@@ -652,13 +652,16 @@ export class FlightPathHostedServer
 self.addEventListener("push", (event) => {
   const payload = event.data ? event.data.json() : {};
   event.waitUntil(
-    self.registration.showNotification(payload.title || "FlightPath", {
-      body: payload.body || "Workflow update available",
-      icon: "/flightpath-icon.svg",
-      badge: "/flightpath-icon.svg",
-      tag: payload.tag,
-      data: { url: payload.url || "/" },
-    })
+    Promise.all([
+      self.registration.showNotification(payload.title || "FlightPath", {
+        body: payload.body || "Workflow update available",
+        icon: "/flightpath-icon.svg",
+        badge: "/flightpath-icon.svg",
+        tag: payload.tag,
+        data: { url: payload.url || "/" },
+      }),
+      navigator.setAppBadge ? navigator.setAppBadge(1) : Promise.resolve(),
+    ])
   );
 });
 
@@ -666,15 +669,18 @@ self.addEventListener("notificationclick", (event) => {
   const targetUrl = event.notification?.data?.url || "/";
   event.notification?.close();
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(targetUrl);
-          return client.focus();
+    Promise.all([
+      navigator.clearAppBadge ? navigator.clearAppBadge() : Promise.resolve(),
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+        for (const client of clients) {
+          if ("focus" in client) {
+            client.navigate(targetUrl);
+            return client.focus();
+          }
         }
-      }
-      return self.clients.openWindow(targetUrl);
-    })
+        return self.clients.openWindow(targetUrl);
+      }),
+    ])
   );
 });
 `.trim();

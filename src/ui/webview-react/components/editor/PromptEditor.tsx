@@ -78,6 +78,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     executionState,
     currentStep,
     finalStepStatus,
+    finalStep,
   } = useWorkflowStore();
   const {
     propertiesDrawerOpen,
@@ -124,6 +125,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   const isFinalStep = selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
   const isFileRef = looksLikeFilePath(promptText.trim());
+
+  // Number of steps that precede this prompt — used by the prior-context linter.
+  // QUEUE(index): steps 0..index-1 are prior; NEW_PROMPT / FINAL_STEP: all queue steps are prior.
+  const stepCount =
+    selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
+      ? selectionTarget.index
+      : prompts.length;
+  const hasFinalStep = finalStep !== null;
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const selectedPromptStatus =
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
@@ -770,6 +779,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             readOnly={isCLIManaged}
             onRun={handleEditorRun}
             onQueue={handleEditorQueue}
+            stepCount={stepCount}
+            hasFinalStep={hasFinalStep}
           />
 
           {/* Properties Drawer (slides up from bottom, overlays only editor) */}

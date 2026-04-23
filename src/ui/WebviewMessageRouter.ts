@@ -49,9 +49,11 @@ import {
   safeDiscoverLocalMcpServers,
   safeFetchMcpRegistry,
 } from "../utils/McpDiscoveryUtils";
+import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder";
 
 const execFileAsync = promisify(execFile);
 const GIT_VALIDATION_TIMEOUT_MS = 5000;
+
 
 /**
  * WebviewMessageRouter
@@ -494,6 +496,13 @@ export class WebviewMessageRouter {
         workspaceRoot,
         ref: message.ref,
       });
+    });
+
+    table.set(MESSAGE_TYPES.OPEN_PRIOR_CONTEXT, async (message) => {
+      await this.handleOpenPriorContext(
+        message.ref as string,
+        (message.stepCount as number) ?? 0
+      );
     });
 
     table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message) => {
@@ -1632,6 +1641,48 @@ export class WebviewMessageRouter {
     } catch (error) {
       Log.error("Error opening file:", error);
       vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
+    }
+  }
+
+  /**
+   * Open an untitled XML preview showing the exact <priorContext> block that
+   * a $prior-context ref will expand to when the prompt runs.
+   * Uses the same buildPriorContextXmlFromItems codepath as live harness injection.
+   */
+  private async handleOpenPriorContext(
+    ref: string,
+    stepCount: number
+  ): Promise<void> {
+    if (!ref) return;
+
+    const orchestrator = this.getOrchestrator();
+    const workingFilePath = orchestrator
+      ?.getQueueState(this.clientId)
+      ?.workingFilePath;
+
+    let content: string;
+
+    if (workingFilePath && fs.existsSync(workingFilePath)) {
+      try {
+        const raw = fs.readFileSync(workingFilePath, "utf-8");
+        const workingFile = JSON.parse(raw) as { steps?: unknown[] };
+        const steps = (workingFile.steps ?? []) as import("../types/FlightPathTypes").WorkflowStep[];
+        content = PriorContextPreviewBuilder.buildPreview(ref, stepCount, steps);
+      } catch {
+        content = `<!-- Could not read workflow state for $${ref} -->`;
+      }
+    } else {
+      content = `<!-- No active workflow — $${ref} will be resolved at execution time -->`;
+    }
+
+    try {
+      const doc = await vscode.workspace.openTextDocument({
+        content,
+        language: "xml",
+      });
+      await vscode.window.showTextDocument(doc, { preview: true });
+    } catch (error) {
+      Log.error("handleOpenPriorContext: failed to open document", error);
     }
   }
 

@@ -19,7 +19,7 @@ import {
 } from "@codemirror/autocomplete";
 import { history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-import { linter, lintKeymap, type Diagnostic } from "@codemirror/lint";
+import { linter, lintKeymap, forceLinting, type Diagnostic } from "@codemirror/lint";
 import { RangeSetBuilder } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import {
@@ -71,6 +71,10 @@ interface CodeMirrorEditorProps {
   onRun?: () => void;
   /** Called when Alt+Shift+Enter is pressed. */
   onQueue?: () => void;
+  /** Number of steps that precede the currently-edited prompt (for $prior-context validation). */
+  stepCount?: number;
+  /** Whether a final step is configured (for $finalStep/$allFinalStep validation). */
+  hasFinalStep?: boolean;
 }
 
 type ContextReferenceType =
@@ -187,6 +191,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     onRun,
     onQueue,
   } = props;
+  const stepCountRef = useRef(props.stepCount ?? 0);
+  const hasFinalStepRef = useRef(props.hasFinalStep ?? false);
   const placeholderText = props.placeholder || EDITOR_PLACEHOLDER_TEXT.DEFAULT;
 
   const editorRef = useRef<HTMLDivElement>(null);
@@ -228,6 +234,21 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       viewRef.current.contentDOM.contentEditable = readOnly ? "false" : "true";
     }
   }, [readOnly]);
+
+  // Sync stepCount ref and re-run prior-context linter when step context changes
+  useEffect(() => {
+    stepCountRef.current = props.stepCount ?? 0;
+    if (viewRef.current) {
+      forceLinting(viewRef.current);
+    }
+  }, [props.stepCount]);
+
+  useEffect(() => {
+    hasFinalStepRef.current = props.hasFinalStep ?? false;
+    if (viewRef.current) {
+      forceLinting(viewRef.current);
+    }
+  }, [props.hasFinalStep]);
 
   // Trigger CodeMirror tooltip remeasure when the visual viewport changes
   // (e.g. mobile keyboard opens/closes, or iOS page-scrolls to keep the
@@ -639,7 +660,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         createFencedBlockDecorationExtension(),
         createLinkDecorationExtension(),
         createFileRefDecorationExtension(),
-        createClickHandlerExtension(vscode),
+        createPriorContextDecorationExtension(),
+        createPriorContextLintExtension(stepCountRef, hasFinalStepRef),
+        createClickHandlerExtension(vscode, stepCountRef),
         // iOS Safari: enable the word-suggestion bar above the keyboard and
         // autocapitalization. CodeMirror defaults these to "off" which suppresses
         // the native suggestion strip entirely on iPhone/iPad.
@@ -867,6 +890,10 @@ function createThemeExtension(surface: CodeMirrorEditorSurface) {
       // Fenced block styling — triple-backtick blocks suppress context expansion
       ".cm-fenced-block": {
         color: "var(--vscode-disabledForeground)",
+        fontStyle: "italic",
+      },
+      // Prior context ref styling — $previous, $step:N, etc.
+      ".cm-prior-context-ref": {
         fontStyle: "italic",
       },
     },
@@ -1478,8 +1505,185 @@ function createFileRefDecorationExtension() {
   );
 }
 
+// ============================================================================
+// Inline prior-context reference helpers ($previous, $all, $step:N, etc.)
+// ============================================================================
+
+interface InlinePriorContextRef {
+  from: number;
+  to: number;
+  token: string;
+  kind: "previous" | "all" | "finalStep" | "allFinalStep" | "step";
+  indices?: number[]; // 1-based step numbers for kind==="step"
+}
+
+/** Parse range notation like "1,3-5,2" into a flat 1-based array. Returns null on invalid input. */
+function parsePriorContextStepRange(rangeText: string): number[] | null {
+  if (!rangeText) return null;
+  const indices: number[] = [];
+  for (const part of rangeText.split(",")) {
+    const rangeMatch = part.match(/^(\d+)-(\d+)$/);
+    if (rangeMatch) {
+      const start = parseInt(rangeMatch[1], 10);
+      const end = parseInt(rangeMatch[2], 10);
+      if (start > end) return null;
+      for (let i = start; i <= end; i++) indices.push(i);
+    } else if (/^\d+$/.test(part)) {
+      indices.push(parseInt(part, 10));
+    } else {
+      return null;
+    }
+  }
+  return indices.length > 0 ? indices : null;
+}
+
+/** Find all inline $prior-context refs in text, returning their absolute positions. */
+function findInlinePriorContextRefs(
+  text: string,
+  offset = 0
+): InlinePriorContextRef[] {
+  const results: InlinePriorContextRef[] = [];
+  const regex = /\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\-]*)?)/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    const body = match[1];
+    const token = match[0];
+    const from = offset + match.index;
+    const to = from + token.length;
+    if (body === "previous") {
+      results.push({ from, to, token, kind: "previous" });
+    } else if (body === "all") {
+      results.push({ from, to, token, kind: "all" });
+    } else if (body === "finalStep") {
+      results.push({ from, to, token, kind: "finalStep" });
+    } else if (body === "allFinalStep") {
+      results.push({ from, to, token, kind: "allFinalStep" });
+    } else if (body.startsWith("step:")) {
+      const indices = parsePriorContextStepRange(body.slice("step:".length));
+      if (indices !== null) {
+        results.push({ from, to, token, kind: "step", indices });
+      }
+    }
+  }
+  return results;
+}
+
+/** Apply cm-link decoration to inline $prior-context references. */
+function createPriorContextDecorationExtension() {
+  return ViewPlugin.fromClass(
+    class {
+      decorations;
+
+      constructor(view: EditorView) {
+        this.decorations = this.buildDecorations(view);
+      }
+
+      update(update: any) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = this.buildDecorations(update.view);
+        }
+      }
+
+      buildDecorations(view: EditorView) {
+        const builder = new RangeSetBuilder<Decoration>();
+        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+        for (const { from, to } of view.visibleRanges) {
+          const text = view.state.doc.sliceString(from, to);
+          const refs = findInlinePriorContextRefs(text, from);
+          for (const ref of refs) {
+            if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+            const dataRef =
+              ref.kind === "step"
+                ? `step:${ref.indices!.join(",")}`
+                : ref.kind;
+            builder.add(
+              ref.from,
+              ref.to,
+              Decoration.mark({
+                class: "cm-link cm-prior-context-ref",
+                attributes: { "data-type": "priorContext", "data-ref": dataRef },
+              })
+            );
+          }
+        }
+        return builder.finish();
+      }
+    },
+    { decorations: (v) => v.decorations }
+  );
+}
+
+/** Warn when $prior-context refs point to steps that don't exist. */
+function createPriorContextLintExtension(
+  stepCountRef: React.RefObject<number>,
+  hasFinalStepRef: React.RefObject<boolean>
+) {
+  return linter(
+    (view): Diagnostic[] => {
+      const stepCount = stepCountRef.current ?? 0;
+      const hasFinalStep = hasFinalStepRef.current ?? false;
+      const diagnostics: Diagnostic[] = [];
+      const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+
+      for (const { from, to } of view.visibleRanges) {
+        const text = view.state.doc.sliceString(from, to);
+        const refs = findInlinePriorContextRefs(text, from);
+
+        for (const ref of refs) {
+          if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
+
+          if (ref.kind === "previous" || ref.kind === "all") {
+            if (stepCount <= 0) {
+              diagnostics.push({
+                from: ref.from,
+                to: ref.to,
+                severity: "warning",
+                message: `Prior context not found — no prior steps exist at this position`,
+              });
+            }
+          } else if (ref.kind === "finalStep" || ref.kind === "allFinalStep") {
+            if (!hasFinalStep) {
+              diagnostics.push({
+                from: ref.from,
+                to: ref.to,
+                severity: "warning",
+                message: `Prior context not found — no final step is configured`,
+              });
+            }
+          } else if (ref.kind === "step" && ref.indices) {
+            const outOfRange = ref.indices.filter(
+              (i) => i < 1 || i > stepCount
+            );
+            if (outOfRange.length > 0) {
+              const label =
+                outOfRange.length === 1
+                  ? `step ${outOfRange[0]} does not exist`
+                  : `steps ${outOfRange.join(", ")} do not exist`;
+              diagnostics.push({
+                from: ref.from,
+                to: ref.to,
+                severity: "warning",
+                message: `Prior context not found — ${label}`,
+              });
+            }
+          }
+        }
+      }
+
+      return diagnostics;
+    },
+    {
+      delay: 300,
+      needsRefresh: (update) => update.docChanged || update.viewportChanged,
+    }
+  );
+}
+
 // Handle Ctrl+Click on links
-function createClickHandlerExtension(vscode: any) {
+function createClickHandlerExtension(
+  vscode: any,
+  stepCountRef: React.RefObject<number>
+) {
   return EditorView.domEventHandlers({
     click: (event, view) => {
       if (!(event.ctrlKey || event.metaKey)) return false;
@@ -1525,6 +1729,14 @@ function createClickHandlerExtension(vscode: any) {
           vscode.postMessage({
             type: MESSAGE_TYPES.OPEN_GIT_CHANGE,
             ref: gitRef,
+          });
+        } else if (type === "priorContext") {
+          // $previous, $all, $step:N, $finalStep, $allFinalStep
+          const ref = target.getAttribute("data-ref");
+          vscode.postMessage({
+            type: MESSAGE_TYPES.OPEN_PRIOR_CONTEXT,
+            ref,
+            stepCount: stepCountRef.current,
           });
         }
 

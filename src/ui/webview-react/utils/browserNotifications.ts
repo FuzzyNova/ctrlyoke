@@ -217,6 +217,12 @@ async function showSystemNotification(
     },
   };
 
+  // Increment the home screen icon badge (iOS 16.4+, Chrome, Edge).
+  // Cleared when the user returns to the app via the visibilitychange handler in App.tsx.
+  if ("setAppBadge" in navigator) {
+    navigator.setAppBadge(1).catch(() => {});
+  }
+
   if ("serviceWorker" in navigator && window.isSecureContext) {
     try {
       const registration = await ensureServiceWorkerRegistration();

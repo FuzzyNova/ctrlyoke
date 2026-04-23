@@ -5,7 +5,7 @@ import {
   captureAndSendThemeVars,
 } from "@hooks/useMessageHandler";
 import { useUndoRedoKeyHandler } from "@hooks/useUndoRedoKeyHandler";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useDesktopLayout } from "@hooks/useDesktopLayout";
 import { useMobileLayout } from "@hooks/useMobileLayout";
@@ -178,6 +178,19 @@ function App() {
   useEffect(() => {
     terminalRegistry.updateFontSize(terminalFontSize);
   }, [terminalFontSize]);
+
+  // Clear the PWA home screen badge when the user returns to the app.
+  useEffect(() => {
+    if (!isStandalone || !("clearAppBadge" in navigator)) return;
+    const clearBadge = () => {
+      if (document.visibilityState === "visible") {
+        navigator.clearAppBadge().catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", clearBadge);
+    clearBadge(); // clear any stale badge from a prior session
+    return () => document.removeEventListener("visibilitychange", clearBadge);
+  }, []);
 
   // ============================================================================
   // LAYOUT TRANSITION LOGIC (runs synchronously during render)

@@ -96,6 +96,53 @@ export interface PromptSections {
   userPromptText: string;
 }
 
+/** Strip ANSI escape codes from a string. */
+export function stripAnsiCodes(text: string): string {
+  return text.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+}
+
+/**
+ * Serialize a list of PriorContextItems into the <priorContext> XML block
+ * that is injected into AI prompts.
+ *
+ * This is the single source of truth for the prior-context XML format.
+ * Both live injection (HarnessIntegration) and the editor preview
+ * (PriorContextPreviewBuilder) use this function, ensuring the preview
+ * always matches what the AI actually receives.
+ */
+export function buildPriorContextXmlFromItems(
+  contextItems: PriorContextItem[]
+): string {
+  const sortedItems = [...contextItems].sort((a, b) => a.index - b.index);
+  const steps = sortedItems
+    .map((item) => {
+      const nameAttr = item.name ? ` name="${item.name}"` : "";
+      if (item.scriptOutput) {
+        const commandSection = `<command>\n${item.scriptOutput.command.trim()}\n</command>\n`;
+        const stdoutSection = item.scriptOutput.stdout.trim()
+          ? `<stdout>\n${stripAnsiCodes(item.scriptOutput.stdout.trim())}\n</stdout>\n`
+          : "";
+        const stderrSection = item.scriptOutput.stderr.trim()
+          ? `<stderr>\n${stripAnsiCodes(item.scriptOutput.stderr.trim())}\n</stderr>\n`
+          : "";
+        const exitCodeSection =
+          item.scriptOutput.exitCode !== undefined
+            ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
+            : "";
+        return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}</step>`;
+      }
+      const typeAttr = item.type ? ` type="${item.type}"` : "";
+      const promptSection = item.prompt
+        ? `<prompt>\n${item.prompt.trim()}\n</prompt>\n`
+        : "";
+      const responseSection = `<response>\n${item.text.trim()}\n</response>`;
+      return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${promptSection}${responseSection}\n</step>`;
+    })
+    .join("\n");
+
+  return `<priorContext>\n${steps}\n</priorContext>`;
+}
+
 /**
  * Harness initialization status
  */
@@ -636,49 +683,18 @@ export abstract class HarnessIntegration {
     return deduplicatePriorContextItems([...propertyItems, ...inlineItems]);
   }
 
-  /**
-   * Build the <priorContext> XML block from gathered context items.
-   * finalStep loop items carry type="finalStep" on the <step> element.
-   */
   protected buildPriorContextXmlFromItems(
     contextItems: PriorContextItem[]
   ): string {
-    const sortedItems = [...contextItems].sort((a, b) => a.index - b.index);
-    const steps = sortedItems
-      .map((item) => {
-        const nameAttr = item.name ? ` name="${item.name}"` : "";
-        if (item.scriptOutput) {
-          const commandSection = `<command>\n${item.scriptOutput.command.trim()}\n</command>\n`;
-          const stdoutSection = item.scriptOutput.stdout.trim()
-            ? `<stdout>\n${item.scriptOutput.stdout.trim()}\n</stdout>\n`
-            : "";
-          const stderrSection = item.scriptOutput.stderr.trim()
-            ? `<stderr>\n${item.scriptOutput.stderr.trim()}\n</stderr>\n`
-            : "";
-          const exitCodeSection =
-            item.scriptOutput.exitCode !== undefined
-              ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
-              : "";
-          return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${this.stripAnsiCodes(stdoutSection)}${this.stripAnsiCodes(stderrSection)}${exitCodeSection}</step>`;
-        }
-        const typeAttr = item.type ? ` type="${item.type}"` : "";
-        const promptSection = item.prompt
-          ? `<prompt>\n${item.prompt.trim()}\n</prompt>\n`
-          : "";
-        const responseSection = `<response>\n${item.text.trim()}\n</response>`;
-        return `<step index="${item.index + 1}"${typeAttr}${nameAttr}>\n${promptSection}${responseSection}\n</step>`;
-      })
-      .join("\n");
-
-    return `<priorContext>\n${steps}\n</priorContext>`;
+    return buildPriorContextXmlFromItems(contextItems);
   }
 
   protected buildPriorContextXml(contextItems: PriorContextItem[]): string {
-    return this.buildPriorContextXmlFromItems(contextItems);
+    return buildPriorContextXmlFromItems(contextItems);
   }
 
   protected stripAnsiCodes(text: string): string {
-    return text.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+    return stripAnsiCodes(text);
   }
 
   /**

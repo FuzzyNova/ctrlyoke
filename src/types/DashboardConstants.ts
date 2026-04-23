@@ -122,6 +122,7 @@ export const MESSAGE_TYPES = {
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   OPEN_FILE: "openFile", // Open file from #file: link
   OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor
+  OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion
   VALIDATE_FILE_REF: "validateFileRef", // Webview -> Extension: Check if a file-ref path resolves
   FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: { exists: boolean, filePath: string }
   VALIDATE_CONTEXT_REFS: "validateContextRefs", // Webview -> Extension: Validate inline @/#/~ context references
