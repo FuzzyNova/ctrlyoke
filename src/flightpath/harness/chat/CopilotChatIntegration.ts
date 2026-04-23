@@ -5,7 +5,10 @@ import {
   PromptStep,
   type UserHookConfig,
 } from "../../../types/FlightPathTypes";
-import { HARNESS_IDS, TEMP_FILE_CATEGORIES } from "../../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  TEMP_FILE_CATEGORIES,
+} from "../../../types/DashboardConstants";
 import { HarnessIntegration, HarnessStatus } from "../../HarnessIntegration";
 import { isModelAvailable } from "../../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -25,6 +28,7 @@ import { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { PromptSections } from "../../HarnessIntegration";
 import { CopilotNotificationMonitor } from "../copilot/CopilotNotificationMonitor";
+import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
 
 /**
  * GitHub Copilot Chat Integration - UI automation with session file monitoring.
@@ -899,7 +903,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
       return;
     }
     const tempMgr = new TempFileManager(workspaceRoot);
-    const filePath = await tempMgr.createCategoryFile(skillContent, TEMP_FILE_CATEGORIES.SKILLS);
+    const filePath = await tempMgr.createCategoryFile(
+      skillContent,
+      TEMP_FILE_CATEGORIES.SKILLS
+    );
     this.pendingTempFiles.push(filePath);
     await this.attachFileToChat(filePath);
   }
@@ -1184,6 +1191,14 @@ export class CopilotChatIntegration extends HarnessIntegration {
       resolvedAgent,
       resolvedSkills
     );
+    const inlinePriorContextRefs = parseInlinePriorContextRefs(
+      sections.userPromptText
+    ).map((match) => match.ref);
+    const resolvedPriorContext =
+      workflowContext?.resolvedProperties?.priorContext;
+    const hasPriorContext =
+      (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") ||
+      inlinePriorContextRefs.length > 0;
 
     // Fast path: simple prompts with no context attachments (file refs allowed
     // when the surrounding text is itself simple)
@@ -1191,6 +1206,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       !sections.agentContent &&
       !sections.skillContent &&
       !sections.excerptContent &&
+      !hasPriorContext &&
       (sections.directFileRefs.length === 0
         ? this.isSimplePrompt(sections.userPromptText)
         : this.isSimplePromptWithFileRefs(sections.userPromptText))
@@ -1203,7 +1219,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
       ? this.buildWorkflowContextText(
           workflowContext.promptIndex,
           workflowContext.allPrompts,
-          workflowContext.resolvedProperties?.priorContext,
+          resolvedPriorContext,
+          inlinePriorContextRefs,
           workflowContext.getFinalStepResponseTexts?.()
         )
       : "";

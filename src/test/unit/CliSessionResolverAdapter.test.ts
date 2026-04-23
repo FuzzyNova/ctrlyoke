@@ -1,10 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliSessionResolverAdapter } from "../../flightpath/harness/shared/CliSessionResolverAdapter";
-import {
-  type PromptFile,
-  type PromptStep,
-} from "../../types/FlightPathTypes";
+import { type PromptFile, type PromptStep } from "../../types/FlightPathTypes";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { Log } from "../../utils/Log";
@@ -46,7 +43,10 @@ suite("CliSessionResolverAdapter", () => {
       result.resolvedSessionId,
       "550e8400-e29b-41d4-a716-446655440000"
     );
-    assert.strictEqual(result.resolvedProperties?.harness, HARNESS_IDS.COPILOT_CLI);
+    assert.strictEqual(
+      result.resolvedProperties?.harness,
+      HARNESS_IDS.COPILOT_CLI
+    );
     assert.strictEqual(result.resolvedProperties?.model, "gpt-5");
   });
 
@@ -114,7 +114,10 @@ suite("CliSessionResolverAdapter", () => {
     } as WorkflowContext);
 
     assert.strictEqual(result.resolvedSessionId, undefined);
-    assert.strictEqual(result.resolvedProperties?.harness, HARNESS_IDS.CODEX_CLI);
+    assert.strictEqual(
+      result.resolvedProperties?.harness,
+      HARNESS_IDS.CODEX_CLI
+    );
     assert.strictEqual(result.resolvedProperties?.model, "gpt-5.2-codex");
   });
 });

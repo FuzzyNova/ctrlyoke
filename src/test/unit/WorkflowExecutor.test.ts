@@ -11,7 +11,12 @@ import { HarnessIntegration } from "../../flightpath/HarnessIntegration";
 import { HarnessStatus } from "../../flightpath/HarnessIntegration";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import { PromptStep, PromptFile } from "../../types/FlightPathTypes";
-import { HARNESS_IDS, EXECUTION_STATES, FINAL_STEP_PHASES, STEP_STATUS } from "../../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  EXECUTION_STATES,
+  FINAL_STEP_PHASES,
+  STEP_STATUS,
+} from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 
 class MockPlatform implements PlatformAdapter {

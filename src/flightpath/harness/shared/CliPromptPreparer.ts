@@ -12,7 +12,14 @@ import { TEMP_FILE_CATEGORIES } from "../../../types/DashboardConstants";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { TempFileManager } from "../../../utils/TempFileManager";
 import { Log } from "../../../utils/Log";
-import type { PromptSections } from "../../HarnessIntegration";
+import {
+  parseInlinePriorContextRefs,
+  type InlinePriorContextRef,
+} from "../../../utils/FileReferenceParser";
+import type {
+  PriorContextItem,
+  PromptSections,
+} from "../../HarnessIntegration";
 
 export interface PromptFileResult {
   tempFilePaths: string[];
@@ -28,12 +35,14 @@ export interface CliPromptPreparerDeps {
   ) => Promise<PromptSections>;
   extractLeadingSlashCommand: (promptText: string) => string | null;
   isSimplePrompt: (promptText: string) => boolean;
-  buildPriorContextXml: (
-    resolvedPriorContext: Exclude<PriorContext, "none">,
+  gatherAndMergeContextItems: (
+    propertyContext: PriorContext | undefined,
+    inlineRefs: InlinePriorContextRef[],
     allPrompts: WorkflowStep[],
     promptIndex: number,
     finalStepResponseTexts: string[]
-  ) => string;
+  ) => PriorContextItem[];
+  buildPriorContextXmlFromItems: (items: PriorContextItem[]) => string;
   getWorkspaceRoot: () => string | undefined;
   getTempFileSplitConfig: () => SplitConfig | undefined;
   formatDirectFileRef: (absolutePath: string) => string;
@@ -85,8 +94,12 @@ export class CliPromptPreparer {
     const promptIndex = workflowContext?.promptIndex ?? 0;
     const allPrompts = workflowContext?.allPrompts ?? [prompt];
     const resolvedPriorContext = resolvedProperties?.priorContext;
+    const inlineRefs = parseInlinePriorContextRefs(sections.userPromptText).map(
+      (match) => match.ref
+    );
     const hasPriorContext =
-      resolvedPriorContext !== undefined && resolvedPriorContext !== "none";
+      (resolvedPriorContext !== undefined && resolvedPriorContext !== "none") ||
+      inlineRefs.length > 0;
 
     const hasExtras =
       !!sections.agentContent ||
@@ -119,12 +132,18 @@ export class CliPromptPreparer {
     }
 
     const contextContent = hasPriorContext
-      ? this.deps.buildPriorContextXml(
-          resolvedPriorContext as Exclude<PriorContext, "none">,
-          allPrompts,
-          promptIndex,
-          finalStepResponseTexts ?? []
-        ) || undefined
+      ? (() => {
+          const items = this.deps.gatherAndMergeContextItems(
+            resolvedPriorContext,
+            inlineRefs,
+            allPrompts,
+            promptIndex,
+            finalStepResponseTexts ?? []
+          );
+          return items.length > 0
+            ? this.deps.buildPriorContextXmlFromItems(items)
+            : undefined;
+        })()
       : undefined;
 
     const preparedPrompt = await this.createCategorizedPromptFiles(

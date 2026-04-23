@@ -718,12 +718,33 @@ export async function getGitChangeCompletions(
   );
 }
 
+export function getPriorContextCompletions(
+  filterText: string
+): PlainCompletionItem[] {
+  const keywords = [
+    { label: "previous", detail: "Output of the previous step" },
+    { label: "all", detail: "Outputs of all prior steps" },
+    { label: "finalStep", detail: "Previous finalStep output" },
+    { label: "allFinalStep", detail: "All finalStep outputs" },
+    { label: "step:", detail: "Specific steps, e.g. $step:1,3-5" },
+  ];
+
+  return keywords
+    .filter((keyword) => keyword.label.startsWith(filterText))
+    .map((keyword) => ({
+      label: keyword.label,
+      kind: vscode.CompletionItemKind.Keyword,
+      insertText: keyword.label,
+      detail: keyword.detail,
+    }));
+}
+
 /**
  * Convert plain completion item to VS Code completion item
  */
 export function toVSCodeCompletionItem(
   item: PlainCompletionItem,
-  _triggerChar: "@" | "#" | "~",
+  _triggerChar: "@" | "#" | "~" | "$",
   range?: vscode.Range
 ): vscode.CompletionItem {
   const vscodeItem = new vscode.CompletionItem(item.label, item.kind);

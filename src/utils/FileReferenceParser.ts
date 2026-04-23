@@ -19,6 +19,7 @@ import {
   GIT_CHANGE_KINDS,
   type GitChangeKind,
 } from "../types/DashboardConstants";
+import { parseRangeNotation } from "./RangeNotationParser";
 
 export interface FileReference {
   path: string;
@@ -26,6 +27,19 @@ export interface FileReference {
   endLine?: number;
   isDirectory?: boolean;
   symbolName?: string;
+}
+
+export type InlinePriorContextRef =
+  | { kind: "previous" }
+  | { kind: "all" }
+  | { kind: "finalStep" }
+  | { kind: "allFinalStep" }
+  | { kind: "step"; indices: number[] };
+
+export interface InlinePriorContextMatch {
+  ref: InlinePriorContextRef;
+  /** The full matched token, e.g. "$previous" or "$step:1,3-5". */
+  token: string;
 }
 
 /**
@@ -195,6 +209,63 @@ export function parseDirectoryReferences(prompt: string): FileReference[] {
   const atRefs = parseAtReferences(prompt);
   // Filter to only directory references (trailing slash)
   return atRefs.filter((ref) => ref.isDirectory);
+}
+
+// ============================================================================
+// Inline Prior Context References ($previous, $all, $step:1,3-5)
+// ============================================================================
+
+/**
+ * Parse inline prior-context references from prompt text.
+ *
+ * Recognized tokens:
+ * - $previous
+ * - $all
+ * - $finalStep
+ * - $allFinalStep
+ * - $step:N,M,A-B
+ *
+ * Unknown $tokens are ignored so future syntaxes can pass through unchanged.
+ */
+export function parseInlinePriorContextRefs(
+  text: string
+): InlinePriorContextMatch[] {
+  const matches: InlinePriorContextMatch[] = [];
+  const regex = /\$([A-Za-z][A-Za-z0-9]*(?::[A-Za-z0-9,\-]*)?)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const body = match[1];
+    const token = match[0];
+
+    if (body === "previous") {
+      matches.push({ ref: { kind: "previous" }, token });
+      continue;
+    }
+    if (body === "all") {
+      matches.push({ ref: { kind: "all" }, token });
+      continue;
+    }
+    if (body === "finalStep") {
+      matches.push({ ref: { kind: "finalStep" }, token });
+      continue;
+    }
+    if (body === "allFinalStep") {
+      matches.push({ ref: { kind: "allFinalStep" }, token });
+      continue;
+    }
+    if (body.startsWith("step:")) {
+      const rangeText = body.slice("step:".length);
+      const indices = parseRangeNotation(rangeText);
+      if (!indices) {
+        console.warn(`Invalid inline prior context range "${token}" skipped`);
+        continue;
+      }
+      matches.push({ ref: { kind: "step", indices }, token });
+    }
+  }
+
+  return matches;
 }
 
 // ============================================================================

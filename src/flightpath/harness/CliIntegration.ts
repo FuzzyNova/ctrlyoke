@@ -564,22 +564,22 @@ export class CliIntegration extends HarnessIntegration {
       extractLeadingSlashCommand: (promptText) =>
         this.extractLeadingSlashCommand(promptText),
       isSimplePrompt: (promptText) => this.isSimplePrompt(promptText),
-      buildPriorContextXml: (
-        resolvedPriorContext,
+      gatherAndMergeContextItems: (
+        propertyContext,
+        inlineRefs,
         allPrompts,
         promptIndex,
         finalStepResponseTexts
-      ) => {
-        const contextItems = this.gatherPriorContextItems(
-          resolvedPriorContext,
+      ) =>
+        this.gatherAndMergeContextItems(
+          propertyContext,
+          inlineRefs,
           allPrompts,
           promptIndex,
           finalStepResponseTexts
-        );
-        return contextItems.length > 0
-          ? this.buildPriorContextXml(contextItems)
-          : "";
-      },
+        ),
+      buildPriorContextXmlFromItems: (items) =>
+        this.buildPriorContextXmlFromItems(items),
       getWorkspaceRoot: () => this.getWorkspaceRoot(),
       getTempFileSplitConfig: () => this.getTempFileSplitConfig(),
       formatDirectFileRef: (absolutePath) =>
@@ -1133,7 +1133,10 @@ export class CliIntegration extends HarnessIntegration {
           return undefined;
         })
         .catch((error) =>
-          Log.warn("Failed to handle headless permission warning choice:", error)
+          Log.warn(
+            "Failed to handle headless permission warning choice:",
+            error
+          )
         );
       return;
     }

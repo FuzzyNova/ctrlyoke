@@ -5,6 +5,7 @@ import {
   getFileCompletions,
   getHashCompletions,
   getGitChangeCompletions,
+  getPriorContextCompletions,
   toVSCodeCompletionItem,
   clearFilesCache,
 } from "./CompletionHelpers";
@@ -12,7 +13,7 @@ import {
 /**
  * Trigger character types for context-aware completions
  */
-type TriggerChar = "@" | "#" | "~";
+type TriggerChar = "@" | "#" | "~" | "$";
 
 /**
  * Provides context-aware completions for FlightPath prompt files
@@ -59,12 +60,18 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const lastAtIndex = textBeforeCursor.lastIndexOf("@");
     const lastHashIndex = textBeforeCursor.lastIndexOf("#");
     const lastTildeIndex = textBeforeCursor.lastIndexOf("~");
+    const lastDollarIndex = textBeforeCursor.lastIndexOf("$");
 
     // Determine which trigger is most recent (closest to cursor)
     let triggerChar: TriggerChar | undefined;
     let afterTrigger: string;
 
-    const maxIndex = Math.max(lastAtIndex, lastHashIndex, lastTildeIndex);
+    const maxIndex = Math.max(
+      lastAtIndex,
+      lastHashIndex,
+      lastTildeIndex,
+      lastDollarIndex
+    );
 
     if (maxIndex === -1) {
       return undefined; // No trigger found
@@ -76,9 +83,12 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     } else if (maxIndex === lastHashIndex) {
       triggerChar = "#";
       afterTrigger = textBeforeCursor.substring(lastHashIndex + 1);
-    } else {
+    } else if (maxIndex === lastTildeIndex) {
       triggerChar = "~";
       afterTrigger = textBeforeCursor.substring(lastTildeIndex + 1);
+    } else {
+      triggerChar = "$";
+      afterTrigger = textBeforeCursor.substring(lastDollarIndex + 1);
     }
 
     // Don't provide completions if there's a space after trigger
@@ -90,14 +100,19 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     if (afterTrigger.includes(" ") && !isInsideQuotedPath) {
       return undefined;
     }
+    if (triggerChar === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(afterTrigger)) {
+      return undefined;
+    }
 
     // Route to appropriate handler based on trigger
     if (triggerChar === "@") {
       return this.getAtCompletions(afterTrigger);
     } else if (triggerChar === "#") {
       return this.getHashCompletions(afterTrigger);
-    } else {
+    } else if (triggerChar === "~") {
       return this.getTildeCompletions(afterTrigger);
+    } else {
+      return this.getDollarCompletions(afterTrigger);
     }
   }
 
@@ -166,6 +181,16 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const range = this.calculateCompletionRange("~");
     const items = plainItems.map((item) =>
       toVSCodeCompletionItem(item, "~", range)
+    );
+
+    return new vscode.CompletionList(items, true);
+  }
+
+  private getDollarCompletions(filterText: string): vscode.CompletionList {
+    const plainItems = getPriorContextCompletions(filterText);
+    const range = this.calculateCompletionRange("$");
+    const items = plainItems.map((item) =>
+      toVSCodeCompletionItem(item, "$", range)
     );
 
     return new vscode.CompletionList(items, true);

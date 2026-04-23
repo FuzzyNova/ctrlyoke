@@ -2,7 +2,10 @@ import * as assert from "assert";
 import { SessionResolver } from "../../utils/SessionResolver";
 import { PromptFile, PromptStep } from "../../types/FlightPathTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { SESSION_ID_SENTINELS, HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  SESSION_ID_SENTINELS,
+  HARNESS_IDS,
+} from "../../types/DashboardConstants";
 
 suite("SessionResolver Tests", () => {
   suite("resolve - workflow-level sessionId inheritance", () => {

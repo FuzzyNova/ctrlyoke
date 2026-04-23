@@ -23,7 +23,8 @@ suite("CliPromptPreparer", () => {
       buildPromptSections: async () => createSections(),
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
-      buildPriorContextXml: () => "",
+      gatherAndMergeContextItems: () => [],
+      buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
       formatDirectFileRef: () => {
@@ -67,7 +68,8 @@ suite("CliPromptPreparer", () => {
       },
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
-      buildPriorContextXml: () => "",
+      gatherAndMergeContextItems: () => [],
+      buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
       formatDirectFileRef: () => "",
@@ -97,7 +99,8 @@ suite("CliPromptPreparer", () => {
         }),
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => false,
-      buildPriorContextXml: () =>
+      gatherAndMergeContextItems: () => [{ index: 0, text: "hello" }],
+      buildPriorContextXmlFromItems: () =>
         "<priorContext><step>hello</step></priorContext>",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
@@ -133,6 +136,56 @@ suite("CliPromptPreparer", () => {
     assert.ok(createdFiles.length >= 2);
   });
 
+  test("should create one prior-context file for inline refs", async () => {
+    let capturedInlineRefCount = 0;
+    const preparer = new CliPromptPreparer({
+      shouldOmitAgentsAndSkillsOnResume: () => false,
+      buildPromptSections: async () =>
+        createSections({ userPromptText: "use $previous and continue" }),
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      gatherAndMergeContextItems: (_propertyContext, inlineRefs) => {
+        capturedInlineRefCount = inlineRefs.length;
+        return [{ index: 0, text: "prior output" }];
+      },
+      buildPriorContextXmlFromItems: () =>
+        "<priorContext><step>prior output</step></priorContext>",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: (_tempMgr, absolutePath: string) => `@${absolutePath}`,
+      formatCategorizedReferences: (
+        _agentRefs,
+        _skillRefs,
+        _directRefs,
+        contextRefs,
+        _excerptRefs,
+        promptRefs
+      ) => [...contextRefs, ...promptRefs].join(" | "),
+    });
+
+    const result = await preparer.preparePrompt(
+      { prompt: "use $previous and continue" } as PromptStep,
+      {
+        workflowName: "test-workflow",
+        promptIndex: 1,
+        allPrompts: [
+          { prompt: "first" } as PromptStep,
+          { prompt: "use $previous and continue" } as PromptStep,
+        ],
+      } as WorkflowContext,
+      undefined,
+      undefined
+    );
+
+    assert.strictEqual(capturedInlineRefCount, 1);
+    assert.ok(
+      result.tempFilePaths.some((filePath) =>
+        filePath.endsWith(".context.md")
+      )
+    );
+  });
+
   test("should use fast path when only file refs exist and text-minus-refs is simple", async () => {
     const preparer = new CliPromptPreparer({
       shouldOmitAgentsAndSkillsOnResume: () => false,
@@ -143,7 +196,8 @@ suite("CliPromptPreparer", () => {
         }),
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: (text) => text === "fully implement",
-      buildPriorContextXml: () => "",
+      gatherAndMergeContextItems: () => [],
+      buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
       formatDirectFileRef: () => {
@@ -181,7 +235,8 @@ suite("CliPromptPreparer", () => {
       },
       extractLeadingSlashCommand: () => "/handoff",
       isSimplePrompt: () => true,
-      buildPriorContextXml: () => "",
+      gatherAndMergeContextItems: () => [],
+      buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
       formatDirectFileRef: () => "",
@@ -210,7 +265,8 @@ suite("CliPromptPreparer", () => {
         createSections({ userPromptText: "/handoff summarize the session" }),
       extractLeadingSlashCommand: () => "/handoff",
       isSimplePrompt: () => true,
-      buildPriorContextXml: () => "",
+      gatherAndMergeContextItems: () => [],
+      buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
       formatDirectFileRef: () => "",
@@ -241,7 +297,8 @@ suite("CliPromptPreparer", () => {
         }),
       extractLeadingSlashCommand: () => "/handoff",
       isSimplePrompt: () => false,
-      buildPriorContextXml: () => "",
+      gatherAndMergeContextItems: () => [],
+      buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
       getTempFileSplitConfig: () => undefined,
       formatDirectFileRef: (absolutePath: string) => `@${absolutePath}`,

@@ -27,6 +27,7 @@ import {
   STEP_TYPES,
   PriorContextItemType,
 } from "../types/DashboardConstants";
+import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
 
 /**
  * Minimal container for VS Code-style disposable subscriptions.
@@ -38,7 +39,7 @@ interface SubscriptionContainer {
 }
 
 /** A single context item ready for XML serialization by insertPriorContext. */
-type PriorContextItem = {
+export type PriorContextItem = {
   index: number;
   name?: string;
   /** The prompt text that was sent for this step. Absent for finalStep loop items and script steps. */
@@ -49,6 +50,33 @@ type PriorContextItem = {
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
 };
+
+export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
+  switch (ref.kind) {
+    case "previous":
+      return PRIOR_CONTEXT_KEYWORDS.PREVIOUS;
+    case "all":
+      return PRIOR_CONTEXT_KEYWORDS.ALL;
+    case "finalStep":
+      return PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_PREVIOUS;
+    case "allFinalStep":
+      return PRIOR_CONTEXT_KEYWORDS.FINAL_STEP_ALL;
+    case "step":
+      return ref.indices;
+  }
+}
+
+export function deduplicatePriorContextItems(
+  items: PriorContextItem[]
+): PriorContextItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.type ?? "queue"}:${item.index}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 /**
  * Categorized sections of a prompt — used for typed file splitting.
@@ -541,7 +569,9 @@ export abstract class HarnessIntegration {
             text: [
               scriptOutput.stdout,
               scriptOutput.stderr,
-              scriptOutput.exitCode !== undefined ? String(scriptOutput.exitCode) : "",
+              scriptOutput.exitCode !== undefined
+                ? String(scriptOutput.exitCode)
+                : "",
             ]
               .filter(Boolean)
               .join("\n")
@@ -556,7 +586,10 @@ export abstract class HarnessIntegration {
           text: step._runtime?.responseText ?? "",
         };
       })
-      .filter((item): item is PriorContextItem => item !== null && item.text.length > 0);
+      .filter(
+        (item): item is PriorContextItem =>
+          item !== null && item.text.length > 0
+      );
 
     if (items.length === 0 && targetIndices.length > 0) {
       Log.debug(
@@ -567,11 +600,43 @@ export abstract class HarnessIntegration {
     return items;
   }
 
+  protected gatherAndMergeContextItems(
+    propertyContext: PriorContext | undefined,
+    inlineRefs: InlinePriorContextRef[],
+    allPrompts: WorkflowStep[],
+    currentIndex: number,
+    finalStepResponseTexts: string[] = []
+  ): PriorContextItem[] {
+    const propertyItems =
+      propertyContext !== undefined &&
+      propertyContext !== PRIOR_CONTEXT_KEYWORDS.NONE
+        ? this.gatherPriorContextItems(
+            propertyContext,
+            allPrompts,
+            currentIndex,
+            finalStepResponseTexts
+          )
+        : [];
+
+    const inlineItems = inlineRefs.flatMap((ref) =>
+      this.gatherPriorContextItems(
+        refToPriorContext(ref),
+        allPrompts,
+        currentIndex,
+        finalStepResponseTexts
+      )
+    );
+
+    return deduplicatePriorContextItems([...propertyItems, ...inlineItems]);
+  }
+
   /**
    * Build the <priorContext> XML block from gathered context items.
    * finalStep loop items carry type="finalStep" on the <step> element.
    */
-  protected buildPriorContextXml(contextItems: PriorContextItem[]): string {
+  protected buildPriorContextXmlFromItems(
+    contextItems: PriorContextItem[]
+  ): string {
     const steps = contextItems
       .map((item) => {
         const nameAttr = item.name ? ` name="${item.name}"` : "";
@@ -601,6 +666,10 @@ export abstract class HarnessIntegration {
     return `<priorContext>\n${steps}\n</priorContext>`;
   }
 
+  protected buildPriorContextXml(contextItems: PriorContextItem[]): string {
+    return this.buildPriorContextXmlFromItems(contextItems);
+  }
+
   /**
    * Build the additional workflow-context text (prior context + critical instruction)
    * for injection into the prompt file section of a categorized split.
@@ -615,16 +684,19 @@ export abstract class HarnessIntegration {
     promptIndex: number,
     allPrompts: WorkflowStep[],
     resolvedPriorContext?: PriorContext,
+    inlinePriorContextRefs: InlinePriorContextRef[] = [],
     finalStepResponseTexts?: string[]
   ): string {
     if (
-      resolvedPriorContext === undefined ||
-      resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.NONE
+      (resolvedPriorContext === undefined ||
+        resolvedPriorContext === PRIOR_CONTEXT_KEYWORDS.NONE) &&
+      inlinePriorContextRefs.length === 0
     ) {
       return "";
     }
-    const contextItems = this.gatherPriorContextItems(
+    const contextItems = this.gatherAndMergeContextItems(
       resolvedPriorContext,
+      inlinePriorContextRefs,
       allPrompts,
       promptIndex,
       finalStepResponseTexts ?? []
@@ -639,7 +711,7 @@ export abstract class HarnessIntegration {
       `🔗 Injecting ${isFinalStepContext ? "finalStep" : "prior"} context for prompt ${promptIndex + 1}: ` +
         `${contextItems.length} step(s) from indices [${contextItems.map((c) => c.index + 1).join(", ")}]`
     );
-    return this.buildPriorContextXml(contextItems);
+    return this.buildPriorContextXmlFromItems(contextItems);
   }
 
   /**

@@ -422,8 +422,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       const lastAtIndex = textBefore.lastIndexOf("@");
       const lastHashIndex = textBefore.lastIndexOf("#");
       const lastTildeIndex = textBefore.lastIndexOf("~");
+      const lastDollarIndex = textBefore.lastIndexOf("$");
 
-      const maxIndex = Math.max(lastAtIndex, lastHashIndex, lastTildeIndex);
+      const maxIndex = Math.max(
+        lastAtIndex,
+        lastHashIndex,
+        lastTildeIndex,
+        lastDollarIndex
+      );
       if (maxIndex === -1) return null;
 
       let trigger: string;
@@ -435,9 +441,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       } else if (maxIndex === lastHashIndex) {
         trigger = "#";
         afterTrigger = textBefore.slice(lastHashIndex + 1);
-      } else {
+      } else if (maxIndex === lastTildeIndex) {
         trigger = "~";
         afterTrigger = textBefore.slice(lastTildeIndex + 1);
+      } else {
+        trigger = "$";
+        afterTrigger = textBefore.slice(lastDollarIndex + 1);
       }
 
       // For @: allow spaces inside a quoted path (@"path with spaces/..."),
@@ -453,6 +462,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       if (trigger === "#" && !/^[a-zA-Z0-9_/:.-]*$/.test(afterTrigger))
         return null;
       if (trigger === "~" && !/^[a-zA-Z0-9:_]*$/.test(afterTrigger))
+        return null;
+      if (trigger === "$" && !/^[a-zA-Z0-9:,\-]*$/.test(afterTrigger))
         return null;
 
       const from = lineObj.from + maxIndex; // absolute position of trigger char

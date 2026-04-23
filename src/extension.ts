@@ -383,7 +383,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register notification manager as a dashboard client so it observes
     // workflow state transitions and fires VS Code toasts as configured.
     notificationManager = new NotificationManager(() => workflowOrchestrator);
-    workflowOrchestrator.getDashboardBroadcastHub().addClient(notificationManager);
+    workflowOrchestrator
+      .getDashboardBroadcastHub()
+      .addClient(notificationManager);
 
     // Share OutputHistoryManager with webview provider (single instance)
     webviewProvider.setOutputHistoryManager(
@@ -462,8 +464,17 @@ export async function activate(context: vscode.ExtensionContext) {
         "~" // Trigger on ~ character for git change references
       )
     );
+
+    // Register $ trigger for inline prior-context references
+    context.subscriptions.push(
+      vscode.languages.registerCompletionItemProvider(
+        promptFilePatterns,
+        promptCompletionProvider,
+        "$" // Trigger on $ character for prior-context references
+      )
+    );
     Log.debug(
-      "FlightPath: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, and ~ triggers"
+      "FlightPath: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, ~, and $ triggers"
     );
 
     // Register property key completion provider for YAML workflow files.
@@ -887,8 +898,10 @@ function registerCommands(context: vscode.ExtensionContext) {
         vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
       const storedToken = await context.secrets.get("flightpath.server.token");
       const token = storedToken ?? randomBytes(32).toString("hex");
-      if (!storedToken) await context.secrets.store("flightpath.server.token", token);
-      const bindAddress = configService.get("server")?.bindAddress ?? "127.0.0.1";
+      if (!storedToken)
+        await context.secrets.store("flightpath.server.token", token);
+      const bindAddress =
+        configService.get("server")?.bindAddress ?? "127.0.0.1";
       const tlsCfg = configService.get("server")?.tls;
       const tlsConfig =
         tlsCfg?.enabled && tlsCfg.certPath && tlsCfg.keyPath
@@ -952,7 +965,9 @@ function registerCommands(context: vscode.ExtensionContext) {
     "flightpath.regenerateServerToken",
     async () => {
       await context.secrets.delete("flightpath.server.token");
-      webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED });
+      webviewProvider.postMessage({
+        type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,
+      });
       vscode.window.showInformationMessage(
         "FlightPath: Server token regenerated. Restart the server for the new token to take effect."
       );
@@ -997,16 +1012,16 @@ function registerCommands(context: vscode.ExtensionContext) {
     void vscode.commands.executeCommand("flightpath.enableServer");
   }
 
-    // Register development commands (only in dev mode)
-    if (IS_DEV_MODE) {
-      const { registerDevCommands } = require("./dev/DevCommands");
-      registerDevCommands(context, {
-        sendTestNotification: async () => {
-          notificationManager?.sendTestNotification();
-          await hostedServer?.sendTestNotification();
-        },
-      });
-    }
+  // Register development commands (only in dev mode)
+  if (IS_DEV_MODE) {
+    const { registerDevCommands } = require("./dev/DevCommands");
+    registerDevCommands(context, {
+      sendTestNotification: async () => {
+        notificationManager?.sendTestNotification();
+        await hostedServer?.sendTestNotification();
+      },
+    });
+  }
 
   Log.debug("FlightPath: Commands registered successfully");
 }

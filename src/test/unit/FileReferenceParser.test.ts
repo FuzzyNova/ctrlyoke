@@ -6,6 +6,7 @@ import {
   parseSymbolReferences,
   parseDirectoryReferences,
   parseAllFileReferences,
+  parseInlinePriorContextRefs,
 } from "../../utils/FileReferenceParser";
 
 suite("FileReferenceParser", () => {
@@ -244,6 +245,58 @@ suite("FileReferenceParser", () => {
       );
       assert.strictEqual(refs.length, 2);
       assert.ok(refs.every((r) => r.isDirectory));
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("parseInlinePriorContextRefs", () => {
+    test("returns empty array when no inline prior-context references exist", () => {
+      const refs = parseInlinePriorContextRefs("normal prompt text");
+      assert.deepStrictEqual(refs, []);
+    });
+
+    test("parses all keyword forms", () => {
+      const refs = parseInlinePriorContextRefs(
+        "$previous $all $finalStep $allFinalStep"
+      );
+      assert.deepStrictEqual(
+        refs.map((match) => match.ref.kind),
+        ["previous", "all", "finalStep", "allFinalStep"]
+      );
+      assert.deepStrictEqual(
+        refs.map((match) => match.token),
+        ["$previous", "$all", "$finalStep", "$allFinalStep"]
+      );
+    });
+
+    test("parses step range notation", () => {
+      const refs = parseInlinePriorContextRefs("Use $step:3,1-2,2 please");
+      assert.strictEqual(refs.length, 1);
+      assert.deepStrictEqual(refs[0].ref, {
+        kind: "step",
+        indices: [1, 2, 3],
+      });
+      assert.strictEqual(refs[0].token, "$step:3,1-2,2");
+    });
+
+    test("ignores unknown tokens", () => {
+      const refs = parseInlinePriorContextRefs(
+        "$workflow-xyz:step:1 $unknown $previously $previous"
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.deepStrictEqual(refs[0].ref, { kind: "previous" });
+    });
+
+    test("skips invalid step ranges", () => {
+      const refs = parseInlinePriorContextRefs("$step:abc $step:3-1 $step:2");
+      assert.strictEqual(refs.length, 1);
+      assert.deepStrictEqual(refs[0].ref, { kind: "step", indices: [2] });
+    });
+
+    test("allows punctuation after keyword tokens", () => {
+      const refs = parseInlinePriorContextRefs("Use $previous, then continue.");
+      assert.strictEqual(refs.length, 1);
+      assert.deepStrictEqual(refs[0].ref, { kind: "previous" });
     });
   });
 

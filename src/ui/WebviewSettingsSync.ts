@@ -660,11 +660,17 @@ export class WebviewSettingsSync {
       ConfigurationUtils.shouldRespectGitignoreForCompletions();
 
     const harnessDefaultModels = {
-      [HARNESS_IDS.COPILOT_CLI]: this.getModelForHarness(HARNESS_IDS.COPILOT_CLI),
-      [HARNESS_IDS.COPILOT_CHAT]: this.getModelForHarness(HARNESS_IDS.COPILOT_CHAT),
+      [HARNESS_IDS.COPILOT_CLI]: this.getModelForHarness(
+        HARNESS_IDS.COPILOT_CLI
+      ),
+      [HARNESS_IDS.COPILOT_CHAT]: this.getModelForHarness(
+        HARNESS_IDS.COPILOT_CHAT
+      ),
       [HARNESS_IDS.CLAUDE_CLI]: this.getModelForHarness(HARNESS_IDS.CLAUDE_CLI),
       [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(HARNESS_IDS.CODEX_CLI),
-      [HARNESS_IDS.OPENCODE_CLI]: this.getModelForHarness(HARNESS_IDS.OPENCODE_CLI),
+      [HARNESS_IDS.OPENCODE_CLI]: this.getModelForHarness(
+        HARNESS_IDS.OPENCODE_CLI
+      ),
       [HARNESS_IDS.QWEN_CLI]: this.getModelForHarness(HARNESS_IDS.QWEN_CLI),
       [HARNESS_IDS.GEMINI_CLI]: this.getModelForHarness(HARNESS_IDS.GEMINI_CLI),
     };
@@ -681,7 +687,9 @@ export class WebviewSettingsSync {
         HARNESS_IDS.CODEX_CLI
       ),
       [HARNESS_IDS.OPENCODE_CLI]:
-        ConfigurationUtils.getAdditionalArgsForHarness(HARNESS_IDS.OPENCODE_CLI),
+        ConfigurationUtils.getAdditionalArgsForHarness(
+          HARNESS_IDS.OPENCODE_CLI
+        ),
       [HARNESS_IDS.QWEN_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
         HARNESS_IDS.QWEN_CLI
       ),
@@ -921,7 +929,9 @@ export class WebviewSettingsSync {
     await vscode.commands.executeCommand("flightpath.disableServer");
   }
 
-  async handleRegenerateServerToken(_postMessage: PostMessageFn): Promise<void> {
+  async handleRegenerateServerToken(
+    _postMessage: PostMessageFn
+  ): Promise<void> {
     await vscode.commands.executeCommand("flightpath.regenerateServerToken");
   }
 

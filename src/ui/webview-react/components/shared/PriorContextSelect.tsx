@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { PriorContext } from "@/types/messages";
+import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 
 interface PriorContextSelectProps {
   id?: string;
@@ -42,41 +43,6 @@ function getMode(value: PriorContext | undefined): KeywordMode {
   if (value === undefined) return "default";
   if (Array.isArray(value)) return "custom";
   return value as KeywordMode;
-}
-
-/** Parse range notation like "1,2,4-10" into a sorted, deduplicated number[]. Returns null if invalid. */
-function parseRangeNotation(text: string): number[] | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-
-  const parts = trimmed.split(",");
-  const result: number[] = [];
-
-  for (const part of parts) {
-    const p = part.trim();
-    if (!p) return null; // empty segment (e.g. trailing comma or "1,,2")
-
-    const rangeMatch = p.match(/^(\d+)-(\d+)$/);
-    if (rangeMatch) {
-      const start = parseInt(rangeMatch[1], 10);
-      const end = parseInt(rangeMatch[2], 10);
-      if (start < 1 || end < 1 || start > end) return null;
-      for (let i = start; i <= end; i++) result.push(i);
-      continue;
-    }
-
-    if (/^\d+$/.test(p)) {
-      const n = parseInt(p, 10);
-      if (n < 1) return null;
-      result.push(n);
-      continue;
-    }
-
-    return null; // unrecognized format
-  }
-
-  if (result.length === 0) return null;
-  return [...new Set(result)].sort((a, b) => a - b);
 }
 
 /** Format a number[] as compact range notation, e.g. [1,2,4,5,6] → "1,2,4-6". */

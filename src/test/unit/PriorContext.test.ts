@@ -3,6 +3,8 @@ import { suite, test } from "mocha";
 import {
   HarnessIntegration,
   HarnessStatus,
+  refToPriorContext,
+  type PriorContextItem,
 } from "../../flightpath/HarnessIntegration";
 import {
   PromptStep,
@@ -13,7 +15,10 @@ import {
   ScriptRuntimeOutput,
 } from "../../types/FlightPathTypes";
 import { PropertyResolver } from "../../utils/PropertyResolver";
-import { PRIOR_CONTEXT_ITEM_TYPES, HARNESS_IDS } from "../../types/DashboardConstants";
+import {
+  PRIOR_CONTEXT_ITEM_TYPES,
+  HARNESS_IDS,
+} from "../../types/DashboardConstants";
 
 // ---------------------------------------------------------------------------
 // Test subclass that exposes the private prior-context helpers
@@ -57,6 +62,22 @@ class TestHarness extends HarnessIntegration {
   ) {
     return (this as any).gatherPriorContextItems(
       priorContext,
+      allPrompts,
+      currentIndex,
+      finalStepResponseTexts
+    );
+  }
+
+  public exposeGatherAndMerge(
+    propertyContext: PriorContext | undefined,
+    inlineRefs: Parameters<typeof refToPriorContext>[0][],
+    allPrompts: WorkflowStep[],
+    currentIndex: number,
+    finalStepResponseTexts: string[] = []
+  ): PriorContextItem[] {
+    return (this as any).gatherAndMergeContextItems(
+      propertyContext,
+      inlineRefs,
       allPrompts,
       currentIndex,
       finalStepResponseTexts
@@ -290,7 +311,11 @@ suite("gatherPriorContextItems", () => {
 
   test("includes script step with stdout output for 'previous'", () => {
     const steps: WorkflowStep[] = [
-      makeScriptStep("npm test", { command: "npm test", stdout: "All tests passed", stderr: "" }),
+      makeScriptStep("npm test", {
+        command: "npm test",
+        stdout: "All tests passed",
+        stderr: "",
+      }),
       makePrompt("p2"),
     ];
     const items = harness.exposeGather("previous", steps, 1);
@@ -305,7 +330,11 @@ suite("gatherPriorContextItems", () => {
 
   test("includes script step with stderr output for 'previous'", () => {
     const steps: WorkflowStep[] = [
-      makeScriptStep("npm test", { command: "npm test", stdout: "", stderr: "2 tests failed" }),
+      makeScriptStep("npm test", {
+        command: "npm test",
+        stdout: "",
+        stderr: "2 tests failed",
+      }),
       makePrompt("p2"),
     ];
     const items = harness.exposeGather("previous", steps, 1);
@@ -330,7 +359,11 @@ suite("gatherPriorContextItems", () => {
 
   test("filters out script step with no output and no exitCode", () => {
     const steps: WorkflowStep[] = [
-      makeScriptStep("silent.sh", { command: "silent.sh", stdout: "", stderr: "" }),
+      makeScriptStep("silent.sh", {
+        command: "silent.sh",
+        stdout: "",
+        stderr: "",
+      }),
       makePrompt("p2"),
     ];
     const items = harness.exposeGather("previous", steps, 1);
@@ -339,7 +372,12 @@ suite("gatherPriorContextItems", () => {
 
   test("includes script step with only an exit code (no stdout or stderr)", () => {
     const steps: WorkflowStep[] = [
-      makeScriptStep("exit-only.sh", { command: "exit-only.sh", stdout: "", stderr: "", exitCode: 1 }),
+      makeScriptStep("exit-only.sh", {
+        command: "exit-only.sh",
+        stdout: "",
+        stderr: "",
+        exitCode: 1,
+      }),
       makePrompt("p2"),
     ];
     const items = harness.exposeGather("previous", steps, 1);
@@ -349,7 +387,12 @@ suite("gatherPriorContextItems", () => {
 
   test("includes exit code in text when stdout is also present", () => {
     const steps: WorkflowStep[] = [
-      makeScriptStep("check.sh", { command: "check.sh", stdout: "output", stderr: "", exitCode: 0 }),
+      makeScriptStep("check.sh", {
+        command: "check.sh",
+        stdout: "output",
+        stderr: "",
+        exitCode: 0,
+      }),
       makePrompt("p2"),
     ];
     const items = harness.exposeGather("previous", steps, 1);
@@ -384,7 +427,11 @@ suite("gatherPriorContextItems", () => {
   test("'all' includes mixed prompt and script steps", () => {
     const steps: WorkflowStep[] = [
       makePrompt("p1", "r1", "Analyze"),
-      makeScriptStep("npm test", { command: "npm test", stdout: "pass", stderr: "" }, "Tests"),
+      makeScriptStep(
+        "npm test",
+        { command: "npm test", stdout: "pass", stderr: "" },
+        "Tests"
+      ),
       makePrompt("p3"),
     ];
     const items = harness.exposeGather("all", steps, 2);
@@ -395,6 +442,91 @@ suite("gatherPriorContextItems", () => {
     assert.strictEqual(items[1].index, 1);
     assert.strictEqual(items[1].text, "pass");
     assert.ok(items[1].scriptOutput);
+  });
+});
+
+suite("gatherAndMergeContextItems", () => {
+  let harness: TestHarness;
+
+  setup(() => {
+    harness = new TestHarness(undefined, false);
+  });
+
+  test("deduplicates overlap between property and inline refs", () => {
+    const prompts = [
+      makePrompt("p1", "r1"),
+      makePrompt("p2", "r2"),
+      makePrompt("p3"),
+    ];
+    const items = harness.exposeGatherAndMerge(
+      "previous",
+      [{ kind: "previous" }, { kind: "step", indices: [1] }],
+      prompts,
+      2
+    );
+    assert.deepStrictEqual(
+      items.map((item) => item.index),
+      [1, 0]
+    );
+  });
+
+  test("returns property-only context items", () => {
+    const prompts = [makePrompt("p1", "r1"), makePrompt("p2")];
+    const items = harness.exposeGatherAndMerge("previous", [], prompts, 1);
+    assert.strictEqual(items.length, 1);
+    assert.strictEqual(items[0].index, 0);
+  });
+
+  test("returns inline-only context items", () => {
+    const prompts = [
+      makePrompt("p1", "r1"),
+      makePrompt("p2", "r2"),
+      makePrompt("p3"),
+    ];
+    const items = harness.exposeGatherAndMerge(
+      undefined,
+      [{ kind: "all" }],
+      prompts,
+      2
+    );
+    assert.deepStrictEqual(
+      items.map((item) => item.index),
+      [0, 1]
+    );
+  });
+
+  test("does not deduplicate queue and finalStep items with the same index", () => {
+    const prompts = [makePrompt("p1", "r1"), makePrompt("p2")];
+    const items = harness.exposeGatherAndMerge(
+      "previous",
+      [{ kind: "finalStep" }],
+      prompts,
+      1,
+      ["final output"]
+    );
+    assert.strictEqual(items.length, 2);
+    assert.strictEqual(items[0].index, 0);
+    assert.strictEqual(items[1].index, 0);
+    assert.strictEqual(items[1].type, PRIOR_CONTEXT_ITEM_TYPES.FINAL_STEP);
+  });
+});
+
+suite("refToPriorContext", () => {
+  test("maps inline ref kinds to PriorContext values", () => {
+    assert.strictEqual(refToPriorContext({ kind: "previous" }), "previous");
+    assert.strictEqual(refToPriorContext({ kind: "all" }), "all");
+    assert.strictEqual(
+      refToPriorContext({ kind: "finalStep" }),
+      "finalStepPrevious"
+    );
+    assert.strictEqual(
+      refToPriorContext({ kind: "allFinalStep" }),
+      "finalStepAll"
+    );
+    assert.deepStrictEqual(
+      refToPriorContext({ kind: "step", indices: [1, 3] }),
+      [1, 3]
+    );
   });
 });
 

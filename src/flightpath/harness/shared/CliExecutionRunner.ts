@@ -308,7 +308,7 @@ export class CliExecutionRunner {
         ) {
           const currentHarness =
             session.resolvedProperties?.harness ??
-            (this.deps.provider.config.harnessId);
+            this.deps.provider.config.harnessId;
 
           if (currentHarness === HARNESS_IDS.CLAUDE_CLI) {
             Log.warn(

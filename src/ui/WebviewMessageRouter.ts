@@ -17,6 +17,7 @@ import {
   getHashCompletions,
   getGitChangeCompletions,
   getPromptFileCompletions,
+  getPriorContextCompletions,
 } from "../completions/CompletionHelpers";
 import { resolveSymbol } from "../utils/AttachmentBuilders";
 import { getStashList } from "../utils/GitUtils";
@@ -1313,6 +1314,8 @@ export class WebviewMessageRouter {
       const workspaceRoot =
         vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
       return await getGitChangeCompletions(workspaceRoot, prefix.substring(1)); // Remove ~
+    } else if (trigger === "$") {
+      return getPriorContextCompletions(prefix.substring(1)); // Remove $
     } else if (trigger === "path") {
       return await getPromptFileCompletions(prefix);
     }
