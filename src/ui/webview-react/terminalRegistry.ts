@@ -416,6 +416,10 @@ export const terminalRegistry = {
    * Called when a new run starts.
    */
   clearAiCliSessions(workflowId: string, sessionIds: string[]): void {
+    console.debug(
+      `[terminalRegistry.clearAiCliSessions] wf=${workflowId.slice(0, 8)} clearing ${sessionIds.length} session(s): ` +
+        `[${sessionIds.map((id) => id.slice(0, 8)).join(", ")}]`
+    );
     for (const sessionId of sessionIds) {
       const key = makeKey(workflowId, sessionId);
       const entry = registry.get(key);
@@ -433,6 +437,9 @@ export const terminalRegistry = {
     const key = makeKey(workflowId, sessionId);
     const entry = registry.get(key);
     if (entry) {
+      console.debug(
+        `[terminalRegistry.clearSession] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
+      );
       entry.term.dispose();
       registry.delete(key);
     }

@@ -634,6 +634,10 @@ export class WorkflowOrchestrator {
     // Set viewedId BEFORE loadWorkingFile so retireWorkflow (triggered by terminal
     // state during load) sees isViewed=true and keeps the instance in retiredInstances
     // instead of disposing it immediately.
+    Log.debug(
+      `[loadWorkflowForClient] inst not found in live/retired/CLI for ` +
+        `"${path.basename(filePath)}" — creating fresh instance (clientId=${clientId.slice(0, 12)})`
+    );
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
     this.setViewedWorkflowId(clientId, instance.id);
@@ -1756,22 +1760,38 @@ export class WorkflowOrchestrator {
 
   unregisterClient(clientId: string): void {
     const workflowId = this.getViewedWorkflowId(clientId);
+    const ptyManager = getPtyProcessManager();
+    const ptyCount =
+      workflowId && ptyManager
+        ? ptyManager.getSessionsForWorkflow(workflowId).length
+        : 0;
     Log.debug(
       `[unregisterClient] clientId=${clientId.slice(0, 12)} ` +
         `was viewing inst:${workflowId?.slice(0, 8) ?? "null"} ` +
-        `(retired=${workflowId ? this.retiredInstances.has(workflowId) : false})`
+        `(retired=${workflowId ? this.retiredInstances.has(workflowId) : false}, activePty=${ptyCount})`
     );
     this.viewerRegistry.delete(clientId);
 
     if (!workflowId) return;
 
-    // If the workflow is in retiredInstances and no other client views it, dispose and remove
+    // If the workflow is in retiredInstances and no other client views it, consider disposal.
     if (
       this.retiredInstances.has(workflowId) &&
       !this.isWorkflowViewedByAnyClient(workflowId)
     ) {
+      // Don't dispose while PTY sessions are still running. The instance must remain in
+      // retiredInstances so a reconnecting viewer (e.g. browser page refresh) can find it
+      // by workflowId and receive TERMINAL_STARTED for the still-live sessions.
+      // Cleanup happens on the next unregisterClient call after those sessions have ended.
+      if (ptyCount > 0) {
+        Log.debug(
+          `[unregisterClient] keeping retired inst:${workflowId.slice(0, 8)} — ` +
+            `${ptyCount} active PTY session(s) still running`
+        );
+        return;
+      }
       Log.debug(
-        `[unregisterClient] disposing retired inst:${workflowId.slice(0, 8)} — no clients viewing it`
+        `[unregisterClient] disposing retired inst:${workflowId.slice(0, 8)} — no viewers, no active PTY sessions`
       );
       this.retiredInstances.get(workflowId)?.dispose();
       this.retiredInstances.delete(workflowId);

@@ -451,6 +451,9 @@ export class PtyProcessManager {
   killSession(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (session) {
+      Log.debug(
+        `🖥️ killSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)}`
+      );
       session.pty.kill();
       this.sessions.delete(sessionId);
     }
@@ -464,6 +467,9 @@ export class PtyProcessManager {
   async gracefulKillAiCliSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
+      Log.debug(
+        `🖥️ gracefulKillAiCliSession ${sessionId.slice(0, 8)} (${session.kind}) wf=${session.workflowId.slice(0, 8)}`
+      );
       session.pty.write("\x03");
       session.pty.write("\x03");
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
