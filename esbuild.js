@@ -186,12 +186,19 @@ const copyServerPlugin = {
         fs.mkdirSync(outServer, { recursive: true });
       }
 
-      const shimSrc = path.join(srcServer, "standalone-shim.js");
-      if (fs.existsSync(shimSrc)) {
-        fs.copyFileSync(shimSrc, path.join(outServer, "standalone-shim.js"));
-        console.log(
-          "[copy] standalone-shim.js -> out/server/standalone-shim.js"
-        );
+      const serverStaticFiles = [
+        "standalone-shim.js",
+        "flightpath-service-worker.js",
+      ];
+
+      for (const fileName of serverStaticFiles) {
+        const srcFile = path.join(srcServer, fileName);
+        if (!fs.existsSync(srcFile)) {
+          continue;
+        }
+
+        fs.copyFileSync(srcFile, path.join(outServer, fileName));
+        console.log(`[copy] ${fileName} -> out/server/${fileName}`);
       }
     });
   },
