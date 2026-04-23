@@ -76,18 +76,32 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
 
 interface WebSearchOutputProps {
   query: string;
+  success?: boolean;
+  error?: string;
   className?: string;
 }
 
 export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
   query,
+  success,
+  error,
   className = "",
 }) => (
   <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
     <div className={TOOL_CALL_LINE}>
-      <ToolDot status="pending" />
+      <ToolDot
+        status={
+          success === undefined ? "pending" : success ? "success" : "error"
+        }
+      />
       <span>Web search: &ldquo;{query}&rdquo;</span>
     </div>
+    {error && (
+      <div className={TOOL_ERROR_LINE}>
+        <span className="text-vscode-description-fg shrink-0">{"  ⎿  "}</span>
+        <div className="inline whitespace-pre-wrap break-words">{error}</div>
+      </div>
+    )}
   </div>
 );
 
@@ -329,8 +343,19 @@ export const ToolCallOutput: React.FC<ToolCallOutputProps> = ({
     }
 
     case CLI_EVENT_TYPES.WEB_SEARCH: {
-      const searchData = data as { query: string };
-      return <WebSearchOutput query={searchData.query} className={className} />;
+      const searchData = data as {
+        query: string;
+        success?: boolean;
+        error?: string;
+      };
+      return (
+        <WebSearchOutput
+          query={searchData.query}
+          success={searchData.success}
+          error={searchData.error}
+          className={className}
+        />
+      );
     }
 
     case CLI_EVENT_TYPES.TOOL_CALL: {

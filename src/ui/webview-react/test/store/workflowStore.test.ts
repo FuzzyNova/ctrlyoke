@@ -5,9 +5,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
+  CLI_EVENT_TYPES,
   EXECUTION_STATES,
   STEP_STATUS,
   FINAL_STEP_PHASES,
+  OPERATION_STATUS,
   OUTPUT_HISTORY_KINDS,
 } from "@/types/messages";
 import type { PromptStep, CliOutput } from "@/types/messages";
@@ -240,6 +242,61 @@ describe("clearStreamingChunk", () => {
     store().appendStreamingChunk(0, "text");
     store().clearStreamingChunk(0);
     expect(store().streamingChunks[0]).toBe("");
+  });
+});
+
+describe("appendStreamingEvents", () => {
+  it("collapses duplicate tool lifecycle events into one semantic event", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    store().appendStreamingEvents(0, [
+      {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        data: {
+          path: "src/example.ts",
+          status: OPERATION_STATUS.INITIATED,
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.TOOL_RESULT,
+        data: {
+          toolCallId: "read-1",
+          result: { success: true, output: "contents" },
+        },
+      },
+    ]);
+
+    store().appendStreamingEvents(0, [
+      {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        data: {
+          path: "src/example.ts",
+          content: "contents",
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        },
+      },
+    ]);
+
+    const entry = store().liveOrderedEntries.find(
+      (item) =>
+        item.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        "target" in item &&
+        item.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        item.target.stepIndex === 0
+    );
+
+    const events = entry && "cliOutput" in entry ? entry.cliOutput.structured?.events : undefined;
+    expect(events).toHaveLength(1);
+    expect(events?.[0]).toMatchObject({
+      type: CLI_EVENT_TYPES.FILE_READ,
+      data: {
+        path: "src/example.ts",
+        content: "contents",
+        status: OPERATION_STATUS.COMPLETED,
+        success: true,
+      },
+    });
   });
 });
 

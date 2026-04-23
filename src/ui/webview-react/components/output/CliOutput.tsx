@@ -4,6 +4,7 @@ import {
   getFirstWords,
   isStructuredPatchMalformed,
 } from "@utils/outputUtils";
+import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import { calcContextPct } from "@utils/tokenUtils";
 import { generateId } from "@utils/string";
 import { BashOutput } from "./BashOutput";
@@ -347,7 +348,14 @@ const SingleEvent = memo<SingleEventProps>(
       case CLI_EVENT_TYPES.WEB_SEARCH: {
         const data = event.data as WebSearchData;
         if (!data.query) return null;
-        return <WebSearchOutput key={eventKey} query={data.query} />;
+        return (
+          <WebSearchOutput
+            key={eventKey}
+            query={data.query}
+            success={data.success}
+            error={data.error}
+          />
+        );
       }
 
       case CLI_EVENT_TYPES.TOOL_CALL: {
@@ -436,13 +444,10 @@ interface StructuredOutputProps {
  * events array reference changes (which happens only when new events arrive or
  * the last event's text grows via mergeStreamingEvents in workflowStore).
  *
- * FILE_EDIT deduplication: harnesses like claude-cli emit both an INITIATED
- * event (the attempted diff) and a COMPLETED event (the applied diff + undo
- * button) for the same file edit. When a COMPLETED event exists for a given
- * path, the INITIATED event's diff is hidden — the COMPLETED version has
- * better diff data (structuredPatch with line numbers) and carries the undo
- * button. The INITIATED tool line ("Editing …") remains visible. When an edit
- * FAILS, the INITIATED diff is kept so the attempted change is visible.
+ * Shared event normalization collapses duplicated tool lifecycles before render
+ * (for example initiated + tool_result + completed → one semantic event).
+ * The remaining render-time hideDiff/hideRow guards are kept as a safety net
+ * for older history entries that were persisted before normalization existed.
  */
 const StructuredOutput = memo<StructuredOutputProps>(
   ({
@@ -461,18 +466,19 @@ const StructuredOutput = memo<StructuredOutputProps>(
     // each INITIATED is only affected by the *next* edit of the same file.
     // When an edit FAILS the diff remains visible alongside the error.
     const visibleEvents = useMemo(() => {
+      const normalizedEvents = normalizeCliEvents(events);
       const indicesToHideDiff = new Set<number>();
       const indicesToHideRow = new Set<number>();
 
-      for (let i = 0; i < events.length; i++) {
-        const event = events[i];
+      for (let i = 0; i < normalizedEvents.length; i++) {
+        const event = normalizedEvents[i];
 
         // FILE_EDIT: hide diff on INITIATED when a COMPLETED follows for the same path.
         if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
           const data = event.data as FileEditData;
           if (data.status === OPERATION_STATUS.INITIATED) {
-            for (let j = i + 1; j < events.length; j++) {
-              const next = events[j];
+            for (let j = i + 1; j < normalizedEvents.length; j++) {
+              const next = normalizedEvents[j];
               if (next.type !== CLI_EVENT_TYPES.FILE_EDIT) continue;
               const nextData = next.data as FileEditData;
               if (!nextData.path || !data.path) continue;
@@ -492,8 +498,8 @@ const StructuredOutput = memo<StructuredOutputProps>(
         if (event.type === CLI_EVENT_TYPES.BASH_COMMAND) {
           const data = event.data as BashCommandData;
           if (data.status === OPERATION_STATUS.INITIATED && data.command) {
-            for (let j = i + 1; j < events.length; j++) {
-              const next = events[j];
+            for (let j = i + 1; j < normalizedEvents.length; j++) {
+              const next = normalizedEvents[j];
               if (next.type !== CLI_EVENT_TYPES.BASH_COMMAND) continue;
               const nextData = next.data as BashCommandData;
               if (nextData.command !== data.command) continue;
@@ -509,7 +515,7 @@ const StructuredOutput = memo<StructuredOutputProps>(
         }
       }
 
-      return events.map((event, i) => ({
+      return normalizedEvents.map((event, i) => ({
         event,
         originalIndex: i,
         hideDiff: indicesToHideDiff.has(i),

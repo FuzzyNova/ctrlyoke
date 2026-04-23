@@ -42,6 +42,7 @@ import { useUiStore } from "./uiStore";
 import { WebviewLog } from "@utils/logger";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
 import type { WorkflowProperties } from "./settingsStore";
+import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 
 /**
  * Merge incoming structured events into an existing CliOutput array.
@@ -74,7 +75,7 @@ function mergeStreamingEvents(existing: any[], incoming: any[]): any[] {
     }
     result.push(event);
   }
-  return result;
+  return normalizeCliEvents(result);
 }
 
 /**

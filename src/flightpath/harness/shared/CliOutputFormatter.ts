@@ -15,6 +15,7 @@ import {
   ToolResultData,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { normalizeCliEvents } from "../../../utils/CliEventNormalizer";
 
 /**
  * Dashboard-ready output format.
@@ -132,7 +133,7 @@ export class CliOutputFormatter {
    */
   static toDashboardFormat(output: UniversalCliOutput): DashboardOutput {
     return {
-      events: output.events,
+      events: normalizeCliEvents(output.events),
       metadata: output.metadata,
     };
   }
@@ -208,7 +209,7 @@ export class CliOutputFormatter {
     }
 
     return {
-      events: outputs.flatMap((o) => o.events),
+      events: normalizeCliEvents(outputs.flatMap((o) => o.events)),
       // Use metadata from the last output (most complete)
       metadata: outputs[outputs.length - 1].metadata,
     };

@@ -4,6 +4,7 @@ import { isScriptStep } from "../types/FlightPathTypes";
 import { EXECUTION_STATES } from "../types/FlightPathTypes";
 import { FINAL_STEP_PHASES } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import { normalizeCliEvents } from "../utils/CliEventNormalizer";
 import { Log } from "../utils/Log";
 
 /**
@@ -206,7 +207,10 @@ export class OutputCaptureBuffer {
   captureEvents(stepIndex: number, events: CliEvent[]): void {
     const existing = this.stepOutputBuffer.get(stepIndex);
     if (existing) {
-      existing.accumulatedEvents.push(...events);
+      existing.accumulatedEvents = normalizeCliEvents([
+        ...existing.accumulatedEvents,
+        ...events,
+      ]);
     }
   }
 
@@ -284,7 +288,10 @@ export class OutputCaptureBuffer {
   captureFinalStepEvents(loopIndex: number, events: CliEvent[]): void {
     const existing = this.finalStepOutputBuffer.get(loopIndex);
     if (existing) {
-      existing.accumulatedEvents.push(...events);
+      existing.accumulatedEvents = normalizeCliEvents([
+        ...existing.accumulatedEvents,
+        ...events,
+      ]);
     }
   }
 
@@ -335,7 +342,7 @@ export class OutputCaptureBuffer {
       structured:
         buffer.accumulatedEvents.length > 0
           ? {
-              events: [...buffer.accumulatedEvents],
+              events: normalizeCliEvents(buffer.accumulatedEvents),
               metadata: {},
             }
           : undefined,
@@ -509,7 +516,10 @@ export class OutputCaptureBuffer {
           response: buffer.accumulatedText,
           structured:
             buffer.accumulatedEvents.length > 0
-              ? { events: [...buffer.accumulatedEvents], metadata: {} }
+              ? {
+                  events: normalizeCliEvents(buffer.accumulatedEvents),
+                  metadata: {},
+                }
               : undefined,
           elapsed: 0,
           tokens: undefined,
