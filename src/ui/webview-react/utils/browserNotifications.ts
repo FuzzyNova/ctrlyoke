@@ -1,6 +1,7 @@
 import {
   BROWSER_NOTIFICATION_MODES,
   COMPLETION_NOTIFICATION_SEVERITY,
+  HOSTED_ICON_PATHS,
   SERVICE_WORKER_BADGE_MESSAGE_TYPES,
   type BrowserNotificationMode,
   type ServiceWorkerBadgeMessageType,
@@ -227,7 +228,8 @@ async function showSystemNotification(
 ): Promise<void> {
   const notificationOptions: NotificationOptions = {
     body: event.body,
-    icon: "/flightpath-icon.svg",
+    icon: HOSTED_ICON_PATHS.APP_ICON_PNG,
+    badge: HOSTED_ICON_PATHS.FAVICON_PNG,
     tag: event.tag,
     data: {
       url: event.url,

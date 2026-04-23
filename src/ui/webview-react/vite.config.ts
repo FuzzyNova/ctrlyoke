@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import path from "path";
+import { HOSTED_ICON_FILES } from "../../types/DashboardConstants";
 
 export default defineConfig(({ mode }) => ({
   plugins: [
@@ -37,6 +38,23 @@ export default defineConfig(({ mode }) => ({
         // Copy extension logo for browser-hosted dashboard background
         {
           src: "../../../images/flightpath-icon.svg",
+          dest: ".",
+        },
+        // Copy hosted dashboard favicon/PWA assets
+        {
+          src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_PNG}`,
+          dest: ".",
+        },
+        {
+          src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_SVG}`,
+          dest: ".",
+        },
+        {
+          src: `../../../images/${HOSTED_ICON_FILES.FAVICON_PNG}`,
+          dest: ".",
+        },
+        {
+          src: `../../../images/${HOSTED_ICON_FILES.FAVICON_SVG}`,
           dest: ".",
         },
       ],

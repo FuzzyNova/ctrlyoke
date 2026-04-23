@@ -1,11 +1,18 @@
 import * as fs from "fs";
 import * as path from "path";
-import { SERVICE_WORKER_BADGE_MESSAGE_TYPES } from "../types/DashboardConstants";
+import {
+  HOSTED_ICON_PATHS,
+  SERVICE_WORKER_BADGE_MESSAGE_TYPES,
+} from "../types/DashboardConstants";
 
 const CLEAR_BADGE_MESSAGE_TYPE_PLACEHOLDER =
   "__FLIGHTPATH_CLEAR_BADGE_MESSAGE_TYPE__";
 const INCREMENT_BADGE_MESSAGE_TYPE_PLACEHOLDER =
   "__FLIGHTPATH_INCREMENT_BADGE_MESSAGE_TYPE__";
+const NOTIFICATION_ICON_PATH_PLACEHOLDER =
+  "__FLIGHTPATH_NOTIFICATION_ICON_PATH__";
+const NOTIFICATION_BADGE_PATH_PLACEHOLDER =
+  "__FLIGHTPATH_NOTIFICATION_BADGE_PATH__";
 const SERVICE_WORKER_TEMPLATE_CANDIDATE_PATHS = [
   path.join(__dirname, "server", "flightpath-service-worker.js"),
   path.join(__dirname, "flightpath-service-worker.js"),
@@ -27,6 +34,16 @@ export function renderHostedServiceWorkerScript(template: string): string {
     script,
     INCREMENT_BADGE_MESSAGE_TYPE_PLACEHOLDER,
     SERVICE_WORKER_BADGE_MESSAGE_TYPES.INCREMENT_NOTIFICATION_BADGE
+  );
+  script = replacePlaceholder(
+    script,
+    NOTIFICATION_ICON_PATH_PLACEHOLDER,
+    HOSTED_ICON_PATHS.APP_ICON_PNG
+  );
+  script = replacePlaceholder(
+    script,
+    NOTIFICATION_BADGE_PATH_PLACEHOLDER,
+    HOSTED_ICON_PATHS.FAVICON_PNG
   );
   return script;
 }

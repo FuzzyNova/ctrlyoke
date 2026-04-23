@@ -316,6 +316,20 @@ export const SERVICE_WORKER_BADGE_MESSAGE_TYPES = {
 export type ServiceWorkerBadgeMessageType =
   (typeof SERVICE_WORKER_BADGE_MESSAGE_TYPES)[keyof typeof SERVICE_WORKER_BADGE_MESSAGE_TYPES];
 
+export const HOSTED_ICON_FILES = {
+  APP_ICON_PNG: "icon.png",
+  APP_ICON_SVG: "flightpath-color-icon.svg",
+  FAVICON_PNG: "flightpath-icon-color-simple.png",
+  FAVICON_SVG: "flightpath-icon-color-simple.svg",
+} as const;
+
+export const HOSTED_ICON_PATHS = {
+  APP_ICON_PNG: `/${HOSTED_ICON_FILES.APP_ICON_PNG}`,
+  APP_ICON_SVG: `/${HOSTED_ICON_FILES.APP_ICON_SVG}`,
+  FAVICON_PNG: `/${HOSTED_ICON_FILES.FAVICON_PNG}`,
+  FAVICON_SVG: `/${HOSTED_ICON_FILES.FAVICON_SVG}`,
+} as const;
+
 // ============================================================================
 // COMPLETION NOTIFICATION KINDS - Structured completion event categories
 // ============================================================================

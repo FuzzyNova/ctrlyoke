@@ -18,6 +18,7 @@ import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import {
   BROWSER_NOTIFICATION_MODES,
+  HOSTED_ICON_PATHS,
   MESSAGE_TYPES,
   BROWSER_CLIENT_PREFIX,
   type FinalStepPhase,
@@ -607,9 +608,14 @@ export class FlightPathHostedServer
 
     // Inject theme vars and standalone shim before </head>.
     const themeBlock = this.buildThemeStyleBlock();
+    const hostedIconLinks = [
+      `<link rel="icon" type="image/svg+xml" href="${HOSTED_ICON_PATHS.FAVICON_SVG}" />`,
+      `<link rel="icon" type="image/png" sizes="512x512" href="${HOSTED_ICON_PATHS.FAVICON_PNG}" />`,
+      `<link rel="apple-touch-icon" href="${HOSTED_ICON_PATHS.APP_ICON_PNG}" />`,
+    ].join("");
     return html.replace(
       "</head>",
-      `${themeBlock}<link rel="manifest" href="/manifest.webmanifest?token=${encodeURIComponent(this.token)}" /><script src="/standalone-shim.js"></script></head>`
+      `${themeBlock}${hostedIconLinks}<link rel="manifest" href="/manifest.webmanifest?token=${encodeURIComponent(this.token)}" /><script src="/standalone-shim.js"></script></head>`
     );
   }
 
@@ -637,10 +643,16 @@ export class FlightPathHostedServer
       scope: "/",
       icons: [
         {
-          src: "/flightpath-icon.svg",
+          src: HOSTED_ICON_PATHS.APP_ICON_PNG,
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "any",
+        },
+        {
+          src: HOSTED_ICON_PATHS.APP_ICON_SVG,
           sizes: "any",
           type: "image/svg+xml",
-          purpose: "any maskable",
+          purpose: "any",
         },
       ],
       theme_color: "#1f1f1f",

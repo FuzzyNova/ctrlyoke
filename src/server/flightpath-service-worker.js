@@ -15,8 +15,8 @@ self.addEventListener("push", (event) => {
     Promise.all([
       self.registration.showNotification(payload.title || "FlightPath", {
         body: payload.body || "Workflow update available",
-        icon: "/flightpath-icon.svg",
-        badge: "/flightpath-icon.svg",
+        icon: "__FLIGHTPATH_NOTIFICATION_ICON_PATH__",
+        badge: "__FLIGHTPATH_NOTIFICATION_BADGE_PATH__",
         tag: payload.tag,
         data: { url: payload.url || "/" },
       }),
