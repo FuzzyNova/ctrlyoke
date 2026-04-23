@@ -21,14 +21,14 @@ so the same step's content is never attached twice.
 
 ## New `$` Syntax
 
-| Syntax            | Equivalent property               | Description                                      |
-| ----------------- | --------------------------------- | ------------------------------------------------ |
-| `$previous`       | `priorContext: previous`          | Output of the immediately preceding queue prompt |
-| `$all`            | `priorContext: all`               | Outputs of all prior queue prompts               |
-| `$finalStep`      | `priorContext: finalStepPrevious` | Output of the previous finalStep loop execution  |
-| `$allFinalStep`   | `priorContext: finalStepAll`      | Outputs of all finalStep loop executions         |
-| `$prompt:N`       | `priorContext: [N]`               | Output of a specific prompt by 1-based number    |
-| `$prompt:N,M,A-B` | `priorContext: [N,M,A,…,B]`       | Outputs of specific prompts via range notation   |
+| Syntax          | Equivalent property               | Description                                     |
+| --------------- | --------------------------------- | ----------------------------------------------- |
+| `$previous`     | `priorContext: previous`          | Output of the immediately preceding queue step  |
+| `$all`          | `priorContext: all`               | Outputs of all prior queue steps                |
+| `$finalStep`    | `priorContext: finalStepPrevious` | Output of the previous finalStep loop execution |
+| `$allFinalStep` | `priorContext: finalStepAll`      | Outputs of all finalStep loop executions        |
+| `$step:N`       | `priorContext: [N]`               | Output of a specific step by 1-based number     |
+| `$step:N,M,A-B` | `priorContext: [N,M,A,…,B]`       | Outputs of specific steps via range notation    |
 
 Range notation uses the same `1,2,4-10` format already supported in `PriorContextSelect`. Any
 combination of comma-separated numbers and `A-B` ranges is valid.
@@ -51,13 +51,13 @@ steps:
     prompt: |
       $previous
 
-      Now also incorporate the patterns from $prompt:1.
+      Now also incorporate the patterns from $step:1.
       Implement all the suggestions.
 ```
 
 ### Stretch goal: cross-workflow reference
 
-`$workflow-xyz:prompt:1` — reference output from a named workflow's step 1. Deferred until
+`$workflow-xyz:step:1` — reference output from a named workflow's step 1. Deferred until
 `OutputHistoryManager` exposes a lookup API by workflow name and step index. The parser will
 ignore unrecognized `$xxx` tokens, so old files won't break when support is added.
 
@@ -99,11 +99,11 @@ export type InlinePriorContextRef =
   | { kind: "all" }
   | { kind: "finalStep" }
   | { kind: "allFinalStep" }
-  | { kind: "prompt"; indices: number[] }; // 1-based, sorted, deduped
+  | { kind: "step"; indices: number[] }; // 1-based, sorted, deduped
 
 export interface InlinePriorContextMatch {
   ref: InlinePriorContextRef;
-  /** The full matched token, e.g. "$previous" or "$prompt:1,3-5". */
+  /** The full matched token, e.g. "$previous" or "$step:1,3-5". */
   token: string;
 }
 ```
@@ -114,14 +114,14 @@ export interface InlinePriorContextMatch {
 export function parseInlinePriorContextRefs(
   text: string
 ): InlinePriorContextMatch[] {
-  // Regex: $ followed by one of the known keywords or "prompt:range"
+  // Regex: $ followed by one of the known keywords or "step:range"
   // Terminated by whitespace, end-of-string, or non-token char
 }
 ```
 
-Recognized tokens: `$previous`, `$all`, `$finalStep`, `$allFinalStep`, `$prompt:RANGE`.
+Recognized tokens: `$previous`, `$all`, `$finalStep`, `$allFinalStep`, `$step:RANGE`.
 Unrecognized `$xxx` tokens are silently ignored (pass through to the AI unchanged).
-Invalid `$prompt:` ranges (e.g. `$prompt:abc`) are logged as a warning and skipped.
+Invalid `$step:` ranges (e.g. `$step:abc`) are logged as a warning and skipped.
 
 ### Range notation utility
 
@@ -144,27 +144,32 @@ export function parseRangeNotation(text: string): number[] | null { ... }
 
 ### `HarnessIntegration.gatherPriorContextItems()` / `buildPriorContextXml()`
 
-These methods remain in the base class. Their signatures do not change. The only change is in
-how they're called: after gathering items from the `priorContext` property, also gather items
-from inline refs and merge with deduplication before building the XML.
+These methods remain in the base class. The only change is splitting `buildPriorContextXml`
+into two steps so items can be gathered from multiple sources first:
 
-Add a new protected helper:
+- `gatherPriorContextItems(context, allSteps, promptIndex, finalStepResponseTexts)` — unchanged
+  signature; already accepts `WorkflowStep[]` and handles both prompt and script step types
+- `buildPriorContextXmlFromItems(items: PriorContextItem[]): string` — new overload that accepts
+  pre-gathered items directly (the original `buildPriorContextXml` full-pipeline method is
+  refactored to call this internally)
+
+Add a new protected helper for merged gathering:
 
 ```typescript
 protected gatherAndMergeContextItems(
   propertyContext: PriorContext | undefined,
   inlineRefs: InlinePriorContextRef[],
-  allsteps: WorkflowStep[],
+  allSteps: WorkflowStep[],
   promptIndex: number,
   finalStepResponseTexts: string[]
 ): PriorContextItem[] {
   const propertyItems =
     propertyContext && propertyContext !== "none"
-      ? this.gatherPriorContextItems(propertyContext, allPrompts, promptIndex, finalStepResponseTexts)
+      ? this.gatherPriorContextItems(propertyContext, allSteps, promptIndex, finalStepResponseTexts)
       : [];
 
   const inlineItems = inlineRefs.flatMap((ref) =>
-    this.gatherPriorContextItems(refToPriorContext(ref), allPrompts, promptIndex, finalStepResponseTexts)
+    this.gatherPriorContextItems(refToPriorContext(ref), allSteps, promptIndex, finalStepResponseTexts)
   );
 
   // Deduplicate by (index, type) — property items take priority
@@ -172,8 +177,24 @@ protected gatherAndMergeContextItems(
 }
 ```
 
-Where `refToPriorContext(ref: InlinePriorContextRef): PriorContext` maps each ref to the
-equivalent `PriorContext` value (e.g. `{ kind: "previous" } → "previous"`).
+`refToPriorContext` maps each `InlinePriorContextRef` to the equivalent `PriorContext` value:
+
+```typescript
+function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
+  switch (ref.kind) {
+    case "previous":
+      return "previous";
+    case "all":
+      return "all";
+    case "finalStep":
+      return "finalStepPrevious";
+    case "allFinalStep":
+      return "finalStepAll";
+    case "step":
+      return ref.indices; // number[]
+  }
+}
+```
 
 Add a private utility:
 
@@ -193,19 +214,22 @@ function deduplicatePriorContextItems(
 
 ### `CliPromptPreparerDeps` interface
 
-Add the new dep:
+Replace the existing `buildPriorContextXml` dep with two focused deps:
 
 ```typescript
 gatherAndMergeContextItems: (
   propertyContext: PriorContext | undefined,
   inlineRefs: InlinePriorContextRef[],
-  allsteps: PromptItem[],
+  allSteps: WorkflowStep[],
   promptIndex: number,
   finalStepResponseTexts: string[]
 ) => PriorContextItem[];
+
+buildPriorContextXmlFromItems: (items: PriorContextItem[]) => string;
 ```
 
-The existing `buildPriorContextXml` dep (called after gathering) is unchanged.
+The old `buildPriorContextXml` dep (full-pipeline: gather + build) is **removed** from
+`CliPromptPreparerDeps`. All callers migrate to the two-step approach above.
 
 ### `CliPromptPreparer.preparePrompt()`
 
@@ -222,6 +246,7 @@ const hasPriorContext =
 
 const contextContent = hasPriorContext
   ? (() => {
+      // allPrompts is WorkflowStep[] — includes both prompt and script step types
       const items = this.deps.gatherAndMergeContextItems(
         resolvedPriorContext,
         inlineRefs,
@@ -236,15 +261,11 @@ const contextContent = hasPriorContext
   : undefined;
 ```
 
-Add a new dep `buildPriorContextXmlFromItems(items: PriorContextItem[]): string` that takes
-pre-gathered items (replacing the existing full-pipeline dep). The `buildPriorContextXml` base
-class method is refactored to accept items directly (the gathering step is separated out).
-
 ### `CopilotChatIntegration`
 
 Locate the `resolvedProperties.priorContext` reference (around line 1192). After resolving the
 property value, also call `parseInlinePriorContextRefs(promptText)` and merge via
-`gatherAndMergeContextItems`. The resulting items feed the same XML builder. The
+`gatherAndMergeContextItems`. The resulting items feed `buildPriorContextXmlFromItems`. The
 `.context.prompt.md` temp file mechanism is unchanged — only its input changes.
 
 ---
@@ -260,11 +281,11 @@ export function getPriorContextCompletions(
   filterText: string
 ): PlainCompletionItem[] {
   const keywords = [
-    { label: "previous", detail: "Output of the previous prompt" },
-    { label: "all", detail: "Outputs of all prior prompts" },
+    { label: "previous", detail: "Output of the previous step" },
+    { label: "all", detail: "Outputs of all prior steps" },
     { label: "finalStep", detail: "Previous finalStep output" },
     { label: "allFinalStep", detail: "All finalStep outputs" },
-    { label: "prompt:", detail: "Specific prompts — e.g. $prompt:1,3-5" },
+    { label: "step:", detail: "Specific steps — e.g. $step:1,3-5" },
   ];
   return keywords
     .filter((k) => k.label.startsWith(filterText))
@@ -335,7 +356,7 @@ Add the `$` branch in `getCompletionItems()`:
 `PriorContextSelect`, `ContextQuickPicker`, and the Context tab are all untouched by this plan.
 The Additional Instructions plan reuses the Context tab independently.
 
-**`$workflow-xyz:prompt:N` cross-workflow syntax.** Deferred. The parser ignores unrecognized
+**`$workflow-xyz:step:N` cross-workflow syntax.** Deferred. The parser ignores unrecognized
 `$xxx` tokens today, so files won't break when support is added later.
 
 **Tests to add:**
@@ -346,21 +367,22 @@ The Additional Instructions plan reuses the Context tab independently.
   migrated to the new utility
 - `gatherAndMergeContextItems()` — overlap deduplication, all-from-property-only,
   all-from-refs-only, mixed
+- `refToPriorContext()` — each `InlinePriorContextRef` kind maps to the correct `PriorContext`
 
 ---
 
 ## File Change Summary
 
-| File                                                            | Change                                                                                                                                                    |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/utils/RangeNotationParser.ts`                              | New — extract `parseRangeNotation()` from `PriorContextSelect.tsx`                                                                                        |
-| `src/utils/FileReferenceParser.ts`                              | Add `parseInlinePriorContextRefs()`, `InlinePriorContextRef`, `InlinePriorContextMatch`                                                                   |
-| `src/ui/webview-react/components/shared/PriorContextSelect.tsx` | Import `parseRangeNotation` from new utility instead of defining it locally                                                                               |
-| `src/flightpath/HarnessIntegration.ts`                          | Add `gatherAndMergeContextItems()`, `deduplicatePriorContextItems()`, `refToPriorContext()`; refactor `buildPriorContextXml` to accept pre-gathered items |
-| `src/flightpath/harness/shared/CliPromptPreparer.ts`            | Replace `resolvedPriorContext`-only block with merged property+inline logic; update `CliPromptPreparerDeps`                                               |
-| `src/flightpath/harness/chat/CopilotChatIntegration.ts`         | Add inline ref parsing alongside property resolution                                                                                                      |
-| `src/completions/CompletionHelpers.ts`                          | Add `getPriorContextCompletions()`                                                                                                                        |
-| `src/completions/PromptCompletionProvider.ts`                   | Add `$` to `TriggerChar`; add `getDollarCompletions()`; extend `lastIndexOf` block                                                                        |
-| `src/extension.ts`                                              | Add `"$"` to completion trigger characters                                                                                                                |
-| `src/ui/WebviewMessageRouter.ts`                                | Add `$` branch to `getCompletionItems()`                                                                                                                  |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`   | Add `lastDollarIndex`; add `$` character class validation                                                                                                 |
+| File                                                            | Change                                                                                                                                                                                                         |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/utils/RangeNotationParser.ts`                              | New — extract `parseRangeNotation()` from `PriorContextSelect.tsx`                                                                                                                                             |
+| `src/utils/FileReferenceParser.ts`                              | Add `parseInlinePriorContextRefs()`, `InlinePriorContextRef`, `InlinePriorContextMatch`                                                                                                                        |
+| `src/ui/webview-react/components/shared/PriorContextSelect.tsx` | Import `parseRangeNotation` from new utility instead of defining it locally                                                                                                                                    |
+| `src/flightpath/HarnessIntegration.ts`                          | Add `gatherAndMergeContextItems()`, `buildPriorContextXmlFromItems()`, `deduplicatePriorContextItems()`, `refToPriorContext()`; refactor `buildPriorContextXml` to delegate to `buildPriorContextXmlFromItems` |
+| `src/flightpath/harness/shared/CliPromptPreparer.ts`            | Replace `resolvedPriorContext`-only block with merged property+inline logic; replace `buildPriorContextXml` dep with `gatherAndMergeContextItems` + `buildPriorContextXmlFromItems`                            |
+| `src/flightpath/harness/chat/CopilotChatIntegration.ts`         | Add inline ref parsing alongside property resolution; switch to `buildPriorContextXmlFromItems`                                                                                                                |
+| `src/completions/CompletionHelpers.ts`                          | Add `getPriorContextCompletions()`                                                                                                                                                                             |
+| `src/completions/PromptCompletionProvider.ts`                   | Add `$` to `TriggerChar`; add `getDollarCompletions()`; extend `lastIndexOf` block                                                                                                                             |
+| `src/extension.ts`                                              | Add `"$"` to completion trigger characters                                                                                                                                                                     |
+| `src/ui/WebviewMessageRouter.ts`                                | Add `$` branch to `getCompletionItems()`                                                                                                                                                                       |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`   | Add `lastDollarIndex`; add `$` character class validation                                                                                                                                                      |
