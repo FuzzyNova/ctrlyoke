@@ -656,6 +656,13 @@ export class WebviewMessageRouter {
       this.serializer.handleGetRecentWorkflows(this.getCurrentPostMessage());
     });
 
+    table.set(MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE, async (message) => {
+      const { filePath } = message;
+      if (filePath) {
+        await this.serializer.handleToggleFavorite(filePath);
+      }
+    });
+
     table.set(MESSAGE_TYPES.LOAD_WORKFLOW, async (message) => {
       const orchestrator = this.getOrchestrator();
       if (orchestrator) {

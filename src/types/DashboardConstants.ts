@@ -70,6 +70,7 @@ export const MESSAGE_TYPES = {
   RECENT_WORKFLOWS: "recentWorkflows", // Extension -> Webview: Send workflow history
   LOAD_WORKFLOW: "loadWorkflow", // Webview -> Extension: Load specific workflow
   CLEAR_WORKFLOW_HISTORY: "clearWorkflowHistory", // Webview -> Extension: Delete all history files
+  TOGGLE_WORKFLOW_FAVORITE: "toggleWorkflowFavorite", // Webview -> Extension: Toggle favorite on a recent workflow entry { filePath }
 
   // Settings view messages
   CHANGE_MODEL: "changeModel",

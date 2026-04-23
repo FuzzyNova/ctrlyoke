@@ -1,5 +1,8 @@
 import React from "react";
-import { getExecutionStateBadgeClass, getExecutionStateBadgeIcon } from "../../utils/status";
+import {
+  getExecutionStateBadgeClass,
+  getExecutionStateBadgeIcon,
+} from "../../utils/status";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 
@@ -9,6 +12,7 @@ interface RecentWorkflow {
   executionState: string;
   lastModifiedAt?: number;
   startedAt?: number;
+  isFavorite?: boolean;
 }
 
 interface RecentWorkflowsProps {
@@ -18,6 +22,7 @@ interface RecentWorkflowsProps {
   onSelect: (filePath: string) => void;
   onClearHistory: () => void;
   onRemove?: (filePath: string) => void;
+  onToggleFavorite?: (filePath: string) => void;
   onNewWorkflow?: () => void;
   onClose?: () => void;
   showCloseButton?: boolean;
@@ -45,6 +50,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   onSelect,
   onClearHistory,
   onRemove,
+  onToggleFavorite,
   onNewWorkflow,
   onClose,
   showCloseButton = false,
@@ -124,13 +130,17 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 )}
 
                 {/* Execution State Badge — fixed-width column so badges align across rows */}
-                <span className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[76px]"}`}>
+                <span
+                  className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[76px]"}`}
+                >
                   <span
                     className={`workflow-menu-item-state inline-flex items-center text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
                     title={isNarrow ? workflow.executionState : undefined}
                   >
                     {isNarrow ? (
-                      <i className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`} />
+                      <i
+                        className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`}
+                      />
                     ) : (
                       workflow.executionState
                     )}
@@ -141,6 +151,35 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 <span className="workflow-menu-item-time text-[11px] text-description-fg flex-shrink-0 w-[80px] text-right">
                   {timeAgo || ""}
                 </span>
+
+                {onToggleFavorite && (
+                  <button
+                    type="button"
+                    title={
+                      workflow.isFavorite
+                        ? "Remove from favorites"
+                        : "Add to favorites"
+                    }
+                    aria-label={
+                      workflow.isFavorite
+                        ? "Remove from favorites"
+                        : "Add to favorites"
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleFavorite(workflow.filePath);
+                    }}
+                    className={`flex-shrink-0 p-0.5 rounded transition-colors ${
+                      workflow.isFavorite
+                        ? "text-yellow-400 hover:text-yellow-300 hover:bg-toolbar-hover-bg"
+                        : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-yellow-400 hover:bg-toolbar-hover-bg"
+                    }`}
+                  >
+                    <i
+                      className={`codicon ${workflow.isFavorite ? "codicon-star-full" : "codicon-star-empty"}`}
+                    />
+                  </button>
+                )}
 
                 {/* Delete button — visible only on row hover */}
                 {onRemove && (

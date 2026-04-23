@@ -230,11 +230,22 @@ describe("clearHistoryView", () => {
 describe("setRecentWorkflows", () => {
   it("replaces recent workflows list", () => {
     store().setRecentWorkflows([
-      { name: "wf1", path: "/path/wf1.yaml", lastUsed: 1000 },
-      { name: "wf2", path: "/path/wf2.yaml", lastUsed: 900 },
+      {
+        workflowName: "wf1",
+        filePath: "/path/wf1.yaml",
+        executionState: "idle",
+        lastModifiedAt: 1000,
+        isFavorite: true,
+      },
+      {
+        workflowName: "wf2",
+        filePath: "/path/wf2.yaml",
+        executionState: "completed",
+        lastModifiedAt: 900,
+      },
     ]);
     expect(store().recentWorkflows).toHaveLength(2);
-    expect(store().recentWorkflows[0].name).toBe("wf1");
+    expect(store().recentWorkflows[0].workflowName).toBe("wf1");
   });
 });
 

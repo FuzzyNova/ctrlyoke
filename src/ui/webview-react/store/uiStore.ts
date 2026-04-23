@@ -95,9 +95,12 @@ export interface SaveWorkflowDialogData {
  * Recent workflow entry
  */
 export interface RecentWorkflow {
-  name: string;
-  path: string;
-  lastUsed: number;
+  workflowName: string;
+  filePath: string;
+  executionState: string;
+  lastModifiedAt?: number;
+  startedAt?: number;
+  isFavorite?: boolean;
 }
 
 /** Panel size snapshot for desktop or mobile layout.

@@ -19,6 +19,7 @@ import type { TemplateManager } from "../flightpath/TemplateManager";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import type { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 import type { PostMessageFn } from "./WebviewSettingsSync";
+import type { WorkingFile } from "../types/FlightPathTypes";
 
 /**
  * WorkflowSerializer
@@ -607,6 +608,7 @@ export class WorkflowSerializer {
               executionState,
               startedAt: workingFile.startedAt || 0,
               lastModifiedAt: lastModified,
+              isFavorite: workingFile.isFavorite ?? false,
             };
           } catch (error) {
             Log.warn(`Failed to parse workflow file ${file}:`, error);
@@ -642,6 +644,23 @@ export class WorkflowSerializer {
       vscode.window.showErrorMessage(
         `Failed to load workflow: ${getErrorMessage(error)}`
       );
+    }
+  }
+
+  async handleToggleFavorite(filePath: string): Promise<void> {
+    try {
+      const workingFile = (await readJsonFile(filePath)) as WorkingFile;
+      if (!workingFile || typeof workingFile !== "object") {
+        Log.warn(
+          `handleToggleFavorite: invalid working file payload for "${filePath}"`
+        );
+        return;
+      }
+
+      workingFile.isFavorite = !(workingFile.isFavorite ?? false);
+      await fs.writeFile(filePath, JSON.stringify(workingFile, null, 2), "utf-8");
+    } catch (error) {
+      Log.error("Failed to toggle workflow favorite:", error);
     }
   }
 

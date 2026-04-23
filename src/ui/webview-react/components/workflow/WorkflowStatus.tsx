@@ -32,6 +32,17 @@ interface RecentWorkflow {
   executionState: string;
   lastModifiedAt?: number;
   startedAt?: number;
+  isFavorite?: boolean;
+}
+
+function sortRecentWorkflows(workflows: RecentWorkflow[]): RecentWorkflow[] {
+  return [...workflows].sort((a, b) => {
+    if ((a.isFavorite ?? false) !== (b.isFavorite ?? false)) {
+      return (a.isFavorite ?? false) ? -1 : 1;
+    }
+
+    return (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0);
+  });
 }
 
 /**
@@ -187,7 +198,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         WebviewLog.debug(
           `[WorkflowStatus:RECENT_WORKFLOWS] received ${workflows.length} recent workflows`
         );
-        setRecentWorkflows(workflows);
+        setRecentWorkflows(sortRecentWorkflows(workflows));
       }
     };
 
@@ -372,6 +383,29 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const handleRemoveWorkflowCancel = useCallback(() => {
     setPendingDeletePath(null);
   }, []);
+
+  const handleToggleFavorite = useCallback(
+    (filePath: string) => {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE,
+        filePath,
+      });
+
+      setRecentWorkflows((prev) =>
+        sortRecentWorkflows(
+          prev.map((workflow) =>
+            workflow.filePath === filePath
+              ? {
+                  ...workflow,
+                  isFavorite: !(workflow.isFavorite ?? false),
+                }
+              : workflow
+          )
+        )
+      );
+    },
+    [vscode]
+  );
 
   // Pause a specific workflow by ID
   const handlePauseWorkflow = useCallback(
@@ -613,6 +647,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             onSelect={handleSelectWorkflow}
             onClearHistory={handleClearHistory}
             onRemove={handleRemoveWorkflow}
+            onToggleFavorite={handleToggleFavorite}
             isNarrow={isNarrow}
             onClose={closeDropdown}
             showCloseButton={!showRunningWorkflowsSection}

@@ -669,7 +669,14 @@ export interface OpenNewWorkflowModalMessage {
  */
 export interface RecentWorkflowsMessage {
   type: typeof MESSAGE_TYPES.RECENT_WORKFLOWS;
-  workflows: Array<{ name: string; path: string; lastUsed: number }>;
+  workflows: Array<{
+    workflowName: string;
+    filePath: string;
+    executionState: string;
+    lastModifiedAt?: number;
+    startedAt?: number;
+    isFavorite?: boolean;
+  }>;
 }
 
 /**

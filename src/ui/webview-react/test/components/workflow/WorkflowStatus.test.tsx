@@ -5,7 +5,13 @@
  * Strategy: preset store state, render, assert what's visible and what's posted.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  act,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkflowStatus } from "@components/workflow/WorkflowStatus";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -147,6 +153,7 @@ describe("WorkflowStatus — loaded state", () => {
                 workflowName: "Workflow A",
                 filePath: "/path/a.yaml",
                 executionState: "idle",
+                isFavorite: false,
               },
             ],
           },
@@ -162,6 +169,108 @@ describe("WorkflowStatus — loaded state", () => {
       // Count badge or workflow name should appear
       expect(screen.getByText("1")).toBeInTheDocument();
     });
+  });
+
+  it("sorts favorite workflows to the top of recent workflows", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowStatus />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+            workflows: [
+              {
+                workflowName: "Regular Workflow",
+                filePath: "/path/regular.yaml",
+                executionState: EXECUTION_STATES.IDLE,
+                lastModifiedAt: 200,
+                isFavorite: false,
+              },
+              {
+                workflowName: "Favorite Workflow",
+                filePath: "/path/favorite.yaml",
+                executionState: EXECUTION_STATES.IDLE,
+                lastModifiedAt: 100,
+                isFavorite: true,
+              },
+            ],
+          },
+        })
+      );
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    const favoriteWorkflow = screen.getByText("Favorite Workflow");
+    const regularWorkflow = screen.getByText("Regular Workflow");
+
+    expect(
+      favoriteWorkflow.compareDocumentPosition(regularWorkflow) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("toggles a workflow favorite optimistically and posts the toggle message", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowStatus />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+            workflows: [
+              {
+                workflowName: "Workflow A",
+                filePath: "/path/a.yaml",
+                executionState: EXECUTION_STATES.IDLE,
+                lastModifiedAt: 100,
+                isFavorite: false,
+              },
+              {
+                workflowName: "Workflow B",
+                filePath: "/path/b.yaml",
+                executionState: EXECUTION_STATES.IDLE,
+                lastModifiedAt: 200,
+                isFavorite: false,
+              },
+            ],
+          },
+        })
+      );
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    const workflowARow = screen
+      .getByText("Workflow A")
+      .closest('[role="button"]');
+    expect(workflowARow).not.toBeNull();
+    await user.click(
+      within(workflowARow as HTMLElement).getByRole("button", {
+        name: "Add to favorites",
+      })
+    );
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.TOGGLE_WORKFLOW_FAVORITE,
+      filePath: "/path/a.yaml",
+    });
+    expect(
+      screen.getByRole("button", { name: "Remove from favorites" })
+    ).toBeInTheDocument();
+
+    const workflowA = screen.getByText("Workflow A");
+    const workflowB = screen.getByText("Workflow B");
+    expect(
+      workflowA.compareDocumentPosition(workflowB) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("marks loaded workflow rows with a terminal icon when a PTY session is running", async () => {

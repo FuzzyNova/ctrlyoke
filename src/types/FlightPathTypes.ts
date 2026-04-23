@@ -303,6 +303,7 @@ export interface WorkingFile extends PromptFile {
   workflowName: string; // Derived from original filename
   startedAt: number; // Timestamp when workflow started
   lastModifiedAt?: number; // Timestamp when workflow was last modified (optional for backward compatibility)
+  isFavorite?: boolean; // Whether the workflow should be pinned to the top of recent workflow history
   _runtime?: WorkingFileRuntime; // Optional runtime state (can be omitted for manual runs)
 }
 
