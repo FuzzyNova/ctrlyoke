@@ -308,6 +308,14 @@ export const BROWSER_NOTIFICATION_MODES = {
 export type BrowserNotificationMode =
   (typeof BROWSER_NOTIFICATION_MODES)[keyof typeof BROWSER_NOTIFICATION_MODES];
 
+export const SERVICE_WORKER_BADGE_MESSAGE_TYPES = {
+  INCREMENT_NOTIFICATION_BADGE: "flightpath:incrementNotificationBadge",
+  CLEAR_NOTIFICATION_BADGE: "flightpath:clearNotificationBadge",
+} as const;
+
+export type ServiceWorkerBadgeMessageType =
+  (typeof SERVICE_WORKER_BADGE_MESSAGE_TYPES)[keyof typeof SERVICE_WORKER_BADGE_MESSAGE_TYPES];
+
 // ============================================================================
 // COMPLETION NOTIFICATION KINDS - Structured completion event categories
 // ============================================================================

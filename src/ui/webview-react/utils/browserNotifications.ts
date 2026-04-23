@@ -1,7 +1,9 @@
 import {
   BROWSER_NOTIFICATION_MODES,
   COMPLETION_NOTIFICATION_SEVERITY,
+  SERVICE_WORKER_BADGE_MESSAGE_TYPES,
   type BrowserNotificationMode,
+  type ServiceWorkerBadgeMessageType,
 } from "@root/types/DashboardConstants";
 import type {
   CompletionNotificationEventPayload,
@@ -126,6 +128,21 @@ export async function disablePushNotifications(): Promise<BrowserNotificationSta
   return getBrowserNotificationStatus();
 }
 
+export async function clearNotificationBadgeCount(): Promise<void> {
+  const clearedViaWorker = await postBadgeMessageToServiceWorker(
+    SERVICE_WORKER_BADGE_MESSAGE_TYPES.CLEAR_NOTIFICATION_BADGE,
+    undefined,
+    false
+  );
+  if (clearedViaWorker) {
+    return;
+  }
+
+  if ("clearAppBadge" in navigator) {
+    await navigator.clearAppBadge().catch(() => {});
+  }
+}
+
 export async function handleCompletionNotificationEvent(
   event: CompletionNotificationEventPayload,
   fullSettings: FullGlobalSettings | null
@@ -217,16 +234,11 @@ async function showSystemNotification(
     },
   };
 
-  // Increment the home screen icon badge (iOS 16.4+, Chrome, Edge).
-  // Cleared when the user returns to the app via the visibilitychange handler in App.tsx.
-  if ("setAppBadge" in navigator) {
-    navigator.setAppBadge(1).catch(() => {});
-  }
-
   if ("serviceWorker" in navigator && window.isSecureContext) {
     try {
       const registration = await ensureServiceWorkerRegistration();
       await registration.showNotification(event.title, notificationOptions);
+      await incrementNotificationBadgeCount(event.id);
       return;
     } catch {
       // Fall through to the Notification constructor.
@@ -234,6 +246,7 @@ async function showSystemNotification(
   }
 
   const notification = new Notification(event.title, notificationOptions);
+  await incrementNotificationBadgeCount(event.id);
   notification.onclick = () => {
     notification.close();
     if (event.url) {
@@ -242,6 +255,56 @@ async function showSystemNotification(
       window.focus();
     }
   };
+}
+
+async function incrementNotificationBadgeCount(eventId: string): Promise<void> {
+  const incrementedViaWorker = await postBadgeMessageToServiceWorker(
+    SERVICE_WORKER_BADGE_MESSAGE_TYPES.INCREMENT_NOTIFICATION_BADGE,
+    eventId,
+    true
+  );
+  if (incrementedViaWorker) {
+    return;
+  }
+
+  if ("setAppBadge" in navigator) {
+    await navigator.setAppBadge(1).catch(() => {});
+  }
+}
+
+async function postBadgeMessageToServiceWorker(
+  type: ServiceWorkerBadgeMessageType,
+  eventId?: string,
+  createIfMissing: boolean = false
+): Promise<boolean> {
+  if (
+    !isStandalone ||
+    !window.isSecureContext ||
+    !("serviceWorker" in navigator)
+  ) {
+    return false;
+  }
+
+  try {
+    const registration = createIfMissing
+      ? await ensureServiceWorkerRegistration()
+      : await navigator.serviceWorker.getRegistration("/");
+    let worker = registration?.active ?? null;
+    if (!worker && createIfMissing) {
+      worker = (await navigator.serviceWorker.ready).active;
+    }
+    if (!worker) {
+      return false;
+    }
+
+    worker.postMessage({
+      type,
+      ...(eventId ? { eventId } : {}),
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getPermissionStatus(): BrowserPermissionStatus {

@@ -10,6 +10,7 @@ import { useIsMobile } from "@hooks/useMediaQuery";
 import { useDesktopLayout } from "@hooks/useDesktopLayout";
 import { useMobileLayout } from "@hooks/useMobileLayout";
 import { useUiStore } from "@store/uiStore";
+import { clearNotificationBadgeCount } from "@utils/browserNotifications";
 import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see uiStore.ts),
@@ -181,10 +182,10 @@ function App() {
 
   // Clear the PWA home screen badge when the user returns to the app.
   useEffect(() => {
-    if (!isStandalone || !("clearAppBadge" in navigator)) return;
+    if (!isStandalone) return;
     const clearBadge = () => {
       if (document.visibilityState === "visible") {
-        navigator.clearAppBadge().catch(() => {});
+        void clearNotificationBadgeCount();
       }
     };
     document.addEventListener("visibilitychange", clearBadge);
