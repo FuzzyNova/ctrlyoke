@@ -636,6 +636,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             },
           ],
         }),
+        createFencedBlockDecorationExtension(),
         createLinkDecorationExtension(),
         createFileRefDecorationExtension(),
         createClickHandlerExtension(vscode),
@@ -863,6 +864,11 @@ function createThemeExtension(surface: CodeMirrorEditorSurface) {
         textDecoration: "underline",
         fontFamily: "var(--vscode-editor-font-family)",
       },
+      // Fenced block styling — triple-backtick blocks suppress context expansion
+      ".cm-fenced-block": {
+        color: "var(--vscode-disabledForeground)",
+        fontStyle: "italic",
+      },
     },
     {
       // CodeMirror only supports dark:true/false — no separate high-contrast mode.
@@ -1033,28 +1039,50 @@ function createContextReferenceLintExtension(
 ) {
   return linter(
     async (view): Promise<Diagnostic[]> => {
-      const references: Array<ContextReferenceMatch & { id: string }> = [];
+      const allReferences: Array<ContextReferenceMatch & { id: string }> = [];
+      const fencedReferenceIds = new Set<string>();
+      const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
 
       for (const { from, to } of view.visibleRanges) {
         const text = view.state.doc.sliceString(from, to);
         const matches = findContextReferenceMatches(text, from);
         matches.forEach((match, index) => {
-          references.push({
-            ...match,
-            id: `${match.from}:${match.to}:${match.type}:${index}`,
-          });
+          const id = `${match.from}:${match.to}:${match.type}:${index}`;
+          allReferences.push({ ...match, id });
+          if (isInFencedBlock(match.from, match.to, fencedRanges)) {
+            fencedReferenceIds.add(id);
+          }
         });
       }
 
-      if (references.length === 0) {
+      if (allReferences.length === 0) {
         return [];
       }
 
-      const results = await validateReferences(references);
+      const results = await validateReferences(allReferences);
       const resultById = new Map(results.map((result) => [result.id, result]));
 
-      return references.flatMap((reference): Diagnostic[] => {
+      return allReferences.flatMap((reference): Diagnostic[] => {
         const result = resultById.get(reference.id);
+        const inFenced = fencedReferenceIds.has(reference.id);
+
+        if (inFenced) {
+          // Warn only when the reference points to something that actually exists —
+          // the user may not realize expansion is silently suppressed.
+          if (result?.exists) {
+            return [
+              {
+                from: reference.from,
+                to: reference.to,
+                severity: "warning",
+                message:
+                  "Context expansion suppressed — this reference won't be expanded inside a backtick block",
+              },
+            ];
+          }
+          return [];
+        }
+
         if (!result || result.exists) {
           return [];
         }
@@ -1266,6 +1294,71 @@ function findContextReferenceMatches(
   ].sort((a, b) => a.from - b.from);
 }
 
+function getFencedBlockRanges(
+  text: string
+): Array<{ from: number; to: number }> {
+  const ranges: Array<{ from: number; to: number }> = [];
+  const regex = /```[\s\S]*?```/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    ranges.push({ from: match.index, to: match.index + match[0].length });
+  }
+  return ranges;
+}
+
+function isInFencedBlock(
+  from: number,
+  to: number,
+  fencedRanges: Array<{ from: number; to: number }>
+): boolean {
+  return fencedRanges.some((r) => from >= r.from && to <= r.to);
+}
+
+// Apply disabled/italic styling to triple-backtick fenced blocks
+function createFencedBlockDecorationExtension() {
+  return ViewPlugin.fromClass(
+    class {
+      decorations;
+
+      constructor(view: EditorView) {
+        this.decorations = this.buildDecorations(view);
+      }
+
+      update(update: any) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = this.buildDecorations(update.view);
+        }
+      }
+
+      buildDecorations(view: EditorView) {
+        const builder = new RangeSetBuilder<Decoration>();
+        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
+
+        for (const { from, to } of view.visibleRanges) {
+          for (const range of fencedRanges) {
+            if (range.to <= from) continue;
+            if (range.from >= to) break;
+            const visFrom = Math.max(range.from, from);
+            const visTo = Math.min(range.to, to);
+            if (visFrom < visTo) {
+              builder.add(
+                visFrom,
+                visTo,
+                Decoration.mark({ class: "cm-fenced-block" })
+              );
+            }
+          }
+        }
+
+        return builder.finish();
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+    }
+  );
+}
+
 // Decorate links (@file, @dir/, #file:, #sym:)
 function createLinkDecorationExtension() {
   const linkPlugin = ViewPlugin.fromClass(
@@ -1284,12 +1377,16 @@ function createLinkDecorationExtension() {
 
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder<Decoration>();
+        const fencedRanges = getFencedBlockRanges(view.state.doc.toString());
 
         for (const { from, to } of view.visibleRanges) {
           const text = view.state.doc.sliceString(from, to);
           const matches = findContextReferenceMatches(text, from);
 
           for (const linkMatch of matches) {
+            if (isInFencedBlock(linkMatch.from, linkMatch.to, fencedRanges))
+              continue;
+
             const attrs: Record<string, string> = {
               "data-type": linkMatch.type,
             };

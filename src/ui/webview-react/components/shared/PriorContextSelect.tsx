@@ -9,7 +9,7 @@ interface PriorContextSelectProps {
   onChange: (value: PriorContext | undefined) => void;
   /** Show "Default (inherit from workflow)" as the first option. Use in prompt-level UI. */
   showDefault?: boolean;
-  /** Override label for the Default option (e.g. "Default (None)" or "Default (Previous prompt)"). */
+  /** Override label for the Default option (e.g. "Default (None)" or "Default (Previous step)"). */
   defaultLabel?: string;
   dropdownMaxHeight?: string;
 }
@@ -26,8 +26,8 @@ export type KeywordMode =
 export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   default: "Default (inherit from workflow)",
   none: "None",
-  previous: "Previous prompt",
-  all: "All prior prompts",
+  previous: "Previous step",
+  all: "All prior steps",
   finalStepPrevious: "Previous final step output",
   finalStepAll: "All final step outputs",
   custom: "Custom",
@@ -314,9 +314,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       <div
         className={`mt-1${showCustomInput ? "" : " opacity-50 pointer-events-none"}`}
         title={
-          showCustomInput
-            ? undefined
-            : "Select 'Custom' to specify prompt ranges"
+          showCustomInput ? undefined : "Select 'Custom' to specify step ranges"
         }
       >
         <input
@@ -325,7 +323,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           onChange={handleCustomTextChange}
           disabled={!showCustomInput}
           placeholder="e.g. 1,2,4-10"
-          aria-label="Custom prompt range (e.g. 1,2,4-10)"
+          aria-label="Custom step range (e.g. 1,2,4-10)"
           className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${
             customError ? "border-input-error-border" : "border-input-border"
           }`}

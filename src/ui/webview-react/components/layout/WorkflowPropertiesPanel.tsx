@@ -777,7 +777,8 @@ export const WorkflowPropertiesPanel: React.FC<{
         globalSettings.harnessDefaultAdditionalArgs[globalHarness] ?? "",
       resumeSession: globalSettings.resumeSession,
       sessionId: "",
-      priorContext: globalSettings.priorContext as WorkflowProperties["priorContext"],
+      priorContext:
+        globalSettings.priorContext as WorkflowProperties["priorContext"],
       mcpServers: globalSettings.mcpServers as WorkflowProperties["mcpServers"],
       toolPermissions:
         globalSettings.toolPermissions as WorkflowProperties["toolPermissions"],
@@ -840,7 +841,10 @@ export const WorkflowPropertiesPanel: React.FC<{
   );
 
   return (
-    <div ref={drawerRef} className="flex flex-col h-full bg-sidebar-bg overflow-x-hidden">
+    <div
+      ref={drawerRef}
+      className="flex flex-col h-full bg-sidebar-bg overflow-x-hidden"
+    >
       {/* Section Header — clickable to collapse in desktop mode; non-interactive in mobile */}
       <div
         className={`flex items-center justify-between h-[30px] px-2 border-b border-panel-border${isMobileMode ? "" : " cursor-pointer select-none"}`}
@@ -1164,7 +1168,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                 <FormField
                   label="Prior Context"
                   htmlFor="settings-prior-context"
-                  description="Inject prior prompt outputs into each prompt's text before sending to the AI"
+                  description="Send prior step outputs with the prompt"
                   setAsDefaultButton={
                     <SetAsDefaultButton
                       property="priorContext"

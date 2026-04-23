@@ -707,7 +707,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <label
                   htmlFor="prop-prior-context"
                   className="text-[11px] font-semibold uppercase text-description-fg"
-                  title="Inject prior prompt outputs into this prompt's text before sending to the AI"
+                  title="Send prior step outputs with the prompt"
                 >
                   Prior Context
                 </label>

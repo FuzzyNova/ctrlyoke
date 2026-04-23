@@ -275,7 +275,8 @@ export const MESSAGE_TYPES = {
   /** Extension -> Webview: current browser notification permission state */
   BROWSER_NOTIFICATION_STATUS: "browserNotificationStatus",
   /** Webview -> Extension: request browser notification permission */
-  BROWSER_NOTIFICATION_PERMISSION_REQUEST: "browserNotificationPermissionRequest",
+  BROWSER_NOTIFICATION_PERMISSION_REQUEST:
+    "browserNotificationPermissionRequest",
   /** Extension -> Webview: result of browser notification permission request */
   BROWSER_NOTIFICATION_PERMISSION_RESULT: "browserNotificationPermissionResult",
   /** Extension/Hosted server -> Webview: structured completion notification event */
@@ -550,10 +551,10 @@ export const EDITOR_TARGET_KINDS = {
 export const EDITOR_PLACEHOLDER_TEXT = {
   /** Base hint shown in all prompt editors */
   DEFAULT:
-    "Use @ for files/folders, # for selections/symbols, ~ for git changes",
+    "Use @ for files/folders, # for selections/symbols, ~ for git changes, $ for prior step outputs",
   /** Extended hint for the Final Step editor, explaining its loop-back behavior */
   FINAL_PROMPT:
-    "Use @ for files/folders, # for selections/symbols, ~ for git changes\n\nNote: The Final Step runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
+    "Use @ for files/folders, # for selections/symbols, ~ for git changes, $ for prior step outputs\n\nNote: The Final Step runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
 } as const;
 
 // ============================================================================
