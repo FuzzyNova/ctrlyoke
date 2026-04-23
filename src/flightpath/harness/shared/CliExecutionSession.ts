@@ -35,6 +35,7 @@ export class CliExecutionSession {
   private parsed?: UniversalCliOutput;
   private cliResult?: CliResult;
   private extractedSessionIdValue?: string;
+  private injectModePrepared = false;
 
   constructor(params: CliExecutionSessionParams) {
     this.prompt = params.prompt;
@@ -48,6 +49,15 @@ export class CliExecutionSession {
   preparePrompt(promptArgument: string, tempFilePaths: string[]): void {
     this.promptText = promptArgument;
     this.tempFiles = [...tempFilePaths];
+    this.injectModePrepared = false;
+  }
+
+  markInjectModePrepared(): void {
+    this.injectModePrepared = true;
+  }
+
+  get wasInjectModePrepared(): boolean {
+    return this.injectModePrepared;
   }
 
   recordCommandPrepared(info: {

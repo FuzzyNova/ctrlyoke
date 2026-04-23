@@ -564,6 +564,7 @@ export class CliIntegration extends HarnessIntegration {
       extractLeadingSlashCommand: (promptText) =>
         this.extractLeadingSlashCommand(promptText),
       isSimplePrompt: (promptText) => this.isSimplePrompt(promptText),
+      isInjectablePrompt: (promptText) => this.isInjectablePrompt(promptText),
       gatherAndMergeContextItems: (
         propertyContext,
         inlineRefs,
@@ -671,36 +672,40 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   private async initializeExecutionSession(
-    session: CliExecutionSession
+    session: CliExecutionSession,
+    injectMode = false
   ): Promise<void> {
     const prepared = await this.promptPreparer.preparePrompt(
       session.prompt,
       session.workflowContext,
       session.resolvedProperties,
       session.resolvedSessionId,
-      session.workflowContext?.getFinalStepResponseTexts?.()
+      session.workflowContext?.getFinalStepResponseTexts?.(),
+      injectMode
     );
 
     session.preparePrompt(
       prepared.promptWithInstruction,
       prepared.tempFilePaths
     );
+
+    if (injectMode) {
+      session.markInjectModePrepared();
+    }
   }
 
-  private async createPreparedExecutionSession(
+  private createUnpreparedExecutionSession(
     prompt: PromptStep,
     workflowContext?: WorkflowContext
-  ): Promise<CliExecutionSession> {
+  ): CliExecutionSession {
     const { resolvedProperties, resolvedSessionId } =
       this.sessionResolverAdapter.resolve(prompt, workflowContext);
-    const session = this.createExecutionSession(
+    return this.createExecutionSession(
       prompt,
       workflowContext,
       resolvedProperties,
       resolvedSessionId
     );
-    await this.initializeExecutionSession(session);
-    return session;
   }
 
   private async runExecutionSession(
@@ -723,6 +728,18 @@ export class CliIntegration extends HarnessIntegration {
       // Fall through to restart mode if the PTY is no longer available.
       Log.info("↩️ Inject mode unavailable — falling back to restart mode");
       await this.retireInteractivePtyForRestartFallback();
+    }
+
+    // If the session was prepared with inject-lenient rules (which can leave
+    // prompts inline that contain shell-unsafe characters), re-prepare strictly
+    // before any non-inject execution path (restart or headless). This covers:
+    //   1. Inject attempted but PTY died → fell through above.
+    //   2. shouldUseInjectMode was true in sendPrompt (prep was lenient) but
+    //      returned false here (context changed between prep and dispatch).
+    // Only text-only prompts (no temp files) can reach this branch, so there
+    // are no orphaned files to clean up.
+    if (session.wasInjectModePrepared && session.tempFilePaths.length === 0) {
+      await this.initializeExecutionSession(session, false);
     }
 
     if (!isInteractive) {
@@ -1347,11 +1364,15 @@ export class CliIntegration extends HarnessIntegration {
       this.resetCancellationFlag();
       this.failureTracker.reset();
 
-      executionSession = await this.createPreparedExecutionSession(
-        prompt,
-        workflowContext
-      );
+      // Create session without prompt preparation so we can check inject mode
+      // before deciding which inline-check rules to apply.
+      executionSession = this.createUnpreparedExecutionSession(prompt, workflowContext);
       this.activeSession = executionSession;
+
+      const isInteractive =
+        this.getExecutionMode() === CLI_EXECUTION_MODE.INTERACTIVE;
+      const injectMode = isInteractive && this.shouldUseInjectMode(executionSession);
+      await this.initializeExecutionSession(executionSession, injectMode);
 
       // Log prompt
       this.logPrompt(executionSession.promptArgument);

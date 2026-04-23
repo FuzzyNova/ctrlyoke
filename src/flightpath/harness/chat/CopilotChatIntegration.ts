@@ -866,9 +866,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       !sections.agentContent &&
       !sections.skillContent &&
       !sections.excerptContent &&
-      (sections.directFileRefs.length === 0
-        ? this.isSimplePrompt(sections.userPromptText)
-        : this.isSimplePromptWithFileRefs(sections.userPromptText))
+      this.isSimplePrompt(sections.userPromptText)
     ) {
       return sections.userPromptText;
     }
@@ -1207,9 +1205,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       !sections.skillContent &&
       !sections.excerptContent &&
       !hasPriorContext &&
-      (sections.directFileRefs.length === 0
-        ? this.isSimplePrompt(sections.userPromptText)
-        : this.isSimplePromptWithFileRefs(sections.userPromptText))
+      this.isSimplePrompt(sections.userPromptText)
     ) {
       Log.debug(`📝 Simple prompt — using inline (fast path)`);
       return sections.userPromptText;

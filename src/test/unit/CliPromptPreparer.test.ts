@@ -186,7 +186,7 @@ suite("CliPromptPreparer", () => {
     );
   });
 
-  test("should use fast path when only file refs exist and text-minus-refs is simple", async () => {
+  test("should use fast path when only file refs exist and full text is simple", async () => {
     const preparer = new CliPromptPreparer({
       shouldOmitAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () =>
@@ -195,7 +195,9 @@ suite("CliPromptPreparer", () => {
           userPromptText: "fully implement @Path/To/Plan.md",
         }),
       extractLeadingSlashCommand: () => null,
-      isSimplePrompt: (text) => text === "fully implement",
+      // isSimplePrompt receives the full text including the @ref token
+      isSimplePrompt: (text) =>
+        !text.includes('"') && !text.includes("$") && !text.includes("`"),
       gatherAndMergeContextItems: () => [],
       buildPriorContextXmlFromItems: () => "",
       getWorkspaceRoot: () => process.cwd(),
@@ -329,5 +331,151 @@ suite("CliPromptPreparer", () => {
       result.promptWithInstruction.includes("/handoff /handoff"),
       false
     );
+  });
+
+  suite("inject mode", () => {
+    function makeBasePreparer(
+      overrides: Partial<
+        ConstructorParameters<typeof CliPromptPreparer>[0]
+      > = {}
+    ) {
+      return new CliPromptPreparer({
+        shouldOmitAgentsAndSkillsOnResume: () => false,
+        buildPromptSections: async (p) =>
+          createSections({ userPromptText: p.prompt.trim() }),
+        extractLeadingSlashCommand: () => null,
+        isSimplePrompt: (text) => text.length <= 50,
+        isInjectablePrompt: (text) => !/[\x00-\x1f\x7f]/.test(text),
+        gatherAndMergeContextItems: () => [],
+        buildPriorContextXmlFromItems: () => "",
+        getWorkspaceRoot: () => process.cwd(),
+        getTempFileSplitConfig: () => undefined,
+        formatDirectFileRef: (p) => `@${p}`,
+        formatTempFileRef: (_m, p) => `@${p}`,
+        formatCategorizedReferences: (...refs) => refs.flat().join(" "),
+        ...overrides,
+      });
+    }
+
+    test("long prompt (>simple limit) goes inline in inject mode", async () => {
+      const longPrompt = "a".repeat(200);
+      const preparer = makeBasePreparer();
+
+      const result = await preparer.preparePrompt(
+        { prompt: longPrompt } as PromptStep,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        true // injectMode
+      );
+
+      assert.deepStrictEqual(result, {
+        promptWithInstruction: longPrompt,
+        tempFilePaths: [],
+      });
+    });
+
+    test("prompt with shell-special characters goes inline in inject mode", async () => {
+      const prompt = `fix the "async" error and replace \`await\` with $var`;
+      const preparer = makeBasePreparer();
+
+      const result = await preparer.preparePrompt(
+        { prompt } as PromptStep,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        true
+      );
+
+      assert.deepStrictEqual(result, {
+        promptWithInstruction: prompt,
+        tempFilePaths: [],
+      });
+    });
+
+    test("prompt with control characters uses file-based path even in inject mode", async () => {
+      const promptWithNewline = "line one\nline two";
+      let categorizedRefsCalled = false;
+      const preparer = makeBasePreparer({
+        buildPromptSections: async () =>
+          createSections({ userPromptText: promptWithNewline }),
+        formatCategorizedReferences: (..._refs) => {
+          categorizedRefsCalled = true;
+          return "categorized";
+        },
+      });
+
+      const result = await preparer.preparePrompt(
+        { prompt: promptWithNewline } as PromptStep,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        true
+      );
+
+      assert.ok(
+        categorizedRefsCalled,
+        "should fall through to file-based path"
+      );
+      assert.strictEqual(result.promptWithInstruction, "categorized");
+    });
+
+    test("inject mode with only file refs uses injectable check on remaining text", async () => {
+      const prompt = `implement the "feature" described in @Plan.md`;
+      const preparer = makeBasePreparer({
+        buildPromptSections: async () =>
+          createSections({
+            directFileRefs: ["/ws/Plan.md"],
+            userPromptText: prompt,
+          }),
+      });
+
+      const result = await preparer.preparePrompt(
+        { prompt } as PromptStep,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        true
+      );
+
+      // Shell-special chars in text (quotes) but injectable — should go inline
+      assert.deepStrictEqual(result, {
+        promptWithInstruction: prompt,
+        tempFilePaths: [],
+      });
+    });
+
+    test("non-inject mode still rejects shell-special characters", async () => {
+      const prompt = `fix the "async" error`;
+      let categorizedRefsCalled = false;
+      const preparer = makeBasePreparer({
+        // isSimplePrompt rejects quotes (shell-unsafe)
+        isSimplePrompt: (text) => !/["'`$\\]/.test(text) && text.length <= 50,
+        buildPromptSections: async () =>
+          createSections({ userPromptText: prompt }),
+        formatCategorizedReferences: () => {
+          categorizedRefsCalled = true;
+          return "categorized";
+        },
+      });
+
+      await preparer.preparePrompt(
+        { prompt } as PromptStep,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        false // strict mode
+      );
+
+      assert.ok(
+        categorizedRefsCalled,
+        "shell-special chars should use file path in strict mode"
+      );
+    });
   });
 });

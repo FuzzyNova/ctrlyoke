@@ -35,6 +35,7 @@ export interface CliPromptPreparerDeps {
   ) => Promise<PromptSections>;
   extractLeadingSlashCommand: (promptText: string) => string | null;
   isSimplePrompt: (promptText: string) => boolean;
+  isInjectablePrompt?: (promptText: string) => boolean;
   gatherAndMergeContextItems: (
     propertyContext: PriorContext | undefined,
     inlineRefs: InlinePriorContextRef[],
@@ -65,7 +66,8 @@ export class CliPromptPreparer {
     workflowContext: WorkflowContext | undefined,
     resolvedProperties: ResolvedProperties | undefined,
     resolvedSessionId: string | undefined,
-    finalStepResponseTexts?: string[]
+    finalStepResponseTexts?: string[],
+    injectMode = false
   ): Promise<PromptFileResult> {
     const originalPromptText = prompt.prompt.trim();
     const slashCommand =
@@ -107,23 +109,25 @@ export class CliPromptPreparer {
       sections.directFileRefs.length > 0 ||
       !!sections.excerptContent ||
       hasPriorContext;
-    if (!hasExtras && this.deps.isSimplePrompt(sections.userPromptText)) {
+    const inlineCheck = this.makeInlineCheck(injectMode);
+    if (!hasExtras && inlineCheck(sections.userPromptText)) {
       return {
         promptWithInstruction: sections.userPromptText,
         tempFilePaths: [],
       };
     }
 
-    // Fast path: only @file references as extras, and the text itself (minus
-    // those refs) qualifies as a simple prompt — send the prompt directly so
-    // "fully implement @Plan.md" is not wrapped in a categorized instruction.
+    // Fast path: only @file references as extras, and the full text qualifies
+    // as an inline prompt — send it directly so "fully implement @Plan.md" is
+    // not wrapped in a categorized instruction. SAFE_CHARS_PATTERN includes `\`
+    // and `~` so common Windows/Unix path characters pass without stripping.
     if (
       sections.directFileRefs.length > 0 &&
       !sections.agentContent &&
       !sections.skillContent &&
       !sections.excerptContent &&
       !hasPriorContext &&
-      this.isSimplePromptWithOnlyFileRefs(sections.userPromptText)
+      inlineCheck(sections.userPromptText)
     ) {
       return {
         promptWithInstruction: sections.userPromptText,
@@ -162,12 +166,11 @@ export class CliPromptPreparer {
     };
   }
 
-  /** Strips @token refs from text and checks if the remainder is simple. */
-  private isSimplePromptWithOnlyFileRefs(userPromptText: string): boolean {
-    const textWithoutRefs = userPromptText.replace(/@\S+/g, "").trim();
-    return (
-      textWithoutRefs.length === 0 || this.deps.isSimplePrompt(textWithoutRefs)
-    );
+  /** Returns the appropriate inline-check function based on execution mode. */
+  private makeInlineCheck(injectMode: boolean): (text: string) => boolean {
+    return injectMode && this.deps.isInjectablePrompt
+      ? this.deps.isInjectablePrompt
+      : this.deps.isSimplePrompt;
   }
 
   private async createCategorizedPromptFiles(

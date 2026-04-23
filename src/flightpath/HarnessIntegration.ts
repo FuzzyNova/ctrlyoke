@@ -115,8 +115,14 @@ export enum HarnessStatus {
 export abstract class HarnessIntegration {
   /** Maximum character length for prompts passed directly on the command line. */
   private static readonly MAX_SIMPLE_PROMPT_LENGTH = 3000;
-  /** Characters safe to pass directly on the command line without temp-file escaping. */
-  private static readonly SAFE_CHARS_PATTERN = /^[a-zA-Z0-9\s.,!?:;\-_()@#/]*$/;
+  /**
+   * Characters safe to pass directly on the command line without temp-file escaping.
+   * Includes `\` (Windows path separators — safe inside double-quoted shell strings since
+   * the only chars `\` escapes are `"`, `$`, `` ` ``, `\`, and newline, all excluded here)
+   * and `~` (Unix home-dir prefix — never expanded inside double quotes).
+   */
+  private static readonly SAFE_CHARS_PATTERN =
+    /^[a-zA-Z0-9\s.,!?:;\-_()@#/\\~]*$/;
 
   protected context: SubscriptionContainer | undefined;
   protected isAvailable: boolean = false;
@@ -637,7 +643,8 @@ export abstract class HarnessIntegration {
   protected buildPriorContextXmlFromItems(
     contextItems: PriorContextItem[]
   ): string {
-    const steps = contextItems
+    const sortedItems = [...contextItems].sort((a, b) => a.index - b.index);
+    const steps = sortedItems
       .map((item) => {
         const nameAttr = item.name ? ` name="${item.name}"` : "";
         if (item.scriptOutput) {
@@ -652,7 +659,7 @@ export abstract class HarnessIntegration {
             item.scriptOutput.exitCode !== undefined
               ? `<exitCode>${item.scriptOutput.exitCode}</exitCode>\n`
               : "";
-          return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${stdoutSection}${stderrSection}${exitCodeSection}</step>`;
+          return `<step index="${item.index + 1}" type="${STEP_TYPES.SCRIPT}"${nameAttr}>\n${commandSection}${this.stripAnsiCodes(stdoutSection)}${this.stripAnsiCodes(stderrSection)}${exitCodeSection}</step>`;
         }
         const typeAttr = item.type ? ` type="${item.type}"` : "";
         const promptSection = item.prompt
@@ -668,6 +675,10 @@ export abstract class HarnessIntegration {
 
   protected buildPriorContextXml(contextItems: PriorContextItem[]): string {
     return this.buildPriorContextXmlFromItems(contextItems);
+  }
+
+  protected stripAnsiCodes(text: string): string {
+    return text.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
   }
 
   /**
@@ -775,24 +786,24 @@ export abstract class HarnessIntegration {
    * For chat harnesses the same check applies as a fast-path gate: if it passes,
    * the prompt is short and clean enough to type inline, skipping temp file I/O.
    *
-   * @param finalStepText The final step text (after instruction injection)
+   * @param promptText The prompt text
    * @returns true if prompt can be passed directly
    */
-  protected isSimplePrompt(finalStepText: string): boolean {
-    if (finalStepText.length > HarnessIntegration.MAX_SIMPLE_PROMPT_LENGTH) {
+  protected isSimplePrompt(promptText: string): boolean {
+    if (promptText.length > HarnessIntegration.MAX_SIMPLE_PROMPT_LENGTH) {
       return false;
     }
 
     // Only allow: letters, numbers, spaces, and basic safe punctuation.
     // If anything else exists, use file-based passing.
-    if (!HarnessIntegration.SAFE_CHARS_PATTERN.test(finalStepText)) {
+    if (!HarnessIntegration.SAFE_CHARS_PATTERN.test(promptText)) {
       Log.debug(
         "📁 Prompt contains special characters, using file-based passing for safety"
       );
       return false;
     }
 
-    if (/[\n\r\t]/.test(finalStepText)) {
+    if (/[\n\r\t]/.test(promptText)) {
       Log.debug("📁 Prompt contains newlines/tabs, using file-based passing");
       return false;
     }
@@ -801,20 +812,31 @@ export abstract class HarnessIntegration {
   }
 
   /**
-   * Check if a prompt that contains file references (@path tokens) can be
-   * passed directly without a temp file.
+   * Check if a prompt is safe to inject directly into a running TUI via PTY stdin.
    *
-   * Strips all `@token` references from the text and checks whether the
-   * remaining text qualifies as a simple prompt. This allows prompts like
-   * "fully implement @Path/To/Plan.md" to be sent inline, rather than being
-   * wrapped in a categorized-instruction string.
+   * Inject mode writes text to the PTY's stdin directly — no shell spawning, no
+   * CreateProcess, no argument parsing. The only characters that must be excluded
+   * are ASCII control codes that could disrupt the TUI or trigger input submission:
    *
-   * @param userPromptText The raw user prompt text (with @path tokens preserved)
-   * @returns true if the prompt can be passed directly
+   *   - `\x00–\x1f` — NUL, TAB (`\t`), LF (`\n`), CR (`\r`, the submit key), ESC, etc.
+   *   - `\x7f` — DEL
+   *
+   * There is no length restriction: PTY writes are not subject to OS command-line
+   * limits (CreateProcess's 32767-char cap on Windows applies only to spawned shells).
+   * Shell metacharacters (`"`, `'`, `$`, backticks, `\`) are safe because no shell
+   * parsing occurs.
+   *
+   * @param promptText The prompt text to check
+   * @returns true if the prompt can be injected directly into the running TUI
    */
-  protected isSimplePromptWithFileRefs(userPromptText: string): boolean {
-    const textWithoutRefs = userPromptText.replace(/@\S+/g, "").trim();
-    return textWithoutRefs.length === 0 || this.isSimplePrompt(textWithoutRefs);
+  protected isInjectablePrompt(promptText: string): boolean {
+    if (/[\x00-\x1f\x7f]/.test(promptText)) {
+      Log.debug(
+        "📁 Prompt contains control characters, using file-based passing for inject mode"
+      );
+      return false;
+    }
+    return true;
   }
 
   /**
