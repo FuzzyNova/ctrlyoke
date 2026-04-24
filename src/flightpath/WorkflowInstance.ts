@@ -141,6 +141,15 @@ export class WorkflowInstance {
   private lastKnownStepCount: number = 0;
   /** Tracks workflow name to detect changes and push them to the dashboard */
   private lastKnownWorkflowName: string = "";
+  /**
+   * When a prompt is sent with Run intent while the workflow is still cancelling,
+   * we can't execute immediately. This stores the harness override so that once
+   * confirmStopped fires (cancelling → stopped) we auto-continue rather than
+   * leaving the user with a pending step they have to manually resume.
+   * null = no deferred run pending.
+   */
+  private pendingRunAfterCancel: { harness: HarnessId | undefined } | null =
+    null;
   /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
 
@@ -1277,6 +1286,7 @@ export class WorkflowInstance {
     this.currentPromptFile = undefined;
     this.promptQueue.clearQueue();
     this.lastKnownStepCount = 0;
+    this.pendingRunAfterCancel = null;
     this.propagateWorkflowNameToIntegrations();
     Log.debug("Workflow state cleared");
   }
@@ -1823,13 +1833,19 @@ export class WorkflowInstance {
         const isStopped = statusNow === EXECUTION_STATES.STOPPED;
         const isIdleNow = statusNow === EXECUTION_STATES.IDLE;
         const isError = statusNow === EXECUTION_STATES.ERROR;
+        const isCancelling = statusNow === EXECUTION_STATES.CANCELLING;
         Log.debug(
           `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: post-append shouldRun=true, ` +
-            `isIdle=${isIdleNow}, isCompleted=${isCompleted}, isStopped=${isStopped}, isError=${isError}, ` +
+            `isIdle=${isIdleNow}, isCompleted=${isCompleted}, isStopped=${isStopped}, isError=${isError}, isCancelling=${isCancelling}, ` +
             `queueStatusNow=${statusNow}`
         );
-        if (isIdleNow || isCompleted || isStopped || isError) {
-          await this.executeLoadedPromptFile(stepHarness);
+        if (isCancelling) {
+          this.pendingRunAfterCancel = { harness: stepHarness };
+          Log.debug(
+            `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: cancelling in progress — deferring run until confirmStopped`
+          );
+        } else if (isIdleNow || isCompleted || isStopped || isError) {
+          await this.executeLoadedPromptFile(stepHarness, isStopped || isError);
         }
         Log.debug(
           `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`
@@ -2404,6 +2420,23 @@ export class WorkflowInstance {
       if (transition.command === "complete") {
         this.dashboardSink.updateExecutionCompleted?.();
       }
+    }
+
+    if (
+      transition.command === "confirmStopped" &&
+      this.pendingRunAfterCancel !== null
+    ) {
+      const { harness } = this.pendingRunAfterCancel;
+      this.pendingRunAfterCancel = null;
+      Log.debug(
+        `[inst:${this.id.slice(0, 8)}] onRuntimeTransition: firing deferred run after cancel completed`
+      );
+      this.executeLoadedPromptFile(harness, true).catch((err) =>
+        Log.error(
+          `[inst:${this.id.slice(0, 8)}] Failed to execute deferred run after cancel:`,
+          err
+        )
+      );
     }
   }
 
