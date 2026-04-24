@@ -767,7 +767,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     >
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
       {!isScriptMode && (
-        <div className="prompt-editor-wrapper flex flex-col flex-1 overflow-hidden relative">
+        <div className="prompt-editor-wrapper flex flex-col flex-1 overflow-hidden relative isolate">
           <CodeMirrorEditor
             value={promptText}
             onChange={handleTextChange}
