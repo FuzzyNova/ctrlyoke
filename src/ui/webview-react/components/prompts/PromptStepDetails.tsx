@@ -78,7 +78,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
       {/* Harness / model metadata */}
       {(harnessLabel || modelLabel) && (
         <div
-          className={`mt-0.5 flex items-center gap-1 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          className={`mt-0.5 flex items-center gap-1 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           {harnessLabel && (
             <span>
@@ -102,7 +102,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
 
       {/* Retry indicator */}
       {retryState && retryState.currentRetry > 0 && (
-        <div className="mt-1 pl-5 flex items-center gap-1.5 text-[11px] font-semibold text-warning-fg">
+        <div className="mt-1 pl-5 flex items-center gap-1.5 text-xs font-semibold text-warning-fg">
           <i className="codicon codicon-refresh text-xs" />
           <span>
             Retry {retryState.currentRetry} of {retryState.maxRetries}
@@ -114,7 +114,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
       {status === STEP_STATUS.COMPLETED &&
         (sessionId || durationSeconds !== undefined) && (
           <div
-            className={`mt-0.5 flex items-center gap-1 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+            className={`mt-0.5 flex items-center gap-1 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
           >
             {[
               durationSeconds !== undefined ? (
@@ -137,7 +137,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
                     aria-label="Copy session ID"
                   >
                     <i
-                      className={`codicon text-[9px] ${copied ? "codicon-check" : "codicon-copy"}`}
+                      className={`codicon text-xxs ${copied ? "codicon-check" : "codicon-copy"}`}
                     />
                   </button>
                 </span>
@@ -156,7 +156,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
       {/* End condition result */}
       {details?.endConditionResult && (
         <div
-          className={`mt-1 pl-5 flex items-center gap-1.5 text-[11px] ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          className={`mt-1 pl-5 flex items-center gap-1.5 text-xs ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           <span>End condition:</span>
           {details.endConditionResult.passed ? (
@@ -175,7 +175,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
       {/* Status message */}
       {details?.message && (
         <div
-          className={`mt-1 pl-5 text-[11px] italic ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          className={`mt-1 pl-5 text-xs italic ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           {details.message}
         </div>
@@ -184,7 +184,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
       {/* Property overrides — compact chips for prompt-level overrides */}
       {overrides && overrides.length > 0 && (
         <div
-          className={`mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          className={`mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           {overrides.map((override, i) => (
             <span

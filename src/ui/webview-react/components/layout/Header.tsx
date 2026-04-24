@@ -188,7 +188,16 @@ export const Header: React.FC<{
         vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
       }
     }
-  }, [vscode, isPaused, isStopped, isError, isIdleWithOffset, canPause, activeWorkflowId, activeWorkflowWorkingFilePath]);
+  }, [
+    vscode,
+    isPaused,
+    isStopped,
+    isError,
+    isIdleWithOffset,
+    canPause,
+    activeWorkflowId,
+    activeWorkflowWorkingFilePath,
+  ]);
 
   const handleStop = useCallback(() => {
     if (!canStop) return;
@@ -368,7 +377,11 @@ export const Header: React.FC<{
                         ? "Resume from start position"
                         : "Pause"
             }
-            aria-label={isPaused || isStopped || isError || isIdleWithOffset ? "Resume" : "Pause"}
+            aria-label={
+              isPaused || isStopped || isError || isIdleWithOffset
+                ? "Resume"
+                : "Pause"
+            }
           >
             <i
               className={`codicon ${isPaused || isStopped || isError || isIdleWithOffset ? "codicon-debug-continue" : "codicon-debug-pause"}`}
@@ -410,7 +423,7 @@ export const ExecutionStateBadge: React.FC<{
     <span
       className={`execution-state-badge inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${config.className} ${className}`}
     >
-      <i className={`codicon codicon-${config.icon} text-[13px]`} />
+      <i className={`codicon codicon-${config.icon} text-sm`} />
       <span className="execution-state-text">{config.text}</span>
     </span>
   );

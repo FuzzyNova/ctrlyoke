@@ -46,11 +46,11 @@ export const IconToggleButton: React.FC<{
   const text = !narrow && longerLabel && (
     <span className="relative inline-block">
       {/* Invisible spacer — always the longer label's width */}
-      <span className="invisible text-[10px] font-medium" aria-hidden="true">
+      <span className="invisible text-xxs font-medium" aria-hidden="true">
         {longerLabel}
       </span>
       {/* Visible label — absolutely positioned, right-aligned */}
-      <span className="absolute inset-0 flex items-center justify-end text-[10px] font-medium">
+      <span className="absolute inset-0 flex items-center justify-end text-xxs font-medium">
         {label}
       </span>
     </span>

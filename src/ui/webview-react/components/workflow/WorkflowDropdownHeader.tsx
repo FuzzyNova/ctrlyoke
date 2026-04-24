@@ -18,15 +18,15 @@ export const WorkflowDropdownHeader: React.FC<WorkflowDropdownHeaderProps> = ({
   showSearch = false,
 }) => {
   return (
-    <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg flex-shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+    <div className="workflow-menu-header px-3 py-2 text-xs font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg flex-shrink-0 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
       <div className="flex items-center gap-1.5">
-        <i className={`codicon ${icon} text-[13px]`} />
+        <i className={`codicon ${icon} text-sm`} />
         <span className="whitespace-nowrap">{title}</span>
       </div>
 
       {showSearch && onSearchChange ? (
         <div className="relative w-full max-w-[320px] justify-self-center">
-          <i className="codicon codicon-search absolute left-2 top-1/2 -translate-y-1/2 text-[12px] text-description-fg pointer-events-none" />
+          <i className="codicon codicon-search absolute left-2 top-1/2 -translate-y-1/2 text-xs text-description-fg pointer-events-none" />
           <input
             type="search"
             aria-label="Search workflows"

@@ -150,10 +150,10 @@ export const EditorSection: React.FC = () => {
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && handleToggle()}
         >
-          <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
-          <i className="codicon codicon-edit text-[14px]" />
+          <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
+          <i className="codicon codicon-edit text-sm" />
           {!isNarrow && (
-            <span className="text-[11px] font-semibold uppercase tracking-wide">
+            <span className="text-xs font-semibold uppercase tracking-wide">
               Editor
             </span>
           )}

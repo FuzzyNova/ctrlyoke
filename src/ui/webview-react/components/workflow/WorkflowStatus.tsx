@@ -453,8 +453,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     ].some((value) => value?.toLowerCase().includes(normalizedWorkflowSearch));
   };
 
-  const filteredLoadedWorkflows =
-    loadedWorkflows.filter(workflowMatchesSearch);
+  const filteredLoadedWorkflows = loadedWorkflows.filter(workflowMatchesSearch);
   const filteredRecentWorkflows = recentWorkflows.filter(
     (recentWorkflow) =>
       workflowMatchesSearch(recentWorkflow) &&
@@ -506,7 +505,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               {/* CLI Managed badge */}
               {isCLIManaged && (
                 <span
-                  className="text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 bg-blue-800/50 text-blue-300 border border-blue-600/40"
+                  className="text-xs px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 bg-blue-800/50 text-blue-300 border border-blue-600/40"
                   title="Workflow is being managed by the FlightPath CLI"
                 >
                   CLI
@@ -519,14 +518,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                   title="Terminal session is still running"
                   aria-label="Terminal session is still running"
                 >
-                  <i className="codicon codicon-terminal text-[13px]" />
+                  <i className="codicon codicon-terminal text-sm" />
                 </span>
               )}
 
               {/* Execution State */}
               {executionState && executionState !== EXECUTION_STATES.IDLE && (
                 <span
-                  className={`text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(executionState)}`}
+                  className={`text-xs px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(executionState)}`}
                   title={isNarrow ? executionState : undefined}
                 >
                   {isNarrow ? (
@@ -568,7 +567,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               />
             )}
             {recentWorkflows.length > 0 && (
-              <span className="workflow-count-badge text-[10px] font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
+              <span className="workflow-count-badge text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
                 {recentWorkflows.length}
               </span>
             )}

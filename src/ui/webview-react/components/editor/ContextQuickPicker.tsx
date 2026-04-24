@@ -117,7 +117,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       <div className="flex flex-col gap-3 p-3">
         {/* Resume Session section */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] uppercase tracking-wide text-description-fg font-medium">
+          <span className="text-xxs uppercase tracking-wide text-description-fg font-medium">
             Resume Session
           </span>
           <CustomSelect

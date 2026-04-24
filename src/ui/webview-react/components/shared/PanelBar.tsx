@@ -33,8 +33,8 @@ export const PanelBar: React.FC<PanelBarProps> = ({
         tabIndex={0}
         onKeyDown={(e) => e.key === "Enter" && onClick()}
       >
-        <i className="codicon codicon-chevron-right text-[12px]" />
-        <i className={`codicon codicon-${icon} text-[14px]`} />
+        <i className="codicon codicon-chevron-right text-xs" />
+        <i className={`codicon codicon-${icon} text-sm`} />
       </div>
     );
   }
@@ -49,9 +49,9 @@ export const PanelBar: React.FC<PanelBarProps> = ({
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
     >
-      <i className="codicon codicon-chevron-right text-[12px]" />
-      <i className={`codicon codicon-${icon} text-[14px]`} />
-      <span className="text-[11px] font-semibold uppercase tracking-wide">
+      <i className="codicon codicon-chevron-right text-xs" />
+      <i className={`codicon codicon-${icon} text-sm`} />
+      <span className="text-xs font-semibold uppercase tracking-wide">
         {title}
       </span>
     </div>

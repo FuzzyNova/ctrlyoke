@@ -111,13 +111,13 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           }
         >
           {/* Prompt name / text — pl-5 matches PromptStepDetails indent */}
-          <div className="text-[11px] leading-relaxed">
+          <div className="text-xs leading-relaxed">
             {truncate(getStepDisplayText(finalStep))}
           </div>
 
           {/* Phase badge */}
           {phase && (
-            <div className="mt-0.5text-[10px] opacity-75">
+            <div className="mt-0.5text-xxs opacity-75">
               {phase === FINAL_STEP_PHASES.FINAL_STEP ? "Final Step" : "Queue"}
             </div>
           )}
@@ -170,28 +170,28 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
         }
       >
         <StatusIcon status={effectiveStatus} disabled={!hasFinalStep} />
-        <span className="text-[11px] font-semibold uppercase tracking-wide">
+        <span className="text-xs font-semibold uppercase tracking-wide">
           {"Final Step"}
         </span>
         {hasFinalStep && finalStep && isScriptStep(finalStep) && (
           <span
-            className="ml-1 px-1 py-[1px] rounded text-[9px] bg-badge-bg text-badge-fg opacity-75 flex-shrink-0"
+            className="ml-1 px-1 py-[1px] rounded text-xxs bg-badge-bg text-badge-fg opacity-75 flex-shrink-0"
             title="Script step — runs a shell command"
           >
             script
           </span>
         )}
         {hasFinalStep && finalStep ? (
-          <span className="text-[12px] font-bold flex-1 opacity-90 text-terminal-ansiGreen">
+          <span className="text-xs font-bold flex-1 opacity-90 text-terminal-ansiGreen">
             enabled
           </span>
         ) : (
-          <span className="text-[12px] flex-1 italic opacity-80 text-foreground">
+          <span className="text-xs flex-1 italic opacity-80 text-foreground">
             disabled
           </span>
         )}
         {loopCount > 0 && (
-          <span className="ml-1 px-1.5 py-[1px] rounded bg-badge-bg text-badge-fg text-[10px]">
+          <span className="ml-1 px-1.5 py-[1px] rounded bg-badge-bg text-badge-fg text-xxs">
             Loop {loopCount + 1}
           </span>
         )}
@@ -207,7 +207,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
               title="Disable final step"
               aria-label="Disable final step"
             >
-              <i className="codicon codicon-trash text-[12px]" />
+              <i className="codicon codicon-trash text-xs" />
             </button>
           )}
           {hasFinalStep && (
@@ -230,7 +230,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
               }
             >
               <i
-                className={`codicon ${isExpanded ? "codicon-chevron-down" : "codicon-chevron-up"} text-[12px]`}
+                className={`codicon ${isExpanded ? "codicon-chevron-down" : "codicon-chevron-up"} text-xs`}
               />
             </button>
           )}

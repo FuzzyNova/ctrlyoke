@@ -91,7 +91,7 @@ export const BashOutput = memo<BashOutputProps>(
             {isTruncated && (
               <button
                 type="button"
-                className="text-bash-expand-link no-underline text-[0.9em] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+                className="text-bash-expand-link no-underline text-sm ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
                 onClick={() => setExpanded(!isExpanded)}
               >
                 {isExpanded

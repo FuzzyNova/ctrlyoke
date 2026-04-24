@@ -17,7 +17,7 @@ export const BoundaryBar: React.FC<BoundaryBarProps> = ({
   return (
     <div className="flex items-center gap-2 px-3 py-1 select-none">
       <div className="flex-1 h-px bg-panel-border" />
-      <span className="text-[10px] uppercase tracking-widest text-description-fg whitespace-nowrap">
+      <span className="text-xxs uppercase tracking-widest text-description-fg whitespace-nowrap">
         {label}
       </span>
       <div className="flex-1 h-px bg-panel-border" />

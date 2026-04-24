@@ -219,7 +219,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
           <div className="h-full flex flex-col bg-[var(--vscode-terminal-background,var(--vscode-editor-background))]">
             <div className="flex-1 min-h-0 relative">
               {sessions.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-description-fg text-[12px] select-none">
+                <div className="flex items-center justify-center h-full text-description-fg text-xs select-none">
                   Starting shell…
                 </div>
               ) : (
@@ -354,7 +354,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
     <div
       role="tab"
       tabIndex={0}
-      className={`flex items-center gap-1 px-2 py-1.5 text-[11px] flex-shrink-0 cursor-pointer transition-colors
+      className={`flex items-center gap-1 px-2 py-1.5 text-xs flex-shrink-0 cursor-pointer transition-colors
         ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}
         ${!isRunning ? "opacity-60" : ""}`}
       onClick={onClick}
@@ -378,7 +378,7 @@ const RailEntry: React.FC<RailEntryProps> = ({
             onClose();
           }}
         >
-          <i className="codicon codicon-trash text-[11px]" />
+          <i className="codicon codicon-trash text-xs" />
         </button>
       )}
     </div>
@@ -401,7 +401,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
     <div
       role="tab"
       tabIndex={0}
-      className={`flex items-center gap-1 px-2 py-1.5 text-[11px] flex-shrink-0 cursor-pointer transition-colors
+      className={`flex items-center gap-1 px-2 py-1.5 text-xs flex-shrink-0 cursor-pointer transition-colors
         ${isActive ? "bg-list-active-bg text-foreground" : "text-description-fg hover:text-foreground hover:bg-list-hover-bg"}
         ${isEnded ? "opacity-60" : ""}`}
       onClick={onClick}
@@ -424,7 +424,7 @@ const ShellRailEntry: React.FC<ShellRailEntryProps> = ({
           onClose();
         }}
       >
-        <i className="codicon codicon-trash text-[11px]" />
+        <i className="codicon codicon-trash text-xs" />
       </button>
     </div>
   );
@@ -451,7 +451,7 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
     title={session.stepName}
   >
     <SessionIcon session={session} />
-    <span className="text-[9px] font-mono">{label}</span>
+    <span className="text-xxs font-mono">{label}</span>
   </button>
 );
 
@@ -482,16 +482,16 @@ const ShellIcon: React.FC<{
   const isRunning = status === TERMINAL_SESSION_STATUS.RUNNING;
 
   if (shellKind === SHELL_KINDS.PWSH) {
-    return <i className="codicon codicon-terminal text-[11px] flex-shrink-0" />;
+    return <i className="codicon codicon-terminal text-xs flex-shrink-0" />;
   }
   if (shellKind === SHELL_KINDS.POWERSHELL) {
     return (
-      <i className="codicon codicon-terminal-powershell text-[11px] flex-shrink-0" />
+      <i className="codicon codicon-terminal-powershell text-xs flex-shrink-0" />
     );
   }
   if (shellKind === SHELL_KINDS.BASH) {
     return (
-      <i className="codicon codicon-terminal-bash text-[11px] flex-shrink-0" />
+      <i className="codicon codicon-terminal-bash text-xs flex-shrink-0" />
     );
   }
   // Fallback for legacy sessions without shellKind

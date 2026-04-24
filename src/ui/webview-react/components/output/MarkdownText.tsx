@@ -140,7 +140,7 @@ function FileRefButton({
       onClick={() => openFile(filePath)}
       title={`Open ${filePath}`}
     >
-      <i className="codicon codicon-file text-[10px] opacity-70" />
+      <i className="codicon codicon-file text-xxs opacity-70" />
       <span className="group-hover:underline">{children}</span>
     </button>
   );
@@ -244,37 +244,37 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
 
       // ── Headings ───────────────────────────────────────────────────────
       h1: ({ children: c }: React.HTMLAttributes<HTMLHeadingElement>) => (
-        <h1 className="text-md-heading-fg font-bold text-[1.25em] mt-4 mb-2 pb-1 border-b border-panel-border">
+        <h1 className="text-md-heading-fg font-bold text-xl mt-4 mb-2 pb-1 border-b border-panel-border">
           {c}
         </h1>
       ),
 
       h2: ({ children: c }: React.HTMLAttributes<HTMLHeadingElement>) => (
-        <h2 className="text-md-heading-fg font-semibold text-[1.1em] mt-3 mb-1 pb-0.5 border-b border-panel-border opacity-90">
+        <h2 className="text-md-heading-fg font-semibold text-lg mt-3 mb-1 pb-0.5 border-b border-panel-border opacity-90">
           {c}
         </h2>
       ),
 
       h3: ({ children: c }: React.HTMLAttributes<HTMLHeadingElement>) => (
-        <h3 className="text-md-heading-fg font-semibold text-[1em] mt-3 mb-1 opacity-80">
+        <h3 className="text-md-heading-fg font-semibold text-base mt-3 mb-1 opacity-80">
           {c}
         </h3>
       ),
 
       h4: ({ children: c }: React.HTMLAttributes<HTMLHeadingElement>) => (
-        <h4 className="text-md-heading-fg font-medium text-[0.95em] mt-2 mb-0.5 opacity-70">
+        <h4 className="text-md-heading-fg font-medium text-base mt-2 mb-0.5 opacity-70">
           {c}
         </h4>
       ),
 
       h5: ({ children: c }: React.HTMLAttributes<HTMLHeadingElement>) => (
-        <h5 className="text-md-heading-fg font-medium text-[0.9em] mt-2 mb-0.5 opacity-60">
+        <h5 className="text-md-heading-fg font-medium text-sm mt-2 mb-0.5 opacity-60">
           {c}
         </h5>
       ),
 
       h6: ({ children: c }: React.HTMLAttributes<HTMLHeadingElement>) => (
-        <h6 className="text-description-fg font-medium text-[0.85em] mt-2 mb-0.5 uppercase tracking-wide">
+        <h6 className="text-description-fg font-medium text-sm mt-2 mb-0.5 uppercase tracking-wide">
           {c}
         </h6>
       ),
@@ -282,7 +282,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
       // ── Tables ─────────────────────────────────────────────────────────
       table: ({ children: c }: React.HTMLAttributes<HTMLTableElement>) => (
         <div className="overflow-x-auto my-2">
-          <table className="border-collapse text-[0.9em] w-full">{c}</table>
+          <table className="border-collapse text-sm w-full">{c}</table>
         </div>
       ),
 
@@ -342,7 +342,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
         // Inline code (single backtick, no language)
         if (!language) {
           return (
-            <code className="bg-[var(--vscode-textCodeBlock-background)] text-code-inline-fg rounded px-1 py-0.5 font-mono text-[0.9em]">
+            <code className="bg-[var(--vscode-textCodeBlock-background)] text-code-inline-fg rounded px-1 py-0.5 font-mono text-sm">
               {codeChildren}
             </code>
           );
@@ -355,7 +355,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
         return (
           <code
             dangerouslySetInnerHTML={{ __html: highlighted }}
-            className={`hljs ${langClass ?? ""} font-mono text-[0.9em] block`}
+            className={`hljs ${langClass ?? ""} font-mono text-sm block`}
           />
         );
       },
@@ -364,7 +364,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
       // Removes whitespace-pre-wrap so hljs span colouring renders cleanly;
       // whitespace-pre is enough (hljs never emits bare newlines outside spans).
       pre: ({ children: preChildren }: React.HTMLAttributes<HTMLElement>) => (
-        <pre className="bg-editor-bg border border-panel-border rounded p-3 overflow-x-auto my-2 font-mono text-[0.9em] whitespace-pre">
+        <pre className="bg-editor-bg border border-panel-border rounded p-3 overflow-x-auto my-2 font-mono text-sm whitespace-pre">
           {preChildren}
         </pre>
       ),

@@ -149,7 +149,7 @@ export const SkillsSelect: React.FC<{
             }`}
           >
             <i
-              className={`codicon codicon-check text-[10px] flex-shrink-0 ${
+              className={`codicon codicon-check text-xxs flex-shrink-0 ${
                 isSelected ? "visible" : "invisible"
               }`}
             />
@@ -162,7 +162,7 @@ export const SkillsSelect: React.FC<{
       {availableSkills.length > 0 && (
         <>
           <div className="border-t border-dropdown-border" />
-          <div className="px-2 py-1 text-[10px] text-description-fg uppercase font-semibold tracking-wide">
+          <div className="px-2 py-1 text-xxs text-description-fg uppercase font-semibold tracking-wide">
             Select skills:
           </div>
           {availableSkills.map((skill) => {
@@ -189,7 +189,7 @@ export const SkillsSelect: React.FC<{
                 <span className="flex flex-col min-w-0">
                   <span className="font-medium truncate">{skill.name}</span>
                   {skill.description && (
-                    <span className="text-[10px] text-description-fg whitespace-normal break-words">
+                    <span className="text-xxs text-description-fg whitespace-normal break-words">
                       {skill.description}
                     </span>
                   )}
@@ -220,7 +220,7 @@ export const SkillsSelect: React.FC<{
       >
         <span className="truncate">{buttonLabel}</span>
         <i
-          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px] flex-shrink-0 ml-1`}
+          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
         />
       </button>
 

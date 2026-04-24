@@ -112,19 +112,23 @@ function ChipContent({
       title={`${isScript ? "Script" : "Prompt"} ${slotNumber} — right-click for options`}
     >
       {/* Left status border bar */}
-      <div className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`} />
+      <div
+        className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`}
+      />
       {/* Row 1: slot number + type icon */}
       <div className="flex items-center justify-between w-full">
-        <span className="text-[10px] text-description-fg leading-none select-none">
+        <span className="text-xxs text-description-fg leading-none select-none">
           {slotNumber}
         </span>
-        <i className={`codicon ${isScript ? "codicon-terminal-powershell" : "codicon-comment"} text-[12px] text-description-fg`} />
+        <i
+          className={`codicon ${isScript ? "codicon-terminal-powershell" : "codicon-comment"} text-xs text-description-fg`}
+        />
       </div>
 
       {/* Row 2: context % on its own row */}
       {contextPct !== undefined && (
         <div className="flex items-center justify-end w-full mt-0.5">
-          <span className="text-[9px] text-description-fg leading-none">
+          <span className="text-xxs text-description-fg leading-none">
             {contextPct}%
           </span>
         </div>
@@ -185,18 +189,20 @@ function FinalStepChip({
       title="Final Step — right-click for options"
     >
       {/* Left status border bar */}
-      <div className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`} />
+      <div
+        className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`}
+      />
       {/* Row 1: "F" label + status icon */}
       <div className="flex items-center justify-between w-full">
         <span
-          className={`text-[10px] leading-none select-none font-semibold ${hasFinalStep ? "text-terminal-ansiGreen" : "text-description-fg"}`}
+          className={`text-xxs leading-none select-none font-semibold ${hasFinalStep ? "text-terminal-ansiGreen" : "text-description-fg"}`}
         >
           F
         </span>
         <StatusIcon
           status={status}
           disabled={!hasFinalStep}
-          className="text-[16px]"
+          className="text-base"
         />
       </div>
     </div>
@@ -377,15 +383,15 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
           if (e.key === "Enter" || e.key === " ") onExpand();
         }}
       >
-        <i className="codicon codicon-chevron-right text-[12px] text-description-fg" />
-        <i className="codicon codicon-list-ordered text-[12px] text-description-fg mt-1" />
+        <i className="codicon codicon-chevron-right text-xs text-description-fg" />
+        <i className="codicon codicon-list-ordered text-xs text-description-fg mt-1" />
       </div>
 
       {/* Prompt chips — scrollable, scrollbars hidden */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-hide">
         {prompts.length === 0 ? (
           <div className="flex items-center justify-center py-2">
-            <i className="codicon codicon-dash text-[10px] text-description-fg" />
+            <i className="codicon codicon-dash text-xxs text-description-fg" />
           </div>
         ) : (
           <>

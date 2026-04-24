@@ -188,7 +188,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
           )}
         </span>
         <i
-          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px] flex-shrink-0 ml-1`}
+          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
         />
       </button>
 
@@ -260,7 +260,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                             {option.label}
                           </span>
                           {option.description && (
-                            <span className="text-[10px] text-description-fg truncate">
+                            <span className="text-xxs text-description-fg truncate">
                               {option.description}
                             </span>
                           )}
@@ -278,7 +278,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                           }}
                           className="flex-shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
                         >
-                          <i className="codicon codicon-eye-closed text-[11px]" />
+                          <i className="codicon codicon-eye-closed text-xs" />
                         </button>
                       )}
                     </div>
@@ -308,7 +308,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                           }}
                           className="flex-shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
                         >
-                          <i className="codicon codicon-eye text-[11px]" />
+                          <i className="codicon codicon-eye text-xs" />
                         </button>
                         {/* Clicking checkbox or label: unhide + check */}
                         <button
@@ -329,7 +329,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                               {option.label}
                             </span>
                             {option.description && (
-                              <span className="text-[10px] text-description-fg truncate">
+                              <span className="text-xxs text-description-fg truncate">
                                 {option.description}
                               </span>
                             )}

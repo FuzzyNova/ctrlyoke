@@ -393,7 +393,7 @@ const SingleEvent = memo<SingleEventProps>(
           >
             <div className="flex-1 h-px bg-panel-border" />
             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
-              <i className="codicon codicon-fold text-[10px]" />
+              <i className="codicon codicon-fold text-xxs" />
               <span>
                 Conversation compacted ({trigger}){tokenInfo}
               </span>
@@ -728,7 +728,7 @@ export const CliOutput = memo<CliOutputProps>(
     const sequenceLabel = stepLabel ?? `Step ${stepIndex + 1}`;
     const displayName = stepName?.trim();
     const headerIconClass =
-      "codicon text-[11px] leading-none inline-flex items-center justify-center";
+      "codicon text-xs leading-none inline-flex items-center justify-center";
 
     const structuredMetadata = output.structured?.metadata;
     const sessionId = structuredMetadata?.sessionId;
@@ -738,7 +738,8 @@ export const CliOutput = memo<CliOutputProps>(
         harnessId)
       : undefined;
     const harnessShortName = harnessId
-      ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.shortName ?? harnessId)
+      ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.shortName ??
+        harnessId)
       : undefined;
     const modelId = structuredMetadata?.model;
     const modelLabel =
@@ -1150,9 +1151,7 @@ export const CliOutput = memo<CliOutputProps>(
                 {[harnessShortName, modelLabel].filter(Boolean).join(" · ")}
               </span>
             )}
-            {attemptLabel && (
-              <span className="ml-1">{attemptLabel}</span>
-            )}
+            {attemptLabel && <span className="ml-1">{attemptLabel}</span>}
           </span>
           {streamingIndicator}
           {(promptUndoActions.undo || promptUndoActions.redo) && (

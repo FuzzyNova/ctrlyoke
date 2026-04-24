@@ -74,7 +74,7 @@ export function SettingToggleRow({
               : "opacity-0 pointer-events-none"
           }`}
         >
-          <i className="codicon codicon-discard text-[10px]" />
+          <i className="codicon codicon-discard text-xxs" />
         </button>
       )}
     </label>

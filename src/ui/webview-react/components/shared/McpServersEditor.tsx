@@ -137,7 +137,7 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
     <div className="flex flex-col gap-2">
       {/* FlightPath built-in */}
       <div className="flex flex-col gap-1">
-        <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
+        <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
           Built-in
         </div>
         <div
@@ -159,7 +159,7 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
             <span className="text-xs font-medium text-foreground">
               FlightPath
             </span>
-            <span className="text-[10px] text-description-fg">
+            <span className="text-xxs text-description-fg">
               Dynamic queue extension (flightpath_append_queue,
               flightpath_queue_status)
             </span>
@@ -169,11 +169,11 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
 
       {/* Installed Servers */}
       <div className="flex flex-col gap-1">
-        <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
+        <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
           Installed Servers
         </div>
         {isEmpty || servers.length === 0 ? (
-          <div className="text-[11px] text-description-fg italic px-1">
+          <div className="text-xs text-description-fg italic px-1">
             None added
           </div>
         ) : (
@@ -185,7 +185,7 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
               <span className="text-xs font-medium text-foreground truncate">
                 {server.id}
               </span>
-              <span className="text-[10px] text-description-fg font-mono truncate ml-1">
+              <span className="text-xxs text-description-fg font-mono truncate ml-1">
                 {server.url
                   ? server.url
                   : `${server.command ?? ""}${server.args ? " " + server.args.join(" ") : ""}`}
@@ -697,7 +697,7 @@ export const McpServersEditor: React.FC<{
               key={m}
               type="button"
               onClick={() => handleModeChange(m)}
-              className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
+              className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                 mode === m
                   ? "bg-btn-bg text-btn-fg border-btn-bg"
                   : "bg-transparent text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
@@ -726,7 +726,7 @@ export const McpServersEditor: React.FC<{
         >
           {/* FlightPath built-in */}
           <div className="flex flex-col gap-1">
-            <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
+            <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
               Built-in
             </div>
             <button
@@ -755,7 +755,7 @@ export const McpServersEditor: React.FC<{
                 <span className="text-xs font-medium text-foreground">
                   FlightPath
                 </span>
-                <span className="text-[10px] text-description-fg">
+                <span className="text-xxs text-description-fg">
                   Dynamic queue extension (flightpath_append_queue,
                   flightpath_queue_status)
                 </span>
@@ -767,13 +767,13 @@ export const McpServersEditor: React.FC<{
           <div
             className={`flex flex-col gap-1${canFillDiscovery ? " flex-1 min-h-0" : ""}`}
           >
-            <div className="text-[10px] font-semibold uppercase text-description-fg tracking-wide">
+            <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
               Installed Servers
             </div>
 
             {isLoadingWorkspaceServers && (
-              <div className="flex items-center gap-1.5 text-[11px] text-description-fg px-1">
-                <i className="codicon codicon-loading codicon-modifier-spin text-[10px]" />
+              <div className="flex items-center gap-1.5 text-xs text-description-fg px-1">
+                <i className="codicon codicon-loading codicon-modifier-spin text-xxs" />
                 Loading workspace servers…
               </div>
             )}
@@ -781,7 +781,7 @@ export const McpServersEditor: React.FC<{
             {!isLoadingWorkspaceServers &&
               effectiveServers.length === 0 &&
               !showAddForm && (
-                <div className="text-[11px] text-description-fg italic px-1">
+                <div className="text-xs text-description-fg italic px-1">
                   None added
                 </div>
               )}
@@ -816,7 +816,7 @@ export const McpServersEditor: React.FC<{
                           onClick={() =>
                             setEditForm((f) => ({ ...f, activeTab: tab }))
                           }
-                          className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
+                          className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                             editForm.activeTab === tab
                               ? "bg-btn-bg text-btn-fg border-btn-bg"
                               : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
@@ -855,7 +855,7 @@ export const McpServersEditor: React.FC<{
                           className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                         />
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] text-description-fg">
+                          <span className="text-xxs text-description-fg">
                             env (KEY=VALUE, one per line)
                           </span>
                           <textarea
@@ -924,7 +924,7 @@ export const McpServersEditor: React.FC<{
                         }
                         className="w-3 h-3 accent-focus-border"
                       />
-                      <span className="text-[11px] text-description-fg">
+                      <span className="text-xs text-description-fg">
                         Auto-approve all tools (CLI harnesses only)
                       </span>
                     </label>
@@ -938,14 +938,14 @@ export const McpServersEditor: React.FC<{
                             ? !editForm.command.trim()
                             : !editForm.url.trim())
                         }
-                        className="px-2 py-0.5 text-[11px] bg-btn-bg text-btn-fg rounded hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-2 py-0.5 text-xs bg-btn-bg text-btn-fg rounded hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Save
                       </button>
                       <button
                         type="button"
                         onClick={handleCancelEdit}
-                        className="px-2 py-0.5 text-[11px] text-description-fg border border-panel-border rounded hover:border-focus-border hover:text-foreground"
+                        className="px-2 py-0.5 text-xs text-description-fg border border-panel-border rounded hover:border-focus-border hover:text-foreground"
                       >
                         Cancel
                       </button>
@@ -1001,13 +1001,13 @@ export const McpServersEditor: React.FC<{
                       <i
                         className={`codicon codicon-chevron-${
                           expandedId === server.id ? "down" : "right"
-                        } text-[10px] flex-shrink-0 text-description-fg`}
+                        } text-xxs flex-shrink-0 text-description-fg`}
                       />
                       <span className="text-xs font-medium text-foreground flex-shrink-0">
                         {server.id}
                       </span>
                       {expandedId !== server.id && (
-                        <span className="text-[10px] text-description-fg font-mono truncate ml-1">
+                        <span className="text-xxs text-description-fg font-mono truncate ml-1">
                           {server.url
                             ? server.url
                             : `${server.command ?? ""}${server.args ? " " + server.args.join(" ") : ""}`}
@@ -1023,7 +1023,7 @@ export const McpServersEditor: React.FC<{
                       aria-label={`Edit ${server.id}`}
                       title={`Edit ${server.id}`}
                     >
-                      <i className="codicon codicon-edit text-[10px]" />
+                      <i className="codicon codicon-edit text-xxs" />
                     </button>
 
                     {/* Remove button */}
@@ -1034,14 +1034,14 @@ export const McpServersEditor: React.FC<{
                       aria-label={`Remove ${server.id}`}
                       title={`Remove ${server.id}`}
                     >
-                      <i className="codicon codicon-close text-[10px]" />
+                      <i className="codicon codicon-close text-xxs" />
                     </button>
                   </div>
                   {expandedId === server.id && (
                     <div className="px-3 pb-2 space-y-0.5 border-t border-panel-border">
                       {server.url ? (
                         <>
-                          <div className="text-[11px] text-description-fg">
+                          <div className="text-xs text-description-fg">
                             <span className="font-mono text-foreground">
                               url:
                             </span>{" "}
@@ -1049,7 +1049,7 @@ export const McpServersEditor: React.FC<{
                           </div>
                           {server.transport &&
                             server.transport !== "streamable-http" && (
-                              <div className="text-[11px] text-description-fg">
+                              <div className="text-xs text-description-fg">
                                 <span className="font-mono text-foreground">
                                   transport:
                                 </span>{" "}
@@ -1058,7 +1058,7 @@ export const McpServersEditor: React.FC<{
                             )}
                           {server.headers &&
                             Object.keys(server.headers).length > 0 && (
-                              <div className="text-[11px] text-description-fg">
+                              <div className="text-xs text-description-fg">
                                 <span className="font-mono text-foreground">
                                   headers:
                                 </span>{" "}
@@ -1069,7 +1069,7 @@ export const McpServersEditor: React.FC<{
                       ) : (
                         <>
                           {server.command && (
-                            <div className="text-[11px] text-description-fg">
+                            <div className="text-xs text-description-fg">
                               <span className="font-mono text-foreground">
                                 command:
                               </span>{" "}
@@ -1077,7 +1077,7 @@ export const McpServersEditor: React.FC<{
                             </div>
                           )}
                           {server.args && (
-                            <div className="text-[11px] text-description-fg">
+                            <div className="text-xs text-description-fg">
                               <span className="font-mono text-foreground">
                                 args:
                               </span>{" "}
@@ -1085,7 +1085,7 @@ export const McpServersEditor: React.FC<{
                             </div>
                           )}
                           {server.env && Object.keys(server.env).length > 0 && (
-                            <div className="text-[11px] text-description-fg">
+                            <div className="text-xs text-description-fg">
                               <span className="font-mono text-foreground">
                                 env:
                               </span>{" "}
@@ -1095,7 +1095,7 @@ export const McpServersEditor: React.FC<{
                         </>
                       )}
                       {server.autoApprove !== undefined && (
-                        <div className="text-[11px] text-description-fg">
+                        <div className="text-xs text-description-fg">
                           <span className="font-mono text-foreground">
                             autoApprove:
                           </span>{" "}
@@ -1130,7 +1130,7 @@ export const McpServersEditor: React.FC<{
                       key={tab}
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, activeTab: tab }))}
-                      className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
+                      className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                         form.activeTab === tab
                           ? "bg-btn-bg text-btn-fg border-btn-bg"
                           : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
@@ -1163,7 +1163,7 @@ export const McpServersEditor: React.FC<{
                       className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono"
                     />
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-description-fg">
+                      <span className="text-xxs text-description-fg">
                         env (KEY=VALUE, one per line)
                       </span>
                       <textarea
@@ -1224,7 +1224,7 @@ export const McpServersEditor: React.FC<{
                     }
                     className="w-3 h-3 accent-focus-border"
                   />
-                  <span className="text-[11px] text-description-fg">
+                  <span className="text-xs text-description-fg">
                     Auto-approve all tools (CLI harnesses only)
                   </span>
                 </label>
@@ -1238,7 +1238,7 @@ export const McpServersEditor: React.FC<{
                         ? !form.command.trim()
                         : !form.url.trim())
                     }
-                    className="px-2 py-0.5 text-[11px] bg-btn-bg text-btn-fg rounded hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-2 py-0.5 text-xs bg-btn-bg text-btn-fg rounded hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Add
                   </button>
@@ -1248,7 +1248,7 @@ export const McpServersEditor: React.FC<{
                       setShowAddForm(false);
                       setForm(EMPTY_FORM);
                     }}
-                    className="px-2 py-0.5 text-[11px] text-description-fg border border-panel-border rounded hover:border-focus-border hover:text-foreground"
+                    className="px-2 py-0.5 text-xs text-description-fg border border-panel-border rounded hover:border-focus-border hover:text-foreground"
                   >
                     Cancel
                   </button>
@@ -1261,9 +1261,9 @@ export const McpServersEditor: React.FC<{
                   setShowAddForm(true);
                   setEditingId(null);
                 }}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] text-description-fg hover:text-foreground border border-dashed border-panel-border rounded hover:border-focus-border transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-xs text-description-fg hover:text-foreground border border-dashed border-panel-border rounded hover:border-focus-border transition-colors"
               >
-                <i className="codicon codicon-add text-[10px]" />
+                <i className="codicon codicon-add text-xxs" />
                 Add Server
               </button>
             )}
@@ -1279,13 +1279,13 @@ export const McpServersEditor: React.FC<{
                     <button
                       type="button"
                       onClick={() => handleDiscoveryTabChange("local")}
-                      className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
+                      className={`flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors ${
                         discoveryTab === "local"
                           ? "bg-btn-bg text-btn-fg border-btn-bg"
                           : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
                       }`}
                     >
-                      <i className="codicon codicon-folder-opened text-[10px]" />
+                      <i className="codicon codicon-folder-opened text-xxs" />
                       Local configs
                     </button>
                   )}
@@ -1293,13 +1293,13 @@ export const McpServersEditor: React.FC<{
                     <button
                       type="button"
                       onClick={() => handleDiscoveryTabChange("registry")}
-                      className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition-colors ${
+                      className={`flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors ${
                         discoveryTab === "registry"
                           ? "bg-btn-bg text-btn-fg border-btn-bg"
                           : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
                       }`}
                     >
-                      <i className="codicon codicon-globe text-[10px]" />
+                      <i className="codicon codicon-globe text-xxs" />
                       Browse registry
                     </button>
                   )}
@@ -1309,24 +1309,24 @@ export const McpServersEditor: React.FC<{
                 {discoveryTab === "local" && (
                   <div className="flex flex-col gap-1 p-2 rounded border border-panel-border bg-editor-bg">
                     {isLoadingLocal ? (
-                      <div className="flex items-center gap-1.5 text-[11px] text-description-fg">
-                        <i className="codicon codicon-loading codicon-modifier-spin text-[10px]" />
+                      <div className="flex items-center gap-1.5 text-xs text-description-fg">
+                        <i className="codicon codicon-loading codicon-modifier-spin text-xxs" />
                         Scanning local configs…
                       </div>
                     ) : localServersError ? (
-                      <div className="text-[11px] text-error-fg">
+                      <div className="text-xs text-error-fg">
                         {localServersError}
                       </div>
                     ) : !localServers || localServers.length === 0 ? (
-                      <div className="text-[11px] text-description-fg italic">
+                      <div className="text-xs text-description-fg italic">
                         No servers found in local config files
-                        <span className="block text-[10px] mt-0.5">
+                        <span className="block text-xxs mt-0.5">
                           (.vscode/mcp.json, .mcp.json, VS Code user config)
                         </span>
                       </div>
                     ) : (
                       <>
-                        <div className="text-[10px] text-description-fg mb-0.5">
+                        <div className="text-xxs text-description-fg mb-0.5">
                           Found {localServers.length} server
                           {localServers.length !== 1 ? "s" : ""}
                         </div>
@@ -1341,11 +1341,11 @@ export const McpServersEditor: React.FC<{
                                 <span className="text-xs font-medium text-foreground truncate">
                                   {entry.id}
                                 </span>
-                                <span className="text-[10px] text-description-fg font-mono truncate">
+                                <span className="text-xxs text-description-fg font-mono truncate">
                                   {entry.command}
                                   {entry.args ? " " + entry.args.join(" ") : ""}
                                 </span>
-                                <span className="text-[10px] text-description-fg capitalize">
+                                <span className="text-xxs text-description-fg capitalize">
                                   {entry.source.replace(/-/g, " ")}
                                 </span>
                               </div>
@@ -1353,7 +1353,7 @@ export const McpServersEditor: React.FC<{
                                 type="button"
                                 disabled={alreadyAdded}
                                 onClick={() => handleImportLocal(entry)}
-                                className="flex-shrink-0 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                className="flex-shrink-0 px-2 py-0.5 text-xs rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                 title={
                                   alreadyAdded
                                     ? "Already in workspace registry"
@@ -1392,12 +1392,12 @@ export const McpServersEditor: React.FC<{
                     />
 
                     {isLoadingRegistry ? (
-                      <div className="flex items-center gap-1.5 text-[11px] text-description-fg">
-                        <i className="codicon codicon-loading codicon-modifier-spin text-[10px]" />
+                      <div className="flex items-center gap-1.5 text-xs text-description-fg">
+                        <i className="codicon codicon-loading codicon-modifier-spin text-xxs" />
                         Fetching from MCP Registry…
                       </div>
                     ) : registryError ? (
-                      <div className="text-[11px] text-error-fg">
+                      <div className="text-xs text-error-fg">
                         {registryError}
                       </div>
                     ) : filteredRegistryServers &&
@@ -1405,7 +1405,7 @@ export const McpServersEditor: React.FC<{
                       <>
                         {/* Sort controls */}
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-description-fg">
+                          <span className="text-xxs text-description-fg">
                             Sort:
                           </span>
                           {(
@@ -1415,7 +1415,7 @@ export const McpServersEditor: React.FC<{
                               key={s}
                               type="button"
                               onClick={() => handleSortChange(s)}
-                              className={`px-1.5 py-0 text-[10px] rounded border transition-colors ${
+                              className={`px-1.5 py-0 text-xxs rounded border transition-colors ${
                                 registrySort === s
                                   ? "bg-btn-bg text-btn-fg border-btn-bg"
                                   : "text-description-fg border-panel-border hover:border-focus-border hover:text-foreground"
@@ -1451,23 +1451,23 @@ export const McpServersEditor: React.FC<{
                                     </span>
                                     {entry.verified && (
                                       <i
-                                        className="codicon codicon-verified-filled text-[10px] text-blue-400 flex-shrink-0"
+                                        className="codicon codicon-verified-filled text-xxs text-blue-400 flex-shrink-0"
                                         title="MCP Registry verified"
                                       />
                                     )}
                                   </div>
                                   {entry.description && (
-                                    <span className="text-[10px] text-description-fg line-clamp-2">
+                                    <span className="text-xxs text-description-fg line-clamp-2">
                                       {entry.description}
                                     </span>
                                   )}
                                   {entry.installCommand && (
-                                    <span className="text-[10px] text-description-fg font-mono mt-0.5 truncate">
+                                    <span className="text-xxs text-description-fg font-mono mt-0.5 truncate">
                                       {entry.installCommand}
                                     </span>
                                   )}
                                   {!entry.installCommand && entry.remoteUrl && (
-                                    <span className="text-[10px] text-description-fg font-mono mt-0.5 truncate">
+                                    <span className="text-xxs text-description-fg font-mono mt-0.5 truncate">
                                       {entry.remoteTransport ??
                                         "streamable-http"}
                                       : {entry.remoteUrl}
@@ -1475,7 +1475,7 @@ export const McpServersEditor: React.FC<{
                                   )}
                                   {entry.envVars &&
                                     entry.envVars.length > 0 && (
-                                      <span className="text-[10px] text-description-fg mt-0.5">
+                                      <span className="text-xxs text-description-fg mt-0.5">
                                         Requires env:{" "}
                                         {entry.envVars
                                           .map((e) => e.name)
@@ -1486,7 +1486,7 @@ export const McpServersEditor: React.FC<{
                                     entry.remoteHeaders.filter(
                                       (h) => h.isRequired
                                     ).length > 0 && (
-                                      <span className="text-[10px] text-description-fg mt-0.5">
+                                      <span className="text-xxs text-description-fg mt-0.5">
                                         Requires header:{" "}
                                         {entry.remoteHeaders
                                           .filter((h) => h.isRequired)
@@ -1499,7 +1499,7 @@ export const McpServersEditor: React.FC<{
                                   type="button"
                                   disabled={alreadyAdded}
                                   onClick={() => handleImportRegistry(entry)}
-                                  className="flex-shrink-0 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors mt-0.5"
+                                  className="flex-shrink-0 px-2 py-0.5 text-xs rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-40 disabled:cursor-not-allowed transition-colors mt-0.5"
                                   title={
                                     alreadyAdded
                                       ? "Already in workspace registry"
@@ -1519,29 +1519,29 @@ export const McpServersEditor: React.FC<{
                               type="button"
                               disabled={!hasPrevPage || isLoadingRegistry}
                               onClick={handleRegistryPrevPage}
-                              className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              className="flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
-                              <i className="codicon codicon-chevron-left text-[10px]" />
+                              <i className="codicon codicon-chevron-left text-xxs" />
                               Prev
                             </button>
-                            <span className="text-[10px] text-description-fg">
+                            <span className="text-xxs text-description-fg">
                               Page {registryPageNumber}
                             </span>
                             <button
                               type="button"
                               disabled={!hasNextPage || isLoadingRegistry}
                               onClick={handleRegistryNextPage}
-                              className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                              className="flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
                               Next
-                              <i className="codicon codicon-chevron-right text-[10px]" />
+                              <i className="codicon codicon-chevron-right text-xxs" />
                             </button>
                           </div>
                         )}
                       </>
                     ) : filteredRegistryServers !== undefined ? (
                       <div className="flex flex-col gap-1.5">
-                        <div className="text-[11px] text-description-fg italic">
+                        <div className="text-xs text-description-fg italic">
                           {hasPrevPage ? "No more results" : "No matches"}
                         </div>
                         {hasPrevPage && (
@@ -1549,15 +1549,15 @@ export const McpServersEditor: React.FC<{
                             type="button"
                             disabled={isLoadingRegistry}
                             onClick={handleRegistryPrevPage}
-                            className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors self-start"
+                            className="flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-panel-border hover:border-focus-border hover:text-foreground text-description-fg disabled:opacity-30 disabled:cursor-not-allowed transition-colors self-start"
                           >
-                            <i className="codicon codicon-chevron-left text-[10px]" />
+                            <i className="codicon codicon-chevron-left text-xxs" />
                             Back to browse
                           </button>
                         )}
                       </div>
                     ) : (
-                      <div className="text-[10px] text-description-fg italic">
+                      <div className="text-xxs text-description-fg italic">
                         Loading MCP Registry…
                       </div>
                     )}
@@ -1576,8 +1576,7 @@ export const McpServersEditor: React.FC<{
 export function buildMcpDefaultLabel(
   servers: (string | McpServerConfig)[] | undefined | null
 ): string {
-  if (!Array.isArray(servers) || servers.length === 0)
-    return "Inherit (None)";
+  if (!Array.isArray(servers) || servers.length === 0) return "Inherit (None)";
   const hasFlightpathEntry = servers.some((s) => s === "flightpath");
   const customCount = servers.filter(
     (s) => typeof s === "object" && s !== null

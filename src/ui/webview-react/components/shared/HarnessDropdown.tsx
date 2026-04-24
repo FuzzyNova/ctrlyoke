@@ -67,7 +67,7 @@ const StatusIndicator: React.FC<{
   };
   const { color, text, animate } = config[status] ?? config.checking;
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] text-description-fg">
+    <span className="inline-flex items-center gap-1 text-xxs text-description-fg">
       <span
         className={`w-2 h-2 rounded-full flex-shrink-0 ${color} ${animate ? "animate-pulse" : ""}`}
       />
@@ -79,7 +79,7 @@ const StatusIndicator: React.FC<{
 const GroupHeader: React.FC<{ label: string }> = ({ label }) => (
   <div className="flex items-center gap-1.5 px-2 py-1 select-none">
     <div className="flex-1 h-[2px] bg-widget-border" />
-    <span className="text-[9px] font-semibold uppercase tracking-wider text-description-fg whitespace-nowrap leading-none flex-shrink-0">
+    <span className="text-xxs font-semibold uppercase tracking-wider text-description-fg whitespace-nowrap leading-none flex-shrink-0">
       {label}
     </span>
     <div className="flex-1 h-[2px] bg-widget-border" />
@@ -135,7 +135,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
           }}
           className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
         >
-          <i className="codicon codicon-eye text-[11px]" />
+          <i className="codicon codicon-eye text-xs" />
         </button>
         <button
           type="button"
@@ -185,7 +185,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
           }}
           className="flex-shrink-0 p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
         >
-          <i className="codicon codicon-eye-closed text-[11px]" />
+          <i className="codicon codicon-eye-closed text-xs" />
         </button>
       )}
       {showStatus && status && (
@@ -453,7 +453,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
             <StatusIndicator status={triggerStatus.status} narrow={isNarrow} />
           )}
           <i
-            className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px]`}
+            className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs`}
           />
         </div>
       </button>

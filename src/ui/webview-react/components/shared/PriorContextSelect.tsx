@@ -259,7 +259,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         >
           <span className="truncate">{buttonLabel}</span>
           <i
-            className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px] flex-shrink-0 ml-1`}
+            className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
           />
         </button>
 
@@ -296,7 +296,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                       }`}
                     >
                       <i
-                        className={`codicon codicon-check text-[10px] flex-shrink-0 ${
+                        className={`codicon codicon-check text-xxs flex-shrink-0 ${
                           isSelected ? "visible" : "invisible"
                         }`}
                       />
@@ -329,7 +329,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           }`}
         />
         {customError && (
-          <span className="text-[10px] text-error-fg mt-0.5 block">
+          <span className="text-xxs text-error-fg mt-0.5 block">
             Use numbers, commas, and ranges (e.g. 1,3,5-10)
           </span>
         )}

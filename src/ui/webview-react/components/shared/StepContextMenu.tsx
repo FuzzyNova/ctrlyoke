@@ -84,7 +84,7 @@ export function StepContextMenu({
       {items.map((item, i) => (
         <button
           key={i}
-          className={`flex items-center gap-1.5 w-full px-2.5 py-1 text-[11px] text-left transition-colors ${
+          className={`flex items-center gap-1.5 w-full px-2.5 py-1 text-xs text-left transition-colors ${
             item.disabled
               ? "text-description-fg cursor-not-allowed opacity-50"
               : "text-foreground hover:bg-toolbar-hover-bg cursor-pointer"
@@ -97,7 +97,7 @@ export function StepContextMenu({
             item.onClick();
           }}
         >
-          <i className={`codicon ${item.icon} text-[10px]`} />
+          <i className={`codicon ${item.icon} text-xxs`} />
           {item.label}
         </button>
       ))}

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { EXECUTION_STATES, RUNNER_IDS } from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
-import { getExecutionStateBadgeClass, getExecutionStateBadgeIcon } from "../../utils/status";
+import {
+  getExecutionStateBadgeClass,
+  getExecutionStateBadgeIcon,
+} from "../../utils/status";
 
 interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
@@ -115,11 +118,13 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[52px]"}`}
       >
         <span
-          className={`inline-flex items-center text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
+          className={`inline-flex items-center text-xs px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
           title={isNarrow ? workflow.executionState : undefined}
         >
           {isNarrow ? (
-            <i className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`} />
+            <i
+              className={`codicon ${getExecutionStateBadgeIcon(workflow.executionState)}`}
+            />
           ) : (
             workflow.executionState
           )}
@@ -127,13 +132,13 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       </span>
 
       {/* Elapsed time — fixed-width column for consistent m:ss alignment */}
-      <span className="text-[11px] text-description-fg flex-shrink-0 font-mono w-[36px] text-right">
+      <span className="text-xs text-description-fg flex-shrink-0 font-mono w-[36px] text-right">
         {elapsed}
       </span>
 
       {/* Action buttons — CLI pill for CLI-managed workflows, pause/stop for VS Code-managed */}
       {workflow.managedBy === RUNNER_IDS.CLI ? (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-600 text-white flex-shrink-0">
+        <span className="px-1.5 py-0.5 rounded text-xxs font-semibold bg-blue-600 text-white flex-shrink-0">
           CLI
         </span>
       ) : (

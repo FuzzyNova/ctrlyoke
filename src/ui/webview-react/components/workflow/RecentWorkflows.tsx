@@ -86,7 +86,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
               onClick={() => onNewWorkflow?.()}
               className="w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
             >
-              <i className="codicon codicon-add text-[11px]" />
+              <i className="codicon codicon-add text-xs" />
               New Workflow
             </button>
           )
@@ -134,7 +134,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                   className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[76px]"}`}
                 >
                   <span
-                    className={`workflow-menu-item-state inline-flex items-center text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
+                    className={`workflow-menu-item-state inline-flex items-center text-xs px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
                     title={isNarrow ? workflow.executionState : undefined}
                   >
                     {isNarrow ? (
@@ -148,7 +148,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 </span>
 
                 {/* Time — fixed-width column so timestamps align across rows */}
-                <span className="workflow-menu-item-time text-[11px] text-description-fg flex-shrink-0 w-[80px] text-right">
+                <span className="workflow-menu-item-time text-xs text-description-fg flex-shrink-0 w-[80px] text-right">
                   {timeAgo || ""}
                 </span>
 

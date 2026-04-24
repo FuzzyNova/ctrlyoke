@@ -195,7 +195,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             {...dragHandleProps.attributes}
             aria-label="Drag to reorder"
           >
-            <i className="codicon codicon-grabber text-[12px]" />
+            <i className="codicon codicon-grabber text-xs" />
           </span>
         )}
         {/* Icon column: status icon at top, set-start-position button at bottom */}
@@ -214,7 +214,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
               aria-label={`Set step ${displayNumber ?? index + 1} as start position`}
             >
               <i
-                className={`codicon ${startPositionDirection === "rewind" ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-[12px]`}
+                className={`codicon ${startPositionDirection === "rewind" ? "codicon-debug-reverse-continue" : "codicon-debug-step-over"} text-xs`}
               />
             </button>
           )}
@@ -225,7 +225,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             // Script step variant
             <>
               <div className="flex items-center gap-1 min-w-0">
-                <i className="codicon codicon-terminal-powershell text-[11px] opacity-60 flex-shrink-0" />
+                <i className="codicon codicon-terminal-powershell text-xs opacity-60 flex-shrink-0" />
                 <span
                   className={`text-xs leading-relaxed truncate ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
                 >
@@ -235,7 +235,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
               {/* Script command subtitle — only shown when a name is displayed in the title row */}
               {name && text && (
                 <div
-                  className={`mt-0.5 text-[10px] opacity-60 font-mono truncate ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+                  className={`mt-0.5 text-xxs opacity-60 font-mono truncate ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
                   title={text}
                 >
                   {truncate(text, 60)}
@@ -254,7 +254,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             // Prompt step variant (default)
             <>
               <div className="flex items-center gap-1 min-w-0">
-                <i className="codicon codicon-comment text-[11px] opacity-60 flex-shrink-0" />
+                <i className="codicon codicon-comment text-xs opacity-60 flex-shrink-0" />
                 <span
                   className={`text-xs leading-relaxed truncate ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
                 >

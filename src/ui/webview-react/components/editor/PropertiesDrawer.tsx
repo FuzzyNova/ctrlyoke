@@ -388,7 +388,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             title="Reset all to inherit"
             aria-label="Reset all to inherit"
           >
-            <i className="codicon codicon-debug-restart text-[12px]" />
+            <i className="codicon codicon-debug-restart text-xs" />
           </button>
         </div>
         <button
@@ -415,7 +415,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-harness"
-                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  className="text-xs font-semibold uppercase text-description-fg"
                 >
                   {`Harness${harnessCategory(properties.harness ?? "") === "cli" ? " (CLI)" : harnessCategory(properties.harness ?? "") === "chat" ? " (Chat)" : ""}`}
                 </label>
@@ -442,7 +442,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-model"
-                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  className="text-xs font-semibold uppercase text-description-fg"
                 >
                   Model
                 </label>
@@ -484,7 +484,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-agent"
-                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  className="text-xs font-semibold uppercase text-description-fg"
                 >
                   Agent
                 </label>
@@ -532,7 +532,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-skills"
-                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  className="text-xs font-semibold uppercase text-description-fg"
                 >
                   Skills
                 </label>
@@ -553,7 +553,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-additional-args-mode"
-                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  className="text-xs font-semibold uppercase text-description-fg"
                   title="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
                 >
                   Additional Args
@@ -639,7 +639,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-resume-session"
-                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  className="text-xs font-semibold uppercase text-description-fg"
                 >
                   Resume Session
                 </label>
@@ -706,7 +706,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-prior-context"
-                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  className="text-xs font-semibold uppercase text-description-fg"
                   title="Send prior step outputs with the prompt"
                 >
                   Prior Context
@@ -730,7 +730,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="space-y-2">
               <label
                 htmlFor="prop-pre-condition-mode"
-                className="text-[11px] font-semibold uppercase text-description-fg"
+                className="text-xs font-semibold uppercase text-description-fg"
                 title="Runs a script before the prompt. Use to gate execution on a condition."
               >
                 Pre-Condition
@@ -780,7 +780,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
             <div className="space-y-2">
               <label
                 htmlFor="prop-end-condition-mode"
-                className="text-[11px] font-semibold uppercase text-description-fg"
+                className="text-xs font-semibold uppercase text-description-fg"
                 title="Validation runs after the prompt completes. Use to gate retries on a condition."
               >
                 End Condition
@@ -827,7 +827,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: MCP */}
         {activePage === DRAWER_PAGES.MCP && (
           <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase text-description-fg">
+            <p className="text-xs font-semibold uppercase text-description-fg">
               MCP Servers
             </p>
             <McpServersEditor
@@ -856,7 +856,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
           <div className="flex-1 flex flex-col min-h-0">
             {/* Copilot Chat: not applicable */}
             {permHarnessSupport === "n/a" && (
-              <p className="text-[10px] text-description-fg mb-2">
+              <p className="text-xxs text-description-fg mb-2">
                 ℹ️ Tool permissions apply to CLI harnesses only and are ignored
                 for Copilot Chat.
               </p>
@@ -869,7 +869,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-permission-mode"
-                  className="text-[11px] font-semibold uppercase text-description-fg"
+                  className="text-xs font-semibold uppercase text-description-fg"
                   title="Tool permission mode override for this prompt"
                 >
                   Permission Mode
@@ -926,7 +926,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   >
                     {/* Mode-only harness warning */}
                     {permHarnessSupport === "mode-only" && (
-                      <p className="text-[10px] text-description-fg">
+                      <p className="text-xxs text-description-fg">
                         {effectivePermHarness === HARNESS_IDS.CODEX_CLI
                           ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
                           : effectivePermHarness === HARNESS_IDS.OPENCODE_CLI
@@ -939,7 +939,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label
                         htmlFor="prop-allowed-tools"
-                        className="text-[11px] font-semibold uppercase text-description-fg"
+                        className="text-xs font-semibold uppercase text-description-fg"
                         title="Tool patterns to allow (one per line). Uses Copilot CLI format — auto-converted for Claude/Qwen."
                       >
                         Allowed Tools
@@ -977,7 +977,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     <div className="flex-1 flex flex-col gap-1 min-h-0">
                       <label
                         htmlFor="prop-denied-tools"
-                        className="text-[11px] font-semibold uppercase text-description-fg"
+                        className="text-xs font-semibold uppercase text-description-fg"
                         title="Tool patterns to deny (one per line, takes precedence over allow list)."
                       >
                         Denied Tools
@@ -1018,7 +1018,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: Hooks */}
         {activePage === DRAWER_PAGES.HOOKS && (
           <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase text-description-fg">
+            <p className="text-xs font-semibold uppercase text-description-fg">
               User Hooks
             </p>
             <HooksEditor

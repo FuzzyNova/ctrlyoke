@@ -475,7 +475,7 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
                   style={{ whiteSpace: "nowrap" }}
                 >
                   {/* Step label */}
-                  <span className="text-[10px] font-semibold text-foreground leading-tight">
+                  <span className="text-xxs font-semibold text-foreground leading-tight">
                     {step.label}
                   </span>
 
@@ -489,9 +489,9 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
                         redo.onTrigger();
                       }}
                       style={{ touchAction: "manipulation" }}
-                      className="flex items-center gap-1 text-[10px] text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
+                      className="flex items-center gap-1 text-xxs text-terminal-ansiGreen hover:opacity-80 transition-opacity leading-tight focus:outline-none"
                     >
-                      <i className="codicon codicon-redo text-[10px]" />
+                      <i className="codicon codicon-redo text-xxs" />
                       {redo.label}
                     </button>
                   )}
@@ -506,9 +506,9 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
                         undo.onTrigger();
                       }}
                       style={{ touchAction: "manipulation" }}
-                      className="flex items-center gap-1 text-[10px] text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
+                      className="flex items-center gap-1 text-xxs text-link-fg hover:text-link-active-fg transition-colors leading-tight focus:outline-none"
                     >
-                      <i className="codicon codicon-discard text-[10px]" />
+                      <i className="codicon codicon-discard text-xxs" />
                       {undo.label}
                     </button>
                   )}

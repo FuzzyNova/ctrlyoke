@@ -415,9 +415,9 @@ export const OutputSection: React.FC = () => {
         attemptIndex: msg.attemptIndex,
         stepName:
           msg.type === "cli"
-            ? (msg.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-                ? finalStep?.name?.trim() || undefined
-                : steps[msg.target.index]?.name?.trim() || undefined)
+            ? msg.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+              ? finalStep?.name?.trim() || undefined
+              : steps[msg.target.index]?.name?.trim() || undefined
             : undefined,
       })),
       {
@@ -950,14 +950,14 @@ export const OutputSection: React.FC = () => {
           e.key === "Enter" && (triggerPanelAnimation(), toggleOutputCollapse())
         }
       >
-        <i className="codicon codicon-chevron-right text-[12px]" />
-        <i className="codicon codicon-output text-[14px]" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide">
+        <i className="codicon codicon-chevron-right text-xs" />
+        <i className="codicon codicon-output text-sm" />
+        <span className="text-xs font-semibold uppercase tracking-wide">
           Output
         </span>
-        <span className="text-[11px] text-description-fg mx-1">/</span>
-        <i className="codicon codicon-terminal text-[14px]" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide">
+        <span className="text-xs text-description-fg mx-1">/</span>
+        <i className="codicon codicon-terminal text-sm" />
+        <span className="text-xs font-semibold uppercase tracking-wide">
           Terminal
         </span>
       </div>
@@ -992,14 +992,14 @@ export const OutputSection: React.FC = () => {
               (triggerPanelAnimation(), toggleOutputCollapse())
             }
           >
-            <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
+            <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
           </div>
 
           {/* Output / Terminal tab buttons */}
           {showTerminalTab ? (
             <div className="flex items-center ml-1">
               <button
-                className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
+                className={`text-xs font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
                   ${
                     activeOutputTab === "output"
                       ? "text-foreground border-b border-foreground"
@@ -1007,11 +1007,11 @@ export const OutputSection: React.FC = () => {
                   }`}
                 onClick={() => setActiveOutputTab(terminalWorkflowId, "output")}
               >
-                <i className="codicon codicon-output text-[13px]" />
+                <i className="codicon codicon-output text-sm" />
                 {!isHeaderNarrow && <span>Output</span>}
               </button>
               <button
-                className={`text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
+                className={`text-xs font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
                   ${
                     activeOutputTab === "terminal"
                       ? "text-foreground border-b border-foreground"
@@ -1029,7 +1029,7 @@ export const OutputSection: React.FC = () => {
                   }
                 }}
               >
-                <i className="codicon codicon-terminal text-[13px]" />
+                <i className="codicon codicon-terminal text-sm" />
                 {!isHeaderNarrow && <span>Terminal</span>}
                 {terminalSessionActive && (
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -1037,8 +1037,8 @@ export const OutputSection: React.FC = () => {
               </button>
             </div>
           ) : (
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-description-fg ml-1 flex items-center gap-1">
-              <i className="codicon codicon-output text-[13px]" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-description-fg ml-1 flex items-center gap-1">
+              <i className="codicon codicon-output text-sm" />
               Output
             </span>
           )}
@@ -1056,7 +1056,7 @@ export const OutputSection: React.FC = () => {
                 <i className="codicon codicon-sm codicon-remove" />
               </button>
               {!isHeaderNarrow && (
-                <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
+                <span className="text-xxs text-description-fg tabular-nums w-[20px] text-center select-none">
                   {outputFontSize}
                 </span>
               )}
@@ -1082,7 +1082,7 @@ export const OutputSection: React.FC = () => {
                 <i className="codicon codicon-sm codicon-remove" />
               </button>
               {!isHeaderNarrow && (
-                <span className="text-[10px] text-description-fg tabular-nums w-[20px] text-center select-none">
+                <span className="text-xxs text-description-fg tabular-nums w-[20px] text-center select-none">
                   {terminalFontSize}
                 </span>
               )}
@@ -1123,10 +1123,10 @@ export const OutputSection: React.FC = () => {
                               SHELL_KINDS.POWERSHELL
                             ? "codicon-terminal-powershell"
                             : "codicon-terminal-bash"
-                      } text-[12px] flex-shrink-0`}
+                      } text-xs flex-shrink-0`}
                     />
                   )}
-                  <span className="text-[11px] text-foreground truncate max-w-[120px]">
+                  <span className="text-xs text-foreground truncate max-w-[120px]">
                     {activeTerminalSession.stepName}
                   </span>
                 </div>
@@ -1134,7 +1134,7 @@ export const OutputSection: React.FC = () => {
 
               {/* New Terminal button */}
               <button
-                className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-description-fg hover:text-foreground transition-colors"
+                className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-description-fg hover:text-foreground transition-colors"
                 title="New Terminal"
                 onClick={() => {
                   const vscode = getVsCodeApi();
@@ -1145,7 +1145,7 @@ export const OutputSection: React.FC = () => {
                   });
                 }}
               >
-                <i className="codicon codicon-add text-[12px]" />
+                <i className="codicon codicon-add text-xs" />
                 {!isTerminalCompact && <span>New Terminal</span>}
               </button>
 
@@ -1162,9 +1162,7 @@ export const OutputSection: React.FC = () => {
                     onClick={() => {
                       if (!activeTerminalSession) return;
                       const vscode = getVsCodeApi();
-                      if (
-                        activeTerminalSession.kind === SESSION_KINDS.SHELL
-                      ) {
+                      if (activeTerminalSession.kind === SESSION_KINDS.SHELL) {
                         vscode?.postMessage({
                           type: MESSAGE_TYPES.TERMINAL_CLOSE_SHELL,
                           workflowId: terminalWorkflowId,
@@ -1197,7 +1195,7 @@ export const OutputSection: React.FC = () => {
                       }
                     }}
                   >
-                    <i className="codicon codicon-trash text-[12px]" />
+                    <i className="codicon codicon-trash text-xs" />
                   </button>
                 )}
             </>
@@ -1214,7 +1212,7 @@ export const OutputSection: React.FC = () => {
                   return (
                     <button
                       type="button"
-                      className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-link-fg hover:text-link-active-fg transition-colors"
+                      className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors"
                       style={{ touchAction: "manipulation" }}
                       title={`Undo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
                       onClick={() =>
@@ -1226,7 +1224,7 @@ export const OutputSection: React.FC = () => {
                         })
                       }
                     >
-                      <i className="codicon codicon-discard text-[12px]" />
+                      <i className="codicon codicon-discard text-xs" />
                       <span>
                         {isHeaderNarrow ? "Undo" : `Undo ${count} changes`}
                       </span>
@@ -1243,7 +1241,7 @@ export const OutputSection: React.FC = () => {
                   return (
                     <button
                       type="button"
-                      className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-terminal-ansiGreen hover:opacity-80 transition-opacity"
+                      className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-terminal-ansiGreen hover:opacity-80 transition-opacity"
                       style={{ touchAction: "manipulation" }}
                       title={`Redo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
                       onClick={() =>
@@ -1255,7 +1253,7 @@ export const OutputSection: React.FC = () => {
                         })
                       }
                     >
-                      <i className="codicon codicon-redo text-[12px]" />
+                      <i className="codicon codicon-redo text-xs" />
                       <span>
                         {isHeaderNarrow ? "Redo" : `Redo ${count} changes`}
                       </span>

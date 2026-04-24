@@ -63,8 +63,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
     <div className={TOOL_CALL_LINE}>
       <span className="min-w-0 break-words">
-        <ToolDot status={resultDotStatus(result)} />
-        {" "}MCP: {server}.{tool}
+        <ToolDot status={resultDotStatus(result)} /> MCP: {server}.{tool}
       </span>
     </div>
   </div>
@@ -94,14 +93,16 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
           status={
             success === undefined ? "pending" : success ? "success" : "error"
           }
-        />
-        {" "}Web search: &ldquo;{query}&rdquo;
+        />{" "}
+        Web search: &ldquo;{query}&rdquo;
       </span>
     </div>
     {error && (
       <div className={`${TOOL_ERROR_LINE} flex items-start gap-1`}>
         <span className="shrink-0">⎿</span>
-        <div className="min-w-0 flex-1 whitespace-pre-wrap break-words">{error}</div>
+        <div className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+          {error}
+        </div>
       </div>
     )}
   </div>
@@ -175,7 +176,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           {isTruncated && (
             <button
               type="button"
-              className="text-bash-expand-link no-underline text-[0.9em] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+              className="text-bash-expand-link no-underline text-sm ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
               onClick={() => setExpanded(!isExpanded)}
             >
               {isExpanded
@@ -192,14 +193,12 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
         <span className="min-w-0 flex-1 break-words">
-          <ToolDot status={resultDotStatus(result)} />
-          {" "}
-          {name}({params})
+          <ToolDot status={resultDotStatus(result)} /> {name}({params})
         </span>
         {hasParams && (
           <button
             type="button"
-            className="text-bash-expand-link text-[0.85em] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
+            className="text-bash-expand-link text-sm cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
             onClick={() => setParamsExpanded(!paramsExpanded)}
             title={paramsExpanded ? "Hide parameters" : "Show all parameters"}
           >

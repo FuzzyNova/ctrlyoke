@@ -114,7 +114,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         title="Select run to view"
-        className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded
+        className="flex items-center gap-1 px-2 py-0.5 text-xs rounded
           text-description-fg
           hover:text-foreground
           hover:bg-list-hover-bg
@@ -189,7 +189,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
                 role="option"
                 aria-selected={isSelected}
                 onClick={() => handleSelectRun(i)}
-                className={`w-full text-left px-3 py-1.5 text-[11px] flex items-center gap-2
+                className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2
                   transition-colors
                   ${
                     isSelected
@@ -208,7 +208,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
                 {/* Status badge */}
                 {runState && (
                   <span
-                    className={`text-[10px] px-1 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(runState)}`}
+                    className={`text-xxs px-1 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(runState)}`}
                   >
                     {runState}
                   </span>
@@ -219,12 +219,12 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
 
                 {/* Relative time or "live" label */}
                 {isLiveRun ? (
-                  <span className="text-description-fg text-[10px] flex-shrink-0">
+                  <span className="text-description-fg text-xxs flex-shrink-0">
                     live
                   </span>
                 ) : (
                   timeAgo && (
-                    <span className="text-description-fg text-[10px] flex-shrink-0">
+                    <span className="text-description-fg text-xxs flex-shrink-0">
                       {timeAgo}
                     </span>
                   )

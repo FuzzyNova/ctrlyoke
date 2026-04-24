@@ -91,8 +91,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         // mirrors what a real mouse wheel does on desktop, where xterm forwards
         // the event to the PTY as escape sequences when mouse-reporting is active.
         const wheelTarget =
-          currentEntry.term.element?.querySelector<Element>(".xterm-viewport") ??
-          currentEntry.term.element;
+          currentEntry.term.element?.querySelector<Element>(
+            ".xterm-viewport"
+          ) ?? currentEntry.term.element;
         if (wheelTarget) {
           const rect = wheelTarget.getBoundingClientRect();
           wheelTarget.dispatchEvent(
@@ -386,7 +387,7 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
       className="absolute bottom-0 left-0 right-0 flex items-center justify-center py-1 pointer-events-none"
       style={{ background: "rgba(0,0,0,0.4)" }}
     >
-      <span className="text-[11px] text-description-fg select-none">
+      <span className="text-xs text-description-fg select-none">
         {session?.status === TERMINAL_SESSION_STATUS.FAILED
           ? "Process exited with error"
           : "Process exited"}
@@ -424,14 +425,14 @@ const ViewOnlyBadge: React.FC<{ workflowId: string; sessionId: string }> = ({
       style={{ background: "rgba(0,0,0,0.55)", zIndex: 10 }}
     >
       <span
-        className="text-[11px] select-none"
+        className="text-xs select-none"
         style={{ color: "var(--vscode-descriptionForeground)" }}
       >
         View Only
       </span>
       <button
         onClick={handleTakeControl}
-        className="text-[11px] px-2 py-0.5 rounded select-none cursor-pointer"
+        className="text-xs px-2 py-0.5 rounded select-none cursor-pointer"
         style={{
           background:
             "var(--vscode-button-secondaryBackground, rgba(255,255,255,0.12))",

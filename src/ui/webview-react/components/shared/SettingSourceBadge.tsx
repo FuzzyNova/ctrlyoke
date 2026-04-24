@@ -10,7 +10,7 @@ export function SettingSourceBadge({ source }: Props) {
   const isWorkspace = source === "workspace";
   return (
     <span
-      className={`inline-flex items-center px-1 py-0 text-[9px] font-mono rounded border leading-[14px] ${
+      className={`inline-flex items-center px-1 py-0 text-xxs font-mono rounded border leading-[14px] ${
         isWorkspace
           ? "text-amber-400 border-amber-400/50 bg-amber-400/10"
           : "text-blue-400 border-blue-400/50 bg-blue-400/10"

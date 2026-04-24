@@ -93,7 +93,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
           key={m}
           type="button"
           onClick={() => handleModeChange(m)}
-          className={`px-2 py-0.5 text-[11px] rounded cursor-pointer ${
+          className={`px-2 py-0.5 text-xs rounded cursor-pointer ${
             mode === m
               ? "bg-button-bg text-button-fg"
               : "bg-transparent text-description-fg hover:text-fg"
@@ -113,17 +113,14 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
         {inherited.length > 0 ? (
           <div className="opacity-60 space-y-1">
             {inherited.map((h, i) => (
-              <div
-                key={i}
-                className="text-[11px] font-mono text-description-fg"
-              >
-                <span className="text-[10px] uppercase">{h.event}</span>{" "}
+              <div key={i} className="text-xs font-mono text-description-fg">
+                <span className="text-xxs uppercase">{h.event}</span>{" "}
                 <span>{h.command}</span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-[11px] text-description-fg italic">
+          <p className="text-xs text-description-fg italic">
             No hooks inherited
           </p>
         )}
@@ -136,7 +133,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
     return (
       <div>
         {modeSelector}
-        <p className="text-[11px] text-description-fg italic">
+        <p className="text-xs text-description-fg italic">
           No hooks — inherited hooks suppressed
         </p>
       </div>
@@ -153,7 +150,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
             <select
               value={hook.event}
               onChange={(e) => handleUpdateHook(index, "event", e.target.value)}
-              className="bg-input-bg text-input-fg border border-input-border rounded px-1 py-0.5 text-[11px] min-w-[120px]"
+              className="bg-input-bg text-input-fg border border-input-border rounded px-1 py-0.5 text-xs min-w-[120px]"
             >
               {HOOK_EVENTS.map((ev) => (
                 <option key={ev.value} value={ev.value}>
@@ -168,12 +165,12 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
                 handleUpdateHook(index, "command", e.target.value)
               }
               placeholder="node ./scripts/my-hook.js"
-              className="flex-1 bg-input-bg text-input-fg border border-input-border rounded px-2 py-0.5 text-[11px] font-mono"
+              className="flex-1 bg-input-bg text-input-fg border border-input-border rounded px-2 py-0.5 text-xs font-mono"
             />
             <button
               type="button"
               onClick={() => handleRemoveHook(index)}
-              className="text-description-fg hover:text-error-fg text-[11px] px-1 cursor-pointer"
+              className="text-description-fg hover:text-error-fg text-xs px-1 cursor-pointer"
               title="Remove hook"
             >
               ✕
@@ -184,7 +181,7 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
       <button
         type="button"
         onClick={handleAddHook}
-        className="text-[11px] text-link-fg hover:underline mt-2 cursor-pointer"
+        className="text-xs text-link-fg hover:underline mt-2 cursor-pointer"
       >
         + Add Hook
       </button>

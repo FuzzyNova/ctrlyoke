@@ -110,7 +110,7 @@ function SortableWorkflowStepWrapper({
     // slot position while the content transforms during drag.
     <div className="flex items-stretch">
       <div className={`w-[2px] flex-shrink-0 self-stretch ${borderBgClass}`} />
-      <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
+      <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-xs text-description-fg select-none">
         {slotNumber}
       </div>
       <div ref={setNodeRef} style={style} className="flex-1 min-w-0">
@@ -286,7 +286,7 @@ export const WorkflowStepsPanel: React.FC<{
           (s) => typeof s === "string" && s === "flightpath"
         );
         const serverIds = step.mcpServers.map((s) =>
-          typeof s === "string" ? s : (s as { id?: string }).id ?? "custom"
+          typeof s === "string" ? s : ((s as { id?: string }).id ?? "custom")
         );
         if (count === 0) {
           result.push({
@@ -656,7 +656,7 @@ export const WorkflowStepsPanel: React.FC<{
       >
         {/* Left: collapse chevron (desktop) OR collapse-to-sidebar arrow (mobile fullwidth) */}
         {!isMobileMode && (
-          <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
+          <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
         )}
         {onRequestSidebar && (
           <button
@@ -668,11 +668,11 @@ export const WorkflowStepsPanel: React.FC<{
             title="Collapse to sidebar"
             aria-label="Collapse steps to sidebar"
           >
-            <i className="codicon codicon-chevron-left text-[12px]" />
+            <i className="codicon codicon-chevron-left text-xs" />
           </button>
         )}
-        <i className="codicon codicon-list-ordered text-[14px] ml-1" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide ml-1.5">
+        <i className="codicon codicon-list-ordered text-sm ml-1" />
+        <span className="text-xs font-semibold uppercase tracking-wide ml-1.5">
           Steps
         </span>
         <div className="flex-1" />
@@ -689,7 +689,7 @@ export const WorkflowStepsPanel: React.FC<{
             title="Close steps"
             aria-label="Close steps panel"
           >
-            <i className="codicon codicon-close text-[12px]" />
+            <i className="codicon codicon-close text-xs" />
           </button>
         )}
       </div>
@@ -750,7 +750,7 @@ export const WorkflowStepsPanel: React.FC<{
                     <div
                       className={`w-[2px] flex-shrink-0 self-stretch ${getCompletedStepAccentClass(status)}`}
                     />
-                    <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-[11px] text-description-fg select-none">
+                    <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-xs text-description-fg select-none">
                       {slotNumber}
                     </div>
                     <div className="flex-1 min-w-0">

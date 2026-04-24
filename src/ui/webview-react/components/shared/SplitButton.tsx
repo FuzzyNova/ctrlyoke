@@ -251,7 +251,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         } ${isOpen ? "bg-btn-secondary-hover" : ""}`}
       >
         {badge && (
-          <span className="text-[10px] font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center mr-1">
+          <span className="text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center mr-1">
             {badge}
           </span>
         )}

@@ -12,6 +12,8 @@ suite("HostedServiceWorkerScript", () => {
 if (data.type === "__FLIGHTPATH_CLEAR_BADGE_MESSAGE_TYPE__") {
   return "__FLIGHTPATH_INCREMENT_BADGE_MESSAGE_TYPE__";
 }
+const icon = "__FLIGHTPATH_NOTIFICATION_ICON_PATH__";
+const badge = "__FLIGHTPATH_NOTIFICATION_BADGE_PATH__";
 `.trim());
 
     assert.ok(

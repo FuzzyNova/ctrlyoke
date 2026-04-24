@@ -198,7 +198,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             options={COMPARE_SOURCE_OPTIONS}
             disabled={disabled}
           />
-          <span className="text-[10px] text-description-fg">
+          <span className="text-xxs text-description-fg">
             {compareSourceHint}
           </span>
         </div>
@@ -219,7 +219,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
             className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
           />
           {returnsExitCodeHint && (
-            <span className="text-[10px] text-description-fg">
+            <span className="text-xxs text-description-fg">
               {returnsExitCodeHint}
             </span>
           )}
@@ -315,7 +315,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               disabled={disabled}
               className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
             />
-            <span className="text-[10px] text-description-fg">
+            <span className="text-xxs text-description-fg">
               Use -1 for unlimited retries
             </span>
           </div>
@@ -386,7 +386,7 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
               maxHeightClassName="max-h-[220px]"
               className={`overflow-hidden rounded border border-input-border bg-input-bg focus-within:border-focus-border ${disabled ? "opacity-50" : ""}`}
             />
-            <span className="text-[10px] text-description-fg">
+            <span className="text-xxs text-description-fg">
               Type {"{"} for retry placeholders like {"{stderr}"} and{" "}
               {"{stdout}"}.
             </span>

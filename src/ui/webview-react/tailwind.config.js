@@ -295,6 +295,10 @@ module.exports = {
         "slide-out-sidebar": "slide-out-sidebar 0.22s ease-in both",
       },
 
+      fontSize: {
+        xxs: ["0.625rem", { lineHeight: "1rem" }],
+      },
+
       fontFamily: {
         mono: ["var(--vscode-editor-font-family)", "monospace"],
       },

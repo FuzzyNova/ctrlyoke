@@ -226,7 +226,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 }}
                 className="flex-shrink-0 px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
               >
-                <i className="codicon codicon-eye-closed text-[11px]" />
+                <i className="codicon codicon-eye-closed text-xs" />
               </button>
             )}
           </div>
@@ -253,7 +253,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 }}
                 className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
               >
-                <i className="codicon codicon-eye text-[11px]" />
+                <i className="codicon codicon-eye text-xs" />
               </button>
               {/* Clicking label: select AND unhide */}
               <button
@@ -313,7 +313,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       >
         <span className="truncate">{selectedOption?.label ?? value}</span>
         <i
-          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px] flex-shrink-0 ml-1`}
+          className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-xxs flex-shrink-0 ml-1`}
         />
       </button>
 

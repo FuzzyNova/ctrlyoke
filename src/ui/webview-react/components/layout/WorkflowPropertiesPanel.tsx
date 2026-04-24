@@ -78,7 +78,7 @@ const SetAsDefaultButton: React.FC<{
     <button
       type="button"
       onClick={handleClick}
-      className={`text-[10px] font-semibold uppercase text-link-fg hover:underline cursor-pointer transition-colors ${
+      className={`text-xxs font-semibold uppercase text-link-fg hover:underline cursor-pointer transition-colors ${
         state === BUTTON_STATE.SUCCESS ? "text-green-500" : ""
       } ${state === BUTTON_STATE.FADING ? "opacity-0" : ""}`}
       title="Set this as the default for new workflows"
@@ -111,7 +111,7 @@ const FormField: React.FC<{
       <label
         htmlFor={htmlFor}
         title={description}
-        className="text-[11px] font-semibold uppercase text-description-fg cursor-help"
+        className="text-xs font-semibold uppercase text-description-fg cursor-help"
       >
         {label}
       </label>
@@ -858,10 +858,10 @@ export const WorkflowPropertiesPanel: React.FC<{
       >
         <div className="flex items-center gap-1 text-description-fg hover:text-foreground transition-colors">
           {!isMobileMode && (
-            <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
+            <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
           )}
-          <i className="codicon codicon-settings text-[14px]" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
+          <i className="codicon codicon-settings text-sm" />
+          <span className="text-xs font-semibold uppercase tracking-wide ml-0.5">
             Workflow Properties
           </span>
           <button
@@ -874,7 +874,7 @@ export const WorkflowPropertiesPanel: React.FC<{
             title="Reset all to defaults"
             aria-label="Reset all to defaults"
           >
-            <i className="codicon codicon-debug-restart text-[12px]" />
+            <i className="codicon codicon-debug-restart text-xs" />
           </button>
         </div>
         {onRequestClose && (
@@ -887,7 +887,7 @@ export const WorkflowPropertiesPanel: React.FC<{
             title="Close workflow properties"
             aria-label="Close workflow properties"
           >
-            <i className="codicon codicon-close text-[12px]" />
+            <i className="codicon codicon-close text-xs" />
           </button>
         )}
       </div>
@@ -1057,7 +1057,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                     }
                   />
                   {effectiveSkills.length > 0 && (
-                    <p className="text-[10px] text-description-fg mt-0.5">
+                    <p className="text-xxs text-description-fg mt-0.5">
                       Active: {effectiveSkills.join(", ")}
                     </p>
                   )}
@@ -1199,7 +1199,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                 <div className="flex items-center justify-between mb-3">
                   <label
                     htmlFor="settings-pre-condition-enabled"
-                    className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
+                    className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer"
                     title="Runs a script before each prompt. Use to gate execution based on a condition."
                   >
                     <input
@@ -1252,7 +1252,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                 <div className="flex items-center justify-between mb-3">
                   <label
                     htmlFor="settings-end-condition-enabled"
-                    className="flex items-center gap-2 text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
+                    className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer"
                     title="Validation runs after each prompt completes. Individual prompts can override or disable this."
                   >
                     <input
@@ -1348,7 +1348,7 @@ export const WorkflowPropertiesPanel: React.FC<{
             <div className="flex-1 flex flex-col min-h-0">
               {/* Copilot Chat: not applicable */}
               {harnessSupport === "n/a" && (
-                <p className="text-[10px] text-description-fg mb-2">
+                <p className="text-xxs text-description-fg mb-2">
                   ℹ️ Tool permissions apply to CLI harnesses only and are
                   ignored for Copilot Chat.
                 </p>
@@ -1393,7 +1393,7 @@ export const WorkflowPropertiesPanel: React.FC<{
                 <div className="flex-1 flex flex-col gap-2 min-h-0 mt-2">
                   {/* Mode-only harness warning */}
                   {harnessSupport === "mode-only" && (
-                    <p className="text-[10px] text-description-fg">
+                    <p className="text-xxs text-description-fg">
                       {effectiveHarness === HARNESS_IDS.CODEX_CLI
                         ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
                         : effectiveHarness === HARNESS_IDS.OPENCODE_CLI
