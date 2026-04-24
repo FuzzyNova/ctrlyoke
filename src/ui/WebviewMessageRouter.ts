@@ -263,9 +263,18 @@ export class WebviewMessageRouter {
         const ptyManager = getPtyProcessManager();
         if (ptyManager) {
           for (const session of ptyManager.getAllSessions()) {
-            // Auto-claim controller if the session has no owner (e.g. panel-initiated run)
+            // Auto-claim controller if the session has no owner.
+            // Use assignController (not direct mutation) so workflowRunControllers is
+            // updated, then broadcast TERMINAL_CONTROLLER_CHANGED to all clients so
+            // no other client keeps thinking it is still the controller.
             if (session.controllerClientId === undefined) {
-              session.controllerClientId = this.clientId;
+              ptyManager.assignController(session.id, this.clientId);
+              ptyPostMessage({
+                type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
+                workflowId: session.workflowId,
+                sessionId: session.id,
+                controllerClientId: this.clientId,
+              });
             }
             this.emitMessage({
               type: MESSAGE_TYPES.TERMINAL_STARTED,

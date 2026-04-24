@@ -81,10 +81,10 @@ export const BashOutput = memo<BashOutputProps>(
       const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
 
       return (
-        <div className={cssClass}>
-          <span className="text-vscode-description-fg shrink-0">{"  ⎿  "}</span>
+        <div className={`${cssClass} flex items-start gap-1`}>
+          <span className="shrink-0">⎿</span>
           <div
-            className="inline whitespace-pre-wrap break-words"
+            className="min-w-0 flex-1 whitespace-pre-wrap break-words"
             id={`${containerId}-${type}`}
           >
             {visibleContent}
@@ -129,12 +129,23 @@ export const BashOutput = memo<BashOutputProps>(
       return null;
     };
 
+    const dotColorClass =
+      exitCode !== undefined
+        ? exitCode === 0
+          ? "text-bash-status-success"
+          : "text-bash-status-error"
+        : isRunning
+          ? "text-bash-status-running"
+          : "text-editor-fg";
+
     return (
       <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
         <div className={TOOL_CALL_LINE}>
-          <span className="text-vscode-fg">● </span>
-          <span className="text-vscode-fg">{command}</span>
-          {renderStatusBadge()}
+          <span className="min-w-0 break-words">
+            <span className={dotColorClass}>●</span>{" "}
+            <span className="text-vscode-fg">{command}</span>
+            {renderStatusBadge()}
+          </span>
         </div>
 
         {/* Only show output/error for completed commands */}

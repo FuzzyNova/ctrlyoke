@@ -815,11 +815,16 @@ window.vscodeApi = acquireVsCodeApi();
     if (ptyManager) {
       const released = ptyManager.releaseControllerForClient(clientId);
       for (const session of released) {
+        // Fall back to the panel as the controller rather than broadcasting undefined.
+        // Broadcasting undefined sets isController=true on ALL clients (dual-controller).
+        // The panel is the natural fallback owner: it is always connected and can hand
+        // control back to a browser via TERMINAL_CLAIM_CONTROL.
+        ptyManager.assignController(session.id, PANEL_CLIENT_ID);
         ptyPostMessage({
           type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
           workflowId: session.workflowId,
           sessionId: session.id,
-          controllerClientId: undefined,
+          controllerClientId: PANEL_CLIENT_ID,
         });
       }
     }

@@ -200,6 +200,16 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     WebviewLog.debug(
       `[TERMINAL_CONTROLLER_CHANGED] sessionId=${sessionId?.slice(0, 8)} controllerClientId=${controllerClientId?.slice(0, 12) ?? "none"} isController=${isController}`
     );
+    // If no controller is assigned, auto-claim so exactly one client takes ownership.
+    // Mirrors the TERMINAL_STARTED auto-claim logic. All connected clients fire this,
+    // but only the last one processed by the server's routeQueue wins — an intentional
+    // "last writer wins" resolution that produces a single definitive controller.
+    if (controllerClientId === undefined) {
+      sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
+        workflowId,
+        sessionId,
+      });
+    }
   };
 
   // --------------------------------------------------------------------------

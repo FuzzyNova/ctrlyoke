@@ -49,7 +49,10 @@ import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import { CliWatchSession } from "./orchestration/CliWatchSession";
-import { getPtyProcessManager } from "./harness/PtyProcessManager";
+import {
+  getPtyProcessManager,
+  ptyPostMessage,
+} from "./harness/PtyProcessManager";
 
 // Orchestration classes that remain at orchestrator level
 import { TemplateImporter } from "./orchestration/TemplateImporter";
@@ -509,9 +512,19 @@ export class WorkflowOrchestrator {
               `[${sessionsForWorkflow.map((s) => `${s.id.slice(0, 8)}(status=${s.status},kind=${s.kind})`).join(", ") || "none"}]`
           );
           for (const session of sessionsForWorkflow) {
-            // Auto-assign controller to the first client to reconnect for this session
+            // Auto-assign controller to the first client to reconnect for this session.
+            // Use assignController (not direct mutation) so workflowRunControllers is
+            // updated — ensuring subsequent step PTY spawns inherit the same controller.
+            // Broadcast TERMINAL_CONTROLLER_CHANGED to all clients so no other client
+            // continues to think it is still the controller (prevents dual-controller).
             if (session.controllerClientId === undefined) {
-              session.controllerClientId = clientId;
+              ptyManager.assignController(session.id, clientId);
+              ptyPostMessage({
+                type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
+                workflowId: session.workflowId,
+                sessionId: session.id,
+                controllerClientId: clientId,
+              });
             }
             Log.debug(
               `[replayWorkflowStateTo] sending TERMINAL_STARTED for session ${session.id.slice(0, 8)} ` +
