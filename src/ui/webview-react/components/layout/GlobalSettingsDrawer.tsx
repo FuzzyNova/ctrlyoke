@@ -109,38 +109,38 @@ export function GlobalSettingsDrawer() {
       {/* Title bar — always visible, never scrolls */}
       <div className="flex items-center justify-between px-2 h-[30px] border-b border-panel-border shrink-0">
         <div className="flex items-center gap-1 text-description-fg">
-          <i className="codicon codicon-settings-gear text-[14px]" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
+          <i className="codicon codicon-settings-gear text-sm" />
+          <span className="text-sm font-semibold uppercase tracking-wide ml-0.5">
             Settings
           </span>
-        </div>
 
-        {/* Scope toggle */}
-        <div className="flex items-center rounded border border-btn-border overflow-hidden text-[10px] font-medium">
-          <button
-            type="button"
-            onClick={() => setActiveScope("user")}
-            className={`px-2 h-5 transition-colors ${
-              activeScope === "user"
-                ? "bg-btn-primary-bg text-btn-primary-fg"
-                : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-            }`}
-            title="Edit user-scoped settings"
-          >
-            User
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveScope("workspace")}
-            className={`px-2 h-5 border-l border-btn-border transition-colors ${
-              activeScope === "workspace"
-                ? "bg-btn-primary-bg text-btn-primary-fg"
-                : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-            }`}
-            title="Edit workspace-scoped settings"
-          >
-            Workspace
-          </button>
+          {/* Scope toggle */}
+          <div className="flex items-center rounded border border-btn-border overflow-hidden text-sm font-medium ml-2">
+            <button
+              type="button"
+              onClick={() => setActiveScope("user")}
+              className={`px-2 h-5 transition-colors ${
+                activeScope === "user"
+                  ? "bg-btn-bg text-btn-fg"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              title="Edit user-scoped settings"
+            >
+              User
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveScope("workspace")}
+              className={`px-2 h-5 border-l border-btn-border transition-colors ${
+                activeScope === "workspace"
+                  ? "bg-btn-bg text-btn-fg"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              title="Edit workspace-scoped settings"
+            >
+              Workspace
+            </button>
+          </div>
         </div>
 
         <button
@@ -171,7 +171,10 @@ export function GlobalSettingsDrawer() {
               <GeneralSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "workflow" && (
-              <WorkflowDefaultsSection settings={fullSettings} {...sectionProps} />
+              <WorkflowDefaultsSection
+                settings={fullSettings}
+                {...sectionProps}
+              />
             )}
             {fullSettings && effectiveActiveTab === "harnesses" && (
               <HarnessesSection settings={fullSettings} {...sectionProps} />
