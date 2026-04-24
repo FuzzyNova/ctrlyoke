@@ -342,7 +342,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
         // Inline code (single backtick, no language)
         if (!language) {
           return (
-            <code className="bg-[var(--vscode-textCodeBlock-background)] text-code-inline-fg rounded px-1 py-0.5 font-mono text-sm">
+            <code className="bg-[var(--vscode-textCodeBlock-background)] text-code-inline-fg rounded px-1 py-0.5 font-mono">
               {codeChildren}
             </code>
           );
@@ -355,7 +355,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
         return (
           <code
             dangerouslySetInnerHTML={{ __html: highlighted }}
-            className={`hljs ${langClass ?? ""} font-mono text-sm block`}
+            className={`hljs ${langClass ?? ""} font-mono block`}
           />
         );
       },
@@ -364,7 +364,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
       // Removes whitespace-pre-wrap so hljs span colouring renders cleanly;
       // whitespace-pre is enough (hljs never emits bare newlines outside spans).
       pre: ({ children: preChildren }: React.HTMLAttributes<HTMLElement>) => (
-        <pre className="bg-editor-bg border border-panel-border rounded p-3 overflow-x-auto my-2 font-mono text-sm whitespace-pre">
+        <pre className="bg-editor-bg border border-panel-border rounded p-3 overflow-x-auto my-2 font-mono whitespace-pre">
           {preChildren}
         </pre>
       ),
