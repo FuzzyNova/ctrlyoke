@@ -210,7 +210,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   return (
     <div
       ref={setWrapperRef}
-      className={`my-2 ml-6 font-mono text-[length:var(--fp-output-font-size-sm)] ${className}`}
+      className={`my-2 font-mono text-[length:var(--fp-output-font-size-sm)] ${className}`}
     >
       {/* Summary / toggle header */}
       <div className="flex items-center gap-2 mb-1">

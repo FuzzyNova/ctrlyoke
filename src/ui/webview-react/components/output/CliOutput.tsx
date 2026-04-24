@@ -1032,7 +1032,7 @@ export const CliOutput = memo<CliOutputProps>(
     if (output.source === STEP_TYPES.SCRIPT) {
       return (
         <div
-          className={`bg-[var(--bg-primary)] py-[var(--spacing-sm)] px-[var(--spacing-md)] border-b border-[var(--border-color)] ${className}`}
+          className={`bg-[var(--bg-primary)] py-[var(--spacing-sm)] px-[var(--spacing-md)] border-b border-[var(--border-color)] overflow-x-hidden ${className}`}
         >
           {/* Header */}
           <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
@@ -1062,7 +1062,7 @@ export const CliOutput = memo<CliOutputProps>(
           {/* CLI command */}
           {output.cliCommand && (
             <div
-              className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)]`}
+              className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] break-all`}
             >
               {output.workingDirectory || "workspace"}
               {">"} {output.cliCommand}
@@ -1129,7 +1129,7 @@ export const CliOutput = memo<CliOutputProps>(
 
     return (
       <div
-        className={`bg-[var(--bg-primary)] py-[var(--spacing-sm)] px-[var(--spacing-md)] border-b border-[var(--border-color)] ${className}`}
+        className={`bg-[var(--bg-primary)] py-[var(--spacing-sm)] px-[var(--spacing-md)] border-b border-[var(--border-color)] overflow-x-hidden ${className}`}
       >
         {/* Header */}
         <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
@@ -1201,7 +1201,7 @@ export const CliOutput = memo<CliOutputProps>(
         {/* CLI command */}
         {output.cliCommand && (
           <div
-            className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)]`}
+            className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] break-all`}
           >
             {output.workingDirectory || "workspace"}
             {">"} {output.cliCommand}
