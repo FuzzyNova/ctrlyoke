@@ -38,7 +38,10 @@ import {
   type CompletionNotificationEvent,
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
-import { WebPushService, type WebPushSubscriptionPayload } from "./WebPushService";
+import {
+  WebPushService,
+  type WebPushSubscriptionPayload,
+} from "./WebPushService";
 
 export class FlightPathHostedServer
   implements IDashboardProvider, IDashboardSink
@@ -283,8 +286,9 @@ export class FlightPathHostedServer
       return;
     }
 
-    const steps = this.getOrchestrator().getWorkflow(workflowId)?.getQueueState()
-      .steps;
+    const steps = this.getOrchestrator()
+      .getWorkflow(workflowId)
+      ?.getQueueState().steps;
     void this.dispatchCompletionNotification(
       buildPromptCompletionNotification({
         summary,
@@ -526,9 +530,7 @@ export class FlightPathHostedServer
       async (req, res) => {
         const id =
           typeof req.params.id === "string" ? req.params.id : req.params.id[0];
-        const removed = await this.webPushService.removeSubscription(
-          id
-        );
+        const removed = await this.webPushService.removeSubscription(id);
         res.json({ removed });
       }
     );
@@ -611,7 +613,14 @@ export class FlightPathHostedServer
     const hostedIconLinks = [
       `<link rel="icon" type="image/svg+xml" href="${HOSTED_ICON_PATHS.FAVICON_SVG}" />`,
       `<link rel="icon" type="image/png" sizes="512x512" href="${HOSTED_ICON_PATHS.FAVICON_PNG}" />`,
-      `<link rel="apple-touch-icon" href="${HOSTED_ICON_PATHS.APP_ICON_PNG}" />`,
+      // iOS 26+ supports SVG for apple-touch-icon and uses the manifest for home screen web app
+      // icons. The SVG (transparent background) is required for iOS 26 Liquid Glass appearance.
+      `<link rel="apple-touch-icon" type="image/svg+xml" href="${HOSTED_ICON_PATHS.APP_ICON_SVG}" />`,
+      // PNG fallback for older iOS versions (pre-26) which only support PNG apple-touch-icons.
+      `<link rel="apple-touch-icon" sizes="180x180" href="${HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG}" />`,
+      // Enable standalone PWA mode and set the title shown under the home screen icon.
+      `<meta name="apple-mobile-web-app-capable" content="yes" />`,
+      `<meta name="apple-mobile-web-app-title" content="FlightPath" />`,
     ].join("");
     return html.replace(
       "</head>",
@@ -642,6 +651,12 @@ export class FlightPathHostedServer
       start_url: `/?token=${this.token}`,
       scope: "/",
       icons: [
+        {
+          src: HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG,
+          sizes: "180x180",
+          type: "image/png",
+          purpose: "any",
+        },
         {
           src: HOSTED_ICON_PATHS.APP_ICON_PNG,
           sizes: "512x512",
@@ -687,9 +702,7 @@ export class FlightPathHostedServer
       event,
     });
 
-    if (
-      notificationSettings.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH
-    ) {
+    if (notificationSettings.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH) {
       try {
         const result = await this.webPushService.sendNotification(event);
         if (result.sent || result.removed || result.failed) {
@@ -866,8 +879,8 @@ function isValidPushSubscription(
   const candidate = value as Partial<WebPushSubscriptionPayload>;
   return Boolean(
     candidate.endpoint &&
-      candidate.keys &&
-      candidate.keys.auth &&
-      candidate.keys.p256dh
+    candidate.keys &&
+    candidate.keys.auth &&
+    candidate.keys.p256dh
   );
 }

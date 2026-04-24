@@ -78,11 +78,36 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         (currentEntry.term.options.fontSize as number | undefined) ?? 14;
       const lineHeight =
         (currentEntry.term.options.lineHeight as number | undefined) ?? 1.2;
-      touchScrollAccum += deltaPixels / (fontSize * lineHeight);
+      // 3× speed multiplier: lowers the effective pixel-per-line threshold from
+      // ~17px to ~6px so slow drags feel responsive. The WheelEvent deltaY is kept
+      // at real font metrics so xterm's mouse-reporting output to the PTY is unchanged.
+      touchScrollAccum += (deltaPixels * 3) / (fontSize * lineHeight);
       const lines = Math.trunc(touchScrollAccum);
       if (lines !== 0) {
-        currentEntry.term.scrollLines(lines);
         touchScrollAccum -= lines;
+        // Synthesize a WheelEvent so xterm handles both scrollback scrolling and
+        // mouse-reporting escape sequences for TUIs (copilot-cli, opencode) that
+        // capture scroll internally but produce no xterm scrollback buffer. This
+        // mirrors what a real mouse wheel does on desktop, where xterm forwards
+        // the event to the PTY as escape sequences when mouse-reporting is active.
+        const wheelTarget =
+          currentEntry.term.element?.querySelector<Element>(".xterm-viewport") ??
+          currentEntry.term.element;
+        if (wheelTarget) {
+          const rect = wheelTarget.getBoundingClientRect();
+          wheelTarget.dispatchEvent(
+            new WheelEvent("wheel", {
+              bubbles: true,
+              cancelable: true,
+              deltaY: lines * fontSize * lineHeight,
+              deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+              clientX: rect.left + rect.width / 2,
+              clientY: rect.top + rect.height / 2,
+            })
+          );
+        } else {
+          currentEntry.term.scrollLines(lines);
+        }
       }
       e.preventDefault();
     };

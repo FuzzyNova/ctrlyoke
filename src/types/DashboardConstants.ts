@@ -319,9 +319,16 @@ export type ServiceWorkerBadgeMessageType =
 
 export const HOSTED_ICON_FILES = {
   APP_ICON_PNG: "icon.png",
-  APP_ICON_SVG: "flightpath-color-icon.svg",
+  // Transparent-background SVG used in the web app manifest and as the SVG apple-touch-icon.
+  // iOS 26+ supports SVG for home screen icons and uses manifest icons for web apps.
+  // Transparent background is required for iOS 26 Liquid Glass / Clear appearance mode;
+  // a solid opaque background causes iOS 26 to fall back to a generic placeholder icon.
+  APP_ICON_SVG: "flightpath-app-icon.svg",
   FAVICON_PNG: "flightpath-icon-color-simple.png",
   FAVICON_SVG: "flightpath-icon-color-simple.svg",
+  // 180x180 PNG for the apple-touch-icon HTML link (used by the Add-to-Home-Screen preview
+  // and as a PNG fallback for older iOS versions).
+  APPLE_TOUCH_ICON_PNG: "apple-touch-icon.png",
 } as const;
 
 export const HOSTED_ICON_PATHS = {
@@ -329,6 +336,7 @@ export const HOSTED_ICON_PATHS = {
   APP_ICON_SVG: `/${HOSTED_ICON_FILES.APP_ICON_SVG}`,
   FAVICON_PNG: `/${HOSTED_ICON_FILES.FAVICON_PNG}`,
   FAVICON_SVG: `/${HOSTED_ICON_FILES.FAVICON_SVG}`,
+  APPLE_TOUCH_ICON_PNG: `/${HOSTED_ICON_FILES.APPLE_TOUCH_ICON_PNG}`,
 } as const;
 
 // ============================================================================

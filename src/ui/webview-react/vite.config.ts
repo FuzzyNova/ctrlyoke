@@ -57,6 +57,11 @@ export default defineConfig(({ mode }) => ({
           src: `../../../images/${HOSTED_ICON_FILES.FAVICON_SVG}`,
           dest: ".",
         },
+        // 180x180 PNG served at /apple-touch-icon.png for iOS "Add to Home Screen"
+        {
+          src: `../../../images/${HOSTED_ICON_FILES.APPLE_TOUCH_ICON_PNG}`,
+          dest: ".",
+        },
       ],
     }),
   ],

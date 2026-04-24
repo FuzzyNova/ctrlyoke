@@ -37,6 +37,7 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
 
 export function GeneralSection({ settings, onUpdate }: Props) {
   const ui = settings.settings.ui;
+  const exec = settings.settings.execution;
   const s = "user" as const;
 
   return (
@@ -92,6 +93,17 @@ export function GeneralSection({ settings, onUpdate }: Props) {
         checked={ui.confirmResetOperations}
         onChange={(v) => onUpdate("ui.confirmResetOperations", v, s)}
       />
+      <div className="pt-3 border-t border-panel-border mt-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          File Management
+        </h3>
+        <ToggleRow
+          label="Auto-delete temp files"
+          description="Automatically delete prompt temp files after execution. Disable to retain files in .flightpath/temp/ for debugging."
+          checked={exec.autoDeleteTempFiles}
+          onChange={(v) => onUpdate("execution.autoDeleteTempFiles", v, s)}
+        />
+      </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           Diagnostics
