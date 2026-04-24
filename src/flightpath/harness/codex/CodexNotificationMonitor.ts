@@ -1,10 +1,9 @@
-import * as path from "path";
 import {
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
-import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
@@ -57,9 +56,7 @@ export class CodexNotificationMonitor
     _workspaceRoot: string,
     _userHooks?: UserHookConfig[]
   ): HookConfig {
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-    const command = `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
 
     const makeEntry = (cmd: string) => ({
       matcher: "",
@@ -82,11 +79,6 @@ export class CodexNotificationMonitor
    * Uses shared pattern: {workspace}/.flightpath/temp/codex-notifications/
    */
   getNotificationDirectory(workspaceRoot: string): string {
-    return path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.TEMP_DIR,
-      "codex-notifications"
-    );
+    return CliNotificationMonitor.getNotificationDirectory(workspaceRoot, "codex");
   }
 }

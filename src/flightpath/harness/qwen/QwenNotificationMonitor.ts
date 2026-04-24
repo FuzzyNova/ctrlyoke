@@ -47,14 +47,12 @@ export class QwenNotificationMonitor
     _workspaceRoot: string,
     _userHooks?: UserHookConfig[]
   ): HookConfig {
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
     // No quotes: Qwen's hook runner calls spawn(cmd.exe, ['/d','/s','/c', command], {shell:false}).
     // Node.js Windows arg escaping converts any `"` in the command to `\"`, which cmd.exe then
     // passes literally to the child process — the quote becomes part of argv[1], making Node.js
     // treat the absolute path as relative. Forward-slash absolute paths work without quotes on
     // Windows as long as they contain no spaces. Paths with spaces are a known limitation.
-    const command = `node ${normalizedScriptPath} ${normalizedNotifyDir}`;
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir, false);
 
     return {
       type: "json",

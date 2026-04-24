@@ -1,10 +1,9 @@
-import * as path from "path";
 import {
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
-import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
@@ -68,17 +67,9 @@ export class ClaudeNotificationMonitor
     _workspaceRoot: string,
     userHooks?: UserHookConfig[]
   ): HookConfig {
-    // Convert paths to forward slashes (works on Windows and avoids escaping issues)
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
     const flightpathEntry = {
-      hooks: [
-        {
-          type: "command",
-          command: `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`,
-        },
-      ],
+      hooks: [{ type: "command", command }],
     };
 
     // Build hooks object starting with FlightPath's entries
@@ -112,11 +103,6 @@ export class ClaudeNotificationMonitor
    * @returns Notification directory path
    */
   getNotificationDirectory(workspaceRoot: string): string {
-    return path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.TEMP_DIR,
-      "claude-notifications"
-    );
+    return CliNotificationMonitor.getNotificationDirectory(workspaceRoot, "claude");
   }
 }

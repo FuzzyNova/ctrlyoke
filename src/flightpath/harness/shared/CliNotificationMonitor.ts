@@ -226,6 +226,26 @@ export class CliNotificationMonitor {
     );
   }
 
+  /**
+   * Normalize paths to forward slashes and build a `node <script> <dir>` command.
+   *
+   * @param scriptPath Path to the notification hook script
+   * @param notifyDir Notification directory path
+   * @param quoted Whether to wrap paths in double-quotes (default true).
+   *   Pass false for harnesses whose hook runners parse the command via spawn
+   *   with shell: false — quotes would become literal characters in argv.
+   * @returns Ready-to-use node command string
+   */
+  static buildNodeCommand(
+    scriptPath: string,
+    notifyDir: string,
+    quoted = true
+  ): string {
+    const s = scriptPath.replace(/\\/g, "/");
+    const d = notifyDir.replace(/\\/g, "/");
+    return quoted ? `node "${s}" "${d}"` : `node ${s} ${d}`;
+  }
+
   // Harness-specific hook config builders moved to:
   // - CopilotNotificationMonitor.buildCopilotHookConfig()
   // - ClaudeNotificationMonitor.buildClaudeStopHookSettings()

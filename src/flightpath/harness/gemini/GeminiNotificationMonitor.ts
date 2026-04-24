@@ -1,10 +1,9 @@
-import * as path from "path";
 import {
   INotificationMonitor,
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
-import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
+import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
@@ -37,10 +36,7 @@ export class GeminiNotificationMonitor
     _workspaceRoot: string,
     userHooks?: UserHookConfig[]
   ): HookConfig {
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-    const command = `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
-
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
     const flightpathEntry = { hooks: [{ type: "command", command }] };
 
     // Map logical event names to Gemini's native event names
@@ -77,11 +73,6 @@ export class GeminiNotificationMonitor
   }
 
   getNotificationDirectory(workspaceRoot: string): string {
-    return path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.TEMP_DIR,
-      "gemini-notifications"
-    );
+    return CliNotificationMonitor.getNotificationDirectory(workspaceRoot, "gemini");
   }
 }
