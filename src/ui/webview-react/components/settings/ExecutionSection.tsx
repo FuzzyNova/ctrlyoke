@@ -1,39 +1,12 @@
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
-}
-
-interface ToggleRowProps {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  disabled?: boolean;
-}
-
-function ToggleRow({ label, description, checked, onChange, disabled }: ToggleRowProps) {
-  return (
-    <label className={`flex items-start gap-3 py-2 group ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-        className={`mt-0.5 w-4 h-4 accent-focus-border shrink-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
-      />
-      <span className="flex flex-col">
-        <span className="text-sm text-foreground">{label}</span>
-        {description && (
-          <span className="text-xs text-description-fg mt-0.5">
-            {description}
-          </span>
-        )}
-      </span>
-    </label>
-  );
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 const MODE_OPTIONS = [
@@ -41,9 +14,11 @@ const MODE_OPTIONS = [
   { value: "headless", label: "Headless" },
 ];
 
-export function ExecutionSection({ settings, onUpdate }: Props) {
+export function ExecutionSection({ settings, activeScope, onUpdate, onReset }: Props) {
   const exec = settings.settings.execution;
-  const s = "user" as const;
+  const sources = settings.sources as Record<string, SettingSource>;
+
+  const rowProps = { sources, onReset, activeScope };
 
   return (
     <div className="space-y-4">
@@ -60,7 +35,7 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
         <CustomSelect
           id="exec-mode"
           value={exec.mode}
-          onChange={(v) => onUpdate("execution.mode", v, s)}
+          onChange={(v) => onUpdate("execution.mode", v)}
           options={MODE_OPTIONS}
         />
       </div>
@@ -79,8 +54,7 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
           onChange={(e) =>
             onUpdate(
               "execution.maxPromptTimeout",
-              parseInt(e.target.value, 10) || -1,
-              s
+              parseInt(e.target.value, 10) || -1
             )
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
@@ -101,20 +75,21 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
           onChange={(e) =>
             onUpdate(
               "execution.scriptTimeout",
-              parseInt(e.target.value, 10) || 30,
-              s
+              parseInt(e.target.value, 10) || 30
             )
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </div>
-      <ToggleRow
+      <SettingToggleRow
         label="Close terminal on completion"
         description="Automatically close the terminal when a workflow completes."
         checked={exec.closeTerminalOnComplete}
-        onChange={(v) => onUpdate("execution.closeTerminalOnComplete", v, s)}
+        onChange={(v) => onUpdate("execution.closeTerminalOnComplete", v)}
+        path="execution.closeTerminalOnComplete"
+        {...rowProps}
       />
-      <ToggleRow
+      <SettingToggleRow
         label="Inject mode (interactive)"
         description={
           exec.closeTerminalOnComplete
@@ -122,8 +97,10 @@ export function ExecutionSection({ settings, onUpdate }: Props) {
             : "Keep the TUI alive between prompts — faster and avoids the Claude Code resume cache bug."
         }
         checked={exec.injectMode ?? false}
-        onChange={(v) => onUpdate("execution.injectMode", v, s)}
+        onChange={(v) => onUpdate("execution.injectMode", v)}
         disabled={exec.closeTerminalOnComplete}
+        path="execution.injectMode"
+        {...rowProps}
       />
     </div>
   );

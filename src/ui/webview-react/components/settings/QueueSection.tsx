@@ -1,41 +1,18 @@
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
-interface ToggleRowProps {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
-  return (
-    <label className="flex items-start gap-3 py-2 cursor-pointer group">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 w-4 h-4 accent-focus-border cursor-pointer shrink-0"
-      />
-      <span className="flex flex-col">
-        <span className="text-sm text-foreground">{label}</span>
-        {description && (
-          <span className="text-xs text-description-fg mt-0.5">
-            {description}
-          </span>
-        )}
-      </span>
-    </label>
-  );
-}
-
-export function QueueSection({ settings, onUpdate }: Props) {
+export function QueueSection({ settings, activeScope, onUpdate, onReset }: Props) {
   const queue = settings.settings.queue;
-  const s = "user" as const;
+  const sources = settings.sources as Record<string, SettingSource>;
+
+  const rowProps = { sources, onReset, activeScope };
 
   return (
     <div className="space-y-4">
@@ -55,7 +32,7 @@ export function QueueSection({ settings, onUpdate }: Props) {
           min={1}
           value={queue.maxSize}
           onChange={(e) =>
-            onUpdate("queue.maxSize", parseInt(e.target.value, 10) || 10, s)
+            onUpdate("queue.maxSize", parseInt(e.target.value, 10) || 10)
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
@@ -75,24 +52,27 @@ export function QueueSection({ settings, onUpdate }: Props) {
           onChange={(e) =>
             onUpdate(
               "queue.maxWorkflowExecutionTime",
-              parseInt(e.target.value, 10) || -1,
-              s
+              parseInt(e.target.value, 10) || -1
             )
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </div>
-      <ToggleRow
+      <SettingToggleRow
         label="Unlimited mode"
         description="Disable all queue size and time limits."
         checked={queue.unlimitedMode}
-        onChange={(v) => onUpdate("queue.unlimitedMode", v, s)}
+        onChange={(v) => onUpdate("queue.unlimitedMode", v)}
+        path="queue.unlimitedMode"
+        {...rowProps}
       />
-      <ToggleRow
+      <SettingToggleRow
         label="Notify on queue extension"
         description="Show a notification when the queue is extended beyond the limit."
         checked={queue.notifyOnExtension}
-        onChange={(v) => onUpdate("queue.notifyOnExtension", v, s)}
+        onChange={(v) => onUpdate("queue.notifyOnExtension", v)}
+        path="queue.notifyOnExtension"
+        {...rowProps}
       />
     </div>
   );

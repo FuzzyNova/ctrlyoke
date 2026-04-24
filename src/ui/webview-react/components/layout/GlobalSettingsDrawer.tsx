@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
@@ -51,6 +51,7 @@ export function GlobalSettingsDrawer() {
   const serverRunning = useSettingsStore((s) => s.serverRunning);
   const dev = useSettingsStore((s) => s.dev);
   const [drawerRef, isNarrow] = useElementNarrow(580);
+  const [activeScope, setActiveScope] = useState<"user" | "workspace">("user");
   const visibleTabs = TABS.filter((t) => t.id !== "developer" || dev?.enabled);
   const effectiveActiveTab = visibleTabs.some((t) => t.id === activeTab)
     ? activeTab
@@ -73,18 +74,29 @@ export function GlobalSettingsDrawer() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [globalSettingsOpen, closeGlobalSettings]);
 
-  function handleUpdate(
-    path: string,
-    value: unknown,
-    scope: "workspace" | "user"
-  ) {
+  function handleUpdate(path: string, value: unknown) {
     vscode.postMessage({
       type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
       path,
       value,
-      scope,
+      scope: activeScope,
     });
   }
+
+  function handleReset(path: string) {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+      path,
+      value: undefined,
+      scope: activeScope,
+    });
+  }
+
+  const sectionProps = {
+    activeScope,
+    onUpdate: handleUpdate,
+    onReset: handleReset,
+  };
 
   return (
     <div
@@ -102,6 +114,35 @@ export function GlobalSettingsDrawer() {
             Settings
           </span>
         </div>
+
+        {/* Scope toggle */}
+        <div className="flex items-center rounded border border-btn-border overflow-hidden text-[10px] font-medium">
+          <button
+            type="button"
+            onClick={() => setActiveScope("user")}
+            className={`px-2 h-5 transition-colors ${
+              activeScope === "user"
+                ? "bg-btn-primary-bg text-btn-primary-fg"
+                : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+            }`}
+            title="Edit user-scoped settings"
+          >
+            User
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveScope("workspace")}
+            className={`px-2 h-5 border-l border-btn-border transition-colors ${
+              activeScope === "workspace"
+                ? "bg-btn-primary-bg text-btn-primary-fg"
+                : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+            }`}
+            title="Edit workspace-scoped settings"
+          >
+            Workspace
+          </button>
+        </div>
+
         <button
           className="control-button flex items-center justify-center w-5 h-5 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
           onClick={closeGlobalSettings}
@@ -127,61 +168,40 @@ export function GlobalSettingsDrawer() {
         <div className="flex-1 overflow-y-auto">
           <div className="p-4 max-w-2xl">
             {fullSettings && effectiveActiveTab === "general" && (
-              <GeneralSection settings={fullSettings} onUpdate={handleUpdate} />
+              <GeneralSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "workflow" && (
-              <WorkflowDefaultsSection
-                settings={fullSettings}
-                onUpdate={handleUpdate}
-              />
+              <WorkflowDefaultsSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "harnesses" && (
-              <HarnessesSection
-                settings={fullSettings}
-                onUpdate={handleUpdate}
-              />
+              <HarnessesSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "permissions" && (
-              <PermissionsSection
-                settings={fullSettings}
-                onUpdate={handleUpdate}
-              />
+              <PermissionsSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "execution" && (
-              <ExecutionSection
-                settings={fullSettings}
-                onUpdate={handleUpdate}
-              />
+              <ExecutionSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "notifications" && (
-              <NotificationsSection
-                settings={fullSettings}
-                onUpdate={handleUpdate}
-              />
+              <NotificationsSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "terminal" && (
-              <TerminalSection
-                settings={fullSettings}
-                onUpdate={handleUpdate}
-              />
+              <TerminalSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "chat" && (
-              <ChatSection settings={fullSettings} onUpdate={handleUpdate} />
+              <ChatSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "mcp" && (
-              <McpHooksSection
-                settings={fullSettings}
-                onUpdate={handleUpdate}
-              />
+              <McpHooksSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "queue" && (
-              <QueueSection settings={fullSettings} onUpdate={handleUpdate} />
+              <QueueSection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "history" && (
-              <HistorySection settings={fullSettings} onUpdate={handleUpdate} />
+              <HistorySection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "server" && (
-              <ServerSection settings={fullSettings} onUpdate={handleUpdate} />
+              <ServerSection settings={fullSettings} {...sectionProps} />
             )}
             {dev?.enabled && effectiveActiveTab === "developer" && (
               <DeveloperSection />

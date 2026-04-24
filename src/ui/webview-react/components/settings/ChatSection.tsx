@@ -1,37 +1,12 @@
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
-}
-
-interface ToggleRowProps {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
-  return (
-    <label className="flex items-start gap-3 py-2 cursor-pointer group">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 w-4 h-4 accent-focus-border cursor-pointer shrink-0"
-      />
-      <span className="flex flex-col">
-        <span className="text-sm text-foreground">{label}</span>
-        {description && (
-          <span className="text-xs text-description-fg mt-0.5">
-            {description}
-          </span>
-        )}
-      </span>
-    </label>
-  );
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 const WINDOW_LOCATION_OPTIONS = [
@@ -40,9 +15,11 @@ const WINDOW_LOCATION_OPTIONS = [
   { value: "newWindow", label: "New Window" },
 ];
 
-export function ChatSection({ settings, onUpdate }: Props) {
+export function ChatSection({ settings, activeScope, onUpdate, onReset }: Props) {
   const chat = settings.settings.chat;
-  const s = "user" as const;
+  const sources = settings.sources as Record<string, SettingSource>;
+
+  const rowProps = { sources, onReset, activeScope };
 
   return (
     <div className="space-y-4">
@@ -59,7 +36,7 @@ export function ChatSection({ settings, onUpdate }: Props) {
         <CustomSelect
           id="chat-window-location"
           value={chat.windowLocation}
-          onChange={(v) => onUpdate("chat.windowLocation", v, s)}
+          onChange={(v) => onUpdate("chat.windowLocation", v)}
           options={WINDOW_LOCATION_OPTIONS}
         />
       </div>
@@ -78,30 +55,35 @@ export function ChatSection({ settings, onUpdate }: Props) {
           onChange={(e) =>
             onUpdate(
               "chat.inactivityTimeout",
-              parseInt(e.target.value, 10) || 300,
-              s
+              parseInt(e.target.value, 10) || 300
             )
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </div>
-      <ToggleRow
+      <SettingToggleRow
         label="Treat timeout as success"
         description="If the inactivity timeout is reached, treat the prompt as successfully completed."
         checked={chat.treatTimeoutAsSuccess}
-        onChange={(v) => onUpdate("chat.treatTimeoutAsSuccess", v, s)}
+        onChange={(v) => onUpdate("chat.treatTimeoutAsSuccess", v)}
+        path="chat.treatTimeoutAsSuccess"
+        {...rowProps}
       />
-      <ToggleRow
+      <SettingToggleRow
         label="Force agent mode"
         description="Always start the chat in agent mode."
         checked={chat.forceAgentMode}
-        onChange={(v) => onUpdate("chat.forceAgentMode", v, s)}
+        onChange={(v) => onUpdate("chat.forceAgentMode", v)}
+        path="chat.forceAgentMode"
+        {...rowProps}
       />
-      <ToggleRow
+      <SettingToggleRow
         label="Use native attachments"
         description="Use VS Code's native file attachment API for context files."
         checked={chat.useNativeAttachments}
-        onChange={(v) => onUpdate("chat.useNativeAttachments", v, s)}
+        onChange={(v) => onUpdate("chat.useNativeAttachments", v)}
+        path="chat.useNativeAttachments"
+        {...rowProps}
       />
     </div>
   );

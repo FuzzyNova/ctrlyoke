@@ -44,7 +44,6 @@ import type { AgentInfo } from "../utils/AgentDiscovery";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
 import type { SkillInfo } from "../utils/SkillDiscovery";
 import { configService } from "../config/FlightPathConfigService";
-import type { FlightPathGlobalSettings } from "../types/FlightPathSettings";
 import type { DevStatus } from "../types/WebviewMessageTypes";
 
 /**
@@ -869,28 +868,7 @@ export class WebviewSettingsSync {
     postMessage: PostMessageFn
   ): Promise<void> {
     const allSettings = configService.getAll();
-    const keys: (keyof FlightPathGlobalSettings)[] = [
-      "harness",
-      "models",
-      "additionalArgs",
-      "execution",
-      "tools",
-      "workflow",
-      "chat",
-      "mcp",
-      "hooks",
-      "queue",
-      "history",
-      "terminal",
-      "ui",
-      "server",
-      "notifications",
-      "enableDiagnosticLogs",
-    ];
-    const sources: Partial<Record<string, string>> = {};
-    for (const key of keys) {
-      sources[key] = configService.resolve(key).source;
-    }
+    const sources = configService.getLeafSources();
     this.emitMessage(
       {
         type: MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED,

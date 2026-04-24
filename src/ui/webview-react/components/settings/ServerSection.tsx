@@ -6,12 +6,13 @@ import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 export function ServerSection({ settings, onUpdate }: Props) {
   const server = settings.settings.server;
-  const s = "user" as const;
 
   const serverRunning = useSettingsStore((state) => state.serverRunning);
   const serverUrl = useSettingsStore((state) => state.serverUrl);
@@ -191,7 +192,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
             id="server-port"
             type="number"
             value={server.port}
-            onChange={(e) => onUpdate("server.port", Number(e.target.value), s)}
+            onChange={(e) => onUpdate("server.port", Number(e.target.value))}
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
           />
         </div>
@@ -208,7 +209,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
             type="number"
             value={server.standalonePort}
             onChange={(e) =>
-              onUpdate("server.standalonePort", Number(e.target.value), s)
+              onUpdate("server.standalonePort", Number(e.target.value))
             }
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
           />
@@ -224,7 +225,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
           <select
             id="server-bind"
             value={server.bindAddress ?? "127.0.0.1"}
-            onChange={(e) => onUpdate("server.bindAddress", e.target.value, s)}
+            onChange={(e) => onUpdate("server.bindAddress", e.target.value)}
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
           >
             <option value="127.0.0.1">Localhost only (127.0.0.1)</option>
@@ -245,7 +246,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
             type="checkbox"
             checked={server.tls?.enabled ?? false}
             onChange={(e) =>
-              onUpdate("server.tls.enabled", e.target.checked, s)
+              onUpdate("server.tls.enabled", e.target.checked)
             }
             className="accent-btn-primary-bg"
           />
@@ -267,7 +268,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
                 value={server.tls?.certPath ?? ""}
                 placeholder="/path/to/cert.pem"
                 onChange={(e) =>
-                  onUpdate("server.tls.certPath", e.target.value, s)
+                  onUpdate("server.tls.certPath", e.target.value)
                 }
                 className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
               />
@@ -285,7 +286,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
                 value={server.tls?.keyPath ?? ""}
                 placeholder="/path/to/key.pem"
                 onChange={(e) =>
-                  onUpdate("server.tls.keyPath", e.target.value, s)
+                  onUpdate("server.tls.keyPath", e.target.value)
                 }
                 className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
               />

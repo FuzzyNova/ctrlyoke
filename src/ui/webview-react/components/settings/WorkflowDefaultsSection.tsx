@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
 import { PRIOR_CONTEXT_KEYWORDS } from "@root/types/DashboardConstants";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingToggleRow } from "../shared/SettingToggleRow";
 import {
   ScriptConditionEditor,
   type ScriptConditionValue,
@@ -10,35 +11,9 @@ import { AnimatedSection } from "../shared/AnimatedSection";
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
-}
-
-interface ToggleRowProps {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
-  return (
-    <label className="flex items-start gap-3 py-2 cursor-pointer group">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 w-4 h-4 accent-focus-border cursor-pointer shrink-0"
-      />
-      <span className="flex flex-col">
-        <span className="text-sm text-foreground">{label}</span>
-        {description && (
-          <span className="text-xs text-description-fg mt-0.5">
-            {description}
-          </span>
-        )}
-      </span>
-    </label>
-  );
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 interface FieldRowProps {
@@ -81,9 +56,11 @@ const PRIOR_CONTEXT_OPTIONS = [
   },
 ];
 
-export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
+export function WorkflowDefaultsSection({ settings, activeScope, onUpdate, onReset }: Props) {
   const wf = settings.settings.workflow;
-  const s = "user" as const;
+  const sources = settings.sources as Record<string, SettingSource>;
+
+  const rowProps = { sources, onReset, activeScope };
 
   const [preConditionEnabled, setPreConditionEnabled] = useState(
     wf.defaultPreCondition !== null && wf.defaultPreCondition !== undefined
@@ -95,23 +72,23 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
   function handlePreConditionToggle(enabled: boolean) {
     setPreConditionEnabled(enabled);
     if (!enabled) {
-      onUpdate("workflow.defaultPreCondition", null, s);
+      onUpdate("workflow.defaultPreCondition", null);
     } else {
       const initial = wf.defaultPreCondition ?? {
         script: "",
         onFail: "skipPrompt",
       };
-      onUpdate("workflow.defaultPreCondition", initial, s);
+      onUpdate("workflow.defaultPreCondition", initial);
     }
   }
 
   function handleEndConditionToggle(enabled: boolean) {
     setEndConditionEnabled(enabled);
     if (!enabled) {
-      onUpdate("workflow.defaultEndCondition", null, s);
+      onUpdate("workflow.defaultEndCondition", null);
     } else {
       const initial = wf.defaultEndCondition ?? { script: "", returns: "true" };
-      onUpdate("workflow.defaultEndCondition", initial, s);
+      onUpdate("workflow.defaultEndCondition", initial);
     }
   }
 
@@ -126,7 +103,7 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
       >
         <CustomSelect
           value={wf.defaultFormat}
-          onChange={(v) => onUpdate("workflow.defaultFormat", v, s)}
+          onChange={(v) => onUpdate("workflow.defaultFormat", v)}
           options={FORMAT_OPTIONS}
         />
       </FieldRow>
@@ -138,7 +115,7 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
           type="text"
           value={wf.defaultTemplate}
           onChange={(e) =>
-            onUpdate("workflow.defaultTemplate", e.target.value, s)
+            onUpdate("workflow.defaultTemplate", e.target.value)
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
@@ -150,7 +127,7 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
         <input
           type="text"
           value={wf.defaultAgent}
-          onChange={(e) => onUpdate("workflow.defaultAgent", e.target.value, s)}
+          onChange={(e) => onUpdate("workflow.defaultAgent", e.target.value)}
           placeholder="None"
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
@@ -161,28 +138,34 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
       >
         <CustomSelect
           value={wf.priorContext || PRIOR_CONTEXT_KEYWORDS.NONE}
-          onChange={(v) => onUpdate("workflow.priorContext", v, s)}
+          onChange={(v) => onUpdate("workflow.priorContext", v)}
           options={PRIOR_CONTEXT_OPTIONS}
         />
       </FieldRow>
       <div className="pt-2 space-y-1">
-        <ToggleRow
+        <SettingToggleRow
           label="Resume existing session"
           description="Attempt to resume the most recent AI session."
           checked={wf.resumeExistingSession}
-          onChange={(v) => onUpdate("workflow.resumeExistingSession", v, s)}
+          onChange={(v) => onUpdate("workflow.resumeExistingSession", v)}
+          path="workflow.resumeExistingSession"
+          {...rowProps}
         />
-        <ToggleRow
+        <SettingToggleRow
           label="Auto-load recent session"
           description="Automatically load the most recently used workflow on startup."
           checked={wf.autoLoadRecentSession}
-          onChange={(v) => onUpdate("workflow.autoLoadRecentSession", v, s)}
+          onChange={(v) => onUpdate("workflow.autoLoadRecentSession", v)}
+          path="workflow.autoLoadRecentSession"
+          {...rowProps}
         />
-        <ToggleRow
+        <SettingToggleRow
           label="Omit agents & skills on resume"
           description="When resuming a session, do not re-apply agents or skills."
           checked={wf.omitAgentsSkillsOnResume}
-          onChange={(v) => onUpdate("workflow.omitAgentsSkillsOnResume", v, s)}
+          onChange={(v) => onUpdate("workflow.omitAgentsSkillsOnResume", v)}
+          path="workflow.omitAgentsSkillsOnResume"
+          {...rowProps}
         />
       </div>
 
@@ -211,7 +194,7 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
               (wf.defaultPreCondition ?? null) as ScriptConditionValue | null
             }
             onChange={(updated) =>
-              onUpdate("workflow.defaultPreCondition", updated, s)
+              onUpdate("workflow.defaultPreCondition", updated)
             }
             idPrefix="global-default-pre"
           />
@@ -243,7 +226,7 @@ export function WorkflowDefaultsSection({ settings, onUpdate }: Props) {
               (wf.defaultEndCondition ?? null) as ScriptConditionValue | null
             }
             onChange={(updated) =>
-              onUpdate("workflow.defaultEndCondition", updated, s)
+              onUpdate("workflow.defaultEndCondition", updated)
             }
             idPrefix="global-default-end"
           />

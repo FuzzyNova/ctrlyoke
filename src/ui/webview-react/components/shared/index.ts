@@ -46,3 +46,5 @@ export {
   type ScriptConditionValue,
 } from "./ScriptConditionEditor";
 export { AnimatedSection } from "./AnimatedSection";
+export { SettingSourceBadge } from "./SettingSourceBadge";
+export { SettingToggleRow } from "./SettingToggleRow";

@@ -6,7 +6,9 @@ import { CustomSelect } from "@components/shared";
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 const CLI_HARNESSES: HarnessId[] = [
@@ -23,7 +25,6 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
   const models = settings.settings.models;
   const additionalArgs = settings.settings.additionalArgs;
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
-  const s = "user" as const;
 
   return (
     <div className="space-y-4">
@@ -37,7 +38,7 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
         <select
           id="harness-active"
           value={settings.settings.harness}
-          onChange={(e) => onUpdate("harness", e.target.value, s)}
+          onChange={(e) => onUpdate("harness", e.target.value)}
           className="bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         >
           {CLI_HARNESSES.map((id) => (
@@ -84,7 +85,7 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
                     id={`model-${harnessId}`}
                     value={currentModel}
                     onChange={(v) =>
-                      onUpdate(`models.${harnessId}`, v || undefined, s)
+                      onUpdate(`models.${harnessId}`, v || undefined)
                     }
                     options={[
                       { value: "", label: "Default" },
@@ -99,8 +100,7 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
                     onChange={(e) =>
                       onUpdate(
                         `models.${harnessId}`,
-                        e.target.value || undefined,
-                        s
+                        e.target.value || undefined
                       )
                     }
                     placeholder="Default"
@@ -127,8 +127,7 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
                     onChange={(e) =>
                       onUpdate(
                         `additionalArgs.${harnessId}`,
-                        e.target.value || undefined,
-                        s
+                        e.target.value || undefined
                       )
                     }
                     placeholder="None"

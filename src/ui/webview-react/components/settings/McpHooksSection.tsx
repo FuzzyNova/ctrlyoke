@@ -8,20 +8,21 @@ import {
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 export function McpHooksSection({ settings, onUpdate }: Props) {
   const mcpServers = settings.settings.mcp.defaultServers as McpServersValue;
   const hooks = settings.settings.hooks as UserHookConfig[];
-  const s = "user" as const;
 
   function handleMcpChange(value: McpServersValue) {
-    onUpdate("mcp.defaultServers", value ?? [], s);
+    onUpdate("mcp.defaultServers", value ?? []);
   }
 
   function handleHooksChange(value: object[] | null | undefined) {
-    onUpdate("hooks", value ?? [], s);
+    onUpdate("hooks", value ?? []);
   }
 
   return (

@@ -5,20 +5,16 @@ import {
   type TerminalCursorStyle,
   type TerminalMobileControlBar,
 } from "@root/types/DashboardConstants";
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
 import type { TerminalShortcut } from "@root/types/FlightPathSettings";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
-}
-
-interface ToggleRowProps {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 const CURSOR_STYLE_OPTIONS = [
@@ -44,29 +40,6 @@ const WINDOWS_SHELL_OPTIONS = [
   { value: "C:\\Windows\\System32\\wsl.exe", label: "WSL" },
   { value: "__custom__", label: "Custom path..." },
 ];
-
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
-  return (
-    <label className="flex items-start gap-3 py-2 cursor-pointer group">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 w-4 h-4 accent-focus-border cursor-pointer shrink-0"
-      />
-      <span className="flex flex-col">
-        <span className="text-sm text-foreground group-hover:text-foreground">
-          {label}
-        </span>
-        {description && (
-          <span className="text-xs text-description-fg mt-0.5">
-            {description}
-          </span>
-        )}
-      </span>
-    </label>
-  );
-}
 
 function detectPlatform(): "windows" | "mac" | "linux" {
   const platform = navigator.platform.toLowerCase();
@@ -482,9 +455,9 @@ function KeyCaptureInput({
   );
 }
 
-export function TerminalSection({ settings, onUpdate }: Props) {
+export function TerminalSection({ settings, activeScope, onUpdate, onReset }: Props) {
   const terminal = settings.settings.terminal;
-  const s = "user" as const;
+  const sources = settings.sources as Record<string, SettingSource>;
   const platform = useMemo(() => detectPlatform(), []);
   const knownWindowsShell = WINDOWS_SHELL_OPTIONS.some(
     (option) => option.value === terminal.shellExecutable
@@ -502,6 +475,8 @@ export function TerminalSection({ settings, onUpdate }: Props) {
     .pop()
     ?.toLowerCase();
 
+  const rowProps = { sources, onReset, activeScope };
+
   return (
     <div className="space-y-5">
       <section className="space-y-4">
@@ -511,7 +486,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
 
         <FontStepper
           value={terminal.fontSize}
-          onChange={(v) => onUpdate("terminal.fontSize", v, s)}
+          onChange={(v) => onUpdate("terminal.fontSize", v)}
         />
 
         <NumberField
@@ -521,7 +496,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
           min={1}
           max={2}
           step={0.1}
-          onChange={(v) => onUpdate("terminal.lineHeight", v, s)}
+          onChange={(v) => onUpdate("terminal.lineHeight", v)}
         />
 
         <NumberField
@@ -531,7 +506,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
           min={1000}
           max={50000}
           step={1000}
-          onChange={(v) => onUpdate("terminal.scrollback", v, s)}
+          onChange={(v) => onUpdate("terminal.scrollback", v)}
           note="Higher values use more memory. Changes apply to new sessions."
         />
 
@@ -546,17 +521,19 @@ export function TerminalSection({ settings, onUpdate }: Props) {
             id="terminal-cursor-style"
             value={terminal.cursorStyle}
             onChange={(v) =>
-              onUpdate("terminal.cursorStyle", v as TerminalCursorStyle, s)
+              onUpdate("terminal.cursorStyle", v as TerminalCursorStyle)
             }
             options={CURSOR_STYLE_OPTIONS}
           />
         </div>
 
-        <ToggleRow
+        <SettingToggleRow
           label="Cursor blink"
           description="Blink the terminal cursor."
           checked={terminal.cursorBlink}
-          onChange={(v) => onUpdate("terminal.cursorBlink", v, s)}
+          onChange={(v) => onUpdate("terminal.cursorBlink", v)}
+          path="terminal.cursorBlink"
+          {...rowProps}
         />
       </section>
 
@@ -565,11 +542,13 @@ export function TerminalSection({ settings, onUpdate }: Props) {
           Terminal Behavior
         </h3>
 
-        <ToggleRow
+        <SettingToggleRow
           label="macOS: Option key as Meta"
           description="Treat Option as Meta for Emacs and Vim alt-key shortcuts."
           checked={terminal.macOptionIsMeta}
-          onChange={(v) => onUpdate("terminal.macOptionIsMeta", v, s)}
+          onChange={(v) => onUpdate("terminal.macOptionIsMeta", v)}
+          path="terminal.macOptionIsMeta"
+          {...rowProps}
         />
 
         <div>
@@ -585,7 +564,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
             value={terminal.wordSeparators}
             placeholder={" ()[]{}',\"`"}
             onChange={(e) =>
-              onUpdate("terminal.wordSeparators", e.target.value, s)
+              onUpdate("terminal.wordSeparators", e.target.value)
             }
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
           />
@@ -598,7 +577,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
           min={10}
           max={500}
           step={10}
-          onChange={(v) => onUpdate("terminal.replayBufferKb", v, s)}
+          onChange={(v) => onUpdate("terminal.replayBufferKb", v)}
         />
       </section>
 
@@ -627,7 +606,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
                     return;
                   }
                   setShowCustomShell(false);
-                  onUpdate("terminal.shellExecutable", v, s);
+                  onUpdate("terminal.shellExecutable", v);
                 }}
                 options={WINDOWS_SHELL_OPTIONS}
               />
@@ -639,7 +618,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
                 value={terminal.shellExecutable}
                 placeholder="C:\\Program Files\\PowerShell\\7\\pwsh.exe"
                 onChange={(e) =>
-                  onUpdate("terminal.shellExecutable", e.target.value, s)
+                  onUpdate("terminal.shellExecutable", e.target.value)
                 }
                 className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
               />
@@ -676,7 +655,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
                     : "Auto-detected from $SHELL, then /bin/bash"
                 }
                 onChange={(e) =>
-                  onUpdate("terminal.shellExecutable", e.target.value, s)
+                  onUpdate("terminal.shellExecutable", e.target.value)
                 }
                 className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
               />
@@ -715,8 +694,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
             onChange={(v) =>
               onUpdate(
                 "terminal.mobileControlBar",
-                v as TerminalMobileControlBar,
-                s
+                v as TerminalMobileControlBar
               )
             }
             options={CONTROL_BAR_OPTIONS}
@@ -741,8 +719,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
                   [
                     ...terminal.mobileCustomShortcuts,
                     { label: "", sequence: "" },
-                  ],
-                  s
+                  ]
                 )
               }
             >
@@ -769,8 +746,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
                         "terminal.mobileCustomShortcuts",
                         updateShortcut(terminal.mobileCustomShortcuts, index, {
                           label: e.target.value,
-                        }),
-                        s
+                        })
                       )
                     }
                     className="min-w-0 flex-1 bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
@@ -783,8 +759,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
                         "terminal.mobileCustomShortcuts",
                         updateShortcut(terminal.mobileCustomShortcuts, index, {
                           sequence: seq,
-                        }),
-                        s
+                        })
                       )
                     }
                     onCapture={(seq, humanLabel) =>
@@ -793,8 +768,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
                         updateShortcut(terminal.mobileCustomShortcuts, index, {
                           sequence: seq,
                           ...(shortcut.label === "" ? { label: humanLabel } : {}),
-                        }),
-                        s
+                        })
                       )
                     }
                   />
@@ -808,8 +782,7 @@ export function TerminalSection({ settings, onUpdate }: Props) {
                         "terminal.mobileCustomShortcuts",
                         terminal.mobileCustomShortcuts.filter(
                           (_item, shortcutIndex) => shortcutIndex !== index
-                        ),
-                        s
+                        )
                       )
                     }
                   >

@@ -1,37 +1,12 @@
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
-}
-
-interface ToggleRowProps {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
-  return (
-    <label className="flex items-start gap-3 py-2 cursor-pointer group">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 w-4 h-4 accent-focus-border cursor-pointer shrink-0"
-      />
-      <span className="flex flex-col">
-        <span className="text-sm text-foreground">{label}</span>
-        {description && (
-          <span className="text-xs text-description-fg mt-0.5">
-            {description}
-          </span>
-        )}
-      </span>
-    </label>
-  );
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 const PERMISSION_MODE_OPTIONS = [
@@ -52,9 +27,11 @@ const CODEX_APPROVAL_OPTIONS = [
   { value: "never", label: "Never" },
 ];
 
-export function PermissionsSection({ settings, onUpdate }: Props) {
+export function PermissionsSection({ settings, activeScope, onUpdate, onReset }: Props) {
   const tools = settings.settings.tools;
-  const s = "user" as const;
+  const sources = settings.sources as Record<string, SettingSource>;
+
+  const rowProps = { sources, onReset, activeScope };
 
   return (
     <div className="space-y-4">
@@ -64,7 +41,7 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
         </h3>
         <CustomSelect
           value={tools.permissionMode}
-          onChange={(v) => onUpdate("tools.permissionMode", v, s)}
+          onChange={(v) => onUpdate("tools.permissionMode", v)}
           options={PERMISSION_MODE_OPTIONS}
         />
       </div>
@@ -86,8 +63,7 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
                 e.target.value
                   .split("\n")
                   .map((t) => t.trim())
-                  .filter(Boolean),
-                s
+                  .filter(Boolean)
               )
             }
             placeholder={"read\nglob\ngrep"}
@@ -111,8 +87,7 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
                 e.target.value
                   .split("\n")
                   .map((t) => t.trim())
-                  .filter(Boolean),
-                s
+                  .filter(Boolean)
               )
             }
             placeholder={"shell(rm:*)\nwrite"}
@@ -141,8 +116,7 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
                 e.target.value
                   .split("\n")
                   .map((d) => d.trim())
-                  .filter(Boolean),
-                s
+                  .filter(Boolean)
               )
             }
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
@@ -157,11 +131,13 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           Copilot CLI
         </h3>
-        <ToggleRow
+        <SettingToggleRow
           label="Allow all paths"
           description="Allow the Copilot CLI to access all file paths."
           checked={tools.copilotAllowAllPaths}
-          onChange={(v) => onUpdate("tools.copilotAllowAllPaths", v, s)}
+          onChange={(v) => onUpdate("tools.copilotAllowAllPaths", v)}
+          path="tools.copilotAllowAllPaths"
+          {...rowProps}
         />
       </div>
       <div className="border-t border-panel-border pt-4">
@@ -183,7 +159,7 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
             <CustomSelect
               id="codex-sandbox-mode"
               value={tools.codexSandboxMode}
-              onChange={(v) => onUpdate("tools.codexSandboxMode", v, s)}
+              onChange={(v) => onUpdate("tools.codexSandboxMode", v)}
               options={CODEX_SANDBOX_OPTIONS}
             />
           </div>
@@ -197,7 +173,7 @@ export function PermissionsSection({ settings, onUpdate }: Props) {
             <CustomSelect
               id="codex-approval-policy"
               value={tools.codexApprovalPolicy}
-              onChange={(v) => onUpdate("tools.codexApprovalPolicy", v, s)}
+              onChange={(v) => onUpdate("tools.codexApprovalPolicy", v)}
               options={CODEX_APPROVAL_OPTIONS}
             />
           </div>

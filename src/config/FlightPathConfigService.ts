@@ -156,6 +156,41 @@ export class FlightPathConfigService {
     };
   }
 
+  /**
+   * Build a dot-notation leaf path → source map by walking workspace and user backends.
+   * workspace wins over user when both have the same leaf path.
+   */
+  getLeafSources(): Record<string, SettingSource> {
+    const sources: Record<string, SettingSource> = {};
+
+    function walkLeaves(
+      obj: unknown,
+      prefix: string,
+      source: SettingSource
+    ): void {
+      if (
+        obj === null ||
+        obj === undefined ||
+        typeof obj !== "object" ||
+        Array.isArray(obj)
+      ) {
+        if (prefix) sources[prefix] = source;
+        return;
+      }
+      for (const [key, value] of Object.entries(
+        obj as Record<string, unknown>
+      )) {
+        walkLeaves(value, prefix ? `${prefix}.${key}` : key, source);
+      }
+    }
+
+    if (this.userBackend) walkLeaves(this.userBackend.getAll(), "", "user");
+    if (this.workspaceBackend)
+      walkLeaves(this.workspaceBackend.getAll(), "", "workspace");
+
+    return sources;
+  }
+
   /** Notify all subscribers */
   notify(): void {
     this.listeners.forEach((listener) => listener());

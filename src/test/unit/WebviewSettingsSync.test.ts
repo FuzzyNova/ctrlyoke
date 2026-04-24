@@ -42,9 +42,9 @@ suite("WebviewSettingsSync", () => {
   });
 
   suite("handleGlobalSettingsLoadRequest", () => {
-    test("should include notifications settings and source metadata", async () => {
+    test("should include notifications settings and leaf-level source metadata", async () => {
       const originalGetAll = configService.getAll.bind(configService);
-      const originalResolve = configService.resolve.bind(configService);
+      const originalGetLeafSources = configService.getLeafSources.bind(configService);
 
       try {
         configService.getAll = (() => ({
@@ -58,10 +58,9 @@ suite("WebviewSettingsSync", () => {
           },
         })) as typeof configService.getAll;
 
-        configService.resolve = ((key) => ({
-          value: (configService.getAll() as any)[key],
-          source: key === "notifications" ? "workspace" : "default",
-        })) as typeof configService.resolve;
+        configService.getLeafSources = (() => ({
+          "notifications.browser.mode": "workspace",
+        })) as typeof configService.getLeafSources;
 
         const messages: any[] = [];
         const postMessage = (msg: any) => messages.push(msg);
@@ -78,12 +77,12 @@ suite("WebviewSettingsSync", () => {
           "push"
         );
         assert.strictEqual(
-          settingsMsg.settings.sources.notifications,
+          settingsMsg.settings.sources["notifications.browser.mode"],
           "workspace"
         );
       } finally {
         configService.getAll = originalGetAll;
-        configService.resolve = originalResolve;
+        configService.getLeafSources = originalGetLeafSources;
       }
     });
   });

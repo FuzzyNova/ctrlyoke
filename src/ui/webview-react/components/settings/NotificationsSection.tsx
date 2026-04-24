@@ -3,9 +3,10 @@ import {
   BROWSER_NOTIFICATION_MODES,
   NOTIFICATION_EVENT_MODES,
 } from "@root/types/DashboardConstants";
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingToggleRow } from "../shared/SettingToggleRow";
 import {
   disablePushNotifications,
   enableBrowserNotifications,
@@ -15,40 +16,9 @@ import {
 
 interface Props {
   settings: FullGlobalSettings;
-  onUpdate: (path: string, value: unknown, scope: "workspace" | "user") => void;
-}
-
-interface ToggleRowProps {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function ToggleRow({
-  label,
-  description,
-  checked,
-  onChange,
-}: ToggleRowProps) {
-  return (
-    <label className="flex items-start gap-3 py-2 cursor-pointer group">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 w-4 h-4 accent-focus-border shrink-0"
-      />
-      <span className="flex flex-col">
-        <span className="text-sm text-foreground">{label}</span>
-        {description ? (
-          <span className="text-xs text-description-fg mt-0.5">
-            {description}
-          </span>
-        ) : null}
-      </span>
-    </label>
-  );
+  activeScope: "workspace" | "user";
+  onUpdate: (path: string, value: unknown) => void;
+  onReset: (path: string) => void;
 }
 
 const EVENT_MODE_OPTIONS = [
@@ -69,12 +39,14 @@ const BROWSER_MODE_OPTIONS = [
   },
 ];
 
-export function NotificationsSection({ settings, onUpdate }: Props) {
+export function NotificationsSection({ settings, activeScope, onUpdate, onReset }: Props) {
   const notif = settings.settings.notifications;
   const server = settings.settings.server;
-  const scope = "user" as const;
+  const sources = settings.sources as Record<string, SettingSource>;
   const [status, setStatus] = useState<BrowserNotificationStatus | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const rowProps = { sources, onReset, activeScope };
 
   const browserModeEnabled =
     notif.browser.mode !== BROWSER_NOTIFICATION_MODES.NEVER;
@@ -83,8 +55,6 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
   const isIosHomeScreenApp =
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true ||
     window.matchMedia("(display-mode: standalone)").matches;
-  // On iOS, Notification.requestPermission() is only available from a Home Screen app.
-  // In a regular browser tab it silently returns "denied" without showing a dialog.
   const iosBlocksBrowserNotifications = isIos && !isIosHomeScreenApp;
 
   useEffect(() => {
@@ -170,11 +140,13 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
           Channels
         </h4>
 
-        <ToggleRow
+        <SettingToggleRow
           label="VS Code toasts"
           description="Show notification popups in the VS Code window when workflows complete."
           checked={notif.vscode.enabled}
-          onChange={(value) => onUpdate("notifications.vscode.enabled", value, scope)}
+          onChange={(value) => onUpdate("notifications.vscode.enabled", value)}
+          path="notifications.vscode.enabled"
+          {...rowProps}
         />
 
         <div>
@@ -188,7 +160,7 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
             id="notif-browser-mode"
             value={notif.browser.mode}
             onChange={(value) =>
-              onUpdate("notifications.browser.mode", value, scope)
+              onUpdate("notifications.browser.mode", value)
             }
             options={BROWSER_MODE_OPTIONS}
           />
@@ -305,7 +277,7 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
             id="notif-workflow-complete"
             value={notif.events.workflowComplete}
             onChange={(value) =>
-              onUpdate("notifications.events.workflowComplete", value, scope)
+              onUpdate("notifications.events.workflowComplete", value)
             }
             options={EVENT_MODE_OPTIONS}
           />
@@ -322,7 +294,7 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
             id="notif-prompt-complete"
             value={notif.events.promptComplete}
             onChange={(value) =>
-              onUpdate("notifications.events.promptComplete", value, scope)
+              onUpdate("notifications.events.promptComplete", value)
             }
             options={EVENT_MODE_OPTIONS}
           />
@@ -333,19 +305,23 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
         <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Content
         </h4>
-        <ToggleRow
+        <SettingToggleRow
           label="Include workflow name"
           checked={notif.includeWorkflowName}
           onChange={(value) =>
-            onUpdate("notifications.includeWorkflowName", value, scope)
+            onUpdate("notifications.includeWorkflowName", value)
           }
+          path="notifications.includeWorkflowName"
+          {...rowProps}
         />
-        <ToggleRow
+        <SettingToggleRow
           label="Include prompt name"
           checked={notif.includePromptName}
           onChange={(value) =>
-            onUpdate("notifications.includePromptName", value, scope)
+            onUpdate("notifications.includePromptName", value)
           }
+          path="notifications.includePromptName"
+          {...rowProps}
         />
       </div>
 
@@ -353,13 +329,15 @@ export function NotificationsSection({ settings, onUpdate }: Props) {
         <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Noise control
         </h4>
-        <ToggleRow
+        <SettingToggleRow
           label="Only notify when FlightPath is not focused"
           description="Suppress notifications while the VS Code window or hosted dashboard is focused."
           checked={notif.onlyWhenWindowUnfocused}
           onChange={(value) =>
-            onUpdate("notifications.onlyWhenWindowUnfocused", value, scope)
+            onUpdate("notifications.onlyWhenWindowUnfocused", value)
           }
+          path="notifications.onlyWhenWindowUnfocused"
+          {...rowProps}
         />
       </div>
     </div>

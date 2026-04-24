@@ -778,7 +778,7 @@ export type SettingSource = "workspace" | "user" | "default";
 
 export interface FullGlobalSettings {
   settings: FlightPathGlobalSettings;
-  sources: Partial<Record<keyof FlightPathGlobalSettings, SettingSource>>;
+  sources: Record<string, SettingSource>;
 }
 
 export type { TerminalSettings } from "./FlightPathSettings";
