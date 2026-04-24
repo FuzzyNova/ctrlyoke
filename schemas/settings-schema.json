@@ -497,6 +497,10 @@
           "enum": ["auto", "light", "dark"],
           "description": "Color theme for the hosted server UI."
         },
+        "bindAddress": {
+          "type": "string",
+          "description": "Network interface to bind the server to. Use '127.0.0.1' for localhost only or '0.0.0.0' for all interfaces."
+        },
         "tls": {
           "type": "object",
           "description": "TLS configuration for the hosted server.",
@@ -515,6 +519,65 @@
               "description": "Path to the TLS private key file."
             }
           }
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "description": "Notification settings.",
+      "additionalProperties": false,
+      "properties": {
+        "vscode": {
+          "type": "object",
+          "description": "VS Code notification settings.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Show VS Code notification popups when workflows complete."
+            }
+          }
+        },
+        "browser": {
+          "type": "object",
+          "description": "Browser notification settings.",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["never", "connectedOnly", "push"],
+              "description": "When to send browser notifications. 'connectedOnly' fires while the hosted dashboard is open; 'push' enables background push notifications."
+            }
+          }
+        },
+        "events": {
+          "type": "object",
+          "description": "Which events trigger notifications.",
+          "additionalProperties": false,
+          "properties": {
+            "workflowComplete": {
+              "type": "string",
+              "enum": ["all", "failuresOnly", "never"],
+              "description": "When to notify on workflow completion."
+            },
+            "promptComplete": {
+              "type": "string",
+              "enum": ["all", "failuresOnly", "never"],
+              "description": "When to notify on individual prompt completion."
+            }
+          }
+        },
+        "includeWorkflowName": {
+          "type": "boolean",
+          "description": "Include the workflow name in the notification message."
+        },
+        "includePromptName": {
+          "type": "boolean",
+          "description": "Include the prompt name in the notification message."
+        },
+        "onlyWhenWindowUnfocused": {
+          "type": "boolean",
+          "description": "Suppress notifications while the VS Code window or hosted dashboard is focused."
         }
       }
     },
