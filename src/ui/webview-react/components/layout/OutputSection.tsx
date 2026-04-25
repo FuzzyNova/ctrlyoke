@@ -973,7 +973,7 @@ export const OutputSection: React.FC = () => {
     <section
       ref={sectionRef}
       id="output-section"
-      className="min-h-0 flex-1 bg-editor-bg flex flex-col h-full"
+      className="min-h-0 flex-1 bg-editor-bg flex flex-col h-full overflow-hidden"
     >
       {/* Section Header */}
       <div
