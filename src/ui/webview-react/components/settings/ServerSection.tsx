@@ -2,7 +2,9 @@ import { useRef, useState, useEffect, useMemo } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import { SettingInputRow } from "../shared/SettingInputRow";
+import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -11,8 +13,9 @@ interface Props {
   onReset: (path: string) => void;
 }
 
-export function ServerSection({ settings, onUpdate }: Props) {
+export function ServerSection({ settings, activeScope, onUpdate, onReset }: Props) {
   const server = settings.settings.server;
+  const sources = settings.sources as Record<string, SettingSource>;
 
   const serverRunning = useSettingsStore((state) => state.serverRunning);
   const serverUrl = useSettingsStore((state) => state.serverUrl);
@@ -22,6 +25,8 @@ export function ServerSection({ settings, onUpdate }: Props) {
     (state) => state.setSelectedDisplayIp
   );
   const vscode = useVsCodeApi();
+
+  const rowProps = { sources, onReset, activeScope };
 
   const showIpSelector =
     server.bindAddress === "0.0.0.0" && availableIps.length > 1;
@@ -73,7 +78,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
       </h3>
 
       <div className="space-y-3">
-        {/* Enable/disable toggle — also controls auto-start on VS Code restart */}
+        {/* Enable/disable toggle — runtime action, not a persisted setting path */}
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -93,13 +98,10 @@ export function ServerSection({ settings, onUpdate }: Props) {
         {serverRunning && displayUrl && (
           <div>
             {showIpSelector && (
-              <div className="mb-1.5">
-                <label
-                  htmlFor="server-display-ip"
-                  className="block text-xs text-description-fg mb-1"
-                >
-                  Connect via
-                </label>
+              <SettingInputRow
+                label="Connect via"
+                id="server-display-ip"
+              >
                 <select
                   id="server-display-ip"
                   value={selectedDisplayIp ?? ""}
@@ -112,7 +114,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
                     </option>
                   ))}
                 </select>
-              </div>
+              </SettingInputRow>
             )}
             <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded">
               <span
@@ -181,29 +183,28 @@ export function ServerSection({ settings, onUpdate }: Props) {
           </div>
         )}
 
-        <div>
-          <label
-            htmlFor="server-port"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Server port
-          </label>
+        <SettingInputRow
+          label="Server port"
+          id="server-port"
+          path="server.port"
+          {...rowProps}
+        >
           <input
             id="server-port"
             type="number"
             value={server.port}
             onChange={(e) => onUpdate("server.port", Number(e.target.value))}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
+            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
           />
-        </div>
+        </SettingInputRow>
 
-        <div>
-          <label
-            htmlFor="server-standalone-port"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Standalone port
-          </label>
+        <SettingInputRow
+          label="Standalone port"
+          description="Port used by the flightpath server CLI command (headless mode, no VS Code required)."
+          id="server-standalone-port"
+          path="server.standalonePort"
+          {...rowProps}
+        >
           <input
             id="server-standalone-port"
             type="number"
@@ -211,17 +212,16 @@ export function ServerSection({ settings, onUpdate }: Props) {
             onChange={(e) =>
               onUpdate("server.standalonePort", Number(e.target.value))
             }
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
+            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
           />
-        </div>
+        </SettingInputRow>
 
-        <div>
-          <label
-            htmlFor="server-bind"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Bind address
-          </label>
+        <SettingInputRow
+          label="Bind address"
+          id="server-bind"
+          path="server.bindAddress"
+          {...rowProps}
+        >
           <select
             id="server-bind"
             value={server.bindAddress ?? "127.0.0.1"}
@@ -233,7 +233,7 @@ export function ServerSection({ settings, onUpdate }: Props) {
               All interfaces (0.0.0.0) — LAN access
             </option>
           </select>
-        </div>
+        </SettingInputRow>
       </div>
 
       <div className="pt-3 border-t border-panel-border mt-3">
@@ -241,27 +241,22 @@ export function ServerSection({ settings, onUpdate }: Props) {
           HTTPS / TLS
         </h3>
 
-        <label className="flex items-center gap-2 cursor-pointer select-none mb-3">
-          <input
-            type="checkbox"
-            checked={server.tls?.enabled ?? false}
-            onChange={(e) =>
-              onUpdate("server.tls.enabled", e.target.checked)
-            }
-            className="accent-btn-primary-bg"
-          />
-          <span className="text-sm text-foreground">Enable HTTPS</span>
-        </label>
+        <SettingToggleRow
+          label="Enable HTTPS"
+          checked={server.tls?.enabled ?? false}
+          onChange={(v) => onUpdate("server.tls.enabled", v)}
+          path="server.tls.enabled"
+          {...rowProps}
+        />
 
         {server.tls?.enabled && (
-          <div className="space-y-3">
-            <div>
-              <label
-                htmlFor="tls-cert-path"
-                className="block text-xs text-description-fg mb-1"
-              >
-                Certificate file (.pem)
-              </label>
+          <div className="space-y-3 mt-3">
+            <SettingInputRow
+              label="Certificate file (.pem)"
+              id="tls-cert-path"
+              path="server.tls.certPath"
+              {...rowProps}
+            >
               <input
                 id="tls-cert-path"
                 type="text"
@@ -270,16 +265,15 @@ export function ServerSection({ settings, onUpdate }: Props) {
                 onChange={(e) =>
                   onUpdate("server.tls.certPath", e.target.value)
                 }
-                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
+                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
               />
-            </div>
-            <div>
-              <label
-                htmlFor="tls-key-path"
-                className="block text-xs text-description-fg mb-1"
-              >
-                Private key file (.pem)
-              </label>
+            </SettingInputRow>
+            <SettingInputRow
+              label="Private key file (.pem)"
+              id="tls-key-path"
+              path="server.tls.keyPath"
+              {...rowProps}
+            >
               <input
                 id="tls-key-path"
                 type="text"
@@ -288,9 +282,9 @@ export function ServerSection({ settings, onUpdate }: Props) {
                 onChange={(e) =>
                   onUpdate("server.tls.keyPath", e.target.value)
                 }
-                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
+                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
               />
-            </div>
+            </SettingInputRow>
             <div className="flex items-center gap-4">
               <button
                 type="button"
