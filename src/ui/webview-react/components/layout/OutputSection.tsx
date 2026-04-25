@@ -14,6 +14,7 @@ import { CliOutput, StatusMessage } from "../output";
 import { RunSelector, IconToggleButton } from "../shared";
 import { HarnessIcon } from "../shared/HarnessIcon";
 import { generateDiffLines } from "@utils/outputUtils";
+import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import { generateId } from "@utils/string";
 import { generateMarkdownExport } from "@utils/markdownExport";
 import {
@@ -753,7 +754,11 @@ export const OutputSection: React.FC = () => {
         const typedOutput = output as CliOutputType & { attemptIndex?: number };
         const attemptIdx = typedOutput.attemptIndex ?? 0;
         const anchorPrefix = `fp-diff-${kindSlug}-${stepIndex}-a${attemptIdx}`;
-        const events = typedOutput.structured?.events ?? [];
+        // Normalize to match the indices StructuredOutput uses for DOM anchor IDs.
+        // normalizeCliEvents can merge/remove events (e.g. collapsing duplicate
+        // fileRead completions), so iterating the original array produces anchor IDs
+        // that don't exist in the DOM.
+        const events = normalizeCliEvents(typedOutput.structured?.events ?? []);
         events.forEach((event, eventIndex) => {
           if (
             event.type !== CLI_EVENT_TYPES.FILE_EDIT &&
