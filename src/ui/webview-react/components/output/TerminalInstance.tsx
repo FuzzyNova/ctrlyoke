@@ -56,64 +56,174 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         `registryHasEntry=${!!terminalRegistry.get(workflowId, sessionId)}`
     );
 
-    // Touch-scroll support: translate touch-drag into xterm scrollLines().
+    // Touch-scroll support with iOS-style momentum (inertia) scrolling.
     // Defined at effect scope so the cleanup return can call removeEventListener
     // with the same stable function references.
     let touchStartY = 0;
     let touchScrollAccum = 0;
     let touchEl: HTMLElement | null = null;
 
+    // Inertia state — velocity in px/ms, positive = scroll down
+    let inertiaVelocity = 0;
+    let inertiaScrollAccum = 0;
+    let inertiaRafId: number | null = null;
+    let inertiaLastTime = 0;
+    // Velocity saved at touchstart so re-flicks in the same direction build speed
+    let preTouchInertiaVelocity = 0;
+
+    // Ring of recent move samples used to estimate end-of-gesture velocity
+    let velSamples: Array<{ dp: number; t: number }> = [];
+    const VEL_WINDOW_MS = 80; // look-back window for velocity estimate
+    // Exponential decay: 0.9987^ms reaches ~1% of initial velocity in ~3.5 s
+    const DECEL_PER_MS = 0.9987;
+    const VEL_STOP_PX_PER_MS = 0.005;
+    const MAX_VELOCITY_PX_PER_MS = 5;
+    // Scales touch pixels to lines — higher = faster scroll per unit of drag.
+    const TOUCH_SPEED_MULTIPLIER = 1.5;
+
+    // Dispatch scroll lines to xterm and synthesize a WheelEvent for TUI
+    // mouse-reporting (same logic as the original direct-touch path).
+    const dispatchScroll = (lines: number) => {
+      const entry = terminalRegistry.get(workflowId, sessionId);
+      if (!entry) return;
+      const fontSize =
+        (entry.term.options.fontSize as number | undefined) ?? 14;
+      const lineHeight =
+        (entry.term.options.lineHeight as number | undefined) ?? 1.2;
+      // scrollLines handles normal scrollback; on the alternate buffer it is a
+      // no-op so it never interferes with TUI output.
+      entry.term.scrollLines(lines);
+      // Synthesize WheelEvent so xterm forwards mouse-reporting escape sequences
+      // to TUI programs when mouse-reporting is active.
+      const wheelTarget =
+        entry.term.element?.querySelector<Element>(".xterm-viewport") ??
+        entry.term.element;
+      if (wheelTarget) {
+        const rect = wheelTarget.getBoundingClientRect();
+        wheelTarget.dispatchEvent(
+          new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            deltaY: lines * fontSize * lineHeight,
+            deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2,
+          })
+        );
+      }
+    };
+
+    const stopInertia = () => {
+      if (inertiaRafId !== null) {
+        cancelAnimationFrame(inertiaRafId);
+        inertiaRafId = null;
+      }
+    };
+
+    const tickInertia = (now: number) => {
+      // Cap dt to avoid a massive jump after the tab returns from background.
+      const dt = Math.min(now - inertiaLastTime, 50);
+      inertiaLastTime = now;
+      inertiaVelocity *= Math.pow(DECEL_PER_MS, dt);
+      if (Math.abs(inertiaVelocity) < VEL_STOP_PX_PER_MS) {
+        inertiaRafId = null;
+        inertiaScrollAccum = 0;
+        return;
+      }
+      const entry = terminalRegistry.get(workflowId, sessionId);
+      if (!entry) {
+        inertiaRafId = null;
+        return;
+      }
+      const fontSize =
+        (entry.term.options.fontSize as number | undefined) ?? 14;
+      const lineHeight =
+        (entry.term.options.lineHeight as number | undefined) ?? 1.2;
+      inertiaScrollAccum +=
+        (inertiaVelocity * dt * TOUCH_SPEED_MULTIPLIER) / (fontSize * lineHeight);
+      const lines = Math.trunc(inertiaScrollAccum);
+      if (lines !== 0) {
+        inertiaScrollAccum -= lines;
+        dispatchScroll(lines);
+      }
+      inertiaRafId = requestAnimationFrame(tickInertia);
+    };
+
     const handleTouchStart = (e: TouchEvent) => {
+      // Save current coasting velocity before stopping — a re-flick in the same
+      // direction will add it back at touchend to accumulate momentum.
+      preTouchInertiaVelocity = inertiaVelocity;
+      stopInertia();
       touchStartY = e.touches[0].clientY;
       touchScrollAccum = 0;
+      inertiaScrollAccum = 0;
+      velSamples = [];
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       if (!e.touches.length) return;
+      const now = performance.now();
       const deltaPixels = touchStartY - e.touches[0].clientY;
       touchStartY = e.touches[0].clientY;
-      const currentEntry = terminalRegistry.get(workflowId, sessionId);
-      if (!currentEntry) return;
+
+      // Accumulate velocity samples; prune anything outside the look-back window.
+      velSamples.push({ dp: deltaPixels, t: now });
+      const cutoff = now - VEL_WINDOW_MS;
+      while (velSamples.length > 1 && velSamples[0].t < cutoff) {
+        velSamples.shift();
+      }
+
+      const entry = terminalRegistry.get(workflowId, sessionId);
+      if (!entry) return;
       const fontSize =
-        (currentEntry.term.options.fontSize as number | undefined) ?? 14;
+        (entry.term.options.fontSize as number | undefined) ?? 14;
       const lineHeight =
-        (currentEntry.term.options.lineHeight as number | undefined) ?? 1.2;
-      // 3× speed multiplier: lowers the effective pixel-per-line threshold from
-      // ~17px to ~6px so slow drags feel responsive. The WheelEvent deltaY is kept
-      // at real font metrics so xterm's mouse-reporting output to the PTY is unchanged.
-      touchScrollAccum += (deltaPixels * 3) / (fontSize * lineHeight);
+        (entry.term.options.lineHeight as number | undefined) ?? 1.2;
+      touchScrollAccum +=
+        (deltaPixels * TOUCH_SPEED_MULTIPLIER) / (fontSize * lineHeight);
       const lines = Math.trunc(touchScrollAccum);
       if (lines !== 0) {
         touchScrollAccum -= lines;
-        // scrollLines handles normal scrollback (shells, harnesses without alternate
-        // screen). Synthetic WheelEvents are untrusted so the browser ignores them
-        // for viewport scrolling — scrollLines is the only reliable path here.
-        // It is safe to call in all modes: on the alternate buffer it is a no-op
-        // (no scrollback exists) so it doesn't interfere with TUI output.
-        currentEntry.term.scrollLines(lines);
-        // Also synthesize a WheelEvent so xterm forwards scroll as mouse-reporting
-        // escape sequences for TUI programs (copilot-cli, opencode, etc.) that
-        // capture wheel input when mouse-reporting is active. This has no effect
-        // when mouse-reporting is off, so it is safe to always dispatch.
-        const wheelTarget =
-          currentEntry.term.element?.querySelector<Element>(
-            ".xterm-viewport"
-          ) ?? currentEntry.term.element;
-        if (wheelTarget) {
-          const rect = wheelTarget.getBoundingClientRect();
-          wheelTarget.dispatchEvent(
-            new WheelEvent("wheel", {
-              bubbles: true,
-              cancelable: true,
-              deltaY: lines * fontSize * lineHeight,
-              deltaMode: WheelEvent.DOM_DELTA_PIXEL,
-              clientX: rect.left + rect.width / 2,
-              clientY: rect.top + rect.height / 2,
-            })
-          );
-        }
+        dispatchScroll(lines);
       }
       e.preventDefault();
+    };
+
+    const handleTouchEnd = (_e: TouchEvent) => {
+      const now = performance.now();
+      const cutoff = now - VEL_WINDOW_MS;
+      const recent = velSamples.filter((s) => s.t >= cutoff);
+
+      let gestureVelocity = 0;
+      if (recent.length > 0) {
+        const totalDp = recent.reduce((sum, s) => sum + s.dp, 0);
+        // Use actual elapsed time between first and last sample; fall back to
+        // one assumed frame if only a single sample is available.
+        const timeSpan =
+          recent.length > 1 ? recent[recent.length - 1].t - recent[0].t : 16;
+        gestureVelocity = totalDp / Math.max(timeSpan, 1);
+      }
+
+      // Add pre-touch coasting velocity so repeated fast flicks build up speed.
+      inertiaVelocity = Math.max(
+        -MAX_VELOCITY_PX_PER_MS,
+        Math.min(
+          MAX_VELOCITY_PX_PER_MS,
+          gestureVelocity + preTouchInertiaVelocity
+        )
+      );
+      velSamples = [];
+
+      if (Math.abs(inertiaVelocity) > VEL_STOP_PX_PER_MS) {
+        inertiaScrollAccum = 0;
+        inertiaLastTime = performance.now();
+        inertiaRafId = requestAnimationFrame(tickInertia);
+      }
+    };
+
+    const handleTouchCancel = () => {
+      // Gesture was interrupted (e.g. system alert); discard without inertia.
+      velSamples = [];
     };
 
     async function mount() {
@@ -206,6 +316,10 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         touchEl.addEventListener("touchmove", handleTouchMove, {
           passive: false,
         });
+        touchEl.addEventListener("touchend", handleTouchEnd, { passive: true });
+        touchEl.addEventListener("touchcancel", handleTouchCancel, {
+          passive: true,
+        });
       }
 
       // ResizeObserver: fit xterm to container; only the controller notifies the PTY.
@@ -263,9 +377,12 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       terminalRegistry.detach(workflowId, sessionId);
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
-      // Remove touch-scroll listeners
+      // Remove touch-scroll listeners and cancel any in-flight inertia animation
+      stopInertia();
       touchEl?.removeEventListener("touchstart", handleTouchStart);
       touchEl?.removeEventListener("touchmove", handleTouchMove);
+      touchEl?.removeEventListener("touchend", handleTouchEnd);
+      touchEl?.removeEventListener("touchcancel", handleTouchCancel);
     };
   }, [workflowId, sessionId]);
 
