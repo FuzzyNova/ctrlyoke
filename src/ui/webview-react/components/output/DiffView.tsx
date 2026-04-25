@@ -1,17 +1,16 @@
 /**
- * DiffView — lazy, collapsible diff renderer with async HLJS highlighting.
- *
- * Performance design:
- * - Collapsed (default): renders a single summary line. Zero DOM nodes for
- *   diff lines, zero HLJS calls — the main render path is O(1).
- * - Expanded: diff lines computed via useMemo (gated on expand), then HLJS
- *   runs in a useEffect so it never blocks the initial paint. Shows plain
- *   (un-highlighted) diff lines immediately and upgrades once HLJS finishes.
+ * DiffView — collapsible diff renderer powered by react-diff-view.
  *
  * Layout:
- * - Wide panels (≥ 1024 px): side-by-side (old left, new right), detected via
- *   ResizeObserver through useElementNarrow.
+ * - Wide panels (≥ 1024 px): side-by-side split view via viewType="split".
  * - Narrow panels (< 1024 px): classic unified inline view.
+ *
+ * Features:
+ * - Async-free syntax highlighting via refractor + tokenize() (runs in useMemo).
+ * - Character-level inline diff marks via the markEdits() enhancer.
+ * - GitHub-style "N hidden lines" decorations between hunks; click to expand
+ *   (only when oldContent is available for context line lookup).
+ * - Global collapse/expand synced from uiStore.
  */
 import React, {
   useMemo,
@@ -21,44 +20,26 @@ import React, {
   useRef,
   useCallback,
 } from "react";
+import { Diff, Hunk, Decoration, tokenize, markEdits } from "react-diff-view";
 import {
-  parseUnifiedDiff,
-  generateDiffLines,
-  buildSideBySideRows,
+  getCollapsedLinesCountBetween,
+  expandFromRawCode,
+} from "react-diff-view";
+import type { HunkData, DiffType } from "react-diff-view";
+import {
+  toRdvHunks,
+  toRdvFromContent,
+  normalizeLanguage,
+  refractor,
+} from "@utils/rdvAdapter";
+import {
   normalizeStructuredPatch,
   countStructuredPatchDisplayLines,
-  type DiffLine,
-  type SideBySideRow,
 } from "@utils/outputUtils";
-import { highlightLines, injectHljsStyles } from "@utils/hljsUtils";
 import { useUiStore } from "@store/uiStore";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 
-// Ensure VS Code-themed HLJS stylesheet is in <head> (idempotent)
-injectHljsStyles();
-
 const SIDE_BY_SIDE_THRESHOLD = 1024;
-
-const DIFF_LINE_STYLES = {
-  added: {
-    bg: "bg-diff-added-bg",
-    contentColor: "text-diff-added-fg",
-    lineNumColor: "text-diff-added-fg opacity-80",
-    prefix: "+ ",
-  },
-  removed: {
-    bg: "bg-diff-removed-bg",
-    contentColor: "text-diff-removed-fg",
-    lineNumColor: "text-diff-removed-fg opacity-80",
-    prefix: "- ",
-  },
-  context: {
-    bg: "bg-transparent",
-    contentColor: "text-diff-context-fg",
-    lineNumColor: "",
-    prefix: "  ",
-  },
-} as const;
 
 interface DiffViewProps {
   /** Raw old file content (full-file edit path) */
@@ -97,29 +78,19 @@ export const DiffView: React.FC<DiffViewProps> = ({
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const [isExpanded, setIsExpanded] = useState(!globallyCollapsed);
 
-  // When the global flag changes or the reset version is bumped (e.g. user clicks
-  // "Expand all" / "Collapse all"), always snap to the global state.
-  // diffResetVersion is included so the effect fires even when globallyCollapsed
-  // doesn't change — e.g. diffsCollapsed is already false but the user manually
-  // collapsed one diff and then clicks "Expand all" again.
+  // Snap to global state whenever the global flag or reset version changes.
   useEffect(() => {
     setIsExpanded(!globallyCollapsed);
   }, [globallyCollapsed, diffResetVersion]);
 
-  const handleToggle = () => {
-    setIsExpanded((prev) => !prev);
-  };
+  const handleToggle = () => setIsExpanded((prev) => !prev);
 
-  // Width tracking for side-by-side vs inline layout.
-  // useElementNarrow returns isNarrow; we invert to get isWide.
+  // Width tracking for split vs unified layout.
   const [narrowCallbackRef, isNarrow] = useElementNarrow<HTMLDivElement>(
     SIDE_BY_SIDE_THRESHOLD
   );
   const isWide = !isNarrow;
 
-  // wrapperRef is needed for the data-diff-collapsed propagation effect below.
-  // We merge it with the ResizeObserver callback ref from useElementNarrow so
-  // both can point at the same DOM node.
   const wrapperRef = useRef<HTMLDivElement>(null);
   const setWrapperRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -130,30 +101,17 @@ export const DiffView: React.FC<DiffViewProps> = ({
     [narrowCallbackRef]
   );
 
-  // Compute diff lines lazily — only when expanded.
-  // This avoids running Diff.diffLines() (O(N*D)) and parseUnifiedDiff() for
-  // every file edit at mount time.
-  const diffLines = useMemo((): DiffLine[] => {
-    if (!isExpanded) return [];
-    const normalizedPatch = normalizeStructuredPatch(structuredPatch);
-    if (normalizedPatch.length > 0) {
-      return parseUnifiedDiff(normalizedPatch);
+  // Propagate actual collapse state to the nearest [data-diff-anchor] wrapper.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const anchor = el.closest<HTMLElement>("[data-diff-anchor]");
+    if (anchor) {
+      anchor.setAttribute("data-diff-collapsed", isExpanded ? "false" : "true");
     }
-    if (oldContent && newContent) {
-      return generateDiffLines(oldContent, newContent);
-    }
-    return [];
-  }, [isExpanded, structuredPatch, oldContent, newContent]);
+  }, [isExpanded]);
 
-  // Side-by-side rows — computed only when expanded and panel is wide enough.
-  const sideBySideRows = useMemo((): SideBySideRow[] => {
-    if (!isExpanded || !isWide || diffLines.length === 0) return [];
-    return buildSideBySideRows(diffLines);
-  }, [isExpanded, isWide, diffLines]);
-
-  // Derive a quick line-count estimate for the summary badge without computing
-  // the full diff. For structured patches we count hunk lines; for full-file
-  // pairs we just count the larger file.
+  // Derive estimated line count for summary badge (cheap, no diff computation).
   const estimatedLineCount = useMemo(() => {
     const normalizedPatch = normalizeStructuredPatch(structuredPatch);
     if (normalizedPatch.length > 0) {
@@ -169,48 +127,70 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
   const hasDiff = estimatedLineCount > 0;
 
-  // Propagate actual collapse state to the nearest [data-diff-anchor] wrapper
-  // so OutputSection's measurement can read the true state rather than
-  // inferring it from rendered height.
-  useEffect(() => {
-    const el = wrapperRef.current;
-    if (!el) return;
-    const anchor = el.closest<HTMLElement>("[data-diff-anchor]");
-    if (anchor) {
-      anchor.setAttribute("data-diff-collapsed", isExpanded ? "false" : "true");
+  // Convert input to react-diff-view hunks — only when expanded (lazy).
+  const { baseHunks, diffType } = useMemo((): {
+    baseHunks: HunkData[];
+    diffType: DiffType;
+  } => {
+    if (!isExpanded) return { baseHunks: [], diffType: "modify" };
+    const normalizedPatch = normalizeStructuredPatch(structuredPatch);
+    if (normalizedPatch.length > 0) {
+      return { baseHunks: toRdvHunks(normalizedPatch), diffType: "modify" };
     }
-  }, [isExpanded]);
-
-  // Async HLJS highlighting — runs in useEffect so it never blocks the paint.
-  // When diffLines changes (expand) we kick off highlighting and set the result
-  // once it's done. Until then, plain (un-highlighted) text is shown.
-  const [highlightedLines, setHighlightedLines] = useState<string[]>([]);
-  const highlightVersion = useRef(0); // prevents stale async result from landing
-
-  useEffect(() => {
-    if (diffLines.length === 0) {
-      setHighlightedLines([]);
-      return;
+    if (oldContent !== undefined && newContent !== undefined) {
+      const result = toRdvFromContent(oldContent, newContent);
+      return { baseHunks: result.hunks, diffType: result.diffType };
     }
-    const version = ++highlightVersion.current;
-    // Run HLJS in a macrotask so the browser can paint the un-highlighted
-    // diff lines first, keeping the expand interaction responsive.
-    const id = setTimeout(() => {
-      const combined = diffLines.map((l) => l.content).join("\n");
-      const result = highlightLines(combined, language);
-      if (highlightVersion.current === version) {
-        setHighlightedLines(result);
+    return { baseHunks: [], diffType: "modify" };
+  }, [isExpanded, structuredPatch, oldContent, newContent]);
+
+  // Track the currently-displayed hunks (can be expanded by user clicks).
+  const [expandedHunks, setExpandedHunks] = useState<HunkData[]>(baseHunks);
+  useEffect(() => {
+    setExpandedHunks(baseHunks);
+  }, [baseHunks]);
+
+  // Expand N lines of context for the gap between two consecutive hunks.
+  const handleExpand = useCallback(
+    (prevHunk: HunkData | null, nextHunk: HunkData, count: number) => {
+      if (!oldContent) return;
+      const gapStart =
+        prevHunk !== null ? prevHunk.oldStart + prevHunk.oldLines : 1;
+      const gapEnd = nextHunk.oldStart;
+      const expandEnd = Math.min(gapStart + count, gapEnd);
+      setExpandedHunks((prev) =>
+        expandFromRawCode(prev, oldContent, gapStart, expandEnd)
+      );
+    },
+    [oldContent]
+  );
+
+  // Syntax highlighting + word-level edit marks via refractor (synchronous useMemo).
+  const lang = normalizeLanguage(language);
+  const tokens = useMemo(() => {
+    if (!expandedHunks.length) return null;
+    try {
+      const enhancers = [markEdits(expandedHunks)];
+      if (lang && refractor.registered(lang)) {
+        return tokenize(expandedHunks, {
+          highlight: true,
+          refractor,
+          language: lang,
+          enhancers,
+        });
       }
-    }, 0);
-    return () => clearTimeout(id);
-  }, [diffLines, language]);
+      return tokenize(expandedHunks, { highlight: false, enhancers });
+    } catch {
+      return null;
+    }
+  }, [expandedHunks, lang]);
 
   if (!hasDiff) return null;
 
   return (
     <div
       ref={setWrapperRef}
-      className={`my-2 font-mono text-[length:var(--fp-output-font-size-sm)] ${className}`}
+      className={`my-2 ${className}`}
     >
       {/* Summary / toggle header */}
       <div className="flex items-center gap-2 mb-1">
@@ -235,155 +215,45 @@ export const DiffView: React.FC<DiffViewProps> = ({
         {actionSlot}
       </div>
 
-      {/* Diff lines — only mounted when expanded */}
-      {isExpanded && diffLines.length > 0 && (
-        <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border bg-editor-bg">
-          {isWide
-            ? /* ── Side-by-side view ── */
-              (
-                <SideBySideDiffTable
-                  rows={sideBySideRows}
-                  highlightedLines={highlightedLines}
-                />
-              )
-            : /* ── Inline unified view ── */
-              diffLines.map((line, index) => {
-                const styles =
-                  DIFF_LINE_STYLES[line.type] || DIFF_LINE_STYLES.context;
-                const highlighted = highlightedLines[index] ?? "";
-
-                return (
-                  <div
-                    key={index}
-                    className={`flex w-max min-w-full items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${styles.bg}`}
-                  >
-                    <span
-                      className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
-                    >
-                      {line.type !== "added" ? line.oldLineNum : ""}
-                    </span>
-                    <span
-                      className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num border-r border-diff-line-num mr-2 ${styles.lineNumColor}`}
-                    >
-                      {line.type !== "removed" ? line.newLineNum : ""}
-                    </span>
-                    <span className="inline-block py-0.5 pr-2 whitespace-pre">
-                      <span className={`font-bold ${styles.contentColor}`}>
-                        {styles.prefix}
-                      </span>
-                      {highlighted ? (
-                        <span dangerouslySetInnerHTML={{ __html: highlighted }} />
-                      ) : (
-                        <span className={styles.contentColor}>
-                          {line.content}
-                        </span>
-                      )}
-                    </span>
-                  </div>
+      {/* Diff — only mounted when expanded and there are hunks */}
+      {isExpanded && expandedHunks.length > 0 && (
+        <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border border-panel-border">
+          <Diff
+            viewType={isWide ? "split" : "unified"}
+            diffType={diffType}
+            hunks={expandedHunks}
+            tokens={tokens}
+          >
+            {(hunks) =>
+              hunks.reduce<React.ReactElement[]>((nodes, hunk, i) => {
+                const prevHunk = i > 0 ? hunks[i - 1] : null;
+                const collapsed = getCollapsedLinesCountBetween(
+                  prevHunk,
+                  hunk
                 );
-              })}
+                if (collapsed > 0) {
+                  nodes.push(
+                    <Decoration key={`gap-${i}-${hunk.oldStart}`}>
+                      <button
+                        type="button"
+                        disabled={!oldContent}
+                        onClick={() => handleExpand(prevHunk, hunk, 10)}
+                        className="w-full text-left px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg hover:text-foreground disabled:cursor-default disabled:opacity-50 bg-transparent border-none font-mono cursor-pointer"
+                      >
+                        ▸ {collapsed} hidden lines
+                      </button>
+                    </Decoration>
+                  );
+                }
+                nodes.push(<Hunk key={hunk.content} hunk={hunk} />);
+                return nodes;
+              }, [])
+            }
+          </Diff>
         </div>
       )}
     </div>
   );
 };
 
-// ---------------------------------------------------------------------------
-// Side-by-side table — wide diffs share a single horizontal scroller so both
-// columns remain aligned even when one side is wider than the other.
-// ---------------------------------------------------------------------------
-
-interface SideBySideDiffTableProps {
-  rows: SideBySideRow[];
-  highlightedLines: string[];
-}
-
-const SideBySideDiffTable: React.FC<SideBySideDiffTableProps> = ({
-  rows,
-  highlightedLines,
-}) => (
-  <table className="min-w-full w-max border-collapse">
-    <tbody>
-      {rows.map((row, rowIndex) => (
-        <tr key={rowIndex} className="align-top">
-          <SideBySideDiffCell
-            side="left"
-            row={row}
-            highlightedLines={highlightedLines}
-            className="border-r border-diff-line-num"
-          />
-          <SideBySideDiffCell
-            side="right"
-            row={row}
-            highlightedLines={highlightedLines}
-          />
-        </tr>
-      ))}
-    </tbody>
-  </table>
-);
-
-interface SideBySideDiffCellProps {
-  side: "left" | "right";
-  row: SideBySideRow;
-  highlightedLines: string[];
-  className?: string;
-}
-
-const SideBySideDiffCell: React.FC<SideBySideDiffCellProps> = ({
-  side,
-  row,
-  highlightedLines,
-  className = "",
-}) => {
-  const cell = side === "left" ? row.left : row.right;
-  const lineType = cell?.line.type ?? "context";
-  const styles = DIFF_LINE_STYLES[lineType] || DIFF_LINE_STYLES.context;
-
-  const bg =
-    cell === null
-      ? side === "left"
-        ? "bg-diff-removed-bg opacity-30"
-        : "bg-diff-added-bg opacity-30"
-      : styles.bg;
-  const highlighted =
-    cell !== null ? (highlightedLines[cell.originalIndex] ?? "") : "";
-  const lineNumber =
-    cell !== null &&
-    (side === "left" ? cell.line.type !== "added" : cell.line.type !== "removed")
-      ? side === "left"
-        ? cell.line.oldLineNum
-        : cell.line.newLineNum
-      : "";
-
-  return (
-    <td
-      className={`align-top w-1/2 ${bg} ${className}`}
-    >
-      <div className="flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px min-w-full">
-        <span
-          className={`inline-block w-10 text-right px-1.5 select-none text-[length:var(--fp-output-font-size-xs)] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
-        >
-          {lineNumber}
-        </span>
-        <span className="inline-block py-0.5 pr-2 whitespace-pre min-w-0">
-          {cell !== null && (
-            <>
-              <span className={`font-bold ${styles.contentColor}`}>
-                {styles.prefix}
-              </span>
-              {highlighted ? (
-                <span dangerouslySetInnerHTML={{ __html: highlighted }} />
-              ) : (
-                <span className={styles.contentColor}>{cell.line.content}</span>
-              )}
-            </>
-          )}
-        </span>
-      </div>
-    </td>
-  );
-};
-
-// Memo wrapper with display name for DevTools
 export default memo(DiffView);

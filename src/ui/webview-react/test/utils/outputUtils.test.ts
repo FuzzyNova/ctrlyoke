@@ -4,7 +4,6 @@ import {
   shortenPath,
   formatTimeHMS,
   extractKeyParameters,
-  parseUnifiedDiff,
   generateDiffLines,
   normalizeStructuredPatch,
   isStructuredPatchMalformed,
@@ -125,111 +124,6 @@ describe("extractKeyParameters", () => {
     });
     expect(result).toContain("alpha:");
     expect(result).toContain("beta:");
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// parseUnifiedDiff
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe("parseUnifiedDiff", () => {
-  const hunks: UnifiedDiffHunk[] = [
-    {
-      oldStart: 1,
-      oldLines: 3,
-      newStart: 1,
-      newLines: 3,
-      lines: [" context line", "-removed line", "+added line"],
-    },
-  ];
-
-  it("produces DiffLine entries for each hunk line", () => {
-    const result = parseUnifiedDiff(hunks);
-    expect(result).toHaveLength(3);
-  });
-
-  it("parses context lines correctly", () => {
-    const result = parseUnifiedDiff(hunks);
-    const context = result.find((l) => l.type === "context");
-    expect(context?.content).toBe("context line");
-    expect(context?.oldLineNum).toBe(1);
-    expect(context?.newLineNum).toBe(1);
-  });
-
-  it("parses removed lines correctly", () => {
-    const result = parseUnifiedDiff(hunks);
-    const removed = result.find((l) => l.type === "removed");
-    expect(removed?.content).toBe("removed line");
-    expect(removed?.oldLineNum).toBe(2);
-    expect(removed?.newLineNum).toBeUndefined();
-  });
-
-  it("parses added lines correctly", () => {
-    const result = parseUnifiedDiff(hunks);
-    const added = result.find((l) => l.type === "added");
-    expect(added?.content).toBe("added line");
-    expect(added?.newLineNum).toBe(2);
-    expect(added?.oldLineNum).toBeUndefined();
-  });
-
-  it("increments line numbers across multiple hunks", () => {
-    const twoHunks: UnifiedDiffHunk[] = [
-      {
-        oldStart: 1,
-        oldLines: 1,
-        newStart: 1,
-        newLines: 1,
-        lines: ["+line A"],
-      },
-      {
-        oldStart: 5,
-        oldLines: 1,
-        newStart: 5,
-        newLines: 1,
-        lines: ["+line B"],
-      },
-    ];
-    const result = parseUnifiedDiff(twoHunks);
-    expect(result[0].newLineNum).toBe(1);
-    expect(result[1].newLineNum).toBe(5);
-  });
-
-  it("returns empty array for empty hunks", () => {
-    expect(parseUnifiedDiff([])).toEqual([]);
-  });
-
-  it("deduplicates repeated hunks and skips non-display diff metadata", () => {
-    const duplicatedHunks: UnifiedDiffHunk[] = [
-      {
-        oldStart: 1,
-        oldLines: 1,
-        newStart: 1,
-        newLines: 1,
-        lines: [
-          "-removed line",
-          "+added line",
-          "\\ No newline at end of file",
-        ],
-      },
-      {
-        oldStart: 1,
-        oldLines: 1,
-        newStart: 1,
-        newLines: 1,
-        lines: [
-          "-removed line",
-          "+added line",
-          "\\ No newline at end of file",
-        ],
-      },
-    ];
-
-    const result = parseUnifiedDiff(duplicatedHunks);
-    expect(result).toHaveLength(2);
-    expect(result.map((line) => line.content)).toEqual([
-      "removed line",
-      "added line",
-    ]);
   });
 });
 

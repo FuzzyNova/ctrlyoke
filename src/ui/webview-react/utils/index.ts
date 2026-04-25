@@ -79,7 +79,6 @@ export { generateDiff, applyDiff } from "./diff";
 export {
   shortenPath,
   extractKeyParameters,
-  parseUnifiedDiff,
   generateDiffLines,
   type DiffLine,
 } from "./outputUtils";

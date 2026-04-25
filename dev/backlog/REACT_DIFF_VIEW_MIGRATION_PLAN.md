@@ -118,24 +118,80 @@ This is implemented with `getCollapsedLinesCountBetween` and `expandFromRawCode`
 
 ## Theming
 
-Add to `src/ui/webview-react/index.css` (after the existing `react-diff-view/style/index.css` import):
+**Approach**: Scoped CSS block in `src/ui/webview-react/styles/globals.css` — the same pattern already used for `.markdown-text` (Streamdown). Do **not** add more Tailwind tokens; react-diff-view's own CSS variable system is the right interface.
+
+react-diff-view exposes 11 CSS variables. The full mapping to VS Code theme tokens (using the validated Dark+ defaults from `dev/reference/vscode-css-vars-defaultdark.json`):
+
+| react-diff-view variable | VS Code variable | Dark+ fallback |
+|---|---|---|
+| `--diff-background-color` | `--vscode-editor-background` | `#121314` |
+| `--diff-text-color` | `--vscode-editor-foreground` | `#bbbebf` |
+| `--diff-font-family` | `--vscode-editor-font-family` | `Consolas, 'Courier New', monospace` |
+| `--diff-selection-background-color` | `--vscode-editor-selectionBackground` | `rgba(39,103,130,0.87)` |
+| `--diff-gutter-insert-background-color` | `--vscode-diffEditor-insertedLineBackground` | `rgba(52,125,57,0.15)` |
+| `--diff-gutter-delete-background-color` | `--vscode-diffEditor-removedLineBackground` | `rgba(201,60,55,0.15)` |
+| `--diff-code-insert-background-color` | `--vscode-diffEditor-insertedLineBackground` | `rgba(52,125,57,0.15)` |
+| `--diff-code-delete-background-color` | `--vscode-diffEditor-removedLineBackground` | `rgba(201,60,55,0.15)` |
+| `--diff-code-insert-edit-background-color` | `--vscode-diffEditor-insertedTextBackground` | `rgba(87,171,90,0.3)` |
+| `--diff-code-delete-edit-background-color` | `--vscode-diffEditor-removedTextBackground` | `rgba(244,112,103,0.3)` |
+| `--diff-omit-gutter-line-color` | `--vscode-diffEditor-unchangedRegionForeground` | `#bfbfbf` |
+
+> **`insertedLineBackground` vs `insertedTextBackground`**: VS Code uses two distinct variables — `insertedLineBackground` (subtle, whole-line tint) for the row background, and `insertedTextBackground` (more saturated) for inline character-level highlights. The mapping above mirrors VS Code's own diff editor exactly. The old plan incorrectly used `insertedTextBackground` for both.
+
+Add to the bottom of `src/ui/webview-react/styles/globals.css`:
 
 ```css
+/* ============================================================================
+   react-diff-view Theme
+   ============================================================================
+   Maps react-diff-view's 11 CSS variables to VS Code theme tokens.
+   Scoped to .diff (the root class applied by the Diff component).
+   Additional rules below cover gutter foreground, font size, and the
+   collapsed-context (omit) row that react-diff-view variables don't expose.
+   ============================================================================ */
 @import "react-diff-view/style/index.css";
 
 .diff {
-  --diff-background-color: var(--vscode-editor-background);
-  --diff-text-color: var(--vscode-editor-foreground);
-  --diff-font-family: var(--fp-output-font-family, monospace);
-  --diff-gutter-insert-background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(155,185,85,0.2));
-  --diff-gutter-delete-background-color: var(--vscode-diffEditor-removedTextBackground, rgba(255,0,0,0.2));
-  --diff-code-insert-background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(155,185,85,0.1));
-  --diff-code-delete-background-color: var(--vscode-diffEditor-removedTextBackground, rgba(255,0,0,0.1));
-  --diff-omit-gutter-line-color: var(--vscode-editorLineNumber-foreground, #858585);
+  /* Base */
+  --diff-background-color:          var(--vscode-editor-background);
+  --diff-text-color:                var(--vscode-editor-foreground);
+  --diff-font-family:               var(--vscode-editor-font-family, 'Consolas, Courier New, monospace');
+  --diff-selection-background-color: var(--vscode-editor-selectionBackground, rgba(39,103,130,0.87));
+
+  /* Insert (added) lines — full-line tint */
+  --diff-gutter-insert-background-color:      var(--vscode-diffEditor-insertedLineBackground, rgba(52,125,57,0.15));
+  --diff-code-insert-background-color:        var(--vscode-diffEditor-insertedLineBackground, rgba(52,125,57,0.15));
+  /* Insert — inline word-level highlight (markEdits enhancer) */
+  --diff-code-insert-edit-background-color:   var(--vscode-diffEditor-insertedTextBackground, rgba(87,171,90,0.3));
+
+  /* Delete (removed) lines — full-line tint */
+  --diff-gutter-delete-background-color:      var(--vscode-diffEditor-removedLineBackground, rgba(201,60,55,0.15));
+  --diff-code-delete-background-color:        var(--vscode-diffEditor-removedLineBackground, rgba(201,60,55,0.15));
+  /* Delete — inline word-level highlight */
+  --diff-code-delete-edit-background-color:   var(--vscode-diffEditor-removedTextBackground, rgba(244,112,103,0.3));
+
+  /* Omit row divider (the colored line in the gutter for collapsed context rows) */
+  --diff-omit-gutter-line-color:    var(--vscode-diffEditor-unchangedRegionForeground, #bfbfbf);
+
+  /* Font size — react-diff-view has no variable for this; set it on the container */
+  font-size: var(--fp-output-font-size-sm);
+}
+
+/* Gutter column (line numbers) — smaller than code text, muted foreground */
+.diff .diff-gutter {
+  font-size: var(--fp-output-font-size-xs);
+  color: var(--vscode-editorLineNumber-foreground, #858889);
+}
+
+/* Collapsed context stub row ("N hidden lines" decoration) */
+.diff-omit,
+.diff .diff-omit {
+  background-color: var(--vscode-diffEditor-unchangedRegionBackground, var(--vscode-editor-background));
+  color: var(--vscode-diffEditor-unchangedRegionForeground, #bfbfbf);
 }
 ```
 
-The existing Tailwind `diff-*` color tokens in `tailwind.config.js` can be removed once the migration is complete.
+The existing Tailwind `diff-*` color tokens in `tailwind.config.js` (`diff-added-bg`, `diff-added-fg`, `diff-removed-bg`, `diff-removed-fg`, `diff-context-fg`, `diff-line-num`) can be removed once the migration is validated — they are only consumed by the old `DiffView.tsx`.
 
 ---
 
@@ -146,10 +202,10 @@ The existing Tailwind `diff-*` color tokens in `tailwind.config.js` can be remov
 | `src/ui/webview-react/components/output/DiffView.tsx` | Full rewrite using `react-diff-view` components |
 | `src/ui/webview-react/utils/rdvAdapter.ts` | **New** — `toRdvHunks()` adapter + `toRdvFromContent()` |
 | `src/ui/webview-react/utils/diffUtils.ts` | Remove `buildSideBySideRows`, `parseUnifiedDiff`, `generateDiffLines` (replaced by adapter); keep `normalizeStructuredPatch`, `countStructuredPatchDisplayLines`, `isStructuredPatchMalformed` |
-| `src/ui/webview-react/utils/hljsUtils.ts` | Remove (replaced by refractor + tokenize) |
+| `src/ui/webview-react/utils/hljsUtils.ts` | Remove `highlightLines` and `splitHighlightedHtml` only — `highlightCode`, `injectHljsStyles`, `getLanguageFromPath` stay (still used by `MarkdownText`, `FileOperationOutput`, `UndoChangesDialog`) |
 | `src/ui/webview-react/utils/outputUtils.ts` | Update re-exports to remove deleted diffUtils exports |
-| `src/ui/webview-react/index.css` | Add `react-diff-view/style/index.css` import + CSS variable overrides |
-| `src/ui/webview-react/tailwind.config.js` | Remove `diff-*` color tokens once migration is validated |
+| `src/ui/webview-react/styles/globals.css` | Add `@import "react-diff-view/style/index.css"` and the `.diff` theme block at the bottom |
+| `src/ui/webview-react/tailwind.config.js` | Remove `diff-added-bg`, `diff-added-fg`, `diff-removed-bg`, `diff-removed-fg`, `diff-context-fg`, `diff-line-num` tokens once migration is validated |
 | `package.json` (webview) | Add `react-diff-view`, `refractor`; remove `diff` if no other consumers |
 
 ---
@@ -164,9 +220,9 @@ The existing Tailwind `diff-*` color tokens in `tailwind.config.js` can be remov
 
 4. **Implement collapsible hunks** — Add a `useState` for the current expanded hunk array. Render `<Decoration>` gap rows between hunks. Wire `expandFromRawCode` + `insertHunk` to expand on click (enabled only when `oldContent` is available).
 
-5. **CSS theming** — Add the CSS variable block to `index.css`. Visually verify against Dark+, Light+, and a high-contrast theme.
+5. **CSS theming** — Add the `@import` and `.diff` theme block to `styles/globals.css` as specified in the Theming section. Visually verify against Dark+, Light+, and a high-contrast theme.
 
-6. **Clean up dead code** — Remove `buildSideBySideRows`, `parseUnifiedDiff`, `generateDiffLines` from `diffUtils.ts`; remove `hljsUtils.ts`; update `outputUtils.ts` re-exports.
+6. **Clean up dead code** — Remove `buildSideBySideRows`, `parseUnifiedDiff`, `generateDiffLines` from `diffUtils.ts`; remove `highlightLines` and `splitHighlightedHtml` from `hljsUtils.ts` (do **not** remove the file — `MarkdownText`, `FileOperationOutput`, `UndoChangesDialog` still need it); update `outputUtils.ts` re-exports.
 
 7. **Verify no TypeScript errors** — `npm run compile` from repo root; `npm run build:webview` for the Vite bundle.
 
@@ -176,9 +232,10 @@ The existing Tailwind `diff-*` color tokens in `tailwind.config.js` can be remov
 
 ## What We Lose
 
-- The custom async HLJS highlighting pipeline (replaced by refractor — functionally equivalent, Prism-based themes)
+- The async HLJS pipeline in `DiffView` (`highlightLines`, `splitHighlightedHtml`) — replaced by refractor + `tokenize()`. HLJS itself stays for `MarkdownText`.
 - The manual side-by-side table implementation in `SideBySideDiffTable` / `SideBySideDiffCell` (~80 lines)
-- The `diff` library dependency if `DiffView` is its only consumer (check other uses first)
+- The `+`/`-` prefix character in code lines — react-diff-view uses GitHub-style colored backgrounds without the prefix notation (improvement, not regression)
+- The `diff` library dependency if `DiffView` is its only consumer — verify with `grep -r "from.*diff" src/ui/webview-react` before removing
 
 ## What We Gain
 

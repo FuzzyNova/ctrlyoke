@@ -24,6 +24,9 @@
 /* Streamdown: animation keyframes (sd-fadeIn, sd-blurIn, sd-slideUp) */
 @import "streamdown/styles.css";
 
+/* react-diff-view: base diff table styles and CSS variable defaults */
+@import "react-diff-view/style/index.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -489,4 +492,49 @@ button .codicon {
     -webkit-mask-position: center bottom;
     mask-position: center bottom;
   }
+}
+
+/* ============================================================================
+   react-diff-view Theme
+   ============================================================================
+   Maps react-diff-view's CSS variables to VS Code theme tokens.
+   Scoped to .diff (the root class the Diff component applies).
+   ============================================================================ */
+.diff {
+  /* Base */
+  --diff-background-color: var(--vscode-editor-background);
+  --diff-text-color: var(--vscode-editor-foreground);
+  --diff-font-family: var(--vscode-editor-font-family, 'Consolas, Courier New, monospace');
+  --diff-selection-background-color: var(--vscode-editor-selectionBackground, rgba(39, 103, 130, 0.87));
+
+  /* Insert (added) lines — full-line tint */
+  --diff-gutter-insert-background-color: var(--vscode-diffEditor-insertedLineBackground, rgba(52, 125, 57, 0.15));
+  --diff-code-insert-background-color: var(--vscode-diffEditor-insertedLineBackground, rgba(52, 125, 57, 0.15));
+  /* Insert — inline word-level highlight (markEdits enhancer) */
+  --diff-code-insert-edit-background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(87, 171, 90, 0.3));
+
+  /* Delete (removed) lines — full-line tint */
+  --diff-gutter-delete-background-color: var(--vscode-diffEditor-removedLineBackground, rgba(201, 60, 55, 0.15));
+  --diff-code-delete-background-color: var(--vscode-diffEditor-removedLineBackground, rgba(201, 60, 55, 0.15));
+  /* Delete — inline word-level highlight */
+  --diff-code-delete-edit-background-color: var(--vscode-diffEditor-removedTextBackground, rgba(244, 112, 103, 0.3));
+
+  /* Omit row divider (collapsed context gap indicator) */
+  --diff-omit-gutter-line-color: var(--vscode-diffEditor-unchangedRegionForeground, #bfbfbf);
+
+  /* Font size — react-diff-view has no variable for this; set it on the container */
+  font-size: var(--fp-output-font-size-sm);
+}
+
+/* Gutter column (line numbers) — smaller and muted */
+.diff .diff-gutter {
+  font-size: var(--fp-output-font-size-xs);
+  color: var(--vscode-editorLineNumber-foreground, #858889);
+}
+
+/* Collapsed context stub row ("N hidden lines" decoration) */
+.diff-omit,
+.diff .diff-omit {
+  background-color: var(--vscode-diffEditor-unchangedRegionBackground, var(--vscode-editor-background));
+  color: var(--vscode-diffEditor-unchangedRegionForeground, #bfbfbf);
 }

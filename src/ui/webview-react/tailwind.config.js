@@ -153,15 +153,10 @@ module.exports = {
         "output-command-border": "rgb(255, 200, 100)",
         "output-streaming": "#4ec9b0",
 
-        // ── Diff colors (VS Code theme vars with fallbacks) ──
-        "diff-added-bg":
-          "var(--vscode-diffEditor-insertedTextBackground, rgba(155, 185, 85, 0.2))",
+        // ── Diff colors ──
+        // diff-added-fg: used by UndoChangesDialog.tsx for "created" file status text.
+        // The remaining diff-* tokens were only used by the old DiffView and are removed.
         "diff-added-fg": "var(--vscode-terminal-ansiGreen, #89d185)",
-        "diff-removed-bg":
-          "var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.2))",
-        "diff-removed-fg": "var(--vscode-terminal-ansiRed, #f14c4c)",
-        "diff-context-fg": "var(--vscode-editor-foreground, #cccccc)",
-        "diff-line-num": "var(--vscode-editorLineNumber-foreground, #858585)",
 
         // ── Markdown enrichment colors (VS Code symbol icon palette) ──
         // Used by MarkdownText.tsx for bold, italic, headings, and tables.

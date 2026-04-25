@@ -1,31 +1,21 @@
 /**
  * Diff computation utilities.
  *
- * Converts structured patch hunks or raw old/new content into DiffLine arrays
- * for rendering in DiffView. The diff library (js-diff) is only imported here,
- * keeping it out of the main outputUtils bundle.
+ * Structured-patch normalisation and line-counting shared by DiffView (via
+ * rdvAdapter) and other consumers (OutputSection, markdownExport, CliOutput).
+ * Raw old/new → DiffLine generation stays here for OutputSection and markdown export.
  */
 import * as Diff from "diff";
 import type { UnifiedDiffHunk } from "../types/cliEvents";
 
 /**
- * A single line in a rendered diff.
+ * A single line in a rendered diff — used by OutputSection and markdownExport.
  */
 export interface DiffLine {
   type: "added" | "removed" | "context";
   oldLineNum?: number;
   newLineNum?: number;
   content: string;
-}
-
-/**
- * A paired row for side-by-side diff rendering.
- * Each side carries the original flat-array index so HLJS highlighted
- * lines (indexed by that same flat array) can be looked up correctly.
- */
-export interface SideBySideRow {
-  left: { line: DiffLine; originalIndex: number } | null;
-  right: { line: DiffLine; originalIndex: number } | null;
 }
 
 function getStructuredPatchSignature(hunk: UnifiedDiffHunk): string {
@@ -115,86 +105,6 @@ export function countStructuredPatchDisplayLines(
       ),
     0
   );
-}
-
-/**
- * Convert a flat DiffLine array into SideBySideRow pairs.
- *
- * Within each changed block (consecutive removed/added lines) the removed
- * lines are zipped with the added lines in order; the shorter side is padded
- * with `null`. Context lines produce a symmetric row (both sides point to the
- * same DiffLine).
- */
-export function buildSideBySideRows(lines: DiffLine[]): SideBySideRow[] {
-  const rows: SideBySideRow[] = [];
-  const pendingRemoved: Array<{ line: DiffLine; originalIndex: number }> = [];
-  const pendingAdded: Array<{ line: DiffLine; originalIndex: number }> = [];
-
-  const flush = () => {
-    const len = Math.max(pendingRemoved.length, pendingAdded.length);
-    for (let i = 0; i < len; i++) {
-      rows.push({
-        left: pendingRemoved[i] ?? null,
-        right: pendingAdded[i] ?? null,
-      });
-    }
-    pendingRemoved.length = 0;
-    pendingAdded.length = 0;
-  };
-
-  lines.forEach((line, index) => {
-    if (line.type === "removed") {
-      // If we were collecting added lines before this removed line, close the
-      // current change block first (handles uncommon interleaved ordering).
-      if (pendingAdded.length > 0) flush();
-      pendingRemoved.push({ line, originalIndex: index });
-    } else if (line.type === "added") {
-      pendingAdded.push({ line, originalIndex: index });
-    } else {
-      // context — close any open change block then emit symmetric row
-      flush();
-      rows.push({
-        left: { line, originalIndex: index },
-        right: { line, originalIndex: index },
-      });
-    }
-  });
-  flush();
-
-  return rows;
-}
-
-/**
- * Parse unified diff hunks (e.g. from Claude's structured patch) into DiffLine array.
- */
-export function parseUnifiedDiff(hunks: UnifiedDiffHunk[]): DiffLine[] {
-  const lines: DiffLine[] = [];
-
-  normalizeStructuredPatch(hunks).forEach((hunk) => {
-    let oldLineNum = hunk.oldStart;
-    let newLineNum = hunk.newStart;
-
-    hunk.lines.forEach((line) => {
-      if (!isDisplayableDiffLine(line)) return;
-
-      const prefix = line[0];
-      const content = line.slice(1);
-
-      if (prefix === "+") {
-        lines.push({ type: "added", newLineNum, content });
-        newLineNum++;
-      } else if (prefix === "-") {
-        lines.push({ type: "removed", oldLineNum, content });
-        oldLineNum++;
-      } else if (prefix === " ") {
-        lines.push({ type: "context", oldLineNum, newLineNum, content });
-        oldLineNum++;
-        newLineNum++;
-      }
-    });
-  });
-
-  return lines;
 }
 
 /**
