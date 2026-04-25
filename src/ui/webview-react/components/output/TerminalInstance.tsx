@@ -85,11 +85,16 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const lines = Math.trunc(touchScrollAccum);
       if (lines !== 0) {
         touchScrollAccum -= lines;
-        // Synthesize a WheelEvent so xterm handles both scrollback scrolling and
-        // mouse-reporting escape sequences for TUIs (copilot-cli, opencode) that
-        // capture scroll internally but produce no xterm scrollback buffer. This
-        // mirrors what a real mouse wheel does on desktop, where xterm forwards
-        // the event to the PTY as escape sequences when mouse-reporting is active.
+        // scrollLines handles normal scrollback (shells, harnesses without alternate
+        // screen). Synthetic WheelEvents are untrusted so the browser ignores them
+        // for viewport scrolling — scrollLines is the only reliable path here.
+        // It is safe to call in all modes: on the alternate buffer it is a no-op
+        // (no scrollback exists) so it doesn't interfere with TUI output.
+        currentEntry.term.scrollLines(lines);
+        // Also synthesize a WheelEvent so xterm forwards scroll as mouse-reporting
+        // escape sequences for TUI programs (copilot-cli, opencode, etc.) that
+        // capture wheel input when mouse-reporting is active. This has no effect
+        // when mouse-reporting is off, so it is safe to always dispatch.
         const wheelTarget =
           currentEntry.term.element?.querySelector<Element>(
             ".xterm-viewport"
@@ -106,8 +111,6 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
               clientY: rect.top + rect.height / 2,
             })
           );
-        } else {
-          currentEntry.term.scrollLines(lines);
         }
       }
       e.preventDefault();

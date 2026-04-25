@@ -224,6 +224,9 @@ export class WebviewMessageRouter {
 
       // Panel-only extras:
       if (this.clientId === PANEL_CLIENT_ID) {
+        // Panel has reconnected — cancel any pending RECONNECT retries immediately
+        // so stale retries don't arrive after the handshake is already complete.
+        this.callbacks.onPanelReady?.();
         if (orchestrator) {
           // Register the callback before setDashboardReady so it's in place
           // whether the auto-load runs immediately (orchestrator already init'd)
@@ -2160,6 +2163,12 @@ export interface WebviewRouterCallbacks {
   getServerUrl?: () => string | undefined;
   /** Returns all available LAN IPs (populated when binding to 0.0.0.0). */
   getAvailableIps?: () => string[];
+  /**
+   * Called synchronously when the VS Code panel sends READY.
+   * Used by FlightPathWebviewProvider to cancel pending RECONNECT retries
+   * so no stale retries fire after the handshake is already complete.
+   */
+  onPanelReady?: () => void;
 }
 
 export interface WebviewRouteOptions {

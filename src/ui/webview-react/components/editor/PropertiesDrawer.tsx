@@ -378,8 +378,12 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       {/* Header */}
       <div className="drawer-header shrink-0 flex items-center justify-between px-4 py-0 border-b border-panel-border bg-sidebar-drop-bg z-10">
         <div className="flex items-center gap-2">
-          <h3 className="text-xs font-semibold text-foreground uppercase">
-            Prompt Properties
+          <h3 className="flex items-center gap-1 text-xs font-semibold uppercase leading-none text-foreground">
+            <i
+              className="codicon codicon-settings text-xs leading-none"
+              aria-hidden="true"
+            />
+            <span>Prompt Properties</span>
           </h3>
           <button
             type="button"

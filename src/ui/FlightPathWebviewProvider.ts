@@ -50,6 +50,7 @@ import type { IDashboardSink } from "../types/IDashboardSink";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import { DashboardBroadcastHub } from "./DashboardBroadcastHub";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
+import { retryWithBackoff } from "../utils/RetryUtils";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -71,6 +72,11 @@ export class FlightPathWebviewProvider
   private view?: vscode.WebviewView;
   private _pendingActiveWorkflowId: string | undefined;
   private workflowOrchestrator?: WorkflowOrchestrator;
+  // Incremented each time a new RECONNECT retry loop starts (resolveWebviewView)
+  // or is cancelled (panel sends READY / dispose). Each retryWithBackoff closure
+  // captures the session value at launch; a stale closure exits immediately when
+  // the captured value no longer matches the field.
+  private reconnectRetrySession = 0;
   private outputHistoryManager?: OutputHistoryManager;
   private hub?: DashboardBroadcastHub;
   private modelsLoadedDisposable?: vscode.Disposable;
@@ -134,6 +140,7 @@ export class FlightPathWebviewProvider
           this.sendDevStatus(scopedPostMessage),
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
+        onPanelReady: () => this.cancelReconnectRetry(),
       }
     );
 
@@ -192,7 +199,32 @@ export class FlightPathWebviewProvider
     // iframe (common on extension host restart), React will never re-send
     // READY on its own. This RECONNECT nudges the retained React to re-send
     // READY so the new extension host can complete initialization.
-    this.postMessage({ type: MESSAGE_TYPES.RECONNECT });
+    //
+    // The first RECONNECT can be silently dropped when the webview message
+    // channel is still being re-established after the restart (the inbound
+    // path — webview → extension — becomes ready slightly after resolveWebviewView
+    // is called). retryWithBackoff gives the channel time to fully come up.
+    // Each retry closure captures `session`; incrementing reconnectRetrySession
+    // in cancelReconnectRetry() causes all in-flight closures to self-terminate.
+    const session = ++this.reconnectRetrySession;
+    void retryWithBackoff(
+      async () => {
+        if (this.reconnectRetrySession !== session) return true; // cancelled
+        this.postMessage({ type: MESSAGE_TYPES.RECONNECT });
+        return null; // keep retrying
+      },
+      {
+        maxAttempts: 6,
+        delays: [250, 500, 1000, 2000, 4000], // delays between retries (attempt 0 is always immediate)
+        onRetry: (attempt) => {
+          if (attempt > 1) {
+            Log.debug(
+              `[resolveWebviewView] panel hasn't reconnected — retrying RECONNECT (attempt ${attempt - 1}/5)`
+            );
+          }
+        },
+      }
+    );
 
     // Best-effort early INIT: VS Code buffers postMessage until the
     // webview iframe loads, but React's message listener may not be
@@ -985,6 +1017,16 @@ window.vscodeApi = acquireVsCodeApi();
   public dispose(): void {
     this.modelsLoadedDisposable?.dispose();
     this.configServiceUnsubscribe?.();
+    this.cancelReconnectRetry();
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // RECONNECT retry helpers
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /** Cancels any in-flight RECONNECT retry loop by invalidating its session id. */
+  private cancelReconnectRetry(): void {
+    this.reconnectRetrySession++;
   }
 
   // ============================================================================
