@@ -78,6 +78,10 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     const DECEL_PER_MS = 0.9987;
     const VEL_STOP_PX_PER_MS = 0.005;
     const MAX_VELOCITY_PX_PER_MS = 5;
+    // Dead zones: both must pass for a gesture to trigger inertia.
+    // Filters lift-off wobble (finger not releasing straight) and slow drags.
+    const MIN_GESTURE_VELOCITY_PX_PER_MS = 0.1; // ~100 px/s
+    const MIN_GESTURE_DISTANCE_PX = 3;
     // Scales touch pixels to lines — higher = faster scroll per unit of drag.
     const TOUCH_SPEED_MULTIPLIER = 1.5;
 
@@ -201,16 +205,27 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         // one assumed frame if only a single sample is available.
         const timeSpan =
           recent.length > 1 ? recent[recent.length - 1].t - recent[0].t : 16;
-        gestureVelocity = totalDp / Math.max(timeSpan, 1);
+        const rawVelocity = totalDp / Math.max(timeSpan, 1);
+        // Dead-zone check: require both enough speed and enough net displacement
+        // so lift-off wobble (finger not releasing straight) is ignored.
+        if (
+          Math.abs(rawVelocity) >= MIN_GESTURE_VELOCITY_PX_PER_MS &&
+          Math.abs(totalDp) >= MIN_GESTURE_DISTANCE_PX
+        ) {
+          gestureVelocity = rawVelocity;
+        }
       }
 
-      // Add pre-touch coasting velocity so repeated fast flicks build up speed.
+      // Only accumulate pre-touch coasting when the gesture itself qualifies —
+      // a catch gesture (finger down then up with no real movement) should stop
+      // the scroll rather than silently resume it.
+      const combined =
+        gestureVelocity !== 0
+          ? gestureVelocity + preTouchInertiaVelocity
+          : 0;
       inertiaVelocity = Math.max(
         -MAX_VELOCITY_PX_PER_MS,
-        Math.min(
-          MAX_VELOCITY_PX_PER_MS,
-          gestureVelocity + preTouchInertiaVelocity
-        )
+        Math.min(MAX_VELOCITY_PX_PER_MS, combined)
       );
       velSamples = [];
 
