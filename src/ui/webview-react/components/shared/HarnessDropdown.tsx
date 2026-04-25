@@ -61,9 +61,21 @@ const StatusIndicator: React.FC<{
     HarnessStatusString,
     { color: string; text: string; animate: boolean }
   > = {
-    checking: { color: "bg-yellow-400", text: "Checking...", animate: true },
-    available: { color: "bg-green-500", text: "Available", animate: false },
-    unavailable: { color: "bg-red-400", text: "Not Available", animate: false },
+    checking: {
+      color: "bg-indicator-running",
+      text: "Checking...",
+      animate: true,
+    },
+    available: {
+      color: "bg-indicator-success",
+      text: "Available",
+      animate: false,
+    },
+    unavailable: {
+      color: "bg-indicator-error",
+      text: "Not Available",
+      animate: false,
+    },
   };
   const { color, text, animate } = config[status] ?? config.checking;
   return (

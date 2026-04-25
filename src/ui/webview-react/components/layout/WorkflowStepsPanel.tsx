@@ -63,11 +63,11 @@ function getStepText(step: WorkflowStep): string {
 function getCompletedStepAccentClass(status: StepStatus): string {
   switch (status) {
     case STEP_STATUS.CANCELLED:
-      return "bg-bash-status-running";
+      return "bg-indicator-running";
     case STEP_STATUS.FAILED:
-      return "bg-bash-status-error";
+      return "bg-indicator-error";
     default:
-      return "bg-bash-status-success";
+      return "bg-indicator-success";
   }
 }
 

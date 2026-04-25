@@ -160,9 +160,9 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
         >
           <span>End condition:</span>
           {details.endConditionResult.passed ? (
-            <i className="codicon codicon-pass text-bash-status-success" />
+            <i className="codicon codicon-pass text-indicator-success" />
           ) : (
-            <i className="codicon codicon-error text-bash-status-error" />
+            <i className="codicon codicon-error text-indicator-error" />
           )}
           {details.endConditionResult.message && (
             <span className="truncate">

@@ -59,13 +59,13 @@ function getChipBorderClass(status: StepStatus): string {
     case STEP_STATUS.RUNNING:
       return "bg-status-idle animate-pulse-custom";
     case STEP_STATUS.FAILED:
-      return "bg-bash-status-error";
+      return "bg-indicator-error";
     case STEP_STATUS.CANCELLED:
-      return "bg-bash-status-running";
+      return "bg-indicator-running";
     case STEP_STATUS.PENDING:
       return "bg-transparent";
     default:
-      return "bg-bash-status-success";
+      return "bg-indicator-success";
   }
 }
 

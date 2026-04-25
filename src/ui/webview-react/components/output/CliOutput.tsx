@@ -157,7 +157,7 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
 
   return (
     <div
-      className={`${result.success ? TOOL_RESULT_LINE : "text-bash-status-error pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)]"} flex items-start gap-1 ${className}`}
+      className={`${result.success ? TOOL_RESULT_LINE : "text-indicator-error pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)]"} flex items-start gap-1 ${className}`}
     >
       <span className="shrink-0">⎿</span>
       <span className="whitespace-pre-wrap break-words min-w-0">
@@ -1097,8 +1097,8 @@ export const CliOutput = memo<CliOutputProps>(
             <div
               className={`mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)] flex items-center gap-1 ${
                 output.exitCode === 0
-                  ? "text-bash-status-success"
-                  : "text-bash-status-error"
+                  ? "text-indicator-success"
+                  : "text-indicator-error"
               }`}
             >
               <i

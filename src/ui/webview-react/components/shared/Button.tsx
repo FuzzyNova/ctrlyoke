@@ -22,7 +22,7 @@ export const Button: React.FC<ButtonProps> = ({
       "bg-btn-bg text-btn-fg hover:bg-btn-hover border border-btn-border",
     secondary:
       "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover",
-    danger: "bg-bash-status-error text-btn-fg hover:opacity-90",
+    danger: "bg-indicator-error text-btn-fg hover:opacity-90",
   };
 
   const sizeClasses = {

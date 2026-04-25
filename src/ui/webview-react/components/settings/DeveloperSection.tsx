@@ -146,7 +146,9 @@ export function DeveloperSection() {
         {devBuild.lastResult && (
           <div
             className={`text-xs ${
-              devBuild.lastResult.success ? "text-bash-status-success" : "text-error-fg"
+              devBuild.lastResult.success
+                ? "text-indicator-success"
+                : "text-error-fg"
             }`}
           >
             {devBuild.lastResult.success

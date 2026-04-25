@@ -216,7 +216,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
       >
         {/* Terminal canvas */}
         <Panel id="terminal-canvas">
-          <div className="h-full flex flex-col bg-[var(--vscode-terminal-background,var(--vscode-editor-background))]">
+          <div className="h-full flex flex-col bg-terminal-bg">
             <div className="flex-1 min-h-0 relative">
               {sessions.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-description-fg text-xs select-none">
@@ -497,12 +497,12 @@ const ShellIcon: React.FC<{
   // Fallback for legacy sessions without shellKind
   if (isRunning) {
     return (
-      <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
+      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse flex-shrink-0" />
     );
   }
   if (status === TERMINAL_SESSION_STATUS.FAILED) {
     return (
-      <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-error flex-shrink-0" />
     );
   }
   return (

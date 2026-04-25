@@ -1037,7 +1037,7 @@ export const OutputSection: React.FC = () => {
                 <i className="codicon codicon-terminal text-sm" />
                 {!isHeaderNarrow && <span>Terminal</span>}
                 {terminalSessionActive && (
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse" />
                 )}
               </button>
             </div>
@@ -1378,7 +1378,7 @@ export const OutputSection: React.FC = () => {
                     className="text-link-fg hover:underline focus:outline-none"
                   >
                     Back to Live{" "}
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse align-middle" />
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse align-middle" />
                   </button>
                 )}
               </div>

@@ -90,7 +90,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       {/* Status icon */}
       {isRunning ? (
         <span className="flex-shrink-0 w-4 flex items-center justify-center">
-          <span className="inline-block w-2 h-2 rounded-full bg-bash-status-success animate-pulse" />
+          <span className="inline-block w-2 h-2 rounded-full bg-indicator-success animate-pulse" />
         </span>
       ) : (
         <span className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg">
@@ -138,7 +138,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
 
       {/* Action buttons — CLI pill for CLI-managed workflows, pause/stop for VS Code-managed */}
       {workflow.managedBy === RUNNER_IDS.CLI ? (
-        <span className="px-1.5 py-0.5 rounded text-xxs font-semibold bg-blue-600 text-white flex-shrink-0">
+        <span className="px-1.5 py-0.5 rounded text-xxs font-semibold bg-btn-bg text-btn-fg border border-btn-border flex-shrink-0">
           CLI
         </span>
       ) : (

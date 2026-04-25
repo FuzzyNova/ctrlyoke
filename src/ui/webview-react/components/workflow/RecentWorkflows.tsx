@@ -171,8 +171,8 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                     }}
                     className={`flex-shrink-0 p-0.5 rounded transition-colors ${
                       workflow.isFavorite
-                        ? "text-yellow-400 hover:text-yellow-300 hover:bg-toolbar-hover-bg"
-                        : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-yellow-400 hover:bg-toolbar-hover-bg"
+                        ? "text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
+                        : "opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-favorite hover:opacity-80 hover:bg-toolbar-hover-bg"
                     }`}
                   >
                     <i

@@ -505,7 +505,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               {/* CLI Managed badge */}
               {isCLIManaged && (
                 <span
-                  className="text-xs px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 bg-blue-800/50 text-blue-300 border border-blue-600/40"
+                  className="text-xs px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 bg-btn-bg text-btn-fg border border-btn-border"
                   title="Workflow is being managed by the FlightPath CLI"
                 >
                   CLI
@@ -562,7 +562,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 w.id !== activeWorkflowId
             ) && (
               <span
-                className="inline-block w-2 h-2 rounded-full bg-bash-status-success animate-pulse"
+                className="inline-block w-2 h-2 rounded-full bg-indicator-success animate-pulse"
                 title="Another workflow is running"
               />
             )}

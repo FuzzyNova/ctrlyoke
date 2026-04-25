@@ -21,8 +21,8 @@ type DotStatus = "pending" | "success" | "error";
 
 const DOT_COLORS: Record<DotStatus, string> = {
   pending: "text-editor-fg",
-  success: "text-bash-status-success",
-  error: "text-bash-status-error",
+  success: "text-indicator-success",
+  error: "text-indicator-error",
 };
 
 /** Coloured ● bullet that reflects the operation status */
@@ -140,7 +140,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
           <span>{getActionLabel()}</span>
           <FilePath path={path} />
           {error && status === OPERATION_STATUS.FAILED && (
-            <span className="text-bash-status-error">— {error}</span>
+            <span className="text-indicator-error">— {error}</span>
           )}
         </div>
         {hasDiffData ? (
@@ -202,7 +202,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
         <span>{getActionLabel()}</span>
         <FilePath path={path} />
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-bash-status-error">— {error}</span>
+          <span className="text-indicator-error">— {error}</span>
         )}
         {onUndoFile && status !== OPERATION_STATUS.INITIATED && (
           <button
@@ -255,7 +255,7 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
         <span>{getActionLabel()}</span>
         <FilePath path={path} />
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-bash-status-error">— {error}</span>
+          <span className="text-indicator-error">— {error}</span>
         )}
       </div>
     </div>
@@ -294,7 +294,7 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
         <span>Delete file:</span>
         <FilePath path={path} />
         {error && success === false && (
-          <span className="text-bash-status-error">— {error}</span>
+          <span className="text-indicator-error">— {error}</span>
         )}
         {onUndoFile && success !== false && (
           <button

@@ -114,7 +114,7 @@ const CHANGE_TYPE_LABEL: Record<PromptChangeType, string> = {
 const CHANGE_TYPE_COLORS: Record<PromptChangeType, string> = {
   created: "text-diff-added-fg",
   modified: "text-warning-fg",
-  deleted: "text-bash-status-error",
+  deleted: "text-indicator-error",
 };
 
 // ============================================================================
@@ -136,7 +136,7 @@ function redoActionBadgeLabel(action: UndoFileInstruction["action"]): string {
 function redoActionBadgeColor(action: UndoFileInstruction["action"]): string {
   switch (action) {
     case "delete":
-      return "text-bash-status-error";
+      return "text-indicator-error";
     default:
       return "text-warning-fg";
   }

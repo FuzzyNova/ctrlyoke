@@ -1451,7 +1451,7 @@ export const McpServersEditor: React.FC<{
                                     </span>
                                     {entry.verified && (
                                       <i
-                                        className="codicon codicon-verified-filled text-xxs text-blue-400 flex-shrink-0"
+                                        className="codicon codicon-verified-filled text-xxs text-verified flex-shrink-0"
                                         title="MCP Registry verified"
                                       />
                                     )}

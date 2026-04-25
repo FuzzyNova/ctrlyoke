@@ -54,13 +54,13 @@ export function getStatusIconClassName(status: StepStatus): string {
  * Maps to CSS classes or Tailwind utilities
  */
 export const STATUS_COLORS: Record<StepStatus, string> = {
-  [STEP_STATUS.PENDING]: "text-gray-400",
-  [STEP_STATUS.SENT]: "text-blue-400",
-  [STEP_STATUS.RUNNING]: "text-yellow-400",
-  [STEP_STATUS.COMPLETED]: "text-green-500",
-  [STEP_STATUS.FAILED]: "text-red-500",
-  [STEP_STATUS.CANCELLED]: "text-gray-500",
-  [STEP_STATUS.SKIPPED]: "text-gray-400",
+  [STEP_STATUS.PENDING]: "text-description-fg",
+  [STEP_STATUS.SENT]: "text-charts-blue",
+  [STEP_STATUS.RUNNING]: "text-charts-blue",
+  [STEP_STATUS.COMPLETED]: "text-indicator-success",
+  [STEP_STATUS.FAILED]: "text-indicator-error",
+  [STEP_STATUS.CANCELLED]: "text-description-fg",
+  [STEP_STATUS.SKIPPED]: "text-description-fg",
 };
 
 /**
@@ -119,13 +119,13 @@ export function getExecutionStateIconClass(state: ExecutionState): string {
  * Execution state colors
  */
 export const EXECUTION_STATE_COLORS: Record<ExecutionState, string> = {
-  [EXECUTION_STATES.IDLE]: "text-gray-400",
-  [EXECUTION_STATES.RUNNING]: "text-blue-500",
-  [EXECUTION_STATES.PAUSED]: "text-yellow-500",
-  [EXECUTION_STATES.STOPPED]: "text-orange-500",
-  [EXECUTION_STATES.CANCELLING]: "text-orange-400",
-  [EXECUTION_STATES.COMPLETED]: "text-green-500",
-  [EXECUTION_STATES.ERROR]: "text-red-500",
+  [EXECUTION_STATES.IDLE]: "text-description-fg",
+  [EXECUTION_STATES.RUNNING]: "text-charts-blue",
+  [EXECUTION_STATES.PAUSED]: "text-indicator-running",
+  [EXECUTION_STATES.STOPPED]: "text-warning-fg",
+  [EXECUTION_STATES.CANCELLING]: "text-warning-fg",
+  [EXECUTION_STATES.COMPLETED]: "text-indicator-success",
+  [EXECUTION_STATES.ERROR]: "text-indicator-error",
 };
 
 /**

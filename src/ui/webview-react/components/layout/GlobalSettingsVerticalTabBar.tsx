@@ -39,7 +39,7 @@ export function GlobalSettingsVerticalTabBar({
           <span className="relative shrink-0">
             <span className={`codicon ${tab.icon} text-base`} />
             {tab.indicator && (
-              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-green-500" />
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-indicator-success" />
             )}
           </span>
           {!iconOnly && <span>{tab.label}</span>}

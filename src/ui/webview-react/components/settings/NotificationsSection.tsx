@@ -108,7 +108,7 @@ export function NotificationsSection({ settings, activeScope, onUpdate, onReset 
       case "granted":
         return {
           text: "Allowed",
-          className: "text-bash-status-success",
+          className: "text-indicator-success",
         };
       default:
         return {
@@ -199,7 +199,7 @@ export function NotificationsSection({ settings, activeScope, onUpdate, onReset 
                       Push subscription:
                     </span>
                     <span
-                      className={`text-xs ${status?.subscribed ? "text-bash-status-success" : "text-warning-fg"}`}
+                      className={`text-xs ${status?.subscribed ? "text-indicator-success" : "text-warning-fg"}`}
                     >
                       {status?.subscribed ? "Subscribed" : "Not subscribed"}
                     </span>

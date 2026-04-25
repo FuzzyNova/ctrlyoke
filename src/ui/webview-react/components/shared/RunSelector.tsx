@@ -122,7 +122,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
           focus-visible:ring-focus-border"
       >
         {isLiveRunActive && !isViewingHistory && (
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse mr-0.5" />
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse mr-0.5" />
         )}
         <span>
           {narrow ? "Runs" : `Run ${currentRunNumber} of ${availableRuns}`}
@@ -200,7 +200,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
                 {/* Run number with optional live dot inline */}
                 <span className="flex items-center gap-1 flex-shrink-0">
                   {isLiveRun && (
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse" />
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse" />
                   )}
                   <span className="font-mono">{runNumber}</span>
                 </span>

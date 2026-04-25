@@ -9,9 +9,9 @@ import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
 
 const STATUS_BADGE_STYLES: Record<string, string> = {
-  success: "text-bash-status-success",
-  error: "text-bash-status-error",
-  running: "text-bash-status-running",
+  success: "text-indicator-success",
+  error: "text-indicator-error",
+  running: "text-indicator-running",
 };
 
 interface BashOutputProps {
@@ -132,10 +132,10 @@ export const BashOutput = memo<BashOutputProps>(
     const dotColorClass =
       exitCode !== undefined
         ? exitCode === 0
-          ? "text-bash-status-success"
-          : "text-bash-status-error"
+          ? "text-indicator-success"
+          : "text-indicator-error"
         : isRunning
-          ? "text-bash-status-running"
+          ? "text-indicator-running"
           : "text-editor-fg";
 
     return (
@@ -143,7 +143,7 @@ export const BashOutput = memo<BashOutputProps>(
         <div className={TOOL_CALL_LINE}>
           <span className="min-w-0 break-words">
             <span className={dotColorClass}>●</span>{" "}
-            <span className="text-vscode-fg">{command}</span>
+            <span className="text-editor-fg">{command}</span>
             {renderStatusBadge()}
           </span>
         </div>

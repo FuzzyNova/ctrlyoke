@@ -2,6 +2,10 @@ const path = require("path");
 
 // Get directory of this config file
 const srcDir = __dirname;
+const chartsBlue = "var(--vscode-charts-blue, #4084d6)";
+const chartsGreen = "var(--vscode-charts-green, #89d185)";
+const chartsRed = "var(--vscode-charts-red, #c24038)";
+const chartsYellow = "var(--vscode-charts-yellow, #d19a66)";
 
 module.exports = {
   content: [
@@ -27,6 +31,8 @@ module.exports = {
         "panel-border": "var(--vscode-panel-border)",
         "sidebar-bg": "var(--vscode-sideBar-background)",
         "sidebar-drop-bg": "var(--vscode-sideBar-dropBackground)",
+        "terminal-bg":
+          "var(--vscode-terminal-background, var(--vscode-editor-background))",
         "focus-border": "var(--vscode-focusBorder)",
         "focus-highlight":
           "var(--vscode-list-focusHighlightForeground, #2aaaff)",
@@ -89,6 +95,8 @@ module.exports = {
         "link-fg": "var(--vscode-textLink-foreground)",
         "link-active-fg": "var(--vscode-textLink-activeForeground)",
         "disabled-fg": "var(--vscode-disabledForeground)",
+        "charts-blue": chartsBlue,
+        verified: chartsBlue,
 
         // Badges
         "badge-bg": "var(--vscode-badge-background)",
@@ -167,12 +175,16 @@ module.exports = {
         // ── Inline code color ──
         // Warm VS Code string tint for backtick inline code (no language class).
         "code-inline-fg": "var(--vscode-debugTokenExpression-string, #ce9178)",
+        "code-block": "var(--vscode-textCodeBlock-background)",
 
-        // ── Bash output colors ──
+        // ── Semantic accent colors ──
         "bash-expand-link": "#569cd6",
-        "bash-status-success": "var(--vscode-charts-green, #89d185)",
-        "bash-status-error": "var(--vscode-charts-red, #c24038)",
-        "bash-status-running": "var(--vscode-charts-yellow, #d19a66)",
+        favorite: "#e5c014",
+        "scope-workspace": "#d97706",
+        "scope-user": "#3b82f6",
+        "indicator-success": chartsGreen,
+        "indicator-error": chartsRed,
+        "indicator-running": chartsYellow,
 
         // ── Terminal ANSI colors ──
         "terminal-ansiGreen": "var(--vscode-terminal-ansiGreen, #89d185)",

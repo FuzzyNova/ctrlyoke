@@ -237,7 +237,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
       {/* Diff lines — only mounted when expanded */}
       {isExpanded && diffLines.length > 0 && (
-        <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border border-vscode-border bg-vscode-bg">
+        <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border bg-editor-bg">
           {isWide
             ? /* ── Side-by-side view ── */
               (

@@ -35,22 +35,22 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
       case STEP_STATUS.SENT:
         return {
           icon: "codicon-arrow-up",
-          colorClass: "text-[var(--vscode-charts-blue)]",
+          colorClass: "text-charts-blue",
         };
       case STEP_STATUS.RUNNING:
         return {
           icon: "codicon-play",
-          colorClass: "text-[var(--vscode-charts-blue)]",
+          colorClass: "text-charts-blue",
         };
       case STEP_STATUS.COMPLETED:
         return {
           icon: "codicon-pass",
-          colorClass: "text-bash-status-success",
+          colorClass: "text-indicator-success",
         };
       case STEP_STATUS.FAILED:
         return {
           icon: "codicon-error",
-          colorClass: "text-bash-status-error",
+          colorClass: "text-indicator-error",
         };
       case STEP_STATUS.CANCELLED:
         return {

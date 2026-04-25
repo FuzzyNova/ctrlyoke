@@ -12,8 +12,8 @@ export function SettingSourceBadge({ source }: Props) {
     <span
       className={`inline-flex items-center px-1 py-0 text-xxs font-mono rounded border leading-[14px] ${
         isWorkspace
-          ? "text-amber-400 border-amber-400/50 bg-amber-400/10"
-          : "text-blue-400 border-blue-400/50 bg-blue-400/10"
+          ? "text-scope-workspace border-scope-workspace/50 bg-scope-workspace/10"
+          : "text-scope-user border-scope-user/50 bg-scope-user/10"
       }`}
       title={isWorkspace ? "Set in workspace config" : "Set in user config"}
     >

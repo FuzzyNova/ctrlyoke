@@ -118,7 +118,7 @@ export function ServerSection({ settings, activeScope, onUpdate, onReset }: Prop
             )}
             <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded">
               <span
-                className="w-2 h-2 rounded-full bg-green-500 shrink-0"
+                className="w-2 h-2 rounded-full bg-indicator-success shrink-0"
                 title="Server running"
               />
               <a
@@ -161,7 +161,7 @@ export function ServerSection({ settings, activeScope, onUpdate, onReset }: Prop
             {showQr && (
               <div className="mt-2 flex flex-col items-center gap-1 p-3 bg-white rounded">
                 <canvas ref={qrCanvasRef} />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-description-fg">
                   Scan to open on your phone
                 </p>
               </div>

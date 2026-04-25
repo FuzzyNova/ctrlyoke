@@ -342,7 +342,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
         // Inline code (single backtick, no language)
         if (!language) {
           return (
-            <code className="bg-[var(--vscode-textCodeBlock-background)] text-code-inline-fg rounded px-1 py-0.5 font-mono">
+            <code className="bg-code-block text-code-inline-fg rounded px-1 py-0.5 font-mono">
               {codeChildren}
             </code>
           );

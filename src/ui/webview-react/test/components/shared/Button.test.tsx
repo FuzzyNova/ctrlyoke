@@ -46,7 +46,7 @@ describe("Button", () => {
   it("applies danger variant classes", () => {
     render(<Button variant="danger">Btn</Button>);
     const btn = screen.getByRole("button");
-    expect(btn.className).toContain("bg-bash-status-error");
+    expect(btn.className).toContain("bg-indicator-error");
   });
 
   it("applies sm size classes", () => {

@@ -79,7 +79,7 @@ const SetAsDefaultButton: React.FC<{
       type="button"
       onClick={handleClick}
       className={`text-xxs font-semibold uppercase text-link-fg hover:underline cursor-pointer transition-colors ${
-        state === BUTTON_STATE.SUCCESS ? "text-green-500" : ""
+        state === BUTTON_STATE.SUCCESS ? "text-indicator-success" : ""
       } ${state === BUTTON_STATE.FADING ? "opacity-0" : ""}`}
       title="Set this as the default for new workflows"
     >
