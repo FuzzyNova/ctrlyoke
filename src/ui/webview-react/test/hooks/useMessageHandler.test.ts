@@ -358,6 +358,70 @@ describe("restart lifecycle", () => {
     expect(reloadSpy).not.toHaveBeenCalled();
     reloadSpy.mockRestore();
   });
+
+  it("does not schedule a panel reload fallback for reloadWindow", () => {
+    vi.useFakeTimers();
+    const reloadSpy = vi
+      .spyOn(
+        reconnectWatchdog.reconnectWatchdogHooks,
+        "reloadPanelForReconnect"
+      )
+      .mockImplementation(() => undefined);
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.DEV_RESTARTING, {
+        command: "workbench.action.reloadWindow",
+      });
+      vi.advanceTimersByTime(1600);
+    });
+
+    expect(reloadSpy).not.toHaveBeenCalled();
+    reloadSpy.mockRestore();
+  });
+});
+
+describe("STARTUP_COMPLETE", () => {
+  it("requests CLEAR_WORKFLOW when startup completes with no workflow or persisted path", () => {
+    const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
+      typeof vi.fn
+    >;
+    postMessageMock.mockClear();
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
+    });
+
+    expect(postMessageMock).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.CLEAR_WORKFLOW,
+    });
+  });
+
+  it("does not request CLEAR_WORKFLOW when a persisted workflow path is pending", () => {
+    const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
+      typeof vi.fn
+    >;
+    postMessageMock.mockClear();
+
+    useUiStore
+      .getState()
+      .setActiveWorkflowWorkingFilePath(
+        "c:/dev/FlightPath/.flightpath/.queue/example.flightpath.json"
+      );
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.STARTUP_COMPLETE);
+    });
+
+    expect(postMessageMock).not.toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.CLEAR_WORKFLOW,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

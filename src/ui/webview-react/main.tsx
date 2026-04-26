@@ -1,16 +1,33 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
+import BootstrapApp from "./BootstrapApp";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
+import { WebviewLog } from "@utils/logger";
+import { useUiStore } from "@store/uiStore";
 import "./styles/globals.css";
 
 const root = document.getElementById("root");
-if (root) {
-  ReactDOM.createRoot(root).render(
-    <React.StrictMode>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </React.StrictMode>
-  );
+window.__flightpathReactMounted = true;
+if (!root) {
+  WebviewLog.error("[main] root element not found");
+} else {
+  const start = async () => {
+    try {
+      await useUiStore.persist.rehydrate();
+      ReactDOM.createRoot(root).render(
+        <React.StrictMode>
+          <ErrorBoundary>
+            <BootstrapApp />
+          </ErrorBoundary>
+        </React.StrictMode>
+      );
+    } catch (error) {
+      WebviewLog.error(
+        `[main] bootstrap failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      throw error;
+    }
+  };
+
+  void start();
 }

@@ -391,13 +391,22 @@ function createMessageHandlers(): MessageHandlerMap {
       );
   };
 
-  handlers[MESSAGE_TYPES.DEV_RESTARTING] = () => {
+  handlers[MESSAGE_TYPES.DEV_RESTARTING] = (message) => {
     useUiStore.setState({
       devRestarting: true,
       startupReady: false,
       myClientId: "",
     });
-    schedulePanelReconnectReloadWatchdog();
+    // For a full window reload VS Code restarts the renderer and (on some builds)
+    // preserves the webview process. Scheduling a self-reload watchdog here causes
+    // window.location.reload() to fire ~1.5 s into the reload sequence — before
+    // resolveWebviewView() has set fresh HTML — which corrupts the acquireVsCodeApi()
+    // lifecycle and leaves the panel showing "raw html text" or stuck in a dead state.
+    // For extension host restart the webview IS retained and the watchdog is needed
+    // as a self-healing fallback if the READY handshake doesn't complete.
+    if (message.command !== "workbench.action.reloadWindow") {
+      schedulePanelReconnectReloadWatchdog();
+    }
   };
 
   handlers[MESSAGE_TYPES.RECONNECT] = () => {
@@ -1284,12 +1293,14 @@ function createMessageHandlers(): MessageHandlerMap {
   // STARTUP_COMPLETE - Extension startup sequence finished (with or without session)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STARTUP_COMPLETE] = () => {
+    const { fileName } = useWorkflowStore.getState();
+    const { activeWorkflowWorkingFilePath } = useUiStore.getState();
     clearPanelReconnectReloadWatchdog();
     useUiStore.getState().setStartupReady(true);
-    // If startup completed with no session, auto-create a blank workflow so the
-    // user lands on "New Workflow" rather than the "No workflow loaded" empty state.
-    const { fileName } = useWorkflowStore.getState();
-    if (!fileName) {
+    // If startup completed with no session and no persisted target workflow,
+    // auto-create a blank workflow so the user lands on "New Workflow" rather
+    // than the "No workflow loaded" empty state.
+    if (!fileName && !activeWorkflowWorkingFilePath) {
       getVsCodeApi().postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
     }
   };

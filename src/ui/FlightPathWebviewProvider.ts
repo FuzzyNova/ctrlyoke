@@ -69,7 +69,6 @@ export type { HarnessStatus } from "./WebviewSettingsSync";
 export class FlightPathWebviewProvider
   implements vscode.WebviewViewProvider, IDashboardProvider, IDashboardSink
 {
-  private static readonly PANEL_HARD_RELOAD_TIMEOUT_MS = 6500;
   private view?: vscode.WebviewView;
   private _pendingActiveWorkflowId: string | undefined;
   private workflowOrchestrator?: WorkflowOrchestrator;
@@ -78,7 +77,6 @@ export class FlightPathWebviewProvider
   // captures the session value at launch; a stale closure exits immediately when
   // the captured value no longer matches the field.
   private reconnectRetrySession = 0;
-  private panelHardReloadTimer?: ReturnType<typeof setTimeout>;
   private outputHistoryManager?: OutputHistoryManager;
   private hub?: DashboardBroadcastHub;
   private modelsLoadedDisposable?: vscode.Disposable;
@@ -197,7 +195,7 @@ export class FlightPathWebviewProvider
 
     Log.debug("resolveWebviewView() complete — view is now set");
 
-    this.startPanelReconnectRecovery(webviewView, true);
+    this.startPanelReconnectRecovery(webviewView);
 
     // Best-effort early INIT: VS Code buffers postMessage until the
     // webview iframe loads, but React's message listener may not be
@@ -211,12 +209,7 @@ export class FlightPathWebviewProvider
     }
   }
 
-  private startPanelReconnectRecovery(
-    webviewView: vscode.WebviewView,
-    allowHardReload: boolean
-  ): void {
-    this.clearPanelHardReloadTimer();
-
+  private startPanelReconnectRecovery(webviewView: vscode.WebviewView): void {
     // If VS Code retained the old React context instead of reloading the
     // iframe (common on extension host restart), React will never re-send
     // READY on its own. This RECONNECT nudges the retained React to re-send
@@ -228,41 +221,26 @@ export class FlightPathWebviewProvider
     // is called). retryWithBackoff gives the channel time to fully come up.
     // Each retry closure captures `session`; incrementing reconnectRetrySession
     // in cancelReconnectRetry() causes all in-flight closures to self-terminate.
+    //
+    // If the panel still doesn't respond after all retries, the React-side
+    // reconnect watchdog (reconnectWatchdog.ts) handles the self-reload. It is
+    // triggered by RECONNECT messages and fires window.location.reload() after
+    // a cooldown if CLIENT_ID_ASSIGNED never arrives. This avoids the "raw html
+    // text" regression caused by setting webview.html a second time from the
+    // extension side while the first load is still in progress.
     const session = ++this.reconnectRetrySession;
-
-    if (allowHardReload) {
-      this.panelHardReloadTimer = setTimeout(() => {
-        this.panelHardReloadTimer = undefined;
-        if (this.reconnectRetrySession !== session || this.view !== webviewView) {
-          return;
-        }
-
-        Log.warn(
-          "[resolveWebviewView] panel never sent READY after restart — forcing full webview HTML reload"
-        );
-
-        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-        this.startPanelReconnectRecovery(webviewView, false);
-        void this.settingsSync.sendInitialState();
-      }, FlightPathWebviewProvider.PANEL_HARD_RELOAD_TIMEOUT_MS);
-    }
 
     void retryWithBackoff(
       async () => {
-        if (this.reconnectRetrySession !== session) return true; // cancelled
+        if (this.reconnectRetrySession !== session || this.view !== webviewView) {
+          return true; // cancelled
+        }
         this.postMessage({ type: MESSAGE_TYPES.RECONNECT });
         return null; // keep retrying
       },
       {
         maxAttempts: 6,
         delays: [250, 500, 1000, 2000, 4000], // delays between retries (attempt 0 is always immediate)
-        onRetry: (attempt) => {
-          if (attempt > 1) {
-            Log.debug(
-              `[resolveWebviewView] panel hasn't reconnected — retrying RECONNECT (attempt ${attempt - 1}/5)`
-            );
-          }
-        },
       }
     );
   }
@@ -274,6 +252,11 @@ export class FlightPathWebviewProvider
     const htmlPath = vscode.Uri.joinPath(this.webviewReactUri, "index.html");
 
     let html = fsSync.readFileSync(htmlPath.fsPath, "utf-8");
+    const moduleScriptPattern = /<script\b[^>]*\btype=(["'])module\1[^>]*>/i;
+    const moduleScriptWithSrcPattern =
+      /<script\b(?=[^>]*\btype=(["'])module\1)(?=[^>]*\bsrc=(["'])([^"']+)\2)[^>]*>\s*<\/script>/i;
+    const modulePreloadPattern = /<link\b[^>]*\brel=["']modulepreload["'][^>]*>\s*/gi;
+    html = html.replace(modulePreloadPattern, "");
 
     // Get base URI for webview resources
     const webviewRootUri = webview.asWebviewUri(this.webviewReactUri);
@@ -331,20 +314,81 @@ export class FlightPathWebviewProvider
     // Generate a nonce for CSP script-src (replaces 'unsafe-inline')
     const nonce = this.getNonce();
 
-    // Inject VS Code API capture script BEFORE any other scripts
-    // acquireVsCodeApi() can only be called once, so we capture it and make it globally available
-    // This must run before the React module script loads
-    const vscodeApiScript = `<script nonce="${nonce}">
-window.vscodeApi = acquireVsCodeApi();
+    // acquireVsCodeApi() can only be called once per page lifecycle. Capture it
+    // before the React bundle loads so the retained panel path can reuse the
+    // latest API object during reconnect.
+    const bootstrapScript = `<script nonce="${nonce}">
+(function() {
+  try {
+    window.vscodeApi = acquireVsCodeApi();
+  } catch {
+    // Ignore stale retained contexts here; useVsCodeApi() will recover from the
+    // current window.vscodeApi reference once the panel reconnects.
+  }
+})();
 </script>`;
 
-    // Inject AFTER typo.js script tag but BEFORE the module scripts
-    html = html.replace(
-      /<script type="module"/,
-      `${vscodeApiScript}\n    <script type="module" nonce="${nonce}"`
-    );
+    const moduleScriptWithSrcMatch = html.match(moduleScriptWithSrcPattern);
+    const moduleScriptSrc = moduleScriptWithSrcMatch?.[3];
+    const moduleLoaderScript =
+      moduleScriptSrc !== undefined
+        ? `<script type="module" nonce="${nonce}">
+(function() {
+  var src = ${JSON.stringify(moduleScriptSrc)};
+  var timeoutMs = 5000;
+  var recoveryCooldownMs = 10000;
+  var recoverySessionKey = 'flightpath-panel-module-recovery-at';
+  var timer = window.setTimeout(function() {
+    if (!window.__flightpathReactMounted) {
+      var now = Date.now();
+      var lastRecoveryAt = 0;
+      try {
+        lastRecoveryAt = Number(sessionStorage.getItem(recoverySessionKey) || '0');
+      } catch {}
+      if (!Number.isFinite(lastRecoveryAt) || now - lastRecoveryAt >= recoveryCooldownMs) {
+        try {
+          sessionStorage.setItem(recoverySessionKey, String(now));
+        } catch {}
+        window.location.reload();
+      }
+    }
+  }, timeoutMs);
+  import(src)
+    .then(function() {
+      window.clearTimeout(timer);
+    })
+    .catch(function(err) {
+      window.clearTimeout(timer);
+      console.error("[FlightPath panel] module bootstrap import failed:", err);
+    });
+})();
+</script>`
+        : undefined;
 
-    // Add nonce to any remaining script tags (e.g., typo.js)
+    // Inject the bootstrap BEFORE the module scripts.
+    // acquireVsCodeApi() must run before the React bundle so window.vscodeApi is available
+    // when React initialises.
+    const hadModuleScript = moduleScriptPattern.test(html);
+    if (hadModuleScript) {
+      if (moduleLoaderScript && moduleScriptWithSrcMatch) {
+        html = html.replace(
+          moduleScriptWithSrcPattern,
+          `${bootstrapScript}\n    ${moduleLoaderScript}`
+        );
+      } else {
+        html = html.replace(moduleScriptPattern, `${bootstrapScript}\n    $&`);
+      }
+    } else {
+      // No module script found — fall back to inserting before </head> so the
+      // panel at least gets vscodeApi even if the bundle
+      // tag name changed in a future Vite version.
+      Log.warn(
+        "[_getHtmlForWebview] No module script tag found in index.html — injecting bootstrap before </head>"
+      );
+      html = html.replace("</head>", `${bootstrapScript}\n  </head>`);
+    }
+
+    // Add nonce to any remaining script tags that don't already have one (e.g., typo.js)
     html = html.replace(
       /<script(?!\s+nonce=)([^>]*>)/g,
       `<script nonce="${nonce}"$1`
@@ -358,14 +402,16 @@ window.vscodeApi = acquireVsCodeApi();
     // - connect-src: Allow source map loading in dev tools
     const cspContent = `default-src 'none'; script-src ${webview.cspSource} 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data: https:; connect-src ${webview.cspSource};`;
 
-    // Replace existing CSP meta tag — regex handles multi-line tags and both /> and > closings
+    // Replace existing CSP meta tag — \s+ in the regex matches newlines so
+    // multi-line meta tags (as Vite formats them) are handled correctly.
     const htmlBeforeCsp = html;
     html = html.replace(
       /<meta\s+http-equiv="Content-Security-Policy"\s+content="[^"]*"\s*\/?>/,
       `<meta http-equiv="Content-Security-Policy" content="${cspContent}" />`
     );
     if (html === htmlBeforeCsp) {
-      // No existing CSP tag found, add one before </head>
+      // No existing CSP tag found — insert before </head> as fallback
+      Log.warn("[_getHtmlForWebview] CSP meta tag not found in index.html — inserting before </head>");
       html = html.replace(
         "</head>",
         `    <meta http-equiv="Content-Security-Policy" content="${cspContent}" />\n  </head>`
@@ -1056,13 +1102,6 @@ window.vscodeApi = acquireVsCodeApi();
   /** Cancels any in-flight RECONNECT retry loop by invalidating its session id. */
   private cancelReconnectRetry(): void {
     this.reconnectRetrySession++;
-    this.clearPanelHardReloadTimer();
-  }
-
-  private clearPanelHardReloadTimer(): void {
-    if (!this.panelHardReloadTimer) return;
-    clearTimeout(this.panelHardReloadTimer);
-    this.panelHardReloadTimer = undefined;
   }
 
   // ============================================================================
@@ -1178,6 +1217,6 @@ window.vscodeApi = acquireVsCodeApi();
 
   /** Public postMessage for use by PtyProcessManager (terminal output routing) */
   public postMessagePublic(message: unknown): void {
-    this.view?.webview.postMessage(message);
+    this.postMessage(message);
   }
 }

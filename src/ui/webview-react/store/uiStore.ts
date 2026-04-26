@@ -924,6 +924,9 @@ export const useUiStore = create<UiState & UiActions>()(
     }),
     {
       name: "flightpath-ui-state",
+      // Rehydrated explicitly from main.tsx before App mounts so retained
+      // panel reconnects do not call vscode.getState() during module import.
+      skipHydration: true,
       storage: createJSONStorage(() => vsCodeRawStorage),
       // Only persist specific fields (layout preferences)
       partialize: (state) =>

@@ -11,6 +11,7 @@ declare global {
   interface Window {
     vscodeApi?: VsCodeApi;
     __flightpathStandalone?: boolean;
+    __flightpathReactMounted?: boolean;
     acquireVsCodeApi?: () => VsCodeApi;
   }
 }

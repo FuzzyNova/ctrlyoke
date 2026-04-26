@@ -13,8 +13,8 @@ import { useUiStore } from "@store/uiStore";
 import { clearNotificationBadgeCount } from "@utils/browserNotifications";
 import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
-// uiStore uses vscode.getState()/setState() as its persist storage (see uiStore.ts),
-// so collapse states are restored synchronously before the first render.
+// uiStore uses vscode.getState()/setState() as its persist storage (see
+// uiStore.ts) and is rehydrated from main.tsx before App mounts.
 import {
   PANEL_COLLAPSED_SIZE_DEFAULT,
   PANEL_COLLAPSED_SIZE_SIDEBAR,
@@ -41,8 +41,8 @@ import {
 function App() {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
-  // uiStore hydrates synchronously from vscode.getState() on store creation,
-  // so the persisted collapse state is available on the first render.
+  // main.tsx rehydrates uiStore before App is imported, so the persisted
+  // collapse state is available on the first render.
   const [uiLayoutReady] = useState(true);
 
   // Collapse state from store (source of truth)

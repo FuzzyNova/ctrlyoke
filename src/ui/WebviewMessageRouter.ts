@@ -157,7 +157,6 @@ export class WebviewMessageRouter {
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.READY, async (message) => {
-      Log.debug("Received READY from React — sending INIT");
       if (this.clientId === PANEL_CLIENT_ID) {
         // Cancel RECONNECT retries before any awaited startup work so a valid
         // panel READY immediately stops further nudges from the extension.
