@@ -1,0 +1,61 @@
+import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
+import { suite, test } from "mocha";
+import { WorkspaceSessionManager } from "../../flightpath/orchestration/WorkspaceSessionManager";
+import { PromptFileParser } from "../../flightpath/PromptFileParser";
+import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+
+suite("WorkspaceSessionManager", () => {
+  test("uses lastModifiedAt instead of filename order for recent session discovery", async () => {
+    const workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "flightpath-workspace-session-manager-")
+    );
+    const queueDir = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.QUEUE_DIR
+    );
+    await fs.mkdir(queueDir, { recursive: true });
+
+    try {
+      await fs.writeFile(
+        path.join(queueDir, "older-name.flightpath.json"),
+        JSON.stringify({
+          workflowName: "older-name",
+          startedAt: 100,
+          lastModifiedAt: 5000,
+          steps: [],
+        })
+      );
+      await fs.writeFile(
+        path.join(queueDir, "newer-name.flightpath.json"),
+        JSON.stringify({
+          workflowName: "newer-name",
+          startedAt: 200,
+          lastModifiedAt: 1000,
+          steps: [],
+        })
+      );
+
+      const manager = new WorkspaceSessionManager(
+        new PromptFileParser(),
+        {} as any
+      );
+
+      const mostRecentPath =
+        await manager.getMostRecentWorkingFilePath(workspaceRoot);
+      const sessions = await manager.discoverSessions(workspaceRoot);
+
+      assert.strictEqual(
+        mostRecentPath,
+        path.join(queueDir, "older-name.flightpath.json")
+      );
+      assert.strictEqual(sessions[0]?.label, "⏸ older-name");
+      assert.strictEqual(sessions[1]?.label, "⏸ newer-name");
+    } finally {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+});

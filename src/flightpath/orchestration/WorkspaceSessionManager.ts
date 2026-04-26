@@ -36,37 +36,23 @@ export class WorkspaceSessionManager {
     onLoad: (workingFilePath: string) => Promise<void>
   ): Promise<void> {
     try {
-      const queueDir = path.join(
-        workspaceFolderPath,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
-        PATH_CONSTANTS.QUEUE_DIR
-      );
+      const workingFilePath =
+        await this.getMostRecentWorkingFilePath(workspaceFolderPath);
 
-      // Check if queue directory exists
-      try {
-        await fs.stat(queueDir);
-      } catch {
-        // Queue directory doesn't exist yet
-        return;
-      }
-
-      // Find most recent working file
-      const mostRecentFile = await this.findMostRecentWorkingFile(queueDir);
-
-      if (!mostRecentFile) {
+      if (!workingFilePath) {
         return; // No sessions to load
       }
-
-      const workingFilePath = path.join(queueDir, mostRecentFile);
 
       // Load from working file
       await onLoad(workingFilePath);
 
       // Extract workflow name from filename for logging
-      const workflowName = this.extractWorkflowName(mostRecentFile);
+      const workflowName = this.extractWorkflowName(
+        path.basename(workingFilePath)
+      );
 
       Log.debug(
-        `FlightPath: Auto-loaded recent session: ${workflowName} (${mostRecentFile})`
+        `FlightPath: Auto-loaded recent session: ${workflowName} (${path.basename(workingFilePath)})`
       );
 
       // Optional: Show subtle notification (not intrusive)
@@ -76,6 +62,34 @@ export class WorkspaceSessionManager {
     } catch (error) {
       Log.error("FlightPath: Failed to auto-load recent session:", error);
       // Don't show error to user - just log and continue
+    }
+  }
+
+  /**
+   * Resolve the current most-recent working file from .flightpath/.queue/.
+   * Reads queue metadata from disk each time so reconnecting clients always
+   * use fresh recency data rather than a startup snapshot.
+   */
+  async getMostRecentWorkingFilePath(
+    workspaceFolderPath: string
+  ): Promise<string | undefined> {
+    try {
+      const queueDir = path.join(
+        workspaceFolderPath,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.QUEUE_DIR
+      );
+      const workingFiles = await this.listWorkingFilesByRecency(queueDir);
+      return workingFiles[0]?.filePath;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return undefined;
+      }
+      Log.error(
+        "FlightPath: Failed to resolve most recent working file path:",
+        error
+      );
+      return undefined;
     }
   }
 
@@ -98,16 +112,24 @@ export class WorkspaceSessionManager {
   }
 
   /**
-   * Find the most recent working file in the queue directory
-   * Sorted by lastModifiedAt timestamp (or startedAt if not available)
+   * Read all working files in the queue directory, sorted by recency.
+   * Uses lastModifiedAt when available, falling back to startedAt.
    *
    * @param queueDir Path to .flightpath/.queue/ directory
-   * @returns Most recent filename or undefined if none found
    */
-  private async findMostRecentWorkingFile(
+  private async listWorkingFilesByRecency(
     queueDir: string
-  ): Promise<string | undefined> {
+  ): Promise<
+    Array<{
+      filename: string;
+      filePath: string;
+      workingFile: WorkingFile;
+      timestamp: number;
+    }>
+  > {
     try {
+      await fs.stat(queueDir);
+
       // Read directory contents
       const entries = await fs.readdir(queueDir, { withFileTypes: true });
 
@@ -119,14 +141,14 @@ export class WorkspaceSessionManager {
         .map((entry) => entry.name);
 
       if (workingFiles.length === 0) {
-        return undefined;
+        return [];
       }
 
       // Read each file to get lastModifiedAt timestamp
       const filesWithTimestamps = await Promise.all(
         workingFiles.map(async (filename) => {
+          const filePath = path.join(queueDir, filename);
           try {
-            const filePath = path.join(queueDir, filename);
             const content = await fs.readFile(filePath, "utf8");
             const workingFile = JSON.parse(content) as WorkingFile;
 
@@ -134,21 +156,33 @@ export class WorkspaceSessionManager {
             const timestamp =
               workingFile.lastModifiedAt || workingFile.startedAt || 0;
 
-            return { filename, timestamp };
+            return { filename, filePath, workingFile, timestamp };
           } catch (error) {
             Log.warn(`Failed to read ${filename}:`, error);
-            return { filename, timestamp: 0 };
+            return undefined;
           }
         })
       );
 
       // Sort by timestamp (newest first)
-      filesWithTimestamps.sort((a, b) => b.timestamp - a.timestamp);
-
-      return filesWithTimestamps[0]?.filename;
+      return filesWithTimestamps
+        .filter(
+          (
+            entry
+          ): entry is {
+            filename: string;
+            filePath: string;
+            workingFile: WorkingFile;
+            timestamp: number;
+          } => entry !== undefined
+        )
+        .sort((a, b) => b.timestamp - a.timestamp);
     } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
       Log.error("FlightPath: Failed to find most recent working file:", error);
-      return undefined;
+      return [];
     }
   }
 
@@ -194,31 +228,17 @@ export class WorkspaceSessionManager {
         return []; // No queue directory
       }
 
-      // Find all working files
-      const entries = await fs.readdir(queueDir, { withFileTypes: true });
-
-      const workingFiles = entries
-        .filter(
-          (entry) => entry.isFile() && entry.name.endsWith(".flightpath.json")
-        )
-        .map((entry) => entry.name);
+      const workingFiles = await this.listWorkingFilesByRecency(queueDir);
 
       if (workingFiles.length === 0) {
         return [];
       }
 
-      // Sort by timestamp (newest first)
-      const sortedFiles = workingFiles.sort().reverse();
-
       // Read each file to get metadata
       const sessions = [];
 
-      for (const filename of sortedFiles) {
+      for (const { filePath, workingFile } of workingFiles) {
         try {
-          const filePath = path.join(queueDir, filename);
-          const content = await fs.readFile(filePath, "utf8");
-          const workingFile = JSON.parse(content) as WorkingFile;
-
           const runtime = workingFile._runtime;
           // completedPrompts is a legacy field (no longer on WorkingFileRuntime interface)
           // but may exist in older working files on disk. Use prompts' _runtime.completedAt instead.
@@ -262,7 +282,7 @@ export class WorkspaceSessionManager {
           });
         } catch (error) {
           // Skip invalid files
-          Log.warn(`Failed to read session file ${filename}:`, error);
+          Log.warn(`Failed to read session file ${path.basename(filePath)}:`, error);
         }
       }
 

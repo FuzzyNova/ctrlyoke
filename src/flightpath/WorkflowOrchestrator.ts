@@ -1247,9 +1247,32 @@ export class WorkflowOrchestrator {
     let viewedId = this.getViewedWorkflowId(clientId);
 
     // Browser clients connecting for the first time have no viewed workflow.
-    // Fall back to whatever the panel is currently viewing so the browser
-    // mirrors the panel's session on first connect.
+    // Re-check the queue on disk at READY time so reconnects without persisted
+    // tab state fall back to the actual most recently modified workflow, not
+    // whatever the panel happened to load earlier in the session.
     if (!viewedId && clientId !== this.PANEL_CLIENT_ID) {
+      const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+      if (workspaceFolderPath) {
+        const mostRecentWorkingFilePath =
+          await this.workspaceSessionManager.getMostRecentWorkingFilePath(
+            workspaceFolderPath
+          );
+        if (mostRecentWorkingFilePath) {
+          await this.loadWorkflowForClient(
+            mostRecentWorkingFilePath,
+            send,
+            clientId
+          );
+          send({
+            type: MESSAGE_TYPES.WORKFLOWS_LIST,
+            workflows: this.getWorkflowSummaries(),
+          });
+          return;
+        }
+      }
+
+      // If there is no recent working file on disk, fall back to whatever the
+      // panel is currently viewing so browser clients still inherit some state.
       viewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
     }
 
