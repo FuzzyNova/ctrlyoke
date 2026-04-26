@@ -30,6 +30,7 @@ import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
 import { Log } from "../utils/Log";
 import { configService } from "../config/FlightPathConfigService";
+import { createHostedHarnessStatusUpdate } from "./HostedServerMessageFactory";
 import {
   buildPromptCompletionNotification,
   buildTestNotificationEvent,
@@ -163,11 +164,7 @@ export class FlightPathHostedServer
   }
 
   notifyHarnessAvailability(harnessId: string, available: boolean): void {
-    this.broadcast({
-      type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
-      harnessId,
-      available,
-    });
+    this.broadcast(createHostedHarnessStatusUpdate(harnessId, available));
   }
 
   // ── IDashboardSink — delegate to PostMessageDashboardSink ────────────────
