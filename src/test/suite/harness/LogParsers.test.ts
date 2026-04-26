@@ -751,7 +751,9 @@ suite("CopilotLogParser", () => {
         },
       ];
 
-      const response = parser.extractResponse(events as BaseCliEvent[]);
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
 
       assert.strictEqual(response.metadata.sessionId, "session-abc");
       assert.strictEqual(response.metadata.model, "claude-sonnet-4.5");
@@ -981,7 +983,9 @@ suite("CodexLogParser", () => {
         },
       ];
 
-      const response = parser.extractResponse(events as BaseCliEvent[]);
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
 
       assert.strictEqual(response.metadata.sessionId, "thread_abc123xyz789");
       assert.strictEqual(response.metadata.model, "gpt-5.1-codex");
@@ -1235,6 +1239,37 @@ suite("CodexLogParser", () => {
       assert.strictEqual(extractText(response), "Part 1. Part 2. Part 3.");
     });
 
+    test("should not duplicate text when event_msg agent_message precedes response_item output_text", () => {
+      const events = [
+        {
+          type: "event_msg",
+          payload: {
+            type: "agent_message",
+            message: "Duplicate candidate",
+          },
+          timestamp: "2026-01-17T10:00:01Z",
+        },
+        {
+          type: "response_item",
+          payload: {
+            role: "assistant",
+            content: [{ type: "output_text", text: "Duplicate candidate" }],
+          },
+          timestamp: "2026-01-17T10:00:02Z",
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+      const textEvents = response.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.TEXT
+      );
+
+      assert.strictEqual(extractText(response), "Duplicate candidate");
+      assert.strictEqual(textEvents.length, 1);
+    });
+
     test("should cache session metadata for fallback", () => {
       const events1 = [
         {
@@ -1302,6 +1337,42 @@ suite("CodexLogParser", () => {
       assert.strictEqual(response.metadata.usage?.outputTokens, 14864);
       assert.strictEqual(response.metadata.usage?.cachedInputTokens, 5032192);
       assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 6001);
+    });
+  });
+
+  suite("extractStructuredEventsFromEvent", () => {
+    test("should ignore event_msg agent_message when the same text arrives in response_item", () => {
+      const eventMsgEvents = parser.extractStructuredEventsFromEvent(
+        {
+          type: "event_msg",
+          payload: {
+            type: "agent_message",
+            message: "Duplicate candidate",
+          },
+          timestamp: "2026-01-17T10:00:01Z",
+        } as unknown as BaseCliEvent
+      );
+      const responseItemEvents = parser.extractStructuredEventsFromEvent(
+        {
+          type: "response_item",
+          payload: {
+            role: "assistant",
+            content: [{ type: "output_text", text: "Duplicate candidate" }],
+          },
+          timestamp: "2026-01-17T10:00:02Z",
+        } as unknown as BaseCliEvent
+      );
+
+      const textEvents = responseItemEvents.filter(
+        (event) => event.type === CLI_EVENT_TYPES.TEXT
+      );
+
+      assert.deepStrictEqual(eventMsgEvents, []);
+      assert.strictEqual(textEvents.length, 1);
+      assert.strictEqual(
+        (textEvents[0].data as TextData).text,
+        "Duplicate candidate"
+      );
     });
   });
 

@@ -234,19 +234,9 @@ export class CodexLogParser extends BaseLogParser {
         }
       }
 
-      // event_msg:agent_message - Complete agent response text
-      if (
-        event.type === "event_msg" &&
-        event.payload?.type === "agent_message"
-      ) {
-        outputEvents.push({
-          type: CLI_EVENT_TYPES.TEXT,
-          timestamp,
-          data: {
-            text: event.payload.message,
-          } as TextData,
-        });
-      }
+      // event_msg:agent_message is a duplicate of response_item:role=assistant:output_text
+      // that appears in every Codex log immediately before the response_item entry.
+      // Text is extracted from response_item below to avoid emitting it twice.
 
       // event_msg:token_count - Token usage statistics
       if (event.type === "event_msg" && event.payload?.type === "token_count") {
@@ -956,15 +946,8 @@ export class CodexLogParser extends BaseLogParser {
       : Date.now();
     const results: CliEvent[] = [];
 
-    // event_msg:agent_message → TEXT
-    if (e.type === "event_msg" && e.payload?.type === "agent_message") {
-      results.push({
-        type: CLI_EVENT_TYPES.TEXT,
-        timestamp,
-        data: { text: e.payload.message } as TextData,
-      });
-      return results;
-    }
+    // event_msg:agent_message is a duplicate of response_item:role=assistant:output_text.
+    // Skipped here; text is captured below when response_item arrives.
 
     // response_item with role="assistant" content array
     if (e.type === "response_item" && e.payload?.role === "assistant") {

@@ -583,10 +583,10 @@ export const EDITOR_TARGET_KINDS = {
 export const EDITOR_PLACEHOLDER_TEXT = {
   /** Base hint shown in all prompt editors */
   DEFAULT:
-    "Use @ for files/folders, # for selections/symbols, ~ for git changes, $ for prior step outputs",
+    "Use @ for files/folders, # for selections/symbols, ~ for git changes, $ for prior context",
   /** Extended hint for the Final Step editor, explaining its loop-back behavior */
   FINAL_PROMPT:
-    "Use @ for files/folders, # for selections/symbols, ~ for git changes, $ for prior step outputs\n\nNote: The Final Step runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
+    "Use @ for files/folders, # for selections/symbols, ~ for git changes, $ for prior context\n\nNote: The Final Step runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
 } as const;
 
 // ============================================================================
