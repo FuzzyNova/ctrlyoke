@@ -136,4 +136,21 @@ describe("BashOutput", () => {
     );
     expect(container.firstChild).toHaveClass("my-class");
   });
+
+  it("strips ANSI and control characters from command output", () => {
+    const { container } = render(
+      <BashOutput
+        command={"npm test\u0007"}
+        output={"\u001b[1mRUN\u001b[22m\r\nok\u0007"}
+        status={OPERATION_STATUS.COMPLETED}
+      />
+    );
+
+    expect(screen.getByText("npm test")).toBeInTheDocument();
+    expect(container.textContent).toContain("RUN");
+    expect(container.textContent).toContain("ok");
+    expect(container.textContent).not.toContain("\u001b");
+    expect(container.textContent).not.toContain("\u0007");
+    expect(container.textContent).not.toContain("\r");
+  });
 });

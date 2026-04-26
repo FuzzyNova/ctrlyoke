@@ -133,4 +133,72 @@ describe("CliEventNormalizer", () => {
       },
     });
   });
+
+  it("preserves an initiated bash command when the completed event omits it", () => {
+    const events: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: {
+          command: "npm run test:ui",
+          status: OPERATION_STATUS.INITIATED,
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: {
+          command: "",
+          output: "test output",
+          exitCode: 0,
+          status: OPERATION_STATUS.COMPLETED,
+        },
+      },
+    ];
+
+    const normalized = normalizeCliEvents(events);
+
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0].type).toBe(CLI_EVENT_TYPES.BASH_COMMAND);
+    expect(normalized[0].data).toMatchObject({
+      command: "npm run test:ui",
+      output: "test output",
+      exitCode: 0,
+      status: OPERATION_STATUS.COMPLETED,
+    });
+  });
+
+  it("does not merge a commandless completed bash event into a previous completed bash event", () => {
+    const events: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: {
+          command: "npm run lint",
+          output: "lint output",
+          exitCode: 0,
+          status: OPERATION_STATUS.COMPLETED,
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        data: {
+          command: "",
+          output: "test output",
+          exitCode: 0,
+          status: OPERATION_STATUS.COMPLETED,
+        },
+      },
+    ];
+
+    const normalized = normalizeCliEvents(events);
+
+    expect(normalized).toHaveLength(2);
+    expect(normalized[0].data).toMatchObject({
+      command: "npm run lint",
+      output: "lint output",
+    });
+    expect(normalized[1].data).toMatchObject({
+      output: "test output",
+      exitCode: 0,
+      status: OPERATION_STATUS.COMPLETED,
+    });
+  });
 });

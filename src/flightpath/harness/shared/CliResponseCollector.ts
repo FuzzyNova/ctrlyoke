@@ -3,6 +3,7 @@ import type {
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
 import { Log } from "../../../utils/Log";
+import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
 import { CliOutputFormatter } from "./CliOutputFormatter";
 import { extractTextFromEvents } from "./CliResponseTextExtractor";
 import type { ICliProvider } from "./interfaces/ICliProvider";
@@ -100,7 +101,7 @@ export class CliResponseCollector {
     params: { stdout: string; stderr: string; exitCode: number },
     parsedOutput: UniversalCliOutput
   ): string | undefined {
-    const stderr = this.stripAnsiCodes(params.stderr).trim();
+    const stderr = sanitizeTerminalOutput(params.stderr).trim();
 
     if (params.exitCode !== 0) {
       return stderr || `Process exited with code ${params.exitCode}`;
@@ -127,9 +128,5 @@ export class CliResponseCollector {
       /\bTry ['"].*--help['"] for more information\./iu,
       /^Usage:/imu,
     ].some((pattern) => pattern.test(stderr));
-  }
-
-  private stripAnsiCodes(text: string): string {
-    return text.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
   }
 }

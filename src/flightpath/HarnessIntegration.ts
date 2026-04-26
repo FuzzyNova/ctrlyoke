@@ -20,6 +20,7 @@ import type { SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { TempFileManager } from "../utils/TempFileManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { stripAnsiCodes } from "../utils/TerminalOutputSanitizer";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
   PRIOR_CONTEXT_KEYWORDS,
@@ -50,6 +51,8 @@ export type PriorContextItem = {
   /** Structured script output. Present only for ScriptStep items; triggers script-specific XML rendering. */
   scriptOutput?: ScriptRuntimeOutput;
 };
+
+export { stripAnsiCodes };
 
 export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
   switch (ref.kind) {
@@ -94,11 +97,6 @@ export interface PromptSections {
   excerptContent: string | null;
   /** The raw user prompt text (with @path tokens preserved as-is) */
   userPromptText: string;
-}
-
-/** Strip ANSI escape codes from a string. */
-export function stripAnsiCodes(text: string): string {
-  return text.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
 }
 
 /**

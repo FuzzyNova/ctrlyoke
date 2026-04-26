@@ -239,7 +239,14 @@ function findOutputIndexForCompletionFallback(
       }
       continue;
     }
-    return i;
+
+    // If the completion event has no key (for example, Codex omitted the bash
+    // command text), only fall back to an INITIATED event. Falling back to the
+    // last completed bash event can incorrectly glue a new command's output
+    // onto the previous command block.
+    if (!key && isSemanticInitiatedEvent(candidate)) {
+      return i;
+    }
   }
   return undefined;
 }

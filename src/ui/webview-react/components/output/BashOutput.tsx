@@ -1,4 +1,5 @@
 import { useState, useId, memo } from "react";
+import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
   TOOL_CALL_TERMINAL,
   TOOL_CALL_LINE,
@@ -50,6 +51,11 @@ export const BashOutput = memo<BashOutputProps>(
     const [outputExpanded, setOutputExpanded] = useState(false);
     const [errorExpanded, setErrorExpanded] = useState(false);
     const containerId = useId();
+    const sanitizedCommand = sanitizeTerminalOutput(command).trim();
+    const displayCommand = sanitizedCommand || "command unavailable";
+    const hasCommandLabel = sanitizedCommand.length > 0;
+    const sanitizedOutput = sanitizeTerminalOutput(output || "");
+    const sanitizedError = sanitizeTerminalOutput(error || "");
 
     // Check if status is "initiated" (command still running)
     const isRunning = status === OPERATION_STATUS.INITIATED;
@@ -143,7 +149,13 @@ export const BashOutput = memo<BashOutputProps>(
         <div className={TOOL_CALL_LINE}>
           <span className="min-w-0 break-words">
             <span className={dotColorClass}>●</span>{" "}
-            <span className="text-editor-fg">{command}</span>
+            <span
+              className={
+                hasCommandLabel ? "text-editor-fg" : "text-description-fg italic"
+              }
+            >
+              {displayCommand}
+            </span>
             {renderStatusBadge()}
           </span>
         </div>
@@ -152,13 +164,13 @@ export const BashOutput = memo<BashOutputProps>(
         {isCompleted && (
           <>
             {renderExpandableContent(
-              output || "",
+              sanitizedOutput,
               "output",
               outputExpanded,
               setOutputExpanded
             )}
             {renderExpandableContent(
-              error || "",
+              sanitizedError,
               "error",
               errorExpanded,
               setErrorExpanded

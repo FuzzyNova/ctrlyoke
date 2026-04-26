@@ -30,6 +30,7 @@
   let readySentForSocket = false;
   let lastSentReadyPreferredWorkingFilePath;
   let lastReadyMessage;
+  const reconnectDelaysMs = [250, 500, 1000, 1500, 2000];
   const pendingOutbound = [];
   // iOS Safari rejects WSS to self-signed certs even after the HTTPS warning is
   // accepted. The cert rejection manifests identically to the "stuck CONNECTING"
@@ -174,7 +175,10 @@
   function scheduleReconnect() {
     if (pageUnloading || document.visibilityState === "hidden") return;
     if (reconnectTimer) return;
-    const delay = Math.min(500 * 2 ** reconnectAttempt, 5000);
+    const delay =
+      reconnectDelaysMs[
+        Math.min(reconnectAttempt, reconnectDelaysMs.length - 1)
+      ];
     reconnectAttempt += 1;
     reconnectTimer = window.setTimeout(() => {
       reconnectTimer = undefined;

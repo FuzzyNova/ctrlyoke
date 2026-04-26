@@ -10,6 +10,7 @@ import {
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
+import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { CodexToolBuilder } from "./CodexToolBuilder";
 
@@ -307,9 +308,9 @@ export class CodexResponseParser
 
     // Command execution (shell command) → BASH_COMMAND event
     if (item.type === "command_execution") {
-      // Strip ANSI escape codes from output for clean display
+      // Strip ANSI/control codes from output for clean display.
       const cleanOutput = item.aggregated_output
-        ? this.stripAnsiCodes(item.aggregated_output)
+        ? sanitizeTerminalOutput(item.aggregated_output)
         : "";
 
       events.push({
@@ -463,9 +464,10 @@ export class CodexResponseParser
             const delta = newOutput.substring(prevOutput.length);
             streamState.set(outputKey, newOutput);
 
-            // Emit delta as text for real-time display (strip ANSI codes)
-            if (delta) {
-              const cleanDelta = this.stripAnsiCodes(delta);
+          // Emit delta as text for real-time display (strip ANSI codes)
+          if (delta) {
+            const cleanDelta = sanitizeTerminalOutput(delta);
+            if (cleanDelta) {
               events.push({
                 type: CLI_EVENT_TYPES.TEXT,
                 timestamp: Date.now(),
@@ -473,6 +475,7 @@ export class CodexResponseParser
               });
             }
           }
+        }
         }
 
         // Todo list updates (track progress)

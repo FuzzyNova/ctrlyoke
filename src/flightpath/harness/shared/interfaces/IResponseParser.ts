@@ -1,4 +1,5 @@
 import { UniversalCliOutput, CliEvent } from "../../../../types/CliOutputTypes";
+import { stripAnsiCodes } from "../../../../utils/TerminalOutputSanitizer";
 
 /**
  * Response parsing interface
@@ -115,7 +116,7 @@ export abstract class ResponseParserBase implements IResponseParser {
    * @returns Cleaned text
    */
   protected stripAnsiCodes(text: string): string {
-    return text.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+    return stripAnsiCodes(text);
   }
 
   /**
