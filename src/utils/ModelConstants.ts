@@ -32,10 +32,9 @@
  * Some of these may NOT be available via Copilot CLI.
  */
 export const COPILOT_MODELS: Record<string, string> = {
-  "claude-opus-4.6": "Claude Opus 4.6",
   "claude-sonnet-4.6": "Claude Sonnet 4.6",
   "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
-  "gpt-5.2-codex": "Gpt 5.2 Codex",
+  "gpt-5.2-codex": "GPT 5.2 Codex",
   "gpt-5.3-codex": "GPT 5.3 Codex",
   "gpt-5.4-mini": "GPT 5.4 Mini",
   "gpt-5.4": "GPT 5.4",
@@ -44,16 +43,14 @@ export const COPILOT_MODELS: Record<string, string> = {
   "copilot-fast": "Copilot Fast",
   "gpt-4o": "GPT-4o",
   "grok-code-fast-1": "Grok Code Fast",
-  "gpt-5.1": "GPT-5.1",
   "claude-sonnet-4": "Claude Sonnet 4",
   "claude-sonnet-4.5": "Claude Sonnet 4.5",
-  "claude-opus-4.5": "Claude Opus 4.5",
   "claude-haiku-4.5": "Claude Haiku 4.5",
   "gemini-3-flash-preview": "Gemini 3 Flash Preview",
   "gemini-2.5-pro": "Gemini 2.5 Pro",
   "gpt-4.1": "GPT-4.1",
   "oswe-vscode-prime": "Raptor Mini",
-  "gpt-5.2": "Gpt 5.2",
+  "gpt-5.2": "GPT 5.2",
   auto: "Auto",
 };
 
@@ -63,18 +60,20 @@ export const COPILOT_MODELS: Record<string, string> = {
  * This list comes from `copilot help config` output.
  * Update this when new CLI models become available.
  *
- * Last updated: 2025-11-30
- * Command: copilot help config
+ * Last updated: 2026-04-26
+ * Command: FlightPath: Export Discovered Models → cliModelIds
  */
 export const COPILOT_CLI_MODEL_IDS = [
   "claude-sonnet-4.6",
   "claude-sonnet-4.5",
   "claude-haiku-4.5",
+  "claude-opus-4.7",
   "claude-opus-4.6",
   "claude-opus-4.6-fast",
   "claude-opus-4.5",
   "claude-sonnet-4",
   "gpt-5.4",
+  "gpt-5.5",
   "gpt-5.3-codex",
   "gpt-5.2-codex",
   "gpt-5.2",
@@ -120,26 +119,22 @@ export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
  * See: https://docs.openai.com/codex
  */
 export const CODEX_CLI_MODELS = [
+  "gpt-5.5",
   "gpt-5.4",
-  "gpt-5.2-codex",
   "gpt-5.4-mini",
-  "gpt-5.1-codex-max",
   "gpt-5.3-codex",
   "gpt-5.2",
-  "gpt-5.1-codex-mini",
 ] as const;
 
 /**
  * Codex CLI model display names
  */
 export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
+  "gpt-5.5": "GPT 5.5",
   "gpt-5.4": "GPT 5.4",
-  "gpt-5.2-codex": "GPT 5.2 Codex",
   "gpt-5.4-mini": "GPT 5.4 Mini",
-  "gpt-5.1-codex-max": "GPT 5.1 Codex Max",
   "gpt-5.3-codex": "GPT 5.3 Codex",
   "gpt-5.2": "GPT 5.2",
-  "gpt-5.1-codex-mini": "GPT 5.1 Codex Mini",
 };
 
 /**

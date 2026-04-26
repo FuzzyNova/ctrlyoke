@@ -48,7 +48,7 @@ export type HarnessId =
 export const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
   "copilot-cli": "gpt-5-mini",
   "claude-cli": "haiku",
-  "codex-cli": "gpt-5.1-codex-mini",
+  "codex-cli": "gpt-5.4",
   "opencode-cli": "opencode/big-pickle",
   "qwen-cli": "qwen3.5-plus",
   "gemini-cli": "gemini-3-flash-preview",

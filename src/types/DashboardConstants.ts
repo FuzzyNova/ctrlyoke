@@ -4,6 +4,17 @@
  * Used by both TypeScript extension code AND JavaScript webview code
  */
 
+import {
+  CLAUDE_CLI_MODELS as MC_CLAUDE_CLI_MODELS,
+  CLAUDE_CLI_MODEL_LABELS,
+  CODEX_CLI_MODELS as MC_CODEX_CLI_MODELS,
+  CODEX_CLI_MODEL_LABELS,
+  GEMINI_CLI_MODELS as MC_GEMINI_CLI_MODELS,
+  GEMINI_CLI_MODEL_LABELS,
+  QWEN_CLI_MODELS as MC_QWEN_CLI_MODELS,
+  QWEN_CLI_MODEL_LABELS,
+} from "../utils/ModelConstants";
+
 // ============================================================================
 // MESSAGE TYPES - Communication between extension and webview
 // ============================================================================
@@ -494,54 +505,40 @@ export const MODEL_OPTION_VALUES = {
 } as const;
 
 // ============================================================================
-// CLAUDE CLI MODELS - Static options (no programmatic way to query)
+// CLI MODEL OPTION LISTS - Derived from ModelConstants (single source of truth)
+// Each list includes a leading "None" option for the settings UI.
 // ============================================================================
 export const CLAUDE_CLI_MODELS = [
   { value: MODEL_OPTION_VALUES.NONE, label: "None" },
-  { value: "sonnet", label: "Sonnet" },
-  { value: "sonnet[1m]", label: "Sonnet 1M Context" },
-  { value: "opus", label: "Opus" },
-  { value: "opus[1m]", label: "Opus 1M Context" },
-  { value: "haiku", label: "Haiku" },
-] as const;
+  ...MC_CLAUDE_CLI_MODELS.map((id) => ({
+    value: id,
+    label: CLAUDE_CLI_MODEL_LABELS[id] ?? id,
+  })),
+];
 
-// ============================================================================
-// CODEX CLI MODELS - Static options (from codex /model command)
-// ============================================================================
 export const CODEX_CLI_MODELS = [
   { value: MODEL_OPTION_VALUES.NONE, label: "None" },
-  { value: "gpt-5.4", label: "GPT 5.4" },
-  { value: "gpt-5.2-codex", label: "GPT 5.2 Codex" },
-  { value: "gpt-5.4-mini", label: "GPT 5.4 Mini" },
-  { value: "gpt-5.1-codex-max", label: "GPT 5.1 Codex Max" },
-  { value: "gpt-5.3-codex", label: "GPT 5.3 Codex" },
-  { value: "gpt-5.2", label: "GPT 5.2" },
-  { value: "gpt-5.1-codex-mini", label: "GPT 5.1 Codex Mini" },
-] as const;
+  ...MC_CODEX_CLI_MODELS.map((id) => ({
+    value: id,
+    label: CODEX_CLI_MODEL_LABELS[id] ?? id,
+  })),
+];
 
-// ============================================================================
-// QWEN CLI MODELS - Fallback only; runtime list comes from ~/.qwen/settings.json
-// ============================================================================
 export const QWEN_CLI_MODELS = [
   { value: MODEL_OPTION_VALUES.NONE, label: "None" },
-  { value: "qwen3.5-plus", label: "Qwen 3.5 Plus" },
-] as const;
+  ...MC_QWEN_CLI_MODELS.map((id) => ({
+    value: id,
+    label: QWEN_CLI_MODEL_LABELS[id] ?? id,
+  })),
+];
 
-// ============================================================================
-// GEMINI CLI MODELS - Static options (from Gemini CLI documentation)
-// ============================================================================
 export const GEMINI_CLI_MODELS = [
   { value: MODEL_OPTION_VALUES.NONE, label: "None" },
-  { value: "gemini-3-pro-preview", label: "Gemini 3 Pro (Preview)" },
-  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (Preview)" },
-  {
-    value: "gemini-3.1-flash-lite-preview",
-    label: "Gemini 3.1 Flash Lite (Preview)",
-  },
-  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
-] as const;
+  ...MC_GEMINI_CLI_MODELS.map((id) => ({
+    value: id,
+    label: GEMINI_CLI_MODEL_LABELS[id] ?? id,
+  })),
+];
 
 // ============================================================================
 // HARNESS STATUS STRINGS - Status values for harness availability
