@@ -9,12 +9,18 @@
  */
 import * as DiffLib from "diff";
 import { parseDiff } from "react-diff-view";
-import type { HunkData, ChangeData, DiffType } from "react-diff-view";
+import type { HunkData, ChangeData, DiffType, ViewType } from "react-diff-view";
 import { refractor } from "refractor";
 import { normalizeStructuredPatch } from "./diffUtils";
 import type { UnifiedDiffHunk } from "../types/cliEvents";
 
 export { refractor };
+
+export interface RenderedDiffRun {
+  count: number;
+  addedLines: number;
+  removedLines: number;
+}
 
 function isDisplayableLine(line: string): boolean {
   return !(
@@ -101,4 +107,82 @@ export function normalizeLanguage(lang: string | undefined): string | undefined 
   if (!lang) return undefined;
   const overrides: Record<string, string> = { tsx: "typescript", jsx: "javascript" };
   return overrides[lang] ?? lang;
+}
+
+function appendRenderedDiffRun(
+  runs: RenderedDiffRun[],
+  next: RenderedDiffRun
+): void {
+  const last = runs[runs.length - 1];
+  if (
+    last &&
+    last.addedLines === next.addedLines &&
+    last.removedLines === next.removedLines
+  ) {
+    last.count += next.count;
+    return;
+  }
+
+  runs.push({ ...next });
+}
+
+/**
+ * Convert react-diff-view hunks into the same rendered row model used by the UI.
+ *
+ * - `unified`: each diff change maps to one rendered row
+ * - `split`: adjacent delete+insert changes share one rendered row
+ */
+export function getRenderedDiffStats(
+  hunks: HunkData[],
+  viewType: ViewType
+): { added: number; removed: number; runs: RenderedDiffRun[] } {
+  let added = 0;
+  let removed = 0;
+  const runs: RenderedDiffRun[] = [];
+
+  const pushRow = (addedLines: number, removedLines: number) => {
+    added += addedLines;
+    removed += removedLines;
+    appendRenderedDiffRun(runs, { count: 1, addedLines, removedLines });
+  };
+
+  for (const hunk of hunks) {
+    if (viewType === "unified") {
+      for (const change of hunk.changes) {
+        if (change.type === "insert") {
+          pushRow(1, 0);
+        } else if (change.type === "delete") {
+          pushRow(0, 1);
+        } else {
+          pushRow(0, 0);
+        }
+      }
+      continue;
+    }
+
+    for (let i = 0; i < hunk.changes.length; i++) {
+      const current = hunk.changes[i];
+
+      if (current.type === "normal") {
+        pushRow(0, 0);
+        continue;
+      }
+
+      if (current.type === "delete") {
+        const next = hunk.changes[i + 1];
+        if (next?.type === "insert") {
+          pushRow(1, 1);
+          i++;
+          continue;
+        }
+
+        pushRow(0, 1);
+        continue;
+      }
+
+      pushRow(1, 0);
+    }
+  }
+
+  return { added, removed, runs };
 }

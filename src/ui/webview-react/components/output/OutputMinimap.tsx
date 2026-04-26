@@ -5,10 +5,11 @@ import { type FinalStepPhase } from "../../types/messages";
 // Types
 // ============================================================================
 
-/** A single contiguous run of same-type diff lines. */
+/** A single contiguous run of rendered diff rows. */
 export interface DiffRun {
-  type: "added" | "removed" | "context";
   count: number;
+  addedLines: number;
+  removedLines: number;
 }
 
 /** A single file-edit diff region to visualize in the minimap rail. */
@@ -22,10 +23,9 @@ export interface MinimapDiffBlock {
   /** Total removed lines — used for the collapsed 5px line split */
   removedLines: number;
   /**
-   * Ordered sequence of diff runs extracted from structuredPatch.
-   * When present, the expanded minimap overlay uses per-run color strips
-   * (matching VS Code's diff minimap) rather than a simple two-color split.
-   * Empty when only oldContent/newContent is available (no hunk data).
+   * Ordered sequence of rendered diff rows.
+   * When present, the expanded minimap overlay follows the same row grouping
+   * as the live diff view, including split-view delete/insert pair rows.
    */
   runs: DiffRun[];
   /** Whether the diff is currently collapsed in the output view (tracked via data-diff-collapsed attribute). */
@@ -81,8 +81,7 @@ const DIFF_ADDED_COLOR =
  *   (stacked vertically when both are available — mixed state)
  * - Renders colored diff overlays for file edits (red = removed, green = added):
  *   - Collapsed diffs → 5px horizontal line, split red/green proportionally
- *   - Expanded diffs  → vertical band with red on top, green on bottom,
- *     proportional to removed/added line counts
+ *   - Expanded diffs  → row-aligned bands using the live diff's rendered layout
  *
  * Marker positions use real pixel fractions (offsetTop / scrollHeight) so they
  * align with the actual rendered position of each step — not an index fraction.
@@ -322,40 +321,57 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
               );
             }
 
-            // Expanded: per-run color strips matching VS Code's diff minimap style.
-            // Each run gets a proportional slice of the block height; context = transparent.
-            // The overlay height is DOM-measured so colored bands are proportional to
-            // changed line counts relative to total lines shown (including context).
-            let background: string;
             if (block.runs.length > 0) {
-              const totalRunLines = block.runs.reduce((s, r) => s + r.count, 0);
-              if (totalRunLines > 0) {
-                const stops: string[] = [];
-                let pct = 0;
-                for (const run of block.runs) {
-                  const end = pct + (run.count / totalRunLines) * 100;
-                  const color =
-                    run.type === "removed"
-                      ? DIFF_REMOVED_COLOR
-                      : run.type === "added"
-                        ? DIFF_ADDED_COLOR
-                        : "transparent";
-                  // Hard stop: same color repeated at start and end of each run
-                  stops.push(`${color} ${pct}%`, `${color} ${end}%`);
-                  pct = end;
-                }
-                background = `linear-gradient(to bottom, ${stops.join(", ")})`;
-              } else {
-                background = "transparent";
+              const totalRunRows = block.runs.reduce((sum, run) => sum + run.count, 0);
+              if (totalRunRows > 0) {
+                let offsetRows = 0;
+                return (
+                  <div
+                    key={blockIdx}
+                    className="absolute left-0 right-0 pointer-events-none overflow-hidden"
+                    style={{
+                      top: `${block.scrollFraction * 100}%`,
+                      height: `${block.heightFraction * 100}%`,
+                    }}
+                  >
+                    {block.runs.map((run, runIndex) => {
+                      const top = (offsetRows / totalRunRows) * 100;
+                      const height = (run.count / totalRunRows) * 100;
+                      offsetRows += run.count;
+
+                      const changedLines = run.addedLines + run.removedLines;
+                      let background = "transparent";
+
+                      if (changedLines > 0) {
+                        const removedPct = (run.removedLines / changedLines) * 100;
+                        background =
+                          run.addedLines > 0 && run.removedLines > 0
+                            ? `linear-gradient(to right,
+                                ${DIFF_REMOVED_COLOR} 0%,
+                                ${DIFF_REMOVED_COLOR} ${removedPct}%,
+                                ${DIFF_ADDED_COLOR} ${removedPct}%,
+                                ${DIFF_ADDED_COLOR} 100%
+                              )`
+                            : run.removedLines > 0
+                              ? DIFF_REMOVED_COLOR
+                              : DIFF_ADDED_COLOR;
+                      }
+
+                      return (
+                        <div
+                          key={runIndex}
+                          className="absolute left-0 right-0 pointer-events-none"
+                          style={{
+                            top: `${top}%`,
+                            height: `${height}%`,
+                            background,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                );
               }
-            } else {
-              // Fallback when no run data (oldContent/newContent path): simple split
-              background = `linear-gradient(to bottom,
-                ${DIFF_REMOVED_COLOR} 0%,
-                ${DIFF_REMOVED_COLOR} ${removedFraction * 100}%,
-                ${DIFF_ADDED_COLOR} ${removedFraction * 100}%,
-                ${DIFF_ADDED_COLOR} 100%
-              )`;
             }
 
             return (
@@ -365,7 +381,12 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
                 style={{
                   top: `${block.scrollFraction * 100}%`,
                   height: `${block.heightFraction * 100}%`,
-                  background,
+                  background: `linear-gradient(to bottom,
+                    ${DIFF_REMOVED_COLOR} 0%,
+                    ${DIFF_REMOVED_COLOR} ${removedFraction * 100}%,
+                    ${DIFF_ADDED_COLOR} ${removedFraction * 100}%,
+                    ${DIFF_ADDED_COLOR} 100%
+                  )`,
                 }}
               />
             );

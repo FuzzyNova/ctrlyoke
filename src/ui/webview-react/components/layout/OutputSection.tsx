@@ -13,10 +13,14 @@ import { useElementNarrow } from "@hooks/useElementNarrow";
 import { CliOutput, StatusMessage } from "../output";
 import { RunSelector, IconToggleButton } from "../shared";
 import { HarnessIcon } from "../shared/HarnessIcon";
-import { generateDiffLines } from "@utils/outputUtils";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import { generateId } from "@utils/string";
 import { generateMarkdownExport } from "@utils/markdownExport";
+import {
+  getRenderedDiffStats,
+  toRdvFromContent,
+  toRdvHunks,
+} from "@utils/rdvAdapter";
 import {
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
@@ -242,7 +246,14 @@ export const OutputSection: React.FC = () => {
   const [diffMeasurements, setDiffMeasurements] = useState<
     Map<
       string,
-      { startFraction: number; heightFraction: number; isCollapsed: boolean }
+      {
+        startFraction: number;
+        heightFraction: number;
+        isCollapsed: boolean;
+        addedLines: number;
+        removedLines: number;
+        runs: DiffRun[];
+      }
     >
   >(new Map());
 
@@ -359,7 +370,14 @@ export const OutputSection: React.FC = () => {
         container.querySelectorAll<HTMLElement>("[data-diff-anchor]");
       const newDiffMeasurements = new Map<
         string,
-        { startFraction: number; heightFraction: number; isCollapsed: boolean }
+        {
+          startFraction: number;
+          heightFraction: number;
+          isCollapsed: boolean;
+          addedLines: number;
+          removedLines: number;
+          runs: DiffRun[];
+        }
       >();
       diffAnchors.forEach((el) => {
         const pixelTop =
@@ -370,10 +388,17 @@ export const OutputSection: React.FC = () => {
         const attrVal = el.getAttribute("data-diff-collapsed");
         const isCollapsed =
           attrVal !== null ? attrVal === "true" : diffsCollapsed;
+        const addedLines = Number(el.getAttribute("data-diff-added-lines") ?? 0);
+        const removedLines = Number(
+          el.getAttribute("data-diff-removed-lines") ?? 0
+        );
         newDiffMeasurements.set(el.id, {
           startFraction: pixelTop / scrollHeight,
           heightFraction: el.offsetHeight / scrollHeight,
           isCollapsed,
+          addedLines: Number.isFinite(addedLines) ? addedLines : 0,
+          removedLines: Number.isFinite(removedLines) ? removedLines : 0,
+          runs: parseDiffRuns(el.getAttribute("data-diff-runs")),
         });
       });
       setDiffMeasurements(newDiffMeasurements);
@@ -390,7 +415,12 @@ export const OutputSection: React.FC = () => {
     mutationObserver.observe(container, {
       attributes: true,
       subtree: true,
-      attributeFilter: ["data-diff-collapsed"],
+      attributeFilter: [
+        "data-diff-collapsed",
+        "data-diff-added-lines",
+        "data-diff-removed-lines",
+        "data-diff-runs",
+      ],
     });
     return () => {
       resizeObserver.disconnect();
@@ -622,6 +652,35 @@ export const OutputSection: React.FC = () => {
 
   // ── Diff line count helper ─────────────────────────────────────────────────
 
+  function parseDiffRuns(value: string | null): DiffRun[] {
+    if (!value) return [];
+
+    try {
+      const parsed = JSON.parse(value);
+      if (!Array.isArray(parsed)) return [];
+
+      return parsed.flatMap((run) => {
+        if (
+          typeof run?.count !== "number" ||
+          typeof run?.addedLines !== "number" ||
+          typeof run?.removedLines !== "number"
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            count: run.count,
+            addedLines: run.addedLines,
+            removedLines: run.removedLines,
+          },
+        ];
+      });
+    } catch {
+      return [];
+    }
+  }
+
   /**
    * Extract diff statistics and run sequence for a single CLI event.
    * Returns added/removed totals (for collapsed display) plus an ordered
@@ -636,71 +695,11 @@ export const OutputSection: React.FC = () => {
     if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
       const data = event.data as FileEditData;
       if (data.structuredPatch && data.structuredPatch.length > 0) {
-        let added = 0;
-        let removed = 0;
-        const runs: DiffRun[] = [];
-        let currentType: DiffRun["type"] | null = null;
-        let currentCount = 0;
-
-        const flushRun = () => {
-          if (currentType !== null && currentCount > 0) {
-            runs.push({ type: currentType, count: currentCount });
-          }
-        };
-
-        for (const hunk of data.structuredPatch) {
-          for (const line of hunk.lines) {
-            const lineType: DiffRun["type"] =
-              line[0] === "+"
-                ? "added"
-                : line[0] === "-"
-                  ? "removed"
-                  : "context";
-            if (lineType === "added") added++;
-            else if (lineType === "removed") removed++;
-            if (lineType === currentType) {
-              currentCount++;
-            } else {
-              flushRun();
-              currentType = lineType;
-              currentCount = 1;
-            }
-          }
-        }
-        flushRun();
-        return { added, removed, runs };
+        return getRenderedDiffStats(toRdvHunks(data.structuredPatch), "unified");
       }
       if (data.oldContent && data.newContent) {
-        // No structuredPatch — compute runs from the same diff algorithm used
-        // by DiffView so the minimap gradient matches the DOM rendering exactly.
-        let added = 0;
-        let removed = 0;
-        const runs: DiffRun[] = [];
-        let currentType: DiffRun["type"] | null = null;
-        let currentCount = 0;
-
-        const flushRun = () => {
-          if (currentType !== null && currentCount > 0) {
-            runs.push({ type: currentType, count: currentCount });
-          }
-        };
-
-        for (const line of generateDiffLines(
-          data.oldContent,
-          data.newContent
-        )) {
-          if (line.type === "added") added++;
-          else if (line.type === "removed") removed++;
-          if (line.type === currentType) {
-            currentCount++;
-          } else {
-            flushRun();
-            currentType = line.type;
-            currentCount = 1;
-          }
-        }
-        flushRun();
-        return { added, removed, runs };
+        const { hunks } = toRdvFromContent(data.oldContent, data.newContent);
+        return getRenderedDiffStats(hunks, "unified");
       }
       return { added: 0, removed: 0, runs: [] };
     }
@@ -710,11 +709,15 @@ export const OutputSection: React.FC = () => {
       return {
         added: lines,
         removed: 0,
-        runs: [{ type: "added", count: lines }],
+        runs: [{ count: lines, addedLines: 1, removedLines: 0 }],
       };
     }
     if (event.type === CLI_EVENT_TYPES.FILE_DELETE) {
-      return { added: 0, removed: 1, runs: [{ type: "removed", count: 1 }] };
+      return {
+        added: 0,
+        removed: 1,
+        runs: [{ count: 1, addedLines: 0, removedLines: 1 }],
+      };
     }
     return { added: 0, removed: 0, runs: [] };
   }
@@ -769,7 +772,16 @@ export const OutputSection: React.FC = () => {
           const anchorId = `${anchorPrefix}-e${eventIndex}`;
           const measurement = diffMeasurements.get(anchorId);
           if (!measurement || measurement.heightFraction < 0.0005) return;
-          const stats = computeDiffStats(event);
+          const stats =
+            measurement.addedLines > 0 ||
+            measurement.removedLines > 0 ||
+            measurement.runs.length > 0
+              ? {
+                  added: measurement.addedLines,
+                  removed: measurement.removedLines,
+                  runs: measurement.runs,
+                }
+              : computeDiffStats(event);
           if (stats.added + stats.removed === 0) return;
           diffBlocks.push({
             scrollFraction: measurement.startFraction,

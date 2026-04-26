@@ -30,6 +30,7 @@ import {
   toRdvHunks,
   toRdvFromContent,
   normalizeLanguage,
+  getRenderedDiffStats,
   refractor,
 } from "@utils/rdvAdapter";
 import {
@@ -90,6 +91,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     SIDE_BY_SIDE_THRESHOLD
   );
   const isWide = !isNarrow;
+  const viewType = isWide ? "split" : "unified";
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const setWrapperRef = useCallback(
@@ -100,16 +102,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
     },
     [narrowCallbackRef]
   );
-
-  // Propagate actual collapse state to the nearest [data-diff-anchor] wrapper.
-  useEffect(() => {
-    const el = wrapperRef.current;
-    if (!el) return;
-    const anchor = el.closest<HTMLElement>("[data-diff-anchor]");
-    if (anchor) {
-      anchor.setAttribute("data-diff-collapsed", isExpanded ? "false" : "true");
-    }
-  }, [isExpanded]);
 
   // Derive estimated line count for summary badge (cheap, no diff computation).
   const estimatedLineCount = useMemo(() => {
@@ -185,6 +177,34 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }
   }, [expandedHunks, lang]);
 
+  const minimapStats = useMemo(
+    () => getRenderedDiffStats(expandedHunks, viewType),
+    [expandedHunks, viewType]
+  );
+
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const anchor = el.closest<HTMLElement>("[data-diff-anchor]");
+    if (!anchor) return;
+
+    anchor.setAttribute("data-diff-collapsed", isExpanded ? "false" : "true");
+
+    if (expandedHunks.length > 0) {
+      anchor.setAttribute("data-diff-added-lines", String(minimapStats.added));
+      anchor.setAttribute(
+        "data-diff-removed-lines",
+        String(minimapStats.removed)
+      );
+      anchor.setAttribute("data-diff-runs", JSON.stringify(minimapStats.runs));
+      return;
+    }
+
+    anchor.removeAttribute("data-diff-added-lines");
+    anchor.removeAttribute("data-diff-removed-lines");
+    anchor.removeAttribute("data-diff-runs");
+  }, [isExpanded, expandedHunks.length, minimapStats]);
+
   if (!hasDiff) return null;
 
   return (
@@ -219,7 +239,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       {isExpanded && expandedHunks.length > 0 && (
         <div className="rounded-[3px] overflow-x-auto overflow-y-hidden border border-panel-border">
           <Diff
-            viewType={isWide ? "split" : "unified"}
+            viewType={viewType}
             diffType={diffType}
             hunks={expandedHunks}
             tokens={tokens}

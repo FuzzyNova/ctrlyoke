@@ -69,6 +69,7 @@ export type { HarnessStatus } from "./WebviewSettingsSync";
 export class FlightPathWebviewProvider
   implements vscode.WebviewViewProvider, IDashboardProvider, IDashboardSink
 {
+  private static readonly PANEL_HARD_RELOAD_TIMEOUT_MS = 6500;
   private view?: vscode.WebviewView;
   private _pendingActiveWorkflowId: string | undefined;
   private workflowOrchestrator?: WorkflowOrchestrator;
@@ -77,6 +78,7 @@ export class FlightPathWebviewProvider
   // captures the session value at launch; a stale closure exits immediately when
   // the captured value no longer matches the field.
   private reconnectRetrySession = 0;
+  private panelHardReloadTimer?: ReturnType<typeof setTimeout>;
   private outputHistoryManager?: OutputHistoryManager;
   private hub?: DashboardBroadcastHub;
   private modelsLoadedDisposable?: vscode.Disposable;
@@ -195,6 +197,26 @@ export class FlightPathWebviewProvider
 
     Log.debug("resolveWebviewView() complete — view is now set");
 
+    this.startPanelReconnectRecovery(webviewView, true);
+
+    // Best-effort early INIT: VS Code buffers postMessage until the
+    // webview iframe loads, but React's message listener may not be
+    // attached yet. The READY handler sends INIT again as a
+    // guaranteed fallback once React confirms it is listening.
+    void this.settingsSync.sendInitialState();
+
+    if (this._pendingActiveWorkflowId !== undefined) {
+      this.notifyActiveWorkflowChanged(this._pendingActiveWorkflowId);
+      this._pendingActiveWorkflowId = undefined;
+    }
+  }
+
+  private startPanelReconnectRecovery(
+    webviewView: vscode.WebviewView,
+    allowHardReload: boolean
+  ): void {
+    this.clearPanelHardReloadTimer();
+
     // If VS Code retained the old React context instead of reloading the
     // iframe (common on extension host restart), React will never re-send
     // READY on its own. This RECONNECT nudges the retained React to re-send
@@ -207,6 +229,24 @@ export class FlightPathWebviewProvider
     // Each retry closure captures `session`; incrementing reconnectRetrySession
     // in cancelReconnectRetry() causes all in-flight closures to self-terminate.
     const session = ++this.reconnectRetrySession;
+
+    if (allowHardReload) {
+      this.panelHardReloadTimer = setTimeout(() => {
+        this.panelHardReloadTimer = undefined;
+        if (this.reconnectRetrySession !== session || this.view !== webviewView) {
+          return;
+        }
+
+        Log.warn(
+          "[resolveWebviewView] panel never sent READY after restart — forcing full webview HTML reload"
+        );
+
+        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+        this.startPanelReconnectRecovery(webviewView, false);
+        void this.settingsSync.sendInitialState();
+      }, FlightPathWebviewProvider.PANEL_HARD_RELOAD_TIMEOUT_MS);
+    }
+
     void retryWithBackoff(
       async () => {
         if (this.reconnectRetrySession !== session) return true; // cancelled
@@ -225,17 +265,6 @@ export class FlightPathWebviewProvider
         },
       }
     );
-
-    // Best-effort early INIT: VS Code buffers postMessage until the
-    // webview iframe loads, but React's message listener may not be
-    // attached yet. The READY handler sends INIT again as a
-    // guaranteed fallback once React confirms it is listening.
-    void this.settingsSync.sendInitialState();
-
-    if (this._pendingActiveWorkflowId !== undefined) {
-      this.notifyActiveWorkflowChanged(this._pendingActiveWorkflowId);
-      this._pendingActiveWorkflowId = undefined;
-    }
   }
 
   /**
@@ -1027,6 +1056,13 @@ window.vscodeApi = acquireVsCodeApi();
   /** Cancels any in-flight RECONNECT retry loop by invalidating its session id. */
   private cancelReconnectRetry(): void {
     this.reconnectRetrySession++;
+    this.clearPanelHardReloadTimer();
+  }
+
+  private clearPanelHardReloadTimer(): void {
+    if (!this.panelHardReloadTimer) return;
+    clearTimeout(this.panelHardReloadTimer);
+    this.panelHardReloadTimer = undefined;
   }
 
   // ============================================================================

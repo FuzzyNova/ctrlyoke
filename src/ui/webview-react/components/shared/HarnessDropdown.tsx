@@ -185,24 +185,26 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
         <HarnessIcon harnessId={harness} size={13} />
         {name}
       </button>
-      {/* Eye-closed — hover-only, left of status dot, never on selected or non-hideable */}
-      {canHideRow && (
-        <button
-          type="button"
-          title="Hide this harness"
-          aria-label="Hide this harness"
-          onClick={(e) => {
-            e.stopPropagation();
-            onHide?.(harness);
-          }}
-          className="flex-shrink-0 p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
-        >
-          <i className="codicon codicon-eye-closed text-xs" />
-        </button>
-      )}
       {showStatus && status && (
         <StatusIndicator status={status.status} narrow={narrow} />
       )}
+      <div className="flex-shrink-0 w-4 flex items-center justify-center">
+        {/* Reserve a right-edge action slot so status text never shifts on hover. */}
+        {canHideRow && (
+          <button
+            type="button"
+            title="Hide this harness"
+            aria-label="Hide this harness"
+            onClick={(e) => {
+              e.stopPropagation();
+              onHide?.(harness);
+            }}
+            className="p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+          >
+            <i className="codicon codicon-eye-closed text-xs" />
+          </button>
+        )}
+      </div>
     </div>
   );
 };

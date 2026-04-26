@@ -1,0 +1,107 @@
+import { describe, expect, it } from "vitest";
+import {
+  getRenderedDiffStats,
+  type RenderedDiffRun,
+} from "@utils/rdvAdapter";
+
+describe("getRenderedDiffStats", () => {
+  it("merges contiguous unified rows with the same rendered signature", () => {
+    const result = getRenderedDiffStats(
+      [
+        {
+          content: "@@ -1,4 +1,4 @@",
+          oldStart: 1,
+          oldLines: 4,
+          newStart: 1,
+          newLines: 4,
+          changes: [
+            {
+              type: "normal",
+              isNormal: true,
+              oldLineNumber: 1,
+              newLineNumber: 1,
+              content: "context 1",
+            },
+            {
+              type: "normal",
+              isNormal: true,
+              oldLineNumber: 2,
+              newLineNumber: 2,
+              content: "context 2",
+            },
+            {
+              type: "insert",
+              isInsert: true,
+              lineNumber: 3,
+              content: "added 1",
+            },
+            {
+              type: "insert",
+              isInsert: true,
+              lineNumber: 4,
+              content: "added 2",
+            },
+          ],
+        },
+      ],
+      "unified"
+    );
+
+    expect(result.added).toBe(2);
+    expect(result.removed).toBe(0);
+    expect(result.runs).toEqual<RenderedDiffRun[]>([
+      { count: 2, addedLines: 0, removedLines: 0 },
+      { count: 2, addedLines: 1, removedLines: 0 },
+    ]);
+  });
+
+  it("uses split-view row pairing for adjacent delete/insert changes", () => {
+    const result = getRenderedDiffStats(
+      [
+        {
+          content: "@@ -1,3 +1,3 @@",
+          oldStart: 1,
+          oldLines: 3,
+          newStart: 1,
+          newLines: 3,
+          changes: [
+            {
+              type: "delete",
+              isDelete: true,
+              lineNumber: 1,
+              content: "removed",
+            },
+            {
+              type: "insert",
+              isInsert: true,
+              lineNumber: 1,
+              content: "added",
+            },
+            {
+              type: "normal",
+              isNormal: true,
+              oldLineNumber: 2,
+              newLineNumber: 2,
+              content: "context",
+            },
+            {
+              type: "delete",
+              isDelete: true,
+              lineNumber: 3,
+              content: "removed only",
+            },
+          ],
+        },
+      ],
+      "split"
+    );
+
+    expect(result.added).toBe(1);
+    expect(result.removed).toBe(2);
+    expect(result.runs).toEqual<RenderedDiffRun[]>([
+      { count: 1, addedLines: 1, removedLines: 1 },
+      { count: 1, addedLines: 0, removedLines: 0 },
+      { count: 1, addedLines: 0, removedLines: 1 },
+    ]);
+  });
+});
