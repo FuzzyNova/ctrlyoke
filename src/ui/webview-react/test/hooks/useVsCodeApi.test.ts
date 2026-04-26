@@ -3,9 +3,13 @@
  *
  * The VS Code API is mocked in test/setup.ts via window.vscodeApi.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useVsCodeApi, getVsCodeApi } from "@hooks/useVsCodeApi";
+
+beforeEach(() => {
+  window.vscodeApi = window.acquireVsCodeApi?.();
+});
 
 // ---------------------------------------------------------------------------
 // useVsCodeApi
@@ -44,6 +48,19 @@ describe("useVsCodeApi", () => {
     const { result } = renderHook(() => useVsCodeApi());
     expect(result.current).toBe(window.vscodeApi);
   });
+
+  it("refreshes when window.vscodeApi is replaced", () => {
+    const replacementApi = {
+      postMessage: () => undefined,
+      getState: () => null,
+      setState: () => undefined,
+    };
+
+    window.vscodeApi = replacementApi;
+
+    const { result } = renderHook(() => useVsCodeApi());
+    expect(result.current).toBe(replacementApi);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -68,5 +85,17 @@ describe("getVsCodeApi", () => {
     expect(typeof api.postMessage).toBe("function");
     expect(typeof api.getState).toBe("function");
     expect(typeof api.setState).toBe("function");
+  });
+
+  it("returns the latest window.vscodeApi when the global changes", () => {
+    const replacementApi = {
+      postMessage: () => undefined,
+      getState: () => null,
+      setState: () => undefined,
+    };
+
+    window.vscodeApi = replacementApi;
+
+    expect(getVsCodeApi()).toBe(replacementApi);
   });
 });

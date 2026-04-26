@@ -33,9 +33,9 @@ function formatElapsed(startedAt: number | undefined): string {
  * RunningWorkflowItem - Single entry in the "Running Workflows" dropdown section.
  *
  * Shows:
- * - Status icon: pulsing green dot for RUNNING, pause codicon for PAUSED
  * - Workflow name (truncated)
- * - Status badge ("RUNNING" / "PAUSED", muted text)
+ * - Optional terminal icon aligned with recent workflow rows
+ * - Status badge ("RUNNING" / "PAUSED") aligned with recent workflow rows
  * - Elapsed timer: live ticking for RUNNING, frozen for PAUSED
  *
  * No dismiss button — workflows auto-retire when they finish.
@@ -87,17 +87,6 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       title={workflow.filePath}
     >
-      {/* Status icon */}
-      {isRunning ? (
-        <span className="flex-shrink-0 w-4 flex items-center justify-center">
-          <span className="inline-block w-2 h-2 rounded-full bg-indicator-success animate-pulse" />
-        </span>
-      ) : (
-        <span className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg">
-          <i className="codicon codicon-debug-pause" />
-        </span>
-      )}
-
       {/* Workflow name */}
       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
         {workflow.workflowName}
@@ -113,9 +102,9 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         </span>
       )}
 
-      {/* Status badge — fixed-width column so "RUNNING"/"PAUSED" align across rows */}
+      {/* Status badge — fixed-width column matches recent workflow rows */}
       <span
-        className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[52px]"}`}
+        className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[76px]"}`}
       >
         <span
           className={`inline-flex items-center text-xs px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}

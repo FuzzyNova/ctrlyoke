@@ -6,6 +6,7 @@ import {
 } from "@store/workflowStore";
 import type { UndoableWorkflowState } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
+import { useIsMobile } from "@hooks/useMediaQuery";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
@@ -170,6 +171,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   onAction,
 }) => {
   const vscode = useVsCodeApi();
+  const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -185,6 +187,12 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const futureStates = useWorkflowTemporalStore((s) => s.futureStates);
 
   const editingDisabled = isRunning || isPaused;
+
+  useEffect(() => {
+    if (isMobile && isOpen) {
+      setIsOpen(false);
+    }
+  }, [isMobile, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -394,42 +402,49 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
         <i className="codicon codicon-redo" />
       </button>
 
-      {/* Separator */}
-      <div className={separatorClass}>
-        <div className="w-px h-full bg-current opacity-40" />
-      </div>
+      {!isMobile && (
+        <>
+          {/* Separator */}
+          <div className={separatorClass}>
+            <div className="w-px h-full bg-current opacity-40" />
+          </div>
 
-      {/* History chevron */}
-      <button
-        type="button"
-        className={`${btnBase} px-1.5 ${chevronDisabled ? disabledClass : activeClass} ${isOpen ? "bg-btn-secondary-hover" : ""}`}
-        onClick={() => {
-          const nextOpen = !isOpen;
-          onAction?.("history-toggle", getDebugDetails({ isOpen: nextOpen }));
-          if (!chevronDisabled) {
-            setIsOpen(nextOpen);
-          }
-        }}
-        disabled={chevronDisabled}
-        title="Undo history"
-        aria-label="Show undo history"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-      >
-        <svg
-          className="w-3 h-3"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </button>
+          {/* History chevron */}
+          <button
+            type="button"
+            className={`${btnBase} px-1.5 ${chevronDisabled ? disabledClass : activeClass} ${isOpen ? "bg-btn-secondary-hover" : ""}`}
+            onClick={() => {
+              const nextOpen = !isOpen;
+              onAction?.(
+                "history-toggle",
+                getDebugDetails({ isOpen: nextOpen })
+              );
+              if (!chevronDisabled) {
+                setIsOpen(nextOpen);
+              }
+            }}
+            disabled={chevronDisabled}
+            title="Undo history"
+            aria-label="Show undo history"
+            aria-haspopup="listbox"
+            aria-expanded={isOpen}
+          >
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </button>
+        </>
+      )}
 
       {/* Dropdown */}
       {isOpen &&

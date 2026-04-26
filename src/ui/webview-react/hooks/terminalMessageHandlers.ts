@@ -16,6 +16,7 @@ import { useUiStore } from "../store/uiStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { sendMessage } from "@hooks/useMessageHandler";
 import type { MessageHandlerMap } from "./useMessageHandler";
+import { clearPanelReconnectReloadWatchdog } from "./reconnectWatchdog";
 
 function isScriptPtySession(session: {
   kind?: string;
@@ -39,6 +40,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   handlers[MESSAGE_TYPES.CLIENT_ID_ASSIGNED] = (message: any) => {
     const { clientId } = message;
     if (clientId) {
+      clearPanelReconnectReloadWatchdog();
       useUiStore.getState().setMyClientId(clientId as string);
     }
   };
@@ -53,8 +55,12 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     const entry = terminalRegistry.get(workflowId, sessionId);
     if (entry) {
       entry.term.write(data as string);
-    } else {
-      // Terminal not yet mounted — buffer until TerminalInstance mounts
+      return;
+    }
+    // Only buffer for the active workflow. For inactive workflows the
+    // server-side reconnect buffer replays output on SWITCH_WORKFLOW, so
+    // buffering here would cause duplicate output when the user switches.
+    if (workflowId === useUiStore.getState().activeWorkflowId) {
       useTerminalStore
         .getState()
         .pushPendingOutput(workflowId, sessionId, data as string);

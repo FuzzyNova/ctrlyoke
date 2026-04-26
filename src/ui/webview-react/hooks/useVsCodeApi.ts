@@ -11,6 +11,7 @@ declare global {
   interface Window {
     vscodeApi?: VsCodeApi;
     __flightpathStandalone?: boolean;
+    acquireVsCodeApi?: () => VsCodeApi;
   }
 }
 
@@ -20,29 +21,41 @@ export const isStandalone =
 
 let vscodeApi: VsCodeApi | undefined;
 
-// Initialize immediately from window (set by inline script).
-// No logging here — WebviewLog imports this module (circular dep) and the
-// VS Code API is not yet available at module-load time anyway.
-if (typeof window !== "undefined" && window.vscodeApi && !vscodeApi) {
-  vscodeApi = window.vscodeApi;
+function resolveVsCodeApi(): VsCodeApi | undefined {
+  if (typeof window === "undefined") {
+    return vscodeApi;
+  }
+
+  // Prefer the current global reference. On retained webviews, VS Code may
+  // replace window.vscodeApi during a reconnect, so never pin the first object
+  // forever if a newer one is present.
+  if (window.vscodeApi && window.vscodeApi !== vscodeApi) {
+    vscodeApi = window.vscodeApi;
+  }
+
+  if (!vscodeApi && typeof window.acquireVsCodeApi === "function") {
+    vscodeApi = window.acquireVsCodeApi();
+    window.vscodeApi = vscodeApi;
+  }
+
+  return vscodeApi;
 }
 
 export function useVsCodeApi(): VsCodeApi {
-  const [api, setApi] = useState<VsCodeApi | undefined>(vscodeApi);
+  const [api, setApi] = useState<VsCodeApi | undefined>(() => resolveVsCodeApi());
 
   useEffect(() => {
-    if (!vscodeApi) {
-      // Use the globally captured API from the inline script
-      vscodeApi = window.vscodeApi;
-      if (!vscodeApi) {
-        console.error("FlightPath: window.vscodeApi is undefined!");
-        throw new Error(
-          "VS Code API not available - window.vscodeApi is undefined"
-        );
-      }
-      setApi(vscodeApi);
+    const resolvedApi = resolveVsCodeApi();
+    if (!resolvedApi) {
+      console.error("FlightPath: window.vscodeApi is undefined!");
+      throw new Error(
+        "VS Code API not available - window.vscodeApi is undefined"
+      );
     }
-  }, []);
+    if (resolvedApi !== api) {
+      setApi(resolvedApi);
+    }
+  }, [api]);
 
   if (!api) {
     console.error("FlightPath: api is undefined in useVsCodeApi hook");
@@ -53,13 +66,11 @@ export function useVsCodeApi(): VsCodeApi {
 }
 
 export function getVsCodeApi(): VsCodeApi {
-  if (!vscodeApi) {
-    vscodeApi = window.vscodeApi;
-    if (!vscodeApi) {
-      throw new Error(
-        "VS Code API not available - window.vscodeApi is undefined"
-      );
-    }
+  const resolvedApi = resolveVsCodeApi();
+  if (!resolvedApi) {
+    throw new Error(
+      "VS Code API not available - window.vscodeApi is undefined"
+    );
   }
-  return vscodeApi;
+  return resolvedApi;
 }

@@ -37,6 +37,7 @@ vi.mock("@utils/logger", () => ({
 }));
 
 import { useMessageHandler } from "@hooks/useMessageHandler";
+import * as reconnectWatchdog from "@hooks/reconnectWatchdog";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
@@ -81,6 +82,8 @@ beforeEach(() => {
   useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
   handleCompletionNotificationEventMock.mockReset();
   webviewWarnMock.mockReset();
+  sessionStorage.clear();
+  vi.useRealTimers();
 });
 
 // ---------------------------------------------------------------------------
@@ -297,6 +300,63 @@ describe("INIT", () => {
     expect(useSettingsStore.getState().globalSettings.harness).toBe(
       "claude-cli"
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Restart / reconnect lifecycle
+// ---------------------------------------------------------------------------
+
+describe("restart lifecycle", () => {
+  it("schedules a panel reload fallback after DEV_RESTARTING", () => {
+    vi.useFakeTimers();
+    const reloadSpy = vi
+      .spyOn(
+        reconnectWatchdog.reconnectWatchdogHooks,
+        "reloadPanelForReconnect"
+      )
+      .mockImplementation(() => undefined);
+
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setMyClientId("panel");
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.DEV_RESTARTING);
+    });
+
+    expect(useUiStore.getState().devRestarting).toBe(true);
+    expect(useUiStore.getState().startupReady).toBe(false);
+    expect(useUiStore.getState().myClientId).toBe("");
+
+    act(() => {
+      vi.advanceTimersByTime(1600);
+    });
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    reloadSpy.mockRestore();
+  });
+
+  it("cancels the reload fallback once CLIENT_ID_ASSIGNED arrives", () => {
+    vi.useFakeTimers();
+    const reloadSpy = vi
+      .spyOn(
+        reconnectWatchdog.reconnectWatchdogHooks,
+        "reloadPanelForReconnect"
+      )
+      .mockImplementation(() => undefined);
+
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setMyClientId("panel");
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RECONNECT);
+      dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "panel" });
+      vi.advanceTimersByTime(1600);
+    });
+
+    expect(useUiStore.getState().myClientId).toBe("panel");
+    expect(reloadSpy).not.toHaveBeenCalled();
+    reloadSpy.mockRestore();
   });
 });
 

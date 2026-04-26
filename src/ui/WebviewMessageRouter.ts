@@ -158,6 +158,11 @@ export class WebviewMessageRouter {
     // ── Lifecycle ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.READY, async (message) => {
       Log.debug("Received READY from React — sending INIT");
+      if (this.clientId === PANEL_CLIENT_ID) {
+        // Cancel RECONNECT retries before any awaited startup work so a valid
+        // panel READY immediately stops further nudges from the extension.
+        this.callbacks.onPanelReady?.();
+      }
       await this.settingsSync.sendInitialState(this.getCurrentPostMessage());
       // Tell the webview its own client identity so it can compute isController
       this.emitMessage({
@@ -224,9 +229,6 @@ export class WebviewMessageRouter {
 
       // Panel-only extras:
       if (this.clientId === PANEL_CLIENT_ID) {
-        // Panel has reconnected — cancel any pending RECONNECT retries immediately
-        // so stale retries don't arrive after the handshake is already complete.
-        this.callbacks.onPanelReady?.();
         if (orchestrator) {
           // Register the callback before setDashboardReady so it's in place
           // whether the auto-load runs immediately (orchestrator already init'd)
@@ -1028,7 +1030,6 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.TERMINAL_SPAWN_SHELL, async (msg) => {
       const ptyManager = getPtyProcessManager();
-      const postMsg = this.getCurrentPostMessage();
       if (!ptyManager || !msg.workflowId) return;
       const workflowId = msg.workflowId as string;
       const cwd = (msg.cwd as string | undefined) ?? process.cwd();
@@ -1038,7 +1039,7 @@ export class WebviewMessageRouter {
           workflowId,
           cwd,
           onData: (s, chunk) => {
-            postMsg({
+            ptyPostMessage({
               type: MESSAGE_TYPES.TERMINAL_OUTPUT,
               workflowId: s.workflowId,
               sessionId: s.id,
@@ -1046,7 +1047,7 @@ export class WebviewMessageRouter {
             });
           },
           onExit: (s, exitCode) => {
-            postMsg({
+            ptyPostMessage({
               type: MESSAGE_TYPES.TERMINAL_ENDED,
               workflowId: s.workflowId,
               sessionId: s.id,
@@ -1061,9 +1062,10 @@ export class WebviewMessageRouter {
         void vscode.window.showWarningMessage(message);
         return;
       }
-      // The client that spawned the shell is its controller
-      session.controllerClientId = this.clientId;
-      postMsg({
+      // Register the spawning client as controller and update workflowRunControllers
+      // so that subsequent restarts inherit the same controller via assignController.
+      ptyManager.assignController(session.id, this.clientId);
+      ptyPostMessage({
         type: MESSAGE_TYPES.TERMINAL_STARTED,
         workflowId,
         sessionId: session.id,
@@ -1076,14 +1078,13 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.TERMINAL_RESTART_SHELL, async (msg) => {
       const ptyManager = getPtyProcessManager();
-      const postMsg = this.getCurrentPostMessage();
       if (!ptyManager || !msg.sessionId || !msg.workflowId) return;
       const workflowId = msg.workflowId as string;
       let newSession: ReturnType<typeof ptyManager.restartShellSession>;
       try {
         newSession = ptyManager.restartShellSession(msg.sessionId as string, {
           onData: (s, chunk) => {
-            postMsg({
+            ptyPostMessage({
               type: MESSAGE_TYPES.TERMINAL_OUTPUT,
               workflowId: s.workflowId,
               sessionId: s.id,
@@ -1091,7 +1092,7 @@ export class WebviewMessageRouter {
             });
           },
           onExit: (s, exitCode) => {
-            postMsg({
+            ptyPostMessage({
               type: MESSAGE_TYPES.TERMINAL_ENDED,
               workflowId: s.workflowId,
               sessionId: s.id,
@@ -1107,13 +1108,14 @@ export class WebviewMessageRouter {
         return;
       }
       if (newSession) {
-        postMsg({
+        ptyPostMessage({
           type: MESSAGE_TYPES.TERMINAL_STARTED,
           workflowId,
           sessionId: newSession.id,
           stepName: newSession.stepName,
           kind: SESSION_KINDS.SHELL,
           shellKind: newSession.shellKind,
+          controllerClientId: newSession.controllerClientId,
         });
       }
     });

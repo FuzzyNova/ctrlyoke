@@ -1102,9 +1102,27 @@ window.vscodeApi = acquireVsCodeApi();
     }
 
     const { handleDevDashboardAction } = await import("../dev/DevCommands");
+    const broadcastAwarePostMessage: PostMessageFn = (message) => {
+      if (
+        message &&
+        typeof message === "object" &&
+        "type" in message &&
+        message.type === MESSAGE_TYPES.DEV_RESTARTING
+      ) {
+        if (this.hub) {
+          this.hub.postMessage(message);
+        } else {
+          this.postMessage(message);
+        }
+        return;
+      }
+
+      postMessage(message);
+    };
+
     await handleDevDashboardAction(action, {
       context: this.context,
-      postMessage,
+      postMessage: broadcastAwarePostMessage,
       sendTestNotification: async () => {
         await vscode.commands.executeCommand(
           "flightpath.dev.sendTestNotification"
