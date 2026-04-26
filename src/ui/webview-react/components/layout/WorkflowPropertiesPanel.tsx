@@ -856,17 +856,17 @@ export const WorkflowPropertiesPanel: React.FC<{
           isMobileMode ? undefined : (e) => e.key === "Enter" && handleToggle()
         }
       >
-        <div className="flex items-center gap-1 text-description-fg hover:text-foreground transition-colors">
+        <div className="flex min-w-0 flex-1 items-center gap-1 text-description-fg hover:text-foreground transition-colors">
           {!isMobileMode && (
             <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
           )}
           <i className="codicon codicon-settings text-sm" />
-          <span className="text-xs font-semibold uppercase tracking-wide ml-0.5">
+          <span className="ml-0.5 min-w-0 truncate whitespace-nowrap text-xs font-semibold uppercase tracking-wide">
             Workflow Properties
           </span>
           <button
             type="button"
-            className="ml-1 w-5 h-5 flex items-center justify-center rounded opacity-60 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
+            className="ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-60 transition-all hover:bg-toolbar-hover-bg hover:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               handleResetAllToDefault();
