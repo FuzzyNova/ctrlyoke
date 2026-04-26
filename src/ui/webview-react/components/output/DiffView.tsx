@@ -213,11 +213,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
       className={`my-2 ${className}`}
     >
       {/* Summary / toggle header */}
-      <div className="flex items-center gap-2 mb-1">
+      <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
         <button
           type="button"
           onClick={handleToggle}
-          className="flex items-center gap-1.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
+          className="flex min-w-0 items-center gap-1.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
           title={isExpanded ? "Collapse diff" : "Expand diff"}
         >
           <i
@@ -232,7 +232,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
             )}
           </span>
         </button>
-        {actionSlot}
+        {actionSlot && (
+          <div className="ml-auto flex shrink-0 items-center">
+            {actionSlot}
+          </div>
+        )}
       </div>
 
       {/* Diff — only mounted when expanded and there are hunks */}

@@ -121,7 +121,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
       status !== OPERATION_STATUS.FAILED ? (
         <button
           type="button"
-          className="text-[length:var(--fp-output-font-size-xs)] font-bold uppercase text-description-fg hover:text-foreground transition-colors cursor-pointer bg-transparent border-none p-0 font-[inherit]"
+          className={`icon-btn inline-flex items-center gap-1 py-0.5 px-1.5 text-[length:var(--fp-output-font-size-xs)] ${fileUndoMode === "redo" ? "text-terminal-ansiGreen hover:opacity-80" : "text-link-fg hover:text-link-active-fg"}`}
           title={
             fileUndoMode === "redo"
               ? `Redo changes to ${path}`
@@ -129,7 +129,10 @@ export const FileEditOutput = memo<FileEditOutputProps>(
           }
           onClick={() => onUndoFile(path, attemptIndex)}
         >
-          {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+          <i
+            className={`codicon ${fileUndoMode === "redo" ? "codicon-redo" : "codicon-discard"} text-xxs`}
+          />
+          <span>{fileUndoMode === "redo" ? "Redo" : "Undo"}</span>
         </button>
       ) : null;
 

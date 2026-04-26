@@ -80,6 +80,8 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       }
       setProperty("resumeSession", v === "yes");
     }
+
+    setFooterOpenPicker(v === "yes" ? "context" : null);
   };
 
   // ── Session ID input ──────────────────────────────────────────────────────
