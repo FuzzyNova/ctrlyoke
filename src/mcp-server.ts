@@ -238,6 +238,15 @@ class FlightPathMCPServer {
               },
             },
           },
+          {
+            name: "flightpath_global_status",
+            description:
+              "Get the status of ALL FlightPath workflows currently in the workspace queue, not just the current one. Call this at the start of a session to understand what other agents are working on, avoid editing files they own, and ignore compile/test errors they may have caused. Returns name, execution state, harness, current step, and working file path for each workflow.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+            },
+          },
         ],
       };
     });
@@ -277,6 +286,11 @@ class FlightPathMCPServer {
               log("Handling read_output...");
               result = await this.handleReadOutput(args);
               log("read_output completed successfully");
+              return result;
+            case "flightpath_global_status":
+              log("Handling global_status...");
+              result = await this.handleGlobalStatus();
+              log("global_status completed successfully");
               return result;
             default:
               throw new Error(`Unknown tool: ${name}`);
@@ -771,6 +785,92 @@ class FlightPathMCPServer {
     }
 
     return results;
+  }
+
+  /**
+   * Handle flightpath_global_status tool invocation.
+   * Returns the status of every workflow in the workspace queue — not just the
+   * current one. Agents should call this at session start to understand what
+   * other workflows are running so they can avoid file conflicts and ignore
+   * errors caused by sibling workflows.
+   */
+  private async handleGlobalStatus() {
+    const queueDir = path.join(this.workspaceRoot, FLIGHTPATH_DIR, QUEUE_DIR);
+    log("Scanning queue directory for all workflows:", queueDir);
+
+    try {
+      const files = await fs.readdir(queueDir);
+      const queueFiles = files.filter((f) => f.endsWith(".flightpath.json"));
+      log("Found queue files:", queueFiles.length);
+
+      const workflows = await Promise.all(
+        queueFiles.map(async (f) => {
+          const filePath = path.join(queueDir, f);
+          try {
+            const content = await fs.readFile(filePath, "utf8");
+            const data: WorkingFile = JSON.parse(content);
+            const runtime = data._runtime || {
+              currentIndex: 0,
+              executionState: EXECUTION_STATES.IDLE,
+            };
+            const allSteps = (data.steps || []) as WorkflowStep[];
+            const completedCount = allSteps.filter(
+              (p) => p._runtime?.completedAt !== undefined
+            ).length;
+
+            return {
+              workflowName: data.workflowName,
+              executionState: runtime.executionState,
+              harness: data.harness ?? null,
+              model: data.model ?? null,
+              currentStep: runtime.currentIndex + 1,
+              totalSteps: allSteps.length,
+              completedSteps: completedCount,
+              startedAt: data.startedAt ?? null,
+              lastModifiedAt: data.lastModifiedAt ?? null,
+              workingFile: path.relative(this.workspaceRoot, filePath),
+            };
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      const validWorkflows = workflows.filter(
+        (w): w is NonNullable<typeof w> => w !== null
+      );
+
+      const response = {
+        workspaceRoot: this.workspaceRoot,
+        workflowCount: validWorkflows.length,
+        workflows: validWorkflows,
+      };
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(response, null, 2),
+          },
+        ],
+      };
+    } catch (error: any) {
+      if (error.code === "ENOENT") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                { workspaceRoot: this.workspaceRoot, workflowCount: 0, workflows: [] },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+      throw error;
+    }
   }
 
   /**
