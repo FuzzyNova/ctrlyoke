@@ -211,8 +211,9 @@ export function buildUndoCandidatesForOutputs(
     // For display: prefer the snapshot's structuredPatch (a single full before→after diff).
     // Fall back to the per-event patches combined — needed when the snapshot patch is absent
     // (e.g. content capture was skipped due to file size).
+    const snapshotPatch = snapEntry?.structuredPatch;
     const displayPatch =
-      snapEntry?.structuredPatch ??
+      snapshotPatch ??
       (accum.eventPatches.length > 0 ? accum.eventPatches.flat() : undefined);
 
     return {
@@ -224,7 +225,11 @@ export function buildUndoCandidatesForOutputs(
       changeType: snapEntry?.changeType ?? accum.changeType,
       tier: "tier1",
       instruction,
-      oldContent: displayPatch ? undefined : accum.oldContent,
+      oldContent: snapshotPatch
+        ? snapEntry?.beforeContent
+        : displayPatch
+          ? undefined
+          : accum.oldContent,
       newContent: displayPatch ? undefined : accum.newContent,
       structuredPatch: displayPatch,
       afterHash: snapEntry?.afterHash,
@@ -245,6 +250,7 @@ export function buildUndoCandidatesForOutputs(
       tier: "tier2",
       instruction: resolveSnapshotUndoInstruction(snap),
       contentCaptureSkipped: snap.contentCaptureSkipped,
+      oldContent: snap.beforeContent,
       afterHash: snap.afterHash,
       structuredPatch: snap.structuredPatch,
     }));

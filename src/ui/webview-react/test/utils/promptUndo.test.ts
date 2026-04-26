@@ -85,11 +85,28 @@ function makeCliOutput(events: unknown[]): CliOutput {
 }
 
 function makeSnapshot(files: SnapshotFileChange[]): WorkspaceSnapshot {
-  return { capturedAt: Date.now(), strategy: "git", changedFiles: files };
+  return {
+    capturedAt: Date.now(),
+    strategy: "git",
+    git: {
+      headCommit: "0123456789abcdef0123456789abcdef01234567",
+      branch: "main",
+    },
+    changedFiles: files,
+  };
 }
 
-function makeModifiedSnap(path: string, patch = PATCH): SnapshotFileChange {
-  return { path, changeType: "modified", structuredPatch: patch };
+function makeModifiedSnap(
+  path: string,
+  patch = PATCH,
+  beforeContent?: string
+): SnapshotFileChange {
+  return {
+    path,
+    changeType: "modified",
+    structuredPatch: patch,
+    beforeContent,
+  };
 }
 
 function makeCreatedSnap(path: string): SnapshotFileChange {
@@ -337,6 +354,24 @@ describe("buildUndoCandidatesForOutputs — Tier 1", () => {
     // Snapshot patch wins for display
     expect(candidates[0].structuredPatch).toEqual(snapPatch);
   });
+
+  it("uses snapshot beforeContent when the snapshot patch wins for display", () => {
+    const output = makeCliOutput([
+      makeFileEditEvent("src/a.ts", {
+        oldContent: "event-old",
+        newContent: "event-new",
+        structuredPatch: PATCH,
+      }),
+    ]);
+    const snapshot = makeSnapshot([
+      makeModifiedSnap("src/a.ts", PATCH, "snapshot-before"),
+    ]);
+    const candidates = buildUndoCandidatesForOutputs([output], snapshot);
+
+    expect(candidates[0].structuredPatch).toEqual(PATCH);
+    expect(candidates[0].oldContent).toBe("snapshot-before");
+    expect(candidates[0].newContent).toBeUndefined();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -364,6 +399,17 @@ describe("buildUndoCandidatesForOutputs — Tier 2", () => {
     );
     expect(candidates[0].tier).toBe("tier2");
     expect(candidates[0].instruction).toBeNull();
+  });
+
+  it("snapshot-only modified file keeps beforeContent for diff display", () => {
+    const candidates = buildUndoCandidatesForOutputs(
+      [],
+      makeSnapshot([makeModifiedSnap("src/x.ts", PATCH, "snapshot-before")])
+    );
+
+    expect(candidates[0].tier).toBe("tier2");
+    expect(candidates[0].oldContent).toBe("snapshot-before");
+    expect(candidates[0].structuredPatch).toEqual(PATCH);
   });
 
   it("snapshot-only created file → delete instruction", () => {

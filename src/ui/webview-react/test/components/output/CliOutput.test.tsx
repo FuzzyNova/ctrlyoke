@@ -66,10 +66,15 @@ describe("CliOutput", () => {
     const workspaceSnapshot: WorkspaceSnapshot = {
       capturedAt: Date.now(),
       strategy: "git",
+      git: {
+        headCommit: "0123456789abcdef0123456789abcdef01234567",
+        branch: "main",
+      },
       changedFiles: [
         {
           path: "src/example.ts",
           changeType: "modified",
+          beforeContent: "line 1\nline 2\nsnapshot old\n",
           structuredPatch: [
             {
               oldStart: 3,
@@ -95,6 +100,9 @@ describe("CliOutput", () => {
     await user.click(screen.getByRole("button", { name: /show diff/i }));
 
     expect(screen.getByText("snapshot new")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /2 hidden lines/i })
+    ).toBeInTheDocument();
     expect(screen.queryByText("event earlier")).not.toBeInTheDocument();
   });
 });

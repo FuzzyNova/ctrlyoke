@@ -300,6 +300,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
         tier: "tier2",
         instruction: resolveSnapshotInstruction(snap),
         contentCaptureSkipped: snap.contentCaptureSkipped,
+        oldContent: snap.beforeContent,
         structuredPatch: snap.structuredPatch,
       })),
     [input?.snapshotOnlyFiles]

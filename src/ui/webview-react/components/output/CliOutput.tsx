@@ -179,6 +179,15 @@ function getSnapshotStructuredPatch(
   )?.structuredPatch;
 }
 
+function getSnapshotBeforeContent(
+  path: string,
+  workspaceSnapshot?: WorkspaceSnapshot
+): string | undefined {
+  return workspaceSnapshot?.changedFiles.find(
+    (change) => change.beforeContent !== undefined && sameFilePath(path, change.path)
+  )?.beforeContent;
+}
+
 function getDisplayStructuredPatch(
   path: string,
   eventPatch: FileEditData["structuredPatch"] | undefined,
@@ -269,12 +278,14 @@ const SingleEvent = memo<SingleEventProps>(
           data.structuredPatch,
           workspaceSnapshot
         );
+        const displayOldContent =
+          data.oldContent ?? getSnapshotBeforeContent(data.path, workspaceSnapshot);
         return (
           <FileEditOutput
             key={eventKey}
             path={data.path}
             status={data.status}
-            oldContent={data.oldContent}
+            oldContent={displayOldContent}
             newContent={data.newContent}
             structuredPatch={displayStructuredPatch}
             error={data.error}

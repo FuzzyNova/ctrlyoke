@@ -9,7 +9,9 @@ import {
   OutputExecutionTarget,
   WorkspaceSnapshot,
   UndoRecord,
+  StepOutput,
 } from "../../types/OutputHistoryTypes";
+import { WorkspaceSnapshotService } from "../../utils/WorkspaceSnapshotService";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
   EXECUTION_STATES,
@@ -46,6 +48,7 @@ export class OutputHistoryManager {
   private readonly timelineAdapter = new OutputHistoryTimelineAdapter(
     this.timelineRecorder
   );
+  private readonly snapshotService = new WorkspaceSnapshotService();
 
   constructor(private _workspaceFolderPath: string) {
     this.historyBaseDir = path.join(
@@ -275,9 +278,12 @@ export class OutputHistoryManager {
 
   /**
    * Load a history file for display.
+   * Enriches gitHead snapshot entries with `beforeContent` fetched from git
+   * when the original capture omitted it (e.g. file was >512 KB at HEAD).
    */
   async loadHistory(historyFilePath: string): Promise<WorkflowOutputHistory> {
-    return this.timelineAdapter.loadHistory(historyFilePath);
+    const history = await this.timelineAdapter.loadHistory(historyFilePath);
+    return this.enrichSnapshotsInHistory(history);
   }
 
   /**
@@ -480,6 +486,56 @@ export class OutputHistoryManager {
   // ============================================================================
   // Private helpers
   // ============================================================================
+
+  /**
+   * Enrich all workspace snapshots in a loaded history by hydrating
+   * `beforeContent` for gitHead entries that were missing it.
+   * Returns the same history object reference if nothing changed.
+   */
+  private async enrichSnapshotsInHistory(
+    history: WorkflowOutputHistory
+  ): Promise<WorkflowOutputHistory> {
+    const enrichStep = async (stepOutput: StepOutput): Promise<StepOutput> => {
+      if (!stepOutput.workspaceSnapshot) {
+        return stepOutput;
+      }
+      const enriched = await this.snapshotService.enrichSnapshotBeforeContent(
+        stepOutput.workspaceSnapshot,
+        this._workspaceFolderPath
+      );
+      if (enriched === stepOutput.workspaceSnapshot) {
+        return stepOutput;
+      }
+      return { ...stepOutput, workspaceSnapshot: enriched };
+    };
+
+    const promptEntries = await Promise.all(
+      Object.entries(history.promptOutputs).map(
+        async ([k, v]): Promise<[number, StepOutput]> => [
+          Number(k),
+          await enrichStep(v),
+        ]
+      )
+    );
+
+    let finalStepOutputs = history.finalStepOutputs;
+    if (finalStepOutputs) {
+      const finalEntries = await Promise.all(
+        Object.entries(finalStepOutputs).map(
+          async ([k, v]): Promise<[number, StepOutput]> => [
+            Number(k),
+            await enrichStep(v),
+          ]
+        )
+      );
+      finalStepOutputs = Object.fromEntries(finalEntries);
+    }
+
+    const promptOutputs: WorkflowOutputHistory["promptOutputs"] =
+      Object.fromEntries(promptEntries);
+
+    return { ...history, promptOutputs, finalStepOutputs };
+  }
 
   private getStepOutput(
     history: WorkflowOutputHistory,

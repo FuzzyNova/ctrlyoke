@@ -78,6 +78,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
 }) => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const [isExpanded, setIsExpanded] = useState(!globallyCollapsed);
+  const hasExpandableSource = oldContent !== undefined;
 
   // Snap to global state whenever the global flag or reset version changes.
   useEffect(() => {
@@ -109,7 +110,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     if (normalizedPatch.length > 0) {
       return countStructuredPatchDisplayLines(normalizedPatch);
     }
-    if (oldContent || newContent) {
+    if (oldContent !== undefined || newContent !== undefined) {
       const oldLines = oldContent ? oldContent.split("\n").length : 0;
       const newLines = newContent ? newContent.split("\n").length : 0;
       return Math.max(oldLines, newLines);
@@ -145,7 +146,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   // Expand N lines of context for the gap between two consecutive hunks.
   const handleExpand = useCallback(
     (prevHunk: HunkData | null, nextHunk: HunkData, count: number) => {
-      if (!oldContent) return;
+      if (oldContent === undefined) return;
       const gapStart =
         prevHunk !== null ? prevHunk.oldStart + prevHunk.oldLines : 1;
       const gapEnd = nextHunk.oldStart;
@@ -258,14 +259,23 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 if (collapsed > 0) {
                   nodes.push(
                     <Decoration key={`gap-${i}-${hunk.oldStart}`}>
-                      <button
-                        type="button"
-                        disabled={!oldContent}
-                        onClick={() => handleExpand(prevHunk, hunk, 10)}
-                        className="w-full text-left px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg hover:text-foreground disabled:cursor-default disabled:opacity-50 bg-transparent border-none font-mono cursor-pointer"
-                      >
-                        ▸ {collapsed} hidden lines
-                      </button>
+                      {hasExpandableSource ? (
+                        <button
+                          type="button"
+                          onClick={() => handleExpand(prevHunk, hunk, 10)}
+                          className="w-full text-left px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg hover:text-foreground bg-transparent border-none font-mono cursor-pointer"
+                          title="Expand hidden lines"
+                        >
+                          ▸ {collapsed} hidden lines
+                        </button>
+                      ) : (
+                        <div
+                          className="w-full px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg opacity-70 font-mono"
+                          title="Hidden lines can't be expanded because the original file content is unavailable for this diff."
+                        >
+                          ▸ {collapsed} hidden lines
+                        </div>
+                      )}
                     </Decoration>
                   );
                 }

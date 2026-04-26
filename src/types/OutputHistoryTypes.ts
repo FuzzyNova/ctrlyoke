@@ -2,6 +2,7 @@ import {
   ExecutionState,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  type SnapshotBaseSource,
 } from "./DashboardConstants";
 import type {
   WorkflowRuntimeCommand,
@@ -123,15 +124,40 @@ export type UndoDialogScope =
 
 export type PromptChangeType = "created" | "modified" | "deleted";
 
+export interface WorkspaceSnapshotGitInfo {
+  /**
+   * Repository HEAD commit at the moment the snapshot was captured.
+   * This lets history consumers retrieve the exact tracked file content for
+   * git-backed snapshots when the working tree still matches that revision.
+   */
+  headCommit: string;
+  /**
+   * Checked-out branch name at capture time.
+   * Omitted when HEAD was detached or the branch name could not be resolved.
+   */
+  branch?: string;
+}
+
 export interface SnapshotFileChange {
   /** Workspace-relative POSIX path (forward slashes, no leading slash) */
   path: string;
   changeType: PromptChangeType;
   /**
+   * Provenance for modified-file snapshot diffs.
+   * - "gitHead": diff base came from git HEAD at snapshot.git.headCommit
+   * - "capturedBefore": diff base came from the pre-prompt working tree content
+   */
+  baseSource?: SnapshotBaseSource;
+  /**
    * Content to restore for 'deleted' files.
    * Undefined if content capture was skipped.
    */
   contentToRestore?: string;
+  /**
+   * Full file content before a modified file was changed.
+   * Stored only when capture stayed under the snapshot size limit.
+   */
+  beforeContent?: string;
   /** True if before-content was skipped due to size (>512 KB) or binary detection. */
   contentCaptureSkipped?: boolean;
   /**
@@ -161,6 +187,11 @@ export interface WorkspaceSnapshot {
   capturedAt: number;
   /** Strategy used to capture the snapshot ('git' or 'filesystem'). */
   strategy: "git" | "filesystem";
+  /**
+   * Git repository metadata captured alongside git-backed snapshots.
+   * Absent for filesystem snapshots or when git metadata could not be resolved.
+   */
+  git?: WorkspaceSnapshotGitInfo;
   /**
    * Files changed during this prompt that have NO structured event attribution.
    * May include changes from parallel workflows — shown with a warning in the dialog.

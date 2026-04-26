@@ -8,6 +8,8 @@ import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import type {
   SnapshotFileChange,
   PromptChangeType,
+  WorkspaceSnapshot,
+  WorkspaceSnapshotGitInfo,
 } from "../types/OutputHistoryTypes";
 import type {
   UndoFileInstruction,
@@ -16,6 +18,7 @@ import type {
 import type { UnifiedDiffHunk } from "../types/CliOutputTypes";
 import { Log } from "./Log";
 import {
+  SNAPSHOT_BASE_SOURCES,
   SNAPSHOT_STRATEGIES,
   UNDO_FILE_ACTIONS,
   type SnapshotStrategy,
@@ -69,6 +72,7 @@ export interface RawWorkspaceState {
   strategy: SnapshotStrategy;
   files: Map<string, RawFileState>;
   capturedAt: number;
+  git?: WorkspaceSnapshotGitInfo;
 }
 
 function computeHash(content: string): string {
@@ -265,6 +269,34 @@ function buildReversePatchString(hunks: UnifiedDiffHunk[]): string {
 }
 
 export class WorkspaceSnapshotService {
+  private async getGitSnapshotInfo(
+    workspacePath: string
+  ): Promise<WorkspaceSnapshotGitInfo | undefined> {
+    try {
+      const [{ stdout: headCommit }, { stdout: branchOutput }] =
+        await Promise.all([
+          execFileAsync("git", ["rev-parse", "HEAD"], {
+            cwd: workspacePath,
+          }),
+          execFileAsync("git", ["branch", "--show-current"], {
+            cwd: workspacePath,
+          }),
+        ]);
+
+      const normalizedHeadCommit = headCommit.trim();
+      if (!normalizedHeadCommit) {
+        return undefined;
+      }
+
+      const normalizedBranch = branchOutput.trim();
+      return normalizedBranch
+        ? { headCommit: normalizedHeadCommit, branch: normalizedBranch }
+        : { headCommit: normalizedHeadCommit };
+    } catch {
+      return undefined;
+    }
+  }
+
   async selectStrategy(workspacePath: string): Promise<SnapshotStrategy> {
     try {
       await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], {
@@ -282,9 +314,11 @@ export class WorkspaceSnapshotService {
   ): Promise<RawWorkspaceState> {
     const capturedAt = Date.now();
     const files = new Map<string, RawFileState>();
+    let git: WorkspaceSnapshotGitInfo | undefined;
 
     try {
       if (strategy === SNAPSHOT_STRATEGIES.GIT) {
+        git = await this.getGitSnapshotInfo(workspacePath);
         let stdout = "";
         try {
           const result = await execFileAsync("git", ["status", "--porcelain"], {
@@ -293,7 +327,7 @@ export class WorkspaceSnapshotService {
           stdout = result.stdout;
         } catch (err) {
           Log.warn(`WorkspaceSnapshotService: git status failed: ${err}`);
-          return { strategy, files, capturedAt };
+          return { strategy, files, capturedAt, git };
         }
 
         const lines = stdout.split("\n").filter((l) => l.length >= 3);
@@ -338,10 +372,10 @@ export class WorkspaceSnapshotService {
       }
     } catch (err) {
       Log.warn(`WorkspaceSnapshotService: captureWorkspaceState error: ${err}`);
-      return { strategy, files: new Map(), capturedAt };
+      return { strategy, files: new Map(), capturedAt, git };
     }
 
-    return { strategy, files, capturedAt };
+    return { strategy, files, capturedAt, git };
   }
 
   async computeSnapshotChanges(
@@ -368,6 +402,7 @@ export class WorkspaceSnapshotService {
           const change: SnapshotFileChange = {
             path: filePath,
             changeType: "modified" as PromptChangeType,
+            baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
             afterHash: afterState.contentHash,
           };
           try {
@@ -376,6 +411,9 @@ export class WorkspaceSnapshotService {
               ["show", `HEAD:${filePath}`],
               { cwd: workspacePath }
             );
+            if (Buffer.byteLength(headContent, "utf8") <= MAX_CONTENT_SIZE) {
+              change.beforeContent = headContent;
+            }
             if (afterState.content !== undefined) {
               const patchResult = Diff.structuredPatch(
                 "",
@@ -413,12 +451,14 @@ export class WorkspaceSnapshotService {
         const change: SnapshotFileChange = {
           path: filePath,
           changeType: "modified" as PromptChangeType,
+          baseSource: SNAPSHOT_BASE_SOURCES.CAPTURED_BEFORE,
           afterHash: afterState.contentHash,
         };
         if (
           beforeState.content !== undefined &&
           afterState.content !== undefined
         ) {
+          change.beforeContent = beforeState.content;
           const patchResult = Diff.structuredPatch(
             "",
             "",
@@ -620,5 +660,66 @@ export class WorkspaceSnapshotService {
       return undefined;
     }
     return result.hash;
+  }
+
+  /**
+   * Hydrate `beforeContent` for modified gitHead entries that are missing it.
+   *
+   * When a file was clean at HEAD but large (>512 KB) at capture time, the
+   * snapshot stores `baseSource: "gitHead"` without `beforeContent`. This
+   * method fetches the blob from the stored HEAD commit so the DiffView can
+   * expand lines outside the visible hunks.
+   *
+   * Only touches entries where ALL conditions hold:
+   * - `change.changeType === "modified"`
+   * - `change.baseSource === SNAPSHOT_BASE_SOURCES.GIT_HEAD`
+   * - `change.beforeContent` is absent
+   * - `change.contentCaptureSkipped` is not set
+   *
+   * Never touches `capturedBefore` entries — their diff base is the dirty
+   * worktree at prompt start, not git HEAD.
+   */
+  async enrichSnapshotBeforeContent(
+    snapshot: WorkspaceSnapshot,
+    workspaceFolderPath: string
+  ): Promise<WorkspaceSnapshot> {
+    if (
+      snapshot.strategy !== SNAPSHOT_STRATEGIES.GIT ||
+      !snapshot.git?.headCommit
+    ) {
+      return snapshot;
+    }
+
+    const { headCommit } = snapshot.git;
+    let anyChanged = false;
+
+    const enrichedFiles = await Promise.all(
+      snapshot.changedFiles.map(async (change): Promise<SnapshotFileChange> => {
+        if (
+          change.changeType !== "modified" ||
+          change.baseSource !== SNAPSHOT_BASE_SOURCES.GIT_HEAD ||
+          change.beforeContent !== undefined ||
+          change.contentCaptureSkipped
+        ) {
+          return change;
+        }
+        try {
+          const { stdout: content } = await execFileAsync(
+            "git",
+            ["show", `${headCommit}:${change.path}`],
+            { cwd: workspaceFolderPath }
+          );
+          anyChanged = true;
+          return { ...change, beforeContent: content };
+        } catch {
+          return change;
+        }
+      })
+    );
+
+    if (!anyChanged) {
+      return snapshot;
+    }
+    return { ...snapshot, changedFiles: enrichedFiles };
   }
 }

@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import { execFileSync } from "child_process";
 import { suite, test, setup, teardown } from "mocha";
 import { OutputHistoryManager } from "../../flightpath/orchestration/OutputHistoryManager";
 import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
@@ -9,6 +10,8 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   OUTPUT_HISTORY_KINDS,
+  SNAPSHOT_BASE_SOURCES,
+  SNAPSHOT_STRATEGIES,
 } from "../../types/DashboardConstants";
 import {
   TIMELINE_EVENT_TYPES,
@@ -16,6 +19,7 @@ import {
   TIMELINE_STORAGE_KIND,
   type WorkflowRunManifest,
 } from "../../types/WorkflowTimelineTypes";
+import type { WorkspaceSnapshot } from "../../types/OutputHistoryTypes";
 
 suite("OutputHistoryManager timeline-backed storage", () => {
   let tempWorkspace: string;
@@ -502,5 +506,185 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       restoredFiles: ["src/file.ts"],
       redoInstructions: [],
     });
+  });
+});
+
+suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
+  let tempWorkspace: string;
+  let manager: OutputHistoryManager;
+
+  setup(async () => {
+    tempWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), "fp-enrich-"));
+    manager = new OutputHistoryManager(tempWorkspace);
+  });
+
+  teardown(async () => {
+    await fs.rm(tempWorkspace, { recursive: true, force: true });
+  });
+
+  async function saveSnapshotAndLoad(
+    snapshot: WorkspaceSnapshot
+  ): Promise<WorkspaceSnapshot | undefined> {
+    const { filePath } = await manager.initializeRun("wf-enrich");
+    await manager.saveSnapshotForTarget(
+      filePath,
+      { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+      snapshot
+    );
+    const history = await manager.loadHistory(filePath);
+    return history.promptOutputs[0]?.workspaceSnapshot;
+  }
+
+  test("passes filesystem snapshots through without enrichment", async () => {
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
+      changedFiles: [
+        {
+          path: "src/foo.ts",
+          changeType: "modified",
+          baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
+        },
+      ],
+    };
+    const loaded = await saveSnapshotAndLoad(snapshot);
+    assert.strictEqual(loaded?.changedFiles[0]?.beforeContent, undefined);
+  });
+
+  test("passes git snapshots without headCommit through without enrichment", async () => {
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.GIT,
+      changedFiles: [
+        {
+          path: "src/foo.ts",
+          changeType: "modified",
+          baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
+        },
+      ],
+    };
+    const loaded = await saveSnapshotAndLoad(snapshot);
+    assert.strictEqual(loaded?.changedFiles[0]?.beforeContent, undefined);
+  });
+
+  test("does not enrich capturedBefore entries (safety rule)", async () => {
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.GIT,
+      git: { headCommit: "abc123" },
+      changedFiles: [
+        {
+          path: "src/foo.ts",
+          changeType: "modified",
+          baseSource: SNAPSHOT_BASE_SOURCES.CAPTURED_BEFORE,
+        },
+      ],
+    };
+    const loaded = await saveSnapshotAndLoad(snapshot);
+    assert.strictEqual(loaded?.changedFiles[0]?.beforeContent, undefined);
+  });
+
+  test("does not re-fetch when beforeContent is already populated", async () => {
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.GIT,
+      git: { headCommit: "abc123" },
+      changedFiles: [
+        {
+          path: "src/foo.ts",
+          changeType: "modified",
+          baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
+          beforeContent: "existing content",
+        },
+      ],
+    };
+    const loaded = await saveSnapshotAndLoad(snapshot);
+    assert.strictEqual(loaded?.changedFiles[0]?.beforeContent, "existing content");
+  });
+
+  test("does not fetch when contentCaptureSkipped is set", async () => {
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.GIT,
+      git: { headCommit: "abc123" },
+      changedFiles: [
+        {
+          path: "src/foo.ts",
+          changeType: "modified",
+          baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
+          contentCaptureSkipped: true,
+        },
+      ],
+    };
+    const loaded = await saveSnapshotAndLoad(snapshot);
+    assert.strictEqual(loaded?.changedFiles[0]?.beforeContent, undefined);
+    assert.strictEqual(loaded?.changedFiles[0]?.contentCaptureSkipped, true);
+  });
+
+  test("silently skips when git fetch fails for eligible entry", async () => {
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.GIT,
+      git: { headCommit: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" },
+      changedFiles: [
+        {
+          path: "src/no-such-file.ts",
+          changeType: "modified",
+          baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
+        },
+      ],
+    };
+    // tempWorkspace has no git repo → git show will fail → entry unchanged
+    const loaded = await saveSnapshotAndLoad(snapshot);
+    assert.strictEqual(loaded?.changedFiles[0]?.beforeContent, undefined);
+  });
+
+  test("hydrates beforeContent from git for eligible gitHead entries", async () => {
+    // Set up a minimal git repo with a tracked file
+    const gitEnv = {
+      GIT_AUTHOR_NAME: "Test",
+      GIT_AUTHOR_EMAIL: "test@test.com",
+      GIT_COMMITTER_NAME: "Test",
+      GIT_COMMITTER_EMAIL: "test@test.com",
+    };
+    execFileSync("git", ["init"], { cwd: tempWorkspace });
+    execFileSync("git", ["config", "user.email", "test@test.com"], {
+      cwd: tempWorkspace,
+    });
+    execFileSync("git", ["config", "user.name", "Test"], {
+      cwd: tempWorkspace,
+    });
+
+    const srcDir = path.join(tempWorkspace, "src");
+    await fs.mkdir(srcDir);
+    await fs.writeFile(path.join(srcDir, "target.ts"), "original content");
+    execFileSync("git", ["add", "."], { cwd: tempWorkspace, env: { ...process.env, ...gitEnv } });
+    execFileSync(
+      "git",
+      ["commit", "--no-gpg-sign", "-m", "initial"],
+      { cwd: tempWorkspace, env: { ...process.env, ...gitEnv } }
+    );
+
+    const headCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: tempWorkspace,
+    })
+      .toString()
+      .trim();
+
+    const snapshot: WorkspaceSnapshot = {
+      capturedAt: 1000,
+      strategy: SNAPSHOT_STRATEGIES.GIT,
+      git: { headCommit },
+      changedFiles: [
+        {
+          path: "src/target.ts",
+          changeType: "modified",
+          baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
+        },
+      ],
+    };
+
+    const loaded = await saveSnapshotAndLoad(snapshot);
+    assert.strictEqual(loaded?.changedFiles[0]?.beforeContent, "original content");
   });
 });

@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { useUiStore } from "@store/uiStore";
 
 const {
   mockGetRenderedDiffStats,
   mockToRdvHunks,
   mockToRdvFromContent,
+  mockGetCollapsedLinesCountBetween,
+  mockExpandFromRawCode,
 } = vi.hoisted(() => ({
   mockGetRenderedDiffStats: vi.fn<
     () => {
@@ -36,6 +38,8 @@ const {
       diffType: string;
     }
   >(() => ({ hunks: [], diffType: "modify" })),
+  mockGetCollapsedLinesCountBetween: vi.fn(() => 0),
+  mockExpandFromRawCode: vi.fn((hunks: unknown[]) => hunks),
 }));
 
 vi.mock("@utils/rdvAdapter", () => ({
@@ -67,8 +71,8 @@ vi.mock("react-diff-view", async () => {
     ),
     tokenize: vi.fn(() => null),
     markEdits: vi.fn(() => vi.fn()),
-    getCollapsedLinesCountBetween: vi.fn(() => 0),
-    expandFromRawCode: vi.fn((hunks: unknown[]) => hunks),
+    getCollapsedLinesCountBetween: mockGetCollapsedLinesCountBetween,
+    expandFromRawCode: mockExpandFromRawCode,
     parseDiff: vi.fn(() => []),
   };
 });
@@ -82,9 +86,16 @@ import { DiffView } from "@components/output/DiffView";
 describe("DiffView", () => {
   beforeEach(() => {
     useUiStore.setState({ diffsCollapsed: false, diffResetVersion: 0 });
+    mockGetRenderedDiffStats.mockClear();
+    mockToRdvHunks.mockClear();
+    mockToRdvFromContent.mockClear();
+    mockGetCollapsedLinesCountBetween.mockClear();
+    mockExpandFromRawCode.mockClear();
     mockGetRenderedDiffStats.mockReturnValue({ added: 0, removed: 0, runs: [] });
     mockToRdvHunks.mockReturnValue([]);
     mockToRdvFromContent.mockReturnValue({ hunks: [], diffType: "modify" });
+    mockGetCollapsedLinesCountBetween.mockReturnValue(0);
+    mockExpandFromRawCode.mockImplementation((hunks: unknown[]) => hunks);
   });
 
   it("renders nothing when there is no diff content", () => {
@@ -167,5 +178,86 @@ describe("DiffView", () => {
     expect(anchor?.getAttribute("data-diff-runs")).toBe(
       JSON.stringify([{ count: 1, addedLines: 1, removedLines: 1 }])
     );
+  });
+
+  it("expands hidden lines when original file content is available", () => {
+    mockToRdvFromContent.mockReturnValue({
+      hunks: [
+        {
+          content: "@@ -5,1 +5,1 @@",
+          oldStart: 5,
+          oldLines: 1,
+          newStart: 5,
+          newLines: 1,
+          changes: [],
+        },
+      ],
+      diffType: "modify",
+    });
+    mockGetCollapsedLinesCountBetween.mockReturnValue(4);
+
+    const { getByRole } = render(
+      <DiffView
+        oldContent={"a\nb\nc\nd\ne\n"}
+        newContent={"a\nb\nc\nd\nE\n"}
+        globallyCollapsed={false}
+      />
+    );
+
+    fireEvent.click(getByRole("button", { name: /4 hidden lines/i }));
+
+    expect(mockExpandFromRawCode).toHaveBeenCalledWith(
+      [
+        {
+          content: "@@ -5,1 +5,1 @@",
+          oldStart: 5,
+          oldLines: 1,
+          newStart: 5,
+          newLines: 1,
+          changes: [],
+        },
+      ],
+      "a\nb\nc\nd\ne\n",
+      1,
+      5
+    );
+  });
+
+  it("shows hidden-line summaries as non-expandable when original file content is unavailable", () => {
+    mockToRdvHunks.mockReturnValue([
+      {
+        content: "@@ -5,1 +5,1 @@",
+        oldStart: 5,
+        oldLines: 1,
+        newStart: 5,
+        newLines: 1,
+        changes: [],
+      },
+    ]);
+    mockGetCollapsedLinesCountBetween.mockReturnValue(4);
+
+    const { getByText, queryByRole } = render(
+      <DiffView
+        structuredPatch={[
+          {
+            oldStart: 5,
+            oldLines: 1,
+            newStart: 5,
+            newLines: 1,
+            lines: ["-old", "+new"],
+          },
+        ]}
+        globallyCollapsed={false}
+      />
+    );
+
+    const hiddenLines = getByText(/4 hidden lines/i);
+    expect(queryByRole("button", { name: /4 hidden lines/i })).toBeNull();
+    expect(hiddenLines.getAttribute("title")).toContain(
+      "original file content is unavailable"
+    );
+
+    fireEvent.click(hiddenLines);
+    expect(mockExpandFromRawCode).not.toHaveBeenCalled();
   });
 });

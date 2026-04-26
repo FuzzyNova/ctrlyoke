@@ -1088,11 +1088,17 @@ export class WorkflowExecutor {
       context.workspaceFolderPath
     );
 
-    const snapshot: WorkspaceSnapshot = {
-      capturedAt: Date.now(),
+    let snapshot: WorkspaceSnapshot = {
+      capturedAt: afterState.capturedAt,
       strategy,
+      git: afterState.git,
       changedFiles,
     };
+
+    snapshot = await context.snapshotService.enrichSnapshotBeforeContent(
+      snapshot,
+      context.workspaceFolderPath
+    );
 
     context.onSnapshotCaptured?.(target, snapshot);
 

@@ -940,6 +940,14 @@ export const SNAPSHOT_STRATEGIES = {
 } as const;
 
 // ============================================================================
+// SNAPSHOT BASE SOURCES - Provenance for modified-file snapshot diffs
+// ============================================================================
+export const SNAPSHOT_BASE_SOURCES = {
+  GIT_HEAD: "gitHead",
+  CAPTURED_BEFORE: "capturedBefore",
+} as const;
+
+// ============================================================================
 // UNDO FILE ACTIONS - File restoration action discriminants
 // ============================================================================
 export const UNDO_FILE_ACTIONS = {
@@ -1017,6 +1025,8 @@ export type OutputHistoryKind =
   (typeof OUTPUT_HISTORY_KINDS)[keyof typeof OUTPUT_HISTORY_KINDS];
 export type SnapshotStrategy =
   (typeof SNAPSHOT_STRATEGIES)[keyof typeof SNAPSHOT_STRATEGIES];
+export type SnapshotBaseSource =
+  (typeof SNAPSHOT_BASE_SOURCES)[keyof typeof SNAPSHOT_BASE_SOURCES];
 export type UndoFileAction =
   (typeof UNDO_FILE_ACTIONS)[keyof typeof UNDO_FILE_ACTIONS];
 export type WorkflowAttemptCommandValue =
