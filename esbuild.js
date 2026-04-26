@@ -205,6 +205,23 @@ const copyServerPlugin = {
 };
 
 async function main() {
+  // Build webview inline scripts (bootstrap + module loader)
+  // These run in the browser webview context and are read/injected by FlightPathWebviewProvider.
+  const webviewScriptsCtx = await esbuild.context({
+    entryPoints: [
+      "src/ui/webview-react/scripts/bootstrapScript.ts",
+      "src/ui/webview-react/scripts/moduleLoaderScript.ts",
+    ],
+    bundle: false,
+    format: "iife",
+    minify: production,
+    platform: "browser",
+    target: "es2020",
+    outdir: "out/ui/webview-scripts",
+    outbase: "src/ui/webview-react/scripts",
+    logLevel: "error",
+  });
+
   // Build main extension
   const ctx = await esbuild.context({
     entryPoints: ["src/extension.ts"],
@@ -275,13 +292,16 @@ async function main() {
   });
 
   if (watch) {
+    await webviewScriptsCtx.watch();
     await ctx.watch();
     await mcpCtx.watch();
     await cliCtx.watch();
   } else {
+    await webviewScriptsCtx.rebuild();
     await ctx.rebuild();
     await mcpCtx.rebuild();
     await cliCtx.rebuild();
+    await webviewScriptsCtx.dispose();
     await ctx.dispose();
     await mcpCtx.dispose();
     await cliCtx.dispose();

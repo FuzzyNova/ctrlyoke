@@ -314,56 +314,24 @@ export class FlightPathWebviewProvider
     // Generate a nonce for CSP script-src (replaces 'unsafe-inline')
     const nonce = this.getNonce();
 
-    // acquireVsCodeApi() can only be called once per page lifecycle. Capture it
-    // before the React bundle loads so the retained panel path can reuse the
-    // latest API object during reconnect.
-    const bootstrapScript = `<script nonce="${nonce}">
-(function() {
-  try {
-    window.vscodeApi = acquireVsCodeApi();
-  } catch {
-    // Ignore stale retained contexts here; useVsCodeApi() will recover from the
-    // current window.vscodeApi reference once the panel reconnects.
-  }
-})();
-</script>`;
+    // Load compiled inline scripts from out/ui/webview-scripts/
+    const webviewScriptsUri = vscode.Uri.joinPath(
+      this.context.extensionUri, "out", "ui", "webview-scripts"
+    );
+    const bootstrapBody = fsSync.readFileSync(
+      vscode.Uri.joinPath(webviewScriptsUri, "bootstrapScript.js").fsPath, "utf-8"
+    );
+    const bootstrapScript = `<script nonce="${nonce}">\n${bootstrapBody}</script>`;
 
     const moduleScriptWithSrcMatch = html.match(moduleScriptWithSrcPattern);
     const moduleScriptSrc = moduleScriptWithSrcMatch?.[3];
-    const moduleLoaderScript =
-      moduleScriptSrc !== undefined
-        ? `<script type="module" nonce="${nonce}">
-(function() {
-  var src = ${JSON.stringify(moduleScriptSrc)};
-  var timeoutMs = 5000;
-  var recoveryCooldownMs = 10000;
-  var recoverySessionKey = 'flightpath-panel-module-recovery-at';
-  var timer = window.setTimeout(function() {
-    if (!window.__flightpathReactMounted) {
-      var now = Date.now();
-      var lastRecoveryAt = 0;
-      try {
-        lastRecoveryAt = Number(sessionStorage.getItem(recoverySessionKey) || '0');
-      } catch {}
-      if (!Number.isFinite(lastRecoveryAt) || now - lastRecoveryAt >= recoveryCooldownMs) {
-        try {
-          sessionStorage.setItem(recoverySessionKey, String(now));
-        } catch {}
-        window.location.reload();
-      }
+    let moduleLoaderScript: string | undefined;
+    if (moduleScriptSrc !== undefined) {
+      const loaderBody = fsSync.readFileSync(
+        vscode.Uri.joinPath(webviewScriptsUri, "moduleLoaderScript.js").fsPath, "utf-8"
+      );
+      moduleLoaderScript = `<script type="module" nonce="${nonce}">\nconst __fpModuleSrc__ = ${JSON.stringify(moduleScriptSrc)};\n${loaderBody}</script>`;
     }
-  }, timeoutMs);
-  import(src)
-    .then(function() {
-      window.clearTimeout(timer);
-    })
-    .catch(function(err) {
-      window.clearTimeout(timer);
-      console.error("[FlightPath panel] module bootstrap import failed:", err);
-    });
-})();
-</script>`
-        : undefined;
 
     // Inject the bootstrap BEFORE the module scripts.
     // acquireVsCodeApi() must run before the React bundle so window.vscodeApi is available
