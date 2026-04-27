@@ -451,7 +451,14 @@ export class FlightPathHostedServer
     // the browser fetches them without query params after loading the entry HTML.
     this.app.get("/standalone-shim.js", (_req, res) => {
       this.setNoStore(res);
-      res.sendFile(path.join(__dirname, "server", "standalone-shim.js"));
+      res
+        .type("application/javascript")
+        .send(
+          fs.readFileSync(
+            path.join(__dirname, "server", "standalone-shim.js"),
+            "utf8"
+          )
+        );
     });
     // Cert download — no token required so iOS users can fetch and install it
     // before the WebSocket handshake can succeed. The cert is a public key only.
