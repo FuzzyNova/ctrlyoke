@@ -28,10 +28,9 @@ export class PromptFileParser {
 
   private loadSchemas(): void {
     try {
-      // Load schema from bundled location (copied from /schemas during build)
+      // Load schema from bundled location (copied to out/schemas/ during build)
       const promptSchemaPath = path.join(
         __dirname,
-        "..",
         "schemas",
         "prompt-schema.json"
       );
