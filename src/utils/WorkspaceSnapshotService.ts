@@ -75,6 +75,12 @@ export interface RawWorkspaceState {
   git?: WorkspaceSnapshotGitInfo;
 }
 
+interface SnapshotFileData {
+  exists: boolean;
+  content?: string;
+  hash?: string;
+}
+
 function computeHash(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex");
 }
@@ -112,6 +118,24 @@ async function readFileForSnapshot(
   } catch {
     return null;
   }
+}
+
+async function getSnapshotFileData(filePath: string): Promise<SnapshotFileData> {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+  } catch {
+    return { exists: false };
+  }
+
+  const fileData = await readFileForSnapshot(filePath);
+  if (!fileData) {
+    return { exists: true };
+  }
+  return {
+    exists: true,
+    content: fileData.content,
+    hash: fileData.hash,
+  };
 }
 
 /** Parse .gitignore lines into simple matchers. Returns a function that checks if a relative path should be excluded. */
@@ -269,6 +293,42 @@ function buildReversePatchString(hunks: UnifiedDiffHunk[]): string {
 }
 
 export class WorkspaceSnapshotService {
+  private buildModifiedChange(
+    filePath: string,
+    beforeState: RawFileState,
+    afterState: SnapshotFileData
+  ): SnapshotFileChange {
+    const change: SnapshotFileChange = {
+      path: filePath,
+      changeType: "modified" as PromptChangeType,
+      baseSource: SNAPSHOT_BASE_SOURCES.CAPTURED_BEFORE,
+      afterHash: afterState.hash,
+    };
+
+    if (
+      beforeState.content !== undefined &&
+      afterState.content !== undefined
+    ) {
+      change.beforeContent = beforeState.content;
+      const patchResult = Diff.structuredPatch(
+        "",
+        "",
+        normalizeLf(beforeState.content),
+        normalizeLf(afterState.content)
+      );
+      if (patchResult.hunks.length > 0) {
+        change.structuredPatch = patchResult.hunks as UnifiedDiffHunk[];
+      }
+      if (beforeState.content.includes("\r\n")) {
+        change.lineEnding = "crlf";
+      }
+    } else {
+      change.contentCaptureSkipped = true;
+    }
+
+    return change;
+  }
+
   private async getGitSnapshotInfo(
     workspacePath: string
   ): Promise<WorkspaceSnapshotGitInfo | undefined> {
@@ -483,6 +543,28 @@ export class WorkspaceSnapshotService {
     // Files in before but not in after: deleted during prompt
     for (const [filePath, beforeState] of before.files) {
       if (!after.files.has(filePath)) {
+        if (strategy === SNAPSHOT_STRATEGIES.GIT) {
+          const currentFile = await getSnapshotFileData(
+            path.join(workspacePath, filePath)
+          );
+
+          if (currentFile.exists) {
+            // In git mode, the after snapshot only contains dirty files. A path
+            // missing from `after.files` may simply mean the prompt left it
+            // clean (for example by committing it), not that it was deleted.
+            if (
+              currentFile.hash !== undefined &&
+              currentFile.hash === beforeState.contentHash
+            ) {
+              continue;
+            }
+            changes.push(
+              this.buildModifiedChange(filePath, beforeState, currentFile)
+            );
+            continue;
+          }
+        }
+
         const change: SnapshotFileChange = {
           path: filePath,
           changeType: "deleted" as PromptChangeType,
