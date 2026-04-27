@@ -213,12 +213,21 @@ interface SingleEventProps {
   event: CliEvent;
   eventKey: string;
   rawTextOutput: boolean;
-  onUndoFile?: (path: string, attemptIndex: number) => void;
+  onUndoFile?: (request: FileUndoRequest) => void;
   attemptIndex?: number;
   fileUndoMode?: "undo" | "redo";
   hideDiff?: boolean;
   hideRow?: boolean;
   workspaceSnapshot?: WorkspaceSnapshot;
+}
+
+interface FileUndoRequest {
+  path: string;
+  eventIndex: number;
+  event: CliEvent;
+  oldContent?: string;
+  newContent?: string;
+  structuredPatch?: FileEditData["structuredPatch"];
 }
 
 /**
@@ -280,6 +289,18 @@ const SingleEvent = memo<SingleEventProps>(
         );
         const displayOldContent =
           data.oldContent ?? getSnapshotBeforeContent(data.path, workspaceSnapshot);
+        const handleUndoFile =
+          onUndoFile == null
+            ? undefined
+            : () =>
+                onUndoFile({
+                  path: data.path,
+                  eventIndex: attemptIndex,
+                  event,
+                  oldContent: displayOldContent,
+                  newContent: data.newContent,
+                  structuredPatch: displayStructuredPatch,
+                });
         return (
           <FileEditOutput
             key={eventKey}
@@ -289,8 +310,7 @@ const SingleEvent = memo<SingleEventProps>(
             newContent={data.newContent}
             structuredPatch={displayStructuredPatch}
             error={data.error}
-            onUndoFile={onUndoFile}
-            attemptIndex={attemptIndex}
+            onUndoFile={handleUndoFile}
             fileUndoMode={fileUndoMode}
             hideDiff={hideDiff}
           />
@@ -300,6 +320,15 @@ const SingleEvent = memo<SingleEventProps>(
       case CLI_EVENT_TYPES.FILE_WRITE: {
         const data = event.data as FileWriteData;
         if (!data.path) return null;
+        const handleUndoFile =
+          onUndoFile == null
+            ? undefined
+            : () =>
+                onUndoFile({
+                  path: data.path,
+                  eventIndex: attemptIndex,
+                  event,
+                });
         return (
           <FileWriteOutput
             key={eventKey}
@@ -307,8 +336,7 @@ const SingleEvent = memo<SingleEventProps>(
             status={data.status}
             content={data.content}
             error={data.error}
-            onUndoFile={onUndoFile}
-            attemptIndex={attemptIndex}
+            onUndoFile={handleUndoFile}
             fileUndoMode={fileUndoMode}
           />
         );
@@ -330,14 +358,22 @@ const SingleEvent = memo<SingleEventProps>(
       case CLI_EVENT_TYPES.FILE_DELETE: {
         const data = event.data as FileDeleteData;
         if (!data.path) return null;
+        const handleUndoFile =
+          onUndoFile == null
+            ? undefined
+            : () =>
+                onUndoFile({
+                  path: data.path,
+                  eventIndex: attemptIndex,
+                  event,
+                });
         return (
           <FileDeleteOutput
             key={eventKey}
             path={data.path}
             success={data.success}
             error={data.error}
-            onUndoFile={onUndoFile}
-            attemptIndex={attemptIndex}
+            onUndoFile={handleUndoFile}
             fileUndoMode={fileUndoMode}
           />
         );
@@ -429,7 +465,7 @@ interface StructuredOutputProps {
   events: CliEvent[];
   /** When true, text events are rendered as pre-formatted plain text (no markdown pipeline) */
   rawTextOutput?: boolean;
-  onUndoFile?: (path: string, eventIndex: number) => void;
+  onUndoFile?: (request: FileUndoRequest) => void;
   fileUndoMode?: "undo" | "redo";
   className?: string;
   /**
@@ -700,14 +736,14 @@ export const CliOutput = memo<CliOutputProps>(
         : "undo";
 
     const onUndoFile = useCallback(
-      (path: string, eventIndex: number) => {
+      (request: FileUndoRequest) => {
         const newRequestId = generateId();
         const showRedo =
           effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true;
 
         if (showRedo) {
           const fileRedoInstruction = effectiveUndoRecord.redoInstructions.find(
-            (i) => sameFilePath(i.path, path)
+            (i) => sameFilePath(i.path, request.path)
           );
           if (fileRedoInstruction) {
             setDialogState({
@@ -718,16 +754,18 @@ export const CliOutput = memo<CliOutputProps>(
           }
         } else {
           const workspacePath = output.workingDirectory ?? "";
-          // Use the specific event index so each individual diff undo targets only
-          // the clicked edit — not last-write-wins across all edits to the same file.
-          const events = output.structured?.events ?? [];
           const input = buildUndoDialogInputForSpecificEvent(
             target,
-            eventIndex,
-            path,
-            events,
+            request.eventIndex,
+            request.path,
+            request.event,
             effectiveSnapshot,
-            workspacePath
+            workspacePath,
+            {
+              oldContent: request.oldContent,
+              newContent: request.newContent,
+              structuredPatch: request.structuredPatch,
+            }
           );
           setDialogState({ mode: "undo", input, requestId: newRequestId });
         }

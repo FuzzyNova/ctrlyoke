@@ -706,7 +706,9 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
           )
         ) : allUndoRows.length === 0 ? (
           <p className="text-sm text-description-fg">
-            No file changes found for this prompt.
+            {input?.scope.mode === "singleFile"
+              ? "No file changes found for this diff."
+              : "No file changes found for this prompt."}
           </p>
         ) : (
           <div className="flex flex-col gap-0.5">

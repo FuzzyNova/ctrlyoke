@@ -36,6 +36,12 @@ export interface UndoDialogInput {
   workspacePath: string;
 }
 
+export interface SpecificEventDiffFallback {
+  oldContent?: string;
+  newContent?: string;
+  structuredPatch?: UnifiedDiffHunk[];
+}
+
 /**
  * Resolve an undo instruction for a single FILE_WRITE or FILE_DELETE event.
  * Used by buildUndoDialogInputForSpecificEvent for per-event (not prompt-level) undo.
@@ -54,7 +60,7 @@ function resolveEventUndoInstruction(
     case CLI_EVENT_TYPES.FILE_DELETE: {
       const d = event.data as FileDeleteData;
       if (!d.path) return null;
-      const snap = snapshotFiles.find((f) => f.path === d.path);
+      const snap = snapshotFiles.find((f) => sameFilePath(f.path, d.path));
       if (!snap) return null;
       if (snap.contentToRestore != null)
         return {
@@ -355,9 +361,10 @@ export function buildUndoDialogInputForSpecificEvent(
   target: UndoExecutionTarget,
   eventIndex: number,
   path: string,
-  events: CliEvent[],
+  event: CliEvent | undefined,
   snapshot: WorkspaceSnapshot | undefined,
-  workspacePath: string
+  workspacePath: string,
+  fallback?: SpecificEventDiffFallback
 ): UndoDialogInput {
   const scope: UndoDialogScope = {
     mode: "singleFile",
@@ -367,7 +374,6 @@ export function buildUndoDialogInputForSpecificEvent(
   };
   const snapshotFiles: SnapshotFileChange[] = snapshot?.changedFiles ?? [];
 
-  const event = events[eventIndex];
   if (!event) {
     return {
       scope,
@@ -390,15 +396,18 @@ export function buildUndoDialogInputForSpecificEvent(
   // For FILE_EDIT: prefer reverse-patch so only this edit is undone (other edits stay intact).
   // Fall back to restore-content (via resolveEventUndoInstruction) only when no patch is available.
   let instruction: UndoFileInstruction | null;
-  let oldContent: string | undefined;
-  let newContent: string | undefined;
-  let structuredPatch: UndoFileCandidate["structuredPatch"];
+  let oldContent = fallback?.oldContent;
+  let newContent = fallback?.newContent;
+  let structuredPatch = fallback?.structuredPatch;
 
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
     const editData = event.data as FileEditData;
-    oldContent = editData.oldContent;
-    newContent = editData.newContent;
-    structuredPatch = editData.structuredPatch;
+    oldContent = editData.oldContent ?? oldContent;
+    newContent = editData.newContent ?? newContent;
+    structuredPatch =
+      editData.structuredPatch && editData.structuredPatch.length > 0
+        ? editData.structuredPatch
+        : structuredPatch;
 
     if (structuredPatch && structuredPatch.length > 0) {
       // Reverse-patch: the extension reads the current file and applies this patch in reverse.

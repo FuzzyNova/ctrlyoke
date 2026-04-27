@@ -552,8 +552,9 @@ export const OutputSection: React.FC = () => {
     isViewingHistory,
   ]);
 
-  // Only show undo actions when execution is not active
-  const allowUndoActions = !isExecutionActive;
+  // History view should keep its undo affordances even if a live workflow is
+  // currently active elsewhere; otherwise historical per-diff undo buttons disappear.
+  const allowUndoActions = isViewingHistory || !isExecutionActive;
 
   // ── Workflow-level undo/redo aggregation ───────────────────────────────────
   // Iterates all steps to collect entries for the workflow undo/redo dialog.

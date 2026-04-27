@@ -71,8 +71,7 @@ interface FileEditOutputProps {
     lines: string[];
   }>;
   error?: string;
-  onUndoFile?: (path: string, attemptIndex: number) => void;
-  attemptIndex?: number;
+  onUndoFile?: () => void;
   fileUndoMode?: "undo" | "redo";
   /** When true, suppresses the diff display (used when a COMPLETED event for the same file follows) */
   hideDiff?: boolean;
@@ -95,7 +94,6 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     structuredPatch,
     error,
     onUndoFile,
-    attemptIndex = 0,
     fileUndoMode = "undo",
     hideDiff = false,
     className = "",
@@ -127,7 +125,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
               ? `Redo changes to ${path}`
               : `Undo changes to ${path}`
           }
-          onClick={() => onUndoFile(path, attemptIndex)}
+          onClick={onUndoFile}
         >
           <i
             className={`codicon ${fileUndoMode === "redo" ? "codicon-redo" : "codicon-discard"} text-xxs`}
@@ -173,8 +171,7 @@ interface FileWriteOutputProps {
   status?: FileOperationStatus;
   content?: string;
   error?: string;
-  onUndoFile?: (path: string, attemptIndex: number) => void;
-  attemptIndex?: number;
+  onUndoFile?: () => void;
   fileUndoMode?: "undo" | "redo";
   className?: string;
 }
@@ -185,7 +182,6 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   content,
   error,
   onUndoFile,
-  attemptIndex = 0,
   fileUndoMode = "undo",
   className = "",
 }) => {
@@ -216,7 +212,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
                 ? `Redo changes to ${path}`
                 : `Undo changes to ${path}`
             }
-            onClick={() => onUndoFile(path, attemptIndex)}
+            onClick={onUndoFile}
           >
             {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
           </button>
@@ -273,8 +269,7 @@ interface FileDeleteOutputProps {
   path: string;
   success?: boolean;
   error?: string;
-  onUndoFile?: (path: string, attemptIndex: number) => void;
-  attemptIndex?: number;
+  onUndoFile?: () => void;
   fileUndoMode?: "undo" | "redo";
   className?: string;
 }
@@ -284,7 +279,6 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
   success,
   error,
   onUndoFile,
-  attemptIndex = 0,
   fileUndoMode = "undo",
   className = "",
 }) => {
@@ -308,7 +302,7 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
                 ? `Redo deletion of ${path}`
                 : `Undo deletion of ${path}`
             }
-            onClick={() => onUndoFile(path, attemptIndex)}
+            onClick={onUndoFile}
           >
             {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
           </button>
