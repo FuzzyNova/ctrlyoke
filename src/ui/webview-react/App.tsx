@@ -4,7 +4,6 @@ import {
   Group,
   Separator,
   type Layout,
-  type PanelSize,
 } from "react-resizable-panels";
 import {
   useMessageHandler,
@@ -17,7 +16,6 @@ import { useDesktopLayout } from "@hooks/useDesktopLayout";
 import { useMobileLayout } from "@hooks/useMobileLayout";
 import { useUiStore } from "@store/uiStore";
 import { clearNotificationBadgeCount } from "@utils/browserNotifications";
-import { WebviewLog } from "@utils/logger";
 import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see
@@ -51,21 +49,7 @@ function App() {
   // collapse state is available on the first render.
   const [uiLayoutReady] = useState(true);
 
-  const logDesktopCenterEvent = (event: string, details: object = {}) => {
-    WebviewLog.debug(`[LAYOUT][desktop-center] ${event}`, {
-      ...details,
-      snapshot: desktop.getDesktopPanelSnapshot(),
-    });
-  };
-
-  const logMobileCenterEvent = (event: string, details: object = {}) => {
-    WebviewLog.debug(`[LAYOUT][mobile-center] ${event}`, {
-      ...details,
-      snapshot: mobile.getMobilePanelSnapshot(),
-    });
-  };
-
-  const persistDesktopCenterLayout = (layout: Layout, source: string) => {
+  const persistDesktopCenterLayout = (layout: Layout) => {
     const isRemountUnstable =
       desktop.needsForcedResize.current || desktop.isForcingResize.current;
     const panelOutputCollapsed =
@@ -86,13 +70,6 @@ function App() {
       outputSize <= centerMinSizePct ||
       editorSize <= centerMinSizePct
     ) {
-      logDesktopCenterEvent("group:layout-persist:skipped", {
-        source,
-        layout,
-        isRemountUnstable,
-        panelOutputCollapsed,
-        panelEditorCollapsed,
-      });
       return;
     }
 
@@ -101,10 +78,6 @@ function App() {
     useUiStore.getState().setLastDesktopSizes({
       output: outputSize,
       editor: editorSize,
-    });
-    logDesktopCenterEvent("group:layout-persisted", {
-      source,
-      layout,
     });
   };
 
@@ -201,12 +174,6 @@ function App() {
 
   // Track isMobile to detect layout transitions in render body below
   const wasMobileRef = useRef(isMobile);
-  const previousCenterStateRef = useRef({
-    isMobile,
-    outputCollapsed,
-    editorCollapsed,
-  });
-
   // Message handlers with full implementations
   useMessageHandler();
   useUndoRedoKeyHandler();
@@ -371,49 +338,6 @@ function App() {
   const allMobileCenterCollapsed = outputCollapsed && editorCollapsed;
   const centerMinSizePct = Number(PANEL_MIN_SIZE_CENTER);
 
-  useEffect(() => {
-    WebviewLog.debug("[LAYOUT][center][render-mode]", {
-      isMobile,
-      outputCollapsed,
-      editorCollapsed,
-      desktopMode:
-        outputCollapsed && editorCollapsed ? "flat-collapsed" : "panel-group",
-      mobileMode: allMobileCenterCollapsed ? "flat-collapsed" : "panel-group",
-      desktop: desktop.getDesktopPanelSnapshot(),
-      mobile: mobile.getMobilePanelSnapshot(),
-    });
-  }, [isMobile, outputCollapsed, editorCollapsed]);
-
-  useEffect(() => {
-    const previous = previousCenterStateRef.current;
-
-    if (previous.outputCollapsed !== outputCollapsed) {
-      WebviewLog.debug("[LAYOUT][center][output-store-transition]", {
-        isMobile,
-        from: previous.outputCollapsed ? "collapsed" : "expanded",
-        to: outputCollapsed ? "collapsed" : "expanded",
-        desktop: desktop.getDesktopPanelSnapshot(),
-        mobile: mobile.getMobilePanelSnapshot(),
-      });
-    }
-
-    if (previous.editorCollapsed !== editorCollapsed) {
-      WebviewLog.debug("[LAYOUT][center][editor-store-transition]", {
-        isMobile,
-        from: previous.editorCollapsed ? "collapsed" : "expanded",
-        to: editorCollapsed ? "collapsed" : "expanded",
-        desktop: desktop.getDesktopPanelSnapshot(),
-        mobile: mobile.getMobilePanelSnapshot(),
-      });
-    }
-
-    previousCenterStateRef.current = {
-      isMobile,
-      outputCollapsed,
-      editorCollapsed,
-    };
-  }, [isMobile, outputCollapsed, editorCollapsed]);
-
   // Update mobile mount defaults when transitioning from all-collapsed → some-open.
   // Open center panels redistribute proportionally; collapsed panels stay at 30px.
   {
@@ -486,12 +410,6 @@ function App() {
               orientation="vertical"
               className="flex-1"
               id="flightpath-mobile-layout"
-              onLayoutChange={(layout: Layout) => {
-                logMobileCenterEvent("group:onLayoutChange", { layout });
-              }}
-              onLayoutChanged={(layout: Layout) => {
-                logMobileCenterEvent("group:onLayoutChanged", { layout });
-              }}
             >
               <Panel
                 panelRef={mobile.mobileOutputRef}
@@ -500,20 +418,12 @@ function App() {
                 collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                 minSize={PANEL_MIN_SIZE_CENTER}
                 id="mobile-output-panel"
-                onResize={(panelSize: PanelSize, id, prevPanelSize) => {
+                onResize={() => {
                   const gateOpen =
                     mobile.mobileInitializedRef.current && uiLayoutReady;
-                  if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                    {
-                      logMobileCenterEvent("output:onResize:gated", {
-                        gateOpen,
-                        id,
-                        panelSize,
-                        prevPanelSize,
-                        storeOutputCollapsed: outputCollapsed,
-                      });
-                      return;
-                    }
+                  if (!mobile.mobileInitializedRef.current || !uiLayoutReady) {
+                    return;
+                  }
                   const isCollapsed =
                     mobile.mobileOutputRef.current?.isCollapsed() ?? false;
                   const size =
@@ -522,15 +432,6 @@ function App() {
                   const editorSize =
                     mobile.mobileEditorRef.current?.getSize().asPercentage ??
                     null;
-                  logMobileCenterEvent("output:onResize", {
-                    gateOpen,
-                    id,
-                    isCollapsed,
-                    size,
-                    panelSize,
-                    prevPanelSize,
-                    storeOutputCollapsed: outputCollapsed,
-                  });
                   if (!gateOpen) {
                     return;
                   }
@@ -616,20 +517,12 @@ function App() {
                 collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                 minSize={PANEL_MIN_SIZE_CENTER}
                 id="mobile-editor-panel"
-                onResize={(panelSize: PanelSize, id, prevPanelSize) => {
+                onResize={() => {
                   const gateOpen =
                     mobile.mobileInitializedRef.current && uiLayoutReady;
-                  if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                    {
-                      logMobileCenterEvent("editor:onResize:gated", {
-                        gateOpen,
-                        id,
-                        panelSize,
-                        prevPanelSize,
-                        storeEditorCollapsed: editorCollapsed,
-                      });
-                      return;
-                    }
+                  if (!mobile.mobileInitializedRef.current || !uiLayoutReady) {
+                    return;
+                  }
                   const isCollapsed =
                     mobile.mobileEditorRef.current?.isCollapsed() ?? false;
                   const size =
@@ -638,15 +531,6 @@ function App() {
                   const outputSize =
                     mobile.mobileOutputRef.current?.getSize().asPercentage ??
                     null;
-                  logMobileCenterEvent("editor:onResize", {
-                    gateOpen,
-                    id,
-                    isCollapsed,
-                    size,
-                    panelSize,
-                    prevPanelSize,
-                    storeEditorCollapsed: editorCollapsed,
-                  });
                   if (!gateOpen) {
                     return;
                   }
@@ -791,12 +675,8 @@ function App() {
                 orientation="vertical"
                 className="h-full"
                 id="flightpath-vertical-layout"
-                onLayoutChange={(layout: Layout) => {
-                  logDesktopCenterEvent("group:onLayoutChange", { layout });
-                }}
                 onLayoutChanged={(layout: Layout) => {
-                  logDesktopCenterEvent("group:onLayoutChanged", { layout });
-                  persistDesktopCenterLayout(layout, "group:onLayoutChanged");
+                  persistDesktopCenterLayout(layout);
                 }}
               >
                 <Panel
@@ -806,29 +686,12 @@ function App() {
                   collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                   minSize={PANEL_MIN_SIZE_CENTER}
                   id="output-panel"
-                  onResize={(panelSize: PanelSize, id, prevPanelSize) => {
-                    const gateOpen =
-                      desktop.initializedRef.current && uiLayoutReady;
+                  onResize={() => {
                     const isRemountUnstable =
                       desktop.needsForcedResize.current ||
                       desktop.isForcingResize.current;
                     const isOutputCollapsed =
                       desktop.outputRef.current?.isCollapsed() ?? false;
-                    const isEditorCollapsed =
-                      desktop.editorRef.current?.isCollapsed() ?? false;
-                    const currentSize =
-                      desktop.outputRef.current?.getSize().asPercentage;
-                    logDesktopCenterEvent("output:onResize", {
-                      gateOpen,
-                      id,
-                      isOutputCollapsed,
-                      isEditorCollapsed,
-                      currentSize,
-                      panelSize,
-                      prevPanelSize,
-                      storeOutputCollapsed: outputCollapsed,
-                      isRemountUnstable,
-                    });
                     if (!desktop.initializedRef.current || !uiLayoutReady)
                       return;
                     if (!isRemountUnstable) {
@@ -848,29 +711,12 @@ function App() {
                   collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                   minSize={PANEL_MIN_SIZE_CENTER}
                   id="editor-panel"
-                  onResize={(panelSize: PanelSize, id, prevPanelSize) => {
-                    const gateOpen =
-                      desktop.initializedRef.current && uiLayoutReady;
+                  onResize={() => {
                     const isRemountUnstable =
                       desktop.needsForcedResize.current ||
                       desktop.isForcingResize.current;
                     const isEditorCollapsed =
                       desktop.editorRef.current?.isCollapsed() ?? false;
-                    const isOutputCollapsed =
-                      desktop.outputRef.current?.isCollapsed() ?? false;
-                    const currentSize =
-                      desktop.editorRef.current?.getSize().asPercentage;
-                    logDesktopCenterEvent("editor:onResize", {
-                      gateOpen,
-                      id,
-                      isEditorCollapsed,
-                      isOutputCollapsed,
-                      currentSize,
-                      panelSize,
-                      prevPanelSize,
-                      storeEditorCollapsed: editorCollapsed,
-                      isRemountUnstable,
-                    });
                     if (!desktop.initializedRef.current || !uiLayoutReady)
                       return;
                     if (!isRemountUnstable) {

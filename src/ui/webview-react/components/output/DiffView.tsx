@@ -160,6 +160,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
         mode === "all"
           ? gapEnd
           : Math.min(gapStart + HIDDEN_CONTEXT_CHUNK_LINES, gapEnd);
+      const oldLineCount = oldContent.split("\n").length;
+      if (gapStart > oldLineCount) {
+        console.warn(
+          `[DiffView] expand skipped: gapStart=${gapStart} exceeds oldContent lines=${oldLineCount}. ` +
+            `oldContent may be a snippet rather than the full file.`
+        );
+        return;
+      }
       setExpandedHunks((prev) =>
         expandFromRawCode(prev, oldContent, gapStart, expandEnd)
       );
@@ -257,7 +265,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             {(hunks) =>
               hunks.reduce<React.ReactElement[]>((nodes, hunk, i) => {
                 const prevHunk = i > 0 ? hunks[i - 1] : null;
-                const collapsed = getCollapsedLinesCountBetween(prevHunk, hunk);
+                const collapsed = prevHunk !== null ? getCollapsedLinesCountBetween(prevHunk, hunk) : 0;
                 if (collapsed > 0) {
                   const hiddenLinesLabel = formatHiddenLines(collapsed);
                   const chunkSize = Math.min(
@@ -267,10 +275,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
                   nodes.push(
                     <Decoration key={`gap-${i}-${hunk.oldStart}`}>
                       {hasExpandableSource ? (
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)]">
-                          <span className="font-mono text-description-fg">
-                            ▸ {hiddenLinesLabel}
-                          </span>
+                        <div className="flex w-full items-center justify-center gap-x-3 bg-diff-hidden-bg px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)]">
+                          <i className="codicon codicon-triangle-right text-description-fg" />
                           <button
                             type="button"
                             onClick={() =>
@@ -299,13 +305,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
                               Show all
                             </button>
                           )}
+                          <i className="codicon codicon-triangle-left text-description-fg" />
                         </div>
                       ) : (
                         <div
-                          className="w-full px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg opacity-70 font-mono"
+                          className="flex w-full items-center justify-center gap-x-2 bg-diff-hidden-bg px-3 py-0.5 font-mono text-[length:var(--fp-output-font-size-xs)] text-description-fg opacity-70"
                           title="Hidden lines can't be expanded because the original file content is unavailable for this diff."
                         >
-                          ▸ {hiddenLinesLabel}
+                          {hiddenLinesLabel}
                         </div>
                       )}
                     </Decoration>

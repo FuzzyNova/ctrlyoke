@@ -287,8 +287,14 @@ const SingleEvent = memo<SingleEventProps>(
           data.structuredPatch,
           workspaceSnapshot
         );
-        const displayOldContent =
-          data.oldContent ?? getSnapshotBeforeContent(data.path, workspaceSnapshot);
+        // When a structured patch drives the hunks it carries absolute file line
+        // numbers, so context expansion requires the full file's beforeContent.
+        // The event's own oldContent is the replaced snippet (old_string) whose
+        // line numbers start at 1 — passing it to expandFromRawCode would cause
+        // silent no-ops when the gap positions exceed the snippet's line count.
+        const displayOldContent = displayStructuredPatch
+          ? getSnapshotBeforeContent(data.path, workspaceSnapshot)
+          : (data.oldContent ?? getSnapshotBeforeContent(data.path, workspaceSnapshot));
         const handleUndoFile =
           onUndoFile == null
             ? undefined

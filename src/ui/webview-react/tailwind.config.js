@@ -157,6 +157,8 @@ module.exports = {
         // diff-added-fg: used by UndoChangesDialog.tsx for "created" file status text.
         // The remaining diff-* tokens were only used by the old DiffView and are removed.
         "diff-added-fg": "var(--vscode-terminal-ansiGreen, #89d185)",
+        // diff-hidden-bg: background for hidden-lines decoration rows in DiffView.
+        "diff-hidden-bg": "var(--vscode-diffEditor-unchangedCodeBackground, rgba(116, 116, 116, 0.16))",
 
         // ── Markdown enrichment colors (VS Code symbol icon palette) ──
         // Used by MarkdownText.tsx for bold, italic, headings, and tables.

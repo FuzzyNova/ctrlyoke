@@ -375,7 +375,7 @@ export const Header: React.FC<{
                       ? "Continue (retry current prompt)"
                       : isIdleWithOffset
                         ? "Resume from start position"
-                        : "Pause"
+                        : "Pause after current step completes"
             }
             aria-label={
               isPaused || isStopped || isError || isIdleWithOffset
@@ -397,7 +397,7 @@ export const Header: React.FC<{
             }`}
             onClick={isCLIManaged ? handleStopCliRun : handleStop}
             disabled={!canStop && !isCLIManaged}
-            title={isCLIManaged ? "Stop CLI run" : "Stop execution"}
+            title={isCLIManaged ? "Stop CLI run" : "Stop immediately"}
             aria-label="Stop"
           >
             <i className="codicon codicon-debug-stop" />

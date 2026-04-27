@@ -161,7 +161,10 @@ export function useDesktopLayout({
 
   const setLayoutFromStoredSizes = (reason: string) => {
     if (!verticalGroupRef.current) {
-      WebviewLog.error("[LAYOUT] verticalGroupRef.current is null!");
+      WebviewLog.error("[LAYOUT] verticalGroupRef.current is null", {
+        reason,
+        snapshot: getDesktopPanelSnapshot(),
+      });
       return;
     }
 
@@ -174,23 +177,22 @@ export function useDesktopLayout({
 
     try {
       verticalGroupRef.current.setLayout(layout);
-      WebviewLog.debug("[LAYOUT][desktop][vertical-sync:setLayout]", {
+    } catch (error) {
+      WebviewLog.error("[LAYOUT] setLayout() failed", {
         reason,
         layout,
+        error: error instanceof Error ? error.message : String(error),
         snapshot: getDesktopPanelSnapshot(),
       });
-    } catch (error) {
-      WebviewLog.error(
-        `[LAYOUT] setLayout() failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
     }
   };
 
   const setSingleCollapsedPixelLayout = (reason: string) => {
     if (!verticalGroupRef.current) {
-      WebviewLog.error("[LAYOUT] verticalGroupRef.current is null!");
+      WebviewLog.error("[LAYOUT] verticalGroupRef.current is null", {
+        reason,
+        snapshot: getDesktopPanelSnapshot(),
+      });
       return false;
     }
 
@@ -219,19 +221,15 @@ export function useDesktopLayout({
 
     try {
       verticalGroupRef.current.setLayout(layout);
-      WebviewLog.debug("[LAYOUT][desktop][vertical-sync:setCollapsedLayout]", {
+      return true;
+    } catch (error) {
+      WebviewLog.error("[LAYOUT] setCollapsedLayout() failed", {
         reason,
         layout,
         totalPx,
+        error: error instanceof Error ? error.message : String(error),
         snapshot: getDesktopPanelSnapshot(),
       });
-      return true;
-    } catch (error) {
-      WebviewLog.error(
-        `[LAYOUT] setCollapsedLayout() failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
       return false;
     }
   };
@@ -244,12 +242,6 @@ export function useDesktopLayout({
     if (outputCollapsed || editorCollapsed) {
       syncCollapsiblePanel(outputRef, outputCollapsed);
       syncCollapsiblePanel(editorRef, editorCollapsed);
-      WebviewLog.debug("[LAYOUT][desktop][vertical-sync:collapse-expand]", {
-        reason,
-        outputCollapsed,
-        editorCollapsed,
-        snapshot: getDesktopPanelSnapshot(),
-      });
       return;
     }
 
@@ -261,10 +253,6 @@ export function useDesktopLayout({
 
     syncCollapsiblePanel(outputRef, false);
     syncCollapsiblePanel(editorRef, false);
-    WebviewLog.debug("[LAYOUT][desktop][vertical-sync:steady-open]", {
-      reason,
-      snapshot: getDesktopPanelSnapshot(),
-    });
   };
 
   const applyRemountVerticalSync = (reason: string) => {
@@ -278,12 +266,6 @@ export function useDesktopLayout({
       if (setSingleCollapsedPixelLayout(reason)) {
         return;
       }
-      WebviewLog.debug("[LAYOUT][desktop][vertical-sync:collapse-expand]", {
-        reason,
-        outputCollapsed,
-        editorCollapsed,
-        snapshot: getDesktopPanelSnapshot(),
-      });
       return;
     }
 
@@ -299,10 +281,6 @@ export function useDesktopLayout({
     needsExpandedLayoutRestore.current = outputCollapsed !== editorCollapsed;
     isForcingResize.current = false;
     initializedRef.current = !(outputCollapsed && editorCollapsed);
-    WebviewLog.debug("[LAYOUT][desktop][vertical-remount-sync:complete]", {
-      reason,
-      snapshot: getDesktopPanelSnapshot(),
-    });
   };
 
   const startRemountSync = () => {
@@ -350,11 +328,6 @@ export function useDesktopLayout({
     if (isMobile) return;
     syncCollapsiblePanel(settingsRef, settingsCollapsed);
     syncCollapsiblePanel(stepsRef, promptsCollapsed);
-    WebviewLog.debug("[LAYOUT][desktop][horizontal-sync]", {
-      settingsCollapsed,
-      promptsCollapsed,
-      snapshot: getDesktopPanelSnapshot(),
-    });
   }, [isMobile, uiLayoutReady]);
 
   // Open the horizontal onResize gate after mount events have settled.
@@ -364,9 +337,6 @@ export function useDesktopLayout({
     if (!uiLayoutReady) return;
     if (!isMobile) {
       horizontalInitializedRef.current = true;
-      WebviewLog.debug("[LAYOUT][desktop][horizontal-gate-open]", {
-        snapshot: getDesktopPanelSnapshot(),
-      });
     }
   }, [isMobile, uiLayoutReady]);
 
@@ -374,19 +344,11 @@ export function useDesktopLayout({
   useEffect(() => {
     if (!uiLayoutReady) return;
     syncCollapsiblePanel(settingsRef, settingsCollapsed);
-    WebviewLog.debug("[LAYOUT][desktop][settings-sync]", {
-      settingsCollapsed,
-      snapshot: getDesktopPanelSnapshot(),
-    });
   }, [settingsCollapsed, uiLayoutReady]);
 
   useEffect(() => {
     if (!uiLayoutReady) return;
     syncCollapsiblePanel(stepsRef, promptsCollapsed);
-    WebviewLog.debug("[LAYOUT][desktop][steps-sync]", {
-      promptsCollapsed,
-      snapshot: getDesktopPanelSnapshot(),
-    });
   }, [promptsCollapsed, uiLayoutReady]);
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -399,13 +361,6 @@ export function useDesktopLayout({
   useLayoutEffect(() => {
     if (!uiLayoutReady) return;
     const shouldStabilizeRemount = needsForcedResize.current;
-
-    WebviewLog.debug("[LAYOUT][desktop][vertical-sync:start]", {
-      outputCollapsed,
-      editorCollapsed,
-      shouldStabilizeRemount,
-      snapshot: getDesktopPanelSnapshot(),
-    });
 
     if (shouldStabilizeRemount) {
       applyRemountVerticalSync("remount-initial");
@@ -432,12 +387,6 @@ export function useDesktopLayout({
       initializedRef.current =
         !needsForcedResize.current && !isForcingResize.current;
     }
-    WebviewLog.debug("[LAYOUT][desktop][vertical-gate]", {
-      outputCollapsed,
-      editorCollapsed,
-      initialized: initializedRef.current,
-      snapshot: getDesktopPanelSnapshot(),
-    });
   }, [outputCollapsed, editorCollapsed, isMobile, uiLayoutReady]);
 
   useEffect(() => cancelRemountSync, []);
@@ -462,7 +411,5 @@ export function useDesktopLayout({
     wasBothCollapsed,
     // Size tracking
     lastDesktopSizes,
-    // Debug helper
-    getDesktopPanelSnapshot,
   };
 }
