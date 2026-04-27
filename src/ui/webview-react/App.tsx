@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Panel, Group, Separator } from "react-resizable-panels";
+import {
+  Panel,
+  Group,
+  Separator,
+  type Layout,
+  type PanelSize,
+} from "react-resizable-panels";
 import {
   useMessageHandler,
   captureAndSendThemeVars,
@@ -11,6 +17,7 @@ import { useDesktopLayout } from "@hooks/useDesktopLayout";
 import { useMobileLayout } from "@hooks/useMobileLayout";
 import { useUiStore } from "@store/uiStore";
 import { clearNotificationBadgeCount } from "@utils/browserNotifications";
+import { WebviewLog } from "@utils/logger";
 import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see
@@ -18,7 +25,6 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import {
   PANEL_COLLAPSED_SIZE_DEFAULT,
   PANEL_COLLAPSED_SIZE_SIDEBAR,
-  PANEL_EXPANDED_SIZE_SINGLE,
   PANEL_MIN_SIZE_CENTER,
   PANEL_MIN_SIZE_CENTER_COLUMN,
   PANEL_MIN_SIZE_SIDEBAR,
@@ -44,6 +50,63 @@ function App() {
   // main.tsx rehydrates uiStore before App is imported, so the persisted
   // collapse state is available on the first render.
   const [uiLayoutReady] = useState(true);
+
+  const logDesktopCenterEvent = (event: string, details: object = {}) => {
+    WebviewLog.debug(`[LAYOUT][desktop-center] ${event}`, {
+      ...details,
+      snapshot: desktop.getDesktopPanelSnapshot(),
+    });
+  };
+
+  const logMobileCenterEvent = (event: string, details: object = {}) => {
+    WebviewLog.debug(`[LAYOUT][mobile-center] ${event}`, {
+      ...details,
+      snapshot: mobile.getMobilePanelSnapshot(),
+    });
+  };
+
+  const persistDesktopCenterLayout = (layout: Layout, source: string) => {
+    const isRemountUnstable =
+      desktop.needsForcedResize.current || desktop.isForcingResize.current;
+    const panelOutputCollapsed =
+      desktop.outputRef.current?.isCollapsed() ?? outputCollapsed;
+    const panelEditorCollapsed =
+      desktop.editorRef.current?.isCollapsed() ?? editorCollapsed;
+    const outputSize = layout["output-panel"];
+    const editorSize = layout["editor-panel"];
+
+    if (
+      isRemountUnstable ||
+      outputCollapsed ||
+      editorCollapsed ||
+      panelOutputCollapsed ||
+      panelEditorCollapsed ||
+      typeof outputSize !== "number" ||
+      typeof editorSize !== "number" ||
+      outputSize <= centerMinSizePct ||
+      editorSize <= centerMinSizePct
+    ) {
+      logDesktopCenterEvent("group:layout-persist:skipped", {
+        source,
+        layout,
+        isRemountUnstable,
+        panelOutputCollapsed,
+        panelEditorCollapsed,
+      });
+      return;
+    }
+
+    desktop.lastDesktopSizes.current.output = outputSize;
+    desktop.lastDesktopSizes.current.editor = editorSize;
+    useUiStore.getState().setLastDesktopSizes({
+      output: outputSize,
+      editor: editorSize,
+    });
+    logDesktopCenterEvent("group:layout-persisted", {
+      source,
+      layout,
+    });
+  };
 
   // Collapse state from store (source of truth)
   const settingsCollapsed = useUiStore((s) => s.settingsCollapsed);
@@ -138,6 +201,11 @@ function App() {
 
   // Track isMobile to detect layout transitions in render body below
   const wasMobileRef = useRef(isMobile);
+  const previousCenterStateRef = useRef({
+    isMobile,
+    outputCollapsed,
+    editorCollapsed,
+  });
 
   // Message handlers with full implementations
   useMessageHandler();
@@ -250,16 +318,16 @@ function App() {
       desktop.mountDefaultOutput.current = outputCollapsed
         ? PANEL_COLLAPSED_SIZE_DEFAULT
         : editorCollapsed
-          ? PANEL_EXPANDED_SIZE_SINGLE
+          ? undefined
           : String(desktop.lastDesktopSizes.current.output);
       desktop.mountDefaultEditor.current = editorCollapsed
         ? PANEL_COLLAPSED_SIZE_DEFAULT
         : outputCollapsed
-          ? PANEL_EXPANDED_SIZE_SINGLE
+          ? undefined
           : String(desktop.lastDesktopSizes.current.editor);
 
       // Trigger forced resize for center group (if both open)
-      if (!outputCollapsed && !editorCollapsed) {
+      if (!outputCollapsed || !editorCollapsed) {
         desktop.needsForcedResize.current = true;
       }
       // Close gates so mount-time onResize events are ignored
@@ -280,12 +348,12 @@ function App() {
       desktop.mountDefaultOutput.current = outputCollapsed
         ? PANEL_COLLAPSED_SIZE_DEFAULT
         : editorCollapsed
-          ? PANEL_EXPANDED_SIZE_SINGLE
+          ? undefined
           : String(desktop.lastDesktopSizes.current.output);
       desktop.mountDefaultEditor.current = editorCollapsed
         ? PANEL_COLLAPSED_SIZE_DEFAULT
         : outputCollapsed
-          ? PANEL_EXPANDED_SIZE_SINGLE
+          ? undefined
           : String(desktop.lastDesktopSizes.current.editor);
       // Group is remounting — next both-open transition needs forced resize
       desktop.needsForcedResize.current = true;
@@ -298,6 +366,50 @@ function App() {
   // ============================================================================
 
   const allMobileCenterCollapsed = outputCollapsed && editorCollapsed;
+  const centerMinSizePct = Number(PANEL_MIN_SIZE_CENTER);
+
+  useEffect(() => {
+    WebviewLog.debug("[LAYOUT][center][render-mode]", {
+      isMobile,
+      outputCollapsed,
+      editorCollapsed,
+      desktopMode:
+        outputCollapsed && editorCollapsed ? "flat-collapsed" : "panel-group",
+      mobileMode: allMobileCenterCollapsed ? "flat-collapsed" : "panel-group",
+      desktop: desktop.getDesktopPanelSnapshot(),
+      mobile: mobile.getMobilePanelSnapshot(),
+    });
+  }, [isMobile, outputCollapsed, editorCollapsed]);
+
+  useEffect(() => {
+    const previous = previousCenterStateRef.current;
+
+    if (previous.outputCollapsed !== outputCollapsed) {
+      WebviewLog.debug("[LAYOUT][center][output-store-transition]", {
+        isMobile,
+        from: previous.outputCollapsed ? "collapsed" : "expanded",
+        to: outputCollapsed ? "collapsed" : "expanded",
+        desktop: desktop.getDesktopPanelSnapshot(),
+        mobile: mobile.getMobilePanelSnapshot(),
+      });
+    }
+
+    if (previous.editorCollapsed !== editorCollapsed) {
+      WebviewLog.debug("[LAYOUT][center][editor-store-transition]", {
+        isMobile,
+        from: previous.editorCollapsed ? "collapsed" : "expanded",
+        to: editorCollapsed ? "collapsed" : "expanded",
+        desktop: desktop.getDesktopPanelSnapshot(),
+        mobile: mobile.getMobilePanelSnapshot(),
+      });
+    }
+
+    previousCenterStateRef.current = {
+      isMobile,
+      outputCollapsed,
+      editorCollapsed,
+    };
+  }, [isMobile, outputCollapsed, editorCollapsed]);
 
   // Update mobile mount defaults when transitioning from all-collapsed → some-open.
   // Open center panels redistribute proportionally; collapsed panels stay at 30px.
@@ -312,7 +424,7 @@ function App() {
 
       for (const k of centerKeys) {
         mobile.mobileMountDefaults.current[k] = collapsed[k]
-          ? "30px"
+          ? PANEL_COLLAPSED_SIZE_DEFAULT
           : String(
               Math.round((mobile.lastMobileSizes.current[k] / totalOpen) * 100)
             );
@@ -364,6 +476,12 @@ function App() {
               orientation="vertical"
               className="flex-1"
               id="flightpath-mobile-layout"
+              onLayoutChange={(layout: Layout) => {
+                logMobileCenterEvent("group:onLayoutChange", { layout });
+              }}
+              onLayoutChanged={(layout: Layout) => {
+                logMobileCenterEvent("group:onLayoutChanged", { layout });
+              }}
             >
               <Panel
                 panelRef={mobile.mobileOutputRef}
@@ -372,15 +490,49 @@ function App() {
                 collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                 minSize={PANEL_MIN_SIZE_CENTER}
                 id="mobile-output-panel"
-                onResize={() => {
+                onResize={(panelSize: PanelSize, id, prevPanelSize) => {
+                  const gateOpen =
+                    mobile.mobileInitializedRef.current && uiLayoutReady;
                   if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                    return;
+                    {
+                      logMobileCenterEvent("output:onResize:gated", {
+                        gateOpen,
+                        id,
+                        panelSize,
+                        prevPanelSize,
+                        storeOutputCollapsed: outputCollapsed,
+                      });
+                      return;
+                    }
                   const isCollapsed =
                     mobile.mobileOutputRef.current?.isCollapsed() ?? false;
                   const size =
                     mobile.mobileOutputRef.current?.getSize().asPercentage ??
                     null;
-                  if (!isCollapsed && size != null) {
+                  const editorSize =
+                    mobile.mobileEditorRef.current?.getSize().asPercentage ??
+                    null;
+                  logMobileCenterEvent("output:onResize", {
+                    gateOpen,
+                    id,
+                    isCollapsed,
+                    size,
+                    panelSize,
+                    prevPanelSize,
+                    storeOutputCollapsed: outputCollapsed,
+                  });
+                  if (!gateOpen) {
+                    return;
+                  }
+                  if (
+                    !outputCollapsed &&
+                    !editorCollapsed &&
+                    !isCollapsed &&
+                    size != null &&
+                    editorSize != null &&
+                    size > centerMinSizePct &&
+                    editorSize > centerMinSizePct
+                  ) {
                     mobile.lastMobileSizes.current.output = size;
                     useUiStore.getState().setLastMobileSizes({ output: size });
                   }
@@ -454,15 +606,49 @@ function App() {
                 collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                 minSize={PANEL_MIN_SIZE_CENTER}
                 id="mobile-editor-panel"
-                onResize={() => {
+                onResize={(panelSize: PanelSize, id, prevPanelSize) => {
+                  const gateOpen =
+                    mobile.mobileInitializedRef.current && uiLayoutReady;
                   if (!mobile.mobileInitializedRef.current || !uiLayoutReady)
-                    return;
+                    {
+                      logMobileCenterEvent("editor:onResize:gated", {
+                        gateOpen,
+                        id,
+                        panelSize,
+                        prevPanelSize,
+                        storeEditorCollapsed: editorCollapsed,
+                      });
+                      return;
+                    }
                   const isCollapsed =
                     mobile.mobileEditorRef.current?.isCollapsed() ?? false;
                   const size =
                     mobile.mobileEditorRef.current?.getSize().asPercentage ??
                     null;
-                  if (!isCollapsed && size != null) {
+                  const outputSize =
+                    mobile.mobileOutputRef.current?.getSize().asPercentage ??
+                    null;
+                  logMobileCenterEvent("editor:onResize", {
+                    gateOpen,
+                    id,
+                    isCollapsed,
+                    size,
+                    panelSize,
+                    prevPanelSize,
+                    storeEditorCollapsed: editorCollapsed,
+                  });
+                  if (!gateOpen) {
+                    return;
+                  }
+                  if (
+                    !outputCollapsed &&
+                    !editorCollapsed &&
+                    !isCollapsed &&
+                    size != null &&
+                    outputSize != null &&
+                    size > centerMinSizePct &&
+                    outputSize > centerMinSizePct
+                  ) {
                     mobile.lastMobileSizes.current.editor = size;
                     useUiStore.getState().setLastMobileSizes({ editor: size });
                   }
@@ -595,6 +781,13 @@ function App() {
                 orientation="vertical"
                 className="h-full"
                 id="flightpath-vertical-layout"
+                onLayoutChange={(layout: Layout) => {
+                  logDesktopCenterEvent("group:onLayoutChange", { layout });
+                }}
+                onLayoutChanged={(layout: Layout) => {
+                  logDesktopCenterEvent("group:onLayoutChanged", { layout });
+                  persistDesktopCenterLayout(layout, "group:onLayoutChanged");
+                }}
               >
                 <Panel
                   panelRef={desktop.outputRef}
@@ -603,29 +796,34 @@ function App() {
                   collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                   minSize={PANEL_MIN_SIZE_CENTER}
                   id="output-panel"
-                  onResize={() => {
-                    if (!desktop.initializedRef.current || !uiLayoutReady)
-                      return;
+                  onResize={(panelSize: PanelSize, id, prevPanelSize) => {
+                    const gateOpen =
+                      desktop.initializedRef.current && uiLayoutReady;
+                    const isRemountUnstable =
+                      desktop.needsForcedResize.current ||
+                      desktop.isForcingResize.current;
                     const isOutputCollapsed =
                       desktop.outputRef.current?.isCollapsed() ?? false;
                     const isEditorCollapsed =
                       desktop.editorRef.current?.isCollapsed() ?? false;
                     const currentSize =
                       desktop.outputRef.current?.getSize().asPercentage;
-
-                    if (
-                      !isOutputCollapsed &&
-                      !isEditorCollapsed &&
-                      !desktop.isForcingResize.current
-                    ) {
-                      const newSize =
-                        currentSize ?? desktop.lastDesktopSizes.current.output;
-                      desktop.lastDesktopSizes.current.output = newSize;
-                      useUiStore
-                        .getState()
-                        .setLastDesktopSizes({ output: newSize });
+                    logDesktopCenterEvent("output:onResize", {
+                      gateOpen,
+                      id,
+                      isOutputCollapsed,
+                      isEditorCollapsed,
+                      currentSize,
+                      panelSize,
+                      prevPanelSize,
+                      storeOutputCollapsed: outputCollapsed,
+                      isRemountUnstable,
+                    });
+                    if (!desktop.initializedRef.current || !uiLayoutReady)
+                      return;
+                    if (!isRemountUnstable) {
+                      setOutputCollapsed(isOutputCollapsed);
                     }
-                    setOutputCollapsed(isOutputCollapsed);
                   }}
                 >
                   <OutputSection />
@@ -640,29 +838,34 @@ function App() {
                   collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
                   minSize={PANEL_MIN_SIZE_CENTER}
                   id="editor-panel"
-                  onResize={() => {
-                    if (!desktop.initializedRef.current || !uiLayoutReady)
-                      return;
+                  onResize={(panelSize: PanelSize, id, prevPanelSize) => {
+                    const gateOpen =
+                      desktop.initializedRef.current && uiLayoutReady;
+                    const isRemountUnstable =
+                      desktop.needsForcedResize.current ||
+                      desktop.isForcingResize.current;
                     const isEditorCollapsed =
                       desktop.editorRef.current?.isCollapsed() ?? false;
                     const isOutputCollapsed =
                       desktop.outputRef.current?.isCollapsed() ?? false;
                     const currentSize =
                       desktop.editorRef.current?.getSize().asPercentage;
-
-                    if (
-                      !isEditorCollapsed &&
-                      !isOutputCollapsed &&
-                      !desktop.isForcingResize.current
-                    ) {
-                      const newSize =
-                        currentSize ?? desktop.lastDesktopSizes.current.editor;
-                      desktop.lastDesktopSizes.current.editor = newSize;
-                      useUiStore
-                        .getState()
-                        .setLastDesktopSizes({ editor: newSize });
+                    logDesktopCenterEvent("editor:onResize", {
+                      gateOpen,
+                      id,
+                      isEditorCollapsed,
+                      isOutputCollapsed,
+                      currentSize,
+                      panelSize,
+                      prevPanelSize,
+                      storeEditorCollapsed: editorCollapsed,
+                      isRemountUnstable,
+                    });
+                    if (!desktop.initializedRef.current || !uiLayoutReady)
+                      return;
+                    if (!isRemountUnstable) {
+                      setEditorCollapsed(isEditorCollapsed);
                     }
-                    setEditorCollapsed(isEditorCollapsed);
                   }}
                 >
                   <EditorSection />

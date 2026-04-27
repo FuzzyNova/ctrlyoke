@@ -4,12 +4,10 @@
 
 /** Collapsed panel size - fixed height/width bar when panel is minimized */
 export const PANEL_COLLAPSED_SIZE_DEFAULT = "30px";
+export const PANEL_COLLAPSED_SIZE_DEFAULT_PX = 30;
 
 /** Alternative collapsed size for prompts/settings panels (desktop) */
 export const PANEL_COLLAPSED_SIZE_SIDEBAR = "32px";
-
-/** Expanded size when one vertical panel should take up most space (95% height) */
-export const PANEL_EXPANDED_SIZE_SINGLE = "95";
 
 /** Minimum panel size as percentage for resizable panels */
 export const PANEL_MIN_SIZE_SMALL = "100px";

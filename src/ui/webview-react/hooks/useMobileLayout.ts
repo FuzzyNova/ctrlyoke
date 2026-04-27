@@ -11,6 +11,9 @@ import type {
   GroupImperativeHandle,
 } from "react-resizable-panels";
 import { useUiStore } from "@store/uiStore";
+import { syncCollapsiblePanel } from "@utils/panelSync";
+import { readPanelSnapshot } from "@utils/panelSnapshot";
+import { WebviewLog } from "@utils/logger";
 
 interface MobileLayoutParams {
   isMobile: boolean;
@@ -54,6 +57,9 @@ export function useMobileLayout({
   // Debug snapshot — reads panel state at call time (used in error paths).
   const getMobilePanelSnapshot = () => {
     const store = useUiStore.getState();
+    const output = readPanelSnapshot(mobileOutputRef, "mobile-output");
+    const editor = readPanelSnapshot(mobileEditorRef, "mobile-editor");
+
     return {
       isMobile,
       mobileInitialized: mobileInitializedRef.current,
@@ -66,12 +72,12 @@ export function useMobileLayout({
       },
       panelState: {
         output: {
-          collapsed: mobileOutputRef.current?.isCollapsed() ?? null,
-          size: mobileOutputRef.current?.getSize().asPercentage ?? null,
+          collapsed: output.collapsed,
+          size: output.sizePct,
         },
         editor: {
-          collapsed: mobileEditorRef.current?.isCollapsed() ?? null,
-          size: mobileEditorRef.current?.getSize().asPercentage ?? null,
+          collapsed: editor.collapsed,
+          size: editor.sizePct,
         },
       },
       lastMobileSizes: { ...lastMobileSizes.current },
@@ -88,11 +94,13 @@ export function useMobileLayout({
     if (!uiLayoutReady) return;
     if (!isMobile) return;
 
-    if (outputCollapsed) mobileOutputRef.current?.collapse();
-    if (editorCollapsed) mobileEditorRef.current?.collapse();
-
-    if (!outputCollapsed) mobileOutputRef.current?.expand();
-    if (!editorCollapsed) mobileEditorRef.current?.expand();
+    syncCollapsiblePanel(mobileOutputRef, outputCollapsed);
+    syncCollapsiblePanel(mobileEditorRef, editorCollapsed);
+    WebviewLog.debug("[LAYOUT][mobile][center-sync]", {
+      outputCollapsed,
+      editorCollapsed,
+      snapshot: getMobilePanelSnapshot(),
+    });
   }, [uiLayoutReady, isMobile, outputCollapsed, editorCollapsed]);
 
   // Mobile gate management: closed when both panels collapse, opened after sync.
@@ -100,6 +108,12 @@ export function useMobileLayout({
     if (!uiLayoutReady) return;
     if (!isMobile) return;
     mobileInitializedRef.current = !(outputCollapsed && editorCollapsed);
+    WebviewLog.debug("[LAYOUT][mobile][center-gate]", {
+      outputCollapsed,
+      editorCollapsed,
+      initialized: mobileInitializedRef.current,
+      snapshot: getMobilePanelSnapshot(),
+    });
   }, [uiLayoutReady, isMobile, outputCollapsed, editorCollapsed]);
 
   return {

@@ -91,7 +91,11 @@ describe("DiffView", () => {
     mockToRdvFromContent.mockClear();
     mockGetCollapsedLinesCountBetween.mockClear();
     mockExpandFromRawCode.mockClear();
-    mockGetRenderedDiffStats.mockReturnValue({ added: 0, removed: 0, runs: [] });
+    mockGetRenderedDiffStats.mockReturnValue({
+      added: 0,
+      removed: 0,
+      runs: [],
+    });
     mockToRdvHunks.mockReturnValue([]);
     mockToRdvFromContent.mockReturnValue({ hunks: [], diffType: "modify" });
     mockGetCollapsedLinesCountBetween.mockReturnValue(0);
@@ -180,7 +184,7 @@ describe("DiffView", () => {
     );
   });
 
-  it("expands hidden lines when original file content is available", () => {
+  it("expands a small hidden block in one click when original file content is available", () => {
     mockToRdvFromContent.mockReturnValue({
       hunks: [
         {
@@ -204,7 +208,7 @@ describe("DiffView", () => {
       />
     );
 
-    fireEvent.click(getByRole("button", { name: /4 hidden lines/i }));
+    fireEvent.click(getByRole("button", { name: /show 4 hidden lines/i }));
 
     expect(mockExpandFromRawCode).toHaveBeenCalledWith(
       [
@@ -220,6 +224,73 @@ describe("DiffView", () => {
       "a\nb\nc\nd\ne\n",
       1,
       5
+    );
+  });
+
+  it("renders chunked and full expansion controls for large hidden blocks", () => {
+    mockToRdvFromContent.mockReturnValue({
+      hunks: [
+        {
+          content: "@@ -41,1 +41,1 @@",
+          oldStart: 41,
+          oldLines: 1,
+          newStart: 41,
+          newLines: 1,
+          changes: [],
+        },
+      ],
+      diffType: "modify",
+    });
+    mockGetCollapsedLinesCountBetween.mockReturnValue(40);
+
+    const { getByRole } = render(
+      <DiffView
+        oldContent={Array.from({ length: 41 }, (_, i) => `line ${i + 1}`).join(
+          "\n"
+        )}
+        newContent={Array.from({ length: 40 }, (_, i) => `line ${i + 1}`)
+          .concat("updated")
+          .join("\n")}
+        globallyCollapsed={false}
+      />
+    );
+
+    fireEvent.click(
+      getByRole("button", { name: /show 25 of 40 hidden lines/i })
+    );
+
+    expect(mockExpandFromRawCode).toHaveBeenCalledWith(
+      [
+        {
+          content: "@@ -41,1 +41,1 @@",
+          oldStart: 41,
+          oldLines: 1,
+          newStart: 41,
+          newLines: 1,
+          changes: [],
+        },
+      ],
+      Array.from({ length: 41 }, (_, i) => `line ${i + 1}`).join("\n"),
+      1,
+      26
+    );
+
+    fireEvent.click(getByRole("button", { name: /show all/i }));
+
+    expect(mockExpandFromRawCode).toHaveBeenLastCalledWith(
+      [
+        {
+          content: "@@ -41,1 +41,1 @@",
+          oldStart: 41,
+          oldLines: 1,
+          newStart: 41,
+          newLines: 1,
+          changes: [],
+        },
+      ],
+      Array.from({ length: 41 }, (_, i) => `line ${i + 1}`).join("\n"),
+      1,
+      41
     );
   });
 
@@ -252,7 +323,7 @@ describe("DiffView", () => {
     );
 
     const hiddenLines = getByText(/4 hidden lines/i);
-    expect(queryByRole("button", { name: /4 hidden lines/i })).toBeNull();
+    expect(queryByRole("button", { name: /show/i })).toBeNull();
     expect(hiddenLines.getAttribute("title")).toContain(
       "original file content is unavailable"
     );

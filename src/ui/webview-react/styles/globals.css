@@ -504,23 +504,72 @@ button .codicon {
   /* Base */
   --diff-background-color: var(--vscode-editor-background);
   --diff-text-color: var(--vscode-editor-foreground);
-  --diff-font-family: var(--vscode-editor-font-family, 'Consolas, Courier New, monospace');
-  --diff-selection-background-color: var(--vscode-editor-selectionBackground, rgba(39, 103, 130, 0.87));
+  --diff-font-family: var(
+    --vscode-editor-font-family,
+    "Consolas, Courier New, monospace"
+  );
+  --diff-selection-background-color: var(
+    --vscode-editor-selectionBackground,
+    rgba(39, 103, 130, 0.87)
+  );
+  --diff-selection-text-color: var(
+    --vscode-editor-selectionForeground,
+    var(--vscode-editor-foreground)
+  );
 
   /* Insert (added) lines — full-line tint */
-  --diff-gutter-insert-background-color: var(--vscode-diffEditor-insertedLineBackground, rgba(52, 125, 57, 0.15));
-  --diff-code-insert-background-color: var(--vscode-diffEditor-insertedLineBackground, rgba(52, 125, 57, 0.15));
+  --diff-gutter-insert-background-color: var(
+    --vscode-diffEditor-insertedLineBackground,
+    rgba(52, 125, 57, 0.15)
+  );
+  --diff-gutter-insert-text-color: var(--vscode-editor-foreground);
+  --diff-code-insert-background-color: var(
+    --vscode-diffEditor-insertedLineBackground,
+    rgba(52, 125, 57, 0.15)
+  );
+  --diff-code-insert-text-color: var(--vscode-editor-foreground);
   /* Insert — inline word-level highlight (markEdits enhancer) */
-  --diff-code-insert-edit-background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(87, 171, 90, 0.3));
+  --diff-code-insert-edit-background-color: var(
+    --vscode-diffEditor-insertedTextBackground,
+    rgba(87, 171, 90, 0.3)
+  );
+  --diff-code-insert-edit-text-color: var(--vscode-editor-foreground);
 
   /* Delete (removed) lines — full-line tint */
-  --diff-gutter-delete-background-color: var(--vscode-diffEditor-removedLineBackground, rgba(201, 60, 55, 0.15));
-  --diff-code-delete-background-color: var(--vscode-diffEditor-removedLineBackground, rgba(201, 60, 55, 0.15));
+  --diff-gutter-delete-background-color: var(
+    --vscode-diffEditor-removedLineBackground,
+    rgba(201, 60, 55, 0.15)
+  );
+  --diff-gutter-delete-text-color: var(--vscode-editor-foreground);
+  --diff-code-delete-background-color: var(
+    --vscode-diffEditor-removedLineBackground,
+    rgba(201, 60, 55, 0.15)
+  );
+  --diff-code-delete-text-color: var(--vscode-editor-foreground);
   /* Delete — inline word-level highlight */
-  --diff-code-delete-edit-background-color: var(--vscode-diffEditor-removedTextBackground, rgba(244, 112, 103, 0.3));
+  --diff-code-delete-edit-background-color: var(
+    --vscode-diffEditor-removedTextBackground,
+    rgba(244, 112, 103, 0.3)
+  );
+  --diff-code-delete-edit-text-color: var(--vscode-editor-foreground);
+
+  /* Selected rows/lines (used by react-diff-view selection APIs) */
+  --diff-gutter-selected-background-color: var(
+    --vscode-editor-selectionHighlightBackground,
+    var(--vscode-editor-selectionBackground, rgba(39, 103, 130, 0.35))
+  );
+  --diff-gutter-selected-text-color: var(--vscode-editor-foreground);
+  --diff-code-selected-background-color: var(
+    --vscode-editor-selectionHighlightBackground,
+    var(--vscode-editor-selectionBackground, rgba(39, 103, 130, 0.35))
+  );
+  --diff-code-selected-text-color: var(--vscode-editor-foreground);
 
   /* Omit row divider (collapsed context gap indicator) */
-  --diff-omit-gutter-line-color: var(--vscode-diffEditor-unchangedRegionForeground, #bfbfbf);
+  --diff-omit-gutter-line-color: var(
+    --vscode-diffEditor-unchangedRegionForeground,
+    #bfbfbf
+  );
 
   /* Font size — react-diff-view has no variable for this; set it on the container */
   font-size: var(--fp-output-font-size-sm);
@@ -532,9 +581,17 @@ button .codicon {
   color: var(--vscode-editorLineNumber-foreground, #858889);
 }
 
+.diff .diff-code-edit,
+.diff .diff-code-mark {
+  border-radius: 2px;
+}
+
 /* Collapsed context stub row ("N hidden lines" decoration) */
 .diff-omit,
 .diff .diff-omit {
-  background-color: var(--vscode-diffEditor-unchangedRegionBackground, var(--vscode-editor-background));
+  background-color: var(
+    --vscode-diffEditor-unchangedRegionBackground,
+    var(--vscode-editor-background)
+  );
   color: var(--vscode-diffEditor-unchangedRegionForeground, #bfbfbf);
 }

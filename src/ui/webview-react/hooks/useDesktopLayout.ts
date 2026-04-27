@@ -11,10 +11,12 @@ import type {
   GroupImperativeHandle,
 } from "react-resizable-panels";
 import { WebviewLog } from "@utils/logger";
+import { readPanelSnapshot } from "@utils/panelSnapshot";
+import { syncCollapsiblePanel } from "@utils/panelSync";
 import { useUiStore } from "@store/uiStore";
 import {
   PANEL_COLLAPSED_SIZE_DEFAULT,
-  PANEL_EXPANDED_SIZE_SINGLE,
+  PANEL_COLLAPSED_SIZE_DEFAULT_PX,
 } from "../constants";
 
 interface DesktopLayoutParams {
@@ -55,7 +57,11 @@ export function useDesktopLayout({
 
   // Resize tracking
   const isForcingResize = useRef(false);
-  const needsForcedResize = useRef(false);
+  const needsForcedResize = useRef(outputCollapsed !== editorCollapsed);
+  const needsExpandedLayoutRestore = useRef(outputCollapsed !== editorCollapsed);
+  const remountSyncFrameRef = useRef<number | null>(null);
+  const remountStableFramesRef = useRef(0);
+  const remountPreviousTotalSizeRef = useRef<number | null>(null);
 
   // Size persistence — initialized from store so sizes survive VS Code restarts
   const lastDesktopSizes = useRef({
@@ -70,24 +76,267 @@ export function useDesktopLayout({
     steps: `${lastDesktopSizes.current.steps}px`,
     settings: `${lastDesktopSizes.current.settings}px`,
   });
-  const mountDefaultOutput = useRef(
+  // undefined means "no defaultSize" → the Panel uses flexGrow:1, which gives
+  // ne(group) the full container height so collapsedSize % is computed correctly.
+  const mountDefaultOutput = useRef<string | undefined>(
     outputCollapsed
       ? PANEL_COLLAPSED_SIZE_DEFAULT
       : editorCollapsed
-        ? PANEL_EXPANDED_SIZE_SINGLE
+        ? undefined
         : String(lastDesktopSizes.current.output)
   );
-  const mountDefaultEditor = useRef(
+  const mountDefaultEditor = useRef<string | undefined>(
     editorCollapsed
       ? PANEL_COLLAPSED_SIZE_DEFAULT
       : outputCollapsed
-        ? PANEL_EXPANDED_SIZE_SINGLE
+        ? undefined
         : String(lastDesktopSizes.current.editor)
   );
 
   // Tracks both-collapsed → one-open transition; App.tsx updates this during
   // render to recompute mountDefault* before the Group remounts.
   const wasBothCollapsed = useRef(outputCollapsed && editorCollapsed);
+
+  const getDesktopPanelSnapshot = () => {
+    const store = useUiStore.getState();
+    const steps = readPanelSnapshot(stepsRef, "desktop-steps");
+    const settings = readPanelSnapshot(settingsRef, "desktop-settings");
+    const output = readPanelSnapshot(outputRef, "desktop-output");
+    const editor = readPanelSnapshot(editorRef, "desktop-editor");
+
+    return {
+      isMobile,
+      initialized: initializedRef.current,
+      horizontalInitialized: horizontalInitializedRef.current,
+      isForcingResize: isForcingResize.current,
+      needsForcedResize: needsForcedResize.current,
+      store: {
+        promptsCollapsed: store.stepsCollapsed,
+        settingsCollapsed: store.settingsCollapsed,
+        outputCollapsed: store.outputCollapsed,
+        editorCollapsed: store.editorCollapsed,
+      },
+      panelState: {
+        steps: {
+          collapsed: steps.collapsed,
+          sizePx: steps.sizePx,
+        },
+        settings: {
+          collapsed: settings.collapsed,
+          sizePx: settings.sizePx,
+        },
+        output: {
+          collapsed: output.collapsed,
+          sizePct: output.sizePct,
+        },
+        editor: {
+          collapsed: editor.collapsed,
+          sizePct: editor.sizePct,
+        },
+      },
+      lastDesktopSizes: { ...lastDesktopSizes.current },
+      mountDefaults: {
+        steps: desktopMountDefaults.current.steps,
+        settings: desktopMountDefaults.current.settings,
+        output: mountDefaultOutput.current,
+        editor: mountDefaultEditor.current,
+      },
+    };
+  };
+
+  const cancelRemountSync = () => {
+    if (remountSyncFrameRef.current != null) {
+      window.cancelAnimationFrame(remountSyncFrameRef.current);
+      remountSyncFrameRef.current = null;
+    }
+    remountStableFramesRef.current = 0;
+    remountPreviousTotalSizeRef.current = null;
+  };
+
+  const getVerticalGroupTotalPx = () => {
+    const outputPx = outputRef.current?.getSize().inPixels ?? 0;
+    const editorPx = editorRef.current?.getSize().inPixels ?? 0;
+    return outputPx + editorPx;
+  };
+
+  const setLayoutFromStoredSizes = (reason: string) => {
+    if (!verticalGroupRef.current) {
+      WebviewLog.error("[LAYOUT] verticalGroupRef.current is null!");
+      return;
+    }
+
+    const outputSize = Math.round(lastDesktopSizes.current.output);
+    const editorSize = 100 - outputSize;
+    const layout = {
+      "output-panel": outputSize,
+      "editor-panel": editorSize,
+    };
+
+    try {
+      verticalGroupRef.current.setLayout(layout);
+      WebviewLog.debug("[LAYOUT][desktop][vertical-sync:setLayout]", {
+        reason,
+        layout,
+        snapshot: getDesktopPanelSnapshot(),
+      });
+    } catch (error) {
+      WebviewLog.error(
+        `[LAYOUT] setLayout() failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  };
+
+  const setSingleCollapsedPixelLayout = (reason: string) => {
+    if (!verticalGroupRef.current) {
+      WebviewLog.error("[LAYOUT] verticalGroupRef.current is null!");
+      return false;
+    }
+
+    const totalPx = getVerticalGroupTotalPx();
+    if (totalPx <= PANEL_COLLAPSED_SIZE_DEFAULT_PX) {
+      return false;
+    }
+
+    const collapsedPct = Number(
+      ((PANEL_COLLAPSED_SIZE_DEFAULT_PX / totalPx) * 100).toFixed(3)
+    );
+    if (!(collapsedPct > 0 && collapsedPct < 100)) {
+      return false;
+    }
+
+    const expandedPct = Number((100 - collapsedPct).toFixed(3));
+    const layout = outputCollapsed
+      ? {
+          "output-panel": collapsedPct,
+          "editor-panel": expandedPct,
+        }
+      : {
+          "output-panel": expandedPct,
+          "editor-panel": collapsedPct,
+        };
+
+    try {
+      verticalGroupRef.current.setLayout(layout);
+      WebviewLog.debug("[LAYOUT][desktop][vertical-sync:setCollapsedLayout]", {
+        reason,
+        layout,
+        totalPx,
+        snapshot: getDesktopPanelSnapshot(),
+      });
+      return true;
+    } catch (error) {
+      WebviewLog.error(
+        `[LAYOUT] setCollapsedLayout() failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return false;
+    }
+  };
+
+  const applySteadyVerticalSync = (reason: string) => {
+    if (outputCollapsed && editorCollapsed) {
+      return;
+    }
+
+    if (outputCollapsed || editorCollapsed) {
+      syncCollapsiblePanel(outputRef, outputCollapsed);
+      syncCollapsiblePanel(editorRef, editorCollapsed);
+      WebviewLog.debug("[LAYOUT][desktop][vertical-sync:collapse-expand]", {
+        reason,
+        outputCollapsed,
+        editorCollapsed,
+        snapshot: getDesktopPanelSnapshot(),
+      });
+      return;
+    }
+
+    if (needsExpandedLayoutRestore.current) {
+      setLayoutFromStoredSizes(reason);
+      needsExpandedLayoutRestore.current = false;
+      return;
+    }
+
+    syncCollapsiblePanel(outputRef, false);
+    syncCollapsiblePanel(editorRef, false);
+    WebviewLog.debug("[LAYOUT][desktop][vertical-sync:steady-open]", {
+      reason,
+      snapshot: getDesktopPanelSnapshot(),
+    });
+  };
+
+  const applyRemountVerticalSync = (reason: string) => {
+    if (outputCollapsed && editorCollapsed) {
+      return;
+    }
+
+    if (outputCollapsed || editorCollapsed) {
+      syncCollapsiblePanel(outputRef, outputCollapsed);
+      syncCollapsiblePanel(editorRef, editorCollapsed);
+      if (setSingleCollapsedPixelLayout(reason)) {
+        return;
+      }
+      WebviewLog.debug("[LAYOUT][desktop][vertical-sync:collapse-expand]", {
+        reason,
+        outputCollapsed,
+        editorCollapsed,
+        snapshot: getDesktopPanelSnapshot(),
+      });
+      return;
+    }
+
+    setLayoutFromStoredSizes(reason);
+  };
+
+  const finishRemountSync = (reason: string) => {
+    if (outputCollapsed !== editorCollapsed) {
+      setSingleCollapsedPixelLayout(`${reason}-finalize`);
+    }
+    cancelRemountSync();
+    needsForcedResize.current = false;
+    needsExpandedLayoutRestore.current = outputCollapsed !== editorCollapsed;
+    isForcingResize.current = false;
+    initializedRef.current = !(outputCollapsed && editorCollapsed);
+    WebviewLog.debug("[LAYOUT][desktop][vertical-remount-sync:complete]", {
+      reason,
+      snapshot: getDesktopPanelSnapshot(),
+    });
+  };
+
+  const startRemountSync = () => {
+    cancelRemountSync();
+    isForcingResize.current = true;
+    initializedRef.current = false;
+
+    let frameCount = 0;
+    const tick = () => {
+      frameCount += 1;
+      applyRemountVerticalSync(`remount-frame-${frameCount}`);
+
+      const totalPx = getVerticalGroupTotalPx();
+      const previousTotalPx = remountPreviousTotalSizeRef.current;
+      const isStableFrame =
+        previousTotalPx != null && Math.abs(totalPx - previousTotalPx) < 1;
+
+      remountPreviousTotalSizeRef.current = totalPx;
+      remountStableFramesRef.current = isStableFrame
+        ? remountStableFramesRef.current + 1
+        : 0;
+
+      if (remountStableFramesRef.current >= 2 || frameCount >= 24) {
+        finishRemountSync(
+          remountStableFramesRef.current >= 2 ? "stable" : "max-frames"
+        );
+        return;
+      }
+
+      remountSyncFrameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    remountSyncFrameRef.current = window.requestAnimationFrame(tick);
+  };
 
   // ──────────────────────────────────────────────────────────────────────────
   // HORIZONTAL PANEL SYNC (prompts / settings)
@@ -99,10 +348,13 @@ export function useDesktopLayout({
   useLayoutEffect(() => {
     if (!uiLayoutReady) return;
     if (isMobile) return;
-    if (settingsCollapsed) settingsRef.current?.collapse();
-    else settingsRef.current?.expand();
-    if (promptsCollapsed) stepsRef.current?.collapse();
-    else stepsRef.current?.expand();
+    syncCollapsiblePanel(settingsRef, settingsCollapsed);
+    syncCollapsiblePanel(stepsRef, promptsCollapsed);
+    WebviewLog.debug("[LAYOUT][desktop][horizontal-sync]", {
+      settingsCollapsed,
+      promptsCollapsed,
+      snapshot: getDesktopPanelSnapshot(),
+    });
   }, [isMobile, uiLayoutReady]);
 
   // Open the horizontal onResize gate after mount events have settled.
@@ -112,20 +364,29 @@ export function useDesktopLayout({
     if (!uiLayoutReady) return;
     if (!isMobile) {
       horizontalInitializedRef.current = true;
+      WebviewLog.debug("[LAYOUT][desktop][horizontal-gate-open]", {
+        snapshot: getDesktopPanelSnapshot(),
+      });
     }
   }, [isMobile, uiLayoutReady]);
 
   // Ongoing store → panel sync for settings and prompts collapse
   useEffect(() => {
     if (!uiLayoutReady) return;
-    if (settingsCollapsed) settingsRef.current?.collapse();
-    else settingsRef.current?.expand();
+    syncCollapsiblePanel(settingsRef, settingsCollapsed);
+    WebviewLog.debug("[LAYOUT][desktop][settings-sync]", {
+      settingsCollapsed,
+      snapshot: getDesktopPanelSnapshot(),
+    });
   }, [settingsCollapsed, uiLayoutReady]);
 
   useEffect(() => {
     if (!uiLayoutReady) return;
-    if (promptsCollapsed) stepsRef.current?.collapse();
-    else stepsRef.current?.expand();
+    syncCollapsiblePanel(stepsRef, promptsCollapsed);
+    WebviewLog.debug("[LAYOUT][desktop][steps-sync]", {
+      promptsCollapsed,
+      snapshot: getDesktopPanelSnapshot(),
+    });
   }, [promptsCollapsed, uiLayoutReady]);
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -137,44 +398,22 @@ export function useDesktopLayout({
   // to their persisted sizes atomically.
   useLayoutEffect(() => {
     if (!uiLayoutReady) return;
-    const shouldForceResize =
-      !outputCollapsed && !editorCollapsed && needsForcedResize.current;
+    const shouldStabilizeRemount = needsForcedResize.current;
 
-    if (shouldForceResize) {
-      isForcingResize.current = true;
+    WebviewLog.debug("[LAYOUT][desktop][vertical-sync:start]", {
+      outputCollapsed,
+      editorCollapsed,
+      shouldStabilizeRemount,
+      snapshot: getDesktopPanelSnapshot(),
+    });
 
-      if (verticalGroupRef.current) {
-        const outputSize = Math.round(lastDesktopSizes.current.output);
-        const editorSize = 100 - outputSize;
-        const layout = {
-          "output-panel": outputSize,
-          "editor-panel": editorSize,
-        };
-        try {
-          verticalGroupRef.current.setLayout(layout);
-        } catch (error) {
-          WebviewLog.error(
-            `[LAYOUT] setLayout() failed: ${error instanceof Error ? error.message : String(error)}`
-          );
-        }
-      } else {
-        WebviewLog.error("[LAYOUT] verticalGroupRef.current is null!");
-      }
-
-      needsForcedResize.current = false;
-      setTimeout(() => {
-        isForcingResize.current = false;
-      }, 50);
-    } else {
-      if (outputRef.current) {
-        if (outputCollapsed) outputRef.current.collapse();
-        else outputRef.current.expand();
-      }
-      if (editorRef.current) {
-        if (editorCollapsed) editorRef.current.collapse();
-        else editorRef.current.expand();
-      }
+    if (shouldStabilizeRemount) {
+      applyRemountVerticalSync("remount-initial");
+      startRemountSync();
+      return;
     }
+
+    applySteadyVerticalSync("steady");
   }, [outputCollapsed, editorCollapsed, isMobile, uiLayoutReady]);
 
   // Vertical gate management: closed when both panels collapse (Group unmounts;
@@ -184,14 +423,24 @@ export function useDesktopLayout({
   useEffect(() => {
     if (!uiLayoutReady) return;
     if (outputCollapsed && editorCollapsed) {
+      cancelRemountSync();
       initializedRef.current = false;
-      if (needsForcedResize.current) {
-        needsForcedResize.current = false;
-      }
+      isForcingResize.current = false;
+      needsForcedResize.current = false;
+      needsExpandedLayoutRestore.current = false;
     } else {
-      initializedRef.current = true;
+      initializedRef.current =
+        !needsForcedResize.current && !isForcingResize.current;
     }
+    WebviewLog.debug("[LAYOUT][desktop][vertical-gate]", {
+      outputCollapsed,
+      editorCollapsed,
+      initialized: initializedRef.current,
+      snapshot: getDesktopPanelSnapshot(),
+    });
   }, [outputCollapsed, editorCollapsed, isMobile, uiLayoutReady]);
+
+  useEffect(() => cancelRemountSync, []);
 
   return {
     // Panel / group refs
@@ -213,5 +462,7 @@ export function useDesktopLayout({
     wasBothCollapsed,
     // Size tracking
     lastDesktopSizes,
+    // Debug helper
+    getDesktopPanelSnapshot,
   };
 }

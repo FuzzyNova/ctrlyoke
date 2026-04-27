@@ -8,8 +8,9 @@
  * Features:
  * - Async-free syntax highlighting via refractor + tokenize() (runs in useMemo).
  * - Character-level inline diff marks via the markEdits() enhancer.
- * - GitHub-style "N hidden lines" decorations between hunks; click to expand
- *   (only when oldContent is available for context line lookup).
+ * - GitHub-style "N hidden lines" decorations between hunks with chunked and
+ *   full-block expansion controls (only when oldContent is available for
+ *   context line lookup).
  * - Global collapse/expand synced from uiStore.
  */
 import React, {
@@ -41,6 +42,11 @@ import { useUiStore } from "@store/uiStore";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 
 const SIDE_BY_SIDE_THRESHOLD = 1024;
+const HIDDEN_CONTEXT_CHUNK_LINES = 25;
+
+function formatHiddenLines(count: number): string {
+  return `${count} hidden line${count === 1 ? "" : "s"}`;
+}
 
 interface DiffViewProps {
   /** Raw old file content (full-file edit path) */
@@ -143,14 +149,17 @@ export const DiffView: React.FC<DiffViewProps> = ({
     setExpandedHunks(baseHunks);
   }, [baseHunks]);
 
-  // Expand N lines of context for the gap between two consecutive hunks.
+  // Expand hidden context for the gap between two consecutive hunks.
   const handleExpand = useCallback(
-    (prevHunk: HunkData | null, nextHunk: HunkData, count: number) => {
+    (prevHunk: HunkData | null, nextHunk: HunkData, mode: "chunk" | "all") => {
       if (oldContent === undefined) return;
       const gapStart =
         prevHunk !== null ? prevHunk.oldStart + prevHunk.oldLines : 1;
       const gapEnd = nextHunk.oldStart;
-      const expandEnd = Math.min(gapStart + count, gapEnd);
+      const expandEnd =
+        mode === "all"
+          ? gapEnd
+          : Math.min(gapStart + HIDDEN_CONTEXT_CHUNK_LINES, gapEnd);
       setExpandedHunks((prev) =>
         expandFromRawCode(prev, oldContent, gapStart, expandEnd)
       );
@@ -209,10 +218,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   if (!hasDiff) return null;
 
   return (
-    <div
-      ref={setWrapperRef}
-      className={`my-2 ${className}`}
-    >
+    <div ref={setWrapperRef} className={`my-2 ${className}`}>
       {/* Summary / toggle header */}
       <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
         <button
@@ -234,9 +240,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
           </span>
         </button>
         {actionSlot && (
-          <div className="ml-auto flex shrink-0 items-center">
-            {actionSlot}
-          </div>
+          <div className="ml-auto flex shrink-0 items-center">{actionSlot}</div>
         )}
       </div>
 
@@ -248,32 +252,60 @@ export const DiffView: React.FC<DiffViewProps> = ({
             diffType={diffType}
             hunks={expandedHunks}
             tokens={tokens}
+            optimizeSelection={viewType === "split"}
           >
             {(hunks) =>
               hunks.reduce<React.ReactElement[]>((nodes, hunk, i) => {
                 const prevHunk = i > 0 ? hunks[i - 1] : null;
-                const collapsed = getCollapsedLinesCountBetween(
-                  prevHunk,
-                  hunk
-                );
+                const collapsed = getCollapsedLinesCountBetween(prevHunk, hunk);
                 if (collapsed > 0) {
+                  const hiddenLinesLabel = formatHiddenLines(collapsed);
+                  const chunkSize = Math.min(
+                    HIDDEN_CONTEXT_CHUNK_LINES,
+                    collapsed
+                  );
                   nodes.push(
                     <Decoration key={`gap-${i}-${hunk.oldStart}`}>
                       {hasExpandableSource ? (
-                        <button
-                          type="button"
-                          onClick={() => handleExpand(prevHunk, hunk, 10)}
-                          className="w-full text-left px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg hover:text-foreground bg-transparent border-none font-mono cursor-pointer"
-                          title="Expand hidden lines"
-                        >
-                          ▸ {collapsed} hidden lines
-                        </button>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)]">
+                          <span className="font-mono text-description-fg">
+                            ▸ {hiddenLinesLabel}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleExpand(prevHunk, hunk, "chunk")
+                            }
+                            className="cursor-pointer border-none bg-transparent p-0 font-mono text-link-fg hover:text-link-active-fg"
+                            title={
+                              collapsed <= HIDDEN_CONTEXT_CHUNK_LINES
+                                ? "Expand hidden lines"
+                                : `Expand ${chunkSize} hidden lines`
+                            }
+                          >
+                            {collapsed <= HIDDEN_CONTEXT_CHUNK_LINES
+                              ? `Show ${hiddenLinesLabel}`
+                              : `Show ${chunkSize} of ${hiddenLinesLabel}`}
+                          </button>
+                          {collapsed > HIDDEN_CONTEXT_CHUNK_LINES && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleExpand(prevHunk, hunk, "all")
+                              }
+                              className="cursor-pointer border-none bg-transparent p-0 font-mono text-description-fg hover:text-foreground"
+                              title="Expand all hidden lines"
+                            >
+                              Show all
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <div
                           className="w-full px-3 py-0.5 text-[length:var(--fp-output-font-size-xs)] text-description-fg opacity-70 font-mono"
                           title="Hidden lines can't be expanded because the original file content is unavailable for this diff."
                         >
-                          ▸ {collapsed} hidden lines
+                          ▸ {hiddenLinesLabel}
                         </div>
                       )}
                     </Decoration>

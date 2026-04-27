@@ -95,7 +95,7 @@ export function toRdvFromContent(
   const gitDiff = ["diff --git a/file b/file", ...patchLines.slice(2)].join(
     "\n"
   );
-  const [file] = parseDiff(gitDiff);
+  const [file] = parseDiff(gitDiff, { nearbySequences: "zip" });
   return {
     hunks: (file?.hunks ?? []) as HunkData[],
     diffType: (file?.type as DiffType) ?? "modify",
@@ -103,9 +103,14 @@ export function toRdvFromContent(
 }
 
 /** Map the language names from getLanguageFromPath() to refractor-registered names. */
-export function normalizeLanguage(lang: string | undefined): string | undefined {
+export function normalizeLanguage(
+  lang: string | undefined
+): string | undefined {
   if (!lang) return undefined;
-  const overrides: Record<string, string> = { tsx: "typescript", jsx: "javascript" };
+  const overrides: Record<string, string> = {
+    tsx: "typescript",
+    jsx: "javascript",
+  };
   return overrides[lang] ?? lang;
 }
 
