@@ -106,6 +106,87 @@ describe("CliOutput", () => {
     expect(screen.queryByText("event earlier")).not.toBeInTheDocument();
   });
 
+  it("uses the same snapshot-backed diff in the undo dialog that the inline diff rendered", async () => {
+    const user = userEvent.setup();
+
+    const output: CliOutputType = {
+      prompt: "",
+      response: "",
+      elapsed: 0,
+      structured: {
+        events: [
+          {
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            data: {
+              path: "src/example.ts",
+              status: OPERATION_STATUS.COMPLETED,
+              structuredPatch: [
+                {
+                  oldStart: 10,
+                  oldLines: 1,
+                  newStart: 10,
+                  newLines: 1,
+                  lines: ["-event late", "+event later"],
+                },
+                {
+                  oldStart: 1,
+                  oldLines: 1,
+                  newStart: 1,
+                  newLines: 1,
+                  lines: ["-event early", "+event earlier"],
+                },
+              ],
+            },
+          },
+        ],
+        metadata: {},
+      },
+      isStreaming: false,
+      workingDirectory: "C:/dev/FlightPath",
+    };
+
+    const workspaceSnapshot: WorkspaceSnapshot = {
+      capturedAt: Date.now(),
+      strategy: "git",
+      git: {
+        headCommit: "0123456789abcdef0123456789abcdef01234567",
+        branch: "main",
+      },
+      changedFiles: [
+        {
+          path: "src/example.ts",
+          changeType: "modified",
+          beforeContent: "line 1\nline 2\nsnapshot old\n",
+          structuredPatch: [
+            {
+              oldStart: 3,
+              oldLines: 1,
+              newStart: 3,
+              newLines: 1,
+              lines: ["-snapshot old", "+snapshot new"],
+            },
+          ],
+        },
+      ],
+    };
+
+    render(
+      <CliOutput
+        output={output}
+        stepIndex={0}
+        attemptIndex={0}
+        allowUndoActions={true}
+        workspaceSnapshot={workspaceSnapshot}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await user.click(screen.getAllByRole("button", { name: /show diff/i })[0]);
+
+    expect(screen.getByText("snapshot new")).toBeInTheDocument();
+    expect(screen.queryByText("event earlier")).not.toBeInTheDocument();
+  });
+
   it("opens single-diff undo from the rendered event even when the raw event list normalizes differently", async () => {
     const user = userEvent.setup();
 

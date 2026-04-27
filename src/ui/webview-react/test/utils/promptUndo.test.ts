@@ -663,4 +663,54 @@ describe("buildUndoDialogInputForSpecificEvent", () => {
       UNDO_FILE_ACTIONS.REVERSE_PATCH
     );
   });
+
+  it("prefers the rendered diff patch over the raw event patch for single-file undo", () => {
+    const rawPatch: UnifiedDiffHunk[] = [
+      {
+        oldStart: 20,
+        oldLines: 1,
+        newStart: 20,
+        newLines: 1,
+        lines: ["-raw old", "+raw new"],
+      },
+    ];
+    const renderedPatch: UnifiedDiffHunk[] = [
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        lines: ["-rendered old", "+rendered new"],
+      },
+    ];
+
+    const result = buildUndoDialogInputForSpecificEvent(
+      TARGET,
+      4,
+      "src/a.ts",
+      makeFileEditEvent("src/a.ts", {
+        oldContent: "raw old",
+        newContent: "raw new",
+        structuredPatch: rawPatch,
+      }) as never,
+      undefined,
+      "/workspace",
+      {
+        oldContent: "rendered old",
+        newContent: "rendered new",
+        structuredPatch: renderedPatch,
+      }
+    );
+
+    expect(result.eventAttributedFiles[0].oldContent).toBe("rendered old");
+    expect(result.eventAttributedFiles[0].newContent).toBe("rendered new");
+    expect(result.eventAttributedFiles[0].structuredPatch).toEqual(
+      renderedPatch
+    );
+    expect(result.eventAttributedFiles[0].instruction).toEqual({
+      path: "src/a.ts",
+      action: UNDO_FILE_ACTIONS.REVERSE_PATCH,
+      structuredPatch: renderedPatch,
+    });
+  });
 });

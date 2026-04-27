@@ -402,12 +402,13 @@ export function buildUndoDialogInputForSpecificEvent(
 
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
     const editData = event.data as FileEditData;
-    oldContent = editData.oldContent ?? oldContent;
-    newContent = editData.newContent ?? newContent;
+    oldContent = oldContent ?? editData.oldContent;
+    newContent = newContent ?? editData.newContent;
     structuredPatch =
-      editData.structuredPatch && editData.structuredPatch.length > 0
+      structuredPatch ??
+      (editData.structuredPatch && editData.structuredPatch.length > 0
         ? editData.structuredPatch
-        : structuredPatch;
+        : undefined);
 
     if (structuredPatch && structuredPatch.length > 0) {
       // Reverse-patch: the extension reads the current file and applies this patch in reverse.
