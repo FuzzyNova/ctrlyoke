@@ -100,9 +100,6 @@ describe("CliOutput", () => {
     await user.click(screen.getByRole("button", { name: /show diff/i }));
 
     expect(screen.getByText("snapshot new")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /2 hidden lines/i })
-    ).toBeInTheDocument();
     expect(screen.queryByText("event earlier")).not.toBeInTheDocument();
   });
 

@@ -185,138 +185,76 @@ describe("DiffView", () => {
   });
 
   it("expands a small hidden block in one click when original file content is available", () => {
-    mockToRdvFromContent.mockReturnValue({
-      hunks: [
-        {
-          content: "@@ -5,1 +5,1 @@",
-          oldStart: 5,
-          oldLines: 1,
-          newStart: 5,
-          newLines: 1,
-          changes: [],
-        },
-      ],
-      diffType: "modify",
-    });
+    // Two hunks with a 4-line inter-hunk gap (lines 2-5 hidden between them).
+    const hunk1 = { content: "@@ -1,1 +1,1 @@", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, changes: [] };
+    const hunk2 = { content: "@@ -6,1 +6,1 @@", oldStart: 6, oldLines: 1, newStart: 6, newLines: 1, changes: [] };
+    mockToRdvFromContent.mockReturnValue({ hunks: [hunk1, hunk2], diffType: "modify" });
     mockGetCollapsedLinesCountBetween.mockReturnValue(4);
 
+    const oldContent = "a\nb\nc\nd\ne\nf\n";
     const { getByRole } = render(
       <DiffView
-        oldContent={"a\nb\nc\nd\ne\n"}
-        newContent={"a\nb\nc\nd\nE\n"}
+        oldContent={oldContent}
+        newContent={"A\nb\nc\nd\ne\nF\n"}
         globallyCollapsed={false}
       />
     );
 
     fireEvent.click(getByRole("button", { name: /show 4 hidden lines/i }));
 
+    // gapStart = hunk1.oldStart + hunk1.oldLines = 1 + 1 = 2
+    // gapEnd   = hunk2.oldStart = 6
+    // expandEnd = min(2 + 25, 6) = 6
     expect(mockExpandFromRawCode).toHaveBeenCalledWith(
-      [
-        {
-          content: "@@ -5,1 +5,1 @@",
-          oldStart: 5,
-          oldLines: 1,
-          newStart: 5,
-          newLines: 1,
-          changes: [],
-        },
-      ],
-      "a\nb\nc\nd\ne\n",
-      1,
-      5
+      [hunk1, hunk2],
+      oldContent,
+      2,
+      6
     );
   });
 
   it("renders chunked and full expansion controls for large hidden blocks", () => {
-    mockToRdvFromContent.mockReturnValue({
-      hunks: [
-        {
-          content: "@@ -41,1 +41,1 @@",
-          oldStart: 41,
-          oldLines: 1,
-          newStart: 41,
-          newLines: 1,
-          changes: [],
-        },
-      ],
-      diffType: "modify",
-    });
+    // Two hunks with a 40-line inter-hunk gap (lines 2-41 hidden between them).
+    const hunk1 = { content: "@@ -1,1 +1,1 @@", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, changes: [] };
+    const hunk2 = { content: "@@ -42,1 +42,1 @@", oldStart: 42, oldLines: 1, newStart: 42, newLines: 1, changes: [] };
+    mockToRdvFromContent.mockReturnValue({ hunks: [hunk1, hunk2], diffType: "modify" });
     mockGetCollapsedLinesCountBetween.mockReturnValue(40);
+
+    const oldContent = Array.from({ length: 42 }, (_, i) => `line ${i + 1}`).join("\n");
+    const newContent = ["updated", ...Array.from({ length: 40 }, (_, i) => `line ${i + 2}`), "updated end"].join("\n");
 
     const { getByRole } = render(
       <DiffView
-        oldContent={Array.from({ length: 41 }, (_, i) => `line ${i + 1}`).join(
-          "\n"
-        )}
-        newContent={Array.from({ length: 40 }, (_, i) => `line ${i + 1}`)
-          .concat("updated")
-          .join("\n")}
+        oldContent={oldContent}
+        newContent={newContent}
         globallyCollapsed={false}
       />
     );
 
-    fireEvent.click(
-      getByRole("button", { name: /show 25 of 40 hidden lines/i })
-    );
+    fireEvent.click(getByRole("button", { name: /show 25 of 40 hidden lines/i }));
 
-    expect(mockExpandFromRawCode).toHaveBeenCalledWith(
-      [
-        {
-          content: "@@ -41,1 +41,1 @@",
-          oldStart: 41,
-          oldLines: 1,
-          newStart: 41,
-          newLines: 1,
-          changes: [],
-        },
-      ],
-      Array.from({ length: 41 }, (_, i) => `line ${i + 1}`).join("\n"),
-      1,
-      26
-    );
+    // gapStart = 1 + 1 = 2, gapEnd = 42
+    // chunk expandEnd = min(2 + 25, 42) = 27
+    expect(mockExpandFromRawCode).toHaveBeenCalledWith([hunk1, hunk2], oldContent, 2, 27);
 
     fireEvent.click(getByRole("button", { name: /show all/i }));
 
-    expect(mockExpandFromRawCode).toHaveBeenLastCalledWith(
-      [
-        {
-          content: "@@ -41,1 +41,1 @@",
-          oldStart: 41,
-          oldLines: 1,
-          newStart: 41,
-          newLines: 1,
-          changes: [],
-        },
-      ],
-      Array.from({ length: 41 }, (_, i) => `line ${i + 1}`).join("\n"),
-      1,
-      41
-    );
+    // all expandEnd = gapEnd = 42
+    expect(mockExpandFromRawCode).toHaveBeenLastCalledWith([hunk1, hunk2], oldContent, 2, 42);
   });
 
   it("shows hidden-line summaries as non-expandable when original file content is unavailable", () => {
-    mockToRdvHunks.mockReturnValue([
-      {
-        content: "@@ -5,1 +5,1 @@",
-        oldStart: 5,
-        oldLines: 1,
-        newStart: 5,
-        newLines: 1,
-        changes: [],
-      },
-    ]);
+    // Two hunks with a 4-line inter-hunk gap — no oldContent so expansion is unavailable.
+    const hunk1 = { content: "@@ -1,1 +1,1 @@", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, changes: [] };
+    const hunk2 = { content: "@@ -6,1 +6,1 @@", oldStart: 6, oldLines: 1, newStart: 6, newLines: 1, changes: [] };
+    mockToRdvHunks.mockReturnValue([hunk1, hunk2]);
     mockGetCollapsedLinesCountBetween.mockReturnValue(4);
 
     const { getByText, queryByRole } = render(
       <DiffView
         structuredPatch={[
-          {
-            oldStart: 5,
-            oldLines: 1,
-            newStart: 5,
-            newLines: 1,
-            lines: ["-old", "+new"],
-          },
+          { oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ["-old1", "+new1"] },
+          { oldStart: 6, oldLines: 1, newStart: 6, newLines: 1, lines: ["-old6", "+new6"] },
         ]}
         globallyCollapsed={false}
       />
