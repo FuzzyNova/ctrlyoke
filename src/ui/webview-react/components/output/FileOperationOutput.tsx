@@ -8,7 +8,7 @@ import React, { memo } from "react";
 import { DiffView } from "./DiffView";
 import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE } from "./outputStyles";
 import { openFile } from "@hooks/useMessageHandler";
-import { getLanguageFromPath } from "@utils/hljsUtils";
+import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { useUiStore } from "@store/uiStore";
 import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
@@ -82,7 +82,8 @@ interface FileEditOutputProps {
  * FileEditOutput renders a file edit operation with diff visualization.
  *
  * The raw diff inputs are passed directly to DiffView which owns all
- * expensive computation (diff generation + HLJS) lazily behind an expand gate.
+ * expensive computation (diff generation + syntax tokenization) lazily behind
+ * an expand gate.
  * This component itself does zero diff work at render time.
  */
 export const FileEditOutput = memo<FileEditOutputProps>(

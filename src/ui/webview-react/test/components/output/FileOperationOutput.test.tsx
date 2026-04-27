@@ -7,7 +7,7 @@ vi.mock("@hooks/useMessageHandler", () => ({
   openFile: vi.fn(),
 }));
 
-vi.mock("@utils/hljsUtils", () => ({
+vi.mock("@utils/syntaxHighlighting", () => ({
   getLanguageFromPath: vi.fn(() => "typescript"),
 }));
 

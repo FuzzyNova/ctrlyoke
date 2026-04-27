@@ -30,15 +30,17 @@ import type { HunkData, DiffType } from "react-diff-view";
 import {
   toRdvHunks,
   toRdvFromContent,
-  normalizeLanguage,
   getRenderedDiffStats,
-  refractor,
 } from "@utils/rdvAdapter";
 import {
   normalizeStructuredPatch,
   countStructuredPatchDisplayLines,
 } from "@utils/outputUtils";
-import { injectHljsStyles } from "@utils/hljsUtils";
+import {
+  injectSyntaxHighlightStyles,
+  normalizeSyntaxLanguage,
+  refractor,
+} from "@utils/syntaxHighlighting";
 import { useUiStore } from "@store/uiStore";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 
@@ -46,7 +48,7 @@ const SIDE_BY_SIDE_THRESHOLD = 1024;
 const HIDDEN_CONTEXT_CHUNK_LINES = 25;
 
 // Ensure the shared VS Code-themed syntax styles are in <head>.
-injectHljsStyles();
+injectSyntaxHighlightStyles();
 
 function formatHiddenLines(count: number): string {
   return `${count} hidden line${count === 1 ? "" : "s"}`;
@@ -65,7 +67,7 @@ interface DiffViewProps {
     newLines: number;
     lines: string[];
   }>;
-  /** hljs language id inferred from the file path (e.g. "typescript") */
+  /** Syntax language inferred from the file path (e.g. "typescript") */
   language?: string;
   /**
    * When true the diff renders collapsed (summary header only).
@@ -180,7 +182,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   );
 
   // Syntax highlighting + word-level edit marks via refractor (synchronous useMemo).
-  const lang = normalizeLanguage(language);
+  const lang = normalizeSyntaxLanguage(language);
   const tokens = useMemo(() => {
     if (!expandedHunks.length) return null;
     try {

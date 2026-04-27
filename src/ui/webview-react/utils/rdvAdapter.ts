@@ -4,66 +4,12 @@
  * Two entry points:
  *  - toRdvHunks()       — structured patch (e.g. from Claude) → HunkData[]
  *  - toRdvFromContent() — raw old/new file content → { hunks, diffType }
- *
- * Also exports the configured refractor instance for use in DiffView's tokenize call.
  */
 import * as DiffLib from "diff";
 import { parseDiff } from "react-diff-view";
 import type { HunkData, ChangeData, DiffType, ViewType } from "react-diff-view";
-import { refractor as refractorCore } from "refractor/core";
-import refractorTypescript from "refractor/typescript";
-import refractorTsx from "refractor/tsx";
-import refractorJavascript from "refractor/javascript";
-import refractorJsx from "refractor/jsx";
-import refractorPython from "refractor/python";
-import refractorBash from "refractor/bash";
-import refractorJson from "refractor/json";
-import refractorYaml from "refractor/yaml";
-import refractorCss from "refractor/css";
-import refractorMarkup from "refractor/markup";
-import refractorMarkdown from "refractor/markdown";
-import refractorRust from "refractor/rust";
-import refractorGo from "refractor/go";
-import refractorJava from "refractor/java";
-import refractorCsharp from "refractor/csharp";
-import refractorC from "refractor/c";
-import refractorCpp from "refractor/cpp";
 import { normalizeStructuredPatch } from "./diffUtils";
 import type { UnifiedDiffHunk } from "../types/cliEvents";
-
-// Register the Prism grammars used by DiffView highlighting.
-refractorCore.register(refractorTypescript);
-refractorCore.register(refractorTsx);
-refractorCore.register(refractorJavascript);
-refractorCore.register(refractorJsx);
-refractorCore.register(refractorPython);
-refractorCore.register(refractorBash);
-refractorCore.register(refractorJson);
-refractorCore.register(refractorYaml);
-refractorCore.register(refractorCss);
-refractorCore.register(refractorMarkup);
-refractorCore.register(refractorMarkdown);
-refractorCore.register(refractorRust);
-refractorCore.register(refractorGo);
-refractorCore.register(refractorJava);
-refractorCore.register(refractorCsharp);
-refractorCore.register(refractorC);
-refractorCore.register(refractorCpp);
-
-/**
- * react-diff-view expects refractor.highlight() to return a node array.
- * Modern refractor returns a `{ type: "root", children }` wrapper instead,
- * so adapt it here to the shape tokenize() expects.
- */
-export const refractor = {
-  highlight(value: string, language: string) {
-    const result = refractorCore.highlight(value, language);
-    return Array.isArray(result) ? result : result.children;
-  },
-  registered(aliasOrLanguage: string) {
-    return refractorCore.registered(aliasOrLanguage);
-  },
-};
 
 export interface RenderedDiffRun {
   count: number;
@@ -149,13 +95,6 @@ export function toRdvFromContent(
     hunks: (file?.hunks ?? []) as HunkData[],
     diffType: (file?.type as DiffType) ?? "modify",
   };
-}
-
-/** Map the language names from getLanguageFromPath() to refractor-registered names. */
-export function normalizeLanguage(
-  lang: string | undefined
-): string | undefined {
-  return lang;
 }
 
 function appendRenderedDiffRun(

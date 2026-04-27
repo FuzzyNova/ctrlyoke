@@ -46,19 +46,19 @@ const {
   mockTokenize: vi.fn(() => null),
 }));
 
-vi.mock("@utils/hljsUtils", () => ({
-  injectHljsStyles: vi.fn(),
+vi.mock("@utils/syntaxHighlighting", () => ({
+  injectSyntaxHighlightStyles: vi.fn(),
+  normalizeSyntaxLanguage: vi.fn((lang) => lang),
+  refractor: {
+    registered: mockRefractorRegistered,
+    highlight: vi.fn(() => []),
+  },
 }));
 
 vi.mock("@utils/rdvAdapter", () => ({
-  refractor: {
-    registered: mockRefractorRegistered,
-    highlight: vi.fn(() => ({ children: [] })),
-  },
   getRenderedDiffStats: mockGetRenderedDiffStats,
   toRdvHunks: mockToRdvHunks,
   toRdvFromContent: mockToRdvFromContent,
-  normalizeLanguage: vi.fn((lang) => lang),
 }));
 
 vi.mock("react-diff-view", async () => {

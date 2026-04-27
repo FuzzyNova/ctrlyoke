@@ -6,10 +6,15 @@ import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import type { CliOutput as CliOutputType } from "@/types/cliEvents";
 import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
 
-vi.mock("@utils/hljsUtils", () => ({
-  highlightLines: vi.fn(() => []),
-  injectHljsStyles: vi.fn(),
+vi.mock("@utils/syntaxHighlighting", () => ({
+  injectSyntaxHighlightStyles: vi.fn(),
   getLanguageFromPath: vi.fn(() => "typescript"),
+  normalizeSyntaxLanguage: vi.fn((lang) => lang),
+  renderHighlightedCode: vi.fn((code: string) => code),
+  refractor: {
+    registered: vi.fn(() => false),
+    highlight: vi.fn(() => []),
+  },
 }));
 
 vi.mock("@hooks/useMessageHandler", async (importOriginal) => {
@@ -19,6 +24,11 @@ vi.mock("@hooks/useMessageHandler", async (importOriginal) => {
 });
 
 import { CliOutput } from "@components/output/CliOutput";
+
+function hasExactText(expected: string) {
+  return (_content: string, element: Element | null) =>
+    element?.textContent === expected;
+}
 
 describe("CliOutput", () => {
   beforeEach(() => {
@@ -99,7 +109,7 @@ describe("CliOutput", () => {
 
     await user.click(screen.getByRole("button", { name: /show diff/i }));
 
-    expect(screen.getByText("snapshot new")).toBeInTheDocument();
+    expect(screen.getByText(hasExactText("snapshot new"))).toBeInTheDocument();
     expect(screen.queryByText("event earlier")).not.toBeInTheDocument();
   });
 
@@ -180,7 +190,7 @@ describe("CliOutput", () => {
     await user.click(screen.getByRole("button", { name: "Undo" }));
     await user.click(screen.getAllByRole("button", { name: /show diff/i })[0]);
 
-    expect(screen.getByText("snapshot new")).toBeInTheDocument();
+    expect(screen.getByText(hasExactText("snapshot new"))).toBeInTheDocument();
     expect(screen.queryByText("event earlier")).not.toBeInTheDocument();
   });
 

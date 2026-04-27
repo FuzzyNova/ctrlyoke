@@ -15,7 +15,7 @@ import type {
 import { useWorkflowStore } from "@store/workflowStore";
 import { sendMessage } from "../../hooks/useMessageHandler";
 import { DiffView } from "./ToolCallOutput";
-import { getLanguageFromPath } from "@utils/hljsUtils";
+import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 
 // ============================================================================
 // Types

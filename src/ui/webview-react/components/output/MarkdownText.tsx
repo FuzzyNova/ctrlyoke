@@ -3,10 +3,13 @@ import { Streamdown, defaultRemarkPlugins } from "streamdown";
 import { findAndReplace } from "mdast-util-find-and-replace";
 import type { Root } from "mdast";
 import { openFile } from "@hooks/useMessageHandler";
-import { highlightCode, injectHljsStyles } from "@utils/hljsUtils";
+import {
+  injectSyntaxHighlightStyles,
+  renderHighlightedCode,
+} from "@utils/syntaxHighlighting";
 
 // Ensure the shared VS Code-themed syntax styles are in <head>.
-injectHljsStyles();
+injectSyntaxHighlightStyles();
 
 // ── File-link detection ────────────────────────────────────────────────────
 
@@ -55,6 +58,22 @@ const FILE_PATH_SOURCE =
 /** Escapes HTML special characters for use in raw HTML node text content. */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function getNodeText(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((item) => getNodeText(item)).join("");
+  }
+
+  if (React.isValidElement(node)) {
+    return getNodeText((node.props as { children?: React.ReactNode }).children);
+  }
+
+  return "";
 }
 
 /**
@@ -332,7 +351,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
       // When inside a fenced block the `code` node carries a `language-*`
       // class; inline backtick code has no class. We differentiate here:
       //   • No language class → styled inline span with a warm VS Code tint
-      //   • Language class    → syntax-highlighted block via highlight.js
+      //   • Language class    → syntax-highlighted block via refractor
       code: ({
         children: codeChildren,
         className: langClass,
@@ -348,21 +367,17 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
           );
         }
 
-        // Fenced code block – syntax-highlight with highlight.js
-        const rawText = String(codeChildren).replace(/\n$/, "");
-        const highlighted = highlightCode(rawText, language);
+        const rawText = getNodeText(codeChildren).replace(/\n$/, "");
 
         return (
-          <code
-            dangerouslySetInnerHTML={{ __html: highlighted }}
-            className={`hljs ${langClass ?? ""} font-mono block`}
-          />
+          <code className={`fp-syntax ${langClass ?? ""} font-mono block`}>
+            {renderHighlightedCode(rawText, language)}
+          </code>
         );
       },
 
       // ── Code block wrapper ─────────────────────────────────────────────
-      // Removes whitespace-pre-wrap so hljs span colouring renders cleanly;
-      // whitespace-pre is enough (hljs never emits bare newlines outside spans).
+      // Removes whitespace-pre-wrap so token spans preserve exact formatting.
       pre: ({ children: preChildren }: React.HTMLAttributes<HTMLElement>) => (
         <pre className="bg-editor-bg border border-panel-border rounded p-3 overflow-x-auto my-2 font-mono whitespace-pre">
           {preChildren}

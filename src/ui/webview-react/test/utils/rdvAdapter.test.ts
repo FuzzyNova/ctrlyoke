@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { tokenize } from "react-diff-view";
+import { getRenderedDiffStats, type RenderedDiffRun } from "@utils/rdvAdapter";
 import {
-  getRenderedDiffStats,
-  normalizeLanguage,
+  getLanguageFromPath,
+  normalizeSyntaxLanguage,
   refractor,
-  type RenderedDiffRun,
-} from "@utils/rdvAdapter";
+} from "@utils/syntaxHighlighting";
 
 describe("getRenderedDiffStats", () => {
   it("merges contiguous unified rows with the same rendered signature", () => {
@@ -109,10 +109,12 @@ describe("getRenderedDiffStats", () => {
   });
 });
 
-describe("rdvAdapter language setup", () => {
-  it("preserves jsx and tsx language ids for refractor highlighting", () => {
-    expect(normalizeLanguage("tsx")).toBe("tsx");
-    expect(normalizeLanguage("jsx")).toBe("jsx");
+describe("syntaxHighlighting", () => {
+  it("resolves file extensions and fence aliases through one registry", () => {
+    expect(getLanguageFromPath("src/example.tsx")).toBe("tsx");
+    expect(getLanguageFromPath("config/workflow.yml")).toBe("yaml");
+    expect(normalizeSyntaxLanguage("tsx")).toBe("tsx");
+    expect(normalizeSyntaxLanguage("yml")).toBe("yaml");
   });
 
   it("registers the React-oriented refractor grammars used by DiffView", () => {

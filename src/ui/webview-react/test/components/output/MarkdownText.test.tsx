@@ -1,18 +1,12 @@
 /**
  * Tests for MarkdownText.
  *
- * Streamdown is a real ESM package — we let it render normally but mock
- * the heavy highlight.js utility to avoid jsdom canvas/worker issues.
+ * Streamdown and the shared syntax highlighter run normally here so fenced
+ * code blocks exercise the real refractor rendering path.
  */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-
-// Mock hljsUtils to avoid the stylesheet injection side-effect and heavy work
-vi.mock("@utils/hljsUtils", () => ({
-  highlightCode: (code: string) => code, // return plain text
-  injectHljsStyles: vi.fn(),
-}));
 
 // Mock openFile so clicking file links doesn't try to post to vscode
 vi.mock("@hooks/useMessageHandler", async (importOriginal) => {
@@ -45,6 +39,28 @@ describe("MarkdownText", () => {
     render(<MarkdownText>`const x = 1`</MarkdownText>);
     const code = await screen.findByText("const x = 1");
     expect(code.tagName).toBe("CODE");
+  });
+
+  it("renders highlighted tokens for supported fenced languages", () => {
+    const { container } = render(
+      <MarkdownText>{"```ts\nconst value = 1;\n```"}</MarkdownText>
+    );
+
+    const code = container.querySelector("code.fp-syntax.language-ts");
+    expect(code).toBeTruthy();
+    expect(code?.querySelector(".token.keyword")?.textContent).toBe("const");
+    expect(code?.querySelector(".token.number")?.textContent).toBe("1");
+  });
+
+  it("falls back to plain text for unsupported fenced languages", () => {
+    const { container } = render(
+      <MarkdownText>{"```unknownlang\nconst value = 1;\n```"}</MarkdownText>
+    );
+
+    const code = container.querySelector("code.fp-syntax.language-unknownlang");
+    expect(code).toBeTruthy();
+    expect(code).toHaveTextContent("const value = 1;");
+    expect(code?.querySelector(".token")).toBeNull();
   });
 
   it("renders a heading", async () => {

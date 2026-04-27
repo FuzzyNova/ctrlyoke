@@ -6,12 +6,12 @@ import { FINAL_STEP_PHASES } from "@root/types/DashboardConstants";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type { UndoFileCandidate } from "@/types/messages";
 
-vi.mock("@utils/hljsUtils", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@utils/hljsUtils")>();
+vi.mock("@utils/syntaxHighlighting", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("@utils/syntaxHighlighting")>();
   return {
     ...original,
     getLanguageFromPath: vi.fn(() => "typescript"),
-    injectHljsStyles: vi.fn(),
   };
 });
 
