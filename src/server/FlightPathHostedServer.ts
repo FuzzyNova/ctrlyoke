@@ -47,10 +47,14 @@ import {
 export class FlightPathHostedServer
   implements IDashboardProvider, IDashboardSink
 {
+  private static readonly SOCKET_HEARTBEAT_INTERVAL_MS = 30000;
+
   private app = express();
   private httpServer: Server;
   private wss: WebSocketServer;
   private connections = new Set<WebSocket>();
+  private readonly socketLiveness = new WeakMap<WebSocket, boolean>();
+  private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
   private readonly workflowSummaries = new Map<string, WorkflowSummary>();
   private readonly notifiedEventIds = new Set<string>();
   private cachedThemeVars: Record<string, string> = {};
@@ -97,6 +101,7 @@ export class FlightPathHostedServer
     this.app.use(express.json({ limit: "64kb" }));
     this.setupRoutes();
     this.setupWebSocket();
+    this.setupHeartbeat();
     hub.addClient(this);
   }
 
@@ -725,6 +730,7 @@ export class FlightPathHostedServer
         return;
       }
       this.connections.add(ws);
+      this.socketLiveness.set(ws, true);
       const clientTag = `${BROWSER_CLIENT_PREFIX}${this.nextConnectionId++}`;
       let sawReady = false;
       const connectedAt = Date.now();
@@ -757,11 +763,15 @@ export class FlightPathHostedServer
           );
         }
       });
+      ws.on("pong", () => {
+        this.socketLiveness.set(ws, true);
+      });
       ws.on("close", (code, reason) => {
         Log.debug(
           `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()}`
         );
         this.connections.delete(ws);
+        this.socketLiveness.delete(ws);
         this.webviewProvider.unregisterBrowserClient(clientTag);
       });
       ws.on("error", (error) => {
@@ -770,6 +780,37 @@ export class FlightPathHostedServer
         );
       });
     });
+  }
+
+  private setupHeartbeat(): void {
+    this.heartbeatInterval = setInterval(() => {
+      for (const ws of this.connections) {
+        if (ws.readyState !== WebSocket.OPEN) {
+          continue;
+        }
+
+        const isAlive = this.socketLiveness.get(ws);
+        if (isAlive === false) {
+          try {
+            ws.terminate();
+          } catch {
+            // Best-effort cleanup. close/error handlers own the rest.
+          }
+          continue;
+        }
+
+        this.socketLiveness.set(ws, false);
+        try {
+          ws.ping();
+        } catch {
+          try {
+            ws.terminate();
+          } catch {
+            // Best-effort cleanup. close/error handlers own the rest.
+          }
+        }
+      }
+    }, FlightPathHostedServer.SOCKET_HEARTBEAT_INTERVAL_MS);
   }
 
   private sendInitialState(ws: WebSocket): void {
@@ -853,6 +894,10 @@ export class FlightPathHostedServer
 
   dispose(): void {
     this.hub.removeClient(this);
+    if (this.heartbeatInterval !== undefined) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = undefined;
+    }
     for (const ws of this.connections) ws.close();
     this.connections.clear();
     this.wss.close();

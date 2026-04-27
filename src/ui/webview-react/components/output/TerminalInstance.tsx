@@ -76,14 +76,20 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     const VEL_WINDOW_MS = 80; // look-back window for velocity estimate
     // Exponential decay: 0.9987^ms reaches ~1% of initial velocity in ~3.5 s
     const DECEL_PER_MS = 0.9987;
-    const VEL_STOP_PX_PER_MS = 0.005;
-    const MAX_VELOCITY_PX_PER_MS = 5;
+    const VEL_STOP_PX_PER_MS = 0.01;
+    const MAX_VELOCITY_PX_PER_MS = 10;
     // Dead zones: both must pass for a gesture to trigger inertia.
     // Filters lift-off wobble (finger not releasing straight) and slow drags.
     const MIN_GESTURE_VELOCITY_PX_PER_MS = 0.1; // ~100 px/s
     const MIN_GESTURE_DISTANCE_PX = 3;
     // Scales touch pixels to lines — higher = faster scroll per unit of drag.
     const TOUCH_SPEED_MULTIPLIER = 1.5;
+    const hasMeaningfulInertia = (velocity: number) =>
+      Math.abs(velocity) >= VEL_STOP_PX_PER_MS &&
+      // Reuse the same dead zone for scroll end: once the remaining motion over
+      // the velocity window is inside it, stop coasting instead of dragging out
+      // a long sub-pixel tail that occasionally emits late scroll lines.
+      Math.abs(velocity) * VEL_WINDOW_MS >= MIN_GESTURE_DISTANCE_PX;
 
     // Dispatch scroll lines to xterm and synthesize a WheelEvent for TUI
     // mouse-reporting (same logic as the original direct-touch path).
@@ -129,7 +135,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const dt = Math.min(now - inertiaLastTime, 50);
       inertiaLastTime = now;
       inertiaVelocity *= Math.pow(DECEL_PER_MS, dt);
-      if (Math.abs(inertiaVelocity) < VEL_STOP_PX_PER_MS) {
+      if (!hasMeaningfulInertia(inertiaVelocity)) {
         inertiaRafId = null;
         inertiaScrollAccum = 0;
         return;
@@ -144,7 +150,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const lineHeight =
         (entry.term.options.lineHeight as number | undefined) ?? 1.2;
       inertiaScrollAccum +=
-        (inertiaVelocity * dt * TOUCH_SPEED_MULTIPLIER) / (fontSize * lineHeight);
+        (inertiaVelocity * dt * TOUCH_SPEED_MULTIPLIER) /
+        (fontSize * lineHeight);
       const lines = Math.trunc(inertiaScrollAccum);
       if (lines !== 0) {
         inertiaScrollAccum -= lines;
@@ -220,16 +227,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       // a catch gesture (finger down then up with no real movement) should stop
       // the scroll rather than silently resume it.
       const combined =
-        gestureVelocity !== 0
-          ? gestureVelocity + preTouchInertiaVelocity
-          : 0;
+        gestureVelocity !== 0 ? gestureVelocity + preTouchInertiaVelocity : 0;
       inertiaVelocity = Math.max(
         -MAX_VELOCITY_PX_PER_MS,
         Math.min(MAX_VELOCITY_PX_PER_MS, combined)
       );
       velSamples = [];
 
-      if (Math.abs(inertiaVelocity) > VEL_STOP_PX_PER_MS) {
+      if (hasMeaningfulInertia(inertiaVelocity)) {
         inertiaScrollAccum = 0;
         inertiaLastTime = performance.now();
         inertiaRafId = requestAnimationFrame(tickInertia);

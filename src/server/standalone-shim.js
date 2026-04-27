@@ -30,7 +30,11 @@
   let readySentForSocket = false;
   let lastSentReadyPreferredWorkingFilePath;
   let lastReadyMessage;
+  let hiddenAtMs;
+  let lastForegroundRefreshAt = 0;
   const reconnectDelaysMs = [250, 500, 1000, 1500, 2000];
+  const backgroundSocketRevalidateMs = 30000;
+  const foregroundRefreshDebounceMs = 1000;
   const pendingOutbound = [];
   // iOS Safari rejects WSS to self-signed certs even after the HTTPS warning is
   // accepted. The cert rejection manifests identically to the "stuck CONNECTING"
@@ -113,6 +117,12 @@
     }
   }
 
+  function refreshReadyState() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    sendNow(ws, buildReadyMessage());
+    flushOutbound();
+  }
+
   function applyThemeVars(vars) {
     const style = document.documentElement.style;
     for (const [k, v] of Object.entries(vars)) style.setProperty(k, v);
@@ -190,6 +200,65 @@
     if (!reconnectTimer) return;
     window.clearTimeout(reconnectTimer);
     reconnectTimer = undefined;
+  }
+
+  function reconnectNow(reason) {
+    clearReconnectTimer();
+    clearConnectWatchdog();
+    reconnectAttempt = 0;
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+      const socket = ws;
+      ws = undefined;
+      try {
+        socket.close(1000, reason);
+      } catch {
+        /* best-effort */
+      }
+    }
+    connect();
+  }
+
+  function refreshConnectionOnForeground(forceReconnect) {
+    if (
+      pageUnloading ||
+      document.visibilityState === "hidden" ||
+      connectionBannerShown
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastForegroundRefreshAt < foregroundRefreshDebounceMs) {
+      return;
+    }
+    lastForegroundRefreshAt = now;
+
+    if (!ws || ws.readyState === WebSocket.CLOSED) {
+      reconnectAttempt = 0;
+      connect();
+      return;
+    }
+
+    if (ws.readyState === WebSocket.CONNECTING) {
+      if (forceReconnect) {
+        reconnectNow("foreground revalidate");
+      }
+      return;
+    }
+
+    if (ws.readyState === WebSocket.CLOSING) {
+      if (forceReconnect) {
+        reconnectNow("foreground revalidate");
+      }
+      return;
+    }
+
+    if (forceReconnect) {
+      reconnectNow("foreground revalidate");
+      return;
+    }
+
+    refreshReadyState();
   }
 
   function isSocketActive() {
@@ -355,18 +424,33 @@
 
   function resumeAfterPageShow() {
     pageUnloading = false;
-    connect();
+    const hiddenDuration = hiddenAtMs ? Date.now() - hiddenAtMs : 0;
+    hiddenAtMs = undefined;
+    refreshConnectionOnForeground(
+      hiddenDuration >= backgroundSocketRevalidateMs
+    );
   }
 
   window.addEventListener("pagehide", pauseForPageExit);
   window.addEventListener("pageshow", resumeAfterPageShow);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
+      hiddenAtMs = Date.now();
       clearReconnectTimer();
       return;
     }
     pageUnloading = false;
-    connect();
+    const hiddenDuration = hiddenAtMs ? Date.now() - hiddenAtMs : 0;
+    hiddenAtMs = undefined;
+    refreshConnectionOnForeground(
+      hiddenDuration >= backgroundSocketRevalidateMs
+    );
+  });
+  window.addEventListener("focus", () => {
+    refreshConnectionOnForeground(false);
+  });
+  window.addEventListener("online", () => {
+    refreshConnectionOnForeground(true);
   });
 
   connect();
