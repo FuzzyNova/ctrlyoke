@@ -5,7 +5,7 @@ import type { Root } from "mdast";
 import { openFile } from "@hooks/useMessageHandler";
 import { highlightCode, injectHljsStyles } from "@utils/hljsUtils";
 
-// Ensure the VS Code-themed HLJS stylesheet is in <head>
+// Ensure the shared VS Code-themed syntax styles are in <head>.
 injectHljsStyles();
 
 // ── File-link detection ────────────────────────────────────────────────────

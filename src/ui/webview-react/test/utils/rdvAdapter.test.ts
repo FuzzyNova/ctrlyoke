@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { tokenize } from "react-diff-view";
 import {
   getRenderedDiffStats,
+  normalizeLanguage,
+  refractor,
   type RenderedDiffRun,
 } from "@utils/rdvAdapter";
 
@@ -103,5 +106,49 @@ describe("getRenderedDiffStats", () => {
       { count: 1, addedLines: 0, removedLines: 0 },
       { count: 1, addedLines: 0, removedLines: 1 },
     ]);
+  });
+});
+
+describe("rdvAdapter language setup", () => {
+  it("preserves jsx and tsx language ids for refractor highlighting", () => {
+    expect(normalizeLanguage("tsx")).toBe("tsx");
+    expect(normalizeLanguage("jsx")).toBe("jsx");
+  });
+
+  it("registers the React-oriented refractor grammars used by DiffView", () => {
+    expect(refractor.registered("typescript")).toBe(true);
+    expect(refractor.registered("tsx")).toBe(true);
+    expect(refractor.registered("javascript")).toBe(true);
+    expect(refractor.registered("jsx")).toBe(true);
+  });
+
+  it("adapts refractor.highlight() to the array shape react-diff-view tokenize() expects", () => {
+    const hunks = [
+      {
+        content: "@@ -1,1 +1,1 @@",
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        changes: [
+          {
+            type: "normal" as const,
+            isNormal: true as const,
+            oldLineNumber: 1,
+            newLineNumber: 1,
+            content: "const value = 1;",
+          },
+        ],
+      },
+    ];
+
+    expect(() =>
+      tokenize(hunks, {
+        highlight: true,
+        refractor,
+        language: "typescript",
+        oldSource: "const value = 1;",
+      })
+    ).not.toThrow();
   });
 });

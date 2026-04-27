@@ -3,7 +3,7 @@
  *
  * Single source of truth for:
  *  - Registering all languages (import core only, no bundled themes)
- *  - VS Code Dark+ themed CSS injected once into document.head
+ *  - VS Code Dark+ themed CSS for both highlight.js and react-diff-view
  *  - Helpers used by MarkdownText and DiffView
  */
 import hljs from "highlight.js/lib/core";
@@ -164,14 +164,94 @@ export const HLJS_STYLES = `
 .hljs-doctag { color: var(--vscode-charts-green, #608b4e); }
 `;
 
-/** Inject the HLJS theme stylesheet once per document lifetime. Idempotent. */
-export function injectHljsStyles(): void {
+/**
+ * Token colour rules for refractor output rendered inside react-diff-view.
+ *
+ * react-diff-view renders refractor's Prism-style token classes (`.token.*`)
+ * inside diff code cells, so the theme must target that token vocabulary
+ * rather than highlight.js' `.hljs-*` class names.
+ */
+export const DIFF_REFRACTOR_STYLES = `
+/* FlightPath – VS Code Dark+ themed refractor tokens within react-diff-view */
+.diff .token { color: inherit; }
+
+/* Keywords, control flow */
+.diff .token.keyword,
+.diff .token.atrule { color: var(--vscode-symbolIcon-functionForeground, #569cd6); }
+
+/* Strings */
+.diff .token.string,
+.diff .token.char,
+.diff .token.attr-value { color: var(--vscode-debugTokenExpression-string, #ce9178); }
+
+/* Numbers */
+.diff .token.number { color: var(--vscode-debugTokenExpression-number, #b5cea8); }
+
+/* Comments */
+.diff .token.comment,
+.diff .token.prolog,
+.diff .token.doctype,
+.diff .token.cdata { color: var(--vscode-charts-green, #6a9955); font-style: italic; }
+
+/* Function / method names */
+.diff .token.function { color: var(--vscode-debugTokenExpression-string, #dcdcaa); }
+
+/* Class / type names */
+.diff .token.class-name,
+.diff .token.maybe-class-name { color: var(--vscode-chat-editedFileForeground, #4ec9b0); }
+
+/* Variables, parameters, properties */
+.diff .token.variable,
+.diff .token.parameter,
+.diff .token.property,
+.diff .token.attr-name { color: var(--vscode-symbolIcon-variableForeground, #9cdcfe); }
+
+/* Built-in types / functions */
+.diff .token.builtin,
+.diff .token.constant,
+.diff .token.namespace { color: var(--vscode-scmGraph-foreground4, #4ec9b0); }
+
+/* Booleans, null, undefined */
+.diff .token.boolean,
+.diff .token.null,
+.diff .token.symbol { color: var(--vscode-debugTokenExpression-boolean, #4e94ce); }
+
+/* Regex */
+.diff .token.regex { color: var(--vscode-charts-red, #d16969); }
+
+/* Decorators, annotations, meta */
+.diff .token.annotation,
+.diff .token.decorator,
+.diff .token.important { color: var(--vscode-editorCodeLens-foreground, #c9b299); }
+
+/* HTML/JSX tag names */
+.diff .token.tag { color: var(--vscode-symbolIcon-constructorForeground, #4ec9b0); }
+
+/* CSS selectors */
+.diff .token.selector,
+.diff .token.selector-class,
+.diff .token.selector-id,
+.diff .token.selector-pseudo-class,
+.diff .token.selector-pseudo-element { color: var(--vscode-chat-editedFileForeground, #d7ba7d); }
+
+/* Links / entities */
+.diff .token.entity,
+.diff .token.url { color: var(--vscode-textLink-foreground, #4e94ce); }
+`;
+
+function injectStyle(id: string, cssText: string): void {
   if (typeof document === "undefined") return;
-  if (document.getElementById("fp-hljs-theme")) return;
+  if (document.getElementById(id)) return;
   const style = document.createElement("style");
-  style.id = "fp-hljs-theme";
-  style.textContent = HLJS_STYLES;
+  style.id = id;
+  style.textContent = cssText;
   document.head.appendChild(style);
+}
+
+/** Inject shared syntax highlight styles once per document lifetime. */
+export function injectHljsStyles(): void {
+  injectStyle("fp-hljs-theme", HLJS_STYLES);
+  injectStyle("fp-diff-refractor-theme", DIFF_REFRACTOR_STYLES);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -252,4 +332,3 @@ export function highlightCode(code: string, language?: string): string {
       .replace(/>/g, "&gt;");
   }
 }
-

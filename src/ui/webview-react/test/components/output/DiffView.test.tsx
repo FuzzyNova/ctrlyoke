@@ -8,6 +8,8 @@ const {
   mockToRdvFromContent,
   mockGetCollapsedLinesCountBetween,
   mockExpandFromRawCode,
+  mockRefractorRegistered,
+  mockTokenize,
 } = vi.hoisted(() => ({
   mockGetRenderedDiffStats: vi.fn<
     () => {
@@ -40,11 +42,17 @@ const {
   >(() => ({ hunks: [], diffType: "modify" })),
   mockGetCollapsedLinesCountBetween: vi.fn(() => 0),
   mockExpandFromRawCode: vi.fn((hunks: unknown[]) => hunks),
+  mockRefractorRegistered: vi.fn(() => false),
+  mockTokenize: vi.fn(() => null),
+}));
+
+vi.mock("@utils/hljsUtils", () => ({
+  injectHljsStyles: vi.fn(),
 }));
 
 vi.mock("@utils/rdvAdapter", () => ({
   refractor: {
-    registered: vi.fn(() => false),
+    registered: mockRefractorRegistered,
     highlight: vi.fn(() => ({ children: [] })),
   },
   getRenderedDiffStats: mockGetRenderedDiffStats,
@@ -69,7 +77,7 @@ vi.mock("react-diff-view", async () => {
     Decoration: vi.fn(({ children }: { children: React.ReactNode }) =>
       React.createElement("div", { className: "diff-decoration" }, children)
     ),
-    tokenize: vi.fn(() => null),
+    tokenize: mockTokenize,
     markEdits: vi.fn(() => vi.fn()),
     getCollapsedLinesCountBetween: mockGetCollapsedLinesCountBetween,
     expandFromRawCode: mockExpandFromRawCode,
@@ -100,6 +108,8 @@ describe("DiffView", () => {
     mockToRdvFromContent.mockReturnValue({ hunks: [], diffType: "modify" });
     mockGetCollapsedLinesCountBetween.mockReturnValue(0);
     mockExpandFromRawCode.mockImplementation((hunks: unknown[]) => hunks);
+    mockRefractorRegistered.mockReturnValue(false);
+    mockTokenize.mockClear();
   });
 
   it("renders nothing when there is no diff content", () => {
@@ -268,5 +278,41 @@ describe("DiffView", () => {
 
     fireEvent.click(hiddenLines);
     expect(mockExpandFromRawCode).not.toHaveBeenCalled();
+  });
+
+  it("passes old source to react-diff-view tokenization when syntax highlighting is enabled", () => {
+    const oldContent = "const value = 1;\n";
+    const hunks = [
+      {
+        content: "@@ -1,1 +1,1 @@",
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 1,
+        changes: [],
+      },
+    ];
+
+    mockRefractorRegistered.mockReturnValue(true);
+    mockToRdvFromContent.mockReturnValue({ hunks, diffType: "modify" });
+
+    render(
+      <DiffView
+        oldContent={oldContent}
+        newContent={"const value = 2;\n"}
+        language="typescript"
+        globallyCollapsed={false}
+      />
+    );
+
+    expect(mockTokenize).toHaveBeenCalledWith(
+      hunks,
+      expect.objectContaining({
+        highlight: true,
+        language: "typescript",
+        oldSource: oldContent,
+        enhancers: expect.any(Array),
+      })
+    );
   });
 });

@@ -38,11 +38,15 @@ import {
   normalizeStructuredPatch,
   countStructuredPatchDisplayLines,
 } from "@utils/outputUtils";
+import { injectHljsStyles } from "@utils/hljsUtils";
 import { useUiStore } from "@store/uiStore";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 
 const SIDE_BY_SIDE_THRESHOLD = 1024;
 const HIDDEN_CONTEXT_CHUNK_LINES = 25;
+
+// Ensure the shared VS Code-themed syntax styles are in <head>.
+injectHljsStyles();
 
 function formatHiddenLines(count: number): string {
   return `${count} hidden line${count === 1 ? "" : "s"}`;
@@ -186,14 +190,16 @@ export const DiffView: React.FC<DiffViewProps> = ({
           highlight: true,
           refractor,
           language: lang,
+          oldSource: oldContent,
           enhancers,
         });
       }
       return tokenize(expandedHunks, { highlight: false, enhancers });
-    } catch {
+    } catch (error) {
+      console.warn("[DiffView] syntax tokenization failed", error);
       return null;
     }
-  }, [expandedHunks, lang]);
+  }, [expandedHunks, lang, oldContent]);
 
   const minimapStats = useMemo(
     () => getRenderedDiffStats(expandedHunks, viewType),
