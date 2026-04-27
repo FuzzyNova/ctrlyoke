@@ -283,18 +283,21 @@ function App() {
       const centerKeys = ["output", "editor"] as const;
       const openKeys = centerKeys.filter((k) => !centerCollapsed[k]);
 
-      if (openKeys.length > 0) {
+      if (openKeys.length === 1) {
+        // One collapsed, one open: collapsed gets pixel size, open gets undefined (flexGrow:1)
+        for (const k of centerKeys) {
+          mobile.mobileMountDefaults.current[k] = centerCollapsed[k]
+            ? PANEL_COLLAPSED_SIZE_DEFAULT
+            : undefined;
+        }
+      } else if (openKeys.length === 2) {
         const totalOpen =
           openKeys.reduce((s, k) => s + mobile.lastMobileSizes.current[k], 0) ||
           1;
         for (const k of centerKeys) {
-          mobile.mobileMountDefaults.current[k] = centerCollapsed[k]
-            ? PANEL_COLLAPSED_SIZE_DEFAULT
-            : String(
-                Math.round(
-                  (mobile.lastMobileSizes.current[k] / totalOpen) * 100
-                )
-              );
+          mobile.mobileMountDefaults.current[k] = String(
+            Math.round((mobile.lastMobileSizes.current[k] / totalOpen) * 100)
+          );
         }
       }
 
@@ -418,16 +421,23 @@ function App() {
       const centerKeys = ["output", "editor"] as const;
       const collapsed = { output: outputCollapsed, editor: editorCollapsed };
       const openKeys = centerKeys.filter((k) => !collapsed[k]);
-      const totalOpen =
-        openKeys.reduce((s, k) => s + mobile.lastMobileSizes.current[k], 0) ||
-        1;
 
-      for (const k of centerKeys) {
-        mobile.mobileMountDefaults.current[k] = collapsed[k]
-          ? PANEL_COLLAPSED_SIZE_DEFAULT
-          : String(
-              Math.round((mobile.lastMobileSizes.current[k] / totalOpen) * 100)
-            );
+      if (openKeys.length === 1) {
+        // One collapsed, one open: collapsed gets pixel size, open gets undefined (flexGrow:1)
+        for (const k of centerKeys) {
+          mobile.mobileMountDefaults.current[k] = collapsed[k]
+            ? PANEL_COLLAPSED_SIZE_DEFAULT
+            : undefined;
+        }
+      } else {
+        const totalOpen =
+          openKeys.reduce((s, k) => s + mobile.lastMobileSizes.current[k], 0) ||
+          1;
+        for (const k of centerKeys) {
+          mobile.mobileMountDefaults.current[k] = String(
+            Math.round((mobile.lastMobileSizes.current[k] / totalOpen) * 100)
+          );
+        }
       }
     }
     mobile.mobileWasAllCollapsed.current = allMobileCenterCollapsed;

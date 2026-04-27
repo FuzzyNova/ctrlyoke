@@ -14,6 +14,7 @@ import { useUiStore } from "@store/uiStore";
 import { syncCollapsiblePanel } from "@utils/panelSync";
 import { readPanelSnapshot } from "@utils/panelSnapshot";
 import { WebviewLog } from "@utils/logger";
+import { PANEL_COLLAPSED_SIZE_DEFAULT } from "../constants";
 
 interface MobileLayoutParams {
   isMobile: boolean;
@@ -44,10 +45,23 @@ export function useMobileLayout({
   // Size persistence — initialized from store so sizes survive VS Code restarts
   const lastMobileSizes = useRef({ ...useUiStore.getState().lastMobileSizes });
 
-  // Stable mount defaults for each center panel
-  const mobileMountDefaults = useRef({
-    output: String(lastMobileSizes.current.output),
-    editor: String(lastMobileSizes.current.editor),
+  // Stable mount defaults for each center panel.
+  // Collapsed panels mount at "30px"; the open sibling gets undefined (flexGrow:1)
+  // so ne(group) measures the real container height and collapsedSize% is correct.
+  const mobileMountDefaults = useRef<{
+    output: string | undefined;
+    editor: string | undefined;
+  }>({
+    output: outputCollapsed
+      ? PANEL_COLLAPSED_SIZE_DEFAULT
+      : editorCollapsed
+        ? undefined
+        : String(lastMobileSizes.current.output),
+    editor: editorCollapsed
+      ? PANEL_COLLAPSED_SIZE_DEFAULT
+      : outputCollapsed
+        ? undefined
+        : String(lastMobileSizes.current.editor),
   });
 
   // Tracks all-collapsed → some-open transition; App.tsx updates this during
