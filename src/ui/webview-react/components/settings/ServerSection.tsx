@@ -84,7 +84,7 @@ export function ServerSection({ settings, activeScope, onUpdate, onReset }: Prop
             type="checkbox"
             checked={serverRunning}
             onChange={(e) => toggleServer(e.target.checked)}
-            className="accent-btn-primary-bg"
+            className="accent-btn-bg"
           />
           <span className="text-sm text-foreground">Enable server</span>
           {serverRunning && (
@@ -125,7 +125,7 @@ export function ServerSection({ settings, activeScope, onUpdate, onReset }: Prop
                 href={displayUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs text-link truncate flex-1 hover:underline"
+                className="text-xs text-link-fg truncate flex-1 hover:underline"
               >
                 {displayUrl}
               </a>
