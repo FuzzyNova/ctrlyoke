@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { MESSAGE_TYPES } from "@/types/messages";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
 
@@ -39,7 +39,13 @@ export default function BootstrapApp() {
       type: MESSAGE_TYPES.READY,
       preferredWorkingFilePath: initialPreferredWorkingFilePath,
     });
-    captureAndSendThemeVars(vscode);
+    // In standalone browser mode the server is the authoritative source of theme
+    // vars. Sending THEME_VARS_CAPTURED from the browser strips --fp-color-theme-kind
+    // (only --vscode-* props are captured here), corrupting cachedThemeVars on the
+    // server and breaking body-class-based icon inversion for subsequent connections.
+    if (!isStandalone) {
+      captureAndSendThemeVars(vscode);
+    }
 
     let cancelled = false;
     const loadDashboardApp = async () => {

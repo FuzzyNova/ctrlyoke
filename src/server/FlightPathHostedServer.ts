@@ -599,9 +599,20 @@ export class FlightPathHostedServer
     );
 
     // Add spell-checker dictionary paths as data attributes on <body>.
+    // Also inject the VS Code theme body class (vscode-dark / vscode-light /
+    // vscode-high-contrast) from the cached theme vars so that CSS rules that
+    // gate on body class (e.g. harness-icon-adaptive inversion) work correctly
+    // on first render, before the WebSocket THEME_VARS_UPDATED message arrives.
+    const themeKind = this.cachedThemeVars["--fp-color-theme-kind"];
+    const themeBodyClass =
+      themeKind === "light"
+        ? "vscode-light"
+        : themeKind === "high-contrast"
+          ? "vscode-high-contrast"
+          : "vscode-dark";
     html = html.replace(
       "<body>",
-      `<body data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/flightpath-icon.svg">`
+      `<body class="${themeBodyClass}" data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/flightpath-icon.svg">`
     );
 
     // Replace the VS Code-specific CSP with a browser-compatible policy.
