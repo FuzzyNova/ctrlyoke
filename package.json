@@ -382,6 +382,11 @@
           "command": "flightpath.queueNextFromContext",
           "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@4"
+        },
+        {
+          "command": "flightpath.addFileToPromptEditor",
+          "when": "resourceScheme == file",
+          "group": "flightpath@5"
         }
       ],
       "editor/context": [
