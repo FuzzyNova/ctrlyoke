@@ -190,3 +190,29 @@ export async function searchCommitsBySubject(
 export function isValidCommitHash(hash: string): boolean {
   return /^[0-9a-f]{7,40}$/i.test(hash);
 }
+
+/**
+ * Returns all non-gitignored file paths (relative to repoRoot) using
+ * `git ls-files --cached --others --exclude-standard -z`.
+ *
+ * --cached  : tracked (committed or staged) files
+ * --others  : untracked files
+ * --exclude-standard : apply .gitignore, .git/info/exclude, and global gitignore
+ * -z        : NUL-separated output, safe for paths containing spaces or newlines
+ *
+ * This is the canonical way to ask git which files are not ignored.
+ * It handles nested .gitignore files, global gitignore, and git attributes
+ * automatically — no need to batch-check individual files.
+ */
+export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    {
+      cwd: repoRoot,
+      timeout: GIT_TIMEOUT_MS,
+      maxBuffer: 500 * 1024 * 1024, // 500 MB — large monorepos can exceed 100 MB
+    }
+  );
+  return stdout.split("\0").filter(Boolean);
+}
