@@ -52,7 +52,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     let cancelled = false;
     console.debug(
       `[TerminalInstance] mount effect start wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
-        `isVisible=${isVisible} containerConnected=${containerRef.current?.isConnected ?? false} ` +
+        `containerConnected=${containerRef.current?.isConnected ?? false} ` +
         `registryHasEntry=${!!terminalRegistry.get(workflowId, sessionId)}`
     );
 

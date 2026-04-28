@@ -355,6 +355,7 @@ function KeyCaptureInput({
   const [capturing, setCapturing] = useState(false);
   const [editing, setEditing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const captureButtonRef = useRef<HTMLButtonElement>(null);
 
   const humanLabel = sequenceToHumanLabel(sequence);
 
@@ -366,10 +367,10 @@ function KeyCaptureInput({
     }
     setEditing(false);
     setCapturing(true);
-    setTimeout(() => containerRef.current?.focus(), 0);
+    setTimeout(() => captureButtonRef.current?.focus(), 0);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!capturing) return;
     if (e.key === "Escape") {
       setCapturing(false);
@@ -383,7 +384,7 @@ function KeyCaptureInput({
     }
   };
 
-  const handleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+  const handleBlur = (e: React.FocusEvent<HTMLButtonElement>) => {
     if (!containerRef.current?.contains(e.relatedTarget as Node)) {
       setCapturing(false);
     }
@@ -392,7 +393,6 @@ function KeyCaptureInput({
   if (editing) {
     return (
       <input
-        // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus
         type="text"
         value={sequence}
@@ -407,38 +407,40 @@ function KeyCaptureInput({
   }
 
   return (
-    <div
-      ref={containerRef}
-      tabIndex={0}
-      aria-label={ariaLabel}
-      onKeyDown={handleKeyDown}
-      onBlur={handleBlur}
-      className="min-w-0 flex-1 focus:outline-none"
-    >
+    <div ref={containerRef} className="min-w-0 flex-1">
       <div
         className={`flex items-center gap-1 bg-input-bg border rounded px-2 py-1 text-sm h-[30px] ${
           capturing ? "border-focus-border" : "border-input-border"
         }`}
       >
-        {capturing ? (
-          <span className="flex-1 text-description-fg italic text-xs">
-            Press a key combination…
-          </span>
-        ) : (
-          <span
-            className={`flex-1 truncate cursor-text ${
-              sequence
+        <button
+          ref={captureButtonRef}
+          type="button"
+          aria-label={ariaLabel}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          onClick={() => {
+            if (!capturing) {
+              setEditing(true);
+            }
+          }}
+          title={humanLabel && sequence ? `Sequence: ${sequence}` : undefined}
+          className={`flex-1 min-w-0 truncate text-left focus:outline-none ${
+            capturing
+              ? "text-description-fg italic text-xs"
+              : sequence
                 ? humanLabel
                   ? "text-foreground"
                   : "text-description-fg font-mono text-xs"
                 : "text-input-placeholder italic text-xs"
-            }`}
-            title={humanLabel && sequence ? `Sequence: ${sequence}` : undefined}
-            onClick={() => setEditing(true)}
-          >
-            {sequence ? (humanLabel ?? sequence) : "\\x1b[1;5A"}
-          </span>
-        )}
+          }`}
+        >
+          {capturing
+            ? "Press a key combination…"
+            : sequence
+              ? (humanLabel ?? sequence)
+              : "\\x1b[1;5A"}
+        </button>
         <button
           type="button"
           className={`icon-btn w-5 h-5 shrink-0 p-0 ${capturing ? "text-focus-border" : ""}`}

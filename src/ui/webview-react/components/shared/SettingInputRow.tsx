@@ -39,6 +39,7 @@ export function SettingInputRow({
         {onReset && path && (
           <button
             type="button"
+            aria-label={`Reset ${label}`}
             onClick={() => {
               if (canReset) onReset(path);
             }}

@@ -479,8 +479,10 @@ export const OutputSection: React.FC = () => {
     currentStep,
     executionState,
     fileName,
+    finalStep?.name,
     historyOutputs,
     isViewingHistory,
+    steps,
     totalSteps,
   ]);
 

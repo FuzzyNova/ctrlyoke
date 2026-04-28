@@ -56,6 +56,7 @@ export function SettingToggleRow({
       {onReset && path && (
         <button
           type="button"
+          aria-label={`Reset ${label}`}
           onClick={(e) => {
             e.preventDefault();
             if (canReset) onReset(path);
