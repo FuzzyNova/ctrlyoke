@@ -228,7 +228,12 @@ async function filterGitIgnoredFiles(
     );
 
     // Check gitignore status per repository
-    const filteredFiles: vscode.Uri[] = [...nonGitFiles];
+    // Use a loop instead of spread to avoid "Maximum call stack size exceeded" on repos with
+    // hundreds of thousands of files (spread operator passes all items as function arguments).
+    const filteredFiles: vscode.Uri[] = [];
+    for (const uri of nonGitFiles) {
+      filteredFiles.push(uri);
+    }
     let repoIndex = 0;
 
     for (const [
@@ -240,9 +245,11 @@ async function filterGitIgnoredFiles(
         `[Completions] Processing repo ${repoIndex}/${filesByRepoPath.size}: ${repoFiles.length} files from ${repoPath}`
       );
 
-      // Process in batches to avoid overwhelming the Git API
+      // Process in batches to avoid overwhelming the Git API.
+      // Push directly to filteredFiles inside the loop — never accumulate into an
+      // intermediate array and spread it, as spread throws RangeError on very large arrays.
       const BATCH_SIZE = 500;
-      const keptFiles: vscode.Uri[] = [];
+      let filteredCount = 0;
 
       for (let i = 0; i < repoFiles.length; i += BATCH_SIZE) {
         const batch = repoFiles.slice(i, i + BATCH_SIZE);
@@ -251,24 +258,27 @@ async function filterGitIgnoredFiles(
         try {
           const ignoredSet = await repo.checkIgnore(filePaths);
 
-          // Keep only non-ignored files
-          const kept = batch.filter((uri) => !ignoredSet.has(uri.fsPath));
-          keptFiles.push(...kept);
+          for (const uri of batch) {
+            if (ignoredSet.has(uri.fsPath)) {
+              filteredCount++;
+            } else {
+              filteredFiles.push(uri);
+            }
+          }
         } catch (batchError) {
           Log.error(
             `[Completions] Failed to check batch ${i}-${i + BATCH_SIZE}:`,
             batchError
           );
           // On error, keep all files in this batch (fail open)
-          keptFiles.push(...batch);
+          for (const uri of batch) {
+            filteredFiles.push(uri);
+          }
         }
       }
 
-      filteredFiles.push(...keptFiles);
-
-      const filteredCount = repoFiles.length - keptFiles.length;
       Log.debug(
-        `[Completions] Filtered ${filteredCount} gitignored files from ${repoPath} (kept ${keptFiles.length})`
+        `[Completions] Filtered ${filteredCount} gitignored files from ${repoPath} (kept ${repoFiles.length - filteredCount})`
       );
     }
 

@@ -1038,3 +1038,10 @@ export type CompareSource =
   (typeof COMPARE_SOURCES)[keyof typeof COMPARE_SOURCES];
 export type RetryPromptPlaceholder =
   (typeof RETRY_PROMPT_PLACEHOLDERS)[keyof typeof RETRY_PROMPT_PLACEHOLDERS];
+
+// VS Code command IDs registered by the extension
+export const VSCODE_COMMANDS = {
+  ENABLE_SERVER: "flightpath.enableServer",
+  DISABLE_SERVER: "flightpath.disableServer",
+  REGENERATE_SERVER_TOKEN: "flightpath.regenerateServerToken",
+} as const;

@@ -13,11 +13,14 @@ import {
   PERMISSION_MODES,
   MODEL_OPTION_VALUES,
   PANEL_CLIENT_ID,
+  VSCODE_COMMANDS,
   type HarnessId,
   type HarnessStatusString,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
+  CONFIG_KEYS,
+  CONFIG_SCOPE,
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -529,7 +532,7 @@ export class WebviewSettingsSync {
     } else if (property === "skills") {
       await ConfigurationUtils.setDefaultSkills(value || []);
     } else if (property === "resumeSession") {
-      await ConfigurationUtils.updateSetting("resumeExistingSession", value);
+      await ConfigurationUtils.updateSetting(CONFIG_KEYS.WORKFLOW_RESUME_EXISTING_SESSION, value);
     } else if (property === "mcpServers") {
       // null (None mode) → [] so we never write null to an array-typed setting
       await ConfigurationUtils.setDefaultMcpServers(value ?? []);
@@ -542,17 +545,17 @@ export class WebviewSettingsSync {
     } else if (property === "toolPermissions") {
       const override = value as ToolPermissionsOverride | null;
       await ConfigurationUtils.updateSetting(
-        "cliToolPermissions",
+        CONFIG_KEYS.TOOLS_PERMISSION_MODE,
         override?.mode && override.mode !== PERMISSION_MODES.NONE
           ? override.mode
           : PERMISSION_MODES.ALLOW_ALL
       );
       await ConfigurationUtils.updateSetting(
-        "cliAllowedTools",
+        CONFIG_KEYS.TOOLS_ALLOWED,
         override?.allowedTools ?? []
       );
       await ConfigurationUtils.updateSetting(
-        "cliDeniedTools",
+        CONFIG_KEYS.TOOLS_DENIED,
         override?.deniedTools ?? []
       );
     } else {
@@ -564,12 +567,12 @@ export class WebviewSettingsSync {
     key: string,
     postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
-    if (!key.startsWith("flightpath.")) {
+    if (!key.startsWith(CONFIG_KEYS.EXTENSION_NAMESPACE)) {
       Log.warn(`Rejected config read for non-flightpath key: ${key}`);
       return;
     }
 
-    const relativeKey = key.slice("flightpath.".length);
+    const relativeKey = key.slice(CONFIG_KEYS.EXTENSION_NAMESPACE.length);
     const value = configService.getNested(relativeKey);
 
     this.emitMessage(
@@ -583,13 +586,13 @@ export class WebviewSettingsSync {
   }
 
   async handleUpdateConfig(key: string, value: unknown): Promise<void> {
-    if (!key.startsWith("flightpath.")) {
+    if (!key.startsWith(CONFIG_KEYS.EXTENSION_NAMESPACE)) {
       Log.warn(`Rejected config write for non-flightpath key: ${key}`);
       return;
     }
 
-    const relativeKey = key.slice("flightpath.".length);
-    await configService.set(relativeKey, value, "user");
+    const relativeKey = key.slice(CONFIG_KEYS.EXTENSION_NAMESPACE.length);
+    await configService.set(relativeKey, value, CONFIG_SCOPE.USER);
   }
 
   // ============================================================================
@@ -898,19 +901,19 @@ export class WebviewSettingsSync {
   }
 
   async handleEnableServer(_postMessage: PostMessageFn): Promise<void> {
-    await configService.set("server.enabled", true, "user");
-    await vscode.commands.executeCommand("flightpath.enableServer");
+    await configService.set(CONFIG_KEYS.SERVER_ENABLED, true, CONFIG_SCOPE.USER);
+    await vscode.commands.executeCommand(VSCODE_COMMANDS.ENABLE_SERVER);
   }
 
   async handleDisableServer(_postMessage: PostMessageFn): Promise<void> {
-    await configService.set("server.enabled", false, "user");
-    await vscode.commands.executeCommand("flightpath.disableServer");
+    await configService.set(CONFIG_KEYS.SERVER_ENABLED, false, CONFIG_SCOPE.USER);
+    await vscode.commands.executeCommand(VSCODE_COMMANDS.DISABLE_SERVER);
   }
 
   async handleRegenerateServerToken(
     _postMessage: PostMessageFn
   ): Promise<void> {
-    await vscode.commands.executeCommand("flightpath.regenerateServerToken");
+    await vscode.commands.executeCommand(VSCODE_COMMANDS.REGENERATE_SERVER_TOKEN);
   }
 
   async handleGenerateServerCert(postMessage: PostMessageFn): Promise<void> {
@@ -923,7 +926,7 @@ export class WebviewSettingsSync {
     );
     await fs.mkdir(certsDir, { recursive: true });
 
-    const bindAddress = configService.get("server")?.bindAddress ?? "127.0.0.1";
+    const bindAddress = configService.get(CONFIG_KEYS.SERVER)?.bindAddress ?? "127.0.0.1";
     const lanIps: string[] =
       bindAddress === "0.0.0.0"
         ? Object.values(os.networkInterfaces())
@@ -976,8 +979,8 @@ export class WebviewSettingsSync {
     await fs.writeFile(certPath, pems.cert, "utf8");
     await fs.writeFile(keyPath, pems.private, "utf8");
 
-    await configService.set("server.tls.certPath", certPath, "user");
-    await configService.set("server.tls.keyPath", keyPath, "user");
+    await configService.set(CONFIG_KEYS.SERVER_TLS_CERT_PATH, certPath, CONFIG_SCOPE.USER);
+    await configService.set(CONFIG_KEYS.SERVER_TLS_KEY_PATH, keyPath, CONFIG_SCOPE.USER);
     await this.handleGlobalSettingsLoadRequest(postMessage);
 
     this.emitMessage(

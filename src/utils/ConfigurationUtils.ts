@@ -44,10 +44,17 @@ export const CONFIG_KEYS = {
   WORKFLOW_DEFAULT_TEMPLATE: "workflow.defaultTemplate",
   WORKFLOW_RESUME_EXISTING_SESSION: "workflow.resumeExistingSession",
   EXECUTION_MODE: "execution.mode",
+  TOOLS_PERMISSION_MODE: "tools.permissionMode",
+  TOOLS_ALLOWED: "tools.allowed",
+  TOOLS_DENIED: "tools.denied",
+  SERVER_ENABLED: "server.enabled",
+  SERVER_TLS_CERT_PATH: "server.tls.certPath",
+  SERVER_TLS_KEY_PATH: "server.tls.keyPath",
   UI_CONFIRM_DELETE_OPERATIONS: "ui.confirmDeleteOperations",
   UI_CONFIRM_RESET_OPERATIONS: "ui.confirmResetOperations",
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
   MCP_DEFAULT_SERVERS: "mcp.defaultServers",
+  EXTENSION_NAMESPACE: "flightpath.",
 } as const;
 
 /**
