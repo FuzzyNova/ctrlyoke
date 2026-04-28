@@ -541,9 +541,17 @@ export class FlightPathWebviewProvider
   public updateCliStreamingEvents(
     stepIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void {
-    this.sink.updateCliStreamingEvents(stepIndex, events, workflowId);
+    this.sink.updateCliStreamingEvents(
+      stepIndex,
+      events,
+      attemptIndex,
+      runIndex,
+      workflowId
+    );
   }
   public updateContextWindow(
     stepIndex: number,
@@ -670,9 +678,17 @@ export class FlightPathWebviewProvider
   public updateFinalStepStreamingEvents(
     loopIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void {
-    this.sink.updateFinalStepStreamingEvents(loopIndex, events, workflowId);
+    this.sink.updateFinalStepStreamingEvents(
+      loopIndex,
+      events,
+      attemptIndex,
+      runIndex,
+      workflowId
+    );
   }
   /** Only resets prompt statuses and execution state — does not touch CLI outputs or run history. */
   public notifyWorkflowStateReset(steps: any[], workflowId?: string): void {

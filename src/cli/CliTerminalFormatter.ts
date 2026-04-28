@@ -379,7 +379,7 @@ export class CliTerminalFormatter {
    * then with cliCommand (show the harness command being run).
    */
   static renderPromptHeader(data: PromptStartData): void {
-    const { stepIndex, totalSteps, promptText, attemptIndex, cliCommand } =
+    const { stepIndex, totalSteps, promptText, attemptIndex, runIndex, cliCommand } =
       data;
 
     if (cliCommand !== undefined) {
@@ -397,9 +397,16 @@ export class CliTerminalFormatter {
     // Blue left border mirrors border-l-output-prompt-border in the webview
     const border = chalk.blue("│");
 
-    if (attemptIndex > 0) {
+    const executionLabel = [
+      runIndex > 0 ? `Re-run ${runIndex}` : "",
+      attemptIndex > 0 ? `Retry ${attemptIndex}` : "",
+    ]
+      .filter((label) => label.length > 0)
+      .join(" · ");
+
+    if (executionLabel) {
       console.log(
-        `${border} ${chalk.yellow(`Retry ${attemptIndex} — Step ${stepIndex + 1}/${totalSteps}`)}`
+        `${border} ${chalk.yellow(`${executionLabel} — Step ${stepIndex + 1}/${totalSteps}`)}`
       );
     } else {
       console.log(

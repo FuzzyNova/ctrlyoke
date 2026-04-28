@@ -285,4 +285,41 @@ describe("CliOutput", () => {
       screen.queryByText("No file changes found for this diff.")
     ).not.toBeInTheDocument();
   });
+
+  it("shows rerun labeling and run-aware diff anchors", () => {
+    const output: CliOutputType = {
+      prompt: "rerun prompt",
+      response: "",
+      elapsed: 0,
+      structured: {
+        events: [
+          {
+            type: CLI_EVENT_TYPES.FILE_WRITE,
+            data: {
+              path: "src/rerun.ts",
+              status: OPERATION_STATUS.COMPLETED,
+              content: "export const rerun = true;\n",
+            },
+          },
+        ],
+        metadata: {},
+      },
+      isStreaming: false,
+      runIndex: 1,
+    };
+
+    const { container } = render(
+      <CliOutput
+        output={output}
+        stepIndex={0}
+        attemptIndex={0}
+        runIndex={1}
+      />
+    );
+
+    expect(screen.getByText("Re-run 1")).toBeInTheDocument();
+    expect(
+      container.querySelector("#fp-diff-q-0-r1-a0-e0")
+    ).toBeInTheDocument();
+  });
 });

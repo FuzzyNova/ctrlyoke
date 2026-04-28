@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo, useState, memo } from "react";
 import {
+  buildDiffAnchorPrefix,
+  formatExecutionBadge,
   formatTime,
   getFirstWords,
   isStructuredPatchMalformed,
@@ -644,6 +646,7 @@ interface CliOutputProps {
   isFinalStep?: boolean;
   stepName?: string;
   attemptIndex: number;
+  runIndex?: number;
   streamingChunk?: string;
   /** When false, suppresses the streaming indicator even if output.isStreaming is true.
    *  The partial streamed text is still shown so the user can see output captured before stop/error. */
@@ -687,6 +690,7 @@ export const CliOutput = memo<CliOutputProps>(
     isFinalStep = false,
     stepName,
     attemptIndex,
+    runIndex,
     streamingChunk = "",
     isExecutionActive = true,
     allowUndoActions = false,
@@ -723,11 +727,17 @@ export const CliOutput = memo<CliOutputProps>(
     const targetKey = isFinalStep
       ? `finalStep-${stepIndex}`
       : `queue-${stepIndex}`;
+    const resolvedRunIndex = runIndex ?? output.runIndex ?? 0;
 
     // Prefix for diff measurement anchor IDs in StructuredOutput.
-    // Format: fp-diff-{kind}-{stepIndex}-a{attemptIndex}
+    // Format: fp-diff-{kind}-{stepIndex}-r{runIndex}-a{attemptIndex}
     // Matches the lookup key used in OutputSection minimapSteps computation.
-    const diffAnchorPrefix = `fp-diff-${isFinalStep ? "fp" : "q"}-${stepIndex}-a${attemptIndex}`;
+    const diffAnchorPrefix = buildDiffAnchorPrefix(
+      isFinalStep ? "fp" : "q",
+      stepIndex,
+      resolvedRunIndex,
+      attemptIndex
+    );
 
     const effectiveUndoRecord = undoRecord ?? undoRecordsFromStore[targetKey];
     const effectiveSnapshot =
@@ -779,7 +789,10 @@ export const CliOutput = memo<CliOutputProps>(
       [target, output, effectiveUndoRecord, effectiveSnapshot]
     );
 
-    const attemptLabel = attemptIndex > 0 ? `Retry ${attemptIndex}` : "";
+    const executionBadge = formatExecutionBadge(
+      resolvedRunIndex,
+      attemptIndex
+    );
     const sequenceLabel = stepLabel ?? `Step ${stepIndex + 1}`;
     const displayName = stepName?.trim();
     const headerIconClass =
@@ -1110,7 +1123,11 @@ export const CliOutput = memo<CliOutputProps>(
                   <span className="ml-1 text-foreground">{scriptTitle}</span>
                 ) : null;
               })()}
-              {attemptLabel && <span className="ml-1">{attemptLabel}</span>}
+              {executionBadge && (
+                <span className="ml-1 text-description-fg">
+                  {executionBadge}
+                </span>
+              )}
             </span>
             {streamingIndicator}
           </div>
@@ -1206,7 +1223,9 @@ export const CliOutput = memo<CliOutputProps>(
                 {[harnessShortName, modelLabel].filter(Boolean).join(" · ")}
               </span>
             )}
-            {attemptLabel && <span className="ml-1">{attemptLabel}</span>}
+            {executionBadge && (
+              <span className="ml-1 text-description-fg">{executionBadge}</span>
+            )}
           </span>
           {streamingIndicator}
           {(promptUndoActions.undo || promptUndoActions.redo) && (

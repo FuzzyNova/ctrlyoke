@@ -76,6 +76,7 @@ import {
 } from "../../utils/promptUndo";
 import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
+import { buildDiffAnchorPrefix } from "@utils/outputUtils";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 
@@ -756,14 +757,19 @@ export const OutputSection: React.FC = () => {
       const kindSlug = isFinalStep ? "fp" : "q";
       const diffBlocks: MinimapDiffBlock[] = [];
       for (const output of stepOutputs) {
-        const typedOutput = output as CliOutputType & { attemptIndex?: number };
-        const attemptIdx = typedOutput.attemptIndex ?? 0;
-        const anchorPrefix = `fp-diff-${kindSlug}-${stepIndex}-a${attemptIdx}`;
+        const attemptIdx = output.attemptIndex ?? 0;
+        const runIdx = output.runIndex ?? 0;
+        const anchorPrefix = buildDiffAnchorPrefix(
+          kindSlug,
+          stepIndex,
+          runIdx,
+          attemptIdx
+        );
         // Normalize to match the indices StructuredOutput uses for DOM anchor IDs.
         // normalizeCliEvents can merge/remove events (e.g. collapsing duplicate
         // fileRead completions), so iterating the original array produces anchor IDs
         // that don't exist in the DOM.
-        const events = normalizeCliEvents(typedOutput.structured?.events ?? []);
+        const events = normalizeCliEvents(output.structured?.events ?? []);
         events.forEach((event, eventIndex) => {
           if (
             event.type !== CLI_EVENT_TYPES.FILE_EDIT &&
@@ -1492,6 +1498,7 @@ export const OutputSection: React.FC = () => {
                             : workflowStep?.name?.trim() || undefined
                         }
                         attemptIndex={item.attemptIndex || 0}
+                        runIndex={item.runIndex ?? (cliData.runIndex ?? 0)}
                         streamingChunk={streamingChunk}
                         isExecutionActive={isExecutionActive}
                         allowUndoActions={allowUndoActions}

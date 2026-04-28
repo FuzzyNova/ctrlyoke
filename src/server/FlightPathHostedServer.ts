@@ -336,9 +336,17 @@ export class FlightPathHostedServer
   updateCliStreamingEvents(
     stepIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void {
-    this.sink.updateCliStreamingEvents(stepIndex, events, workflowId);
+    this.sink.updateCliStreamingEvents(
+      stepIndex,
+      events,
+      attemptIndex,
+      runIndex,
+      workflowId
+    );
   }
   updateContextWindow(
     stepIndex: number,
@@ -399,9 +407,17 @@ export class FlightPathHostedServer
   updateFinalStepStreamingEvents(
     loopIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void {
-    this.sink.updateFinalStepStreamingEvents(loopIndex, events, workflowId);
+    this.sink.updateFinalStepStreamingEvents(
+      loopIndex,
+      events,
+      attemptIndex,
+      runIndex,
+      workflowId
+    );
   }
   notifyWorkflowStateReset(steps: any[], workflowId?: string): void {
     this.sink.notifyWorkflowStateReset(steps, workflowId);

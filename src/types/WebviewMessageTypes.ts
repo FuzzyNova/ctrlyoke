@@ -511,6 +511,8 @@ export interface CliStreamingEventsMessage {
   type: typeof MESSAGE_TYPES.CLI_STREAMING_EVENTS;
   stepIndex: number;
   events: CliEvent[];
+  attemptIndex?: number;
+  runIndex?: number;
 }
 
 /**
@@ -596,6 +598,8 @@ export interface FinalStepStreamingEventsMessage {
   type: typeof MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS;
   loopIndex: number;
   events: CliEvent[];
+  attemptIndex?: number;
+  runIndex?: number;
 }
 
 /**

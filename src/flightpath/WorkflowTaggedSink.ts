@@ -184,8 +184,19 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.updateCliStreamingChunk(stepIndex, chunk, this.workflowId);
   }
 
-  updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void {
-    this.inner.updateCliStreamingEvents(stepIndex, events, this.workflowId);
+  updateCliStreamingEvents(
+    stepIndex: number,
+    events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number
+  ): void {
+    this.inner.updateCliStreamingEvents(
+      stepIndex,
+      events,
+      attemptIndex,
+      runIndex,
+      this.workflowId
+    );
   }
 
   updateContextWindow(stepIndex: number, used: number, size: number): void {
@@ -246,10 +257,17 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.updateFinalStepStreamingChunk(loopIndex, chunk, this.workflowId);
   }
 
-  updateFinalStepStreamingEvents(loopIndex: number, events: CliEvent[]): void {
+  updateFinalStepStreamingEvents(
+    loopIndex: number,
+    events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number
+  ): void {
     this.inner.updateFinalStepStreamingEvents(
       loopIndex,
       events,
+      attemptIndex,
+      runIndex,
       this.workflowId
     );
   }

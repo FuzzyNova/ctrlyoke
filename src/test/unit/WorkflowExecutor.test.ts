@@ -411,6 +411,61 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.ok(outputUpdates.some((u: any) => u.output?.isStreaming === false));
   });
 
+  test("forwards runIndex on queue streaming events", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    const streamingUpdates: Array<{
+      stepIndex: number;
+      attemptIndex?: number;
+      runIndex?: number;
+    }> = [];
+
+    integration.onSend = async () => {
+      (integration as any).streamingEventsEmitter.fire([
+        {
+          type: "text",
+          data: { text: "streaming body" },
+        },
+      ]);
+      return { success: true, responseText: "done" };
+    };
+
+    queue.loadPrompts({
+      steps: [{ prompt: "queue-rerun" }],
+    });
+
+    const context = makeContext(integration);
+    context.targetRunIndices = new Map([["queue:0", 2]]);
+    context.dashboardProvider = {
+      updateStepStatus: () => {},
+      updateRetryAttempt: () => {},
+      updateProgress: () => {},
+      updateCliStreamingChunk: () => {},
+      updateCliOutput: () => {},
+      updateExecutionCompleted: () => {},
+      updateFinalStepStatus: () => {},
+      updateFinalStepOutput: () => {},
+      updateFinalStepStreamingChunk: () => {},
+      updateFinalStepStreamingEvents: () => {},
+      updateCliStreamingEvents: (
+        stepIndex: number,
+        _events: CliEvent[],
+        attemptIndex?: number,
+        runIndex?: number
+      ) => {
+        streamingUpdates.push({ stepIndex, attemptIndex, runIndex });
+      },
+    } as any;
+
+    await executor.execute(integration, context);
+
+    assert.deepStrictEqual(streamingUpdates, [
+      { stepIndex: 0, attemptIndex: 0, runIndex: 2 },
+    ]);
+  });
+
   test("captures finalStep output using dedicated replay-safe callbacks", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

@@ -1683,13 +1683,17 @@ export class WorkflowExecutor {
         context.captureEvents?.(signedStepIndex, events);
         context.dashboardProvider?.updateCliStreamingEvents(
           signedStepIndex,
-          events
+          events,
+          attemptIndex,
+          runIndex
         );
       } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
         context.captureFinalStepEvents?.(target.loopIndex, events);
         context.dashboardProvider?.updateFinalStepStreamingEvents(
           target.loopIndex,
-          events
+          events,
+          attemptIndex,
+          runIndex
         );
       }
     });

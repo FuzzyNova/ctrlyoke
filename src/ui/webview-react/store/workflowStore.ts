@@ -155,9 +155,19 @@ interface WorkflowActions {
   clearLiveEntries: () => void;
   appendStreamingChunk: (stepIndex: number, chunk: string) => void;
   clearStreamingChunk: (stepIndex: number) => void;
-  appendStreamingEvents: (stepIndex: number, events: any[]) => void;
+  appendStreamingEvents: (
+    stepIndex: number,
+    events: any[],
+    attemptIndex?: number,
+    runIndex?: number
+  ) => void;
   appendFinalStepStreamingChunk: (loopIndex: number, chunk: string) => void;
-  appendFinalStepStreamingEvents: (loopIndex: number, events: any[]) => void;
+  appendFinalStepStreamingEvents: (
+    loopIndex: number,
+    events: any[],
+    attemptIndex?: number,
+    runIndex?: number
+  ) => void;
 
   // Retry management
   setRetryState: (
@@ -442,7 +452,12 @@ export const useWorkflowStore = create<
           }))
         ),
 
-      appendStreamingEvents: (stepIndex, events) =>
+      appendStreamingEvents: (
+        stepIndex,
+        events,
+        attemptIndex = 0,
+        runIndex = 0
+      ) =>
         withUndoPause(() =>
           set((state) => {
             const target: OutputExecutionTarget = {
@@ -461,6 +476,8 @@ export const useWorkflowStore = create<
                     stepIndex: number;
                   }
                 ).stepIndex === stepIndex &&
+                getCliEntryRunIndex(e as OrderedCliHistoryEntry) === runIndex &&
+                (e as OrderedCliHistoryEntry).attemptIndex === attemptIndex &&
                 (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true
             );
             if (existingIdx >= 0) {
@@ -496,14 +513,14 @@ export const useWorkflowStore = create<
               elapsed: 0,
               isStreaming: true,
               timestampMs: Date.now(),
-              attemptIndex: 0,
-              runIndex: 0,
+              attemptIndex,
+              runIndex,
             };
             const newEntry: OrderedCliHistoryEntry = {
               kind: OUTPUT_HISTORY_KINDS.CLI,
               target,
-              runIndex: 0,
-              attemptIndex: 0,
+              runIndex,
+              attemptIndex,
               cliOutput: streamingOutput,
               timestampMs: streamingOutput.timestampMs!,
               sequence: state.liveSequence,
@@ -526,7 +543,12 @@ export const useWorkflowStore = create<
           }))
         ),
 
-      appendFinalStepStreamingEvents: (loopIndex, events) =>
+      appendFinalStepStreamingEvents: (
+        loopIndex,
+        events,
+        attemptIndex = 0,
+        runIndex = 0
+      ) =>
         withUndoPause(() =>
           set((state) => {
             const target: OutputExecutionTarget = {
@@ -545,6 +567,8 @@ export const useWorkflowStore = create<
                     loopIndex: number;
                   }
                 ).loopIndex === loopIndex &&
+                getCliEntryRunIndex(e as OrderedCliHistoryEntry) === runIndex &&
+                (e as OrderedCliHistoryEntry).attemptIndex === attemptIndex &&
                 (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true
             );
             if (existingIdx >= 0) {
@@ -580,14 +604,14 @@ export const useWorkflowStore = create<
               elapsed: 0,
               isStreaming: true,
               timestampMs: Date.now(),
-              attemptIndex: 0,
-              runIndex: 0,
+              attemptIndex,
+              runIndex,
             };
             const newEntry: OrderedCliHistoryEntry = {
               kind: OUTPUT_HISTORY_KINDS.CLI,
               target,
-              runIndex: 0,
-              attemptIndex: 0,
+              runIndex,
+              attemptIndex,
               cliOutput: streamingOutput,
               timestampMs: streamingOutput.timestampMs!,
               sequence: state.liveSequence,

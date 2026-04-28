@@ -208,12 +208,16 @@ export class PostMessageDashboardSink implements IDashboardSink {
   updateCliStreamingEvents(
     stepIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void {
     this.send({
       type: MESSAGE_TYPES.CLI_STREAMING_EVENTS,
       stepIndex,
       events,
+      ...(attemptIndex !== undefined ? { attemptIndex } : {}),
+      ...(runIndex !== undefined ? { runIndex } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }
@@ -328,12 +332,16 @@ export class PostMessageDashboardSink implements IDashboardSink {
   updateFinalStepStreamingEvents(
     loopIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void {
     this.send({
       type: MESSAGE_TYPES.FINAL_PROMPT_STREAMING_EVENTS,
       loopIndex,
       events,
+      ...(attemptIndex !== undefined ? { attemptIndex } : {}),
+      ...(runIndex !== undefined ? { runIndex } : {}),
       ...(workflowId !== undefined ? { workflowId } : {}),
     });
   }

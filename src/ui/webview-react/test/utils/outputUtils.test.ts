@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import {
+  buildDiffAnchorPrefix,
+  formatAttemptLabel,
+  formatExecutionBadge,
+  formatRunLabel,
   shortenPath,
   formatTimeHMS,
   extractKeyParameters,
@@ -50,6 +54,31 @@ describe("formatTimeHMS", () => {
     const result = formatTimeHMS(ts);
     // Should match ##:##:## pattern
     expect(result).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+  });
+});
+
+describe("run and retry labels", () => {
+  it("formats rerun labels only for manual reruns", () => {
+    expect(formatRunLabel(0)).toBe("");
+    expect(formatRunLabel(2)).toBe("Re-run 2");
+  });
+
+  it("formats retry labels and optional initial-attempt labels", () => {
+    expect(formatAttemptLabel(0)).toBe("");
+    expect(formatAttemptLabel(0, true)).toBe("Initial Attempt");
+    expect(formatAttemptLabel(3)).toBe("Retry 3");
+  });
+
+  it("combines run and retry labels into a single execution badge", () => {
+    expect(formatExecutionBadge(0, 0, true)).toBe("Initial Attempt");
+    expect(formatExecutionBadge(1, 0, true)).toBe(
+      "Re-run 1 · Initial Attempt"
+    );
+    expect(formatExecutionBadge(2, 1)).toBe("Re-run 2 · Retry 1");
+  });
+
+  it("builds diff anchor prefixes with runIndex and attemptIndex", () => {
+    expect(buildDiffAnchorPrefix("q", 3, 2, 1)).toBe("fp-diff-q-3-r2-a1");
   });
 });
 
@@ -284,6 +313,22 @@ describe("generateMarkdownExport", () => {
     ];
     const md = generateMarkdownExport(outputs, metadata);
     expect(md).toContain("Retry 2");
+  });
+
+  it("labels manual reruns independently from retries", () => {
+    const outputs = [
+      {
+        type: "cli" as const,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 1,
+        data: { response: "rerun response" },
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata);
+    expect(md).toContain("Re-run 1 · Initial Attempt");
   });
 
   it("renders token stats when present", () => {

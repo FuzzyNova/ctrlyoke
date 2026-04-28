@@ -57,6 +57,42 @@ export function formatTimeHMS(timestampMs: number): string {
   });
 }
 
+export function formatRunLabel(runIndex: number): string {
+  return runIndex > 0 ? `Re-run ${runIndex}` : "";
+}
+
+export function formatAttemptLabel(
+  attemptIndex: number,
+  includeInitialAttempt: boolean = false
+): string {
+  if (attemptIndex > 0) {
+    return `Retry ${attemptIndex}`;
+  }
+  return includeInitialAttempt ? "Initial Attempt" : "";
+}
+
+export function formatExecutionBadge(
+  runIndex: number,
+  attemptIndex: number,
+  includeInitialAttempt: boolean = false
+): string {
+  return [
+    formatRunLabel(runIndex),
+    formatAttemptLabel(attemptIndex, includeInitialAttempt),
+  ]
+    .filter((label) => label.length > 0)
+    .join(" · ");
+}
+
+export function buildDiffAnchorPrefix(
+  kindSlug: "q" | "fp",
+  stepIndex: number,
+  runIndex: number,
+  attemptIndex: number
+): string {
+  return `fp-diff-${kindSlug}-${stepIndex}-r${runIndex}-a${attemptIndex}`;
+}
+
 /**
  * Extract key parameters from a tool call for compact display.
  */

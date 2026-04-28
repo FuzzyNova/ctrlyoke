@@ -972,7 +972,12 @@ function createMessageHandlers(): MessageHandlerMap {
     }
     useWorkflowStore
       .getState()
-      .appendFinalStepStreamingEvents(message.loopIndex, message.events || []);
+      .appendFinalStepStreamingEvents(
+        message.loopIndex,
+        message.events || [],
+        message.attemptIndex ?? 0,
+        message.runIndex ?? 0
+      );
   };
 
   // --------------------------------------------------------------------------
@@ -1047,7 +1052,12 @@ function createMessageHandlers(): MessageHandlerMap {
 
     // Append events to streaming buffer (creates buffer if needed)
     // Events are accumulated and displayed in real-time as formatted structured output
-    workflowStore.appendStreamingEvents(message.stepIndex, events);
+    workflowStore.appendStreamingEvents(
+      message.stepIndex,
+      events,
+      message.attemptIndex ?? 0,
+      message.runIndex ?? 0
+    );
   };
 
   // --------------------------------------------------------------------------

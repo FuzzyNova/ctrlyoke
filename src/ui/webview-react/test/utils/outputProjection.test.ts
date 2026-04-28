@@ -38,4 +38,41 @@ describe("outputProjection", () => {
     expect(messages[0]?.sequence).toBe(1);
     expect(messages[1]?.sequence).toBe(2);
   });
+
+  it("normalizes runIndex from ordered entries or cli output", () => {
+    const messages = mapOrderedHistoryEntriesToMessages([
+      {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        runIndex: 2,
+        attemptIndex: 0,
+        cliOutput: {
+          prompt: "",
+          response: "explicit run",
+          elapsed: 0,
+          isStreaming: false,
+          timestampMs: 1000,
+        },
+        timestampMs: 1000,
+        sequence: 1,
+      },
+      {
+        kind: OUTPUT_HISTORY_KINDS.CLI,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        attemptIndex: 1,
+        cliOutput: {
+          prompt: "",
+          response: "fallback run",
+          elapsed: 0,
+          isStreaming: false,
+          timestampMs: 1001,
+          runIndex: 3,
+        },
+        timestampMs: 1001,
+        sequence: 2,
+      },
+    ]);
+
+    expect(messages.map((message) => message.runIndex)).toEqual([2, 3]);
+  });
 });

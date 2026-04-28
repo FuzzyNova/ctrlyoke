@@ -110,6 +110,8 @@ export interface IDashboardSink {
   updateCliStreamingEvents(
     stepIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void;
 
@@ -164,6 +166,8 @@ export interface IDashboardSink {
   updateFinalStepStreamingEvents(
     loopIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void;
 

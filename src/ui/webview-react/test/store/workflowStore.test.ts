@@ -298,6 +298,37 @@ describe("appendStreamingEvents", () => {
       },
     });
   });
+
+  it("keeps separate streaming entries for different runIndex values", () => {
+    store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
+
+    store().appendStreamingEvents(
+      0,
+      [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "original run" } }],
+      0,
+      0
+    );
+    store().appendStreamingEvents(
+      0,
+      [{ type: CLI_EVENT_TYPES.TEXT, data: { text: "rerun" } }],
+      0,
+      1
+    );
+
+    const entries = store().liveOrderedEntries.filter(
+      (item) =>
+        item.kind === OUTPUT_HISTORY_KINDS.CLI &&
+        "target" in item &&
+        item.target.kind === FINAL_STEP_PHASES.QUEUE &&
+        item.target.stepIndex === 0
+    );
+
+    expect(entries).toHaveLength(2);
+    expect(entries).toMatchObject([
+      { runIndex: 0, attemptIndex: 0 },
+      { runIndex: 1, attemptIndex: 0 },
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -225,10 +225,18 @@ export class DashboardBroadcastHub
   updateCliStreamingEvents(
     stepIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateCliStreamingEvents?.(stepIndex, events, workflowId);
+      client.updateCliStreamingEvents?.(
+        stepIndex,
+        events,
+        attemptIndex,
+        runIndex,
+        workflowId
+      );
     }
   }
 
@@ -320,10 +328,18 @@ export class DashboardBroadcastHub
   updateFinalStepStreamingEvents(
     loopIndex: number,
     events: CliEvent[],
+    attemptIndex?: number,
+    runIndex?: number,
     workflowId?: string
   ): void {
     for (const client of this.clients) {
-      client.updateFinalStepStreamingEvents?.(loopIndex, events, workflowId);
+      client.updateFinalStepStreamingEvents?.(
+        loopIndex,
+        events,
+        attemptIndex,
+        runIndex,
+        workflowId
+      );
     }
   }
 

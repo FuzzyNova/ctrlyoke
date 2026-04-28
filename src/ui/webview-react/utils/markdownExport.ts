@@ -29,7 +29,11 @@ import {
 import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
 import { truncate } from "./string";
 import { generateDiffLines } from "./diffUtils";
-import { extractKeyParameters, getFirstWords } from "./outputUtils";
+import {
+  extractKeyParameters,
+  formatExecutionBadge,
+  getFirstWords,
+} from "./outputUtils";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -353,10 +357,11 @@ export function generateMarkdownExport(
         };
       };
 
-      const attemptLabel =
-        item.attemptIndex === 0
-          ? "Initial Attempt"
-          : `Retry ${item.attemptIndex}`;
+      const executionLabel = formatExecutionBadge(
+        item.runIndex ?? 0,
+        item.attemptIndex ?? 0,
+        true
+      );
 
       const isFinalStep = item.target.kind === FINAL_STEP_PHASES.FINAL_STEP;
       const stepNum = item.target.index + 1;
@@ -372,7 +377,7 @@ export function generateMarkdownExport(
         ? `Final Step Loop ${stepNum}${item.stepName ? `: ${item.stepName}` : ""}`
         : `Step ${stepNum}${stepDisplayName ? `: ${stepDisplayName}` : ""}`;
 
-      lines.push(`## ${stepLabel} — ${attemptLabel}`);
+      lines.push(`## ${stepLabel} — ${executionLabel}`);
       lines.push("");
 
       if (output.prompt) {
