@@ -1098,7 +1098,6 @@ export const useWorkflowStore = create<
         steps: state.steps,
         workflowName: state.workflowName,
         finalStep: state.finalStep,
-        currentStep: state.currentStep,
         undoWorkflowProperties: state.undoWorkflowProperties,
       }),
       limit: 100,
@@ -1135,7 +1134,6 @@ export interface UndoableWorkflowState {
   steps: WorkflowStep[];
   workflowName: string | null;
   finalStep: WorkflowStep | null;
-  currentStep: number;
   undoWorkflowProperties: WorkflowProperties;
 }
 

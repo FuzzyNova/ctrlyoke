@@ -73,6 +73,13 @@ interface WorkflowStepProps {
   dimmed?: boolean;
   /** Live context window usage (updated during running step; falls back to latestOutput for completed) */
   liveContextWindow?: { used: number; size: number };
+  /** Cached runtime metadata used to restore completed-step display after undo/redo */
+  runtimeMeta?: {
+    sessionId?: string;
+    elapsed?: number;
+    contextWindowUsed?: number;
+    contextWindowSize?: number;
+  };
   /** Drag handle props from dnd-kit sortable */
   dragHandleProps?: {
     listeners: SyntheticListenerMap | undefined;
@@ -122,6 +129,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   hideBorderBottom = false,
   dimmed = false,
   liveContextWindow,
+  runtimeMeta,
   dragHandleProps,
   isScript = false,
   onContextMenu,
@@ -136,6 +144,11 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
           used: latestOutput.tokens.contextWindowUsed ?? 0,
           size: latestOutput.tokens.contextWindowSize,
         }
+      : runtimeMeta?.contextWindowSize
+        ? {
+            used: runtimeMeta.contextWindowUsed ?? 0,
+            size: runtimeMeta.contextWindowSize,
+          }
       : undefined);
   const contextPct = ctx?.size
     ? Math.round((ctx.used / ctx.size) * 100)
@@ -247,6 +260,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
                 retryState={retryState}
                 latestOutput={latestOutput}
                 details={details}
+                runtimeMeta={runtimeMeta}
                 isSelected={isSelected}
               />
             </>
@@ -270,6 +284,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
                 retryState={retryState}
                 latestOutput={latestOutput}
                 details={details}
+                runtimeMeta={runtimeMeta}
                 isSelected={isSelected}
                 overrides={overrides}
               />

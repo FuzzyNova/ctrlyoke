@@ -378,6 +378,16 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
    *  Also persists across pause/resume cycles via the working file. */
   responseText?: string;
 
+  /** Session ID associated with the completed prompt output. */
+  sessionId?: string;
+
+  /** Completed prompt duration in seconds. */
+  elapsed?: number;
+
+  /** Context window usage captured from the last completed output. */
+  contextWindowUsed?: number;
+  contextWindowSize?: number;
+
   /** Captured stdout/stderr from a ScriptStep execution.
    *  Stored here to enable priorContext injection for script steps. */
   scriptOutput?: ScriptRuntimeOutput;

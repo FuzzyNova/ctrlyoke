@@ -741,6 +741,7 @@ export const WorkflowStepsPanel: React.FC<{
                   selectionTarget.index === index;
                 const harnessModel = getStepHarnessModel(step);
                 const overrides = getStepOverrides(step);
+                const runtimeMeta = step._runtime;
                 return (
                   <div
                     key={`step-${index}-${step.name || ""}`}
@@ -764,6 +765,7 @@ export const WorkflowStepsPanel: React.FC<{
                         details={details}
                         latestOutput={latestOutput}
                         liveContextWindow={liveContextWindow?.[index]}
+                        runtimeMeta={runtimeMeta}
                         isCurrent={false}
                         isSelected={isSelected}
                         onClick={() => handleStepClick(index)}
@@ -832,6 +834,7 @@ export const WorkflowStepsPanel: React.FC<{
                     selectionTarget.index === index;
                   const harnessModel = getStepHarnessModel(step);
                   const overrides = getStepOverrides(step);
+                  const runtimeMeta = step._runtime;
                   // Target index for set-position is currentStep + visual offset,
                   // matching the post-reorder backend index for this slot.
                   const setPositionTarget = currentStep + visualIdx;
@@ -850,6 +853,7 @@ export const WorkflowStepsPanel: React.FC<{
                       details={details}
                       latestOutput={latestOutput}
                       liveContextWindow={liveContextWindow?.[index]}
+                      runtimeMeta={runtimeMeta}
                       isCurrent={isCurrent}
                       isSelected={isSelected}
                       onClick={() => handleStepClick(index)}

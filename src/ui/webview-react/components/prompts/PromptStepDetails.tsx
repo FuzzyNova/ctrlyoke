@@ -24,6 +24,10 @@ interface PromptStepDetailsProps {
   latestOutput?: CliOutput | null;
   details?: StepDetails;
   isSelected?: boolean;
+  runtimeMeta?: {
+    sessionId?: string;
+    elapsed?: number;
+  };
   /** Prompt-level property overrides to display as compact chips */
   overrides?: PromptOverride[];
 }
@@ -46,10 +50,13 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
   latestOutput,
   details,
   isSelected = false,
+  runtimeMeta,
   overrides,
 }) => {
-  const durationSeconds = details?.duration ?? latestOutput?.elapsed;
-  const sessionId = latestOutput?.structured?.metadata?.sessionId;
+  const durationSeconds =
+    details?.duration ?? latestOutput?.elapsed ?? runtimeMeta?.elapsed;
+  const sessionId =
+    latestOutput?.structured?.metadata?.sessionId ?? runtimeMeta?.sessionId;
   const [copied, setCopied] = useState(false);
   const handleCopySessionId = useCallback(async () => {
     if (!sessionId) return;

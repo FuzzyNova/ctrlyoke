@@ -4,11 +4,15 @@ import {
   useWorkflowStore,
   useWorkflowTemporalStore,
 } from "@store/workflowStore";
-import type { UndoableWorkflowState } from "@store/workflowStore";
+import type {
+  UndoableWorkflowState,
+  WorkflowStep,
+} from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
+import { STEP_STATUS } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 
 interface UndoRedoControlProps {
@@ -41,6 +45,89 @@ function truncateVal(val: string): string {
 function strVal(val: string | number | null | undefined): string {
   if (val === null || val === undefined || val === "") return "none";
   return truncateVal(String(val));
+}
+
+function stripTransientStepFields(step: WorkflowStep | null): unknown {
+  if (!step) return null;
+  const { status: _status, _runtime: _runtime, ...stableStep } =
+    step as WorkflowStep & {
+      status?: unknown;
+      _runtime?: unknown;
+    };
+  return stableStep;
+}
+
+type RuntimeDecoratedStep = WorkflowStep & {
+  status?: (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
+  _runtime?: WorkflowStep["_runtime"];
+};
+
+function getStepStatus(step?: WorkflowStep | null) {
+  return (step as RuntimeDecoratedStep | undefined | null)?.status;
+}
+
+function isTerminalStatus(
+  status: RuntimeDecoratedStep["status"]
+): status is
+  | typeof STEP_STATUS.COMPLETED
+  | typeof STEP_STATUS.FAILED
+  | typeof STEP_STATUS.CANCELLED
+  | typeof STEP_STATUS.SKIPPED {
+  return (
+    status === STEP_STATUS.COMPLETED ||
+    status === STEP_STATUS.FAILED ||
+    status === STEP_STATUS.CANCELLED ||
+    status === STEP_STATUS.SKIPPED
+  );
+}
+
+function sameEditableStep(a?: WorkflowStep | null, b?: WorkflowStep | null): boolean {
+  return JSON.stringify(stripTransientStepFields(a ?? null)) === JSON.stringify(stripTransientStepFields(b ?? null));
+}
+
+function reconcileStepRuntime(
+  restoredStep: WorkflowStep,
+  previousStep?: WorkflowStep
+): WorkflowStep {
+  const restoredStatus = getStepStatus(restoredStep);
+  const previousStatus = getStepStatus(previousStep);
+
+  if (!previousStep || !sameEditableStep(previousStep, restoredStep)) {
+    if (
+      restoredStatus === STEP_STATUS.RUNNING ||
+      restoredStatus === STEP_STATUS.SENT
+    ) {
+      return {
+        ...(restoredStep as RuntimeDecoratedStep),
+        status: STEP_STATUS.PENDING,
+      } as WorkflowStep;
+    }
+    return restoredStep;
+  }
+
+  const restoredTerminal = isTerminalStatus(restoredStatus);
+  const previousTerminal = isTerminalStatus(previousStatus);
+
+  if (previousTerminal && !restoredTerminal) {
+    return {
+      ...(restoredStep as RuntimeDecoratedStep),
+      status: previousStatus,
+      _runtime: (previousStep as RuntimeDecoratedStep)._runtime,
+    } as WorkflowStep;
+  }
+
+  return restoredStep;
+}
+
+function deriveCurrentStep(steps: WorkflowStep[]): number {
+  let nextCurrentStep = 0;
+  for (const step of steps) {
+    if (!isTerminalStatus(getStepStatus(step))) {
+      break;
+    }
+    nextCurrentStep += 1;
+  }
+  return nextCurrentStep;
 }
 
 interface PromptChangeFields {
@@ -251,21 +338,61 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     });
   }, [vscode]);
 
+  const normalizeAfterHistoryAction = useCallback(
+    (previousState: { steps: WorkflowStep[]; finalStep: WorkflowStep | null }) => {
+      useWorkflowStore.temporal.getState().pause();
+      useWorkflowStore.setState((state) => {
+        const reconciledSteps = state.steps.map((step, index) =>
+          reconcileStepRuntime(step, previousState.steps[index])
+        );
+        const reconciledFinalStep = state.finalStep
+          ? reconcileStepRuntime(state.finalStep, previousState.finalStep ?? undefined)
+          : null;
+
+        return {
+          steps: reconciledSteps,
+          finalStep: reconciledFinalStep,
+          currentStep: Math.min(
+            deriveCurrentStep(reconciledSteps),
+            reconciledSteps.length
+          ),
+          totalSteps: reconciledSteps.length,
+        };
+      });
+      useWorkflowStore.temporal.getState().resume();
+    },
+    []
+  );
+
   const handleUndo = useCallback(() => {
     if (!canUndo || editingDisabled) return;
+    const previousState = {
+      steps: useWorkflowStore.getState().steps,
+      finalStep: useWorkflowStore.getState().finalStep,
+    };
     useWorkflowStore.temporal.getState().undo();
+    normalizeAfterHistoryAction(previousState);
     syncToVsCode();
-  }, [canUndo, editingDisabled, syncToVsCode]);
+  }, [canUndo, editingDisabled, normalizeAfterHistoryAction, syncToVsCode]);
 
   const handleRedo = useCallback(() => {
     if (!canRedo || editingDisabled) return;
+    const previousState = {
+      steps: useWorkflowStore.getState().steps,
+      finalStep: useWorkflowStore.getState().finalStep,
+    };
     useWorkflowStore.temporal.getState().redo();
+    normalizeAfterHistoryAction(previousState);
     syncToVsCode();
-  }, [canRedo, editingDisabled, syncToVsCode]);
+  }, [canRedo, editingDisabled, normalizeAfterHistoryAction, syncToVsCode]);
 
   const handleJumpTo = useCallback(
     (stepCount: number, direction: "undo" | "redo") => {
       if (editingDisabled) return;
+      const previousState = {
+        steps: useWorkflowStore.getState().steps,
+        finalStep: useWorkflowStore.getState().finalStep,
+      };
       const temporal = useWorkflowStore.temporal.getState();
       for (let i = 0; i < stepCount; i++) {
         if (direction === "redo") {
@@ -274,10 +401,11 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
           temporal.undo();
         }
       }
+      normalizeAfterHistoryAction(previousState);
       syncToVsCode();
       setIsOpen(false);
     },
-    [editingDisabled, syncToVsCode]
+    [editingDisabled, normalizeAfterHistoryAction, syncToVsCode]
   );
 
   // Build history list: most-recent first.
@@ -290,7 +418,6 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       steps: s.steps ?? [],
       workflowName: s.workflowName ?? null,
       finalStep: s.finalStep ?? null,
-      currentStep: s.currentStep ?? 0,
       undoWorkflowProperties: s.undoWorkflowProperties ?? {},
     };
     // futureStates[0] = oldest future (last to redo), futureStates[length-1] = most recently undone (first to redo)

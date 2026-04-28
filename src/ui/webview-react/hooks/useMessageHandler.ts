@@ -994,6 +994,26 @@ function createMessageHandlers(): MessageHandlerMap {
       sequence: store.liveSequence,
     };
     store.appendLiveEntry(entry);
+
+    if (store.steps[message.stepIndex]) {
+      useWorkflowStore.temporal.getState().pause();
+      store.updatePrompt(message.stepIndex, {
+        _runtime: {
+          ...store.steps[message.stepIndex]._runtime,
+          sessionId:
+            message.output.structured?.metadata?.sessionId ??
+            store.steps[message.stepIndex]._runtime?.sessionId,
+          elapsed: message.output.elapsed,
+          contextWindowUsed:
+            message.output.tokens?.contextWindowUsed ??
+            store.steps[message.stepIndex]._runtime?.contextWindowUsed,
+          contextWindowSize:
+            message.output.tokens?.contextWindowSize ??
+            store.steps[message.stepIndex]._runtime?.contextWindowSize,
+        },
+      });
+      useWorkflowStore.temporal.getState().resume();
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -1063,6 +1083,26 @@ function createMessageHandlers(): MessageHandlerMap {
       sequence: store.liveSequence,
     };
     store.appendLiveEntry(entry);
+
+    if (store.steps[message.stepIndex]) {
+      useWorkflowStore.temporal.getState().pause();
+      store.updatePrompt(message.stepIndex, {
+        _runtime: {
+          ...store.steps[message.stepIndex]._runtime,
+          sessionId:
+            message.output.structured?.metadata?.sessionId ??
+            store.steps[message.stepIndex]._runtime?.sessionId,
+          elapsed: message.output.elapsed,
+          contextWindowUsed:
+            message.output.tokens?.contextWindowUsed ??
+            store.steps[message.stepIndex]._runtime?.contextWindowUsed,
+          contextWindowSize:
+            message.output.tokens?.contextWindowSize ??
+            store.steps[message.stepIndex]._runtime?.contextWindowSize,
+        },
+      });
+      useWorkflowStore.temporal.getState().resume();
+    }
   };
 
   // --------------------------------------------------------------------------

@@ -261,6 +261,9 @@ export interface PromptStep {
     retryCount?: number;
     isRetry?: boolean;
     responseText?: string;
+    elapsed?: number;
+    contextWindowUsed?: number;
+    contextWindowSize?: number;
   };
   // Status for UI display
   status?: StepStatus;
