@@ -94,15 +94,14 @@ export function useStepContextMenu({
 
   const handleSetPositionConfirm = useCallback(() => {
     if (setPositionIndex === null) return;
-    sendMessage(MESSAGE_TYPES.SET_START_POSITION, { toIndex: setPositionIndex });
+    sendMessage(MESSAGE_TYPES.SET_START_POSITION, {
+      toIndex: setPositionIndex,
+    });
     setSetPositionIndex(null);
   }, [setPositionIndex]);
 
   const contextMenuPortal = contextMenu ? (
-    <StepContextMenu
-      {...contextMenu}
-      onClose={() => setContextMenu(null)}
-    />
+    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
   const setPositionModal =

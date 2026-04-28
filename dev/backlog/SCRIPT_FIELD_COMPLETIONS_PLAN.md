@@ -41,16 +41,16 @@ The script field should behave like a normal single-line input:
 
 Suggested completion examples:
 
-| Typed text       | Suggestions                                                |
-| ---------------- | ---------------------------------------------------------- |
-| `npm `           | `npm run <script>`, `npm test`, `npm install`, `npm ci`    |
-| `npm run `       | all scripts from `package.json`                            |
-| `npm run te`     | matching npm scripts such as `test`, `test:ui`             |
-| `pnpm `          | `pnpm run <script>`, `pnpm test`, discovered script names  |
-| `yarn `          | `yarn <script>`, `yarn test`, discovered script names      |
-| `git `           | `git status`, `git diff`, `git log`, `git rev-parse`       |
-| `pwsh` / `powershell` | `pwsh -File`, `powershell -ExecutionPolicy Bypass`   |
-| empty field      | high-value starters: `npm test`, `npm run build`, `git status`, shell built-ins |
+| Typed text            | Suggestions                                                                     |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `npm `                | `npm run <script>`, `npm test`, `npm install`, `npm ci`                         |
+| `npm run `            | all scripts from `package.json`                                                 |
+| `npm run te`          | matching npm scripts such as `test`, `test:ui`                                  |
+| `pnpm `               | `pnpm run <script>`, `pnpm test`, discovered script names                       |
+| `yarn `               | `yarn <script>`, `yarn test`, discovered script names                           |
+| `git `                | `git status`, `git diff`, `git log`, `git rev-parse`                            |
+| `pwsh` / `powershell` | `pwsh -File`, `powershell -ExecutionPolicy Bypass`                              |
+| empty field           | high-value starters: `npm test`, `npm run build`, `git status`, shell built-ins |
 
 ---
 
@@ -184,11 +184,11 @@ Rules:
 
 Initial output examples:
 
-| Script key | Completion labels                                      |
-| ---------- | ------------------------------------------------------ |
-| `test`     | `npm test`, `npm run test`, `pnpm test`, `yarn test`   |
-| `build`    | `npm run build`, `pnpm build`, `yarn build`            |
-| `test:ui`  | `npm run test:ui`, `pnpm test:ui`, `yarn test:ui`      |
+| Script key | Completion labels                                    |
+| ---------- | ---------------------------------------------------- |
+| `test`     | `npm test`, `npm run test`, `pnpm test`, `yarn test` |
+| `build`    | `npm run build`, `pnpm build`, `yarn build`          |
+| `test:ui`  | `npm run test:ui`, `pnpm test:ui`, `yarn test:ui`    |
 
 Prefer npm-first sorting because `npm` is universal in Node projects, but include pnpm/yarn forms because workspaces often use those package managers.
 
@@ -226,12 +226,12 @@ Input model:
 
 Replacement examples:
 
-| Current text         | Cursor context | Replacement range | Completion insert |
-| -------------------- | -------------- | ----------------- | ----------------- |
-| `npm run te`         | after `te`     | `te`              | `test:ui` or `test` |
-| `npm te`             | after `te`     | `npm te` segment  | `npm test`        |
-| `git st`             | after `st`     | `git st` segment  | `git status`      |
-| `echo ok && npm r`   | after `r`      | after `&&` segment | `npm run ...`     |
+| Current text       | Cursor context | Replacement range  | Completion insert   |
+| ------------------ | -------------- | ------------------ | ------------------- |
+| `npm run te`       | after `te`     | `te`               | `test:ui` or `test` |
+| `npm te`           | after `te`     | `npm te` segment   | `npm test`          |
+| `git st`           | after `st`     | `git st` segment   | `git status`        |
+| `echo ok && npm r` | after `r`      | after `&&` segment | `npm run ...`       |
 
 This should live in a pure helper so edge cases can be unit-tested without CodeMirror or VS Code.
 
@@ -291,33 +291,33 @@ Run `npm run compile` if router/type changes touch extension-side compilation in
 
 ## Files to Create or Modify
 
-| File | Action | Purpose |
-| ---- | ------ | ------- |
-| `src/types/DashboardConstants.ts` | Modify | Add script completion message constants |
-| `src/types/WebviewMessageTypes.ts` | Modify | Add request/response payload types if needed |
-| `src/completions/ScriptCommandCompletionHelpers.ts` | Create | Workspace script and shell command completion logic |
-| `src/ui/WebviewMessageRouter.ts` | Modify | Route script completion requests from the webview |
-| `src/ui/webview-react/components/shared/ScriptCommandEditor.tsx` | Create | Single-line CodeMirror command input |
-| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx` | Modify | Replace plain script input with `ScriptCommandEditor` |
-| `src/ui/webview-react/test/components/shared/ScriptCommandEditor.test.tsx` | Create | Component behavior tests |
-| `src/test/completions/ScriptCommandCompletionHelpers.test.ts` | Create | Extension-side parser/completion tests |
+| File                                                                       | Action | Purpose                                               |
+| -------------------------------------------------------------------------- | ------ | ----------------------------------------------------- |
+| `src/types/DashboardConstants.ts`                                          | Modify | Add script completion message constants               |
+| `src/types/WebviewMessageTypes.ts`                                         | Modify | Add request/response payload types if needed          |
+| `src/completions/ScriptCommandCompletionHelpers.ts`                        | Create | Workspace script and shell command completion logic   |
+| `src/ui/WebviewMessageRouter.ts`                                           | Modify | Route script completion requests from the webview     |
+| `src/ui/webview-react/components/shared/ScriptCommandEditor.tsx`           | Create | Single-line CodeMirror command input                  |
+| `src/ui/webview-react/components/shared/ScriptConditionEditor.tsx`         | Modify | Replace plain script input with `ScriptCommandEditor` |
+| `src/ui/webview-react/test/components/shared/ScriptCommandEditor.test.tsx` | Create | Component behavior tests                              |
+| `src/test/completions/ScriptCommandCompletionHelpers.test.ts`              | Create | Extension-side parser/completion tests                |
 
 ---
 
 ## Edge Cases
 
-| Scenario | Expected behavior |
-| -------- | ----------------- |
-| No workspace folder | Show static shell/common command completions only |
-| Missing `package.json` | Show static shell/common command completions only |
-| Malformed `package.json` | Log a warning and continue with built-ins |
-| Empty `scripts` object | Show built-ins and package manager base commands |
-| User types after `&&` or `|` | Complete only the current command segment |
-| User is editing middle of command | Preserve text before and after the replacement range |
-| Disabled editor | No editing and no completion requests |
-| Multiple package managers | Suggest npm, pnpm, and yarn forms; sorting can prefer detected lockfile later |
-| Very large package.json | Cache parsed scripts and avoid reading on every keystroke |
-| Browser-hosted dashboard client | Completion request still routes through the extension/server client context where available |
+| Scenario                          | Expected behavior                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| No workspace folder               | Show static shell/common command completions only                                           |
+| Missing `package.json`            | Show static shell/common command completions only                                           |
+| Malformed `package.json`          | Log a warning and continue with built-ins                                                   |
+| Empty `scripts` object            | Show built-ins and package manager base commands                                            |
+| User types after `&&` or `        | `                                                                                           | Complete only the current command segment |
+| User is editing middle of command | Preserve text before and after the replacement range                                        |
+| Disabled editor                   | No editing and no completion requests                                                       |
+| Multiple package managers         | Suggest npm, pnpm, and yarn forms; sorting can prefer detected lockfile later               |
+| Very large package.json           | Cache parsed scripts and avoid reading on every keystroke                                   |
+| Browser-hosted dashboard client   | Completion request still routes through the extension/server client context where available |
 
 ---
 

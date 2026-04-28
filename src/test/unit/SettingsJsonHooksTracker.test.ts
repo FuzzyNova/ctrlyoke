@@ -147,7 +147,9 @@ suite("SettingsJsonHooksTracker", () => {
       "wf-1",
       tmpDir,
       {
-        Stop: [{ matcher: "", hooks: [{ type: "command", command: "node fp.js" }] }],
+        Stop: [
+          { matcher: "", hooks: [{ type: "command", command: "node fp.js" }] },
+        ],
       },
       {}
     );

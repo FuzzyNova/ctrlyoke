@@ -4,7 +4,9 @@ import { CodexResponseParser } from "../../flightpath/harness/codex/CodexRespons
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { TextData } from "../../types/CliOutputTypes";
 
-function getTextEvents(output: ReturnType<CodexResponseParser["parse"]>): string[] {
+function getTextEvents(
+  output: ReturnType<CodexResponseParser["parse"]>
+): string[] {
   return output.events
     .filter((event) => event.type === CLI_EVENT_TYPES.TEXT)
     .map((event) => (event.data as TextData).text);

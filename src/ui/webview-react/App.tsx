@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Panel,
-  Group,
-  Separator,
-  type Layout,
-} from "react-resizable-panels";
+import { Panel, Group, Separator, type Layout } from "react-resizable-panels";
 import {
   useMessageHandler,
   captureAndSendThemeVars,
@@ -127,7 +122,8 @@ function App() {
 
   // Sidebar chip rail closing animation state — same pattern as the fullwidth overlay.
   // sidebarAfterClose fires after the collapse animation completes (width 32→0).
-  const sidebarShouldShow = mobilePromptsOpen && mobilePromptsMode === "sidebar";
+  const sidebarShouldShow =
+    mobilePromptsOpen && mobilePromptsMode === "sidebar";
   const [sidebarChipClosing, setSidebarChipClosing] = useState(false);
   const sidebarAfterClose = useRef<(() => void) | null>(null);
 

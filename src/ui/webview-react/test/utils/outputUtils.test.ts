@@ -71,9 +71,7 @@ describe("run and retry labels", () => {
 
   it("combines run and retry labels into a single execution badge", () => {
     expect(formatExecutionBadge(0, 0, true)).toBe("Initial Attempt");
-    expect(formatExecutionBadge(1, 0, true)).toBe(
-      "Re-run 1 · Initial Attempt"
-    );
+    expect(formatExecutionBadge(1, 0, true)).toBe("Re-run 1 · Initial Attempt");
     expect(formatExecutionBadge(2, 1)).toBe("Re-run 2 · Retry 1");
   });
 

@@ -54,7 +54,6 @@ import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder"
 const execFileAsync = promisify(execFile);
 const GIT_VALIDATION_TIMEOUT_MS = 5000;
 
-
 /**
  * WebviewMessageRouter
  *
@@ -766,11 +765,15 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.REGENERATE_SERVER_TOKEN, () => {
-      this.settingsSync.handleRegenerateServerToken(this.getCurrentPostMessage());
+      this.settingsSync.handleRegenerateServerToken(
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.GENERATE_SERVER_CERT, () => {
-      void this.settingsSync.handleGenerateServerCert(this.getCurrentPostMessage());
+      void this.settingsSync.handleGenerateServerCert(
+        this.getCurrentPostMessage()
+      );
     });
 
     table.set(MESSAGE_TYPES.THEME_VARS_CAPTURED, (message) => {
@@ -1676,9 +1679,9 @@ export class WebviewMessageRouter {
     if (!ref) return;
 
     const orchestrator = this.getOrchestrator();
-    const workingFilePath = orchestrator
-      ?.getQueueState(this.clientId)
-      ?.workingFilePath;
+    const workingFilePath = orchestrator?.getQueueState(
+      this.clientId
+    )?.workingFilePath;
 
     let content: string;
 
@@ -1686,8 +1689,13 @@ export class WebviewMessageRouter {
       try {
         const raw = fs.readFileSync(workingFilePath, "utf-8");
         const workingFile = JSON.parse(raw) as { steps?: unknown[] };
-        const steps = (workingFile.steps ?? []) as import("../types/FlightPathTypes").WorkflowStep[];
-        content = PriorContextPreviewBuilder.buildPreview(ref, stepCount, steps);
+        const steps = (workingFile.steps ??
+          []) as import("../types/FlightPathTypes").WorkflowStep[];
+        content = PriorContextPreviewBuilder.buildPreview(
+          ref,
+          stepCount,
+          steps
+        );
       } catch {
         content = `<!-- Could not read workflow state for $${ref} -->`;
       }

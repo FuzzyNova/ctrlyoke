@@ -33,10 +33,7 @@ suite("WorkspaceInitializer", () => {
       PATH_CONSTANTS.FLIGHTPATH_DIR,
       ".gitignore"
     );
-    const gitignoreContent = await fs.promises.readFile(
-      gitignorePath,
-      "utf8"
-    );
+    const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
 
     assert.match(gitignoreContent, /^\.history\/$/m);
     assert.match(gitignoreContent, /^\.queue\/$/m);
@@ -58,10 +55,7 @@ suite("WorkspaceInitializer", () => {
 
     await WorkspaceInitializer.reinitialize(workspaceRoot);
 
-    const gitignoreContent = await fs.promises.readFile(
-      gitignorePath,
-      "utf8"
-    );
+    const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
     assert.match(gitignoreContent, /^custom-entry$/m);
     assert.strictEqual(
       gitignoreContent.match(/^logs\/$/gm)?.length,

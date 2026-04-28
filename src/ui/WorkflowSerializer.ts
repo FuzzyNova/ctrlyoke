@@ -658,7 +658,11 @@ export class WorkflowSerializer {
       }
 
       workingFile.isFavorite = !(workingFile.isFavorite ?? false);
-      await fs.writeFile(filePath, JSON.stringify(workingFile, null, 2), "utf-8");
+      await fs.writeFile(
+        filePath,
+        JSON.stringify(workingFile, null, 2),
+        "utf-8"
+      );
     } catch (error) {
       Log.error("Failed to toggle workflow favorite:", error);
     }

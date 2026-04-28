@@ -28,16 +28,12 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
   };
 
   return (
-    <div
-      className={`border rounded-md ${className}`}
-    >
+    <div className={`border rounded-md ${className}`}>
       <button
         onClick={handleToggle}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-list-hover-bg transition-colors"
       >
-        <span className="font-medium text-foreground">
-          {title}
-        </span>
+        <span className="font-medium text-foreground">{title}</span>
         <svg
           className={`w-5 h-5 text-description-fg transition-transform ${
             isExpanded ? "transform rotate-180" : ""
@@ -55,11 +51,7 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
         </svg>
       </button>
 
-      {isExpanded && (
-        <div className="px-4 py-3 border-t">
-          {children}
-        </div>
-      )}
+      {isExpanded && <div className="px-4 py-3 border-t">{children}</div>}
     </div>
   );
 };

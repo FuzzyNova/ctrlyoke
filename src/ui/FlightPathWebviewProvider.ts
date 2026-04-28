@@ -232,7 +232,10 @@ export class FlightPathWebviewProvider
 
     void retryWithBackoff(
       async () => {
-        if (this.reconnectRetrySession !== session || this.view !== webviewView) {
+        if (
+          this.reconnectRetrySession !== session ||
+          this.view !== webviewView
+        ) {
           return true; // cancelled
         }
         this.postMessage({ type: MESSAGE_TYPES.RECONNECT });
@@ -255,7 +258,8 @@ export class FlightPathWebviewProvider
     const moduleScriptPattern = /<script\b[^>]*\btype=(["'])module\1[^>]*>/i;
     const moduleScriptWithSrcPattern =
       /<script\b(?=[^>]*\btype=(["'])module\1)(?=[^>]*\bsrc=(["'])([^"']+)\2)[^>]*>\s*<\/script>/i;
-    const modulePreloadPattern = /<link\b[^>]*\brel=["']modulepreload["'][^>]*>\s*/gi;
+    const modulePreloadPattern =
+      /<link\b[^>]*\brel=["']modulepreload["'][^>]*>\s*/gi;
     html = html.replace(modulePreloadPattern, "");
 
     // Get base URI for webview resources
@@ -316,10 +320,14 @@ export class FlightPathWebviewProvider
 
     // Load compiled inline scripts from out/ui/webview-scripts/
     const webviewScriptsUri = vscode.Uri.joinPath(
-      this.context.extensionUri, "out", "ui", "webview-scripts"
+      this.context.extensionUri,
+      "out",
+      "ui",
+      "webview-scripts"
     );
     const bootstrapBody = fsSync.readFileSync(
-      vscode.Uri.joinPath(webviewScriptsUri, "bootstrapScript.js").fsPath, "utf-8"
+      vscode.Uri.joinPath(webviewScriptsUri, "bootstrapScript.js").fsPath,
+      "utf-8"
     );
     const bootstrapScript = `<script nonce="${nonce}">\n${bootstrapBody}</script>`;
 
@@ -328,7 +336,8 @@ export class FlightPathWebviewProvider
     let moduleLoaderScript: string | undefined;
     if (moduleScriptSrc !== undefined) {
       const loaderBody = fsSync.readFileSync(
-        vscode.Uri.joinPath(webviewScriptsUri, "moduleLoaderScript.js").fsPath, "utf-8"
+        vscode.Uri.joinPath(webviewScriptsUri, "moduleLoaderScript.js").fsPath,
+        "utf-8"
       );
       moduleLoaderScript = `<script type="module" nonce="${nonce}">\nconst __fpModuleSrc__ = ${JSON.stringify(moduleScriptSrc)};\n${loaderBody}</script>`;
     }
@@ -379,7 +388,9 @@ export class FlightPathWebviewProvider
     );
     if (html === htmlBeforeCsp) {
       // No existing CSP tag found — insert before </head> as fallback
-      Log.warn("[_getHtmlForWebview] CSP meta tag not found in index.html — inserting before </head>");
+      Log.warn(
+        "[_getHtmlForWebview] CSP meta tag not found in index.html — inserting before </head>"
+      );
       html = html.replace(
         "</head>",
         `    <meta http-equiv="Content-Security-Policy" content="${cspContent}" />\n  </head>`
@@ -1031,7 +1042,10 @@ export class FlightPathWebviewProvider
    * Track the running server URL so READY reconnects the webview when it reloads
    * while the server is up. Pass undefined when the server stops.
    */
-  public setRunningServerUrl(url: string | undefined, availableIps?: string[]): void {
+  public setRunningServerUrl(
+    url: string | undefined,
+    availableIps?: string[]
+  ): void {
     this.runningServerUrl = url;
     this.runningServerAvailableIps = availableIps ?? [];
   }

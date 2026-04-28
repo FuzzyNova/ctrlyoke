@@ -362,7 +362,9 @@
       "<strong>Cannot connect to FlightPath server.</strong> " +
       "The server may be offline, or the certificate is not trusted.<br>" +
       "<strong>iOS Safari fix (requires iOS 18.2+):</strong> " +
-      '<a href="' + certUrl + '" style="color:#fca5a5;text-decoration:underline">Download certificate</a>' +
+      '<a href="' +
+      certUrl +
+      '" style="color:#fca5a5;text-decoration:underline">Download certificate</a>' +
       ", then: (1) install via <em>Settings → General → VPN &amp; Device Management</em>" +
       ", (2) go to <em>Settings → General → About → Certificate Trust Settings</em>" +
       " and toggle on <em>Enable Full Trust For Root Certificates</em>." +

@@ -1366,12 +1366,16 @@ export class CliIntegration extends HarnessIntegration {
 
       // Create session without prompt preparation so we can check inject mode
       // before deciding which inline-check rules to apply.
-      executionSession = this.createUnpreparedExecutionSession(prompt, workflowContext);
+      executionSession = this.createUnpreparedExecutionSession(
+        prompt,
+        workflowContext
+      );
       this.activeSession = executionSession;
 
       const isInteractive =
         this.getExecutionMode() === CLI_EXECUTION_MODE.INTERACTIVE;
-      const injectMode = isInteractive && this.shouldUseInjectMode(executionSession);
+      const injectMode =
+        isInteractive && this.shouldUseInjectMode(executionSession);
       await this.initializeExecutionSession(executionSession, injectMode);
 
       // Log prompt

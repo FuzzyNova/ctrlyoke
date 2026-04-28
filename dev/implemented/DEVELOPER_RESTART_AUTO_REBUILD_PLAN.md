@@ -33,11 +33,11 @@ The generated command reference `dev/reference/VSCODE_COMMANDS.md` includes both
 
 Use them differently:
 
-| Action | Command ID | Role | Notes |
-| --- | --- | --- | --- |
-| Reload Window | `workbench.action.reloadWindow` | Default restart path | Most reliable dev workflow. Reloads the VS Code window and reactivates extensions from disk. |
-| Restart Extension Host | `workbench.action.restartExtensionHost` | Optional fast path | Available in the captured command list, but still verify at runtime with `vscode.commands.getCommands(false)` before showing or invoking it. |
-| Reload With Extensions Disabled | `workbench.action.reloadWindowWithExtensionsDisabled` | Do not use | This disables extensions and is not useful for FlightPath development. |
+| Action                          | Command ID                                            | Role                 | Notes                                                                                                                                        |
+| ------------------------------- | ----------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reload Window                   | `workbench.action.reloadWindow`                       | Default restart path | Most reliable dev workflow. Reloads the VS Code window and reactivates extensions from disk.                                                 |
+| Restart Extension Host          | `workbench.action.restartExtensionHost`               | Optional fast path   | Available in the captured command list, but still verify at runtime with `vscode.commands.getCommands(false)` before showing or invoking it. |
+| Reload With Extensions Disabled | `workbench.action.reloadWindowWithExtensionsDisabled` | Do not use           | This disables extensions and is not useful for FlightPath development.                                                                       |
 
 The default "Rebuild & Reload" action should run the build and then call `workbench.action.reloadWindow`. A separate "Restart Extension Host" action can be offered only when `workbench.action.restartExtensionHost` is present.
 
@@ -108,7 +108,9 @@ const commands = await vscode.commands.getCommands(false);
 const restartExtensionHostAvailable = commands.includes(
   "workbench.action.restartExtensionHost"
 );
-const reloadWindowAvailable = commands.includes("workbench.action.reloadWindow");
+const reloadWindowAvailable = commands.includes(
+  "workbench.action.reloadWindow"
+);
 ```
 
 Only send `dev.enabled: true` when `IS_DEV_MODE` is true. Server-side handlers must still enforce this guard even if the UI is hidden.
@@ -277,19 +279,19 @@ True in-flight survival would require a separate supervisor/daemon architecture 
 
 ## File Changes
 
-| File | Change |
-| --- | --- |
-| `src/types/DashboardConstants.ts` | Add dev message constants. |
-| `src/types/WebviewMessageTypes.ts` | Add dev request/response message types. |
-| `src/dev/DevCommands.ts` | Add exported dev dashboard action handler; keep dev-only logic centralized. |
-| `src/ui/WebviewMessageRouter.ts` | Route dev dashboard messages through a callback. |
-| `src/ui/FlightPathWebviewProvider.ts` | Provide dev callback with `ExtensionContext`; enforce `IS_DEV_MODE`; expose command availability to initial state. |
-| `src/ui/WebviewSettingsSync.ts` | Include dev mode/status data in `INIT`. |
-| `src/ui/webview-react/store/settingsStore.ts` or `src/ui/webview-react/store/uiStore.ts` | Store dev status/build state. |
-| `src/ui/webview-react/hooks/useMessageHandler.ts` | Handle dev status/build/restarting messages. |
-| `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx` | Add conditional Developer tab. |
-| `src/ui/webview-react/components/settings/DeveloperSection.tsx` | New settings UI. |
-| Tests | Add focused tests for store/message handling if existing patterns make that cheap. |
+| File                                                                                     | Change                                                                                                             |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/types/DashboardConstants.ts`                                                        | Add dev message constants.                                                                                         |
+| `src/types/WebviewMessageTypes.ts`                                                       | Add dev request/response message types.                                                                            |
+| `src/dev/DevCommands.ts`                                                                 | Add exported dev dashboard action handler; keep dev-only logic centralized.                                        |
+| `src/ui/WebviewMessageRouter.ts`                                                         | Route dev dashboard messages through a callback.                                                                   |
+| `src/ui/FlightPathWebviewProvider.ts`                                                    | Provide dev callback with `ExtensionContext`; enforce `IS_DEV_MODE`; expose command availability to initial state. |
+| `src/ui/WebviewSettingsSync.ts`                                                          | Include dev mode/status data in `INIT`.                                                                            |
+| `src/ui/webview-react/store/settingsStore.ts` or `src/ui/webview-react/store/uiStore.ts` | Store dev status/build state.                                                                                      |
+| `src/ui/webview-react/hooks/useMessageHandler.ts`                                        | Handle dev status/build/restarting messages.                                                                       |
+| `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx`                        | Add conditional Developer tab.                                                                                     |
+| `src/ui/webview-react/components/settings/DeveloperSection.tsx`                          | New settings UI.                                                                                                   |
+| Tests                                                                                    | Add focused tests for store/message handling if existing patterns make that cheap.                                 |
 
 No changes are required in `WorkflowOrchestrator.restoreState()` or `extension.ts` for workflow restoration.
 

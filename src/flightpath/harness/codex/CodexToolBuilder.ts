@@ -283,7 +283,8 @@ export class CodexToolBuilder {
           timestamp,
           data: {
             path: (initiatedData as FileWriteData | undefined)?.path ?? "",
-            content: (initiatedData as FileWriteData | undefined)?.content ?? "",
+            content:
+              (initiatedData as FileWriteData | undefined)?.content ?? "",
             status,
             success,
           } as FileWriteData,
@@ -295,10 +296,8 @@ export class CodexToolBuilder {
           timestamp,
           data: {
             path: (initiatedData as FileEditData | undefined)?.path ?? "",
-            oldContent: (initiatedData as FileEditData | undefined)
-              ?.oldContent,
-            newContent: (initiatedData as FileEditData | undefined)
-              ?.newContent,
+            oldContent: (initiatedData as FileEditData | undefined)?.oldContent,
+            newContent: (initiatedData as FileEditData | undefined)?.newContent,
             structuredPatch: (initiatedData as FileEditData | undefined)
               ?.structuredPatch,
             status,

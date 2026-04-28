@@ -416,7 +416,9 @@ export class CliTransportCoordinator {
    * Used when a later prompt resumes the same AI session in headless mode; the
    * headless process must be the only live owner of that session.
    */
-  async terminateCurrentPtySession(reason: string): Promise<string | undefined> {
+  async terminateCurrentPtySession(
+    reason: string
+  ): Promise<string | undefined> {
     if (!this.currentPtySession) {
       return undefined;
     }

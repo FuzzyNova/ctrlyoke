@@ -3,7 +3,10 @@ import {
   BROWSER_NOTIFICATION_MODES,
   NOTIFICATION_EVENT_MODES,
 } from "@root/types/DashboardConstants";
-import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingSource,
+} from "@root/types/WebviewMessageTypes";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -39,7 +42,12 @@ const BROWSER_MODE_OPTIONS = [
   },
 ];
 
-export function NotificationsSection({ settings, activeScope, onUpdate, onReset }: Props) {
+export function NotificationsSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: Props) {
   const notif = settings.settings.notifications;
   const server = settings.settings.server;
   const sources = settings.sources as Record<string, SettingSource>;
@@ -53,8 +61,8 @@ export function NotificationsSection({ settings, activeScope, onUpdate, onReset 
   const needsHttps = browserModeEnabled && !server.tls.enabled;
   const isIos = /iP(hone|ad)/.test(navigator.userAgent);
   const isIosHomeScreenApp =
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true ||
-    window.matchMedia("(display-mode: standalone)").matches;
+    (window.navigator as Navigator & { standalone?: boolean }).standalone ===
+      true || window.matchMedia("(display-mode: standalone)").matches;
   const iosBlocksBrowserNotifications = isIos && !isIosHomeScreenApp;
 
   useEffect(() => {
@@ -127,7 +135,10 @@ export function NotificationsSection({ settings, activeScope, onUpdate, onReset 
   const showEnableButton =
     isStandalone &&
     browserModeEnabled &&
-    (!status || status.permission !== "granted" || notif.browser.mode !== BROWSER_NOTIFICATION_MODES.PUSH || !status.subscribed);
+    (!status ||
+      status.permission !== "granted" ||
+      notif.browser.mode !== BROWSER_NOTIFICATION_MODES.PUSH ||
+      !status.subscribed);
 
   return (
     <div className="space-y-6">
@@ -159,15 +170,13 @@ export function NotificationsSection({ settings, activeScope, onUpdate, onReset 
           <CustomSelect
             id="notif-browser-mode"
             value={notif.browser.mode}
-            onChange={(value) =>
-              onUpdate("notifications.browser.mode", value)
-            }
+            onChange={(value) => onUpdate("notifications.browser.mode", value)}
             options={BROWSER_MODE_OPTIONS}
           />
           {!isStandalone ? (
             <p className="text-xs text-description-fg mt-1">
-              Browser notifications apply to the hosted server dashboard, not the
-              VS Code sidebar.
+              Browser notifications apply to the hosted server dashboard, not
+              the VS Code sidebar.
             </p>
           ) : null}
         </div>
@@ -176,9 +185,9 @@ export function NotificationsSection({ settings, activeScope, onUpdate, onReset 
           <div className="space-y-2 rounded border border-panel-border p-3">
             {iosBlocksBrowserNotifications ? (
               <p className="text-xs text-description-fg">
-                Browser notifications on iPhone and iPad require FlightPath to be
-                added to the Home Screen first. After adding, open FlightPath from
-                the Home Screen
+                Browser notifications on iPhone and iPad require FlightPath to
+                be added to the Home Screen first. After adding, open FlightPath
+                from the Home Screen
                 {notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH
                   ? " and then enable push notifications here."
                   : " to enable notifications."}
@@ -186,7 +195,9 @@ export function NotificationsSection({ settings, activeScope, onUpdate, onReset 
             ) : (
               <>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-description-fg">Permission:</span>
+                  <span className="text-xs text-description-fg">
+                    Permission:
+                  </span>
                   <span className={`text-xs ${permission.className}`}>
                     {permission.text}
                   </span>
@@ -245,8 +256,8 @@ export function NotificationsSection({ settings, activeScope, onUpdate, onReset 
 
             {needsHttps ? (
               <p className="text-xs text-warning-fg">
-                Phone notifications require HTTPS. Enable server TLS or use a secure
-                tunnel.
+                Phone notifications require HTTPS. Enable server TLS or use a
+                secure tunnel.
               </p>
             ) : null}
 
@@ -254,7 +265,8 @@ export function NotificationsSection({ settings, activeScope, onUpdate, onReset 
             status &&
             !status.secureContext ? (
               <p className="text-xs text-warning-fg">
-                Push subscriptions require a secure context. Use HTTPS or localhost.
+                Push subscriptions require a secure context. Use HTTPS or
+                localhost.
               </p>
             ) : null}
           </div>

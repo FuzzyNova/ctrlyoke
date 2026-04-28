@@ -36,7 +36,10 @@ export class GeminiNotificationMonitor
     _workspaceRoot: string,
     userHooks?: UserHookConfig[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      notifyDir
+    );
     const flightpathEntry = { hooks: [{ type: "command", command }] };
 
     // Map logical event names to Gemini's native event names
@@ -73,6 +76,9 @@ export class GeminiNotificationMonitor
   }
 
   getNotificationDirectory(workspaceRoot: string): string {
-    return CliNotificationMonitor.getNotificationDirectory(workspaceRoot, "gemini");
+    return CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "gemini"
+    );
   }
 }

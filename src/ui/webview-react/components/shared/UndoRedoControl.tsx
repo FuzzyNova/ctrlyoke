@@ -4,10 +4,7 @@ import {
   useWorkflowStore,
   useWorkflowTemporalStore,
 } from "@store/workflowStore";
-import type {
-  UndoableWorkflowState,
-  WorkflowStep,
-} from "@store/workflowStore";
+import type { UndoableWorkflowState, WorkflowStep } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -49,11 +46,14 @@ function strVal(val: string | number | null | undefined): string {
 
 function stripTransientStepFields(step: WorkflowStep | null): unknown {
   if (!step) return null;
-  const { status: _status, _runtime: _runtime, ...stableStep } =
-    step as WorkflowStep & {
-      status?: unknown;
-      _runtime?: unknown;
-    };
+  const {
+    status: _status,
+    _runtime: _runtime,
+    ...stableStep
+  } = step as WorkflowStep & {
+    status?: unknown;
+    _runtime?: unknown;
+  };
   return stableStep;
 }
 
@@ -81,8 +81,14 @@ function isTerminalStatus(
   );
 }
 
-function sameEditableStep(a?: WorkflowStep | null, b?: WorkflowStep | null): boolean {
-  return JSON.stringify(stripTransientStepFields(a ?? null)) === JSON.stringify(stripTransientStepFields(b ?? null));
+function sameEditableStep(
+  a?: WorkflowStep | null,
+  b?: WorkflowStep | null
+): boolean {
+  return (
+    JSON.stringify(stripTransientStepFields(a ?? null)) ===
+    JSON.stringify(stripTransientStepFields(b ?? null))
+  );
 }
 
 function reconcileStepRuntime(
@@ -339,14 +345,20 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   }, [vscode]);
 
   const normalizeAfterHistoryAction = useCallback(
-    (previousState: { steps: WorkflowStep[]; finalStep: WorkflowStep | null }) => {
+    (previousState: {
+      steps: WorkflowStep[];
+      finalStep: WorkflowStep | null;
+    }) => {
       useWorkflowStore.temporal.getState().pause();
       useWorkflowStore.setState((state) => {
         const reconciledSteps = state.steps.map((step, index) =>
           reconcileStepRuntime(step, previousState.steps[index])
         );
         const reconciledFinalStep = state.finalStep
-          ? reconcileStepRuntime(state.finalStep, previousState.finalStep ?? undefined)
+          ? reconcileStepRuntime(
+              state.finalStep,
+              previousState.finalStep ?? undefined
+            )
           : null;
 
         return {

@@ -56,7 +56,10 @@ export class CodexNotificationMonitor
     _workspaceRoot: string,
     _userHooks?: UserHookConfig[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      notifyDir
+    );
 
     const makeEntry = (cmd: string) => ({
       matcher: "",
@@ -79,6 +82,9 @@ export class CodexNotificationMonitor
    * Uses shared pattern: {workspace}/.flightpath/temp/codex-notifications/
    */
   getNotificationDirectory(workspaceRoot: string): string {
-    return CliNotificationMonitor.getNotificationDirectory(workspaceRoot, "codex");
+    return CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "codex"
+    );
   }
 }

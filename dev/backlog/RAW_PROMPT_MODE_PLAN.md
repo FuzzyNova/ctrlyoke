@@ -8,13 +8,13 @@ Add a new `rawPromptMode` execution property that bypasses FlightPath's entire c
 
 A companion feature (see `BACKTICK_CONTEXT_SUPPRESSION_PLAN.md`) adds selective suppression of context expansion inside triple-backtick blocks directly in `ContextExpander`. These are **independent, complementary features**:
 
-| | Backtick suppression | `rawPromptMode` |
-|---|---|---|
-| **Scope** | Selective — suppresses refs inside ` ``` ` blocks only | Full bypass — suppresses all expansion + agent/skills/priorContext |
-| **Granularity** | Per-block within a prompt | Per-step or per-workflow |
-| **Requires editing prompt text** | Yes | No — set at workflow YAML level |
-| **Useful for file-based prompts** | Only if you edit the `.prompt.md` file | Yes — apply without touching the file |
-| **Implementation location** | `ContextExpander` | `CliPromptPreparer` |
+|                                   | Backtick suppression                                   | `rawPromptMode`                                                    |
+| --------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------ |
+| **Scope**                         | Selective — suppresses refs inside ` ``` ` blocks only | Full bypass — suppresses all expansion + agent/skills/priorContext |
+| **Granularity**                   | Per-block within a prompt                              | Per-step or per-workflow                                           |
+| **Requires editing prompt text**  | Yes                                                    | No — set at workflow YAML level                                    |
+| **Useful for file-based prompts** | Only if you edit the `.prompt.md` file                 | Yes — apply without touching the file                              |
+| **Implementation location**       | `ContextExpander`                                      | `CliPromptPreparer`                                                |
 
 > **Why rawPromptMode does NOT implement via backtick-wrapping:** Wrapping the prompt in ` ``` ` and passing to `ContextExpander` would send literal backtick fences to the AI. `rawPromptMode` bypasses `buildPromptSections()` entirely instead.
 
@@ -130,6 +130,7 @@ private async prepareRawPrompt(promptText: string): Promise<PromptFileResult> {
 ```
 
 Key properties of `prepareRawPrompt()`:
+
 - **No `ContextExpander.expandContextSplit()` call** — `@path` and `#sym:` references in the text are passed through unchanged.
 - **No agent/skills sections** — even if `resolvedProperties.agent` is set, it is ignored.
 - **No prior context wrapping** — `priorContext` is ignored.
@@ -160,7 +161,7 @@ if (resolvedProperties.priorContext) ignored.push("priorContext");
 if (ignored.length > 0) {
   Log.warn(
     `rawPromptMode: the following properties were ignored because rawPromptMode is enabled: ${ignored.join(", ")}. ` +
-    `Disable rawPromptMode or remove these properties to re-enable them.`
+      `Disable rawPromptMode or remove these properties to re-enable them.`
   );
 }
 ```
@@ -177,15 +178,15 @@ Context references in the prompt text itself (`@path/to/file`, `#sym:path:symbol
 
 ## Files Changed (Summary)
 
-| File | Change |
-|------|--------|
-| `schemas/prompt-schema.json` | Add `rawPromptMode` boolean to `executionProperties` definition |
-| `src/types/FlightPathTypes.ts` | Add `rawPromptMode?: boolean` to `ExecutionProperties` |
-| `src/utils/PropertyResolver.ts` | Add to `ResolvedProperties`, add `resolveRawPromptMode()`, wire into `resolve()` |
-| `src/flightpath/PromptFileParser.ts` | Copy `rawPromptMode` in `buildPromptStep()` and `copyWorkflowLevelProperties()` |
-| `src/flightpath/harness/shared/CliPromptPreparer.ts` | Add early-return guard + `prepareRawPrompt()` method |
-| `src/flightpath/harness/chat/CopilotChatIntegration.ts` | Audit + add guard if it has its own prep path |
-| `schemas/prompt-schema.yaml` | Regenerated via `npm run generate-schema` (do not hand-edit) |
+| File                                                    | Change                                                                           |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `schemas/prompt-schema.json`                            | Add `rawPromptMode` boolean to `executionProperties` definition                  |
+| `src/types/FlightPathTypes.ts`                          | Add `rawPromptMode?: boolean` to `ExecutionProperties`                           |
+| `src/utils/PropertyResolver.ts`                         | Add to `ResolvedProperties`, add `resolveRawPromptMode()`, wire into `resolve()` |
+| `src/flightpath/PromptFileParser.ts`                    | Copy `rawPromptMode` in `buildPromptStep()` and `copyWorkflowLevelProperties()`  |
+| `src/flightpath/harness/shared/CliPromptPreparer.ts`    | Add early-return guard + `prepareRawPrompt()` method                             |
+| `src/flightpath/harness/chat/CopilotChatIntegration.ts` | Audit + add guard if it has its own prep path                                    |
+| `schemas/prompt-schema.yaml`                            | Regenerated via `npm run generate-schema` (do not hand-edit)                     |
 
 ## Windows / node-pty Character Limit Analysis
 
@@ -194,17 +195,17 @@ Context references in the prompt text itself (`@path/to/file`, `#sym:path:symbol
 FlightPath no longer uses VS Code's built-in terminal (`vscode.window.createTerminal` + `terminal.sendText()`). Interactive mode now spawns the AI CLI via node-pty (`PtyProcessManager.spawnPty()`). On Windows, `CliTransportCoordinator.startInteractiveProcess()` builds shell args as:
 
 ```typescript
-["-NoProfile", "-Command", String(tuiCommand)]
+["-NoProfile", "-Command", String(tuiCommand)];
 ```
 
 node-pty calls `CreateProcess` directly (no shell wrapper), passing the entire assembled command line. Windows `CreateProcess` has a hard 32767-character limit on `lpCommandLine`. This applies regardless of whether the shell is PowerShell 5.1 or pwsh 7+.
 
 ### Two execution paths, different limits
 
-| Path | How prompt reaches the AI | Effective limit |
-|------|--------------------------|-----------------|
-| **Spawn (fresh session)** | Embedded in `tuiCommand` → `CreateProcess` arg | 32767 chars (Windows OS limit) |
-| **Inject mode (resume)** | Written to PTY via `ptyManager.writeToSession()` — no command line involved | Effectively unlimited (PTY input stream) |
+| Path                      | How prompt reaches the AI                                                   | Effective limit                          |
+| ------------------------- | --------------------------------------------------------------------------- | ---------------------------------------- |
+| **Spawn (fresh session)** | Embedded in `tuiCommand` → `CreateProcess` arg                              | 32767 chars (Windows OS limit)           |
+| **Inject mode (resume)**  | Written to PTY via `ptyManager.writeToSession()` — no command line involved | Effectively unlimited (PTY input stream) |
 
 In inject mode, the prepared `session.promptArgument` is typed into the running TUI via PTY write, so there is no command line length constraint at all.
 
@@ -214,12 +215,12 @@ The prompt is built (temp files written or inline text chosen) **before** the ex
 
 ### rawPromptMode behavior for oversized prompts
 
-| Prompt length | Safe chars? | rawPromptMode action |
-|--------------|-------------|---------------------|
-| ≤ 300 chars | Yes | Pass inline (same as `isSimplePrompt`) |
-| ≤ 300 chars | No | Fall back to single bare temp file |
-| > 300 chars, ≤ 32,767 chars | Any | Single bare temp file — no instruction wrapper |
-| > 32,767 chars | Any | Single bare temp file (same as above — the temp file path on the command line is short; only the file content is large) |
+| Prompt length               | Safe chars? | rawPromptMode action                                                                                                    |
+| --------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| ≤ 300 chars                 | Yes         | Pass inline (same as `isSimplePrompt`)                                                                                  |
+| ≤ 300 chars                 | No          | Fall back to single bare temp file                                                                                      |
+| > 300 chars, ≤ 32,767 chars | Any         | Single bare temp file — no instruction wrapper                                                                          |
+| > 32,767 chars              | Any         | Single bare temp file (same as above — the temp file path on the command line is short; only the file content is large) |
 
 The temp file path (`@.flightpath/temp/<timestamp>-<name>.prompt.md`) is always short enough to fit on the command line, regardless of how long the file's content is. So for rawPromptMode, a prompt of any length is handled safely: short + safe chars → inline, anything else → one bare temp file.
 

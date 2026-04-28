@@ -3,9 +3,7 @@ import type { MutableRefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { syncCollapsiblePanel } from "@utils/panelSync";
 
-function createPanelRef(
-  collapsed: boolean
-): {
+function createPanelRef(collapsed: boolean): {
   panelRef: MutableRefObject<PanelImperativeHandle | null>;
   collapse: ReturnType<typeof vi.fn>;
   expand: ReturnType<typeof vi.fn>;

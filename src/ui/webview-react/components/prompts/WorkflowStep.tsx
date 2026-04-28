@@ -149,7 +149,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             used: runtimeMeta.contextWindowUsed ?? 0,
             size: runtimeMeta.contextWindowSize,
           }
-      : undefined);
+        : undefined);
   const contextPct = ctx?.size
     ? Math.round((ctx.used / ctx.size) * 100)
     : undefined;

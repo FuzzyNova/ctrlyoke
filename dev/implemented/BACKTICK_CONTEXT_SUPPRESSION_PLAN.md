@@ -13,8 +13,10 @@ Users frequently embed literal output, log data, or existing FlightPath instruct
 ```
 Referencing @src/utils/ContextExpander.ts, analyze why this prior session output is wrong:
 ```
+
 using these attachment excerpts @.flightpath/temp/abc-excerpts.md,
 follow the instructions in @.flightpath/temp/abc-prompt.md
+
 ```
 Fix the issue.
 ```
@@ -25,11 +27,11 @@ Without suppression, FlightPath would attempt to expand all four `@` references,
 
 Only **triple-backtick fenced blocks** suppress expansion. Single-backtick inline code does not:
 
-| Syntax | Suppresses expansion? |
-|--------|----------------------|
-| ` ```\n@path/to/file\n``` ` | Yes |
-| ` ```typescript\n@path\n``` ` | Yes (language specifier ignored) |
-| `` `@path/to/file` `` | No — single backticks are inline code, not fenced blocks |
+| Syntax                        | Suppresses expansion?                                    |
+| ----------------------------- | -------------------------------------------------------- |
+| ` ```\n@path/to/file\n``` `   | Yes                                                      |
+| ` ```typescript\n@path\n``` ` | Yes (language specifier ignored)                         |
+| `` `@path/to/file` ``         | No — single backticks are inline code, not fenced blocks |
 
 This matches standard Markdown semantics: fenced blocks are multi-line literal content; inline code is a short span.
 
@@ -43,7 +45,7 @@ Add a private `maskBacktickBlocks()` helper and call it at the top of both `expa
 
 Replaces the trigger characters (`@`, `#`, `~`) inside triple-backtick regions with a null byte (`\x00`) so `parseAllFileReferences` and `parseGitChangeReferences` never see them. The original `text` is still sent to the harness unchanged — masking applies only to the reference-detection pass.
 
-```typescript
+````typescript
 private maskBacktickBlocks(text: string): string {
   // Replace @, #, ~ inside ``` fenced blocks so the reference parsers
   // never see them. Uses non-greedy match to handle multiple blocks.
@@ -53,7 +55,7 @@ private maskBacktickBlocks(text: string): string {
     block.replace(/[@#~]/g, "\x00")
   );
 }
-```
+````
 
 **Wire into `expandContext()`:**
 
@@ -93,8 +95,8 @@ The masking is intentionally lossy (positions shift by replacing multi-char toke
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
+| File                           | Change                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `src/utils/ContextExpander.ts` | Add `maskBacktickBlocks()` private method; call at top of `expandContext()` and `expandContextSplit()` |
 
 No schema, type, parser, or resolver changes required.

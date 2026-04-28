@@ -1342,26 +1342,22 @@ suite("CodexLogParser", () => {
 
   suite("extractStructuredEventsFromEvent", () => {
     test("should ignore event_msg agent_message when the same text arrives in response_item", () => {
-      const eventMsgEvents = parser.extractStructuredEventsFromEvent(
-        {
-          type: "event_msg",
-          payload: {
-            type: "agent_message",
-            message: "Duplicate candidate",
-          },
-          timestamp: "2026-01-17T10:00:01Z",
-        } as unknown as BaseCliEvent
-      );
-      const responseItemEvents = parser.extractStructuredEventsFromEvent(
-        {
-          type: "response_item",
-          payload: {
-            role: "assistant",
-            content: [{ type: "output_text", text: "Duplicate candidate" }],
-          },
-          timestamp: "2026-01-17T10:00:02Z",
-        } as unknown as BaseCliEvent
-      );
+      const eventMsgEvents = parser.extractStructuredEventsFromEvent({
+        type: "event_msg",
+        payload: {
+          type: "agent_message",
+          message: "Duplicate candidate",
+        },
+        timestamp: "2026-01-17T10:00:01Z",
+      } as unknown as BaseCliEvent);
+      const responseItemEvents = parser.extractStructuredEventsFromEvent({
+        type: "response_item",
+        payload: {
+          role: "assistant",
+          content: [{ type: "output_text", text: "Duplicate candidate" }],
+        },
+        timestamp: "2026-01-17T10:00:02Z",
+      } as unknown as BaseCliEvent);
 
       const textEvents = responseItemEvents.filter(
         (event) => event.type === CLI_EVENT_TYPES.TEXT

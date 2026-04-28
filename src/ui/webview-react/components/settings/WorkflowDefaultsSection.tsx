@@ -1,5 +1,8 @@
 import React, { useState } from "react";
-import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingSource,
+} from "@root/types/WebviewMessageTypes";
 import { PRIOR_CONTEXT_KEYWORDS } from "@root/types/DashboardConstants";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -56,7 +59,12 @@ const PRIOR_CONTEXT_OPTIONS = [
   },
 ];
 
-export function WorkflowDefaultsSection({ settings, activeScope, onUpdate, onReset }: Props) {
+export function WorkflowDefaultsSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: Props) {
   const wf = settings.settings.workflow;
   const sources = settings.sources as Record<string, SettingSource>;
 
@@ -114,9 +122,7 @@ export function WorkflowDefaultsSection({ settings, activeScope, onUpdate, onRes
         <input
           type="text"
           value={wf.defaultTemplate}
-          onChange={(e) =>
-            onUpdate("workflow.defaultTemplate", e.target.value)
-          }
+          onChange={(e) => onUpdate("workflow.defaultTemplate", e.target.value)}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </FieldRow>

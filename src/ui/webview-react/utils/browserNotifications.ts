@@ -95,7 +95,11 @@ export async function enableBrowserNotifications(
 
   if (mode === BROWSER_NOTIFICATION_MODES.PUSH && isStandalone) {
     await subscribeForPushNotifications();
-  } else if (isStandalone && window.isSecureContext && "serviceWorker" in navigator) {
+  } else if (
+    isStandalone &&
+    window.isSecureContext &&
+    "serviceWorker" in navigator
+  ) {
     // Register early so connected notifications can prefer showNotification().
     await ensureServiceWorkerRegistration();
   }
@@ -117,9 +121,12 @@ export async function disablePushNotifications(): Promise<BrowserNotificationSta
 
     const subscriptionId = localStorage.getItem(PUSH_SUBSCRIPTION_ID_KEY);
     if (subscriptionId) {
-      await apiFetch(`/api/notifications/subscriptions/${encodeURIComponent(subscriptionId)}`, {
-        method: "DELETE",
-      });
+      await apiFetch(
+        `/api/notifications/subscriptions/${encodeURIComponent(subscriptionId)}`,
+        {
+          method: "DELETE",
+        }
+      );
       localStorage.removeItem(PUSH_SUBSCRIPTION_ID_KEY);
     }
   } catch {
@@ -149,7 +156,10 @@ export async function handleCompletionNotificationEvent(
   fullSettings: FullGlobalSettings | null
 ): Promise<void> {
   const browserSettings = fullSettings?.settings.notifications?.browser;
-  if (!browserSettings || browserSettings.mode === BROWSER_NOTIFICATION_MODES.NEVER) {
+  if (
+    !browserSettings ||
+    browserSettings.mode === BROWSER_NOTIFICATION_MODES.NEVER
+  ) {
     return;
   }
 
@@ -324,10 +334,7 @@ function getPermissionStatus(): BrowserPermissionStatus {
   }
 }
 
-async function apiFetch(
-  input: string,
-  init?: RequestInit
-): Promise<Response> {
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   const token = new URLSearchParams(window.location.search).get("token");
   if (token) {
@@ -356,9 +363,7 @@ async function apiFetchJson<T>(input: string, init?: RequestInit): Promise<T> {
 
 function base64UrlToUint8Array(value: string): Uint8Array {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
-  const normalized = `${value}${padding}`
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
+  const normalized = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
   const binary = window.atob(normalized);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }

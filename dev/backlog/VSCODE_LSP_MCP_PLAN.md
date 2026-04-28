@@ -16,16 +16,16 @@ Expose VS Code's diagnostic (LSP) state to the AI agents FlightPath runs — not
 
 ### The generic bridge problem is already crowded
 
-| Project | Tools | Stars |
-|---|---|---|
-| `vscode-mcp/vscode-mcp-server` (tjx666) | getDiagnostics, getReferences, renameSymbol, executeCommand, 8 tools | 74 |
-| `acomagu/vscode-as-mcp-server` | executeCommand, code_checker, debug, text_editor | 114 |
-| `trademe/vscode-lsp-mcp` | workspace_symbols, document_symbols, find_symbol_locations | 530 installs |
-| `beixiyo/CJL.lsp-mcp` | hover, definition, completions, references, rename | 530 installs |
-| `juehang/vscode-mcp-server` | file ops, symbols, diagnostics, shell | 349 stars |
-| `Oolab-labs/claude-ide-bridge` | ~140 tools across LSP, debugging, git, terminal | 33 stars |
-| `newbpydev/mcp-diagnostics-extension` | getProblems, getProblemsForFile, real-time notifications | 22 stars, 810 tests |
-| Microsoft Semantic Workbench `mcp-server-vscode` | code_checker, focus_editor, symbol search | Official research |
+| Project                                          | Tools                                                                | Stars               |
+| ------------------------------------------------ | -------------------------------------------------------------------- | ------------------- |
+| `vscode-mcp/vscode-mcp-server` (tjx666)          | getDiagnostics, getReferences, renameSymbol, executeCommand, 8 tools | 74                  |
+| `acomagu/vscode-as-mcp-server`                   | executeCommand, code_checker, debug, text_editor                     | 114                 |
+| `trademe/vscode-lsp-mcp`                         | workspace_symbols, document_symbols, find_symbol_locations           | 530 installs        |
+| `beixiyo/CJL.lsp-mcp`                            | hover, definition, completions, references, rename                   | 530 installs        |
+| `juehang/vscode-mcp-server`                      | file ops, symbols, diagnostics, shell                                | 349 stars           |
+| `Oolab-labs/claude-ide-bridge`                   | ~140 tools across LSP, debugging, git, terminal                      | 33 stars            |
+| `newbpydev/mcp-diagnostics-extension`            | getProblems, getProblemsForFile, real-time notifications             | 22 stars, 810 tests |
+| Microsoft Semantic Workbench `mcp-server-vscode` | code_checker, focus_editor, symbol search                            | Official research   |
 
 **VS Code itself** is MCP-client-only. Microsoft has not announced plans to expose IDE APIs outward as an MCP server.
 
@@ -56,17 +56,19 @@ The same limitation applies to GitHub Copilot CLI's IDE integration — it's sco
 Add a new `kind: "diagnostics"` end-condition type that evaluates directly inside the extension host without any MCP or subprocess.
 
 **Schema addition** (`schemas/prompt-schema.json`):
+
 ```yaml
 endCondition:
-  kind: diagnostics        # new, alternative to kind: script
-  scope: workspace         # "workspace" | "openFiles" | "file"
-  file: src/index.ts       # only when scope: file
+  kind: diagnostics # new, alternative to kind: script
+  scope: workspace # "workspace" | "openFiles" | "file"
+  file: src/index.ts # only when scope: file
   maxErrors: 0
-  maxWarnings: ~           # omit = no limit
-  sources: [typescript, eslint]  # omit = all sources
+  maxWarnings: ~ # omit = no limit
+  sources: [typescript, eslint] # omit = all sources
 ```
 
 **Implementation touch points:**
+
 - `src/types/FlightPathTypes.ts` — add `DiagnosticsEndCondition` to `EndCondition` union type
 - `src/flightpath/EndConditionEvaluator.ts` — add `evaluateDiagnostics()` that calls `vscode.languages.getDiagnostics()` (cannot run in child process since it needs the VS Code API; needs a new in-process evaluation path)
 - `src/flightpath/EndConditionHandler.ts` — route `kind: "diagnostics"` to new evaluator
@@ -86,12 +88,14 @@ endCondition:
 ```
 
 `{diagnostics}` expands to a formatted list:
+
 ```
 src/foo.ts:12:4 error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
 src/bar.ts:8:1 error TS2304: Cannot find name 'Foo'.
 ```
 
 **Implementation:**
+
 - `src/flightpath/WorkflowExecutor.ts` — extend the retry prompt interpolation (currently handles `{stderr}`, `{stdout}`) to also resolve `{diagnostics}` when end-condition kind is `diagnostics`
 
 ### Phase 3: `flightpath-ide` MCP Server (auto-injected)
@@ -109,6 +113,7 @@ Claude Code / Copilot CLI / Codex (spawned by CliIntegration)
 ```
 
 **Tools exposed:**
+
 - `flightpath_ide_get_diagnostics(scope?, file?, severity?)` — returns Problems panel state
 - `flightpath_ide_get_workspace_summary()` — file count, language breakdown, error/warning totals
 
@@ -127,9 +132,7 @@ After each prompt step completes, capture and store the diagnostic snapshot in t
     "diagnosticsSnapshot": {
       "errorCount": 3,
       "warningCount": 12,
-      "errors": [
-        { "file": "src/foo.ts", "line": 12, "message": "..." }
-      ]
+      "errors": [{ "file": "src/foo.ts", "line": 12, "message": "..." }]
     }
   }
 }
@@ -141,13 +144,13 @@ This enables the dashboard to show diagnostic trend across a workflow run and gi
 
 ## What to Skip
 
-| Capability | Why skip |
-|---|---|
-| Generic VS Code command executor (`executeCommand`) | Security surface. No workflow automation value. Community tools cover it. |
-| Hover / go-to-definition / find-references | No value for autonomous agent workflows. Community tools cover it. |
-| Full LSP bridge (20+ tools) | Solved problem. Direct users to `vscode-mcp/vscode-mcp-server` or `CJL.lsp-mcp`. |
-| Workspace file system tools | Already covered by CLI harnesses' native file access and FlightPath's `ContextExpander`. |
-| Debug session tools | Out of scope for prompt workflow automation. |
+| Capability                                          | Why skip                                                                                 |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Generic VS Code command executor (`executeCommand`) | Security surface. No workflow automation value. Community tools cover it.                |
+| Hover / go-to-definition / find-references          | No value for autonomous agent workflows. Community tools cover it.                       |
+| Full LSP bridge (20+ tools)                         | Solved problem. Direct users to `vscode-mcp/vscode-mcp-server` or `CJL.lsp-mcp`.         |
+| Workspace file system tools                         | Already covered by CLI harnesses' native file access and FlightPath's `ContextExpander`. |
+| Debug session tools                                 | Out of scope for prompt workflow automation.                                             |
 
 ---
 
@@ -164,12 +167,12 @@ Phases 1 and 2 together deliver the core value proposition with no new executabl
 
 ## Effort Estimate
 
-| Phase | Complexity | New files | Key risk |
-|---|---|---|---|
-| 1 — Diagnostic end-condition | Medium | 1 (DiagnosticsEndConditionEvaluator) | In-process evaluation bypasses child process isolation; need to handle `PlatformAdapter` stub for tests |
-| 2 — `{diagnostics}` interpolation | Low | 0 | Formatting long diagnostic lists into prompts |
-| 3 — `flightpath-ide` MCP server | Medium-High | 2–3 (binary + IPC bridge) | Named pipe lifecycle, auth token, server discovery by harnesses |
-| 4 — `_runtime` snapshots | Low | 0 | Working file schema churn |
+| Phase                             | Complexity  | New files                            | Key risk                                                                                                |
+| --------------------------------- | ----------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| 1 — Diagnostic end-condition      | Medium      | 1 (DiagnosticsEndConditionEvaluator) | In-process evaluation bypasses child process isolation; need to handle `PlatformAdapter` stub for tests |
+| 2 — `{diagnostics}` interpolation | Low         | 0                                    | Formatting long diagnostic lists into prompts                                                           |
+| 3 — `flightpath-ide` MCP server   | Medium-High | 2–3 (binary + IPC bridge)            | Named pipe lifecycle, auth token, server discovery by harnesses                                         |
+| 4 — `_runtime` snapshots          | Low         | 0                                    | Working file schema churn                                                                               |
 
 ---
 

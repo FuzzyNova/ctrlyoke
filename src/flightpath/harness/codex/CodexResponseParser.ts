@@ -464,18 +464,18 @@ export class CodexResponseParser
             const delta = newOutput.substring(prevOutput.length);
             streamState.set(outputKey, newOutput);
 
-          // Emit delta as text for real-time display (strip ANSI codes)
-          if (delta) {
-            const cleanDelta = sanitizeTerminalOutput(delta);
-            if (cleanDelta) {
-              events.push({
-                type: CLI_EVENT_TYPES.TEXT,
-                timestamp: Date.now(),
-                data: { text: cleanDelta },
-              });
+            // Emit delta as text for real-time display (strip ANSI codes)
+            if (delta) {
+              const cleanDelta = sanitizeTerminalOutput(delta);
+              if (cleanDelta) {
+                events.push({
+                  type: CLI_EVENT_TYPES.TEXT,
+                  timestamp: Date.now(),
+                  data: { text: cleanDelta },
+                });
+              }
             }
           }
-        }
         }
 
         // Todo list updates (track progress)

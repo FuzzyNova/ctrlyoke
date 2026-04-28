@@ -1,4 +1,7 @@
-import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingSource,
+} from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
@@ -14,7 +17,12 @@ const MODE_OPTIONS = [
   { value: "headless", label: "Headless" },
 ];
 
-export function ExecutionSection({ settings, activeScope, onUpdate, onReset }: Props) {
+export function ExecutionSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: Props) {
   const exec = settings.settings.execution;
   const sources = settings.sources as Record<string, SettingSource>;
 

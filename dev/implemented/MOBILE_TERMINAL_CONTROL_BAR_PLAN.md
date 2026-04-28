@@ -86,6 +86,7 @@ The bar is a single horizontal row of buttons:
 ### Ctrl Toggle Logic
 
 When Ctrl is active:
+
 - The **bar buttons** send their Ctrl-modified sequence directly (Esc → `\x1b` unchanged, Tab → `\x09` unchanged, Arrow → unchanged, Enter → `\r` unchanged; Ctrl only meaningfully modifies letter keys which come from the software keyboard)
 - A `keydown` listener on `document` intercepts the **next key from the software keyboard** and sends `Ctrl+key` as a raw byte (`String.fromCharCode(char.toUpperCase().charCodeAt(0) - 64)`), then deactivates Ctrl and calls `event.preventDefault()`
 - After one intercepted keystroke (bar button or keyboard), Ctrl auto-deactivates
@@ -94,25 +95,25 @@ This one-shot model avoids the complexity of a sticky Ctrl key that could trap l
 
 ### Key Sequences
 
-| Key | Sequence | Notes |
-|---|---|---|
-| Escape | `\x1b` | |
-| Tab | `\x09` | |
-| Enter | `\r` | PTY expects CR |
-| Arrow Up | `\x1b[A` | |
-| Arrow Down | `\x1b[B` | |
-| Arrow Left | `\x1b[D` | |
-| Arrow Right | `\x1b[C` | |
-| Ctrl+C | `\x03` | SIGINT |
-| Ctrl+D | `\x04` | EOF / detach |
-| Ctrl+Z | `\x1a` | SIGTSTP |
-| Ctrl+L | `\x0c` | Clear screen |
-| Ctrl+A | `\x01` | Line start |
-| Ctrl+E | `\x05` | Line end |
-| Ctrl+U | `\x15` | Clear line |
-| Ctrl+W | `\x17` | Delete word |
-| Ctrl+R | `\x12` | Reverse search |
-| Shift+Tab | `\x1b[Z` | |
+| Key         | Sequence | Notes          |
+| ----------- | -------- | -------------- |
+| Escape      | `\x1b`   |                |
+| Tab         | `\x09`   |                |
+| Enter       | `\r`     | PTY expects CR |
+| Arrow Up    | `\x1b[A` |                |
+| Arrow Down  | `\x1b[B` |                |
+| Arrow Left  | `\x1b[D` |                |
+| Arrow Right | `\x1b[C` |                |
+| Ctrl+C      | `\x03`   | SIGINT         |
+| Ctrl+D      | `\x04`   | EOF / detach   |
+| Ctrl+Z      | `\x1a`   | SIGTSTP        |
+| Ctrl+L      | `\x0c`   | Clear screen   |
+| Ctrl+A      | `\x01`   | Line start     |
+| Ctrl+E      | `\x05`   | Line end       |
+| Ctrl+U      | `\x15`   | Clear line     |
+| Ctrl+W      | `\x17`   | Delete word    |
+| Ctrl+R      | `\x12`   | Reverse search |
+| Shift+Tab   | `\x1b[Z` |                |
 
 All sequences sent via `sendMessage(MESSAGE_TYPES.TERMINAL_INPUT, { workflowId, sessionId, data })`.
 
@@ -121,6 +122,7 @@ All sequences sent via `sendMessage(MESSAGE_TYPES.TERMINAL_INPUT, { workflowId, 
 A small popup panel anchored to the `···` button. Contains:
 
 **Built-in shortcuts** (always present):
+
 - Shift+Tab → `\x1b[Z`
 - Ctrl+C → `\x03`
 - Ctrl+Z → `\x1a`
@@ -129,6 +131,7 @@ A small popup panel anchored to the `···` button. Contains:
 - Ctrl+A → `\x01` (beginning of line)
 
 **User custom shortcuts** (from settings, see §Settings):
+
 - Each rendered as a tappable button with the user's label
 - An **"Add shortcuts…"** footer link opens GlobalSettingsDrawer on the Terminal tab
 
@@ -194,11 +197,13 @@ These settings need to be plumbed through `FlightPathGlobalSettings` → `FullGl
 ## Implementation Steps
 
 ### Step 1 — Detection hook
+
 - Add `useMobileTerminalBar()` hook in `src/ui/webview-react/hooks/`
 - Returns `{ shouldShow: boolean, isCoarsePointer: boolean }` based on detection logic + setting override
 - Reads `fullGlobalSettings.settings.terminal.mobileControlBar` from `settingsStore`
 
 ### Step 2 — TerminalControlBar component
+
 - Create `src/ui/webview-react/components/output/TerminalControlBar.tsx`
 - Internal state: `ctrlActive: boolean`, `moreOpen: boolean`
 - `sendKey(seq: string)` helper: calls `sendMessage(TERMINAL_INPUT, ...)` and resets ctrl state
@@ -206,17 +211,20 @@ These settings need to be plumbed through `FlightPathGlobalSettings` → `FullGl
 - Style: `sticky bottom-0 z-20`, semi-transparent background matching `--vscode-terminal-background`, minimal height (~36px), full width
 
 ### Step 3 — Integrate into TerminalView
+
 - In `TerminalView.tsx`, import `TerminalControlBar` and `useMobileTerminalBar`
 - Render `<TerminalControlBar>` inside the terminal canvas panel, visible only when `shouldShow && activeSessionId && isController`
 - The bar always renders at the bottom of the canvas; no layout changes needed for non-mobile
 
 ### Step 4 — Settings wiring
+
 - Add `mobileControlBar` and `mobileCustomShortcuts` to `FlightPathGlobalSettings` in `WebviewMessageTypes.ts`
 - Add to `package.json` and `ConfigurationUtils.ts`
 - Create `TerminalSection.tsx` settings component
 - Register tab in `GlobalSettingsDrawer.tsx`
 
 ### Step 5 — Virtual keyboard avoidance
+
 - Detect VK API availability; if present, set `overlaysContent = true` and use `env(keyboard-inset-height)` in the bar's CSS
 - Fallback: listen to `window.visualViewport.resize`, compute keyboard height as `window.innerHeight - visualViewport.height`, apply as inline `paddingBottom` on the bar
 

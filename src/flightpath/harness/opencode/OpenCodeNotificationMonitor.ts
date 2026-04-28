@@ -50,6 +50,9 @@ export class OpenCodeNotificationMonitor
    * Get notification directory for OpenCode
    */
   getNotificationDirectory(workspaceRoot: string): string {
-    return CliNotificationMonitor.getNotificationDirectory(workspaceRoot, "opencode");
+    return CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "opencode"
+    );
   }
 }

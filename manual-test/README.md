@@ -102,16 +102,16 @@ When creating new files:
 
 ### Advanced Features
 
-| File                                          | Tests                                        | Duration |
-| --------------------------------------------- | -------------------------------------------- | -------- |
-| `workflow-properties-test.flightpath.yaml`    | Property inheritance and precedence          | 15 sec   |
-| `test-property-sync.flightpath.yaml`          | Property sync to dashboard UI                | 10 sec   |
-| `dynamic-queue-basic-example.flightpath.json` | Dynamic queue extension via MCP tools        | 20 sec   |
-| `attachment-test.prompt.md`                   | All attachment types (@, #file, #sym)        | 10 sec   |
-| `prompt-links-test.flightpath.json`           | Clickable links (Ctrl+Click navigation)      | UI Test  |
-| `precondition-test.flightpath.yaml`           | preCondition pass/skip/always-run gating     | 15 sec   |
-| `script-step-test.flightpath.yaml`            | scriptStep executes without AI               | 10 sec   |
-| `end-condition-continue-test.flightpath.yaml` | endCondition onFail: "continue" advances     | 10 sec   |
+| File                                          | Tests                                    | Duration |
+| --------------------------------------------- | ---------------------------------------- | -------- |
+| `workflow-properties-test.flightpath.yaml`    | Property inheritance and precedence      | 15 sec   |
+| `test-property-sync.flightpath.yaml`          | Property sync to dashboard UI            | 10 sec   |
+| `dynamic-queue-basic-example.flightpath.json` | Dynamic queue extension via MCP tools    | 20 sec   |
+| `attachment-test.prompt.md`                   | All attachment types (@, #file, #sym)    | 10 sec   |
+| `prompt-links-test.flightpath.json`           | Clickable links (Ctrl+Click navigation)  | UI Test  |
+| `precondition-test.flightpath.yaml`           | preCondition pass/skip/always-run gating | 15 sec   |
+| `script-step-test.flightpath.yaml`            | scriptStep executes without AI           | 10 sec   |
+| `end-condition-continue-test.flightpath.yaml` | endCondition onFail: "continue" advances | 10 sec   |
 
 ---
 

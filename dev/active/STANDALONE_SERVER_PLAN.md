@@ -143,16 +143,16 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 ### Existing Patterns Reused
 
-| Pattern                         | Where It Exists                          | How Server Uses It                                                                                                          |
-| ------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `IDashboardProvider` interface  | `src/ui/IDashboardProvider.ts`           | Already present; both server implementations plug into this surface                                                         |
-| `IDashboardSink` interface      | `src/types/IDashboardSink.ts`            | Existing live step/output sink; needs a broadcast-capable implementation before hosted tabs can mirror the sidebar          |
+| Pattern                         | Where It Exists                          | How Server Uses It                                                                                                           |
+| ------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `IDashboardProvider` interface  | `src/ui/IDashboardProvider.ts`           | Already present; both server implementations plug into this surface                                                          |
+| `IDashboardSink` interface      | `src/types/IDashboardSink.ts`            | Existing live step/output sink; needs a broadcast-capable implementation before hosted tabs can mirror the sidebar           |
 | `WorkflowOrchestrator` registry | `src/flightpath/WorkflowOrchestrator.ts` | Shared provider/sink fanout is already in place; the remaining issue is adapter/watcher construction for non-VS Code runtime |
-| `WebviewMessageRouter`          | `src/ui/WebviewMessageRouter.ts`         | Hosted server can reuse its logic only after exposing a direct callable entrypoint and preserving per-connection replies    |
-| `PlatformAdapter` interface     | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation; this seam also needs file-watcher support                            |
-| `vscode-shim` alias             | `esbuild.js` CLI bundle                  | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }`                                   |
-| Commander.js subcommands        | `src/cli.ts`                             | `run` and `validate` exist today; `server` still needs to be added as a subcommand                                          |
-| `setRuntimeMode`                | `src/cli.ts` line 27                     | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)` — `RUNNER_IDS.SERVER` already exists in `DashboardConstants.ts` |
+| `WebviewMessageRouter`          | `src/ui/WebviewMessageRouter.ts`         | Hosted server can reuse its logic only after exposing a direct callable entrypoint and preserving per-connection replies     |
+| `PlatformAdapter` interface     | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation; this seam also needs file-watcher support                             |
+| `vscode-shim` alias             | `esbuild.js` CLI bundle                  | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }`                                    |
+| Commander.js subcommands        | `src/cli.ts`                             | `run` and `validate` exist today; `server` still needs to be added as a subcommand                                           |
+| `setRuntimeMode`                | `src/cli.ts` line 27                     | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)` — `RUNNER_IDS.SERVER` already exists in `DashboardConstants.ts`  |
 
 ---
 

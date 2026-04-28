@@ -14,8 +14,8 @@ eliminates this class of problem entirely by giving each workflow its own branch
 working directory.
 
 The `flightpath_global_status` MCP tool (already added) provides situational awareness
-for agents that *want* to share a workspace. Worktree support is for agents that should
-be *isolated* from each other — different concerns, different branches, no interference.
+for agents that _want_ to share a workspace. Worktree support is for agents that should
+be _isolated_ from each other — different concerns, different branches, no interference.
 
 ---
 
@@ -140,19 +140,22 @@ interface MergeResult {
 
 class WorktreeManager {
   // Mode A: create timestamped branch + worktree
-  async createManagedWorktree(workflowName: string): Promise<WorktreeInfo>
+  async createManagedWorktree(workflowName: string): Promise<WorktreeInfo>;
 
   // Mode B: find existing or create named worktree
-  async resolveNamedWorktree(branchName: string, workflowName: string): Promise<WorktreeInfo>
+  async resolveNamedWorktree(
+    branchName: string,
+    workflowName: string
+  ): Promise<WorktreeInfo>;
 
   // Attempt merge back to current HEAD branch, return result
-  async mergeAndCleanup(info: WorktreeInfo): Promise<MergeResult>
+  async mergeAndCleanup(info: WorktreeInfo): Promise<MergeResult>;
 
   // List all FlightPath-managed worktrees (branch name starts with "flightpath/")
-  async listManagedWorktrees(): Promise<WorktreeInfo[]>
+  async listManagedWorktrees(): Promise<WorktreeInfo[]>;
 
   // Remove a worktree (used after successful merge, or user-initiated cleanup)
-  async removeWorktree(info: WorktreeInfo): Promise<void>
+  async removeWorktree(info: WorktreeInfo): Promise<void>;
 }
 ```
 
@@ -219,6 +222,7 @@ After a managed workflow completes, `WorktreeManager.mergeAndCleanup()` runs:
 5. On success: `git worktree remove --force <path>` + `git branch -d <branch>`
 
 **VS Code notification on conflict:**
+
 ```
 FlightPath: Workflow "ui-refactor" completed but merge to main has conflicts.
 Worktree left at: .flightpath/worktrees/ui-refactor-2026-04-26/
@@ -236,7 +240,7 @@ The working file records `state: "conflict"` so the dashboard can show a warning
 auto-managed worktree is created, `WorktreeManager` appends it automatically (same
 pattern as how the extension ensures `.flightpath/` exists).
 
-Note: git worktrees *are* functional when placed inside the repo directory as long as
+Note: git worktrees _are_ functional when placed inside the repo directory as long as
 the path is gitignored. The `.flightpath/` directory is already runtime-only.
 
 ---
@@ -256,6 +260,7 @@ Show a "worktree" badge on workflows running in a worktree:
 For named worktrees: `Branch: ui-work` with no timestamp.
 
 After managed completion: replace running state with a merge result badge:
+
 - `✓ merged (fast-forward)` — green
 - `✓ merged (merge commit)` — green
 - `⚠ merge conflict — resolve manually` — yellow with a link to the worktree path
@@ -291,22 +296,22 @@ status payload so agents know which branch their sibling is working on:
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `schemas/prompt-schema.json` | Add `worktree` to `executionProperties` |
-| `src/types/FlightPathTypes.ts` | Add `worktree?: string \| boolean` to `PromptFile`; add `worktree?` to `WorkingFileRuntime` |
-| `src/flightpath/orchestration/WorktreeManager.ts` | **New class** — git worktree lifecycle |
-| `src/flightpath/WorkflowOrchestrator.ts` | Instantiate `WorktreeManager`; call before/after workflow execution |
-| `src/flightpath/WorkflowInstance.ts` | Store `WorktreeInfo` on instance; propagate to `WorkflowExecutionContext` |
-| `src/flightpath/WorkflowExecutor.ts` | Pass `worktreePath` from context to `CliIntegration` as `cwd` |
-| `src/flightpath/harness/CliIntegration.ts` | Accept optional `cwd` override; pass to `CliExecutionRunner` |
-| `src/flightpath/harness/shared/CliExecutionRunner.ts` | Use provided `cwd` over workspace folder when set |
-| `src/flightpath/harness/chat/CopilotChatIntegration.ts` | Accept `cwd` override for consistency |
-| `src/mcp-server.ts` | Add `worktree` field to `flightpath_global_status` response (already added tool) |
-| `src/flightpath/orchestration/WorkspaceSessionManager.ts` | Include worktree info in `discoverSessions()` detail |
-| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx` | Show worktree badge on workflow header |
-| `src/test/unit/WorktreeManager.test.ts` | **New** — unit tests for create, resolve, merge, cleanup |
-| `src/test/unit/WorkflowOrchestrator.test.ts` | Tests for worktree lifecycle integration |
+| File                                                            | Change                                                                                      |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `schemas/prompt-schema.json`                                    | Add `worktree` to `executionProperties`                                                     |
+| `src/types/FlightPathTypes.ts`                                  | Add `worktree?: string \| boolean` to `PromptFile`; add `worktree?` to `WorkingFileRuntime` |
+| `src/flightpath/orchestration/WorktreeManager.ts`               | **New class** — git worktree lifecycle                                                      |
+| `src/flightpath/WorkflowOrchestrator.ts`                        | Instantiate `WorktreeManager`; call before/after workflow execution                         |
+| `src/flightpath/WorkflowInstance.ts`                            | Store `WorktreeInfo` on instance; propagate to `WorkflowExecutionContext`                   |
+| `src/flightpath/WorkflowExecutor.ts`                            | Pass `worktreePath` from context to `CliIntegration` as `cwd`                               |
+| `src/flightpath/harness/CliIntegration.ts`                      | Accept optional `cwd` override; pass to `CliExecutionRunner`                                |
+| `src/flightpath/harness/shared/CliExecutionRunner.ts`           | Use provided `cwd` over workspace folder when set                                           |
+| `src/flightpath/harness/chat/CopilotChatIntegration.ts`         | Accept `cwd` override for consistency                                                       |
+| `src/mcp-server.ts`                                             | Add `worktree` field to `flightpath_global_status` response (already added tool)            |
+| `src/flightpath/orchestration/WorkspaceSessionManager.ts`       | Include worktree info in `discoverSessions()` detail                                        |
+| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx` | Show worktree badge on workflow header                                                      |
+| `src/test/unit/WorktreeManager.test.ts`                         | **New** — unit tests for create, resolve, merge, cleanup                                    |
+| `src/test/unit/WorkflowOrchestrator.test.ts`                    | Tests for worktree lifecycle integration                                                    |
 
 ---
 

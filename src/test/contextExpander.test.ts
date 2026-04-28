@@ -360,8 +360,14 @@ suite("ContextExpander.expandContext", () => {
 
   test("keeps fenced references literal while expanding outside references", async () => {
     const root = freshWorkspace();
-    fs.writeFileSync(path.join(root, "outside.ts"), "export const outside = 1;\n");
-    fs.writeFileSync(path.join(root, "inside.ts"), "export const inside = 2;\n");
+    fs.writeFileSync(
+      path.join(root, "outside.ts"),
+      "export const outside = 1;\n"
+    );
+    fs.writeFileSync(
+      path.join(root, "inside.ts"),
+      "export const inside = 2;\n"
+    );
 
     const expander = new ContextExpander(root);
     const result = await expander.expandContext(

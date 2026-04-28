@@ -11,10 +11,7 @@ import type {
   ToolResultData,
   WebSearchData,
 } from "../types/CliOutputTypes";
-import {
-  CLI_EVENT_TYPES,
-  OPERATION_STATUS,
-} from "../types/DashboardConstants";
+import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/DashboardConstants";
 
 type PendingKind = "semantic" | "toolCall" | "mcp" | "webSearch";
 
@@ -70,7 +67,9 @@ function getEventKey(event: CliEvent): string | undefined {
     }
     case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
       const data = event.data as McpToolCallData;
-      return data.server && data.tool ? `mcp:${data.server}.${data.tool}` : undefined;
+      return data.server && data.tool
+        ? `mcp:${data.server}.${data.tool}`
+        : undefined;
     }
     case CLI_EVENT_TYPES.WEB_SEARCH: {
       const data = event.data as WebSearchData;
@@ -306,9 +305,11 @@ function mergeInitiatedWithResult(
         data: {
           ...data,
           output: data.output ?? result.output,
-          error: data.error ?? (result.success ? undefined : (result.error ?? result.output)),
+          error:
+            data.error ??
+            (result.success ? undefined : (result.error ?? result.output)),
           exitCode:
-            data.exitCode ?? (result.success ? 0 : data.exitCode ?? 1),
+            data.exitCode ?? (result.success ? 0 : (data.exitCode ?? 1)),
           status: result.success
             ? OPERATION_STATUS.COMPLETED
             : OPERATION_STATUS.FAILED,
@@ -471,7 +472,8 @@ function mergeInitiatedWithCompleted(
             completedData.structuredPatch ?? initiatedData.structuredPatch,
           error: completedData.error ?? initiatedData.error,
           success: completedData.success ?? initiatedData.success,
-          userModified: completedData.userModified ?? initiatedData.userModified,
+          userModified:
+            completedData.userModified ?? initiatedData.userModified,
           replaceAll: completedData.replaceAll ?? initiatedData.replaceAll,
         } as FileEditData,
       };
@@ -519,7 +521,10 @@ export function normalizeCliEvents(events: readonly CliEvent[]): CliEvent[] {
         }
       }
 
-      const fallbackIndex = findOutputIndexForResultFallback(output, resultData);
+      const fallbackIndex = findOutputIndexForResultFallback(
+        output,
+        resultData
+      );
       if (fallbackIndex !== undefined) {
         const merged = mergeInitiatedWithResult(
           output[fallbackIndex],

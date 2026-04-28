@@ -409,7 +409,9 @@ export class PtyProcessManager {
     const shellOverride = terminalSettings.shellExecutable.trim();
     const shell =
       shellOverride ||
-      (process.platform === "win32" ? resolveWindowsShell() : resolveUnixShell());
+      (process.platform === "win32"
+        ? resolveWindowsShell()
+        : resolveUnixShell());
 
     return this.spawnPty({
       workflowId: opts.workflowId,

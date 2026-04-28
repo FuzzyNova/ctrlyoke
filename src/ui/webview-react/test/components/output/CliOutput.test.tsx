@@ -309,12 +309,7 @@ describe("CliOutput", () => {
     };
 
     const { container } = render(
-      <CliOutput
-        output={output}
-        stepIndex={0}
-        attemptIndex={0}
-        runIndex={1}
-      />
+      <CliOutput output={output} stepIndex={0} attemptIndex={0} runIndex={1} />
     );
 
     expect(screen.getByText("Re-run 1")).toBeInTheDocument();

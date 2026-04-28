@@ -599,7 +599,10 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
       ],
     };
     const loaded = await saveSnapshotAndLoad(snapshot);
-    assert.strictEqual(loaded?.changedFiles[0]?.beforeContent, "existing content");
+    assert.strictEqual(
+      loaded?.changedFiles[0]?.beforeContent,
+      "existing content"
+    );
   });
 
   test("does not fetch when contentCaptureSkipped is set", async () => {
@@ -658,12 +661,14 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
     const srcDir = path.join(tempWorkspace, "src");
     await fs.mkdir(srcDir);
     await fs.writeFile(path.join(srcDir, "target.ts"), "original content");
-    execFileSync("git", ["add", "."], { cwd: tempWorkspace, env: { ...process.env, ...gitEnv } });
-    execFileSync(
-      "git",
-      ["commit", "--no-gpg-sign", "-m", "initial"],
-      { cwd: tempWorkspace, env: { ...process.env, ...gitEnv } }
-    );
+    execFileSync("git", ["add", "."], {
+      cwd: tempWorkspace,
+      env: { ...process.env, ...gitEnv },
+    });
+    execFileSync("git", ["commit", "--no-gpg-sign", "-m", "initial"], {
+      cwd: tempWorkspace,
+      env: { ...process.env, ...gitEnv },
+    });
 
     const headCommit = execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: tempWorkspace,
@@ -685,6 +690,9 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
     };
 
     const loaded = await saveSnapshotAndLoad(snapshot);
-    assert.strictEqual(loaded?.changedFiles[0]?.beforeContent, "original content");
+    assert.strictEqual(
+      loaded?.changedFiles[0]?.beforeContent,
+      "original content"
+    );
   });
 });

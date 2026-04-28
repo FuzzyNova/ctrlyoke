@@ -62,13 +62,13 @@ export class OutputHistoryTimelineAdapter {
           cliEntriesByKey.set(
             getCliEntryKey(event.target, runIndex, attemptIndex),
             {
-            kind: OUTPUT_HISTORY_KINDS.CLI,
-            target: event.target,
-            runIndex,
-            attemptIndex,
-            cliOutput: event.payload.cliOutput,
-            timestampMs: event.timestampMs,
-            sequence: event.sequence,
+              kind: OUTPUT_HISTORY_KINDS.CLI,
+              target: event.target,
+              runIndex,
+              attemptIndex,
+              cliOutput: event.payload.cliOutput,
+              timestampMs: event.timestampMs,
+              sequence: event.sequence,
             }
           );
           break;

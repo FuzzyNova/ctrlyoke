@@ -61,10 +61,7 @@ export function schedulePanelReconnectReloadWatchdog(): void {
     }
 
     try {
-      sessionStorage.setItem(
-        PANEL_RECONNECT_RELOAD_SESSION_KEY,
-        String(now)
-      );
+      sessionStorage.setItem(PANEL_RECONNECT_RELOAD_SESSION_KEY, String(now));
     } catch {
       // Best-effort persistence only.
     }

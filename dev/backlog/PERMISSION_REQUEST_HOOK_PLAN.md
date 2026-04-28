@@ -70,12 +70,14 @@ other hook events.
 ### Payload Fields
 
 **Claude** (hook_event_name = `"PermissionRequest"`):
+
 - `session_id`, `transcript_path`, `cwd`, `permission_mode`
 - `tool_name` (e.g. `"Bash"`, `"Edit"`, `"mcp__memory__write"`)
 - `tool_input` (tool-specific object)
 - `permission_suggestions` (optional array of "always allow" options)
 
 **Codex** (same envelope, extra fields):
+
 - `model`, `turn_id`
 - `tool_input.description` (human-readable approval reason)
 
@@ -103,9 +105,9 @@ export type HookEvent =
 
 Mapping table row to add:
 
-| Logical          | Claude            | Copilot    | Codex             | Qwen | Gemini | OpenCode          |
-|------------------|-------------------|------------|-------------------|------|--------|-------------------|
-| `permissionRequest` | PermissionRequest | n/a     | PermissionRequest | n/a  | n/a    | permission.asked  |
+| Logical             | Claude            | Copilot | Codex             | Qwen | Gemini | OpenCode         |
+| ------------------- | ----------------- | ------- | ----------------- | ---- | ------ | ---------------- |
+| `permissionRequest` | PermissionRequest | n/a     | PermissionRequest | n/a  | n/a    | permission.asked |
 
 Copilot CLI, Qwen, and Gemini do not expose this hook — unsupported events are already
 silently skipped by the harness layer.
@@ -125,10 +127,15 @@ No other changes needed — the editor already handles arbitrary hook entries ge
 Replace the early-exit for unknown events with a three-way branch:
 
 ```js
-if (hookEvent === "SessionStart") { /* existing start logic */ }
-else if (hookEvent === "Stop")    { /* existing stop logic */ }
-else if (hookEvent === "PermissionRequest") { handlePermissionRequest(hookInput, debugLog, notifyDir); }
-else { process.exit(0); }
+if (hookEvent === "SessionStart") {
+  /* existing start logic */
+} else if (hookEvent === "Stop") {
+  /* existing stop logic */
+} else if (hookEvent === "PermissionRequest") {
+  handlePermissionRequest(hookInput, debugLog, notifyDir);
+} else {
+  process.exit(0);
+}
 ```
 
 `handlePermissionRequest(hookInput, debugLog, notifyDir)`:
@@ -213,6 +220,7 @@ And in `NotificationsSection.tsx` hook-event table, add a row:
 | Permission Request | checkbox | AI paused waiting for tool approval |
 
 The notification body should include `toolName` when available, e.g.:
+
 > `workflow.flightpath.yaml — step 2 "implement" — Bash`
 
 This makes it actionable: the user sees "permission request for Bash" in the

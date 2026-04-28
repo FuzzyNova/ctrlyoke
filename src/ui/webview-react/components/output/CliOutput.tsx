@@ -186,7 +186,8 @@ function getSnapshotBeforeContent(
   workspaceSnapshot?: WorkspaceSnapshot
 ): string | undefined {
   return workspaceSnapshot?.changedFiles.find(
-    (change) => change.beforeContent !== undefined && sameFilePath(path, change.path)
+    (change) =>
+      change.beforeContent !== undefined && sameFilePath(path, change.path)
   )?.beforeContent;
 }
 
@@ -296,7 +297,8 @@ const SingleEvent = memo<SingleEventProps>(
         // silent no-ops when the gap positions exceed the snippet's line count.
         const displayOldContent = displayStructuredPatch
           ? getSnapshotBeforeContent(data.path, workspaceSnapshot)
-          : (data.oldContent ?? getSnapshotBeforeContent(data.path, workspaceSnapshot));
+          : (data.oldContent ??
+            getSnapshotBeforeContent(data.path, workspaceSnapshot));
         const handleUndoFile =
           onUndoFile == null
             ? undefined
@@ -789,10 +791,7 @@ export const CliOutput = memo<CliOutputProps>(
       [target, output, effectiveUndoRecord, effectiveSnapshot]
     );
 
-    const executionBadge = formatExecutionBadge(
-      resolvedRunIndex,
-      attemptIndex
-    );
+    const executionBadge = formatExecutionBadge(resolvedRunIndex, attemptIndex);
     const sequenceLabel = stepLabel ?? `Step ${stepIndex + 1}`;
     const displayName = stepName?.trim();
     const headerIconClass =

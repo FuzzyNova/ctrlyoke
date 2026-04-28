@@ -411,8 +411,8 @@ Respect `includeWorkflowName` and `includePromptName` when building the content.
    - `BROWSER_NOTIFICATION_STATUS`
    - `BROWSER_NOTIFICATION_PERMISSION_REQUEST`
    - `BROWSER_NOTIFICATION_PERMISSION_RESULT`
-   These should be added to `DashboardConstants.ts` and typed in
-   `WebviewMessageTypes.ts`.
+     These should be added to `DashboardConstants.ts` and typed in
+     `WebviewMessageTypes.ts`.
 6. Add a `NotificationManager` under `src/ui/` for VS Code toasts.
    - It should consume terminal workflow and prompt events, not harness-specific hook
      files.

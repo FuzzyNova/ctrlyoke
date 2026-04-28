@@ -15,9 +15,9 @@ steps:
   - name: step-with-failing-condition
     prompt: |
       Step 1: This step has an end condition that will FAIL (always_false.py returns "false").
-      
+
       Because the end condition has onFail: "continue", the workflow should NOT stop.
-      
+
       Please respond with: "Step 1 complete."
     endCondition:
       script: manual-test/.flightpath/scripts/always_false.py
@@ -28,5 +28,5 @@ steps:
     prompt: |
       Step 2: If you are seeing this, the workflow correctly continued past the
       failed end condition in step 1 (onFail: "continue" worked as expected).
-      
+
       Please respond with: "Step 2 reached - onFail continue behavior verified."

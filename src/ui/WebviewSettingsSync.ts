@@ -532,7 +532,10 @@ export class WebviewSettingsSync {
     } else if (property === "skills") {
       await ConfigurationUtils.setDefaultSkills(value || []);
     } else if (property === "resumeSession") {
-      await ConfigurationUtils.updateSetting(CONFIG_KEYS.WORKFLOW_RESUME_EXISTING_SESSION, value);
+      await ConfigurationUtils.updateSetting(
+        CONFIG_KEYS.WORKFLOW_RESUME_EXISTING_SESSION,
+        value
+      );
     } else if (property === "mcpServers") {
       // null (None mode) → [] so we never write null to an array-typed setting
       await ConfigurationUtils.setDefaultMcpServers(value ?? []);
@@ -901,19 +904,29 @@ export class WebviewSettingsSync {
   }
 
   async handleEnableServer(_postMessage: PostMessageFn): Promise<void> {
-    await configService.set(CONFIG_KEYS.SERVER_ENABLED, true, CONFIG_SCOPE.USER);
+    await configService.set(
+      CONFIG_KEYS.SERVER_ENABLED,
+      true,
+      CONFIG_SCOPE.USER
+    );
     await vscode.commands.executeCommand(VSCODE_COMMANDS.ENABLE_SERVER);
   }
 
   async handleDisableServer(_postMessage: PostMessageFn): Promise<void> {
-    await configService.set(CONFIG_KEYS.SERVER_ENABLED, false, CONFIG_SCOPE.USER);
+    await configService.set(
+      CONFIG_KEYS.SERVER_ENABLED,
+      false,
+      CONFIG_SCOPE.USER
+    );
     await vscode.commands.executeCommand(VSCODE_COMMANDS.DISABLE_SERVER);
   }
 
   async handleRegenerateServerToken(
     _postMessage: PostMessageFn
   ): Promise<void> {
-    await vscode.commands.executeCommand(VSCODE_COMMANDS.REGENERATE_SERVER_TOKEN);
+    await vscode.commands.executeCommand(
+      VSCODE_COMMANDS.REGENERATE_SERVER_TOKEN
+    );
   }
 
   async handleGenerateServerCert(postMessage: PostMessageFn): Promise<void> {
@@ -926,7 +939,8 @@ export class WebviewSettingsSync {
     );
     await fs.mkdir(certsDir, { recursive: true });
 
-    const bindAddress = configService.get(CONFIG_KEYS.SERVER)?.bindAddress ?? "127.0.0.1";
+    const bindAddress =
+      configService.get(CONFIG_KEYS.SERVER)?.bindAddress ?? "127.0.0.1";
     const lanIps: string[] =
       bindAddress === "0.0.0.0"
         ? Object.values(os.networkInterfaces())
@@ -979,8 +993,16 @@ export class WebviewSettingsSync {
     await fs.writeFile(certPath, pems.cert, "utf8");
     await fs.writeFile(keyPath, pems.private, "utf8");
 
-    await configService.set(CONFIG_KEYS.SERVER_TLS_CERT_PATH, certPath, CONFIG_SCOPE.USER);
-    await configService.set(CONFIG_KEYS.SERVER_TLS_KEY_PATH, keyPath, CONFIG_SCOPE.USER);
+    await configService.set(
+      CONFIG_KEYS.SERVER_TLS_CERT_PATH,
+      certPath,
+      CONFIG_SCOPE.USER
+    );
+    await configService.set(
+      CONFIG_KEYS.SERVER_TLS_KEY_PATH,
+      keyPath,
+      CONFIG_SCOPE.USER
+    );
     await this.handleGlobalSettingsLoadRequest(postMessage);
 
     this.emitMessage(

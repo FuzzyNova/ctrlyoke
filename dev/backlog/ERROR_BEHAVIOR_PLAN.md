@@ -26,12 +26,12 @@ are not detected at all:
 `errorBehavior` is a new `ExecutionProperties` field that controls what happens when the
 **harness itself** fails — not when an end condition script fails. The distinction matters:
 
-| Situation                           | Mechanism           | Notes                                       |
-| ----------------------------------- | ------------------- | ------------------------------------------- |
-| End condition script returns false  | `endCondition`      | Existing — script-based validation          |
-| Pre-condition script returns false  | `preCondition`      | Existing — gate before prompt runs          |
-| `type: script` step fails           | `onFail`            | Existing — inline script step               |
-| **Harness process errors/crashes**  | **`errorBehavior`** | New — "did the AI CLI itself fail?"         |
+| Situation                          | Mechanism           | Notes                               |
+| ---------------------------------- | ------------------- | ----------------------------------- |
+| End condition script returns false | `endCondition`      | Existing — script-based validation  |
+| Pre-condition script returns false | `preCondition`      | Existing — gate before prompt runs  |
+| `type: script` step fails          | `onFail`            | Existing — inline script step       |
+| **Harness process errors/crashes** | **`errorBehavior`** | New — "did the AI CLI itself fail?" |
 
 ---
 
@@ -42,18 +42,18 @@ steps:
   - name: implement
     prompt: Implement the feature.
     errorBehavior:
-      onError: retry           # stop | retry | continue
-      maxRetries: 3            # only relevant when onError: retry
-      retryDelayMs: 5000       # optional, ms to wait before retry (default: 2000)
+      onError: retry # stop | retry | continue
+      maxRetries: 3 # only relevant when onError: retry
+      retryDelayMs: 5000 # optional, ms to wait before retry (default: 2000)
 ```
 
 ### `onError` Options
 
-| Value      | Behavior                                                                                        |
-| ---------- | ----------------------------------------------------------------------------------------------- |
-| `stop`     | Stop the workflow and mark the step as failed (current behavior — default)                      |
-| `retry`    | Re-run the same step (with optional delay). After `maxRetries` exhausted, stops the workflow.   |
-| `continue` | Log the error as a warning, mark step as failed, advance to the next step in the queue.         |
+| Value      | Behavior                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------- |
+| `stop`     | Stop the workflow and mark the step as failed (current behavior — default)                    |
+| `retry`    | Re-run the same step (with optional delay). After `maxRetries` exhausted, stops the workflow. |
+| `continue` | Log the error as a warning, mark step as failed, advance to the next step in the queue.       |
 
 ### Why Not Extend `endCondition`?
 
@@ -104,6 +104,7 @@ renders an error message. FlightPath keeps waiting for the Stop hook indefinitel
 #### Claude CLI (interactive)
 
 Claude has two hook events:
+
 - `Stop` — fires whenever the agent stops (normal completion OR error)
 - `StopFailure` — fires specifically when the agent stopped due to an error
 
@@ -120,10 +121,11 @@ received instead of `Stop`, signal a harness error (not just a completion). This
 primary fix for the interactive hang bug.
 
 The `StopFailure` hook payload (from Claude's source) looks like:
+
 ```json
 {
   "hook_event_name": "StopFailure",
-  "error": "rate_limit",  // same enum as assistant.error
+  "error": "rate_limit", // same enum as assistant.error
   "error_details": "HTTP 429: Too many requests",
   "last_assistant_message": "...",
   "session_id": "..."
@@ -131,6 +133,7 @@ The `StopFailure` hook payload (from Claude's source) looks like:
 ```
 
 The `flightpath-claude-hook.js` script needs to write a notification file that:
+
 - Uses a distinct filename suffix: `{sessionId}-error.json`
 - Includes `{ hookEvent: "StopFailure", sessionId, status: "error", errorType: "rate_limit", errorDetails: "..." }`
 
@@ -146,15 +149,18 @@ Based on Claude's source code, the `result` type has specific error subtypes:
 ```json
 {
   "type": "result",
-  "subtype": "error_during_execution",  // or error_max_turns, error_max_budget_usd
+  "subtype": "error_during_execution", // or error_max_turns, error_max_budget_usd
   "is_error": true,
-  "errors": ["[ede_diagnostic] result_type=X last_content_type=Y stop_reason=Z"],
+  "errors": [
+    "[ede_diagnostic] result_type=X last_content_type=Y stop_reason=Z"
+  ],
   "session_id": "..."
 }
 ```
 
 There's also a `system` message type for **in-progress** API retries that Claude handles
 internally:
+
 ```json
 {
   "type": "system",
@@ -167,10 +173,12 @@ internally:
   "session_id": "..."
 }
 ```
+
 This fires while Claude is internally retrying — FlightPath could surface this to the user
 ("Claude is retrying due to rate limit, attempt 2/5") rather than just showing a frozen TUI.
 
 And the `assistant` message itself has an `error` field (non-null on error):
+
 ```json
 {
   "type": "assistant",
@@ -182,11 +190,13 @@ And the `assistant` message itself has an `error` field (non-null on error):
 ```
 
 **Current detection gaps in `ClaudeResponseParser`**:
+
 - Does not check `result.subtype` (only `is_error`)
 - Does not check `assistant.error` field
 - Does not surface `system/api_retry` events to the user
 
 **Recommended additions to `ClaudeResponseParser`**:
+
 1. Check `json.subtype` on result objects for error classification (rate_limit vs. execution error)
 2. Check `json.error` on assistant messages as an early error signal
 3. Emit a user-visible status event for `api_retry` system messages
@@ -204,6 +214,7 @@ The stop hook (`agentStop`) may or may not fire on error.
 
 **Fix**: Add `errorOccurred` to Copilot's hook config and notification monitoring. When
 `errorOccurred` fires, signal a harness error. This requires:
+
 1. Adding `errorOccurred` to `CopilotNotificationMonitor.EVENT_MAP`
 2. Updating `buildHookConfig()` to register an `errorOccurred` handler
 3. Writing `{sessionId}-error.json` notification from the hook script
@@ -263,11 +274,13 @@ error hooks are unavailable or untested.
 
 In interactive mode, when a harness encounters a recoverable error (e.g., a rate limit that
 it will retry internally), it may:
+
 1. Show the error in the TUI
 2. Retry automatically (without exiting)
 3. Eventually succeed → Stop hook fires normally ✅
 
 But when the error is unrecoverable:
+
 1. Show the error in the TUI
 2. Keep the TUI open (waiting for user input, or in a broken state)
 3. Stop hook may or may not fire
@@ -287,6 +300,7 @@ a timeout could trigger retry logic.
 ## WorkflowExecutor Changes
 
 Currently, all harness errors go through one of two paths:
+
 1. `wasLastFailureProcessExit()` → stop workflow
 2. `wasLastFailureUserCancellation()` → cancel, stop workflow
 3. Neither (general failure) → `markErrored()`, stop workflow
@@ -296,7 +310,10 @@ With `errorBehavior`, path 1 and 3 need to be intercepted:
 ```typescript
 // Conceptual change in WorkflowExecutor.executeStep()
 
-const resolvedErrorBehavior = propertyResolver.resolveErrorBehavior(prompt, workflow);
+const resolvedErrorBehavior = propertyResolver.resolveErrorBehavior(
+  prompt,
+  workflow
+);
 const onError = resolvedErrorBehavior?.onError ?? "stop";
 
 if (harnessErrored) {
@@ -306,7 +323,7 @@ if (harnessErrored) {
     // Do NOT call runtime.fail() — continue queue
     continue;
   }
-  
+
   if (onError === "retry") {
     const maxRetries = resolvedErrorBehavior?.maxRetries ?? 1;
     const retryDelayMs = resolvedErrorBehavior?.retryDelayMs ?? 2000;
@@ -316,7 +333,7 @@ if (harnessErrored) {
     }
     // Exhausted retries — fall through to stop
   }
-  
+
   // Default: stop
   runtime.failAttempt(target, attemptIndex, failureReason);
   runtime.fail();
@@ -343,11 +360,11 @@ getLastHarnessErrorMessage(): string | undefined;
 Or, extend the existing failure reason system with an error kind enum:
 
 ```typescript
-export type FailureKind = 
+export type FailureKind =
   | "userCancelled"
   | "processExit"
-  | "harnessError"     // NEW: harness signaled error via hook or JSON
-  | "timeout"          // NEW: prompt execution timed out
+  | "harnessError" // NEW: harness signaled error via hook or JSON
+  | "timeout" // NEW: prompt execution timed out
   | "unknown";
 ```
 
@@ -365,21 +382,25 @@ Both panels share the validation/execution section. Add below the existing `endC
 section:
 
 **`errorBehavior` dropdown** (replaces old hardcoded "stop" behavior):
+
 - Label: "On Harness Error"
 - Options: "Stop Workflow" (default), "Retry", "Continue to Next Step"
 - Applies to prompt steps only (not script steps — those already have `onFail`)
 
 **`maxRetries` number input** (shown only when option is "Retry"):
+
 - Label: "Max Retries"
 - Default: 1
 - Min: 1, Max: 10
 
 **`retryDelayMs` number input** (shown only when option is "Retry", optional):
+
 - Label: "Retry Delay (ms)"
 - Default: 2000
 - Only shown if user wants to customize; could be an expandable advanced section
 
 The UI pattern follows the existing `endCondition` section layout:
+
 - Collapsed/hidden when `onError: "stop"` (the default, no additional config needed)
 - Expanded with `maxRetries` + `retryDelayMs` inputs when `onError: "retry"`
 
@@ -412,7 +433,7 @@ Add global defaults to VS Code settings:
   "description": "Default maximum retries when errorBehavior.onError is 'retry'."
 },
 "flightpath.errorBehavior.retryDelayMs": {
-  "type": "number", 
+  "type": "number",
   "default": 2000,
   "description": "Default delay (ms) between error retries."
 }
@@ -423,6 +444,7 @@ Add global defaults to VS Code settings:
 ## Implementation Order
 
 ### Phase 1 — Schema + Types (no behavior change)
+
 1. Add `ErrorBehavior` interface and `ErrorBehaviorAction` type to `FlightPathTypes.ts`
 2. Add `errorBehavior?: ErrorBehavior | null` to `ExecutionProperties`
 3. Add to `schemas/prompt-schema.json` with descriptions and enum
@@ -430,6 +452,7 @@ Add global defaults to VS Code settings:
 5. Add to `PropertyResolver.resolveErrorBehavior()`
 
 ### Phase 2 — Error Detection (Claude first)
+
 1. Add `StopFailure` to `ClaudeNotificationMonitor.buildHookConfig()`
 2. Update `flightpath-claude-hook.js` to write `{sessionId}-error.json` for `StopFailure`
 3. Update `NotificationMonitorBase.monitorForCompletion()` to distinguish completion vs. error
@@ -438,12 +461,14 @@ Add global defaults to VS Code settings:
 6. Test with internet disconnection mid-prompt (Claude)
 
 ### Phase 3 — Error Detection (other harnesses)
+
 1. Copilot: Add `errorOccurred` hook + notification file
 2. Research Codex/OpenCode/Qwen/Gemini error event formats (open source codebases)
 3. Add log-based `isErrorEvent()` to each log parser for cross-harness fallback
 4. Headless: `ClaudeResponseParser` already works — just ensure error kind is set
 
 ### Phase 4 — WorkflowExecutor Routing
+
 1. Extend `executeStep()` to read resolved `errorBehavior`
 2. Implement `continue` path (skip `runtime.fail()`, advance queue)
 3. Implement `retry` path (loop with delay, up to maxRetries)
@@ -451,6 +476,7 @@ Add global defaults to VS Code settings:
 5. Update step status messages for retry/continue cases
 
 ### Phase 5 — UI
+
 1. Add `errorBehavior` dropdown to `WorkflowPropertiesPanel`
 2. Add `errorBehavior` dropdown to `PropertiesDrawer`
 3. Conditional `maxRetries` + `retryDelayMs` inputs

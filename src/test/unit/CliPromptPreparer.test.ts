@@ -180,9 +180,7 @@ suite("CliPromptPreparer", () => {
 
     assert.strictEqual(capturedInlineRefCount, 1);
     assert.ok(
-      result.tempFilePaths.some((filePath) =>
-        filePath.endsWith(".context.md")
-      )
+      result.tempFilePaths.some((filePath) => filePath.endsWith(".context.md"))
     );
   });
 

@@ -138,7 +138,7 @@ suite("CliTransportCoordinator", () => {
       } as unknown as ICliProvider,
       processManager: {
         spawn: async () => ({
-          stdout: "{\"partial\":true}\n",
+          stdout: '{"partial":true}\n',
           stderr: "",
           exitCode: 1,
         }),
@@ -173,7 +173,7 @@ suite("CliTransportCoordinator", () => {
 
     assert.strictEqual(success, false);
     assert.deepStrictEqual(callbackResult, {
-      stdout: "{\"partial\":true}\n",
+      stdout: '{"partial":true}\n',
       stderr: "",
       exitCode: 1,
     });

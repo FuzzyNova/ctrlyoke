@@ -557,9 +557,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
     renderHook(() => useMessageHandler());
 
     act(() => {
-      useWorkflowStore
-        .getState()
-        .setExecutionState(EXECUTION_STATES.RUNNING);
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
       useUiStore.getState().setHistoryView(0, 1);
     });
 

@@ -177,15 +177,15 @@ all call sites in `App.tsx`.
 
 Instead of always rendering `[▶][⏸][⏹]` (3 buttons), show only what is actionable:
 
-| State                  | Buttons shown              |
-| ---------------------- | -------------------------- |
-| no file                | `[▶ disabled]`             |
-| `idle` with file       | `[▶ run]`                  |
-| `running`              | `[⏸]` `[⏹]`                |
-| `paused` / `stopped`   | `[↺ restart]` `[▶ resume]` |
-| `completed` / `error`  | `[↺ restart]`              |
-| `cancelling`           | `[⏹ dim]`                  |
-| CLI-managed            | `[⏹ stop-cli]`             |
+| State                 | Buttons shown              |
+| --------------------- | -------------------------- |
+| no file               | `[▶ disabled]`             |
+| `idle` with file      | `[▶ run]`                  |
+| `running`             | `[⏸]` `[⏹]`                |
+| `paused` / `stopped`  | `[↺ restart]` `[▶ resume]` |
+| `completed` / `error` | `[↺ restart]`              |
+| `cancelling`          | `[⏹ dim]`                  |
+| CLI-managed           | `[⏹ stop-cli]`             |
 
 This saves one button-width on the right side of the header, giving `WorkflowStatus` more
 room to render the workflow name without truncating aggressively.
@@ -324,22 +324,24 @@ useEffect(() => {
 Then conditionally render the bottom nav:
 
 ```tsx
-{!keyboardVisible && (
-  <MobileBottomNav
-    onToggleMobilePrompts={handleToggleMobilePrompts}
-    onToggleGlobalSettings={handleToggleGlobalSettings}
-    onToggleMobileSettings={handleToggleMobileSettings}
-  />
-)}
+{
+  !keyboardVisible && (
+    <MobileBottomNav
+      onToggleMobilePrompts={handleToggleMobilePrompts}
+      onToggleGlobalSettings={handleToggleGlobalSettings}
+      onToggleMobileSettings={handleToggleMobileSettings}
+    />
+  );
+}
 ```
 
 **Result per case:**
 
-| Case | Bottom nav | `flex-1` available | Terminal inset spacer |
-|---|---|---|---|
-| No keyboard | visible | dvh − header − nav − safe-area | 0 |
-| PromptEditor keyboard | hidden | dvh − header − safe-area (+56 px recovered) | 0 |
-| Terminal keyboard | hidden | dvh − header − safe-area − inset (+56 px recovered) | keyboard height |
+| Case                  | Bottom nav | `flex-1` available                                  | Terminal inset spacer |
+| --------------------- | ---------- | --------------------------------------------------- | --------------------- |
+| No keyboard           | visible    | dvh − header − nav − safe-area                      | 0                     |
+| PromptEditor keyboard | hidden     | dvh − header − safe-area (+56 px recovered)         | 0                     |
+| Terminal keyboard     | hidden     | dvh − header − safe-area − inset (+56 px recovered) | keyboard height       |
 
 When the keyboard is open the user is actively typing — they have no need for the nav —
 so hiding it is zero-cost UX and maximum-benefit layout.
@@ -360,14 +362,14 @@ This is a separate, optional improvement; it can be deferred.
 
 ## Files Changed
 
-| File                                       | Change                                                                                                                              |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `components/layout/MobileBottomNav.tsx`    | **New** — bottom nav component                                                                                                      |
+| File                                       | Change                                                                                                                                                                                                                     |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `components/layout/MobileBottomNav.tsx`    | **New** — bottom nav component                                                                                                                                                                                             |
 | `components/layout/Header.tsx`             | Mobile only: remove panel toggles, standalone save button, and global-settings button; pass save props to `WorkflowControls`; context-sensitive mobile exec controls; collapse mobile header to one row. Desktop unchanged |
-| `components/workflow/WorkflowControls.tsx` | Add optional mobile Save dropdown entry using existing save props and `divider` support                                              |
-| `components/shared/SplitButton.tsx`        | Tighten `SplitButtonOption` into a discriminated union for divider rows                                                              |
-| `App.tsx`                                  | Render `MobileBottomNav` (hidden when `keyboardVisible`); generalize `visualViewport` effect to produce `keyboardVisible`; remove panel-toggle props from `<Header>` |
-| `components/layout/index.ts`               | Export `MobileBottomNav`                                                                                                            |
+| `components/workflow/WorkflowControls.tsx` | Add optional mobile Save dropdown entry using existing save props and `divider` support                                                                                                                                    |
+| `components/shared/SplitButton.tsx`        | Tighten `SplitButtonOption` into a discriminated union for divider rows                                                                                                                                                    |
+| `App.tsx`                                  | Render `MobileBottomNav` (hidden when `keyboardVisible`); generalize `visualViewport` effect to produce `keyboardVisible`; remove panel-toggle props from `<Header>`                                                       |
+| `components/layout/index.ts`               | Export `MobileBottomNav`                                                                                                                                                                                                   |
 
 ---
 

@@ -3,6 +3,7 @@
 ## Security Priority Order
 
 HTTPS/TLS is **low priority** for most users because:
+
 - WireGuard/Tailscale users already have network-layer encryption — HTTPS adds nothing
 - Localhost-only users are never exposed to the network at all
 - For direct internet exposure, HTTPS without authentication still leaves the server wide open
@@ -10,6 +11,7 @@ HTTPS/TLS is **low priority** for most users because:
 The real gap is **authentication**. An unauthenticated server lets anyone who can reach the port read all workflow history, trigger AI execution, enumerate workspace files, and run end-condition scripts (arbitrary code on the host machine).
 
 Priority order:
+
 1. **Token authentication** — closes the access control gap entirely
 2. **Configurable bind address** — reduces exposure surface (localhost by default)
 3. **WebSocket origin check** — prevents cross-site WebSocket hijacking
@@ -51,7 +53,13 @@ const storedToken = await context.secrets.get("flightpath.server.token");
 const token = storedToken ?? randomBytes(32).toString("hex");
 if (!storedToken) await context.secrets.store("flightpath.server.token", token);
 
-hostedServer = new FlightPathHostedServer(hub, webviewProvider, port, workspaceRoot, token);
+hostedServer = new FlightPathHostedServer(
+  hub,
+  webviewProvider,
+  port,
+  workspaceRoot,
+  token
+);
 ```
 
 Register a `flightpath.regenerateServerToken` command that calls `context.secrets.delete("flightpath.server.token")` and posts `SERVER_TOKEN_REGENERATED` to the webview (so the UI refreshes the displayed URL on next server start). Show an info message telling the user to restart the server.
@@ -108,35 +116,48 @@ The running-server row (URL + copy button) gains two new buttons:
 **QR code button** — renders the full URL as a QR code in an inline panel beneath the URL row. User scans once with phone → saves as bookmark. Uses the `qrcode` npm package (client-side, ~50KB, renders to `<canvas>`).
 
 ```tsx
-{serverRunning && serverUrl && (
-  <div>
-    <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded">
-      <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-      <a href={serverUrl} target="_blank" rel="noreferrer"
-         className="text-xs text-link truncate flex-1 hover:underline">
-        {serverUrl}
-      </a>
-      <button onClick={() => navigator.clipboard.writeText(serverUrl)}
-              title="Copy URL" className="shrink-0 text-description-fg hover:text-foreground">
-        <i className="codicon codicon-copy" />
-      </button>
-      <button onClick={() => setShowQr((v) => !v)}
-              title="Show QR code" className="shrink-0 text-description-fg hover:text-foreground">
-        <i className="codicon codicon-qr-code" />  {/* or inline SVG */}
-      </button>
-    </div>
-
-    {showQr && (
-      <div className="mt-2 flex flex-col items-center gap-1 p-3 bg-white rounded">
-        <canvas ref={qrCanvasRef} />
-        <p className="text-xs text-gray-500">Scan to open on your phone</p>
+{
+  serverRunning && serverUrl && (
+    <div>
+      <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded">
+        <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+        <a
+          href={serverUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-link truncate flex-1 hover:underline"
+        >
+          {serverUrl}
+        </a>
+        <button
+          onClick={() => navigator.clipboard.writeText(serverUrl)}
+          title="Copy URL"
+          className="shrink-0 text-description-fg hover:text-foreground"
+        >
+          <i className="codicon codicon-copy" />
+        </button>
+        <button
+          onClick={() => setShowQr((v) => !v)}
+          title="Show QR code"
+          className="shrink-0 text-description-fg hover:text-foreground"
+        >
+          <i className="codicon codicon-qr-code" /> {/* or inline SVG */}
+        </button>
       </div>
-    )}
-  </div>
-)}
+
+      {showQr && (
+        <div className="mt-2 flex flex-col items-center gap-1 p-3 bg-white rounded">
+          <canvas ref={qrCanvasRef} />
+          <p className="text-xs text-gray-500">Scan to open on your phone</p>
+        </div>
+      )}
+    </div>
+  );
+}
 ```
 
 QR generation in effect:
+
 ```ts
 useEffect(() => {
   if (showQr && qrCanvasRef.current && serverUrl) {
@@ -151,7 +172,9 @@ useEffect(() => {
 
 ```tsx
 <button
-  onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.REGENERATE_SERVER_TOKEN })}
+  onClick={() =>
+    vscode.postMessage({ type: MESSAGE_TYPES.REGENERATE_SERVER_TOKEN })
+  }
   className="text-xs text-description-fg hover:text-foreground underline"
 >
   Regenerate token
@@ -210,7 +233,10 @@ Add a `bindAddress` field below the port fields:
 
 ```tsx
 <div>
-  <label htmlFor="server-bind" className="block text-xs text-description-fg mb-1">
+  <label
+    htmlFor="server-bind"
+    className="block text-xs text-description-fg mb-1"
+  >
     Bind address
   </label>
   <select
@@ -319,44 +345,56 @@ Replace the "reserved for future update" placeholder with:
     className="accent-btn-primary-bg"
   />
   <span className="text-sm text-foreground">Enable HTTPS</span>
-</label>
+</label>;
 
-{server.tls?.enabled && (
-  <div className="space-y-3">
-    <div>
-      <label htmlFor="tls-cert-path" className="block text-xs text-description-fg mb-1">
-        Certificate file (.pem)
-      </label>
-      <input
-        id="tls-cert-path"
-        type="text"
-        value={server.tls?.certPath ?? ""}
-        placeholder="/path/to/cert.pem"
-        onChange={(e) => onUpdate("server.tls.certPath", e.target.value, s)}
-        className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
-      />
+{
+  server.tls?.enabled && (
+    <div className="space-y-3">
+      <div>
+        <label
+          htmlFor="tls-cert-path"
+          className="block text-xs text-description-fg mb-1"
+        >
+          Certificate file (.pem)
+        </label>
+        <input
+          id="tls-cert-path"
+          type="text"
+          value={server.tls?.certPath ?? ""}
+          placeholder="/path/to/cert.pem"
+          onChange={(e) => onUpdate("server.tls.certPath", e.target.value, s)}
+          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
+        />
+      </div>
+      <div>
+        <label
+          htmlFor="tls-key-path"
+          className="block text-xs text-description-fg mb-1"
+        >
+          Private key file (.pem)
+        </label>
+        <input
+          id="tls-key-path"
+          type="text"
+          value={server.tls?.keyPath ?? ""}
+          placeholder="/path/to/key.pem"
+          onChange={(e) => onUpdate("server.tls.keyPath", e.target.value, s)}
+          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
+        />
+      </div>
+      <p className="text-xs text-description-fg italic">
+        Generate a self-signed cert:{" "}
+        <code>
+          openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem
+          -sha256 -days 365 -nodes -subj "/CN=localhost"
+        </code>
+      </p>
+      <p className="text-xs text-description-fg italic">
+        Changes take effect the next time the server is restarted.
+      </p>
     </div>
-    <div>
-      <label htmlFor="tls-key-path" className="block text-xs text-description-fg mb-1">
-        Private key file (.pem)
-      </label>
-      <input
-        id="tls-key-path"
-        type="text"
-        value={server.tls?.keyPath ?? ""}
-        placeholder="/path/to/key.pem"
-        onChange={(e) => onUpdate("server.tls.keyPath", e.target.value, s)}
-        className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono"
-      />
-    </div>
-    <p className="text-xs text-description-fg italic">
-      Generate a self-signed cert: <code>openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 365 -nodes -subj "/CN=localhost"</code>
-    </p>
-    <p className="text-xs text-description-fg italic">
-      Changes take effect the next time the server is restarted.
-    </p>
-  </div>
-)}
+  );
+}
 ```
 
 ### Note on Let's Encrypt
@@ -367,22 +405,22 @@ Let's Encrypt is **not applicable** for localhost/LAN use — it requires a publ
 
 ## Summary of Files to Touch
 
-| Phase | File | Change |
-|---|---|---|
-| 1 | `src/extension.ts` | Read/generate persistent token from `SecretStorage`; pass to constructor; register `regenerateServerToken` command |
-| 1 | `src/server/FlightPathHostedServer.ts` | Accept token in constructor, HTTP middleware, WS token check |
-| 1 | `src/server/standalone-shim.js` | Forward token from page URL query string to WebSocket URL |
-| 1 | `src/ui/webview-react/components/settings/ServerSection.tsx` | QR code button + inline canvas, Regenerate token button |
-| 1 | `src/types/DashboardConstants.ts` | Add `REGENERATE_SERVER_TOKEN` message type |
-| 1 | `src/ui/WebviewSettingsSync.ts` | Handle `REGENERATE_SERVER_TOKEN` message |
-| 1 | `package.json` (webview) | Add `qrcode` dependency |
-| 2 | `src/types/FlightPathSettings.ts` | Add `bindAddress` field + default `"127.0.0.1"` |
-| 2 | `src/server/FlightPathHostedServer.ts` | Accept `bindAddress`, use in `listen()` |
-| 2 | `src/extension.ts` | Read `bindAddress` from config, pass to constructor |
-| 2 | `src/ui/webview-react/components/settings/ServerSection.tsx` | Add bind address select dropdown |
-| 3 | `src/server/FlightPathHostedServer.ts` | `isAllowedOrigin()` check in `setupWebSocket()` |
-| 4 | `src/types/FlightPathSettings.ts` | Make `tls` required, add defaults |
-| 4 | `src/server/FlightPathHostedServer.ts` | HTTPS branch, `isTls` field, scheme in `listen()` |
-| 4 | `src/extension.ts` | Read TLS config, pass to constructor, try/catch with `showErrorMessage` |
-| 4 | `src/ui/webview-react/components/settings/ServerSection.tsx` | Replace TLS placeholder with real fields |
-| 4 | `src/ui/WebviewSettingsSync.ts` | Verify 3-segment dot-path support for `server.tls.*` |
+| Phase | File                                                         | Change                                                                                                             |
+| ----- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| 1     | `src/extension.ts`                                           | Read/generate persistent token from `SecretStorage`; pass to constructor; register `regenerateServerToken` command |
+| 1     | `src/server/FlightPathHostedServer.ts`                       | Accept token in constructor, HTTP middleware, WS token check                                                       |
+| 1     | `src/server/standalone-shim.js`                              | Forward token from page URL query string to WebSocket URL                                                          |
+| 1     | `src/ui/webview-react/components/settings/ServerSection.tsx` | QR code button + inline canvas, Regenerate token button                                                            |
+| 1     | `src/types/DashboardConstants.ts`                            | Add `REGENERATE_SERVER_TOKEN` message type                                                                         |
+| 1     | `src/ui/WebviewSettingsSync.ts`                              | Handle `REGENERATE_SERVER_TOKEN` message                                                                           |
+| 1     | `package.json` (webview)                                     | Add `qrcode` dependency                                                                                            |
+| 2     | `src/types/FlightPathSettings.ts`                            | Add `bindAddress` field + default `"127.0.0.1"`                                                                    |
+| 2     | `src/server/FlightPathHostedServer.ts`                       | Accept `bindAddress`, use in `listen()`                                                                            |
+| 2     | `src/extension.ts`                                           | Read `bindAddress` from config, pass to constructor                                                                |
+| 2     | `src/ui/webview-react/components/settings/ServerSection.tsx` | Add bind address select dropdown                                                                                   |
+| 3     | `src/server/FlightPathHostedServer.ts`                       | `isAllowedOrigin()` check in `setupWebSocket()`                                                                    |
+| 4     | `src/types/FlightPathSettings.ts`                            | Make `tls` required, add defaults                                                                                  |
+| 4     | `src/server/FlightPathHostedServer.ts`                       | HTTPS branch, `isTls` field, scheme in `listen()`                                                                  |
+| 4     | `src/extension.ts`                                           | Read TLS config, pass to constructor, try/catch with `showErrorMessage`                                            |
+| 4     | `src/ui/webview-react/components/settings/ServerSection.tsx` | Replace TLS placeholder with real fields                                                                           |
+| 4     | `src/ui/WebviewSettingsSync.ts`                              | Verify 3-segment dot-path support for `server.tls.*`                                                               |

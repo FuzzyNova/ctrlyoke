@@ -379,8 +379,14 @@ export class CliTerminalFormatter {
    * then with cliCommand (show the harness command being run).
    */
   static renderPromptHeader(data: PromptStartData): void {
-    const { stepIndex, totalSteps, promptText, attemptIndex, runIndex, cliCommand } =
-      data;
+    const {
+      stepIndex,
+      totalSteps,
+      promptText,
+      attemptIndex,
+      runIndex,
+      cliCommand,
+    } = data;
 
     if (cliCommand !== undefined) {
       // Second fire — print the CLI command with a yellow left border (mirrors border-l-output-command-border)

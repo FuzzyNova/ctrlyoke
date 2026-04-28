@@ -273,7 +273,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
             {(hunks) =>
               hunks.reduce<React.ReactElement[]>((nodes, hunk, i) => {
                 const prevHunk = i > 0 ? hunks[i - 1] : null;
-                const collapsed = prevHunk !== null ? getCollapsedLinesCountBetween(prevHunk, hunk) : 0;
+                const collapsed =
+                  prevHunk !== null
+                    ? getCollapsedLinesCountBetween(prevHunk, hunk)
+                    : 0;
                 if (collapsed > 0) {
                   const hiddenLinesLabel = formatHiddenLines(collapsed);
                   const chunkSize = Math.min(

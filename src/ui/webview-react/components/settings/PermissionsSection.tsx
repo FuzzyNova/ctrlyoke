@@ -1,4 +1,7 @@
-import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingSource,
+} from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
@@ -27,7 +30,12 @@ const CODEX_APPROVAL_OPTIONS = [
   { value: "never", label: "Never" },
 ];
 
-export function PermissionsSection({ settings, activeScope, onUpdate, onReset }: Props) {
+export function PermissionsSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: Props) {
   const tools = settings.settings.tools;
   const sources = settings.sources as Record<string, SettingSource>;
 

@@ -885,7 +885,10 @@ function createMessageHandlers(): MessageHandlerMap {
 
     useUiStore
       .getState()
-      .showToast(message.event.body, getNotificationSeverityColor(message.event.severity));
+      .showToast(
+        message.event.body,
+        getNotificationSeverityColor(message.event.severity)
+      );
 
     void handleCompletionNotificationEvent(
       message.event,

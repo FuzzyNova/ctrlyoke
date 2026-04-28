@@ -3,11 +3,11 @@
 **Date:** 2026-04-03 (revised 2026-04-20)
 **Purpose:** Generate conventional commit messages using the workspace's configured FlightPath harness. Three integration points share a single core implementation:
 
-| Surface            | What it does                                                                 |
-| ------------------ | ---------------------------------------------------------------------------- |
-| **VS Code SCM**    | Button in the SCM title bar — generates message, populates the input box     |
-| **CLI**            | `flightpath commit` subcommand — generates message then runs `git commit -m` |
-| **Hosted server**  | "Commit" button in the React dashboard — generates message then commits      |
+| Surface           | What it does                                                                 |
+| ----------------- | ---------------------------------------------------------------------------- |
+| **VS Code SCM**   | Button in the SCM title bar — generates message, populates the input box     |
+| **CLI**           | `flightpath commit` subcommand — generates message then runs `git commit -m` |
+| **Hosted server** | "Commit" button in the React dashboard — generates message then commits      |
 
 ---
 
@@ -20,10 +20,10 @@ Because all three surfaces share the same generation logic, commit settings belo
 ```typescript
 // In FlightPathGlobalSettings interface
 commit: {
-  harness: HarnessId | "";  // empty = use workspace default harness
-  model: string;            // empty = use the commit harness default
-  prompt: string;           // system prompt; diff appended after
-};
+  harness: HarnessId | ""; // empty = use workspace default harness
+  model: string; // empty = use the commit harness default
+  prompt: string; // system prompt; diff appended after
+}
 ```
 
 ### `FLIGHTPATH_SETTINGS_DEFAULTS`
@@ -113,7 +113,10 @@ export class CommitMessageGenerator {
    * Convenience: getDiff + generateMessage.
    * Returns null if there is nothing to commit (clean working tree + index).
    */
-  async generate(cwd: string, token?: AbortSignal): Promise<CommitResult | null>;
+  async generate(
+    cwd: string,
+    token?: AbortSignal
+  ): Promise<CommitResult | null>;
 }
 ```
 
@@ -170,7 +173,11 @@ export class GitCommitter {
    * Commits with the given message.
    * If addAll is true, runs `git add .` first (fallback path when nothing was staged).
    */
-  async commit(message: string, cwd: string, options?: CommitOptions): Promise<void>;
+  async commit(
+    message: string,
+    cwd: string,
+    options?: CommitOptions
+  ): Promise<void>;
 }
 ```
 
@@ -266,14 +273,18 @@ async function commitCommand(options: CommitOptions): Promise<void> {
     process.exit(1);
   }
   if (!result.staged) {
-    console.log("No staged changes found; using working tree diff (will run git add .).");
+    console.log(
+      "No staged changes found; using working tree diff (will run git add .)."
+    );
   }
   if (options.dryRun) {
     console.log(result.message);
     return;
   }
   // addAll: true → GitCommitter runs `git add . && git commit -m`
-  await new GitCommitter().commit(result.message, cwd, { addAll: !result.staged });
+  await new GitCommitter().commit(result.message, cwd, {
+    addAll: !result.staged,
+  });
   console.log(`Committed: ${result.message}`);
 }
 ```
@@ -286,12 +297,12 @@ async function commitCommand(options: CommitOptions): Promise<void> {
 
 ```typescript
 // From browser client → server
-GENERATE_COMMIT_MESSAGE: "generateCommitMessage"
+GENERATE_COMMIT_MESSAGE: "generateCommitMessage";
 
 // From server → browser client
-COMMIT_MESSAGE_GENERATED: "commitMessageGenerated"
-COMMIT_COMPLETE: "commitComplete"
-COMMIT_ERROR: "commitError"
+COMMIT_MESSAGE_GENERATED: "commitMessageGenerated";
+COMMIT_COMPLETE: "commitComplete";
+COMMIT_ERROR: "commitError";
 ```
 
 ### `src/server/FlightPathHostedServer.ts`
@@ -306,12 +317,19 @@ if (msg?.type === MESSAGE_TYPES.GENERATE_COMMIT_MESSAGE) {
   try {
     const result = await generator.generate(cwd);
     if (!result) {
-      send({ type: MESSAGE_TYPES.COMMIT_ERROR, error: "Nothing to commit — working tree is clean." });
+      send({
+        type: MESSAGE_TYPES.COMMIT_ERROR,
+        error: "Nothing to commit — working tree is clean.",
+      });
       return;
     }
     // addAll: true → GitCommitter runs `git add . && git commit -m`
     await committer.commit(result.message, cwd, { addAll: !result.staged });
-    send({ type: MESSAGE_TYPES.COMMIT_COMPLETE, message: result.message, staged: result.staged });
+    send({
+      type: MESSAGE_TYPES.COMMIT_COMPLETE,
+      message: result.message,
+      staged: result.staged,
+    });
   } catch (err) {
     send({ type: MESSAGE_TYPES.COMMIT_ERROR, error: String(err) });
   }
@@ -326,15 +344,15 @@ Add a "Commit" button panel to the dashboard (exact placement TBD — likely nea
 
 ## 7. Error Handling (all paths)
 
-| Scenario                             | Behavior                                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| Nothing staged AND clean working tree | Error: "Nothing to commit — working tree is clean."                                              |
-| Nothing staged, but unstaged changes | Proceed with working tree diff; CLI/server run `git add .` before commit; VS Code shows info note |
-| Harness not configured/found         | Error: "No harness configured." (link to settings)                                               |
-| Diff exceeds 8 KB                    | Warn user; truncate and continue                                                                  |
-| Generation fails                     | Error notification; input box / terminal left unchanged                                           |
-| `git commit` fails (CLI/server)      | Surface the git error message                                                                     |
-| User cancels (VS Code)               | Silent cancel; input box left unchanged                                                           |
+| Scenario                              | Behavior                                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Nothing staged AND clean working tree | Error: "Nothing to commit — working tree is clean."                                               |
+| Nothing staged, but unstaged changes  | Proceed with working tree diff; CLI/server run `git add .` before commit; VS Code shows info note |
+| Harness not configured/found          | Error: "No harness configured." (link to settings)                                                |
+| Diff exceeds 8 KB                     | Warn user; truncate and continue                                                                  |
+| Generation fails                      | Error notification; input box / terminal left unchanged                                           |
+| `git commit` fails (CLI/server)       | Surface the git error message                                                                     |
+| User cancels (VS Code)                | Silent cancel; input box left unchanged                                                           |
 
 ---
 
@@ -369,39 +387,39 @@ Add a "Commit" button panel to the dashboard (exact placement TBD — likely nea
 
 ## 9. Isolation Boundary
 
-| File/Layer                              | Touched | Notes                                            |
-| --------------------------------------- | ------- | ------------------------------------------------ |
-| `src/types/FlightPathSettings.ts`       | Yes     | Add `commit` section (shared settings)           |
-| `schemas/settings-schema.json`          | Yes     | Add `commit` object                              |
-| `src/utils/ConfigurationUtils.ts`       | Yes     | Add `getCommitModel()` / `getCommitPrompt()`     |
-| `src/types/DashboardConstants.ts`       | Yes     | Add 3 new message types                          |
-| `src/git/CommitMessageGenerator.ts`     | New     | No vscode imports                                |
-| `src/git/GitCommitter.ts`               | New     | No vscode imports                                |
-| `src/scm/ScmCommitCommand.ts`           | New     | VS Code only (vscode imports allowed)            |
-| `src/extension.ts`                      | Yes     | Register command                                 |
-| `package.json`                          | Yes     | Command, menu, icon, (no settings — shared)      |
-| `src/cli.ts`                            | Yes     | Add `commit` subcommand                          |
-| `src/server/FlightPathHostedServer.ts`  | Yes     | Handle `GENERATE_COMMIT_MESSAGE` WS message      |
-| `src/ui/webview-react/`                 | Yes     | Commit button + status display in dashboard      |
+| File/Layer                             | Touched | Notes                                        |
+| -------------------------------------- | ------- | -------------------------------------------- |
+| `src/types/FlightPathSettings.ts`      | Yes     | Add `commit` section (shared settings)       |
+| `schemas/settings-schema.json`         | Yes     | Add `commit` object                          |
+| `src/utils/ConfigurationUtils.ts`      | Yes     | Add `getCommitModel()` / `getCommitPrompt()` |
+| `src/types/DashboardConstants.ts`      | Yes     | Add 3 new message types                      |
+| `src/git/CommitMessageGenerator.ts`    | New     | No vscode imports                            |
+| `src/git/GitCommitter.ts`              | New     | No vscode imports                            |
+| `src/scm/ScmCommitCommand.ts`          | New     | VS Code only (vscode imports allowed)        |
+| `src/extension.ts`                     | Yes     | Register command                             |
+| `package.json`                         | Yes     | Command, menu, icon, (no settings — shared)  |
+| `src/cli.ts`                           | Yes     | Add `commit` subcommand                      |
+| `src/server/FlightPathHostedServer.ts` | Yes     | Handle `GENERATE_COMMIT_MESSAGE` WS message  |
+| `src/ui/webview-react/`                | Yes     | Commit button + status display in dashboard  |
 
 ---
 
 ## 10. Implementation Order
 
-| # | Task                                                                          | Complexity |
-| - | ----------------------------------------------------------------------------- | ---------- |
-| 1 | Add `commit` section to `FlightPathSettings.ts` + defaults                    | Low        |
-| 2 | Add `commit` to `schemas/settings-schema.json`                                | Low        |
-| 3 | Add `getCommitModel()` / `getCommitPrompt()` to `ConfigurationUtils.ts`       | Low        |
-| 4 | Add 3 message type constants to `DashboardConstants.ts`                       | Low        |
-| 5 | Implement `src/git/CommitMessageGenerator.ts`                                 | Medium     |
-| 6 | Implement `src/git/GitCommitter.ts`                                           | Low        |
-| 7 | Implement `src/scm/ScmCommitCommand.ts` + register in `extension.ts`         | Medium     |
-| 8 | Register FlightPath SVG icon + add command/menu to `package.json`             | Low        |
-| 9 | Add `flightpath commit` subcommand to `src/cli.ts`                            | Low        |
-| 10 | Add WebSocket handler in `FlightPathHostedServer.ts`                          | Low        |
-| 11 | Add Commit button + state to React webview                                    | Medium     |
-| 12 | Manual testing: all three surfaces, empty staging area, large diff, cancel    | Medium     |
+| #   | Task                                                                       | Complexity |
+| --- | -------------------------------------------------------------------------- | ---------- |
+| 1   | Add `commit` section to `FlightPathSettings.ts` + defaults                 | Low        |
+| 2   | Add `commit` to `schemas/settings-schema.json`                             | Low        |
+| 3   | Add `getCommitModel()` / `getCommitPrompt()` to `ConfigurationUtils.ts`    | Low        |
+| 4   | Add 3 message type constants to `DashboardConstants.ts`                    | Low        |
+| 5   | Implement `src/git/CommitMessageGenerator.ts`                              | Medium     |
+| 6   | Implement `src/git/GitCommitter.ts`                                        | Low        |
+| 7   | Implement `src/scm/ScmCommitCommand.ts` + register in `extension.ts`       | Medium     |
+| 8   | Register FlightPath SVG icon + add command/menu to `package.json`          | Low        |
+| 9   | Add `flightpath commit` subcommand to `src/cli.ts`                         | Low        |
+| 10  | Add WebSocket handler in `FlightPathHostedServer.ts`                       | Low        |
+| 11  | Add Commit button + state to React webview                                 | Medium     |
+| 12  | Manual testing: all three surfaces, empty staging area, large diff, cancel | Medium     |
 
 ---
 

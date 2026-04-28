@@ -99,8 +99,7 @@ export function countStructuredPatchDisplayLines(
     (count, hunk) =>
       count +
       hunk.lines.reduce(
-        (lineCount, line) =>
-          lineCount + (isDisplayableDiffLine(line) ? 1 : 0),
+        (lineCount, line) => lineCount + (isDisplayableDiffLine(line) ? 1 : 0),
         0
       ),
     0

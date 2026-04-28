@@ -43,7 +43,9 @@ function resolveVsCodeApi(): VsCodeApi | undefined {
 }
 
 export function useVsCodeApi(): VsCodeApi {
-  const [api, setApi] = useState<VsCodeApi | undefined>(() => resolveVsCodeApi());
+  const [api, setApi] = useState<VsCodeApi | undefined>(() =>
+    resolveVsCodeApi()
+  );
 
   useEffect(() => {
     const resolvedApi = resolveVsCodeApi();

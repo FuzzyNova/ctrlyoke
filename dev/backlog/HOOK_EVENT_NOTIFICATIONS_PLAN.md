@@ -46,12 +46,16 @@ There is already a Notifications tab in the global settings drawer, so this feat
 
 ```ts
 notifications: {
-  vscode: { enabled: boolean };
-  browser: { mode: BrowserNotificationMode };
+  vscode: {
+    enabled: boolean;
+  }
+  browser: {
+    mode: BrowserNotificationMode;
+  }
   events: {
     workflowComplete: NotificationEventMode;
     promptComplete: NotificationEventMode;
-  };
+  }
   includeWorkflowName: boolean;
   includePromptName: boolean;
   onlyWhenWindowUnfocused: boolean;
@@ -187,13 +191,13 @@ Extend [NotificationsSection.tsx](/C:/dev/FlightPath/src/ui/webview-react/compon
 
 Recommended layout:
 
-| Event | Notify | Meaning |
-| --- | --- | --- |
-| Session Start | checkbox | AI session started for this prompt |
-| User Prompt Submit | checkbox | prompt submitted into the harness |
-| Pre Tool Use | checkbox | before a tool call |
-| Post Tool Use | checkbox | after a tool call |
-| Stop | checkbox | harness stop/completion hook |
+| Event              | Notify   | Meaning                            |
+| ------------------ | -------- | ---------------------------------- |
+| Session Start      | checkbox | AI session started for this prompt |
+| User Prompt Submit | checkbox | prompt submitted into the harness  |
+| Pre Tool Use       | checkbox | before a tool call                 |
+| Post Tool Use      | checkbox | after a tool call                  |
+| Stop               | checkbox | harness stop/completion hook       |
 
 Behavior notes:
 

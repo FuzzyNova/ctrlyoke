@@ -2,7 +2,10 @@ import { useRef, useState, useEffect, useMemo } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
-import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingSource,
+} from "@root/types/WebviewMessageTypes";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
@@ -13,14 +16,21 @@ interface Props {
   onReset: (path: string) => void;
 }
 
-export function ServerSection({ settings, activeScope, onUpdate, onReset }: Props) {
+export function ServerSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: Props) {
   const server = settings.settings.server;
   const sources = settings.sources as Record<string, SettingSource>;
 
   const serverRunning = useSettingsStore((state) => state.serverRunning);
   const serverUrl = useSettingsStore((state) => state.serverUrl);
   const availableIps = useSettingsStore((state) => state.availableIps);
-  const selectedDisplayIp = useSettingsStore((state) => state.selectedDisplayIp);
+  const selectedDisplayIp = useSettingsStore(
+    (state) => state.selectedDisplayIp
+  );
   const setSelectedDisplayIp = useSettingsStore(
     (state) => state.setSelectedDisplayIp
   );
@@ -98,10 +108,7 @@ export function ServerSection({ settings, activeScope, onUpdate, onReset }: Prop
         {serverRunning && displayUrl && (
           <div>
             {showIpSelector && (
-              <SettingInputRow
-                label="Connect via"
-                id="server-display-ip"
-              >
+              <SettingInputRow label="Connect via" id="server-display-ip">
                 <select
                   id="server-display-ip"
                   value={selectedDisplayIp ?? ""}
@@ -279,9 +286,7 @@ export function ServerSection({ settings, activeScope, onUpdate, onReset }: Prop
                 type="text"
                 value={server.tls?.keyPath ?? ""}
                 placeholder="/path/to/key.pem"
-                onChange={(e) =>
-                  onUpdate("server.tls.keyPath", e.target.value)
-                }
+                onChange={(e) => onUpdate("server.tls.keyPath", e.target.value)}
                 className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
               />
             </SettingInputRow>
@@ -317,8 +322,8 @@ export function ServerSection({ settings, activeScope, onUpdate, onReset }: Prop
               <em>Settings → General → VPN &amp; Device Management</em>, then
               enable full trust under{" "}
               <em>
-                Settings → General → About → Certificate Trust Settings →
-                Enable Full Trust For Root Certificates
+                Settings → General → About → Certificate Trust Settings → Enable
+                Full Trust For Root Certificates
               </em>
               . Requires iOS 18.2+ (iOS 18.0–18.1 had a bug where this toggle
               didn&apos;t appear).

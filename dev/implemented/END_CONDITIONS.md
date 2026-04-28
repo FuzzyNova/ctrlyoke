@@ -62,14 +62,14 @@ End conditions are **optional validation checks** that determine whether a workf
 
 ### Retry Prompt Placeholders
 
-| Placeholder       | Description                                            | Example        |
-| ----------------- | ------------------------------------------------------ | -------------- |
-| `{stdout}`        | stdout from the validation script                      | `"3 tests failed"` |
-| `{stderr}`        | stderr from the validation script                      | `"SyntaxError: ..."` |
-| `{expected}`      | The configured expected value                          | `"true"`       |
-| `{actual}`        | The actual comparison value (resolved from compareSource) | `"false"` |
-| `{exitCode}`      | Numeric exit code from the validation script           | `"1"`          |
-| `{compareSource}` | Comparison source: `stdout`, `stderr`, `exitCode`, `auto` | `"stdout"` |
+| Placeholder       | Description                                               | Example              |
+| ----------------- | --------------------------------------------------------- | -------------------- |
+| `{stdout}`        | stdout from the validation script                         | `"3 tests failed"`   |
+| `{stderr}`        | stderr from the validation script                         | `"SyntaxError: ..."` |
+| `{expected}`      | The configured expected value                             | `"true"`             |
+| `{actual}`        | The actual comparison value (resolved from compareSource) | `"false"`            |
+| `{exitCode}`      | Numeric exit code from the validation script              | `"1"`                |
+| `{compareSource}` | Comparison source: `stdout`, `stderr`, `exitCode`, `auto` | `"stdout"`           |
 
 ---
 

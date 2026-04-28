@@ -120,7 +120,9 @@ async function readFileForSnapshot(
   }
 }
 
-async function getSnapshotFileData(filePath: string): Promise<SnapshotFileData> {
+async function getSnapshotFileData(
+  filePath: string
+): Promise<SnapshotFileData> {
   try {
     await fs.promises.access(filePath, fs.constants.F_OK);
   } catch {
@@ -305,10 +307,7 @@ export class WorkspaceSnapshotService {
       afterHash: afterState.hash,
     };
 
-    if (
-      beforeState.content !== undefined &&
-      afterState.content !== undefined
-    ) {
+    if (beforeState.content !== undefined && afterState.content !== undefined) {
       change.beforeContent = beforeState.content;
       const patchResult = Diff.structuredPatch(
         "",

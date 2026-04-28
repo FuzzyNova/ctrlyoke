@@ -205,6 +205,7 @@ This piggybacks on the existing event loop — zero additional file I/O.
 `LogMonitorDependencies` is assembled inside **`CliExecutionRunner`**, not `CliIntegration` directly. The callback must flow through the existing `hostCallbacks` chain:
 
 **`CliExecutionRunner` `hostCallbacks`** (add one field):
+
 ```typescript
 hostCallbacks: {
   onStreamingEvents: (events) => ...;   // existing
@@ -217,6 +218,7 @@ hostCallbacks: {
 **`CliExecutionRunner`** passes it into `LogMonitorDependencies` when constructing `CliLogMonitor`.
 
 **`CliIntegration`** wires the callback when constructing `CliExecutionRunner` (lines ~646–650):
+
 ```typescript
 hostCallbacks: {
   onStreamingEvents: (events) => this.emitStreamingEvents(events),
@@ -272,6 +274,7 @@ case MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE:
 ```
 
 Clear `liveContextWindow[stepIndex]` in two places:
+
 - When `clearRuntimeStateFromStep` fires (set-start-position / workflow reset)
 - When `PROGRESS_UPDATE` fires for that stepIndex with a terminal status (`COMPLETED`, `FAILED`, `CANCELLED`) — so the bar transitions cleanly to showing data from `latestOutput.tokens` once the step is done
 
@@ -283,7 +286,8 @@ Without the second clear, the live value (last mid-run reading) would shadow `la
 
 ```typescript
 export function useContextPct() {
-  const { liveOrderedEntries, historyOutputs, liveContextWindow } = useWorkflowStore();
+  const { liveOrderedEntries, historyOutputs, liveContextWindow } =
+    useWorkflowStore();
   const { isViewingHistory } = useUiStore();
 
   return function getContextPct(index: number): number | undefined {
@@ -293,9 +297,10 @@ export function useContextPct() {
       return calcContextPct(live.used, live.size);
     }
     // Fall back to completed step data
-    const entries = isViewingHistory && historyOutputs
-      ? historyOutputs.orderedEntries
-      : liveOrderedEntries;
+    const entries =
+      isViewingHistory && historyOutputs
+        ? historyOutputs.orderedEntries
+        : liveOrderedEntries;
     // ... existing logic unchanged ...
   };
 }
@@ -334,32 +339,35 @@ const contextPct = ctx?.size ? Math.round((ctx.used / ctx.size) * 100) : undefin
 **Render — right-side vertical bar (added inside the `flex items-start gap-2` div, after the content column):**
 
 ```tsx
-{contextPct !== undefined && (
-  <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5">
-    {/* Track */}
-    <div className="flex-1 w-1.5 rounded-full bg-panel-border overflow-hidden relative">
-      {/* Fill — color class derived from contextPct thresholds */}
-      <div
-        key={contextPct}
-        className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${
-          contextPct >= 85
-            ? "bg-error-fg opacity-90"
-            : contextPct >= 70
-            ? "bg-warning-fg opacity-70"
-            : "bg-description-fg opacity-50"
-        }`}
-        style={{ height: `${contextPct}%` }}
-      />
+{
+  contextPct !== undefined && (
+    <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5">
+      {/* Track */}
+      <div className="flex-1 w-1.5 rounded-full bg-panel-border overflow-hidden relative">
+        {/* Fill — color class derived from contextPct thresholds */}
+        <div
+          key={contextPct}
+          className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${
+            contextPct >= 85
+              ? "bg-error-fg opacity-90"
+              : contextPct >= 70
+                ? "bg-warning-fg opacity-70"
+                : "bg-description-fg opacity-50"
+          }`}
+          style={{ height: `${contextPct}%` }}
+        />
+      </div>
+      {/* Percentage label — below the bar */}
+      <span className="text-[8px] leading-none text-description-fg opacity-75 mt-0.5">
+        {contextPct}
+      </span>
     </div>
-    {/* Percentage label — below the bar */}
-    <span className="text-[8px] leading-none text-description-fg opacity-75 mt-0.5">
-      {contextPct}
-    </span>
-  </div>
-)}
+  );
+}
 ```
 
 Color cues use existing Tailwind tokens (`bg-error-fg`, `bg-warning-fg`, `bg-description-fg`):
+
 - 0–70%: `bg-description-fg opacity-50` (neutral)
 - 70–85%: `bg-warning-fg opacity-70` (warning)
 - 85–100%: `bg-error-fg opacity-90` (danger)
@@ -370,7 +378,7 @@ Add `key={contextPct}` to the fill div. React unmounts and remounts the element 
 
 ```tsx
 <div
-  key={contextPct}   // ← remount on update → restarts animation
+  key={contextPct} // ← remount on update → restarts animation
   className={`absolute bottom-0 left-0 right-0 rounded-full animate-ctx-update ${colorClass}`}
   style={{ height: `${contextPct}%` }}
 />
@@ -596,30 +604,30 @@ Process exits → sidecar.stop() → watcher.close()
 
 ## Files to Modify
 
-| File                                                                 | Change                                                                            |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `src/flightpath/harness/shared/interfaces/ILogParser.ts`             | Add optional `extractLiveContextWindow?` method                                   |
-| `src/flightpath/harness/shared/BaseLogParser.ts`                     | Add default no-op implementation                                                  |
-| `src/flightpath/harness/claude/ClaudeLogParser.ts`                   | Implement `extractLiveContextWindow`                                              |
-| `src/flightpath/harness/copilot/CopilotLogParser.ts`                 | Implement `extractLiveContextWindow`                                              |
-| `src/flightpath/harness/codex/CodexLogParser.ts`                     | Implement `extractLiveContextWindow`                                              |
-| `src/flightpath/harness/gemini/GeminiLogParser.ts`                   | Implement `extractLiveContextWindow`                                              |
-| `src/flightpath/harness/qwen/QwenLogParser.ts`                       | Implement `extractLiveContextWindow`                                              |
-| `src/flightpath/harness/opencode/OpenCodeLogParser.ts`               | Implement `extractLiveContextWindow`                                              |
-| `src/flightpath/harness/CliLogMonitor.ts`                            | Add `onContextWindowUpdate?` to `LogMonitorDependencies`; call in `processEvent`  |
-| `src/flightpath/harness/CliIntegration.ts`                           | Add `startContextWindowSidecar()`; wire into headless execution path              |
-| `src/flightpath/harness/CliIntegration.ts`                           | Wire `onContextWindowUpdate` from `CliLogMonitor` to caller (interactive)         |
-| `src/types/DashboardConstants.ts`                                    | Add `CONTEXT_WINDOW_UPDATE` to `MESSAGE_TYPES`                                    |
-| `src/types/WebviewMessageTypes.ts`                                   | Add `ContextWindowUpdateMessage` type + union                                     |
-| `src/ui/FlightPathWebviewProvider.ts`                                | Add `updateLiveContextWindow()` method + call from CliIntegration                 |
-| `src/ui/webview-react/store/workflowStore.ts`                        | Add `liveContextWindow` state + `updateLiveContextWindow` + `clearLiveContextWindow` actions |
-| `src/ui/webview-react/store/workflowStore.ts`                        | Handle `CONTEXT_WINDOW_UPDATE` message; clear on `clearRuntimeStateFromStep`      |
-| `src/ui/webview-react/hooks/useContextPct.ts`                        | Check `liveContextWindow[index]` first before falling back to completed data      |
-| `src/ui/webview-react/components/prompts/WorkflowStep.tsx`           | Add vertical bar + `liveContextWindow` prop to `WorkflowStepItem`                 |
-| `src/ui/webview-react/components/prompts/PromptStepDetails.tsx`      | Remove `{contextPct}%` chip from stats row; remove unused `calcContextPct` call   |
-| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`      | Read `liveContextWindow` from store; pass to `WorkflowStepItem` for current step  |
-| `src/ui/webview-react/components/prompts/PromptChipRail.tsx`         | Add 2px right-edge bar to `ChipContent`; add `relative` to chip container        |
-| `src/ui/webview-react/tailwind.config.js`                            | Add `ctx-update` keyframe + animation for the brightness flash                    |
+| File                                                            | Change                                                                                       |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `src/flightpath/harness/shared/interfaces/ILogParser.ts`        | Add optional `extractLiveContextWindow?` method                                              |
+| `src/flightpath/harness/shared/BaseLogParser.ts`                | Add default no-op implementation                                                             |
+| `src/flightpath/harness/claude/ClaudeLogParser.ts`              | Implement `extractLiveContextWindow`                                                         |
+| `src/flightpath/harness/copilot/CopilotLogParser.ts`            | Implement `extractLiveContextWindow`                                                         |
+| `src/flightpath/harness/codex/CodexLogParser.ts`                | Implement `extractLiveContextWindow`                                                         |
+| `src/flightpath/harness/gemini/GeminiLogParser.ts`              | Implement `extractLiveContextWindow`                                                         |
+| `src/flightpath/harness/qwen/QwenLogParser.ts`                  | Implement `extractLiveContextWindow`                                                         |
+| `src/flightpath/harness/opencode/OpenCodeLogParser.ts`          | Implement `extractLiveContextWindow`                                                         |
+| `src/flightpath/harness/CliLogMonitor.ts`                       | Add `onContextWindowUpdate?` to `LogMonitorDependencies`; call in `processEvent`             |
+| `src/flightpath/harness/CliIntegration.ts`                      | Add `startContextWindowSidecar()`; wire into headless execution path                         |
+| `src/flightpath/harness/CliIntegration.ts`                      | Wire `onContextWindowUpdate` from `CliLogMonitor` to caller (interactive)                    |
+| `src/types/DashboardConstants.ts`                               | Add `CONTEXT_WINDOW_UPDATE` to `MESSAGE_TYPES`                                               |
+| `src/types/WebviewMessageTypes.ts`                              | Add `ContextWindowUpdateMessage` type + union                                                |
+| `src/ui/FlightPathWebviewProvider.ts`                           | Add `updateLiveContextWindow()` method + call from CliIntegration                            |
+| `src/ui/webview-react/store/workflowStore.ts`                   | Add `liveContextWindow` state + `updateLiveContextWindow` + `clearLiveContextWindow` actions |
+| `src/ui/webview-react/store/workflowStore.ts`                   | Handle `CONTEXT_WINDOW_UPDATE` message; clear on `clearRuntimeStateFromStep`                 |
+| `src/ui/webview-react/hooks/useContextPct.ts`                   | Check `liveContextWindow[index]` first before falling back to completed data                 |
+| `src/ui/webview-react/components/prompts/WorkflowStep.tsx`      | Add vertical bar + `liveContextWindow` prop to `WorkflowStepItem`                            |
+| `src/ui/webview-react/components/prompts/PromptStepDetails.tsx` | Remove `{contextPct}%` chip from stats row; remove unused `calcContextPct` call              |
+| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx` | Read `liveContextWindow` from store; pass to `WorkflowStepItem` for current step             |
+| `src/ui/webview-react/components/prompts/PromptChipRail.tsx`    | Add 2px right-edge bar to `ChipContent`; add `relative` to chip container                    |
+| `src/ui/webview-react/tailwind.config.js`                       | Add `ctx-update` keyframe + animation for the brightness flash                               |
 
 ---
 

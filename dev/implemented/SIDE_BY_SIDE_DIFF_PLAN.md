@@ -45,8 +45,8 @@ and one optional right cell (added/context). A helper converts the flat `DiffLin
 
 ```ts
 type SideBySideRow = {
-  left: DiffLine | null;   // removed or context
-  right: DiffLine | null;  // added or context
+  left: DiffLine | null; // removed or context
+  right: DiffLine | null; // added or context
 };
 ```
 
@@ -77,6 +77,7 @@ export function buildSideBySideRows(lines: DiffLine[]): SideBySideRow[] { ... }
 ```
 
 The algorithm:
+
 1. Iterate `lines`.
 2. Collect consecutive `removed` lines into a buffer, then pair them with the immediately
    following `added` lines (zip, pad shorter side with `null`).
@@ -89,7 +90,9 @@ Export `SideBySideRow` type alongside the function.
 
 ```tsx
 const SIDE_BY_SIDE_THRESHOLD = 1024;
-const [wideRef, isWide] = useElementNarrow<HTMLDivElement>(SIDE_BY_SIDE_THRESHOLD);
+const [wideRef, isWide] = useElementNarrow<HTMLDivElement>(
+  SIDE_BY_SIDE_THRESHOLD
+);
 // isWide = true when width >= threshold (useElementNarrow returns isNarrow,
 // so: const isWide = !isNarrow)
 ```
@@ -116,11 +119,18 @@ Only computed when both expanded and wide — zero cost in the common collapsed 
 ### 4. Branch the render
 
 ```tsx
-{isExpanded && diffLines.length > 0 && (
-  isWide
-    ? <SideBySideDiffTable rows={sideBySideRows} highlightedLines={highlightedLines} />
-    : <InlineDiffList lines={diffLines} highlightedLines={highlightedLines} />
-)}
+{
+  isExpanded &&
+    diffLines.length > 0 &&
+    (isWide ? (
+      <SideBySideDiffTable
+        rows={sideBySideRows}
+        highlightedLines={highlightedLines}
+      />
+    ) : (
+      <InlineDiffList lines={diffLines} highlightedLines={highlightedLines} />
+    ));
+}
 ```
 
 Extract the existing inline render into `InlineDiffList` (internal component or just a
@@ -147,7 +157,7 @@ can be looked up correctly. Extend `SideBySideRow`:
 
 ```ts
 type SideBySideRow = {
-  left:  { line: DiffLine; originalIndex: number } | null;
+  left: { line: DiffLine; originalIndex: number } | null;
   right: { line: DiffLine; originalIndex: number } | null;
 };
 ```
@@ -189,10 +199,10 @@ Optionally update the `title` attribute on the toggle button to hint at the curr
 
 ## Files Affected
 
-| File | Change |
-|------|--------|
-| `src/ui/webview-react/components/output/DiffView.tsx` | Main render logic + `useElementNarrow` wiring |
-| `src/ui/webview-react/utils/outputUtils.ts` | Add `buildSideBySideRows` + `SideBySideRow` type |
+| File                                                  | Change                                           |
+| ----------------------------------------------------- | ------------------------------------------------ |
+| `src/ui/webview-react/components/output/DiffView.tsx` | Main render logic + `useElementNarrow` wiring    |
+| `src/ui/webview-react/utils/outputUtils.ts`           | Add `buildSideBySideRows` + `SideBySideRow` type |
 
 No other files need changes.
 

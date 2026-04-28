@@ -52,11 +52,11 @@ Both use dynamic inline styles for popup/overlay widgets where the colors come f
 
 These classes do not exist in Tailwind's default palette OR in tailwind.config.js. They silently produce no styling.
 
-| File | Line | Broken Class | Fix |
-|------|------|-------------|-----|
-| `components/output/BashOutput.tsx` | 146 | `text-vscode-fg` | → `text-editor-fg` |
-| `components/output/DiffView.tsx` | 240 | `border-vscode-border` | → `border` (uses DEFAULT from borderColor config) |
-| `components/output/DiffView.tsx` | 240 | `bg-vscode-bg` | → `bg-editor-bg` |
+| File                               | Line | Broken Class           | Fix                                               |
+| ---------------------------------- | ---- | ---------------------- | ------------------------------------------------- |
+| `components/output/BashOutput.tsx` | 146  | `text-vscode-fg`       | → `text-editor-fg`                                |
+| `components/output/DiffView.tsx`   | 240  | `border-vscode-border` | → `border` (uses DEFAULT from borderColor config) |
+| `components/output/DiffView.tsx`   | 240  | `bg-vscode-bg`         | → `bg-editor-bg`                                  |
 
 **Action**: Fix these three class names directly. No config changes needed — the correct tokens already exist.
 
@@ -66,11 +66,11 @@ These classes do not exist in Tailwind's default palette OR in tailwind.config.j
 
 These VS Code variables are used directly in component class strings (via Tailwind's arbitrary value syntax) but have no named token. Add them to tailwind.config.js so callers use a named token instead of an inline var reference.
 
-| Current Usage | File | Add Token | Maps To |
-|--------------|------|-----------|---------|
-| `text-[var(--vscode-charts-blue)]` | `prompts/StatusIcon.tsx:38,43` | `"charts-blue"` | `var(--vscode-charts-blue, #4084d6)` |
-| `bg-[var(--vscode-textCodeBlock-background)]` | `output/MarkdownText.tsx:345` | `"code-block"` | `var(--vscode-textCodeBlock-background)` |
-| `bg-[var(--vscode-terminal-background,...)]` | `output/TerminalView.tsx:219` | `"terminal-bg"` | `var(--vscode-terminal-background, var(--vscode-editor-background))` |
+| Current Usage                                 | File                           | Add Token       | Maps To                                                              |
+| --------------------------------------------- | ------------------------------ | --------------- | -------------------------------------------------------------------- |
+| `text-[var(--vscode-charts-blue)]`            | `prompts/StatusIcon.tsx:38,43` | `"charts-blue"` | `var(--vscode-charts-blue, #4084d6)`                                 |
+| `bg-[var(--vscode-textCodeBlock-background)]` | `output/MarkdownText.tsx:345`  | `"code-block"`  | `var(--vscode-textCodeBlock-background)`                             |
+| `bg-[var(--vscode-terminal-background,...)]`  | `output/TerminalView.tsx:219`  | `"terminal-bg"` | `var(--vscode-terminal-background, var(--vscode-editor-background))` |
 
 **Action**: Add three entries to the `colors` block in tailwind.config.js, then update the three call sites to use the named class (`text-charts-blue`, `bg-code-block`, `bg-terminal-bg`).
 
@@ -87,13 +87,14 @@ These use Tailwind's default numeric palette (green-400, amber-400, blue-600, et
 Five uses of `bg-green-400/500`, `bg-red-400`, `bg-yellow-400` as small indicator dots.
 The tokens `bash-status-success`, `bash-status-error`, `bash-status-running` already exist in tailwind.config.js and point to the right VS Code chart colors. The `bash-` prefix is misleading (these aren't bash-specific). **Rename them** and update all call sites.
 
-| Current Token | Rename To | VS Code Var |
-|--------------|-----------|-------------|
-| `bash-status-success` | `indicator-success` | `var(--vscode-charts-green, #89d185)` |
-| `bash-status-error` | `indicator-error` | `var(--vscode-charts-red, #c24038)` |
+| Current Token         | Rename To           | VS Code Var                            |
+| --------------------- | ------------------- | -------------------------------------- |
+| `bash-status-success` | `indicator-success` | `var(--vscode-charts-green, #89d185)`  |
+| `bash-status-error`   | `indicator-error`   | `var(--vscode-charts-red, #c24038)`    |
 | `bash-status-running` | `indicator-running` | `var(--vscode-charts-yellow, #d19a66)` |
 
 Files to update:
+
 - `components/layout/OutputSection.tsx:1040` — `bg-green-400` → `bg-indicator-success`
 - `components/layout/GlobalSettingsVerticalTabBar.tsx:42` — `bg-green-500` → `bg-indicator-success`
 - `components/settings/ServerSection.tsx:121` — `bg-green-500` → `bg-indicator-success`
@@ -172,7 +173,7 @@ Then use `text-verified`. This reuses the `charts-blue` token proposed in §2 (c
 
 ---
 
-### 4. Collapsible.tsx — Replace gray-* / dark: classes (Low Priority)
+### 4. Collapsible.tsx — Replace gray-\* / dark: classes (Low Priority)
 
 `components/shared/Collapsible.tsx` uses raw gray palette colors with `dark:` prefix:
 
@@ -187,30 +188,31 @@ text-gray-500
 
 **Fix**: Replace all gray classes with VS Code semantic tokens:
 
-| Current | Replace With |
-|---------|-------------|
-| `border-gray-200 dark:border-gray-700` | `border` (DEFAULT border token) |
-| `hover:bg-gray-50 dark:hover:bg-gray-800` | `hover:bg-list-hover-bg` |
-| `text-gray-900 dark:text-gray-100` | `text-foreground` |
-| `text-gray-500` | `text-description-fg` |
+| Current                                   | Replace With                    |
+| ----------------------------------------- | ------------------------------- |
+| `border-gray-200 dark:border-gray-700`    | `border` (DEFAULT border token) |
+| `hover:bg-gray-50 dark:hover:bg-gray-800` | `hover:bg-list-hover-bg`        |
+| `text-gray-900 dark:text-gray-100`        | `text-foreground`               |
+| `text-gray-500`                           | `text-description-fg`           |
 
 ---
 
 ## Implementation Order
 
-| Priority | Item | Files Changed | Risk |
-|----------|------|---------------|------|
-| 1 (bug fix) | §1 — Fix undefined class names | 2 files | Zero — these do nothing currently |
-| 2 | §2 — Add 3 tokens + update call sites | tailwind.config.js + 3 files | Low |
-| 3 | §3a+3b — Rename bash-status-* + indicator dots | tailwind.config.js + 9 files | Low — visual test all themes |
-| 4 | §3g + §4 — description-fg + Collapsible.tsx | 2 files | Low |
-| 5 | §3c–3f — Semantic badges (favorite, scope, CLI, verified) | tailwind.config.js + 5 files | Low — discuss CLI badge color first |
+| Priority    | Item                                                      | Files Changed                | Risk                                |
+| ----------- | --------------------------------------------------------- | ---------------------------- | ----------------------------------- |
+| 1 (bug fix) | §1 — Fix undefined class names                            | 2 files                      | Zero — these do nothing currently   |
+| 2           | §2 — Add 3 tokens + update call sites                     | tailwind.config.js + 3 files | Low                                 |
+| 3           | §3a+3b — Rename bash-status-\* + indicator dots           | tailwind.config.js + 9 files | Low — visual test all themes        |
+| 4           | §3g + §4 — description-fg + Collapsible.tsx               | 2 files                      | Low                                 |
+| 5           | §3c–3f — Semantic badges (favorite, scope, CLI, verified) | tailwind.config.js + 5 files | Low — discuss CLI badge color first |
 
 ---
 
 ## Non-Goal: Centralizing CodeMirror Colors
 
 Do **not** extract CodeMirror's VS Code variable strings into a separate `codeMirrorThemeVars.ts` constants file. The variables are:
+
 - Already co-located with the code that uses them
 - Not referenced anywhere else in the codebase
 - Named clearly enough (`--vscode-editorSuggestWidget-background`) that they self-document

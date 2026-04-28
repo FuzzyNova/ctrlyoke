@@ -20,5 +20,5 @@ steps:
   - name: confirm-script-ran
     prompt: |
       A script step just ran before this prompt (it executed always_true.py and returned "true").
-      
+
       Please respond with: "Script step completed and workflow continued as expected."

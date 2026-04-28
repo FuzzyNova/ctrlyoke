@@ -1,4 +1,7 @@
-import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingSource,
+} from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
@@ -15,7 +18,12 @@ const WINDOW_LOCATION_OPTIONS = [
   { value: "newWindow", label: "New Window" },
 ];
 
-export function ChatSection({ settings, activeScope, onUpdate, onReset }: Props) {
+export function ChatSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: Props) {
   const chat = settings.settings.chat;
   const sources = settings.sources as Record<string, SettingSource>;
 

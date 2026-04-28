@@ -12,18 +12,12 @@ vi.mock("@utils/syntaxHighlighting", () => ({
 }));
 
 vi.mock("@components/output/DiffView", () => ({
-  DiffView: vi.fn(
-    ({
-      actionSlot,
-    }: {
-      actionSlot?: ReactNode;
-    }) => (
-      <div>
-        <div>mock diff</div>
-        {actionSlot}
-      </div>
-    )
-  ),
+  DiffView: vi.fn(({ actionSlot }: { actionSlot?: ReactNode }) => (
+    <div>
+      <div>mock diff</div>
+      {actionSlot}
+    </div>
+  )),
 }));
 
 import { FileEditOutput } from "@components/output/FileOperationOutput";

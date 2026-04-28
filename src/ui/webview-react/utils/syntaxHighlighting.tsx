@@ -304,7 +304,10 @@ export function injectSyntaxHighlightStyles(): void {
 export function normalizeSyntaxLanguage(
   language: string | undefined
 ): string | undefined {
-  const normalized = language?.trim().toLowerCase().replace(/^language-/, "");
+  const normalized = language
+    ?.trim()
+    .toLowerCase()
+    .replace(/^language-/, "");
   if (!normalized) return undefined;
 
   const canonical = LANGUAGE_ALIAS_MAP[normalized] ?? normalized;

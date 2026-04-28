@@ -1,4 +1,7 @@
-import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingSource,
+} from "@root/types/WebviewMessageTypes";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
@@ -8,7 +11,12 @@ interface Props {
   onReset: (path: string) => void;
 }
 
-export function GeneralSection({ settings, activeScope, onUpdate, onReset }: Props) {
+export function GeneralSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: Props) {
   const ui = settings.settings.ui;
   const exec = settings.settings.execution;
   const sources = settings.sources as Record<string, SettingSource>;

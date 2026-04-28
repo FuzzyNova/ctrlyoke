@@ -286,7 +286,10 @@ describe("appendStreamingEvents", () => {
         item.target.stepIndex === 0
     );
 
-    const events = entry && "cliOutput" in entry ? entry.cliOutput.structured?.events : undefined;
+    const events =
+      entry && "cliOutput" in entry
+        ? entry.cliOutput.structured?.events
+        : undefined;
     expect(events).toHaveLength(1);
     expect(events?.[0]).toMatchObject({
       type: CLI_EVENT_TYPES.FILE_READ,

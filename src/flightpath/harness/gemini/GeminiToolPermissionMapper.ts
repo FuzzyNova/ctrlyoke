@@ -24,5 +24,4 @@ export class GeminiToolPermissionMapper
     // Default or custom
     return ["--approval-mode", "default"];
   }
-
 }

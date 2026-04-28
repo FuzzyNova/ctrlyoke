@@ -52,7 +52,11 @@ export class QwenNotificationMonitor
     // passes literally to the child process — the quote becomes part of argv[1], making Node.js
     // treat the absolute path as relative. Forward-slash absolute paths work without quotes on
     // Windows as long as they contain no spaces. Paths with spaces are a known limitation.
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir, false);
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      notifyDir,
+      false
+    );
 
     return {
       type: "json",

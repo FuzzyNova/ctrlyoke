@@ -861,7 +861,11 @@ class FlightPathMCPServer {
             {
               type: "text",
               text: JSON.stringify(
-                { workspaceRoot: this.workspaceRoot, workflowCount: 0, workflows: [] },
+                {
+                  workspaceRoot: this.workspaceRoot,
+                  workflowCount: 0,
+                  workflows: [],
+                },
                 null,
                 2
               ),

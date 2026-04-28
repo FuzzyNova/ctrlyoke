@@ -1,10 +1,7 @@
 import * as vscode from "vscode";
 import { configService } from "../config/FlightPathConfigService";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
-import type {
-  WorkflowStep,
-  WorkflowSummary,
-} from "../types/FlightPathTypes";
+import type { WorkflowStep, WorkflowSummary } from "../types/FlightPathTypes";
 import type { DashboardClient } from "./DashboardBroadcastHub";
 import {
   COMPLETION_NOTIFICATION_SEVERITY,

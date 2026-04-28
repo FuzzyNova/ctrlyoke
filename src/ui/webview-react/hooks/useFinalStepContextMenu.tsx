@@ -41,10 +41,7 @@ export function useFinalStepContextMenu({
   );
 
   const finalStepContextMenuPortal = contextMenu ? (
-    <StepContextMenu
-      {...contextMenu}
-      onClose={() => setContextMenu(null)}
-    />
+    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
   ) : null;
 
   return { openFinalStepContextMenu, finalStepContextMenuPortal };

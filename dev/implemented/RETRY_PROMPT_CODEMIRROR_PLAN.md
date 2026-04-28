@@ -15,13 +15,13 @@ It also needs one end-condition-specific feature: autocomplete after `{` for ret
 
 Recommended runtime placeholders are:
 
-| Placeholder       | Runtime value                                          |
-| ----------------- | ------------------------------------------------------ |
-| `{stdout}`        | trimmed stdout from the validation script              |
-| `{stderr}`        | trimmed stderr from the validation script              |
-| `{expected}`      | configured expected value                              |
-| `{actual}`        | actual comparison value (resolved from compareSource)  |
-| `{exitCode}`      | numeric exit code from the validation script           |
+| Placeholder       | Runtime value                                             |
+| ----------------- | --------------------------------------------------------- |
+| `{stdout}`        | trimmed stdout from the validation script                 |
+| `{stderr}`        | trimmed stderr from the validation script                 |
+| `{expected}`      | configured expected value                                 |
+| `{actual}`        | actual comparison value (resolved from compareSource)     |
+| `{exitCode}`      | numeric exit code from the validation script              |
 | `{compareSource}` | comparison source: `stdout`, `stderr`, `exitCode`, `auto` |
 
 Note: the current UI hint says `Use {error} placeholder`, but `EndConditionEvaluator.buildRetryPrompt()` does not replace `{error}`. The evaluator currently supports `{scriptOutput}` and `{errorOutput}`; because FlightPath is still pre-release, this plan intentionally renames those two placeholders to `{stdout}` and `{stderr}` instead of preserving the older names.

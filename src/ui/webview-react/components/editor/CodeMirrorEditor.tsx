@@ -19,7 +19,12 @@ import {
 } from "@codemirror/autocomplete";
 import { history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-import { linter, lintKeymap, forceLinting, type Diagnostic } from "@codemirror/lint";
+import {
+  linter,
+  lintKeymap,
+  forceLinting,
+  type Diagnostic,
+} from "@codemirror/lint";
 import { RangeSetBuilder } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import {
@@ -803,9 +808,7 @@ function createThemeExtension(surface: CodeMirrorEditorSurface) {
         // Input-surface editors use a wrapper focus border so the inner
         // CodeMirror outline is not clipped by bounded form-control layouts.
         outline:
-          surface === "input"
-            ? "none"
-            : "1px solid var(--vscode-focusBorder)",
+          surface === "input" ? "none" : "1px solid var(--vscode-focusBorder)",
       },
       ".cm-placeholder": {
         color: "var(--vscode-input-placeholderForeground)",
@@ -1593,15 +1596,16 @@ function createPriorContextDecorationExtension() {
           for (const ref of refs) {
             if (isInFencedBlock(ref.from, ref.to, fencedRanges)) continue;
             const dataRef =
-              ref.kind === "step"
-                ? `step:${ref.indices!.join(",")}`
-                : ref.kind;
+              ref.kind === "step" ? `step:${ref.indices!.join(",")}` : ref.kind;
             builder.add(
               ref.from,
               ref.to,
               Decoration.mark({
                 class: "cm-link cm-prior-context-ref",
-                attributes: { "data-type": "priorContext", "data-ref": dataRef },
+                attributes: {
+                  "data-type": "priorContext",
+                  "data-ref": dataRef,
+                },
               })
             );
           }

@@ -2,10 +2,7 @@ import {
   type PriorContextItem,
   buildPriorContextXmlFromItems,
 } from "../flightpath/HarnessIntegration";
-import {
-  type WorkflowStep,
-  isScriptStep,
-} from "../types/FlightPathTypes";
+import { type WorkflowStep, isScriptStep } from "../types/FlightPathTypes";
 
 /**
  * Builds the exact XML preview a user will see in the editor when they
@@ -98,7 +95,9 @@ export class PriorContextPreviewBuilder {
       return stepCount > 0 ? [stepCount - 1] : [];
     }
     if (ref === "all") {
-      return stepCount > 0 ? Array.from({ length: stepCount }, (_, i) => i) : [];
+      return stepCount > 0
+        ? Array.from({ length: stepCount }, (_, i) => i)
+        : [];
     }
     if (ref.startsWith("step:")) {
       const rangeText = ref.slice("step:".length);

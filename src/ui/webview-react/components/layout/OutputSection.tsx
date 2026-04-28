@@ -389,7 +389,9 @@ export const OutputSection: React.FC = () => {
         const attrVal = el.getAttribute("data-diff-collapsed");
         const isCollapsed =
           attrVal !== null ? attrVal === "true" : diffsCollapsed;
-        const addedLines = Number(el.getAttribute("data-diff-added-lines") ?? 0);
+        const addedLines = Number(
+          el.getAttribute("data-diff-added-lines") ?? 0
+        );
         const removedLines = Number(
           el.getAttribute("data-diff-removed-lines") ?? 0
         );
@@ -698,7 +700,10 @@ export const OutputSection: React.FC = () => {
     if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
       const data = event.data as FileEditData;
       if (data.structuredPatch && data.structuredPatch.length > 0) {
-        return getRenderedDiffStats(toRdvHunks(data.structuredPatch), "unified");
+        return getRenderedDiffStats(
+          toRdvHunks(data.structuredPatch),
+          "unified"
+        );
       }
       if (data.oldContent && data.newContent) {
         const { hunks } = toRdvFromContent(data.oldContent, data.newContent);
@@ -1498,7 +1503,7 @@ export const OutputSection: React.FC = () => {
                             : workflowStep?.name?.trim() || undefined
                         }
                         attemptIndex={item.attemptIndex || 0}
-                        runIndex={item.runIndex ?? (cliData.runIndex ?? 0)}
+                        runIndex={item.runIndex ?? cliData.runIndex ?? 0}
                         streamingChunk={streamingChunk}
                         isExecutionActive={isExecutionActive}
                         allowUndoActions={allowUndoActions}

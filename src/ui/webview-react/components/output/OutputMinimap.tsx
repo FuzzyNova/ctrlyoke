@@ -322,7 +322,10 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
             }
 
             if (block.runs.length > 0) {
-              const totalRunRows = block.runs.reduce((sum, run) => sum + run.count, 0);
+              const totalRunRows = block.runs.reduce(
+                (sum, run) => sum + run.count,
+                0
+              );
               if (totalRunRows > 0) {
                 let offsetRows = 0;
                 return (
@@ -343,7 +346,8 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
                       let background = "transparent";
 
                       if (changedLines > 0) {
-                        const removedPct = (run.removedLines / changedLines) * 100;
+                        const removedPct =
+                          (run.removedLines / changedLines) * 100;
                         background =
                           run.addedLines > 0 && run.removedLines > 0
                             ? `linear-gradient(to right,

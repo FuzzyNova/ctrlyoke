@@ -35,8 +35,7 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
   const resolvedModeLabel = (() => {
     const wf = workflowProperties.toolPermissions;
     // Fall back to global settings when no workflow-level override is set
-    const effective =
-      wf !== undefined ? wf : globalSettings.toolPermissions;
+    const effective = wf !== undefined ? wf : globalSettings.toolPermissions;
     if (effective === undefined || effective === null) return "None";
     return (
       PERMISSION_MODE_OPTIONS.find((o) => o.value === effective.mode)?.label ??

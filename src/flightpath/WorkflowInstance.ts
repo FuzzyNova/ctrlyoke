@@ -856,8 +856,7 @@ export class WorkflowInstance {
       }
 
       if (detailedStatus.initializationStatus !== HarnessStatus.Ready) {
-        const errorMessage =
-          detailedStatus.message || "Harness is unavailable";
+        const errorMessage = detailedStatus.message || "Harness is unavailable";
         Log.error(`FlightPath: Harness not ready: ${errorMessage}`);
         const preflightStepCount = this.promptQueue.getState().steps.length;
         if (this.dashboardSink && preflightStepCount > 0) {
@@ -1906,7 +1905,11 @@ export class WorkflowInstance {
     const rerunTargets: OutputExecutionTarget[] = [];
     const state = this.promptQueue.getState();
 
-    for (let stepIndex = state.currentIndex; stepIndex < state.steps.length; stepIndex++) {
+    for (
+      let stepIndex = state.currentIndex;
+      stepIndex < state.steps.length;
+      stepIndex++
+    ) {
       rerunTargets.push({
         kind: FINAL_STEP_PHASES.QUEUE,
         stepIndex,
@@ -1932,7 +1935,8 @@ export class WorkflowInstance {
       rerunTargets.map((target) => this.getExecutionTargetRunKey(target))
     );
 
-    const history = await this.outputHistoryManager.loadHistory(historyFilePath);
+    const history =
+      await this.outputHistoryManager.loadHistory(historyFilePath);
     const maxRunIndexByTarget = new Map<string, number>();
 
     for (const entry of history.orderedEntries) {

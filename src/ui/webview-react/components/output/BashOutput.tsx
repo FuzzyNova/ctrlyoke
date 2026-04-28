@@ -151,7 +151,9 @@ export const BashOutput = memo<BashOutputProps>(
             <span className={dotColorClass}>●</span>{" "}
             <span
               className={
-                hasCommandLabel ? "text-editor-fg" : "text-description-fg italic"
+                hasCommandLabel
+                  ? "text-editor-fg"
+                  : "text-description-fg italic"
               }
             >
               {displayCommand}

@@ -130,7 +130,9 @@ export class PropertyResolver {
     workflowHarness?: HarnessId
   ): HarnessId {
     return (
-      promptHarness ?? workflowHarness ?? ConfigurationUtils.getIntegrationMode()
+      promptHarness ??
+      workflowHarness ??
+      ConfigurationUtils.getIntegrationMode()
     );
   }
 

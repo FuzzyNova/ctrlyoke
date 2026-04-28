@@ -117,9 +117,7 @@ export class WorkspaceSessionManager {
    *
    * @param queueDir Path to .flightpath/.queue/ directory
    */
-  private async listWorkingFilesByRecency(
-    queueDir: string
-  ): Promise<
+  private async listWorkingFilesByRecency(queueDir: string): Promise<
     Array<{
       filename: string;
       filePath: string;
@@ -282,7 +280,10 @@ export class WorkspaceSessionManager {
           });
         } catch (error) {
           // Skip invalid files
-          Log.warn(`Failed to read session file ${path.basename(filePath)}:`, error);
+          Log.warn(
+            `Failed to read session file ${path.basename(filePath)}:`,
+            error
+          );
         }
       }
 

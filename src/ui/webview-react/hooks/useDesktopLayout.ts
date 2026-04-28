@@ -58,7 +58,9 @@ export function useDesktopLayout({
   // Resize tracking
   const isForcingResize = useRef(false);
   const needsForcedResize = useRef(outputCollapsed !== editorCollapsed);
-  const needsExpandedLayoutRestore = useRef(outputCollapsed !== editorCollapsed);
+  const needsExpandedLayoutRestore = useRef(
+    outputCollapsed !== editorCollapsed
+  );
   const remountSyncFrameRef = useRef<number | null>(null);
   const remountStableFramesRef = useRef(0);
   const remountPreviousTotalSizeRef = useRef<number | null>(null);

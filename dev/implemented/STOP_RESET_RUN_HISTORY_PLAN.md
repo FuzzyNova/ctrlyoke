@@ -16,12 +16,14 @@ bit worse than "duplicate raw entries": `OutputHistoryTimelineAdapter` projects 
 history using `(target, attemptIndex)` as the dedupe key, so a later manual re-run with
 the same `attemptIndex` can overwrite the earlier projected entry during `loadHistory()`.
 So the fix needs to address both:
+
 - raw timeline events (`events.jsonl`) containing colliding records, and
 - projected `orderedEntries` collapsing earlier runs because the adapter key is too coarse.
 
 ### Scenario: stop at step 9, reposition to step 2, resume
 
 After the resume, the history file contains:
+
 - Steps 1–8: original run, `attemptIndex: 0` (correct)
 - Step 9: partial/cancelled, `attemptIndex: 0`
 - Steps 2–9: re-run, `attemptIndex: 0` ← duplicate, indistinguishable from originals
@@ -40,17 +42,17 @@ on the very first EC retry, which is wrong.
 
 **Important**: `maxRetries` enforcement is NOT broken — `EndConditionHandler` uses
 `promptQueue.getCurrentRetryCount()` as its retry counter, which is reset to 0 at the
-start of each step execution regardless of `attemptIndex`. So the *gate* is correct;
-only the *display* is wrong. But display correctness still matters.
+start of each step execution regardless of `attemptIndex`. So the _gate_ is correct;
+only the _display_ is wrong. But display correctness still matters.
 
 ## Solution: Two independent axes
 
 Track manual re-runs and end-condition retries as independent dimensions:
 
-| Field          | Meaning                                                 | Values       |
-| -------------- | ------------------------------------------------------- | ------------ |
-| `runIndex`     | Which manual start/re-run of this step (new)            | 0, 1, 2, …  |
-| `attemptIndex` | End-condition retry within the current `runIndex` (unchanged) | 0, 1, 2, …  |
+| Field          | Meaning                                                       | Values     |
+| -------------- | ------------------------------------------------------------- | ---------- |
+| `runIndex`     | Which manual start/re-run of this step (new)                  | 0, 1, 2, … |
+| `attemptIndex` | End-condition retry within the current `runIndex` (unchanged) | 0, 1, 2, … |
 
 A history entry for step N is uniquely identified by `(stepIndex, runIndex, attemptIndex)`.
 
@@ -59,11 +61,12 @@ storage / projection / buffering layers should therefore treat `runIndex` as par
 general execution-target key, not as a queue-step-only concern.
 
 Examples for step 9 (maxRetries=5) after 2 manual re-runs:
+
 - Original run, initial attempt: `runIndex:0, att:0`
-- Original run, EC retry 1:     `runIndex:0, att:1`
-- Manual re-run #1, initial:    `runIndex:1, att:0`
-- Manual re-run #1, EC retry 1: `runIndex:1, att:1`  → UI shows "Retry 1/5" ✓
-- Manual re-run #2, initial:    `runIndex:2, att:0`
+- Original run, EC retry 1: `runIndex:0, att:1`
+- Manual re-run #1, initial: `runIndex:1, att:0`
+- Manual re-run #1, EC retry 1: `runIndex:1, att:1` → UI shows "Retry 1/5" ✓
+- Manual re-run #2, initial: `runIndex:2, att:0`
 
 **`maxRetries` enforcement is completely unaffected** — `EndConditionHandler` calls
 `promptQueue.getCurrentRetryCount()` (reset on each new step execution) and does not
@@ -76,6 +79,7 @@ look at `runIndex` or `attemptIndex` from history.
 ### Phase 1: Data model + timeline event shape
 
 **`src/types/WebviewMessageTypes.ts`** — Add `runIndex` to `CliOutput`:
+
 ```typescript
 export interface CliOutput {
   // ... existing fields ...
@@ -91,11 +95,12 @@ export interface CliOutput {
 ```
 
 **`src/types/OutputHistoryTypes.ts`** — Add `runIndex` to `OrderedCliHistoryEntry`:
+
 ```typescript
 export interface OrderedCliHistoryEntry {
   kind: "cli";
   target: OutputExecutionTarget;
-  runIndex: number;      // ← NEW, default 0 for existing history
+  runIndex: number; // ← NEW, default 0 for existing history
   attemptIndex: number;
   cliOutput: CliOutput;
   timestampMs: number;
@@ -104,10 +109,11 @@ export interface OrderedCliHistoryEntry {
 ```
 
 **`src/types/WorkflowTimelineTypes.ts`** — Add `runIndex` to the timeline CLI event:
+
 ```typescript
 export interface CliOutputRecordedEventDraft extends TargetedTimelineEventDraftBase {
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED;
-  runIndex: number;      // NEW
+  runIndex: number; // NEW
   attemptIndex: number;
   payload: {
     cliOutput: CliOutput;
@@ -131,6 +137,7 @@ indices for any execution target that is about to be re-run against an existing 
 file.
 
 Important correction: this must run for both continuation paths that reuse history:
+
 - `continueFromCurrent=true` manual Resume
 - `isIdleContinuation=true` stop → set-start-position → Run/Resume
 
@@ -138,11 +145,13 @@ It should also handle the case where a workflow resumes directly in `finalStep`,
 queue steps.
 
 Recommended shape: compute a target-keyed map, not a step-only map:
+
 ```typescript
 type ExecutionTargetRunKey = `queue:${number}` | `final:${number}`;
 ```
 
 Then build:
+
 - `queue:${stepIndex}` for any queue step `>= currentIndex` that will re-run
 - `final:${loopIndex}` when resuming in the `finalStep` phase for the current loop
 
@@ -163,6 +172,7 @@ execution.
 ### Phase 3: Thread runIndex through the execution context
 
 **`src/flightpath/WorkflowExecutor.ts`** — Add to `WorkflowExecutionContext`:
+
 ```typescript
 export interface WorkflowExecutionContext {
   // ... existing fields ...
@@ -179,6 +189,7 @@ In `WorkflowExecutor`, resolve the current run index from the execution target a
 it on every emitted `CliOutput`, for both queue and `finalStep` targets.
 
 Pass `runIndex` through to:
+
 - `captureOutputInit` (OutputCaptureBuffer)
 - `captureFinalStepOutputInit`
 - `buildCliOutput`
@@ -198,6 +209,7 @@ Use the actual buffer types in this file: `StepOutputBufferEntry` and
 `CompletedStepEntry`.
 
 Add `runIndex` to `StepOutputBufferEntry` and `CompletedStepEntry`:
+
 ```typescript
 interface StepOutputBufferEntry {
   // ... existing ...
@@ -210,16 +222,18 @@ interface StepOutputBufferEntry {
 `captureCompletedOutput` should use `(target, runIndex)` as the compound key so that
 manual re-runs for the same queue step or same `finalStep` loop do not collide with the
 original run. Change:
+
 - queue completed-output keys from `stepIndex`
 - finalStep completed-output keys from `loopIndex`
-to a compound execution-target key such as:
-`queue:${stepIndex}:run:${runIndex}` / `final:${loopIndex}:run:${runIndex}`
+  to a compound execution-target key such as:
+  `queue:${stepIndex}:run:${runIndex}` / `final:${loopIndex}:run:${runIndex}`
 
 Also update `cacheHistoricalStepOutput()` and the append-continuation history hydration in
 `WorkflowInstance` so pre-cached outputs preserve per-run grouping instead of flattening
 all outputs for a step into a single bucket.
 
 `replayTo()` replays all runs for each target in order:
+
 ```
 step 2, runIndex 0 → attempt 0, attempt 1 (EC retries)
 step 2, runIndex 1 → attempt 0, attempt 1 (EC retries from re-run)
@@ -236,7 +250,7 @@ unchanged (`currentAttemptIndex + 1` — still means "EC retry within this runIn
 ```typescript
 export interface RetryContext {
   // ... existing ...
-  runIndex: number;  // passed through from WorkflowExecutionContext
+  runIndex: number; // passed through from WorkflowExecutionContext
 }
 ```
 
@@ -255,6 +269,7 @@ Correction for this repo: the write path is `saveExecutionOutput()` →
 `saveTimelineExecutionOutput()`, not `writeCliOutput()`.
 
 Required changes:
+
 - `saveTimelineExecutionOutput`: include `runIndex` (default 0) in
   `CliOutputRecordedEventDraft`
 - `loadHistory`: still delegates to `OutputHistoryTimelineAdapter`, which must default
@@ -306,6 +321,7 @@ Implementation detail: `OutputMessage` should carry `runIndex`, not just `attemp
 That keeps downstream rendering and export code from silently flattening re-runs.
 
 Display options (pick one — decide at implementation time):
+
 - **Option A**: Show as sequential collapsed blocks within a step: "Run 1" / "Run 2"
   headers (similar to how retry blocks work today).
 - **Option B**: Only show the most recent `runIndex` in the live output, with a
@@ -318,6 +334,7 @@ component pattern.
 
 Also update the renderers / helpers that currently key UI affordances by
 `attemptIndex` alone:
+
 - [ ] `src/ui/webview-react/components/layout/OutputSection.tsx`
 - [ ] `src/ui/webview-react/components/output/CliOutput.tsx`
 - [ ] `src/ui/webview-react/utils/markdownExport.ts` if exported labels should preserve
@@ -351,25 +368,25 @@ This plan is not implementation-ready without test coverage updates. Add/adjust 
 
 ## Files changed (summary)
 
-| File | Change |
-|------|--------|
-| `src/types/WebviewMessageTypes.ts` | Add `runIndex?: number` to `CliOutput` |
-| `src/types/OutputHistoryTypes.ts` | Add `runIndex: number` to `OrderedCliHistoryEntry` |
-| `src/types/WorkflowTimelineTypes.ts` | Add `runIndex` to timeline CLI event draft/event types |
-| `src/flightpath/orchestration/OutputHistoryTimelineAdapter.ts` | Key projected CLI entries by `(target, runIndex, attemptIndex)` and default old events to `runIndex: 0` |
-| `src/flightpath/WorkflowInstance.ts` | Compute target run indices; populate `targetRunIndices` for continuation / idle-continuation runs |
-| `src/flightpath/WorkflowExecutor.ts` | Accept `targetRunIndices`; stamp `runIndex` on queue/finalStep outputs and retry paths |
-| `src/flightpath/OutputCaptureBuffer.ts` | Add `runIndex` to buffer types; compound key completed outputs by target+runIndex; update replay/cache logic |
-| `src/flightpath/EndConditionHandler.ts` | Forward `runIndex` through `RetryContext` |
-| `src/flightpath/orchestration/OutputHistoryManager.ts` | Write `runIndex` to timeline drafts; add optional `getMaxRunIndexForTarget` helper |
-| `src/ui/webview-react/hooks/useMessageHandler.ts` | Preserve `runIndex` when constructing ordered live entries |
-| `src/ui/webview-react/store/workflowStore.ts` | Extend streaming de-dup key to include `runIndex` |
-| `src/ui/webview-react/utils/outputProjection.ts` | Render multiple runIndex groups per step |
-| `src/ui/webview-react/components/layout/OutputSection.tsx` | Keep diff/minimap/render grouping distinct across runIndex values |
-| `src/ui/webview-react/components/output/CliOutput.tsx` (or equivalent) | Display run group header when `runIndex > 0`; include `runIndex` in anchor keys |
-| `src/ui/webview-react/utils/markdownExport.ts` | Preserve run labels in export output if history/live output is exported |
-| `src/cli/CliTerminalFormatter.ts` | Display manual re-run labeling in CLI mode when `runIndex > 0` |
-| `src/test/unit/*` / `src/ui/webview-react/test/*` | Add regression coverage for target/run/attempt uniqueness |
+| File                                                                   | Change                                                                                                       |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `src/types/WebviewMessageTypes.ts`                                     | Add `runIndex?: number` to `CliOutput`                                                                       |
+| `src/types/OutputHistoryTypes.ts`                                      | Add `runIndex: number` to `OrderedCliHistoryEntry`                                                           |
+| `src/types/WorkflowTimelineTypes.ts`                                   | Add `runIndex` to timeline CLI event draft/event types                                                       |
+| `src/flightpath/orchestration/OutputHistoryTimelineAdapter.ts`         | Key projected CLI entries by `(target, runIndex, attemptIndex)` and default old events to `runIndex: 0`      |
+| `src/flightpath/WorkflowInstance.ts`                                   | Compute target run indices; populate `targetRunIndices` for continuation / idle-continuation runs            |
+| `src/flightpath/WorkflowExecutor.ts`                                   | Accept `targetRunIndices`; stamp `runIndex` on queue/finalStep outputs and retry paths                       |
+| `src/flightpath/OutputCaptureBuffer.ts`                                | Add `runIndex` to buffer types; compound key completed outputs by target+runIndex; update replay/cache logic |
+| `src/flightpath/EndConditionHandler.ts`                                | Forward `runIndex` through `RetryContext`                                                                    |
+| `src/flightpath/orchestration/OutputHistoryManager.ts`                 | Write `runIndex` to timeline drafts; add optional `getMaxRunIndexForTarget` helper                           |
+| `src/ui/webview-react/hooks/useMessageHandler.ts`                      | Preserve `runIndex` when constructing ordered live entries                                                   |
+| `src/ui/webview-react/store/workflowStore.ts`                          | Extend streaming de-dup key to include `runIndex`                                                            |
+| `src/ui/webview-react/utils/outputProjection.ts`                       | Render multiple runIndex groups per step                                                                     |
+| `src/ui/webview-react/components/layout/OutputSection.tsx`             | Keep diff/minimap/render grouping distinct across runIndex values                                            |
+| `src/ui/webview-react/components/output/CliOutput.tsx` (or equivalent) | Display run group header when `runIndex > 0`; include `runIndex` in anchor keys                              |
+| `src/ui/webview-react/utils/markdownExport.ts`                         | Preserve run labels in export output if history/live output is exported                                      |
+| `src/cli/CliTerminalFormatter.ts`                                      | Display manual re-run labeling in CLI mode when `runIndex > 0`                                               |
+| `src/test/unit/*` / `src/ui/webview-react/test/*`                      | Add regression coverage for target/run/attempt uniqueness                                                    |
 
 ---
 
@@ -393,6 +410,7 @@ pre-existing duplicate issue for this path too.
 
 **Resume during `finalStep`**: If the workflow is stopped while executing a `finalStep`
 loop and then resumed, the same loop index can be re-run. The plan should either:
+
 - include target-keyed `runIndex` support for `final:${loopIndex}` in this same change, or
 - explicitly scope `finalStep` out as follow-up work.
 

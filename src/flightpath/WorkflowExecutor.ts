@@ -619,16 +619,16 @@ export class WorkflowExecutor {
     }
 
     if (!result) {
-        return this.handlePromptSendFailure(
-          integration,
-          context,
-          target,
-          prompt,
-          signedStepIndex,
-          runIndex,
-          0
-        );
-      }
+      return this.handlePromptSendFailure(
+        integration,
+        context,
+        target,
+        prompt,
+        signedStepIndex,
+        runIndex,
+        0
+      );
+    }
 
     const { responseText, duration } = result;
 
@@ -657,9 +657,8 @@ export class WorkflowExecutor {
       target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
       prompt,
       responseText,
-      duration
-      ,
-      runIndex,
+      duration,
+      runIndex
     );
 
     // Use the resolved end condition (handles workflow-level inheritance via PropertyResolver)

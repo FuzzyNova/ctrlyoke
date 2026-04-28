@@ -67,7 +67,10 @@ export class ClaudeNotificationMonitor
     _workspaceRoot: string,
     userHooks?: UserHookConfig[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      notifyDir
+    );
     const flightpathEntry = {
       hooks: [{ type: "command", command }],
     };
@@ -103,6 +106,9 @@ export class ClaudeNotificationMonitor
    * @returns Notification directory path
    */
   getNotificationDirectory(workspaceRoot: string): string {
-    return CliNotificationMonitor.getNotificationDirectory(workspaceRoot, "claude");
+    return CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "claude"
+    );
   }
 }

@@ -44,7 +44,8 @@ suite("WebviewSettingsSync", () => {
   suite("handleGlobalSettingsLoadRequest", () => {
     test("should include notifications settings and leaf-level source metadata", async () => {
       const originalGetAll = configService.getAll.bind(configService);
-      const originalGetLeafSources = configService.getLeafSources.bind(configService);
+      const originalGetLeafSources =
+        configService.getLeafSources.bind(configService);
 
       try {
         configService.getAll = (() => ({

@@ -5,7 +5,10 @@ import {
   type TerminalCursorStyle,
   type TerminalMobileControlBar,
 } from "@root/types/DashboardConstants";
-import type { FullGlobalSettings, SettingSource } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingSource,
+} from "@root/types/WebviewMessageTypes";
 import type { TerminalShortcut } from "@root/types/FlightPathSettings";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -226,8 +229,7 @@ function keyEventToCapture(
     return { sequence: "\\x1b[2~", humanLabel: label("Ins") };
   if (e.key === "Home")
     return { sequence: "\\x1b[H", humanLabel: label("Home") };
-  if (e.key === "End")
-    return { sequence: "\\x1b[F", humanLabel: label("End") };
+  if (e.key === "End") return { sequence: "\\x1b[F", humanLabel: label("End") };
   if (e.key === "PageUp")
     return { sequence: "\\x1b[5~", humanLabel: label("PgUp") };
   if (e.key === "PageDown")
@@ -455,7 +457,12 @@ function KeyCaptureInput({
   );
 }
 
-export function TerminalSection({ settings, activeScope, onUpdate, onReset }: Props) {
+export function TerminalSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: Props) {
   const terminal = settings.settings.terminal;
   const sources = settings.sources as Record<string, SettingSource>;
   const platform = useMemo(() => detectPlatform(), []);
@@ -714,13 +721,10 @@ export function TerminalSection({ settings, activeScope, onUpdate, onReset }: Pr
               type="button"
               className="text-xs text-link-fg hover:text-link-active-fg"
               onClick={() =>
-                onUpdate(
-                  "terminal.mobileCustomShortcuts",
-                  [
-                    ...terminal.mobileCustomShortcuts,
-                    { label: "", sequence: "" },
-                  ]
-                )
+                onUpdate("terminal.mobileCustomShortcuts", [
+                  ...terminal.mobileCustomShortcuts,
+                  { label: "", sequence: "" },
+                ])
               }
             >
               + Add shortcut
@@ -767,7 +771,9 @@ export function TerminalSection({ settings, activeScope, onUpdate, onReset }: Pr
                         "terminal.mobileCustomShortcuts",
                         updateShortcut(terminal.mobileCustomShortcuts, index, {
                           sequence: seq,
-                          ...(shortcut.label === "" ? { label: humanLabel } : {}),
+                          ...(shortcut.label === ""
+                            ? { label: humanLabel }
+                            : {}),
                         })
                       )
                     }
