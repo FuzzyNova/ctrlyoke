@@ -19,6 +19,7 @@ import type {
   CliOutput,
   DevDashboardAction,
   DevStatus,
+  PromptEditorInsertRequest,
   UndoExecutionTarget,
   UndoResult,
   UndoPromptResultMessage,
@@ -83,6 +84,9 @@ export class FlightPathWebviewProvider
   private configServiceUnsubscribe?: () => void;
   private runningServerUrl?: string;
   private runningServerAvailableIps: string[] = [];
+  private panelReady = false;
+  private readonly pendingPromptEditorInsertQueue: PromptEditorInsertRequest[] =
+    [];
 
   // Delegate classes
   private readonly settingsSync: WebviewSettingsSync;
@@ -140,7 +144,7 @@ export class FlightPathWebviewProvider
           this.sendDevStatus(scopedPostMessage),
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
-        onPanelReady: () => this.cancelReconnectRetry(),
+        onPanelReady: () => this.handlePanelReady(),
       }
     );
 
@@ -176,6 +180,7 @@ export class FlightPathWebviewProvider
     _token: vscode.CancellationToken
   ): void | Thenable<void> {
     this.view = webviewView;
+    this.panelReady = false;
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -1069,6 +1074,26 @@ export class FlightPathWebviewProvider
     });
   }
 
+  public async enqueuePromptEditorInsert(
+    request: PromptEditorInsertRequest
+  ): Promise<void> {
+    if (request.references.length === 0) {
+      return;
+    }
+
+    await vscode.commands.executeCommand("flightpath.dashboard.focus");
+
+    if (!this.view || !this.panelReady) {
+      this.pendingPromptEditorInsertQueue.push(request);
+      return;
+    }
+
+    this.postMessage({
+      type: MESSAGE_TYPES.INSERT_PROMPT_REFERENCES,
+      data: request,
+    });
+  }
+
   /**
    * Clear the current workflow. Public because it's called by extension commands.
    */
@@ -1100,6 +1125,30 @@ export class FlightPathWebviewProvider
   /** Cancels any in-flight RECONNECT retry loop by invalidating its session id. */
   private cancelReconnectRetry(): void {
     this.reconnectRetrySession++;
+  }
+
+  private handlePanelReady(): void {
+    this.cancelReconnectRetry();
+    this.panelReady = true;
+    this.flushPendingPromptEditorInserts();
+  }
+
+  private flushPendingPromptEditorInserts(): void {
+    if (!this.panelReady || !this.view) {
+      return;
+    }
+
+    while (this.pendingPromptEditorInsertQueue.length > 0) {
+      const request = this.pendingPromptEditorInsertQueue.shift();
+      if (!request) {
+        continue;
+      }
+
+      this.postMessage({
+        type: MESSAGE_TYPES.INSERT_PROMPT_REFERENCES,
+        data: request,
+      });
+    }
   }
 
   // ============================================================================

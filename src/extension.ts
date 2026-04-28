@@ -6,6 +6,7 @@ import { PromptCompletionProvider } from "./completions/PromptCompletionProvider
 import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCompletionProvider";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
+import { ContextMenuReferenceCommands } from "./completions/ContextMenuReferenceCommands";
 import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
 import { FlightPathHostedServer } from "./server/FlightPathHostedServer";
 import {
@@ -525,6 +526,10 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 function registerCommands(context: vscode.ExtensionContext) {
+  const contextMenuReferenceCommands = new ContextMenuReferenceCommands(
+    webviewProvider
+  );
+
   // Open Panel command
   const openPanelCommand = vscode.commands.registerCommand(
     "flightpath.openPanel",
@@ -863,6 +868,60 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  const addFileToPromptEditorCommand = vscode.commands.registerCommand(
+    "flightpath.addFileToPromptEditor",
+    async (uri: vscode.Uri) => {
+      if (uri) {
+        await saveIfDirty(uri.fsPath);
+      }
+      await contextMenuReferenceCommands.addFileToPromptEditor(uri);
+    }
+  );
+
+  const addDirectoryToPromptEditorCommand = vscode.commands.registerCommand(
+    "flightpath.addDirectoryToPromptEditor",
+    async (uri: vscode.Uri) => {
+      await contextMenuReferenceCommands.addDirectoryToPromptEditor(uri);
+    }
+  );
+
+  const addSelectionToPromptEditorCommand = vscode.commands.registerCommand(
+    "flightpath.addSelectionToPromptEditor",
+    async (uri: vscode.Uri) => {
+      if (uri) {
+        await saveIfDirty(uri.fsPath);
+      }
+      await contextMenuReferenceCommands.addSelectionToPromptEditor(uri);
+    }
+  );
+
+  const addSymbolToPromptEditorCommand = vscode.commands.registerCommand(
+    "flightpath.addSymbolToPromptEditor",
+    async (uri: vscode.Uri, lineNumber?: number) => {
+      if (uri) {
+        await saveIfDirty(uri.fsPath);
+      }
+      await contextMenuReferenceCommands.addSymbolToPromptEditor(uri, lineNumber);
+    }
+  );
+
+  const addScmResourcesToPromptEditorCommand = vscode.commands.registerCommand(
+    "flightpath.addScmResourcesToPromptEditor",
+    async (...args: unknown[]) => {
+      await contextMenuReferenceCommands.addScmResourcesToPromptEditor(...args);
+    }
+  );
+
+  const addTimelineCommitToPromptEditorCommand =
+    vscode.commands.registerCommand(
+      "flightpath.addTimelineCommitToPromptEditor",
+      async (item: unknown) => {
+        await contextMenuReferenceCommands.addTimelineCommitToPromptEditor(
+          item
+        );
+      }
+    );
+
   // Initialize Workspace command (manual reinit for existing users)
   const initWorkspaceCommand = vscode.commands.registerCommand(
     "flightpath.initWorkspace",
@@ -1001,6 +1060,12 @@ function registerCommands(context: vscode.ExtensionContext) {
     openFileWithSelectionCommand,
     clearWorkflowCommand,
     openGitChangeCommand,
+    addFileToPromptEditorCommand,
+    addDirectoryToPromptEditorCommand,
+    addSelectionToPromptEditorCommand,
+    addSymbolToPromptEditorCommand,
+    addScmResourcesToPromptEditorCommand,
+    addTimelineCommitToPromptEditorCommand,
     initWorkspaceCommand,
     enableServerCommand,
     disableServerCommand,

@@ -20,6 +20,7 @@ import {
   FinalStepPhase,
   StepStatus,
   HarnessId,
+  PromptEditorInsertMode,
   MESSAGE_TYPES,
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
@@ -760,6 +761,18 @@ export interface ActiveWorkflowChangedMessage {
   workingFilePath?: string | null;
 }
 
+export interface PromptEditorInsertRequest {
+  requestId: string;
+  references: string[];
+  mode: PromptEditorInsertMode;
+  surroundWithNewlines?: boolean;
+}
+
+export interface PromptEditorInsertMessage {
+  type: typeof MESSAGE_TYPES.INSERT_PROMPT_REFERENCES;
+  data: PromptEditorInsertRequest;
+}
+
 /**
  * Global settings updated message (extension -> webview)
  */
@@ -1208,6 +1221,7 @@ export type IncomingMessage =
   | WorkflowDismissedMessage
   | WorkflowSummaryUpdatedMessage
   | ActiveWorkflowChangedMessage
+  | PromptEditorInsertMessage
   | GlobalSettingsUpdatedMessage
   | ResetWorkflowStateMessage
   | RunHistoryUpdatedMessage

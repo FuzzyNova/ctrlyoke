@@ -176,6 +176,36 @@
         "title": "Initialize Workspace",
         "category": "FlightPath",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "flightpath.addFileToPromptEditor",
+        "title": "Add File to FlightPath",
+        "category": "FlightPath"
+      },
+      {
+        "command": "flightpath.addDirectoryToPromptEditor",
+        "title": "Add Directory to FlightPath",
+        "category": "FlightPath"
+      },
+      {
+        "command": "flightpath.addSelectionToPromptEditor",
+        "title": "Add Selection to FlightPath",
+        "category": "FlightPath"
+      },
+      {
+        "command": "flightpath.addSymbolToPromptEditor",
+        "title": "Add Symbol to FlightPath",
+        "category": "FlightPath"
+      },
+      {
+        "command": "flightpath.addScmResourcesToPromptEditor",
+        "title": "Add File to FlightPath",
+        "category": "FlightPath"
+      },
+      {
+        "command": "flightpath.addTimelineCommitToPromptEditor",
+        "title": "Add Commit to FlightPath",
+        "category": "FlightPath"
       }
     ],
     "keybindings": [
@@ -252,6 +282,30 @@
         {
           "command": "flightpath.queueNextFromContext",
           "when": "false"
+        },
+        {
+          "command": "flightpath.addFileToPromptEditor",
+          "when": "false"
+        },
+        {
+          "command": "flightpath.addDirectoryToPromptEditor",
+          "when": "false"
+        },
+        {
+          "command": "flightpath.addSelectionToPromptEditor",
+          "when": "false"
+        },
+        {
+          "command": "flightpath.addSymbolToPromptEditor",
+          "when": "false"
+        },
+        {
+          "command": "flightpath.addScmResourcesToPromptEditor",
+          "when": "false"
+        },
+        {
+          "command": "flightpath.addTimelineCommitToPromptEditor",
+          "when": "false"
         }
       ],
       "explorer/context": [
@@ -279,6 +333,16 @@
           "command": "flightpath.queueNextFromContext",
           "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@4"
+        },
+        {
+          "command": "flightpath.addFileToPromptEditor",
+          "when": "resourceScheme == file && !explorerResourceIsFolder",
+          "group": "flightpath@5"
+        },
+        {
+          "command": "flightpath.addDirectoryToPromptEditor",
+          "when": "explorerResourceIsFolder",
+          "group": "flightpath@5"
         }
       ],
       "editor/title": [
@@ -318,6 +382,51 @@
           "command": "flightpath.queueNextFromContext",
           "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@4"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "flightpath.addSelectionToPromptEditor",
+          "when": "editorHasSelection && resourceScheme == file",
+          "group": "2_flightpath@1"
+        },
+        {
+          "command": "flightpath.addSymbolToPromptEditor",
+          "when": "!editorHasSelection && resourceScheme == file",
+          "group": "2_flightpath@2"
+        }
+      ],
+      "editor/lineNumber/context": [
+        {
+          "command": "flightpath.addSelectionToPromptEditor",
+          "when": "editorHasSelection && resourceScheme == file",
+          "group": "2_flightpath@1"
+        },
+        {
+          "command": "flightpath.addSymbolToPromptEditor",
+          "when": "!editorHasSelection && resourceScheme == file",
+          "group": "2_flightpath@2"
+        }
+      ],
+      "scm/resourceState/context": [
+        {
+          "command": "flightpath.addScmResourcesToPromptEditor",
+          "when": "scmProvider == git",
+          "group": "2_flightpath"
+        }
+      ],
+      "scm/resourceFolder/context": [
+        {
+          "command": "flightpath.addScmResourcesToPromptEditor",
+          "when": "scmProvider == git",
+          "group": "2_flightpath"
+        }
+      ],
+      "timeline/item/context": [
+        {
+          "command": "flightpath.addTimelineCommitToPromptEditor",
+          "when": "timelineItem =~ /git:file:commit\\b/",
+          "group": "2_flightpath"
         }
       ]
     },

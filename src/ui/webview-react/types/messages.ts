@@ -30,6 +30,7 @@ export {
   RUNNER_IDS,
   EDITOR_TARGET_KINDS,
   EDITOR_PLACEHOLDER_TEXT,
+  PROMPT_EDITOR_INSERT_MODES,
   RETRY_PROMPT_PLACEHOLDERS,
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
@@ -55,6 +56,7 @@ export {
   type RunnerId,
   type ExecutionMode,
   type EditorTargetKind,
+  type PromptEditorInsertMode,
   type TerminalSessionStatus,
   type SessionKind,
   type ShellKind,
@@ -87,6 +89,8 @@ export {
   type WorkflowPropertiesUpdateMessage,
   type OpenNewWorkflowModalMessage,
   type RecentWorkflowsMessage,
+  type PromptEditorInsertRequest,
+  type PromptEditorInsertMessage,
   type IncomingMessage,
 
   // Prompt and workflow types

@@ -1709,6 +1709,17 @@ function createMessageHandlers(): MessageHandlerMap {
     // Full state sync comes via SESSION_RESTORED which is already handled
   };
 
+  handlers[MESSAGE_TYPES.INSERT_PROMPT_REFERENCES] = (message) => {
+    if (!message.data) {
+      return;
+    }
+
+    useUiStore.getState().setEditorCollapsed(false);
+    const editorStore = useEditorStore.getState();
+    editorStore.preparePromptEditorForInsert();
+    editorStore.enqueuePromptEditorInsert(message.data);
+  };
+
   // --------------------------------------------------------------------------
   // STEP_UNDO_DATA_UPDATED - Live snapshot metadata after prompt completes
   // --------------------------------------------------------------------------

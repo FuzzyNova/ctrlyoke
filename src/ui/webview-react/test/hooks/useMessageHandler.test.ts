@@ -46,11 +46,13 @@ import { useTerminalStore } from "@store/terminalStore";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
+  PROMPT_EDITOR_INSERT_MODES,
   STEP_STATUS,
   SESSION_KINDS,
   TERMINAL_SESSION_STATUS,
 } from "@/types/messages";
 import type { PromptStep } from "@/types/messages";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -960,6 +962,32 @@ describe("cleanup", () => {
 });
 
 describe("message passthroughs", () => {
+  it("queues prompt-editor insert requests and opens the editor section", () => {
+    renderHook(() => useMessageHandler());
+    useUiStore.getState().setEditorCollapsed(true);
+    useEditorStore.getState().setStepType(STEP_TYPES.SCRIPT);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.INSERT_PROMPT_REFERENCES, {
+        data: {
+          requestId: "insert-1",
+          references: ["@src/extension.ts", "@package.json"],
+          mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+        },
+      });
+    });
+
+    expect(useUiStore.getState().editorCollapsed).toBe(false);
+    expect(useEditorStore.getState().stepType).toBe(STEP_TYPES.PROMPT);
+    expect(useEditorStore.getState().pendingPromptEditorInserts).toEqual([
+      {
+        requestId: "insert-1",
+        references: ["@src/extension.ts", "@package.json"],
+        mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+      },
+    ]);
+  });
+
   it("does not warn for context reference validation replies handled by the editor", () => {
     renderHook(() => useMessageHandler());
 

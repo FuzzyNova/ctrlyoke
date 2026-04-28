@@ -15,7 +15,10 @@ import {
   COMPARE_SOURCES,
 } from "../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
-import type { ScriptStep } from "@root/types/WebviewMessageTypes";
+import type {
+  PromptEditorInsertRequest,
+  ScriptStep,
+} from "@root/types/WebviewMessageTypes";
 import { useUiStore } from "./uiStore";
 import type { WorkflowStep } from "./workflowStore";
 
@@ -168,6 +171,7 @@ interface EditorState {
 
   // Validation state
   validationErrors: Record<string, string>;
+  pendingPromptEditorInserts: PromptEditorInsertRequest[];
 }
 
 /**
@@ -223,6 +227,9 @@ interface EditorActions {
 
   // Queue state
   setHasActiveQueue: (hasQueue: boolean) => void;
+  preparePromptEditorForInsert: () => void;
+  enqueuePromptEditorInsert: (request: PromptEditorInsertRequest) => void;
+  consumePromptEditorInsert: (requestId: string) => void;
 
   // Pending edit cache
   clearAllPendingEdits: () => void;
@@ -282,6 +289,7 @@ const initialState: EditorState = {
   properties: { ...PROPERTY_DEFAULTS },
   isDirty: false,
   validationErrors: {},
+  pendingPromptEditorInserts: [],
 };
 
 export const useEditorStore = create<
@@ -843,6 +851,32 @@ export const useEditorStore = create<
 
   setHasActiveQueue: (hasQueue) => set({ hasActiveQueue: hasQueue }),
 
+  preparePromptEditorForInsert: () => {
+    const state = get();
+    if (state.selectionTarget.kind !== EDITOR_TARGET_KINDS.NEW_PROMPT) {
+      state.deselect();
+    }
+
+    if (get().stepType === STEP_TYPES.SCRIPT) {
+      get().setStepType(STEP_TYPES.PROMPT);
+    }
+  },
+
+  enqueuePromptEditorInsert: (request) =>
+    set((state) => ({
+      pendingPromptEditorInserts: [
+        ...state.pendingPromptEditorInserts,
+        request,
+      ],
+    })),
+
+  consumePromptEditorInsert: (requestId) =>
+    set((state) => ({
+      pendingPromptEditorInserts: state.pendingPromptEditorInserts.filter(
+        (request) => request.requestId !== requestId
+      ),
+    })),
+
   // ============================================================================
   // PENDING EDIT CACHE
   // ============================================================================
@@ -979,6 +1013,7 @@ export const useEditorStore = create<
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
       validationErrors: {},
+      pendingPromptEditorInserts: [],
     }),
 
   resetToDefaults: () =>
@@ -996,6 +1031,7 @@ export const useEditorStore = create<
       properties: { ...PROPERTY_DEFAULTS },
       isDirty: false,
       validationErrors: {},
+      pendingPromptEditorInserts: [],
     }),
 
   // ============================================================================

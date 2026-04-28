@@ -4,7 +4,11 @@ import {
   PROPERTY_DEFAULTS,
   END_CONDITION_DEFAULTS,
 } from "@store/editorStore";
-import { FINAL_STEP_PHASES } from "@/types/messages";
+import {
+  FINAL_STEP_PHASES,
+  PROMPT_EDITOR_INSERT_MODES,
+} from "@/types/messages";
+import { STEP_TYPES } from "@root/types/DashboardConstants";
 import type { PromptStep } from "@/types/messages";
 
 // ---------------------------------------------------------------------------
@@ -291,6 +295,41 @@ describe("setHasActiveQueue", () => {
     expect(store().hasActiveQueue).toBe(false);
     store().setHasActiveQueue(true);
     expect(store().hasActiveQueue).toBe(true);
+  });
+});
+
+describe("prompt editor inserts", () => {
+  it("switches script mode back to prompt mode before inserting", () => {
+    store().setStepType(STEP_TYPES.SCRIPT);
+
+    store().preparePromptEditorForInsert();
+
+    expect(store().selectionTarget.kind).toBe("newPrompt");
+    expect(store().stepType).toBe(STEP_TYPES.PROMPT);
+  });
+
+  it("returns from edit mode before inserting", () => {
+    store().setPromptText("Draft before editing");
+    store().enterEditMode(0, makePromptStep({ prompt: "Existing prompt" }));
+
+    store().preparePromptEditorForInsert();
+
+    expect(store().selectionTarget.kind).toBe("newPrompt");
+    expect(store().promptText).toBe("Draft before editing");
+  });
+
+  it("queues and consumes pending insert requests", () => {
+    store().enqueuePromptEditorInsert({
+      requestId: "insert-1",
+      references: ["@src/app.ts"],
+      mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+    });
+
+    expect(store().pendingPromptEditorInserts).toHaveLength(1);
+
+    store().consumePromptEditorInsert("insert-1");
+
+    expect(store().pendingPromptEditorInserts).toEqual([]);
   });
 });
 

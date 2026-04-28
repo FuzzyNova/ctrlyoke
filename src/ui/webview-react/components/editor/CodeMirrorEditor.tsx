@@ -31,7 +31,9 @@ import {
   MESSAGE_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
   RETRY_PROMPT_PLACEHOLDERS,
+  PROMPT_EDITOR_INSERT_MODES,
   type RetryPromptPlaceholder,
+  type PromptEditorInsertRequest,
 } from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
@@ -80,6 +82,10 @@ interface CodeMirrorEditorProps {
   stepCount?: number;
   /** Whether a final step is configured (for $finalStep/$allFinalStep validation). */
   hasFinalStep?: boolean;
+  /** Pending external insert request from VS Code context menus. */
+  pendingInsertRequest?: PromptEditorInsertRequest | null;
+  /** Called after a pending external insert has been applied. */
+  onInsertApplied?: (requestId: string) => void;
 }
 
 type ContextReferenceType =
@@ -169,6 +175,44 @@ export function getRetryPlaceholderCompletions(
   };
 }
 
+export function buildPromptReferenceInsertion(
+  docText: string,
+  request: PromptEditorInsertRequest,
+  selection: { from: number; to: number }
+): { from: number; to: number; text: string } {
+  const referencesText = request.references.join("\n");
+
+  if (request.mode === PROMPT_EDITOR_INSERT_MODES.APPEND) {
+    const prefix =
+      docText.length > 0 && !docText.endsWith("\n") ? "\n" : "";
+    return {
+      from: docText.length,
+      to: docText.length,
+      text: `${prefix}${referencesText}`,
+    };
+  }
+
+  const hasExplicitSelection = selection.from !== selection.to;
+  const shouldSurroundWithNewlines =
+    request.surroundWithNewlines ??
+    (!hasExplicitSelection &&
+      request.references.length > 1 &&
+      selection.from > 0 &&
+      selection.to < docText.length &&
+      docText[selection.from - 1] !== "\n" &&
+      docText[selection.to] !== "\n");
+
+  const text = shouldSurroundWithNewlines
+    ? `\n${referencesText}\n`
+    : referencesText;
+
+  return {
+    from: selection.from,
+    to: selection.to,
+    text,
+  };
+}
+
 /**
  * CodeMirrorEditor - CodeMirror 6 integration for prompt editing
  *
@@ -195,6 +239,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     maxHeightClassName,
     onRun,
     onQueue,
+    pendingInsertRequest,
+    onInsertApplied,
   } = props;
   const stepCountRef = useRef(props.stepCount ?? 0);
   const hasFinalStepRef = useRef(props.hasFinalStep ?? false);
@@ -254,6 +300,35 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       forceLinting(viewRef.current);
     }
   }, [props.hasFinalStep]);
+
+  useEffect(() => {
+    if (!pendingInsertRequest || !viewRef.current || mode !== "prompt") {
+      return;
+    }
+
+    const view = viewRef.current;
+    const selection = view.state.selection.main;
+    const change = buildPromptReferenceInsertion(
+      view.state.doc.toString(),
+      pendingInsertRequest,
+      { from: selection.from, to: selection.to }
+    );
+
+    view.dispatch({
+      changes: {
+        from: change.from,
+        to: change.to,
+        insert: change.text,
+      },
+      selection: {
+        anchor: change.from + change.text.length,
+      },
+      scrollIntoView: true,
+      userEvent: "input",
+    });
+    view.focus();
+    onInsertApplied?.(pendingInsertRequest.requestId);
+  }, [mode, onInsertApplied, pendingInsertRequest]);
 
   // Trigger CodeMirror tooltip remeasure when the visual viewport changes
   // (e.g. mobile keyboard opens/closes, or iOS page-scrolls to keep the

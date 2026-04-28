@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import {
+  buildPromptReferenceInsertion,
   getRetryPlaceholderCompletions,
   type CodeMirrorEditorMode,
 } from "@components/editor/CodeMirrorEditor";
-import { RETRY_PROMPT_PLACEHOLDERS } from "@/types/messages";
+import {
+  PROMPT_EDITOR_INSERT_MODES,
+  RETRY_PROMPT_PLACEHOLDERS,
+} from "@/types/messages";
 
 function getCompletions(
   doc: string,
@@ -51,5 +55,43 @@ describe("CodeMirrorEditor retry placeholder completions", () => {
   it("does not trigger after whitespace or a closing brace", () => {
     expect(getCompletions("{std out")).toBeNull();
     expect(getCompletions("{stdout}")).toBeNull();
+  });
+});
+
+describe("CodeMirrorEditor prompt reference insertion", () => {
+  it("surrounds multi-reference inserts with newlines when inserting mid-line", () => {
+    const result = buildPromptReferenceInsertion(
+      "Review this prompt",
+      {
+        requestId: "insert-1",
+        references: ["@src/app.ts", "@package.json"],
+        mode: PROMPT_EDITOR_INSERT_MODES.INSERT,
+      },
+      { from: "Review".length, to: "Review".length }
+    );
+
+    expect(result).toEqual({
+      from: "Review".length,
+      to: "Review".length,
+      text: "\n@src/app.ts\n@package.json\n",
+    });
+  });
+
+  it("appends references at the end of the document in append mode", () => {
+    const result = buildPromptReferenceInsertion(
+      "Analyze current output",
+      {
+        requestId: "insert-2",
+        references: ["@src/extension.ts"],
+        mode: PROMPT_EDITOR_INSERT_MODES.APPEND,
+      },
+      { from: 0, to: 0 }
+    );
+
+    expect(result).toEqual({
+      from: "Analyze current output".length,
+      to: "Analyze current output".length,
+      text: "\n@src/extension.ts",
+    });
   });
 });

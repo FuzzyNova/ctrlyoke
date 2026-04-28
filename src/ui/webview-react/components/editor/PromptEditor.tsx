@@ -71,6 +71,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     setScriptOnFail,
     setScriptCompareSource,
     setScriptReturns,
+    pendingPromptEditorInserts,
+    consumePromptEditorInsert,
   } = useEditorStore();
 
   const {
@@ -147,6 +149,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     selectedPromptStatus === STEP_STATUS.RUNNING;
   // Delete button: disabled only when prompt is actively running
   const isPromptActivelyRunning = selectedPromptStatus === STEP_STATUS.RUNNING;
+  const pendingPromptEditorInsert = pendingPromptEditorInserts[0] ?? null;
 
   const { affUri, dicUri } = getDictionaryUris();
 
@@ -781,6 +784,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
             onQueue={handleEditorQueue}
             stepCount={stepCount}
             hasFinalStep={hasFinalStep}
+            pendingInsertRequest={pendingPromptEditorInsert}
+            onInsertApplied={consumePromptEditorInsert}
           />
 
           {/* Properties Drawer (slides up from bottom, overlays only editor) */}

@@ -14,7 +14,6 @@ Add a new `Add to FlightPath` workflow for the main VS Code surfaces where conte
 - Editor selections
 - Editor symbol/cursor context
 - SCM changed resources
-- SCM title actions for git-wide context
 - Git commit items where VS Code exposes them
 
 The output of every action should be a valid FlightPath reference string inserted into the prompt editor in `CodeMirrorEditor.tsx`, not a second attachment format.
@@ -105,7 +104,9 @@ Built-in SCM menus do **not** expose a dedicated “commit history item” conte
 That means:
 
 - changed files/resources belong in SCM menus
-- commit hashes belong either in Timeline item menus or in an SCM title QuickPick
+- commit hashes belong either in Timeline item menus or in some other picker-driven command
+
+For this plan revision, only the Timeline commit-item path is in scope. SCM title actions for `~diff`, `~staged`, stash, or recent commits are intentionally out of scope.
 
 This is the main API constraint that should shape the implementation plan.
 
@@ -130,10 +131,6 @@ This avoids polluting Explorer, Editor, and SCM menus with many top-level action
 | Editor with selection | Right-click selection → Add to FlightPath | `#selection:path:start-end` |
 | Editor without selection | Right-click symbol/cursor → Add to FlightPath | `#sym:path:Symbol:line` if resolvable, else fallback |
 | SCM changed file(s) | Right-click changed resource(s) → Add to FlightPath | `@path` per selected resource |
-| SCM title | Add Working Tree Diff | `~diff` |
-| SCM title | Add Staged Diff | `~staged` |
-| SCM title | Add Stash… | `~stash:N` |
-| SCM title | Add Recent Commit… | `~<hash>` |
 | Timeline commit item | Right-click commit item → Add to FlightPath | `~<hash>` |
 
 ### Symbol fallback behavior
@@ -167,7 +164,7 @@ That layer should own:
 - building `@dir/`
 - building `#selection:path:start-end`
 - building `#sym:path:name:line`
-- building `~diff`, `~staged`, `~stash:N`, `~hash`
+- building `~hash`
 
 `CompletionHelpers.ts` should then consume those builders for completions, and the new menu commands should consume the same builders for insertion.
 
@@ -253,10 +250,6 @@ Recommended command set:
 - `flightpath.addExplorerResourceToPromptEditor`
 - `flightpath.addEditorContextToPromptEditor`
 - `flightpath.addScmResourcesToPromptEditor`
-- `flightpath.addWorkingTreeDiffToPromptEditor`
-- `flightpath.addStagedDiffToPromptEditor`
-- `flightpath.addStashToPromptEditor`
-- `flightpath.addRecentCommitToPromptEditor`
 - `flightpath.addTimelineCommitToPromptEditor`
 
 These should be hidden from the Command Palette unless a command is also useful outside the menu flow.
@@ -299,14 +292,22 @@ Suggested `when` logic:
 
 ## 6.5 SCM
 
-Use two SCM surfaces for different semantics:
+Use SCM resource surfaces only:
 
 - `scm/resourceState/context` and `scm/resourceFolder/context`
   - insert one `@path` per selected changed resource
-- `scm/title`
-  - add git-wide context actions: `~diff`, `~staged`, stash picker, recent-commit picker
 
 For SCM resource multi-select, join inserted references with newlines in selection order.
+
+### SCM title
+
+Out of scope for this version.
+
+Rationale:
+
+- `~diff` is fast to type manually
+- the user explicitly does not want SCM title actions for working tree or staged diff
+- stash and recent-commit pickers add scope without improving the core right-click path materially
 
 ## 6.6 Timeline commit items
 
@@ -322,29 +323,12 @@ This is the correct built-in right-click surface for commit items.
 
 ## 7. Git Context Plan
 
-## 7.1 Reuse existing git helpers
+Git-context scope for this version is intentionally narrow:
 
-The existing `src/utils/GitUtils.ts` already provides what this feature needs:
+- in scope: timeline commit item → `~<hash>`
+- out of scope: SCM title actions for `~diff`, `~staged`, stash, and recent commits
 
-- `getRecentCommits()`
-- `getStashList()`
-- `searchCommitsBySubject()`
-
-The SCM title QuickPick commands should reuse those helpers instead of adding new git-parsing code.
-
-## 7.2 Why SCM title needs QuickPick actions
-
-There is no native right-click surface for:
-
-- `~stash:N`
-- arbitrary recent commit hashes across the repo
-
-So the cleanest plan is:
-
-- direct menu action where VS Code exposes a concrete resource/item
-- QuickPick command from the SCM title for the git contexts that are repo-scoped rather than resource-scoped
-
-That is the only way to cover “basically everything we support” without building a custom SCM UI.
+This keeps the implementation aligned with the requested UX and avoids adding picker-driven git actions that the user does not want.
 
 ---
 
@@ -389,8 +373,7 @@ Do **not** auto-expand references into XML in the editor. The editor should alwa
 5. Add new insertion message type(s) in `DashboardConstants.ts` and typed payloads in `WebviewMessageTypes.ts`.
 6. Add webview-side insertion handling with buffering for pre-mount requests.
 7. Make `CodeMirrorEditor.tsx` apply live insertion transactions at the current selection.
-8. Add SCM title QuickPick flows for stash and recent commits.
-9. Add tests and manual verification.
+8. Add tests and manual verification.
 
 ---
 
@@ -403,7 +386,7 @@ Do **not** auto-expand references into XML in the editor. The editor should alwa
 - editor selection → `#selection`
 - symbol resolution fallback behavior
 - SCM resource array → multiple `@path` refs
-- commit/stash picker reference generation
+- timeline commit reference generation
 
 ## Integration tests
 
@@ -418,9 +401,6 @@ Do **not** auto-expand references into XML in the editor. The editor should alwa
 - editor selection
 - editor symbol with and without selection
 - SCM changed file
-- SCM title `~diff`
-- SCM title `~staged`
-- SCM title stash picker
 - Timeline commit item
 - insertion while editing a queue step
 - insertion while editing final step
@@ -434,7 +414,7 @@ Do **not** auto-expand references into XML in the editor. The editor should alwa
 1. Should insertion target the currently edited prompt even when the user is editing the final step, or should all external inserts force new-prompt mode?
 2. For SCM changed resources, should the command always insert `@path`, or should there also be a separate “Add Resource Diff” action later?
 3. Do we want a single generic submenu label everywhere, or more explicit labels like `Add File to FlightPath` on single-action surfaces?
-4. Should stash/recent-commit QuickPicks be available only from `scm/title`, or also from the Command Palette?
+4. Should `timeline/item/context` be the only commit-hash insertion surface, or do we eventually want a fallback command-palette picker for commits too?
 
 ---
 
@@ -448,5 +428,6 @@ The most important implementation decisions are:
 - centralize reference string generation
 - keep insertion panel-scoped, not broadcast-scoped
 - use `timeline/item/context` for commit items, because built-in SCM menus do not expose commit-history entries directly
+- leave SCM title git actions out of scope for this version
 
 That approach covers the requested VS Code surfaces, fits the current FlightPath architecture, and avoids duplicating context syntax logic across completions, commands, and the webview.

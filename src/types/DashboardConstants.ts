@@ -139,6 +139,7 @@ export const MESSAGE_TYPES = {
   FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: { exists: boolean, filePath: string }
   VALIDATE_CONTEXT_REFS: "validateContextRefs", // Webview -> Extension: Validate inline @/#/~ context references
   CONTEXT_REFS_VALIDATION: "contextRefsValidation", // Extension -> Webview: Inline context reference validation results
+  INSERT_PROMPT_REFERENCES: "insertPromptReferences", // Extension -> Webview: insert raw context references into the live prompt editor
 
   // Token counting - Webview -> Extension: Request token counts for attachment references
   REQUEST_ATTACHMENT_TOKEN_COUNTS: "requestAttachmentTokenCounts",
@@ -572,6 +573,14 @@ export const QUEUE_POSITION = {
 // ============================================================================
 export const EDITOR_TARGET_KINDS = {
   NEW_PROMPT: "newPrompt",
+} as const;
+
+// ============================================================================
+// PROMPT EDITOR INSERT MODES - How external reference insertions are applied
+// ============================================================================
+export const PROMPT_EDITOR_INSERT_MODES = {
+  INSERT: "insert",
+  APPEND: "append",
 } as const;
 
 // ============================================================================
@@ -1018,6 +1027,8 @@ export type GitChangeKind =
   (typeof GIT_CHANGE_KINDS)[keyof typeof GIT_CHANGE_KINDS];
 export type EditorTargetKind =
   (typeof EDITOR_TARGET_KINDS)[keyof typeof EDITOR_TARGET_KINDS];
+export type PromptEditorInsertMode =
+  (typeof PROMPT_EDITOR_INSERT_MODES)[keyof typeof PROMPT_EDITOR_INSERT_MODES];
 export type TerminalSessionStatus =
   (typeof TERMINAL_SESSION_STATUS)[keyof typeof TERMINAL_SESSION_STATUS];
 export type SessionKind = (typeof SESSION_KINDS)[keyof typeof SESSION_KINDS];
