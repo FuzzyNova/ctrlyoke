@@ -17,6 +17,7 @@ export interface PromptStartData {
   totalSteps: number;
   promptText: string;
   attemptIndex: number;
+  runIndex: number;
   /** The harness CLI command string, populated only on the second fire. */
   cliCommand?: string;
 }
@@ -43,6 +44,7 @@ interface StepOutputBufferEntry {
   workingDirectory: string | undefined;
   timestampMs: number;
   attemptIndex: number;
+  runIndex: number;
   accumulatedText: string;
   accumulatedEvents: CliEvent[];
   rawTextOutput?: boolean;
@@ -152,7 +154,8 @@ export class OutputCaptureBuffer {
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
-    rawTextOutput: boolean | undefined
+    rawTextOutput: boolean | undefined,
+    runIndex: number = 0
   ): void {
     // Preserve accumulatedText/Events across the two captureOutputInit calls
     // per attempt (the second call updates cliCommand once the process starts).
@@ -163,6 +166,7 @@ export class OutputCaptureBuffer {
       workingDirectory,
       timestampMs,
       attemptIndex,
+      runIndex,
       accumulatedText: existing?.accumulatedText ?? "",
       accumulatedEvents: existing?.accumulatedEvents ?? [],
       rawTextOutput,
@@ -193,6 +197,7 @@ export class OutputCaptureBuffer {
       totalSteps,
       promptText: prompt,
       attemptIndex,
+      runIndex,
       cliCommand,
     });
   }
@@ -263,7 +268,8 @@ export class OutputCaptureBuffer {
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
-    rawTextOutput: boolean | undefined
+    rawTextOutput: boolean | undefined,
+    runIndex: number = 0
   ): void {
     const existing = this.finalStepOutputBuffer.get(loopIndex);
     this.finalStepOutputBuffer.set(loopIndex, {
@@ -272,6 +278,7 @@ export class OutputCaptureBuffer {
       workingDirectory,
       timestampMs,
       attemptIndex,
+      runIndex,
       accumulatedText: existing?.accumulatedText ?? "",
       accumulatedEvents: existing?.accumulatedEvents ?? [],
       rawTextOutput,
@@ -353,6 +360,7 @@ export class OutputCaptureBuffer {
       workingDirectory: buffer.workingDirectory,
       timestampMs: buffer.timestampMs,
       attemptIndex: buffer.attemptIndex,
+      runIndex: buffer.runIndex,
       rawTextOutput: buffer.rawTextOutput,
     };
   }
@@ -483,6 +491,7 @@ export class OutputCaptureBuffer {
           workingDirectory: buffer.workingDirectory,
           timestampMs: buffer.timestampMs,
           attemptIndex: buffer.attemptIndex,
+          runIndex: buffer.runIndex,
           rawTextOutput: buffer.rawTextOutput,
         });
         if (buffer.accumulatedText) {
@@ -528,6 +537,7 @@ export class OutputCaptureBuffer {
           workingDirectory: buffer.workingDirectory,
           timestampMs: buffer.timestampMs,
           attemptIndex: buffer.attemptIndex,
+          runIndex: buffer.runIndex,
           rawTextOutput: buffer.rawTextOutput,
         });
       }

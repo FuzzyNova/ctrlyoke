@@ -560,6 +560,7 @@ export class OutputHistoryManager {
         eventType: TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED,
         timestampMs: cliOutput.timestampMs ?? Date.now(),
         target,
+        runIndex: cliOutput.runIndex ?? 0,
         attemptIndex: cliOutput.attemptIndex ?? 0,
         payload: { cliOutput },
       })

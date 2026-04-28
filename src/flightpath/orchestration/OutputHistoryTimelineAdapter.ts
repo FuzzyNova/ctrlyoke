@@ -57,15 +57,20 @@ export class OutputHistoryTimelineAdapter {
           });
           break;
         case TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED: {
+          const runIndex = event.runIndex ?? 0;
           const attemptIndex = event.attemptIndex;
-          cliEntriesByKey.set(getCliEntryKey(event.target, attemptIndex), {
+          cliEntriesByKey.set(
+            getCliEntryKey(event.target, runIndex, attemptIndex),
+            {
             kind: OUTPUT_HISTORY_KINDS.CLI,
             target: event.target,
+            runIndex,
             attemptIndex,
             cliOutput: event.payload.cliOutput,
             timestampMs: event.timestampMs,
             sequence: event.sequence,
-          });
+            }
+          );
           break;
         }
         case TIMELINE_EVENT_TYPES.STATUS_MESSAGE_RECORDED:
@@ -130,13 +135,14 @@ function compareTimelineEvents(
 
 function getCliEntryKey(
   target: OutputExecutionTarget,
+  runIndex: number,
   attemptIndex: number
 ): string {
   const base =
     target.kind === FINAL_STEP_PHASES.QUEUE
       ? `queue:${target.stepIndex}`
       : `final:${target.loopIndex}`;
-  return `${base}:attempt:${attemptIndex}`;
+  return `${base}:run:${runIndex}:attempt:${attemptIndex}`;
 }
 
 function compareOrderedHistoryEntries(

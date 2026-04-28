@@ -88,7 +88,8 @@ export interface WorkflowExecutionContext {
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
-    rawTextOutput?: boolean
+    rawTextOutput?: boolean,
+    runIndex?: number
   ) => void;
   /** Always-on chunk buffer for queue steps — enables output replay on workflow switch. */
   captureChunk?: (stepIndex: number, chunk: string) => void;
@@ -106,7 +107,8 @@ export interface WorkflowExecutionContext {
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
-    rawTextOutput?: boolean
+    rawTextOutput?: boolean,
+    runIndex?: number
   ) => void;
   captureFinalStepChunk?: (loopIndex: number, chunk: string) => void;
   captureFinalStepEvents?: (loopIndex: number, events: CliEvent[]) => void;
@@ -146,9 +148,16 @@ export interface WorkflowExecutionContext {
     /** Called for each output chunk — used to stream text to the CliOutput panel. */
     onOutput: (chunk: string) => void;
   }) => Promise<number>;
+  targetRunIndices?: Map<string, number>;
 }
 
 type ExecutionTarget = WorkflowAttemptTarget;
+
+function getExecutionTargetRunKey(target: ExecutionTarget): string {
+  return target.kind === FINAL_STEP_PHASES.QUEUE
+    ? `queue:${target.stepIndex}`
+    : `final:${target.loopIndex}`;
+}
 
 /**
  * Drives the sequential execution loop for a FlightPath workflow.
@@ -566,6 +575,7 @@ export class WorkflowExecutor {
     }
 
     const signedStepIndex = this.getSignedStepIndex(target);
+    const runIndex = this.getRunIndexForTarget(context, target);
     const sendPromptIndex =
       target.kind === FINAL_STEP_PHASES.QUEUE
         ? target.stepIndex
@@ -577,6 +587,7 @@ export class WorkflowExecutor {
       context,
       target,
       target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
+      runIndex,
       0,
       {
         promptIndex: sendPromptIndex,
@@ -608,15 +619,16 @@ export class WorkflowExecutor {
     }
 
     if (!result) {
-      return this.handlePromptSendFailure(
-        integration,
-        context,
-        target,
-        prompt,
-        signedStepIndex,
-        0
-      );
-    }
+        return this.handlePromptSendFailure(
+          integration,
+          context,
+          target,
+          prompt,
+          signedStepIndex,
+          runIndex,
+          0
+        );
+      }
 
     const { responseText, duration } = result;
 
@@ -646,6 +658,8 @@ export class WorkflowExecutor {
       prompt,
       responseText,
       duration
+      ,
+      runIndex,
     );
 
     // Use the resolved end condition (handles workflow-level inheritance via PropertyResolver)
@@ -663,6 +677,7 @@ export class WorkflowExecutor {
         context,
         target,
         target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
+        runIndex,
         0,
         duration,
         vars && Object.keys(vars).length > 0 ? vars : undefined
@@ -792,6 +807,7 @@ export class WorkflowExecutor {
   ): Promise<boolean> {
     const runtime = this.getRuntime();
     const stepLabel = step.name ?? step.script.split(/\s+/)[0];
+    const runIndex = this.getRunIndexForTarget(context, target);
     Log.info(`Executing script step: ${stepLabel}`);
 
     // Mark step as running in the dashboard
@@ -829,6 +845,8 @@ export class WorkflowExecutor {
       timestampMs,
       cliCommand: step.script,
       workingDirectory: context.workspaceFolderPath,
+      attemptIndex,
+      runIndex,
     };
     if (context.dashboardProvider && signedStepIndex >= 0) {
       context.dashboardProvider.updateCliOutput(signedStepIndex, initCliOutput);
@@ -948,6 +966,8 @@ export class WorkflowExecutor {
       timestampMs,
       cliCommand: step.script,
       workingDirectory: context.workspaceFolderPath,
+      attemptIndex,
+      runIndex,
     };
 
     if (context.dashboardProvider && signedStepIndex >= 0) {
@@ -1131,6 +1151,13 @@ export class WorkflowExecutor {
       : -(target.loopIndex + 1);
   }
 
+  private getRunIndexForTarget(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget
+  ): number {
+    return context.targetRunIndices?.get(getExecutionTargetRunKey(target)) ?? 0;
+  }
+
   private describeExecutionTarget(target: ExecutionTarget): string {
     return target.kind === FINAL_STEP_PHASES.QUEUE
       ? `queue prompt ${target.stepIndex + 1}`
@@ -1227,6 +1254,7 @@ export class WorkflowExecutor {
     target: ExecutionTarget;
     signedStepIndex: number;
     prompt: PromptStep;
+    runIndex: number;
     attemptIndex: number;
     responseText?: string;
     errorMessage?: string;
@@ -1238,6 +1266,7 @@ export class WorkflowExecutor {
       target,
       signedStepIndex,
       prompt,
+      runIndex,
       attemptIndex,
       responseText,
       errorMessage,
@@ -1302,6 +1331,7 @@ export class WorkflowExecutor {
         bufferedOutput?.timestampMs ??
         this.getAttemptStartedAt(target) ??
         Date.now(),
+      runIndex,
       attemptIndex,
       rawTextOutput:
         rawTextOutputOverride ??
@@ -1317,6 +1347,7 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     signedStepIndex: number | undefined,
+    runIndex: number,
     attemptIndex: number,
     duration: number,
     vars?: Record<string, string>
@@ -1400,7 +1431,8 @@ export class WorkflowExecutor {
       integration,
       context,
       target,
-      signedStepIndex
+      signedStepIndex,
+      runIndex
     );
 
     const result = await this.endConditionHandler.handleEndConditionResult(
@@ -1485,6 +1517,7 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
     signedStepIndex: number | undefined,
+    runIndex: number,
     attemptIndex: number,
     sendOptions: WorkflowContext,
     onPromptSent?: () => Promise<void>
@@ -1508,6 +1541,7 @@ export class WorkflowExecutor {
           cliCommand: undefined,
           workingDirectory: context.workspaceFolderPath,
           timestampMs: initTimestampMs,
+          runIndex,
           attemptIndex,
           rawTextOutput,
         });
@@ -1521,7 +1555,8 @@ export class WorkflowExecutor {
           context.workspaceFolderPath,
           initTimestampMs,
           attemptIndex,
-          rawTextOutput
+          rawTextOutput,
+          runIndex
         );
       }
     } else {
@@ -1534,6 +1569,7 @@ export class WorkflowExecutor {
         cliCommand: undefined,
         workingDirectory: context.workspaceFolderPath,
         timestampMs: initTimestampMs,
+        runIndex,
         attemptIndex,
         rawTextOutput,
       });
@@ -1544,7 +1580,8 @@ export class WorkflowExecutor {
         context.workspaceFolderPath,
         initTimestampMs,
         attemptIndex,
-        rawTextOutput
+        rawTextOutput,
+        runIndex
       );
     }
 
@@ -1573,6 +1610,7 @@ export class WorkflowExecutor {
             cliCommand,
             workingDirectory: context.workspaceFolderPath,
             timestampMs: initTimestampMs,
+            runIndex,
             attemptIndex,
             rawTextOutput,
           });
@@ -1586,7 +1624,8 @@ export class WorkflowExecutor {
             context.workspaceFolderPath,
             initTimestampMs,
             attemptIndex,
-            rawTextOutput
+            rawTextOutput,
+            runIndex
           );
         }
       } else {
@@ -1599,6 +1638,7 @@ export class WorkflowExecutor {
           cliCommand,
           workingDirectory: context.workspaceFolderPath,
           timestampMs: initTimestampMs,
+          runIndex,
           attemptIndex,
           rawTextOutput,
         });
@@ -1610,7 +1650,8 @@ export class WorkflowExecutor {
           context.workspaceFolderPath,
           initTimestampMs,
           attemptIndex,
-          rawTextOutput
+          rawTextOutput,
+          runIndex
         );
       }
     });
@@ -1703,7 +1744,8 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     context: WorkflowExecutionContext,
     target: ExecutionTarget,
-    signedStepIndex: number | undefined
+    signedStepIndex: number | undefined,
+    runIndex: number
   ): SendRetryPromptCallback {
     return async (
       retryPromptStep: PromptStep,
@@ -1723,6 +1765,7 @@ export class WorkflowExecutor {
         context,
         target,
         target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
+        runIndex,
         retryAttemptIndex,
         {
           promptIndex: currentIndex,
@@ -1749,6 +1792,7 @@ export class WorkflowExecutor {
           target,
           retryPromptStep,
           signedStepIndex ?? this.getSignedStepIndex(target),
+          runIndex,
           retryAttemptIndex
         );
         return null;
@@ -1762,6 +1806,7 @@ export class WorkflowExecutor {
         retryPromptStep,
         result.responseText,
         result.duration,
+        runIndex,
         retryAttemptIndex
       );
 
@@ -1914,6 +1959,7 @@ export class WorkflowExecutor {
     target: ExecutionTarget,
     prompt: PromptStep,
     signedStepIndex: number,
+    runIndex: number,
     attemptIndex: number
   ): Promise<boolean> {
     const runtime = this.getRuntime();
@@ -1929,6 +1975,7 @@ export class WorkflowExecutor {
         target,
         signedStepIndex,
         prompt,
+        runIndex,
         attemptIndex,
         responseText: failureOutput,
         errorMessage: failureReason,
@@ -2044,6 +2091,7 @@ export class WorkflowExecutor {
         target,
         signedStepIndex,
         prompt,
+        runIndex,
         attemptIndex,
         responseText: failureOutput,
         errorMessage: failureReason,
@@ -2134,6 +2182,7 @@ export class WorkflowExecutor {
       workingDirectory: context.workspaceFolderPath,
       timestampMs: this.getAttemptStartedAt(target) ?? Date.now(),
       attemptIndex,
+      runIndex,
       rawTextOutput: integration.rawTextOutput || undefined,
       errorMessage: failureReason,
     };
@@ -2185,6 +2234,7 @@ export class WorkflowExecutor {
     prompt: PromptStep,
     responseText: string,
     duration: number,
+    runIndex: number,
     attemptIndex: number = 0
   ): Promise<void> {
     const parsedOutput = integration.getLastParsedOutput?.();
@@ -2235,6 +2285,7 @@ export class WorkflowExecutor {
       cliCommand,
       workingDirectory: context.workspaceFolderPath,
       timestampMs: this.getAttemptStartedAt(target) ?? Date.now(),
+      runIndex,
       attemptIndex,
       rawTextOutput: integration.rawTextOutput || undefined,
     };

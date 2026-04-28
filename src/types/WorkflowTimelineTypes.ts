@@ -86,6 +86,7 @@ export interface WorkflowRuntimeTransitionRecordedEventDraft extends RunTimeline
 
 export interface CliOutputRecordedEventDraft extends TargetedTimelineEventDraftBase {
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED;
+  runIndex?: number;
   attemptIndex: number;
   payload: {
     cliOutput: CliOutput;
@@ -154,6 +155,7 @@ export type WorkflowTimelineEventDraft =
 
 export interface CliOutputRecordedEvent extends TargetedTimelineEventBase {
   eventType: typeof TIMELINE_EVENT_TYPES.CLI_OUTPUT_RECORDED;
+  runIndex?: number;
   attemptIndex: number;
   payload: {
     cliOutput: CliOutput;

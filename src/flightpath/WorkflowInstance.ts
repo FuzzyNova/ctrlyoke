@@ -63,7 +63,10 @@ import { PromptFileWatcher } from "./orchestration/PromptFileWatcher";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
-import type { UndoExecutionTarget } from "../types/OutputHistoryTypes";
+import type {
+  OutputExecutionTarget,
+  UndoExecutionTarget,
+} from "../types/OutputHistoryTypes";
 import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
 import {
   OutputCaptureBuffer,
@@ -1084,13 +1087,22 @@ export class WorkflowInstance {
         const currentIndex = currentQueueState.currentIndex;
         integration.setWorkflowProgress(currentIndex + 1, totalSteps);
       }
+      const targetRunIndices = await this.computeTargetRunIndices(
+        historyFilePath,
+        {
+          continueFromCurrent,
+          isAppendContinuation,
+          isIdleContinuation,
+        }
+      );
       Log.debug(
         `🟢 [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
       );
       await this.startWorkflowExecution(
         integration,
         historyFilePath,
-        workingFilePath || undefined
+        workingFilePath || undefined,
+        targetRunIndices
       );
     } catch (error) {
       Log.error("Failed to execute prompt file:", error);
@@ -1867,6 +1879,84 @@ export class WorkflowInstance {
     this.outputCaptureBuffer.clear();
   }
 
+  private getExecutionTargetRunKey(
+    target: OutputExecutionTarget
+  ): `queue:${number}` | `final:${number}` {
+    return target.kind === FINAL_STEP_PHASES.QUEUE
+      ? `queue:${target.stepIndex}`
+      : `final:${target.loopIndex}`;
+  }
+
+  private async computeTargetRunIndices(
+    historyFilePath: string,
+    options: {
+      continueFromCurrent: boolean;
+      isAppendContinuation: boolean;
+      isIdleContinuation: boolean;
+    }
+  ): Promise<Map<string, number>> {
+    if (
+      !historyFilePath ||
+      (!options.continueFromCurrent && !options.isIdleContinuation) ||
+      options.isAppendContinuation
+    ) {
+      return new Map();
+    }
+
+    const rerunTargets: OutputExecutionTarget[] = [];
+    const state = this.promptQueue.getState();
+
+    for (let stepIndex = state.currentIndex; stepIndex < state.steps.length; stepIndex++) {
+      rerunTargets.push({
+        kind: FINAL_STEP_PHASES.QUEUE,
+        stepIndex,
+      });
+    }
+
+    const finalStepRuntime = this.promptQueue.getFinalStepRuntime();
+    if (
+      finalStepRuntime?.phase === FINAL_STEP_PHASES.FINAL_STEP &&
+      !this.promptQueue.hasNext()
+    ) {
+      rerunTargets.push({
+        kind: FINAL_STEP_PHASES.FINAL_STEP,
+        loopIndex: finalStepRuntime.loopCount,
+      });
+    }
+
+    if (rerunTargets.length === 0) {
+      return new Map();
+    }
+
+    const targetKeys = new Set(
+      rerunTargets.map((target) => this.getExecutionTargetRunKey(target))
+    );
+
+    const history = await this.outputHistoryManager.loadHistory(historyFilePath);
+    const maxRunIndexByTarget = new Map<string, number>();
+
+    for (const entry of history.orderedEntries) {
+      if (entry.kind !== OUTPUT_HISTORY_KINDS.CLI) {
+        continue;
+      }
+      const key = this.getExecutionTargetRunKey(entry.target);
+      if (!targetKeys.has(key)) {
+        continue;
+      }
+      const runIndex = entry.runIndex ?? entry.cliOutput.runIndex ?? 0;
+      maxRunIndexByTarget.set(
+        key,
+        Math.max(maxRunIndexByTarget.get(key) ?? -1, runIndex)
+      );
+    }
+
+    const nextRunIndexByTarget = new Map<string, number>();
+    for (const [key, maxRunIndex] of maxRunIndexByTarget) {
+      nextRunIndexByTarget.set(key, maxRunIndex + 1);
+    }
+    return nextRunIndexByTarget;
+  }
+
   /**
    * Build the WorkflowExecutionContext passed to WorkflowExecutor.execute().
    * Captures all per-run closure state (integration reference, buffer callbacks,
@@ -1876,7 +1966,8 @@ export class WorkflowInstance {
   private buildWorkflowExecutionContext(
     activeIntegration: HarnessIntegration,
     historyFilePath: string,
-    workingFilePath: string | undefined
+    workingFilePath: string | undefined,
+    targetRunIndices?: Map<string, number>
   ): WorkflowExecutionContext {
     const self = this;
     return {
@@ -1898,6 +1989,7 @@ export class WorkflowInstance {
       instanceId: this.id,
       outputHistoryManager: this.outputHistoryManager,
       mcpServerProvider: this.mcpServerProvider,
+      targetRunIndices,
       getIntegrationForPrompt: (
         prompt: PromptStep,
         harnessOverride?: HarnessId
@@ -1926,7 +2018,8 @@ export class WorkflowInstance {
         workingDirectory,
         timestampMs,
         attemptIndex,
-        rawTextOutput
+        rawTextOutput,
+        runIndex
       ) => {
         this.outputCaptureBuffer.captureOutputInit(
           stepIndex,
@@ -1935,7 +2028,8 @@ export class WorkflowInstance {
           workingDirectory,
           timestampMs,
           attemptIndex,
-          rawTextOutput
+          rawTextOutput,
+          runIndex
         );
       },
       captureChunk: (stepIndex, chunk) => {
@@ -1957,7 +2051,8 @@ export class WorkflowInstance {
         workingDirectory,
         timestampMs,
         attemptIndex,
-        rawTextOutput
+        rawTextOutput,
+        runIndex
       ) => {
         this.outputCaptureBuffer.captureFinalStepOutputInit(
           loopIndex,
@@ -1966,7 +2061,8 @@ export class WorkflowInstance {
           workingDirectory,
           timestampMs,
           attemptIndex,
-          rawTextOutput
+          rawTextOutput,
+          runIndex
         );
       },
       captureFinalStepChunk: (loopIndex, chunk) => {
@@ -2147,7 +2243,8 @@ export class WorkflowInstance {
   private async startWorkflowExecution(
     integration?: HarnessIntegration,
     historyFilePath = this.activeHistoryFilePath,
-    workingFilePath?: string
+    workingFilePath?: string,
+    targetRunIndices?: Map<string, number>
   ): Promise<void> {
     if (this.startPending) {
       Log.debug(
@@ -2241,7 +2338,8 @@ export class WorkflowInstance {
       const workflowContext = this.buildWorkflowExecutionContext(
         activeIntegration,
         historyFilePath,
-        workingFilePath
+        workingFilePath,
+        targetRunIndices
       );
 
       await this.workflowExecutor.execute(activeIntegration, workflowContext);

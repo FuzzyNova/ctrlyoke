@@ -142,6 +142,12 @@ export interface CliOutput {
    */
   attemptIndex?: number;
   /**
+   * Manual re-run index for this execution target. 0 = first run ever; increments
+   * when a previously-run step or finalStep loop is executed again.
+   * @default 0
+   */
+  runIndex?: number;
+  /**
    * When true, the harness emits pre-formatted plain text (no markdown).
    * Set from provider config; carried on every CliOutput (streaming and final) so
    * the UI can skip the Streamdown pipeline even before the final parse completes.

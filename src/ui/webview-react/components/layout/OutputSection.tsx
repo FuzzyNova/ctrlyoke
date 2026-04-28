@@ -444,6 +444,7 @@ export const OutputSection: React.FC = () => {
         sequence: msg.sequence,
         data: msg.data,
         attemptIndex: msg.attemptIndex,
+        runIndex: msg.runIndex,
         stepName:
           msg.type === "cli"
             ? msg.target.kind === FINAL_STEP_PHASES.FINAL_STEP

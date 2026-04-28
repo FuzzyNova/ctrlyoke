@@ -24,6 +24,7 @@ export interface OrderedHistoryEntryBase {
 export interface OrderedCliHistoryEntry extends OrderedHistoryEntryBase {
   kind: typeof OUTPUT_HISTORY_KINDS.CLI;
   target: OutputExecutionTarget;
+  runIndex?: number;
   attemptIndex: number;
   cliOutput: CliOutput;
 }

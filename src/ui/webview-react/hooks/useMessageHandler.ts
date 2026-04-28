@@ -936,6 +936,7 @@ function createMessageHandlers(): MessageHandlerMap {
         kind: FINAL_STEP_PHASES.FINAL_STEP,
         loopIndex: message.loopIndex,
       },
+      runIndex: message.output.runIndex ?? 0,
       attemptIndex: message.output.attemptIndex ?? 0,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
@@ -988,6 +989,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: message.stepIndex },
+      runIndex: message.output.runIndex ?? 0,
       attemptIndex: message.output.attemptIndex ?? 0,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),
@@ -1077,6 +1079,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const entry: OrderedCliHistoryEntry = {
       kind: OUTPUT_HISTORY_KINDS.CLI,
       target: { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: message.stepIndex },
+      runIndex: message.output.runIndex ?? 0,
       attemptIndex: message.output.attemptIndex ?? 0,
       cliOutput: message.output,
       timestampMs: message.output.timestampMs ?? Date.now(),

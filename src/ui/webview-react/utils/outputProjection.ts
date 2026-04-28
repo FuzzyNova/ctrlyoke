@@ -18,6 +18,7 @@ export interface OutputMessage {
   sequence?: number;
   data: OutputStatusMessage | CliOutput;
   attemptIndex?: number;
+  runIndex?: number;
 }
 
 export function sortOutputMessages(
@@ -61,6 +62,7 @@ export function mapOrderedHistoryEntriesToMessages(
           sequence: entry.sequence,
           data: entry.cliOutput,
           attemptIndex: entry.attemptIndex,
+          runIndex: entry.runIndex ?? entry.cliOutput.runIndex ?? 0,
         });
         break;
       case "runtime":

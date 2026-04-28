@@ -43,6 +43,7 @@ interface MarkdownExportItem {
   sequence?: number;
   data: unknown;
   attemptIndex?: number;
+  runIndex?: number;
   /** User-defined step name (undefined when none set) */
   stepName?: string;
 }

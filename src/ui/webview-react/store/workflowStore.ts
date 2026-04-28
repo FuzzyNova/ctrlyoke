@@ -310,6 +310,10 @@ function targetsEqual(
   return false;
 }
 
+function getCliEntryRunIndex(entry: OrderedCliHistoryEntry): number {
+  return entry.runIndex ?? entry.cliOutput.runIndex ?? 0;
+}
+
 export const useWorkflowStore = create<
   WorkflowState & WorkflowActions & WorkflowSelectors
 >()(
@@ -393,6 +397,8 @@ export const useWorkflowStore = create<
                     (e as OrderedCliHistoryEntry).target,
                     cliEntry.target
                   ) &&
+                  getCliEntryRunIndex(e as OrderedCliHistoryEntry) ===
+                    getCliEntryRunIndex(cliEntry) &&
                   (e as OrderedCliHistoryEntry).attemptIndex ===
                     cliEntry.attemptIndex &&
                   (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true
@@ -455,8 +461,7 @@ export const useWorkflowStore = create<
                     stepIndex: number;
                   }
                 ).stepIndex === stepIndex &&
-                (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true &&
-                (e as OrderedCliHistoryEntry).attemptIndex === 0
+                (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true
             );
             if (existingIdx >= 0) {
               const existing = state.liveOrderedEntries[
@@ -492,10 +497,12 @@ export const useWorkflowStore = create<
               isStreaming: true,
               timestampMs: Date.now(),
               attemptIndex: 0,
+              runIndex: 0,
             };
             const newEntry: OrderedCliHistoryEntry = {
               kind: OUTPUT_HISTORY_KINDS.CLI,
               target,
+              runIndex: 0,
               attemptIndex: 0,
               cliOutput: streamingOutput,
               timestampMs: streamingOutput.timestampMs!,
@@ -538,8 +545,7 @@ export const useWorkflowStore = create<
                     loopIndex: number;
                   }
                 ).loopIndex === loopIndex &&
-                (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true &&
-                (e as OrderedCliHistoryEntry).attemptIndex === 0
+                (e as OrderedCliHistoryEntry).cliOutput.isStreaming === true
             );
             if (existingIdx >= 0) {
               const existing = state.liveOrderedEntries[
@@ -575,10 +581,12 @@ export const useWorkflowStore = create<
               isStreaming: true,
               timestampMs: Date.now(),
               attemptIndex: 0,
+              runIndex: 0,
             };
             const newEntry: OrderedCliHistoryEntry = {
               kind: OUTPUT_HISTORY_KINDS.CLI,
               target,
+              runIndex: 0,
               attemptIndex: 0,
               cliOutput: streamingOutput,
               timestampMs: streamingOutput.timestampMs!,
@@ -753,20 +761,6 @@ export const useWorkflowStore = create<
             });
 
             return {
-              liveOrderedEntries: state.liveOrderedEntries.filter(
-                (e) =>
-                  !(
-                    "target" in e &&
-                    ((e.target.kind === FINAL_STEP_PHASES.QUEUE &&
-                      (
-                        e.target as {
-                          kind: typeof FINAL_STEP_PHASES.QUEUE;
-                          stepIndex: number;
-                        }
-                      ).stepIndex >= startStep) ||
-                      e.target.kind === FINAL_STEP_PHASES.FINAL_STEP)
-                  )
-              ),
               retryStates: newRetryStates,
               streamingChunks: newStreamingChunks,
               liveContextWindow: newLiveContextWindow,
