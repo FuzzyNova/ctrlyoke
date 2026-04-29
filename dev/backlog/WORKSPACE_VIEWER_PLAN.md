@@ -1,6 +1,6 @@
 # Hosted Workspace Viewer Plan
 
-## Status: Proposed
+## Status: Ready for Implementation
 
 ---
 
@@ -68,10 +68,17 @@ This plan is intentionally scoped to the hosted browser surface only. The VS Cod
 - No VS Code panel support.
 - No multi-root workspace support beyond the first workspace root.
 - No full SCM feature parity with VS Code.
-- No inline staging/unstaging/commit/discard actions.
 - No binary editing.
 - No large-file virtualization or streaming file reads.
 - No live watcher-driven auto-refresh on every filesystem or git change.
+- No separate index-vs-working-tree diff toggle (combined `HEAD → workspace` diff only).
+- No conflict resolution UI.
+
+---
+
+## Library Evaluation: File Explorer
+
+Evaluated `react-file-explorer`, `react-accessible-treeview`, and `react-complex-tree`. All are designed for recursive tree-view rendering and carry significant layout/state overhead for what this feature needs — a simple one-level-at-a-time list. A custom component is the right call: fewer dependencies, full control over mobile touch targets, and no tree state to manage.
 
 ---
 
@@ -98,12 +105,15 @@ Reason:
 
 ### Tabs
 
-The viewer contains two top-level tabs:
+The viewer's header is a **tab bar** rendered at the top of the fullscreen shell:
 
-1. `Explorer`
-2. `Source Control`
+```
+[ FlightPath Workspace ]    Explorer  |  Source Control         [✕ Close]
+```
 
-Each tab owns its own body state, but both live inside the same fullscreen shell so switching between them is instant.
+- The active tab is underlined / highlighted (consistent with existing tab styling in the webview).
+- Each tab owns its own body state. Switching is instant because both panes remain mounted; only visibility changes.
+- The close button (`codicon-close`) sits at the far right of the header bar.
 
 ---
 
@@ -118,6 +128,11 @@ Add hosted-only workspace viewer routes under a dedicated prefix:
 - `PUT /api/workspace-viewer/file`
 - `GET /api/workspace-viewer/status`
 - `GET /api/workspace-viewer/diff?path=...`
+- `POST /api/workspace-viewer/stage`
+- `POST /api/workspace-viewer/unstage`
+- `POST /api/workspace-viewer/commit`
+- `POST /api/workspace-viewer/push`
+- `POST /api/workspace-viewer/pull`
 
 These should use the same token middleware already used by the hosted server.
 
@@ -145,6 +160,10 @@ Recommended split:
   - text file read/write
   - git status collection
   - git diff/base-content collection
+  - git stage / unstage
+  - git commit
+  - git push
+  - git pull
 
 That keeps the hosted server class from becoming another general-purpose filesystem controller.
 
@@ -172,6 +191,11 @@ Suggested state:
 - `selectedDiffPath`
 - `diffData`
 - `diffLoading`
+- `commitMessage`
+- `committing`
+- `pushing`
+- `pulling`
+- `scmError`
 - `error`
 
 This state is highly feature-local and mostly transient. It should not be merged into the main persisted dashboard layout state unless there is a strong reason later.
@@ -186,6 +210,7 @@ Recommended component set:
 - `components/workspace-viewer/WorkspaceFileEditor.tsx`
 - `components/workspace-viewer/WorkspaceSourceControlPane.tsx`
 - `components/workspace-viewer/WorkspaceDiffPane.tsx`
+- `components/workspace-viewer/WorkspaceCommitArea.tsx`
 
 This keeps the feature self-contained and avoids mixing file-browser concerns into workflow/editor/output components.
 
@@ -193,17 +218,83 @@ This keeps the feature self-contained and avoids mixing file-browser concerns in
 
 ## Explorer Tab
 
+### Layout
+
+The Explorer tab uses a **two-column layout on wide viewports**:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Explorer  │  Source Control                        [✕ Close]  │  ← tab bar
+├───────────────────────┬────────────────────────────────────────┤
+│ [ ← ]  root / src    │  src/ui/App.tsx  ●           [Save]    │
+│ ─────────────────────│────────────────────────────────────────│
+│ 📁 components/       │                                        │
+│ 📁 hooks/            │   <CodeMirror editor>                  │
+│ 📄 App.tsx      ←sel │                                        │
+│ 📄 utils.ts          │                                        │
+└───────────────────────┴────────────────────────────────────────┘
+```
+
+- **Left column**: directory list with its own nav toolbar (back + breadcrumb). Width is fixed (e.g. `w-64` / `16rem`) and the list scrolls independently.
+- **Right column**: CodeMirror editor fills the remaining space. Empty state shown when no file is selected.
+- Clicking a file in the list opens it in the right column — the directory list stays visible.
+- Clicking a directory drills into it in the left column — the editor stays open if a file was already selected.
+
+**Mobile (narrow viewport):**
+
+```
+[ ← ]  root / src              [↻]
+────────────────────────────────
+📁 components/
+📁 hooks/
+📄 App.tsx
+```
+
+- The directory list is the default view.
+- Selecting a file transitions to a full-screen editor with a back button in its toolbar.
+- Back returns to the directory list (dirty-exit guard applies).
+- This is the same interaction model as the wide layout’s left column, just without the persistent right column.
+
 ### Navigation model
 
-Use a GitHub-mobile-style single-level explorer:
+The directory list follows a single-level explorer pattern:
 
 - one directory level visible at a time
 - directories first, then files
-- breadcrumb/back affordance at the top
-- clicking a directory replaces the list with that directory’s children
-- clicking a file replaces the directory list with a file editor view
+- all files and directories shown including hidden ones (`.git`, `.env`, etc.)
+- navigation is scoped to the workspace root — paths cannot escape via `..` or symlinks
+- a future setting (`hideHiddenFiles`) can filter dotfiles from the list; expose as a toggle button in the explorer toolbar when implemented
 
-This is simpler and more touch-friendly than a recursive tree.
+### Navigation button UX
+
+**Left column nav toolbar**
+
+```
+[ ← ]  workspace-root / src / ui          [↻ Refresh]
+```
+
+- **Back button** (`codicon-arrow-left`): navigates to `parentPath` from the tree response. Hidden when at workspace root.
+- **Breadcrumb**: each path segment is a clickable link (jumps directly to that directory). Workspace root label comes from `rootLabel` in the tree response.
+- **Refresh** (`codicon-refresh`): re-fetches the current directory listing.
+
+**Right column (editor) toolbar — wide viewport**
+
+```
+src/ui/App.tsx  ●                                      [Save]
+```
+
+- **File path**: workspace-relative path shown left-aligned. Dot `●` suffix when unsaved.
+- **Save button**: right-aligned, `codicon-save`. Spinner / disabled while PUT in-flight. Also bound to `Ctrl+S` / `Cmd+S`.
+
+**Mobile editor toolbar (full-screen file view)**
+
+```
+[ ← Back ]  src/ui/App.tsx  ●                          [Save]
+```
+
+- **Back button**: returns to the directory list. Triggers dirty-exit guard if file is modified.
+
+All icons use existing VS Code codicons via `codicon-*` CSS classes already in the webview stylesheet.
 
 ### Tree route response
 
@@ -280,10 +371,12 @@ New component:
 Behavior:
 
 - editable text buffer
+- syntax highlighting via CodeMirror's native lezer-based parser
 - find/replace support
 - undo/redo/history
-- line wrapping optional
-- theme consistent with existing CodeMirror styling
+- line number gutter
+- line wrapping toggle
+- theme consistent with existing CodeMirror styling (`createThemeExtension` extracted from `CodeMirrorEditor.tsx`)
 - no completions
 - no spell checker
 - no prompt-link decorations
@@ -291,6 +384,71 @@ Behavior:
 - no workflow keyboard shortcuts
 
 The point is a clean editor, not a second prompt-authoring surface.
+
+### Syntax highlighting strategy
+
+Do **not** re-use the refractor-based highlighting from `syntaxHighlighting.tsx`. CodeMirror 6 uses lezer grammars with its own `HighlightStyle` system, which is integrated into the editor at the parser level and is significantly faster for large files.
+
+**Language detection**: reuse `getLanguageFromPath(filePath)` from `syntaxHighlighting.tsx` to get the language name from the file extension.
+
+**Language extension mapping**: create a helper in `src/ui/webview-react/utils/codemirrorLanguage.ts` that maps language names to CodeMirror language extensions. Start with the languages already supported by packages that will be added:
+
+| Language | Package |
+|---|---|
+| javascript / jsx | `@codemirror/lang-javascript` |
+| typescript / tsx | `@codemirror/lang-javascript` (TypeScript dialect) |
+| python | `@codemirror/lang-python` |
+| rust | `@codemirror/lang-rust` |
+| json | `@codemirror/lang-json` |
+| html / markup | `@codemirror/lang-html` |
+| css / scss | `@codemirror/lang-css` |
+| yaml | `@codemirror/lang-yaml` (already installed via lang-markdown peer) |
+| markdown | `@codemirror/lang-markdown` (already installed) |
+| java | `@codemirror/lang-java` |
+| cpp / c | `@codemirror/lang-cpp` |
+| php | `@codemirror/lang-php` |
+
+Add these packages to `package.json` devDependencies (they are already bundled by Vite so they stay webview-only).
+
+**Highlight style**: create `createWorkspaceEditorHighlightExtension()` in `src/ui/webview-react/utils/codemirrorLanguage.ts`. Build a `HighlightStyle` using `@lezer/highlight` tags mapped to the **same VS Code CSS variables** as `SYNTAX_TOKEN_STYLES` in `syntaxHighlighting.tsx`:
+
+```ts
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
+
+export function createWorkspaceEditorHighlightExtension() {
+  const style = HighlightStyle.define([
+    { tag: [tags.keyword, tags.definitionKeyword, tags.modifier],
+      color: "var(--vscode-symbolIcon-functionForeground, #569cd6)" },
+    { tag: [tags.string, tags.character, tags.attributeValue],
+      color: "var(--vscode-debugTokenExpression-string, #ce9178)" },
+    { tag: tags.number,
+      color: "var(--vscode-debugTokenExpression-number, #b5cea8)" },
+    { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment],
+      color: "var(--vscode-charts-green, #6a9955)", fontStyle: "italic" },
+    { tag: [tags.function(tags.variableName), tags.function(tags.name)],
+      color: "#dcdcaa" },
+    { tag: [tags.className, tags.typeName, tags.namespace],
+      color: "var(--vscode-chat-editedFileForeground, #4ec9b0)" },
+    { tag: [tags.variableName, tags.propertyName, tags.attributeName,
+            tags.local(tags.variableName), tags.definition(tags.variableName)],
+      color: "var(--vscode-symbolIcon-variableForeground, #9cdcfe)" },
+    { tag: [tags.bool, tags.null],
+      color: "var(--vscode-debugTokenExpression-boolean, #4e94ce)" },
+    { tag: tags.regexp,
+      color: "var(--vscode-charts-red, #d16969)" },
+    { tag: tags.tagName,
+      color: "var(--vscode-symbolIcon-constructorForeground, #4ec9b0)" },
+    { tag: [tags.selector, tags.className],
+      color: "var(--vscode-chat-editedFileForeground, #d7ba7d)" },
+    { tag: tags.url,
+      color: "var(--vscode-textLink-foreground, #4e94ce)" },
+  ]);
+  return syntaxHighlighting(style);
+}
+```
+
+This gives visual parity with the refractor token styles used in DiffView and output blocks, using the same design-token variables, without coupling the editor to refractor or injecting `<style>` tags.
 
 ### Save behavior
 
@@ -331,15 +489,51 @@ If the user navigates away from a dirty file:
 
 ## Source Control Tab
 
-### List behavior
+### Layout
 
-Show a flat list of changed files. Each row should include:
+The Source Control tab uses a **two-column layout on wide viewports** matching VS Code's SCM panel ordering — commit area first, then file lists:
 
-- relative path
-- status badge(s)
-- optional file-kind icon
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Explorer  │  Source Control                        [✕ Close]  │  ← tab bar
+├───────────────────────┬────────────────────────────────────────┤
+│  Commit message...    │                                        │
+│                       │   Diff for selected file               │
+│  [Commit] [Push|Pull] │   (DiffView.tsx)                       │
+│  ─────────────────── │                                        │
+│  Staged (1) [Unstage All]                                      │
+│   ✓ M  src/types.ts [-]                                        │
+│  ─────────────────── │                                        │
+│  Changes (3) [Stage All]                                       │
+│   ● M  src/App.tsx [+]│                                        │
+│   ● M  src/utils.ts[+]│                                        │
+│   ● U  src/new.ts  [+]│                                        │
+└───────────────────────┴────────────────────────────────────────┘
+```
 
-The list should include files with:
+The left column has a fixed width (same as the Explorer list column) and scrolls independently. The right column fills the remaining space with the diff.
+
+**Mobile (narrow viewport):**
+
+The left column (commit area + file lists) is the default view. Clicking a file row transitions to a full-screen diff view with a back button. Back returns to the file list. Commit/push controls remain at the top of the left column, not duplicated in the diff view.
+
+### File list behavior
+
+Two sections in VS Code order — **Staged** above **Changes**:
+
+- **Staged** section: files that have been `git add`-ed. Header includes a `[Unstage All]` button shown only when ≥1 file is staged.
+- **Changes** section: modified, deleted, and untracked files that are not staged. Header includes a `[Stage All]` button.
+
+Each row includes:
+
+- status badge: `M` modified, `A` added, `D` deleted, `U` untracked, `R` renamed
+- color: staged rows use `--vscode-gitDecoration-addedResourceForeground` (green-tinted); unstaged rows use `--vscode-gitDecoration-modifiedResourceForeground` (orange/yellow)
+- relative file path
+- action button: `[+]` to stage (Changes section), `[−]` to unstage (Staged section)
+
+Clicking a file row selects it and loads its diff in the right panel. The selected row is highlighted.
+
+The list covers all changed files:
 
 - unstaged changes
 - staged changes
@@ -368,15 +562,43 @@ interface WorkspaceScmStatusResponse {
 
 ### Diff semantics
 
-For V1, clicking a file should show the file’s **current effective workspace diff** in the browser. The simplest practical definition is:
+Clicking a file shows its **current effective workspace diff** (`HEAD → current working tree`):
 
 - compare current workspace content to `HEAD` when the file exists in git
-- compare `""` to current content for untracked files
-- compare prior `HEAD` content to `""` for deleted files
+- compare `””` to current content for untracked files
+- compare prior `HEAD` content to `””` for deleted files
 
-This gives a stable “what does the workspace currently look like relative to the repo baseline?” view and works well with `DiffView.tsx`.
+For staged files, the diff shown is still `HEAD → working tree` (the combined view) for V1. Separate `HEAD → index` vs `index → working tree` toggles are a later enhancement.
 
-If a file has both staged and unstaged changes, the list should still show both badges, but the rendered diff should remain the combined current workspace state relative to `HEAD` for V1. Separate index-vs-working-tree toggles can be a later enhancement if needed.
+### Stage / unstage actions
+
+- Clicking `+` on a Changes row calls `POST /api/workspace-viewer/stage` with `{ path }`.
+- Clicking `−` on a Staged row calls `POST /api/workspace-viewer/unstage` with `{ path }`.
+- Both refresh the file list after the operation completes.
+- If staging an untracked file, it becomes tracked + staged (equivalent to `git add`).
+
+### Commit and push area
+
+Positioned at the **top of the left column**, above the file lists (matching VS Code’s SCM panel order):
+
+**Commit message textarea**
+
+- Multiline textarea, placeholder `Commit message...`
+- Required to be non-empty before the Commit button is enabled
+
+**Action buttons**
+
+Two controls sit below the textarea in a single row:
+
+1. **Commit button** (standalone): calls `POST /api/workspace-viewer/commit` with `{ message }`. Disabled when message is empty or while committing. Clears the message and refreshes the file list on success.
+
+2. **Push / Pull split button** (grouped, styled like `UndoRedoControl.tsx`): a single bordered button group containing two segments separated by a divider:
+   - `[Push]` — calls `POST /api/workspace-viewer/push`. Disabled while pushing.
+   - `[Pull]` — calls `POST /api/workspace-viewer/pull`. Disabled while pulling.
+
+   Implement as a `<div role="group">` with shared border and overflow-hidden, identical to the undo/redo button grouping pattern in `UndoRedoControl.tsx`.
+
+Both controls show inline error text below the buttons if an operation fails (no remote, auth failure, conflict, etc.). Spinners replace icons while in-flight.
 
 ### Diff route
 
@@ -481,17 +703,22 @@ Recommended:
 
 - `src/types/HostedWorkspaceViewerTypes.ts`
 
-Also add a small hosted fetch helper for token-aware API calls:
+Also add:
 
-- `src/ui/webview-react/utils/hostedApi.ts`
+- `src/ui/webview-react/utils/hostedApi.ts` — token-aware fetch helper (token from URL, JSON boilerplate, error normalization)
+- `src/ui/webview-react/utils/codemirrorLanguage.ts` — language detection → CodeMirror extension mapper and `createWorkspaceEditorHighlightExtension()`
 
-This helper should centralize:
+These are cleaner than sprinkling raw `fetch("/api/...")` calls or language-switching logic across components.
 
-- token propagation from the current URL
-- JSON fetch boilerplate
-- hosted-route error normalization
+### New request types (add to `HostedWorkspaceViewerTypes.ts`)
 
-That is cleaner than sprinkling raw `fetch("/api/...")` calls across components.
+```ts
+interface WorkspaceStageRequest   { path: string }
+interface WorkspaceUnstageRequest { path: string }
+interface WorkspaceCommitRequest  { message: string }
+interface WorkspacePushResponse   { branch: string; remote: string }
+interface WorkspacePullResponse   { branch: string; remote: string }
+```
 
 ---
 
@@ -511,6 +738,10 @@ Add focused tests around the new service/helpers for:
 - git status parsing
 - non-git workspace fallback
 - diff content generation for modified, added, and deleted files
+- stage / unstage file
+- commit with message
+- push (and failure cases: no remote, auth error)
+- pull (and failure cases: no remote, conflicts)
 
 ## Webview tests
 
@@ -520,8 +751,12 @@ Add React/Vitest tests for:
 - opening/closing the workspace viewer
 - explorer directory drill-in and back navigation
 - file editor dirty-state transitions
-- save request flow
-- source control list rendering
+- save request flow and dirty indicator
+- back button triggers dirty-exit guard when file is modified
+- source control file list: Changes and Staged sections render correctly
+- stage/unstage action buttons call correct API and refresh list
+- commit button disabled when message is empty
+- commit + push + pull request flows
 - diff pane rendering through `DiffView`
 - dirty-exit confirmation behavior
 
@@ -543,10 +778,11 @@ Test in:
 
 ### Phase 1: Server foundation
 
-- Add shared hosted viewer types
-- Add hosted API helper
-- Add `HostedWorkspaceViewerService`
+- Add shared hosted viewer types (`HostedWorkspaceViewerTypes.ts`)
+- Add hosted API helper (`hostedApi.ts`)
+- Add `HostedWorkspaceViewerService` with filesystem + git methods
 - Add tree/file/save/status/diff routes in `FlightPathHostedServer.ts`
+- Add stage/unstage/commit/push/pull routes in `FlightPathHostedServer.ts`
 
 ### Phase 2: Viewer shell
 
@@ -556,21 +792,25 @@ Test in:
 
 ### Phase 3: Explorer
 
-- Add single-level explorer list
-- Add breadcrumb/back navigation
-- Add file open flow
+- Add two-column layout (directory list left, editor right) with mobile single-column fallback
+- Add single-level directory list with breadcrumb/back navigation
+- Add file open flow (wide: loads into right column; mobile: transitions to full-screen editor)
 
 ### Phase 4: File editor
 
-- Extract shared CodeMirror theme/setup pieces from `CodeMirrorEditor.tsx`
-- Build `WorkspaceFileEditor.tsx`
-- Add save + dirty tracking
+- Extract `createThemeExtension` from `CodeMirrorEditor.tsx` into a shared helper
+- Add `@codemirror/lang-javascript`, `@codemirror/lang-python`, `@codemirror/lang-rust`, `@codemirror/lang-json`, `@codemirror/lang-html`, `@codemirror/lang-css`, `@codemirror/lang-java`, `@codemirror/lang-cpp`, `@codemirror/lang-php` to `package.json`
+- Build `codemirrorLanguage.ts` with language map and `createWorkspaceEditorHighlightExtension()`
+- Build `WorkspaceFileEditor.tsx` with syntax highlighting, save button, dirty indicator
+- Add `Ctrl+S` / `Cmd+S` save keybinding
 
 ### Phase 5: Source Control
 
-- Add SCM list
-- Add diff fetch flow
-- Render diffs through `DiffView.tsx`
+- Add two-section file list (Changes / Staged) with stage/unstage action buttons
+- Add diff fetch flow and `WorkspaceDiffPane.tsx` rendering through `DiffView.tsx`
+- Add `WorkspaceCommitArea.tsx` with commit message textarea, Commit button, Push/Pull split button
+- Wire commit/push/pull to new API routes with in-flight state and error display
+- Mobile: clicking a file in the list transitions to full-screen diff with back button
 
 ### Phase 6: Hardening
 
@@ -591,17 +831,18 @@ Test in:
 - `src/ui/webview-react/components/workspace-viewer/WorkspaceFileEditor.tsx`
 - `src/ui/webview-react/components/workspace-viewer/WorkspaceSourceControlPane.tsx`
 - `src/ui/webview-react/components/workspace-viewer/WorkspaceDiffPane.tsx`
+- `src/ui/webview-react/components/workspace-viewer/WorkspaceCommitArea.tsx`
 - `src/ui/webview-react/store/workspaceViewerStore.ts`
 - `src/ui/webview-react/utils/hostedApi.ts`
+- `src/ui/webview-react/utils/codemirrorLanguage.ts`
 
 ---
 
 ## Open Questions
 
-1. Should the Explorer hide `.git/` and other noise by default, or should V1 show the literal filesystem?
-2. Should deleted files be viewable as diff-only rows with no editor open path, or should the explorer also surface them separately when selected from Source Control?
-3. Do we want a manual `Refresh` button in both tabs for V1, or is open/tab-switch/save refresh enough?
-4. Should partially staged files eventually gain a toggle between `HEAD -> index` and `index -> working tree`, or is the combined `HEAD -> current workspace` diff sufficient for the hosted UX?
+1. Should deleted files be viewable as diff-only rows with no editor open path, or should the explorer also surface them separately when selected from Source Control?
+
+> **Resolved:** The Explorer shows all files and directories including hidden ones (`.git`, dotfiles). Navigation is scoped to the workspace root — paths cannot escape. A `hideHiddenFiles` setting is planned as a future toggle (exposed as a shortcut button in the explorer toolbar when implemented).
 
 ---
 
@@ -609,4 +850,12 @@ Test in:
 
 Build this as a **hosted-only, HTTP-backed workspace viewer** with a dedicated fullscreen UI, a dedicated store, a lightweight file editor, and direct reuse of `DiffView.tsx`.
 
-The key implementation decision is to **avoid reusing `CodeMirrorEditor.tsx` wholesale**. Extract the theme/setup pieces that are truly shared, but keep prompt editing and file editing as separate surfaces. That keeps the prompt editor maintainable while still giving the hosted browser a strong editing experience.
+Two key implementation decisions:
+
+1. **Avoid reusing `CodeMirrorEditor.tsx` wholesale.** Extract `createThemeExtension` and the VS Code CSS variable wiring, but keep prompt editing and file editing as separate surfaces.
+
+2. **Use CodeMirror's native lezer-based highlighting** (not refractor) in the file editor. Create a `HighlightStyle` that maps `@lezer/highlight` tags to the same VS Code CSS variables already defined in `SYNTAX_TOKEN_STYLES` in `syntaxHighlighting.tsx`. This gives fast, integrated highlighting without duplicating the CSS token variable set.
+
+3. **Staging and commit/push/pull are in scope for V1.** The Source Control tab should be a usable mini-SCM panel, not just a diff viewer. Keep it simple (no conflict resolution, no rebase, no branch switching), but enough to review changes, stage selectively, commit with a message, push, and pull — all without leaving the browser.
+
+4. **Two-column layout on wide viewports for both tabs.** The Explorer shows the directory list and editor side-by-side. Source Control shows the commit area + file lists alongside the diff. Mobile collapses to single-column with file selection transitioning to a full-screen view with a back button. This matches the spatial model users expect from VS Code and GitHub mobile.
