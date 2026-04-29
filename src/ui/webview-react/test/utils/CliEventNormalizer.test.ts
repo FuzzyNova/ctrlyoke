@@ -166,6 +166,90 @@ describe("CliEventNormalizer", () => {
     });
   });
 
+  it("preserves multiple sequential edits to the same file as separate events", () => {
+    const patch1 = [
+      {
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 2,
+        lines: ["-old1", "+new1a", "+new1b"],
+      },
+    ];
+    const patch2 = [
+      {
+        oldStart: 5,
+        oldLines: 1,
+        newStart: 6,
+        newLines: 1,
+        lines: ["-old2", "+new2"],
+      },
+    ];
+    const patch3 = [
+      {
+        oldStart: 10,
+        oldLines: 2,
+        newStart: 11,
+        newLines: 3,
+        lines: ["-old3a", "-old3b", "+new3a", "+new3b", "+new3c"],
+      },
+    ];
+
+    const events: CliEvent[] = [
+      {
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        data: {
+          path: "src/editor/Footer.tsx",
+          structuredPatch: patch1,
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "Now attaching the second ref..." },
+      },
+      {
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        data: {
+          path: "src/editor/Footer.tsx",
+          structuredPatch: patch2,
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        },
+      },
+      {
+        type: CLI_EVENT_TYPES.TEXT,
+        data: { text: "Now hiding the quick pickers..." },
+      },
+      {
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        data: {
+          path: "src/editor/Footer.tsx",
+          structuredPatch: patch3,
+          status: OPERATION_STATUS.COMPLETED,
+          success: true,
+        },
+      },
+    ];
+
+    const normalized = normalizeCliEvents(events);
+
+    expect(normalized).toHaveLength(5);
+    expect(normalized[0].type).toBe(CLI_EVENT_TYPES.FILE_EDIT);
+    expect(
+      (normalized[0].data as { structuredPatch: unknown }).structuredPatch
+    ).toEqual(patch1);
+    expect(normalized[2].type).toBe(CLI_EVENT_TYPES.FILE_EDIT);
+    expect(
+      (normalized[2].data as { structuredPatch: unknown }).structuredPatch
+    ).toEqual(patch2);
+    expect(normalized[4].type).toBe(CLI_EVENT_TYPES.FILE_EDIT);
+    expect(
+      (normalized[4].data as { structuredPatch: unknown }).structuredPatch
+    ).toEqual(patch3);
+  });
+
   it("does not merge a commandless completed bash event into a previous completed bash event", () => {
     const events: CliEvent[] = [
       {

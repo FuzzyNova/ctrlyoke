@@ -233,7 +233,10 @@ function findOutputIndexForCompletionFallback(
     }
     const candidateKey = getEventKey(candidate);
     if (key && candidateKey) {
-      if (key === candidateKey) {
+      // Only match an INITIATED event. A COMPLETED event at the same path is a
+      // different operation — matching it would silently merge a second (third…)
+      // edit to the same file into the first one, losing all but the last diff.
+      if (key === candidateKey && isSemanticInitiatedEvent(candidate)) {
         return i;
       }
       continue;

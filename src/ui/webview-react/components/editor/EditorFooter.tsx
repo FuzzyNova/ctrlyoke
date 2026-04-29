@@ -77,13 +77,17 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   drawerHarnessId,
   drawerTabOverrides,
 }) => {
-  const [footerRef, isNarrow] = useElementNarrow(768);
+  const [footerRef, isMediumWidth] = useElementNarrow(768);
+  const [footerRefSmall, isSmallWidth] = useElementNarrow(400);
   const stepType = useEditorStore((s) => s.stepType);
   const isScriptMode = stepType === STEP_TYPES.SCRIPT;
 
   return (
     <div
-      ref={footerRef}
+      ref={(node) => {
+        footerRef(node);
+        footerRefSmall(node);
+      }}
       className="editor-footer flex items-center gap-1 px-3 py-1.5 border-t border-panel-border bg-sidebar-bg"
     >
       {/* Properties toggle button — hidden in script mode */}
@@ -98,8 +102,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           title="Toggle prompt properties"
         >
           <i className="codicon codicon-settings" />
-          {!isNarrow && <span>Properties</span>}
-          {!isNarrow && (
+          {!isMediumWidth && <span>Properties</span>}
+          {!isMediumWidth && (
             <i
               className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
             />
@@ -120,38 +124,40 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           >
             <div className="flex items-center gap-1">
               <HarnessQuickPicker
-                isNarrow={isNarrow}
-                showLabel={!isNarrow}
+                isNarrow={isMediumWidth}
+                showLabel={!isMediumWidth}
                 disabled={isCLIManaged}
               />
               <ModelQuickPicker
-                isNarrow={isNarrow}
-                showLabel={!isNarrow}
+                isNarrow={isMediumWidth}
+                showLabel={!isMediumWidth}
                 disabled={isCLIManaged}
               />
               <AgentQuickPicker
-                isNarrow={isNarrow}
-                showLabel={!isNarrow}
+                isNarrow={isMediumWidth}
+                showLabel={!isMediumWidth}
                 disabled={isCLIManaged}
               />
               <SkillsQuickPicker
-                isNarrow={isNarrow}
-                showLabel={!isNarrow}
+                isNarrow={isMediumWidth}
+                showLabel={!isMediumWidth}
                 disabled={isCLIManaged}
               />
             </div>
-            <div className="flex items-center gap-1">
-              <PermissionsQuickPicker
-                isNarrow={isNarrow}
-                showLabel={!isNarrow}
-                disabled={isCLIManaged}
-              />
-              <ContextQuickPicker
-                isNarrow={isNarrow}
-                showLabel={!isNarrow}
-                disabled={isCLIManaged}
-              />
-            </div>
+            {!(isEditMode && isSmallWidth) && (
+              <div className="flex items-center gap-1">
+                <PermissionsQuickPicker
+                  isNarrow={isMediumWidth}
+                  showLabel={!isMediumWidth}
+                  disabled={isCLIManaged}
+                />
+                <ContextQuickPicker
+                  isNarrow={isMediumWidth}
+                  showLabel={!isMediumWidth}
+                  disabled={isCLIManaged}
+                />
+              </div>
+            )}
           </div>
 
           {/* DrawerTabBar — independent full-width layer, enters from below */}
@@ -166,7 +172,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               activeTab={drawerActivePage}
               onTabChange={onDrawerTabChange}
               harnessId={drawerHarnessId}
-              isNarrow={isNarrow}
+              isNarrow={isMediumWidth}
               tabOverrides={drawerTabOverrides}
               className="flex items-center w-full h-full"
             />
@@ -193,7 +199,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               }
             >
               <i className="codicon codicon-close" />
-              {!isNarrow && <span className="btn-text">Cancel</span>}
+              {!isMediumWidth && <span className="btn-text">Cancel</span>}
             </button>
 
             <button
@@ -211,7 +217,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               }
             >
               <i className="codicon codicon-check" />
-              {!isNarrow && <span className="btn-text">Update</span>}
+              {!isMediumWidth && <span className="btn-text">Update</span>}
             </button>
 
             <button
@@ -229,7 +235,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               }
             >
               <i className="codicon codicon-trash" />
-              {!isNarrow && (
+              {!isMediumWidth && (
                 <span className="btn-text">
                   {isFinalStepMode ? "Disable" : "Delete"}
                 </span>
@@ -250,7 +256,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               }
             >
               <i className="codicon codicon-add" />
-              {!isNarrow && <span className="btn-text">Queue</span>}
+              {!isMediumWidth && <span className="btn-text">Queue</span>}
             </button>
 
             <button
@@ -264,7 +270,9 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               }
             >
               <i className="codicon codicon-send" />
-              {!isNarrow && <span className="btn-text">{runButtonText}</span>}
+              {!isMediumWidth && (
+                <span className="btn-text">{runButtonText}</span>
+              )}
             </button>
           </>
         )}
