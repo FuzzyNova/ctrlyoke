@@ -40,12 +40,12 @@ export function DirtyExitGuard({
 
   return (
     <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center">
-      <div className="bg-[var(--panel-bg)] border border-[var(--panel-border)] rounded-lg shadow-xl w-80 max-w-[90%] p-5 flex flex-col gap-4">
+      <div className="bg-panel-bg border border-panel-border rounded-lg shadow-xl w-80 max-w-[90%] p-5 flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-semibold text-[var(--editor-fg)]">
+          <h3 className="text-sm font-semibold text-editor-fg">
             Unsaved changes
           </h3>
-          <p className="text-xs text-[var(--editor-fg)] opacity-70">
+          <p className="text-xs text-editor-fg opacity-70">
             Do you want to save changes to <span className="font-medium">{fileName}</span>?
           </p>
         </div>
@@ -53,21 +53,21 @@ export function DirtyExitGuard({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full py-1.5 px-3 text-sm rounded bg-[var(--button-bg)] text-[var(--button-fg)] hover:bg-[var(--button-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-1.5 px-3 text-sm rounded bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? "Saving…" : "Save"}
           </button>
           <button
             onClick={onDiscard}
             disabled={saving}
-            className="w-full py-1.5 px-3 text-sm rounded border border-[var(--panel-border)] text-[var(--editor-fg)] hover:bg-[var(--list-hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-1.5 px-3 text-sm rounded border border-panel-border text-editor-fg hover:bg-list-hover-bg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Discard changes
           </button>
           <button
             onClick={onCancel}
             disabled={saving}
-            className="w-full py-1.5 px-3 text-sm rounded text-[var(--editor-fg)] opacity-60 hover:opacity-100 hover:bg-[var(--list-hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-1.5 px-3 text-sm rounded text-editor-fg opacity-60 hover:opacity-100 hover:bg-list-hover-bg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             Cancel
           </button>

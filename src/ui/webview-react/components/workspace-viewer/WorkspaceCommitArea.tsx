@@ -70,14 +70,14 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         onChange={(e) => setCommitMessage(e.target.value)}
         placeholder="Commit message..."
         rows={3}
-        className="w-full resize-none rounded border border-[var(--panel-border)] bg-[var(--input-bg,var(--sidebar-bg))] text-[var(--editor-fg)] text-xs px-2 py-1.5 placeholder-[var(--editor-fg)] placeholder-opacity-40 focus:outline-none focus:border-[var(--focus-border)]"
+        className="w-full resize-none rounded border border-panel-border bg-input-bg text-editor-fg text-xs px-2 py-1.5 placeholder-editor-fg placeholder-opacity-40 focus:outline-none focus:border-focus-border"
       />
 
       <div className="flex items-center gap-2">
         <button
           onClick={handleCommit}
           disabled={commitMessage.trim() === "" || committing}
-          className="flex items-center gap-1 px-3 py-1 text-xs rounded border border-[var(--btn-border)] bg-[var(--btn-bg)] text-[var(--btn-fg)] hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+          className="flex items-center gap-1 px-3 py-1 text-xs rounded border border-btn-border bg-btn-bg text-btn-fg hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
         >
           {committing ? (
             <i className="codicon codicon-loading animate-spin" />
@@ -87,11 +87,11 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
           Commit
         </button>
 
-        <div role="group" className="flex overflow-hidden rounded border border-[var(--btn-border)]">
+        <div role="group" className="flex overflow-hidden rounded border border-btn-border">
           <button
             onClick={handlePush}
             disabled={pushing}
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-fg)] hover:bg-[var(--btn-secondary-hover)] disabled:opacity-50 border-r border-[var(--btn-border)]"
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 border-r border-btn-border"
           >
             {pushing ? (
               <i className="codicon codicon-loading animate-spin" />
@@ -103,7 +103,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
           <button
             onClick={handlePull}
             disabled={pulling}
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-fg)] hover:bg-[var(--btn-secondary-hover)] disabled:opacity-50"
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50"
           >
             {pulling ? (
               <i className="codicon codicon-loading animate-spin" />

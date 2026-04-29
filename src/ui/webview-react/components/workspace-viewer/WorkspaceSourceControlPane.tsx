@@ -124,8 +124,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       <button
         key={`${isStaged ? "staged" : "changed"}-${file.path}`}
         onClick={() => selectFileDiff(file.path)}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 min-h-[44px] sm:min-h-0 text-sm text-left hover:bg-[var(--list-hover-bg)] transition-colors ${
-          isSelected ? "bg-[var(--list-active-bg)]" : ""
+        className={`w-full flex items-center gap-2 px-3 py-1.5 min-h-[44px] sm:min-h-0 text-sm text-left hover:bg-list-hover-bg transition-colors ${
+          isSelected ? "bg-list-active-bg" : ""
         }`}
         title={file.path}
       >
@@ -138,7 +138,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         >
           {badge}
         </span>
-        <span className="flex-1 truncate text-[var(--editor-fg)] text-xs min-w-0">
+        <span className="flex-1 truncate text-editor-fg text-xs min-w-0">
           {file.path}
         </span>
         {isStaged ? (
@@ -171,12 +171,12 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const leftColumn = (
-    <div className="w-64 flex-shrink-0 flex flex-col border-r border-[var(--panel-border)] overflow-y-auto">
+    <div className="w-64 flex-shrink-0 flex flex-col border-r border-panel-border overflow-y-auto">
       <WorkspaceCommitArea onRefresh={loadStatus} />
-      <div className="border-t border-[var(--panel-border)]" />
+      <div className="border-t border-panel-border" />
 
       {sourceControlLoading ? (
-        <div className="flex items-center justify-center py-6 text-[var(--editor-fg)] opacity-50 gap-2">
+        <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
           <i className="codicon codicon-loading animate-spin text-sm" />
           <span className="text-xs">Refreshing…</span>
         </div>
@@ -185,20 +185,20 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           {/* Staged section */}
           <div>
             <div className="flex items-center justify-between px-3 py-1.5">
-              <span className="text-xs font-semibold uppercase text-[var(--editor-fg)] opacity-60">
+              <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
                 Staged ({staged.length})
               </span>
               {staged.length > 0 && (
                 <button
                   onClick={handleUnstageAll}
-                  className="text-xs text-[var(--btn-fg)] hover:underline"
+                  className="text-xs text-btn-fg hover:underline"
                 >
                   Unstage All
                 </button>
               )}
             </div>
             {staged.length === 0 ? (
-              <p className="px-3 pb-2 text-xs text-[var(--editor-fg)] opacity-40 select-none">
+              <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
                 No staged files
               </p>
             ) : (
@@ -206,25 +206,25 @@ export const WorkspaceSourceControlPane: React.FC = () => {
             )}
           </div>
 
-          <div className="border-t border-[var(--panel-border)]" />
+          <div className="border-t border-panel-border" />
 
           {/* Changes section */}
           <div>
             <div className="flex items-center justify-between px-3 py-1.5">
-              <span className="text-xs font-semibold uppercase text-[var(--editor-fg)] opacity-60">
+              <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
                 Changes ({changed.length})
               </span>
               {changed.length > 0 && (
                 <button
                   onClick={handleStageAll}
-                  className="text-xs text-[var(--btn-fg)] hover:underline"
+                  className="text-xs text-btn-fg hover:underline"
                 >
                   Stage All
                 </button>
               )}
             </div>
             {changed.length === 0 ? (
-              <p className="px-3 pb-2 text-xs text-[var(--editor-fg)] opacity-40 select-none">
+              <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
                 No changes
               </p>
             ) : (
@@ -243,15 +243,15 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   if (isMobile && mobileDiffVisible) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--panel-border)] flex-shrink-0">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border flex-shrink-0">
           <button
             onClick={() => setMobileDiffVisible(false)}
-            className="flex items-center gap-1 text-[var(--editor-fg)] hover:opacity-80 transition-opacity"
+            className="flex items-center gap-1 text-editor-fg hover:opacity-80 transition-opacity"
           >
             <i className="codicon codicon-arrow-left text-sm" />
             <span className="text-sm">Back</span>
           </button>
-          <span className="flex-1 text-sm truncate text-[var(--editor-fg)] min-w-0 ml-1">
+          <span className="flex-1 text-sm truncate text-editor-fg min-w-0 ml-1">
             {selectedDiffPath}
           </span>
         </div>
@@ -271,10 +271,10 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       <div className="flex flex-col h-full overflow-hidden">
         <div className="flex-1 overflow-y-auto flex flex-col">
           <WorkspaceCommitArea onRefresh={loadStatus} />
-          <div className="border-t border-[var(--panel-border)]" />
+          <div className="border-t border-panel-border" />
 
           {sourceControlLoading ? (
-            <div className="flex items-center justify-center py-6 text-[var(--editor-fg)] opacity-50 gap-2">
+            <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
               <i className="codicon codicon-loading animate-spin text-sm" />
               <span className="text-xs">Refreshing…</span>
             </div>
@@ -282,43 +282,43 @@ export const WorkspaceSourceControlPane: React.FC = () => {
             <>
               <div>
                 <div className="flex items-center justify-between px-3 py-1.5">
-                  <span className="text-xs font-semibold uppercase text-[var(--editor-fg)] opacity-60">
+                  <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
                     Staged ({staged.length})
                   </span>
                   {staged.length > 0 && (
                     <button
                       onClick={handleUnstageAll}
-                      className="text-xs text-[var(--btn-fg)] hover:underline"
+                      className="text-xs text-btn-fg hover:underline"
                     >
                       Unstage All
                     </button>
                   )}
                 </div>
                 {staged.length === 0 ? (
-                  <p className="px-3 pb-2 text-xs text-[var(--editor-fg)] opacity-40 select-none">
+                  <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
                     No staged files
                   </p>
                 ) : (
                   <div>{staged.map((f) => renderFileRow(f, true))}</div>
                 )}
               </div>
-              <div className="border-t border-[var(--panel-border)]" />
+              <div className="border-t border-panel-border" />
               <div>
                 <div className="flex items-center justify-between px-3 py-1.5">
-                  <span className="text-xs font-semibold uppercase text-[var(--editor-fg)] opacity-60">
+                  <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
                     Changes ({changed.length})
                   </span>
                   {changed.length > 0 && (
                     <button
                       onClick={handleStageAll}
-                      className="text-xs text-[var(--btn-fg)] hover:underline"
+                      className="text-xs text-btn-fg hover:underline"
                     >
                       Stage All
                     </button>
                   )}
                 </div>
                 {changed.length === 0 ? (
-                  <p className="px-3 pb-2 text-xs text-[var(--editor-fg)] opacity-40 select-none">
+                  <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
                     No changes
                   </p>
                 ) : (

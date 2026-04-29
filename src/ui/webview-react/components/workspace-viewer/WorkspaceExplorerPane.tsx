@@ -154,7 +154,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       <button
         key="root"
         onClick={() => loadDirectory("")}
-        className="hover:underline text-[var(--editor-fg)] opacity-70 hover:opacity-100 text-xs"
+        className="hover:underline text-editor-fg opacity-70 hover:opacity-100 text-xs"
         title="Go to workspace root"
       >
         {rootLabel || "workspace"}
@@ -171,7 +171,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       );
       if (isLast) {
         crumbs.push(
-          <span key={segPath} className="text-[var(--editor-fg)] text-xs font-medium">
+          <span key={segPath} className="text-editor-fg text-xs font-medium">
             {segment}
           </span>
         );
@@ -180,7 +180,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           <button
             key={segPath}
             onClick={() => loadDirectory(segPath)}
-            className="hover:underline text-[var(--editor-fg)] opacity-70 hover:opacity-100 text-xs"
+            className="hover:underline text-editor-fg opacity-70 hover:opacity-100 text-xs"
           >
             {segment}
           </button>
@@ -196,16 +196,16 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const directoryListColumn = (
-    <div className="flex flex-col h-full w-full sm:w-64 sm:flex-shrink-0 border-r border-[var(--panel-border)] overflow-hidden">
+    <div className="flex flex-col h-full w-full sm:w-64 sm:flex-shrink-0 border-r border-panel-border overflow-hidden">
       {/* Navigation toolbar */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[var(--panel-border)] flex-shrink-0">
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-panel-border flex-shrink-0">
         <button
           onClick={handleBack}
           disabled={parentPath === null}
           className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
             parentPath === null
               ? "opacity-30 cursor-default"
-              : "hover:bg-[var(--btn-secondary-hover)] text-[var(--editor-fg)]"
+              : "hover:bg-btn-secondary-hover text-editor-fg"
           }`}
           title="Go to parent directory"
           aria-label="Go to parent directory"
@@ -221,7 +221,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
         <button
           onClick={handleRefresh}
-          className="flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded hover:bg-[var(--btn-secondary-hover)] text-[var(--editor-fg)] transition-colors flex-shrink-0"
+          className="flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded hover:bg-btn-secondary-hover text-editor-fg transition-colors flex-shrink-0"
           title="Refresh directory"
           aria-label="Refresh directory"
         >
@@ -236,12 +236,12 @@ export const WorkspaceExplorerPane: React.FC = () => {
       {/* Entry list */}
       <div className="flex-1 overflow-y-auto">
         {explorerLoading ? (
-          <div className="flex items-center justify-center py-8 text-[var(--editor-fg)] opacity-50">
+          <div className="flex items-center justify-center py-8 text-editor-fg opacity-50">
             <i className="codicon codicon-loading animate-spin mr-2" />
             <span className="text-sm">Loading…</span>
           </div>
         ) : explorerEntries.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-[var(--editor-fg)] opacity-40 select-none">
+          <div className="flex items-center justify-center py-8 text-editor-fg opacity-40 select-none">
             <span className="text-sm">Empty directory</span>
           </div>
         ) : (
@@ -261,8 +261,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     }}
                     className={`w-full flex items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
                       isSelected
-                        ? "bg-[var(--list-active-bg)] text-[var(--editor-fg)]"
-                        : "text-[var(--editor-fg)] hover:bg-[var(--btn-secondary-hover)]"
+                        ? "bg-list-active-bg text-editor-fg"
+                        : "text-editor-fg hover:bg-btn-secondary-hover"
                     }`}
                     title={entry.path}
                   >
@@ -294,10 +294,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const fileEditorColumn = (
     <div className="flex-1 flex flex-col overflow-hidden relative">
       {/* File toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--panel-border)] flex-shrink-0 min-h-[2.25rem]">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0 min-h-[2.25rem]">
         {selectedFilePath ? (
           <>
-            <span className="flex-1 text-sm truncate text-[var(--editor-fg)] min-w-0">
+            <span className="flex-1 text-sm truncate text-editor-fg min-w-0">
               {selectedFilePath}
               {fileDirty && (
                 <span className="ml-1.5 text-[var(--status-warning)]" title="Unsaved changes">
@@ -311,8 +311,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 disabled={fileSaving || !fileDirty}
                 className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
                   fileDirty && !fileSaving
-                    ? "border-[var(--btn-border)] bg-[var(--btn-bg)] text-[var(--btn-fg)] hover:opacity-80"
-                    : "border-transparent bg-transparent text-[var(--editor-fg)] opacity-40 cursor-default"
+                    ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
+                    : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
                 }`}
                 title={fileDirty ? "Save file" : "No changes to save"}
               >
@@ -326,7 +326,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
             )}
           </>
         ) : (
-          <span className="text-sm text-[var(--editor-fg)] opacity-40 select-none">
+          <span className="text-sm text-editor-fg opacity-40 select-none">
             No file selected
           </span>
         )}
@@ -336,12 +336,12 @@ export const WorkspaceExplorerPane: React.FC = () => {
       {selectedFilePath ? (
         <div className="flex-1 flex flex-col overflow-hidden">
           {fileLoading ? (
-            <div className="flex items-center gap-2 p-4 opacity-50 text-[var(--editor-fg)]">
+            <div className="flex items-center gap-2 p-4 opacity-50 text-editor-fg">
               <i className="codicon codicon-loading animate-spin" />
               <span className="text-sm">Loading file…</span>
             </div>
           ) : fileReadOnly ? (
-            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-[var(--editor-fg)] opacity-70">
+            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-editor-fg opacity-70">
               <i className="codicon codicon-info text-2xl" />
               <p className="text-sm">{fileReadOnlyReason ?? "This file cannot be edited"}</p>
             </div>
@@ -356,7 +356,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-[var(--editor-fg)] opacity-50 select-none">
+        <div className="flex-1 flex items-center justify-center text-editor-fg opacity-50 select-none">
           <p className="text-sm">Select a file to edit</p>
         </div>
       )}
@@ -378,15 +378,15 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const mobileEditorView = (
     <div className="flex-1 flex flex-col overflow-hidden relative">
       {/* Mobile toolbar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--panel-border)] flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border flex-shrink-0">
         <button
           onClick={handleMobileBack}
-          className="flex items-center gap-1 min-h-[44px] text-[var(--editor-fg)] hover:opacity-80 transition-opacity"
+          className="flex items-center gap-1 min-h-[44px] text-editor-fg hover:opacity-80 transition-opacity"
         >
           <i className="codicon codicon-arrow-left text-sm" />
           <span className="text-sm">Back</span>
         </button>
-        <span className="flex-1 text-sm truncate text-[var(--editor-fg)] min-w-0 ml-1">
+        <span className="flex-1 text-sm truncate text-editor-fg min-w-0 ml-1">
           {selectedFilePath}
           {fileDirty && (
             <span className="ml-1.5 text-[var(--status-warning)]" title="Unsaved changes">
@@ -400,8 +400,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
             disabled={fileSaving || !fileDirty}
             className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
               fileDirty && !fileSaving
-                ? "border-[var(--btn-border)] bg-[var(--btn-bg)] text-[var(--btn-fg)] hover:opacity-80"
-                : "border-transparent bg-transparent text-[var(--editor-fg)] opacity-40 cursor-default"
+                ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
+                : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
             }`}
             title={fileDirty ? "Save file" : "No changes to save"}
           >
@@ -418,12 +418,12 @@ export const WorkspaceExplorerPane: React.FC = () => {
       {/* File editor */}
       <div className="flex-1 overflow-hidden">
         {fileLoading ? (
-          <div className="flex items-center gap-2 p-4 opacity-50 text-[var(--editor-fg)]">
+          <div className="flex items-center gap-2 p-4 opacity-50 text-editor-fg">
             <i className="codicon codicon-loading animate-spin" />
             <span className="text-sm">Loading file…</span>
           </div>
         ) : fileReadOnly ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-[var(--editor-fg)] opacity-70">
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-editor-fg opacity-70">
             <i className="codicon codicon-info text-2xl" />
             <p className="text-sm">{fileReadOnlyReason ?? "This file cannot be edited"}</p>
           </div>

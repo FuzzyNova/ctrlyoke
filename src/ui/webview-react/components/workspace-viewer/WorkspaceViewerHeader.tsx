@@ -12,9 +12,9 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
   onClose,
 }) => {
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--panel-border)] bg-[var(--sidebar-bg)] flex-shrink-0">
+    <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0">
       {/* Title */}
-      <span className="text-sm font-medium text-[var(--editor-fg)] opacity-60 whitespace-nowrap mr-2 select-none">
+      <span className="text-sm font-medium text-editor-fg opacity-60 whitespace-nowrap mr-2 select-none">
         FlightPath Workspace
       </span>
 
@@ -23,8 +23,8 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
         <button
           className={`px-3 py-1 text-sm rounded transition-colors border-b-2 ${
             activeTab === "explorer"
-              ? "border-[var(--btn-bg)] text-[var(--btn-fg)] bg-[var(--btn-bg)] bg-opacity-10"
-              : "border-transparent text-[var(--editor-fg)] opacity-70 hover:opacity-100 hover:bg-[var(--btn-secondary-hover)]"
+              ? "border-btn-bg text-btn-fg bg-btn-bg bg-opacity-10"
+              : "border-transparent text-editor-fg opacity-70 hover:opacity-100 hover:bg-btn-secondary-hover"
           }`}
           onClick={() => onTabChange("explorer")}
           aria-selected={activeTab === "explorer"}
@@ -36,8 +36,8 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
         <button
           className={`px-3 py-1 text-sm rounded transition-colors border-b-2 ${
             activeTab === "sourceControl"
-              ? "border-[var(--btn-bg)] text-[var(--btn-fg)] bg-[var(--btn-bg)] bg-opacity-10"
-              : "border-transparent text-[var(--editor-fg)] opacity-70 hover:opacity-100 hover:bg-[var(--btn-secondary-hover)]"
+              ? "border-btn-bg text-btn-fg bg-btn-bg bg-opacity-10"
+              : "border-transparent text-editor-fg opacity-70 hover:opacity-100 hover:bg-btn-secondary-hover"
           }`}
           onClick={() => onTabChange("sourceControl")}
           aria-selected={activeTab === "sourceControl"}
@@ -50,7 +50,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
 
       {/* Close button */}
       <button
-        className="flex items-center justify-center w-7 h-7 rounded border border-[var(--btn-border)] bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-fg)] hover:bg-[var(--btn-secondary-hover)] transition-colors flex-shrink-0"
+        className="flex items-center justify-center w-7 h-7 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors flex-shrink-0"
         onClick={onClose}
         title="Close workspace viewer"
         aria-label="Close workspace viewer"

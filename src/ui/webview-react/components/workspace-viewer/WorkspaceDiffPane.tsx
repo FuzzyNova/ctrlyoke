@@ -11,7 +11,7 @@ export const WorkspaceDiffPane: React.FC = () => {
 
   if (!selectedDiffPath) {
     return (
-      <div className="flex items-center justify-center h-full text-[var(--editor-fg)] opacity-40 select-none">
+      <div className="flex items-center justify-center h-full text-editor-fg opacity-40 select-none">
         <p className="text-sm">Select a file to see its diff</p>
       </div>
     );
@@ -19,7 +19,7 @@ export const WorkspaceDiffPane: React.FC = () => {
 
   if (diffLoading) {
     return (
-      <div className="flex items-center justify-center h-full gap-2 text-[var(--editor-fg)] opacity-50">
+      <div className="flex items-center justify-center h-full gap-2 text-editor-fg opacity-50">
         <i className="codicon codicon-loading animate-spin" />
         <span className="text-sm">Loading diff…</span>
       </div>

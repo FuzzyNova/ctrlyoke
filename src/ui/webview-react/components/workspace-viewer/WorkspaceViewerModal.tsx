@@ -1,4 +1,5 @@
 import React, { useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { WorkspaceViewerHeader } from "./WorkspaceViewerHeader";
 import { WorkspaceExplorerPane } from "./WorkspaceExplorerPane";
@@ -22,8 +23,8 @@ export const WorkspaceViewerModal: React.FC = () => {
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[var(--sidebar-bg)]">
+  return createPortal(
+    <div className="fixed inset-0 z-[300] flex flex-col bg-sidebar-bg">
       <WorkspaceViewerHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -36,6 +37,7 @@ export const WorkspaceViewerModal: React.FC = () => {
           <WorkspaceSourceControlPane />
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
