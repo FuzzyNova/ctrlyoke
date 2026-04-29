@@ -1,10 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@components/shared/Button";
 import { Modal } from "@components/shared/Modal";
+import { hostedFetch } from "@utils/hostedApi";
+import type { WorkflowFileEntry } from "@root/utils/WorkflowFileDiscovery";
 
-interface WorkflowFileEntry {
-  path: string;
-  relativePath: string;
+interface WorkflowFilesResponse {
+  files?: WorkflowFileEntry[];
+}
+
+const WORKFLOW_PATH_PLACEHOLDER = "path/to/workflow.flightpath.yaml";
+
+function normalizeWorkflowPath(filePath: string): string {
+  return filePath.trim().replace(/\\/g, "/");
 }
 
 interface WorkflowFilePickerModalProps {
@@ -34,18 +41,16 @@ export const WorkflowFilePickerModal: React.FC<
     setIsLoading(true);
     setError(null);
 
-    fetch("/api/workflow-files")
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
-        }
-        return response.json() as Promise<{ files?: WorkflowFileEntry[] }>;
-      })
+    hostedFetch<WorkflowFilesResponse>("/api/workflow-files")
       .then((data) => {
         if (cancelled) {
           return;
         }
-        const nextFiles = data.files ?? [];
+        const nextFiles = (data.files ?? []).map((file) => ({
+          ...file,
+          path: normalizeWorkflowPath(file.path),
+          relativePath: normalizeWorkflowPath(file.relativePath),
+        }));
         setFiles(nextFiles);
         setSelectedPath(nextFiles[0]?.path ?? "");
       })
@@ -78,7 +83,7 @@ export const WorkflowFilePickerModal: React.FC<
     );
   }, [files, query]);
 
-  const chosenPath = manualPath.trim() || selectedPath;
+  const chosenPath = normalizeWorkflowPath(manualPath || selectedPath);
 
   const handleSubmit = () => {
     if (!chosenPath) {
@@ -161,7 +166,7 @@ export const WorkflowFilePickerModal: React.FC<
             type="text"
             value={manualPath}
             onChange={(event) => setManualPath(event.target.value)}
-            placeholder="C:\\path\\to\\workflow.flightpath.yaml"
+            placeholder={WORKFLOW_PATH_PLACEHOLDER}
             className="mt-2 w-full rounded border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-none focus:ring-1 focus:ring-focus-border"
           />
         </label>

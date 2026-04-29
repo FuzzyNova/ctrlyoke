@@ -33,6 +33,10 @@ const IGNORED_WORKFLOW_SCAN_DIRS = new Set([
   "coverage",
 ]);
 
+function toPortablePath(filePath: string): string {
+  return filePath.replace(/\\/g, "/");
+}
+
 export function isWorkflowFileName(fileName: string): boolean {
   return (
     WORKFLOW_FILE_NAMES.has(fileName) ||
@@ -67,8 +71,8 @@ export function findWorkflowFilesInWorkspace(
       }
 
       results.push({
-        path: fullPath,
-        relativePath: path.relative(workspaceRoot, fullPath),
+        path: toPortablePath(fullPath),
+        relativePath: toPortablePath(path.relative(workspaceRoot, fullPath)),
       });
     }
   };
