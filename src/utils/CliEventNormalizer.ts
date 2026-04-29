@@ -226,6 +226,24 @@ function findOutputIndexForCompletionFallback(
   event: CliEvent
 ): number | undefined {
   const key = getEventKey(event);
+
+  // When the immediately-preceding output event is already a completed version
+  // of the same operation (same type + key), merge into it. This handles
+  // streaming batches where INITIATED+TOOL_RESULT in one batch produces a
+  // COMPLETED event, and a later batch delivers the same COMPLETED event again.
+  // The adjacency requirement (no other output events between them) prevents
+  // this from collapsing genuinely separate operations on the same file.
+  if (key && output.length > 0) {
+    const last = output[output.length - 1];
+    if (
+      last.type === event.type &&
+      isSemanticCompletionEvent(last) &&
+      getEventKey(last) === key
+    ) {
+      return output.length - 1;
+    }
+  }
+
   for (let i = output.length - 1; i >= 0; i--) {
     const candidate = output[i];
     if (candidate.type !== event.type) {
