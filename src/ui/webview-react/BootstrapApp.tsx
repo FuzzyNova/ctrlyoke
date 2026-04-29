@@ -35,15 +35,24 @@ export default function BootstrapApp() {
   useEffect(() => {
     const initialPreferredWorkingFilePath =
       initialPreferredWorkingFilePathRef.current;
-    vscode.postMessage({
-      type: MESSAGE_TYPES.READY,
-      preferredWorkingFilePath: initialPreferredWorkingFilePath,
-    });
-    // In standalone browser mode the server is the authoritative source of theme
+    // In standalone (browser) mode the shim sends READY at WebSocket open for
+    // server registration, and App.tsx sends it again after useMessageHandler
+    // mounts its window listener (to flush buffered inbound messages).
+    // Sending READY here would call flushInbound() via queueMicrotask() before
+    // App.tsx finishes its async import — dispatching SESSION_RESTORED and other
+    // startup messages to the window before any handler is registered, so they
+    // are silently lost. New tabs with no persisted state rely on that
+    // SESSION_RESTORED to load the most-recent workflow; losing it leaves the UI
+    // stuck in "new workflow" state.
+    // In standalone mode the server is also the authoritative source of theme
     // vars. Sending THEME_VARS_CAPTURED from the browser strips --fp-color-theme-kind
     // (only --vscode-* props are captured here), corrupting cachedThemeVars on the
     // server and breaking body-class-based icon inversion for subsequent connections.
     if (!isStandalone) {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.READY,
+        preferredWorkingFilePath: initialPreferredWorkingFilePath,
+      });
       captureAndSendThemeVars(vscode);
     }
 

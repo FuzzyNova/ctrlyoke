@@ -1,9 +1,11 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { WorkspaceViewerHeader } from "./WorkspaceViewerHeader";
 import { WorkspaceExplorerPane } from "./WorkspaceExplorerPane";
 import { WorkspaceSourceControlPane } from "./WorkspaceSourceControlPane";
+
+const EXIT_DURATION_MS = 220;
 
 export const WorkspaceViewerModal: React.FC = () => {
   const isOpen = useWorkspaceViewerStore((s) => s.isOpen);
@@ -13,6 +15,38 @@ export const WorkspaceViewerModal: React.FC = () => {
   const promptDirtyExit = useWorkspaceViewerStore((s) => s.promptDirtyExit);
   const setActiveTab = useWorkspaceViewerStore((s) => s.setActiveTab);
 
+  const [rendering, setRendering] = useState(isOpen);
+  const [closing, setClosing] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setClosing(false);
+      setRendering(true);
+    } else {
+      setClosing(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        setRendering(false);
+        setClosing(false);
+      }, EXIT_DURATION_MS);
+    }
+  }, [isOpen]);
+
+  const handleAnimationEnd = useCallback(() => {
+    if (closing) {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setRendering(false);
+      setClosing(false);
+    }
+  }, [closing]);
+
   const handleClose = useCallback(() => {
     if (fileDirty) {
       promptDirtyExit(close);
@@ -21,10 +55,13 @@ export const WorkspaceViewerModal: React.FC = () => {
     }
   }, [fileDirty, promptDirtyExit, close]);
 
-  if (!isOpen) return null;
+  if (!rendering) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[300] flex flex-col bg-sidebar-bg">
+    <div
+      className={`fixed inset-0 z-[300] flex flex-col bg-sidebar-bg ${closing ? "animate-modal-exit" : "animate-modal-enter"}`}
+      onAnimationEnd={handleAnimationEnd}
+    >
       <WorkspaceViewerHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}

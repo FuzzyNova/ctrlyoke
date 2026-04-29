@@ -182,8 +182,13 @@ function App() {
       type: MESSAGE_TYPES.READY,
       preferredWorkingFilePath: activeWorkflowWorkingFilePath,
     });
-    // Capture VS Code theme variables on mount and send to extension for server theme forwarding
-    captureAndSendThemeVars(vscode);
+    // In standalone (browser) mode the server is the authoritative source of theme
+    // vars. Sending THEME_VARS_CAPTURED from the browser strips --fp-color-theme-kind
+    // (only --vscode-* props are captured here), corrupting cachedThemeVars on the
+    // server and breaking body-class-based icon inversion for subsequent connections.
+    if (!isStandalone) {
+      captureAndSendThemeVars(vscode);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // vscode is a stable singleton — never changes
 

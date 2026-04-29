@@ -288,6 +288,14 @@ module.exports = {
           from: { width: "32px" },
           to: { width: "0px" },
         },
+        "modal-enter": {
+          from: { transform: "translateY(-100%)" },
+          to: { transform: "translateY(0)" },
+        },
+        "modal-exit": {
+          from: { transform: "translateY(0)" },
+          to: { transform: "translateY(-100%)" },
+        },
       },
 
       animation: {
@@ -303,6 +311,8 @@ module.exports = {
         "ctx-update": "ctx-update 0.4s ease-out",
         "slide-in-sidebar": "slide-in-sidebar 0.25s ease-out both",
         "slide-out-sidebar": "slide-out-sidebar 0.22s ease-in both",
+        "modal-enter": "modal-enter 0.25s ease-out forwards",
+        "modal-exit": "modal-exit 0.22s ease-in forwards",
       },
 
       fontSize: {

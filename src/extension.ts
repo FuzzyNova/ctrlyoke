@@ -901,7 +901,10 @@ function registerCommands(context: vscode.ExtensionContext) {
       if (uri) {
         await saveIfDirty(uri.fsPath);
       }
-      await contextMenuReferenceCommands.addSymbolToPromptEditor(uri, lineNumber);
+      await contextMenuReferenceCommands.addSymbolToPromptEditor(
+        uri,
+        lineNumber
+      );
     }
   );
 
