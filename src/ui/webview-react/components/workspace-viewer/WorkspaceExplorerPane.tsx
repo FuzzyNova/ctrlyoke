@@ -1,5 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useSettingsStore } from "@store/settingsStore";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { MESSAGE_TYPES } from "@/types/messages";
 import { workspaceTree, workspaceFile, workspaceSaveFile } from "@utils/hostedApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { WorkspaceFileEditor } from "./WorkspaceFileEditor";
@@ -35,11 +38,22 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const setMobileEditorVisible = useWorkspaceViewerStore((s) => s.setMobileEditorVisible);
   const setError = useWorkspaceViewerStore((s) => s.setError);
 
+  const showHiddenFiles = useSettingsStore((s) => s.globalSettings.showHiddenFiles);
+  const vscode = useVsCodeApi();
+
   const isMobile = useIsMobile();
 
   // Nav metadata kept in local state — not needed globally
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [rootLabel, setRootLabel] = useState<string>("");
+
+  const visibleEntries = useMemo(
+    () =>
+      showHiddenFiles
+        ? explorerEntries
+        : explorerEntries.filter((entry) => !entry.name.startsWith(".")),
+    [explorerEntries, showHiddenFiles]
+  );
 
   const loadDirectory = useCallback(
     async (dirPath: string) => {
@@ -221,6 +235,19 @@ export const WorkspaceExplorerPane: React.FC = () => {
         </div>
 
         <button
+          onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path: "ui.showHiddenFiles", value: !showHiddenFiles, scope: "user" })}
+          className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
+            showHiddenFiles
+              ? "hover:bg-btn-secondary-hover text-editor-fg"
+              : "hover:bg-btn-secondary-hover text-editor-fg opacity-40"
+          }`}
+          title={showHiddenFiles ? "Hide dotfiles" : "Show dotfiles"}
+          aria-label={showHiddenFiles ? "Hide dotfiles" : "Show dotfiles"}
+        >
+          <i className={`codicon ${showHiddenFiles ? "codicon-eye" : "codicon-eye-closed"} text-xs`} />
+        </button>
+
+        <button
           onClick={handleRefresh}
           className="flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded hover:bg-btn-secondary-hover text-editor-fg transition-colors flex-shrink-0"
           title="Refresh directory"
@@ -241,13 +268,13 @@ export const WorkspaceExplorerPane: React.FC = () => {
             <i className="codicon codicon-loading animate-spin mr-2" />
             <span className="text-sm">Loading…</span>
           </div>
-        ) : explorerEntries.length === 0 ? (
+        ) : visibleEntries.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-editor-fg opacity-40 select-none">
             <span className="text-sm">Empty directory</span>
           </div>
         ) : (
           <ul className="py-1">
-            {explorerEntries.map((entry) => {
+            {visibleEntries.map((entry) => {
               const isSelected =
                 entry.kind === "file" && selectedFilePath === entry.path;
               return (

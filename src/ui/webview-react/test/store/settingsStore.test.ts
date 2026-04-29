@@ -157,6 +157,7 @@ describe("setGlobalSettings", () => {
       resumeSession: true,
       mcpServers: ["flightpath"],
       hooks: [],
+      autoFocusOutputOnExecution: true,
       toolPermissions: {
         mode: PERMISSION_MODES.ALLOW_ALL,
         allowedTools: [],
@@ -165,6 +166,7 @@ describe("setGlobalSettings", () => {
       respectGitignore: false,
       confirmDeleteOperations: false,
       confirmResetOperations: false,
+      showHiddenFiles: true,
       priorContext: "none",
       workspaceRoot: "",
       defaultEndCondition: null,

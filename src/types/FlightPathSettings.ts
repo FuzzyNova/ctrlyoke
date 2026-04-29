@@ -105,10 +105,12 @@ export interface FlightPathGlobalSettings {
     showCliCommand: boolean;
     logRawCliOutput: boolean;
     showHeadlessPermissionWarning: boolean;
+    autoFocusOutputOnExecution: boolean;
     openPromptsInSecondGroup: boolean;
     respectGitignoreForCompletions: boolean;
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;
+    showHiddenFiles: boolean;
   };
 
   // Server (new)
@@ -275,10 +277,12 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     showCliCommand: true,
     logRawCliOutput: false,
     showHeadlessPermissionWarning: true,
+    autoFocusOutputOnExecution: true,
     openPromptsInSecondGroup: false,
     respectGitignoreForCompletions: true,
     confirmDeleteOperations: true,
     confirmResetOperations: true,
+    showHiddenFiles: true,
   },
   server: {
     enabled: false,

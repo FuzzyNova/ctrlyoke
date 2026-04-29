@@ -290,6 +290,7 @@ describe("INIT", () => {
             resumeSession: false,
             mcpServers: [],
             hooks: [],
+            autoFocusOutputOnExecution: true,
             respectGitignore: true,
             confirmDeleteOperations: true,
             confirmResetOperations: true,
@@ -751,6 +752,96 @@ describe("STEPS_EXTENDED", () => {
 // ---------------------------------------------------------------------------
 
 describe("EXECUTION_STARTED", () => {
+  it("expands the output section and shows output for headless runs when auto-focus is enabled", () => {
+    renderHook(() => useMessageHandler());
+
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useUiStore.getState().setOutputCollapsed(true);
+    useUiStore.getState().setActiveOutputTab("workflow-1", "terminal");
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("executionMode", "headless");
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("autoFocusOutputOnExecution", true);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf.yaml",
+        totalSteps: 2,
+      });
+    });
+
+    expect(useUiStore.getState().outputCollapsed).toBe(false);
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
+      "output"
+    );
+  });
+
+  it("leaves the current view alone when headless auto-focus is disabled", () => {
+    renderHook(() => useMessageHandler());
+
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useUiStore.getState().setOutputCollapsed(true);
+    useUiStore.getState().setActiveOutputTab("workflow-1", "terminal");
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("executionMode", "headless");
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("autoFocusOutputOnExecution", false);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf.yaml",
+        totalSteps: 2,
+      });
+    });
+
+    expect(useUiStore.getState().outputCollapsed).toBe(true);
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
+      "terminal"
+    );
+  });
+
+  it("expands the output section and keeps terminal visible for inject-mode runs", () => {
+    renderHook(() => useMessageHandler());
+
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useUiStore.getState().setOutputCollapsed(true);
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("executionMode", "interactive");
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("autoFocusOutputOnExecution", true);
+    useTerminalStore.getState().addSession({
+      id: "session-1",
+      workflowId: "workflow-1",
+      stepName: "Step 1",
+      kind: SESSION_KINDS.AI_CLI,
+      status: TERMINAL_SESSION_STATUS.COMPLETED,
+      pendingOutput: [],
+      isController: true,
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_STARTED, {
+        workflowId: "workflow-1",
+        fileName: "wf.yaml",
+        totalSteps: 2,
+        isInjectMode: true,
+      });
+    });
+
+    expect(useUiStore.getState().outputCollapsed).toBe(false);
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
+      "terminal"
+    );
+  });
+
   it("preserves ai-cli sessions during append continuations until TERMINAL_STARTED reconciles them", () => {
     renderHook(() => useMessageHandler());
     useUiStore.getState().setActiveWorkflowId("workflow-1");
@@ -809,6 +900,60 @@ describe("EXECUTION_STARTED", () => {
 // ---------------------------------------------------------------------------
 
 describe("TERMINAL_STARTED", () => {
+  it("expands the output section and shows terminal when auto-focus is enabled", () => {
+    renderHook(() => useMessageHandler());
+
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useUiStore.getState().setOutputCollapsed(true);
+    useUiStore.getState().setActiveOutputTab("workflow-1", "output");
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("autoFocusOutputOnExecution", true);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        stepName: "Step 1",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 1,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    expect(useUiStore.getState().outputCollapsed).toBe(false);
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
+      "terminal"
+    );
+  });
+
+  it("does not switch views on terminal start when auto-focus is disabled", () => {
+    renderHook(() => useMessageHandler());
+
+    useUiStore.getState().setActiveWorkflowId("workflow-1");
+    useUiStore.getState().setOutputCollapsed(true);
+    useUiStore.getState().setActiveOutputTab("workflow-1", "output");
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("autoFocusOutputOnExecution", false);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        stepName: "Step 1",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 1,
+        controllerClientId: "controller-1",
+      });
+    });
+
+    expect(useUiStore.getState().outputCollapsed).toBe(true);
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
+      "output"
+    );
+  });
+
   it("updates existing session metadata when inject mode reuses the PTY", () => {
     renderHook(() => useMessageHandler());
 

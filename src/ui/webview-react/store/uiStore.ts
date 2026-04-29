@@ -898,6 +898,7 @@ export const useUiStore = create<UiState & UiActions>()(
         }),
       setDevRestarting: (restarting) =>
         set({ devRestarting: restarting, startupReady: !restarting }),
+
       setMyClientId: (clientId) => set({ myClientId: clientId }),
 
       // ============================================================================

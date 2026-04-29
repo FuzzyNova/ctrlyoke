@@ -17,6 +17,7 @@ import { terminalRegistry } from "../terminalRegistry";
 import { sendMessage } from "@hooks/useMessageHandler";
 import type { MessageHandlerMap } from "./useMessageHandler";
 import { clearPanelReconnectReloadWatchdog } from "./reconnectWatchdog";
+import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 
 function isScriptPtySession(session: {
   kind?: string;
@@ -177,9 +178,9 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
 
     useUiStore.getState().setTerminalSessionActive(workflowId, true);
 
-    // Auto-switch to Terminal tab when an ai-cli session starts.
+    // Auto-focus the output section on interactive execution when enabled.
     if (kind === SESSION_KINDS.AI_CLI) {
-      useUiStore.getState().setActiveOutputTab(workflowId, "terminal");
+      autoFocusOutputOnExecution(workflowId, "terminal");
     }
 
     // Auto-claim if no controller is assigned — the first client to send wins

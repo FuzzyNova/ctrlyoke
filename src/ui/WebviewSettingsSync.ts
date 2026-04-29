@@ -720,6 +720,8 @@ export class WebviewSettingsSync {
       resumeSession: resumeExistingSession,
       mcpServers: defaultMcpServers,
       hooks: ConfigurationUtils.getDefaultHooks(),
+      autoFocusOutputOnExecution:
+        ConfigurationUtils.shouldAutoFocusOutputOnExecution(),
       terminal: ConfigurationUtils.getTerminalSettings(),
       toolPermissions: {
         mode: ConfigurationUtils.getCliToolPermissions(),
@@ -730,6 +732,7 @@ export class WebviewSettingsSync {
       confirmDeleteOperations:
         ConfigurationUtils.shouldConfirmDeleteOperations(),
       confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations(),
+      showHiddenFiles: ConfigurationUtils.shouldShowHiddenFiles(),
       priorContext: ConfigurationUtils.getPriorContext(),
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,
       defaultPreCondition: ConfigurationUtils.getDefaultPreCondition() ?? null,

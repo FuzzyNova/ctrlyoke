@@ -457,6 +457,10 @@
           "type": "boolean",
           "description": "Show a warning when headless execution uses limited tool permissions."
         },
+        "autoFocusOutputOnExecution": {
+          "type": "boolean",
+          "description": "Automatically expand the output section and switch to the relevant output view when a prompt starts. Headless runs show Output; interactive and inject-mode runs show Terminal."
+        },
         "openPromptsInSecondGroup": {
           "type": "boolean",
           "description": "Open prompt files in a second editor group."
@@ -472,6 +476,10 @@
         "confirmResetOperations": {
           "type": "boolean",
           "description": "Show a confirmation dialog before resetting workflow start position."
+        },
+        "showHiddenFiles": {
+          "type": "boolean",
+          "description": "Show dotfiles and hidden directories in the workspace file explorer and workflow file picker."
         }
       }
     },

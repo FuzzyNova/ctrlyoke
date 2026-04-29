@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@components/shared/Button";
 import { Modal } from "@components/shared/Modal";
 import { hostedFetch } from "@utils/hostedApi";
+import { useSettingsStore } from "@store/settingsStore";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { MESSAGE_TYPES } from "@/types/messages";
 import type { WorkflowFileEntry } from "@root/utils/WorkflowFileDiscovery";
 
 interface WorkflowFilesResponse {
@@ -12,6 +15,10 @@ const WORKFLOW_PATH_PLACEHOLDER = "path/to/workflow.flightpath.yaml";
 
 function normalizeWorkflowPath(filePath: string): string {
   return filePath.trim().replace(/\\/g, "/");
+}
+
+function hasHiddenSegment(relativePath: string): boolean {
+  return relativePath.split("/").some((segment) => segment.startsWith("."));
 }
 
 interface WorkflowFilePickerModalProps {
@@ -31,6 +38,8 @@ export const WorkflowFilePickerModal: React.FC<
   const [manualPath, setManualPath] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const showHiddenFiles = useSettingsStore((s) => s.globalSettings.showHiddenFiles);
+  const vscode = useVsCodeApi();
 
   useEffect(() => {
     if (!isOpen) {
@@ -75,13 +84,12 @@ export const WorkflowFilePickerModal: React.FC<
 
   const filteredFiles = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return files;
-    }
-    return files.filter((file) =>
-      file.relativePath.toLowerCase().includes(normalizedQuery)
-    );
-  }, [files, query]);
+    return files.filter((file) => {
+      if (!showHiddenFiles && hasHiddenSegment(file.relativePath)) return false;
+      if (normalizedQuery && !file.relativePath.toLowerCase().includes(normalizedQuery)) return false;
+      return true;
+    });
+  }, [files, query, showHiddenFiles]);
 
   const chosenPath = normalizeWorkflowPath(manualPath || selectedPath);
 
@@ -113,16 +121,39 @@ export const WorkflowFilePickerModal: React.FC<
       size="lg"
     >
       <div className="space-y-4">
-        <label className="block text-sm font-medium text-foreground">
-          Search workspace files
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label
+              htmlFor="workflow-file-search"
+              className="text-sm font-medium text-foreground"
+            >
+              Search workspace files
+            </label>
+            <button
+              type="button"
+              onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path: "ui.showHiddenFiles", value: !showHiddenFiles, scope: "user" })}
+              className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded transition-colors ${
+                showHiddenFiles
+                  ? "text-foreground hover:bg-btn-secondary-hover"
+                  : "text-description-fg hover:bg-btn-secondary-hover"
+              }`}
+              title={showHiddenFiles ? "Hide dotfiles" : "Show dotfiles"}
+            >
+              <i
+                className={`codicon ${showHiddenFiles ? "codicon-eye" : "codicon-eye-closed"} text-xs`}
+              />
+              <span>dotfiles</span>
+            </button>
+          </div>
           <input
+            id="workflow-file-search"
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="workflow, prompt, .flightpath"
-            className="mt-2 w-full rounded border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-none focus:ring-1 focus:ring-focus-border"
+            className="w-full rounded border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-none focus:ring-1 focus:ring-focus-border"
           />
-        </label>
+        </div>
 
         <div className="h-64 overflow-y-auto rounded border border-panel-border">
           {isLoading && (

@@ -61,6 +61,14 @@ export function GeneralSection({
         {...rowProps}
       />
       <SettingToggleRow
+        label="Auto-focus output on execution"
+        description="Automatically expand the output section when a prompt starts. Headless runs show Output; interactive and inject-mode runs show Terminal."
+        checked={ui.autoFocusOutputOnExecution}
+        onChange={(v) => onUpdate("ui.autoFocusOutputOnExecution", v)}
+        path="ui.autoFocusOutputOnExecution"
+        {...rowProps}
+      />
+      <SettingToggleRow
         label="Open prompts in second group"
         description="Open prompt files in the second editor group."
         checked={ui.openPromptsInSecondGroup}
@@ -90,6 +98,14 @@ export function GeneralSection({
         checked={ui.confirmResetOperations}
         onChange={(v) => onUpdate("ui.confirmResetOperations", v)}
         path="ui.confirmResetOperations"
+        {...rowProps}
+      />
+      <SettingToggleRow
+        label="Show hidden files"
+        description="Show dotfiles and hidden directories in the workspace file explorer and workflow file picker."
+        checked={ui.showHiddenFiles}
+        onChange={(v) => onUpdate("ui.showHiddenFiles", v)}
+        path="ui.showHiddenFiles"
         {...rowProps}
       />
       <div className="pt-3 border-t border-panel-border mt-3">

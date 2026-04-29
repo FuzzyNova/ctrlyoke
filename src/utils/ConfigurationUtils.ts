@@ -53,6 +53,7 @@ export const CONFIG_KEYS = {
   UI_CONFIRM_DELETE_OPERATIONS: "ui.confirmDeleteOperations",
   UI_CONFIRM_RESET_OPERATIONS: "ui.confirmResetOperations",
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
+  UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
   MCP_DEFAULT_SERVERS: "mcp.defaultServers",
   EXTENSION_NAMESPACE: "flightpath.",
 } as const;
@@ -155,6 +156,14 @@ export const ConfigurationUtils = {
    */
   shouldShowHeadlessPermissionWarning(): boolean {
     return configService.get(CONFIG_KEYS.UI).showHeadlessPermissionWarning;
+  },
+
+  /**
+   * Check if prompt execution should automatically reveal the output section
+   * and switch to the relevant output view (output vs terminal).
+   */
+  shouldAutoFocusOutputOnExecution(): boolean {
+    return configService.get(CONFIG_KEYS.UI).autoFocusOutputOnExecution;
   },
 
   /**
@@ -838,6 +847,10 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.UI).confirmResetOperations;
   },
 
+  shouldShowHiddenFiles(): boolean {
+    return configService.get(CONFIG_KEYS.UI).showHiddenFiles;
+  },
+
   async setConfirmResetOperations(enabled: boolean): Promise<void> {
     await configService.set(
       CONFIG_KEYS.UI_CONFIRM_RESET_OPERATIONS,
@@ -849,6 +862,14 @@ export const ConfigurationUtils = {
   async setShowHeadlessPermissionWarning(enabled: boolean): Promise<void> {
     await configService.set(
       CONFIG_KEYS.UI_SHOW_HEADLESS_PERMISSION_WARNING,
+      enabled,
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  async setAutoFocusOutputOnExecution(enabled: boolean): Promise<void> {
+    await configService.set(
+      CONFIG_KEYS.UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION,
       enabled,
       CONFIG_SCOPE.USER
     );

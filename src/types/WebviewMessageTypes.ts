@@ -319,6 +319,7 @@ export interface InitMessageData {
     resumeSession: boolean;
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];
+    autoFocusOutputOnExecution?: boolean;
     terminal?: TerminalSettings;
   };
   workflowProperties: Record<string, any>;
@@ -789,9 +790,11 @@ export interface GlobalSettingsUpdatedMessage {
     resumeSession: boolean;
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];
+    autoFocusOutputOnExecution?: boolean;
     respectGitignore?: boolean;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
+    showHiddenFiles?: boolean;
     terminal?: TerminalSettings;
   };
 }

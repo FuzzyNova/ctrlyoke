@@ -21,6 +21,7 @@ import { useEditorStore } from "../store/editorStore";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
+  EXECUTION_MODES,
   STEP_STATUS,
   EDITOR_TARGET_KINDS,
   SESSION_KINDS,
@@ -50,6 +51,7 @@ import {
   getNotificationSeverityColor,
   handleCompletionNotificationEvent,
 } from "@utils/browserNotifications";
+import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 
 // ============================================================================
 // Types
@@ -737,6 +739,15 @@ function createMessageHandlers(): MessageHandlerMap {
     // Handle ai-cli terminal sessions for the new run.
     const wfId = message.workflowId;
     if (wfId) {
+      if (
+        useSettingsStore.getState().globalSettings.executionMode ===
+        EXECUTION_MODES.HEADLESS
+      ) {
+        autoFocusOutputOnExecution(wfId, "output");
+      } else if (message.isInjectMode) {
+        autoFocusOutputOnExecution(wfId, "terminal");
+      }
+
       if (message.isInjectMode) {
         // Inject mode reuses the existing PTY — unfreeze and resume the existing
         // ai-cli session(s) instead of destroying and recreating them.
@@ -749,7 +760,6 @@ function createMessageHandlers(): MessageHandlerMap {
           termStore.resumeSession(wfId, s.id);
         }
         if (aiCliSessions.length > 0) {
-          useUiStore.getState().setActiveOutputTab(wfId, "terminal");
           useUiStore.getState().setTerminalSessionActive(wfId, true);
         }
       } else if (!isContinuation) {

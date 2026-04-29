@@ -88,6 +88,7 @@ export interface GlobalSettings {
   resumeSession: boolean;
   mcpServers: (string | object)[];
   hooks: object[];
+  autoFocusOutputOnExecution: boolean;
   toolPermissions: {
     mode: string;
     allowedTools: string[];
@@ -96,6 +97,7 @@ export interface GlobalSettings {
   respectGitignore: boolean;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
+  showHiddenFiles: boolean;
   priorContext: string;
   workspaceRoot: string;
   defaultEndCondition: EndCondition | null;
@@ -271,6 +273,7 @@ const initialGlobalSettings: GlobalSettings = {
   resumeSession: false,
   mcpServers: [],
   hooks: [],
+  autoFocusOutputOnExecution: true,
   toolPermissions: {
     mode: PERMISSION_MODES.ALLOW_ALL,
     allowedTools: [],
@@ -279,6 +282,7 @@ const initialGlobalSettings: GlobalSettings = {
   respectGitignore: true,
   confirmDeleteOperations: true,
   confirmResetOperations: true,
+  showHiddenFiles: true,
   priorContext: "none",
   workspaceRoot: "",
   defaultEndCondition: null,
