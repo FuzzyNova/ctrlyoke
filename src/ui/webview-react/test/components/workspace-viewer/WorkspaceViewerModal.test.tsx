@@ -253,3 +253,69 @@ describe("workspaceViewerStore — file read-only state", () => {
     expect(useWorkspaceViewerStore.getState().fileReadOnlyReason).toBeUndefined();
   });
 });
+
+describe("workspaceViewerStore — save state", () => {
+  it("markFileSaved clears dirty state after a successful save", () => {
+    useWorkspaceViewerStore.setState({
+      fileContent: "updated",
+      originalFileContent: "original",
+      fileDirty: true,
+    });
+
+    useWorkspaceViewerStore.getState().markFileSaved();
+
+    const state = useWorkspaceViewerStore.getState();
+    expect(state.fileContent).toBe("updated");
+    expect(state.originalFileContent).toBe("updated");
+    expect(state.fileDirty).toBe(false);
+  });
+});
+
+describe("workspaceViewerStore — diff state", () => {
+  it("clearDiff resets the selected diff and payload", () => {
+    useWorkspaceViewerStore.setState({
+      selectedDiffPath: "src/fileA.ts",
+      diffOldContent: "before",
+      diffNewContent: "after",
+      diffLanguage: "typescript",
+      diffKind: "modified",
+      diffLoading: true,
+    });
+
+    useWorkspaceViewerStore.getState().clearDiff();
+
+    const state = useWorkspaceViewerStore.getState();
+    expect(state.selectedDiffPath).toBeNull();
+    expect(state.diffOldContent).toBe("");
+    expect(state.diffNewContent).toBe("");
+    expect(state.diffLanguage).toBeUndefined();
+    expect(state.diffKind).toBeNull();
+    expect(state.diffLoading).toBe(false);
+  });
+
+  it("setSourceControlFiles clears the diff when the selected file disappears", () => {
+    useWorkspaceViewerStore.setState({
+      selectedDiffPath: "src/fileA.ts",
+      diffOldContent: "before",
+      diffNewContent: "after",
+      diffLanguage: "typescript",
+      diffKind: "modified",
+    });
+
+    useWorkspaceViewerStore.getState().setSourceControlFiles([
+      {
+        path: "src/fileB.ts",
+        stagedStatus: "M",
+        unstagedStatus: null,
+        kind: "modified",
+      },
+    ]);
+
+    const state = useWorkspaceViewerStore.getState();
+    expect(state.selectedDiffPath).toBeNull();
+    expect(state.diffOldContent).toBe("");
+    expect(state.diffNewContent).toBe("");
+    expect(state.diffLanguage).toBeUndefined();
+    expect(state.diffKind).toBeNull();
+  });
+});

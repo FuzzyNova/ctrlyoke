@@ -75,6 +75,7 @@ interface WorkspaceViewerActions {
   selectFile(path: string): void;
   setFileContent(content: string): void;
   setOriginalFileContent(content: string): void;
+  markFileSaved(content?: string): void;
   setFileLoading(loading: boolean): void;
   setFileSaving(saving: boolean): void;
   setFileReadOnly(readOnly: boolean, reason?: string): void;
@@ -92,6 +93,7 @@ interface WorkspaceViewerActions {
   setSourceControlFiles(files: SourceControlFile[]): void;
   setSourceControlLoading(loading: boolean): void;
   selectDiff(path: string | null): void;
+  clearDiff(): void;
   setDiffData(
     oldContent: string,
     newContent: string,
@@ -210,6 +212,15 @@ export const useWorkspaceViewerStore = create<
     set({ originalFileContent: content });
   },
 
+  markFileSaved(content) {
+    const savedContent = content ?? get().fileContent;
+    set({
+      fileContent: savedContent,
+      originalFileContent: savedContent,
+      fileDirty: false,
+    });
+  },
+
   setFileLoading(loading) {
     set({ fileLoading: loading });
   },
@@ -258,7 +269,23 @@ export const useWorkspaceViewerStore = create<
   // --- Source control ---
 
   setSourceControlFiles(files) {
-    set({ sourceControlFiles: files });
+    const selectedDiffPath = get().selectedDiffPath;
+    const selectedStillExists =
+      selectedDiffPath !== null && files.some((file) => file.path === selectedDiffPath);
+
+    set({
+      sourceControlFiles: files,
+      ...(selectedDiffPath !== null && !selectedStillExists
+        ? {
+            selectedDiffPath: null,
+            diffOldContent: "",
+            diffNewContent: "",
+            diffLanguage: undefined,
+            diffKind: null,
+            diffLoading: false,
+          }
+        : {}),
+    });
   },
 
   setSourceControlLoading(loading) {
@@ -267,6 +294,17 @@ export const useWorkspaceViewerStore = create<
 
   selectDiff(path) {
     set({ selectedDiffPath: path });
+  },
+
+  clearDiff() {
+    set({
+      selectedDiffPath: null,
+      diffOldContent: "",
+      diffNewContent: "",
+      diffLanguage: undefined,
+      diffKind: null,
+      diffLoading: false,
+    });
   },
 
   setDiffData(oldContent, newContent, language, kind) {

@@ -19,6 +19,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   const setPushing = useWorkspaceViewerStore((s) => s.setPushing);
   const setPulling = useWorkspaceViewerStore((s) => s.setPulling);
   const setScmError = useWorkspaceViewerStore((s) => s.setScmError);
+  const clearDiff = useWorkspaceViewerStore((s) => s.clearDiff);
 
   const handleCommit = useCallback(async () => {
     if (commitMessage.trim() === "" || committing) return;
@@ -27,13 +28,14 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
     try {
       await workspaceCommit({ message: commitMessage });
       setCommitMessage("");
+      clearDiff();
       await onRefresh();
     } catch (err) {
       setScmError(String(err));
     } finally {
       setCommitting(false);
     }
-  }, [commitMessage, committing, setCommitting, setScmError, setCommitMessage, onRefresh]);
+  }, [commitMessage, committing, setCommitting, setScmError, setCommitMessage, clearDiff, onRefresh]);
 
   const handlePush = useCallback(async () => {
     if (pushing) return;

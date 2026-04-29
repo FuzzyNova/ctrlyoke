@@ -24,6 +24,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const selectFile = useWorkspaceViewerStore((s) => s.selectFile);
   const setFileContent = useWorkspaceViewerStore((s) => s.setFileContent);
   const setOriginalFileContent = useWorkspaceViewerStore((s) => s.setOriginalFileContent);
+  const markFileSaved = useWorkspaceViewerStore((s) => s.markFileSaved);
   const setFileLoading = useWorkspaceViewerStore((s) => s.setFileLoading);
   const setFileSaving = useWorkspaceViewerStore((s) => s.setFileSaving);
   const setFileReadOnly = useWorkspaceViewerStore((s) => s.setFileReadOnly);
@@ -127,13 +128,13 @@ export const WorkspaceExplorerPane: React.FC = () => {
     setFileSaving(true);
     try {
       await workspaceSaveFile({ path: selectedFilePath, content: fileContent });
-      setOriginalFileContent(fileContent);
+      markFileSaved(fileContent);
     } catch (err) {
       setError(String(err));
     } finally {
       setFileSaving(false);
     }
-  }, [selectedFilePath, fileContent, setFileSaving, setOriginalFileContent, setError]);
+  }, [selectedFilePath, fileContent, setFileSaving, markFileSaved, setError]);
 
   const handleDirtyExitSave = useCallback(async () => {
     await handleSave();
