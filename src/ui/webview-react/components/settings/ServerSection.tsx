@@ -123,7 +123,7 @@ export function ServerSection({
                 </select>
               </SettingInputRow>
             )}
-            <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded">
+            <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded mt-2">
               <span
                 className="w-2 h-2 rounded-full bg-indicator-success shrink-0"
                 title="Server running"
