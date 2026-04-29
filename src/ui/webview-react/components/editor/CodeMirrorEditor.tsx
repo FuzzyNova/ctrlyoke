@@ -8,6 +8,7 @@ import {
   highlightActiveLine,
   tooltips,
 } from "@codemirror/view";
+import { createThemeExtension } from "@utils/codemirrorTheme";
 import { EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
@@ -684,6 +685,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         ]),
         placeholder(placeholderText),
         createThemeExtension(surface),
+        createPromptDecorationThemeExtension(),
         createLinterThemeExtension(),
         highlightActiveLine(),
         highlightSelectionMatches({ minSelectionLength: 2 }),
@@ -813,181 +815,31 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   return <div id={id} ref={editorRef} className={editorClassName} />;
 };
 
-// VS Code theme integration
-function createThemeExtension(surface: CodeMirrorEditorSurface) {
-  const backgroundColor =
-    surface === "input"
-      ? "var(--vscode-input-background)"
-      : "var(--vscode-editor-background)";
-  const foregroundColor =
-    surface === "input"
-      ? "var(--vscode-input-foreground)"
-      : "var(--vscode-editor-foreground)";
-
-  return EditorView.theme(
-    {
-      "&": {
-        color: foregroundColor,
-        backgroundColor,
-        height: surface === "input" ? "auto" : "100%",
-        ...(surface === "input"
-          ? { minHeight: "inherit", maxHeight: "inherit" }
-          : {}),
-      },
-      ".cm-scroller":
-        surface === "input"
-          ? {
-              minHeight: "inherit",
-              maxHeight: "inherit",
-              overflow: "auto",
-            }
-          : {},
-      ".cm-content": {
-        caretColor: "var(--vscode-editorCursor-foreground)",
-        fontFamily: "var(--vscode-editor-font-family, 'Consolas, monospace')",
-        fontSize: "var(--vscode-editor-font-size, 14px)",
-        padding: "8px 0",
-      },
-      ".cm-line": {
-        padding: "0 8px",
-      },
-      ".cm-cursor": {
-        borderLeftColor: "var(--vscode-editorCursor-foreground)",
-      },
-      ".cm-selectionBackground": {
-        backgroundColor:
-          "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55)) !important",
-      },
-      "&.cm-focused .cm-selectionBackground": {
-        backgroundColor:
-          "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55)) !important",
-      },
-      ".cm-activeLine":
-        surface === "input"
-          ? { backgroundColor: "transparent" }
-          : {
-              outline: "1px solid var(--vscode-editor-lineHighlightBorder)",
-              outlineOffset: "-1px",
-              backgroundColor:
-                "color-mix(in srgb, var(--vscode-editor-lineHighlightBackground) 40%, transparent)",
-            },
-      ".cm-gutters": {
-        backgroundColor: "var(--vscode-editorGutter-background)",
-        color: "var(--vscode-editorLineNumber-foreground)",
-        border: "none",
-      },
-      ".cm-activeLineGutter": {
-        backgroundColor: "var(--vscode-editor-lineHighlightBackground)",
-      },
-      "&.cm-focused": {
-        // Input-surface editors use a wrapper focus border so the inner
-        // CodeMirror outline is not clipped by bounded form-control layouts.
-        outline:
-          surface === "input" ? "none" : "1px solid var(--vscode-focusBorder)",
-      },
-      ".cm-placeholder": {
-        color: "var(--vscode-input-placeholderForeground)",
-        fontStyle: "italic",
-      },
-      // Autocomplete dropdown styling
-      ".cm-tooltip-autocomplete": {
-        backgroundColor: "var(--vscode-editorSuggestWidget-background)",
-        border: "1px solid var(--vscode-editorSuggestWidget-border)",
-        boxShadow: "0 2px 8px var(--vscode-widget-shadow)",
-      },
-      ".cm-tooltip-autocomplete ul": {
-        fontFamily: "var(--vscode-editor-font-family, 'Consolas, monospace')",
-      },
-      ".cm-tooltip-autocomplete li": {
-        color: "var(--vscode-editorSuggestWidget-foreground)",
-      },
-      ".cm-tooltip-autocomplete li:hover": {
-        backgroundColor: "var(--vscode-list-hoverBackground)",
-        color: "var(--vscode-list-hoverForeground)",
-      },
-      ".cm-tooltip-autocomplete li[aria-selected]": {
-        backgroundColor: "var(--vscode-editorSuggestWidget-selectedBackground)",
-        color: "var(--vscode-editorSuggestWidget-selectedForeground)",
-      },
-      // Type-based completion styling
-      ".cm-completion-file .cm-completionIcon": {
-        color: "var(--vscode-symbolIcon-fileForeground, #858585)",
-      },
-      ".cm-completion-folder .cm-completionIcon": {
-        color: "var(--vscode-symbolIcon-folderForeground, #dcb67a)",
-      },
-      ".cm-completion-class .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-classForeground, #ee9d28)",
-      },
-      ".cm-completion-method .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-methodForeground, #b180d7)",
-      },
-      ".cm-completion-function .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-functionForeground, #b180d7)",
-      },
-      ".cm-completion-property .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-propertyForeground, #75beff)",
-      },
-      ".cm-completion-variable .cm-completionLabel": {
-        color: "var(--vscode-symbolIcon-variableForeground, #75beff)",
-      },
-      // Find/replace search match highlights (@codemirror/search)
-      ".cm-searchMatch": {
-        backgroundColor:
-          "var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33))",
-        outline:
-          "1px solid var(--vscode-editor-findMatchHighlightBorder, transparent)",
-      },
-      ".cm-searchMatch.cm-searchMatch-selected": {
-        backgroundColor:
-          "var(--vscode-editor-findMatchBackground, rgba(234, 92, 0, 0.7))",
-        outline: "1px solid var(--vscode-editor-findMatchBorder, #f38518)",
-      },
-      // Selection match highlight (highlightSelectionMatches)
-      ".cm-selectionMatch": {
-        backgroundColor:
-          "var(--vscode-editor-selectionHighlightBackground, rgba(173, 214, 255, 0.15))",
-        outline:
-          "1px solid var(--vscode-editor-selectionHighlightBorder, rgba(173, 214, 255, 0.4))",
-      },
-      // Link styling for clickable @file and #file references
-      ".cm-link": {
-        color: "var(--vscode-textLink-foreground)",
-        textDecoration: "underline",
-        cursor: "pointer",
-      },
-      ".cm-link:hover": {
-        color: "var(--vscode-textLink-activeForeground)",
-      },
-      // File-reference styling — applied when the entire editor content is a lone path
-      ".cm-prompt-file-ref": {
-        color: "var(--vscode-textLink-foreground)",
-        textDecoration: "underline",
-        fontFamily: "var(--vscode-editor-font-family)",
-      },
-      // Fenced block styling — triple-backtick blocks suppress context expansion
-      ".cm-fenced-block": {
-        color: "var(--vscode-disabledForeground)",
-        fontStyle: "italic",
-      },
-      // Prior context ref styling — $previous, $step:N, etc.
-      ".cm-prior-context-ref": {
-        fontStyle: "italic",
-      },
+// Prompt-editor-specific decoration styles (link, file-ref, fenced-block, prior-context).
+// Generic base theme (colours, gutter, cursor, autocomplete) lives in codemirrorTheme.ts.
+function createPromptDecorationThemeExtension() {
+  return EditorView.baseTheme({
+    ".cm-link": {
+      color: "var(--vscode-textLink-foreground)",
+      textDecoration: "underline",
+      cursor: "pointer",
     },
-    {
-      // CodeMirror only supports dark:true/false — no separate high-contrast mode.
-      // In VS Code the body carries "vscode-dark"; in the browser-hosted dashboard
-      // --fp-color-theme-kind is injected on :root via buildThemeStyleBlock and
-      // mirrored onto the body class by standalone-shim.js, so both checks work.
-      dark:
-        document.body.classList.contains("vscode-dark") ||
-        window
-          .getComputedStyle(document.documentElement)
-          .getPropertyValue("--fp-color-theme-kind")
-          .trim() !== "light",
-    }
-  );
+    ".cm-link:hover": {
+      color: "var(--vscode-textLink-activeForeground)",
+    },
+    ".cm-prompt-file-ref": {
+      color: "var(--vscode-textLink-foreground)",
+      textDecoration: "underline",
+      fontFamily: "var(--vscode-editor-font-family)",
+    },
+    ".cm-fenced-block": {
+      color: "var(--vscode-disabledForeground)",
+      fontStyle: "italic",
+    },
+    ".cm-prior-context-ref": {
+      fontStyle: "italic",
+    },
+  });
 }
 
 // Linter theme for squiggly underlines

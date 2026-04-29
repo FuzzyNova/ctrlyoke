@@ -6,7 +6,8 @@ import {
   EXECUTION_STATES,
   RUNNER_IDS,
 } from "../../types/messages";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { WebviewLog } from "@utils/logger";
 import { WorkflowControls } from "../workflow/WorkflowControls";
@@ -82,6 +83,7 @@ export const Header: React.FC<{
 }> = ({ onToggleMobilePrompts, onToggleMobileSettings }) => {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
+  const openWorkspaceViewer = useWorkspaceViewerStore((s) => s.open);
   const { fileName, executionState, currentStep } = useWorkflowStore();
   const hasPrompts = useWorkflowStore((s) => s.steps.length > 0);
   const {
@@ -269,6 +271,17 @@ export const Header: React.FC<{
             isPaused={isPaused}
             onAction={handleUndoRedoAction}
           />
+          {/* Workspace Explorer button — standalone (browser) mode only */}
+          {isStandalone && (
+            <button
+              className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              onClick={openWorkspaceViewer}
+              title="Explore files and changes"
+              aria-label="Explore files and changes"
+            >
+              <i className="codicon codicon-files" />
+            </button>
+          )}
           {/* Settings button */}
           <button
             className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${

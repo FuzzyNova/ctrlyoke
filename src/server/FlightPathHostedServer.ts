@@ -43,6 +43,7 @@ import {
   WebPushService,
   type WebPushSubscriptionPayload,
 } from "./WebPushService";
+import { HostedWorkspaceViewerService } from "./HostedWorkspaceViewerService";
 
 export class FlightPathHostedServer
   implements IDashboardProvider, IDashboardSink
@@ -65,6 +66,7 @@ export class FlightPathHostedServer
   private readonly tlsCertPath: string | undefined;
   private publicUrl?: string;
   private availableIps: string[] = [];
+  private readonly viewerService: HostedWorkspaceViewerService;
 
   constructor(
     private hub: DashboardBroadcastHub,
@@ -78,6 +80,7 @@ export class FlightPathHostedServer
   ) {
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
     this.webPushService = new WebPushService(workspaceRoot);
+    this.viewerService = new HostedWorkspaceViewerService(workspaceRoot);
     if (tlsConfig) {
       const cert = fs.readFileSync(tlsConfig.certPath);
       const key = fs.readFileSync(tlsConfig.keyPath);
@@ -570,6 +573,201 @@ export class FlightPathHostedServer
         files: findWorkflowFilesInWorkspace(this.workspaceRoot),
       });
     });
+
+    // ── Workspace Viewer API ────────────────────────────────────────────────
+
+    this.app.get(
+      "/api/workspace-viewer/tree",
+      requireToken,
+      async (req, res) => {
+        const dirPath =
+          typeof req.query.path === "string" ? req.query.path : "";
+        try {
+          res.json(await this.viewerService.listDirectory(dirPath));
+        } catch (err) {
+          Log.error(`workspace-viewer /tree error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.get(
+      "/api/workspace-viewer/file",
+      requireToken,
+      async (req, res) => {
+        const filePath =
+          typeof req.query.path === "string" ? req.query.path : "";
+        if (!filePath) {
+          res.status(400).json({ error: "path is required" });
+          return;
+        }
+        try {
+          res.json(await this.viewerService.readFile(filePath));
+        } catch (err) {
+          Log.error(`workspace-viewer GET /file error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.put(
+      "/api/workspace-viewer/file",
+      requireToken,
+      express.json({ limit: "5mb" }),
+      async (req, res) => {
+        const body = req.body as { path?: unknown; content?: unknown };
+        if (typeof body.path !== "string" || typeof body.content !== "string") {
+          res.status(400).json({ error: "path and content are required" });
+          return;
+        }
+        try {
+          await this.viewerService.saveFile({
+            path: body.path,
+            content: body.content,
+          });
+          res.json({});
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message === "Path not allowed") {
+            res.status(403).json({ error: message });
+          } else {
+            Log.error(`workspace-viewer PUT /file error: ${message}`);
+            res.status(500).json({ error: "Internal server error" });
+          }
+        }
+      }
+    );
+
+    this.app.get(
+      "/api/workspace-viewer/status",
+      requireToken,
+      async (_req, res) => {
+        try {
+          res.json(await this.viewerService.getStatus());
+        } catch (err) {
+          Log.error(`workspace-viewer /status error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.get(
+      "/api/workspace-viewer/diff",
+      requireToken,
+      async (req, res) => {
+        const filePath =
+          typeof req.query.path === "string" ? req.query.path : "";
+        if (!filePath) {
+          res.status(400).json({ error: "path is required" });
+          return;
+        }
+        try {
+          res.json(await this.viewerService.getDiff(filePath));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message === "Path not allowed") {
+            res.status(403).json({ error: message });
+          } else {
+            Log.error(`workspace-viewer /diff error: ${message}`);
+            res.status(500).json({ error: "Internal server error" });
+          }
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/stage",
+      requireToken,
+      async (req, res) => {
+        const body = req.body as { path?: unknown };
+        if (typeof body.path !== "string") {
+          res.status(400).json({ error: "path is required" });
+          return;
+        }
+        try {
+          await this.viewerService.stageFile(body.path);
+          res.json({});
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message === "Path not allowed") {
+            res.status(403).json({ error: message });
+          } else {
+            Log.error(`workspace-viewer /stage error: ${message}`);
+            res.status(500).json({ error: "Internal server error" });
+          }
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/unstage",
+      requireToken,
+      async (req, res) => {
+        const body = req.body as { path?: unknown };
+        if (typeof body.path !== "string") {
+          res.status(400).json({ error: "path is required" });
+          return;
+        }
+        try {
+          await this.viewerService.unstageFile(body.path);
+          res.json({});
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message === "Path not allowed") {
+            res.status(403).json({ error: message });
+          } else {
+            Log.error(`workspace-viewer /unstage error: ${message}`);
+            res.status(500).json({ error: "Internal server error" });
+          }
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/commit",
+      requireToken,
+      async (req, res) => {
+        const body = req.body as { message?: unknown };
+        if (typeof body.message !== "string" || !body.message.trim()) {
+          res.status(400).json({ error: "message is required" });
+          return;
+        }
+        try {
+          await this.viewerService.commit(body.message);
+          res.json({});
+        } catch (err) {
+          Log.error(`workspace-viewer /commit error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/push",
+      requireToken,
+      async (_req, res) => {
+        try {
+          res.json(await this.viewerService.push());
+        } catch (err) {
+          Log.error(`workspace-viewer /push error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/pull",
+      requireToken,
+      async (_req, res) => {
+        try {
+          res.json(await this.viewerService.pull());
+        } catch (err) {
+          Log.error(`workspace-viewer /pull error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
     // SPA fallback: any unmatched route gets the patched index.html (token required).
     this.app.use(requireToken, (req, res) => {
       this.setNoStore(res);

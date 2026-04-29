@@ -36,6 +36,7 @@ import {
   GlobalSettingsDrawer,
   StartupOverlay,
 } from "./components/layout";
+import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
 
 function App() {
   const vscode = useVsCodeApi();
@@ -595,6 +596,9 @@ function App() {
         {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
         <StartupOverlay />
 
+        {/* Workspace viewer — fixed fullscreen overlay, standalone mode only */}
+        <WorkspaceViewerModal />
+
         {/* iOS safe area spacer — lifts all content above the home indicator.
             height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.
             Placing it here (flex sibling of the main content area) means every
@@ -766,6 +770,9 @@ function App() {
 
       {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
       <StartupOverlay />
+
+      {/* Workspace viewer — fixed fullscreen overlay, standalone mode only */}
+      <WorkspaceViewerModal />
 
       {/* iOS safe area spacer — see mobile layout comment above */}
       <div className="safe-area-spacer" aria-hidden="true" />

@@ -18,6 +18,7 @@ export {
 } from "./editorStore";
 export { useSettingsStore } from "./settingsStore";
 export { useTerminalStore } from "./terminalStore";
+export { useWorkspaceViewerStore } from "./workspaceViewerStore";
 export type { TerminalSession, SessionKind } from "./terminalStore";
 
 // Types from workflowStore

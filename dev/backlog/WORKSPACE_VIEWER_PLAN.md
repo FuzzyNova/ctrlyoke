@@ -86,13 +86,23 @@ Evaluated `react-file-explorer`, `react-accessible-treeview`, and `react-complex
 
 ### Entry point
 
-Add a new header button, visible only when `isStandalone === true`.
+Add an icon button to `Header.tsx` left section, visible only when `isStandalone === true`.
 
-- Label option: `Workspace Viewer`
-- Icon-only option: `codicon-files`
-- Recommendation: icon button with tooltip `Workspace Viewer`
+- **Icon**: `codicon-files`
+- **Tooltip / aria-label**: `Explore files and changes`
+- **Position**: between the UndoRedoControl and the Settings button
 
-The button should not render in the VS Code panel. Hiding only the button is enough for UX, but the backing hosted routes should still remain isolated and token-protected.
+The updated left-section button order becomes:
+
+```
+[New ▾]  [Save]  [Undo/Redo]  [Explorer]  [Settings]
+```
+
+This matches the `header-left` div in `Header.tsx`, which currently orders:
+`WorkflowControls → Save → UndoRedoControl → Settings`.
+The new order is: `WorkflowControls → Save → UndoRedoControl → Explorer → Settings`.
+
+The button should not render in the VS Code panel. Hiding only the button is sufficient for UX; the backing hosted routes remain isolated and token-protected regardless.
 
 ### Modal layout
 
@@ -642,10 +652,24 @@ The feature should be browser-only at the UI layer and hosted-only at the data l
 
 ### UI gate
 
-In `Header.tsx`:
+In `Header.tsx`, in the `header-left` div after the Save button and before the Settings button:
 
-- import `isStandalone`
-- render the workspace viewer button only when `isStandalone` is true
+```tsx
+{isStandalone && (
+  <button
+    className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+    onClick={openWorkspaceViewer}
+    title="Explore files and changes"
+    aria-label="Explore files and changes"
+  >
+    <i className="codicon codicon-files" />
+  </button>
+)}
+```
+
+`isStandalone` is already exported from `hooks/useVsCodeApi.ts`. `openWorkspaceViewer` calls `workspaceViewerStore.open()`.
+
+The Settings button moves to the rightmost position in the left group (after Explorer), which is its conventional anchor position.
 
 ### Data gate
 
