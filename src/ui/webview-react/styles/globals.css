@@ -61,6 +61,13 @@
   /* Button foreground — used in Header.tsx execution state badge text */
   --btn-fg: var(--vscode-button-foreground);
 
+  /* Elevated dropdown surface — used for expanded custom dropdown menus.
+     This stays visible even when themes omit dropdown borders. */
+  --fp-dropdown-popup-shadow:
+    0 0 0 1px var(--vscode-contrastBorder, transparent),
+    0 12px 28px -12px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.45)),
+    0 6px 16px -10px rgba(0, 0, 0, 0.35);
+
   /* Execution state badge backgrounds — used in Header.tsx.
      Chain through terminal ANSI colors as they are defined in virtually all themes. */
   --status-success: var(
@@ -436,6 +443,12 @@ button .codicon {
            text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg
            transition-colors duration-100
            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-description-fg;
+  }
+
+  /* Shared elevated surface for custom dropdown popups rendered in portals. */
+  .fp-dropdown-popup {
+    @apply rounded overflow-hidden;
+    box-shadow: var(--fp-dropdown-popup-shadow);
   }
 }
 

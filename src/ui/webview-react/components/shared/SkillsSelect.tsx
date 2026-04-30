@@ -229,7 +229,7 @@ export const SkillsSelect: React.FC<{
         createPortal(
           <div
             ref={popupRef}
-            className="fixed bg-dropdown-bg border border-dropdown-border z-[9999] shadow-lg flex flex-col"
+            className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-[9999] flex flex-col"
             style={{
               top: popupPos.top,
               bottom: popupPos.bottom,
