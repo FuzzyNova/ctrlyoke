@@ -471,7 +471,7 @@
         },
         "confirmDeleteOperations": {
           "type": "boolean",
-          "description": "Show a confirmation dialog before deleting prompts or workflow history."
+          "description": "Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files."
         },
         "confirmResetOperations": {
           "type": "boolean",

@@ -75,6 +75,10 @@ export interface WorkspaceUnstageRequest {
   path: string;
 }
 
+export interface WorkspaceDiscardRequest {
+  path: string;
+}
+
 export interface WorkspaceCommitRequest {
   message: string;
 }

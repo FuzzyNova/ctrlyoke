@@ -1,10 +1,26 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { workspaceStatus, workspaceDiff, workspaceStage, workspaceUnstage } from "@utils/hostedApi";
+import { MESSAGE_TYPES } from "@/types/messages";
 import { useIsMobile } from "@hooks/useMediaQuery";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useSettingsStore } from "@store/settingsStore";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import {
+  workspaceDiff,
+  workspaceDiscard,
+  workspaceStage,
+  workspaceStatus,
+  workspaceUnstage,
+} from "@utils/hostedApi";
 import type { SourceControlFile } from "@root/types/HostedWorkspaceViewerTypes";
+import { Button } from "../shared/Button";
+import { Modal } from "../shared/Modal";
 import { WorkspaceCommitArea } from "./WorkspaceCommitArea";
 import { WorkspaceDiffPane } from "./WorkspaceDiffPane";
+
+interface PendingDiscardAction {
+  paths: string[];
+  untrackedCount: number;
+}
 
 function getStatusBadge(file: SourceControlFile): string {
   if (file.kind === "added") return "A";
@@ -15,6 +31,7 @@ function getStatusBadge(file: SourceControlFile): string {
 }
 
 export const WorkspaceSourceControlPane: React.FC = () => {
+  const vscode = useVsCodeApi();
   const sourceControlFiles = useWorkspaceViewerStore((s) => s.sourceControlFiles);
   const selectedDiffPath = useWorkspaceViewerStore((s) => s.selectedDiffPath);
   const sourceControlLoading = useWorkspaceViewerStore((s) => s.sourceControlLoading);
@@ -24,24 +41,32 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const setDiffData = useWorkspaceViewerStore((s) => s.setDiffData);
   const setDiffLoading = useWorkspaceViewerStore((s) => s.setDiffLoading);
   const setScmError = useWorkspaceViewerStore((s) => s.setScmError);
+  const confirmDeleteOperations = useSettingsStore(
+    (s) => s.globalSettings.confirmDeleteOperations
+  );
 
   const isMobile = useIsMobile();
   const [mobileDiffVisible, setMobileDiffVisible] = useState(false);
+  const [pendingDiscard, setPendingDiscard] =
+    useState<PendingDiscardAction | null>(null);
+  const [dontWarnAgain, setDontWarnAgain] = useState(false);
 
-  const loadStatus = useCallback(async () => {
+  const loadStatus = useCallback(async (): Promise<SourceControlFile[]> => {
     setSourceControlLoading(true);
     try {
       const result = await workspaceStatus();
       setSourceControlFiles(result.files);
+      return result.files;
     } catch (err) {
       setScmError(String(err));
+      return [];
     } finally {
       setSourceControlLoading(false);
     }
-  }, [setSourceControlLoading, setSourceControlFiles, setScmError]);
+  }, [setScmError, setSourceControlFiles, setSourceControlLoading]);
 
   useEffect(() => {
-    loadStatus();
+    void loadStatus();
     // Intentional: run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -60,7 +85,27 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         setDiffLoading(false);
       }
     },
-    [selectDiff, setDiffLoading, isMobile, setDiffData, setScmError]
+    [isMobile, selectDiff, setDiffData, setDiffLoading, setScmError]
+  );
+
+  const refreshAfterMutation = useCallback(
+    async (affectedPaths: string[]) => {
+      const files = await loadStatus();
+      if (!selectedDiffPath || !affectedPaths.includes(selectedDiffPath)) {
+        return;
+      }
+
+      const selectedStillExists = files.some((file) => file.path === selectedDiffPath);
+      if (!selectedStillExists) {
+        if (isMobile) {
+          setMobileDiffVisible(false);
+        }
+        return;
+      }
+
+      await selectFileDiff(selectedDiffPath);
+    },
+    [isMobile, loadStatus, selectFileDiff, selectedDiffPath]
   );
 
   const handleStage = useCallback(
@@ -87,13 +132,51 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     [loadStatus, setScmError]
   );
 
+  const performDiscard = useCallback(
+    async (paths: string[]) => {
+      try {
+        for (const filePath of paths) {
+          await workspaceDiscard({ path: filePath });
+        }
+        await refreshAfterMutation(paths);
+      } catch (err) {
+        setScmError(String(err));
+      }
+    },
+    [refreshAfterMutation, setScmError]
+  );
+
   const staged = sourceControlFiles.filter((f) => f.stagedStatus !== null);
   const changed = sourceControlFiles.filter((f) => f.unstagedStatus !== null);
 
+  const openDiscardWarning = useCallback(
+    (paths: string[], untrackedCount: number) => {
+      setDontWarnAgain(!confirmDeleteOperations);
+      setPendingDiscard({ paths, untrackedCount });
+    },
+    [confirmDeleteOperations]
+  );
+
+  const requestDiscard = useCallback(
+    (paths: string[]) => {
+      const untrackedCount = sourceControlFiles.filter(
+        (file) => paths.includes(file.path) && file.kind === "untracked"
+      ).length;
+
+      if (untrackedCount > 0 && confirmDeleteOperations) {
+        openDiscardWarning(paths, untrackedCount);
+        return;
+      }
+
+      void performDiscard(paths);
+    },
+    [confirmDeleteOperations, openDiscardWarning, performDiscard, sourceControlFiles]
+  );
+
   const handleStageAll = useCallback(async () => {
     try {
-      for (const f of changed) {
-        await workspaceStage({ path: f.path });
+      for (const file of changed) {
+        await workspaceStage({ path: file.path });
       }
       await loadStatus();
     } catch (err) {
@@ -101,74 +184,168 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     }
   }, [changed, loadStatus, setScmError]);
 
+  const handleDiscardAll = useCallback(() => {
+    requestDiscard(changed.map((file) => file.path));
+  }, [changed, requestDiscard]);
+
   const handleUnstageAll = useCallback(async () => {
     try {
-      for (const f of staged) {
-        await workspaceUnstage({ path: f.path });
+      for (const file of staged) {
+        await workspaceUnstage({ path: file.path });
       }
       await loadStatus();
     } catch (err) {
       setScmError(String(err));
     }
-  }, [staged, loadStatus, setScmError]);
+  }, [loadStatus, setScmError, staged]);
 
-  // ---------------------------------------------------------------------------
-  // File row renderer
-  // ---------------------------------------------------------------------------
+  const handleDiscardCheckboxChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const checked = e.target.checked;
+      setDontWarnAgain(checked);
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_CONFIRM_DELETE,
+        value: !checked,
+      });
+    },
+    [vscode]
+  );
+
+  const handleConfirmDiscard = useCallback(() => {
+    const action = pendingDiscard;
+    setPendingDiscard(null);
+    if (action) {
+      void performDiscard(action.paths);
+    }
+  }, [pendingDiscard, performDiscard]);
+
+  const discardMessage =
+    pendingDiscard?.untrackedCount === 1
+      ? "Discarding will delete this untracked file from disk."
+      : `Discarding will delete ${pendingDiscard?.untrackedCount ?? 0} untracked files from disk.`;
+  const discardDetail =
+    pendingDiscard &&
+    pendingDiscard.paths.length > pendingDiscard.untrackedCount
+      ? "Tracked files in the same discard action will be restored to their Git state."
+      : undefined;
 
   const renderFileRow = (file: SourceControlFile, isStaged: boolean) => {
     const badge = getStatusBadge(file);
     const isSelected = selectedDiffPath === file.path;
+    const badgeStyle = {
+      color: isStaged
+        ? "var(--vscode-gitDecoration-addedResourceForeground, #81b88b)"
+        : "var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d)",
+    };
 
     return (
-      <button
+      <div
         key={`${isStaged ? "staged" : "changed"}-${file.path}`}
-        onClick={() => selectFileDiff(file.path)}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 min-h-[44px] sm:min-h-0 text-sm text-left hover:bg-list-hover-bg transition-colors ${
-          isSelected ? "bg-list-active-bg" : ""
-        }`}
-        title={file.path}
+        className={`flex items-center gap-1 px-2 py-1 ${
+          isSelected ? "bg-list-active-bg" : "hover:bg-list-hover-bg"
+        } transition-colors`}
       >
-        <span
-          className={`text-xs font-mono font-bold flex-shrink-0 ${
-            isStaged
-              ? "text-[var(--vscode-gitDecoration-addedResourceForeground,#81b88b)]"
-              : "text-[var(--vscode-gitDecoration-modifiedResourceForeground,#e2c08d)]"
-          }`}
+        <button
+          onClick={() => selectFileDiff(file.path)}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-sm text-editor-fg"
+          title={file.path}
         >
-          {badge}
-        </span>
-        <span className="flex-1 truncate text-editor-fg text-xs min-w-0">
-          {file.path}
-        </span>
-        {isStaged ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleUnstage(file.path);
-            }}
-            className="codicon codicon-dash text-xs opacity-60 hover:opacity-100 flex-shrink-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center p-1"
-            title="Unstage"
-            aria-label="Unstage"
-          />
-        ) : (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleStage(file.path);
-            }}
-            className="codicon codicon-plus text-xs opacity-60 hover:opacity-100 flex-shrink-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center p-1"
-            title="Stage"
-            aria-label="Stage"
-          />
-        )}
-      </button>
+          <span className="flex-shrink-0 text-xs font-mono font-bold" style={badgeStyle}>
+            {badge}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs">{file.path}</span>
+        </button>
+
+        <div className="flex items-center">
+          {!isStaged && (
+            <button
+              onClick={() => requestDiscard([file.path])}
+              className="codicon codicon-discard flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center p-1 text-xs opacity-60 hover:opacity-100 sm:min-h-0 sm:min-w-0"
+              title="Discard changes"
+              aria-label="Discard changes"
+            />
+          )}
+
+          {isStaged ? (
+            <button
+              onClick={() => handleUnstage(file.path)}
+              className="codicon codicon-dash flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center p-1 text-xs opacity-60 hover:opacity-100 sm:min-h-0 sm:min-w-0"
+              title="Unstage"
+              aria-label="Unstage"
+            />
+          ) : (
+            <button
+              onClick={() => handleStage(file.path)}
+              className="codicon codicon-plus flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center p-1 text-xs opacity-60 hover:opacity-100 sm:min-h-0 sm:min-w-0"
+              title="Stage"
+              aria-label="Stage"
+            />
+          )}
+        </div>
+      </div>
     );
   };
 
-  // ---------------------------------------------------------------------------
-  // Left column (commit area + file lists)
-  // ---------------------------------------------------------------------------
+  const sourceControlSections = (
+    <>
+      <div>
+        <div className="flex items-center justify-between px-3 py-1.5">
+          <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
+            Staged ({staged.length})
+          </span>
+          {staged.length > 0 && (
+            <button
+              onClick={handleUnstageAll}
+              className="text-xs text-btn-fg hover:underline"
+            >
+              Unstage All
+            </button>
+          )}
+        </div>
+        {staged.length === 0 ? (
+          <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
+            No staged files
+          </p>
+        ) : (
+          <div>{staged.map((file) => renderFileRow(file, true))}</div>
+        )}
+      </div>
+
+      <div className="border-t border-panel-border" />
+
+      <div>
+        <div className="flex items-center justify-between px-3 py-1.5">
+          <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
+            Changes ({changed.length})
+          </span>
+          {changed.length > 0 && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleDiscardAll}
+                className="inline-flex items-center gap-1 text-xs text-btn-fg hover:underline"
+              >
+                <i className="codicon codicon-discard text-xs" />
+                <span>Discard All</span>
+              </button>
+              <button
+                onClick={handleStageAll}
+                className="text-xs text-btn-fg hover:underline"
+              >
+                Stage All
+              </button>
+            </div>
+          )}
+        </div>
+        {changed.length === 0 ? (
+          <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
+            No changes
+          </p>
+        ) : (
+          <div>{changed.map((file) => renderFileRow(file, false))}</div>
+        )}
+      </div>
+    </>
+  );
 
   const leftColumn = (
     <div className="w-64 flex-shrink-0 flex flex-col border-r border-panel-border overflow-y-auto">
@@ -181,64 +358,10 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           <span className="text-xs">Refreshing…</span>
         </div>
       ) : (
-        <>
-          {/* Staged section */}
-          <div>
-            <div className="flex items-center justify-between px-3 py-1.5">
-              <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
-                Staged ({staged.length})
-              </span>
-              {staged.length > 0 && (
-                <button
-                  onClick={handleUnstageAll}
-                  className="text-xs text-btn-fg hover:underline"
-                >
-                  Unstage All
-                </button>
-              )}
-            </div>
-            {staged.length === 0 ? (
-              <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
-                No staged files
-              </p>
-            ) : (
-              <div>{staged.map((f) => renderFileRow(f, true))}</div>
-            )}
-          </div>
-
-          <div className="border-t border-panel-border" />
-
-          {/* Changes section */}
-          <div>
-            <div className="flex items-center justify-between px-3 py-1.5">
-              <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
-                Changes ({changed.length})
-              </span>
-              {changed.length > 0 && (
-                <button
-                  onClick={handleStageAll}
-                  className="text-xs text-btn-fg hover:underline"
-                >
-                  Stage All
-                </button>
-              )}
-            </div>
-            {changed.length === 0 ? (
-              <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
-                No changes
-              </p>
-            ) : (
-              <div>{changed.map((f) => renderFileRow(f, false))}</div>
-            )}
-          </div>
-        </>
+        sourceControlSections
       )}
     </div>
   );
-
-  // ---------------------------------------------------------------------------
-  // Mobile diff view (full-screen when a file is selected)
-  // ---------------------------------------------------------------------------
 
   if (isMobile && mobileDiffVisible) {
     return (
@@ -262,86 +385,116 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Mobile: show only left column (file list + commit)
-  // ---------------------------------------------------------------------------
-
   if (isMobile) {
     return (
-      <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-y-auto flex flex-col">
-          <WorkspaceCommitArea onRefresh={loadStatus} />
-          <div className="border-t border-panel-border" />
+      <>
+        <div className="flex flex-col h-full overflow-hidden">
+          <div className="flex-1 overflow-y-auto flex flex-col">
+            <WorkspaceCommitArea onRefresh={loadStatus} />
+            <div className="border-t border-panel-border" />
 
-          {sourceControlLoading ? (
-            <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
-              <i className="codicon codicon-loading animate-spin text-sm" />
-              <span className="text-xs">Refreshing…</span>
-            </div>
-          ) : (
-            <>
-              <div>
-                <div className="flex items-center justify-between px-3 py-1.5">
-                  <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
-                    Staged ({staged.length})
-                  </span>
-                  {staged.length > 0 && (
-                    <button
-                      onClick={handleUnstageAll}
-                      className="text-xs text-btn-fg hover:underline"
-                    >
-                      Unstage All
-                    </button>
-                  )}
-                </div>
-                {staged.length === 0 ? (
-                  <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
-                    No staged files
-                  </p>
-                ) : (
-                  <div>{staged.map((f) => renderFileRow(f, true))}</div>
-                )}
+            {sourceControlLoading ? (
+              <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
+                <i className="codicon codicon-loading animate-spin text-sm" />
+                <span className="text-xs">Refreshing…</span>
               </div>
-              <div className="border-t border-panel-border" />
-              <div>
-                <div className="flex items-center justify-between px-3 py-1.5">
-                  <span className="text-xs font-semibold uppercase text-editor-fg opacity-60">
-                    Changes ({changed.length})
-                  </span>
-                  {changed.length > 0 && (
-                    <button
-                      onClick={handleStageAll}
-                      className="text-xs text-btn-fg hover:underline"
-                    >
-                      Stage All
-                    </button>
-                  )}
-                </div>
-                {changed.length === 0 ? (
-                  <p className="px-3 pb-2 text-xs text-editor-fg opacity-40 select-none">
-                    No changes
-                  </p>
-                ) : (
-                  <div>{changed.map((f) => renderFileRow(f, false))}</div>
-                )}
-              </div>
-            </>
-          )}
+            ) : (
+              sourceControlSections
+            )}
+          </div>
         </div>
-      </div>
+
+        <Modal
+          isOpen={pendingDiscard !== null}
+          onClose={() => setPendingDiscard(null)}
+          title={
+            pendingDiscard?.untrackedCount === 1
+              ? "Delete Untracked File?"
+              : "Delete Untracked Files?"
+          }
+          size="sm"
+          footer={
+            <>
+              <Button variant="secondary" size="md" onClick={() => setPendingDiscard(null)}>
+                Cancel
+              </Button>
+              <Button variant="danger" size="md" onClick={handleConfirmDiscard}>
+                Discard
+              </Button>
+            </>
+          }
+        >
+          <p className="text-foreground">{discardMessage}</p>
+          {discardDetail && (
+            <p className="mt-2 text-sm text-description-fg">{discardDetail}</p>
+          )}
+          <label
+            htmlFor="discard-untracked-dont-warn-mobile"
+            className="mt-4 flex cursor-pointer items-center gap-2 select-none text-sm text-description-fg transition-colors hover:text-foreground"
+          >
+            <input
+              id="discard-untracked-dont-warn-mobile"
+              type="checkbox"
+              checked={dontWarnAgain}
+              onChange={handleDiscardCheckboxChange}
+              aria-label="Don't warn me again before deleting untracked files"
+              className="h-3.5 w-3.5 cursor-pointer accent-button-bg"
+            />
+            Don't warn me again
+          </label>
+        </Modal>
+      </>
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Wide viewport: two-column layout
-  // ---------------------------------------------------------------------------
-
   return (
-    <div className="flex h-full overflow-hidden">
-      {leftColumn}
-      <div className="flex-1 overflow-hidden">
-        <WorkspaceDiffPane />
+    <>
+      <div className="flex h-full overflow-hidden">
+        {leftColumn}
+        <div className="flex-1 overflow-hidden">
+          <WorkspaceDiffPane />
+        </div>
       </div>
-    </div>
+
+      <Modal
+        isOpen={pendingDiscard !== null}
+        onClose={() => setPendingDiscard(null)}
+        title={
+          pendingDiscard?.untrackedCount === 1
+            ? "Delete Untracked File?"
+            : "Delete Untracked Files?"
+        }
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" size="md" onClick={() => setPendingDiscard(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" size="md" onClick={handleConfirmDiscard}>
+              Discard
+            </Button>
+          </>
+        }
+      >
+        <p className="text-foreground">{discardMessage}</p>
+        {discardDetail && (
+          <p className="mt-2 text-sm text-description-fg">{discardDetail}</p>
+        )}
+        <label
+          htmlFor="discard-untracked-dont-warn"
+          className="mt-4 flex cursor-pointer items-center gap-2 select-none text-sm text-description-fg transition-colors hover:text-foreground"
+        >
+          <input
+            id="discard-untracked-dont-warn"
+            type="checkbox"
+            checked={dontWarnAgain}
+            onChange={handleDiscardCheckboxChange}
+            aria-label="Don't warn me again before deleting untracked files"
+            className="h-3.5 w-3.5 cursor-pointer accent-button-bg"
+          />
+          Don't warn me again
+        </label>
+      </Modal>
+    </>
   );
 };

@@ -86,7 +86,7 @@ export function GeneralSection({
       />
       <SettingToggleRow
         label="Confirm delete operations"
-        description="Show a confirmation dialog before deleting prompts."
+        description="Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files."
         checked={ui.confirmDeleteOperations}
         onChange={(v) => onUpdate("ui.confirmDeleteOperations", v)}
         path="ui.confirmDeleteOperations"

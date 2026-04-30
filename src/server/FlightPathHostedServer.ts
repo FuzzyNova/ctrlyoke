@@ -724,6 +724,30 @@ export class FlightPathHostedServer
     );
 
     this.app.post(
+      "/api/workspace-viewer/discard",
+      requireToken,
+      async (req, res) => {
+        const body = req.body as { path?: unknown };
+        if (typeof body.path !== "string") {
+          res.status(400).json({ error: "path is required" });
+          return;
+        }
+        try {
+          await this.viewerService.discardFile(body.path);
+          res.json({});
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message === "Path not allowed") {
+            res.status(403).json({ error: message });
+          } else {
+            Log.error(`workspace-viewer /discard error: ${message}`);
+            res.status(500).json({ error: "Internal server error" });
+          }
+        }
+      }
+    );
+
+    this.app.post(
       "/api/workspace-viewer/commit",
       requireToken,
       async (req, res) => {

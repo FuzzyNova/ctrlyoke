@@ -320,6 +320,10 @@ export interface InitMessageData {
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];
     autoFocusOutputOnExecution?: boolean;
+    respectGitignore?: boolean;
+    confirmDeleteOperations?: boolean;
+    confirmResetOperations?: boolean;
+    showHiddenFiles?: boolean;
     terminal?: TerminalSettings;
   };
   workflowProperties: Record<string, any>;

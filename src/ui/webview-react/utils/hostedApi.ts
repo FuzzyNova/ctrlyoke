@@ -6,6 +6,7 @@ import type {
   WorkspaceScmDiffResponse,
   WorkspaceStageRequest,
   WorkspaceUnstageRequest,
+  WorkspaceDiscardRequest,
   WorkspaceCommitRequest,
   WorkspacePushResponse,
   WorkspacePullResponse,
@@ -101,6 +102,15 @@ export async function workspaceUnstage(
   req: WorkspaceUnstageRequest
 ): Promise<void> {
   return hostedFetch<void>("/api/workspace-viewer/unstage", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export async function workspaceDiscard(
+  req: WorkspaceDiscardRequest
+): Promise<void> {
+  return hostedFetch<void>("/api/workspace-viewer/discard", {
     method: "POST",
     body: JSON.stringify(req),
   });

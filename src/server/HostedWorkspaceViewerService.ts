@@ -83,6 +83,10 @@ function toGitPath(p: string): string {
   return p.split(path.sep).join("/");
 }
 
+function normalizeScmPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
 export class HostedWorkspaceViewerService {
   constructor(private readonly workspaceRoot: string) {}
 
@@ -362,7 +366,12 @@ export class HostedWorkspaceViewerService {
           kind = "modified";
         }
 
-        return { path: filePath, stagedStatus, unstagedStatus, kind };
+        return {
+          path: normalizeScmPath(filePath),
+          stagedStatus,
+          unstagedStatus,
+          kind,
+        };
       });
   }
 
@@ -375,12 +384,15 @@ export class HostedWorkspaceViewerService {
     }
 
     const relPath = this.relativePath(resolved);
+    const normalizedRelPath = normalizeScmPath(relPath);
     const gitPath = toGitPath(relPath);
     const language = languageFromPath(resolved);
 
     // Determine kind from status
     const status = await this.getStatus();
-    const fileStatus = status.files.find((f) => f.path === relPath);
+    const fileStatus = status.files.find(
+      (f) => normalizeScmPath(f.path) === normalizedRelPath
+    );
     const kind: DiffKind = fileStatus?.kind ?? "modified";
 
     const oldContent = await this.getHeadContent(gitPath);
@@ -394,7 +406,13 @@ export class HostedWorkspaceViewerService {
       }
     }
 
-    return { path: relPath, language, oldContent, newContent, kind };
+    return {
+      path: fileStatus?.path ?? normalizedRelPath,
+      language,
+      oldContent,
+      newContent,
+      kind,
+    };
   }
 
   private async getHeadContent(gitRelPath: string): Promise<string> {
@@ -430,6 +448,36 @@ export class HostedWorkspaceViewerService {
     await execFileAsync(
       "git",
       ["-C", this.workspaceRoot, "restore", "--staged", "--", relPath],
+      { timeout: GIT_TIMEOUT_MS }
+    );
+  }
+
+  async discardFile(filePath: string): Promise<void> {
+    const resolved = this.safeResolve(filePath);
+    if (!resolved) throw new Error("Path not allowed");
+
+    const relPath = this.relativePath(resolved);
+    const normalizedRelPath = normalizeScmPath(relPath);
+    const status = await this.getStatus();
+    const fileStatus = status.files.find(
+      (file) => normalizeScmPath(file.path) === normalizedRelPath
+    );
+
+    if (fileStatus?.kind === "untracked") {
+      await fs.promises.rm(resolved, { recursive: true, force: true });
+      return;
+    }
+
+    await execFileAsync(
+      "git",
+      [
+        "-C",
+        this.workspaceRoot,
+        "restore",
+        "--worktree",
+        "--",
+        toGitPath(relPath),
+      ],
       { timeout: GIT_TIMEOUT_MS }
     );
   }
