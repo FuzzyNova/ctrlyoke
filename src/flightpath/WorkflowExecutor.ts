@@ -1462,10 +1462,13 @@ export class WorkflowExecutor {
    * is parked in `pendingResponseResolver` and the promise stays open until
    * `resumePendingResponse()` is called.
    *
-   * Exception: if this is the last queue step (no next step to pause before),
-   * the response is resolved immediately even when paused. The executor then
-   * calls `finalizeWorkflowExecution()` which transitions to COMPLETED instead
-   * of leaving the workflow stuck in PAUSED with no way to make progress.
+   * Exception: if this is the exact last queue step (currentIndex ===
+   * steps.length - 1), the response is resolved immediately even when paused.
+   * The executor then calls `finalizeWorkflowExecution()` which transitions to
+   * COMPLETED instead of leaving the workflow stuck in PAUSED indefinitely.
+   * The finalStep is intentionally excluded from this exception — its response
+   * is parked normally so `resumePendingResponse()` can continue the same
+   * execute() call on resume without re-triggering the AI.
    *
    * There is intentionally no per-prompt timeout here. Complex prompts (large
    * refactors, full audits) can legitimately run for hours. The workflow-level
@@ -1489,11 +1492,16 @@ export class WorkflowExecutor {
 
           if (this.getRuntime().status === EXECUTION_STATES.PAUSED) {
             // Park the response only when there is a next step to pause before.
-            // If this is the last step, resolve immediately so finalizeWorkflowExecution
-            // can complete the workflow rather than leaving it stuck in PAUSED forever.
+            // For the last queue step specifically (currentIndex === steps.length - 1),
+            // resolve immediately so finalizeWorkflowExecution can complete the workflow
+            // rather than leaving it stuck in PAUSED forever.
+            // The finalStep (currentIndex === steps.length) is intentionally excluded:
+            // its response must be parked so resume can continue the same execute()
+            // call via resumePendingResponse() without re-triggering the AI.
             const state = this.promptQueue.getState();
-            const isLastStep = state.currentIndex >= state.steps.length - 1;
-            if (!isLastStep) {
+            const isLastQueueStep =
+              state.currentIndex === state.steps.length - 1;
+            if (!isLastQueueStep) {
               this.pendingResponseResolver = resolve;
               this.pendingResponseText = responseText;
               this.isWaitingForResponse = false;
