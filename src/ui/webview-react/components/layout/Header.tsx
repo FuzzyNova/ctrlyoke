@@ -78,9 +78,9 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
  * - Control buttons: Run/Pause/Stop based on execution state
  */
 export const Header: React.FC<{
-  onToggleMobilePrompts?: () => void;
-  onToggleMobileSettings?: () => void;
-}> = ({ onToggleMobilePrompts, onToggleMobileSettings }) => {
+  onToggleMobileSteps?: () => void;
+  onToggleMobileWorkflowProps?: () => void;
+}> = ({ onToggleMobileSteps, onToggleMobileWorkflowProps }) => {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
   const openWorkspaceViewer = useWorkspaceViewerStore((s) => s.open);
@@ -92,8 +92,8 @@ export const Header: React.FC<{
     activeWorkflowWorkingFilePath,
     newWorkflowModalOpen,
     closeNewWorkflowModal,
-    mobilePromptsOpen,
-    mobileSettingsOpen,
+    mobileStepsOpen,
+    mobileWorkflowPropsOpen,
     globalSettingsOpen,
     toggleGlobalSettings,
   } = useUiStore();
@@ -311,13 +311,13 @@ export const Header: React.FC<{
           {isMobile && (
             <button
               className={`control-button flex items-center justify-center mr-2 gap-0.5 pl-3.5 pr-2 py-1.5 text-sm rounded-r border-y border-r border-btn-border transition-colors ${
-                mobilePromptsOpen
+                mobileStepsOpen
                   ? "bg-btn-bg text-btn-fg"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               }`}
-              onClick={onToggleMobilePrompts}
-              title="Prompts"
-              aria-label="Toggle prompts panel"
+              onClick={onToggleMobileSteps}
+              title="Steps"
+              aria-label="Toggle steps panel"
             >
               <i className="codicon codicon-list-ordered" />
             </button>
@@ -326,11 +326,11 @@ export const Header: React.FC<{
           {isMobile && (
             <button
               className={`control-button flex items-center justify-center ml-2 gap-0.5 pl-2 pr-3.5 py-1.5 text-sm rounded-l border-y border-l border-btn-border transition-colors ${
-                mobileSettingsOpen
+                mobileWorkflowPropsOpen
                   ? "bg-btn-bg text-btn-fg"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               }`}
-              onClick={onToggleMobileSettings}
+              onClick={onToggleMobileWorkflowProps}
               title="Workflow Properties"
               aria-label="Toggle workflow properties"
             >

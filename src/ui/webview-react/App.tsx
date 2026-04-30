@@ -88,14 +88,18 @@ function App() {
   const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
 
   // Mobile drawer state
-  const mobilePromptsOpen = useUiStore((s) => s.mobilePromptsOpen);
-  const mobilePromptsMode = useUiStore((s) => s.mobilePromptsMode);
-  const mobileSettingsOpen = useUiStore((s) => s.mobileSettingsOpen);
-  const toggleMobilePrompts = useUiStore((s) => s.toggleMobilePrompts);
-  const setMobilePromptsMode = useUiStore((s) => s.setMobilePromptsMode);
-  const toggleMobileSettings = useUiStore((s) => s.toggleMobileSettings);
-  const closeMobilePrompts = useUiStore((s) => s.closeMobilePrompts);
-  const closeMobileSettings = useUiStore((s) => s.closeMobileSettings);
+  const mobileStepsOpen = useUiStore((s) => s.mobileStepsOpen);
+  const mobileStepsMode = useUiStore((s) => s.mobileStepsMode);
+  const mobileWorkflowPropsOpen = useUiStore((s) => s.mobileWorkflowPropsOpen);
+  const toggleMobileSteps = useUiStore((s) => s.toggleMobileSteps);
+  const setMobileStepsMode = useUiStore((s) => s.setMobileStepsMode);
+  const toggleMobileWorkflowProps = useUiStore(
+    (s) => s.toggleMobileWorkflowProps
+  );
+  const closeMobileSteps = useUiStore((s) => s.closeMobileSteps);
+  const closeMobileWorkflowProps = useUiStore(
+    (s) => s.closeMobileWorkflowProps
+  );
 
   const desktop = useDesktopLayout({
     isMobile,
@@ -123,49 +127,48 @@ function App() {
 
   // Sidebar chip rail closing animation state — same pattern as the fullwidth overlay.
   // sidebarAfterClose fires after the collapse animation completes (width 32→0).
-  const sidebarShouldShow =
-    mobilePromptsOpen && mobilePromptsMode === "sidebar";
+  const sidebarShouldShow = mobileStepsOpen && mobileStepsMode === "sidebar";
   const [sidebarChipClosing, setSidebarChipClosing] = useState(false);
   const sidebarAfterClose = useRef<(() => void) | null>(null);
 
   const handlePromptsRequestSidebar = () => {
-    promptsAfterClose.current = () => setMobilePromptsMode("sidebar");
+    promptsAfterClose.current = () => setMobileStepsMode("sidebar");
     setPromptsOverlayClosing(true);
   };
   const handlePromptsRequestClose = () => {
-    promptsAfterClose.current = () => closeMobilePrompts();
+    promptsAfterClose.current = () => closeMobileSteps();
     setPromptsOverlayClosing(true);
   };
   const handleSettingsRequestClose = () => {
-    settingsAfterClose.current = () => closeMobileSettings();
+    settingsAfterClose.current = () => closeMobileWorkflowProps();
     setSettingsOverlayClosing(true);
   };
 
   const handleSidebarExpand = () => {
-    sidebarAfterClose.current = () => setMobilePromptsMode("fullwidth");
+    sidebarAfterClose.current = () => setMobileStepsMode("fullwidth");
     setSidebarChipClosing(true);
   };
 
   // Header toggle handlers — route through close animation when panels are already open.
-  // Calling toggleMobilePrompts/toggleMobileSettings directly skips the animation path.
-  const handleToggleMobilePrompts = () => {
-    if (mobilePromptsOpen && mobilePromptsMode === "fullwidth") {
-      promptsAfterClose.current = () => closeMobilePrompts();
+  // Calling toggleMobileSteps/toggleMobileWorkflowProps directly skips the animation path.
+  const handleToggleMobileSteps = () => {
+    if (mobileStepsOpen && mobileStepsMode === "fullwidth") {
+      promptsAfterClose.current = () => closeMobileSteps();
       setPromptsOverlayClosing(true);
-    } else if (mobilePromptsOpen && mobilePromptsMode === "sidebar") {
-      sidebarAfterClose.current = () => closeMobilePrompts();
+    } else if (mobileStepsOpen && mobileStepsMode === "sidebar") {
+      sidebarAfterClose.current = () => closeMobileSteps();
       setSidebarChipClosing(true);
     } else {
-      toggleMobilePrompts();
+      toggleMobileSteps();
     }
   };
 
-  const handleToggleMobileSettings = () => {
-    if (mobileSettingsOpen) {
-      settingsAfterClose.current = () => closeMobileSettings();
+  const handleToggleMobileWorkflowProps = () => {
+    if (mobileWorkflowPropsOpen) {
+      settingsAfterClose.current = () => closeMobileWorkflowProps();
       setSettingsOverlayClosing(true);
     } else {
-      toggleMobileSettings();
+      toggleMobileWorkflowProps();
     }
   };
 
@@ -194,11 +197,11 @@ function App() {
 
   // Close the settings drawer when switching to desktop — it has no desktop
   // equivalent and would reappear on re-entry to mobile otherwise.
-  // mobilePromptsOpen is NOT reset here so the persisted preference is preserved:
+  // mobileStepsOpen is NOT reset here so the persisted preference is preserved:
   // if steps were open on mobile, they'll still be open when returning to mobile.
   useEffect(() => {
     if (!isMobile) {
-      closeMobileSettings();
+      closeMobileWorkflowProps();
     }
   }, [isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -374,8 +377,8 @@ function App() {
     return (
       <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground border-l border-r relative">
         <Header
-          onToggleMobilePrompts={handleToggleMobilePrompts}
-          onToggleMobileSettings={handleToggleMobileSettings}
+          onToggleMobileSteps={handleToggleMobileSteps}
+          onToggleMobileWorkflowProps={handleToggleMobileWorkflowProps}
         />
 
         {/* Main area — relative container for absolute overlays */}
@@ -486,8 +489,7 @@ function App() {
                     <OutputSection />
 
                     {/* Fullwidth steps — covers the output area only */}
-                    {((mobilePromptsOpen &&
-                      mobilePromptsMode === "fullwidth") ||
+                    {((mobileStepsOpen && mobileStepsMode === "fullwidth") ||
                       promptsOverlayClosing) && (
                       <div
                         className={`absolute inset-0 z-20 bg-editor-bg flex flex-col ${promptsOverlayClosing ? "animate-slide-out-left" : "animate-slide-in-left"}`}
@@ -560,7 +562,7 @@ function App() {
           )}
 
           {/* Settings overlay drawer */}
-          {(mobileSettingsOpen || settingsOverlayClosing) && (
+          {(mobileWorkflowPropsOpen || settingsOverlayClosing) && (
             <>
               {/* Backdrop — tap outside closes (hidden while closing) */}
               {!settingsOverlayClosing && (

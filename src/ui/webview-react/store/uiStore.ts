@@ -233,9 +233,9 @@ interface UiState {
   mcpWorkspaceServersLoading: boolean;
 
   // Mobile drawer/overlay state — persisted so user preference survives restarts
-  mobilePromptsOpen: boolean;
-  mobilePromptsMode: "sidebar" | "fullwidth";
-  mobileSettingsOpen: boolean;
+  mobileStepsOpen: boolean;
+  mobileStepsMode: "sidebar" | "fullwidth";
+  mobileWorkflowPropsOpen: boolean;
 
   // Global settings drawer state
   globalSettingsOpen: boolean;
@@ -394,11 +394,11 @@ interface UiActions {
   setMcpWorkspaceServers: (servers: McpServerConfig[]) => void;
 
   // Mobile drawer actions
-  toggleMobilePrompts: () => void;
-  setMobilePromptsMode: (mode: "sidebar" | "fullwidth") => void;
-  toggleMobileSettings: () => void;
-  closeMobilePrompts: () => void;
-  closeMobileSettings: () => void;
+  toggleMobileSteps: () => void;
+  setMobileStepsMode: (mode: "sidebar" | "fullwidth") => void;
+  toggleMobileWorkflowProps: () => void;
+  closeMobileSteps: () => void;
+  closeMobileWorkflowProps: () => void;
 
   // Global settings drawer actions
   toggleGlobalSettings: () => void;
@@ -469,9 +469,9 @@ const initialState: UiState = {
   mcpRegistryPageCursors: [undefined],
   mcpWorkspaceServers: undefined,
   mcpWorkspaceServersLoading: false,
-  mobilePromptsOpen: false,
-  mobilePromptsMode: "fullwidth",
-  mobileSettingsOpen: false,
+  mobileStepsOpen: false,
+  mobileStepsMode: "fullwidth",
+  mobileWorkflowPropsOpen: false,
   globalSettingsOpen: false,
   globalSettingsActiveTab: "general",
   startupReady: false,
@@ -497,8 +497,8 @@ const persistedFields = [
   "mcpDiscoveryTab",
   "globalSettingsActiveTab",
   "activeWorkflowWorkingFilePath",
-  "mobilePromptsOpen",
-  "mobilePromptsMode",
+  "mobileStepsOpen",
+  "mobileStepsMode",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -866,17 +866,19 @@ export const useUiStore = create<UiState & UiActions>()(
       // MOBILE DRAWER
       // ============================================================================
 
-      toggleMobilePrompts: () =>
-        set((state) => ({ mobilePromptsOpen: !state.mobilePromptsOpen })),
+      toggleMobileSteps: () =>
+        set((state) => ({ mobileStepsOpen: !state.mobileStepsOpen })),
 
-      setMobilePromptsMode: (mode) => set({ mobilePromptsMode: mode }),
+      setMobileStepsMode: (mode) => set({ mobileStepsMode: mode }),
 
-      toggleMobileSettings: () =>
-        set((state) => ({ mobileSettingsOpen: !state.mobileSettingsOpen })),
+      toggleMobileWorkflowProps: () =>
+        set((state) => ({
+          mobileWorkflowPropsOpen: !state.mobileWorkflowPropsOpen,
+        })),
 
-      closeMobilePrompts: () => set({ mobilePromptsOpen: false }),
+      closeMobileSteps: () => set({ mobileStepsOpen: false }),
 
-      closeMobileSettings: () => set({ mobileSettingsOpen: false }),
+      closeMobileWorkflowProps: () => set({ mobileWorkflowPropsOpen: false }),
 
       // ============================================================================
       // GLOBAL SETTINGS DRAWER
