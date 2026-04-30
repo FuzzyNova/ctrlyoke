@@ -1079,6 +1079,7 @@ export class WorkflowOrchestrator {
       );
       return;
     }
+    Log.debug(`pauseWorkflow: inst:${workflowId.slice(0, 8)}`);
     return instance.pause();
   }
 
@@ -1130,6 +1131,7 @@ export class WorkflowOrchestrator {
     if (this.retiredInstances.has(instance.id)) {
       this.retiredInstances.delete(instance.id);
     }
+    Log.debug(`resumeWorkflow: inst:${workflowId.slice(0, 8)}`);
     return instance.resume();
   }
 

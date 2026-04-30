@@ -1462,6 +1462,11 @@ export class WorkflowExecutor {
    * is parked in `pendingResponseResolver` and the promise stays open until
    * `resumePendingResponse()` is called.
    *
+   * Exception: if this is the last queue step (no next step to pause before),
+   * the response is resolved immediately even when paused. The executor then
+   * calls `finalizeWorkflowExecution()` which transitions to COMPLETED instead
+   * of leaving the workflow stuck in PAUSED with no way to make progress.
+   *
    * There is intentionally no per-prompt timeout here. Complex prompts (large
    * refactors, full audits) can legitimately run for hours. The workflow-level
    * `maxWorkflowExecutionTime` setting guards against runaway workflows, and
@@ -1483,10 +1488,17 @@ export class WorkflowExecutor {
           disposable.dispose();
 
           if (this.getRuntime().status === EXECUTION_STATES.PAUSED) {
-            this.pendingResponseResolver = resolve;
-            this.pendingResponseText = responseText;
-            this.isWaitingForResponse = false;
-            return;
+            // Park the response only when there is a next step to pause before.
+            // If this is the last step, resolve immediately so finalizeWorkflowExecution
+            // can complete the workflow rather than leaving it stuck in PAUSED forever.
+            const state = this.promptQueue.getState();
+            const isLastStep = state.currentIndex >= state.steps.length - 1;
+            if (!isLastStep) {
+              this.pendingResponseResolver = resolve;
+              this.pendingResponseText = responseText;
+              this.isWaitingForResponse = false;
+              return;
+            }
           }
 
           this.isWaitingForResponse = false;
@@ -2325,11 +2337,19 @@ export class WorkflowExecutor {
 
   private async finalizeWorkflowExecution(): Promise<void> {
     const finalState = this.getRuntime().status;
+    // When paused and the queue is fully drained with no finalStep defined,
+    // auto-complete rather than leaving the workflow stuck in PAUSED indefinitely.
+    // Workflows WITH a finalStep stay paused so the user can resume and run/continue it.
+    const pausedWithQueueDrained =
+      finalState === EXECUTION_STATES.PAUSED &&
+      !this.promptQueue.hasNext() &&
+      !this.promptQueue.getWorkflowFile().finalStep;
     if (
-      finalState !== EXECUTION_STATES.PAUSED &&
-      finalState !== EXECUTION_STATES.STOPPED &&
-      finalState !== EXECUTION_STATES.CANCELLING &&
-      finalState !== EXECUTION_STATES.ERROR
+      pausedWithQueueDrained ||
+      (finalState !== EXECUTION_STATES.PAUSED &&
+        finalState !== EXECUTION_STATES.STOPPED &&
+        finalState !== EXECUTION_STATES.CANCELLING &&
+        finalState !== EXECUTION_STATES.ERROR)
     ) {
       this.getRuntime().complete();
       await this.promptQueue.commitRuntimeTransition();

@@ -1050,6 +1050,7 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.PAUSE_WORKFLOW, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
+        Log.debug(`[WebviewMessageRouter] PAUSE_WORKFLOW received: inst:${workflowId.slice(0, 8)}`);
         await this.getOrchestrator()?.pauseWorkflow(workflowId);
       }
     });
@@ -1057,6 +1058,7 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.RESUME_WORKFLOW, (message) => {
       const { workflowId, workingFilePath } = message;
       if (workflowId) {
+        Log.debug(`[WebviewMessageRouter] RESUME_WORKFLOW received: inst:${workflowId.slice(0, 8)}`);
         // Fire-and-forget: resumeWorkflow can call executeLoadedPromptFile which
         // awaits the entire workflow execution loop. Awaiting here would block
         // routeQueue for the full run duration, preventing stop/pause/switch-workflow
