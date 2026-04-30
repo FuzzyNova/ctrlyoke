@@ -1167,6 +1167,90 @@ export interface SaveMcpWorkspaceServersMessage {
   servers: McpServerConfig[];
 }
 
+// ============================================================================
+// HARNESS FILE MANAGER TYPES
+// ============================================================================
+
+/** A single location where an agent or skill file exists on disk */
+export interface ManagedFileLocation {
+  /** The harness this location belongs to, or "flightpath" for the FP-exclusive dir */
+  harnessId: HarnessId | "flightpath";
+  /** Absolute path to the file (agent) or directory (skill) on disk */
+  path: string;
+}
+
+/** A discovered agent or skill, with all known on-disk locations */
+export interface ManagedFile {
+  /** Agent/skill name without extension or dir suffix */
+  name: string;
+  /** Formatted display name for the UI */
+  displayName: string;
+  type: "agent" | "skill";
+  locations: ManagedFileLocation[];
+}
+
+/** Webview → Extension: enumerate all agents or skills */
+export interface RequestHarnessFilesMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_HARNESS_FILES;
+  fileType: "agent" | "skill";
+}
+
+/** Extension → Webview: result of enumeration */
+export interface HarnessFilesResultMessage {
+  type: typeof MESSAGE_TYPES.HARNESS_FILES_RESULT;
+  files: ManagedFile[];
+}
+
+/** Webview → Extension: copy a file to a target harness dir */
+export interface ExportToHarnessMessage {
+  type: typeof MESSAGE_TYPES.EXPORT_TO_HARNESS;
+  sourcePath: string;
+  harnessId: HarnessId | "flightpath";
+  fileType: "agent" | "skill";
+  overwrite?: boolean;
+}
+
+/** Webview → Extension: copy a file into .flightpath/agents or .flightpath/skills */
+export interface ImportToFlightPathMessage {
+  type: typeof MESSAGE_TYPES.IMPORT_TO_FLIGHTPATH;
+  sourcePath: string;
+  fileType: "agent" | "skill";
+  overwrite?: boolean;
+}
+
+/** Webview → Extension: delete a file from a specific harness dir */
+export interface DeleteFromHarnessMessage {
+  type: typeof MESSAGE_TYPES.DELETE_FROM_HARNESS;
+  name: string;
+  harnessId: HarnessId | "flightpath";
+  fileType: "agent" | "skill";
+}
+
+/** Webview → Extension: copy all files to a single harness dir */
+export interface SyncAllToHarnessMessage {
+  type: typeof MESSAGE_TYPES.SYNC_ALL_TO_HARNESS;
+  /** List of { sourcePath, name } for each file to sync */
+  files: Array<{ sourcePath: string; name: string }>;
+  targetHarnessId: HarnessId;
+  fileType: "agent" | "skill";
+}
+
+/** Extension → Webview: result of a file operation (export/import/delete/sync) */
+export interface HarnessFileOpResultMessage {
+  type: typeof MESSAGE_TYPES.HARNESS_FILE_OP_RESULT;
+  success: boolean;
+  error?: string;
+  /** Updated file list after the operation (re-broadcast for convenience) */
+  files?: ManagedFile[];
+}
+
+/** Webview → Extension: open harness directory in Explorer/Finder */
+export interface OpenHarnessDirMessage {
+  type: typeof MESSAGE_TYPES.OPEN_HARNESS_DIR;
+  harnessId: HarnessId | "flightpath";
+  fileType: "agent" | "skill";
+}
+
 /**
  * Union type for all incoming messages from extension to webview
  */
@@ -1249,4 +1333,6 @@ export type IncomingMessage =
   | DevBuildCompletedMessage
   | DevRestartingMessage
   | DevCommandUnavailableMessage
+  | HarnessFilesResultMessage
+  | HarnessFileOpResultMessage
   | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE };

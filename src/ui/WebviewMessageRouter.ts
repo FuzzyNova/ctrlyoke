@@ -50,6 +50,13 @@ import {
   safeFetchMcpRegistry,
 } from "../utils/McpDiscoveryUtils";
 import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder";
+import { HarnessFileManager } from "../utils/HarnessFileManager";
+import {
+  getHarnessAgentDirs,
+  getFlightPathAgentDir,
+  getHarnessSkillDirs,
+  getFlightPathSkillDir,
+} from "../utils/HarnessDirectoryUtils";
 
 const execFileAsync = promisify(execFile);
 const GIT_VALIDATION_TIMEOUT_MS = 5000;
@@ -575,6 +582,150 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS, async (message) => {
       await this.saveMcpWorkspaceServers(message.servers ?? []);
+    });
+
+    // ── Harness File Manager ─────────────────────────────────────────────
+    table.set(MESSAGE_TYPES.REQUEST_HARNESS_FILES, async (message) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      const files = await HarnessFileManager.resolveAllLocations(
+        workspaceRoot,
+        message.fileType
+      );
+      this.emitMessage({ type: MESSAGE_TYPES.HARNESS_FILES_RESULT, files });
+    });
+
+    table.set(MESSAGE_TYPES.EXPORT_TO_HARNESS, async (message) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      try {
+        await HarnessFileManager.exportToHarness(
+          message.sourcePath,
+          message.harnessId,
+          workspaceRoot,
+          message.fileType,
+          message.overwrite ?? false
+        );
+        const files = await HarnessFileManager.resolveAllLocations(
+          workspaceRoot,
+          message.fileType
+        );
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: true,
+          files,
+        });
+      } catch (error) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: false,
+          error: getErrorMessage(error),
+        });
+      }
+    });
+
+    table.set(MESSAGE_TYPES.IMPORT_TO_FLIGHTPATH, async (message) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      try {
+        await HarnessFileManager.importToFlightPath(
+          message.sourcePath,
+          workspaceRoot,
+          message.fileType,
+          message.overwrite ?? false
+        );
+        const files = await HarnessFileManager.resolveAllLocations(
+          workspaceRoot,
+          message.fileType
+        );
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: true,
+          files,
+        });
+      } catch (error) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: false,
+          error: getErrorMessage(error),
+        });
+      }
+    });
+
+    table.set(MESSAGE_TYPES.DELETE_FROM_HARNESS, async (message) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      try {
+        await HarnessFileManager.deleteFromHarness(
+          message.name,
+          message.harnessId,
+          workspaceRoot,
+          message.fileType
+        );
+        const files = await HarnessFileManager.resolveAllLocations(
+          workspaceRoot,
+          message.fileType
+        );
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: true,
+          files,
+        });
+      } catch (error) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: false,
+          error: getErrorMessage(error),
+        });
+      }
+    });
+
+    table.set(MESSAGE_TYPES.SYNC_ALL_TO_HARNESS, async (message) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      try {
+        const sourcePaths: string[] = (message.files ?? []).map(
+          (f: { sourcePath: string }) => f.sourcePath
+        );
+        for (const sourcePath of sourcePaths) {
+          await HarnessFileManager.exportToHarness(
+            sourcePath,
+            message.targetHarnessId,
+            workspaceRoot,
+            message.fileType,
+            true
+          );
+        }
+        const files = await HarnessFileManager.resolveAllLocations(
+          workspaceRoot,
+          message.fileType
+        );
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: true,
+          files,
+        });
+      } catch (error) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: false,
+          error: getErrorMessage(error),
+        });
+      }
+    });
+
+    table.set(MESSAGE_TYPES.OPEN_HARNESS_DIR, async (message) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      const dirPath =
+        message.harnessId === "flightpath"
+          ? message.fileType === "agent"
+            ? getFlightPathAgentDir(workspaceRoot)
+            : getFlightPathSkillDir(workspaceRoot)
+          : message.fileType === "agent"
+            ? getHarnessAgentDirs(message.harnessId, workspaceRoot)[0]
+            : getHarnessSkillDirs(message.harnessId, workspaceRoot)[0];
+
+      if (dirPath) {
+        await vscode.commands.executeCommand(
+          "revealFileInOS",
+          vscode.Uri.file(dirPath)
+        );
+      }
     });
 
     // ── Output History ───────────────────────────────────────────────────
@@ -2112,8 +2263,12 @@ export class WebviewMessageRouter {
     }
   }
 
+  private getWorkspaceRoot(): string {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+  }
+
   private getMcpWorkspaceServersPath(): string | null {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) return null;
     return path.join(
       workspaceRoot,

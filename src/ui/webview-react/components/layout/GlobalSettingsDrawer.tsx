@@ -19,6 +19,7 @@ import {
   ServerSection,
   NotificationsSection,
   DeveloperSection,
+  HarnessFileManagerSection,
 } from "../settings";
 
 const ALL_TABS = [
@@ -34,6 +35,7 @@ const ALL_TABS = [
   { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
   { id: "history", label: "History", icon: "codicon-history" },
   { id: "server", label: "Server", icon: "codicon-server" },
+  { id: "filemanager", label: "File Manager", icon: "codicon-files" },
   { id: "developer", label: "Developer", icon: "codicon-tools" },
 ];
 
@@ -206,14 +208,19 @@ export function GlobalSettingsDrawer() {
             {fullSettings && effectiveActiveTab === "server" && (
               <ServerSection settings={fullSettings} {...sectionProps} />
             )}
+            {effectiveActiveTab === "filemanager" && (
+              <HarnessFileManagerSection />
+            )}
             {dev?.enabled && effectiveActiveTab === "developer" && (
               <DeveloperSection />
             )}
-            {!fullSettings && effectiveActiveTab !== "developer" && (
-              <div className="text-description-fg text-sm">
-                Loading settings…
-              </div>
-            )}
+            {!fullSettings &&
+              effectiveActiveTab !== "developer" &&
+              effectiveActiveTab !== "filemanager" && (
+                <div className="text-description-fg text-sm">
+                  Loading settings…
+                </div>
+              )}
           </div>
         </div>
       </div>

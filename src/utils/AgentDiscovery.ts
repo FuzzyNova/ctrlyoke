@@ -4,7 +4,11 @@ import * as fs from "fs";
 import * as os from "os";
 import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
-import { PATH_CONSTANTS } from "./ConfigurationUtils";
+import {
+  getHarnessAgentDirs,
+  getFlightPathAgentDir,
+} from "./HarnessDirectoryUtils";
+import { HARNESS_IDS } from "../types/DashboardConstants";
 
 /**
  * Represents a discovered agent file
@@ -59,33 +63,33 @@ export class AgentDiscovery {
       const userAgents = await this.discoverUserAgents();
       agents.push(...userAgents);
 
-      // 2. Discover from workspace .github/agents/
+      // 2-3. Discover from workspace harness agent dirs (Claude, Copilot, Codex, etc.)
       if (workspaceFolder) {
-        const githubAgents = await this.discoverWorkspaceAgents(
-          workspaceFolder,
-          ".github/agents"
-        );
-        agents.push(...githubAgents);
-      }
+        const workspaceRoot = workspaceFolder.uri.fsPath;
+        const scanned = new Set<string>();
 
-      // 3. Discover from workspace .claude/agents/
-      if (workspaceFolder) {
-        const claudeAgents = await this.discoverWorkspaceAgents(
-          workspaceFolder,
-          ".claude/agents"
-        );
-        agents.push(...claudeAgents);
-      }
+        for (const harnessId of Object.values(HARNESS_IDS)) {
+          for (const dir of getHarnessAgentDirs(harnessId, workspaceRoot)) {
+            const normalized = path.normalize(dir);
+            if (scanned.has(normalized)) continue;
+            scanned.add(normalized);
+            const harnessAgents = await this.discoverAgentsInDirectory(
+              dir,
+              "workspace-github" // source label kept generic; file manager owns the per-harness detail
+            );
+            agents.push(...harnessAgents);
+          }
+        }
 
-      // 4. Discover from workspace .flightpath/agents/ (FlightPath-exclusive agents)
-      // Agents placed here are only discovered by FlightPath — no harness scrapes this
-      // directory, preventing duplicate context injection when using harness-native dirs.
-      if (workspaceFolder) {
-        const flightpathAgents = await this.discoverWorkspaceAgents(
-          workspaceFolder,
-          `${PATH_CONSTANTS.FLIGHTPATH_DIR}/${PATH_CONSTANTS.AGENTS_DIR}`
+        // 4. Discover from workspace .flightpath/agents/ (FlightPath-exclusive agents)
+        // Agents placed here are only discovered by FlightPath — no harness scrapes this
+        // directory, preventing duplicate context injection when using harness-native dirs.
+        const fpDir = getFlightPathAgentDir(workspaceRoot);
+        const fpAgents = await this.discoverAgentsInDirectory(
+          fpDir,
+          "workspace-flightpath"
         );
-        agents.push(...flightpathAgents);
+        agents.push(...fpAgents);
       }
 
       Log.debug(`Discovered ${agents.length} custom agents`);
@@ -121,27 +125,6 @@ export class AgentDiscovery {
       results.push(...agents);
     }
     return results;
-  }
-
-  /**
-   * Discover agents from workspace subdirectory
-   * @param workspaceFolder Workspace folder
-   * @param relativePath Relative path within workspace (e.g., ".github/agents")
-   */
-  private static async discoverWorkspaceAgents(
-    workspaceFolder: vscode.WorkspaceFolder,
-    relativePath: string
-  ): Promise<AgentInfo[]> {
-    const agentsDir = path.join(workspaceFolder.uri.fsPath, relativePath);
-    const source =
-      relativePath === ".github/agents"
-        ? "workspace-github"
-        : relativePath ===
-            `${PATH_CONSTANTS.FLIGHTPATH_DIR}/${PATH_CONSTANTS.AGENTS_DIR}`
-          ? "workspace-flightpath"
-          : "workspace-claude";
-
-    return this.discoverAgentsInDirectory(agentsDir, source);
   }
 
   /**

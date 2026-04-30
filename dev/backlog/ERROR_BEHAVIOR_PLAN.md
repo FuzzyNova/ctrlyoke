@@ -165,6 +165,11 @@ many harnesses log tool-level failures using common error fields.
 
 ### Research basis for this change
 
+This plan is based on two kinds of evidence:
+
+- direct local inspection of harness logs
+- official hook/plugin documentation for harnesses that expose explicit error events
+
 This recommendation is based on direct local inspection of the harness log locations that
 FlightPath currently targets:
 
@@ -181,6 +186,8 @@ The result was not "no harness contains error lines". The result was narrower:
 - Claude had plausible session-level error shapes plus many tool-level error shapes
 - Codex/Qwen/Gemini logs contained error-looking records, but the verified local examples
   were tool-level failures, not safe session-level harness-failure markers
+- official docs confirm explicit interactive error signals for Copilot, Claude, and
+  OpenCode, so those harnesses should use hook/plugin events as the primary detection path
 
 That is why the generic fallback was removed. The issue is false positives, not absence of
 error text.
@@ -193,6 +200,7 @@ strings like `429`, `timeout`, or `error`.
 Instead, only use:
 
 - explicit harness/session error hooks
+- explicit plugin session-error events
 - verified session-level log events
 - verified headless result objects
 - process exit and timeout as the universal fallback
@@ -225,7 +233,7 @@ Recommended plumbing:
 
 #### Interactive
 
-Claude is the strongest candidate for fixing the current hang case.
+Claude has a documented primary interactive error path.
 
 Current state:
 
@@ -238,6 +246,12 @@ Recommended change:
 - add `StopFailure` notification support
 - write a distinct error notification file
 - surface it as `failureKind: "harnessError"`
+
+Research note:
+
+- Claude's official hooks docs define `StopFailure` as the event that runs instead of
+  `Stop` when a turn ends due to an API error
+- this makes `StopFailure` the primary interactive harness-error signal, not a fallback
 
 #### Headless/log fallback
 
@@ -259,6 +273,8 @@ result errors as harness failures.
 
 #### Interactive
 
+Copilot has a documented primary interactive error hook.
+
 Current state:
 
 - `CopilotNotificationMonitor` maps `agentStop` and `sessionStart`
@@ -266,9 +282,17 @@ Current state:
 
 Recommended change:
 
-- add `errorOccurred` hook handling if the hook is available in the active Copilot CLI
+- add `errorOccurred` hook handling as a primary harness-error signal
 - write a distinct error notification file
 - surface it as `failureKind: "harnessError"`
+
+Research note:
+
+- GitHub's hook documentation defines an error-occurrence hook for Copilot agent execution
+- this should be treated as the primary interactive error signal for Copilot harnesses,
+  not as a speculative feature
+- user direction for this plan is that the same Copilot hook model also applies to
+  `copilot-chat`, but the initial implementation scope here remains the CLI harness path
 
 #### Log fallback
 
@@ -339,13 +363,25 @@ Recommendation:
 
 Current state:
 
-- no local logs were available in this environment
-- parser/source-based investigation suggests retry/error fields may exist, but that is not
-  yet verified against real logs
+- local logs were not available in this environment
+- FlightPath already uses an OpenCode plugin for interactive lifecycle detection
+- the current plugin and monitor handle `session.created`, `session.updated`,
+  `session.status`, and completion via `session.idle`
+- the current plugin does not yet emit a structured error notification
 
 Recommendation:
 
-- leave OpenCode fallback unimplemented beyond process exit and timeout until verified
+- treat OpenCode plugin events as the primary interactive error path
+- extend the plugin to listen for `session.error`
+- write a distinct error notification file from the plugin when `session.error` fires
+- surface that as `failureKind: "harnessError"`
+- keep process exit and timeout as the universal fallback
+
+Research note:
+
+- OpenCode's official plugin docs list `session.error` as a supported session event
+- this means OpenCode does have a first-class interactive error signal available to
+  FlightPath, even though it is provided through the plugin system rather than a hook file
 
 ---
 
@@ -368,6 +404,7 @@ This applies first to:
 
 - Claude `StopFailure`
 - Copilot `errorOccurred`
+- OpenCode `session.error`
 
 ### CLI log monitor
 
@@ -567,10 +604,11 @@ classification explicit.
 ### Phase 3 - Harness detection
 
 1. Claude: add `StopFailure` notification support
-2. Copilot: add `errorOccurred` notification support if supported by the active CLI
-3. Claude: tighten session-level fallback parsing only
-4. Copilot: add `session.error` fallback parsing only
-5. Leave Codex/Qwen/Gemini/OpenCode on process-exit/timeout fallback until verified
+2. Copilot: add `errorOccurred` notification support
+3. OpenCode: extend the plugin and monitor for `session.error`
+4. Claude: tighten session-level fallback parsing only
+5. Copilot: add `session.error` fallback parsing only
+6. Leave Codex/Qwen/Gemini on process-exit/timeout fallback until verified
 
 This is the smallest safe implementation slice that fixes the known blind spots without
 adding broad false-positive log parsing.
@@ -608,10 +646,11 @@ Retries should start a fresh harness attempt, not attempt to recover the broken 
 
 1. Does Claude `StopFailure` always fire for the interactive unrecoverable-error case, or
    are there cases where only transcript/log evidence is available?
-2. Is Copilot `errorOccurred` available and stable in the CLI version FlightPath targets,
-   and what exact payload does it provide?
-3. For Codex/OpenCode, is there a verified session-level error event that is distinct from
-   tool failures? If so, capture the exact event shape before implementing a parser.
+2. What exact payload shape does Copilot `errorOccurred` provide in the CLI versions
+   FlightPath targets, and does FlightPath need to normalize multiple variants?
+3. What exact payload shape does OpenCode `session.error` provide in live sessions, and
+   does it always correspond to a terminal harness failure rather than a recoverable
+   intermediate state?
 4. Should timeout be user-configurable per step in the future, or is routing the existing
    global timeout through `errorBehavior` sufficient for now?
 
@@ -624,7 +663,9 @@ The highest-value safe slice is:
 1. land the schema/parser/serializer/settings work
 2. add structured failure classification
 3. wire Claude `StopFailure`
-4. route process exit and timeout through `errorBehavior`
+4. wire Copilot `errorOccurred`
+5. wire OpenCode `session.error`
+6. route process exit and timeout through `errorBehavior`
 
 That fixes the biggest execution gap without depending on speculative log parsing for every
 harness.

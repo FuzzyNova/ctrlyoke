@@ -211,6 +211,16 @@ export const MESSAGE_TYPES = {
   MCP_WORKSPACE_SERVERS_RESULT: "mcpWorkspaceServersResult", // Extension -> Webview: { servers: McpServerConfig[], error? }
   SAVE_MCP_WORKSPACE_SERVERS: "saveMcpWorkspaceServers", // Webview -> Extension: Save workspace MCP registry { servers: McpServerConfig[] }
 
+  // Harness File Manager — Webview ↔ Extension
+  REQUEST_HARNESS_FILES: "requestHarnessFiles", // Webview -> Extension: { fileType: "agent" | "skill" }
+  HARNESS_FILES_RESULT: "harnessFilesResult", // Extension -> Webview: { files: ManagedFile[] }
+  EXPORT_TO_HARNESS: "exportToHarness", // Webview -> Extension: { sourcePath, harnessId, fileType, overwrite? }
+  IMPORT_TO_FLIGHTPATH: "importToFlightPath", // Webview -> Extension: { sourcePath, fileType, overwrite? }
+  DELETE_FROM_HARNESS: "deleteFromHarness", // Webview -> Extension: { name, harnessId, fileType }
+  SYNC_ALL_TO_HARNESS: "syncAllToHarness", // Webview -> Extension: { sourcePaths, targetHarnessId, fileType }
+  HARNESS_FILE_OP_RESULT: "harnessFileOpResult", // Extension -> Webview: { success, error?, files? }
+  OPEN_HARNESS_DIR: "openHarnessDir", // Webview -> Extension: { harnessId, fileType }
+
   // Settings — Webview → Extension
   UPDATE_CONFIRM_DELETE: "updateConfirmDelete", // Update confirmDeleteOperations setting: { value: boolean }
 

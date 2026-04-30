@@ -41,6 +41,7 @@ import type {
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
 import { WebviewLog } from "@utils/logger";
 import { useTerminalStore } from "../store/terminalStore";
+import { useHarnessFileStore } from "../store/useHarnessFileStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import {
@@ -1321,6 +1322,30 @@ function createMessageHandlers(): MessageHandlerMap {
     useUiStore
       .getState()
       .setMcpWorkspaceServersResult(message.servers ?? [], message.error);
+  };
+
+  // --------------------------------------------------------------------------
+  // HARNESS_FILES_RESULT - File enumeration results
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.HARNESS_FILES_RESULT] = (message) => {
+    useHarnessFileStore.getState().setFiles(message.files ?? []);
+  };
+
+  // --------------------------------------------------------------------------
+  // HARNESS_FILE_OP_RESULT - Result of an export/import/delete/sync operation
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.HARNESS_FILE_OP_RESULT] = (message) => {
+    const store = useHarnessFileStore.getState();
+    if (message.success) {
+      if (message.files) {
+        store.setFiles(message.files);
+      } else {
+        store.setLoading(false);
+      }
+      store.setError(null);
+    } else {
+      store.setError(message.error ?? "Operation failed");
+    }
   };
 
   // --------------------------------------------------------------------------
