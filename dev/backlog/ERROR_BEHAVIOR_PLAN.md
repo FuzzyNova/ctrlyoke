@@ -2,40 +2,47 @@
 
 ## Problem
 
-When a harness throws an error (rate limit, server timeout, network failure, invalid model,
-API key error), FlightPath currently does one thing: stop the workflow. There is no way to
-configure retry behavior or continue to the next step. Additionally, some error conditions
-are not detected at all:
+FlightPath currently has no configurable policy for harness-level execution failures.
+When a harness fails, the workflow generally stops. That creates three gaps:
 
-- **Interactive mode bug**: If a CLI harness surfaces an error inside its TUI while keeping
-  the process alive (the TUI does not exit), FlightPath never receives a PTY exit event and
-  just keeps waiting for the Stop hook forever. The error is visible to the user in the TUI
-  but FlightPath is stuck.
+- **No retry policy for transient harness failures**: rate limits, server errors, and
+  similar failures cannot be retried automatically.
+- **No continue policy**: there is no supported way to mark a step failed and keep the
+  workflow moving.
+- **Interactive harness blind spot**: some CLIs can surface an error in the TUI without
+  exiting the process. In that case FlightPath may keep waiting for completion instead of
+  classifying the step as a harness failure.
 
-- **Headless mode**: Claude CLI already emits `"type": "result", "is_error": true` in its
-  JSON output — FlightPath's `ClaudeResponseParser` detects and surfaces this, but then
-  always stops the workflow regardless.
-
-- **No retry logic for transient errors**: Rate limits and server timeouts are transient.
-  There is no mechanism to retry the same step after a brief delay.
+This feature adds a new execution property, `errorBehavior`, that controls how FlightPath
+responds when the **harness itself** fails.
 
 ---
 
-## Scope of This Feature
+## Scope
 
-`errorBehavior` is a new `ExecutionProperties` field that controls what happens when the
-**harness itself** fails — not when an end condition script fails. The distinction matters:
+`errorBehavior` is for harness/session failures only. It does not replace the existing
+step validation or script failure mechanisms.
 
-| Situation                          | Mechanism           | Notes                               |
-| ---------------------------------- | ------------------- | ----------------------------------- |
-| End condition script returns false | `endCondition`      | Existing — script-based validation  |
-| Pre-condition script returns false | `preCondition`      | Existing — gate before prompt runs  |
-| `type: script` step fails          | `onFail`            | Existing — inline script step       |
-| **Harness process errors/crashes** | **`errorBehavior`** | New — "did the AI CLI itself fail?" |
+| Situation | Mechanism | Notes |
+| --- | --- | --- |
+| End condition script returns false | `endCondition` | Existing output validation |
+| Pre-condition script returns false | `preCondition` | Existing pre-run gate |
+| `type: script` step fails | `onFail` | Existing script-step behavior |
+| Harness/session failure | `errorBehavior` | New harness failure policy |
+
+Examples of harness/session failures:
+
+- CLI process exits before the prompt completes
+- Harness-specific stop/error hook reports a session failure
+- Headless harness output marks the overall run as an error
+- Prompt execution times out while waiting for completion
+
+Tool failures inside the agent session are **not automatically** harness failures. Several
+harness logs contain tool-level errors that should not trigger retry or continue behavior.
 
 ---
 
-## Schema: `errorBehavior` on `PromptItem`
+## Proposed Schema
 
 ```yaml
 steps:
@@ -43,488 +50,581 @@ steps:
     prompt: Implement the feature.
     errorBehavior:
       onError: retry # stop | retry | continue
-      maxRetries: 3 # only relevant when onError: retry
-      retryDelayMs: 5000 # optional, ms to wait before retry (default: 2000)
+      maxRetries: 3
+      retryDelayMs: 5000
 ```
 
-### `onError` Options
+### `onError`
 
-| Value      | Behavior                                                                                      |
-| ---------- | --------------------------------------------------------------------------------------------- |
-| `stop`     | Stop the workflow and mark the step as failed (current behavior — default)                    |
-| `retry`    | Re-run the same step (with optional delay). After `maxRetries` exhausted, stops the workflow. |
-| `continue` | Log the error as a warning, mark step as failed, advance to the next step in the queue.       |
+| Value | Behavior |
+| --- | --- |
+| `stop` | Mark the step failed and stop the workflow. Default behavior. |
+| `retry` | Retry the same step. After retries are exhausted, stop the workflow. |
+| `continue` | Mark the step failed, record the harness failure, and advance to the next step. |
 
-### Why Not Extend `endCondition`?
-
-`endCondition` requires a script and operates on AI output, not on harness process state.
-Detecting a rate limit error requires observing the process exit code or parsing JSON from
-the harness itself — not running a user script against AI text. Combining them would make
-`endCondition` a different kind of object depending on whether a script is provided, which
-is clunky and confusing. Keep them separate.
-
----
-
-## TypeScript Types
+### TypeScript shape
 
 ```typescript
-// FlightPathTypes.ts additions
-
 export type ErrorBehaviorAction = "stop" | "retry" | "continue";
 
 export interface ErrorBehavior {
-  /** What to do when the harness itself errors. Default: "stop". */
   onError: ErrorBehaviorAction;
-  /** Maximum retry attempts when onError is "retry". Default: 1. */
   maxRetries?: number;
-  /** Delay in ms before each retry. Default: 2000. */
   retryDelayMs?: number;
 }
 
-// Add to ExecutionProperties:
+// ExecutionProperties addition
 errorBehavior?: ErrorBehavior | null;
-// null = explicitly disable inherited errorBehavior (same pattern as endCondition)
 ```
+
+`null` should follow the same inheritance semantics already used by nullable execution
+properties in the UI: explicitly clear the inherited workflow-level value.
 
 ---
 
-## Error Detection Research
+## Resolution Model
 
-### Current State
+The original plan proposed `prompt > workflow > settings` resolution through a new
+`PropertyResolver.resolveErrorBehavior()` path. That does not match how the current
+codebase handles workflow defaults.
 
-`CliFailureTracker` tracks one kind of harness failure: **PTY process exit before completion**.
-When the PTY exits unexpectedly (non-zero exit code, crash), `WorkflowExecutor` calls
-`wasLastFailureProcessExit()` and currently always stops the workflow.
+### Current pattern in the repo
 
-The gap: some errors leave the TUI process alive. The process doesn't exit; the TUI just
-renders an error message. FlightPath keeps waiting for the Stop hook indefinitely.
+- Prompt and workflow execution properties live in `ExecutionProperties`.
+- `PromptFileLoader.populateSettingsDefaults()` seeds workflow defaults from
+  `FlightPathSettings.workflow.*` when a workflow is loaded without explicit values.
+- `PropertyResolver` resolves runtime execution properties such as harness/model/agent,
+  but it does **not** currently resolve `endCondition` or `preCondition` from settings.
+- `WebviewSettingsSync` already reads and writes workflow defaults under
+  `flightpath.workflow.*`.
 
-### Detection Strategy Per Harness
+### Recommended approach
 
-#### Claude CLI (interactive)
+Use the existing workflow-default architecture instead of introducing a one-off flat
+settings path:
 
-Claude has two hook events:
+- Add `workflow.defaultErrorBehavior` to `FlightPathSettings`
+- Add the corresponding schema entry to `schemas/settings-schema.json`
+- Seed workflow defaults in `PromptFileLoader.populateSettingsDefaults()`
+- Let prompt-level `errorBehavior` override workflow-level `errorBehavior`
 
-- `Stop` — fires whenever the agent stops (normal completion OR error)
-- `StopFailure` — fires specifically when the agent stopped due to an error
-
-**Current state**: `ClaudeNotificationMonitor` only registers `Stop`. It does not register
-`StopFailure`. This means:
-
-1. Normal completion: `Stop` fires → FlightPath detects completion ✅
-2. Error (TUI stays open): If only `StopFailure` fires but not `Stop`, FlightPath waits
-   forever ❌
-3. Error (process exits): PTY exit detected → stop workflow ✅
-
-**Fix**: Register `StopFailure` in `ClaudeNotificationMonitor`. When `StopFailure` is
-received instead of `Stop`, signal a harness error (not just a completion). This is the
-primary fix for the interactive hang bug.
-
-The `StopFailure` hook payload (from Claude's source) looks like:
-
-```json
-{
-  "hook_event_name": "StopFailure",
-  "error": "rate_limit", // same enum as assistant.error
-  "error_details": "HTTP 429: Too many requests",
-  "last_assistant_message": "...",
-  "session_id": "..."
-}
-```
-
-The `flightpath-claude-hook.js` script needs to write a notification file that:
-
-- Uses a distinct filename suffix: `{sessionId}-error.json`
-- Includes `{ hookEvent: "StopFailure", sessionId, status: "error", errorType: "rate_limit", errorDetails: "..." }`
-
-`CliLogMonitor` / `ClaudeNotificationMonitor` needs to distinguish error notifications from
-completion notifications when reading the notification directory. The `NotificationResult`
-type needs an `isError` flag or a `kind: "completed" | "error"` discriminator.
-
-#### Claude CLI (headless)
-
-`ClaudeResponseParser.parse()` already detects `is_error: true` in the `result` JSON object.
-Based on Claude's source code, the `result` type has specific error subtypes:
-
-```json
-{
-  "type": "result",
-  "subtype": "error_during_execution", // or error_max_turns, error_max_budget_usd
-  "is_error": true,
-  "errors": [
-    "[ede_diagnostic] result_type=X last_content_type=Y stop_reason=Z"
-  ],
-  "session_id": "..."
-}
-```
-
-There's also a `system` message type for **in-progress** API retries that Claude handles
-internally:
-
-```json
-{
-  "type": "system",
-  "subtype": "api_retry",
-  "attempt": 2,
-  "max_retries": 5,
-  "retry_delay_ms": 10000,
-  "error_status": 429,
-  "error": "rate_limit",
-  "session_id": "..."
-}
-```
-
-This fires while Claude is internally retrying — FlightPath could surface this to the user
-("Claude is retrying due to rate limit, attempt 2/5") rather than just showing a frozen TUI.
-
-And the `assistant` message itself has an `error` field (non-null on error):
-
-```json
-{
-  "type": "assistant",
-  "message": { ... },
-  "error": "rate_limit",   // "authentication_failed" | "billing_error" | "rate_limit" |
-                            // "invalid_request" | "server_error" | "unknown" | "max_output_tokens"
-  "session_id": "..."
-}
-```
-
-**Current detection gaps in `ClaudeResponseParser`**:
-
-- Does not check `result.subtype` (only `is_error`)
-- Does not check `assistant.error` field
-- Does not surface `system/api_retry` events to the user
-
-**Recommended additions to `ClaudeResponseParser`**:
-
-1. Check `json.subtype` on result objects for error classification (rate_limit vs. execution error)
-2. Check `json.error` on assistant messages as an early error signal
-3. Emit a user-visible status event for `api_retry` system messages
-
-**No changes needed for base detection** — just routing changes in `WorkflowExecutor` and
-enhanced classification.
-
-#### Copilot CLI (interactive)
-
-Copilot CLI has an `errorOccurred` hook event (distinct from `agentStop`). This hook fires
-when an error occurs during agent execution, giving us a clean signal.
-
-**Current state**: `CopilotNotificationMonitor.EVENT_MAP` does not include `errorOccurred`.
-The stop hook (`agentStop`) may or may not fire on error.
-
-**Fix**: Add `errorOccurred` to Copilot's hook config and notification monitoring. When
-`errorOccurred` fires, signal a harness error. This requires:
-
-1. Adding `errorOccurred` to `CopilotNotificationMonitor.EVENT_MAP`
-2. Updating `buildHookConfig()` to register an `errorOccurred` handler
-3. Writing `{sessionId}-error.json` notification from the hook script
-
-**Note**: Copilot's `errorOccurred` is documented but untested. Manual testing with internet
-disconnection mid-prompt is the only reliable way to verify the payload format and confirm
-it fires before vs. after `agentStop`.
-
-#### Copilot CLI (headless)
-
-Copilot uses JSONL log files monitored by `CopilotLogParser`. Error events in the log likely
-have a `turn.error` or similar event type. **Research needed**: manually test a Copilot
-failure and inspect the log file in `~/.vscode-copilot/logs/`. The process exit code
-(non-zero) is a reliable fallback.
-
-#### Codex CLI
-
-Codex uses JSONL streaming events. The `notify` hook fires on completion. For errors, the
-process likely exits with a non-zero code — check `CodexNotificationMonitor`. The `exitCode`
-from PTY exit is the primary detection mechanism for Codex.
-
-The Codex source is open source. Its error event format should be checkable in the Codex
-repository. Error events in JSONL likely appear as `{ "type": "error", "message": "..." }`.
-
-#### OpenCode CLI (open source)
-
-OpenCode uses JSONL events + a plugin for completion detection. Its source code can be
-explored at the OpenCode repository. Error events in its JSONL stream likely include an
-`error` type or a `state: "error"` field. OpenCode is open source — check the JSONL
-event schema before implementing.
-
-#### Qwen Code CLI (open source)
-
-Similar JSONL event stream as OpenCode. Check source code for error event types. Qwen's
-log parser (`QwenLogParser`) already reads JSONL events — extend `isError()` detection
-there.
-
-#### Gemini CLI (open source)
-
-Gemini uses JSON streaming similar to Claude. Check its source for error event types in
-the streaming output. `GeminiLogParser` and `GeminiResponseParser` are the relevant files.
-
-### Log-Based Error Pattern (Cross-Harness Fallback)
-
-As a last resort, all harnesses write to log files. Common error patterns across logs:
-
-- Rate limit: typically contains "rate limit", "429", "too many requests"
-- Server timeout: "timeout", "503", "service unavailable"
-- Invalid model: "model not found", "invalid model"
-- Auth failure: "401", "unauthorized", "authentication"
-
-A `BaseLogParser.isErrorEvent()` method can be added as a hook for harnesses to override,
-parsing error-type events from their logs. This is a fallback for harnesses where dedicated
-error hooks are unavailable or untested.
-
-### The "TUI Stays Open" Bug (Root Cause)
-
-In interactive mode, when a harness encounters a recoverable error (e.g., a rate limit that
-it will retry internally), it may:
-
-1. Show the error in the TUI
-2. Retry automatically (without exiting)
-3. Eventually succeed → Stop hook fires normally ✅
-
-But when the error is unrecoverable:
-
-1. Show the error in the TUI
-2. Keep the TUI open (waiting for user input, or in a broken state)
-3. Stop hook may or may not fire
-
-The `StopFailure` hook (Claude) and `errorOccurred` hook (Copilot) are specifically designed
-for case 2. Wiring them up is the fix. For harnesses without dedicated error hooks, we need
-a log-based polling approach or a timeout mechanism.
-
-**Potential timeout approach**: If a `maxPromptExecutionTime` passes with no Stop hook and
-no completion event in the log, treat it as a harness error. This is already partially
-implemented (`ConfigurationUtils.getMaxPromptExecutionTimeMs()`), but it just rejects with
-"Log monitoring timeout" which is caught and treated as a hard failure. With `errorBehavior`,
-a timeout could trigger retry logic.
+That keeps `errorBehavior` aligned with the rest of the workflow editing model and avoids
+special-case runtime resolution logic.
 
 ---
 
-## WorkflowExecutor Changes
+## Current Failure Routing
 
-Currently, all harness errors go through one of two paths:
+Before implementation, the plan needs to reflect the code that already exists in
+`WorkflowExecutor`.
 
-1. `wasLastFailureProcessExit()` → stop workflow
-2. `wasLastFailureUserCancellation()` → cancel, stop workflow
-3. Neither (general failure) → `markErrored()`, stop workflow
+### Current behavior
 
-With `errorBehavior`, path 1 and 3 need to be intercepted:
+`handlePromptSendFailure()` currently distinguishes:
 
-```typescript
-// Conceptual change in WorkflowExecutor.executeStep()
+1. `wasLastFailureUserCancellation()`
+2. `wasLastFailureProcessExit()`
+3. everything else
 
-const resolvedErrorBehavior = propertyResolver.resolveErrorBehavior(
-  prompt,
-  workflow
-);
-const onError = resolvedErrorBehavior?.onError ?? "stop";
+Today, **process exit is not treated as a normal step failure**. It is routed through the
+stop/cancel path:
 
-if (harnessErrored) {
-  if (onError === "continue") {
-    // Mark step as failed, log warning, advance to next step
-    runtime.failAttempt(target, attemptIndex, failureReason);
-    // Do NOT call runtime.fail() — continue queue
-    continue;
-  }
+- cancel attempt
+- mark the prompt cancelled
+- request workflow stop
+- confirm stopped
+- finalize cancelled prompt after stop
 
-  if (onError === "retry") {
-    const maxRetries = resolvedErrorBehavior?.maxRetries ?? 1;
-    const retryDelayMs = resolvedErrorBehavior?.retryDelayMs ?? 2000;
-    if (attemptIndex < maxRetries) {
-      await delay(retryDelayMs);
-      continue; // retry the same step
-    }
-    // Exhausted retries — fall through to stop
-  }
+Everything else is treated as a hard failure:
 
-  // Default: stop
-  runtime.failAttempt(target, attemptIndex, failureReason);
-  runtime.fail();
-  return;
-}
-```
+- mark step failed
+- fail attempt
+- finalize failed in-flight prompt
+- fail workflow
 
-The `propertyResolver` gets a new `resolveErrorBehavior()` method following the three-tier
-precedence (prompt > workflow > settings). A global default can be added to VS Code settings.
+### Required adjustment
+
+`errorBehavior` should apply to **harness failures**, which means at minimum:
+
+- process exit
+- harness-signaled session error
+- prompt execution timeout
+
+User cancellation must remain separate and must **not** be routed through `errorBehavior`.
+
+This implies the current process-exit branch in `WorkflowExecutor` needs to move from the
+cancel/stop path into the new harness-failure policy path.
 
 ---
 
-## HarnessIntegration Classification
+## Detection Strategy
 
-`HarnessIntegration` needs a way to distinguish harness errors from other failures.
-Add a method or property:
+The fallback section of the original plan was too speculative. The local harness logs in
+this environment show that generic keyword matching would create false positives, because
+many harnesses log tool-level failures using common error fields.
 
-```typescript
-// HarnessIntegration.ts (abstract base)
-abstract wasLastFailureHarnessError(): boolean;
-getLastHarnessErrorMessage(): string | undefined;
-```
+### Research basis for this change
 
-Or, extend the existing failure reason system with an error kind enum:
+This recommendation is based on direct local inspection of the harness log locations that
+FlightPath currently targets:
+
+- Copilot: inspected local session-state and log files
+- Claude: inspected local project transcript logs
+- Codex: inspected local session logs
+- Qwen: inspected local project logs
+- Gemini: inspected local temp/chat logs
+- OpenCode: no local logs were present to inspect in this environment
+
+The result was not "no harness contains error lines". The result was narrower:
+
+- Copilot had a verified session-level error event
+- Claude had plausible session-level error shapes plus many tool-level error shapes
+- Codex/Qwen/Gemini logs contained error-looking records, but the verified local examples
+  were tool-level failures, not safe session-level harness-failure markers
+
+That is why the generic fallback was removed. The issue is false positives, not absence of
+error text.
+
+### Key rule
+
+Do **not** implement a generic cross-harness `BaseLogParser.isErrorEvent()` that matches
+strings like `429`, `timeout`, or `error`.
+
+Instead, only use:
+
+- explicit harness/session error hooks
+- verified session-level log events
+- verified headless result objects
+- process exit and timeout as the universal fallback
+
+### Failure classification
+
+The implementation needs a structured failure kind instead of boolean checks:
 
 ```typescript
 export type FailureKind =
   | "userCancelled"
   | "processExit"
-  | "harnessError" // NEW: harness signaled error via hook or JSON
-  | "timeout" // NEW: prompt execution timed out
+  | "harnessError"
+  | "timeout"
   | "unknown";
 ```
 
-`CliFailureTracker` currently tracks `processExitTermination` (number) and derives
-`wasLastFailureProcessExit()`. Extend it to also track `harnessError` state with an
-optional error message.
+Recommended plumbing:
+
+- extend `CliFailureTracker` to store `failureKind` and optional details
+- extend `NotificationResult` to distinguish completion from error
+- extend `LogMonitorResult` to return a structured failure kind when available
+- keep user cancellation separate from harness failure handling
 
 ---
 
-## UI Changes
+## Harness Findings
 
-### WorkflowPropertiesPanel and PropertiesDrawer
+### Claude
 
-Both panels share the validation/execution section. Add below the existing `endCondition`
-section:
+#### Interactive
 
-**`errorBehavior` dropdown** (replaces old hardcoded "stop" behavior):
+Claude is the strongest candidate for fixing the current hang case.
 
-- Label: "On Harness Error"
-- Options: "Stop Workflow" (default), "Retry", "Continue to Next Step"
-- Applies to prompt steps only (not script steps — those already have `onFail`)
+Current state:
 
-**`maxRetries` number input** (shown only when option is "Retry"):
+- `ClaudeNotificationMonitor` maps `Stop` and `SessionStart`
+- `flightpath-claude-hook.js` only handles those events
+- there is no current path for `StopFailure`
 
-- Label: "Max Retries"
-- Default: 1
-- Min: 1, Max: 10
+Recommended change:
 
-**`retryDelayMs` number input** (shown only when option is "Retry", optional):
+- add `StopFailure` notification support
+- write a distinct error notification file
+- surface it as `failureKind: "harnessError"`
 
-- Label: "Retry Delay (ms)"
-- Default: 2000
-- Only shown if user wants to customize; could be an expandable advanced section
+#### Headless/log fallback
 
-The UI pattern follows the existing `endCondition` section layout:
+Verified and likely-useful signals:
 
-- Collapsed/hidden when `onError: "stop"` (the default, no additional config needed)
-- Expanded with `maxRetries` + `retryDelayMs` inputs when `onError: "retry"`
+- `result.is_error === true` is already handled in `ClaudeResponseParser`
+- assistant transcript entries can contain top-level `error` plus `isApiErrorMessage`
+- `system` entries with `subtype: "api_retry"` look like in-progress status, not terminal failure
 
-### Step Status Display
+Important constraint:
 
-When a step fails with a harness error and `onError: "continue"`, the step icon should
-show a distinct warning state (yellow, not red) — "error but continued" vs. "error that
-stopped everything". This requires a new `STEP_STATUS.ERROR_CONTINUED` or similar, or
-reuse the existing `STEP_STATUS.FAILED` with a different message.
+- many Claude logs contain `message.content[].is_error: true` and tool-use error payloads
+- those are often tool-level failures, not session-level harness failures
 
-When retrying, show `STEP_STATUS.RUNNING` on the retry attempt. The step label should
-show "Retry 1/3" similar to how `endCondition` retries are displayed.
+So the log fallback for Claude must remain session-level only. Do not treat generic tool
+result errors as harness failures.
+
+### Copilot
+
+#### Interactive
+
+Current state:
+
+- `CopilotNotificationMonitor` maps `agentStop` and `sessionStart`
+- no current support for `errorOccurred`
+
+Recommended change:
+
+- add `errorOccurred` hook handling if the hook is available in the active Copilot CLI
+- write a distinct error notification file
+- surface it as `failureKind: "harnessError"`
+
+#### Log fallback
+
+This environment has verified session-level Copilot errors in the local log/session state:
+
+- `session.error`
+- with fields such as `data.errorType`, `data.message`, and sometimes `data.statusCode`
+
+Important constraint:
+
+- `tool.execution_complete success:false` appears frequently and should not be treated as
+  a harness failure
+
+So Copilot can use a harness-specific log fallback based on `session.error`, but not on
+generic tool failure events.
+
+### Codex
+
+Current state:
+
+- local session logs did **not** reveal a verified session-level error event
+- observed failures were mostly tool command failures such as `exec_command_end` with
+  `status:"failed"`
+
+Important constraint:
+
+- those command failures are not equivalent to harness/session failure
+
+Recommendation:
+
+- do not assume a generic `{ type: "error" }` session event
+- for now, rely on process exit and timeout
+- only add a session-level fallback after the event shape is verified
+
+### Qwen
+
+Current state:
+
+- local logs show tool and UI telemetry failures
+- examples include `toolCallResult.status:"error"` and nested tool response errors
+
+Important constraint:
+
+- those are tool-level failures and would false-positive badly
+
+Recommendation:
+
+- do not implement log-based harness-error detection yet
+- rely on process exit and timeout until a verified session-level signal is found
+
+### Gemini
+
+Current state:
+
+- local logs show tool/function response errors
+- examples include `functionResponse.response.error` and tool entries with `status:"error"`
+
+Important constraint:
+
+- these are not reliable harness/session failure markers
+
+Recommendation:
+
+- do not implement generic log-based harness-error detection
+- rely on process exit and timeout until a verified session-level signal is found
+
+### OpenCode
+
+Current state:
+
+- no local logs were available in this environment
+- parser/source-based investigation suggests retry/error fields may exist, but that is not
+  yet verified against real logs
+
+Recommendation:
+
+- leave OpenCode fallback unimplemented beyond process exit and timeout until verified
+
+---
+
+## Detection Architecture
+
+### Notification monitors
+
+Current state:
+
+- `NotificationMonitorBase` assumes start/stop completion files
+- `NotificationResult` only exposes `completed`, `error?`, and `data?`
+
+Required changes:
+
+- add a discriminator such as `kind: "completed" | "error"`
+- allow monitors to watch for `{sessionId}-error.json` in addition to stop files
+- map harness-specific error hooks into that structured result
+
+This applies first to:
+
+- Claude `StopFailure`
+- Copilot `errorOccurred`
+
+### CLI log monitor
+
+Current state:
+
+- `CliLogMonitor` can resolve success, parsed headless output, or `processExited`
+- timeout currently rejects with `"Log monitoring timeout"`
+
+Required changes:
+
+- return a structured timeout failure instead of a generic thrown error
+- thread `failureKind` and optional details into the monitor result
+- keep notification-monitor completion authoritative where applicable
+
+Recommended `LogMonitorResult` direction:
+
+```typescript
+interface LogMonitorResult {
+  success: boolean;
+  sessionId?: string;
+  parsedOutput?: string;
+  cliResult?: CliResult;
+  failureKind?: FailureKind;
+  failureMessage?: string;
+  processExited?: { exitCode: number };
+}
+```
+
+### Failure tracker
+
+Current state:
+
+- `CliFailureTracker` only has process-exit-oriented state
+
+Required changes:
+
+- replace or extend the current booleans with structured failure kind tracking
+- preserve the existing user-cancel path
+- capture optional harness error details for runtime messages and logs
+
+---
+
+## Workflow Routing
+
+### Desired behavior
+
+When a prompt attempt fails with `failureKind` in:
+
+- `processExit`
+- `harnessError`
+- `timeout`
+
+then `WorkflowExecutor` should resolve `errorBehavior` and route accordingly.
+
+### `stop`
+
+- fail the attempt
+- mark the step failed
+- finalize the failed prompt
+- fail the workflow
+
+### `retry`
+
+- fail the current attempt
+- wait `retryDelayMs` if configured
+- re-run the same step until `maxRetries` is exhausted
+- after retries are exhausted, fail the workflow
+
+### `continue`
+
+- fail the attempt
+- mark the step failed
+- finalize the prompt as failed
+- keep the workflow runtime running
+- continue to the next queued step
+
+`continue` does **not** require a new step status. The current failed step status is
+already sufficient. The UI/runtime messaging should explain that the workflow continued
+after the failure.
+
+---
+
+## Parser, Schema, and Serialization Touchpoints
+
+The original Phase 1 was incomplete for this repository. Adding a new execution property
+requires updates in the prompt parser and editor plumbing, not just shared types.
+
+Expected touchpoints:
+
+- `src/types/FlightPathTypes.ts`
+- `src/types/DashboardConstants.ts`
+- `src/types/FlightPathSettings.ts`
+- `schemas/prompt-schema.json`
+- `schemas/settings-schema.json`
+- `src/flightpath/PromptFileParser.ts`
+- `src/flightpath/orchestration/PromptFileLoader.ts`
+- `src/flightpath/WorkflowInstance.ts`
+- `src/ui/WorkflowSerializer.ts`
+- `src/completions/PromptPropertyCompletionProvider.ts`
+- `src/ui/WebviewSettingsSync.ts`
+- `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`
+
+Likely supporting updates:
+
+- prompt/workflow property key lists
+- serializer field allowlists
+- settings synchronization
+- prompt property completions
+
+If the workflow-level default is exposed in the UI, the relevant webview state/types will
+need to be updated as well.
+
+---
+
+## UI Plan
+
+The prompt-level UI should follow the existing nullable execution-property pattern used for
+`endCondition` and `preCondition`, rather than introducing a one-off dropdown.
+
+### Prompt step editor
+
+For prompt steps:
+
+- inheritance mode
+- explicit none/clear mode
+- custom `errorBehavior`
+
+When custom is selected:
+
+- show `On Harness Error`
+- show `Max Retries` when `retry` is selected
+- show `Retry Delay (ms)` when `retry` is selected
+
+### Workflow-level editor
+
+At the workflow level, expose the default `errorBehavior` in the execution/settings area so
+steps can inherit it.
+
+### Status display
+
+- keep failed steps as `FAILED`
+- show retry progress using attempt/status messaging
+- for continue behavior, show a warning/status message that the workflow advanced after the
+  step failed
+
+No new shared `STEP_STATUS` value is necessary for the first implementation.
 
 ---
 
 ## Settings
 
-Add global defaults to VS Code settings:
+Use the existing structured settings model:
 
 ```json
-"flightpath.errorBehavior.onError": {
-  "type": "string",
-  "enum": ["stop", "retry", "continue"],
-  "default": "stop",
-  "description": "Default action when a harness error occurs. Can be overridden per-workflow or per-step."
-},
-"flightpath.errorBehavior.maxRetries": {
-  "type": "number",
-  "default": 1,
-  "description": "Default maximum retries when errorBehavior.onError is 'retry'."
-},
-"flightpath.errorBehavior.retryDelayMs": {
-  "type": "number",
-  "default": 2000,
-  "description": "Default delay (ms) between error retries."
+"flightpath.workflow.defaultErrorBehavior": {
+  "type": "object",
+  "default": null,
+  "description": "Default error behavior for workflow steps when a harness/session failure occurs."
 }
 ```
+
+Schema details should validate:
+
+- `onError`: `"stop" | "retry" | "continue"`
+- `maxRetries`: integer, minimum `1`
+- `retryDelayMs`: integer, minimum `0`
+
+This should be wired through `FlightPathSettings.workflow.defaultErrorBehavior`, not
+through new flat settings like `flightpath.errorBehavior.onError`.
 
 ---
 
 ## Implementation Order
 
-### Phase 1 — Schema + Types (no behavior change)
+### Phase 1 - Types, schemas, parser, serializer
 
-1. Add `ErrorBehavior` interface and `ErrorBehaviorAction` type to `FlightPathTypes.ts`
-2. Add `errorBehavior?: ErrorBehavior | null` to `ExecutionProperties`
-3. Add to `schemas/prompt-schema.json` with descriptions and enum
-4. Run `npm run generate-schema`
-5. Add to `PropertyResolver.resolveErrorBehavior()`
+1. Add `ErrorBehavior` types to shared workflow types
+2. Add `errorBehavior` to execution properties
+3. Update prompt schema, settings schema, parser, serializer, and completion plumbing
+4. Add `workflow.defaultErrorBehavior` to settings types and settings sync
+5. Seed workflow defaults in `PromptFileLoader.populateSettingsDefaults()`
 
-### Phase 2 — Error Detection (Claude first)
+This phase should make the property round-trip correctly before any runtime behavior
+changes are introduced.
 
-1. Add `StopFailure` to `ClaudeNotificationMonitor.buildHookConfig()`
-2. Update `flightpath-claude-hook.js` to write `{sessionId}-error.json` for `StopFailure`
-3. Update `NotificationMonitorBase.monitorForCompletion()` to distinguish completion vs. error
-4. Extend `CliFailureTracker` with `harnessError` state + message
-5. Thread the error kind through `CliLogMonitor` result → `WorkflowExecutor`
-6. Test with internet disconnection mid-prompt (Claude)
+### Phase 2 - Failure classification plumbing
 
-### Phase 3 — Error Detection (other harnesses)
+1. Introduce structured `FailureKind`
+2. Extend `CliFailureTracker`
+3. Extend `NotificationResult`
+4. Extend `CliLogMonitor` result shape
+5. Treat prompt timeout as structured failure instead of a generic thrown error
 
-1. Copilot: Add `errorOccurred` hook + notification file
-2. Research Codex/OpenCode/Qwen/Gemini error event formats (open source codebases)
-3. Add log-based `isErrorEvent()` to each log parser for cross-harness fallback
-4. Headless: `ClaudeResponseParser` already works — just ensure error kind is set
+This phase should not yet change retry/continue behavior. It should only make failure
+classification explicit.
 
-### Phase 4 — WorkflowExecutor Routing
+### Phase 3 - Harness detection
 
-1. Extend `executeStep()` to read resolved `errorBehavior`
-2. Implement `continue` path (skip `runtime.fail()`, advance queue)
-3. Implement `retry` path (loop with delay, up to maxRetries)
-4. Add retry attempt counter to `PromptRuntimeMetadata`
-5. Update step status messages for retry/continue cases
+1. Claude: add `StopFailure` notification support
+2. Copilot: add `errorOccurred` notification support if supported by the active CLI
+3. Claude: tighten session-level fallback parsing only
+4. Copilot: add `session.error` fallback parsing only
+5. Leave Codex/Qwen/Gemini/OpenCode on process-exit/timeout fallback until verified
 
-### Phase 5 — UI
+This is the smallest safe implementation slice that fixes the known blind spots without
+adding broad false-positive log parsing.
 
-1. Add `errorBehavior` dropdown to `WorkflowPropertiesPanel`
-2. Add `errorBehavior` dropdown to `PropertiesDrawer`
-3. Conditional `maxRetries` + `retryDelayMs` inputs
-4. Step retry display in prompt list ("Retry 2/3")
-5. VS Code settings additions
+### Phase 4 - WorkflowExecutor routing
+
+1. Route `processExit`, `harnessError`, and `timeout` through `errorBehavior`
+2. Keep `userCancelled` on the existing cancellation path
+3. Implement `retry`
+4. Implement `continue`
+5. Preserve existing stop behavior as the default
+
+### Phase 5 - UI
+
+1. Add workflow-level default editing
+2. Add prompt-level inherit/none/custom editing
+3. Add retry-related inputs
+4. Add status messaging for retry and continue outcomes
 
 ---
 
-## What NOT to Build (Now)
+## What Not To Build Yet
 
-- **Smart backoff**: Fixed delay only. Exponential backoff or jitter can be added later.
-- **Error type discrimination**: Don't try to classify rate limits vs. timeouts vs. auth
-  failures differently in the schema. One `onError` action applies to all harness errors.
-  Users who need different behavior for different error types can use `endCondition` with
-  a script that inspects the AI's output.
-- **Circuit breaker**: Don't add a "pause workflow for N minutes then retry" mechanism.
-- **Session recovery on retry**: When retrying after a harness error, do NOT resume the
-  errored session. Start a fresh session. The errored session may be in a broken state.
+- generic keyword-based cross-harness error detection
+- per-error-type policy branching in the schema
+- exponential backoff or jitter
+- automatic resume of an errored harness session on retry
+- new step status enums unless the existing `FAILED` state proves insufficient
+
+Retries should start a fresh harness attempt, not attempt to recover the broken session.
 
 ---
 
 ## Open Questions
 
-1. **Does Claude's `StopFailure` hook actually fire when the TUI stays open?** This needs
-   manual testing — connect Claude, start a long prompt, kill the network, observe whether
-   `StopFailure` fires while the TUI is still visible. The Claude source code at
-   `C:\dev\claude-code-main` should be explored to understand the hook firing conditions.
-
-2. **What does Copilot's `errorOccurred` hook payload look like?** The hook is documented
-   but not tested in FlightPath. Manual testing required.
-
-3. **Does the PTY exit always occur after `StopFailure`, or can they be independent?**
-   If both fire, we need to handle the race condition where `StopFailure` (harness error)
-   and PTY exit (process died) both arrive.
-
-4. **Codex/OpenCode/Qwen/Gemini error formats**: Need source code exploration or manual
-   testing to determine reliable error event signatures before implementing log parsers.
+1. Does Claude `StopFailure` always fire for the interactive unrecoverable-error case, or
+   are there cases where only transcript/log evidence is available?
+2. Is Copilot `errorOccurred` available and stable in the CLI version FlightPath targets,
+   and what exact payload does it provide?
+3. For Codex/OpenCode, is there a verified session-level error event that is distinct from
+   tool failures? If so, capture the exact event shape before implementing a parser.
+4. Should timeout be user-configurable per step in the future, or is routing the existing
+   global timeout through `errorBehavior` sufficient for now?
 
 ---
 
-## Effort Estimate
+## Recommended Shipping Sequence
 
-- Phase 1 (schema + types): ~2h
-- Phase 2 (Claude error detection + bug fix): ~1 day (includes testing)
-- Phase 3 (other harnesses): ~1.5 days (research + implementation)
-- Phase 4 (WorkflowExecutor routing): ~4h
-- Phase 5 (UI): ~4h
+The highest-value safe slice is:
 
-Total: ~3.5 days for full feature. Phase 2 alone (Claude fix for the TUI hang bug) is
-the highest priority and can ship independently before the `errorBehavior` schema is
-complete.
+1. land the schema/parser/serializer/settings work
+2. add structured failure classification
+3. wire Claude `StopFailure`
+4. route process exit and timeout through `errorBehavior`
+
+That fixes the biggest execution gap without depending on speculative log parsing for every
+harness.
