@@ -232,7 +232,7 @@ interface UiState {
   mcpWorkspaceServers: McpServerConfig[] | undefined;
   mcpWorkspaceServersLoading: boolean;
 
-  // Mobile drawer/sidebar state (transient — not persisted)
+  // Mobile drawer/overlay state — persisted so user preference survives restarts
   mobilePromptsOpen: boolean;
   mobilePromptsMode: "sidebar" | "fullwidth";
   mobileSettingsOpen: boolean;
@@ -470,7 +470,7 @@ const initialState: UiState = {
   mcpWorkspaceServers: undefined,
   mcpWorkspaceServersLoading: false,
   mobilePromptsOpen: false,
-  mobilePromptsMode: "sidebar",
+  mobilePromptsMode: "fullwidth",
   mobileSettingsOpen: false,
   globalSettingsOpen: false,
   globalSettingsActiveTab: "general",
@@ -497,6 +497,8 @@ const persistedFields = [
   "mcpDiscoveryTab",
   "globalSettingsActiveTab",
   "activeWorkflowWorkingFilePath",
+  "mobilePromptsOpen",
+  "mobilePromptsMode",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(

@@ -192,11 +192,12 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // vscode is a stable singleton — never changes
 
-  // Close mobile drawers when switching to desktop so they don't reappear
-  // the next time the user returns to mobile.
+  // Close the settings drawer when switching to desktop — it has no desktop
+  // equivalent and would reappear on re-entry to mobile otherwise.
+  // mobilePromptsOpen is NOT reset here so the persisted preference is preserved:
+  // if steps were open on mobile, they'll still be open when returning to mobile.
   useEffect(() => {
     if (!isMobile) {
-      closeMobilePrompts();
       closeMobileSettings();
     }
   }, [isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
