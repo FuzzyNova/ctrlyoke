@@ -3,6 +3,7 @@ import type {
   SettingSource,
 } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
@@ -34,27 +35,25 @@ export function ChatSection({
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
         Chat (Copilot Chat Harness)
       </h3>
-      <div>
-        <label
-          htmlFor="chat-window-location"
-          className="block text-xs text-description-fg mb-1"
-        >
-          Chat window location
-        </label>
+      <SettingInputRow
+        label="Chat window location"
+        id="chat-window-location"
+        path="chat.windowLocation"
+        {...rowProps}
+      >
         <CustomSelect
           id="chat-window-location"
           value={chat.windowLocation}
           onChange={(v) => onUpdate("chat.windowLocation", v)}
           options={WINDOW_LOCATION_OPTIONS}
         />
-      </div>
-      <div>
-        <label
-          htmlFor="chat-inactivity-timeout"
-          className="block text-xs text-description-fg mb-1"
-        >
-          Inactivity timeout (seconds)
-        </label>
+      </SettingInputRow>
+      <SettingInputRow
+        label="Inactivity timeout (seconds)"
+        id="chat-inactivity-timeout"
+        path="chat.inactivityTimeout"
+        {...rowProps}
+      >
         <input
           id="chat-inactivity-timeout"
           type="number"
@@ -68,7 +67,7 @@ export function ChatSection({
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
-      </div>
+      </SettingInputRow>
       <SettingToggleRow
         label="Treat timeout as success"
         description="If the inactivity timeout is reached, treat the prompt as successfully completed."

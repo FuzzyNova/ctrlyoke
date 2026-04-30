@@ -2,6 +2,7 @@ import type {
   FullGlobalSettings,
   SettingSource,
 } from "@root/types/WebviewMessageTypes";
+import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
@@ -27,13 +28,12 @@ export function QueueSection({
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
         Queue
       </h3>
-      <div>
-        <label
-          htmlFor="queue-max-size"
-          className="block text-xs text-description-fg mb-1"
-        >
-          Max queue size
-        </label>
+      <SettingInputRow
+        label="Max queue size"
+        id="queue-max-size"
+        path="queue.maxSize"
+        {...rowProps}
+      >
         <input
           id="queue-max-size"
           type="number"
@@ -44,14 +44,13 @@ export function QueueSection({
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
-      </div>
-      <div>
-        <label
-          htmlFor="queue-max-execution-time"
-          className="block text-xs text-description-fg mb-1"
-        >
-          Max workflow execution time (seconds, -1 = unlimited)
-        </label>
+      </SettingInputRow>
+      <SettingInputRow
+        label="Max workflow execution time (seconds, -1 = unlimited)"
+        id="queue-max-execution-time"
+        path="queue.maxWorkflowExecutionTime"
+        {...rowProps}
+      >
         <input
           id="queue-max-execution-time"
           type="number"
@@ -65,7 +64,7 @@ export function QueueSection({
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
-      </div>
+      </SettingInputRow>
       <SettingToggleRow
         label="Unlimited mode"
         description="Disable all queue size and time limits."

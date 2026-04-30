@@ -1,8 +1,12 @@
-import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
+import type {
+  FullGlobalSettings,
+  SettingSource,
+} from "@root/types/WebviewMessageTypes";
 import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { CustomSelect } from "@components/shared";
+import { SettingInputRow } from "../shared/SettingInputRow";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -21,20 +25,29 @@ const CLI_HARNESSES: HarnessId[] = [
   HARNESS_IDS.COPILOT_CHAT,
 ] as HarnessId[];
 
-export function HarnessesSection({ settings, onUpdate }: Props) {
+export function HarnessesSection({
+  settings,
+  activeScope,
+  onUpdate,
+  onReset,
+}: Props) {
   const models = settings.settings.models;
   const additionalArgs = settings.settings.additionalArgs;
+  const sources = settings.sources as Record<string, SettingSource>;
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
+  const rowProps = { sources, onReset, activeScope };
 
   return (
     <div className="space-y-4">
       <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
         Default Harness
       </h3>
-      <div className="grid grid-cols-[120px_1fr] items-center gap-2">
-        <label htmlFor="harness-active" className="text-xs text-description-fg">
-          Active harness
-        </label>
+      <SettingInputRow
+        label="Active harness"
+        id="harness-active"
+        path="harness"
+        {...rowProps}
+      >
         <select
           id="harness-active"
           value={settings.settings.harness}
@@ -47,7 +60,7 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
             </option>
           ))}
         </select>
-      </div>
+      </SettingInputRow>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
           Harness Defaults
@@ -73,13 +86,12 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
               <div className="text-sm font-medium text-foreground">
                 {info.name}
               </div>
-              <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                <label
-                  htmlFor={`model-${harnessId}`}
-                  className="text-xs text-description-fg"
-                >
-                  Model
-                </label>
+              <SettingInputRow
+                label="Model"
+                id={`model-${harnessId}`}
+                path={`models.${harnessId}`}
+                {...rowProps}
+              >
                 {discoveredModels.length > 0 ? (
                   <CustomSelect
                     id={`model-${harnessId}`}
@@ -107,15 +119,14 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
                     className="bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
                   />
                 )}
-              </div>
+              </SettingInputRow>
               {!isChat && (
-                <div className="grid grid-cols-[80px_1fr] items-center gap-2">
-                  <label
-                    htmlFor={`extra-args-${harnessId}`}
-                    className="text-xs text-description-fg"
-                  >
-                    Extra args
-                  </label>
+                <SettingInputRow
+                  label="Extra args"
+                  id={`extra-args-${harnessId}`}
+                  path={`additionalArgs.${harnessId}`}
+                  {...rowProps}
+                >
                   <input
                     id={`extra-args-${harnessId}`}
                     type="text"
@@ -133,7 +144,7 @@ export function HarnessesSection({ settings, onUpdate }: Props) {
                     placeholder="None"
                     className="bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
                   />
-                </div>
+                </SettingInputRow>
               )}
             </div>
           );

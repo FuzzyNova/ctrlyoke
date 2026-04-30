@@ -37,7 +37,6 @@
       "description": "Per-harness additional CLI arguments.",
       "properties": {
         "copilot-cli": { "type": "string" },
-        "copilot-chat": { "type": "string" },
         "claude-cli": { "type": "string" },
         "codex-cli": { "type": "string" },
         "opencode-cli": { "type": "string" },

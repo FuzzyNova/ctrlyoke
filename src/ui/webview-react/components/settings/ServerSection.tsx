@@ -88,21 +88,34 @@ export function ServerSection({
       </h3>
 
       <div className="space-y-3">
-        {/* Enable/disable toggle — runtime action, not a persisted setting path */}
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={serverRunning}
-            onChange={(e) => toggleServer(e.target.checked)}
-            className="accent-btn-bg"
-          />
-          <span className="text-sm text-foreground">Enable server</span>
-          {serverRunning && (
-            <span className="ml-auto text-xs text-description-fg italic">
-              running
-            </span>
-          )}
-        </label>
+        <SettingToggleRow
+          label="Enable on launch"
+          description="Automatically start the hosted server when FlightPath activates."
+          checked={server.enabled}
+          onChange={(value) => onUpdate("server.enabled", value)}
+          path="server.enabled"
+          {...rowProps}
+        />
+
+        <div className="rounded border border-panel-border p-3 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm text-foreground">Current session</div>
+              <div className="text-xs text-description-fg">
+                {serverRunning
+                  ? "Server is running for this VS Code session."
+                  : "Server is stopped for this VS Code session."}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleServer(!serverRunning)}
+              className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover"
+            >
+              {serverRunning ? "Stop server" : "Start server"}
+            </button>
+          </div>
+        </div>
 
         {/* Clickable URL + copy + QR buttons — visible while server is running */}
         {serverRunning && displayUrl && (
@@ -255,6 +268,13 @@ export function ServerSection({
           path="server.tls.enabled"
           {...rowProps}
         />
+        <div className="text-xs text-description-fg italic">
+          HTTPS is required for push notifications on mobile browsers, and is
+          generally recommended for secure communication. You can provide your
+          own TLS certificate and private key, or generate a self-signed
+          certificate directly from the dashboard. Changes take effect on server
+          restart.
+        </div>
 
         {server.tls?.enabled && (
           <div className="space-y-3 mt-3">
@@ -318,7 +338,8 @@ export function ServerSection({
               gitignored. Browsers will show a warning on first visit — click
               proceed to continue. Changes take effect on server restart.
               <br />
-              <strong>iOS Safari:</strong> download the cert and install it via{" "}
+              <strong>iOS Safari:</strong> depending on iOS version, it may be
+              necessary to download the cert and install it via{" "}
               <em>Settings → General → VPN &amp; Device Management</em>, then
               enable full trust under{" "}
               <em>

@@ -3,6 +3,7 @@ import type {
   SettingSource,
 } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
@@ -47,20 +48,27 @@ export function PermissionsSection({
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           Permission Mode
         </h3>
-        <CustomSelect
-          value={tools.permissionMode}
-          onChange={(v) => onUpdate("tools.permissionMode", v)}
-          options={PERMISSION_MODE_OPTIONS}
-        />
+        <SettingInputRow
+          label="Mode"
+          id="tools-permission-mode"
+          path="tools.permissionMode"
+          {...rowProps}
+        >
+          <CustomSelect
+            id="tools-permission-mode"
+            value={tools.permissionMode}
+            onChange={(v) => onUpdate("tools.permissionMode", v)}
+            options={PERMISSION_MODE_OPTIONS}
+          />
+        </SettingInputRow>
       </div>
       <div className="space-y-3 mt-2">
-        <div>
-          <label
-            htmlFor="tools-allowed"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Allowed tools (one per line)
-          </label>
+        <SettingInputRow
+          label="Allowed tools (one per line)"
+          id="tools-allowed"
+          path="tools.allowed"
+          {...rowProps}
+        >
           <textarea
             id="tools-allowed"
             rows={3}
@@ -77,14 +85,13 @@ export function PermissionsSection({
             placeholder={"read\nglob\ngrep"}
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
           />
-        </div>
-        <div>
-          <label
-            htmlFor="tools-denied"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Denied tools (one per line)
-          </label>
+        </SettingInputRow>
+        <SettingInputRow
+          label="Denied tools (one per line)"
+          id="tools-denied"
+          path="tools.denied"
+          {...rowProps}
+        >
           <textarea
             id="tools-denied"
             rows={3}
@@ -101,19 +108,18 @@ export function PermissionsSection({
             placeholder={"shell(rm:*)\nwrite"}
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
           />
-        </div>
+        </SettingInputRow>
       </div>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           Allowed Directories
         </h3>
-        <div>
-          <label
-            htmlFor="allowed-dirs"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Additional directories (one per line)
-          </label>
+        <SettingInputRow
+          label="Additional directories (one per line)"
+          id="allowed-dirs"
+          path="tools.allowedDirs"
+          {...rowProps}
+        >
           <textarea
             id="allowed-dirs"
             rows={3}
@@ -129,11 +135,11 @@ export function PermissionsSection({
             }
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
           />
-          <p className="text-xs text-description-fg mt-1">
-            Applies to copilot-cli, claude-cli, codex-cli, and qwen-cli. Not
-            supported by gemini-cli, opencode-cli, or copilot-chat.
-          </p>
-        </div>
+        </SettingInputRow>
+        <p className="text-xs text-description-fg mt-1">
+          Applies to copilot-cli, claude-cli, codex-cli, and qwen-cli. Not
+          supported by gemini-cli, opencode-cli, or copilot-chat.
+        </p>
       </div>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
@@ -157,34 +163,32 @@ export function PermissionsSection({
           set to <span className="font-medium text-foreground">Custom</span>.
         </p>
         <div className="space-y-3">
-          <div>
-            <label
-              htmlFor="codex-sandbox-mode"
-              className="block text-xs text-description-fg mb-1"
-            >
-              Sandbox mode
-            </label>
+          <SettingInputRow
+            label="Sandbox mode"
+            id="codex-sandbox-mode"
+            path="tools.codexSandboxMode"
+            {...rowProps}
+          >
             <CustomSelect
               id="codex-sandbox-mode"
               value={tools.codexSandboxMode}
               onChange={(v) => onUpdate("tools.codexSandboxMode", v)}
               options={CODEX_SANDBOX_OPTIONS}
             />
-          </div>
-          <div>
-            <label
-              htmlFor="codex-approval-policy"
-              className="block text-xs text-description-fg mb-1"
-            >
-              Approval policy
-            </label>
+          </SettingInputRow>
+          <SettingInputRow
+            label="Approval policy"
+            id="codex-approval-policy"
+            path="tools.codexApprovalPolicy"
+            {...rowProps}
+          >
             <CustomSelect
               id="codex-approval-policy"
               value={tools.codexApprovalPolicy}
               onChange={(v) => onUpdate("tools.codexApprovalPolicy", v)}
               options={CODEX_APPROVAL_OPTIONS}
             />
-          </div>
+          </SettingInputRow>
         </div>
       </div>
     </div>

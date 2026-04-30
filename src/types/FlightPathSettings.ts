@@ -16,6 +16,8 @@ import type {
   UserHookConfig,
 } from "./FlightPathTypes";
 
+type CliAdditionalArgsHarnessId = Exclude<HarnessId, "copilot-chat">;
+
 export interface FlightPathGlobalSettings {
   // Core
   harness: HarnessId;
@@ -24,7 +26,7 @@ export interface FlightPathGlobalSettings {
   models: Partial<Record<HarnessId, string>>;
 
   // Additional args (per-harness) — replaces 6 separate VS Code settings
-  additionalArgs: Partial<Record<HarnessId, string>>;
+  additionalArgs: Partial<Record<CliAdditionalArgsHarnessId, string>>;
 
   // Execution
   execution: {

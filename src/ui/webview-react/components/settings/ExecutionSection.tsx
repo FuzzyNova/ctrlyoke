@@ -3,6 +3,7 @@ import type {
   SettingSource,
 } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
@@ -33,27 +34,25 @@ export function ExecutionSection({
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
         Execution
       </h3>
-      <div>
-        <label
-          htmlFor="exec-mode"
-          className="block text-xs text-description-fg mb-1"
-        >
-          Execution mode
-        </label>
+      <SettingInputRow
+        label="Execution mode"
+        id="exec-mode"
+        path="execution.mode"
+        {...rowProps}
+      >
         <CustomSelect
           id="exec-mode"
           value={exec.mode}
           onChange={(v) => onUpdate("execution.mode", v)}
           options={MODE_OPTIONS}
         />
-      </div>
-      <div>
-        <label
-          htmlFor="exec-max-prompt-timeout"
-          className="block text-xs text-description-fg mb-1"
-        >
-          Max prompt timeout (seconds, -1 = unlimited)
-        </label>
+      </SettingInputRow>
+      <SettingInputRow
+        label="Max prompt timeout (seconds, -1 = unlimited)"
+        id="exec-max-prompt-timeout"
+        path="execution.maxPromptTimeout"
+        {...rowProps}
+      >
         <input
           id="exec-max-prompt-timeout"
           type="number"
@@ -67,14 +66,13 @@ export function ExecutionSection({
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
-      </div>
-      <div>
-        <label
-          htmlFor="exec-script-timeout"
-          className="block text-xs text-description-fg mb-1"
-        >
-          Script timeout (seconds)
-        </label>
+      </SettingInputRow>
+      <SettingInputRow
+        label="Script timeout (seconds)"
+        id="exec-script-timeout"
+        path="execution.scriptTimeout"
+        {...rowProps}
+      >
         <input
           id="exec-script-timeout"
           type="number"
@@ -88,7 +86,7 @@ export function ExecutionSection({
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
-      </div>
+      </SettingInputRow>
       <SettingToggleRow
         label="Close terminal on completion"
         description="Automatically close the terminal when a workflow completes."

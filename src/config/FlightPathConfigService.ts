@@ -177,6 +177,13 @@ export class FlightPathConfigService {
         if (prefix) sources[prefix] = source;
         return;
       }
+
+      // Record the object path itself so aggregate editors (for example
+      // workflow.defaultEndCondition) can still show source and reset state.
+      if (prefix) {
+        sources[prefix] = source;
+      }
+
       for (const [key, value] of Object.entries(
         obj as Record<string, unknown>
       )) {

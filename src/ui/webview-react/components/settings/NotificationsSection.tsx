@@ -9,6 +9,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import {
   disablePushNotifications,
@@ -160,13 +161,12 @@ export function NotificationsSection({
           {...rowProps}
         />
 
-        <div>
-          <label
-            htmlFor="notif-browser-mode"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Browser notifications
-          </label>
+        <SettingInputRow
+          label="Browser notifications"
+          id="notif-browser-mode"
+          path="notifications.browser.mode"
+          {...rowProps}
+        >
           <CustomSelect
             id="notif-browser-mode"
             value={notif.browser.mode}
@@ -179,7 +179,7 @@ export function NotificationsSection({
               the VS Code sidebar.
             </p>
           ) : null}
-        </div>
+        </SettingInputRow>
 
         {browserModeEnabled ? (
           <div className="space-y-2 rounded border border-panel-border p-3">
@@ -278,13 +278,12 @@ export function NotificationsSection({
           Events
         </h4>
 
-        <div>
-          <label
-            htmlFor="notif-workflow-complete"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Workflow complete
-          </label>
+        <SettingInputRow
+          label="Workflow complete"
+          id="notif-workflow-complete"
+          path="notifications.events.workflowComplete"
+          {...rowProps}
+        >
           <CustomSelect
             id="notif-workflow-complete"
             value={notif.events.workflowComplete}
@@ -293,15 +292,14 @@ export function NotificationsSection({
             }
             options={EVENT_MODE_OPTIONS}
           />
-        </div>
+        </SettingInputRow>
 
-        <div>
-          <label
-            htmlFor="notif-prompt-complete"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Prompt complete
-          </label>
+        <SettingInputRow
+          label="Prompt complete"
+          id="notif-prompt-complete"
+          path="notifications.events.promptComplete"
+          {...rowProps}
+        >
           <CustomSelect
             id="notif-prompt-complete"
             value={notif.events.promptComplete}
@@ -310,7 +308,7 @@ export function NotificationsSection({
             }
             options={EVENT_MODE_OPTIONS}
           />
-        </div>
+        </SettingInputRow>
       </div>
 
       <div className="space-y-1">

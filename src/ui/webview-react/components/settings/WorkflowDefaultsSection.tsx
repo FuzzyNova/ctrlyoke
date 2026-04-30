@@ -1,46 +1,26 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import type {
   FullGlobalSettings,
   SettingSource,
 } from "@root/types/WebviewMessageTypes";
 import { PRIOR_CONTEXT_KEYWORDS } from "@root/types/DashboardConstants";
+import { useSettingsStore } from "@store/settingsStore";
 import { CustomSelect } from "../shared/CustomSelect";
+import { MultiCheckboxDropdown } from "../shared/MultiCheckboxDropdown";
+import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import {
   ScriptConditionEditor,
   type ScriptConditionValue,
 } from "../shared/ScriptConditionEditor";
 import { AnimatedSection } from "../shared/AnimatedSection";
+import { SettingSourceBadge } from "../shared/SettingSourceBadge";
 
 interface Props {
   settings: FullGlobalSettings;
   activeScope: "workspace" | "user";
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
-}
-
-interface FieldRowProps {
-  label: string;
-  description?: string;
-  children: React.ReactNode;
-}
-
-function FieldRow({ label, description, children }: FieldRowProps) {
-  return (
-    <div className="py-2">
-      <div className="flex items-center justify-between gap-4">
-        <span className="flex flex-col min-w-0">
-          <span className="text-sm text-foreground">{label}</span>
-          {description && (
-            <span className="text-xs text-description-fg mt-0.5">
-              {description}
-            </span>
-          )}
-        </span>
-        <div className="shrink-0 w-40">{children}</div>
-      </div>
-    </div>
-  );
 }
 
 const FORMAT_OPTIONS = [
@@ -67,6 +47,7 @@ export function WorkflowDefaultsSection({
 }: Props) {
   const wf = settings.settings.workflow;
   const sources = settings.sources as Record<string, SettingSource>;
+  const availableSkills = useSettingsStore((s) => s.availableSkills);
 
   const rowProps = { sources, onReset, activeScope };
 
@@ -100,54 +81,122 @@ export function WorkflowDefaultsSection({
     }
   }
 
+  function renderObjectSettingHeader(path: string, label: string) {
+    const source = sources[path];
+    const canReset =
+      source !== undefined && source !== "default" && source === activeScope;
+
+    return (
+      <div className="flex items-center gap-1.5">
+        <span>{label}</span>
+        {source && source !== "default" && <SettingSourceBadge source={source} />}
+        <button
+          type="button"
+          aria-label={`Reset ${label}`}
+          onClick={() => {
+            if (canReset) onReset(path);
+          }}
+          disabled={!canReset}
+          title={
+            canReset
+              ? "Reset to default"
+              : source
+                ? `Defined in ${source} config`
+                : undefined
+          }
+          className={`w-4 h-4 flex items-center justify-center rounded text-description-fg hover:text-foreground transition-opacity ${
+            canReset ? "opacity-0 group-hover:opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <i className="codicon codicon-discard text-xxs" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1">
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
         Workflow Defaults
       </h3>
-      <FieldRow
+      <SettingInputRow
         label="Default format"
         description="File format for new workflows."
+        id="workflow-default-format"
+        path="workflow.defaultFormat"
+        {...rowProps}
       >
         <CustomSelect
+          id="workflow-default-format"
           value={wf.defaultFormat}
           onChange={(v) => onUpdate("workflow.defaultFormat", v)}
           options={FORMAT_OPTIONS}
         />
-      </FieldRow>
-      <FieldRow
+      </SettingInputRow>
+      <SettingInputRow
         label="Default template"
         description="Template ID used when creating new workflows."
+        id="workflow-default-template"
+        path="workflow.defaultTemplate"
+        {...rowProps}
       >
         <input
+          id="workflow-default-template"
           type="text"
           value={wf.defaultTemplate}
           onChange={(e) => onUpdate("workflow.defaultTemplate", e.target.value)}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
-      </FieldRow>
-      <FieldRow
+      </SettingInputRow>
+      <SettingInputRow
         label="Default agent"
         description="Agent to use when none is specified in the workflow."
+        id="workflow-default-agent"
+        path="workflow.defaultAgent"
+        {...rowProps}
       >
         <input
+          id="workflow-default-agent"
           type="text"
           value={wf.defaultAgent}
           onChange={(e) => onUpdate("workflow.defaultAgent", e.target.value)}
           placeholder="None"
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
-      </FieldRow>
-      <FieldRow
+      </SettingInputRow>
+      <SettingInputRow
+        label="Default skills"
+        description="Skills to include in new workflows by default."
+        id="workflow-default-skills"
+        path="workflow.defaultSkills"
+        {...rowProps}
+      >
+        <MultiCheckboxDropdown
+          id="workflow-default-skills"
+          selectedValues={wf.defaultSkills}
+          onChange={(values) => onUpdate("workflow.defaultSkills", values)}
+          options={availableSkills.map((skill) => ({
+            value: skill.name,
+            label: skill.name,
+            description: skill.description,
+          }))}
+          placeholder="No skills selected"
+        />
+      </SettingInputRow>
+      <SettingInputRow
         label="Default prior context"
         description="How to handle prior context between prompts."
+        id="workflow-default-prior-context"
+        path="workflow.priorContext"
+        {...rowProps}
       >
         <CustomSelect
+          id="workflow-default-prior-context"
           value={wf.priorContext || PRIOR_CONTEXT_KEYWORDS.NONE}
           onChange={(v) => onUpdate("workflow.priorContext", v)}
           options={PRIOR_CONTEXT_OPTIONS}
         />
-      </FieldRow>
+      </SettingInputRow>
       <div className="pt-2 space-y-1">
         <SettingToggleRow
           label="Resume existing session"
@@ -176,9 +225,9 @@ export function WorkflowDefaultsSection({
       </div>
 
       {/* Default Pre-Condition */}
-      <div className="pt-4 border-t border-panel-border">
-        <label
-          className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer mb-1"
+      <div className="pt-4 border-t border-panel-border group">
+        <div
+          className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg mb-1"
           title="Default pre-condition gate applied to all new workflows. Individual prompts can override or disable this."
         >
           <input
@@ -187,8 +236,11 @@ export function WorkflowDefaultsSection({
             onChange={(e) => handlePreConditionToggle(e.target.checked)}
             className="w-4 h-4 accent-focus-border cursor-pointer"
           />
-          Default Pre-Condition
-        </label>
+          {renderObjectSettingHeader(
+            "workflow.defaultPreCondition",
+            "Default Pre-Condition"
+          )}
+        </div>
         <p className="text-xs text-description-fg mb-2">
           Script gate that runs before each prompt in new workflows. Prompts can
           override or disable it.
@@ -208,9 +260,9 @@ export function WorkflowDefaultsSection({
       </div>
 
       {/* Default End Condition */}
-      <div className="pt-4 border-t border-panel-border">
-        <label
-          className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer mb-1"
+      <div className="pt-4 border-t border-panel-border group">
+        <div
+          className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg mb-1"
           title="Default end condition applied to all new workflows. Individual prompts can override or disable this."
         >
           <input
@@ -219,8 +271,11 @@ export function WorkflowDefaultsSection({
             onChange={(e) => handleEndConditionToggle(e.target.checked)}
             className="w-4 h-4 accent-focus-border cursor-pointer"
           />
-          Default End Condition
-        </label>
+          {renderObjectSettingHeader(
+            "workflow.defaultEndCondition",
+            "Default End Condition"
+          )}
+        </div>
         <p className="text-xs text-description-fg mb-2">
           Validation that runs after each prompt in new workflows. Prompts can
           override or disable it.

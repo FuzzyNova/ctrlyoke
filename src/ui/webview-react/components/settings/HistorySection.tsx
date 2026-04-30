@@ -2,6 +2,7 @@ import type {
   FullGlobalSettings,
   SettingSource,
 } from "@root/types/WebviewMessageTypes";
+import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
@@ -35,13 +36,12 @@ export function HistorySection({
         path="history.saveOutput"
         {...rowProps}
       />
-      <div>
-        <label
-          htmlFor="history-max-runs"
-          className="block text-xs text-description-fg mb-1"
-        >
-          Max history runs (-1 = unlimited)
-        </label>
+      <SettingInputRow
+        label="Max history runs (-1 = unlimited)"
+        id="history-max-runs"
+        path="history.maxRuns"
+        {...rowProps}
+      >
         <input
           id="history-max-runs"
           type="number"
@@ -52,7 +52,7 @@ export function HistorySection({
           }
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
-      </div>
+      </SettingInputRow>
     </div>
   );
 }

@@ -684,7 +684,6 @@ export class WebviewSettingsSync {
       [HARNESS_IDS.COPILOT_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
         HARNESS_IDS.COPILOT_CLI
       ),
-      [HARNESS_IDS.COPILOT_CHAT]: "",
       [HARNESS_IDS.CLAUDE_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
         HARNESS_IDS.CLAUDE_CLI
       ),
@@ -907,20 +906,10 @@ export class WebviewSettingsSync {
   }
 
   async handleEnableServer(_postMessage: PostMessageFn): Promise<void> {
-    await configService.set(
-      CONFIG_KEYS.SERVER_ENABLED,
-      true,
-      CONFIG_SCOPE.USER
-    );
     await vscode.commands.executeCommand(VSCODE_COMMANDS.ENABLE_SERVER);
   }
 
   async handleDisableServer(_postMessage: PostMessageFn): Promise<void> {
-    await configService.set(
-      CONFIG_KEYS.SERVER_ENABLED,
-      false,
-      CONFIG_SCOPE.USER
-    );
     await vscode.commands.executeCommand(VSCODE_COMMANDS.DISABLE_SERVER);
   }
 

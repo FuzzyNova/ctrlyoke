@@ -17,7 +17,7 @@ export function SettingSourceBadge({ source }: Props) {
       }`}
       title={isWorkspace ? "Set in workspace config" : "Set in user config"}
     >
-      {isWorkspace ? "ws" : "user"}
+      {isWorkspace ? "workspace" : "user"}
     </span>
   );
 }

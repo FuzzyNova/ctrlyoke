@@ -11,6 +11,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import type { TerminalShortcut } from "@root/types/FlightPathSettings";
 import { CustomSelect } from "../shared/CustomSelect";
+import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
@@ -69,6 +70,10 @@ function NumberField({
   step,
   onChange,
   note,
+  path,
+  sources,
+  onReset,
+  activeScope,
 }: {
   id: string;
   label: string;
@@ -78,13 +83,21 @@ function NumberField({
   step: number;
   onChange: (value: number) => void;
   note?: string;
+  path?: string;
+  sources?: Record<string, SettingSource>;
+  onReset?: (path: string) => void;
+  activeScope?: "workspace" | "user";
 }) {
   const isInvalid = value < min || value > max;
   return (
-    <div>
-      <label htmlFor={id} className="block text-xs text-description-fg mb-1">
-        {label}
-      </label>
+    <SettingInputRow
+      label={label}
+      id={id}
+      path={path}
+      sources={sources}
+      onReset={onReset}
+      activeScope={activeScope}
+    >
       <input
         id={id}
         type="number"
@@ -114,24 +127,37 @@ function NumberField({
         </p>
       )}
       {note && <p className="text-xs text-description-fg mt-1">{note}</p>}
-    </div>
+    </SettingInputRow>
   );
 }
 
 function FontStepper({
   value,
   onChange,
+  path,
+  sources,
+  onReset,
+  activeScope,
 }: {
   value: number;
   onChange: (value: number) => void;
+  path?: string;
+  sources?: Record<string, SettingSource>;
+  onReset?: (path: string) => void;
+  activeScope?: "workspace" | "user";
 }) {
   const min = 8;
   const max = 24;
   const setSize = (next: number) => onChange(clampNumber(next, min, max));
 
   return (
-    <div>
-      <span className="block text-xs text-description-fg mb-1">Font size</span>
+    <SettingInputRow
+      label="Font size"
+      path={path}
+      sources={sources}
+      onReset={onReset}
+      activeScope={activeScope}
+    >
       <div className="flex items-center">
         <button
           className="icon-btn py-0 px-1"
@@ -157,7 +183,7 @@ function FontStepper({
           <i className="codicon codicon-sm codicon-add" />
         </button>
       </div>
-    </div>
+    </SettingInputRow>
   );
 }
 
@@ -496,6 +522,8 @@ export function TerminalSection({
         <FontStepper
           value={terminal.fontSize}
           onChange={(v) => onUpdate("terminal.fontSize", v)}
+          path="terminal.fontSize"
+          {...rowProps}
         />
 
         <NumberField
@@ -506,6 +534,8 @@ export function TerminalSection({
           max={2}
           step={0.1}
           onChange={(v) => onUpdate("terminal.lineHeight", v)}
+          path="terminal.lineHeight"
+          {...rowProps}
         />
 
         <NumberField
@@ -517,15 +547,16 @@ export function TerminalSection({
           step={1000}
           onChange={(v) => onUpdate("terminal.scrollback", v)}
           note="Higher values use more memory. Changes apply to new sessions."
+          path="terminal.scrollback"
+          {...rowProps}
         />
 
-        <div>
-          <label
-            htmlFor="terminal-cursor-style"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Cursor style
-          </label>
+        <SettingInputRow
+          label="Cursor style"
+          id="terminal-cursor-style"
+          path="terminal.cursorStyle"
+          {...rowProps}
+        >
           <CustomSelect
             id="terminal-cursor-style"
             value={terminal.cursorStyle}
@@ -534,7 +565,7 @@ export function TerminalSection({
             }
             options={CURSOR_STYLE_OPTIONS}
           />
-        </div>
+        </SettingInputRow>
 
         <SettingToggleRow
           label="Cursor blink"
@@ -560,13 +591,12 @@ export function TerminalSection({
           {...rowProps}
         />
 
-        <div>
-          <label
-            htmlFor="terminal-word-separators"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Double-click word separators
-          </label>
+        <SettingInputRow
+          label="Double-click word separators"
+          id="terminal-word-separators"
+          path="terminal.wordSeparators"
+          {...rowProps}
+        >
           <input
             id="terminal-word-separators"
             type="text"
@@ -577,7 +607,7 @@ export function TerminalSection({
             }
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
           />
-        </div>
+        </SettingInputRow>
 
         <NumberField
           id="terminal-replay-buffer"
@@ -587,6 +617,8 @@ export function TerminalSection({
           max={500}
           step={10}
           onChange={(v) => onUpdate("terminal.replayBufferKb", v)}
+          path="terminal.replayBufferKb"
+          {...rowProps}
         />
       </section>
 
@@ -597,13 +629,12 @@ export function TerminalSection({
 
         {platform === "windows" ? (
           <>
-            <div>
-              <label
-                htmlFor="terminal-shell"
-                className="block text-xs text-description-fg mb-1"
-              >
-                Shell executable
-              </label>
+            <SettingInputRow
+              label="Shell executable"
+              id="terminal-shell"
+              path="terminal.shellExecutable"
+              {...rowProps}
+            >
               <CustomSelect
                 id="terminal-shell"
                 value={
@@ -619,18 +650,24 @@ export function TerminalSection({
                 }}
                 options={WINDOWS_SHELL_OPTIONS}
               />
-            </div>
+            </SettingInputRow>
 
             {showCustomShell && (
-              <input
-                type="text"
-                value={terminal.shellExecutable}
-                placeholder="C:\\Program Files\\PowerShell\\7\\pwsh.exe"
-                onChange={(e) =>
-                  onUpdate("terminal.shellExecutable", e.target.value)
-                }
-                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
-              />
+              <SettingInputRow
+                label="Custom shell path"
+                path="terminal.shellExecutable"
+                {...rowProps}
+              >
+                <input
+                  type="text"
+                  value={terminal.shellExecutable}
+                  placeholder="C:\\Program Files\\PowerShell\\7\\pwsh.exe"
+                  onChange={(e) =>
+                    onUpdate("terminal.shellExecutable", e.target.value)
+                  }
+                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                />
+              </SettingInputRow>
             )}
 
             {shellWarning === "cmd.exe" && (
@@ -647,13 +684,12 @@ export function TerminalSection({
           </>
         ) : (
           <>
-            <div>
-              <label
-                htmlFor="terminal-shell"
-                className="block text-xs text-description-fg mb-1"
-              >
-                Shell executable override
-              </label>
+            <SettingInputRow
+              label="Shell executable override"
+              id="terminal-shell"
+              path="terminal.shellExecutable"
+              {...rowProps}
+            >
               <input
                 id="terminal-shell"
                 type="text"
@@ -668,7 +704,7 @@ export function TerminalSection({
                 }
                 className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
               />
-            </div>
+            </SettingInputRow>
 
             <p className="text-xs text-description-fg">
               Use this only when VS Code was launched without inheriting your
@@ -690,13 +726,12 @@ export function TerminalSection({
           Mobile Control Bar
         </h3>
 
-        <div>
-          <label
-            htmlFor="terminal-mobile-control-bar"
-            className="block text-xs text-description-fg mb-1"
-          >
-            Control bar visibility
-          </label>
+        <SettingInputRow
+          label="Control bar visibility"
+          id="terminal-mobile-control-bar"
+          path="terminal.mobileControlBar"
+          {...rowProps}
+        >
           <CustomSelect
             id="terminal-mobile-control-bar"
             value={terminal.mobileControlBar}
@@ -712,9 +747,13 @@ export function TerminalSection({
             Auto shows the bar for touch browsers connected to the FlightPath
             server.
           </p>
-        </div>
+        </SettingInputRow>
 
-        <div>
+        <SettingInputRow
+          label="Custom shortcuts"
+          path="terminal.mobileCustomShortcuts"
+          {...rowProps}
+        >
           <div className="flex items-center justify-between gap-2 mb-2">
             <span className="text-xs text-description-fg">
               Custom shortcuts
@@ -805,7 +844,7 @@ export function TerminalSection({
             Click the sequence display to edit the raw escape notation manually
             (e.g. \x1b[A, \t, \r).
           </p>
-        </div>
+        </SettingInputRow>
       </section>
     </div>
   );

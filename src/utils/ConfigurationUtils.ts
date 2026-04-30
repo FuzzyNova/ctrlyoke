@@ -527,7 +527,11 @@ export const ConfigurationUtils = {
     if (harness === HARNESS_IDS.COPILOT_CHAT) {
       return "";
     }
-    return configService.get(CONFIG_KEYS.ADDITIONAL_ARGS)[harness] ?? "";
+    return (
+      configService.get(CONFIG_KEYS.ADDITIONAL_ARGS)[
+        harness as Exclude<HarnessId, "copilot-chat">
+      ] ?? ""
+    );
   },
 
   /**
