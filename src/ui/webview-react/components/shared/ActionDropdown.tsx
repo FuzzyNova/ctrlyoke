@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { createPortal } from "react-dom";
+import { useState, useRef } from "react";
+import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
+import { useClickOutside } from "@hooks/useClickOutside";
+import { DropdownPortal } from "./DropdownPortal";
 
 export interface ActionDropdownItem {
   label: string;
@@ -31,54 +33,18 @@ export function ActionDropdown({
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{
-    top?: number;
-    bottom?: number;
-    left: number;
-    minWidth: number;
-  } | null>(null);
 
-  const updatePosition = useCallback(() => {
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom - 4;
-    if (spaceBelow >= 80) {
-      setPopupPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
-    } else {
-      setPopupPos({
-        bottom: window.innerHeight - rect.top + 4,
-        left: rect.left,
-        minWidth: rect.width,
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (open) {
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    } else {
-      setPopupPos(null);
-    }
-  }, [open, updatePosition]);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (!buttonRef.current?.contains(target) && !popupRef.current?.contains(target)) {
-        setOpen(false);
+  const rawPos = useDropdownPortalPosition(buttonRef, open);
+  const popupPos = rawPos
+    ? {
+        top: rawPos.top,
+        bottom: rawPos.bottom,
+        left: rawPos.left,
+        minWidth: Math.max(rawPos.width ?? 0, 140),
+        maxHeight: rawPos.maxHeight,
       }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
+    : null;
+  useClickOutside([buttonRef, popupRef], open, () => setOpen(false));
 
   return (
     <div className={`relative inline-block ${className}`}>
@@ -92,19 +58,7 @@ export function ActionDropdown({
         <i className={`codicon codicon-chevron-${open ? "up" : "down"} text-[10px]`} />
       </button>
 
-      {open &&
-        popupPos &&
-        createPortal(
-          <div
-            ref={popupRef}
-            className="fp-dropdown-popup fixed z-[9999] bg-dropdown-bg border border-dropdown-border overflow-hidden"
-            style={{
-              top: popupPos.top,
-              bottom: popupPos.bottom,
-              left: popupPos.left,
-              minWidth: Math.max(popupPos.minWidth, 140),
-            }}
-          >
+      <DropdownPortal isOpen={open} popupPos={popupPos} ref={popupRef}>
             {items.map((item) => (
               <button
                 key={item.value}
@@ -125,9 +79,7 @@ export function ActionDropdown({
                 {item.label}
               </button>
             ))}
-          </div>,
-          document.body
-        )}
+          </DropdownPortal>
     </div>
   );
 }

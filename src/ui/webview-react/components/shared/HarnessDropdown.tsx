@@ -1,5 +1,7 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
+import React, { useState, useRef } from "react";
+import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
+import { useClickOutside } from "@hooks/useClickOutside";
+import { DropdownPortal } from "./DropdownPortal";
 import {
   HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
@@ -44,12 +46,6 @@ export function harnessCategory(value: string): "cli" | "chat" | null {
 // The selected harness can never be hidden (canHide enforces this).
 // showChatGroup already suppresses the empty Chat section when all items are hidden.
 const NON_HIDEABLE: HarnessId[] = [];
-
-/** Convert a CSS max-height prop string ("60vh", "150px") to pixels. */
-function parsePropMaxHeight(h: string): number {
-  if (h.endsWith("vh")) return (parseFloat(h) / 100) * window.innerHeight;
-  return parseFloat(h);
-}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -254,72 +250,14 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(160);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{
-    top?: number;
-    bottom?: number;
-    left: number;
-    width: number;
-    maxHeight: number;
-  } | null>(null);
 
-  const updatePosition = useCallback(() => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom - 4;
-      const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
-      if (spaceBelow >= 80) {
-        setPopupPos({
-          top: rect.bottom + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceBelow),
-        });
-      } else {
-        const spaceAbove = rect.top - 4;
-        setPopupPos({
-          bottom: window.innerHeight - rect.top + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceAbove),
-        });
-      }
-    }
-  }, [dropdownMaxHeight]);
-
-  // Compute/update position whenever the popup opens or the window moves.
-  // Reset to null on close so stale coordinates never flash on next open.
-  useEffect(() => {
-    if (isOpen) {
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    } else {
-      setPopupPos(null);
-    }
-  }, [isOpen, updatePosition]);
-
-  // Close on click outside (must check both button and portaled popup)
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        !buttonRef.current?.contains(target) &&
-        !popupRef.current?.contains(target)
-      ) {
-        setIsOpen(false);
-        setShowHidden(false);
-      }
-    };
-    if (!inline && isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen, inline]);
+  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  useClickOutside(
+    [buttonRef, popupRef],
+    isOpen,
+    () => { setIsOpen(false); setShowHidden(false); },
+    !inline
+  );
 
   const handleSelect = (harnessId: string) => {
     onChange(harnessId);
@@ -472,26 +410,11 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         </div>
       </button>
 
-      {isOpen &&
-        popupPos &&
-        createPortal(
-          <div
-            ref={popupRef}
-            className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-[9999] flex flex-col"
-            style={{
-              top: popupPos.top,
-              bottom: popupPos.bottom,
-              left: popupPos.left,
-              width: popupPos.width,
-              maxHeight: popupPos.maxHeight,
-            }}
-          >
-            {popupPos.bottom !== undefined && toggleBar(true)}
-            {scrollableList}
-            {popupPos.top !== undefined && toggleBar(false)}
-          </div>,
-          document.body
-        )}
+      <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+        {popupPos?.bottom !== undefined && toggleBar(true)}
+        {scrollableList}
+        {popupPos?.top !== undefined && toggleBar(false)}
+      </DropdownPortal>
     </div>
   );
 };

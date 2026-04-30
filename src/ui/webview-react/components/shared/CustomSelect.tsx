@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
+import React, { useState, useRef } from "react";
+import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
+import { useClickOutside } from "@hooks/useClickOutside";
+import { DropdownPortal } from "./DropdownPortal";
 
 export interface SelectOption {
   value: string;
@@ -42,12 +44,6 @@ interface CustomSelectProps extends HideableProps {
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
 
-/** Convert a CSS max-height prop string ("60vh", "150px") to pixels. */
-function parsePropMaxHeight(h: string): number {
-  if (h.endsWith("vh")) return (parseFloat(h) / 100) * window.innerHeight;
-  return parseFloat(h);
-}
-
 /**
  * Custom styled select dropdown that matches the VS Code theme.
  * Replaces native <select> elements whose browser-rendered popup cannot be
@@ -79,13 +75,6 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const [showHidden, setShowHidden] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{
-    top?: number;
-    bottom?: number;
-    left: number;
-    width: number;
-    maxHeight: number;
-  } | null>(null);
 
   const hideEnabled = namespace !== undefined;
   const nonHideable = nonHideableValues ?? DEFAULT_NON_HIDEABLE;
@@ -123,65 +112,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     }
   };
 
-  const updatePosition = useCallback(() => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom - 4;
-      const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
-      if (spaceBelow >= 80) {
-        setPopupPos({
-          top: rect.bottom + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceBelow),
-        });
-      } else {
-        const spaceAbove = rect.top - 4;
-        setPopupPos({
-          bottom: window.innerHeight - rect.top + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceAbove),
-        });
-      }
-    }
-  }, [dropdownMaxHeight]);
-
-  // Compute/update position whenever the popup opens or the window moves.
-  // Reset to null on close so stale coordinates never flash on next open.
-  useEffect(() => {
-    if (isOpen) {
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    } else {
-      setPopupPos(null);
-    }
-  }, [isOpen, updatePosition]);
-
-  // Close on click outside (must check both button and portaled popup)
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        !buttonRef.current?.contains(target) &&
-        !popupRef.current?.contains(target)
-      ) {
-        setIsOpen(false);
-        setShowHidden(false);
-      }
-    };
-
-    if (!inline && isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen, inline]);
+  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  useClickOutside(
+    [buttonRef, popupRef],
+    isOpen,
+    () => { setIsOpen(false); setShowHidden(false); },
+    !inline
+  );
 
   const canHide = (option: SelectOption) =>
     hideEnabled &&
@@ -317,27 +254,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         />
       </button>
 
-      {isOpen &&
-        !disabled &&
-        popupPos &&
-        createPortal(
-          <div
-            ref={popupRef}
-            className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-[9999] flex flex-col"
-            style={{
-              top: popupPos.top,
-              bottom: popupPos.bottom,
-              left: popupPos.left,
-              width: popupPos.width,
-              maxHeight: popupPos.maxHeight,
-            }}
-          >
-            {popupPos.bottom !== undefined && toggleBar(true)}
-            {scrollableList}
-            {popupPos.top !== undefined && toggleBar(false)}
-          </div>,
-          document.body
-        )}
+      {!disabled && (
+        <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+          {popupPos?.bottom !== undefined && toggleBar(true)}
+          {scrollableList}
+          {popupPos?.top !== undefined && toggleBar(false)}
+        </DropdownPortal>
+      )}
     </div>
   );
 };

@@ -1,14 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
+import React, { useState, useRef } from "react";
+import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
+import { useClickOutside } from "@hooks/useClickOutside";
+import { DropdownPortal } from "./DropdownPortal";
 import type { HideableProps } from "./CustomSelect";
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
-
-/** Convert a CSS max-height prop string ("60vh", "150px") to pixels. */
-function parsePropMaxHeight(h: string): number {
-  if (h.endsWith("vh")) return (parseFloat(h) / 100) * window.innerHeight;
-  return parseFloat(h);
-}
 
 export interface MultiCheckboxDropdownProps extends HideableProps {
   id: string;
@@ -47,76 +43,16 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   const [showHidden, setShowHidden] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{
-    top?: number;
-    bottom?: number;
-    left: number;
-    width: number;
-    maxHeight: number;
-  } | null>(null);
 
   const hideEnabled = namespace !== undefined;
   const nonHideable = nonHideableValues ?? DEFAULT_NON_HIDEABLE;
 
-  const updatePosition = useCallback(() => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom - 4;
-      const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
-      if (spaceBelow >= 80) {
-        setPopupPos({
-          top: rect.bottom + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceBelow),
-        });
-      } else {
-        const spaceAbove = rect.top - 4;
-        setPopupPos({
-          bottom: window.innerHeight - rect.top + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceAbove),
-        });
-      }
-    }
-  }, [dropdownMaxHeight]);
-
-  // Compute/update position whenever the popup opens or the window moves.
-  // Reset to null on close so stale coordinates never flash on next open.
-  useEffect(() => {
-    if (isOpen) {
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    } else {
-      setPopupPos(null);
-    }
-  }, [isOpen, updatePosition]);
-
-  // Close on click outside (must check both button and portaled popup)
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        !buttonRef.current?.contains(target) &&
-        !popupRef.current?.contains(target)
-      ) {
-        setIsOpen(false);
-        setShowHidden(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen]);
+  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  useClickOutside(
+    [buttonRef, popupRef],
+    isOpen,
+    () => { setIsOpen(false); setShowHidden(false); }
+  );
 
   const toggleValue = (value: string) => {
     if (selectedValues.includes(value)) {
@@ -192,22 +128,9 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
         />
       </button>
 
-      {isOpen &&
-        popupPos &&
-        createPortal(
-          <div
-            ref={popupRef}
-            className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-[9999] flex flex-col"
-            style={{
-              top: popupPos.top,
-              bottom: popupPos.bottom,
-              left: popupPos.left,
-              width: popupPos.width,
-              maxHeight: popupPos.maxHeight,
-            }}
-          >
+      <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
             {/* Show hidden toggle — at top when expanding upward (end-cap is the visual end) */}
-            {popupPos.bottom !== undefined && hideEnabled && (
+            {popupPos?.bottom !== undefined && hideEnabled && (
               <div className="border-b border-dropdown-border bg-editor-bg flex-shrink-0">
                 <button
                   type="button"
@@ -359,9 +282,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                 </button>
               </div>
             )}
-          </div>,
-          document.body
-        )}
+          </DropdownPortal>
     </div>
   );
 };

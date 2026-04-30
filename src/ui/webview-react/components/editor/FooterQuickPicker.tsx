@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useClickOutside } from "@hooks/useClickOutside";
 
 interface FooterQuickPickerProps {
   /** Icon-only mode (narrow, < 380px) */
@@ -90,23 +91,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
     }
   }, [isOpen, updatePosition]);
 
-  // Close on click outside (must check both button and portaled popup)
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        !buttonRef.current?.contains(target) &&
-        !popupRef.current?.contains(target)
-      ) {
-        onClose();
-      }
-    };
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen, onClose]);
+  useClickOutside([buttonRef, popupRef], isOpen, onClose);
 
   return (
     <>
@@ -142,7 +127,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         createPortal(
           <div
             ref={popupRef}
-            className="fixed bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[9999] flex flex-col overflow-hidden"
+            className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-[9999] flex flex-col"
             style={{
               bottom: popupPos.bottom,
               left: popupPos.left,

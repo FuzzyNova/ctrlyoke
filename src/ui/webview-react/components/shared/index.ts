@@ -54,3 +54,4 @@ export {
   type ActionDropdownItem,
   type ActionDropdownProps,
 } from "./ActionDropdown";
+export { DropdownPortal } from "./DropdownPortal";

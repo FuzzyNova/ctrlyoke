@@ -1,11 +1,7 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
-import { createPortal } from "react-dom";
-
-/** Convert a CSS max-height prop string ("60vh", "150px") to pixels. */
-function parsePropMaxHeight(h: string): number {
-  if (h.endsWith("vh")) return (parseFloat(h) / 100) * window.innerHeight;
-  return parseFloat(h);
-}
+import React, { useRef, useState } from "react";
+import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
+import { useClickOutside } from "@hooks/useClickOutside";
+import { DropdownPortal } from "./DropdownPortal";
 
 /**
  * SkillsSelect — Hybrid dropdown for the prompt-level skills property.
@@ -37,71 +33,9 @@ export const SkillsSelect: React.FC<{
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{
-    top?: number;
-    bottom?: number;
-    left: number;
-    width: number;
-    maxHeight: number;
-  } | null>(null);
 
-  const updatePosition = useCallback(() => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom - 4;
-      const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
-      if (spaceBelow >= 80) {
-        setPopupPos({
-          top: rect.bottom + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceBelow),
-        });
-      } else {
-        const spaceAbove = rect.top - 4;
-        setPopupPos({
-          bottom: window.innerHeight - rect.top + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceAbove),
-        });
-      }
-    }
-  }, [dropdownMaxHeight]);
-
-  // Compute/update position whenever the popup opens or the window moves.
-  // Reset to null on close so stale coordinates never flash on next open.
-  useEffect(() => {
-    if (isOpen) {
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    } else {
-      setPopupPos(null);
-    }
-  }, [isOpen, updatePosition]);
-
-  // Close on click outside (must check both button and portaled popup)
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        !buttonRef.current?.contains(target) &&
-        !popupRef.current?.contains(target)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    if (!inline && isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen, inline]);
+  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  useClickOutside([buttonRef, popupRef], isOpen, () => setIsOpen(false), !inline);
 
   const selectedSkills = Array.isArray(value) ? value : [];
 
@@ -224,24 +158,9 @@ export const SkillsSelect: React.FC<{
         />
       </button>
 
-      {isOpen &&
-        popupPos &&
-        createPortal(
-          <div
-            ref={popupRef}
-            className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-[9999] flex flex-col"
-            style={{
-              top: popupPos.top,
-              bottom: popupPos.bottom,
-              left: popupPos.left,
-              width: popupPos.width,
-              maxHeight: popupPos.maxHeight,
-            }}
-          >
-            {listContent}
-          </div>,
-          document.body
-        )}
+      <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
+          {listContent}
+        </DropdownPortal>
     </div>
   );
 };

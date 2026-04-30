@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
+import { useClickOutside } from "@hooks/useClickOutside";
+import { DropdownPortal } from "./DropdownPortal";
 import type { PriorContext } from "@/types/messages";
 import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 
@@ -33,11 +35,6 @@ export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   custom: "Custom",
 };
 
-/** Convert a CSS max-height prop string ("60vh", "150px") to pixels. */
-function parsePropMaxHeight(h: string): number {
-  if (h.endsWith("vh")) return (parseFloat(h) / 100) * window.innerHeight;
-  return parseFloat(h);
-}
 
 function getMode(value: PriorContext | undefined): KeywordMode {
   if (value === undefined) return "default";
@@ -87,13 +84,9 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{
-    top?: number;
-    bottom?: number;
-    left: number;
-    width: number;
-    maxHeight: number;
-  } | null>(null);
+
+  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  useClickOutside([buttonRef, popupRef], isOpen, () => setIsOpen(false));
 
   const mode = getMode(value);
 
@@ -124,61 +117,6 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
       setCustomError(false);
     }
   }, [value]);
-
-  const updatePosition = useCallback(() => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom - 4;
-      const propMaxH = parsePropMaxHeight(dropdownMaxHeight);
-      if (spaceBelow >= 80) {
-        setPopupPos({
-          top: rect.bottom + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceBelow),
-        });
-      } else {
-        const spaceAbove = rect.top - 4;
-        setPopupPos({
-          bottom: window.innerHeight - rect.top + 4,
-          left: rect.left,
-          width: rect.width,
-          maxHeight: Math.min(propMaxH, spaceAbove),
-        });
-      }
-    }
-  }, [dropdownMaxHeight]);
-
-  useEffect(() => {
-    if (isOpen) {
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    } else {
-      setPopupPos(null);
-    }
-  }, [isOpen, updatePosition]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        !buttonRef.current?.contains(target) &&
-        !popupRef.current?.contains(target)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen]);
 
   const selectKeyword = (k: KeywordMode) => {
     if (k === "custom") {
@@ -263,20 +201,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           />
         </button>
 
-        {isOpen &&
-          popupPos &&
-          createPortal(
-            <div
-              ref={popupRef}
-              className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-[9999] flex flex-col"
-              style={{
-                top: popupPos.top,
-                bottom: popupPos.bottom,
-                left: popupPos.left,
-                width: popupPos.width,
-                maxHeight: popupPos.maxHeight,
-              }}
-            >
+        <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
               <div className="overflow-y-auto min-h-0 flex-1">
                 {keywords.map((k) => {
                   const isSelected = displayMode === k;
@@ -305,9 +230,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
                   );
                 })}
               </div>
-            </div>,
-            document.body
-          )}
+            </DropdownPortal>
       </div>
 
       {/* Custom range input — always rendered, disabled when not in custom mode */}
