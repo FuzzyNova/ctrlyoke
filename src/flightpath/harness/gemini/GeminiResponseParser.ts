@@ -73,7 +73,7 @@ export class GeminiResponseParser
 
       if (json.type === "tool_use") {
         events.push(
-          GeminiToolBuilder.buildInitiatedEvent(
+          ...GeminiToolBuilder.buildInitiatedEvents(
             json.tool_name as string,
             (json.parameters as Record<string, unknown>) || {},
             json.tool_id as string | undefined,
@@ -173,7 +173,7 @@ export class GeminiResponseParser
 
       if (json.type === "tool_use") {
         events.push(
-          GeminiToolBuilder.buildInitiatedEvent(
+          ...GeminiToolBuilder.buildInitiatedEvents(
             json.tool_name as string,
             (json.parameters as Record<string, unknown>) || {},
             json.tool_id as string | undefined,

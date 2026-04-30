@@ -21,7 +21,7 @@ import { Log } from "../../../utils/Log";
  * Builds CliEvents from Claude CLI tool call payloads.
  *
  * Three static methods cover Claude's tool lifecycle:
- * - `buildInitiatedEvent` — tool_use in assistant content → INITIATED event
+ * - `buildInitiatedEvents` — tool_use in assistant content → INITIATED event(s) (array)
  * - `processToolResultBlocks` — tool_result in user content → TOOL_RESULT events
  * - `processToolUseResultMetadata` — CLI structured metadata → COMPLETED semantic events
  *
@@ -37,22 +37,26 @@ export class ClaudeToolBuilder {
   // ── INITIATED ──────────────────────────────────────────────────────────────
 
   /**
-   * Build an INITIATED CliEvent for a Claude tool_use block.
+   * Build INITIATED CliEvents for a Claude tool_use block.
+   *
+   * Returns an array to support multi-file tools like `multiedit`, which fans
+   * out to one FILE_EDIT event per edited file. All other tools return a
+   * single-element array.
    *
    * @param toolName - Tool name from tool_use block
    * @param input - Tool input parameters from tool_use block
    * @param toolId - Tool call ID (used in generic TOOL_CALL fallback)
    * @param timestamp - Event timestamp in milliseconds
    * @param callerType - 'direct' for top-level calls, 'subagent' for sub-agent calls
-   * @returns A single CliEvent to push onto the event stream
+   * @returns Array of CliEvents to spread onto the event stream
    */
-  static buildInitiatedEvent(
+  static buildInitiatedEvents(
     toolName: string,
     input: Record<string, unknown>,
     toolId: string | undefined,
     timestamp: number,
     callerType?: string
-  ): CliEvent {
+  ): CliEvent[] {
     const classification = CliEventMapper.classifyTool(toolName);
     const path = (input.path ?? input.file_path) as string | undefined;
 
@@ -61,45 +65,81 @@ export class ClaudeToolBuilder {
 
     switch (classification.type) {
       case CLI_EVENT_TYPES.BASH_COMMAND:
-        return {
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          timestamp,
-          ...ct,
-          data: {
-            command:
-              ((input.command ?? input.cmd) as string | undefined) || "unknown",
-            workingDir: (input.working_dir ?? input.cwd ?? input.workingDir) as
-              | string
-              | undefined,
-            status: OPERATION_STATUS.INITIATED,
-          } as BashCommandData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
+            timestamp,
+            ...ct,
+            data: {
+              command:
+                ((input.command ?? input.cmd) as string | undefined) ||
+                "unknown",
+              workingDir: (input.working_dir ??
+                input.cwd ??
+                input.workingDir) as string | undefined,
+              status: OPERATION_STATUS.INITIATED,
+            } as BashCommandData,
+          },
+        ];
 
       case CLI_EVENT_TYPES.FILE_READ:
-        return {
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp,
-          ...ct,
-          data: {
-            path: path || "unknown",
-            status: OPERATION_STATUS.INITIATED,
-          } as FileReadData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.FILE_READ,
+            timestamp,
+            ...ct,
+            data: {
+              path: path || "unknown",
+              status: OPERATION_STATUS.INITIATED,
+            } as FileReadData,
+          },
+        ];
 
       case CLI_EVENT_TYPES.FILE_WRITE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp,
-          ...ct,
-          data: {
-            path: path || "unknown",
-            content:
-              ((input.content ?? input.file_text) as string | undefined) || "",
-            status: OPERATION_STATUS.INITIATED,
-          } as FileWriteData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.FILE_WRITE,
+            timestamp,
+            ...ct,
+            data: {
+              path: path || "unknown",
+              content:
+                ((input.content ?? input.file_text) as string | undefined) ||
+                "",
+              status: OPERATION_STATUS.INITIATED,
+            } as FileWriteData,
+          },
+        ];
 
       case CLI_EVENT_TYPES.FILE_EDIT: {
+        // Handle multiedit tool (multiple files in one tool call)
+        if (toolName === "multiedit" && Array.isArray(input.edits)) {
+          return (input.edits as Record<string, unknown>[]).map((edit) => {
+            const editPath = (edit.file_path ?? edit.path) as
+              | string
+              | undefined;
+            const oldContent = (edit.old_string ??
+              edit.oldString ??
+              edit.old_content ??
+              edit.oldContent) as string | undefined;
+            const newContent = (edit.new_string ??
+              edit.newString ??
+              edit.new_content ??
+              edit.newContent) as string | undefined;
+            return {
+              type: CLI_EVENT_TYPES.FILE_EDIT,
+              timestamp,
+              ...ct,
+              data: {
+                path: editPath || "unknown",
+                oldContent,
+                newContent,
+                status: OPERATION_STATUS.INITIATED,
+              } as FileEditData,
+            };
+          });
+        }
+
         const oldContent = (input.oldString ??
           input.old_string ??
           input.oldContent ??
@@ -110,38 +150,44 @@ export class ClaudeToolBuilder {
           input.newContent ??
           input.new_content ??
           input.new_str) as string | undefined;
-        return {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          ...ct,
-          data: {
-            path: path || "unknown",
-            oldContent,
-            newContent,
-            status: OPERATION_STATUS.INITIATED,
-          } as FileEditData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            timestamp,
+            ...ct,
+            data: {
+              path: path || "unknown",
+              oldContent,
+              newContent,
+              status: OPERATION_STATUS.INITIATED,
+            } as FileEditData,
+          },
+        ];
       }
 
       case CLI_EVENT_TYPES.FILE_DELETE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_DELETE,
-          timestamp,
-          ...ct,
-          data: {
-            path: path || "unknown",
-          } as FileDeleteData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.FILE_DELETE,
+            timestamp,
+            ...ct,
+            data: {
+              path: path || "unknown",
+            } as FileDeleteData,
+          },
+        ];
 
       case CLI_EVENT_TYPES.WEB_SEARCH:
-        return {
-          type: CLI_EVENT_TYPES.WEB_SEARCH,
-          timestamp,
-          ...ct,
-          data: {
-            query: (input.query as string) || "",
-          } as WebSearchData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.WEB_SEARCH,
+            timestamp,
+            ...ct,
+            data: {
+              query: (input.query as string) || "",
+            } as WebSearchData,
+          },
+        ];
 
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
         const mcp = classification as {
@@ -149,29 +195,33 @@ export class ClaudeToolBuilder {
           server: string;
           tool: string;
         };
-        return {
-          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-          timestamp,
-          ...ct,
-          data: {
-            server: mcp.server,
-            tool: mcp.tool,
-            parameters: input,
-          } as McpToolCallData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+            timestamp,
+            ...ct,
+            data: {
+              server: mcp.server,
+              tool: mcp.tool,
+              parameters: input,
+            } as McpToolCallData,
+          },
+        ];
       }
 
       default:
-        return {
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          ...ct,
-          data: {
-            name: toolName,
-            parameters: input,
-            id: toolId,
-          } as ToolCall,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp,
+            ...ct,
+            data: {
+              name: toolName,
+              parameters: input,
+              id: toolId,
+            } as ToolCall,
+          },
+        ];
     }
   }
 

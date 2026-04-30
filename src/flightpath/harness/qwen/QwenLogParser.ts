@@ -228,7 +228,7 @@ export class QwenLogParser extends BaseLogParser {
               callPathMap.set(part.functionCall.id, fp);
             }
             outputEvents.push(
-              QwenToolBuilder.buildInitiatedEvent(
+              ...QwenToolBuilder.buildInitiatedEvents(
                 part.functionCall.name,
                 args,
                 part.functionCall.id,
@@ -571,7 +571,7 @@ export class QwenLogParser extends BaseLogParser {
 
         if (part.functionCall) {
           cliEvents.push(
-            QwenToolBuilder.buildInitiatedEvent(
+            ...QwenToolBuilder.buildInitiatedEvents(
               part.functionCall.name,
               part.functionCall.args || {},
               part.functionCall.id,

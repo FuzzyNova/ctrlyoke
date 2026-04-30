@@ -209,7 +209,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           // TOOL_USE - Map Claude tools to semantic event types
           if (contentBlock.type === "tool_use") {
             outputEvents.push(
-              ClaudeToolBuilder.buildInitiatedEvent(
+              ...ClaudeToolBuilder.buildInitiatedEvents(
                 contentBlock.name,
                 contentBlock.input || {},
                 contentBlock.id,
@@ -695,7 +695,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         if (block.type === "tool_use") {
           const callerType = block.caller?.type as string | undefined;
           events.push(
-            ClaudeToolBuilder.buildInitiatedEvent(
+            ...ClaudeToolBuilder.buildInitiatedEvents(
               block.name,
               block.input || {},
               block.id,

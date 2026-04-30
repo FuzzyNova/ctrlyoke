@@ -261,7 +261,7 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
           for (const tc of event.toolCalls) {
             // Emit INITIATED tool call event
             outputEvents.push(
-              GeminiToolBuilder.buildInitiatedEvent(
+              ...GeminiToolBuilder.buildInitiatedEvents(
                 tc.name,
                 tc.args || {},
                 tc.id,
@@ -568,7 +568,7 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
     if (msg.toolCalls) {
       for (const tc of msg.toolCalls) {
         cliEvents.push(
-          GeminiToolBuilder.buildInitiatedEvent(
+          ...GeminiToolBuilder.buildInitiatedEvents(
             tc.name,
             tc.args || {},
             tc.id,

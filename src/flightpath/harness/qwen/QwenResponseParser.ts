@@ -208,7 +208,7 @@ export class QwenResponseParser
       // Handle tool_use blocks - map to semantic event types
       if (contentBlock.type === "tool_use") {
         events.push(
-          QwenToolBuilder.buildInitiatedEvent(
+          ...QwenToolBuilder.buildInitiatedEvents(
             contentBlock.name,
             contentBlock.input || {},
             contentBlock.id,

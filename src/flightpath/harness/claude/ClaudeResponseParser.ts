@@ -327,7 +327,7 @@ export class ClaudeResponseParser
       if (contentBlock.type === "tool_use") {
         const callerType = contentBlock.caller?.type as string | undefined;
         events.push(
-          ClaudeToolBuilder.buildInitiatedEvent(
+          ...ClaudeToolBuilder.buildInitiatedEvents(
             contentBlock.name,
             contentBlock.input || {},
             contentBlock.id,
@@ -474,7 +474,7 @@ export class ClaudeResponseParser
                 const input = JSON.parse(block.accumulatedJson);
                 // Map to semantic event type, preserving caller context
                 events.push(
-                  ClaudeToolBuilder.buildInitiatedEvent(
+                  ...ClaudeToolBuilder.buildInitiatedEvents(
                     block.name,
                     input,
                     block.id,
