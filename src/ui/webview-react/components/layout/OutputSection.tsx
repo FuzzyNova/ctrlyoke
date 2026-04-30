@@ -12,7 +12,7 @@ import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { CliOutput, StatusMessage } from "../output";
 import { RunSelector, IconToggleButton } from "../shared";
-import { HarnessIcon } from "../shared/HarnessIcon";
+import { TerminalSessionIcon } from "../output/TerminalSessionIcon";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import { generateId } from "@utils/string";
 import { generateMarkdownExport } from "@utils/markdownExport";
@@ -43,9 +43,7 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   SESSION_KINDS,
-  SHELL_KINDS,
   STEP_TYPES,
-  type HarnessId,
 } from "../../types/messages";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import {
@@ -1140,24 +1138,7 @@ export const OutputSection: React.FC = () => {
               {/* Active session icon + title — only shown when rail is collapsed */}
               {isTerminalCompact && activeTerminalSession && (
                 <div className="flex items-center gap-1.5 min-w-0 mr-1">
-                  {activeTerminalSession.harnessId ? (
-                    <HarnessIcon
-                      harnessId={activeTerminalSession.harnessId as HarnessId}
-                      size={12}
-                      className="flex-shrink-0"
-                    />
-                  ) : (
-                    <i
-                      className={`codicon ${
-                        activeTerminalSession.shellKind === SHELL_KINDS.PWSH
-                          ? "codicon-terminal"
-                          : activeTerminalSession.shellKind ===
-                              SHELL_KINDS.POWERSHELL
-                            ? "codicon-terminal-powershell"
-                            : "codicon-terminal-bash"
-                      } text-xs flex-shrink-0`}
-                    />
-                  )}
+                  <TerminalSessionIcon session={activeTerminalSession} />
                   <span className="text-xs text-foreground truncate max-w-[120px]">
                     {activeTerminalSession.stepName}
                   </span>

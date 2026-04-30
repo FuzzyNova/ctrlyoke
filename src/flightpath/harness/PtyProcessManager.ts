@@ -84,10 +84,20 @@ function shellDisplayName(shellPath: string): string {
  * Map a shell executable path to a ShellKind discriminant used by the UI
  * to pick the appropriate terminal icon.
  */
-function resolveShellKind(shellPath: string): ShellKind {
+export function resolveShellKind(shellPath: string): ShellKind {
   const name = shellDisplayName(shellPath).toLowerCase();
-  if (name === "pwsh") return SHELL_KINDS.PWSH;
-  if (name === "powershell") return SHELL_KINDS.POWERSHELL;
+  if (/^pwsh([.-]|$)/.test(name)) return SHELL_KINDS.PWSH;
+  if (name.startsWith("powershell")) return SHELL_KINDS.POWERSHELL;
+  if (name === "zsh") return SHELL_KINDS.ZSH;
+  if (name === "bash") return SHELL_KINDS.BASH;
+  if (name === "fish") return SHELL_KINDS.FISH;
+  if (name === "cmd") return SHELL_KINDS.CMD;
+  if (name === "wsl") return SHELL_KINDS.WSL;
+  if (name === "nu" || name === "nushell") return SHELL_KINDS.NUSHELL;
+  if (name === "sh" || name === "dash" || name === "ksh") {
+    return SHELL_KINDS.SH;
+  }
+  if (name.endsWith("sh")) return SHELL_KINDS.SH;
   return SHELL_KINDS.BASH;
 }
 
@@ -149,7 +159,7 @@ export class PtySession {
   promptNumber?: number;
   /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Undefined for shell sessions. */
   readonly harnessId?: string;
-  /** Shell variant for SHELL sessions (pwsh / powershell / bash). Undefined for ai-cli sessions. */
+  /** Shell variant for SHELL sessions. Undefined for ai-cli sessions. */
   readonly shellKind?: ShellKind;
   readonly pty: IPty;
   status: TerminalSessionStatus;

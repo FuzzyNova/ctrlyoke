@@ -661,8 +661,20 @@ export const SHELL_KINDS = {
   PWSH: "pwsh",
   /** Windows PowerShell 5.1 fallback (powershell.exe) */
   POWERSHELL: "powershell",
-  /** bash / zsh / sh or any Unix shell */
+  /** zsh */
+  ZSH: "zsh",
+  /** bash */
   BASH: "bash",
+  /** POSIX sh / dash / ksh-style shells */
+  SH: "sh",
+  /** fish shell */
+  FISH: "fish",
+  /** Windows Command Prompt */
+  CMD: "cmd",
+  /** WSL launcher */
+  WSL: "wsl",
+  /** Nushell */
+  NUSHELL: "nu",
 } as const;
 
 export type ShellKind = (typeof SHELL_KINDS)[keyof typeof SHELL_KINDS];

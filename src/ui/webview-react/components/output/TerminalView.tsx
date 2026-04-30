@@ -16,14 +16,13 @@ import {
   EXECUTION_STATES,
   TERMINAL_SESSION_STATUS,
   SESSION_KINDS,
-  SHELL_KINDS,
 } from "../../types/messages";
 import { TerminalInstance } from "./TerminalInstance";
 import { TerminalControlBar } from "./TerminalControlBar";
 import type { TerminalSession } from "@store/terminalStore";
 import { SEPARATOR_VERTICAL } from "../../constants";
-import { HarnessIcon } from "../shared/HarnessIcon";
-import type { HarnessId } from "../../types/messages";
+import { TerminalSessionIcon } from "./TerminalSessionIcon";
+import { getShellCompactLabel } from "@utils/terminalPresentation";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
@@ -306,7 +305,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
                     <CompactRailEntry
                       key={session.id}
                       session={session}
-                      label="sh"
+                      label={getShellCompactLabel(
+                        session.shellKind,
+                        session.stepName
+                      )}
                       isActive={session.id === activeSessionId}
                       onClick={() => setActiveSession(workflowId, session.id)}
                     />
@@ -455,57 +457,6 @@ const CompactRailEntry: React.FC<CompactRailEntryProps> = ({
   </button>
 );
 
-/**
- * Shows the harness icon for AI CLI sessions, or a shell-type codicon for shell sessions.
- */
-const SessionIcon: React.FC<{ session: TerminalSession }> = ({ session }) => {
-  if (session.harnessId) {
-    return (
-      <HarnessIcon
-        harnessId={session.harnessId as HarnessId}
-        size={12}
-        className="flex-shrink-0"
-      />
-    );
-  }
-  return <ShellIcon shellKind={session.shellKind} status={session.status} />;
-};
-
-/**
- * Shell session icon — picks a codicon based on the detected shell variant.
- * Falls back to a status dot when shellKind is unavailable (legacy sessions).
- */
-const ShellIcon: React.FC<{
-  shellKind: TerminalSession["shellKind"];
-  status: TerminalSession["status"];
-}> = ({ shellKind, status }) => {
-  const isRunning = status === TERMINAL_SESSION_STATUS.RUNNING;
-
-  if (shellKind === SHELL_KINDS.PWSH) {
-    return <i className="codicon codicon-terminal text-xs flex-shrink-0" />;
-  }
-  if (shellKind === SHELL_KINDS.POWERSHELL) {
-    return (
-      <i className="codicon codicon-terminal-powershell text-xs flex-shrink-0" />
-    );
-  }
-  if (shellKind === SHELL_KINDS.BASH) {
-    return (
-      <i className="codicon codicon-terminal-bash text-xs flex-shrink-0" />
-    );
-  }
-  // Fallback for legacy sessions without shellKind
-  if (isRunning) {
-    return (
-      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse flex-shrink-0" />
-    );
-  }
-  if (status === TERMINAL_SESSION_STATUS.FAILED) {
-    return (
-      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-error flex-shrink-0" />
-    );
-  }
-  return (
-    <span className="inline-block w-1.5 h-1.5 rounded-full bg-description-fg/50 flex-shrink-0" />
-  );
-};
+const SessionIcon: React.FC<{ session: TerminalSession }> = ({ session }) => (
+  <TerminalSessionIcon session={session} />
+);

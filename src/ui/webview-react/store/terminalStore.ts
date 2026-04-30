@@ -17,7 +17,7 @@ export interface TerminalSession {
   promptNumber?: number;
   /** HarnessId for AI CLI sessions (e.g. "claude-cli"). Undefined for shell sessions. */
   harnessId?: string;
-  /** Shell variant for SHELL sessions (pwsh / powershell / bash). Undefined for ai-cli sessions. */
+  /** Shell variant for SHELL sessions. Undefined for ai-cli sessions. */
   shellKind?: ShellKind;
   status: TerminalSessionStatus;
   /** Chunks buffered before TerminalInstance mounts — flushed on mount */
