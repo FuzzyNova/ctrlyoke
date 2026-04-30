@@ -80,18 +80,19 @@ export class CodexToolBuilder {
    * @param callId   - Call ID for correlation with COMPLETED event (may be undefined)
    * @param timestamp - Event timestamp in milliseconds
    */
-  static buildLogToolInitiatedEvent(
+  static buildLogToolInitiatedEvents(
     toolName: string,
     params: Record<string, unknown>,
     callId: string | undefined,
     timestamp: number
-  ): CliEvent {
+  ): CliEvent[] {
     const classification = CliEventMapper.classifyTool(toolName);
     const filePath = ((params.path ?? params.file) as string | undefined) ?? "";
 
     switch (classification.type) {
       case CLI_EVENT_TYPES.BASH_COMMAND:
-        return {
+        return [
+          {
           type: CLI_EVENT_TYPES.BASH_COMMAND,
           timestamp,
           data: {
@@ -100,20 +101,24 @@ export class CodexToolBuilder {
             workingDir: (params.workingDir ?? params.cwd) as string | undefined,
             status: OPERATION_STATUS.INITIATED,
           } as BashCommandData,
-        };
+          },
+        ];
 
       case CLI_EVENT_TYPES.FILE_READ:
-        return {
+        return [
+          {
           type: CLI_EVENT_TYPES.FILE_READ,
           timestamp,
           data: {
             path: filePath,
             status: OPERATION_STATUS.INITIATED,
           } as FileReadData,
-        };
+          },
+        ];
 
       case CLI_EVENT_TYPES.FILE_WRITE:
-        return {
+        return [
+          {
           type: CLI_EVENT_TYPES.FILE_WRITE,
           timestamp,
           data: {
@@ -121,14 +126,31 @@ export class CodexToolBuilder {
             content: (params.content as string | undefined) || "",
             status: OPERATION_STATUS.INITIATED,
           } as FileWriteData,
-        };
+          },
+        ];
 
       case CLI_EVENT_TYPES.FILE_EDIT: {
         if (toolName === "apply_patch") {
           const patchInput = (params.input as string | undefined) ?? "";
+          const fileEdits = CodexToolBuilder.parseApplyPatchFileEdits(patchInput);
+          if (fileEdits.length > 0) {
+            Log.debug(
+              `[CodexToolBuilder] apply_patch initiated - files=${fileEdits.length}`
+            );
+            return fileEdits.map((fileEdit) => ({
+              type: CLI_EVENT_TYPES.FILE_EDIT,
+              timestamp,
+              data: {
+                path: fileEdit.path,
+                structuredPatch: fileEdit.structuredPatch,
+                status: OPERATION_STATUS.INITIATED,
+              } as FileEditData,
+            }));
+          }
+
           let extractedPath = "unknown";
           const fileMatch = patchInput.match(
-            /\*\*\* (?:Add|Update) File: (.+)/
+            /\*\*\* (?:Add|Update|Delete) File: (.+)/
           );
           if (fileMatch) {
             extractedPath = fileMatch[1].trim();
@@ -137,41 +159,47 @@ export class CodexToolBuilder {
           Log.debug(
             `[CodexToolBuilder] apply_patch initiated - file=${extractedPath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
           );
-          return {
+          return [
+            {
+              type: CLI_EVENT_TYPES.FILE_EDIT,
+              timestamp,
+              data: {
+                path: extractedPath,
+                structuredPatch,
+                status: OPERATION_STATUS.INITIATED,
+              } as FileEditData,
+            },
+          ];
+        }
+        return [
+          {
             type: CLI_EVENT_TYPES.FILE_EDIT,
             timestamp,
             data: {
-              path: extractedPath,
-              structuredPatch,
+              path: filePath,
+              oldContent: (params.oldContent ?? params.old_content) as
+                | string
+                | undefined,
+              newContent: (params.newContent ??
+                params.new_content ??
+                params.content) as string | undefined,
               status: OPERATION_STATUS.INITIATED,
             } as FileEditData,
-          };
-        }
-        return {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          data: {
-            path: filePath,
-            oldContent: (params.oldContent ?? params.old_content) as
-              | string
-              | undefined,
-            newContent: (params.newContent ??
-              params.new_content ??
-              params.content) as string | undefined,
-            status: OPERATION_STATUS.INITIATED,
-          } as FileEditData,
-        };
+          },
+        ];
       }
 
       case CLI_EVENT_TYPES.FILE_DELETE:
-        return {
+        return [
+          {
           type: CLI_EVENT_TYPES.FILE_DELETE,
           timestamp,
           data: {
             path: filePath,
             status: OPERATION_STATUS.INITIATED,
           } as FileDeleteData,
-        };
+          },
+        ];
 
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
         const mcp = classification as {
@@ -179,36 +207,42 @@ export class CodexToolBuilder {
           server: string;
           tool: string;
         };
-        return {
-          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-          timestamp,
-          data: {
-            server: mcp.server,
-            tool: mcp.tool,
-            parameters: params,
-          } as McpToolCallData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+            timestamp,
+            data: {
+              server: mcp.server,
+              tool: mcp.tool,
+              parameters: params,
+            } as McpToolCallData,
+          },
+        ];
       }
 
       case CLI_EVENT_TYPES.WEB_SEARCH:
-        return {
-          type: CLI_EVENT_TYPES.WEB_SEARCH,
-          timestamp,
-          data: {
-            query: (params.query as string) || "",
-          } as WebSearchData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.WEB_SEARCH,
+            timestamp,
+            data: {
+              query: (params.query as string) || "",
+            } as WebSearchData,
+          },
+        ];
 
       default:
-        return {
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: toolName,
-            parameters: params,
-            id: callId,
-          } as ToolCall,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp,
+            data: {
+              name: toolName,
+              parameters: params,
+              id: callId,
+            } as ToolCall,
+          },
+        ];
     }
   }
 
@@ -236,95 +270,111 @@ export class CodexToolBuilder {
    * @param callId     - Original call ID (used in TOOL_RESULT fallback)
    * @param timestamp  - Event timestamp in milliseconds
    */
-  static buildCustomToolCallCompletedEvent(
+  static buildCustomToolCallCompletedEvents(
     toolInfo: { type: string; toolName: string },
     exitCode: number | undefined,
     success: boolean,
     outputText: string,
     callId: string | undefined,
     timestamp: number,
-    initiatedEvent?: CliEvent
-  ): CliEvent {
+    initiatedEvents?: CliEvent[]
+  ): CliEvent[] {
     const status = success
       ? OPERATION_STATUS.COMPLETED
       : OPERATION_STATUS.FAILED;
-    const initiatedData = initiatedEvent?.data;
+    const primaryInitiatedData = initiatedEvents?.[0]?.data;
 
-    switch (toolInfo.type) {
-      case CLI_EVENT_TYPES.BASH_COMMAND:
-        return {
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          timestamp,
-          data: {
-            command:
-              (initiatedData as BashCommandData | undefined)?.command ?? "",
-            exitCode: exitCode ?? 0,
-            output: outputText,
-            error: success ? undefined : outputText,
-            status,
-          } as BashCommandData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_READ:
-        return {
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp,
-          data: {
-            path: (initiatedData as FileReadData | undefined)?.path ?? "",
-            content: outputText,
-            status,
-            success,
-          } as FileReadData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_WRITE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp,
-          data: {
-            path: (initiatedData as FileWriteData | undefined)?.path ?? "",
-            content:
-              (initiatedData as FileWriteData | undefined)?.content ?? "",
-            status,
-            success,
-          } as FileWriteData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_EDIT:
+    if (toolInfo.type === CLI_EVENT_TYPES.FILE_EDIT && initiatedEvents) {
+      return initiatedEvents.map((initiatedEvent) => {
+        const initiatedData = initiatedEvent.data as FileEditData | undefined;
         return {
           type: CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,
           data: {
-            path: (initiatedData as FileEditData | undefined)?.path ?? "",
-            oldContent: (initiatedData as FileEditData | undefined)?.oldContent,
-            newContent: (initiatedData as FileEditData | undefined)?.newContent,
-            structuredPatch: (initiatedData as FileEditData | undefined)
-              ?.structuredPatch,
+            path: initiatedData?.path ?? "",
+            oldContent: initiatedData?.oldContent,
+            newContent: initiatedData?.newContent,
+            structuredPatch: initiatedData?.structuredPatch,
             status,
             success,
           } as FileEditData,
         };
+      });
+    }
+
+    switch (toolInfo.type) {
+      case CLI_EVENT_TYPES.BASH_COMMAND:
+        return [
+          {
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
+            timestamp,
+            data: {
+              command:
+                (primaryInitiatedData as BashCommandData | undefined)?.command ??
+                "",
+              exitCode: exitCode ?? 0,
+              output: outputText,
+              error: success ? undefined : outputText,
+              status,
+            } as BashCommandData,
+          },
+        ];
+
+      case CLI_EVENT_TYPES.FILE_READ:
+        return [
+          {
+            type: CLI_EVENT_TYPES.FILE_READ,
+            timestamp,
+            data: {
+              path: (primaryInitiatedData as FileReadData | undefined)?.path ?? "",
+              content: outputText,
+              status,
+              success,
+            } as FileReadData,
+          },
+        ];
+
+      case CLI_EVENT_TYPES.FILE_WRITE:
+        return [
+          {
+            type: CLI_EVENT_TYPES.FILE_WRITE,
+            timestamp,
+            data: {
+              path: (primaryInitiatedData as FileWriteData | undefined)?.path ?? "",
+              content:
+                (primaryInitiatedData as FileWriteData | undefined)?.content ??
+                "",
+              status,
+              success,
+            } as FileWriteData,
+          },
+        ];
 
       case CLI_EVENT_TYPES.FILE_DELETE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_DELETE,
-          timestamp,
-          data: {
-            path: (initiatedData as FileDeleteData | undefined)?.path ?? "",
-            status,
-            success,
-          } as FileDeleteData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.FILE_DELETE,
+            timestamp,
+            data: {
+              path:
+                (primaryInitiatedData as FileDeleteData | undefined)?.path ?? "",
+              status,
+              success,
+            } as FileDeleteData,
+          },
+        ];
 
       default:
-        return {
-          type: CLI_EVENT_TYPES.TOOL_RESULT,
-          timestamp,
-          data: {
-            toolCallId: callId,
-            result: { success, output: outputText },
-          } as ToolResultData,
-        };
+        return [
+          {
+            type: CLI_EVENT_TYPES.TOOL_RESULT,
+            timestamp,
+            data: {
+              toolCallId: callId,
+              result: { success, output: outputText },
+            } as ToolResultData,
+          },
+        ];
     }
   }
 
@@ -510,6 +560,154 @@ export class CodexToolBuilder {
         `[CodexToolBuilder] Failed to parse apply_patch input: ${error}`
       );
       return undefined;
+    }
+  }
+
+  static parseApplyPatchFileEdits(
+    patchInput: string
+  ): Array<{ path: string; structuredPatch?: UnifiedDiffHunk[] }> {
+    try {
+      const lines = patchInput.split("\n");
+      const fileEdits: Array<{
+        path: string;
+        structuredPatch?: UnifiedDiffHunk[];
+      }> = [];
+
+      let currentFile:
+        | {
+            path: string;
+            hunks: UnifiedDiffHunk[];
+          }
+        | undefined;
+      let currentHunk: UnifiedDiffHunk | undefined;
+      let oldLineNum = 1;
+      let newLineNum = 1;
+      let inPatch = false;
+
+      const flushHunk = (): void => {
+        if (currentFile && currentHunk && currentHunk.lines.length > 0) {
+          currentFile.hunks.push(currentHunk);
+        }
+        currentHunk = undefined;
+      };
+
+      const flushFile = (): void => {
+        flushHunk();
+        if (!currentFile) {
+          return;
+        }
+        fileEdits.push({
+          path: currentFile.path,
+          structuredPatch:
+            currentFile.hunks.length > 0 ? currentFile.hunks : undefined,
+        });
+        currentFile = undefined;
+      };
+
+      const ensureCurrentHunk = (): UnifiedDiffHunk | undefined => {
+        if (!currentFile) {
+          return undefined;
+        }
+        if (!currentHunk) {
+          currentHunk = {
+            oldStart: oldLineNum,
+            oldLines: 0,
+            newStart: newLineNum,
+            newLines: 0,
+            lines: [],
+          };
+        }
+        return currentHunk;
+      };
+
+      for (const line of lines) {
+        if (line.startsWith("*** Begin Patch")) {
+          inPatch = true;
+          continue;
+        }
+
+        if (!inPatch) {
+          continue;
+        }
+
+        if (line.startsWith("*** End Patch")) {
+          flushFile();
+          break;
+        }
+
+        const fileMatch = line.match(/\*\*\* (?:Add|Update|Delete) File: (.+)/);
+        if (fileMatch) {
+          flushFile();
+          currentFile = {
+            path: fileMatch[1].trim(),
+            hunks: [],
+          };
+          oldLineNum = 1;
+          newLineNum = 1;
+          continue;
+        }
+
+        if (line.startsWith("*** Move to:")) {
+          if (currentFile) {
+            currentFile.path = line.replace("*** Move to:", "").trim();
+          }
+          continue;
+        }
+
+        if (line === "@@" || line.startsWith("@@")) {
+          flushHunk();
+          if (!currentFile) {
+            continue;
+          }
+          currentHunk = {
+            oldStart: oldLineNum,
+            oldLines: 0,
+            newStart: newLineNum,
+            newLines: 0,
+            lines: [],
+          };
+          continue;
+        }
+
+        if (line.startsWith("*** End of File")) {
+          continue;
+        }
+
+        const hunk = ensureCurrentHunk();
+        if (!hunk) {
+          continue;
+        }
+
+        if (line.startsWith("+")) {
+          hunk.lines.push(line);
+          hunk.newLines++;
+          newLineNum++;
+          continue;
+        }
+
+        if (line.startsWith("-")) {
+          hunk.lines.push(line);
+          hunk.oldLines++;
+          oldLineNum++;
+          continue;
+        }
+
+        hunk.lines.push(
+          " " + line.substring(line.startsWith(" ") ? 1 : 0)
+        );
+        hunk.oldLines++;
+        hunk.newLines++;
+        oldLineNum++;
+        newLineNum++;
+      }
+
+      flushFile();
+      return fileEdits;
+    } catch (error) {
+      Log.debug(
+        `[CodexToolBuilder] Failed to parse apply_patch files: ${error}`
+      );
+      return [];
     }
   }
 }

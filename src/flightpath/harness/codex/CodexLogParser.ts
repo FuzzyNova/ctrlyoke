@@ -130,6 +130,12 @@ interface CodexProviderEvent extends BaseCliEvent {
   payload?: Record<string, any>;
 }
 
+interface CodexTrackedToolCall {
+  type: string;
+  toolName: string;
+  initiatedEvents?: CliEvent[];
+}
+
 export class CodexLogParser extends BaseLogParser {
   /**
    * Session metadata cache
@@ -148,7 +154,7 @@ export class CodexLogParser extends BaseLogParser {
    */
   private toolCallMap: Map<
     string,
-    { type: string; toolName: string; initiatedEvent?: CliEvent }
+    CodexTrackedToolCall
   > = new Map();
 
   /**
@@ -159,7 +165,7 @@ export class CodexLogParser extends BaseLogParser {
    */
   private pendingStreamingCalls: Map<
     string,
-    { type: string; toolName: string; initiatedEvent?: CliEvent }
+    CodexTrackedToolCall
   > = new Map();
 
   /**
@@ -291,7 +297,7 @@ export class CodexLogParser extends BaseLogParser {
               const toolName = item.name?.toLowerCase() || "";
               const params = (item.input || {}) as Record<string, unknown>;
               const callId = item.id as string | undefined;
-              const event = CodexToolBuilder.buildLogToolInitiatedEvent(
+              const eventsForTool = CodexToolBuilder.buildLogToolInitiatedEvents(
                 toolName,
                 params,
                 callId,
@@ -299,15 +305,18 @@ export class CodexLogParser extends BaseLogParser {
               );
               if (
                 callId &&
-                CodexToolBuilder.needsCompletionTracking(event.type)
+                eventsForTool.length > 0 &&
+                eventsForTool.every((toolEvent) =>
+                  CodexToolBuilder.needsCompletionTracking(toolEvent.type)
+                )
               ) {
                 this.toolCallMap.set(callId, {
-                  type: event.type,
+                  type: eventsForTool[0].type,
                   toolName,
-                  initiatedEvent: event,
+                  initiatedEvents: eventsForTool,
                 });
               }
-              outputEvents.push(event);
+              outputEvents.push(...eventsForTool);
             }
 
             // Thinking blocks
@@ -365,20 +374,26 @@ export class CodexLogParser extends BaseLogParser {
         const callId = (event.payload.call_id ?? event.payload.id) as
           | string
           | undefined;
-        const event2 = CodexToolBuilder.buildLogToolInitiatedEvent(
+        const eventsForTool = CodexToolBuilder.buildLogToolInitiatedEvents(
           functionName,
           params,
           callId,
           timestamp
         );
-        if (callId && CodexToolBuilder.needsCompletionTracking(event2.type)) {
+        if (
+          callId &&
+          eventsForTool.length > 0 &&
+          eventsForTool.every((toolEvent) =>
+            CodexToolBuilder.needsCompletionTracking(toolEvent.type)
+          )
+        ) {
           this.toolCallMap.set(callId, {
-            type: event2.type,
+            type: eventsForTool[0].type,
             toolName: functionName,
-            initiatedEvent: event2,
+            initiatedEvents: eventsForTool,
           });
         }
-        outputEvents.push(event2);
+        outputEvents.push(...eventsForTool);
       }
 
       // response_item:function_call_output - Function result (COMPLETED event)
@@ -395,7 +410,7 @@ export class CodexLogParser extends BaseLogParser {
             event.payload.output || "",
             callId,
             timestamp,
-            toolInfo?.initiatedEvent
+            toolInfo?.initiatedEvents?.[0]
           )
         );
         if (callId) {
@@ -425,20 +440,26 @@ export class CodexLogParser extends BaseLogParser {
         }
 
         const callId = event.payload.call_id as string | undefined;
-        const event3 = CodexToolBuilder.buildLogToolInitiatedEvent(
+        const eventsForTool = CodexToolBuilder.buildLogToolInitiatedEvents(
           toolName,
           params,
           callId,
           timestamp
         );
-        if (callId && CodexToolBuilder.needsCompletionTracking(event3.type)) {
+        if (
+          callId &&
+          eventsForTool.length > 0 &&
+          eventsForTool.every((toolEvent) =>
+            CodexToolBuilder.needsCompletionTracking(toolEvent.type)
+          )
+        ) {
           this.toolCallMap.set(callId, {
-            type: event3.type,
+            type: eventsForTool[0].type,
             toolName,
-            initiatedEvent: event3,
+            initiatedEvents: eventsForTool,
           });
         }
-        outputEvents.push(event3);
+        outputEvents.push(...eventsForTool);
       }
 
       // response_item:custom_tool_call_output - Custom tool result (COMPLETED event)
@@ -468,14 +489,14 @@ export class CodexLogParser extends BaseLogParser {
 
         if (toolInfo) {
           outputEvents.push(
-            CodexToolBuilder.buildCustomToolCallCompletedEvent(
+            ...CodexToolBuilder.buildCustomToolCallCompletedEvents(
               toolInfo,
               exitCode,
               success,
               outputText,
               callId,
               timestamp,
-              toolInfo.initiatedEvent
+              toolInfo.initiatedEvents
             )
           );
           this.toolCallMap.delete(callId!);
@@ -969,7 +990,7 @@ export class CodexLogParser extends BaseLogParser {
             const toolName = item.name?.toLowerCase() || "";
             const params = (item.input || {}) as Record<string, unknown>;
             const callId = item.id as string | undefined;
-            const toolEvent = CodexToolBuilder.buildLogToolInitiatedEvent(
+            const toolEvents = CodexToolBuilder.buildLogToolInitiatedEvents(
               toolName,
               params,
               callId,
@@ -977,15 +998,18 @@ export class CodexLogParser extends BaseLogParser {
             );
             if (
               callId &&
-              CodexToolBuilder.needsCompletionTracking(toolEvent.type)
+              toolEvents.length > 0 &&
+              toolEvents.every((toolEvent) =>
+                CodexToolBuilder.needsCompletionTracking(toolEvent.type)
+              )
             ) {
               this.pendingStreamingCalls.set(callId, {
-                type: toolEvent.type,
+                type: toolEvents[0].type,
                 toolName,
-                initiatedEvent: toolEvent,
+                initiatedEvents: toolEvents,
               });
             }
-            results.push(toolEvent);
+            results.push(...toolEvents);
           }
 
           if (item.type === "thinking" && item.text) {
@@ -1028,20 +1052,26 @@ export class CodexLogParser extends BaseLogParser {
       }
       const functionName = e.payload.name?.toLowerCase() || "";
       const callId = (e.payload.call_id ?? e.payload.id) as string | undefined;
-      const toolEvent = CodexToolBuilder.buildLogToolInitiatedEvent(
+      const toolEvents = CodexToolBuilder.buildLogToolInitiatedEvents(
         functionName,
         params,
         callId,
         timestamp
       );
-      if (callId && CodexToolBuilder.needsCompletionTracking(toolEvent.type)) {
+      if (
+        callId &&
+        toolEvents.length > 0 &&
+        toolEvents.every((toolEvent) =>
+          CodexToolBuilder.needsCompletionTracking(toolEvent.type)
+        )
+      ) {
         this.pendingStreamingCalls.set(callId, {
-          type: toolEvent.type,
+          type: toolEvents[0].type,
           toolName: functionName,
-          initiatedEvent: toolEvent,
+          initiatedEvents: toolEvents,
         });
       }
-      results.push(toolEvent);
+      results.push(...toolEvents);
       return results;
     }
 
@@ -1061,7 +1091,7 @@ export class CodexLogParser extends BaseLogParser {
           e.payload.output || "",
           callId,
           timestamp,
-          toolInfo?.initiatedEvent
+          toolInfo?.initiatedEvents?.[0]
         )
       );
       if (callId) {
@@ -1086,20 +1116,26 @@ export class CodexLogParser extends BaseLogParser {
         }
       }
       const callId = e.payload.call_id as string | undefined;
-      const toolEvent = CodexToolBuilder.buildLogToolInitiatedEvent(
+      const toolEvents = CodexToolBuilder.buildLogToolInitiatedEvents(
         toolName,
         params,
         callId,
         timestamp
       );
-      if (callId && CodexToolBuilder.needsCompletionTracking(toolEvent.type)) {
+      if (
+        callId &&
+        toolEvents.length > 0 &&
+        toolEvents.every((toolEvent) =>
+          CodexToolBuilder.needsCompletionTracking(toolEvent.type)
+        )
+      ) {
         this.pendingStreamingCalls.set(callId, {
-          type: toolEvent.type,
+          type: toolEvents[0].type,
           toolName,
-          initiatedEvent: toolEvent,
+          initiatedEvents: toolEvents,
         });
       }
-      results.push(toolEvent);
+      results.push(...toolEvents);
       return results;
     }
 
@@ -1128,14 +1164,14 @@ export class CodexLogParser extends BaseLogParser {
       const success = exitCode === 0 || exitCode === undefined;
       if (toolInfo) {
         results.push(
-          CodexToolBuilder.buildCustomToolCallCompletedEvent(
+          ...CodexToolBuilder.buildCustomToolCallCompletedEvents(
             toolInfo,
             exitCode,
             success,
             outputText,
             callId,
             timestamp,
-            toolInfo.initiatedEvent
+            toolInfo.initiatedEvents
           )
         );
         this.pendingStreamingCalls.delete(callId!);

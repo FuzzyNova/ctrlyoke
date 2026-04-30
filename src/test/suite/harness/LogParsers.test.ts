@@ -1338,6 +1338,68 @@ suite("CodexLogParser", () => {
       assert.strictEqual(response.metadata.usage?.cachedInputTokens, 5032192);
       assert.strictEqual(response.metadata.usage?.reasoningOutputTokens, 6001);
     });
+
+    test("should emit one file edit per file for multi-file apply_patch calls", () => {
+      const patchInput = [
+        "*** Begin Patch",
+        "*** Update File: src/one.ts",
+        "@@",
+        "-old one",
+        "+new one",
+        "*** Update File: src/two.ts",
+        "@@",
+        "-old two",
+        "+new two",
+        "*** End Patch",
+      ].join("\n");
+
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "apply_patch",
+            call_id: "call-multi-edit",
+            input: patchInput,
+          },
+          timestamp: "2026-04-29T23:28:40.994Z",
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call_output",
+            call_id: "call-multi-edit",
+            output: JSON.stringify({
+              output: "Success",
+              metadata: { exit_code: 0, duration_seconds: 0.1 },
+            }),
+          },
+          timestamp: "2026-04-29T23:28:41.787Z",
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+      const fileEditEvents = response.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.FILE_EDIT
+      );
+      const completedFileEditEvents = fileEditEvents.filter(
+        (event) => (event.data as any).status === "completed"
+      );
+
+      assert.strictEqual(fileEditEvents.length, 4);
+      assert.deepStrictEqual(
+        completedFileEditEvents.map((event) => (event.data as any).path),
+        ["src/one.ts", "src/two.ts"]
+      );
+      assert.deepStrictEqual(
+        completedFileEditEvents.map((event) => (event.data as any).status),
+        ["completed", "completed"]
+      );
+      assert.ok((completedFileEditEvents[0].data as any).structuredPatch?.length);
+      assert.ok((completedFileEditEvents[1].data as any).structuredPatch?.length);
+    });
   });
 
   suite("extractStructuredEventsFromEvent", () => {
@@ -1368,6 +1430,58 @@ suite("CodexLogParser", () => {
       assert.strictEqual(
         (textEvents[0].data as TextData).text,
         "Duplicate candidate"
+      );
+    });
+
+    test("should stream one file edit per file for multi-file apply_patch calls", () => {
+      const patchInput = [
+        "*** Begin Patch",
+        "*** Update File: src/one.ts",
+        "@@",
+        "-old one",
+        "+new one",
+        "*** Update File: src/two.ts",
+        "@@",
+        "-old two",
+        "+new two",
+        "*** End Patch",
+      ].join("\n");
+
+      const initiatedEvents = parser.extractStructuredEventsFromEvent({
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          name: "apply_patch",
+          call_id: "call-stream-multi-edit",
+          input: patchInput,
+        },
+        timestamp: "2026-04-29T23:28:40.994Z",
+      } as unknown as BaseCliEvent);
+      const completedEvents = parser.extractStructuredEventsFromEvent({
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call_output",
+          call_id: "call-stream-multi-edit",
+          output: JSON.stringify({
+            output: "Success",
+            metadata: { exit_code: 0, duration_seconds: 0.1 },
+          }),
+        },
+        timestamp: "2026-04-29T23:28:41.787Z",
+      } as unknown as BaseCliEvent);
+
+      assert.strictEqual(initiatedEvents.length, 2);
+      assert.deepStrictEqual(
+        initiatedEvents.map((event) => (event.data as any).path),
+        ["src/one.ts", "src/two.ts"]
+      );
+      assert.deepStrictEqual(
+        completedEvents.map((event) => (event.data as any).path),
+        ["src/one.ts", "src/two.ts"]
+      );
+      assert.deepStrictEqual(
+        completedEvents.map((event) => (event.data as any).status),
+        ["completed", "completed"]
       );
     });
   });
