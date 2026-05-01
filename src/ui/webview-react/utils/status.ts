@@ -173,6 +173,30 @@ export function isExecutionBusy(state: ExecutionState): boolean {
 }
 
 /**
+ * Check if a workflow step is actively being executed by the AI.
+ * Returns true for RUNNING or PAUSING (AI is processing right now).
+ * Use for: step display, editor lock, animation, timer ticking.
+ */
+export function isWorkflowRunning(state: ExecutionState): boolean {
+  return (
+    state === EXECUTION_STATES.RUNNING || state === EXECUTION_STATES.PAUSING
+  );
+}
+
+/**
+ * Check if a workflow is in an active/in-progress state.
+ * Returns true for RUNNING, PAUSING, or PAUSED.
+ * Use for: active-workflow dropdown, prompt counters, message routing guards.
+ */
+export function isWorkflowActive(state: ExecutionState): boolean {
+  return (
+    state === EXECUTION_STATES.RUNNING ||
+    state === EXECUTION_STATES.PAUSING ||
+    state === EXECUTION_STATES.PAUSED
+  );
+}
+
+/**
  * Check if execution can be started
  */
 export function canStartExecution(state: ExecutionState): boolean {

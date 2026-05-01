@@ -40,6 +40,7 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
 import { WebviewLog } from "@utils/logger";
+import { isWorkflowActive } from "../utils/status";
 import { useTerminalStore } from "../store/terminalStore";
 import { useHarnessFileStore } from "../store/useHarnessFileStore";
 import { terminalRegistry } from "../terminalRegistry";
@@ -1618,22 +1619,12 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOWS_LIST] = (message) => {
     const all = (message.workflows ?? []) as WorkflowSummary[];
-    const active = all.filter(
-      (w) =>
-        w.executionState === EXECUTION_STATES.RUNNING ||
-        w.executionState === EXECUTION_STATES.PAUSING ||
-        w.executionState === EXECUTION_STATES.PAUSED
-    );
+    const active = all.filter((w) => isWorkflowActive(w.executionState));
     WebviewLog.debug(
       `[WORKFLOWS_LIST] received ${all.length} total, ${active.length} active: ${active.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState}, fp=${w.filePath?.split(/[\\/]/).pop() || "?"})`).join(", ") || "(none)"}` +
         (all.length > active.length
           ? ` | filtered out ${all.length - active.length} non-active: ${all
-              .filter(
-                (w) =>
-                  w.executionState !== EXECUTION_STATES.RUNNING &&
-                  w.executionState !== EXECUTION_STATES.PAUSING &&
-                  w.executionState !== EXECUTION_STATES.PAUSED
-              )
+              .filter((w) => !isWorkflowActive(w.executionState))
               .map((w) => `inst:${w.id.slice(0, 8)}(state=${w.executionState})`)
               .join(", ")}`
           : "")
@@ -1663,12 +1654,7 @@ function createMessageHandlers(): MessageHandlerMap {
         `fp=${summary?.filePath?.split(/[\\/]/).pop() || "?"} wfp=${summary?.workingFilePath?.split(/[\\/]/).pop() || "?"} ` +
         `— current loadedWorkflows: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}]`
     );
-    if (
-      summary &&
-      (summary.executionState === EXECUTION_STATES.RUNNING ||
-        summary.executionState === EXECUTION_STATES.PAUSING ||
-        summary.executionState === EXECUTION_STATES.PAUSED)
-    ) {
+    if (summary && isWorkflowActive(summary.executionState)) {
       useUiStore.getState().addLoadedWorkflow(summary);
     }
   };
@@ -1700,11 +1686,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const summary: WorkflowSummary | undefined = message.summary;
     if (!summary) return;
     const uiStore = useUiStore.getState();
-    if (
-      summary.executionState === EXECUTION_STATES.RUNNING ||
-      summary.executionState === EXECUTION_STATES.PAUSING ||
-      summary.executionState === EXECUTION_STATES.PAUSED
-    ) {
+    if (isWorkflowActive(summary.executionState)) {
       const exists = uiStore.loadedWorkflows.some((w) => w.id === summary.id);
       if (exists) {
         uiStore.updateLoadedWorkflow(summary);

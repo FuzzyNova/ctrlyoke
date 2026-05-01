@@ -558,22 +558,31 @@ describe("getCompletedCount", () => {
   });
 });
 
-describe("isWorkflowRunning / isWorkflowPaused / isWorkflowIdle / isWorkflowComplete", () => {
+describe("isWorkflowRunning / isWorkflowActive / isWorkflowPaused / isWorkflowIdle / isWorkflowComplete", () => {
   it("reflects execution state correctly", () => {
     store().loadWorkflow({ fileName: "wf.yaml", steps: [makePrompt()] });
 
     expect(store().isWorkflowIdle()).toBe(true);
     expect(store().isWorkflowRunning()).toBe(false);
+    expect(store().isWorkflowActive()).toBe(false);
 
     store().setExecutionState(EXECUTION_STATES.RUNNING);
     expect(store().isWorkflowRunning()).toBe(true);
+    expect(store().isWorkflowActive()).toBe(true);
     expect(store().isWorkflowIdle()).toBe(false);
+
+    store().setExecutionState(EXECUTION_STATES.PAUSING);
+    expect(store().isWorkflowRunning()).toBe(true);
+    expect(store().isWorkflowActive()).toBe(true);
 
     store().setExecutionState(EXECUTION_STATES.PAUSED);
     expect(store().isWorkflowPaused()).toBe(true);
+    expect(store().isWorkflowRunning()).toBe(false);
+    expect(store().isWorkflowActive()).toBe(true);
 
     store().setExecutionState(EXECUTION_STATES.COMPLETED);
     expect(store().isWorkflowComplete()).toBe(true);
+    expect(store().isWorkflowActive()).toBe(false);
   });
 });
 

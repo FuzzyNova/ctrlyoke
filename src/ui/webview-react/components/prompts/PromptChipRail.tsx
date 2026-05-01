@@ -31,6 +31,7 @@ import {
   type StepStatus,
 } from "../../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
+import { isWorkflowRunning } from "../../utils/status";
 import {
   DndContext,
   closestCenter,
@@ -271,9 +272,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
 
-  const isRunning =
-    executionState === EXECUTION_STATES.RUNNING ||
-    executionState === EXECUTION_STATES.PAUSING;
+  const isRunning = isWorkflowRunning(executionState);
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
   const canReorder = canChangeStartPosition && prompts.length - currentStep > 1;

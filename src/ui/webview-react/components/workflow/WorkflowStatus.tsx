@@ -18,6 +18,7 @@ import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import {
   getExecutionStateBadgeClass,
   getExecutionStateBadgeIcon,
+  isWorkflowRunning,
 } from "../../utils/status";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { WebviewLog } from "@utils/logger";
@@ -314,10 +315,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     (workflowId: string) => {
       const workflow = loadedWorkflows.find((w) => w.id === workflowId);
       setActiveWorkflowWorkingFilePath(workflow?.workingFilePath ?? null);
-      if (
-        workflow?.executionState === EXECUTION_STATES.RUNNING ||
-        workflow?.executionState === EXECUTION_STATES.PAUSING
-      ) {
+      if (workflow && isWorkflowRunning(workflow.executionState)) {
         useWorkflowStore.getState().clearHistoryOutputs();
         useUiStore.getState().clearHistoryView();
       }
@@ -570,10 +568,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           >
             {/* Pulsing dot: another loaded workflow is running */}
             {loadedWorkflows.some(
-              (w) =>
-                (w.executionState === EXECUTION_STATES.RUNNING ||
-                  w.executionState === EXECUTION_STATES.PAUSING) &&
-                w.id !== activeWorkflowId
+              (w) => isWorkflowRunning(w.executionState) && w.id !== activeWorkflowId
             ) && (
               <span
                 className="inline-block w-2 h-2 rounded-full bg-indicator-success animate-pulse"

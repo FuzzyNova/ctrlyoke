@@ -16,6 +16,10 @@ import {
 } from "../types/messages";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
+import {
+  isWorkflowRunning,
+  isWorkflowActive,
+} from "../utils/status";
 
 /**
  * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptStep
@@ -255,8 +259,10 @@ interface WorkflowSelectors {
   getCurrentPrompt: () => WorkflowStep | null;
   // Get prompt by index
   getPromptByIndex: (index: number) => WorkflowStep | null;
-  // Check if workflow is currently running
+  // Check if workflow is currently running (RUNNING or PAUSING)
   isWorkflowRunning: () => boolean;
+  // Check if workflow is active (RUNNING, PAUSING, or PAUSED)
+  isWorkflowActive: () => boolean;
   // Check if workflow is paused
   isWorkflowPaused: () => boolean;
   // Check if workflow is stopped
@@ -1018,11 +1024,7 @@ export const useWorkflowStore = create<
         }
 
         // If running/paused, check if there are prompts after current step
-        if (
-          executionState === EXECUTION_STATES.RUNNING ||
-          executionState === EXECUTION_STATES.PAUSING ||
-          executionState === EXECUTION_STATES.PAUSED
-        ) {
+        if (isWorkflowActive(executionState)) {
           return currentStep < totalSteps;
         }
 
@@ -1046,9 +1048,9 @@ export const useWorkflowStore = create<
         return null;
       },
 
-      isWorkflowRunning: () =>
-        get().executionState === EXECUTION_STATES.RUNNING ||
-        get().executionState === EXECUTION_STATES.PAUSING,
+      isWorkflowRunning: () => isWorkflowRunning(get().executionState),
+
+      isWorkflowActive: () => isWorkflowActive(get().executionState),
 
       isWorkflowPaused: () => get().executionState === EXECUTION_STATES.PAUSED,
 

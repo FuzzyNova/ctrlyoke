@@ -49,6 +49,7 @@ import {
 } from "@dnd-kit/sortable";
 import { BoundaryBar } from "../prompts/BoundaryBar";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
+import { isWorkflowRunning } from "../../utils/status";
 
 /** Local type guard for script steps */
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -174,9 +175,7 @@ export const WorkflowStepsPanel: React.FC<{
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
   // Determine if workflow is running
-  const isRunning =
-    executionState === EXECUTION_STATES.RUNNING ||
-    executionState === EXECUTION_STATES.PAUSING;
+  const isRunning = isWorkflowRunning(executionState);
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
   const {

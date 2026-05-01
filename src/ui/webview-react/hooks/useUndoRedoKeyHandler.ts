@@ -39,13 +39,10 @@ export function useUndoRedoKeyHandler() {
 
       if (!isUndo && !isRedo) return;
 
-      // Don't undo/redo while a workflow is running or paused
-      const isRunning = useWorkflowStore.getState().isWorkflowRunning();
-      const isPaused = useWorkflowStore.getState().isWorkflowPaused();
-      if (isRunning || isPaused) {
-        WebviewLog.debug(
-          `[UndoRedo] blocked — workflow isRunning=${isRunning} isPaused=${isPaused}`
-        );
+      // Don't undo/redo while a workflow is active (running or paused)
+      const isActive = useWorkflowStore.getState().isWorkflowActive();
+      if (isActive) {
+        WebviewLog.debug(`[UndoRedo] blocked — workflow isActive=${isActive}`);
         return;
       }
 

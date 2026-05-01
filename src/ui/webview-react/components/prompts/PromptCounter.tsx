@@ -1,6 +1,7 @@
 import React from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
-import { EXECUTION_STATES, STEP_STATUS } from "../../types/messages";
+import { STEP_STATUS } from "../../types/messages";
+import { isWorkflowActive } from "../../utils/status";
 
 interface PromptCounterProps {
   className?: string;
@@ -25,11 +26,8 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
     (p) => (p as any).status === STEP_STATUS.COMPLETED
   ).length;
 
-  // Determine if workflow is actively running
-  const isRunning =
-    executionState === EXECUTION_STATES.RUNNING ||
-    executionState === EXECUTION_STATES.PAUSING ||
-    executionState === EXECUTION_STATES.PAUSED;
+  // Determine if workflow is active
+  const isActive = isWorkflowActive(executionState);
 
   // Don't show anything if no prompts
   if (totalSteps === 0) {
@@ -37,7 +35,7 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   }
 
   // During execution: Show "Completed N of M" (or "N/M" when narrow)
-  if (isRunning && totalSteps > 0) {
+  if (isActive && totalSteps > 0) {
     return (
       <span className={`text-xs text-description-fg ${className}`}>
         {narrow

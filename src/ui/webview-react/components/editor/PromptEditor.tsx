@@ -27,6 +27,7 @@ import {
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 import { getDictionaryUris } from "@utils/dictionaryUris";
+import { isWorkflowRunning } from "../../utils/status";
 
 interface PromptEditorProps {
   /** When true, the editor is in CLI watch mode — all editing is disabled. */
@@ -135,9 +136,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ? selectionTarget.index
       : prompts.length;
   const hasFinalStep = finalStep !== null;
-  const isRunning =
-    executionState === EXECUTION_STATES.RUNNING ||
-    executionState === EXECUTION_STATES.PAUSING;
+  const isRunning = isWorkflowRunning(executionState);
   const selectedPromptStatus =
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
       ? (prompts[selectionTarget.index] as any)?.status

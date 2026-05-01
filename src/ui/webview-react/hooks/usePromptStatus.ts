@@ -4,6 +4,7 @@ import {
   EXECUTION_STATES,
   type StepStatus,
 } from "../types/messages";
+import { isWorkflowRunning } from "../utils/status";
 
 /**
  * Returns a `getPromptStatus(prompt, index)` helper that derives the display
@@ -13,9 +14,7 @@ import {
  */
 export function usePromptStatus() {
   const { currentStep, executionState } = useWorkflowStore();
-  const isRunning =
-    executionState === EXECUTION_STATES.RUNNING ||
-    executionState === EXECUTION_STATES.PAUSING;
+  const isRunning = isWorkflowRunning(executionState);
 
   return function getPromptStatus(
     prompt: WorkflowStep | { status?: StepStatus },
