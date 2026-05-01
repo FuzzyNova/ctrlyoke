@@ -3,11 +3,19 @@ import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { workspaceCommit, workspacePush, workspacePull, workspaceStage } from "@utils/hostedApi";
 
 interface WorkspaceCommitAreaProps {
-  onRefresh: () => void;
+  incomingCommitCount: number;
+  onRefresh: () => Promise<unknown>;
+  outgoingCommitCount: number;
+}
+
+function formatSyncActionLabel(baseLabel: string, count: number): string {
+  return count > 0 ? `${baseLabel} (${count})` : baseLabel;
 }
 
 export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
+  incomingCommitCount,
   onRefresh,
+  outgoingCommitCount,
 }) => {
   const commitMessage = useWorkspaceViewerStore((s) => s.commitMessage);
   const committing = useWorkspaceViewerStore((s) => s.committing);
@@ -75,6 +83,34 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
 
   return (
     <div className="flex flex-col gap-2 p-3 flex-shrink-0">
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={handlePush}
+          disabled={pushing}
+          className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
+        >
+          {pushing ? (
+            <i className="codicon codicon-loading animate-spin" />
+          ) : (
+            <i className="codicon codicon-cloud-upload" />
+          )}
+          {formatSyncActionLabel("Push", outgoingCommitCount)}
+        </button>
+
+        <button
+          onClick={handlePull}
+          disabled={pulling}
+          className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 py-1 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
+        >
+          {pulling ? (
+            <i className="codicon codicon-loading animate-spin" />
+          ) : (
+            <i className="codicon codicon-cloud-download" />
+          )}
+          {formatSyncActionLabel("Pull", incomingCommitCount)}
+        </button>
+      </div>
+
       <textarea
         value={commitMessage}
         onChange={(e) => setCommitMessage(e.target.value)}
@@ -83,50 +119,21 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         className="w-full resize-none rounded border border-panel-border bg-input-bg text-editor-fg text-xs px-2 py-1.5 placeholder-editor-fg placeholder-opacity-40 focus:outline-none focus:border-focus-border"
       />
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleCommit}
-          disabled={commitMessage.trim() === "" || committing}
-          className="flex items-center gap-1 px-3 py-1 text-xs rounded border border-btn-border bg-btn-bg text-btn-fg hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-        >
-          {committing ? (
-            <i className="codicon codicon-loading animate-spin" />
-          ) : (
-            <i className="codicon codicon-check" />
-          )}
-          Commit
-        </button>
-
-        <div role="group" className="flex overflow-hidden rounded border border-btn-border">
-          <button
-            onClick={handlePush}
-            disabled={pushing}
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 border-r border-btn-border"
-          >
-            {pushing ? (
-              <i className="codicon codicon-loading animate-spin" />
-            ) : (
-              <i className="codicon codicon-cloud-upload" />
-            )}
-            Push
-          </button>
-          <button
-            onClick={handlePull}
-            disabled={pulling}
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50"
-          >
-            {pulling ? (
-              <i className="codicon codicon-loading animate-spin" />
-            ) : (
-              <i className="codicon codicon-cloud-download" />
-            )}
-            Pull
-          </button>
-        </div>
-      </div>
+      <button
+        onClick={handleCommit}
+        disabled={commitMessage.trim() === "" || committing}
+        className="flex w-full items-center justify-center gap-1 rounded border border-btn-border bg-btn-bg px-3 py-1 text-xs text-btn-fg transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {committing ? (
+          <i className="codicon codicon-loading animate-spin" />
+        ) : (
+          <i className="codicon codicon-check" />
+        )}
+        Commit
+      </button>
 
       {scmError && (
-        <p className="text-xs text-[var(--status-error)] mt-1">{scmError}</p>
+        <p className="mt-1 text-xs text-error-fg">{scmError}</p>
       )}
     </div>
   );

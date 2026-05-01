@@ -322,15 +322,60 @@ export class HostedWorkspaceViewerService {
 
   async getStatus(): Promise<WorkspaceScmStatusResponse> {
     try {
+      const [{ stdout }, syncCounts] = await Promise.all([
+        execFileAsync("git", ["-C", this.workspaceRoot, "status", "--porcelain=v1"], {
+          timeout: GIT_TIMEOUT_MS,
+        }),
+        this.getSyncCounts(),
+      ]);
+      return {
+        files: this.parsePorcelainV1(stdout),
+        ...syncCounts,
+      };
+    } catch {
+      return {
+        files: [],
+        incomingCommitCount: 0,
+        outgoingCommitCount: 0,
+      };
+    }
+  }
+
+  private async getSyncCounts(): Promise<
+    Pick<
+      WorkspaceScmStatusResponse,
+      "incomingCommitCount" | "outgoingCommitCount"
+    >
+  > {
+    try {
       const { stdout } = await execFileAsync(
         "git",
-        ["-C", this.workspaceRoot, "status", "--porcelain=v1"],
+        [
+          "-C",
+          this.workspaceRoot,
+          "rev-list",
+          "--left-right",
+          "--count",
+          "@{upstream}...HEAD",
+        ],
         { timeout: GIT_TIMEOUT_MS }
       );
-      return { files: this.parsePorcelainV1(stdout) };
+      const [incomingRaw, outgoingRaw] = stdout.trim().split(/\s+/);
+      return {
+        incomingCommitCount: this.parseCommitCount(incomingRaw),
+        outgoingCommitCount: this.parseCommitCount(outgoingRaw),
+      };
     } catch {
-      return { files: [] };
+      return {
+        incomingCommitCount: 0,
+        outgoingCommitCount: 0,
+      };
     }
+  }
+
+  private parseCommitCount(value: string | undefined): number {
+    const parsed = Number.parseInt(value ?? "", 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   }
 
   private parsePorcelainV1(
@@ -350,11 +395,12 @@ export class HostedWorkspaceViewerService {
           filePath = filePath.slice(arrowIdx + 4);
         }
 
-        const stagedStatus = x !== " " ? x : null;
+        const isUntracked = x === "?" && y === "?";
+        const stagedStatus = isUntracked ? null : x !== " " ? x : null;
         const unstagedStatus = y !== " " ? y : null;
 
         let kind: DiffKind;
-        if (x === "?" && y === "?") {
+        if (isUntracked) {
           kind = "untracked";
         } else if (x === "A") {
           kind = "added";

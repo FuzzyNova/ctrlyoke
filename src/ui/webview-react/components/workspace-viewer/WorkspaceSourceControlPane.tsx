@@ -47,6 +47,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
   const isMobile = useIsMobile();
   const [mobileDiffVisible, setMobileDiffVisible] = useState(false);
+  const [incomingCommitCount, setIncomingCommitCount] = useState(0);
+  const [outgoingCommitCount, setOutgoingCommitCount] = useState(0);
   const [pendingDiscard, setPendingDiscard] =
     useState<PendingDiscardAction | null>(null);
   const [dontWarnAgain, setDontWarnAgain] = useState(false);
@@ -56,6 +58,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     try {
       const result = await workspaceStatus();
       setSourceControlFiles(result.files);
+      setIncomingCommitCount(result.incomingCommitCount);
+      setOutgoingCommitCount(result.outgoingCommitCount);
       return result.files;
     } catch (err) {
       setScmError(String(err));
@@ -349,7 +353,11 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
   const leftColumn = (
     <div className="w-64 flex-shrink-0 flex flex-col border-r border-panel-border overflow-y-auto">
-      <WorkspaceCommitArea onRefresh={loadStatus} />
+      <WorkspaceCommitArea
+        incomingCommitCount={incomingCommitCount}
+        onRefresh={loadStatus}
+        outgoingCommitCount={outgoingCommitCount}
+      />
       <div className="border-t border-panel-border" />
 
       {sourceControlLoading ? (
@@ -390,7 +398,11 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       <>
         <div className="flex flex-col h-full overflow-hidden">
           <div className="flex-1 overflow-y-auto flex flex-col">
-            <WorkspaceCommitArea onRefresh={loadStatus} />
+            <WorkspaceCommitArea
+              incomingCommitCount={incomingCommitCount}
+              onRefresh={loadStatus}
+              outgoingCommitCount={outgoingCommitCount}
+            />
             <div className="border-t border-panel-border" />
 
             {sourceControlLoading ? (

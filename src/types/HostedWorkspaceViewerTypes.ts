@@ -50,6 +50,8 @@ export type WorkspaceScmFile = SourceControlFile;
 
 export interface WorkspaceScmStatusResponse {
   files: WorkspaceScmFile[];
+  incomingCommitCount: number;
+  outgoingCommitCount: number;
 }
 
 export type DiffKind =

@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -14,6 +15,24 @@ suite("HostedWorkspaceViewerService", () => {
     );
     tempRoots.push(workspaceRoot);
     return workspaceRoot;
+  }
+
+  function runGit(cwd: string, ...args: string[]): string {
+    return execFileSync("git", ["-C", cwd, ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  }
+
+  function configureGitIdentity(cwd: string): void {
+    runGit(cwd, "config", "user.name", "FlightPath Test");
+    runGit(cwd, "config", "user.email", "flightpath@example.com");
+  }
+
+  function commitFile(cwd: string, fileName: string, content: string, message: string): void {
+    fs.writeFileSync(path.join(cwd, fileName), content);
+    runGit(cwd, "add", fileName);
+    runGit(cwd, "commit", "-m", message);
   }
 
   teardown(() => {
@@ -229,6 +248,73 @@ suite("HostedWorkspaceViewerService", () => {
       const result = await svc.getStatus();
 
       assert.deepStrictEqual(result.files, []);
+      assert.strictEqual(result.incomingCommitCount, 0);
+      assert.strictEqual(result.outgoingCommitCount, 0);
+    });
+
+    test("reports outgoing commits relative to the upstream branch", async () => {
+      const remoteRoot = createWorkspace();
+      const root = createWorkspace();
+
+      runGit(remoteRoot, "init", "--bare");
+      runGit(path.dirname(root), "clone", remoteRoot, path.basename(root));
+      configureGitIdentity(root);
+
+      commitFile(root, "tracked.txt", "one\n", "initial commit");
+      runGit(root, "push", "-u", "origin", "HEAD");
+
+      commitFile(root, "tracked.txt", "two\n", "local commit");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getStatus();
+
+      assert.strictEqual(result.incomingCommitCount, 0);
+      assert.strictEqual(result.outgoingCommitCount, 1);
+    });
+
+    test("reports incoming commits after the upstream branch advances", async () => {
+      const remoteRoot = createWorkspace();
+      const root = createWorkspace();
+      const peerRoot = createWorkspace();
+
+      runGit(remoteRoot, "init", "--bare");
+      runGit(path.dirname(root), "clone", remoteRoot, path.basename(root));
+      configureGitIdentity(root);
+
+      commitFile(root, "tracked.txt", "one\n", "initial commit");
+      runGit(root, "push", "-u", "origin", "HEAD");
+
+      runGit(path.dirname(peerRoot), "clone", remoteRoot, path.basename(peerRoot));
+      configureGitIdentity(peerRoot);
+      commitFile(peerRoot, "tracked.txt", "two\n", "remote commit");
+      runGit(peerRoot, "push", "origin", "HEAD");
+
+      runGit(root, "fetch", "origin");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getStatus();
+
+      assert.strictEqual(result.incomingCommitCount, 1);
+      assert.strictEqual(result.outgoingCommitCount, 0);
+    });
+
+    test("reports untracked files only in the changes area", async () => {
+      const root = createWorkspace();
+
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.writeFileSync(path.join(root, "new-file.txt"), "hello\n");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getStatus();
+
+      assert.strictEqual(result.files.length, 1);
+      assert.deepStrictEqual(result.files[0], {
+        path: "new-file.txt",
+        stagedStatus: null,
+        unstagedStatus: "?",
+        kind: "untracked",
+      });
     });
   });
 });
