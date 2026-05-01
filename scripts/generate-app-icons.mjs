@@ -1,0 +1,81 @@
+#!/usr/bin/env node
+
+/**
+ * Generate app icons from the two primary SVG sources:
+ *   - images/flightpath-icon.svg        → icon.png (512), apple-touch-icon.png (180), flightpath-app-icon.svg
+ *   - images/flightpath-icon-simple.svg → flightpath-icon-color-simple.svg, flightpath-icon-color-simple.png (512)
+ *
+ * All generated icons use #1076ba background with #ffffff fill/stroke.
+ * Requires Inkscape CLI to be installed and available on PATH.
+ *
+ * Usage: node scripts/generate-app-icons.mjs
+ */
+
+import { readFileSync, writeFileSync } from "fs";
+import { execSync } from "child_process";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const rootDir = join(__dirname, "..");
+const imagesDir = join(rootDir, "images");
+
+const BG_COLOR = "#1076ba";
+const FG_COLOR = "#ffffff";
+
+/** Replace all theme-relative and hardcoded dark colors with white. */
+function colorize(svg) {
+  return svg
+    .replace(/currentColor/g, FG_COLOR)
+    .replace(/stroke:#[0-9a-fA-F]{3,6}/g, `stroke:${FG_COLOR}`)
+    .replace(/fill:#[0-9a-fA-F]{3,6}/g, `fill:${FG_COLOR}`);
+}
+
+/** Insert a solid background rect as the first child of <svg>. */
+function addBackground(svg, color) {
+  const match = svg.match(/<svg[\s\S]*?>/);
+  if (!match) throw new Error("Could not find opening <svg> tag");
+  const insertAt = match.index + match[0].length;
+  const rect = `<rect width="512" height="512" fill="${color}"/>`;
+  return svg.slice(0, insertAt) + rect + svg.slice(insertAt);
+}
+
+function applyColors(svg) {
+  return addBackground(colorize(svg), BG_COLOR);
+}
+
+/** Export an SVG file to PNG at the given width (square) using Inkscape. */
+function exportPng(svgPath, pngPath, width) {
+  const cmd = `inkscape -o "${pngPath}" -w ${width} -h ${width} "${svgPath}"`;
+  execSync(cmd, { stdio: "inherit" });
+  console.log(`  ✓ ${pngPath} (${width}×${width})`);
+}
+
+try {
+  const primarySvg = readFileSync(join(imagesDir, "flightpath-icon.svg"), "utf8");
+  const simpleSvg = readFileSync(join(imagesDir, "flightpath-icon-simple.svg"), "utf8");
+
+  const coloredPrimary = applyColors(primarySvg);
+  const coloredSimple = applyColors(simpleSvg);
+
+  // SVG outputs
+  const appIconSvgPath = join(imagesDir, "flightpath-app-icon.svg");
+  writeFileSync(appIconSvgPath, coloredPrimary, "utf8");
+  console.log("✓ images/flightpath-app-icon.svg");
+
+  const faviconSvgPath = join(imagesDir, "flightpath-icon-color-simple.svg");
+  writeFileSync(faviconSvgPath, coloredSimple, "utf8");
+  console.log("✓ images/flightpath-icon-color-simple.svg");
+
+  // PNG exports via Inkscape
+  console.log("\nExporting PNGs via Inkscape...");
+  exportPng(appIconSvgPath, join(imagesDir, "icon.png"), 512);
+  exportPng(appIconSvgPath, join(imagesDir, "apple-touch-icon.png"), 180);
+  exportPng(faviconSvgPath, join(imagesDir, "flightpath-icon-color-simple.png"), 512);
+
+  console.log("\n✅ All app icons generated successfully.");
+} catch (err) {
+  console.error("❌ Error:", err.message);
+  process.exit(1);
+}
