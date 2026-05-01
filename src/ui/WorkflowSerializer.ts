@@ -552,11 +552,16 @@ export class WorkflowSerializer {
       const workflowFiles = files.filter((f) => f.endsWith(".flightpath.json"));
 
       // Build a fast lookup set of working file paths that are currently active
-      // in memory (running or paused). Used below to normalize stale RUNNING states.
+      // in memory. Used below to normalize stale active states from disk.
       const manager = this.getManager();
       const activeWorkingFilePaths = new Set<string>(
         (manager?.getWorkflowSummaries() ?? [])
-          .filter((s) => s.executionState === EXECUTION_STATES.RUNNING)
+          .filter(
+            (s) =>
+              s.executionState === EXECUTION_STATES.RUNNING ||
+              s.executionState === EXECUTION_STATES.PAUSING ||
+              s.executionState === EXECUTION_STATES.PAUSED
+          )
           .map((s) => s.workingFilePath)
           .filter((p): p is string => p !== undefined)
       );
@@ -574,14 +579,16 @@ export class WorkflowSerializer {
             let executionState: string =
               workingFile._runtime?.executionState || EXECUTION_STATES.IDLE;
 
-            // Normalize stale RUNNING state: if the disk says "running" but no
-            // in-memory workflow is actually executing this file, show STOPPED.
+            // Normalize stale active state: if the disk says "running" or
+            // "pausing" but no in-memory workflow is actually executing this
+            // file, show STOPPED.
             // This guards against race windows before normalizeStaleLocks finishes.
             // HOWEVER: first check whether the lock file says the CLI is actively
             // running it — this bridges the timing gap where the runner.json
             // file-watcher hasn't fired yet (common on Windows due to watcher latency).
             if (
-              executionState === EXECUTION_STATES.RUNNING &&
+              (executionState === EXECUTION_STATES.RUNNING ||
+                executionState === EXECUTION_STATES.PAUSING) &&
               !activeWorkingFilePaths.has(filePath)
             ) {
               const isCli =

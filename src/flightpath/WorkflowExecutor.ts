@@ -450,7 +450,14 @@ export class WorkflowExecutor {
     const runtime = this.getRuntime();
     const currentStatus = runtime.status;
 
-    if (currentStatus === EXECUTION_STATES.PAUSED) {
+    if (
+      currentStatus === EXECUTION_STATES.PAUSED ||
+      currentStatus === EXECUTION_STATES.PAUSING
+    ) {
+      if (currentStatus === EXECUTION_STATES.PAUSING) {
+        runtime.confirmPaused();
+        await this.promptQueue.commitRuntimeTransition();
+      }
       Log.info("Workflow paused before executing next prompt");
       return false;
     }
@@ -722,7 +729,14 @@ export class WorkflowExecutor {
         context.dashboardProvider.updateProgress(live.current, live.total);
       }
 
-      if (runtime.status === EXECUTION_STATES.PAUSED) {
+      if (
+        runtime.status === EXECUTION_STATES.PAUSED ||
+        runtime.status === EXECUTION_STATES.PAUSING
+      ) {
+        if (runtime.status === EXECUTION_STATES.PAUSING) {
+          runtime.confirmPaused();
+          await this.promptQueue.commitRuntimeTransition();
+        }
         Log.info("Workflow paused");
         return false;
       }
@@ -1072,7 +1086,14 @@ export class WorkflowExecutor {
         await this.promptQueue.commitRuntimeTransition();
       }
 
-      if (runtime.status === EXECUTION_STATES.PAUSED) {
+      if (
+        runtime.status === EXECUTION_STATES.PAUSED ||
+        runtime.status === EXECUTION_STATES.PAUSING
+      ) {
+        if (runtime.status === EXECUTION_STATES.PAUSING) {
+          runtime.confirmPaused();
+          await this.promptQueue.commitRuntimeTransition();
+        }
         Log.info("Workflow paused after script step");
         return false;
       }
@@ -1490,7 +1511,17 @@ export class WorkflowExecutor {
           responseHandled = true;
           disposable.dispose();
 
-          if (this.getRuntime().status === EXECUTION_STATES.PAUSED) {
+          if (
+            this.getRuntime().status === EXECUTION_STATES.PAUSED ||
+            this.getRuntime().status === EXECUTION_STATES.PAUSING
+          ) {
+            // Confirm the pause transition synchronously if still in PAUSING state.
+            // The state machine update is sync; persist the runtime transition
+            // in the background since we're inside a Promise constructor.
+            if (this.getRuntime().status === EXECUTION_STATES.PAUSING) {
+              this.getRuntime().confirmPaused();
+              void this.promptQueue.commitRuntimeTransition();
+            }
             // Park the response only when there is a next step to pause before.
             // For the last queue step specifically (currentIndex === steps.length - 1),
             // resolve immediately so finalizeWorkflowExecution can complete the workflow

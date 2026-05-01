@@ -154,6 +154,7 @@ function makeExecutor(queue: PromptQueue): WorkflowExecutor {
 
 async function pauseQueueExecution(queue: PromptQueue): Promise<void> {
   if (queue.getRuntimeStateMachine().pause()) {
+    queue.getRuntimeStateMachine().confirmPaused();
     await queue.commitRuntimeTransition({ persist: false });
   }
 }

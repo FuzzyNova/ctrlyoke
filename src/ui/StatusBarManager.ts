@@ -49,6 +49,14 @@ export class StatusBarManager {
           );
           break;
 
+        case EXECUTION_STATES.PAUSING:
+          text = `$(debug-pause) FlightPath ${progress.current}/${progress.total}`;
+          tooltip = "FlightPath - Pausing after the current step";
+          backgroundColor = new vscode.ThemeColor(
+            "statusBarItem.warningBackground"
+          );
+          break;
+
         case EXECUTION_STATES.PAUSED:
           text = `$(debug-pause) FlightPath ${progress.current}/${progress.total}`;
           tooltip = "FlightPath - Paused (click to resume)";

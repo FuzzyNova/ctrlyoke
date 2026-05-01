@@ -588,6 +588,63 @@ describe("OUTPUT_HISTORY_LOADED", () => {
   });
 });
 
+describe("active workflow summaries", () => {
+  it("keeps pausing workflows in loadedWorkflows", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOWS_LIST, {
+        workflows: [
+          {
+            id: "wf-pausing",
+            workflowName: "Pausing workflow",
+            filePath: "C:\\wf-pausing.flightpath.json",
+            executionState: EXECUTION_STATES.PAUSING,
+            currentStep: 1,
+            totalSteps: 3,
+          },
+          {
+            id: "wf-complete",
+            workflowName: "Completed workflow",
+            filePath: "C:\\wf-complete.flightpath.json",
+            executionState: EXECUTION_STATES.COMPLETED,
+            currentStep: 3,
+            totalSteps: 3,
+          },
+        ],
+      });
+    });
+
+    expect(useUiStore.getState().loadedWorkflows.map((w) => w.id)).toEqual([
+      "wf-pausing",
+    ]);
+  });
+
+  it("upserts pausing workflow summary updates into loadedWorkflows", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, {
+        summary: {
+          id: "wf-pausing",
+          workflowName: "Pausing workflow",
+          filePath: "C:\\wf-pausing.flightpath.json",
+          executionState: EXECUTION_STATES.PAUSING,
+          currentStep: 1,
+          totalSteps: 3,
+        },
+      });
+    });
+
+    expect(useUiStore.getState().loadedWorkflows.map((w) => w.id)).toEqual([
+      "wf-pausing",
+    ]);
+    expect(useUiStore.getState().loadedWorkflows[0]?.executionState).toBe(
+      EXECUTION_STATES.PAUSING
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // PROGRESS_UPDATE
 // ---------------------------------------------------------------------------

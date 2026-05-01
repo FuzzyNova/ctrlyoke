@@ -1336,6 +1336,7 @@ export class PromptQueue {
     // any non-completed prompt may be deleted freely.
     const isActivelyExecuting =
       this.stateMachine.status === EXECUTION_STATES.RUNNING ||
+      this.stateMachine.status === EXECUTION_STATES.PAUSING ||
       this.stateMachine.status === EXECUTION_STATES.PAUSED ||
       this.stateMachine.status === EXECUTION_STATES.CANCELLING;
 

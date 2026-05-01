@@ -91,6 +91,7 @@ describe("getExecutionStateLabel", () => {
   it.each([
     [EXECUTION_STATES.IDLE, "Ready"],
     [EXECUTION_STATES.RUNNING, "Running"],
+    [EXECUTION_STATES.PAUSING, "Pausing..."],
     [EXECUTION_STATES.PAUSED, "Paused"],
     [EXECUTION_STATES.STOPPED, "Stopped"],
     [EXECUTION_STATES.COMPLETED, "Completed"],
@@ -123,6 +124,10 @@ describe("isExecutionBusy", () => {
     expect(isExecutionBusy(EXECUTION_STATES.RUNNING)).toBe(true);
   });
 
+  it("is true when pausing", () => {
+    expect(isExecutionBusy(EXECUTION_STATES.PAUSING)).toBe(true);
+  });
+
   it("is true when cancelling", () => {
     expect(isExecutionBusy(EXECUTION_STATES.CANCELLING)).toBe(true);
   });
@@ -149,8 +154,9 @@ describe("canStartExecution", () => {
     expect(canStartExecution(EXECUTION_STATES.STOPPED)).toBe(true);
   });
 
-  it("disallows start from running or paused", () => {
+  it("disallows start from running, pausing, or paused", () => {
     expect(canStartExecution(EXECUTION_STATES.RUNNING)).toBe(false);
+    expect(canStartExecution(EXECUTION_STATES.PAUSING)).toBe(false);
     expect(canStartExecution(EXECUTION_STATES.PAUSED)).toBe(false);
   });
 });
@@ -172,8 +178,9 @@ describe("canResumeExecution", () => {
 });
 
 describe("canStopExecution", () => {
-  it("allows stop when running or paused", () => {
+  it("allows stop when running, pausing, or paused", () => {
     expect(canStopExecution(EXECUTION_STATES.RUNNING)).toBe(true);
+    expect(canStopExecution(EXECUTION_STATES.PAUSING)).toBe(true);
     expect(canStopExecution(EXECUTION_STATES.PAUSED)).toBe(true);
   });
 

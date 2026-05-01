@@ -1055,6 +1055,14 @@ export class WebviewMessageRouter {
       }
     });
 
+    table.set(MESSAGE_TYPES.CANCEL_PAUSE_WORKFLOW, async (message) => {
+      const { workflowId } = message;
+      if (workflowId) {
+        Log.debug(`[WebviewMessageRouter] CANCEL_PAUSE_WORKFLOW received: inst:${workflowId.slice(0, 8)}`);
+        await this.getOrchestrator()?.cancelPauseWorkflow(workflowId);
+      }
+    });
+
     table.set(MESSAGE_TYPES.RESUME_WORKFLOW, (message) => {
       const { workflowId, workingFilePath } = message;
       if (workflowId) {

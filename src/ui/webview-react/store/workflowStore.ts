@@ -1020,6 +1020,7 @@ export const useWorkflowStore = create<
         // If running/paused, check if there are prompts after current step
         if (
           executionState === EXECUTION_STATES.RUNNING ||
+          executionState === EXECUTION_STATES.PAUSING ||
           executionState === EXECUTION_STATES.PAUSED
         ) {
           return currentStep < totalSteps;
@@ -1046,7 +1047,8 @@ export const useWorkflowStore = create<
       },
 
       isWorkflowRunning: () =>
-        get().executionState === EXECUTION_STATES.RUNNING,
+        get().executionState === EXECUTION_STATES.RUNNING ||
+        get().executionState === EXECUTION_STATES.PAUSING,
 
       isWorkflowPaused: () => get().executionState === EXECUTION_STATES.PAUSED,
 

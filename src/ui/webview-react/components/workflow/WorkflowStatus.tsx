@@ -314,7 +314,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     (workflowId: string) => {
       const workflow = loadedWorkflows.find((w) => w.id === workflowId);
       setActiveWorkflowWorkingFilePath(workflow?.workingFilePath ?? null);
-      if (workflow?.executionState === EXECUTION_STATES.RUNNING) {
+      if (
+        workflow?.executionState === EXECUTION_STATES.RUNNING ||
+        workflow?.executionState === EXECUTION_STATES.PAUSING
+      ) {
         useWorkflowStore.getState().clearHistoryOutputs();
         useUiStore.getState().clearHistoryView();
       }
@@ -411,6 +414,16 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const handlePauseWorkflow = useCallback(
     (workflowId: string) => {
       vscode.postMessage({ type: MESSAGE_TYPES.PAUSE_WORKFLOW, workflowId });
+    },
+    [vscode]
+  );
+
+  const handleCancelPauseWorkflow = useCallback(
+    (workflowId: string) => {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.CANCEL_PAUSE_WORKFLOW,
+        workflowId,
+      });
     },
     [vscode]
   );
@@ -558,7 +571,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             {/* Pulsing dot: another loaded workflow is running */}
             {loadedWorkflows.some(
               (w) =>
-                w.executionState === EXECUTION_STATES.RUNNING &&
+                (w.executionState === EXECUTION_STATES.RUNNING ||
+                  w.executionState === EXECUTION_STATES.PAUSING) &&
                 w.id !== activeWorkflowId
             ) && (
               <span
@@ -601,7 +615,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               : "inset(0 0 100% 0)",
         }}
       >
-        {/* Section 1: Running Workflows — only shown when any workflow is RUNNING or PAUSED */}
+        {/* Section 1: Running Workflows — only shown when any workflow is active */}
         {showRunningWorkflowsSection && (
           <div className="running-workflows-section flex-shrink-0">
             <WorkflowDropdownHeader
@@ -627,6 +641,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                     isNarrow={isNarrow}
                     onClick={() => handleSwitchWorkflow(workflow.id)}
                     onPause={() => handlePauseWorkflow(workflow.id)}
+                    onCancelPause={() => handleCancelPauseWorkflow(workflow.id)}
                     onResume={() => handleResumeWorkflow(workflow.id)}
                     onStop={() => handleStopWorkflow(workflow.id)}
                   />

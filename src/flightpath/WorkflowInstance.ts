@@ -1138,6 +1138,17 @@ export class WorkflowInstance {
   }
 
   /**
+   * Cancel a pending pause request, resuming execution immediately.
+   */
+  async cancelPause(): Promise<void> {
+    if (!this.workflowRuntime.cancelPause()) {
+      return;
+    }
+
+    await this.promptQueue.commitRuntimeTransition();
+  }
+
+  /**
    * Resume execution from paused state.
    */
   async resume(): Promise<void> {
@@ -1285,10 +1296,11 @@ export class WorkflowInstance {
     const executionState = this.getAuthoritativeExecutionState();
     if (
       executionState === EXECUTION_STATES.RUNNING ||
+      executionState === EXECUTION_STATES.PAUSING ||
       executionState === EXECUTION_STATES.PAUSED
     ) {
       Log.warn(
-        `clearWorkflow called on running/paused instance inst:${this.id.slice(0, 8)} — ignoring`
+        `clearWorkflow called on active instance inst:${this.id.slice(0, 8)} (${executionState}) — ignoring`
       );
       return;
     }
@@ -1705,6 +1717,7 @@ export class WorkflowInstance {
     const executionState = this.getAuthoritativeExecutionState();
     if (
       executionState === EXECUTION_STATES.RUNNING ||
+      executionState === EXECUTION_STATES.PAUSING ||
       executionState === EXECUTION_STATES.CANCELLING
     ) {
       Log.warn(

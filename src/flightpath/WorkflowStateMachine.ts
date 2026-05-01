@@ -376,8 +376,9 @@ export class WorkflowStateMachine {
   }
 
   /**
-   * Pause execution: RUNNING → PAUSED.
-   * Records pausedTime so resume() can compute the paused duration.
+   * Request pause: RUNNING → PAUSING.
+   * The executor will transition to PAUSED after the current step completes.
+   * Call confirmPaused() at that boundary, or cancelPause() to abort.
    */
   pause(): boolean {
     if (this._status !== EXECUTION_STATES.RUNNING) {
@@ -385,9 +386,40 @@ export class WorkflowStateMachine {
     }
 
     const previous = this.getSnapshot();
+    this._status = EXECUTION_STATES.PAUSING;
+    this.emitTransition("pause", previous);
+    return true;
+  }
+
+  /**
+   * Confirm the pause: PAUSING → PAUSED.
+   * Called by the executor when the current step finishes and the pause takes effect.
+   * Records pausedTime so resume() can compute the paused duration.
+   */
+  confirmPaused(): boolean {
+    if (this._status !== EXECUTION_STATES.PAUSING) {
+      return false;
+    }
+
+    const previous = this.getSnapshot();
     this._status = EXECUTION_STATES.PAUSED;
     this._pausedTime ??= Date.now();
-    this.emitTransition("pause", previous);
+    this.emitTransition("confirmPaused", previous);
+    return true;
+  }
+
+  /**
+   * Cancel a pending pause request: PAUSING → RUNNING.
+   * Called when the user cancels the pause before the current step finishes.
+   */
+  cancelPause(): boolean {
+    if (this._status !== EXECUTION_STATES.PAUSING) {
+      return false;
+    }
+
+    const previous = this.getSnapshot();
+    this._status = EXECUTION_STATES.RUNNING;
+    this.emitTransition("cancelPause", previous);
     return true;
   }
 

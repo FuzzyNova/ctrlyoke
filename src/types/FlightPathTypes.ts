@@ -253,6 +253,8 @@ export interface WorkflowRuntimeState {
 export type WorkflowRuntimeCommand =
   | "startExecution"
   | "pause"
+  | "confirmPaused"
+  | "cancelPause"
   | "resume"
   | "requestStop"
   | "confirmStopped"

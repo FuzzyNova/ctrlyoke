@@ -1613,7 +1613,7 @@ function createMessageHandlers(): MessageHandlerMap {
 
   // --------------------------------------------------------------------------
   // WORKFLOWS_LIST - Full list of loaded workflow summaries
-  // Only track RUNNING/PAUSED in the frontend loadedWorkflows array;
+  // Only track active workflows in the frontend loadedWorkflows array;
   // COMPLETED/ERROR/STOPPED appear in the output history section instead.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOWS_LIST] = (message) => {
@@ -1621,6 +1621,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const active = all.filter(
       (w) =>
         w.executionState === EXECUTION_STATES.RUNNING ||
+        w.executionState === EXECUTION_STATES.PAUSING ||
         w.executionState === EXECUTION_STATES.PAUSED
     );
     WebviewLog.debug(
@@ -1630,6 +1631,7 @@ function createMessageHandlers(): MessageHandlerMap {
               .filter(
                 (w) =>
                   w.executionState !== EXECUTION_STATES.RUNNING &&
+                  w.executionState !== EXECUTION_STATES.PAUSING &&
                   w.executionState !== EXECUTION_STATES.PAUSED
               )
               .map((w) => `inst:${w.id.slice(0, 8)}(state=${w.executionState})`)
@@ -1647,9 +1649,9 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // WORKFLOW_ADDED - New workflow instance entered RUNNING or PAUSED state.
+  // WORKFLOW_ADDED - New workflow instance entered an active state.
   // The orchestrator now only sends this message once the queue has actually
-  // transitioned to RUNNING/PAUSED (via onDidChangeState), so the summary is
+  // transitioned to an active state (via onDidChangeState), so the summary is
   // always in an active state.  The RUNNING/PAUSED guard below is kept as
   // defensive code.
   // --------------------------------------------------------------------------
@@ -1664,6 +1666,7 @@ function createMessageHandlers(): MessageHandlerMap {
     if (
       summary &&
       (summary.executionState === EXECUTION_STATES.RUNNING ||
+        summary.executionState === EXECUTION_STATES.PAUSING ||
         summary.executionState === EXECUTION_STATES.PAUSED)
     ) {
       useUiStore.getState().addLoadedWorkflow(summary);
@@ -1690,7 +1693,7 @@ function createMessageHandlers(): MessageHandlerMap {
 
   // --------------------------------------------------------------------------
   // WORKFLOW_SUMMARY_UPDATED - Workflow execution state changed
-  // If now RUNNING or PAUSED: upsert into loadedWorkflows.
+  // If now active: upsert into loadedWorkflows.
   // If now COMPLETED/ERROR/STOPPED: remove from loadedWorkflows.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED] = (message) => {
@@ -1699,6 +1702,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const uiStore = useUiStore.getState();
     if (
       summary.executionState === EXECUTION_STATES.RUNNING ||
+      summary.executionState === EXECUTION_STATES.PAUSING ||
       summary.executionState === EXECUTION_STATES.PAUSED
     ) {
       const exists = uiStore.loadedWorkflows.some((w) => w.id === summary.id);

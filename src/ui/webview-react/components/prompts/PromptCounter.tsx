@@ -28,6 +28,7 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   // Determine if workflow is actively running
   const isRunning =
     executionState === EXECUTION_STATES.RUNNING ||
+    executionState === EXECUTION_STATES.PAUSING ||
     executionState === EXECUTION_STATES.PAUSED;
 
   // Don't show anything if no prompts

@@ -99,6 +99,7 @@ export function getStatusLabel(status: StepStatus): string {
 export const EXECUTION_STATE_ICONS: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "codicon-circle-outline",
   [EXECUTION_STATES.RUNNING]: "codicon-play",
+  [EXECUTION_STATES.PAUSING]: "codicon-debug-pause",
   [EXECUTION_STATES.PAUSED]: "codicon-debug-pause",
   [EXECUTION_STATES.STOPPED]: "codicon-stop",
   [EXECUTION_STATES.CANCELLING]: "codicon-loading",
@@ -121,6 +122,7 @@ export function getExecutionStateIconClass(state: ExecutionState): string {
 export const EXECUTION_STATE_COLORS: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "text-description-fg",
   [EXECUTION_STATES.RUNNING]: "text-charts-blue",
+  [EXECUTION_STATES.PAUSING]: "text-indicator-running",
   [EXECUTION_STATES.PAUSED]: "text-indicator-running",
   [EXECUTION_STATES.STOPPED]: "text-warning-fg",
   [EXECUTION_STATES.CANCELLING]: "text-warning-fg",
@@ -144,6 +146,7 @@ export function getExecutionStateColorClass(state: ExecutionState): string {
 export const EXECUTION_STATE_LABELS: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "Ready",
   [EXECUTION_STATES.RUNNING]: "Running",
+  [EXECUTION_STATES.PAUSING]: "Pausing...",
   [EXECUTION_STATES.PAUSED]: "Paused",
   [EXECUTION_STATES.STOPPED]: "Stopped",
   [EXECUTION_STATES.CANCELLING]: "Cancelling...",
@@ -163,7 +166,9 @@ export function getExecutionStateLabel(state: ExecutionState): string {
  */
 export function isExecutionBusy(state: ExecutionState): boolean {
   return (
-    state === EXECUTION_STATES.RUNNING || state === EXECUTION_STATES.CANCELLING
+    state === EXECUTION_STATES.RUNNING ||
+    state === EXECUTION_STATES.PAUSING ||
+    state === EXECUTION_STATES.CANCELLING
   );
 }
 
@@ -198,7 +203,9 @@ export function canResumeExecution(state: ExecutionState): boolean {
  */
 export function canStopExecution(state: ExecutionState): boolean {
   return (
-    state === EXECUTION_STATES.RUNNING || state === EXECUTION_STATES.PAUSED
+    state === EXECUTION_STATES.RUNNING ||
+    state === EXECUTION_STATES.PAUSING ||
+    state === EXECUTION_STATES.PAUSED
   );
 }
 
@@ -209,6 +216,7 @@ export function canStopExecution(state: ExecutionState): boolean {
 export const EXECUTION_STATE_BADGE_CLASSES: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "bg-status-idle text-white",
   [EXECUTION_STATES.RUNNING]: "bg-status-running text-white",
+  [EXECUTION_STATES.PAUSING]: "bg-status-paused text-white",
   [EXECUTION_STATES.PAUSED]: "bg-status-paused text-white",
   [EXECUTION_STATES.STOPPED]: "bg-status-stopped text-white",
   [EXECUTION_STATES.CANCELLING]: "bg-status-cancelling text-white",
@@ -242,6 +250,7 @@ export function getExecutionStateBadgeClass(state: string): string {
 export const EXECUTION_STATE_BADGE_ICONS: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "codicon-circle-large",
   [EXECUTION_STATES.RUNNING]: "codicon-play",
+  [EXECUTION_STATES.PAUSING]: "codicon-debug-pause",
   [EXECUTION_STATES.PAUSED]: "codicon-debug-pause",
   [EXECUTION_STATES.STOPPED]: "codicon-debug-stop",
   [EXECUTION_STATES.CANCELLING]: "codicon-circle-slash",

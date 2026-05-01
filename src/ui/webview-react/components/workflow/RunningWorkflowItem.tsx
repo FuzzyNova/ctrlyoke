@@ -13,6 +13,7 @@ interface RunningWorkflowItemProps {
   isNarrow?: boolean;
   onClick: () => void;
   onPause: () => void;
+  onCancelPause: () => void;
   onResume: () => void;
   onStop: () => void;
 }
@@ -47,10 +48,12 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   isNarrow = false,
   onClick,
   onPause,
+  onCancelPause,
   onResume,
   onStop,
 }) => {
   const isRunning = workflow.executionState === EXECUTION_STATES.RUNNING;
+  const isPausing = workflow.executionState === EXECUTION_STATES.PAUSING;
   const isPaused = workflow.executionState === EXECUTION_STATES.PAUSED;
 
   const [elapsed, setElapsed] = useState(() =>
@@ -61,18 +64,18 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
     // Always compute immediately when startedAt or state changes
     setElapsed(formatElapsed(workflow.startedAt));
 
-    if (!isRunning) {
+    if (!isRunning && !isPausing) {
       // PAUSED — freeze the display, no interval needed
       return;
     }
 
-    // RUNNING — tick every second
+    // RUNNING / PAUSING — tick every second
     const interval = setInterval(() => {
       setElapsed(formatElapsed(workflow.startedAt));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning, workflow.startedAt]);
+  }, [isRunning, isPausing, workflow.startedAt]);
 
   return (
     <div
@@ -131,7 +134,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           CLI
         </span>
       ) : (
-        (isRunning || isPaused) && (
+        (isRunning || isPausing || isPaused) && (
           <div className="flex items-center gap-1 flex-shrink-0">
             {isRunning ? (
               <button
@@ -146,6 +149,20 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
                 className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
               >
                 <i className="codicon codicon-debug-pause" />
+              </button>
+            ) : isPausing ? (
+              <button
+                type="button"
+                title="Cancel pause"
+                aria-label="Cancel pause"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCancelPause();
+                }}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+              >
+                <i className="codicon codicon-debug-continue" />
               </button>
             ) : (
               <button

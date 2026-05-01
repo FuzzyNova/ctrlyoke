@@ -195,6 +195,7 @@ export const MESSAGE_TYPES = {
   // Per-workflow targeted controls — Webview → Extension
   RUN_WORKFLOW: "runWorkflow", // Run/restart specific workflow: { workflowId }
   PAUSE_WORKFLOW: "pauseWorkflow", // Pause specific workflow: { workflowId }
+  CANCEL_PAUSE_WORKFLOW: "cancelPauseWorkflow", // Cancel a pending pause request: { workflowId }
   RESUME_WORKFLOW: "resumeWorkflow", // Resume specific workflow: { workflowId }
   STOP_WORKFLOW: "stopWorkflow", // Stop specific workflow: { workflowId }
   STOP_CLI_RUN: "stopCliRun", // Kill the CLI process for a CLI-managed workflow: { workflowId }
@@ -390,6 +391,7 @@ export type CompletionNotificationSeverity =
 export const EXECUTION_STATES = {
   IDLE: "idle",
   RUNNING: "running",
+  PAUSING: "pausing", // Pause requested; will pause after the current step completes
   PAUSED: "paused",
   STOPPED: "stopped", // Execution aborted, state preserved, can resume from current prompt
   CANCELLING: "cancelling", // Kill signal sent, waiting for process to die

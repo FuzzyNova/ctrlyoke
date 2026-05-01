@@ -295,6 +295,7 @@ export class WorkflowOrchestrator {
         const existingStatus = existing.getQueueState().status;
         if (
           existingStatus === EXECUTION_STATES.RUNNING ||
+          existingStatus === EXECUTION_STATES.PAUSING ||
           existingStatus === EXECUTION_STATES.PAUSED
         ) {
           Log.info(
@@ -336,6 +337,7 @@ export class WorkflowOrchestrator {
       const viewedStatus = currentViewed.getQueueState().status;
       const isIdle =
         viewedStatus !== EXECUTION_STATES.RUNNING &&
+        viewedStatus !== EXECUTION_STATES.PAUSING &&
         viewedStatus !== EXECUTION_STATES.PAUSED;
       if (isIdle) {
         Log.debug(
@@ -428,7 +430,13 @@ export class WorkflowOrchestrator {
 
   getRunningWorkflows(): WorkflowInstance[] {
     return [...this.instances.values()].filter(
-      (w) => w.getQueueState().status === EXECUTION_STATES.RUNNING
+      (w) => {
+        const status = w.getQueueState().status;
+        return (
+          status === EXECUTION_STATES.RUNNING ||
+          status === EXECUTION_STATES.PAUSING
+        );
+      }
     );
   }
 
@@ -1081,6 +1089,21 @@ export class WorkflowOrchestrator {
     }
     Log.debug(`pauseWorkflow: inst:${workflowId.slice(0, 8)}`);
     return instance.pause();
+  }
+
+  /**
+   * Cancel a pending pause for a specific workflow by ID.
+   */
+  async cancelPauseWorkflow(workflowId: string): Promise<void> {
+    const instance = this.instances.get(workflowId);
+    if (!instance) {
+      Log.warn(
+        `cancelPauseWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
+      );
+      return;
+    }
+    Log.debug(`cancelPauseWorkflow: inst:${workflowId.slice(0, 8)}`);
+    return instance.cancelPause();
   }
 
   /**
@@ -1842,6 +1865,7 @@ export class WorkflowOrchestrator {
       const status = instance.getQueueState().status;
       const isIdle =
         status !== EXECUTION_STATES.RUNNING &&
+        status !== EXECUTION_STATES.PAUSING &&
         status !== EXECUTION_STATES.PAUSED;
       if (isIdle) {
         instance.dispose();
@@ -1899,6 +1923,7 @@ export class WorkflowOrchestrator {
       // loadedWorkflows.
       if (
         (state.status === EXECUTION_STATES.RUNNING ||
+          state.status === EXECUTION_STATES.PAUSING ||
           state.status === EXECUTION_STATES.PAUSED) &&
         !inRegistry
       ) {

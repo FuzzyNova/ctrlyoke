@@ -135,7 +135,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       ? selectionTarget.index
       : prompts.length;
   const hasFinalStep = finalStep !== null;
-  const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const isRunning =
+    executionState === EXECUTION_STATES.RUNNING ||
+    executionState === EXECUTION_STATES.PAUSING;
   const selectedPromptStatus =
     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE
       ? (prompts[selectionTarget.index] as any)?.status
@@ -748,6 +750,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       case EXECUTION_STATES.IDLE:
         return "Queue and run workflow";
       case EXECUTION_STATES.RUNNING:
+      case EXECUTION_STATES.PAUSING:
         return "Queue to current workflow";
       case EXECUTION_STATES.COMPLETED:
         return "Queue and resume workflow";

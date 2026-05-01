@@ -29,6 +29,7 @@ suite("WorkflowStateMachine", () => {
 
     assert.strictEqual(runtime.startExecution(), true);
     assert.strictEqual(runtime.pause(), true);
+    assert.strictEqual(runtime.confirmPaused(), true);
     assert.strictEqual(runtime.resume(), true);
     assert.strictEqual(runtime.requestStop(), true);
     assert.strictEqual(runtime.confirmStopped(), true);
@@ -43,6 +44,12 @@ suite("WorkflowStateMachine", () => {
       {
         command: "pause",
         from: EXECUTION_STATES.RUNNING,
+        to: EXECUTION_STATES.PAUSING,
+        stopped: false,
+      },
+      {
+        command: "confirmPaused",
+        from: EXECUTION_STATES.PAUSING,
         to: EXECUTION_STATES.PAUSED,
         stopped: false,
       },
@@ -65,6 +72,43 @@ suite("WorkflowStateMachine", () => {
         stopped: true,
       },
     ]);
+  });
+
+  test("cancelPause transitions PAUSING → RUNNING", () => {
+    const runtime = new WorkflowStateMachine();
+    const transitions: Array<{ command: string; from: string; to: string }> = [];
+
+    runtime.onDidTransition((t) => {
+      transitions.push({ command: t.command, from: t.previous.status, to: t.current.status });
+    });
+
+    assert.strictEqual(runtime.startExecution(), true);
+    assert.strictEqual(runtime.pause(), true);
+    assert.strictEqual(runtime.cancelPause(), true);
+
+    assert.deepStrictEqual(transitions, [
+      { command: "startExecution", from: EXECUTION_STATES.IDLE, to: EXECUTION_STATES.RUNNING },
+      { command: "pause", from: EXECUTION_STATES.RUNNING, to: EXECUTION_STATES.PAUSING },
+      { command: "cancelPause", from: EXECUTION_STATES.PAUSING, to: EXECUTION_STATES.RUNNING },
+    ]);
+  });
+
+  test("cancelPause is no-op when not in PAUSING state", () => {
+    const runtime = new WorkflowStateMachine();
+    const transitions: Array<string> = [];
+    runtime.onDidTransition((t) => transitions.push(t.command));
+
+    // No-op from IDLE
+    assert.strictEqual(runtime.cancelPause(), false);
+    assert.deepStrictEqual(transitions, []);
+
+    // No-op from PAUSED (already confirmed)
+    runtime.startExecution();
+    runtime.pause();
+    runtime.confirmPaused();
+    transitions.length = 0;
+    assert.strictEqual(runtime.cancelPause(), false);
+    assert.deepStrictEqual(transitions, []);
   });
 
   test("emits ordered attempt transitions and preserves retry metadata", () => {
@@ -165,6 +209,10 @@ suite("WorkflowStateMachine", () => {
     assert.strictEqual(runtime.status, EXECUTION_STATES.RUNNING);
 
     assert.strictEqual(runtime.pause(), true);
+    assert.strictEqual(runtime.status, EXECUTION_STATES.PAUSING);
+    assert.strictEqual(runtime.pausedTime, undefined); // pausedTime not set until confirmPaused
+
+    assert.strictEqual(runtime.confirmPaused(), true);
     assert.strictEqual(runtime.status, EXECUTION_STATES.PAUSED);
     assert.ok(runtime.pausedTime !== undefined);
 
@@ -195,6 +243,7 @@ suite("WorkflowStateMachine", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 25));
     runtime.pause();
+    runtime.confirmPaused();
     await new Promise((resolve) => setTimeout(resolve, 60));
     runtime.resume();
 

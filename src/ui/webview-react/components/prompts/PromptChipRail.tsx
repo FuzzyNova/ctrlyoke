@@ -271,7 +271,9 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
 
-  const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const isRunning =
+    executionState === EXECUTION_STATES.RUNNING ||
+    executionState === EXECUTION_STATES.PAUSING;
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
   const canReorder = canChangeStartPosition && prompts.length - currentStep > 1;

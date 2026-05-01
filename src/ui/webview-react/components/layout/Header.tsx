@@ -36,6 +36,12 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
     text: "Running",
     className: "bg-exec-running-bg text-[var(--btn-fg)] animate-pulse-custom",
   },
+  [EXECUTION_STATES.PAUSING]: {
+    icon: "debug-pause",
+    text: "Pausing",
+    className:
+      "bg-[var(--status-warning)] text-[var(--btn-fg)] animate-pulse-cancelling",
+  },
   [EXECUTION_STATES.PAUSED]: {
     icon: "debug-pause",
     text: "Paused",
@@ -105,6 +111,7 @@ export const Header: React.FC<{
 
   // Derived state
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const isPausing = executionState === EXECUTION_STATES.PAUSING;
   const isPaused = executionState === EXECUTION_STATES.PAUSED;
   const isCompleted = executionState === EXECUTION_STATES.COMPLETED;
   const isError = executionState === EXECUTION_STATES.ERROR;
@@ -122,20 +129,23 @@ export const Header: React.FC<{
   const canRun =
     hasFile &&
     !isCancelling &&
-    !(isRunning && !isCompleted && !isPaused && !isStopped);
+    !(isRunning && !isCompleted && !isPaused && !isStopped) &&
+    !isPausing;
 
   // Pause button becomes resume button when paused, stopped, errored, or idle-with-offset.
   // Disable during cancellation.
+  // PAUSING: Clicking again cancels the pending pause (returns to RUNNING)
   // PAUSED: Resumes to next prompt (current one completed normally)
   // STOPPED: Resumes to next prompt (cancelled prompt already advanced past)
   // ERROR: Retries the current prompt from the beginning
   // IDLE+offset: User stopped then set start position — resume from the repositioned step
   const canPause = isRunning && !isCancelling;
+  const canCancelPause = isPausing && !isCancelling;
   const canResume = isPaused || isStopped || isError || isIdleWithOffset;
 
-  // Stop button enabled when running, paused, or cancelling (allow re-pressing Stop to see status)
+  // Stop button enabled when running, pausing, paused, or cancelling (allow re-pressing Stop to see status)
   // Disable when stopped (already stopped)
-  const canStop = isRunning || isPaused || isCancelling;
+  const canStop = isRunning || isPausing || isPaused || isCancelling;
 
   // Run button shows restart icon when paused, stopped, completed, or errored
   const isRerun = isCompleted || isError || isPaused || isStopped;
@@ -180,6 +190,13 @@ export const Header: React.FC<{
       } else {
         vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
       }
+    } else if (canCancelPause) {
+      if (activeWorkflowId) {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.CANCEL_PAUSE_WORKFLOW,
+          workflowId: activeWorkflowId,
+        });
+      }
     } else if (canPause) {
       if (activeWorkflowId) {
         vscode.postMessage({
@@ -196,6 +213,7 @@ export const Header: React.FC<{
     isStopped,
     isError,
     isIdleWithOffset,
+    canCancelPause,
     canPause,
     activeWorkflowId,
     activeWorkflowWorkingFilePath,
@@ -371,12 +389,12 @@ export const Header: React.FC<{
           {/* Pause/Resume Button */}
           <button
             className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
-              (canPause || canResume) && !isCLIManaged
+              (canPause || canCancelPause || canResume) && !isCLIManaged
                 ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                 : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
             }`}
             onClick={handlePauseResume}
-            disabled={(!canPause && !canResume) || isCLIManaged}
+            disabled={(!canPause && !canCancelPause && !canResume) || isCLIManaged}
             title={
               isCLIManaged
                 ? "Workflow is running via FlightPath CLI"
@@ -388,16 +406,26 @@ export const Header: React.FC<{
                       ? "Continue (retry current prompt)"
                       : isIdleWithOffset
                         ? "Resume from start position"
-                        : "Pause after current step completes"
+                        : isPausing
+                          ? "Cancel pause"
+                          : "Pause after current step completes"
             }
             aria-label={
               isPaused || isStopped || isError || isIdleWithOffset
                 ? "Resume"
-                : "Pause"
+                : isPausing
+                  ? "Cancel pause"
+                  : "Pause"
             }
           >
             <i
-              className={`codicon ${isPaused || isStopped || isError || isIdleWithOffset ? "codicon-debug-continue" : "codicon-debug-pause"}`}
+              className={`codicon ${
+                isPaused || isStopped || isError || isIdleWithOffset
+                  ? "codicon-debug-continue"
+                  : isPausing
+                    ? "codicon-debug-pause animate-pulse-cancelling"
+                    : "codicon-debug-pause"
+              }`}
             />
           </button>
 
@@ -417,6 +445,19 @@ export const Header: React.FC<{
           </button>
         </div>
       </header>
+      {isPausing && (
+        <div className="flex items-center gap-2 px-3 py-1.5 text-xs bg-[var(--status-warning)] text-[var(--btn-fg)] border-b border-btn-border">
+          <i className="codicon codicon-debug-pause animate-pulse-cancelling" />
+          <span>Workflow will pause after the current step completes</span>
+          <button
+            className="ml-auto text-xs underline opacity-80 hover:opacity-100"
+            onClick={handlePauseResume}
+            aria-label="Cancel pause"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
     </>
   );
 };

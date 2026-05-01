@@ -27,6 +27,7 @@ async function startQueueExecution(queue: PromptQueue): Promise<void> {
 
 async function pauseQueueExecution(queue: PromptQueue): Promise<void> {
   if (queue.getRuntimeStateMachine().pause()) {
+    queue.getRuntimeStateMachine().confirmPaused();
     await queue.commitRuntimeTransition();
   }
 }
@@ -146,6 +147,21 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       const state = queue.getState();
       assert.strictEqual(state.completedIndices.size, 0);
+    });
+  });
+
+  suite("deletePrompt", () => {
+    test("should not allow deleting the current prompt while pause is pending", async () => {
+      queue.loadPrompts(createPromptFile(samplePrompts));
+      await startQueueExecution(queue);
+
+      assert.strictEqual(queue.getRuntimeStateMachine().pause(), true);
+      await queue.commitRuntimeTransition();
+
+      await assert.rejects(
+        queue.deletePrompt(0),
+        /Cannot delete the currently executing prompt/
+      );
     });
   });
 

@@ -13,7 +13,9 @@ import {
  */
 export function usePromptStatus() {
   const { currentStep, executionState } = useWorkflowStore();
-  const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const isRunning =
+    executionState === EXECUTION_STATES.RUNNING ||
+    executionState === EXECUTION_STATES.PAUSING;
 
   return function getPromptStatus(
     prompt: WorkflowStep | { status?: StepStatus },

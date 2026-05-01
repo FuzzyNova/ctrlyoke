@@ -1,7 +1,11 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { WorkflowOrchestrator } from "../../flightpath/WorkflowOrchestrator";
-import { MESSAGE_TYPES, PANEL_CLIENT_ID } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  MESSAGE_TYPES,
+  PANEL_CLIENT_ID,
+} from "../../types/DashboardConstants";
 
 function createOrchestratorHarness() {
   const orchestrator = Object.create(
@@ -145,6 +149,36 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     });
     assert.deepStrictEqual(sent, [
       { type: MESSAGE_TYPES.WORKFLOWS_LIST, workflows: [] },
+    ]);
+  });
+});
+
+suite("WorkflowOrchestrator active workflow helpers", () => {
+  test("getRunningWorkflows includes pausing workflows", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+
+    const running = {
+      getQueueState: () => ({ status: EXECUTION_STATES.RUNNING }),
+    };
+    const pausing = {
+      getQueueState: () => ({ status: EXECUTION_STATES.PAUSING }),
+    };
+    const paused = {
+      getQueueState: () => ({ status: EXECUTION_STATES.PAUSED }),
+    };
+
+    internal.instances = new Map<string, any>([
+      ["running", running],
+      ["pausing", pausing],
+      ["paused", paused],
+    ]);
+
+    assert.deepStrictEqual(orchestrator.getRunningWorkflows(), [
+      running,
+      pausing,
     ]);
   });
 });
