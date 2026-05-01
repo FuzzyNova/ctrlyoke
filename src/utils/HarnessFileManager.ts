@@ -103,7 +103,11 @@ async function collectAgentLocations(
       const files = await fs.promises.readdir(dir).catch(() => [] as string[]);
       for (const f of files) {
         if (!f.endsWith(ext)) continue;
-        const name = f.slice(0, -ext.length);
+        // Strip .agent.md preferentially: a .agent.md file in a .md-extension
+        // harness dir (e.g. claude-cli) should yield name "foo", not "foo.agent"
+        const name = f.endsWith(".agent.md")
+          ? f.slice(0, -".agent.md".length)
+          : f.slice(0, -ext.length);
         addAgent(name, { harnessId, path: path.join(dir, f) });
       }
     }

@@ -50,10 +50,11 @@ const HARNESS_USER_SKILL_DIRS: Record<HarnessId, string[]> = {
 
 /**
  * File extension used when reading/writing agent files for each harness.
- * Gemini uses plain *.md; all others use *.agent.md.
+ * Claude CLI and Gemini use plain *.md (with YAML frontmatter agent headers);
+ * all others use *.agent.md.
  */
 export const HARNESS_AGENT_EXTENSION: Record<HarnessId, string> = {
-  [HARNESS_IDS.CLAUDE_CLI]: ".agent.md",
+  [HARNESS_IDS.CLAUDE_CLI]: ".md",
   [HARNESS_IDS.COPILOT_CLI]: ".agent.md",
   [HARNESS_IDS.CODEX_CLI]: ".agent.md",
   [HARNESS_IDS.GEMINI_CLI]: ".md",

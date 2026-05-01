@@ -128,7 +128,11 @@ export class AgentDiscovery {
   }
 
   /**
-   * Discover all .agent.md files in a directory
+   * Discover agent files in a directory.
+   * Includes all *.agent.md files unconditionally and any plain *.md files
+   * that contain a valid agent header (YAML frontmatter with a `name:` or
+   * `description:` field).  This handles harnesses like Claude CLI whose
+   * native agent files are plain *.md, not *.agent.md.
    * @param directoryPath Path to search
    * @param source Source location identifier
    */
@@ -143,17 +147,24 @@ export class AgentDiscovery {
         return [];
       }
 
-      // Read directory contents
       const files = await fs.promises.readdir(directoryPath);
+      const mdFiles = files.filter((file) => file.endsWith(".md"));
 
-      // Filter for .agent.md files
-      const agentFiles = files.filter((file) => file.endsWith(".agent.md"));
-
-      for (const file of agentFiles) {
+      for (const file of mdFiles) {
         const filePath = path.join(directoryPath, file);
 
-        // Extract agent name (remove .agent.md extension)
-        const name = file.replace(/\.agent\.md$/, "");
+        // Always accept *.agent.md; for plain *.md require an agent header
+        if (!file.endsWith(".agent.md")) {
+          const hasHeader = await AgentDiscovery.hasAgentHeader(filePath);
+          if (!hasHeader) {
+            continue;
+          }
+        }
+
+        // Strip .agent.md preferentially so "foo.agent.md" → "foo", "foo.md" → "foo"
+        const name = file.endsWith(".agent.md")
+          ? file.slice(0, -".agent.md".length)
+          : file.slice(0, -".md".length);
 
         agents.push({
           name,
@@ -174,6 +185,40 @@ export class AgentDiscovery {
     }
 
     return agents;
+  }
+
+  /**
+   * Check if a .md file has a valid agent header (YAML frontmatter).
+   * Reads only the first 512 bytes for performance.
+   * A valid header starts with "---" and contains a `name:` or `description:`
+   * field before the closing "---" delimiter.
+   */
+  private static async hasAgentHeader(filePath: string): Promise<boolean> {
+    try {
+      const fd = await fs.promises.open(filePath, "r");
+      const buffer = Buffer.alloc(512);
+      const { bytesRead } = await fd.read(buffer, 0, 512, 0);
+      await fd.close();
+
+      const content = buffer.slice(0, bytesRead).toString("utf8");
+
+      if (!content.startsWith("---")) {
+        return false;
+      }
+
+      const closingIdx = content.indexOf("---", 3);
+      if (closingIdx === -1) {
+        return false;
+      }
+
+      const frontmatter = content.slice(3, closingIdx);
+      return (
+        /^\s*name\s*:/m.test(frontmatter) ||
+        /^\s*description\s*:/m.test(frontmatter)
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**

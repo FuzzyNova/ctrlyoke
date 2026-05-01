@@ -35,14 +35,13 @@ function HarnessBadge({ id }: BadgeProps) {
   const isFp = id === "flightpath";
   return (
     <span
-      className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium
+      className={`inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none
         ${isFp
           ? "bg-badge-bg text-badge-fg"
           : "bg-list-hover-bg text-foreground border border-panel-border"
         }`}
-      title={getHarnessLabel(id)}
     >
-      {isFp ? "FP" : getHarnessLabel(id)}
+      {getHarnessLabel(id)}
     </span>
   );
 }
@@ -83,42 +82,45 @@ function FileRow({ file, onExport, onImport, onDelete }: FileRowProps) {
   }));
 
   return (
-    <div className="flex items-start justify-between gap-3 py-2 px-3 border-b border-panel-border last:border-0">
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-foreground truncate">
-          {file.displayName}
-        </div>
-        <div className="flex flex-wrap gap-1 mt-1">
+    <div className="py-2 px-3 border-b border-panel-border last:border-0">
+      {/* File name — full-width own line, never squished */}
+      <div className="text-sm font-medium text-foreground truncate mb-1.5">
+        {file.displayName}
+      </div>
+
+      {/* Location badges (left) + actions (right) — share one responsive row */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1">
           {file.locations.map((loc) => (
             <HarnessBadge key={`${loc.harnessId}-${loc.path}`} id={loc.harnessId} />
           ))}
         </div>
-      </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
-        {!hasFlightPath && (
-          <button
-            type="button"
-            onClick={() => onImport(primaryLoc.path)}
-            className="px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
-            title="Copy to .flightpath directory"
-          >
-            Import to FP
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 ml-auto">
+          {!hasFlightPath && (
+            <button
+              type="button"
+              onClick={() => onImport(primaryLoc.path)}
+              className="px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+              title="Copy to .flightpath directory"
+            >
+              Import
+            </button>
+          )}
 
-        <ActionDropdown
-          label="Export"
-          items={exportItems}
-          onSelect={(targetId) => onExport(primaryLoc.path, targetId)}
-        />
+          <ActionDropdown
+            label="Export"
+            items={exportItems}
+            onSelect={(targetId) => onExport(primaryLoc.path, targetId)}
+          />
 
-        <ActionDropdown
-          label="Delete"
-          items={deleteItems}
-          onSelect={(harnessId) => onDelete(file.name, harnessId)}
-          className="text-error-fg"
-        />
+          <ActionDropdown
+            label="Delete"
+            items={deleteItems}
+            onSelect={(harnessId) => onDelete(file.name, harnessId)}
+            className="text-error-fg"
+          />
+        </div>
       </div>
     </div>
   );
@@ -131,29 +133,20 @@ function FileRow({ file, onExport, onImport, onDelete }: FileRowProps) {
 interface SyncAllBarProps {
   files: ManagedFile[];
   onSync: (targetId: string) => void;
-  onOpenDir: (harnessId: string) => void;
 }
 
-function SyncAllBar({ files, onSync, onOpenDir }: SyncAllBarProps) {
+function SyncAllBar({ files, onSync }: SyncAllBarProps) {
   const [targetHarness, setTargetHarness] = useState<HarnessId>(
     HARNESS_IDS.CLAUDE_CLI as HarnessId
   );
 
-  const harnessItems: ActionDropdownItem[] = DISPLAYED_HARNESS_IDS.map((id) => ({
-    label: getHarnessLabel(id),
-    value: id,
-  }));
-
-  const fpItem: ActionDropdownItem = { label: "FlightPath", value: "flightpath" };
-
   return (
-    <div className="flex items-center gap-2 pt-3 border-t border-panel-border flex-wrap">
-      <span className="text-xs text-description-fg">Sync all to:</span>
-
+    <div className="flex items-center gap-2 pt-3 border-t border-panel-border">
+      <span className="text-xs text-description-fg shrink-0">Sync all to:</span>
       <select
         value={targetHarness}
         onChange={(e) => setTargetHarness(e.target.value as HarnessId)}
-        className="bg-input-bg border border-input-border rounded px-2 py-0.5 text-xs text-foreground focus:outline-none focus:border-focus-border"
+        className="h-6 flex-1 min-w-0 bg-input-bg border border-input-border rounded px-2 text-xs text-foreground focus:outline-none focus:border-focus-border"
       >
         {DISPLAYED_HARNESS_IDS.map((id) => (
           <option key={id} value={id}>
@@ -161,23 +154,14 @@ function SyncAllBar({ files, onSync, onOpenDir }: SyncAllBarProps) {
           </option>
         ))}
       </select>
-
       <button
         type="button"
         disabled={files.length === 0}
         onClick={() => onSync(targetHarness)}
-        className="px-2 py-0.5 text-xs rounded bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
+        className="h-6 px-2 text-xs rounded bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
       >
         Sync All
       </button>
-
-      <div className="ml-auto flex items-center gap-1.5">
-        <ActionDropdown
-          label="Open Folder"
-          items={[...harnessItems, fpItem]}
-          onSelect={(id) => onOpenDir(id)}
-        />
-      </div>
     </div>
   );
 }
@@ -260,23 +244,36 @@ export function HarnessFileManagerSection() {
         FlightPath-exclusive directory.
       </p>
 
-      {/* Type switcher */}
-      <div className="flex rounded border border-btn-border overflow-hidden text-xs font-medium w-fit">
-        {(["agent", "skill"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setActiveType(t)}
-            className={`px-3 py-1 transition-colors capitalize
-              ${activeType === t
-                ? "bg-btn-bg text-btn-fg"
-                : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              }
-              ${t === "skill" ? "border-l border-btn-border" : ""}`}
-          >
-            {t === "agent" ? "Agents" : "Skills"}
-          </button>
-        ))}
+      {/* Type switcher + Open Folder */}
+      <div className="flex items-center gap-2">
+        <div className="flex rounded border border-btn-border overflow-hidden text-xs font-medium">
+          {(["agent", "skill"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setActiveType(t)}
+              className={`px-3 py-1 transition-colors capitalize
+                ${activeType === t
+                  ? "bg-btn-bg text-btn-fg"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                }
+                ${t === "skill" ? "border-l border-btn-border" : ""}`}
+            >
+              {t === "agent" ? "Agents" : "Skills"}
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto">
+          <ActionDropdown
+            label="Open Folder"
+            items={[
+              ...DISPLAYED_HARNESS_IDS.map((id) => ({ label: getHarnessLabel(id), value: id })),
+              { label: "FlightPath", value: "flightpath" },
+            ]}
+            onSelect={(id) => openHarnessDir(id, activeType)}
+          />
+        </div>
       </div>
 
       {/* File list */}
@@ -308,11 +305,10 @@ export function HarnessFileManagerSection() {
         ))}
       </div>
 
-      {/* Sync all + open folder */}
+      {/* Sync all */}
       <SyncAllBar
         files={managedFiles}
         onSync={handleSyncAll}
-        onOpenDir={(id) => openHarnessDir(id, activeType)}
       />
 
       {/* Delete confirmation modal */}
