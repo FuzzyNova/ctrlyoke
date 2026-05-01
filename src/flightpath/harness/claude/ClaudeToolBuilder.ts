@@ -1,21 +1,17 @@
 import type {
   CliEvent,
   ToolResultData,
-  BashCommandData,
-  FileReadData,
-  FileWriteData,
   FileEditData,
-  FileDeleteData,
-  McpToolCallData,
-  WebSearchData,
-  ToolCall,
+  FileWriteData,
+  FileReadData,
+  BashCommandData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
-import { CliEventMapper } from "../shared/CliEventMapper";
 import { Log } from "../../../utils/Log";
+import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 
 /**
  * Builds CliEvents from Claude CLI tool call payloads.
@@ -57,172 +53,31 @@ export class ClaudeToolBuilder {
     timestamp: number,
     callerType?: string
   ): CliEvent[] {
-    const classification = CliEventMapper.classifyTool(toolName);
-    const path = (input.path ?? input.file_path) as string | undefined;
-
-    // Build the base event then apply callerType if present
     const ct = callerType ? { callerType } : {};
 
-    switch (classification.type) {
-      case CLI_EVENT_TYPES.BASH_COMMAND:
-        return [
-          {
-            type: CLI_EVENT_TYPES.BASH_COMMAND,
-            timestamp,
-            ...ct,
-            data: {
-              command:
-                ((input.command ?? input.cmd) as string | undefined) ||
-                "unknown",
-              workingDir: (input.working_dir ??
-                input.cwd ??
-                input.workingDir) as string | undefined,
-              status: OPERATION_STATUS.INITIATED,
-            } as BashCommandData,
-          },
-        ];
-
-      case CLI_EVENT_TYPES.FILE_READ:
-        return [
-          {
-            type: CLI_EVENT_TYPES.FILE_READ,
-            timestamp,
-            ...ct,
-            data: {
-              path: path || "unknown",
-              status: OPERATION_STATUS.INITIATED,
-            } as FileReadData,
-          },
-        ];
-
-      case CLI_EVENT_TYPES.FILE_WRITE:
-        return [
-          {
-            type: CLI_EVENT_TYPES.FILE_WRITE,
-            timestamp,
-            ...ct,
-            data: {
-              path: path || "unknown",
-              content:
-                ((input.content ?? input.file_text) as string | undefined) ||
-                "",
-              status: OPERATION_STATUS.INITIATED,
-            } as FileWriteData,
-          },
-        ];
-
-      case CLI_EVENT_TYPES.FILE_EDIT: {
-        // Handle multiedit tool (multiple files in one tool call)
-        if (toolName === "multiedit" && Array.isArray(input.edits)) {
-          return (input.edits as Record<string, unknown>[]).map((edit) => {
-            const editPath = (edit.file_path ?? edit.path) as
-              | string
-              | undefined;
-            const oldContent = (edit.old_string ??
-              edit.oldString ??
-              edit.old_content ??
-              edit.oldContent) as string | undefined;
-            const newContent = (edit.new_string ??
-              edit.newString ??
-              edit.new_content ??
-              edit.newContent) as string | undefined;
-            return {
-              type: CLI_EVENT_TYPES.FILE_EDIT,
-              timestamp,
-              ...ct,
-              data: {
-                path: editPath || "unknown",
-                oldContent,
-                newContent,
-                status: OPERATION_STATUS.INITIATED,
-              } as FileEditData,
-            };
-          });
-        }
-
-        const oldContent = (input.oldString ??
-          input.old_string ??
-          input.oldContent ??
-          input.old_content ??
-          input.old_str) as string | undefined;
-        const newContent = (input.newString ??
-          input.new_string ??
-          input.newContent ??
-          input.new_content ??
-          input.new_str) as string | undefined;
-        return [
-          {
-            type: CLI_EVENT_TYPES.FILE_EDIT,
-            timestamp,
-            ...ct,
-            data: {
-              path: path || "unknown",
-              oldContent,
-              newContent,
-              status: OPERATION_STATUS.INITIATED,
-            } as FileEditData,
-          },
-        ];
-      }
-
-      case CLI_EVENT_TYPES.FILE_DELETE:
-        return [
-          {
-            type: CLI_EVENT_TYPES.FILE_DELETE,
-            timestamp,
-            ...ct,
-            data: {
-              path: path || "unknown",
-            } as FileDeleteData,
-          },
-        ];
-
-      case CLI_EVENT_TYPES.WEB_SEARCH:
-        return [
-          {
-            type: CLI_EVENT_TYPES.WEB_SEARCH,
-            timestamp,
-            ...ct,
-            data: {
-              query: (input.query as string) || "",
-            } as WebSearchData,
-          },
-        ];
-
-      case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-        const mcp = classification as {
-          type: typeof CLI_EVENT_TYPES.MCP_TOOL_CALL;
-          server: string;
-          tool: string;
-        };
-        return [
-          {
-            type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-            timestamp,
-            ...ct,
-            data: {
-              server: mcp.server,
-              tool: mcp.tool,
-              parameters: input,
-            } as McpToolCallData,
-          },
-        ];
-      }
-
-      default:
-        return [
-          {
-            type: CLI_EVENT_TYPES.TOOL_CALL,
-            timestamp,
-            ...ct,
-            data: {
-              name: toolName,
-              parameters: input,
-              id: toolId,
-            } as ToolCall,
-          },
-        ];
+    // Claude-specific: multiedit fans out to one FILE_EDIT per edited file
+    if (toolName === "multiedit" && Array.isArray(input.edits)) {
+      return (input.edits as Record<string, unknown>[]).map((edit) => ({
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        timestamp,
+        ...ct,
+        data: {
+          path:
+            ((edit.file_path ?? edit.path) as string | undefined) || "unknown",
+          oldContent: (edit.old_string ??
+            edit.oldString ??
+            edit.old_content ??
+            edit.oldContent) as string | undefined,
+          newContent: (edit.new_string ??
+            edit.newString ??
+            edit.new_content ??
+            edit.newContent) as string | undefined,
+          status: OPERATION_STATUS.INITIATED,
+        } as FileEditData,
+      }));
     }
+
+    return BaseToolBuilder.buildInitiatedEvents(toolName, input, toolId, timestamp, ct);
   }
 
   // ── TOOL RESULTS ───────────────────────────────────────────────────────────

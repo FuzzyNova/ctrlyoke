@@ -5,9 +5,6 @@ import {
   FileWriteData,
   FileEditData,
   FileDeleteData,
-  McpToolCallData,
-  WebSearchData,
-  ToolCall,
   ToolResultData,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
@@ -17,6 +14,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
 import { Log } from "../../../utils/Log";
+import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 
 /**
  * Event types that need toolCallMap registration (i.e. they have a matching
@@ -86,164 +84,53 @@ export class CodexToolBuilder {
     callId: string | undefined,
     timestamp: number
   ): CliEvent[] {
-    const classification = CliEventMapper.classifyTool(toolName);
-    const filePath = ((params.path ?? params.file) as string | undefined) ?? "";
-
-    switch (classification.type) {
-      case CLI_EVENT_TYPES.BASH_COMMAND:
-        return [
-          {
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
+    // Codex-specific: apply_patch encodes multi-file edits in a custom patch format
+    if (
+      toolName === "apply_patch" &&
+      CliEventMapper.classifyTool(toolName).type === CLI_EVENT_TYPES.FILE_EDIT
+    ) {
+      const patchInput = (params.input as string | undefined) ?? "";
+      const fileEdits = CodexToolBuilder.parseApplyPatchFileEdits(patchInput);
+      if (fileEdits.length > 0) {
+        Log.debug(
+          `[CodexToolBuilder] apply_patch initiated - files=${fileEdits.length}`
+        );
+        return fileEdits.map((fileEdit) => ({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,
           data: {
-            command:
-              ((params.command ?? params.cmd) as string | undefined) || "",
-            workingDir: (params.workingDir ?? params.cwd) as string | undefined,
+            path: fileEdit.path,
+            structuredPatch: fileEdit.structuredPatch,
             status: OPERATION_STATUS.INITIATED,
-          } as BashCommandData,
-          },
-        ];
-
-      case CLI_EVENT_TYPES.FILE_READ:
-        return [
-          {
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp,
-          data: {
-            path: filePath,
-            status: OPERATION_STATUS.INITIATED,
-          } as FileReadData,
-          },
-        ];
-
-      case CLI_EVENT_TYPES.FILE_WRITE:
-        return [
-          {
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp,
-          data: {
-            path: filePath,
-            content: (params.content as string | undefined) || "",
-            status: OPERATION_STATUS.INITIATED,
-          } as FileWriteData,
-          },
-        ];
-
-      case CLI_EVENT_TYPES.FILE_EDIT: {
-        if (toolName === "apply_patch") {
-          const patchInput = (params.input as string | undefined) ?? "";
-          const fileEdits = CodexToolBuilder.parseApplyPatchFileEdits(patchInput);
-          if (fileEdits.length > 0) {
-            Log.debug(
-              `[CodexToolBuilder] apply_patch initiated - files=${fileEdits.length}`
-            );
-            return fileEdits.map((fileEdit) => ({
-              type: CLI_EVENT_TYPES.FILE_EDIT,
-              timestamp,
-              data: {
-                path: fileEdit.path,
-                structuredPatch: fileEdit.structuredPatch,
-                status: OPERATION_STATUS.INITIATED,
-              } as FileEditData,
-            }));
-          }
-
-          let extractedPath = "unknown";
-          const fileMatch = patchInput.match(
-            /\*\*\* (?:Add|Update|Delete) File: (.+)/
-          );
-          if (fileMatch) {
-            extractedPath = fileMatch[1].trim();
-          }
-          const structuredPatch = CodexToolBuilder.parseApplyPatch(patchInput);
-          Log.debug(
-            `[CodexToolBuilder] apply_patch initiated - file=${extractedPath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
-          );
-          return [
-            {
-              type: CLI_EVENT_TYPES.FILE_EDIT,
-              timestamp,
-              data: {
-                path: extractedPath,
-                structuredPatch,
-                status: OPERATION_STATUS.INITIATED,
-              } as FileEditData,
-            },
-          ];
-        }
-        return [
-          {
-            type: CLI_EVENT_TYPES.FILE_EDIT,
-            timestamp,
-            data: {
-              path: filePath,
-              oldContent: (params.oldContent ?? params.old_content) as
-                | string
-                | undefined,
-              newContent: (params.newContent ??
-                params.new_content ??
-                params.content) as string | undefined,
-              status: OPERATION_STATUS.INITIATED,
-            } as FileEditData,
-          },
-        ];
+          } as FileEditData,
+        }));
       }
 
-      case CLI_EVENT_TYPES.FILE_DELETE:
-        return [
-          {
-          type: CLI_EVENT_TYPES.FILE_DELETE,
+      let extractedPath = "unknown";
+      const fileMatch = patchInput.match(
+        /\*\*\* (?:Add|Update|Delete) File: (.+)/
+      );
+      if (fileMatch) {
+        extractedPath = fileMatch[1].trim();
+      }
+      const structuredPatch = CodexToolBuilder.parseApplyPatch(patchInput);
+      Log.debug(
+        `[CodexToolBuilder] apply_patch initiated - file=${extractedPath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
+      );
+      return [
+        {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
           timestamp,
           data: {
-            path: filePath,
+            path: extractedPath,
+            structuredPatch,
             status: OPERATION_STATUS.INITIATED,
-          } as FileDeleteData,
-          },
-        ];
-
-      case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-        const mcp = classification as {
-          type: typeof CLI_EVENT_TYPES.MCP_TOOL_CALL;
-          server: string;
-          tool: string;
-        };
-        return [
-          {
-            type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-            timestamp,
-            data: {
-              server: mcp.server,
-              tool: mcp.tool,
-              parameters: params,
-            } as McpToolCallData,
-          },
-        ];
-      }
-
-      case CLI_EVENT_TYPES.WEB_SEARCH:
-        return [
-          {
-            type: CLI_EVENT_TYPES.WEB_SEARCH,
-            timestamp,
-            data: {
-              query: (params.query as string) || "",
-            } as WebSearchData,
-          },
-        ];
-
-      default:
-        return [
-          {
-            type: CLI_EVENT_TYPES.TOOL_CALL,
-            timestamp,
-            data: {
-              name: toolName,
-              parameters: params,
-              id: callId,
-            } as ToolCall,
-          },
-        ];
+          } as FileEditData,
+        },
+      ];
     }
+
+    return BaseToolBuilder.buildInitiatedEvents(toolName, params, callId, timestamp);
   }
 
   /**

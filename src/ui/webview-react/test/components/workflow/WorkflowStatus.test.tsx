@@ -134,6 +134,30 @@ describe("WorkflowStatus — loaded state", () => {
     });
   });
 
+  it("keeps the active pausing workflow in the Running Workflows section when loadedWorkflows is stale", async () => {
+    const user = userEvent.setup();
+    useWorkflowStore.setState({
+      fileName: "/workspace/pausing.flightpath.json",
+      workflowName: "Pausing Workflow",
+      executionState: EXECUTION_STATES.PAUSING,
+      currentStep: 0,
+      totalSteps: 1,
+    });
+    useUiStore.setState({
+      activeWorkflowId: "workflow-pausing",
+      activeWorkflowWorkingFilePath: "/workspace/pausing.flightpath.json",
+      loadedWorkflows: [],
+    });
+
+    render(<WorkflowStatus />);
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+
+    expect(screen.getByText("Running Workflows")).toBeInTheDocument();
+    expect(screen.getAllByText("Pausing Workflow").length).toBeGreaterThan(0);
+  });
+
   it("populates recent workflows list on RECENT_WORKFLOWS message", async () => {
     render(<WorkflowStatus />);
     // Dispatch the RECENT_WORKFLOWS message

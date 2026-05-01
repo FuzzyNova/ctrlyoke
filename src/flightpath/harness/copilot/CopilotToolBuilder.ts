@@ -15,6 +15,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
 import { CliResponseParser } from "../shared/CliResponseParser";
+import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 
 /**
  * Builds CliEvents from Copilot CLI tool call payloads.
@@ -52,108 +53,12 @@ export class CopilotToolBuilder {
     toolCallId: string | undefined,
     timestamp: number
   ): CliEvent {
-    const classification = CliEventMapper.classifyTool(toolName);
-    const path = (args.path ?? args.file_path) as string | undefined;
-
-    switch (classification.type) {
-      case CLI_EVENT_TYPES.BASH_COMMAND:
-        return {
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          timestamp,
-          data: {
-            command:
-              ((args.command ?? args.cmd ?? args.script) as
-                | string
-                | undefined) || "unknown",
-            workingDir: (args.cwd ?? args.workingDir) as string | undefined,
-            status: OPERATION_STATUS.INITIATED,
-          } as BashCommandData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_READ:
-        return {
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp,
-          data: {
-            path: path || "unknown",
-            status: OPERATION_STATUS.INITIATED,
-          } as FileReadData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_WRITE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp,
-          data: {
-            path: path || "unknown",
-            content:
-              ((args.content ?? args.file_text) as string | undefined) || "",
-            status: OPERATION_STATUS.INITIATED,
-          } as FileWriteData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_EDIT:
-        return {
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp,
-          data: {
-            path: path || "unknown",
-            oldContent: (args.old_str ?? args.old_string ?? args.oldString) as
-              | string
-              | undefined,
-            newContent: (args.new_str ?? args.new_string ?? args.newString) as
-              | string
-              | undefined,
-            status: OPERATION_STATUS.INITIATED,
-          } as FileEditData,
-        };
-
-      case CLI_EVENT_TYPES.FILE_DELETE:
-        return {
-          type: CLI_EVENT_TYPES.FILE_DELETE,
-          timestamp,
-          data: {
-            path: path || "unknown",
-          } as FileDeleteData,
-        };
-
-      case CLI_EVENT_TYPES.WEB_SEARCH:
-        return {
-          type: CLI_EVENT_TYPES.WEB_SEARCH,
-          timestamp,
-          data: {
-            query: (args.query as string) || "",
-          } as WebSearchData,
-        };
-
-      case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-        const mcp = classification as {
-          type: typeof CLI_EVENT_TYPES.MCP_TOOL_CALL;
-          server: string;
-          tool: string;
-        };
-        return {
-          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-          timestamp,
-          data: {
-            server: mcp.server,
-            tool: mcp.tool,
-            parameters: args,
-          } as McpToolCallData,
-        };
-      }
-
-      default:
-        return {
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: toolName,
-            parameters: args,
-            id: toolCallId,
-          } as ToolCall,
-        };
-    }
+    return BaseToolBuilder.buildInitiatedEvents(
+      toolName,
+      args,
+      toolCallId,
+      timestamp
+    )[0] as CliEvent;
   }
 
   /**

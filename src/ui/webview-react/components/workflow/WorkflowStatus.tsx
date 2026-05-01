@@ -18,6 +18,7 @@ import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import {
   getExecutionStateBadgeClass,
   getExecutionStateBadgeIcon,
+  isWorkflowActive,
   isWorkflowRunning,
 } from "../../utils/status";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
@@ -59,7 +60,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   className = "",
 }) => {
   const vscode = useVsCodeApi();
-  const { fileName, workflowName, executionState } = useWorkflowStore();
+  const { fileName, workflowName, executionState, currentStep, totalSteps } =
+    useWorkflowStore();
   const {
     loadedWorkflows,
     activeWorkflowId,
@@ -100,10 +102,31 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
   }, [loadedWorkflows]);
 
+  const syntheticActiveWorkflow =
+    activeWorkflowId &&
+    isWorkflowActive(executionState) &&
+    !loadedWorkflows.some((w) => w.id === activeWorkflowId)
+      ? {
+          id: activeWorkflowId,
+          workflowName:
+            workflowName ||
+            (fileName ? getWorkflowNameFromPath(fileName) : DEFAULT_WORKFLOW_NAME),
+          filePath: activeWorkflowWorkingFilePath ?? fileName ?? "",
+          workingFilePath: activeWorkflowWorkingFilePath ?? undefined,
+          executionState,
+          currentStep,
+          totalSteps,
+        }
+      : null;
+
+  const effectiveLoadedWorkflows = syntheticActiveWorkflow
+    ? [...loadedWorkflows, syntheticActiveWorkflow]
+    : loadedWorkflows;
+
   const recentWorkflowHasActiveTerminal = useCallback(
     (workflow: RecentWorkflow) => {
-      // Case 1: workflow is still in loadedWorkflows (RUNNING/PAUSED)
-      const loadedWorkflow = loadedWorkflows.find(
+      // Case 1: workflow is still in loadedWorkflows (or synthesized as active)
+      const loadedWorkflow = effectiveLoadedWorkflows.find(
         (w) =>
           w.filePath === workflow.filePath ||
           w.workingFilePath === workflow.filePath
@@ -135,8 +158,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [
       activeWorkflowId,
       activeWorkflowWorkingFilePath,
+      effectiveLoadedWorkflows,
       fileName,
-      loadedWorkflows,
       workflowHasActiveTerminal,
     ]
   );
@@ -289,6 +312,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       WebviewLog.debug(
         `[WorkflowStatus:toggleDropdown] opening dropdown — requesting workflows list. ` +
           `Current loadedWorkflows: [${loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}], ` +
+          (syntheticActiveWorkflow
+            ? ` syntheticActive=inst:${syntheticActiveWorkflow.id.slice(0, 8)}(state=${syntheticActiveWorkflow.executionState}),`
+            : "") +
           `activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"}, ` +
           `current fileName="${fileName || "(none)"}", workflowName="${workflowName || "(none)"}"`
       );
@@ -305,6 +331,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     loadedWorkflows,
     activeWorkflowId,
     fileName,
+    syntheticActiveWorkflow,
     workflowName,
     updateDropdownTop,
     closeDropdown,
@@ -313,7 +340,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Switch to a loaded workflow
   const handleSwitchWorkflow = useCallback(
     (workflowId: string) => {
-      const workflow = loadedWorkflows.find((w) => w.id === workflowId);
+      const workflow = effectiveLoadedWorkflows.find((w) => w.id === workflowId);
       setActiveWorkflowWorkingFilePath(workflow?.workingFilePath ?? null);
       if (workflow && isWorkflowRunning(workflow.executionState)) {
         useWorkflowStore.getState().clearHistoryOutputs();
@@ -325,7 +352,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       });
       closeDropdown();
     },
-    [closeDropdown, loadedWorkflows, setActiveWorkflowWorkingFilePath, vscode]
+    [
+      closeDropdown,
+      effectiveLoadedWorkflows,
+      setActiveWorkflowWorkingFilePath,
+      vscode,
+    ]
   );
 
   // Load workflow from recent list
@@ -464,16 +496,17 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     ].some((value) => value?.toLowerCase().includes(normalizedWorkflowSearch));
   };
 
-  const filteredLoadedWorkflows = loadedWorkflows.filter(workflowMatchesSearch);
+  const filteredEffectiveLoadedWorkflows =
+    effectiveLoadedWorkflows.filter(workflowMatchesSearch);
   const filteredRecentWorkflows = recentWorkflows.filter(
     (recentWorkflow) =>
       workflowMatchesSearch(recentWorkflow) &&
-      !loadedWorkflows.some(
+      !effectiveLoadedWorkflows.some(
         (loadedWorkflow) =>
           loadedWorkflow.workingFilePath === recentWorkflow.filePath
       )
   );
-  const showRunningWorkflowsSection = loadedWorkflows.length > 0;
+  const showRunningWorkflowsSection = effectiveLoadedWorkflows.length > 0;
 
   return (
     <div
@@ -567,7 +600,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             className={`workflow-button-dropdown px-2 py-1 bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors hover:bg-cmd-active-bg hover:text-cmd-active-fg ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg" : ""}`}
           >
             {/* Pulsing dot: another loaded workflow is running */}
-            {loadedWorkflows.some(
+            {effectiveLoadedWorkflows.some(
               (w) => isWorkflowRunning(w.executionState) && w.id !== activeWorkflowId
             ) && (
               <span
@@ -622,12 +655,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               showSearch
             />
             <div className="py-1">
-              {filteredLoadedWorkflows.length === 0 && isFilteringWorkflows ? (
+              {filteredEffectiveLoadedWorkflows.length === 0 &&
+              isFilteringWorkflows ? (
                 <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
                   No running workflows match your search.
                 </div>
               ) : (
-                filteredLoadedWorkflows.map((workflow) => (
+                filteredEffectiveLoadedWorkflows.map((workflow) => (
                   <RunningWorkflowItem
                     key={workflow.id}
                     workflow={workflow}
