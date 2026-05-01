@@ -913,27 +913,25 @@ export class FlightPathWebviewProvider
    * Unregister a browser WebSocket client from the viewer registry.
    * Called by FlightPathHostedServer when a WebSocket connection closes so
    * retired instances are freed when no clients are viewing them.
+   *
+   * When a browser client was the controller, release the slot to undefined and
+   * broadcast TERMINAL_CONTROLLER_CHANGED(undefined) to all connected clients.
+   * Any client currently viewing that workflow will auto-claim the empty slot.
+   * Clients that connect later will also auto-claim via TERMINAL_STARTED(undefined).
+   * Once a new controller is established, everyone else must use "Take Control."
    */
   public unregisterBrowserClient(clientId: string): void {
     this.workflowOrchestrator?.unregisterClient(clientId);
-    // Release controller ownership for any sessions this client was controlling.
-    // This lets another viewer claim control after the browser tab closes.
     const ptyManager = getPtyProcessManager();
-    if (ptyManager) {
-      const released = ptyManager.releaseControllerForClient(clientId);
-      for (const session of released) {
-        // Fall back to the panel as the controller rather than broadcasting undefined.
-        // Broadcasting undefined sets isController=true on ALL clients (dual-controller).
-        // The panel is the natural fallback owner: it is always connected and can hand
-        // control back to a browser via TERMINAL_CLAIM_CONTROL.
-        ptyManager.assignController(session.id, PANEL_CLIENT_ID);
-        ptyPostMessage({
-          type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
-          workflowId: session.workflowId,
-          sessionId: session.id,
-          controllerClientId: PANEL_CLIENT_ID,
-        });
-      }
+    if (!ptyManager) return;
+    const released = ptyManager.releaseControllerForClient(clientId);
+    for (const session of released) {
+      ptyPostMessage({
+        type: MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED,
+        workflowId: session.workflowId,
+        sessionId: session.id,
+        controllerClientId: undefined,
+      });
     }
   }
 

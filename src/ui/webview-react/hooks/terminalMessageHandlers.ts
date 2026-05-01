@@ -18,7 +18,6 @@ import { sendMessage } from "@hooks/useMessageHandler";
 import type { MessageHandlerMap } from "./useMessageHandler";
 import { clearPanelReconnectReloadWatchdog } from "./reconnectWatchdog";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
-
 function isScriptPtySession(session: {
   kind?: string;
   harnessId?: string;
@@ -134,7 +133,8 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
         status: TERMINAL_SESSION_STATUS.RUNNING,
       });
       termStore.setSessionController(workflowId, sessionId, isController);
-      if (controllerClientId === undefined) {
+      // Only auto-claim if this client is currently viewing this specific workflow.
+      if (controllerClientId === undefined && activeWorkflowId === workflowId) {
         sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
           workflowId,
           sessionId,
@@ -207,11 +207,13 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     WebviewLog.debug(
       `[TERMINAL_CONTROLLER_CHANGED] sessionId=${sessionId?.slice(0, 8)} controllerClientId=${controllerClientId?.slice(0, 12) ?? "none"} isController=${isController}`
     );
-    // If no controller is assigned, auto-claim so exactly one client takes ownership.
-    // Mirrors the TERMINAL_STARTED auto-claim logic. All connected clients fire this,
-    // but only the last one processed by the server's routeQueue wins — an intentional
-    // "last writer wins" resolution that produces a single definitive controller.
-    if (controllerClientId === undefined) {
+    // If no controller is assigned and this client is actively viewing the workflow,
+    // auto-claim so exactly one client takes ownership. Only claim for the workflow
+    // currently in view — do not grab sessions for workflows being viewed on other tabs.
+    // All eligible connected clients fire this; only the last one processed by the
+    // server's routeQueue wins — an intentional "last writer wins" resolution.
+    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+    if (controllerClientId === undefined && activeWorkflowId === workflowId) {
       sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
         workflowId,
         sessionId,
