@@ -1,6 +1,6 @@
 import React, { useCallback } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { workspaceCommit, workspacePush, workspacePull } from "@utils/hostedApi";
+import { workspaceCommit, workspacePush, workspacePull, workspaceStage } from "@utils/hostedApi";
 
 interface WorkspaceCommitAreaProps {
   onRefresh: () => void;
@@ -14,6 +14,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   const pushing = useWorkspaceViewerStore((s) => s.pushing);
   const pulling = useWorkspaceViewerStore((s) => s.pulling);
   const scmError = useWorkspaceViewerStore((s) => s.scmError);
+  const sourceControlFiles = useWorkspaceViewerStore((s) => s.sourceControlFiles);
   const setCommitMessage = useWorkspaceViewerStore((s) => s.setCommitMessage);
   const setCommitting = useWorkspaceViewerStore((s) => s.setCommitting);
   const setPushing = useWorkspaceViewerStore((s) => s.setPushing);
@@ -26,6 +27,13 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
     setCommitting(true);
     setScmError(null);
     try {
+      const staged = sourceControlFiles.filter((f) => f.stagedStatus !== null);
+      const changed = sourceControlFiles.filter((f) => f.unstagedStatus !== null);
+      if (staged.length === 0 && changed.length > 0) {
+        for (const file of changed) {
+          await workspaceStage({ path: file.path });
+        }
+      }
       await workspaceCommit({ message: commitMessage });
       setCommitMessage("");
       clearDiff();
@@ -35,7 +43,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
     } finally {
       setCommitting(false);
     }
-  }, [commitMessage, committing, setCommitting, setScmError, setCommitMessage, clearDiff, onRefresh]);
+  }, [commitMessage, committing, sourceControlFiles, setCommitting, setScmError, setCommitMessage, clearDiff, onRefresh]);
 
   const handlePush = useCallback(async () => {
     if (pushing) return;

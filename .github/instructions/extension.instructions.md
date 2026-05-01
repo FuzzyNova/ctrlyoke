@@ -87,12 +87,13 @@ These are intentionally module-scoped (not passed as parameters) because command
 </moduleScope>
 
 <deactivation>
-`deactivate()` is synchronous and minimal:
+`deactivate()` is **async** (`export async function deactivate(): Promise<void>`).
 
-1. `hostedServer?.dispose()` then set to `undefined`.
-2. `workflowOrchestrator.dispose()` — tears down all seven detector integrations, active workflow instances, and settings hooks trackers.
+1. `getPtyProcessManager()?.gracefulShutdownAllAiCliSessions()` — sends Ctrl+C twice to all active AI CLI PTY sessions and waits 500ms, preventing "improper shutdown" warnings from AI CLIs on next launch.
+2. `hostedServer?.dispose()` then set to `undefined`.
+3. `workflowOrchestrator.dispose()` — tears down all seven detector integrations, active workflow instances, and settings hooks trackers.
 
-Everything registered in `context.subscriptions` is disposed automatically by VS Code before `deactivate()` runs; do not repeat those disposals here.
+After `deactivate()` resolves, VS Code disposes `context.subscriptions` — this triggers `PtyProcessManager.dispose()` as the hard-kill fallback for any sessions not yet dead. Do not repeat those disposals here.
 </deactivation>
 
 <mcpServer>

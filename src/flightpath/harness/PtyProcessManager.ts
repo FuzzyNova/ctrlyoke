@@ -542,6 +542,35 @@ export class PtyProcessManager {
   }
 
   /**
+   * Gracefully signal all active AI CLI PTY sessions to shut down.
+   * Sends Ctrl+C twice to each session so the CLI TUI can clean up, then
+   * waits 500ms. Called from extension deactivate() before hard-kill so that
+   * AI CLIs do not warn about improper shutdown on the next launch.
+   *
+   * Hard-killing is left to dispose() (called via context.subscriptions).
+   */
+  async gracefulShutdownAllAiCliSessions(): Promise<void> {
+    const aiSessions = Array.from(this.sessions.values()).filter(
+      (s) => s.kind === SESSION_KINDS.AI_CLI
+    );
+    if (aiSessions.length === 0) {
+      return;
+    }
+    Log.debug(
+      `🖥️ gracefulShutdownAllAiCliSessions — sending Ctrl+C to ${aiSessions.length} session(s)`
+    );
+    for (const session of aiSessions) {
+      try {
+        session.pty.write("\x03");
+        session.pty.write("\x03");
+      } catch {
+        // Session may already be dead
+      }
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+  }
+
+  /**
    * Implements vscode.Disposable. Kills all PTY processes on extension deactivation.
    */
   dispose(): void {

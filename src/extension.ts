@@ -41,6 +41,7 @@ import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 import {
   initPtyProcessManager,
   setPtyPostMessage,
+  getPtyProcessManager,
 } from "./flightpath/harness/PtyProcessManager";
 import { FlightPathMcpServerProvider } from "./ui/FlightPathMcpServerProvider";
 import { configService } from "./config/FlightPathConfigService";
@@ -1094,8 +1095,10 @@ function registerCommands(context: vscode.ExtensionContext) {
   Log.debug("FlightPath: Commands registered successfully");
 }
 
-export function deactivate() {
+export async function deactivate(): Promise<void> {
   Log.debug("FlightPath: Extension deactivating...");
+
+  await getPtyProcessManager()?.gracefulShutdownAllAiCliSessions();
 
   hostedServer?.dispose();
   hostedServer = undefined;
