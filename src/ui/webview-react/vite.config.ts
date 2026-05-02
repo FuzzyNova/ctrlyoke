@@ -90,8 +90,11 @@ export default defineConfig(({ mode }) => ({
         entryFileNames: "assets/[name].js",
         chunkFileNames: "assets/[name].js",
         assetFileNames: "assets/[name].[ext]",
-        // Disable code splitting - bundle everything into single file
-        manualChunks: undefined,
+        // Name the main dashboard chunk explicitly; without this Rollup picks
+        // "mermaid" from refractor's language grammar modules inside the bundle.
+        manualChunks: (id) => {
+          if (id.includes("/webview-react/App.")) return "dashboard";
+        },
       },
     },
   },
