@@ -81,17 +81,19 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
         border: "1px solid var(--vscode-editorSuggestWidget-border)",
         boxShadow: "0 2px 8px var(--vscode-widget-shadow)",
       },
-      ".cm-tooltip-autocomplete ul": {
+      ".cm-tooltip.cm-tooltip-autocomplete > ul": {
         fontFamily: "var(--vscode-editor-font-family, 'Consolas, monospace')",
       },
-      ".cm-tooltip-autocomplete li": {
+      ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
         color: "var(--vscode-editorSuggestWidget-foreground)",
+        paddingTop: "3px",
+        paddingBottom: "3px",
       },
-      ".cm-tooltip-autocomplete li:hover": {
+      ".cm-tooltip.cm-tooltip-autocomplete > ul > li:hover": {
         backgroundColor: "var(--vscode-list-hoverBackground)",
         color: "var(--vscode-list-hoverForeground)",
       },
-      ".cm-tooltip-autocomplete li[aria-selected]": {
+      ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
         backgroundColor: "var(--vscode-editorSuggestWidget-selectedBackground)",
         color: "var(--vscode-editorSuggestWidget-selectedForeground)",
       },
