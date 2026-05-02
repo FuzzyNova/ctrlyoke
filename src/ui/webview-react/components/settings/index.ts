@@ -11,4 +11,4 @@ export { HistorySection } from "./HistorySection";
 export { ServerSection } from "./ServerSection";
 export { DeveloperSection } from "./DeveloperSection";
 export { NotificationsSection } from "./NotificationsSection";
-export { HarnessFileManagerSection } from "./HarnessFileManagerSection";
+export { AgentSkillsManagerSection } from "./AgentSkillsManagerSection";

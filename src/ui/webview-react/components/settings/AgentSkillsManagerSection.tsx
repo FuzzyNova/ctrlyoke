@@ -2,7 +2,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useHarnessFileStore } from "@store/useHarnessFileStore";
 import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
-import type { ManagedFile, ManagedFileLocation } from "@root/types/WebviewMessageTypes";
+import type {
+  ManagedFile,
+  ManagedFileLocation,
+} from "@root/types/WebviewMessageTypes";
 import { ActionDropdown } from "@components/shared/ActionDropdown";
 import type { ActionDropdownItem } from "@components/shared/ActionDropdown";
 
@@ -36,9 +39,10 @@ function HarnessBadge({ id }: BadgeProps) {
   return (
     <span
       className={`inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none
-        ${isFp
-          ? "bg-badge-bg text-badge-fg"
-          : "bg-list-hover-bg text-foreground border border-panel-border"
+        ${
+          isFp
+            ? "bg-badge-bg text-badge-fg"
+            : "bg-list-hover-bg text-foreground border border-panel-border"
         }`}
     >
       {getHarnessLabel(id)}
@@ -92,7 +96,10 @@ function FileRow({ file, onExport, onImport, onDelete }: FileRowProps) {
       <div className="flex items-center gap-1.5 flex-wrap">
         <div className="flex items-center gap-1">
           {file.locations.map((loc) => (
-            <HarnessBadge key={`${loc.harnessId}-${loc.path}`} id={loc.harnessId} />
+            <HarnessBadge
+              key={`${loc.harnessId}-${loc.path}`}
+              id={loc.harnessId}
+            />
           ))}
         </div>
 
@@ -165,7 +172,9 @@ function AllActionsBar({ files, onSync, onDeleteAll }: AllActionsBarProps) {
         <option value="delete">Delete All</option>
       </select>
 
-      <span className="text-xs text-description-fg shrink-0">{preposition}</span>
+      <span className="text-xs text-description-fg shrink-0">
+        {preposition}
+      </span>
 
       <select
         value={target}
@@ -185,9 +194,10 @@ function AllActionsBar({ files, onSync, onDeleteAll }: AllActionsBarProps) {
         disabled={files.length === 0}
         onClick={handleExecute}
         className={`h-6 px-2 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed shrink-0
-          ${action === "delete"
-            ? "bg-btn-secondary-bg text-error-fg border border-btn-border hover:bg-btn-secondary-hover"
-            : "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+          ${
+            action === "delete"
+              ? "bg-btn-secondary-bg text-error-fg border border-btn-border hover:bg-btn-secondary-hover"
+              : "bg-btn-bg text-btn-fg hover:bg-btn-hover"
           }`}
       >
         {action === "sync" ? "Sync All" : "Delete All"}
@@ -200,7 +210,7 @@ function AllActionsBar({ files, onSync, onDeleteAll }: AllActionsBarProps) {
 // Main Section
 // ============================================================================
 
-export function HarnessFileManagerSection() {
+export function AgentSkillsManagerSection() {
   const managedFiles = useHarnessFileStore((s) => s.managedFiles);
   const activeType = useHarnessFileStore((s) => s.activeType);
   const loading = useHarnessFileStore((s) => s.loading);
@@ -241,12 +251,9 @@ export function HarnessFileManagerSection() {
     [importFile, activeType]
   );
 
-  const handleDeleteRequest = useCallback(
-    (name: string, harnessId: string) => {
-      setConfirmDelete({ name, harnessId });
-    },
-    []
-  );
+  const handleDeleteRequest = useCallback((name: string, harnessId: string) => {
+    setConfirmDelete({ name, harnessId });
+  }, []);
 
   const handleDeleteConfirm = useCallback(() => {
     if (!confirmDelete) return;
@@ -280,7 +287,7 @@ export function HarnessFileManagerSection() {
   return (
     <div className="space-y-4">
       <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
-        Harness File Manager
+        Agent & Skills Manager
       </h3>
 
       <p className="text-xs text-description-fg">
@@ -298,9 +305,10 @@ export function HarnessFileManagerSection() {
               type="button"
               onClick={() => setActiveType(t)}
               className={`px-3 py-1 transition-colors capitalize
-                ${activeType === t
-                  ? "bg-btn-bg text-btn-fg"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                ${
+                  activeType === t
+                    ? "bg-btn-bg text-btn-fg"
+                    : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                 }
                 ${t === "skill" ? "border-l border-btn-border" : ""}`}
             >
@@ -313,7 +321,10 @@ export function HarnessFileManagerSection() {
           <ActionDropdown
             label="Open Folder"
             items={[
-              ...DISPLAYED_HARNESS_IDS.map((id) => ({ label: getHarnessLabel(id), value: id })),
+              ...DISPLAYED_HARNESS_IDS.map((id) => ({
+                label: getHarnessLabel(id),
+                value: id,
+              })),
               { label: "FlightPath", value: "flightpath" },
             ]}
             onSelect={(id) => openHarnessDir(id, activeType)}
@@ -339,15 +350,16 @@ export function HarnessFileManagerSection() {
           </div>
         )}
 
-        {!loading && managedFiles.map((file) => (
-          <FileRow
-            key={file.name}
-            file={file}
-            onExport={handleExport}
-            onImport={handleImport}
-            onDelete={handleDeleteRequest}
-          />
-        ))}
+        {!loading &&
+          managedFiles.map((file) => (
+            <FileRow
+              key={file.name}
+              file={file}
+              onExport={handleExport}
+              onImport={handleImport}
+              onDelete={handleDeleteRequest}
+            />
+          ))}
       </div>
 
       {/* Bulk actions (Sync All / Delete All) */}
@@ -372,8 +384,13 @@ export function HarnessFileManagerSection() {
             </p>
             <p className="text-xs text-description-fg mb-4">
               Remove <strong>{confirmDelete.name}</strong> from{" "}
-              <strong>{getHarnessLabel(confirmDelete.harnessId as HarnessId | "flightpath")}</strong>?
-              This only deletes the file from that directory — other copies are not affected.
+              <strong>
+                {getHarnessLabel(
+                  confirmDelete.harnessId as HarnessId | "flightpath"
+                )}
+              </strong>
+              ? This only deletes the file from that directory — other copies
+              are not affected.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -410,8 +427,12 @@ export function HarnessFileManagerSection() {
             </p>
             <p className="text-xs text-description-fg mb-4">
               Remove every discovered {activeType} from{" "}
-              <strong>{getHarnessLabel(confirmDeleteAll.harnessId as HarnessId | "flightpath")}</strong>.
-              Copies in other directories are not affected.
+              <strong>
+                {getHarnessLabel(
+                  confirmDeleteAll.harnessId as HarnessId | "flightpath"
+                )}
+              </strong>
+              . Copies in other directories are not affected.
             </p>
             <div className="flex justify-end gap-2">
               <button
