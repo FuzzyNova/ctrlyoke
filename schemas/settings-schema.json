@@ -526,6 +526,16 @@
               "description": "Path to the TLS private key file."
             }
           }
+        },
+        "iconBgColor": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Background color for the workspace icon (hex, e.g. '#1076ba'). Applies to the SVG favicon and PWA homescreen icon."
+        },
+        "iconFgColor": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Foreground (path/stroke) color for the workspace icon (hex, e.g. '#ffffff'). Applies to the SVG favicon and PWA homescreen icon."
         }
       }
     },

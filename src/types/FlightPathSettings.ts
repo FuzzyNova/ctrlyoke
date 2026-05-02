@@ -127,6 +127,10 @@ export interface FlightPathGlobalSettings {
       certPath: string;
       keyPath: string;
     };
+    /** Background color for the SVG favicon and PWA icon (hex, e.g. '#1076ba'). */
+    iconBgColor: string;
+    /** Foreground (path/stroke) color for the SVG favicon and PWA icon (hex, e.g. '#ffffff'). */
+    iconFgColor: string;
   };
 
   // Notifications
@@ -297,6 +301,8 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
       certPath: "",
       keyPath: "",
     },
+    iconBgColor: "#1076ba",
+    iconFgColor: "#ffffff",
   },
   notifications: {
     vscode: {

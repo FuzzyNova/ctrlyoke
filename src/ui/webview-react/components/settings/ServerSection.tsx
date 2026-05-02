@@ -8,6 +8,14 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
+import appIconSvg from "../../../../../images/flightpath-app-icon.svg?raw";
+
+function buildIconPreviewDataUrl(bgColor: string, fgColor: string): string {
+  const svg = appIconSvg
+    .replace(/#1076ba/gi, bgColor)
+    .replace(/#ffffff/gi, fgColor);
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
 
 interface Props {
   settings: FullGlobalSettings;
@@ -199,6 +207,68 @@ export function ServerSection({
               >
                 Regenerate token
               </button>
+            </div>
+
+            {/* Icon Colors — live preview, SVG routes apply colors immediately */}
+            <div className="mt-3 pt-3 border-t border-panel-border">
+              <div className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
+                Icon Colors
+              </div>
+              <div className="flex items-end gap-4 mb-2">
+                <div className="flex-1">
+                  <SettingInputRow
+                    label="Background"
+                    id="icon-bg-color"
+                    path="server.iconBgColor"
+                    {...rowProps}
+                  >
+                    <input
+                      id="icon-bg-color"
+                      type="color"
+                      value={server.iconBgColor ?? "#1076ba"}
+                      onChange={(e) =>
+                        onUpdate("server.iconBgColor", e.target.value)
+                      }
+                      className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                      title="Icon background color"
+                    />
+                  </SettingInputRow>
+                </div>
+                <div className="flex-1">
+                  <SettingInputRow
+                    label="Foreground"
+                    id="icon-fg-color"
+                    path="server.iconFgColor"
+                    {...rowProps}
+                  >
+                    <input
+                      id="icon-fg-color"
+                      type="color"
+                      value={server.iconFgColor ?? "#ffffff"}
+                      onChange={(e) =>
+                        onUpdate("server.iconFgColor", e.target.value)
+                      }
+                      className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                      title="Icon foreground color"
+                    />
+                  </SettingInputRow>
+                </div>
+                <img
+                  src={buildIconPreviewDataUrl(
+                    server.iconBgColor ?? "#1076ba",
+                    server.iconFgColor ?? "#ffffff"
+                  )}
+                  alt="Icon preview"
+                  width={32}
+                  height={32}
+                  className="rounded shrink-0 mb-0.5"
+                />
+              </div>
+              <p className="text-xs text-description-fg italic">
+                SVG favicon and PWA icon update immediately. PNG icon clients
+                (iOS &lt; 26 homescreen) use default colors until a server
+                restart.
+              </p>
             </div>
           </div>
         )}

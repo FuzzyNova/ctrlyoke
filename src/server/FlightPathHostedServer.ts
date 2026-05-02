@@ -18,6 +18,7 @@ import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import {
   BROWSER_NOTIFICATION_MODES,
+  HOSTED_ICON_FILES,
   HOSTED_ICON_PATHS,
   MESSAGE_TYPES,
   BROWSER_CLIENT_PREFIX,
@@ -503,6 +504,22 @@ export class FlightPathHostedServer
       this.setNoStore(res);
       res.type("application/javascript").send(buildHostedServiceWorkerScript());
     });
+    // Dynamic SVG icon routes — apply configurable background/foreground colors to the
+    // SVG templates on each request. PNG files continue to be served as static assets.
+    this.app.get("/favicon.svg", (_req, res) => {
+      const svgPath = path.join(
+        webviewDist,
+        HOSTED_ICON_FILES.FAVICON_SVG
+      );
+      this.serveColorizedSvg(svgPath, res);
+    });
+    this.app.get("/app-icon.svg", (_req, res) => {
+      const svgPath = path.join(
+        webviewDist,
+        HOSTED_ICON_FILES.APP_ICON_SVG
+      );
+      this.serveColorizedSvg(svgPath, res);
+    });
     this.app.use(express.static(webviewDist, { index: false }));
 
     // Token is required for the HTML entry point and all API routes.
@@ -868,13 +885,23 @@ export class FlightPathHostedServer
 
     // Inject theme vars and standalone shim before </head>.
     const themeBlock = this.buildThemeStyleBlock();
+    // Append current colors as query params to SVG icon URLs so that browsers (which cache
+    // favicon/icon resources aggressively and often ignore Cache-Control headers) pick up the
+    // new icon as soon as colors change. The server-side route ignores these params — they exist
+    // solely to bust the browser's icon cache. PNG icons are static and need no versioning.
+    const { iconBgColor = "#1076ba", iconFgColor = "#ffffff" } =
+      configService.getAll().server;
+    const iconColorParam = `?bg=${iconBgColor.replace("#", "")}&fg=${iconFgColor.replace("#", "")}`;
     const hostedIconLinks = [
-      `<link rel="icon" type="image/svg+xml" href="${HOSTED_ICON_PATHS.FAVICON_SVG}" />`,
+      `<link rel="icon" type="image/svg+xml" href="${HOSTED_ICON_PATHS.FAVICON_SVG}${iconColorParam}" />`,
       `<link rel="icon" type="image/png" sizes="512x512" href="${HOSTED_ICON_PATHS.FAVICON_PNG}" />`,
-      // iOS 26+ supports SVG for apple-touch-icon and uses the manifest for home screen web app
-      // icons. The SVG (transparent background) is required for iOS 26 Liquid Glass appearance.
-      `<link rel="apple-touch-icon" type="image/svg+xml" href="${HOSTED_ICON_PATHS.APP_ICON_SVG}" />`,
-      // PNG fallback for older iOS versions (pre-26) which only support PNG apple-touch-icons.
+      // SVG apple-touch-icon — delivers custom background/foreground colors dynamically.
+      // No `sizes` attribute makes it the highest-priority default. iOS SpringBoard fetches
+      // this independently from Safari; it requires the server cert to be trusted at the
+      // system level (Settings → General → About → Certificate Trust Settings). Once trusted,
+      // iOS 15+ will use the SVG for the homescreen icon. PNG is kept as a sized fallback for
+      // older iOS versions or any client that cannot render SVG.
+      `<link rel="apple-touch-icon" type="image/svg+xml" href="${HOSTED_ICON_PATHS.APP_ICON_SVG}${iconColorParam}" />`,
       `<link rel="apple-touch-icon" sizes="180x180" href="${HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG}" />`,
       // Enable standalone PWA mode and set the title shown under the home screen icon.
       `<meta name="apple-mobile-web-app-capable" content="yes" />`,
@@ -891,6 +918,21 @@ export class FlightPathHostedServer
       .map(([k, v]) => `  ${k}: ${v};`)
       .join("\n");
     return vars ? `<style>:root {\n${vars}\n}</style>\n` : "";
+  }
+
+  private serveColorizedSvg(svgPath: string, res: express.Response): void {
+    try {
+      const { iconBgColor = "#1076ba", iconFgColor = "#ffffff" } =
+        configService.getAll().server;
+      const svg = fs
+        .readFileSync(svgPath, "utf8")
+        .replace(/#1076ba/gi, iconBgColor)
+        .replace(/#ffffff/gi, iconFgColor);
+      this.setNoStore(res);
+      res.type("image/svg+xml").send(svg);
+    } catch {
+      res.status(404).send("Not found");
+    }
   }
 
   private requestHasValidToken(req: express.Request): boolean {

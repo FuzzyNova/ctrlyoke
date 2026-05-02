@@ -356,9 +356,11 @@ export const HOSTED_ICON_FILES = {
 
 export const HOSTED_ICON_PATHS = {
   APP_ICON_PNG: `/${HOSTED_ICON_FILES.APP_ICON_PNG}`,
-  APP_ICON_SVG: `/${HOSTED_ICON_FILES.APP_ICON_SVG}`,
+  // Dynamic SVG routes — served by FlightPathHostedServer with configurable colors.
+  APP_ICON_SVG: `/app-icon.svg`,
   FAVICON_PNG: `/${HOSTED_ICON_FILES.FAVICON_PNG}`,
-  FAVICON_SVG: `/${HOSTED_ICON_FILES.FAVICON_SVG}`,
+  // Dynamic SVG route — served by FlightPathHostedServer with configurable colors.
+  FAVICON_SVG: `/favicon.svg`,
   APPLE_TOUCH_ICON_PNG: `/${HOSTED_ICON_FILES.APPLE_TOUCH_ICON_PNG}`,
 } as const;
 
