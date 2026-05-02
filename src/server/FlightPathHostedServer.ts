@@ -26,6 +26,10 @@ import {
   type StepStatus,
   type StatusMessageSeverity,
 } from "../types/DashboardConstants";
+import {
+  ICON_BG_COLOR_DEFAULT,
+  ICON_FG_COLOR_DEFAULT,
+} from "../types/IconColorDefaults";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
@@ -507,17 +511,11 @@ export class FlightPathHostedServer
     // Dynamic SVG icon routes — apply configurable background/foreground colors to the
     // SVG templates on each request. PNG files continue to be served as static assets.
     this.app.get("/favicon.svg", (_req, res) => {
-      const svgPath = path.join(
-        webviewDist,
-        HOSTED_ICON_FILES.FAVICON_SVG
-      );
+      const svgPath = path.join(webviewDist, HOSTED_ICON_FILES.FAVICON_SVG);
       this.serveColorizedSvg(svgPath, res);
     });
     this.app.get("/app-icon.svg", (_req, res) => {
-      const svgPath = path.join(
-        webviewDist,
-        HOSTED_ICON_FILES.APP_ICON_SVG
-      );
+      const svgPath = path.join(webviewDist, HOSTED_ICON_FILES.APP_ICON_SVG);
       this.serveColorizedSvg(svgPath, res);
     });
     this.app.use(express.static(webviewDist, { index: false }));
@@ -889,19 +887,23 @@ export class FlightPathHostedServer
     // favicon/icon resources aggressively and often ignore Cache-Control headers) pick up the
     // new icon as soon as colors change. The server-side route ignores these params — they exist
     // solely to bust the browser's icon cache. PNG icons are static and need no versioning.
-    const { iconBgColor = "#1076ba", iconFgColor = "#ffffff" } =
+    const { iconBgColor = ICON_BG_COLOR_DEFAULT, iconFgColor = ICON_FG_COLOR_DEFAULT } =
       configService.getAll().server;
     const iconColorParam = `?bg=${iconBgColor.replace("#", "")}&fg=${iconFgColor.replace("#", "")}`;
     const hostedIconLinks = [
-      `<link rel="icon" type="image/svg+xml" href="${HOSTED_ICON_PATHS.FAVICON_SVG}${iconColorParam}" />`,
-      `<link rel="icon" type="image/png" sizes="512x512" href="${HOSTED_ICON_PATHS.FAVICON_PNG}" />`,
+      // sizes="any" signals this is a scalable SVG — browsers that support SVG will prefer it
+      // without fetching the PNG at all. Without this attribute browsers fetch both and show
+      // whichever responds first (a race condition).  The PNG fallback is removed; all modern
+      // browsers that display favicons support SVG. A default /favicon.ico request will 404
+      // gracefully, which is fine.
+      `<link rel="icon" type="image/svg+xml" sizes="any" href="${HOSTED_ICON_PATHS.FAVICON_SVG}${iconColorParam}" />`,
       // SVG apple-touch-icon — delivers custom background/foreground colors dynamically.
       // No `sizes` attribute makes it the highest-priority default. iOS SpringBoard fetches
       // this independently from Safari; it requires the server cert to be trusted at the
       // system level (Settings → General → About → Certificate Trust Settings). Once trusted,
-      // iOS 15+ will use the SVG for the homescreen icon. PNG is kept as a sized fallback for
-      // older iOS versions or any client that cannot render SVG.
-      `<link rel="apple-touch-icon" type="image/svg+xml" href="${HOSTED_ICON_PATHS.APP_ICON_SVG}${iconColorParam}" />`,
+      // iOS 15+ will use the SVG for the homescreen icon. PNG is kept as a sized fallback because
+      // iOS Safari does not support SVG for homescreen icons — only PNG.
+      `<link rel="apple-touch-icon" type="image/svg+xml" sizes="any" href="${HOSTED_ICON_PATHS.APP_ICON_SVG}${iconColorParam}" />`,
       `<link rel="apple-touch-icon" sizes="180x180" href="${HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG}" />`,
       // Enable standalone PWA mode and set the title shown under the home screen icon.
       `<meta name="apple-mobile-web-app-capable" content="yes" />`,
@@ -922,12 +924,12 @@ export class FlightPathHostedServer
 
   private serveColorizedSvg(svgPath: string, res: express.Response): void {
     try {
-      const { iconBgColor = "#1076ba", iconFgColor = "#ffffff" } =
+      const { iconBgColor = ICON_BG_COLOR_DEFAULT, iconFgColor = ICON_FG_COLOR_DEFAULT } =
         configService.getAll().server;
       const svg = fs
         .readFileSync(svgPath, "utf8")
-        .replace(/#1076ba/gi, iconBgColor)
-        .replace(/#ffffff/gi, iconFgColor);
+        .replace(new RegExp(ICON_BG_COLOR_DEFAULT, "gi"), iconBgColor)
+        .replace(new RegExp(ICON_FG_COLOR_DEFAULT, "gi"), iconFgColor);
       this.setNoStore(res);
       res.type("image/svg+xml").send(svg);
     } catch {

@@ -9,6 +9,7 @@ import {
   type NotificationEventMode,
   type BrowserNotificationMode,
 } from "./DashboardConstants";
+import { ICON_BG_COLOR_DEFAULT, ICON_FG_COLOR_DEFAULT } from "./IconColorDefaults";
 import type {
   EndCondition,
   McpServerConfig,
@@ -301,8 +302,8 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
       certPath: "",
       keyPath: "",
     },
-    iconBgColor: "#1076ba",
-    iconFgColor: "#ffffff",
+    iconBgColor: ICON_BG_COLOR_DEFAULT,
+    iconFgColor: ICON_FG_COLOR_DEFAULT,
   },
   notifications: {
     vscode: {

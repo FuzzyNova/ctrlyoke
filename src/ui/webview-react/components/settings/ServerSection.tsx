@@ -2,6 +2,10 @@ import { useRef, useState, useEffect, useMemo } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import {
+  ICON_BG_COLOR_DEFAULT,
+  ICON_FG_COLOR_DEFAULT,
+} from "@root/types/IconColorDefaults";
 import type {
   FullGlobalSettings,
   SettingSource,
@@ -12,8 +16,8 @@ import appIconSvg from "../../../../../images/flightpath-app-icon.svg?raw";
 
 function buildIconPreviewDataUrl(bgColor: string, fgColor: string): string {
   const svg = appIconSvg
-    .replace(/#1076ba/gi, bgColor)
-    .replace(/#ffffff/gi, fgColor);
+    .replace(new RegExp(ICON_BG_COLOR_DEFAULT, "gi"), bgColor)
+    .replace(new RegExp(ICON_FG_COLOR_DEFAULT, "gi"), fgColor);
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
@@ -225,7 +229,7 @@ export function ServerSection({
                     <input
                       id="icon-bg-color"
                       type="color"
-                      value={server.iconBgColor ?? "#1076ba"}
+                      value={server.iconBgColor ?? ICON_BG_COLOR_DEFAULT}
                       onChange={(e) =>
                         onUpdate("server.iconBgColor", e.target.value)
                       }
@@ -244,7 +248,7 @@ export function ServerSection({
                     <input
                       id="icon-fg-color"
                       type="color"
-                      value={server.iconFgColor ?? "#ffffff"}
+                      value={server.iconFgColor ?? ICON_FG_COLOR_DEFAULT}
                       onChange={(e) =>
                         onUpdate("server.iconFgColor", e.target.value)
                       }
@@ -255,8 +259,8 @@ export function ServerSection({
                 </div>
                 <img
                   src={buildIconPreviewDataUrl(
-                    server.iconBgColor ?? "#1076ba",
-                    server.iconFgColor ?? "#ffffff"
+                    server.iconBgColor ?? ICON_BG_COLOR_DEFAULT,
+                    server.iconFgColor ?? ICON_FG_COLOR_DEFAULT
                   )}
                   alt="Icon preview"
                   width={32}
