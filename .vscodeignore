@@ -21,6 +21,7 @@
 # cli.js is released as a standalone npm package, not bundled with the VSIX.
 !out/extension.js
 !out/mcp-server.js
+!out/resvg.wasm
 
 # Runtime assets copied by the production build.
 !out/templates/**
