@@ -127,25 +127,49 @@ function FileRow({ file, onExport, onImport, onDelete }: FileRowProps) {
 }
 
 // ============================================================================
-// Sync All control
+// All-actions bar (Sync All / Delete All)
 // ============================================================================
 
-interface SyncAllBarProps {
+type BulkAction = "sync" | "delete";
+
+interface AllActionsBarProps {
   files: ManagedFile[];
   onSync: (targetId: string) => void;
+  onDeleteAll: (targetId: string) => void;
 }
 
-function SyncAllBar({ files, onSync }: SyncAllBarProps) {
-  const [targetHarness, setTargetHarness] = useState<HarnessId>(
+function AllActionsBar({ files, onSync, onDeleteAll }: AllActionsBarProps) {
+  const [action, setAction] = useState<BulkAction>("sync");
+  const [target, setTarget] = useState<HarnessId | "flightpath">(
     HARNESS_IDS.CLAUDE_CLI as HarnessId
   );
 
+  const handleExecute = () => {
+    if (action === "sync") {
+      onSync(target);
+    } else {
+      onDeleteAll(target);
+    }
+  };
+
+  const preposition = action === "sync" ? "to:" : "from:";
+
   return (
     <div className="flex items-center gap-2 pt-3 border-t border-panel-border">
-      <span className="text-xs text-description-fg shrink-0">Sync all to:</span>
       <select
-        value={targetHarness}
-        onChange={(e) => setTargetHarness(e.target.value as HarnessId)}
+        value={action}
+        onChange={(e) => setAction(e.target.value as BulkAction)}
+        className="h-6 bg-input-bg border border-input-border rounded px-2 text-xs text-foreground focus:outline-none focus:border-focus-border shrink-0"
+      >
+        <option value="sync">Sync All</option>
+        <option value="delete">Delete All</option>
+      </select>
+
+      <span className="text-xs text-description-fg shrink-0">{preposition}</span>
+
+      <select
+        value={target}
+        onChange={(e) => setTarget(e.target.value as HarnessId | "flightpath")}
         className="h-6 flex-1 min-w-0 bg-input-bg border border-input-border rounded px-2 text-xs text-foreground focus:outline-none focus:border-focus-border"
       >
         {DISPLAYED_HARNESS_IDS.map((id) => (
@@ -153,14 +177,20 @@ function SyncAllBar({ files, onSync }: SyncAllBarProps) {
             {getHarnessLabel(id)}
           </option>
         ))}
+        <option value="flightpath">FlightPath</option>
       </select>
+
       <button
         type="button"
         disabled={files.length === 0}
-        onClick={() => onSync(targetHarness)}
-        className="h-6 px-2 text-xs rounded bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+        onClick={handleExecute}
+        className={`h-6 px-2 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed shrink-0
+          ${action === "delete"
+            ? "bg-btn-secondary-bg text-error-fg border border-btn-border hover:bg-btn-secondary-hover"
+            : "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+          }`}
       >
-        Sync All
+        {action === "sync" ? "Sync All" : "Delete All"}
       </button>
     </div>
   );
@@ -181,10 +211,15 @@ export function HarnessFileManagerSection() {
   const importFile = useHarnessFileStore((s) => s.importFile);
   const deleteFile = useHarnessFileStore((s) => s.deleteFile);
   const syncAll = useHarnessFileStore((s) => s.syncAll);
+  const deleteAll = useHarnessFileStore((s) => s.deleteAll);
   const openHarnessDir = useHarnessFileStore((s) => s.openHarnessDir);
 
   const [confirmDelete, setConfirmDelete] = useState<{
     name: string;
+    harnessId: string;
+  } | null>(null);
+
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState<{
     harnessId: string;
   } | null>(null);
 
@@ -231,6 +266,16 @@ export function HarnessFileManagerSection() {
     },
     [managedFiles, syncAll, activeType]
   );
+
+  const handleDeleteAllRequest = useCallback((targetId: string) => {
+    setConfirmDeleteAll({ harnessId: targetId });
+  }, []);
+
+  const handleDeleteAllConfirm = useCallback(() => {
+    if (!confirmDeleteAll) return;
+    deleteAll(confirmDeleteAll.harnessId, activeType);
+    setConfirmDeleteAll(null);
+  }, [confirmDeleteAll, deleteAll, activeType]);
 
   return (
     <div className="space-y-4">
@@ -305,10 +350,11 @@ export function HarnessFileManagerSection() {
         ))}
       </div>
 
-      {/* Sync all */}
-      <SyncAllBar
+      {/* Bulk actions (Sync All / Delete All) */}
+      <AllActionsBar
         files={managedFiles}
         onSync={handleSyncAll}
+        onDeleteAll={handleDeleteAllRequest}
       />
 
       {/* Delete confirmation modal */}
@@ -343,6 +389,44 @@ export function HarnessFileManagerSection() {
                 className="px-3 py-1 text-xs rounded bg-btn-bg text-btn-fg hover:bg-btn-hover"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All confirmation modal */}
+      {confirmDeleteAll && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setConfirmDeleteAll(null)}
+        >
+          <div
+            className="bg-editor-bg border border-panel-border rounded p-4 max-w-sm w-full mx-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm text-foreground mb-1 font-semibold">
+              Delete all {activeType}s?
+            </p>
+            <p className="text-xs text-description-fg mb-4">
+              Remove every discovered {activeType} from{" "}
+              <strong>{getHarnessLabel(confirmDeleteAll.harnessId as HarnessId | "flightpath")}</strong>.
+              Copies in other directories are not affected.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteAll(null)}
+                className="px-3 py-1 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAllConfirm}
+                className="px-3 py-1 text-xs rounded bg-btn-bg text-btn-fg hover:bg-btn-hover"
+              >
+                Delete All
               </button>
             </div>
           </div>

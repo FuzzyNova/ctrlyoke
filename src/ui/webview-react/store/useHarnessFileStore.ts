@@ -36,6 +36,7 @@ interface HarnessFileState {
     targetHarnessId: string,
     fileType: "agent" | "skill"
   ) => void;
+  deleteAll: (harnessId: string, fileType: "agent" | "skill") => void;
   openHarnessDir: (
     harnessId: string,
     fileType: "agent" | "skill"
@@ -99,6 +100,11 @@ export const useHarnessFileStore = create<HarnessFileState>((set, get) => ({
       targetHarnessId,
       fileType,
     });
+  },
+
+  deleteAll: (harnessId, fileType) => {
+    set({ loading: true, error: null });
+    sendMessage(MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS, { harnessId, fileType });
   },
 
   openHarnessDir: (harnessId, fileType) => {

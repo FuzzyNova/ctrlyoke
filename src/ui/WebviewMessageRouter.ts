@@ -709,6 +709,32 @@ export class WebviewMessageRouter {
       }
     });
 
+    table.set(MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS, async (message) => {
+      const workspaceRoot = this.getWorkspaceRoot();
+      try {
+        await HarnessFileManager.deleteAllFromHarness(
+          message.harnessId,
+          workspaceRoot,
+          message.fileType
+        );
+        const files = await HarnessFileManager.resolveAllLocations(
+          workspaceRoot,
+          message.fileType
+        );
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: true,
+          files,
+        });
+      } catch (error) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: false,
+          error: getErrorMessage(error),
+        });
+      }
+    });
+
     table.set(MESSAGE_TYPES.OPEN_HARNESS_DIR, async (message) => {
       const workspaceRoot = this.getWorkspaceRoot();
       const dirPath =

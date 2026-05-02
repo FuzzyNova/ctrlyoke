@@ -1226,12 +1226,19 @@ export interface DeleteFromHarnessMessage {
   fileType: "agent" | "skill";
 }
 
-/** Webview → Extension: copy all files to a single harness dir */
+/** Webview → Extension: copy all files to a single harness dir (or "flightpath") */
 export interface SyncAllToHarnessMessage {
   type: typeof MESSAGE_TYPES.SYNC_ALL_TO_HARNESS;
   /** List of { sourcePath, name } for each file to sync */
   files: Array<{ sourcePath: string; name: string }>;
-  targetHarnessId: HarnessId;
+  targetHarnessId: HarnessId | "flightpath";
+  fileType: "agent" | "skill";
+}
+
+/** Webview → Extension: delete all discovered files from a specific harness dir (or "flightpath") */
+export interface DeleteAllFromHarnessMessage {
+  type: typeof MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS;
+  harnessId: HarnessId | "flightpath";
   fileType: "agent" | "skill";
 }
 

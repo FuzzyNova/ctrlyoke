@@ -218,7 +218,8 @@ export const MESSAGE_TYPES = {
   EXPORT_TO_HARNESS: "exportToHarness", // Webview -> Extension: { sourcePath, harnessId, fileType, overwrite? }
   IMPORT_TO_FLIGHTPATH: "importToFlightPath", // Webview -> Extension: { sourcePath, fileType, overwrite? }
   DELETE_FROM_HARNESS: "deleteFromHarness", // Webview -> Extension: { name, harnessId, fileType }
-  SYNC_ALL_TO_HARNESS: "syncAllToHarness", // Webview -> Extension: { sourcePaths, targetHarnessId, fileType }
+  SYNC_ALL_TO_HARNESS: "syncAllToHarness", // Webview -> Extension: { files, targetHarnessId, fileType }
+  DELETE_ALL_FROM_HARNESS: "deleteAllFromHarness", // Webview -> Extension: { harnessId, fileType }
   HARNESS_FILE_OP_RESULT: "harnessFileOpResult", // Extension -> Webview: { success, error?, files? }
   OPEN_HARNESS_DIR: "openHarnessDir", // Webview -> Extension: { harnessId, fileType }
 

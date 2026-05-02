@@ -333,6 +333,31 @@ export class HarnessFileManager {
   }
 
   /**
+   * Delete every discovered agent/skill that exists in a specific harness directory.
+   */
+  static async deleteAllFromHarness(
+    harnessId: HarnessId | "flightpath",
+    workspaceRoot: string,
+    type: "agent" | "skill"
+  ): Promise<void> {
+    const files =
+      type === "agent"
+        ? await collectAgentLocations(workspaceRoot)
+        : await collectSkillLocations(workspaceRoot);
+
+    for (const file of files) {
+      if (file.locations.some((l) => l.harnessId === harnessId)) {
+        await HarnessFileManager.deleteFromHarness(
+          file.name,
+          harnessId,
+          workspaceRoot,
+          type
+        );
+      }
+    }
+  }
+
+  /**
    * Returns the primary target directory for a harness + type combination.
    * Uses the first directory in the workspace dirs list.
    */
