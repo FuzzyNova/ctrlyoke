@@ -78,10 +78,21 @@ export class FileConfigBackend implements ConfigBackend {
   }
 
   private load(): PartialFlightPathSettings {
+    let content: string;
     try {
-      const content = fs.readFileSync(this.configPath, "utf-8");
+      content = fs.readFileSync(this.configPath, "utf-8");
+    } catch {
+      // File doesn't exist — return empty settings (expected on first use)
+      return {};
+    }
+    try {
       return JSON.parse(content) as PartialFlightPathSettings;
     } catch {
+      // File exists but contains invalid JSON (e.g. interrupted prior write).
+      // Log to stderr so the user/developer can diagnose the issue.
+      console.warn(
+        `[FlightPath] Settings file has invalid JSON and will be treated as empty: ${this.configPath}`
+      );
       return {};
     }
   }
@@ -91,11 +102,13 @@ export class FileConfigBackend implements ConfigBackend {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    await fs.promises.writeFile(
-      this.configPath,
-      JSON.stringify(data, null, 2),
-      "utf-8"
-    );
+    // Atomic write: write to a temp file first, then rename over the target.
+    // This prevents an interrupted write from leaving the settings file
+    // empty/corrupt (which would cause the next set() call to silently
+    // wipe all settings).
+    const tmpPath = `${this.configPath}.tmp`;
+    await fs.promises.writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+    await fs.promises.rename(tmpPath, this.configPath);
   }
 
   private setNestedValue(

@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useSettingsStore } from "@store/settingsStore";
-import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
@@ -65,7 +65,11 @@ export function ServerSection({
   }, [serverUrl, selectedDisplayIp]);
 
   const certDownloadUrl = useMemo(() => {
-    if (!server.tls?.enabled || !displayUrl) return null;
+    if (!server.tls?.enabled) return null;
+    if (isStandalone) {
+      return `${window.location.origin}/cert`;
+    }
+    if (!displayUrl) return null;
     try {
       const u = new URL(displayUrl);
       u.pathname = "/cert";
@@ -116,37 +120,43 @@ export function ServerSection({
       </h3>
 
       <div className="space-y-3">
-        <SettingToggleRow
-          label="Enable on launch"
-          description="Automatically start the hosted server when FlightPath activates."
-          checked={server.enabled}
-          onChange={(value) => onUpdate("server.enabled", value)}
-          path="server.enabled"
-          {...rowProps}
-        />
+        {/* Enable on launch — server-side only; browser clients cannot change server startup */}
+        {!isStandalone && (
+          <SettingToggleRow
+            label="Enable on launch"
+            description="Automatically start the hosted server when FlightPath activates."
+            checked={server.enabled}
+            onChange={(value) => onUpdate("server.enabled", value)}
+            path="server.enabled"
+            {...rowProps}
+          />
+        )}
 
-        <div className="rounded border border-panel-border p-3 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm text-foreground">Current session</div>
-              <div className="text-xs text-description-fg">
-                {serverRunning
-                  ? "Server is running for this VS Code session."
-                  : "Server is stopped for this VS Code session."}
+        {/* Start/stop — server-side only */}
+        {!isStandalone && (
+          <div className="rounded border border-panel-border p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm text-foreground">Current session</div>
+                <div className="text-xs text-description-fg">
+                  {serverRunning
+                    ? "Server is running for this VS Code session."
+                    : "Server is stopped for this VS Code session."}
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => toggleServer(!serverRunning)}
+                className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover"
+              >
+                {serverRunning ? "Stop server" : "Start server"}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => toggleServer(!serverRunning)}
-              className="px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover"
-            >
-              {serverRunning ? "Stop server" : "Start server"}
-            </button>
           </div>
-        </div>
+        )}
 
-        {/* Clickable URL + copy + QR buttons — visible while server is running */}
-        {serverRunning && displayUrl && (
+        {/* URL display, copy, QR, regenerate token — server-side only */}
+        {!isStandalone && serverRunning && displayUrl && (
           <div>
             {showIpSelector && (
               <SettingInputRow label="Connect via" id="server-display-ip">
@@ -228,219 +238,261 @@ export function ServerSection({
                 Regenerate token
               </button>
             </div>
+          </div>
+        )}
 
-            {/* Icon Colors — live preview, SVG routes apply colors immediately */}
-            <div className="mt-3 pt-3 border-t border-panel-border">
-              <div className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
-                Icon Colors
-              </div>
-              <div className="flex items-end gap-4 mb-2">
-                <div className="flex-1">
-                  <SettingInputRow
-                    label="Background"
-                    id="icon-bg-color"
-                    path="server.iconBgColor"
-                    {...rowProps}
-                  >
-                    <input
-                      id="icon-bg-color"
-                      type="color"
-                      value={localBg}
-                      onChange={(e) => setLocalBg(e.target.value)}
-                      onBlur={(e) =>
-                        onUpdate("server.iconBgColor", e.target.value)
-                      }
-                      className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
-                      title="Icon background color"
-                    />
-                  </SettingInputRow>
-                </div>
-                <div className="flex-1">
-                  <SettingInputRow
-                    label="Foreground"
-                    id="icon-fg-color"
-                    path="server.iconFgColor"
-                    {...rowProps}
-                  >
-                    <input
-                      id="icon-fg-color"
-                      type="color"
-                      value={localFg}
-                      onChange={(e) => setLocalFg(e.target.value)}
-                      onBlur={(e) =>
-                        onUpdate("server.iconFgColor", e.target.value)
-                      }
-                      className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
-                      title="Icon foreground color"
-                    />
-                  </SettingInputRow>
-                </div>
-                <img
-                  src={buildIconPreviewDataUrl(localBg, localFg)}
-                  alt="Icon preview"
-                  width={32}
-                  height={32}
-                  className="rounded shrink-0 mb-0.5"
+        {/* Port, standalone port, bind address — server-side only; changing these could lock out browser clients */}
+        {!isStandalone && (
+          <SettingInputRow
+            label="Server port"
+            id="server-port"
+            path="server.port"
+            {...rowProps}
+          >
+            <input
+              id="server-port"
+              type="number"
+              value={server.port}
+              onChange={(e) => onUpdate("server.port", Number(e.target.value))}
+              className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            />
+          </SettingInputRow>
+        )}
+
+        {!isStandalone && (
+          <SettingInputRow
+            label="Standalone port"
+            description="Port used by the flightpath server CLI command (headless mode, no VS Code required)."
+            id="server-standalone-port"
+            path="server.standalonePort"
+            {...rowProps}
+          >
+            <input
+              id="server-standalone-port"
+              type="number"
+              value={server.standalonePort}
+              onChange={(e) =>
+                onUpdate("server.standalonePort", Number(e.target.value))
+              }
+              className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+            />
+          </SettingInputRow>
+        )}
+
+        {!isStandalone && (
+          <SettingInputRow
+            label="Bind address"
+            id="server-bind"
+            path="server.bindAddress"
+            {...rowProps}
+          >
+            <select
+              id="server-bind"
+              value={server.bindAddress ?? "127.0.0.1"}
+              onChange={(e) => onUpdate("server.bindAddress", e.target.value)}
+              className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
+            >
+              <option value="127.0.0.1">Localhost only (127.0.0.1)</option>
+              <option value="0.0.0.0">
+                All interfaces (0.0.0.0) — LAN access
+              </option>
+            </select>
+          </SettingInputRow>
+        )}
+      </div>
+
+      {/* Icon Colors — visible to all clients; live SVG preview, colors persist on blur */}
+      <div className="pt-3 border-t border-panel-border mt-3">
+        <div className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
+          Icon Colors
+        </div>
+        <div className="flex items-end gap-4 mb-2">
+          <div className="flex-1">
+            <SettingInputRow
+              label="Background"
+              id="icon-bg-color"
+              path="server.iconBgColor"
+              {...rowProps}
+            >
+              <input
+                id="icon-bg-color"
+                type="color"
+                value={localBg}
+                onChange={(e) => setLocalBg(e.target.value)}
+                onBlur={(e) =>
+                  onUpdate("server.iconBgColor", e.target.value)
+                }
+                className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                title="Icon background color"
+              />
+            </SettingInputRow>
+          </div>
+          <div className="flex-1">
+            <SettingInputRow
+              label="Foreground"
+              id="icon-fg-color"
+              path="server.iconFgColor"
+              {...rowProps}
+            >
+              <input
+                id="icon-fg-color"
+                type="color"
+                value={localFg}
+                onChange={(e) => setLocalFg(e.target.value)}
+                onBlur={(e) =>
+                  onUpdate("server.iconFgColor", e.target.value)
+                }
+                className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                title="Icon foreground color"
+              />
+            </SettingInputRow>
+          </div>
+          <img
+            src={buildIconPreviewDataUrl(localBg, localFg)}
+            alt="Icon preview"
+            width={32}
+            height={32}
+            className="rounded shrink-0 mb-0.5"
+          />
+        </div>
+        <p className="text-xs text-description-fg italic">
+          SVG favicon and PWA icon update immediately. PNG icon clients
+          (iOS &lt; 26 homescreen) use the colors saved at the last
+          settings update.
+        </p>
+      </div>
+
+      {/* HTTPS / TLS — full config shown to VS Code panel only */}
+      {!isStandalone && (
+        <div className="pt-3 border-t border-panel-border mt-3">
+          <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+            HTTPS / TLS
+          </h3>
+
+          <SettingToggleRow
+            label="Enable HTTPS"
+            checked={server.tls?.enabled ?? false}
+            onChange={(v) => onUpdate("server.tls.enabled", v)}
+            path="server.tls.enabled"
+            {...rowProps}
+          />
+          <div className="text-xs text-description-fg italic">
+            HTTPS is required for push notifications on mobile browsers, and is
+            generally recommended for secure communication. You can provide your
+            own TLS certificate and private key, or generate a self-signed
+            certificate directly from the dashboard. Changes take effect on
+            server restart.
+          </div>
+
+          {server.tls?.enabled && (
+            <div className="space-y-3 mt-3">
+              <SettingInputRow
+                label="Certificate file (.pem)"
+                id="tls-cert-path"
+                path="server.tls.certPath"
+                {...rowProps}
+              >
+                <input
+                  id="tls-cert-path"
+                  type="text"
+                  value={server.tls?.certPath ?? ""}
+                  placeholder="/path/to/cert.pem"
+                  onChange={(e) =>
+                    onUpdate("server.tls.certPath", e.target.value)
+                  }
+                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
                 />
+              </SettingInputRow>
+              <SettingInputRow
+                label="Private key file (.pem)"
+                id="tls-key-path"
+                path="server.tls.keyPath"
+                {...rowProps}
+              >
+                <input
+                  id="tls-key-path"
+                  type="text"
+                  value={server.tls?.keyPath ?? ""}
+                  placeholder="/path/to/key.pem"
+                  onChange={(e) =>
+                    onUpdate("server.tls.keyPath", e.target.value)
+                  }
+                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
+                />
+              </SettingInputRow>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    vscode.postMessage({
+                      type: MESSAGE_TYPES.GENERATE_SERVER_CERT,
+                    })
+                  }
+                  className="text-xs text-description-fg hover:text-foreground underline"
+                >
+                  Generate self-signed certificate
+                </button>
+                {certDownloadUrl && (
+                  <a
+                    href={certDownloadUrl}
+                    download="flightpath.cer"
+                    className="text-xs text-description-fg hover:text-foreground underline"
+                    title="Download the server certificate for manual installation on iOS"
+                  >
+                    Download certificate
+                  </a>
+                )}
               </div>
               <p className="text-xs text-description-fg italic">
-                SVG favicon and PWA icon update immediately. PNG icon clients
-                (iOS &lt; 26 homescreen) use the colors saved at the last
-                settings update.
+                The generated cert is saved to <code>.flightpath/certs/</code>{" "}
+                and gitignored. Browsers will show a warning on first visit —
+                click proceed to continue. Changes take effect on server
+                restart.
+                <br />
+                <strong>iOS Safari:</strong> depending on iOS version, it may be
+                necessary to download the cert and install it via{" "}
+                <em>Settings → General → VPN &amp; Device Management</em>, then
+                enable full trust under{" "}
+                <em>
+                  Settings → General → About → Certificate Trust Settings →
+                  Enable Full Trust For Root Certificates
+                </em>
+                . Requires iOS 18.2+ (iOS 18.0–18.1 had a bug where this toggle
+                didn&apos;t appear).
               </p>
             </div>
-          </div>
-        )}
-
-        <SettingInputRow
-          label="Server port"
-          id="server-port"
-          path="server.port"
-          {...rowProps}
-        >
-          <input
-            id="server-port"
-            type="number"
-            value={server.port}
-            onChange={(e) => onUpdate("server.port", Number(e.target.value))}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
-          />
-        </SettingInputRow>
-
-        <SettingInputRow
-          label="Standalone port"
-          description="Port used by the flightpath server CLI command (headless mode, no VS Code required)."
-          id="server-standalone-port"
-          path="server.standalonePort"
-          {...rowProps}
-        >
-          <input
-            id="server-standalone-port"
-            type="number"
-            value={server.standalonePort}
-            onChange={(e) =>
-              onUpdate("server.standalonePort", Number(e.target.value))
-            }
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
-          />
-        </SettingInputRow>
-
-        <SettingInputRow
-          label="Bind address"
-          id="server-bind"
-          path="server.bindAddress"
-          {...rowProps}
-        >
-          <select
-            id="server-bind"
-            value={server.bindAddress ?? "127.0.0.1"}
-            onChange={(e) => onUpdate("server.bindAddress", e.target.value)}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
-          >
-            <option value="127.0.0.1">Localhost only (127.0.0.1)</option>
-            <option value="0.0.0.0">
-              All interfaces (0.0.0.0) — LAN access
-            </option>
-          </select>
-        </SettingInputRow>
-      </div>
-
-      <div className="pt-3 border-t border-panel-border mt-3">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          HTTPS / TLS
-        </h3>
-
-        <SettingToggleRow
-          label="Enable HTTPS"
-          checked={server.tls?.enabled ?? false}
-          onChange={(v) => onUpdate("server.tls.enabled", v)}
-          path="server.tls.enabled"
-          {...rowProps}
-        />
-        <div className="text-xs text-description-fg italic">
-          HTTPS is required for push notifications on mobile browsers, and is
-          generally recommended for secure communication. You can provide your
-          own TLS certificate and private key, or generate a self-signed
-          certificate directly from the dashboard. Changes take effect on server
-          restart.
+          )}
         </div>
+      )}
 
-        {server.tls?.enabled && (
-          <div className="space-y-3 mt-3">
-            <SettingInputRow
-              label="Certificate file (.pem)"
-              id="tls-cert-path"
-              path="server.tls.certPath"
-              {...rowProps}
-            >
-              <input
-                id="tls-cert-path"
-                type="text"
-                value={server.tls?.certPath ?? ""}
-                placeholder="/path/to/cert.pem"
-                onChange={(e) =>
-                  onUpdate("server.tls.certPath", e.target.value)
-                }
-                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
-              />
-            </SettingInputRow>
-            <SettingInputRow
-              label="Private key file (.pem)"
-              id="tls-key-path"
-              path="server.tls.keyPath"
-              {...rowProps}
-            >
-              <input
-                id="tls-key-path"
-                type="text"
-                value={server.tls?.keyPath ?? ""}
-                placeholder="/path/to/key.pem"
-                onChange={(e) => onUpdate("server.tls.keyPath", e.target.value)}
-                className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
-              />
-            </SettingInputRow>
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() =>
-                  vscode.postMessage({
-                    type: MESSAGE_TYPES.GENERATE_SERVER_CERT,
-                  })
-                }
-                className="text-xs text-description-fg hover:text-foreground underline"
-              >
-                Generate self-signed certificate
-              </button>
-              {certDownloadUrl && (
-                <a
-                  href={certDownloadUrl}
-                  download="flightpath.cer"
-                  className="text-xs text-description-fg hover:text-foreground underline"
-                  title="Download the server certificate for manual installation on iOS"
-                >
-                  Download certificate
-                </a>
-              )}
-            </div>
-            <p className="text-xs text-description-fg italic">
-              The generated cert is saved to <code>.flightpath/certs/</code> and
-              gitignored. Browsers will show a warning on first visit — click
-              proceed to continue. Changes take effect on server restart.
-              <br />
-              <strong>iOS Safari:</strong> depending on iOS version, it may be
-              necessary to download the cert and install it via{" "}
-              <em>Settings → General → VPN &amp; Device Management</em>, then
-              enable full trust under{" "}
-              <em>
-                Settings → General → About → Certificate Trust Settings → Enable
-                Full Trust For Root Certificates
-              </em>
-              . Requires iOS 18.2+ (iOS 18.0–18.1 had a bug where this toggle
-              didn&apos;t appear).
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Certificate download — browser clients only; VS Code panel shows this inside the TLS section above */}
+      {isStandalone && certDownloadUrl && (
+        <div className="pt-3 border-t border-panel-border mt-3">
+          <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+            HTTPS / TLS
+          </h3>
+          <a
+            href={certDownloadUrl}
+            download="flightpath.cer"
+            className="text-xs text-description-fg hover:text-foreground underline"
+            title="Download the server certificate for manual installation on iOS"
+          >
+            Download certificate
+          </a>
+          <p className="text-xs text-description-fg italic mt-2">
+            <strong>iOS Safari:</strong> depending on iOS version, it may be
+            necessary to download the cert and install it via{" "}
+            <em>Settings → General → VPN &amp; Device Management</em>, then
+            enable full trust under{" "}
+            <em>
+              Settings → General → About → Certificate Trust Settings → Enable
+              Full Trust For Root Certificates
+            </em>
+            . Requires iOS 18.2+ (iOS 18.0–18.1 had a bug where this toggle
+            didn&apos;t appear).
+          </p>
+        </div>
+      )}
     </div>
   );
 }

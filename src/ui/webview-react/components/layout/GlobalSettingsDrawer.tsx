@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
@@ -39,9 +39,7 @@ const ALL_TABS = [
   { id: "developer", label: "Developer", icon: "codicon-tools" },
 ];
 
-const TABS = isStandalone
-  ? ALL_TABS.filter((t) => t.id !== "server")
-  : ALL_TABS;
+const TABS = ALL_TABS;
 
 export function GlobalSettingsDrawer() {
   const vscode = useVsCodeApi();
