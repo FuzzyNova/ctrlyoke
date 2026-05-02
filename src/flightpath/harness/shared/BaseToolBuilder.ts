@@ -58,7 +58,7 @@ export class BaseToolBuilder {
               command:
                 ((input.command ?? input.cmd ?? input.script) as
                   | string
-                  | undefined) || "unknown",
+                  | undefined) ?? "",
               workingDir: (input.working_dir ??
                 input.cwd ??
                 input.workingDir) as string | undefined,
