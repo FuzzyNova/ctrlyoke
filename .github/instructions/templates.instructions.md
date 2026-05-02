@@ -47,11 +47,14 @@ Templates support `{variableName}` placeholder substitution:
 - `full-feature` — `{featureDescription}`, `{planDocument}`
 - `spec-driven-loop` — `{file:specFile}` (file type with `fileFilter` + `autoFillFilename`)
 
-**Reserved variables** (injected at runtime, do NOT use as template placeholders):
+**Reserved variables** (injected at runtime into `retryPrompt`, do NOT use as template placeholders):
 
-- `{scriptOutput}` — output from endCondition script
-- `{retryCount}` — current retry attempt
-- `{maxRetries}` — maximum retries allowed
+- `{stdout}` — stdout from the endCondition script
+- `{stderr}` — stderr from the endCondition script
+- `{expected}` — expected return value
+- `{actual}` — actual return value (same as stdout)
+- `{exitCode}` — script exit code
+- `{compareSource}` — compare mode (`auto`, `stdout`, `stderr`)
 
 **Variable extraction pattern:** `/\{(?:(file|text):)?([a-z][a-zA-Z0-9]*)\}/g`
 

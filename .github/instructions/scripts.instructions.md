@@ -154,7 +154,6 @@ All scripts (except OpenCode plugin which uses it via env var directly) use the 
 - Output: `out/scripts/flightpath-opencode-plugin.ts` (also copied verbatim by the same esbuild plugin)
 - Deployed at runtime by `OpenCodeCliProvider.deployCompletionPlugin()` to `.opencode/plugin/flightpath-completion-hook.ts`; always uses the static file — no code generation
 - User hooks are passed via a `flightpath-hooks.json` sidecar file written alongside the plugin (not embedded in the plugin source)
-- Note: `src/scripts/flightpath-opencode-plugin.js` still exists in the repo as a legacy artifact but is no longer deployed
   </buildAndDeploy>
 
 <debugLogging>

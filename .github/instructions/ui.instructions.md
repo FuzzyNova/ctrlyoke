@@ -61,11 +61,32 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Workflow history (recent workflows, load, remove, clear)
 - Run history (load, clear)
 
+**NotificationManager:** VS Code toast notifications for workflow/step completion.
+
+- Implements `DashboardClient` — registered as a client in `DashboardBroadcastHub` by `WorkflowOrchestrator`
+- Observes `notifyWorkflowSummaryUpdated` and `updateStepStatus` events
+- Delegates to `CompletionNotificationFactory` (`src/ui/notifications/`) to build structured `CompletionNotificationEvent` payloads
+- Deduplicates notifications via `notifiedKeys` set; cleans up per-workflow keys on `notifyWorkflowDismissed`
+- Respects `configService.getAll().notifications` settings: `vscode.enabled` and `onlyWhenWindowUnfocused`
+- Shows `showInformationMessage` / `showWarningMessage` / `showErrorMessage` based on event severity
+- Toast actions: "Open Dashboard" (`flightpath.openPanel`), "View Output" (`flightpath.showOutputPanel`), "Dismiss"
+- `sendTestNotification()` for testing notification display without running a workflow
+
+**notifications/CompletionNotificationFactory:** Shared notification payload builders (`src/ui/notifications/`).
+
+- `buildWorkflowCompletionNotification()` — builds event for workflow-level state transitions
+- `buildPromptCompletionNotification()` — builds event for individual step completion
+- `buildTestNotificationEvent()` — builds a test notification event
+- `isWorkflowCompletionTransition()` — detects when a workflow summary crosses a completion threshold
+- `CompletionNotificationEvent` interface: `id`, `kind`, `severity`, `workflowId`, `stepIndex?`, `title`, `body`, `tag`, `url?`
+- Shared with hosted browser server (framework-agnostic — no VS Code imports)
+
 **StatusBarManager:** Status bar item (`flightpath.openPanel` command).
 
 - **Queue execution states:**
   - `$(compass) FlightPath` — idle (default)
   - `$(compass-dot) FlightPath N/M` — running (prominentBackground)
+  - `$(debug-pause) FlightPath N/M` — pausing (warningBackground, mid-step pause requested)
   - `$(debug-pause) FlightPath N/M` — paused (warningBackground)
   - `$(check) FlightPath Complete` — completed, auto-hides after 5s
   - `$(error) FlightPath Error` — error (errorBackground)
@@ -181,6 +202,8 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 
 <relatedFiles>
 - `src/ui/FlightPathMcpServerProvider.ts` — dynamic MCP server injection for copilot-chat harness
+- `src/ui/NotificationManager.ts` — VS Code toast notifications for workflow/step completion events
+- `src/ui/notifications/CompletionNotificationFactory.ts` — framework-agnostic notification payload builders (shared with hosted server)
 - `src/ui/WebviewSettingsSync.ts` — settings/config management and harness availability tracking
 - `src/ui/WebviewMessageRouter.ts` — dispatch table for all webview → extension messages
 - `src/ui/WorkflowSerializer.ts` — save/export/template/history operations

@@ -52,16 +52,16 @@ Orchestration, parsing, queue, state machine, validation, and template managemen
 **`liveInjectIntegrations` map:** Integrations whose PTY sessions are intentionally kept alive across runs (inject mode). On the next run, entries are re-inserted into `executionIntegrations` so the existing PTY and session context are reused. Each entry is removed when its PTY exits.
 **Dependencies injected by WorkflowOrchestrator:** `integrationFactory` (for per-run execution integrations), `getDetectorIntegration(harness?)` callback, `onWorkflowNameChange`, `onStatusBarUpdate`, `dashboardSink` (the `DashboardBroadcastHub` passed in, then wrapped as a `WorkflowTaggedSink` in the constructor to auto-inject `workflowId`)
 **Events:** `onPromptStart`, `onPromptComplete`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage` — carry typed payloads
-**Background buffering:** `OutputCaptureBuffer` stores per-step output for replay when switching between multiple parallel workflows; `bufferedEvents` array (max 500) for dashboard event replay
+**Background buffering:** `OutputCaptureBuffer` stores per-step output (streaming + completed, for both queue steps and finalStep loops) for replay when switching between multiple parallel workflows
 </workflowInstance>
 
 <workflowTaggedSink>
 **`WorkflowTaggedSink.ts`** — thin proxy around `IDashboardSink` that automatically injects `workflowId`.
 - Implements `IDashboardSink`; constructor takes `(inner: IDashboardSink, workflowId: string)`
-- Every method forwards to `inner` with `workflowId` appended — no call sites in `WorkflowInstance` need to pass the ID manually
+- Most methods forward to `inner` with `workflowId` injected — no call sites in `WorkflowInstance` need to pass the ID manually
 - `WorkflowInstance` creates one in its constructor: `new WorkflowTaggedSink(dashboardSink, this.id)`; all internal `this.dashboardSink` references hold the wrapped proxy
 - `updateExecutionStarted` is a pass-through (already receives `workflowId` as its first argument)
-- `notifyUndoRedoSynced` and `sendStepUndoDataUpdated` are pass-throughs (broadcast-to-all semantics, no per-workflow tagging needed)
+- `notifyUndoRedoSynced`, `sendStepUndoDataUpdated`, and `updatePromptDeleted` are pass-throughs (broadcast-to-all semantics, no per-workflow tagging needed)
 </workflowTaggedSink>
 
 <promptQueue>
@@ -193,7 +193,7 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 **DashboardBroadcastHub:** Fan-out hub in `src/ui/`; `WorkflowOrchestrator` creates it, registers/unregisters dashboard providers on it, and passes it as `IDashboardSink` to `WorkflowInstance`
 
 **CRITICAL — `replayWorkflowStateTo` is required after loading a working file for the panel:**
-`DashboardBroadcastHub.updateSessionRestored()` is a deliberate **no-op**. SESSION_RESTORED (which carries completed step statuses) is only sent through a direct `PostMessageDashboardSink` — which only exists inside `replayWorkflowStateTo()` and `replayFullStateTo()`. It is never sent via the hub or via `WorkflowTaggedSink`.
+`DashboardBroadcastHub.updateSessionRestored()` is a deliberate **no-op**. SESSION_RESTORED (which carries completed step statuses) is only sent through a direct `PostMessageDashboardSink` — which only exists inside `replayWorkflowStateTo()` and `replayFullStateTo()`. `WorkflowTaggedSink.updateSessionRestored` does forward to the hub, but since the hub is a no-op for this method, SESSION_RESTORED never reaches panels via the hub.
 
 Consequence: **any code path that loads a working file for a dashboard client MUST call `replayWorkflowStateTo()` after the load**, not before it, and never send a subset of messages manually. Sending only `ACTIVE_WORKFLOW_CHANGED` or `OUTPUT_HISTORY_LOADED` without SESSION_RESTORED causes the panel to receive no step state, making all step status icons display as idle/pending even for completed runs.
 

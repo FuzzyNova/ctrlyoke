@@ -17,6 +17,31 @@ Automate AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwe
 - **@modelcontextprotocol/sdk** — MCP server for external queue management
 </technicalStack>
 
+<instructionFiles>
+Detailed implementation guidelines live in `.github/instructions/`. Read the relevant file before modifying code in that area.
+
+| File Pattern | Instruction File |
+|---|---|
+| `src/extension.ts`, `src/mcp-server.ts` | `extension.instructions.md` |
+| `src/flightpath/*.ts` (top-level only) | `flightpath-core.instructions.md` |
+| `src/flightpath/harness/**` | `harness-integrations.instructions.md` |
+| `src/flightpath/harness/chat/**` | `flightpath-chat.instructions.md` |
+| `src/flightpath/orchestration/**` | `flightpath-orchestration.instructions.md` |
+| `src/cli.ts`, `src/cli/**` | `flightpath-cli-binary.instructions.md` |
+| `src/config/**` | `config.instructions.md` |
+| `src/platform/**` | `platform.instructions.md` |
+| `src/server/**` | `server.instructions.md` |
+| `src/ui/**` (excl. webview-react) | `ui.instructions.md` |
+| `src/ui/webview-react/**` | `webview-react.instructions.md` |
+| `src/types/**` | `types.instructions.md` |
+| `src/utils/**` | `utils.instructions.md` |
+| `src/completions/**` | `completions.instructions.md` |
+| `src/templates/**` | `templates.instructions.md` |
+| `src/scripts/**` | `scripts.instructions.md` |
+| `src/test/**` | `test.instructions.md` |
+| `src/dev/**` | `dev.instructions.md` |
+</instructionFiles>
+
 <architecture>
 
 ## Harness Model
@@ -56,26 +81,7 @@ User loads workflow (.flightpath.yaml/.json/.prompt.md)
 
 ## CLI Composition Architecture
 
-`CliIntegration` is a **generic class** that works with all CLI harnesses via composition. Each harness lives in its own directory with 6 required files implementing clear interfaces:
-
-```
-src/flightpath/harness/
-├── CliIntegration.ts          ← Generic, never modified for new harnesses
-├── shared/interfaces/         ← ICliProvider, IResponseParser, INotificationMonitor, IToolPermissionMapper, ILogParser
-├── shared/                    ← CliNotificationMonitor, CliOutputFormatter, CliResponseParser, CliToolPermissionMapper,
-│                                 CliMcpConfigGenerator, CliProviderUtils, BaseLogParser, CliLogMonitor
-│                                 + coordinator layer: CliTransportCoordinator, CliExecutionRunner, CliPromptPreparer,
-│                                   CliResponseCollector, CliInteractiveStartupCoordinator, CliSessionResolverAdapter,
-│                                   CliResponseTextExtractor, CliPromptRuntimeCoordinator
-├── copilot/                   ← CopilotCliProvider + 5 supporting classes
-├── claude/                    ← ClaudeCliProvider + 5 supporting classes
-├── codex/                     ← CodexCliProvider + 5 supporting classes
-├── opencode/                  ← OpenCodeCliProvider + 5 supporting classes
-├── qwen/                      ← QwenCliProvider + 5 supporting classes
-└── gemini/                    ← GeminiCliProvider + 5 supporting classes
-```
-
-Adding a new harness requires changes across multiple layers (harness directory, types, wiring, settings, UI). See `dev/implemented/ADDING_NEW_CLI_HARNESS.md` for the complete guide.
+`CliIntegration` is a **generic class** that works with all CLI harnesses via composition. Each harness lives in its own directory (`copilot/`, `claude/`, `codex/`, `opencode/`, `qwen/`, `gemini/`) with 6 required files implementing `ICliProvider`, `IResponseParser`, `INotificationMonitor`, `IToolPermissionMapper`, and `ILogParser` interfaces. See `harness-integrations.instructions.md` for full details. Adding a new harness requires changes across multiple layers — see `dev/implemented/ADDING_NEW_CLI_HARNESS.md`.
 
 ## Key Subsystems
 
@@ -90,7 +96,6 @@ Adding a new harness requires changes across multiple layers (harness directory,
 - **WorkingFileManager** — Extracted file I/O handler; atomic writes with file locking, disk merge for MCP-appended prompts
 - **PlatformAdapter** — Abstract interface enabling core code to run in both VS Code extension and standalone CLI binary (VsCodeAdapter + CliAdapter)
 - **PtyProcessManager** — Singleton managing node-pty sessions for embedded terminal display (kind: 'ai-cli' or 'shell')
-- **FlightPathConfigService** — Singleton configuration service with multi-tier hierarchy (CLI overlay, workspace config, user config, defaults)
 - **FlightPathHostedServer** — Express/WebSocket server hosting the dashboard in a browser tab; self-registers with DashboardBroadcastHub
 - **User-Defined Hooks** — Cross-cutting feature in `ExecutionProperties.hooks` allowing pre/post execution hooks alongside agent/skills/mcpServers
 - **SettingsJsonHooksTracker** — Manages `.github/hooks/*.json` registration for CLI harnesses; cleans up on deactivation
@@ -98,6 +103,9 @@ Adding a new harness requires changes across multiple layers (harness directory,
 - **McpDiscoveryUtils** — Discovers local MCP servers from `.vscode/mcp.json`, `.mcp.json`, VS Code config, `~/.claude.json`; registry pagination
 - **MCP Server** (`src/mcp-server.ts`) — Standalone stdio server for queue management from CLI harnesses
 - **LM Tools** — `flightpath_queue_status`, `flightpath_append_queue`, `flightpath_capabilities`, and `flightpath_read_output` for VS Code Chat integration
+- **VsCodeIntegrationFactory** — extends `IntegrationFactory` with VS Code-only harness support (`copilot-chat`); always used by `WorkflowOrchestrator`; CLI uses base `IntegrationFactory`
+- **WorkflowTaggedSink** — thin proxy around `IDashboardSink` that auto-injects `workflowId` into all sink calls; created by `WorkflowInstance` to eliminate per-call ID passing
+- **FlightPathConfigService** — platform-agnostic config singleton with 4-tier hierarchy (CLI overlay → workspace file → user file → defaults); all config reads in core code go through this singleton
 - **React Webview** — Dashboard with 5 Zustand stores, prompt editor (CodeMirror), output viewer, embedded terminal (xterm.js), settings panel; includes ContextQuickPicker and PermissionsQuickPicker footer controls
 
 </architecture>
@@ -120,6 +128,8 @@ Adding a new harness requires changes across multiple layers (harness directory,
 | `src/flightpath/PromptFileParser.ts`      | YAML/JSON parsing with AJV validation                                          |
 | `src/flightpath/EndConditionEvaluator.ts` | Script validation in isolated child process                                    |
 | `src/flightpath/IntegrationFactory.ts`    | Factory for creating harness-specific CliIntegration instances                 |
+| `src/flightpath/VsCodeIntegrationFactory.ts` | Extends IntegrationFactory with VS Code-only harness support (copilot-chat) |
+| `src/config/FlightPathConfigService.ts`   | Platform-agnostic config singleton (CLI + extension core)                      |
 | `src/types/DashboardConstants.ts`         | **Single source of truth** for all shared constants (100+ message types)       |
 | `src/types/FlightPathTypes.ts`            | Core workflow types (PromptItem, Harness enum, ExecutionProperties, etc.)      |
 | `src/utils/ConfigurationUtils.ts`         | All VS Code settings access centralized here                                   |
@@ -404,8 +414,13 @@ See `dev/implemented/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpat
 | Universal CLI output types                                        | `src/types/CliOutputTypes.ts`       |
 | Extension ↔ webview message contracts                             | `src/types/WebviewMessageTypes.ts`  |
 | Workflow context for harness sendPrompt calls                     | `src/types/WorkflowContextTypes.ts` |
+| Structured global settings interface                              | `src/types/FlightPathSettings.ts`   |
+| Per-run output history and undo types                             | `src/types/OutputHistoryTypes.ts`   |
+| Event-sourced timeline types (run history v2)                     | `src/types/WorkflowTimelineTypes.ts`|
+| Dashboard sink interface (decouples WorkflowInstance from vscode) | `src/types/IDashboardSink.ts`       |
 | Model lists and display names                                     | `src/utils/ModelConstants.ts`       |
 | All VS Code settings access                                       | `src/utils/ConfigurationUtils.ts`   |
+| Platform-agnostic config access (core + CLI)                      | `src/config/FlightPathConfigService.ts` |
 | Prompt file JSON schema                                           | `schemas/prompt-schema.json`        |
 | Directory path name constants                                     | `ConfigurationUtils.PATH_CONSTANTS` |
 | Platform abstraction contract                                     | `src/platform/PlatformAdapter.ts`   |

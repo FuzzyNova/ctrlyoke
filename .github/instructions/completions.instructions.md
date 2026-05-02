@@ -4,12 +4,14 @@ applyTo: "src/completions/**"
 ---
 
 <architecture>
-Four-class system providing context-aware IntelliSense and navigation for FlightPath prompt files:
+Six-file system providing context-aware IntelliSense and navigation for FlightPath prompt files:
 
-1. **PromptCompletionProvider** - IntelliSense for file references, symbols, git changes, and model selection
+1. **PromptCompletionProvider** - IntelliSense for file references, symbols, git changes, model selection, and prior-context references
 2. **PromptPropertyCompletionProvider** - YAML property key completions for `.flightpath.yaml` workflow files
 3. **PromptLinkProvider** - Ctrl+Click navigation from prompts to source code
 4. **CompletionHelpers** - Shared logic and framework-agnostic completion items
+5. **ContextReferenceBuilder** - Pure utility functions for constructing reference strings (`@file`, `#selection:`, `#sym:`, `~git`)
+6. **ContextMenuReferenceCommands** - VS Code context menu commands for inserting references into the webview prompt editor
 
 Note: "Provider" in class names follows VS Code API naming (CompletionItemProvider, DocumentLinkProvider), unrelated to execution harness selection.
 
@@ -18,18 +20,20 @@ Note: "Provider" in class names follows VS Code API naming (CompletionItemProvid
 </architecture>
 
 <completionProvider>
-**PromptCompletionProvider** provides four types of completions:
+**PromptCompletionProvider** provides five types of completions:
 
 1. **File references** (`@` trigger) - Full file and directory attachments
 2. **Symbol references** (`#` trigger) - Line ranges, selections, and workspace symbols
 3. **Git change context** (`~` trigger) - Diff, staged, stash, and commit references
-4. **Model selection** (JSON/JSONC only) - Inside "model" string values
+4. **Prior-context references** (`$` trigger) - References to prior step outputs
+5. **Model selection** (JSON/JSONC only) - Inside "model" string values
 
 **Trigger behavior:**
 
 - `@` trigger: File and directory completions (CLI-native syntax)
 - `#` trigger: Selections + workspace symbols (FlightPath-specific)
 - `~` trigger: Git change references (`~diff`, `~staged`, `~stash:N`, commit hashes)
+- `$` trigger: Prior step context keywords (`$previous`, `$all`, `$finalStep`, `$allFinalStep`, `$step:N`)
 - Model field: Auto-triggers inside "model" string values (JSON only)
 
 **Context detection:**
@@ -48,9 +52,10 @@ Note: "Provider" in class names follows VS Code API naming (CompletionItemProvid
 
 **Trigger character detection:**
 
-- Uses `lastIndexOf('@')`, `lastIndexOf('#')`, and `lastIndexOf('~')` to find most recent trigger
+- Uses `lastIndexOf('@')`, `lastIndexOf('#')`, `lastIndexOf('~')`, and `lastIndexOf('$')` to find most recent trigger
 - Routes to the trigger with the highest index (closest to cursor)
 - Stops if space found after trigger UNLESS inside a quoted path (`@"path with spaces/..."`)
+- `$` trigger: only continues if text after `$` matches `[a-zA-Z0-9:,\-]*`
 
 **YAML compatibility:**
 
@@ -60,7 +65,7 @@ Note: "Provider" in class names follows VS Code API naming (CompletionItemProvid
 </completionProvider>
 
 <completionHelpers>
-**CompletionHelpers** contains shared logic and caching:
+**CompletionHelpers** contains shared logic and caching. Reference strings are built using helpers from `ContextReferenceBuilder` (not inline):
 
 **PlainCompletionItem interface:**
 
@@ -80,10 +85,8 @@ Note: "Provider" in class names follows VS Code API naming (CompletionItemProvid
 **Gitignore filtering:**
 
 - Controlled by `flightpath.respectGitignoreForCompletions` setting
-- OFF (default): Returns ALL files (node_modules, dist, logs, everything)
-- ON: Filters using Git extension API `checkIgnore()` in 500-file batches
-- Groups files by repository for efficient filtering
-- Falls back to unfiltered on errors (fail-safe)
+- OFF (default): Uses `vscode.workspace.findFiles("**/*", "**/.git/**")` — returns everything VS Code indexes (does NOT respect .gitignore, known VS Code limitation)
+- ON: Runs `git ls-files --cached --others --exclude-standard` per workspace folder; falls back to `findFiles` for non-git folders
 - Cache invalidated automatically when setting changes
 
 **Symbol completions** (`getSymbolCompletions()`):
@@ -116,6 +119,12 @@ Note: "Provider" in class names follows VS Code API naming (CompletionItemProvid
 - 10-second cache (`GIT_CACHE_DURATION_MS`) for base commits/stashes; separate search cache keyed by query string
 - Insert text is just the ref (e.g., `diff`, `staged`, `stash:0`, full commit hash)
 
+**Prior-context completions** (`getPriorContextCompletions()`):
+
+- Called by `PromptCompletionProvider` for `$` trigger and by the webview
+- Keywords: `previous` (prior step output), `all` (all prior outputs), `finalStep` (prior finalStep output), `allFinalStep` (all finalStep outputs), `step:` (specific steps, e.g. `$step:1,3-5`)
+- Prefix-filtered against the text after `$`
+
 **Prompt file completions** (`getPromptFileCompletions()`):
 
 - Returns `.prompt.md`, `.md`, `.txt` files only
@@ -135,7 +144,39 @@ Note: "Provider" in class names follows VS Code API naming (CompletionItemProvid
 - Git cache: 10 seconds for commits/stashes; per-query cache for search results
 - Symbol queries: Fresh on each request (required for filtering)
 - `isIncomplete: true` on CompletionList ensures live updates as user types
-- Gitignore filtering uses 500-file batches to avoid overwhelming Git API</completionHelpers>
+- Gitignore filtering uses `git ls-files` which handles all .gitignore rules correctly</completionHelpers>
+
+<contextReferenceBuilder>
+**ContextReferenceBuilder** is a pure utility module (no class, no state) exporting functions that construct reference strings. Both `CompletionHelpers` and `ContextMenuReferenceCommands` depend on it.
+
+**Path utilities:**
+- `toWorkspaceRelativeReferencePath(uri)` — returns workspace-relative path with forward slashes, or `null` if outside workspace
+- `quoteReferencePath(path)` — wraps path in double quotes if it contains spaces
+- (internal) `normalizeReferencePath(path)` — converts backslashes to forward slashes
+
+**Reference builders** (each has a `build*Value` variant that returns only the argument portion without the trigger prefix):
+- `buildFileReference(relativePath)` → `@path/to/file.ts` or `@"path with spaces/file.ts"`
+- `buildDirectoryReference(relativePath)` → `@path/to/dir/` (always trailing slash, quotes if spaces)
+- `buildSelectionReference(relativePath, startLine, endLine)` → `#selection:path:1-10`
+- `buildSymbolReference(relativePath, symbolName, line)` → `#sym:path:SymbolName:42`
+- `buildGitReference(ref)` → `~<ref>` (pass hash, `diff`, `staged`, or `stash:N`)
+</contextReferenceBuilder>
+
+<contextMenuReferenceCommands>
+**ContextMenuReferenceCommands** handles VS Code context menu actions that insert references into the webview prompt editor. Instantiated once in `extension.ts` with a reference to `FlightPathWebviewProvider`.
+
+**Commands registered in `extension.ts`:**
+- `flightpath.addFileToPromptEditor` — inserts `@relativePath` for a file URI
+- `flightpath.addDirectoryToPromptEditor` — inserts `@relativePath/` for a directory URI
+- `flightpath.addSelectionToPromptEditor` — inserts `#selection:path:startLine-endLine`; uses active editor selection if the URI matches, otherwise defaults to line 1
+- `flightpath.addSymbolToPromptEditor` — resolves the innermost symbol at the cursor line via `vscode.executeDocumentSymbolProvider`; falls back to a selection reference if no symbol found
+- `flightpath.addScmResourcesToPromptEditor` — accepts `...args` (VS Code SCM multi-selection); extracts `resourceUri` from `SourceControlResourceState` objects and inserts one `@file` reference per resource
+- `flightpath.addTimelineCommitToPromptEditor` — extracts the longest hex hash from a `TimelineItem`'s `id`/`label`/`description`/`detail`/`tooltip`/`contextValue` fields; inserts `~<hash>`
+
+**Insertion mechanism:**
+- All commands call private `insertReferences(references: string[])` which calls `webviewProvider.enqueuePromptEditorInsert()` with a `PromptEditorInsertRequest` (mode: `INSERT`)
+- Request ID uses `context-menu-<timestamp>-<random>` format
+</contextMenuReferenceCommands>
 
 <modelCompletions>
 **Model field completions** (JSON/JSONC only):
@@ -221,10 +262,11 @@ const promptFilePatterns = [
 
 **Completion provider:**
 
-- Registered three times with different trigger characters: `@`, `#`, and `~`
+- Registered four times with different trigger characters: `@`, `#`, `~`, and `$`
 - `@` → file and directory references
 - `#` → selections and workspace symbols
 - `~` → git change context (diff, staged, stash, commits)
+- `$` → prior step context references
 
 **Property key completion provider:**
 
@@ -290,11 +332,10 @@ const promptFilePatterns = [
 - **Solution:** `calculateCompletionRange()` calculates range from trigger to cursor
 - Required for YAML/YML files to show completion dropdown
 
-**Gitignore filtering performance:**
+**`findFiles` does not respect .gitignore:**
 
-- Checking thousands of files against .gitignore can be slow
-- Uses batching (500 files per Git API call) to prevent overwhelming the API
-- Fails open on errors (returns unfiltered files if Git API fails)
-- Cache prevents repeated expensive operations
+- `vscode.workspace.findFiles()` ignores .gitignore regardless of exclude patterns (VS Code limitation)
+- When `flightpath.respectGitignoreForCompletions` is OFF (default), all files including node_modules are included
+- When ON, `git ls-files` is used instead, which is correct by definition
 </knownIssues>
 ````

@@ -78,6 +78,18 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 **VarSubstitutor:** Handles `{{varName}}` substitution for CLI variable injection. Variables flow from CLI `--var key=value` flags (merged into `PromptFile.vars`) and workflow-level `vars:` defaults. Applies substitution to: prompt text, resolved model, resolved additionalArgs, hook commands, and endCondition script path + retryPrompt. `substitute(text, vars)` throws a clear error for unresolved placeholders. `hasPlaceholders(text)` detects if text contains any `{{key}}`. `applyToPromptText()` and `applyToResolvedProperties()` are the primary call sites.
 
 **WorkflowFileDiscovery:** Synchronous workspace scan for workflow files. `findWorkflowFilesInWorkspace(root)` recursively walks the workspace, skipping `.git`, `node_modules`, `out`, `dist`, `coverage`, and returns sorted `WorkflowFileEntry[]` (absolute + relative paths). `isWorkflowFileName(name)` checks a filename against workflow suffixes/names. Exports `WORKFLOW_FILE_GLOB` and `WORKFLOW_FILE_EXCLUDE_GLOB` for VS Code watchers.
+
+**CliEventNormalizer:** `normalizeCliEvents(events)` — merges split INITIATED/COMPLETED event pairs and TOOL_RESULT events into single unified `CliEvent` objects. Handles bash, file read/write/edit/delete, tool calls, MCP tool calls, and web search. Prevents duplicate events when harnesses emit the same operation in separate streaming batches. Key-based matching (path, command, tool id) with adjacency fallback.
+
+**HarnessDirectoryUtils:** Single source of truth for per-harness agent and skill directory paths. Exports `getHarnessAgentDirs()`, `getHarnessUserAgentDirs()`, `getHarnessSkillDirs()`, `getHarnessUserSkillDirs()`, `getFlightPathAgentDir()`, `getFlightPathSkillDir()`, `getAllHarnessIds()`, and `HARNESS_AGENT_EXTENSION` map (`.md` for Claude/Gemini, `.agent.md` for all others). Used by `AgentDiscovery`, `SkillDiscovery`, and `HarnessFileManager`.
+
+**HarnessFileManager:** Class for CRUD management of agent/skill files across all harness workspace directories. `resolveAllLocations()` enumerates every copy of an agent/skill; `exportToHarness()` / `importToFlightPath()` copy with correct extension conversion; `syncToHarnesses()` bulk-copies to multiple targets; `deleteFromHarness()` / `deleteAllFromHarness()` remove entries; `getTargetDir()` returns the primary directory for a harness+type. Depends on `HarnessDirectoryUtils`.
+
+**PriorContextPreviewBuilder:** Builds `<priorContext>` XML previews for `$prior-context` inline refs (`$previous`, `$step:N,M`, `$all`, etc.). Uses the same `buildPriorContextXmlFromItems` as live harness injection so the editor preview exactly matches what gets injected. Returns a comment string when context is not yet available or the ref is out of range.
+
+**RangeNotationParser:** `parseRangeNotation(text)` — parses comma-separated range notation like `"1,2,4-10"` into a sorted, deduplicated `number[]`. Returns `null` on invalid or empty input. Used for `$step:N` ref parsing.
+
+**TerminalOutputSanitizer:** `stripAnsiCodes(text)` removes ANSI escape sequences. `sanitizeTerminalOutput(text)` additionally strips carriage returns and non-printable control bytes (preserving `\n` and `\t`). Used to clean CLI output for logs and dashboard rendering.
 </keyUtilities>
 
 <terminology>

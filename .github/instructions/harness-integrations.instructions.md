@@ -133,9 +133,9 @@ src/flightpath/harness/opencode/
 **CopilotToolBuilder.ts**:
 
 - Static utility class converting CLI tool call payloads into `CliEvent` objects
-- `buildInitiatedEvent()` — called on tool.execution_start (includes old/new content for FILE_EDIT)
+- `buildInitiatedEvent()` — called on tool.execution_start (includes old/new content for FILE_EDIT); delegates to `BaseToolBuilder.buildInitiatedEvents()` and returns the first element
 - `buildCompletedEvents()` — called on tool.execution_complete (carries `structuredPatch` with accurate line numbers)
-- Uses `CliEventMapper` for semantic tool classification
+- Uses `BaseToolBuilder` and `CliEventMapper` for shared event construction and semantic tool classification
 - Enables code reuse between LogParser and ResponseParser (both call ToolBuilder)
 - OpenCode uses `OpenCodeEventMapper.ts` (not a ToolBuilder) — shared event-mapping utilities used by both `OpenCodeResponseParser` and `OpenCodeLogParser` for OpenCode's JSON event format
 
@@ -192,25 +192,22 @@ CliIntegration supports two execution modes:
 <adaptivePromptPassing>
 FlightPath uses **adaptive prompt passing** based on prompt complexity:
 
-**Simple prompts** (≤300 characters):
+**Simple prompts** (≤3000 characters, no special chars like quotes/backslash/$, no newlines/tabs):
 
-- Passed directly on CLI: `copilot --prompt "your question here"`
+- Passed directly inline on the CLI command
 - Faster, no temp file overhead
-- Works for most single-sentence prompts
 
-**Complex prompts** (>300 characters):
+**Complex prompts** (>3000 characters OR contain special characters OR contain newlines/tabs):
 
-- Written to temp file: `.flightpath/temp/prompt-{timestamp}.md`
-- Passed as file reference: `copilot --prompt "@.flightpath/temp/prompt-{timestamp}.md"`
-- Prefixed with: "Follow instructions in @{file}"
-- Avoids CLI argument length limits
-- Preserves formatting and multi-line structure
+- CliPromptPreparer creates categorized temp files (agent, skills, context, excerpts, prompt)
+- References assembled via `formatCategorizedReferences()` into the final prompt instruction string
+- Provider formats file references per CLI conventions (@file, path, etc.)
 
 **Implementation**:
 
-- CliIntegration.sendPromptInternal() measures prompt length
-- Calls provider.buildHeadlessArgs() (simple) or provider.buildHeadlessArgsWithDirectPrompt() (complex)
-- Provider formats file references per CLI conventions (@file, -f file, etc.)
+- `HarnessIntegration.isSimplePrompt()` is the gating function (MAX_SIMPLE_PROMPT_LENGTH = 3000)
+- Passed into `CliPromptPreparer` as the `isSimplePrompt` dependency callback
+- When simple: prompt text passed inline; when complex: full categorized file assembly via `TempFileManager`
   </adaptivePromptPassing>
 
 <sessionManagement>
@@ -584,6 +581,13 @@ Summary of required layers:
 - `buildMcpConfigBlock()` — shared MCP injection decision logic; checks mcpServers list, extracts user servers, calls provider-specific `getMcpConfigArgs`
 - `buildProcessEnv()` — builds process environment with optional `FLIGHTPATH_DIAGNOSTIC_LOGS`
 - `buildSettingsJsonMcpEntries()` — builds MCP server entries for settings.json format (Gemini/Qwen); FlightPath server gets `trust: true`
+
+**BaseToolBuilder** (src/flightpath/harness/shared/BaseToolBuilder.ts):
+
+- Shared static utility for building INITIATED `CliEvent` objects from raw tool call payloads
+- `buildInitiatedEvents(toolName, input, toolId, timestamp)` — resolves field names across all harness naming conventions (snake_case, camelCase, harness-specific aliases) and returns a `CliEvent[]`
+- Used by all harness ToolBuilders (Copilot, Claude, Codex, Gemini, Qwen) to avoid duplicated event construction logic
+- OpenCode uses `OpenCodeEventMapper.ts` instead (no ToolBuilder)
 
 **CliEventMapper** (src/flightpath/harness/shared/CliEventMapper.ts):
 

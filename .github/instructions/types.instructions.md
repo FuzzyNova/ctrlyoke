@@ -3,7 +3,7 @@ applyTo: "src/types/**"
 ---
 
 <purpose>
-Core data structures and constants for FlightPath extension. TypeScript strict mode enforced. Nine primary files:
+Core data structures and constants for FlightPath extension. TypeScript strict mode enforced. Eleven primary files:
 - **FlightPathTypes.ts** - Core workflow and integration types
 - **IDashboardSink.ts** - Interface decoupling WorkflowInstance from VS Code API
 - **DashboardConstants.ts** - Shared constants (SINGLE SOURCE OF TRUTH for all string literals, enums, and UI values)
@@ -13,6 +13,8 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 - **WorkflowContextTypes.ts** - Workflow context passed to harness sendPrompt calls
 - **FlightPathSettings.ts** - Structured global settings interface replacing per-key VS Code settings
 - **WorkflowTimelineTypes.ts** - Event-sourced timeline storage for workflow run history (v2)
+- **HostedWorkspaceViewerTypes.ts** - Types for the hosted workspace viewer (file tree, SCM, diffs)
+- **IconColorDefaults.ts** - Generated default icon background/foreground colors for the hosted server
 </purpose>
 
 <flightPathTypes>
@@ -227,12 +229,13 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `HARNESS_INFO` — display names per harness (name, shortName)
 - `EXECUTION_MODES` — `interactive | headless`
 - `MODEL_OPTION_VALUES` — `{ NONE: "none" }` (sentinel for "no model selected" in option lists)
-- `DEFAULT_MODELS` — default model per harness (`copilot-cli: "claude-sonnet-4.6"`, `copilot-chat: "claude-sonnet-4.6"`, `claude-cli: "sonnet"`, `codex-cli: "gpt-5.4"`, `opencode-cli: "anthropic/claude-sonnet-4-6"`, `qwen-cli: "coder-model"`, `gemini-cli: "gemini-2.5-pro"`)
+- `DEFAULT_MODELS` — default model per harness (`copilot-cli: "claude-sonnet-4.6"`, `copilot-chat: "claude-sonnet-4.6"`, `claude-cli: "sonnet"`, `codex-cli: "gpt-5.4"`, `opencode-cli: "anthropic/claude-sonnet-4-6"`, `qwen-cli: "qwen3.5-plus"`, `gemini-cli: "gemini-2.5-pro"`)
 - `CLAUDE_CLI_MODELS`, `CODEX_CLI_MODELS`, `QWEN_CLI_MODELS`, `GEMINI_CLI_MODELS` — static model option arrays
 - `HARNESS_STATUS_STRINGS` — `checking | available | unavailable`
 - `UI_STRINGS` — loading/checking text
 - `QUEUE_POSITION` — `next | end | beforeCurrent`
 - `EDITOR_TARGET_KINDS` — `newPrompt`
+- `PROMPT_EDITOR_INSERT_MODES` — `insert | append`
 - `EDITOR_PLACEHOLDER_TEXT` — `DEFAULT`, `FINAL_PROMPT` (placeholder hints for CodeMirrorEditor)
 - `WORKFLOW_ATTEMPT_STATUS` — `running | retrying | completed | failed | cancelled`
 - `PROMPT_TERMINAL_STATUS` — `completed | cancelled | failed` (subset of STEP_STATUS; absent = completed)
@@ -240,6 +243,8 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `TERMINAL_SESSION_STATUS` — `running | completed | failed`
 - `SESSION_KINDS` — `ai-cli | shell`
 - `SHELL_KINDS` — `pwsh | powershell | bash` (specific shell variant for SHELL sessions)
+- `TERMINAL_CURSOR_STYLES` — `block | underline | bar`
+- `TERMINAL_MOBILE_CONTROL_BAR` — `auto | always | never`
 - `SESSION_ID_SENTINELS` — `{ FINAL_STEP: "finalStep" }` (resume session from prior finalStep loop)
 - `PRIOR_CONTEXT_KEYWORDS` — `all | previous | none | finalStepAll | finalStepPrevious`
 - `PRIOR_CONTEXT_ITEM_TYPES` — `finalStep` (discriminant for PriorContextItem.type)
@@ -260,14 +265,24 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `ATTACHMENT_PREFIXES` — `file | symbol | directory | selection | git` (id namespace for `<attachment>` XML elements)
 - `OUTPUT_HISTORY_KINDS` — `cli | status | runtime` (discriminant for OrderedHistoryEntry union)
 - `SNAPSHOT_STRATEGIES` — `git | filesystem` (workspace snapshot strategy values)
+- `SNAPSHOT_BASE_SOURCES` — `gitHead | capturedBefore` (what the snapshot was taken relative to)
 - `UNDO_FILE_ACTIONS` — `delete | restore-content | reverse-patch` (file restoration action discriminants)
 - `TEMP_FILE_CATEGORIES` — `agent | skills | context | excerpts | prompt` (category discriminants for prompt temp files)
 - `WORKFLOW_ATTEMPT_COMMANDS` — `beginAttempt | scheduleRetry | completeAttempt | failAttempt | cancelAttempt`
+- `COMPACTION_TRIGGERS` — `auto | manual`
+- `CALLER_TYPES` — `direct | subagent`
+- `NOTIFICATION_EVENT_MODES` — `all | failuresOnly | never`
+- `BROWSER_NOTIFICATION_MODES` — `connectedOnly | push | never`
+- `COMPLETION_NOTIFICATION_KINDS` — `workflow | prompt`
+- `COMPLETION_NOTIFICATION_SEVERITY` — `info | warning | error`
+- `SERVICE_WORKER_BADGE_MESSAGE_TYPES` — badge increment/clear messages for the hosted PWA service worker
+- `HOSTED_ICON_FILES` / `HOSTED_ICON_PATHS` — file names and URL paths for hosted server icons (PNG, SVG, apple-touch-icon)
+- `VSCODE_COMMANDS` — `flightpath.enableServer | flightpath.disableServer | flightpath.regenerateServerToken`
 - `DEFAULT_WORKFLOW_NAME` — `"New Workflow"`
 - `PANEL_CLIENT_ID` — `"panel"` (well-known VS Code sidebar client)
 - `BROWSER_CLIENT_PREFIX` — `"browser:"` (prefix for all browser WebSocket client IDs)
 
-**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalStepPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `TerminalSessionStatus`, `SessionKind`, `ShellKind`, `WorkflowAttemptStatus`, `PromptTerminalStatus`, `InteractiveAbortKind`, `PermissionMode`, `StepType`, `PriorContextKeyword`, `PriorContextItemType`, `GitChangeKind`, `OutputHistoryKind`, `SnapshotStrategy`, `UndoFileAction`, `TempFileCategory`, `ConditionAction`, `CompareSource`, `RetryPromptPlaceholder`, `WorkflowAttemptCommandValue`
+**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalStepPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `PromptEditorInsertMode`, `TerminalSessionStatus`, `SessionKind`, `ShellKind`, `TerminalCursorStyle`, `TerminalMobileControlBar`, `WorkflowAttemptStatus`, `PromptTerminalStatus`, `InteractiveAbortKind`, `PermissionMode`, `StepType`, `PriorContextKeyword`, `PriorContextItemType`, `GitChangeKind`, `OutputHistoryKind`, `SnapshotStrategy`, `SnapshotBaseSource`, `UndoFileAction`, `TempFileCategory`, `ConditionAction`, `CompareSource`, `RetryPromptPlaceholder`, `WorkflowAttemptCommandValue`, `CompactionTrigger`, `CallerType`, `NotificationEventMode`, `BrowserNotificationMode`, `CompletionNotificationKind`, `CompletionNotificationSeverity`, `ServiceWorkerBadgeMessageType`
 </dashboardConstants>
 
 <flightPathSettings>
@@ -277,17 +292,23 @@ Structured global settings interface replacing per-key VS Code settings. Single 
 
 **`FlightPathGlobalSettings` interface** — grouped by concern:
 
-- **Core:** `harness: HarnessId`, `models: Partial<Record<HarnessId, string>>`, `additionalArgs: Partial<Record<HarnessId, string>>`
-- **Execution:** `execution: { mode, injectMode: boolean, maxPromptTimeout, scriptTimeout, closeTerminalOnComplete }`
+- **Core:** `harness: HarnessId`, `models: Partial<Record<HarnessId, string>>`, `additionalArgs: Partial<Record<CliAdditionalArgsHarnessId, string>>` (excludes `copilot-chat`)
+- **Execution:** `execution: { mode, injectMode: boolean, maxPromptTimeout, scriptTimeout, closeTerminalOnComplete, autoDeleteTempFiles: boolean }`
 - **Tools:** `tools: { permissionMode, allowed, denied, allowedDirs: string[] (shared across copilot-cli/claude-cli/codex-cli/qwen-cli), copilotAllowAllPaths, codexSandboxMode, codexApprovalPolicy }`
 - **Workflow:** `workflow: { defaultFormat, defaultTemplate, defaultAgent, defaultSkills, resumeExistingSession, priorContext, autoLoadRecentSession, omitAgentsSkillsOnResume, defaultEndCondition?: EndCondition | null, defaultPreCondition?: PreCondition | null }`
 - **Chat:** `chat: { windowLocation, inactivityTimeout, treatTimeoutAsSuccess, forceAgentMode, useNativeAttachments }`
 - **MCP & Hooks:** `mcp: { defaultServers }`, `hooks: UserHookConfig[]`
 - **Queue:** `queue: { maxSize, maxWorkflowExecutionTime, unlimitedMode, notifyOnExtension }`
 - **History:** `history: { saveOutput, maxRuns }`
-- **UI:** `ui: { showCliOutput, showCliCommand, logRawCliOutput, openPromptsInSecondGroup, respectGitignoreForCompletions, confirmDeleteOperations, confirmResetOperations }`
-- **Server:** `server: { enabled, port, standalonePort, theme, tls? }`
+- **Terminal:** `terminal: TerminalSettings` — `{ fontSize, lineHeight, scrollback, cursorStyle: TerminalCursorStyle, cursorBlink, macOptionIsMeta, wordSeparators, replayBufferKb, shellExecutable, mobileControlBar: TerminalMobileControlBar, mobileCustomShortcuts: TerminalShortcut[] }`
+- **UI:** `ui: { showCliOutput, showCliCommand, logRawCliOutput, showHeadlessPermissionWarning, autoFocusOutputOnExecution, openPromptsInSecondGroup, respectGitignoreForCompletions, confirmDeleteOperations, confirmResetOperations, showHiddenFiles }`
+- **Server:** `server: { enabled, port, standalonePort, theme, bindAddress: string, tls: { enabled, certPath, keyPath }, iconBgColor, iconFgColor }`
+- **Notifications:** `notifications: FlightPathNotificationSettings` — `{ vscode: { enabled }, browser: { mode: BrowserNotificationMode }, events: { workflowComplete: NotificationEventMode, promptComplete: NotificationEventMode }, includeWorkflowName, includePromptName, onlyWhenWindowUnfocused }`
 - **Advanced:** `enableDiagnosticLogs: boolean`
+
+**Supporting interfaces:**
+- `TerminalShortcut` — `{ label: string, sequence: string }`
+- `FlightPathNotificationSettings` — see `notifications` above
 
 **`PartialFlightPathSettings`** — shallow-partial version for config file contents (each top-level group is `Partial<...>`).
 
@@ -322,6 +343,33 @@ Event-sourced timeline storage for workflow run history (v2 format, supersedes v
 
 **Targeting:** Targeted events (`CliOutputRecordedEvent`, `StatusMessageRecordedEvent`, workspace/undo events) include `target: OutputExecutionTarget` from `OutputHistoryTypes`; runtime transition events are run-level (no target).
 </workflowTimelineTypes>
+
+<hostedWorkspaceViewerTypes>
+**File: HostedWorkspaceViewerTypes.ts**
+
+Types shared between the Express server (extension-side) and the React webview (browser-side) for the hosted workspace viewer feature.
+
+**Key interfaces:**
+- `WorkspaceEntry` / `WorkspaceTreeEntry` (alias) — `name`, `path`, `kind: "file" | "directory"`, `size?`
+- `WorkspaceTreeResponse` — `rootLabel`, `path`, `parentPath`, `entries: WorkspaceTreeEntry[]`
+- `WorkspaceFileResponse` — `path`, `name`, `language?`, `size`, `eol: "lf" | "crlf"`, `content`, `readOnly?`, `reason?`
+- `WorkspaceFileSaveRequest` — `path`, `content`
+- `SourceControlFile` / `WorkspaceScmFile` (alias) — `path`, `stagedStatus`, `unstagedStatus`, `kind: "modified" | "added" | "deleted" | "renamed" | "untracked"`
+- `WorkspaceScmStatusResponse` — `files`, `incomingCommitCount`, `outgoingCommitCount`
+- `DiffKind` — `"modified" | "added" | "deleted" | "renamed" | "untracked"`
+- `WorkspaceScmDiffResponse` — `path`, `language?`, `oldContent`, `newContent`, `kind: DiffKind`
+- Stage/unstage/discard/commit/push/pull request and response types: `WorkspaceStageRequest`, `WorkspaceUnstageRequest`, `WorkspaceDiscardRequest`, `WorkspaceCommitRequest`, `WorkspacePushResponse`, `WorkspacePullResponse`
+</hostedWorkspaceViewerTypes>
+
+<iconColorDefaults>
+**File: IconColorDefaults.ts**
+
+Auto-generated by `scripts/generate-app-icons.mjs`. Do not edit manually.
+
+Exports two constants used as defaults in `FlightPathGlobalSettings.server`:
+- `ICON_BG_COLOR_DEFAULT` — default background color for SVG favicon and PWA icons
+- `ICON_FG_COLOR_DEFAULT` — default foreground color for SVG favicon and PWA icons
+</iconColorDefaults>
 
 <typeSafetyPatterns>
 **Import constants from DashboardConstants (NEVER hardcode strings):**

@@ -42,7 +42,9 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 **Responsibility:** Session discovery and auto-load after VS Code restart or crash.
 **Owned by:** `WorkflowOrchestrator`
 **`autoLoadRecentSession(workspaceFolderPath, onLoad)`** scans `.flightpath/.queue/` for the most recently modified working file and invokes the `onLoad` callback with its path. Errors are silently logged — never surfaced as user notifications.
-**`findPromptFiles(workspaceFolderPath)`** — discovers all `.flightpath.yaml`, `.flightpath.json`, and `.prompt.md` files in the workspace for the file picker UI.
+**`getMostRecentWorkingFilePath(workspaceFolderPath)`** — returns the path of the most recently modified working file without triggering a load callback.
+**`discoverPromptFiles(workspaceFolderPath)`** — discovers all `.flightpath.yaml`, `.flightpath.json`, and `.prompt.md` files in the workspace for the file picker UI.
+**`discoverSessions(workspaceFolderPath)`** — returns working files paired with their parsed workflow state for session listing in the dashboard.
 
 ## OutputHistoryManager
 
@@ -53,11 +55,20 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 - Each run gets a subdirectory `run-<timestamp>/` containing `manifest.json` + `events.jsonl`
 - Disk is the authoritative source — working files do NOT track `outputHistory`
 - History is a self-contained snapshot that renders independently of current prompts
-  **Key methods:**
-- `startRun(workingFilePath)` / `finalizeRun(state)` — lifecycle for a single execution run
-- `appendCliOutput(output, stepIndex)` — writes CLI output events to `events.jsonl` via `TimelineRecorder`
-- `loadHistory(workflowId)` — reads all run directories and returns `WorkflowOutputHistory[]`
+
+**Key methods:**
+- `initializeRun(workingFilePath)` / `finalizeRun(state)` — lifecycle for a single execution run
+- `saveExecutionOutput(output, stepIndex)` — writes CLI output events via `TimelineRecorder`
+- `appendStatusMessage(message)` / `appendRuntimeTransition(event)` — appends non-output timeline events
+- `saveSnapshotForTarget(stepIndex)` — saves a point-in-time snapshot for the specified step
+- `loadHistory(historyFilePath)` — reads a specific run directory and returns `WorkflowOutputHistory`
+- `getRunsForWorkflow(workflowId)` — returns all run directory paths for a workflow
+- `getLatestHistoryFilePath(workflowId)` — returns the most recent run's manifest path
+- `getRunTimestamps(workflowId)` / `getRunStates(workflowId)` — metadata queries across runs
+- `pruneOldRuns(workflowId, maxRuns)` — removes oldest runs beyond the retention limit
+- `saveUndoRecord(record)` / `markUndoRecordRedone(id)` — undo history persistence
 - `isHistoryEnabled()` — gates all writes via `ConfigurationUtils.isSaveOutputHistoryEnabled()`
+- `extractWorkflowId(workingFilePath)` — derives workflow ID from working file path
 
 ## TimelineRecorder
 
@@ -68,7 +79,13 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 
 - `createRunDirectoryName(timestampMs)` — `run-<ISO-timestamp>` directory name
 - `extractRunTimestamp(entryName)` — parse timestamp from a run directory name
-- `isTimelineRunDirectory(name)` / `isLegacyRunFile(name)` — distinguish new vs legacy formats
+- `isTimelineRunDirectory(name)` / `isLegacyRunFile(name)` / `isRunEntry(entry)` — distinguish run entry types
+- `getManifestPathForRunDirectory(runDirectoryPath)` — resolves manifest path from run directory
+- `getEventsPathFromManifestPath(manifestPath)` — resolves events path from manifest path
+
+**Instance methods:**
+- `readManifest(manifestPath)` — reads and parses `manifest.json`
+- `readEvents(manifestPath)` — reads and parses all events from `events.jsonl`
 
 ## OutputHistoryTimelineAdapter
 
@@ -84,7 +101,7 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 **Operations:**
 
 - `importAgents()` — copies bundled agent files to `.github/agents/` with overwrite confirmation
-- `importWorkflows()` — copies bundled workflow templates to `.flightpath/templates/`
+- `importWorkflowTemplates()` — copies bundled workflow templates to `.flightpath/templates/`
 - Reads manifests (`agents/manifest.json`, `workflows/manifest.json`) from the extension's `out/` directory
 - Prompts the user before overwriting existing files
   **`setWorkspaceFolder(folder)`** — called by `WorkflowOrchestrator` when the active workspace folder changes.
@@ -98,6 +115,8 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 - `createPromptFile()` — prompts for a filename (respects `defaultWorkflowFormat` setting), creates file via `TemplateManager`, opens in editor
 - `createDraftPrompt()` — creates a timestamped `.prompt.md` in `.flightpath/prompts/`
 - `createEndConditionScript()` — creates a validation script stub in `.flightpath/scripts/`
+- `createNewTemplate()` — creates a new workflow template from the current prompt file
+- `openPanel()` — opens the FlightPath dashboard panel
 - `openCurrentPromptFile()` — opens the currently loaded prompt file in the editor
   **`setWorkspaceFolder(folder)`** — called by `WorkflowOrchestrator` when the active workspace folder changes.
 
@@ -112,9 +131,10 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 3. **Lock file watcher** — detects workflow completion (lock deleted = CLI finished)
    **Heartbeat poll:** 10-second fallback poll to detect stale locks (CLI crash where lock file remains but heartbeat is stale).
    **`onFinished` event** — fired when the lock is deleted or goes stale; `WorkflowOrchestrator` disposes the session on this event.
-   **Helper exports:**
+**Helper exports:**
 
-- `getHistoryRunTimestamp(path)` — extracts numeric timestamp from a run path
+- `getHistoryRunTimestamp(historyFilePath)` — extracts numeric timestamp from a history file path
+- `getRunEntryNameForHistoryPath(historyFilePath)` — extracts the run entry name from a history file path
 - `isNewerHistoryRunPath(candidate, active)` — compares two run paths by timestamp for most-recent detection
   </components>
 

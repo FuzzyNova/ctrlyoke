@@ -29,7 +29,7 @@ The FlightPath CLI adds only: argument parsing (Commander.js), TTY detection, `C
 1. Parses CLI flags into `ResolvedCliConfig`
 2. Initialises `configService` with file-based backends: `setUserBackend(createUserConfigBackend())`, `setWorkspaceBackend(createWorkspaceConfigBackend(cwd))`, then `setCliOverlay(overlay)` for any explicitly-provided flags
 3. Instantiates `CliAdapter` + registers it via `registerCliAdapter()`
-4. Creates `IntegrationFactory(platform)` + `WorkflowInstance`. Harness is resolved via `resolveHarness()` which only handles `copilot-cli`, `claude-cli`, and `codex-cli` — any other value defaults to `copilot-cli`.
+4. Creates `IntegrationFactory(platform)` + `WorkflowInstance`. Harness is cast directly from `config.harness` as `HarnessId` and passed to `factory.createForExecution(harness)`. The `--harness` option help text lists three common harnesses but any valid `HarnessId` is accepted.
 5. In headless mode, subscribes: `onPromptStart`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage`, `onPromptComplete`. `onStreamingChunk` writes raw text chunks directly to `process.stdout`; the others render via `CliTerminalFormatter`.
 6. Calls `instance.loadPromptFile()` or `instance.loadPromptString()` (for `--prompt`), acquires `WorkflowLockManager` lock with 5s heartbeat
 7. Merges `--var` flags into `workflowFile.vars` (CLI vars override workflow-level defaults)

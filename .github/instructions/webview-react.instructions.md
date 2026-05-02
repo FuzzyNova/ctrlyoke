@@ -80,13 +80,15 @@ src/ui/webview-react/
 │   ├── output/              # Output rendering components
 │   │   ├── BashOutput.tsx        # Shell command output block
 │   │   ├── CliOutput.tsx         # Main CLI output container
-│   │   ├── DiffView.tsx          # Lazy collapsible diff renderer with HLJS
+│   │   ├── DiffView.tsx          # Lazy collapsible diff renderer
 │   │   ├── FileOperationOutput.tsx # File read/write/edit/delete displays
 │   │   ├── MarkdownText.tsx      # Markdown renderer
 │   │   ├── OutputMinimap.tsx     # Right-rail step positions + diff regions
 │   │   ├── outputStyles.ts       # Shared output style constants
 │   │   ├── StatusMessage.tsx     # Status/info message block
+│   │   ├── TerminalControlBar.tsx # Mobile/hosted terminal control bar
 │   │   ├── TerminalInstance.tsx  # Single xterm.js terminal (mount/resize)
+│   │   ├── TerminalSessionIcon.tsx # Session kind icon (ai-cli vs shell)
 │   │   ├── TerminalView.tsx      # Terminal panel (canvas + session rail)
 │   │   ├── ToolCallOutput.tsx    # Tool invocation display
 │   │   └── UndoChangesDialog.tsx # Confirm dialog for undoing file changes
@@ -97,9 +99,11 @@ src/ui/webview-react/
 │   │   ├── SaveWorkflowDialog.tsx # Save-as dialog with path/format
 │   │   ├── TemplateModal.tsx     # New workflow from template
 │   │   ├── WorkflowControls.tsx  # Run/Pause/Stop/Load buttons
+│   │   ├── WorkflowDropdownHeader.tsx # Header inside workflow selector dropdown
 │   │   ├── WorkflowFilePickerModal.tsx # File picker modal for workflow file selection
 │   │   └── WorkflowStatus.tsx    # Execution state badge
 │   ├── settings/            # Global settings tab sections (used in GlobalSettingsDrawer)
+│   │   ├── AgentSkillsManagerSection.tsx # Agent/skill file sync manager
 │   │   ├── ChatSection.tsx           # Chat / Copilot chat settings
 │   │   ├── DeveloperSection.tsx      # Developer tools (only visible in dev builds)
 │   │   ├── ExecutionSection.tsx      # Execution behavior settings
@@ -107,47 +111,67 @@ src/ui/webview-react/
 │   │   ├── HarnessesSection.tsx      # Per-harness configuration
 │   │   ├── HistorySection.tsx        # Run history / output retention settings
 │   │   ├── McpHooksSection.tsx       # Global MCP servers + lifecycle hooks
+│   │   ├── NotificationsSection.tsx  # Browser notification settings
 │   │   ├── PermissionsSection.tsx    # Default tool permissions
 │   │   ├── QueueSection.tsx          # Queue behavior settings
 │   │   ├── ServerSection.tsx         # FlightPath server settings
+│   │   ├── TerminalSection.tsx       # Terminal appearance settings
 │   │   └── WorkflowDefaultsSection.tsx # Workflow-level defaults
-│   └── shared/              # Reusable UI components
-│       ├── AnimatedSection.tsx   # Slide-down mount/unmount with CSS animation
-│       ├── Button.tsx            # Base button component
-│       ├── Collapsible.tsx       # Expand/collapse wrapper
-│       ├── CustomSelect.tsx      # Styled select dropdown
-│       ├── DeleteConfirmModal.tsx # Destructive action confirm (with "don't ask again")
-│       ├── DrawerRow.tsx         # 2-column grid (wide) / fragment (narrow)
-│       ├── DrawerTabBar.tsx      # Tab bar for PropertiesDrawer pages
-│       ├── ErrorBoundary.tsx     # React error boundary with stack logging
-│       ├── HarnessDropdown.tsx   # Grouped harness selector with status badges
-│       ├── HarnessIcon.tsx       # SVG harness icons as data URIs
-│       ├── IconToggleButton.tsx  # Icon-only toggle button
-│       ├── McpServersEditor.tsx  # MCP server config + registry search
-│       ├── Modal.tsx             # Base modal wrapper
-│       ├── MultiCheckboxDropdown.tsx # Multi-select checkbox dropdown
-│       ├── PanelBar.tsx          # Collapsible panel header bar
-│       ├── PriorContextSelect.tsx # Prior context mode selector (6 keywords + custom)
-│       ├── ResetConfirmModal.tsx # Recoverable action confirm (with "don't ask again")
-│       ├── RunSelector.tsx       # Run history selector
-│       ├── ScriptConditionEditor.tsx # Script step condition editor (compare source, returns)
-│       ├── SkillsSelect.tsx      # Hybrid skills dropdown with portal popup
-│       ├── SplitButton.tsx       # Button with dropdown arrow
-│       ├── StepContextMenu.tsx   # Right-click context menu for workflow steps
-│       ├── UndoRedoControl.tsx   # Undo/redo button control with zundo history
-│       ├── permissionUtils.ts    # Tool permission mode logic per harness
-│       └── tabBadgeUtils.ts      # Tab icon/color override helpers for DrawerTabBar
+│   ├── shared/              # Reusable UI components
+│   │   ├── ActionDropdown.tsx    # Generic action dropdown menu
+│   │   ├── AnimatedSection.tsx   # Slide-down mount/unmount with CSS animation
+│   │   ├── Button.tsx            # Base button component
+│   │   ├── Collapsible.tsx       # Expand/collapse wrapper
+│   │   ├── CustomSelect.tsx      # Styled select dropdown
+│   │   ├── DeleteConfirmModal.tsx # Destructive action confirm (with "don't ask again")
+│   │   ├── DrawerRow.tsx         # 2-column grid (wide) / fragment (narrow)
+│   │   ├── DrawerTabBar.tsx      # Tab bar for PropertiesDrawer pages
+│   │   ├── DropdownPortal.tsx    # Portal-rendered dropdown for overflow contexts
+│   │   ├── ErrorBoundary.tsx     # React error boundary with stack logging
+│   │   ├── HarnessDropdown.tsx   # Grouped harness selector with status badges
+│   │   ├── HarnessIcon.tsx       # SVG harness icons as data URIs
+│   │   ├── IconToggleButton.tsx  # Icon-only toggle button
+│   │   ├── McpServersEditor.tsx  # MCP server config + registry search
+│   │   ├── Modal.tsx             # Base modal wrapper
+│   │   ├── MultiCheckboxDropdown.tsx # Multi-select checkbox dropdown
+│   │   ├── PanelBar.tsx          # Collapsible panel header bar
+│   │   ├── PriorContextSelect.tsx # Prior context mode selector (6 keywords + custom)
+│   │   ├── ResetConfirmModal.tsx # Recoverable action confirm (with "don't ask again")
+│   │   ├── RunSelector.tsx       # Run history selector
+│   │   ├── ScriptConditionEditor.tsx # Script step condition editor (compare source, returns)
+│   │   ├── SettingInputRow.tsx   # Labeled input row for settings panels
+│   │   ├── SettingSourceBadge.tsx # Badge indicating setting source (global/workspace/etc.)
+│   │   ├── SettingToggleRow.tsx  # Labeled toggle row for settings panels
+│   │   ├── SkillsSelect.tsx      # Hybrid skills dropdown with portal popup
+│   │   ├── SplitButton.tsx       # Button with dropdown arrow
+│   │   ├── StepContextMenu.tsx   # Right-click context menu for workflow steps
+│   │   ├── UndoRedoControl.tsx   # Undo/redo button control with zundo history
+│   │   ├── permissionUtils.ts    # Tool permission mode logic per harness
+│   │   └── tabBadgeUtils.ts      # Tab icon/color override helpers for DrawerTabBar
+│   └── workspace-viewer/    # Hosted workspace file browser + source control (modal)
+│       ├── DirtyExitGuard.tsx    # Unsaved-changes exit confirmation overlay
+│       ├── WorkspaceCommitArea.tsx # Git commit/push/pull UI
+│       ├── WorkspaceDiffPane.tsx  # Side-by-side diff view for source control
+│       ├── WorkspaceExplorerPane.tsx # Directory browser pane
+│       ├── WorkspaceFileEditor.tsx # Inline file editor (CodeMirror)
+│       ├── WorkspaceSourceControlPane.tsx # Changed-files list pane
+│       ├── WorkspaceViewerHeader.tsx # Header with tabs and close button
+│       └── WorkspaceViewerModal.tsx  # Modal wrapper for the workspace viewer
 ├── hooks/                   # React hooks
+│   ├── reconnectWatchdog.ts     # Auto-reconnect logic for hosted/remote sessions
 │   ├── terminalMessageHandlers.ts # Terminal PTY message routing
 │   ├── useAttachmentTokenCount.ts # Token counting with attachment caching
+│   ├── useClickOutside.ts       # Click-outside detection for dropdowns/modals
 │   ├── useContextPct.ts         # Context percentage (token usage vs window size)
 │   ├── useDesktopLayout.ts      # Desktop 3-panel layout refs and resize logic
 │   ├── useDrawerTabOverrides.ts # Computes tab icon/color overrides for DrawerTabBar
+│   ├── useDropdownPortalPosition.ts # Calculates portal position for dropdown menus
 │   ├── useElementNarrow.ts      # ResizeObserver-based width threshold
 │   ├── useFinalStepContextMenu.tsx # Context menu hook for the final step
 │   ├── useMediaQuery.ts         # Responsive layout detection
 │   ├── useMessageHandler.ts     # Message routing from extension
 │   ├── useMobileLayout.ts       # Mobile single-column layout refs
+│   ├── useMobileTerminalBar.ts  # Mobile terminal control bar state
 │   ├── usePromptStatus.ts       # Step status derived state (icon, color, label)
 │   ├── useStepClickHandler.ts   # Step click → editor navigation + selection
 │   ├── useStepContextMenu.tsx   # Context menu hook for queue step rows
@@ -158,7 +182,9 @@ src/ui/webview-react/
 │   ├── uiStore.ts           # Layout, modals, history browsing
 │   ├── editorStore.ts       # Prompt editor state + properties
 │   ├── settingsStore.ts     # Harness/model/skills/hooks configuration
-│   └── terminalStore.ts     # Terminal session lifecycle
+│   ├── terminalStore.ts     # Terminal session lifecycle
+│   ├── useHarnessFileStore.ts # Agent/skill file sync (export/import/delete)
+│   └── workspaceViewerStore.ts # Hosted workspace file browser + source control
 ├── types/                   # TypeScript types
 │   ├── cliEvents.ts         # CLI event type definitions
 │   ├── drawerPages.ts       # Drawer page constants and tab definitions
@@ -167,20 +193,30 @@ src/ui/webview-react/
 │   ├── messages.ts          # Re-exports from src/types/
 │   └── vscode.ts            # VS Code API types
 ├── utils/                   # Utility functions
+│   ├── browserNotifications.ts # Browser Notifications API integration
+│   ├── codemirrorLanguage.ts   # CodeMirror language detection
+│   ├── codemirrorTheme.ts      # CodeMirror VS Code theme bridge
 │   ├── diff.ts              # Diff/patch utilities
 │   ├── diffUtils.ts         # Diff display helpers
 │   ├── dictionaryUris.ts    # Dictionary URI constants for CodeMirror spellcheck
+│   ├── dropdownUtils.ts     # Dropdown positioning utilities
 │   ├── endCondition.ts      # End condition helpers
-│   ├── hljsUtils.ts         # Highlight.js integration (language detection, styles)
+│   ├── executionOutputFocus.ts # Auto-scroll/focus on execution output
+│   ├── hostedApi.ts         # REST API client for hosted server features
 │   ├── logger.ts            # Webview logging utilities
 │   ├── markdownExport.ts    # Markdown export generation
 │   ├── outputProjection.ts  # Maps OrderedHistoryEntries → OutputMessages for rendering
 │   ├── outputUtils.ts       # Output formatting helpers
 │   ├── panelAnimation.ts    # Panel animation utilities
+│   ├── panelSnapshot.ts     # Panel size snapshot/restore helpers
+│   ├── panelSync.ts         # Panel size sync between layout modes
 │   ├── prompt.ts            # Prompt text utilities
 │   ├── promptUndo.ts        # Undo dialog logic and prompt undo actions
+│   ├── rdvAdapter.ts        # react-diff-viewer adapter for diff rendering
 │   ├── status.ts            # Status/state helpers
 │   ├── string.ts            # String utilities
+│   ├── syntaxHighlighting.tsx # Syntax highlighting (HLJS language detection + styles)
+│   ├── terminalPresentation.ts # Terminal text formatting utilities
 │   ├── time.ts              # Time/duration formatting
 │   ├── tokenizer.ts         # Token counting
 │   └── tokenUtils.ts        # Context percentage helpers (calcContextPct)
@@ -193,7 +229,7 @@ src/ui/webview-react/
 
 ## Zustand Store Pattern
 
-Five separate stores by domain (avoid mixing concerns):
+Seven separate stores by domain (avoid mixing concerns):
 
 ### workflowStore - Core Workflow Data
 
@@ -412,6 +448,14 @@ interface TerminalSession {
 **Use cases**: Terminal session tracking, active session switching, output buffering
 
 **Lifecycle**: AI CLI sessions are cleared on each new run; shell sessions survive across runs. `pendingOutput` buffers PTY data before the xterm instance mounts.
+
+### useHarnessFileStore - Agent/Skill File Sync
+
+Manages exporting, importing, and deleting agent/skill files for specific harnesses. State: `managedFiles`, `activeType` ("agent" | "skill"), `loading`, `error`. Actions: `requestFiles()`, `exportFile()`, `importFile()`, `deleteFile()`, `syncAll()`, `deleteAll()`, `openHarnessDir()`. Used by `AgentSkillsManagerSection` in the global settings drawer.
+
+### workspaceViewerStore - Hosted Workspace Viewer
+
+State for the `WorkspaceViewerModal` (file explorer + source control panel). Tracks explorer path/entries, selected file content and dirty state, diff pane data (old/new content, language, kind), source control file list, commit/push/pull state, and dirty-exit guard. Used only when FlightPath is running as a hosted server.
 
 ## Store Access Patterns
 
@@ -931,26 +975,41 @@ test/
 │   ├── useMessageHandler.test.ts  # Message routing tests
 │   └── useVsCodeApi.test.ts       # VS Code API singleton
 ├── utils/
+│   ├── CliEventNormalizer.test.ts # CLI event normalization
 │   ├── diff.test.ts               # Diff/patch logic
 │   ├── endCondition.test.ts       # End condition helpers
 │   ├── outputProjection.test.ts   # Output message mapping
 │   ├── outputUtils.test.ts        # Output formatting
+│   ├── panelSync.test.ts          # Panel size sync
 │   ├── prompt.test.ts             # Prompt utilities
 │   ├── promptUndo.test.ts         # Undo action computation
+│   ├── rdvAdapter.test.ts         # react-diff-viewer adapter
 │   ├── status.test.ts             # Status helpers
 │   ├── string.test.ts             # String utilities
+│   ├── terminalPresentation.test.ts # Terminal formatting
 │   └── time.test.ts               # Time formatting
 ├── components/
+│   ├── editor/
+│   │   └── CodeMirrorEditor.test.tsx
 │   ├── workflow/
 │   │   ├── WorkflowControls.test.tsx
+│   │   ├── WorkflowFilePickerModal.test.tsx
 │   │   └── WorkflowStatus.test.tsx
 │   ├── output/
 │   │   ├── BashOutput.test.tsx
-│   │   └── MarkdownText.test.tsx
-│   └── shared/
-│       ├── Button.test.tsx
-│       ├── CustomSelect.test.tsx
-│       └── Modal.test.tsx
+│   │   ├── CliOutput.test.tsx
+│   │   ├── DiffView.test.tsx
+│   │   ├── FileOperationOutput.test.tsx
+│   │   ├── MarkdownText.test.tsx
+│   │   └── UndoChangesDialog.test.tsx
+│   ├── shared/
+│   │   ├── Button.test.tsx
+│   │   ├── CustomSelect.test.tsx
+│   │   ├── Modal.test.tsx
+│   │   └── ScriptConditionEditor.test.tsx
+│   └── workspace-viewer/
+│       ├── WorkspaceCommitArea.test.tsx
+│       └── WorkspaceViewerModal.test.tsx
 └── store/
     ├── editorStore.test.ts
     ├── settingsStore.test.ts

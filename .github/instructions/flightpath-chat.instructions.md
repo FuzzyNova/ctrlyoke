@@ -132,8 +132,8 @@ Default uses last request (-1). Returns typed events array.
 
 - File/symbol references attached via VS Code native commands (`github.copilot.chat.attachFile`, `github.copilot.chat.attachSelection`, `workbench.action.chat.attachFolder`)
 - Agent handled by opening agent-specific chat window (`workbench.action.chat.open<FrontmatterName>`)
-- Skills NOT supported in this mode
-- Raw prompt text is typed into chat input
+- Skills written to a `.skills.prompt.md` temp file and attached via `workbench.action.chat.attachFile`
+- Raw prompt text pasted into chat input (clipboard paste — never `type` command)
 
 **Temp file wrapping (`false`, default):**
 
