@@ -18,38 +18,40 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
     : "Workspace";
 
   return (
-    <div className="relative flex items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0">
-      {/* Tab buttons — left-aligned */}
-      <div className="flex items-center" role="tablist">
+    <div className="flex items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0">
+      {/* Tab buttons — fixed left, never shrink */}
+      <div className="flex items-center flex-shrink-0" role="tablist">
         <button
           className={`fp-tab ${activeTab === "explorer" ? "fp-tab-active" : "fp-tab-inactive"}`}
           onClick={() => onTabChange("explorer")}
           aria-selected={activeTab === "explorer"}
           role="tab"
+          title="Explorer"
         >
           <i className="codicon codicon-files text-sm" />
-          Explorer
+          <span className="hidden sm:inline">Explorer</span>
         </button>
         <button
           className={`fp-tab ${activeTab === "sourceControl" ? "fp-tab-active" : "fp-tab-inactive"}`}
           onClick={() => onTabChange("sourceControl")}
           aria-selected={activeTab === "sourceControl"}
           role="tab"
+          title="Source Control"
         >
           <i className="codicon codicon-source-control text-sm" />
-          Source Control
+          <span className="hidden sm:inline">Source Control</span>
         </button>
       </div>
 
-      {/* Title — centered absolutely; two-line stack with name + full path */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center select-none pointer-events-none">
-        <span className="flex items-center gap-1 text-sm font-medium text-editor-fg opacity-70 whitespace-nowrap">
-          <i className="codicon codicon-project text-sm" />
-          Workspace: {workspaceName}
-        </span>
+      {/* Title — takes remaining space, truncates before touching side elements */}
+      <div className="flex-1 min-w-0 flex flex-col items-center px-2 select-none pointer-events-none">
+        <div className="flex items-center gap-1 text-sm font-medium text-editor-fg opacity-70 max-w-full min-w-0">
+          <i className="codicon codicon-project text-sm flex-shrink-0" />
+          <span className="truncate">Workspace: {workspaceName}</span>
+        </div>
         {workspacePath && (
           <span
-            className="text-xs text-description-fg truncate max-w-[40vw]"
+            className="text-xs text-description-fg truncate w-full text-center"
             title={workspacePath}
           >
             {workspacePath}
@@ -57,9 +59,9 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
         )}
       </div>
 
-      {/* Close button — pushed to right */}
+      {/* Close button — fixed right, never shrink */}
       <button
-        className="ml-auto flex items-center justify-center w-7 h-7 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors flex-shrink-0"
+        className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors"
         onClick={onClose}
         title="Close workspace viewer"
         aria-label="Close workspace viewer"
