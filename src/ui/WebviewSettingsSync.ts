@@ -921,11 +921,16 @@ export class WebviewSettingsSync {
     );
   }
 
-  async handleGenerateServerCert(postMessage: PostMessageFn): Promise<void> {
-    const workspaceRoot =
-      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+  async handleGenerateServerCert(
+    postMessage: PostMessageFn,
+    scope: "workspace" | "user"
+  ): Promise<void> {
+    const baseDir =
+      scope === CONFIG_SCOPE.USER
+        ? os.homedir()
+        : (vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd());
     const certsDir = path.join(
-      workspaceRoot,
+      baseDir,
       PATH_CONSTANTS.FLIGHTPATH_DIR,
       PATH_CONSTANTS.CERTS_DIR
     );
@@ -988,12 +993,12 @@ export class WebviewSettingsSync {
     await configService.set(
       CONFIG_KEYS.SERVER_TLS_CERT_PATH,
       certPath,
-      CONFIG_SCOPE.USER
+      scope
     );
     await configService.set(
       CONFIG_KEYS.SERVER_TLS_KEY_PATH,
       keyPath,
-      CONFIG_SCOPE.USER
+      scope
     );
     await this.handleGlobalSettingsLoadRequest(postMessage);
 

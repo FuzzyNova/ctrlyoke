@@ -1029,24 +1029,14 @@ export const OutputSection: React.FC = () => {
           {showTerminalTab ? (
             <div className="flex items-center ml-1">
               <button
-                className={`text-xs font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
-                  ${
-                    activeOutputTab === "output"
-                      ? "text-foreground border-b border-foreground"
-                      : "text-description-fg hover:text-foreground"
-                  }`}
+                className={`fp-tab ${activeOutputTab === "output" ? "fp-tab-active" : "fp-tab-inactive"}`}
                 onClick={() => setActiveOutputTab(terminalWorkflowId, "output")}
               >
                 <i className="codicon codicon-output text-sm" />
                 {!isHeaderNarrow && <span>Output</span>}
               </button>
               <button
-                className={`text-xs font-semibold uppercase tracking-wide px-1.5 py-0.5 flex items-center gap-1 transition-colors
-                  ${
-                    activeOutputTab === "terminal"
-                      ? "text-foreground border-b border-foreground"
-                      : "text-description-fg hover:text-foreground"
-                  }`}
+                className={`fp-tab ${activeOutputTab === "terminal" ? "fp-tab-active" : "fp-tab-inactive"}`}
                 onClick={() => {
                   setActiveOutputTab(terminalWorkflowId, "terminal");
                   if (terminalSessions.length === 0) {

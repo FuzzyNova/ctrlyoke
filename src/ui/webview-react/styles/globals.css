@@ -450,6 +450,43 @@ button .codicon {
     @apply rounded overflow-hidden;
     box-shadow: var(--fp-dropdown-popup-shadow);
   }
+
+  /* ── True tab style ────────────────────────────────────────────────────────
+     Use when tabs swap the entire content view beneath them (Output/Terminal,
+     Explorer/Source Control). Active tab shows an underline indicator. */
+  .fp-tab {
+    @apply text-xs font-semibold uppercase tracking-wide px-1.5 py-0.5
+           flex items-center gap-1 transition-colors;
+  }
+  .fp-tab-active {
+    @apply text-foreground border-b border-foreground;
+  }
+  .fp-tab-inactive {
+    @apply text-description-fg hover:text-foreground;
+  }
+
+  /* ── Mode switch style ─────────────────────────────────────────────────────
+     Use when buttons select between modes without swapping the whole view
+     (Prompt/Script, User/Workspace). Renders as a bordered segmented control
+     with a thin vertical divider between options.
+     Include a divider element between buttons:
+       <div class="fp-mode-switch-divider"><div class="w-px h-full bg-current opacity-40" /></div> */
+  .fp-mode-switch {
+    @apply relative inline-flex rounded border border-btn-border overflow-hidden flex-shrink-0;
+  }
+  .fp-mode-switch-btn {
+    @apply inline-flex items-center justify-center gap-1 px-2 py-0.5
+           text-xs transition-colors focus:outline-none;
+  }
+  .fp-mode-switch-btn-active {
+    @apply bg-btn-bg text-btn-fg;
+  }
+  .fp-mode-switch-btn-inactive {
+    @apply bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover;
+  }
+  .fp-mode-switch-divider {
+    @apply bg-btn-secondary-bg text-btn-secondary-fg py-1 flex-shrink-0;
+  }
 }
 
 /* ============================================================================

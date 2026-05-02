@@ -835,6 +835,12 @@ export interface UpdateGlobalSettingMessage {
   scope: "workspace" | "user";
 }
 
+/** Webview → Extension: generate a self-signed server cert for the active scope */
+export interface GenerateServerCertMessage {
+  type: typeof MESSAGE_TYPES.GENERATE_SERVER_CERT;
+  scope: "workspace" | "user";
+}
+
 /** Extension → Webview: acknowledge a setting update */
 export interface GlobalSettingUpdatedMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTING_UPDATED;

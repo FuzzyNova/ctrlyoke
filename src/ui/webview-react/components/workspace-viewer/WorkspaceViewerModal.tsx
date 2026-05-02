@@ -1,6 +1,7 @@
 import React, { useCallback, useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { WorkspaceViewerHeader } from "./WorkspaceViewerHeader";
 import { WorkspaceExplorerPane } from "./WorkspaceExplorerPane";
 import { WorkspaceSourceControlPane } from "./WorkspaceSourceControlPane";
@@ -14,6 +15,7 @@ export const WorkspaceViewerModal: React.FC = () => {
   const close = useWorkspaceViewerStore((s) => s.close);
   const promptDirtyExit = useWorkspaceViewerStore((s) => s.promptDirtyExit);
   const setActiveTab = useWorkspaceViewerStore((s) => s.setActiveTab);
+  const workspacePath = useSettingsStore((s) => s.globalSettings.workspaceRoot);
 
   const [rendering, setRendering] = useState(isOpen);
   const [closing, setClosing] = useState(false);
@@ -66,6 +68,7 @@ export const WorkspaceViewerModal: React.FC = () => {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onClose={handleClose}
+        workspacePath={workspacePath ?? undefined}
       />
       <div className="flex-1 overflow-hidden relative">
         {activeTab === "explorer" ? (

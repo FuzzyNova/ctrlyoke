@@ -80,6 +80,9 @@ export function ServerSection({
     }
   }, [server.tls?.enabled, displayUrl]);
 
+  const generatedCertLocation =
+    activeScope === "user" ? "~/.flightpath/certs/" : ".flightpath/certs/";
+
   const [showQr, setShowQr] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -426,6 +429,7 @@ export function ServerSection({
                   onClick={() =>
                     vscode.postMessage({
                       type: MESSAGE_TYPES.GENERATE_SERVER_CERT,
+                      scope: activeScope,
                     })
                   }
                   className="text-xs text-description-fg hover:text-foreground underline"
@@ -444,10 +448,13 @@ export function ServerSection({
                 )}
               </div>
               <p className="text-xs text-description-fg italic">
-                The generated cert is saved to <code>.flightpath/certs/</code>{" "}
-                and gitignored. Browsers will show a warning on first visit —
-                click proceed to continue. Changes take effect on server
-                restart.
+                The generated cert is saved to{" "}
+                <code>{generatedCertLocation}</code>
+                {activeScope === "workspace"
+                  ? " in the current workspace and gitignored."
+                  : " in your user FlightPath folder."}{" "}
+                Browsers will show a warning on first visit — click proceed to
+                continue. Changes take effect on server restart.
                 <br />
                 <strong>iOS Safari:</strong> depending on iOS version, it may be
                 necessary to download the cert and install it via{" "}

@@ -119,29 +119,26 @@ export function GlobalSettingsDrawer() {
           </span>
 
           {/* Scope toggle */}
-          <div className="flex items-center rounded border border-btn-border overflow-hidden text-sm font-medium ml-2">
+          <div className="fp-mode-switch ml-2" role="group" aria-label="Settings scope">
             <button
               type="button"
               onClick={() => setActiveScope("user")}
-              className={`px-2 h-5 transition-colors ${
-                activeScope === "user"
-                  ? "bg-btn-bg text-btn-fg"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              }`}
+              className={`fp-mode-switch-btn ${activeScope === "user" ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
               title="Edit user-scoped settings"
             >
+              <i className="codicon codicon-person" />
               User
             </button>
+            <div className="fp-mode-switch-divider">
+              <div className="w-px h-full bg-current opacity-40" />
+            </div>
             <button
               type="button"
               onClick={() => setActiveScope("workspace")}
-              className={`px-2 h-5 border-l border-btn-border transition-colors ${
-                activeScope === "workspace"
-                  ? "bg-btn-bg text-btn-fg"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              }`}
+              className={`fp-mode-switch-btn ${activeScope === "workspace" ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
               title="Edit workspace-scoped settings"
             >
+              <i className="codicon codicon-project" />
               Workspace
             </button>
           </div>

@@ -2,11 +2,13 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import * as vscode from "vscode";
 import { suite, test, afterEach } from "mocha";
 import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import { MESSAGE_TYPES } from "../../types/DashboardConstants";
 import { configService } from "../../config/FlightPathConfigService";
+import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../../types/FlightPathSettings";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -34,12 +36,21 @@ suite("WebviewSettingsSync", () => {
   afterEach(async () => {
     for (const p of tempPaths.splice(0)) {
       try {
-        await fs.unlink(p);
+        await fs.rm(p, { recursive: true, force: true });
       } catch {
         // best-effort cleanup
       }
     }
   });
+
+  function tempDir(name?: string): string {
+    const p = path.join(
+      os.tmpdir(),
+      `fp-wss-${name ?? Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    tempPaths.push(p);
+    return p;
+  }
 
   suite("handleGlobalSettingsLoadRequest", () => {
     test("should include notifications settings and leaf-level source metadata", async () => {
@@ -84,6 +95,136 @@ suite("WebviewSettingsSync", () => {
       } finally {
         configService.getAll = originalGetAll;
         configService.getLeafSources = originalGetLeafSources;
+      }
+    });
+  });
+
+  suite("handleGenerateServerCert", () => {
+    test("should save generated certs to the user FlightPath folder when scope is user", async () => {
+      const originalGet = configService.get.bind(configService);
+      const originalSet = configService.set.bind(configService);
+      const originalHomedir = os.homedir;
+
+      const homeDir = tempDir("user-home");
+      const setCalls: Array<{ key: string; value: unknown; scope: string }> = [];
+
+      try {
+        (os as typeof os & { homedir: () => string }).homedir = () => homeDir;
+        configService.get = ((key: string) =>
+          key === CONFIG_KEYS.SERVER ? { bindAddress: "127.0.0.1" } : undefined
+        ) as typeof configService.get;
+        configService.set = (async (key, value, scope) => {
+          setCalls.push({ key, value, scope });
+        }) as typeof configService.set;
+
+        const messages: any[] = [];
+        const postMessage = (msg: any) => messages.push(msg);
+        const sync = new WebviewSettingsSync(postMessage, () => undefined);
+
+        await sync.handleGenerateServerCert(postMessage, "user");
+
+        const expectedCertPath = path.join(
+          homeDir,
+          ".flightpath",
+          "certs",
+          "cert.pem"
+        );
+        const expectedKeyPath = path.join(
+          homeDir,
+          ".flightpath",
+          "certs",
+          "key.pem"
+        );
+
+        await fs.access(expectedCertPath);
+        await fs.access(expectedKeyPath);
+        assert.deepStrictEqual(
+          setCalls,
+          [
+            {
+              key: CONFIG_KEYS.SERVER_TLS_CERT_PATH,
+              value: expectedCertPath,
+              scope: "user",
+            },
+            {
+              key: CONFIG_KEYS.SERVER_TLS_KEY_PATH,
+              value: expectedKeyPath,
+              scope: "user",
+            },
+          ],
+          "user-scoped cert generation should save paths under ~/.flightpath/certs and persist them to user settings"
+        );
+      } finally {
+        (os as typeof os & { homedir: () => string }).homedir = originalHomedir;
+        configService.get = originalGet;
+        configService.set = originalSet;
+      }
+    });
+
+    test("should save generated certs to the workspace FlightPath folder when scope is workspace", async () => {
+      const originalGet = configService.get.bind(configService);
+      const originalSet = configService.set.bind(configService);
+      const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+
+      const workspaceRoot = tempDir("workspace-root");
+      const setCalls: Array<{ key: string; value: unknown; scope: string }> = [];
+
+      try {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: [{ uri: vscode.Uri.file(workspaceRoot) }],
+          configurable: true,
+        });
+        configService.get = ((key: string) =>
+          key === CONFIG_KEYS.SERVER ? { bindAddress: "127.0.0.1" } : undefined
+        ) as typeof configService.get;
+        configService.set = (async (key, value, scope) => {
+          setCalls.push({ key, value, scope });
+        }) as typeof configService.set;
+
+        const messages: any[] = [];
+        const postMessage = (msg: any) => messages.push(msg);
+        const sync = new WebviewSettingsSync(postMessage, () => undefined);
+
+        await sync.handleGenerateServerCert(postMessage, "workspace");
+
+        const expectedCertPath = path.join(
+          workspaceRoot,
+          ".flightpath",
+          "certs",
+          "cert.pem"
+        );
+        const expectedKeyPath = path.join(
+          workspaceRoot,
+          ".flightpath",
+          "certs",
+          "key.pem"
+        );
+
+        await fs.access(expectedCertPath);
+        await fs.access(expectedKeyPath);
+        assert.deepStrictEqual(
+          setCalls,
+          [
+            {
+              key: CONFIG_KEYS.SERVER_TLS_CERT_PATH,
+              value: expectedCertPath,
+              scope: "workspace",
+            },
+            {
+              key: CONFIG_KEYS.SERVER_TLS_KEY_PATH,
+              value: expectedKeyPath,
+              scope: "workspace",
+            },
+          ],
+          "workspace-scoped cert generation should save paths under the workspace .flightpath/certs directory and persist them to workspace settings"
+        );
+      } finally {
+        Object.defineProperty(vscode.workspace, "workspaceFolders", {
+          value: originalWorkspaceFolders,
+          configurable: true,
+        });
+        configService.get = originalGet;
+        configService.set = originalSet;
       }
     });
   });
@@ -380,6 +521,40 @@ suite("WebviewSettingsSync", () => {
         sendPropsCalled,
         false,
         "sendWorkflowPropertiesToSettings should not be called when falling back to the serializer (no orchestrator)"
+      );
+    });
+  });
+
+  suite("WebviewMessageRouter — GENERATE_SERVER_CERT handler", () => {
+    test("should forward the active scope to WebviewSettingsSync", async () => {
+      let receivedScope: "workspace" | "user" | undefined;
+
+      const mockSettingsSync = {
+        handleGenerateServerCert: async (
+          _postMessage: any,
+          scope: "workspace" | "user"
+        ) => {
+          receivedScope = scope;
+        },
+      } as any;
+
+      const router = new WebviewMessageRouter(
+        () => {},
+        mockSettingsSync,
+        {} as any,
+        () => undefined,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+
+      await router.route({
+        type: MESSAGE_TYPES.GENERATE_SERVER_CERT,
+        scope: "workspace",
+      });
+
+      assert.strictEqual(
+        receivedScope,
+        "workspace",
+        "GENERATE_SERVER_CERT should preserve the active settings scope"
       );
     });
   });

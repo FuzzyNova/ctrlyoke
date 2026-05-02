@@ -947,9 +947,10 @@ export class WebviewMessageRouter {
       );
     });
 
-    table.set(MESSAGE_TYPES.GENERATE_SERVER_CERT, () => {
+    table.set(MESSAGE_TYPES.GENERATE_SERVER_CERT, (message) => {
       void this.settingsSync.handleGenerateServerCert(
-        this.getCurrentPostMessage()
+        this.getCurrentPostMessage(),
+        message.scope
       );
     });
 

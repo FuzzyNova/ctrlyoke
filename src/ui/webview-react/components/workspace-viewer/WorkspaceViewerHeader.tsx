@@ -4,53 +4,62 @@ interface WorkspaceViewerHeaderProps {
   activeTab: "explorer" | "sourceControl";
   onTabChange: (tab: "explorer" | "sourceControl") => void;
   onClose: () => void;
+  workspacePath?: string;
 }
 
 export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
   activeTab,
   onTabChange,
   onClose,
+  workspacePath,
 }) => {
-  return (
-    <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0">
-      {/* Title */}
-      <span className="text-sm font-medium text-editor-fg opacity-60 whitespace-nowrap mr-2 select-none">
-        FlightPath Workspace
-      </span>
+  const workspaceName = workspacePath
+    ? (workspacePath.split(/[/\\]/).filter(Boolean).pop() ?? workspacePath)
+    : "Workspace";
 
-      {/* Tab buttons — centered via flex-1 */}
-      <div className="flex-1 flex items-center justify-center gap-1">
+  return (
+    <div className="relative flex items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0">
+      {/* Tab buttons — left-aligned */}
+      <div className="flex items-center" role="tablist">
         <button
-          className={`px-3 py-1 text-sm rounded transition-colors border-b-2 ${
-            activeTab === "explorer"
-              ? "border-btn-bg text-btn-fg bg-btn-bg bg-opacity-10"
-              : "border-transparent text-editor-fg opacity-70 hover:opacity-100 hover:bg-btn-secondary-hover"
-          }`}
+          className={`fp-tab ${activeTab === "explorer" ? "fp-tab-active" : "fp-tab-inactive"}`}
           onClick={() => onTabChange("explorer")}
           aria-selected={activeTab === "explorer"}
           role="tab"
         >
-          <i className="codicon codicon-files mr-1.5" />
+          <i className="codicon codicon-files text-sm" />
           Explorer
         </button>
         <button
-          className={`px-3 py-1 text-sm rounded transition-colors border-b-2 ${
-            activeTab === "sourceControl"
-              ? "border-btn-bg text-btn-fg bg-btn-bg bg-opacity-10"
-              : "border-transparent text-editor-fg opacity-70 hover:opacity-100 hover:bg-btn-secondary-hover"
-          }`}
+          className={`fp-tab ${activeTab === "sourceControl" ? "fp-tab-active" : "fp-tab-inactive"}`}
           onClick={() => onTabChange("sourceControl")}
           aria-selected={activeTab === "sourceControl"}
           role="tab"
         >
-          <i className="codicon codicon-source-control mr-1.5" />
+          <i className="codicon codicon-source-control text-sm" />
           Source Control
         </button>
       </div>
 
-      {/* Close button */}
+      {/* Title — centered absolutely; two-line stack with name + full path */}
+      <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center select-none pointer-events-none">
+        <span className="flex items-center gap-1 text-sm font-medium text-editor-fg opacity-70 whitespace-nowrap">
+          <i className="codicon codicon-project text-sm" />
+          Workspace: {workspaceName}
+        </span>
+        {workspacePath && (
+          <span
+            className="text-xs text-description-fg truncate max-w-[40vw]"
+            title={workspacePath}
+          >
+            {workspacePath}
+          </span>
+        )}
+      </div>
+
+      {/* Close button — pushed to right */}
       <button
-        className="flex items-center justify-center w-7 h-7 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors flex-shrink-0"
+        className="ml-auto flex items-center justify-center w-7 h-7 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors flex-shrink-0"
         onClick={onClose}
         title="Close workspace viewer"
         aria-label="Close workspace viewer"
