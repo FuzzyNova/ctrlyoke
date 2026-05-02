@@ -5,7 +5,7 @@
 Claude Code, Codex, and OpenCode all expose a `PermissionRequest` / `permission.asked`
 hook event that fires when the AI is about to show the user an interactive permission
 dialog (e.g. "allow this Bash command?"). FlightPath's existing hook scripts silently
-ignore this event. Two things are lost:
+ignore this event. The immediate gap is:
 
 1. **User hook scripts can't intercept it.** Users currently can enter hook scripts for
    `stop`, `sessionStart`, `preToolUse`, `postToolUse`, and `userPromptSubmit` via the
@@ -13,12 +13,10 @@ ignore this event. Two things are lost:
    script to auto-allow or auto-deny — the script's stdout JSON is what the harness
    reads as the decision.
 
-2. **Hook notifications can't fire for it.** The `HOOK_EVENT_NOTIFICATIONS_PLAN.md`
-   feature (hook-event notifications) can't cover permission requests until this event
-   exists as a logical `HookEvent`. Notifications are especially valuable here because
-   in interactive mode, a permission dialog means the AI is paused waiting for input.
-   A "permission request" notification tells the user to open FlightPath and approve
-   in the terminal view, rather than leaving the workflow stuck silently.
+**Hook-event notifications are out of scope for this plan.** That is future work under
+`HOOK_EVENT_NOTIFICATIONS_PLAN.md`. This plan does **not** introduce any FlightPath
+notification-file writes for permission requests. It only exposes the hook override so
+user-defined scripts can participate in the harness's native permission decision flow.
 
 **FlightPath's own tool permission settings (`cliAllowedTools`, `cliDeniedTools`) are
 out of scope.** Those are already enforced by CLI args at spawn time via
@@ -66,6 +64,11 @@ no user hook is configured).
 This means running the user's `permissionRequest` hook script requires capturing its
 stdout and echoing it — not the `execSync(..., { stdio: 'inherit' })` pattern used for
 other hook events.
+
+**Important pass-through rule:** FlightPath should not inspect, suppress, or transform
+the user hook's stdout. It should forward stdout exactly as emitted and let the harness
+apply its own semantics. For example, Codex's hooks docs say plain text stdout is
+ignored for `PermissionRequest`, and only a supported JSON decision changes behavior.
 
 ### Payload Fields
 
@@ -132,31 +135,27 @@ if (hookEvent === "SessionStart") {
 } else if (hookEvent === "Stop") {
   /* existing stop logic */
 } else if (hookEvent === "PermissionRequest") {
-  handlePermissionRequest(hookInput, debugLog, notifyDir);
+  handlePermissionRequest(hookInput, debugLog);
 } else {
   process.exit(0);
 }
 ```
 
-`handlePermissionRequest(hookInput, debugLog, notifyDir)`:
+`handlePermissionRequest(hookInput, debugLog)`:
 
-1. Write a normalized hook-event notification file to `notifyDir` (same pattern as the
-   hook notification plan uses for other events). This is what allows the notification
-   system to fire a "permission request" toast.
-2. Check `FLIGHTPATH_USER_HOOKS_JSON` env var (see §6) for a `permissionRequest` entry.
-3. If found: run the user hook command with the full `hookInput` JSON on stdin, capture
-   stdout, print it to process stdout, exit 0.
-4. If not found: exit 0 with no stdout — harness shows the dialog normally.
+1. Check `FLIGHTPATH_USER_HOOKS_JSON` env var (see §6) for a `permissionRequest` entry.
+2. If found: run the user hook command with the full `hookInput` JSON on stdin, capture
+   stdout, print it to process stdout unchanged, and preserve the child's exit behavior
+   so the harness receives the same decision payload the user script produced.
+3. If not found: exit 0 with no stdout — harness shows the dialog normally.
 
-The notification file should follow the same normalized format described in
-`HOOK_EVENT_NOTIFICATIONS_PLAN.md`, including `toolName` from `hookInput.tool_name`
-since that is directly available in the payload and is useful notification context
-("FlightPath — Permission Request: Bash").
+No notification artifact is written here. `notifyDir` remains relevant only for
+FlightPath's own start/stop completion detection hooks.
 
 ### 4. `src/scripts/flightpath-codex-notify.js`
 
 Identical change. Replace the early-exit with a three-way branch and add
-`handlePermissionRequest` using the same logic.
+`handlePermissionRequest` using the same pass-through logic.
 
 ### 5. `src/scripts/flightpath-opencode-plugin.ts`
 
@@ -166,11 +165,12 @@ event type signature to determine the response contract.
 Once confirmed, add a `permission.asked` handler in the `event()` callback (or as a
 top-level key, depending on how OpenCode routes it). The handler should:
 
-1. Write the normalized notification file.
-2. If a `permissionRequest` user hook is configured in the sidecar JSON:
+1. If a `permissionRequest` user hook is configured in the sidecar JSON:
    run the user command, capture stdout, return/respond with it in whatever form
    OpenCode expects.
-3. Otherwise: return nothing / proceed normally.
+2. Otherwise: return nothing / proceed normally.
+
+Again: no FlightPath notification file is written for this event in this plan.
 
 ### 6. User Hook Forwarding via `flightpath-hook-utils.js`
 
@@ -199,32 +199,12 @@ Verify whether `PermissionRequest` is already included in the hook registrations
   ignoring it. If it lists only `SessionStart`/`Stop`, add `PermissionRequest`.
 - **Codex**: The `.codex/hooks.json` written by `CodexCliProvider`. Same check.
 
-### 8. Hook Notification Plan Integration
+### 8. Future Notification Work
 
-`HOOK_EVENT_NOTIFICATIONS_PLAN.md` should include `permissionRequest` in the
-`notifications.hookEvents` settings model:
-
-```ts
-hookEvents: {
-  stop: false,
-  sessionStart: false,
-  preToolUse: false,
-  postToolUse: false,
-  userPromptSubmit: false,
-  permissionRequest: false,  // ← add
-}
-```
-
-And in `NotificationsSection.tsx` hook-event table, add a row:
-
-| Permission Request | checkbox | AI paused waiting for tool approval |
-
-The notification body should include `toolName` when available, e.g.:
-
-> `workflow.flightpath.yaml — step 2 "implement" — Bash`
-
-This makes it actionable: the user sees "permission request for Bash" in the
-notification, opens FlightPath, switches to the terminal view, and approves.
+If/when `HOOK_EVENT_NOTIFICATIONS_PLAN.md` grows permission-request coverage, that
+should be implemented as a separate FlightPath-specific notification branch. It should
+not reuse the start/stop notification-file mechanism used for completion detection, and
+it should not change the user-hook pass-through behavior described in this plan.
 
 ---
 
@@ -234,6 +214,8 @@ notification, opens FlightPath, switches to the terminal view, and approves.
   enforcement mechanism for FlightPath's own permission settings.
 - `cliAllowedTools`, `cliDeniedTools`, `cliToolPermissions` — unchanged.
 - The fire-and-forget user hook execution for all other events — unchanged.
+- FlightPath start/stop notification-file writes — unchanged; this plan does not add
+  permission-request file writes.
 - Copilot CLI, Qwen CLI, Gemini CLI — no equivalent hook, silently skipped as today.
 
 ---

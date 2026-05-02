@@ -6,6 +6,7 @@ const HOOK_EVENTS = [
   { value: "preToolUse", label: "Pre Tool Use" },
   { value: "postToolUse", label: "Post Tool Use" },
   { value: "userPromptSubmit", label: "User Prompt Submit" },
+  { value: "permissionRequest", label: "Permission Request" },
 ] as const;
 
 interface HookEntry {
