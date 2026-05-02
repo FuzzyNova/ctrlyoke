@@ -923,11 +923,12 @@ export class WebviewSettingsSync {
 
   async handleGenerateServerCert(
     postMessage: PostMessageFn,
-    scope: "workspace" | "user"
+    scope: "workspace" | "user",
+    homedirFn: () => string = os.homedir
   ): Promise<void> {
     const baseDir =
       scope === CONFIG_SCOPE.USER
-        ? os.homedir()
+        ? homedirFn()
         : (vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd());
     const certsDir = path.join(
       baseDir,

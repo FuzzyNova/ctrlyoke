@@ -103,13 +103,11 @@ suite("WebviewSettingsSync", () => {
     test("should save generated certs to the user FlightPath folder when scope is user", async () => {
       const originalGet = configService.get.bind(configService);
       const originalSet = configService.set.bind(configService);
-      const originalHomedir = os.homedir;
 
       const homeDir = tempDir("user-home");
       const setCalls: Array<{ key: string; value: unknown; scope: string }> = [];
 
       try {
-        (os as typeof os & { homedir: () => string }).homedir = () => homeDir;
         configService.get = ((key: string) =>
           key === CONFIG_KEYS.SERVER ? { bindAddress: "127.0.0.1" } : undefined
         ) as typeof configService.get;
@@ -121,7 +119,7 @@ suite("WebviewSettingsSync", () => {
         const postMessage = (msg: any) => messages.push(msg);
         const sync = new WebviewSettingsSync(postMessage, () => undefined);
 
-        await sync.handleGenerateServerCert(postMessage, "user");
+        await sync.handleGenerateServerCert(postMessage, "user", () => homeDir);
 
         const expectedCertPath = path.join(
           homeDir,
@@ -155,7 +153,6 @@ suite("WebviewSettingsSync", () => {
           "user-scoped cert generation should save paths under ~/.flightpath/certs and persist them to user settings"
         );
       } finally {
-        (os as typeof os & { homedir: () => string }).homedir = originalHomedir;
         configService.get = originalGet;
         configService.set = originalSet;
       }
@@ -187,14 +184,16 @@ suite("WebviewSettingsSync", () => {
 
         await sync.handleGenerateServerCert(postMessage, "workspace");
 
+        // Use the URI's fsPath so drive-letter casing matches what the implementation sees.
+        const workspaceFsPath = vscode.Uri.file(workspaceRoot).fsPath;
         const expectedCertPath = path.join(
-          workspaceRoot,
+          workspaceFsPath,
           ".flightpath",
           "certs",
           "cert.pem"
         );
         const expectedKeyPath = path.join(
-          workspaceRoot,
+          workspaceFsPath,
           ".flightpath",
           "certs",
           "key.pem"
