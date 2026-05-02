@@ -204,6 +204,34 @@ const copyServerPlugin = {
   },
 };
 
+/**
+ * Plugin to copy the resvg WASM file to the output directory.
+ * Required so PngIconService can load it at runtime via __dirname.
+ * @type {import('esbuild').Plugin}
+ */
+const copyWasmPlugin = {
+  name: "copy-wasm",
+
+  setup(build) {
+    build.onEnd(() => {
+      const src = path.join(
+        __dirname,
+        "node_modules",
+        "@resvg",
+        "resvg-wasm",
+        "index_bg.wasm"
+      );
+      const dest = path.join(__dirname, "out", "resvg.wasm");
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, dest);
+        console.log("[copy] resvg.wasm -> out/resvg.wasm");
+      } else {
+        console.warn("[copy] resvg.wasm source not found, skipping");
+      }
+    });
+  },
+};
+
 async function main() {
   // Build webview inline scripts (bootstrap + module loader)
   // These run in the browser webview context and are read/injected by FlightPathWebviewProvider.
@@ -242,6 +270,7 @@ async function main() {
       copySchemasPlugin,
       copyScriptsPlugin,
       copyServerPlugin,
+      copyWasmPlugin,
     ],
   });
 

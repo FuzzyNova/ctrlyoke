@@ -48,6 +48,7 @@ import {
   WebPushService,
   type WebPushSubscriptionPayload,
 } from "./WebPushService";
+import { pngIconService } from "./PngIconService";
 import { HostedWorkspaceViewerService } from "./HostedWorkspaceViewerService";
 
 export class FlightPathHostedServer
@@ -518,6 +519,17 @@ export class FlightPathHostedServer
       const svgPath = path.join(webviewDist, HOSTED_ICON_FILES.APP_ICON_SVG);
       this.serveColorizedSvg(svgPath, res);
     });
+    // Dynamic PNG routes — generated via resvg-wasm with configurable colors. Cached in memory
+    // and regenerated only when colors change (on settings save). These override the static PNG
+    // files in webviewDist so that color changes apply to iOS < 26 homescreen icons.
+    this.app.get(HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG, (_req, res) => {
+      const svgPath = path.join(webviewDist, HOSTED_ICON_FILES.APP_ICON_SVG);
+      void this.serveColorizedPng(svgPath, "small", res);
+    });
+    this.app.get(HOSTED_ICON_PATHS.APP_ICON_PNG, (_req, res) => {
+      const svgPath = path.join(webviewDist, HOSTED_ICON_FILES.APP_ICON_SVG);
+      void this.serveColorizedPng(svgPath, "large", res);
+    });
     this.app.use(express.static(webviewDist, { index: false }));
 
     // Token is required for the HTML entry point and all API routes.
@@ -904,7 +916,7 @@ export class FlightPathHostedServer
       // iOS 15+ will use the SVG for the homescreen icon. PNG is kept as a sized fallback because
       // iOS Safari does not support SVG for homescreen icons — only PNG.
       `<link rel="apple-touch-icon" type="image/svg+xml" sizes="any" href="${HOSTED_ICON_PATHS.APP_ICON_SVG}${iconColorParam}" />`,
-      `<link rel="apple-touch-icon" sizes="180x180" href="${HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG}" />`,
+      `<link rel="apple-touch-icon" sizes="180x180" href="${HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG}${iconColorParam}" />`,
       // Enable standalone PWA mode and set the title shown under the home screen icon.
       `<meta name="apple-mobile-web-app-capable" content="yes" />`,
       `<meta name="apple-mobile-web-app-title" content="FlightPath" />`,
@@ -937,6 +949,29 @@ export class FlightPathHostedServer
     }
   }
 
+  private async serveColorizedPng(
+    svgPath: string,
+    size: "small" | "large",
+    res: express.Response
+  ): Promise<void> {
+    try {
+      const { iconBgColor = ICON_BG_COLOR_DEFAULT, iconFgColor = ICON_FG_COLOR_DEFAULT } =
+        configService.getAll().server;
+      const buffer =
+        size === "small"
+          ? await pngIconService.getSmall(svgPath, iconBgColor, iconFgColor)
+          : await pngIconService.getLarge(svgPath, iconBgColor, iconFgColor);
+      if (!buffer) {
+        res.status(404).send("Not found");
+        return;
+      }
+      this.setNoStore(res);
+      res.type("image/png").send(buffer);
+    } catch {
+      res.status(500).send("Error");
+    }
+  }
+
   private requestHasValidToken(req: express.Request): boolean {
     const headerToken = req.get("x-flightpath-token");
     if (headerToken === this.token) {
@@ -946,6 +981,9 @@ export class FlightPathHostedServer
   }
 
   private buildManifest(): Record<string, unknown> {
+    const { iconBgColor = ICON_BG_COLOR_DEFAULT, iconFgColor = ICON_FG_COLOR_DEFAULT } =
+      configService.getAll().server;
+    const iconColorParam = `?bg=${iconBgColor.replace("#", "")}&fg=${iconFgColor.replace("#", "")}`;
     return {
       name: "FlightPath",
       short_name: "FlightPath",
@@ -954,19 +992,19 @@ export class FlightPathHostedServer
       scope: "/",
       icons: [
         {
-          src: HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG,
+          src: `${HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG}${iconColorParam}`,
           sizes: "180x180",
           type: "image/png",
           purpose: "any",
         },
         {
-          src: HOSTED_ICON_PATHS.APP_ICON_PNG,
+          src: `${HOSTED_ICON_PATHS.APP_ICON_PNG}${iconColorParam}`,
           sizes: "512x512",
           type: "image/png",
           purpose: "any",
         },
         {
-          src: HOSTED_ICON_PATHS.APP_ICON_SVG,
+          src: `${HOSTED_ICON_PATHS.APP_ICON_SVG}${iconColorParam}`,
           sizes: "any",
           type: "image/svg+xml",
           purpose: "any",

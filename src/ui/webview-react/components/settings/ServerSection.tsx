@@ -79,6 +79,22 @@ export function ServerSection({
   const [showQr, setShowQr] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Local color state: onChange updates preview instantly without persisting.
+  // onBlur commits via onUpdate, which persists to settings and triggers server-side PNG regeneration.
+  const [localBg, setLocalBg] = useState(
+    server.iconBgColor ?? ICON_BG_COLOR_DEFAULT
+  );
+  const [localFg, setLocalFg] = useState(
+    server.iconFgColor ?? ICON_FG_COLOR_DEFAULT
+  );
+  // Sync local state if the persisted value changes externally (e.g., reset or another tab).
+  useEffect(() => {
+    setLocalBg(server.iconBgColor ?? ICON_BG_COLOR_DEFAULT);
+  }, [server.iconBgColor]);
+  useEffect(() => {
+    setLocalFg(server.iconFgColor ?? ICON_FG_COLOR_DEFAULT);
+  }, [server.iconFgColor]);
+
   useEffect(() => {
     if (showQr && qrCanvasRef.current && displayUrl) {
       import("qrcode").then((QRCode) =>
@@ -229,8 +245,9 @@ export function ServerSection({
                     <input
                       id="icon-bg-color"
                       type="color"
-                      value={server.iconBgColor ?? ICON_BG_COLOR_DEFAULT}
-                      onChange={(e) =>
+                      value={localBg}
+                      onChange={(e) => setLocalBg(e.target.value)}
+                      onBlur={(e) =>
                         onUpdate("server.iconBgColor", e.target.value)
                       }
                       className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
@@ -248,8 +265,9 @@ export function ServerSection({
                     <input
                       id="icon-fg-color"
                       type="color"
-                      value={server.iconFgColor ?? ICON_FG_COLOR_DEFAULT}
-                      onChange={(e) =>
+                      value={localFg}
+                      onChange={(e) => setLocalFg(e.target.value)}
+                      onBlur={(e) =>
                         onUpdate("server.iconFgColor", e.target.value)
                       }
                       className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
@@ -258,10 +276,7 @@ export function ServerSection({
                   </SettingInputRow>
                 </div>
                 <img
-                  src={buildIconPreviewDataUrl(
-                    server.iconBgColor ?? ICON_BG_COLOR_DEFAULT,
-                    server.iconFgColor ?? ICON_FG_COLOR_DEFAULT
-                  )}
+                  src={buildIconPreviewDataUrl(localBg, localFg)}
                   alt="Icon preview"
                   width={32}
                   height={32}
@@ -270,8 +285,8 @@ export function ServerSection({
               </div>
               <p className="text-xs text-description-fg italic">
                 SVG favicon and PWA icon update immediately. PNG icon clients
-                (iOS &lt; 26 homescreen) use default colors until a server
-                restart.
+                (iOS &lt; 26 homescreen) use the colors saved at the last
+                settings update.
               </p>
             </div>
           </div>

@@ -1,8 +1,8 @@
 # Per-Workspace Custom Icon Colors
 
 **Created:** 2026-05-01  
-**Status:** READY  
-**Effort:** Phase 1 — Small (half day); Phase 2 — Medium (1–2 days)
+**Status:** Phase 1 DONE — Phase 2 READY  
+**Effort:** Phase 1 — Small (half day) ✅; Phase 2 — Medium (1–2 days)
 
 ---
 
@@ -38,7 +38,7 @@ Default: `#1076ba` / `#ffffff` (current brand colors, matching the generated sta
 While the server is running, show an **Icon Colors** subsection with:
 - Two `<input type="color">` pickers (background + foreground) — no extra dependencies, built into browsers
 - A live inline SVG preview: embed the source SVG directly in JSX with the selected colors applied via inline style overrides (no round-trip to server needed for preview)
-- A note that color changes take effect immediately for SVG-capable clients; PNG-capable clients need a server restart
+- A note that color changes take effect immediately for SVG-capable clients; iOS < 26 PNG clients use default colors until Phase 2 is implemented
 
 ---
 
@@ -73,7 +73,7 @@ import { initWasm, Resvg } from '@resvg/resvg-wasm';
 // init once at startup, then:
 const resvg = new Resvg(colorizedSvg, { fitTo: { mode: 'width', value: 512 } });
 const png = resvg.render().asPng();
-// serve from /app-icon.png, /favicon.png, /apple-touch-icon.png
+// serve from /app-icon.png, /apple-touch-icon.png
 ```
 
 **Option B: Pre-generated palette (no runtime dep, limited choices)**  
@@ -83,7 +83,43 @@ Extend `generate-app-icons.mjs` to produce 8–16 color combinations at build ti
 - Zero runtime processing; works everywhere without any new dependencies
 - Trade-off: limited palette, requires a new build to add colors
 
-**Recommendation:** Start with Phase 1 (dynamic SVG). If there's demand from iOS < 26 users, add Option A (WASM PNG gen) — it's ~2.4MB but gives total freedom and completes the feature. Option B (pre-baked palette) is a fallback if WASM adds too much weight.
+**Recommendation:** Option A (WASM PNG gen) — free color pickers already work for SVG clients; replacing with a swatch selector would be a UX regression.
+
+---
+
+#### Phase 2 Implementation Details (Option A)
+
+**Routes to make dynamic:**
+- `/apple-touch-icon.png` → dynamic colorized PNG (180×180) — referenced in `<link rel="apple-touch-icon" sizes="180x180">` and manifest `icons[]`
+- `/app-icon.png` (a.k.a. `icon.png`) → dynamic colorized PNG (512×512) — referenced in manifest `icons[]`
+- `/favicon.png` — **not needed**: Phase 1 removed the `<link rel="icon" type="image/png">` tag; SVG-only favicon covers all modern browsers
+
+Both PNGs are generated from the same source: `flightpath-app-icon.svg` (same SVG served by the dynamic `/app-icon.svg` route). Apply the same color substitution (`#1076ba` → `iconBgColor`, `#ffffff` → `iconFgColor`) before passing to resvg-wasm.
+
+**WASM initialization:**
+- Call `initWasm(fs.readFileSync(wasmPath))` once at server startup (or lazily on first PNG request)
+- Store generated PNGs as `Buffer` in memory (`cachedPngSmall` / `cachedPngLarge` fields on the server instance)
+- Regenerate both buffers whenever `iconBgColor` or `iconFgColor` changes (triggered by settings-change event)
+- Serve with `Cache-Control: no-store` (same as SVG routes)
+
+**WASM bundle inclusion:**
+- The `@resvg/resvg-wasm` package ships a `.wasm` file that must be copied as a bundled asset
+- In `esbuild.js`, add the WASM file to the `copy` assets so it lands in `out/` alongside the extension JS
+- At runtime, resolve the WASM path relative to `__dirname` (works in both dev and installed extension)
+
+**Cache-busting for PNG routes:**
+- Apply the same `?bg=...&fg=...` query param pattern used for SVG routes in `buildHtml()` and `buildManifest()`
+- URL changes when colors change → browser/OS fetches fresh PNG
+
+**`onChange`/`onBlur` split in `ServerSection.tsx`:**  
+PNG regeneration is expensive. The color pickers must be split:
+- `onChange` → update **local React state only** (instant visual preview; no persistence, no server call)
+- `onBlur` → call `onUpdate("server.iconBgColor", value)` (persists to settings, triggers server-side PNG regeneration)
+
+Currently Phase 1 pickers call `onUpdate` on every `onChange`. For Phase 2, refactor to local state with `onBlur` commit.
+
+**UI note update:**  
+Replace the current "PNG icon clients (iOS < 26 homescreen) use default colors until a server restart" with "PNG icon clients (iOS < 26) use the colors saved at the last settings update."
 
 ---
 
