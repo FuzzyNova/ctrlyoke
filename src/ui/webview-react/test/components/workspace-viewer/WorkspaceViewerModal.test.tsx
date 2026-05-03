@@ -64,7 +64,7 @@ describe("WorkspaceViewerModal — visibility", () => {
     useWorkspaceViewerStore.setState({ isOpen: true });
     render(<WorkspaceViewerModal />);
 
-    expect(screen.getByText("FlightPath Workspace")).toBeInTheDocument();
+    expect(screen.getByTestId("workspace-name")).toBeInTheDocument();
   });
 
   it("shows the explorer pane by default", () => {

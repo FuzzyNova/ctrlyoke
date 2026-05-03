@@ -15,7 +15,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
 }) => {
   const workspaceName = workspacePath
     ? (workspacePath.split(/[/\\]/).filter(Boolean).pop() ?? workspacePath)
-    : "Workspace";
+    : "FlightPath Workspace";
 
   return (
     <div className="flex items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0">
@@ -47,7 +47,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       <div className="flex-1 min-w-0 flex flex-col items-center px-2 select-none pointer-events-none">
         <div className="flex items-center gap-1 text-sm font-medium text-editor-fg opacity-70 max-w-full min-w-0">
           <i className="codicon codicon-project text-sm flex-shrink-0" />
-          <span className="truncate">Workspace: {workspaceName}</span>
+          <span className="truncate" data-testid="workspace-name">Workspace: {workspaceName}</span>
         </div>
         {workspacePath && (
           <span
