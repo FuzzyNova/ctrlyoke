@@ -1,7 +1,9 @@
 import React, { useCallback, useState } from "react";
 import { isStandalone, useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useIsMobile } from "@hooks/useMediaQuery";
 import { useWorkflowStore } from "@store/workflowStore";
 import { MESSAGE_TYPES } from "@/types/messages";
+import { HEADER_BUTTON_SIZES } from "@/constants";
 import {
   SplitButton,
   type SplitButtonOption,
@@ -32,6 +34,10 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   className = "",
 }) => {
   const vscode = useVsCodeApi();
+  const isMobile = useIsMobile();
+  const btnSizes = isMobile
+    ? HEADER_BUTTON_SIZES.touch
+    : HEADER_BUTTON_SIZES.default;
   const { fileName } = useWorkflowStore();
   const [filePickerMode, setFilePickerMode] = useState<"load" | "queue" | null>(
     null
@@ -109,7 +115,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       <SplitButton
         mainLabel={
           <span className="flex items-center gap-1.5">
-            <i className="codicon codicon-add py-0.5" />
+            <i className={`codicon codicon-add py-0.5 ${btnSizes.icon}`} />
             <span className="sm:inline hidden">New</span>
           </span>
         }

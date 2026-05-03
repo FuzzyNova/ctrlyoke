@@ -15,6 +15,7 @@ import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
 import { TemplateModal } from "../workflow/TemplateModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
+import { HEADER_BUTTON_SIZES } from "../../constants";
 
 /**
  * Execution state badge configuration
@@ -89,6 +90,9 @@ export const Header: React.FC<{
 }> = ({ onToggleMobileSteps, onToggleMobileWorkflowProps }) => {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
+  const btnSize = isMobile
+    ? HEADER_BUTTON_SIZES.touch
+    : HEADER_BUTTON_SIZES.default;
   const openWorkspaceViewer = useWorkspaceViewerStore((s) => s.open);
   const { fileName, executionState, currentStep } = useWorkflowStore();
   const hasPrompts = useWorkflowStore((s) => s.steps.length > 0);
@@ -265,7 +269,7 @@ export const Header: React.FC<{
           <WorkflowControls />
           {/* Save button */}
           <button
-            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
               canSave
                 ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                 : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
@@ -281,7 +285,7 @@ export const Header: React.FC<{
             }
             aria-label="Save workflow"
           >
-            <i className="codicon codicon-save" />
+            <i className={`codicon codicon-save ${btnSize.icon}`} />
           </button>
           {/* Undo / Redo / History */}
           <UndoRedoControl
@@ -292,17 +296,17 @@ export const Header: React.FC<{
           {/* Workspace Explorer button — standalone (browser) mode only */}
           {isStandalone && (
             <button
-              className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
               onClick={openWorkspaceViewer}
               title="Explore files and changes"
               aria-label="Explore files and changes"
             >
-              <i className="codicon codicon-files" />
+              <i className={`codicon codicon-files ${btnSize.icon}`} />
             </button>
           )}
           {/* Settings button */}
           <button
-            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
               globalSettingsOpen
                 ? "bg-btn-bg text-btn-fg"
                 : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -311,7 +315,7 @@ export const Header: React.FC<{
             title="Global Settings"
             aria-label="Open global settings"
           >
-            <i className="codicon codicon-settings-gear" />
+            <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
           </button>
         </div>
 
@@ -328,7 +332,7 @@ export const Header: React.FC<{
         <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full flex items-center justify-center min-w-0 gap-1">
           {isMobile && (
             <button
-              className={`control-button flex items-center justify-center mr-2 gap-0.5 pl-3.5 pr-2 py-1.5 text-sm rounded-r border-y border-r border-btn-border transition-colors ${
+              className={`control-button flex items-center justify-center mr-2 gap-0.5 pl-3.5 pr-2 ${btnSize.mobileToggleButton} rounded-r border-y border-r border-btn-border transition-colors ${
                 mobileStepsOpen
                   ? "bg-btn-bg text-btn-fg"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -337,13 +341,13 @@ export const Header: React.FC<{
               title="Steps"
               aria-label="Toggle steps panel"
             >
-              <i className="codicon codicon-list-ordered" />
+              <i className={`codicon codicon-list-ordered ${btnSize.icon}`} />
             </button>
           )}
           <WorkflowStatus className="flex-1 sm:max-w-[500px]" />
           {isMobile && (
             <button
-              className={`control-button flex items-center justify-center ml-2 gap-0.5 pl-2 pr-3.5 py-1.5 text-sm rounded-l border-y border-l border-btn-border transition-colors ${
+              className={`control-button flex items-center justify-center ml-2 gap-0.5 pl-2 pr-3.5 ${btnSize.mobileToggleButton} rounded-l border-y border-l border-btn-border transition-colors ${
                 mobileWorkflowPropsOpen
                   ? "bg-btn-bg text-btn-fg"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -352,7 +356,7 @@ export const Header: React.FC<{
               title="Workflow Properties"
               aria-label="Toggle workflow properties"
             >
-              <i className="codicon codicon-settings" />
+              <i className={`codicon codicon-settings ${btnSize.icon}`} />
             </button>
           )}
         </div>
@@ -361,8 +365,8 @@ export const Header: React.FC<{
         <div className="header-right justify-self-end flex items-center gap-0.5 sm:gap-1 pr-1 sm:pr-0">
           {/* Run/Restart Button (icon-only) */}
           <button
-            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
-              isRerun ? "text-base font-bold" : ""
+            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
+              isRerun ? "font-bold" : ""
             } ${
               canRun && !isCLIManaged
                 ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
@@ -382,13 +386,13 @@ export const Header: React.FC<{
             aria-label={isRerun ? "Restart from beginning" : "Run"}
           >
             <i
-              className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"}`}
+              className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"} ${btnSize.icon}`}
             />
           </button>
 
           {/* Pause/Resume Button */}
           <button
-            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
               (canPause || canCancelPause || canResume) && !isCLIManaged
                 ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                 : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
@@ -425,13 +429,13 @@ export const Header: React.FC<{
                   : isPausing
                     ? "codicon-debug-pause animate-pulse-cancelling"
                     : "codicon-debug-pause"
-              }`}
+              } ${btnSize.icon}`}
             />
           </button>
 
           {/* Stop Button */}
           <button
-            className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
               canStop || isCLIManaged
                 ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                 : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
@@ -441,7 +445,7 @@ export const Header: React.FC<{
             title={isCLIManaged ? "Stop CLI run" : "Stop immediately"}
             aria-label="Stop"
           >
-            <i className="codicon codicon-debug-stop" />
+            <i className={`codicon codicon-debug-stop ${btnSize.icon}`} />
           </button>
         </div>
       </header>

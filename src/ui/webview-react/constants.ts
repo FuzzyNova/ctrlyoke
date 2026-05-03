@@ -54,3 +54,61 @@ export const SEPARATOR_HORIZONTAL =
 /** Vertical separator (horizontal resize handle) - thin vertical line */
 export const SEPARATOR_VERTICAL =
   "w-0.5 bg-panel-border hover:bg-focus-border active:bg-focus-border cursor-col-resize transition-colors";
+
+/**
+ * Header button sizing — single source of truth for button/icon size in the Header.
+ * To tune the touch target HEIGHT, change --fp-touch-target in globals.css (one place).
+ * To tune the icon size, change the `icon` value in the `touch` block below.
+ */
+export const HEADER_BUTTON_SIZES = {
+  /** Desktop / VS Code: compact, matches VS Code native button density */
+  default: {
+    /** Padding + min-width for icon-only header buttons */
+    iconButton: "min-w-[28px] px-2 py-1.5 text-sm",
+    /** Height applied to grouped controls with a shared outer border */
+    groupContainer: "",
+    /** Main action button in split-button groups */
+    splitButtonMain: "px-2 sm:px-3 py-1 text-sm",
+    /** Dropdown trigger button in split-button groups */
+    splitButtonDropdown: "px-2 py-1 text-sm",
+    /** Font-size class applied to the codicon <i> element */
+    icon: "codicon-sm",
+    /** Height/padding applied to the mobile half-pill toggle buttons */
+    mobileToggleButton: "py-1.5",
+    /** Vertical padding for separator dividers inside button groups */
+    separatorPy: "py-1",
+  },
+  /** Mobile / touch: height controlled by --fp-touch-target in globals.css */
+  touch: {
+    iconButton: "h-[var(--fp-touch-target)] min-w-[var(--fp-touch-target)] px-2 text-sm",
+    groupContainer: "h-[var(--fp-touch-target)]",
+    splitButtonMain: "h-full px-2 sm:px-3 text-sm",
+    splitButtonDropdown:
+      "h-full min-w-[calc(var(--fp-touch-target)-2px)] px-2 text-sm",
+    icon: "codicon-lg",
+    mobileToggleButton: "h-[var(--fp-touch-target)]",
+    separatorPy: "h-full py-0",
+  },
+} as const;
+
+/**
+ * WorkflowStatus header button sizing — the workflow name field and dropdown arrow.
+ * Does not affect the expanded dropdown list items.
+ * Touch target height controlled by --fp-touch-target in globals.css.
+ */
+export const WORKFLOW_STATUS_BUTTON_SIZES = {
+  /** Desktop / VS Code: compact */
+  default: {
+    container: "",
+    mainButton: "px-3 py-1",
+    triggerButton: "px-2 py-1",
+    separatorPy: "py-1",
+  },
+  /** Mobile / touch: height controlled by --fp-touch-target in globals.css */
+  touch: {
+    container: "h-[var(--fp-touch-target)]",
+    mainButton: "h-full px-3",
+    triggerButton: "h-full px-3",
+    separatorPy: "h-full py-0",
+  },
+} as const;

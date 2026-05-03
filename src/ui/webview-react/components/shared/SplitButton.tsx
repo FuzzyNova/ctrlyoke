@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useIsMobile } from "@hooks/useMediaQuery";
+import { HEADER_BUTTON_SIZES } from "@/constants";
 
 export interface SplitButtonOption {
   label: string;
@@ -54,6 +56,10 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   badge,
   dropdownAriaLabel = "More options",
 }) => {
+  const isMobile = useIsMobile();
+  const btnSizes = isMobile
+    ? HEADER_BUTTON_SIZES.touch
+    : HEADER_BUTTON_SIZES.default;
   const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -213,7 +219,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       ref={containerRef}
       role="group"
       aria-label={typeof mainLabel === "string" ? mainLabel : undefined}
-      className={`relative inline-flex rounded border border-btn-border ${className}`}
+      className={`relative inline-flex rounded border border-btn-border ${btnSizes.groupContainer} ${className}`}
       onKeyDown={handleKeyDown}
     >
       {/* Main Button */}
@@ -222,7 +228,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         onClick={mainAction}
         disabled={disabled || mainDisabled}
         title={mainTitle}
-        className={`${baseButtonClass} ${variantClass} px-2 sm:px-3 py-1 text-sm font-medium rounded-l rounded-r-none ${
+        className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonMain} font-medium rounded-l rounded-r-none ${
           disabled || mainDisabled ? disabledClass : ""
         }`}
       >
@@ -232,7 +238,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       {/* Separator — mirrors VS Code's monaco-button-dropdown-separator:
           outer div fills with button background (padding creates the inset),
           inner 1px div is the visible hairline using --vscode-button-separator */}
-      <div className={`${separatorClass} py-1 flex-shrink-0`}>
+      <div className={`${separatorClass} ${btnSizes.separatorPy} flex-shrink-0`}>
         <div className="w-px h-full bg-current opacity-40" />
       </div>
 
@@ -246,7 +252,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         aria-label={dropdownAriaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`${baseButtonClass} ${variantClass} px-2 py-1 rounded-r rounded-l-none ${
+        className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonDropdown} rounded-r rounded-l-none ${
           disabled || dropdownDisabled ? disabledClass : ""
         } ${isOpen ? "bg-btn-secondary-hover" : ""}`}
       >

@@ -22,7 +22,9 @@ import {
   isWorkflowRunning,
 } from "../../utils/status";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { useIsMobile } from "@hooks/useMediaQuery";
 import { WebviewLog } from "@utils/logger";
+import { WORKFLOW_STATUS_BUTTON_SIZES } from "../../constants";
 
 interface WorkflowStatusProps {
   className?: string;
@@ -176,6 +178,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     null
   );
 
+  const isMobile = useIsMobile();
+  const wfStatusSize = isMobile ? WORKFLOW_STATUS_BUTTON_SIZES.touch : WORKFLOW_STATUS_BUTTON_SIZES.default;
   const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(300);
 
   // Refs
@@ -531,13 +535,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       ) : (
         /* Display Mode - Split Button Style */
         <div
-          className={`workflow-split-button flex border rounded overflow-hidden max-w-full sm:max-w-[500px] w-full min-w-0 transition-colors ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
+          className={`workflow-split-button flex border rounded overflow-hidden max-w-full sm:max-w-[500px] w-full min-w-0 transition-colors ${wfStatusSize.container} ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
         >
           {/* Main Button - Workflow Name */}
           <button
             type="button"
             onClick={startEditing}
-            className="workflow-button-main flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg"
+            className={`workflow-button-main flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors ${wfStatusSize.mainButton} bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg`}
             title="Click to edit workflow name"
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">
@@ -585,7 +589,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           </button>
 
           {/* Separator — mirrors VS Code's monaco-button-dropdown-separator */}
-          <div className="bg-cmd-bg text-cmd-fg py-1 flex-shrink-0">
+          <div className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} flex-shrink-0`}>
             <div className="w-px h-full bg-current opacity-40" />
           </div>
 
@@ -597,7 +601,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             aria-haspopup="listbox"
             aria-expanded={isDropdownOpen}
             title="Show recent workflows"
-            className={`workflow-button-dropdown px-2 py-1 bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors hover:bg-cmd-active-bg hover:text-cmd-active-fg ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg" : ""}`}
+            className={`workflow-button-dropdown ${wfStatusSize.triggerButton} bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors hover:bg-cmd-active-bg hover:text-cmd-active-fg ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg" : ""}`}
           >
             {/* Pulsing dot: another loaded workflow is running */}
             {effectiveLoadedWorkflows.some(

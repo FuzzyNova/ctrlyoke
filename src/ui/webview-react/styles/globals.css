@@ -273,11 +273,24 @@
 
 /* Codicon size variants */
 .codicon-sm {
-  font-size: 14px !important;
+  font-size: 16px !important;
 }
 
 .codicon-lg {
   font-size: 20px !important;
+}
+
+.codicon-xl {
+  font-size: 24px !important;
+}
+
+/* ============================================================================
+   Touch target sizing — single location to tune mobile button height.
+   Change --fp-touch-target to experiment (30–44px range).
+   44px = Apple HIG / Material Design recommended minimum.
+   ============================================================================ */
+:root {
+  --fp-touch-target: 30px;
 }
 
 /* Align codicons with text in buttons */

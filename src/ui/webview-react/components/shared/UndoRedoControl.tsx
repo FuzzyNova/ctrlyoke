@@ -11,6 +11,7 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { STEP_STATUS } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
+import { HEADER_BUTTON_SIZES } from "@/constants";
 
 interface UndoRedoControlProps {
   isRunning: boolean;
@@ -460,14 +461,18 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     return [...redoEntries, ...undoEntries];
   }, [futureStates, pastStates]);
 
-  const btnBase =
-    "inline-flex items-center justify-center px-2 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-1";
+  const btnSizes = isMobile
+    ? HEADER_BUTTON_SIZES.touch
+    : HEADER_BUTTON_SIZES.default;
+  const btnBase = `inline-flex items-center justify-center h-full min-w-[calc(var(--fp-touch-target)-2px)] px-2 text-sm transition-colors focus:outline-none focus-visible:ring-1`;
+  const btnBaseDesktop =
+    "inline-flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-1";
+  const resolvedBtnBase = isMobile ? btnBase : btnBaseDesktop;
   const activeClass =
     "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
   const disabledClass =
     "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed";
-  const separatorClass =
-    "bg-btn-secondary-bg text-btn-secondary-fg py-1 flex-shrink-0";
+  const separatorClass = `bg-btn-secondary-bg text-btn-secondary-fg ${btnSizes.separatorPy} flex-shrink-0`;
 
   const undoDisabled = !canUndo || editingDisabled;
   const redoDisabled = !canRedo || editingDisabled;
@@ -502,14 +507,14 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative inline-flex rounded border border-btn-border overflow-hidden"
+      className={`relative inline-flex rounded border border-btn-border overflow-hidden ${btnSizes.groupContainer}`}
       role="group"
       aria-label="Undo / Redo"
     >
       {/* Undo */}
       <button
         type="button"
-        className={`${btnBase} ${undoDisabled ? disabledClass : activeClass}`}
+        className={`${resolvedBtnBase} ${undoDisabled ? disabledClass : activeClass}`}
         onClick={() => {
           onAction?.("undo-click", getDebugDetails());
           handleUndo();
@@ -518,7 +523,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
         title="Undo"
         aria-label="Undo"
       >
-        <i className="codicon codicon-discard" />
+        <i className={`codicon codicon-discard ${btnSizes.icon}`} />
       </button>
 
       {/* Separator */}
@@ -529,7 +534,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       {/* Redo */}
       <button
         type="button"
-        className={`${btnBase} ${redoDisabled ? disabledClass : activeClass}`}
+        className={`${resolvedBtnBase} ${redoDisabled ? disabledClass : activeClass}`}
         onClick={() => {
           onAction?.("redo-click", getDebugDetails());
           handleRedo();
@@ -538,7 +543,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
         title="Redo"
         aria-label="Redo"
       >
-        <i className="codicon codicon-redo" />
+        <i className={`codicon codicon-redo ${btnSizes.icon}`} />
       </button>
 
       {!isMobile && (
@@ -551,7 +556,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
           {/* History chevron */}
           <button
             type="button"
-            className={`${btnBase} px-1.5 ${chevronDisabled ? disabledClass : activeClass} ${isOpen ? "bg-btn-secondary-hover" : ""}`}
+            className={`${resolvedBtnBase} px-1.5 ${chevronDisabled ? disabledClass : activeClass} ${isOpen ? "bg-btn-secondary-hover" : ""}`}
             onClick={() => {
               const nextOpen = !isOpen;
               onAction?.(
