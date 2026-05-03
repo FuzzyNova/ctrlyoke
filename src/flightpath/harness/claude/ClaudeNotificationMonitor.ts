@@ -31,6 +31,11 @@ export class ClaudeNotificationMonitor
     preToolUse: "PreToolUse",
     postToolUse: "PostToolUse",
     userPromptSubmit: "UserPromptSubmit",
+    // Decision hook: Claude pipes the payload on stdin and reads stdout as the
+    // allow/deny decision. Registered as a direct hook entry — not via the
+    // FlightPath notification script — so Claude handles the stdin/stdout
+    // contract natively without FlightPath interception.
+    permissionRequest: "PermissionRequest",
   };
 
   /**

@@ -39,7 +39,7 @@
 //  - Logs written to .flightpath/logs/flightpath-opencode-plugin-debug.log
 
 import { writeFileSync, readFileSync, mkdirSync, appendFileSync } from "fs";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import path from "path";
 
 const NOTIFY_DIR: string | undefined = process.env.FLIGHTPATH_NOTIFY_DIR;
@@ -85,6 +85,53 @@ function _runUserHooks(event: string): void {
       } catch (_e) {}
     }
   }
+}
+
+/**
+ * Run the first user hook matching `event`, pipe `payloadJson` on stdin,
+ * capture stdout, and return the parsed decision object. Returns undefined
+ * when no hook is configured or the hook produces no output.
+ *
+ * Used for decision hooks (permissionRequest) where the hook script's stdout
+ * is the harness decision rather than a fire-and-forget side-effect.
+ */
+function _runDecisionUserHook(
+  event: string,
+  payloadJson: string
+): unknown | undefined {
+  for (const hook of _userHooks) {
+    if (hook.event === event) {
+      try {
+        const result = spawnSync(hook.command, {
+          input: payloadJson,
+          encoding: "utf-8",
+          shell: true,
+          cwd: workspaceRoot,
+        });
+        _debugLog("🔐 _runDecisionUserHook: ran", {
+          event,
+          command: hook.command,
+          exitCode: result.status,
+          stdout: result.stdout,
+        });
+        if (result.stdout && result.stdout.trim()) {
+          try {
+            return JSON.parse(result.stdout.trim());
+          } catch (_parseErr) {
+            // Hook produced non-JSON stdout — ignore, let OpenCode decide natively
+            _debugLog("⚠️ _runDecisionUserHook: non-JSON stdout ignored", {
+              stdout: result.stdout,
+            });
+          }
+        }
+      } catch (_e) {
+        _debugLog("❌ _runDecisionUserHook: error", { error: String(_e) });
+      }
+      // Only run the first matching hook per event
+      break;
+    }
+  }
+  return undefined;
 }
 
 // Diagnostic logging — derive logs dir from NOTIFY_DIR (interactive) or workspaceRoot (headless).
@@ -252,6 +299,26 @@ export const FlightPathHook = async (_hookContext: unknown) => {
           }
         }
       }
+    },
+
+    // permission.asked is an OpenCode trigger hook — called directly by the
+    // runtime (not via the event bus). Return a decision object from the user
+    // hook's stdout, or undefined to let OpenCode show the dialog normally.
+    // NOTE: The exact response contract (field names, envelope shape) should be
+    // verified against @opencode-ai/plugin SDK types before relying on this in
+    // production. The implementation below follows the same pattern as Claude's
+    // PermissionRequest hook (hookSpecificOutput.decision.behavior).
+    "permission.asked": async (_input: unknown) => {
+      _debugLog("🔐 permission.asked", { input: _input });
+      const decision = _runDecisionUserHook(
+        "permissionRequest",
+        JSON.stringify(_input)
+      );
+      if (decision !== undefined) {
+        _debugLog("🔐 permission.asked: returning user decision", { decision });
+        return decision;
+      }
+      // No user hook or empty output — let OpenCode handle natively
     },
 
     // tool.execute.before and tool.execute.after are OpenCode trigger hooks —

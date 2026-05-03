@@ -437,6 +437,10 @@ export class CodexCliProvider implements ICliProvider {
       preToolUse: "PreToolUse",
       postToolUse: "PostToolUse",
       userPromptSubmit: "UserPromptSubmit",
+      // Decision hook: Codex pipes the payload on stdin and reads stdout as the
+      // allow/deny decision. Registered as a direct hook entry so Codex handles
+      // the stdin/stdout contract natively.
+      permissionRequest: "PermissionRequest",
     };
     const section: Record<string, unknown[]> = {};
     for (const uh of userHooks ?? []) {

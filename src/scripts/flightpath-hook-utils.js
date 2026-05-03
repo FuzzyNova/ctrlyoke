@@ -175,6 +175,45 @@ function readStdinJson(scriptPrefix, debugLog, callback) {
   });
 }
 
+/**
+ * Run a decision hook command with a JSON payload on stdin.
+ *
+ * Unlike the fire-and-forget pattern used for stop/preToolUse/etc., this
+ * function captures the child's stdout and writes it to process.stdout so
+ * the harness receives it as the hook decision (allow/deny JSON blob).
+ *
+ * Exit code 0 with no stdout → harness shows the dialog normally (correct
+ * default when the user hook produces no output).
+ *
+ * @param {string} command - Shell command to run as the decision hook
+ * @param {string} payloadJson - JSON string to pipe to the command's stdin
+ * @param {function} debugLog - Logger returned by initializeLogger or createLogger
+ * @returns {number} Exit code of the child process (0 on success / error)
+ */
+function runDecisionHook(command, payloadJson, debugLog) {
+  const { spawnSync } = require("child_process");
+  try {
+    debugLog("🔐 runDecisionHook: running decision hook", { command });
+    const result = spawnSync(command, {
+      input: payloadJson,
+      encoding: "utf-8",
+      shell: true,
+    });
+    if (result.stdout) {
+      process.stdout.write(result.stdout);
+      debugLog("🔐 runDecisionHook: stdout forwarded", {
+        stdout: result.stdout,
+      });
+    }
+    const exitCode = result.status ?? 0;
+    debugLog("🔐 runDecisionHook: completed", { exitCode });
+    return exitCode;
+  } catch (err) {
+    debugLog("❌ runDecisionHook: error", { error: err.message });
+    return 0;
+  }
+}
+
 module.exports = {
   getDebugLogPath,
   getTempLogPath,
@@ -183,4 +222,5 @@ module.exports = {
   getWorkspaceRootFromNotifyDir,
   initializeLogger,
   readStdinJson,
+  runDecisionHook,
 };

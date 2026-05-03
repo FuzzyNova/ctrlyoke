@@ -63,20 +63,27 @@ export interface McpServerConfig {
 /**
  * Logical hook event names — mapped to CLI-specific event names at inject time.
  *
- * | Logical name      | Claude/Qwen      | Copilot CLI         | Gemini CLI   | Codex            | OpenCode                   |
- * |-------------------|------------------|---------------------|--------------|------------------|----------------------------|
- * | "stop"            | Stop             | agentStop           | AfterAgent   | Stop             | session.status { idle }    |
- * | "sessionStart"    | SessionStart     | sessionStart        | SessionStart | SessionStart     | session.created            |
- * | "preToolUse"      | PreToolUse       | preToolUse          | BeforeTool   | PreToolUse       | tool.execute.before        |
- * | "postToolUse"     | PostToolUse      | postToolUse         | AfterTool    | PostToolUse      | tool.execute.after         |
- * | "userPromptSubmit"| UserPromptSubmit | userPromptSubmitted | BeforeAgent  | UserPromptSubmit | session.status { busy }    |
+ * | Logical name        | Claude/Qwen      | Copilot CLI         | Gemini CLI   | Codex             | OpenCode                   |
+ * |---------------------|------------------|---------------------|--------------|-------------------|----------------------------|
+ * | "stop"              | Stop             | agentStop           | AfterAgent   | Stop              | session.status { idle }    |
+ * | "sessionStart"      | SessionStart     | sessionStart        | SessionStart | SessionStart      | session.created            |
+ * | "preToolUse"        | PreToolUse       | preToolUse          | BeforeTool   | PreToolUse        | tool.execute.before        |
+ * | "postToolUse"       | PostToolUse      | postToolUse         | AfterTool    | PostToolUse       | tool.execute.after         |
+ * | "userPromptSubmit"  | UserPromptSubmit | userPromptSubmitted | BeforeAgent  | UserPromptSubmit  | session.status { busy }    |
+ * | "permissionRequest" | PermissionRequest| n/a                 | n/a          | PermissionRequest | permission.asked           |
+ *
+ * Unlike fire-and-forget hooks, `permissionRequest` hooks are decision hooks:
+ * the harness reads the hook script's stdout as the allow/deny decision.
+ * Copilot CLI, Qwen CLI, and Gemini CLI do not expose this event — unsupported
+ * events are silently skipped.
  */
 export type HookEvent =
   | "stop"
   | "sessionStart"
   | "preToolUse"
   | "postToolUse"
-  | "userPromptSubmit";
+  | "userPromptSubmit"
+  | "permissionRequest";
 
 /**
  * A user-defined hook to run alongside FlightPath's built-in hooks.
