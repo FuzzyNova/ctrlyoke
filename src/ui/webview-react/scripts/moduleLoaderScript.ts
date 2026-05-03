@@ -4,7 +4,7 @@
 // No imports — compiled as a standalone IIFE.
 declare const __fpModuleSrc__: string;
 
-const timeoutMs = 5000;
+const timeoutMs = 30_000;
 const recoveryCooldownMs = 10_000;
 const recoverySessionKey = "flightpath-panel-module-recovery-at";
 
