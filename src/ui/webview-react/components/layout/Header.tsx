@@ -264,59 +264,77 @@ export const Header: React.FC<{
   return (
     <>
       <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_minmax(0,1fr)_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
-        {/* Left Section: Workflow Controls + Save + Undo/Redo buttons */}
+        {/* Left Section: Workflow Controls + grouped editing buttons */}
         <div className="header-left flex items-center gap-0.5 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls />
-          {/* Save button */}
-          <button
-            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
-              canSave
-                ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-            }`}
-            onClick={handleSave}
-            disabled={!canSave}
-            title={
-              !hasFile
-                ? "Load a workflow to save"
-                : !hasPrompts
-                  ? "Add prompts to save"
-                  : "Save workflow to file"
-            }
-            aria-label="Save workflow"
+          <div
+            className={`fp-button-group ${btnSize.groupContainer}`}
+            role="group"
+            aria-label="Workflow editing controls"
           >
-            <i className={`codicon codicon-save ${btnSize.icon}`} />
-          </button>
-          {/* Undo / Redo / History */}
-          <UndoRedoControl
-            isRunning={isRunning}
-            isPaused={isPaused}
-            onAction={handleUndoRedoAction}
-          />
-          {/* Workspace Explorer button — standalone (browser) mode only */}
-          {isStandalone && (
+            {/* Save button */}
             <button
-              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
-              onClick={openWorkspaceViewer}
-              title="Explore files and changes"
-              aria-label="Explore files and changes"
+              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                canSave
+                  ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              }`}
+              onClick={handleSave}
+              disabled={!canSave}
+              title={
+                !hasFile
+                  ? "Load a workflow to save"
+                  : !hasPrompts
+                    ? "Add prompts to save"
+                    : "Save workflow to file"
+              }
+              aria-label="Save workflow"
             >
-              <i className={`codicon codicon-files ${btnSize.icon}`} />
+              <i className={`codicon codicon-save ${btnSize.icon}`} />
             </button>
-          )}
-          {/* Settings button */}
-          <button
-            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
-              globalSettingsOpen
-                ? "bg-btn-bg text-btn-fg"
-                : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-            }`}
-            onClick={toggleGlobalSettings}
-            title="Global Settings"
-            aria-label="Open global settings"
-          >
-            <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
-          </button>
+
+            <div className="fp-button-group-divider" />
+
+            {/* Undo / Redo / History */}
+            <UndoRedoControl
+              isRunning={isRunning}
+              isPaused={isPaused}
+              embedded
+              onAction={handleUndoRedoAction}
+            />
+
+            <div className="fp-button-group-divider" />
+
+            {/* Workspace Explorer button — standalone (browser) mode only */}
+            {isStandalone && (
+              <>
+                <button
+                  className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
+                  onClick={openWorkspaceViewer}
+                  title="Explore files and changes"
+                  aria-label="Explore files and changes"
+                >
+                  <i className={`codicon codicon-files ${btnSize.icon}`} />
+                </button>
+
+                <div className="fp-button-group-divider" />
+              </>
+            )}
+
+            {/* Settings button */}
+            <button
+              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                globalSettingsOpen
+                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              onClick={toggleGlobalSettings}
+              title="Global Settings"
+              aria-label="Open global settings"
+            >
+              <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
+            </button>
+          </div>
         </div>
 
         {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}
@@ -362,91 +380,103 @@ export const Header: React.FC<{
         </div>
 
         {/* Right Section: Control Buttons */}
-        <div className="header-right justify-self-end flex items-center gap-0.5 sm:gap-1 pr-1 sm:pr-0">
-          {/* Run/Restart Button (icon-only) */}
-          <button
-            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
-              isRerun ? "font-bold" : ""
-            } ${
-              canRun && !isCLIManaged
-                ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-            }`}
-            onClick={handleRun}
-            disabled={!canRun || isCLIManaged}
-            title={
-              isCLIManaged
-                ? "Workflow is running via FlightPath CLI"
-                : !hasFile
-                  ? "Load a workflow to run"
-                  : isRerun
-                    ? "Restart from beginning"
-                    : "Run"
-            }
-            aria-label={isRerun ? "Restart from beginning" : "Run"}
+        <div className="header-right justify-self-end flex items-center pr-1 sm:pr-0">
+          <div
+            className={`fp-button-group ${btnSize.groupContainer}`}
+            role="group"
+            aria-label="Workflow execution controls"
           >
-            <i
-              className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"} ${btnSize.icon}`}
-            />
-          </button>
+            {/* Run/Restart Button (icon-only) */}
+            <button
+              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                isRerun ? "font-bold" : ""
+              } ${
+                canRun && !isCLIManaged
+                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              }`}
+              onClick={handleRun}
+              disabled={!canRun || isCLIManaged}
+              title={
+                isCLIManaged
+                  ? "Workflow is running via FlightPath CLI"
+                  : !hasFile
+                    ? "Load a workflow to run"
+                    : isRerun
+                      ? "Restart from beginning"
+                      : "Run"
+              }
+              aria-label={isRerun ? "Restart from beginning" : "Run"}
+            >
+              <i
+                className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"} ${btnSize.icon}`}
+              />
+            </button>
 
-          {/* Pause/Resume Button */}
-          <button
-            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
-              (canPause || canCancelPause || canResume) && !isCLIManaged
-                ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-            }`}
-            onClick={handlePauseResume}
-            disabled={(!canPause && !canCancelPause && !canResume) || isCLIManaged}
-            title={
-              isCLIManaged
-                ? "Workflow is running via FlightPath CLI"
-                : isPaused
-                  ? "Resume"
-                  : isStopped
+            <div className="fp-button-group-divider" />
+
+            {/* Pause/Resume Button */}
+            <button
+              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                (canPause || canCancelPause || canResume) && !isCLIManaged
+                  ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              }`}
+              onClick={handlePauseResume}
+              disabled={
+                (!canPause && !canCancelPause && !canResume) || isCLIManaged
+              }
+              title={
+                isCLIManaged
+                  ? "Workflow is running via FlightPath CLI"
+                  : isPaused
                     ? "Resume"
-                    : isError
-                      ? "Continue (retry current prompt)"
-                      : isIdleWithOffset
-                        ? "Resume from start position"
-                        : isPausing
-                          ? "Cancel pause"
-                          : "Pause after current step completes"
-            }
-            aria-label={
-              isPaused || isStopped || isError || isIdleWithOffset
-                ? "Resume"
-                : isPausing
-                  ? "Cancel pause"
-                  : "Pause"
-            }
-          >
-            <i
-              className={`codicon ${
+                    : isStopped
+                      ? "Resume"
+                      : isError
+                        ? "Continue (retry current prompt)"
+                        : isIdleWithOffset
+                          ? "Resume from start position"
+                          : isPausing
+                            ? "Cancel pause"
+                            : "Pause after current step completes"
+              }
+              aria-label={
                 isPaused || isStopped || isError || isIdleWithOffset
-                  ? "codicon-debug-continue"
+                  ? "Resume"
                   : isPausing
-                    ? "codicon-debug-pause animate-pulse-cancelling"
-                    : "codicon-debug-pause"
-              } ${btnSize.icon}`}
-            />
-          </button>
+                    ? "Cancel pause"
+                    : "Pause"
+              }
+            >
+              <i
+                className={`codicon ${
+                  isPaused || isStopped || isError || isIdleWithOffset
+                    ? "codicon-debug-continue"
+                    : isPausing
+                      ? "codicon-debug-pause animate-pulse-cancelling"
+                      : "codicon-debug-pause"
+                } ${btnSize.icon}`}
+              />
+            </button>
 
-          {/* Stop Button */}
-          <button
-            className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded border border-btn-border transition-colors ${
-              canStop || isCLIManaged
-                ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-            }`}
-            onClick={isCLIManaged ? handleStopCliRun : handleStop}
-            disabled={!canStop && !isCLIManaged}
-            title={isCLIManaged ? "Stop CLI run" : "Stop immediately"}
-            aria-label="Stop"
-          >
-            <i className={`codicon codicon-debug-stop ${btnSize.icon}`} />
-          </button>
+            <div className="fp-button-group-divider" />
+
+            {/* Stop Button */}
+            <button
+              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                canStop || isCLIManaged
+                  ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              }`}
+              onClick={isCLIManaged ? handleStopCliRun : handleStop}
+              disabled={!canStop && !isCLIManaged}
+              title={isCLIManaged ? "Stop CLI run" : "Stop immediately"}
+              aria-label="Stop"
+            >
+              <i className={`codicon codicon-debug-stop ${btnSize.icon}`} />
+            </button>
+          </div>
         </div>
       </header>
       {isPausing && (

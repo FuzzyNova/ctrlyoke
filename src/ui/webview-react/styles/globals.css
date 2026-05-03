@@ -464,6 +464,14 @@ button .codicon {
     box-shadow: var(--fp-dropdown-popup-shadow);
   }
 
+  /* Generic full-height segmented button group used in header actions. */
+  .fp-button-group {
+    @apply relative inline-flex rounded border border-btn-border overflow-hidden flex-shrink-0;
+  }
+  .fp-button-group-divider {
+    @apply w-px self-stretch bg-btn-border opacity-40;
+  }
+
   /* ── True tab style ────────────────────────────────────────────────────────
      Use when tabs swap the entire content view beneath them (Output/Terminal,
      Explorer/Source Control). Active tab shows an underline indicator. */

@@ -16,6 +16,7 @@ import { HEADER_BUTTON_SIZES } from "@/constants";
 interface UndoRedoControlProps {
   isRunning: boolean;
   isPaused: boolean;
+  embedded?: boolean;
   onAction?: (
     action: "undo-click" | "redo-click" | "history-toggle" | "history-jump",
     details: {
@@ -262,6 +263,7 @@ function describeChange(
 export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   isRunning,
   isPaused,
+  embedded = false,
   onAction,
 }) => {
   const vscode = useVsCodeApi();
@@ -473,6 +475,9 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const disabledClass =
     "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed";
   const separatorClass = `bg-btn-secondary-bg text-btn-secondary-fg ${btnSizes.separatorPy} flex-shrink-0`;
+  const containerClass = embedded
+    ? `relative inline-flex overflow-hidden flex-shrink-0 ${btnSizes.groupContainer}`
+    : `fp-button-group ${btnSizes.groupContainer}`;
 
   const undoDisabled = !canUndo || editingDisabled;
   const redoDisabled = !canRedo || editingDisabled;
@@ -507,7 +512,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative inline-flex rounded border border-btn-border overflow-hidden ${btnSizes.groupContainer}`}
+      className={containerClass}
       role="group"
       aria-label="Undo / Redo"
     >

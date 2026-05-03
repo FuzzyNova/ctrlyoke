@@ -219,7 +219,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       ref={containerRef}
       role="group"
       aria-label={typeof mainLabel === "string" ? mainLabel : undefined}
-      className={`relative inline-flex rounded border border-btn-border ${btnSizes.groupContainer} ${className}`}
+      className={`fp-button-group overflow-visible ${btnSizes.groupContainer} ${className}`}
       onKeyDown={handleKeyDown}
     >
       {/* Main Button */}
