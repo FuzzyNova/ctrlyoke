@@ -388,12 +388,12 @@ export const Header: React.FC<{
           >
             {/* Run/Restart Button (icon-only) */}
             <button
-              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+              className={`control-button items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 isRerun ? "font-bold" : ""
               } ${
                 canRun && !isCLIManaged
-                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+                  ? "flex bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                  : "hidden sm:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
               }`}
               onClick={handleRun}
               disabled={!canRun || isCLIManaged}
@@ -413,14 +413,14 @@ export const Header: React.FC<{
               />
             </button>
 
-            <div className="fp-button-group-divider" />
+            <div className={`fp-button-group-divider ${canRun && !isCLIManaged && (canPause || canCancelPause || canResume) ? "" : "hidden sm:block"}`} />
 
             {/* Pause/Resume Button */}
             <button
-              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+              className={`control-button items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 (canPause || canCancelPause || canResume) && !isCLIManaged
-                  ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+                  ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                  : "hidden sm:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
               }`}
               onClick={handlePauseResume}
               disabled={
@@ -460,14 +460,14 @@ export const Header: React.FC<{
               />
             </button>
 
-            <div className="fp-button-group-divider" />
+            <div className={`fp-button-group-divider ${(canPause || canCancelPause || canResume) && !isCLIManaged && (canStop || isCLIManaged) ? "" : "hidden sm:block"}`} />
 
             {/* Stop Button */}
             <button
-              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+              className={`control-button items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 canStop || isCLIManaged
-                  ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+                  ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                  : "hidden sm:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
               }`}
               onClick={isCLIManaged ? handleStopCliRun : handleStop}
               disabled={!canStop && !isCLIManaged}
