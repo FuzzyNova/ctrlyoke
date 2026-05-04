@@ -75,10 +75,9 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
  * Header Component
  *
  * Layout:
- *   Wide:   [WorkflowControls] | [WorkflowStatus (centered)] | [Run/Pause/Stop]
- *   Narrow: [WorkflowControls (left)]  [Run/Pause/Stop (right)]
- *           [  [Prompts]  WorkflowStatus (centered)  [Settings]  ]  ← mobile only
- *
+ *   Wide:   [WorkflowControls + grouped editing buttons] [WorkflowStatus (centered)] [Run/Pause/Stop]
+ *   Narrow: [WorkflowControls] [Grouped editing buttons (centered)] [Run/Pause/Stop (right)]
+ *           [[Steps]            [WorkflowStatus (centered)]    [Workflow Properties]]   ← mobile only
  * Features:
  * - WorkflowControls: Split button for New/Load/Queue workflow actions
  * - WorkflowStatus: Workflow name + execution state badge (editable name, recent workflows dropdown)
@@ -265,8 +264,9 @@ export const Header: React.FC<{
     <>
       <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_minmax(0,1fr)_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls + grouped editing buttons */}
-        <div className="header-left flex items-center gap-0.5 sm:gap-2 pl-1 sm:pl-0">
+        <div className="header-left flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls />
+          {/* Grouped Editing Buttons */}
           <div
             className={`fp-button-group ${btnSize.groupContainer}`}
             role="group"
@@ -413,7 +413,9 @@ export const Header: React.FC<{
               />
             </button>
 
-            <div className={`fp-button-group-divider ${canRun && !isCLIManaged && (canPause || canCancelPause || canResume) ? "" : "hidden sm:block"}`} />
+            <div
+              className={`fp-button-group-divider ${canRun && !isCLIManaged && (canPause || canCancelPause || canResume) ? "" : "hidden sm:block"}`}
+            />
 
             {/* Pause/Resume Button */}
             <button
@@ -460,7 +462,9 @@ export const Header: React.FC<{
               />
             </button>
 
-            <div className={`fp-button-group-divider ${(canPause || canCancelPause || canResume) && !isCLIManaged && (canStop || isCLIManaged) ? "" : "hidden sm:block"}`} />
+            <div
+              className={`fp-button-group-divider ${(canPause || canCancelPause || canResume) && !isCLIManaged && (canStop || isCLIManaged) ? "" : "hidden sm:block"}`}
+            />
 
             {/* Stop Button */}
             <button
