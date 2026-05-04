@@ -18,7 +18,9 @@ import {
   EXECUTION_MODES,
   type ExecutionMode,
   type HarnessId,
+  HOOK_EVENT_ORDER,
 } from "../../types/DashboardConstants";
+import { configService } from "../../config/FlightPathConfigService";
 import type { ICliProvider } from "./shared/interfaces/ICliProvider";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
@@ -35,6 +37,7 @@ import { CliSessionResolverAdapter } from "./shared/CliSessionResolverAdapter";
 import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { PtySession } from "./PtyProcessManager";
+import type { HookEvent } from "../../types/FlightPathTypes";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -765,6 +768,8 @@ export class CliIntegration extends HarnessIntegration {
     if (workspaceRoot) {
       const userHooks =
         session.workflowContext?.resolvedProperties?.hooks ?? undefined;
+      const enabledNotificationHookEvents =
+        this.getEnabledHookNotificationEvents();
       const promptIndex = session.workflowContext?.promptIndex ?? 0;
       const workingFilePath = session.workflowContext?.workingFilePath;
 
@@ -776,17 +781,23 @@ export class CliIntegration extends HarnessIntegration {
             workspaceRoot,
             promptIndex,
             workingFilePath,
-            userHooks
+            userHooks,
+            enabledNotificationHookEvents
           )) ?? [];
         baseArgs.push(...hookArgs);
-      } else if (userHooks?.length) {
-        // Headless: user hooks only (no FlightPath notification hooks needed)
+      } else if (
+        userHooks?.length ||
+        enabledNotificationHookEvents.length > 0
+      ) {
+        // Headless: register user hooks and selected FlightPath hook notifications.
         const hookArgs =
           (await this.provider.buildHeadlessUserHookArgs?.(
+            extensionPath,
             workspaceRoot,
             promptIndex,
             workingFilePath,
-            userHooks
+            userHooks,
+            enabledNotificationHookEvents
           )) ?? [];
         // Prepend so hook args appear before --disallowedTools (Claude variadic flag issue)
         baseArgs.unshift(...hookArgs);
@@ -1161,6 +1172,11 @@ export class CliIntegration extends HarnessIntegration {
     }
 
     this.platform.warn(message);
+  }
+
+  private getEnabledHookNotificationEvents(): HookEvent[] {
+    const hookSettings = configService.getAll().notifications.events.hookEvents;
+    return HOOK_EVENT_ORDER.filter((event) => hookSettings[event]);
   }
 
   // ============================================================

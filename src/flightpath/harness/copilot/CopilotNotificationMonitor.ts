@@ -4,7 +4,10 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { UserHookConfig } from "../../../types/FlightPathTypes";
+import type {
+  HookEvent,
+  UserHookConfig,
+} from "../../../types/FlightPathTypes";
 
 /**
  * Copilot CLI Notification Monitor
@@ -70,7 +73,8 @@ export class CopilotNotificationMonitor
     scriptPath: string,
     notifyDir: string,
     _workspaceRoot: string,
-    userHooks?: UserHookConfig[]
+    userHooks?: UserHookConfig[],
+    flightpathEvents?: HookEvent[]
   ): HookConfig {
     // Normalize Windows drive letter to lowercase for stable output (VS Code returns
     // uppercase from GUI launches, lowercase from CLI launches — normalize to avoid
@@ -91,27 +95,22 @@ export class CopilotNotificationMonitor
     // Map logical event names to Copilot's native event names
     const eventMap = CopilotNotificationMonitor.EVENT_MAP;
 
-    // Start with FlightPath's entries (use eventMap as single source of truth for native event names)
-    const nativeSessionStart = eventMap.sessionStart;
-    const nativeStop = eventMap.stop;
-    const hooks: Record<string, unknown[]> = {
-      [nativeSessionStart]: [
+    const hooks: Record<string, unknown[]> = {};
+
+    for (const event of flightpathEvents ?? ["sessionStart", "stop"]) {
+      const nativeEvent = eventMap[event];
+      if (!nativeEvent) {
+        continue;
+      }
+      hooks[nativeEvent] = [
         {
           type: "command",
-          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeSessionStart}"`,
-          powershell: `node "${psScriptPath}" "${psNotifyDir}" "${nativeSessionStart}"`,
+          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeEvent}"`,
+          powershell: `node "${psScriptPath}" "${psNotifyDir}" "${nativeEvent}"`,
           timeoutSec: 10,
         },
-      ],
-      [nativeStop]: [
-        {
-          type: "command",
-          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeStop}"`,
-          powershell: `node "${psScriptPath}" "${psNotifyDir}" "${nativeStop}"`,
-          timeoutSec: 10,
-        },
-      ],
-    };
+      ];
+    }
 
     // Append user hooks
     if (userHooks) {

@@ -24,6 +24,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
+  HookEvent,
   PromptStep,
   WorkflowStep,
   McpServerConfig,
@@ -228,14 +229,16 @@ export class CodexCliProvider implements ICliProvider {
     workspaceRoot: string,
     _promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[] | undefined
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const workflowKey = workingFilePath ?? workspaceRoot;
     await this.writeCodexHooks(
       extensionPath,
       workspaceRoot,
       workflowKey,
-      userHooks
+      userHooks,
+      [...new Set<HookEvent>(["sessionStart", "stop", ...enabledNotificationHookEvents])]
     );
     Log.debug(
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
@@ -249,18 +252,45 @@ export class CodexCliProvider implements ICliProvider {
    * Returns ["--enable", "codex_hooks"] so Codex activates its hook system.
    */
   async buildHeadlessUserHookArgs(
+    extensionPath: string,
     workspaceRoot: string,
     _promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[]
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const workflowKey = workingFilePath ?? workspaceRoot;
-    const workflowUserHooks = this.buildUserHooksSection(userHooks);
+    const flightpathHooksSection =
+      enabledNotificationHookEvents.length > 0
+        ? (() => {
+            const hookConfig = this.notificationMonitor.buildHookConfig(
+              path.join(
+                extensionPath,
+                "out",
+                "scripts",
+                "flightpath-codex-notify.js"
+              ),
+              this.notificationMonitor.getNotificationDirectory(workspaceRoot),
+              workspaceRoot,
+              userHooks,
+              enabledNotificationHookEvents
+            );
+            if (hookConfig.type !== "json") {
+              throw new Error("Unexpected hook config type for Codex CLI");
+            }
+            return (hookConfig.config as Record<string, Record<string, unknown[]>>)
+              .hooks;
+          })()
+        : {};
+    const workflowUserHooks = this.buildUserHooksSection(
+      userHooks,
+      enabledNotificationHookEvents
+    );
     await CodexCliProvider.lockProvider.withLock(async () => {
       await CodexCliProvider.hooksTracker.registerWorkflow(
         workflowKey,
         workspaceRoot,
-        {},
+        flightpathHooksSection,
         workflowUserHooks
       );
     });
@@ -310,7 +340,8 @@ export class CodexCliProvider implements ICliProvider {
     extensionPath: string,
     workspaceRoot: string,
     workflowKey: string,
-    userHooks?: UserHookConfig[]
+    userHooks?: UserHookConfig[],
+    flightpathEvents?: HookEvent[]
   ): Promise<void> {
     const scriptPath = path.join(
       extensionPath,
@@ -325,7 +356,9 @@ export class CodexCliProvider implements ICliProvider {
     const hookConfig = this.notificationMonitor.buildHookConfig(
       scriptPath,
       notifyDir,
-      workspaceRoot
+      workspaceRoot,
+      userHooks,
+      flightpathEvents
     );
     if (hookConfig.type !== "json") {
       throw new Error("Unexpected hook config type for Codex CLI");
@@ -335,7 +368,10 @@ export class CodexCliProvider implements ICliProvider {
       hookConfig.config as Record<string, unknown>
     )["hooks"] as Record<string, unknown[]>;
 
-    const workflowUserHooks = this.buildUserHooksSection(userHooks);
+    const workflowUserHooks = this.buildUserHooksSection(
+      userHooks,
+      flightpathEvents
+    );
 
     // Register hooks via ref-counted tracker under lock
     await CodexCliProvider.lockProvider.withLock(async () => {
@@ -429,7 +465,8 @@ export class CodexCliProvider implements ICliProvider {
    * Codex uses matcher-based entries: { matcher: "", hooks: [{type, command}] }
    */
   private buildUserHooksSection(
-    userHooks?: UserHookConfig[]
+    userHooks?: UserHookConfig[],
+    wrappedFlightpathEvents: HookEvent[] = []
   ): Record<string, unknown[]> {
     const codexEventMap: Record<string, string> = {
       stop: "Stop",
@@ -444,6 +481,12 @@ export class CodexCliProvider implements ICliProvider {
     };
     const section: Record<string, unknown[]> = {};
     for (const uh of userHooks ?? []) {
+      if (
+        uh.event === "permissionRequest" &&
+        wrappedFlightpathEvents.includes("permissionRequest")
+      ) {
+        continue;
+      }
       const nativeEvent = codexEventMap[uh.event];
       if (!nativeEvent) continue;
       if (!section[nativeEvent]) section[nativeEvent] = [];

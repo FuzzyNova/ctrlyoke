@@ -21,6 +21,7 @@ import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
+  HookEvent,
   PromptStep,
   WorkflowStep,
   McpServerConfig,
@@ -170,7 +171,8 @@ export class GeminiCliProvider implements ICliProvider {
     workspaceRoot: string,
     _promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[] | undefined
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const scriptPath = path.join(
       extensionPath,
@@ -183,7 +185,9 @@ export class GeminiCliProvider implements ICliProvider {
     const hookConfig = this.notificationMonitor.buildHookConfig(
       scriptPath,
       notifyDir,
-      workspaceRoot
+      workspaceRoot,
+      userHooks,
+      [...new Set<HookEvent>(["sessionStart", "stop", ...enabledNotificationHookEvents])]
     );
     if (hookConfig.type !== "json") {
       throw new Error("Unexpected hook config type for Gemini CLI");
@@ -214,16 +218,40 @@ export class GeminiCliProvider implements ICliProvider {
    * Returns [] — Gemini auto-discovers hooks from settings.json (no CLI args needed).
    */
   async buildHeadlessUserHookArgs(
+    extensionPath: string,
     workspaceRoot: string,
     _promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[]
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const workflowKey = workingFilePath ?? workspaceRoot;
+    const flightpathHooksSection =
+      enabledNotificationHookEvents.length > 0
+        ? (() => {
+            const hookConfig = this.notificationMonitor.buildHookConfig(
+              path.join(
+                extensionPath,
+                "out",
+                "scripts",
+                "flightpath-gemini-hook.js"
+              ),
+              this.notificationMonitor.getNotificationDirectory(workspaceRoot),
+              workspaceRoot,
+              userHooks,
+              enabledNotificationHookEvents
+            );
+            if (hookConfig.type !== "json") {
+              throw new Error("Unexpected hook config type for Gemini CLI");
+            }
+            return (hookConfig.config as Record<string, Record<string, unknown[]>>)
+              .hooks;
+          })()
+        : {};
     await this.registerHooksInSettings(
       workspaceRoot,
       workflowKey,
-      {},
+      flightpathHooksSection,
       undefined,
       userHooks
     );

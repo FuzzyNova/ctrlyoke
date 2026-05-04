@@ -4,7 +4,10 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { UserHookConfig } from "../../../types/FlightPathTypes";
+import type {
+  HookEvent,
+  UserHookConfig,
+} from "../../../types/FlightPathTypes";
 
 /**
  * Qwen Code CLI Notification Monitor
@@ -45,7 +48,8 @@ export class QwenNotificationMonitor
     scriptPath: string,
     notifyDir: string,
     _workspaceRoot: string,
-    _userHooks?: UserHookConfig[]
+    _userHooks?: UserHookConfig[],
+    flightpathEvents?: HookEvent[]
   ): HookConfig {
     // No quotes: Qwen's hook runner calls spawn(cmd.exe, ['/d','/s','/c', command], {shell:false}).
     // Node.js Windows arg escaping converts any `"` in the command to `\"`, which cmd.exe then
@@ -58,15 +62,26 @@ export class QwenNotificationMonitor
       false
     );
 
+    const eventMap: Partial<Record<HookEvent, string>> = {
+      stop: "Stop",
+      sessionStart: "SessionStart",
+      preToolUse: "PreToolUse",
+      postToolUse: "PostToolUse",
+      userPromptSubmit: "UserPromptSubmit",
+    };
+
+    const hooks: Record<string, unknown[]> = {};
+    for (const event of flightpathEvents ?? ["sessionStart", "userPromptSubmit", "stop"]) {
+      const nativeEvent = eventMap[event];
+      if (!nativeEvent) {
+        continue;
+      }
+      hooks[nativeEvent] = [{ hooks: [{ type: "command", command }] }];
+    }
+
     return {
       type: "json",
-      config: {
-        hooks: {
-          SessionStart: [{ hooks: [{ type: "command", command }] }],
-          UserPromptSubmit: [{ hooks: [{ type: "command", command }] }],
-          Stop: [{ hooks: [{ type: "command", command }] }],
-        },
-      },
+      config: { hooks },
     };
   }
 

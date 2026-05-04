@@ -46,6 +46,27 @@ const NOTIFY_DIR: string | undefined = process.env.FLIGHTPATH_NOTIFY_DIR;
 const RUN_ID: string | undefined = process.env.FLIGHTPATH_RUN_ID;
 const workspaceRoot: string =
   process.env.FLIGHTPATH_WORKSPACE_ROOT || process.cwd();
+const ENABLED_HOOK_EVENTS = new Set(
+  (process.env.FLIGHTPATH_NOTIFY_HOOK_EVENTS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
+
+interface HookArtifact {
+  runId: string;
+  timestamp: number;
+  workflowId: string;
+  workflowName: string;
+  promptIndex: number;
+  promptName: string;
+  hookEvent: string;
+  nativeHookEvent: string;
+  harnessId: string;
+  sessionId?: string;
+  toolName?: string;
+  rawHookData: unknown;
+}
 
 // Track CHILD sessions (sub-agents) to avoid treating them as completion events.
 // Child sessions have a parentID and are created DURING execution, so their
@@ -57,6 +78,7 @@ const mainSessions = new Set<string>();
 
 // Track which sessions have had their start file written.
 const startFilesWritten = new Set<string>();
+let hookArtifactCounter = 0;
 
 // Load user hooks from the sidecar JSON file written by FlightPath alongside this plugin.
 // Format: [{ event: "stop"|"sessionStart"|"preToolUse"|"postToolUse"|"userPromptSubmit", command: string }]
@@ -194,8 +216,68 @@ export const FlightPathHook = async (_hookContext: unknown) => {
       });
     } catch (e) {
       _debugLog("❌ Failed to write start file", { error: String(e) });
-    }
   }
+}
+
+function _buildHookArtifactBase():
+  | Omit<HookArtifact, "hookEvent" | "nativeHookEvent" | "rawHookData">
+  | null {
+  if (!NOTIFY_DIR || !RUN_ID) {
+    return null;
+  }
+  return {
+    runId: RUN_ID,
+    timestamp: Date.now(),
+    workflowId: process.env.FLIGHTPATH_WORKFLOW_ID || "",
+    workflowName: process.env.FLIGHTPATH_WORKFLOW_NAME || "",
+    promptIndex: parseInt(process.env.FLIGHTPATH_PROMPT_INDEX || "0", 10),
+    promptName: process.env.FLIGHTPATH_PROMPT_NAME || "",
+    harnessId: process.env.FLIGHTPATH_HARNESS_ID || "",
+  };
+}
+
+function _writeHookArtifact(
+  hookEvent: string,
+  nativeHookEvent: string,
+  rawHookData: unknown,
+  extras: {
+    sessionId?: string;
+    toolName?: string;
+  } = {}
+): void {
+  if (!ENABLED_HOOK_EVENTS.has(hookEvent) || !NOTIFY_DIR) {
+    return;
+  }
+
+  const base = _buildHookArtifactBase();
+  if (!base) {
+    return;
+  }
+
+  try {
+    mkdirSync(NOTIFY_DIR, { recursive: true });
+    const artifact: HookArtifact = {
+      ...base,
+      hookEvent,
+      nativeHookEvent,
+      sessionId: extras.sessionId,
+      toolName: extras.toolName,
+      rawHookData,
+    };
+    const filePath = path.join(
+      NOTIFY_DIR,
+      `${artifact.runId}-hook-${artifact.timestamp}-${process.pid}-${hookArtifactCounter++}.json`
+    );
+    writeFileSync(filePath, JSON.stringify(artifact));
+    _debugLog("📤 Wrote hook artifact", {
+      hookEvent,
+      nativeHookEvent,
+      filePath,
+    });
+  } catch (error) {
+    _debugLog("❌ Failed to write hook artifact", { error: String(error) });
+  }
+}
 
   return {
     event: async ({
@@ -222,6 +304,9 @@ export const FlightPathHook = async (_hookContext: unknown) => {
           // Main session — track it and write start file.
           mainSessions.add(session.id);
           _writeStartFile(session.id);
+          _writeHookArtifact("sessionStart", "session.created", session, {
+            sessionId: session.id,
+          });
           _runUserHooks("sessionStart");
         }
       }
@@ -240,6 +325,9 @@ export const FlightPathHook = async (_hookContext: unknown) => {
             sessionId: session.id,
           });
           _writeStartFile(session.id);
+          _writeHookArtifact("sessionStart", "session.updated", session, {
+            sessionId: session.id,
+          });
           // Do NOT fire sessionStart user hook here — it may have already fired
           // via session.created, and we don't want to fire it twice.
         }
@@ -272,9 +360,18 @@ export const FlightPathHook = async (_hookContext: unknown) => {
         if (!isChildSession) {
           if (status.type === "busy") {
             _debugLog("⏩ session.status busy (main)", { sessionID });
+            _writeHookArtifact(
+              "userPromptSubmit",
+              "session.status busy",
+              event.properties,
+              { sessionId: sessionID }
+            );
             _runUserHooks("userPromptSubmit");
           } else if (status.type === "idle") {
             _debugLog("🛑 session.status idle (main)", { sessionID });
+            _writeHookArtifact("stop", "session.status idle", event.properties, {
+              sessionId: sessionID,
+            });
             if (NOTIFY_DIR) {
               try {
                 mkdirSync(NOTIFY_DIR, { recursive: true });
@@ -310,6 +407,7 @@ export const FlightPathHook = async (_hookContext: unknown) => {
     // PermissionRequest hook (hookSpecificOutput.decision.behavior).
     "permission.asked": async (_input: unknown) => {
       _debugLog("🔐 permission.asked", { input: _input });
+      _writeHookArtifact("permissionRequest", "permission.asked", _input);
       const decision = _runDecisionUserHook(
         "permissionRequest",
         JSON.stringify(_input)
@@ -333,6 +431,10 @@ export const FlightPathHook = async (_hookContext: unknown) => {
         tool: _input.tool,
         sessionID: _input.sessionID,
       });
+      _writeHookArtifact("preToolUse", "tool.execute.before", _input, {
+        sessionId: _input.sessionID,
+        toolName: _input.tool,
+      });
       _runUserHooks("preToolUse");
     },
 
@@ -348,6 +450,10 @@ export const FlightPathHook = async (_hookContext: unknown) => {
       _debugLog("✅ tool.execute.after", {
         tool: _input.tool,
         sessionID: _input.sessionID,
+      });
+      _writeHookArtifact("postToolUse", "tool.execute.after", _input, {
+        sessionId: _input.sessionID,
+        toolName: _input.tool,
       });
       _runUserHooks("postToolUse");
     },

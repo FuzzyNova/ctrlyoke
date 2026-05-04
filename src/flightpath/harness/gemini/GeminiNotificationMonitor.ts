@@ -4,7 +4,10 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { UserHookConfig } from "../../../types/FlightPathTypes";
+import type {
+  HookEvent,
+  UserHookConfig,
+} from "../../../types/FlightPathTypes";
 
 /**
  * Gemini CLI Notification Monitor
@@ -34,7 +37,8 @@ export class GeminiNotificationMonitor
     scriptPath: string,
     notifyDir: string,
     _workspaceRoot: string,
-    userHooks?: UserHookConfig[]
+    userHooks?: UserHookConfig[],
+    flightpathEvents?: HookEvent[]
   ): HookConfig {
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
@@ -43,7 +47,7 @@ export class GeminiNotificationMonitor
     const flightpathEntry = { hooks: [{ type: "command", command }] };
 
     // Map logical event names to Gemini's native event names
-    const eventMap: Record<string, string> = {
+    const eventMap: Partial<Record<HookEvent, string>> = {
       stop: "AfterAgent",
       sessionStart: "SessionStart",
       preToolUse: "BeforeTool",
@@ -51,11 +55,14 @@ export class GeminiNotificationMonitor
       userPromptSubmit: "BeforeAgent",
     };
 
-    // Build hooks object starting with FlightPath's entries
-    const hooks: Record<string, unknown[]> = {
-      SessionStart: [flightpathEntry],
-      AfterAgent: [flightpathEntry],
-    };
+    const hooks: Record<string, unknown[]> = {};
+    for (const event of flightpathEvents ?? ["sessionStart", "stop"]) {
+      const nativeEvent = eventMap[event];
+      if (!nativeEvent) {
+        continue;
+      }
+      hooks[nativeEvent] = [flightpathEntry];
+    }
 
     // Append user hooks to their respective events
     if (userHooks) {

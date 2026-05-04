@@ -10,6 +10,7 @@ import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { configService } from "../../../config/FlightPathConfigService";
 import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
@@ -184,7 +185,13 @@ export class OpenCodeCliProvider implements ICliProvider {
     // is only set in interactive mode so notification file writing is skipped.
     const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
     const hasUserHooks = (userHooks?.length ?? 0) > 0;
-    if (workspaceRoot && (isInteractive || hasUserHooks)) {
+    const enabledHookNotificationEvents = Object.values(
+      configService.getAll().notifications.events.hookEvents
+    ).some(Boolean);
+    if (
+      workspaceRoot &&
+      (isInteractive || hasUserHooks || enabledHookNotificationEvents)
+    ) {
       await this.deployCompletionPlugin(
         workspaceRoot,
         extensionPath,

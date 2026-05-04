@@ -4,7 +4,10 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { UserHookConfig } from "../../../types/FlightPathTypes";
+import type {
+  HookEvent,
+  UserHookConfig,
+} from "../../../types/FlightPathTypes";
 
 /**
  * OpenCode CLI Notification Monitor
@@ -41,7 +44,8 @@ export class OpenCodeNotificationMonitor
     _scriptPath: string,
     _notifyDir: string,
     _workspaceRoot: string,
-    _userHooks?: UserHookConfig[]
+    _userHooks?: UserHookConfig[],
+    _flightpathEvents?: HookEvent[]
   ): HookConfig {
     return { type: "none" };
   }

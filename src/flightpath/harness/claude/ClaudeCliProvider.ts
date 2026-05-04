@@ -21,6 +21,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
+  HookEvent,
   PromptStep,
   WorkflowStep,
   McpServerConfig,
@@ -275,7 +276,8 @@ export class ClaudeCliProvider implements ICliProvider {
     workspaceRoot: string,
     promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[] | undefined
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const fs = require("fs/promises");
     const scriptPath = path.join(
@@ -290,7 +292,8 @@ export class ClaudeCliProvider implements ICliProvider {
       scriptPath,
       notifyDir,
       workspaceRoot,
-      userHooks
+      userHooks,
+      [...new Set<HookEvent>(["sessionStart", "stop", ...enabledNotificationHookEvents])]
     );
     if (hookConfig.type !== "json-string") {
       throw new Error("Unexpected hook config type for Claude CLI");
@@ -339,14 +342,35 @@ export class ClaudeCliProvider implements ICliProvider {
    * before --disallowedTools (which is variadic and would consume later flags).
    */
   async buildHeadlessUserHookArgs(
+    extensionPath: string,
     workspaceRoot: string,
     promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[]
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const fs = require("fs/promises");
     const settingsJson =
-      ClaudeNotificationMonitor.buildUserOnlyConfig(userHooks);
+      enabledNotificationHookEvents.length > 0
+        ? (() => {
+            const hookConfig = this.notificationMonitor.buildHookConfig(
+              path.join(
+                extensionPath,
+                "out",
+                "scripts",
+                "flightpath-claude-hook.js"
+              ),
+              this.notificationMonitor.getNotificationDirectory(workspaceRoot),
+              workspaceRoot,
+              userHooks,
+              enabledNotificationHookEvents
+            );
+            if (hookConfig.type !== "json-string") {
+              throw new Error("Unexpected hook config type for Claude CLI");
+            }
+            return hookConfig.config;
+          })()
+        : ClaudeNotificationMonitor.buildUserOnlyConfig(userHooks ?? []);
     const tempDir = path.join(
       workspaceRoot,
       PATH_CONSTANTS.FLIGHTPATH_DIR,

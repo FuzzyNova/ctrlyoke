@@ -452,6 +452,10 @@ export class CliExecutionRunner {
         env.FLIGHTPATH_PROMPT_NAME = promptName;
       }
     }
+    const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
+    if (workspaceRoot) {
+      env.FLIGHTPATH_WORKSPACE_ROOT = workspaceRoot;
+    }
     env.FLIGHTPATH_HARNESS_ID = this.deps.provider.config.harnessId;
     return env;
   }

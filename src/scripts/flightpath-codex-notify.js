@@ -34,13 +34,19 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { initializeLogger, readStdinJson, maybeWriteHookArtifact } = require("./flightpath-hook-utils");
+const {
+  initializeLogger,
+  readStdinJson,
+  maybeWriteHookArtifact,
+  runDecisionHook,
+} = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-codex-notify";
 const SCRIPT_PREFIX = "FlightPath Codex Hook";
 
 function main() {
-  const notifyDir = process.argv[2];
+const notifyDir = process.argv[2];
+const encodedDecisionHook = process.argv[3];
 
   // Unconditional invocation log — written before any flag checks so we can confirm
   // the hook script is being called at all, regardless of diagnostic settings.
@@ -115,9 +121,27 @@ function main() {
       maybeWriteHookArtifact(logicalEvent, hookEvent, hookInput, notifyDir, sessionId, toolName, debugLog);
     }
 
+    if (hookEvent === "PermissionRequest") {
+      if (encodedDecisionHook) {
+        const decisionHookCommand = Buffer.from(
+          encodedDecisionHook,
+          "base64"
+        ).toString("utf8");
+        process.exit(
+          runDecisionHook(
+            decisionHookCommand,
+            JSON.stringify(hookInput),
+            debugLog
+          )
+        );
+      }
+      debugLog(`✅ Hook ${hookEvent} completed`);
+      process.exit(0);
+    }
+
     // Events that don't need notification file I/O
     if (hookEvent === "PreToolUse" || hookEvent === "PostToolUse" ||
-        hookEvent === "UserPromptSubmit" || hookEvent === "PermissionRequest") {
+        hookEvent === "UserPromptSubmit") {
       debugLog(`✅ Hook ${hookEvent} completed`);
       process.exit(0);
     }

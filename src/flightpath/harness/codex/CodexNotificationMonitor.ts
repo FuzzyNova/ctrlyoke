@@ -4,7 +4,10 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { UserHookConfig } from "../../../types/FlightPathTypes";
+import type {
+  HookEvent,
+  UserHookConfig,
+} from "../../../types/FlightPathTypes";
 
 /**
  * Codex CLI Notification Monitor
@@ -54,26 +57,44 @@ export class CodexNotificationMonitor
     scriptPath: string,
     notifyDir: string,
     _workspaceRoot: string,
-    _userHooks?: UserHookConfig[]
+    userHooks?: UserHookConfig[],
+    flightpathEvents?: HookEvent[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(
-      scriptPath,
-      notifyDir
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
+    const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
+    const eventMap: Record<HookEvent, string> = {
+      stop: "Stop",
+      sessionStart: "SessionStart",
+      preToolUse: "PreToolUse",
+      postToolUse: "PostToolUse",
+      userPromptSubmit: "UserPromptSubmit",
+      permissionRequest: "PermissionRequest",
+    };
+    const permissionRequestHook = userHooks?.find(
+      (hook) => hook.event === "permissionRequest"
     );
+    const encodedDecisionHook = permissionRequestHook
+      ? Buffer.from(permissionRequestHook.command, "utf8").toString("base64")
+      : undefined;
 
     const makeEntry = (cmd: string) => ({
       matcher: "",
       hooks: [{ type: "command", command: cmd }],
     });
 
+    const hooks: Record<string, unknown[]> = {};
+    for (const event of selectedEvents) {
+      const nativeEvent = eventMap[event];
+      const eventCommand =
+        event === "permissionRequest" && encodedDecisionHook
+          ? `${command} "${encodedDecisionHook}"`
+          : command;
+      hooks[nativeEvent] = [makeEntry(eventCommand)];
+    }
+
     return {
       type: "json",
-      config: {
-        hooks: {
-          SessionStart: [makeEntry(command)],
-          Stop: [makeEntry(command)],
-        },
-      },
+      config: { hooks },
     };
   }
 

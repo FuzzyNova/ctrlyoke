@@ -25,6 +25,7 @@ import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
+  HookEvent,
   PromptStep,
   WorkflowStep,
   McpServerConfig,
@@ -286,7 +287,8 @@ export class CopilotCliProvider implements ICliProvider {
     workspaceRoot: string,
     promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[] | undefined
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
@@ -298,7 +300,8 @@ export class CopilotCliProvider implements ICliProvider {
       hookScriptPath,
       notifyDir,
       workspaceRoot,
-      userHooks
+      userHooks,
+      [...new Set<HookEvent>(["sessionStart", "stop", ...enabledNotificationHookEvents])]
     );
     const hookFileName = CopilotCliProvider.buildHookFileName(
       promptIndex,
@@ -317,17 +320,38 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns CLI arguments array (empty — Copilot auto-discovers hooks from .github/hooks/)
    */
   async buildHeadlessUserHookArgs(
+    extensionPath: string,
     workspaceRoot: string,
     promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[]
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
-    const config = CopilotNotificationMonitor.buildUserOnlyConfig(userHooks);
+    const config =
+      enabledNotificationHookEvents.length > 0
+        ? this.notificationMonitor.buildHookConfig(
+            path.join(
+              extensionPath,
+              "out",
+              "scripts",
+              "flightpath-copilot-hook.js"
+            ),
+            this.notificationMonitor.getNotificationDirectory(workspaceRoot),
+            workspaceRoot,
+            userHooks,
+            enabledNotificationHookEvents
+          )
+        : {
+            type: "json",
+            config: CopilotNotificationMonitor.buildUserOnlyConfig(
+              userHooks ?? []
+            ),
+          };
     const hookFileName = CopilotCliProvider.buildHookFileName(
       promptIndex,
       workingFilePath
     );
-    await this.createHookFile({ config }, workspaceRoot, hookFileName);
+    await this.createHookFile(config, workspaceRoot, hookFileName);
     Log.debug(`🔔 Configured user hooks for headless mode`);
     return [];
   }

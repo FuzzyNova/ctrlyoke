@@ -21,6 +21,7 @@ import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { parseArgString } from "../../../utils/CliArgParser";
 import type {
+  HookEvent,
   PromptStep,
   WorkflowStep,
   McpServerConfig,
@@ -230,7 +231,8 @@ export class QwenCliProvider implements ICliProvider {
     workspaceRoot: string,
     _promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[] | undefined
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const scriptPath = path.join(
       extensionPath,
@@ -243,7 +245,16 @@ export class QwenCliProvider implements ICliProvider {
     const hookConfig = this.notificationMonitor.buildHookConfig(
       scriptPath,
       notifyDir,
-      workspaceRoot
+      workspaceRoot,
+      undefined,
+      [
+        ...new Set<HookEvent>([
+          "sessionStart",
+          "userPromptSubmit",
+          "stop",
+          ...enabledNotificationHookEvents,
+        ]),
+      ]
     );
     const flightpathHooksSection = (
       hookConfig as { type: string; config: { hooks: Record<string, unknown> } }
@@ -272,16 +283,38 @@ export class QwenCliProvider implements ICliProvider {
    * Hooks are enabled by default in Qwen — no CLI flag needed.
    */
   async buildHeadlessUserHookArgs(
+    extensionPath: string,
     workspaceRoot: string,
     _promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[]
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const workflowKey = workingFilePath ?? workspaceRoot;
+    const flightpathHooksSection =
+      enabledNotificationHookEvents.length > 0
+        ? (
+            this.notificationMonitor.buildHookConfig(
+              path.join(
+                extensionPath,
+                "out",
+                "scripts",
+                "flightpath-qwen-hook.js"
+              ),
+              this.notificationMonitor.getNotificationDirectory(workspaceRoot),
+              workspaceRoot,
+              undefined,
+              enabledNotificationHookEvents
+            ) as {
+              type: string;
+              config: { hooks: Record<string, unknown[]> };
+            }
+          ).config.hooks
+        : {};
     await this.registerHooksInSettings(
       workspaceRoot,
       workflowKey,
-      {},
+      flightpathHooksSection,
       undefined,
       userHooks
     );

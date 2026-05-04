@@ -6,6 +6,7 @@ import type {
 } from "./IToolPermissionMapper";
 import type { ILogParser } from "./ILogParser";
 import type {
+  HookEvent,
   PromptStep,
   WorkflowStep,
   McpServerConfig,
@@ -243,7 +244,8 @@ export interface ICliProvider {
     workspaceRoot: string,
     promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[] | undefined
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]>;
 
   /**
@@ -253,10 +255,12 @@ export interface ICliProvider {
    * Replaces the headless user-hook block that was previously inside buildCliArgs().
    */
   buildHeadlessUserHookArgs?(
+    extensionPath: string,
     workspaceRoot: string,
     promptIndex: number,
     workingFilePath: string | undefined,
-    userHooks: UserHookConfig[]
+    userHooks: UserHookConfig[] | undefined,
+    enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]>;
 
   /**

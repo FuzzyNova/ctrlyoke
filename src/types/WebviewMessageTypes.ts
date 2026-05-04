@@ -26,9 +26,9 @@ import {
   EXECUTION_MODES,
   STEP_TYPES,
   type UndoFileAction,
-  type CompletionNotificationKind,
   type CompletionNotificationSeverity,
   type HookEvent,
+  type NotificationKind,
 } from "./DashboardConstants";
 import type {
   WorkflowSummary,
@@ -852,7 +852,7 @@ export interface GlobalSettingUpdatedMessage {
 
 export interface CompletionNotificationEventPayload {
   id: string;
-  kind: CompletionNotificationKind;
+  kind: NotificationKind;
   severity: CompletionNotificationSeverity;
   workflowId: string;
   stepIndex?: number;
