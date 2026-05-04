@@ -1,4 +1,5 @@
 import type { IDashboardSink } from "../types/IDashboardSink";
+import type { FlightPathNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 import type {
   CliEvent,
   UndoExecutionTarget,
@@ -297,5 +298,9 @@ export class WorkflowTaggedSink implements IDashboardSink {
     workspaceSnapshot?: WorkspaceSnapshot
   ): void {
     this.inner.sendStepUndoDataUpdated(target, workspaceSnapshot);
+  }
+
+  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+    this.inner.notifyNotificationEvent?.(event);
   }
 }

@@ -733,6 +733,11 @@ export class CliIntegration extends HarnessIntegration {
       // Fall through to restart mode if the PTY is no longer available.
       Log.info("↩️ Inject mode unavailable — falling back to restart mode");
       await this.retireInteractivePtyForRestartFallback();
+    } else if (isInteractive && this.transportCoordinator.hasLivePtySession()) {
+      // Inject mode was preemptively skipped (settings changed, resumeSession: false,
+      // etc.) but a live PTY from the previous step is still running. Gracefully signal
+      // it before spawning a fresh one so the CLI TUI can clean up.
+      await this.retireInteractivePtyForRestartFallback();
     }
 
     // If the session was prepared with inject-lenient rules (which can leave
