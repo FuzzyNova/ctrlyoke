@@ -92,6 +92,7 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
         fontFamily: "var(--vscode-editor-font-family, 'Consolas, monospace')",
       },
       ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
+        backgroundColor: "var(--vscode-editorSuggestWidget-background)",
         color: "var(--vscode-editorSuggestWidget-foreground)",
         paddingTop: "3px",
         paddingBottom: "3px",
@@ -101,8 +102,10 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
         color: "var(--vscode-list-hoverForeground)",
       },
       ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
-        backgroundColor: "var(--vscode-editorSuggestWidget-selectedBackground)",
-        color: "var(--vscode-editorSuggestWidget-selectedForeground)",
+        backgroundColor:
+          "var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-editorSuggestWidget-background))",
+        color:
+          "var(--vscode-editorSuggestWidget-selectedForeground, var(--vscode-editorSuggestWidget-foreground))",
         outline: `1px solid ${autocompleteSelectedOutlineColor}`,
         outlineOffset: "-1px",
       },
