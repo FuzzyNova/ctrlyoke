@@ -8,6 +8,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { ActionDropdown } from "@components/shared/ActionDropdown";
 import type { ActionDropdownItem } from "@components/shared/ActionDropdown";
+import { isStandalone } from "@hooks/useVsCodeApi";
 
 // ============================================================================
 // Constants
@@ -298,38 +299,45 @@ export function AgentSkillsManagerSection() {
 
       {/* Type switcher + Open Folder */}
       <div className="flex items-center gap-2">
-        <div className="flex rounded border border-btn-border overflow-hidden text-xs font-medium">
-          {(["agent", "skill"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setActiveType(t)}
-              className={`px-3 py-1 transition-colors capitalize
-                ${
-                  activeType === t
-                    ? "bg-btn-bg text-btn-fg"
-                    : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                }
-                ${t === "skill" ? "border-l border-btn-border" : ""}`}
-            >
-              {t === "agent" ? "Agents" : "Skills"}
-            </button>
-          ))}
+        <div className="fp-mode-switch" role="group" aria-label="Agent or skill type">
+          <button
+            type="button"
+            onClick={() => setActiveType("agent")}
+            className={`fp-mode-switch-btn ${activeType === "agent" ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            title="Manage agent files"
+          >
+            <i className="codicon codicon-agent codicon-sm" />
+            Agents
+          </button>
+          <div className="fp-mode-switch-divider">
+            <div className="w-px h-full bg-current opacity-40" />
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveType("skill")}
+            className={`fp-mode-switch-btn ${activeType === "skill" ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            title="Manage skill files"
+          >
+            <i className="codicon codicon-tools codicon-sm" />
+            Skills
+          </button>
         </div>
 
-        <div className="ml-auto">
-          <ActionDropdown
-            label="Open Folder"
-            items={[
-              ...DISPLAYED_HARNESS_IDS.map((id) => ({
-                label: getHarnessLabel(id),
-                value: id,
-              })),
-              { label: "FlightPath", value: "flightpath" },
-            ]}
-            onSelect={(id) => openHarnessDir(id, activeType)}
-          />
-        </div>
+        {!isStandalone && (
+          <div className="ml-auto">
+            <ActionDropdown
+              label="Open Folder"
+              items={[
+                ...DISPLAYED_HARNESS_IDS.map((id) => ({
+                  label: getHarnessLabel(id),
+                  value: id,
+                })),
+                { label: "FlightPath", value: "flightpath" },
+              ]}
+              onSelect={(id) => openHarnessDir(id, activeType)}
+            />
+          </div>
+        )}
       </div>
 
       {/* File list */}
