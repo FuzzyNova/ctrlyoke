@@ -8,9 +8,10 @@ import React, {
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { CliOutput, StatusMessage } from "../output";
+import { Modal } from "../shared";
 import { RunSelector, IconToggleButton } from "../shared";
 import { TerminalSessionIcon } from "../output/TerminalSessionIcon";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
@@ -264,6 +265,11 @@ export const OutputSection: React.FC = () => {
   const [workflowDialogState, setWorkflowDialogState] =
     useState<WorkflowDialogState | null>(null);
 
+  // Standalone-mode export modal (browser clients that can't use VS Code save dialog)
+  const [exportModalContent, setExportModalContent] = useState<string | null>(
+    null
+  );
+
   // Keep --run-selector-max-h in sync with the output section height so the
   // RunSelector dropdown never overflows the panel boundary.
   useEffect(() => {
@@ -434,9 +440,6 @@ export const OutputSection: React.FC = () => {
 
   // Export handler
   const handleExport = useCallback(() => {
-    const vscode = getVsCodeApi();
-    if (!vscode) return;
-
     const markdownContent = generateMarkdownExport(
       allMessages.map((msg) => ({
         type: msg.type,
@@ -467,6 +470,12 @@ export const OutputSection: React.FC = () => {
       }
     );
 
+    if (isStandalone) {
+      setExportModalContent(markdownContent);
+      return;
+    }
+
+    const vscode = getVsCodeApi();
     vscode.postMessage({
       type: MESSAGE_TYPES.EXPORT_OUTPUT,
       content: markdownContent,
@@ -1534,6 +1543,49 @@ export const OutputSection: React.FC = () => {
           workflowEntries={workflowDialogState.entries}
           onClose={() => setWorkflowDialogState(null)}
         />
+      )}
+
+      {/* Standalone export modal — browser clients that can't use VS Code save dialog */}
+      {exportModalContent !== null && (
+        <Modal
+          isOpen
+          title="Export Output"
+          onClose={() => setExportModalContent(null)}
+          size="lg"
+          footer={
+            <>
+              <button
+                type="button"
+                className="px-4 py-2 text-sm text-description-fg hover:text-foreground transition-colors"
+                onClick={() => setExportModalContent(null)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 text-sm bg-btn-bg text-btn-fg hover:bg-btn-hover rounded transition-colors"
+                onClick={() => {
+                  const blob = new Blob([exportModalContent], {
+                    type: "text/markdown",
+                  });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${fileName ?? "output"}.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <i className="codicon codicon-cloud-download mr-1" />
+                Download
+              </button>
+            </>
+          }
+        >
+          <pre className="text-xs text-foreground whitespace-pre-wrap font-mono leading-relaxed overflow-x-auto">
+            {exportModalContent}
+          </pre>
+        </Modal>
       )}
     </section>
   );
