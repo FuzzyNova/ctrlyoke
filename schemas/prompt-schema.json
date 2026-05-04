@@ -597,7 +597,8 @@
             "sessionStart",
             "preToolUse",
             "postToolUse",
-            "userPromptSubmit"
+            "userPromptSubmit",
+            "permissionRequest"
           ],
           "description": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen), agentStop (Copilot), AfterAgent (Gemini), notify (Codex)."
         },

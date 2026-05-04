@@ -31,7 +31,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { initializeLogger, readStdinJson } = require("./flightpath-hook-utils");
+const { initializeLogger, readStdinJson, maybeWriteHookArtifact } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-claude-hook";
 const SCRIPT_PREFIX = "FlightPath Claude Hook";
@@ -66,12 +66,43 @@ function main() {
       allFields: Object.keys(hookInput),
     });
 
-    if (hookEvent !== "SessionStart" && hookEvent !== "Stop") {
-      debugLog("⏭️ Ignoring non-SessionStart/Stop hook event", { hookEvent });
+    const HANDLED_EVENTS = new Set([
+      "SessionStart", "Stop",
+      "PreToolUse", "PostToolUse", "UserPromptSubmit", "PermissionRequest",
+    ]);
+
+    if (!HANDLED_EVENTS.has(hookEvent)) {
+      debugLog("⏭️ Ignoring unhandled hook event", { hookEvent });
       process.exit(0);
     }
 
     const sessionId = hookInput.session_id;
+    const toolName = hookInput.tool_name || hookInput.tool?.name;
+
+    // Write hook artifact for preToolUse, postToolUse, userPromptSubmit,
+    // permissionRequest — before any stdout/notify file activity.
+    // NOTE: PermissionRequest is a decision hook — we must NOT produce stdout.
+    const LOGICAL_EVENT_MAP = {
+      "PreToolUse": "preToolUse",
+      "PostToolUse": "postToolUse",
+      "UserPromptSubmit": "userPromptSubmit",
+      "PermissionRequest": "permissionRequest",
+      "Stop": "stop",
+      "SessionStart": "sessionStart",
+    };
+    const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
+    if (logicalEvent && notifyDir) {
+      maybeWriteHookArtifact(logicalEvent, hookEvent, hookInput, notifyDir, sessionId, toolName, debugLog);
+    }
+
+    // Events that don't need notification file I/O
+    if (hookEvent === "PreToolUse" || hookEvent === "PostToolUse" ||
+        hookEvent === "UserPromptSubmit" || hookEvent === "PermissionRequest") {
+      debugLog(`✅ Hook ${hookEvent} completed`);
+      process.exit(0);
+    }
+
+    // SessionStart and Stop require session_id + notification file
     if (!sessionId) {
       const errorMsg = `Missing session_id in ${hookEvent} hook input`;
       debugLog("❌ ERROR: " + errorMsg, { hookInput });

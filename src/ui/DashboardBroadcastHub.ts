@@ -13,6 +13,7 @@ import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { IDashboardProvider } from "./IDashboardProvider";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
+import type { FlightPathNotificationEvent } from "./notifications/CompletionNotificationFactory";
 
 export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
 
@@ -383,6 +384,12 @@ export class DashboardBroadcastHub
   ): void {
     for (const client of this.clients) {
       client.sendStepUndoDataUpdated?.(target, workspaceSnapshot);
+    }
+  }
+
+  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+    for (const client of this.clients) {
+      client.notifyNotificationEvent?.(event);
     }
   }
 }

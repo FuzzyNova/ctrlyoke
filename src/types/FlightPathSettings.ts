@@ -8,6 +8,7 @@ import {
   type TerminalMobileControlBar,
   type NotificationEventMode,
   type BrowserNotificationMode,
+  type HookEvent,
 } from "./DashboardConstants";
 import { ICON_BG_COLOR_DEFAULT, ICON_FG_COLOR_DEFAULT } from "./IconColorDefaults";
 import type {
@@ -151,6 +152,7 @@ export interface FlightPathNotificationSettings {
   events: {
     workflowComplete: NotificationEventMode;
     promptComplete: NotificationEventMode;
+    hookEvents: { [key in HookEvent]: boolean };
   };
   includeWorkflowName: boolean;
   includePromptName: boolean;
@@ -315,6 +317,14 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     events: {
       workflowComplete: NOTIFICATION_EVENT_MODES.ALL,
       promptComplete: NOTIFICATION_EVENT_MODES.NEVER,
+      hookEvents: {
+        stop: false,
+        sessionStart: false,
+        preToolUse: false,
+        postToolUse: false,
+        userPromptSubmit: false,
+        permissionRequest: false,
+      },
     },
     includeWorkflowName: true,
     includePromptName: true,

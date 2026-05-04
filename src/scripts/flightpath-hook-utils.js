@@ -214,6 +214,100 @@ function runDecisionHook(command, payloadJson, debugLog) {
   }
 }
 
+/**
+ * Build the base fields for a hook artifact from env vars.
+ * Returns null if FLIGHTPATH_RUN_ID is not set.
+ *
+ * @returns {object|null} Base artifact object (without hookEvent/nativeHookEvent/toolName/rawHookData)
+ */
+function buildArtifactBase() {
+  const runId = process.env.FLIGHTPATH_RUN_ID;
+  if (!runId) {
+    return null;
+  }
+  return {
+    runId,
+    timestamp: Date.now(),
+    workflowId: process.env.FLIGHTPATH_WORKFLOW_ID || "",
+    workflowName: process.env.FLIGHTPATH_WORKFLOW_NAME || "",
+    promptIndex: parseInt(process.env.FLIGHTPATH_PROMPT_INDEX || "0", 10),
+    promptName: process.env.FLIGHTPATH_PROMPT_NAME || "",
+    harnessId: process.env.FLIGHTPATH_HARNESS_ID || "",
+  };
+}
+
+/**
+ * Check if a logical hook event is enabled in FLIGHTPATH_NOTIFY_HOOK_EVENTS.
+ *
+ * @param {string} logicalEvent - Logical event name (e.g. "preToolUse")
+ * @returns {boolean} True if the event is enabled
+ */
+function isHookEventEnabled(logicalEvent) {
+  const enabled = process.env.FLIGHTPATH_NOTIFY_HOOK_EVENTS;
+  if (!enabled) {
+    return false;
+  }
+  return enabled.split(",").includes(logicalEvent);
+}
+
+/**
+ * Write a hook artifact for a hook event if it is enabled.
+ *
+ * @param {string} logicalEvent - Logical event name (e.g. "preToolUse")
+ * @param {string} nativeHookEvent - CLI-native event name (e.g. "PreToolUse")
+ * @param {object} hookInput - Parsed hook input object from stdin
+ * @param {string} notifyDir - Notification directory path
+ * @param {string|undefined} sessionId - Session ID if available
+ * @param {string|undefined} toolName - Tool name for preToolUse/postToolUse
+ * @param {function} debugLog - Logger function
+ */
+function maybeWriteHookArtifact(logicalEvent, nativeHookEvent, hookInput, notifyDir, sessionId, toolName, debugLog) {
+  if (!isHookEventEnabled(logicalEvent)) {
+    return;
+  }
+  const base = buildArtifactBase();
+  if (!base) {
+    return;
+  }
+  const artifact = Object.assign({}, base, {
+    hookEvent: logicalEvent,
+    nativeHookEvent,
+    sessionId: sessionId || undefined,
+    toolName: toolName || undefined,
+    rawHookData: hookInput,
+  });
+  writeHookArtifact(notifyDir, artifact, debugLog);
+}
+
+/**
+ * Write a hook artifact file to the notify directory.
+ *
+ * Hook scripts call this when FLIGHTPATH_NOTIFY_HOOK_EVENTS contains the
+ * event name. The file is picked up and deleted by HookEventMonitor in the
+ * extension. File naming: `{runId}-hook-{timestamp}-{pid}.json`.
+ *
+ * @param {string} notifyDir - Notification directory path (from FLIGHTPATH_NOTIFY_DIR)
+ * @param {object} artifact - The HookArtifact payload to write
+ * @param {function} debugLog - Logger returned by initializeLogger or createLogger
+ */
+function writeHookArtifact(notifyDir, artifact, debugLog) {
+  try {
+    if (!fs.existsSync(notifyDir)) {
+      fs.mkdirSync(notifyDir, { recursive: true });
+    }
+    const fileName = `${artifact.runId}-hook-${artifact.timestamp}-${process.pid}.json`;
+    const filePath = path.join(notifyDir, fileName);
+    fs.writeFileSync(filePath, JSON.stringify(artifact));
+    if (debugLog) {
+      debugLog("📤 writeHookArtifact: wrote artifact", { filePath, event: artifact.hookEvent });
+    }
+  } catch (err) {
+    if (debugLog) {
+      debugLog("❌ writeHookArtifact: error", { error: err.message });
+    }
+  }
+}
+
 module.exports = {
   getDebugLogPath,
   getTempLogPath,
@@ -223,4 +317,8 @@ module.exports = {
   initializeLogger,
   readStdinJson,
   runDecisionHook,
+  writeHookArtifact,
+  buildArtifactBase,
+  isHookEventEnabled,
+  maybeWriteHookArtifact,
 };

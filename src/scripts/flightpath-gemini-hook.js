@@ -30,7 +30,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { initializeLogger, readStdinJson } = require("./flightpath-hook-utils");
+const { initializeLogger, readStdinJson, maybeWriteHookArtifact } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-gemini-hook";
 const SCRIPT_PREFIX = "FlightPath Gemini Hook";
@@ -65,14 +65,36 @@ function main() {
       allFields: Object.keys(hookInput),
     });
 
-    if (hookEvent !== "SessionStart" && hookEvent !== "AfterAgent") {
-      debugLog("⏭️ Ignoring non-SessionStart/AfterAgent hook event", {
-        hookEvent,
-      });
+    const HANDLED_EVENTS = new Set([
+      "SessionStart", "AfterAgent", "BeforeTool", "AfterTool",
+    ]);
+
+    if (!HANDLED_EVENTS.has(hookEvent)) {
+      debugLog("⏭️ Ignoring non-handled hook event", { hookEvent });
       process.exit(0);
     }
 
     const sessionId = hookInput.session_id;
+    const toolName = hookInput.tool_name || hookInput.tool?.name;
+
+    // Map Gemini-native event → logical event
+    const LOGICAL_EVENT_MAP = {
+      "SessionStart": "sessionStart",
+      "AfterAgent": "stop",
+      "BeforeTool": "preToolUse",
+      "AfterTool": "postToolUse",
+    };
+    const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
+    if (logicalEvent && notifyDir) {
+      maybeWriteHookArtifact(logicalEvent, hookEvent, hookInput, notifyDir, sessionId, toolName, debugLog);
+    }
+
+    // BeforeTool / AfterTool don't need notification files
+    if (hookEvent === "BeforeTool" || hookEvent === "AfterTool") {
+      debugLog(`✅ Hook ${hookEvent} completed`);
+      process.exit(0);
+    }
+
     if (!sessionId) {
       const errorMsg = `Missing session_id in ${hookEvent} hook input`;
       debugLog("❌ ERROR: " + errorMsg, { hookInput });

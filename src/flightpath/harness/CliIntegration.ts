@@ -659,6 +659,8 @@ export class CliIntegration extends HarnessIntegration {
           this.logResponse(response, statistics),
         onContextWindowUpdate: (used, size) =>
           this.emitContextWindowUpdate(used, size),
+        onNotificationEvent: (event) =>
+          this.notificationEventEmitter.fire(event),
       },
     });
 

@@ -12,7 +12,7 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
-  type CompletionNotificationEvent,
+  type FlightPathNotificationEvent,
 } from "./notifications/CompletionNotificationFactory";
 import { Log } from "../utils/Log";
 
@@ -112,8 +112,12 @@ export class NotificationManager implements DashboardClient {
     return workflow?.getQueueState().steps;
   }
 
+  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+    this.showNotification(event);
+  }
+
   private showNotification(
-    event: CompletionNotificationEvent | undefined
+    event: FlightPathNotificationEvent | undefined
   ): void {
     if (!event) {
       return;

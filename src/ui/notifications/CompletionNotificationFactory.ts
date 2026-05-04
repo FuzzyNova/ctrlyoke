@@ -4,11 +4,14 @@ import {
   COMPLETION_NOTIFICATION_SEVERITY,
   EXECUTION_STATES,
   NOTIFICATION_EVENT_MODES,
+  NOTIFICATION_KINDS,
   STEP_STATUS,
-  type CompletionNotificationKind,
   type CompletionNotificationSeverity,
   type ExecutionState,
+  type HookEvent,
+  type NotificationKind,
   type StepStatus,
+  HOOK_EVENT_METADATA,
 } from "../../types/DashboardConstants";
 import type {
   WorkflowSummary,
@@ -16,9 +19,9 @@ import type {
 } from "../../types/FlightPathTypes";
 import type { FlightPathNotificationSettings } from "../../types/FlightPathSettings";
 
-export interface CompletionNotificationEvent {
+export interface FlightPathNotificationEvent {
   id: string;
-  kind: CompletionNotificationKind;
+  kind: NotificationKind;
   severity: CompletionNotificationSeverity;
   workflowId: string;
   stepIndex?: number;
@@ -26,7 +29,37 @@ export interface CompletionNotificationEvent {
   body: string;
   tag: string;
   url?: string;
+  /** Set for hook-kind events. */
+  hookEvent?: HookEvent;
+  /** Harness that fired the hook event. */
+  harnessId?: string;
+  /** Tool name for preToolUse / postToolUse hook events. */
+  toolName?: string;
 }
+
+/** @deprecated Use FlightPathNotificationEvent */
+export type CompletionNotificationEvent = FlightPathNotificationEvent;
+
+/**
+ * Raw artifact written by a hook script when FLIGHTPATH_NOTIFY_HOOK_EVENTS is set.
+ * File naming: `{runId}-hook-{timestamp}-{pid}.json`
+ */
+export interface HookArtifact {
+  runId: string;
+  timestamp: number;
+  workflowId: string;
+  workflowName: string;
+  promptIndex: number;
+  promptName: string;
+  hookEvent: HookEvent;
+  /** Raw CLI-specific event name (e.g. "PreToolUse", "agentStop"). */
+  nativeHookEvent: string;
+  harnessId: string;
+  sessionId?: string;
+  toolName?: string;
+  rawHookData: Record<string, unknown>;
+}
+
 
 interface WorkflowNotificationInput {
   summary: WorkflowSummary;
@@ -289,4 +322,50 @@ function formatDurationSeconds(seconds: number): string {
   }
 
   return `${remainingSeconds}s`;
+}
+
+/**
+ * Builds a FlightPathNotificationEvent for a hook event artifact, or returns
+ * null if the settings have the event disabled.
+ */
+export function buildHookNotificationEvent(
+  artifact: HookArtifact,
+  settings: FlightPathNotificationSettings,
+  url?: string
+): FlightPathNotificationEvent | null {
+  if (!settings.events.hookEvents[artifact.hookEvent]) {
+    return null;
+  }
+
+  const meta = HOOK_EVENT_METADATA.find((m) => m.event === artifact.hookEvent);
+  const label = meta?.label ?? artifact.hookEvent;
+
+  const titleParts = ["FlightPath -", label];
+  const bodyParts: string[] = [];
+
+  if (settings.includeWorkflowName && artifact.workflowName) {
+    bodyParts.push(artifact.workflowName);
+  }
+  if (settings.includePromptName && artifact.promptName) {
+    bodyParts.push(artifact.promptName);
+  }
+  if (artifact.toolName) {
+    bodyParts.push(artifact.toolName);
+  }
+
+  const id = `${artifact.workflowId}:hook:${artifact.hookEvent}:${artifact.timestamp}`;
+
+  return {
+    id,
+    kind: NOTIFICATION_KINDS.HOOK,
+    severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
+    workflowId: artifact.workflowId,
+    title: titleParts.join(" "),
+    body: bodyParts.join(" - ") || label,
+    tag: `flightpath-hook-${artifact.workflowId}-${artifact.hookEvent}`,
+    url,
+    hookEvent: artifact.hookEvent,
+    harnessId: artifact.harnessId,
+    toolName: artifact.toolName,
+  };
 }

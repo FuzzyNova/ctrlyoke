@@ -2253,6 +2253,9 @@ export class WorkflowInstance {
     integration.onStreamingChunk((chunk) =>
       this._streamingChunkEmitter.fire(chunk)
     );
+    integration.onNotificationEvent((event) =>
+      this.dashboardSink?.notifyNotificationEvent?.(event)
+    );
     this.executionIntegrations.set(harness, integration);
     return integration;
   }

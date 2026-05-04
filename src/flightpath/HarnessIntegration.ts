@@ -29,6 +29,7 @@ import {
   PriorContextItemType,
 } from "../types/DashboardConstants";
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
+import type { FlightPathNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 
 /**
  * Minimal container for VS Code-style disposable subscriptions.
@@ -214,6 +215,11 @@ export abstract class HarnessIntegration {
   }>();
   public readonly onPromptReady = this.promptReadyEmitter.event;
 
+  // Event emitter for hook notification events (fired by HookEventMonitor during execution)
+  protected notificationEventEmitter =
+    new TypedEmitter<FlightPathNotificationEvent>();
+  public readonly onNotificationEvent = this.notificationEventEmitter.event;
+
   constructor(
     context: SubscriptionContainer | undefined,
     registerWithContext: boolean = true
@@ -230,6 +236,7 @@ export abstract class HarnessIntegration {
       context.subscriptions.push(this.streamingEventsEmitter);
       context.subscriptions.push(this.contextWindowUpdateEmitter);
       context.subscriptions.push(this.promptReadyEmitter);
+      context.subscriptions.push(this.notificationEventEmitter);
     }
   }
 
@@ -245,6 +252,7 @@ export abstract class HarnessIntegration {
     this.streamingEventsEmitter.dispose();
     this.contextWindowUpdateEmitter.dispose();
     this.promptReadyEmitter.dispose();
+    this.notificationEventEmitter.dispose();
   }
 
   /**

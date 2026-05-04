@@ -28,6 +28,7 @@ import {
   type UndoFileAction,
   type CompletionNotificationKind,
   type CompletionNotificationSeverity,
+  type HookEvent,
 } from "./DashboardConstants";
 import type {
   WorkflowSummary,
@@ -859,6 +860,9 @@ export interface CompletionNotificationEventPayload {
   body: string;
   tag: string;
   url?: string;
+  hookEvent?: HookEvent;
+  harnessId?: string;
+  toolName?: string;
 }
 
 export interface NotificationEventMessage {

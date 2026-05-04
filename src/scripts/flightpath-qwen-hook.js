@@ -33,7 +33,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { initializeLogger, readStdinJson } = require("./flightpath-hook-utils");
+const { initializeLogger, readStdinJson, maybeWriteHookArtifact } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-qwen-hook";
 const SCRIPT_PREFIX = "FlightPath Qwen Hook";
@@ -87,16 +87,37 @@ function main() {
       allFields: Object.keys(hookInput),
     });
 
-    if (
-      hookEvent !== "SessionStart" &&
-      hookEvent !== "UserPromptSubmit" &&
-      hookEvent !== "Stop"
-    ) {
+    const HANDLED_EVENTS = new Set([
+      "SessionStart", "UserPromptSubmit", "Stop",
+      "PreToolUse", "PostToolUse",
+    ]);
+
+    if (!HANDLED_EVENTS.has(hookEvent)) {
       debugLog("⏭️ Ignoring unhandled hook event", { hookEvent });
       process.exit(0);
     }
 
     const sessionId = hookInput.session_id;
+    const toolName = hookInput.tool_name || hookInput.tool?.name;
+
+    const LOGICAL_EVENT_MAP = {
+      "PreToolUse": "preToolUse",
+      "PostToolUse": "postToolUse",
+      "UserPromptSubmit": "userPromptSubmit",
+      "Stop": "stop",
+      "SessionStart": "sessionStart",
+    };
+    const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
+    if (logicalEvent && notifyDir) {
+      maybeWriteHookArtifact(logicalEvent, hookEvent, hookInput, notifyDir, sessionId, toolName, debugLog);
+    }
+
+    // Events that don't need notification file I/O
+    if (hookEvent === "PreToolUse" || hookEvent === "PostToolUse") {
+      debugLog(`✅ Hook ${hookEvent} completed`);
+      process.exit(0);
+    }
+
     if (!sessionId) {
       const errorMsg = `Missing session_id in ${hookEvent} hook input`;
       debugLog("❌ ERROR: " + errorMsg, { hookInput });

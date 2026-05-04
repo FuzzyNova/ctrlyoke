@@ -41,7 +41,7 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
-  type CompletionNotificationEvent,
+  type FlightPathNotificationEvent,
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import {
@@ -459,6 +459,10 @@ export class FlightPathHostedServer
     workspaceSnapshot?: WorkspaceSnapshot
   ): void {
     this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot);
+  }
+
+  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+    void this.dispatchCompletionNotification(event);
   }
 
   // ── Theme var snapshot (fed from VS Code webview capture) ─────────────────
@@ -1020,7 +1024,7 @@ export class FlightPathHostedServer
   }
 
   private async dispatchCompletionNotification(
-    event: CompletionNotificationEvent | undefined
+    event: FlightPathNotificationEvent | undefined
   ): Promise<void> {
     if (!event) {
       return;

@@ -12,6 +12,7 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { WorkflowStep } from "../types/FlightPathTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
+import type { FlightPathNotificationEvent } from "./notifications/CompletionNotificationFactory";
 
 /**
  * PostMessageDashboardSink
@@ -395,6 +396,13 @@ export class PostMessageDashboardSink implements IDashboardSink {
       type: MESSAGE_TYPES.STEP_UNDO_DATA_UPDATED,
       target,
       workspaceSnapshot,
+    });
+  }
+
+  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+    this.send({
+      type: MESSAGE_TYPES.NOTIFICATION_EVENT,
+      event,
     });
   }
 }

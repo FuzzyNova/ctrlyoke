@@ -581,6 +581,19 @@
               "type": "string",
               "enum": ["all", "failuresOnly", "never"],
               "description": "When to notify on individual prompt completion."
+            },
+            "hookEvents": {
+              "type": "object",
+              "description": "Which hook events trigger notifications. All default to false (opt-in).",
+              "additionalProperties": false,
+              "properties": {
+                "stop": { "type": "boolean", "description": "Notify when the AI agent finishes responding." },
+                "sessionStart": { "type": "boolean", "description": "Notify when a new AI session is created." },
+                "preToolUse": { "type": "boolean", "description": "Notify before the AI invokes a tool." },
+                "postToolUse": { "type": "boolean", "description": "Notify after the AI receives the result of a tool call." },
+                "userPromptSubmit": { "type": "boolean", "description": "Notify when a user prompt is submitted to the AI." },
+                "permissionRequest": { "type": "boolean", "description": "Notify when the AI requests permission to perform an action." }
+              }
             }
           }
         },

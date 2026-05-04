@@ -389,6 +389,22 @@ export type CompletionNotificationSeverity =
   (typeof COMPLETION_NOTIFICATION_SEVERITY)[keyof typeof COMPLETION_NOTIFICATION_SEVERITY];
 
 // ============================================================================
+// NOTIFICATION KINDS - Superset of completion notification kinds (includes hook events)
+// ============================================================================
+export const NOTIFICATION_KINDS = {
+  WORKFLOW: COMPLETION_NOTIFICATION_KINDS.WORKFLOW,
+  PROMPT: COMPLETION_NOTIFICATION_KINDS.PROMPT,
+  HOOK: "hook",
+} as const;
+
+export type NotificationKind =
+  (typeof NOTIFICATION_KINDS)[keyof typeof NOTIFICATION_KINDS];
+
+/** Alias — identical to COMPLETION_NOTIFICATION_SEVERITY; use either name. */
+export const NOTIFICATION_SEVERITY = COMPLETION_NOTIFICATION_SEVERITY;
+export type NotificationSeverity = CompletionNotificationSeverity;
+
+// ============================================================================
 // EXECUTION STATES - QueueState.status values
 // ============================================================================
 export const EXECUTION_STATES = {
@@ -488,6 +504,124 @@ export const HARNESS_INFO = {
   [HARNESS_IDS.QWEN_CLI]: { name: "Qwen Code CLI", shortName: "Qwen Code" },
   [HARNESS_IDS.GEMINI_CLI]: { name: "Gemini CLI", shortName: "Gemini" },
 } as const;
+
+// ============================================================================
+// HOOK EVENT - Logical hook event names and metadata
+// ============================================================================
+
+/**
+ * Logical hook event names — mapped to CLI-specific event names at inject time.
+ *
+ * | Logical name        | Claude/Qwen      | Copilot CLI         | Gemini CLI   | Codex             | OpenCode                   |
+ * |---------------------|------------------|---------------------|--------------|-------------------|----------------------------|
+ * | "stop"              | Stop             | agentStop           | AfterAgent   | Stop              | session.status { idle }    |
+ * | "sessionStart"      | SessionStart     | sessionStart        | SessionStart | SessionStart      | session.created            |
+ * | "preToolUse"        | PreToolUse       | preToolUse          | BeforeTool   | PreToolUse        | tool.execute.before        |
+ * | "postToolUse"       | PostToolUse      | postToolUse         | AfterTool    | PostToolUse       | tool.execute.after         |
+ * | "userPromptSubmit"  | UserPromptSubmit | userPromptSubmitted | BeforeAgent  | UserPromptSubmit  | session.status { busy }    |
+ * | "permissionRequest" | PermissionRequest| n/a                 | n/a          | PermissionRequest | permission.asked           |
+ */
+export type HookEvent =
+  | "stop"
+  | "sessionStart"
+  | "preToolUse"
+  | "postToolUse"
+  | "userPromptSubmit"
+  | "permissionRequest";
+
+export interface HookEventMetadata {
+  event: HookEvent;
+  label: string;
+  description: string;
+  /** Harnesses that fire this event. */
+  supportedHarnesses: HarnessId[];
+}
+
+export const HOOK_EVENT_ORDER: HookEvent[] = [
+  "stop",
+  "sessionStart",
+  "preToolUse",
+  "postToolUse",
+  "userPromptSubmit",
+  "permissionRequest",
+];
+
+export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
+  {
+    event: "stop",
+    label: "Stop",
+    description: "Fires when the AI agent finishes responding.",
+    supportedHarnesses: [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.GEMINI_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ],
+  },
+  {
+    event: "sessionStart",
+    label: "Session Start",
+    description: "Fires when a new AI session is created.",
+    supportedHarnesses: [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.GEMINI_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ],
+  },
+  {
+    event: "preToolUse",
+    label: "Pre Tool Use",
+    description: "Fires before the AI invokes a tool.",
+    supportedHarnesses: [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.GEMINI_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ],
+  },
+  {
+    event: "postToolUse",
+    label: "Post Tool Use",
+    description: "Fires after the AI receives the result of a tool call.",
+    supportedHarnesses: [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.GEMINI_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ],
+  },
+  {
+    event: "userPromptSubmit",
+    label: "User Prompt Submit",
+    description: "Fires when a user prompt is submitted to the AI.",
+    supportedHarnesses: [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
+      HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ],
+  },
+  {
+    event: "permissionRequest",
+    label: "Permission Request",
+    description: "Fires when the AI requests permission to perform an action.",
+    supportedHarnesses: [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ],
+  },
+];
 
 // ============================================================================
 // EXECUTION MODES - Execution environment for CLI commands

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import {
   BROWSER_NOTIFICATION_MODES,
   NOTIFICATION_EVENT_MODES,
+  HOOK_EVENT_METADATA,
+  HOOK_EVENT_ORDER,
 } from "@root/types/DashboardConstants";
 import type {
   FullGlobalSettings,
@@ -309,6 +311,36 @@ export function NotificationsSection({
             options={EVENT_MODE_OPTIONS}
           />
         </SettingInputRow>
+      </div>
+
+      <div className="space-y-3">
+        <h4 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+          Hook Events
+        </h4>
+        <p className="text-xs text-description-fg">
+          Opt in to notifications for AI CLI hook events. Requires the
+          corresponding harness to support each event.
+        </p>
+        {HOOK_EVENT_ORDER.map((event) => {
+          const meta = HOOK_EVENT_METADATA.find((m) => m.event === event);
+          if (!meta) return null;
+          const checked =
+            (notif.events.hookEvents as Record<string, boolean>)[event] ??
+            false;
+          return (
+            <SettingToggleRow
+              key={event}
+              label={meta.label}
+              description={meta.description}
+              checked={checked}
+              onChange={(value) =>
+                onUpdate(`notifications.events.hookEvents.${event}`, value)
+              }
+              path={`notifications.events.hookEvents.${event}`}
+              {...rowProps}
+            />
+          );
+        })}
       </div>
 
       <div className="space-y-1">

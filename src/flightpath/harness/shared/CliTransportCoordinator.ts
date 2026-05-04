@@ -302,7 +302,8 @@ export class CliTransportCoordinator {
       stdout: string;
       stderr: string;
       exitCode: number;
-    }) => Promise<boolean>
+    }) => Promise<boolean>,
+    env?: Record<string, string>
   ): Promise<boolean> {
     try {
       if (tempFilePaths.length > 0) {
@@ -332,6 +333,7 @@ export class CliTransportCoordinator {
         headlessArgs,
         {
           timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
+          env,
           onStdout: shouldStream
             ? (chunk) => {
                 if (ConfigurationUtils.shouldLogRawCliOutput()) {
@@ -491,11 +493,13 @@ export class CliTransportCoordinator {
     args: string[],
     options: {
       timeout?: number;
+      env?: Record<string, string>;
       onStdout?: (chunk: string) => void;
     } = {}
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     const shell = process.platform === "win32" ? resolveWindowsShell() : true;
-    const env = CliProviderUtils.buildProcessEnv();
+    const baseEnv = CliProviderUtils.buildProcessEnv();
+    const env = options.env ? { ...baseEnv, ...options.env } : baseEnv;
 
     const result = await this.deps.processManager.spawn(command, args, {
       cwd: this.deps.runtimeState.getWorkspaceRoot() || "",

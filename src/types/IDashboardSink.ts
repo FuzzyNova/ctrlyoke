@@ -6,6 +6,7 @@ import type {
   StatusMessageSeverity,
 } from "./DashboardConstants";
 import type { WorkspaceSnapshot } from "./OutputHistoryTypes";
+import type { FlightPathNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 
 /**
  * IDashboardSink
@@ -190,4 +191,7 @@ export interface IDashboardSink {
     target: UndoExecutionTarget,
     workspaceSnapshot?: WorkspaceSnapshot
   ): void;
+
+  /** Deliver a FlightPath notification event (completion or hook) to the sink. */
+  notifyNotificationEvent?(event: FlightPathNotificationEvent): void;
 }

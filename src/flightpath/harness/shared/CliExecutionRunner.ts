@@ -14,6 +14,9 @@ import type { CliFailureTracker } from "./CliFailureTracker";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 import type { InteractiveSessionDiscovery } from "./CliInteractiveStartupCoordinator";
 import type { ICliProvider } from "./interfaces/ICliProvider";
+import { HookEventMonitor } from "./HookEventMonitor";
+import type { FlightPathNotificationEvent } from "../../../ui/notifications/CompletionNotificationFactory";
+import { configService } from "../../../config/FlightPathConfigService";
 
 interface CliExecutionTransportCoordinator {
   executeStandaloneInteractiveProcess(
@@ -36,7 +39,8 @@ interface CliExecutionTransportCoordinator {
       stdout: string;
       stderr: string;
       exitCode: number;
-    }) => Promise<boolean>
+    }) => Promise<boolean>,
+    env?: Record<string, string>
   ): Promise<boolean>;
   /** Write text to the currently active PTY session. Returns false if no session is active. */
   writeToCurrentPtySession(text: string): boolean;
@@ -91,6 +95,7 @@ export interface CliExecutionRunnerDeps {
     onResponseComplete: (response: string) => void;
     logResponse: (response: string, statistics?: string) => void;
     onContextWindowUpdate?: (used: number, size: number) => void;
+    onNotificationEvent?: (event: FlightPathNotificationEvent) => void;
   };
 }
 
@@ -293,6 +298,38 @@ export class CliExecutionRunner {
     baseArgs: string[]
   ): Promise<boolean> {
     const responseCallback = this.buildHeadlessResponseCallback(session);
+    const hookEnv = this.buildHookEnvVars(session);
+
+    const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
+    const notifyDir =
+      workspaceRoot && this.deps.provider.notificationMonitor
+        ? this.deps.provider.notificationMonitor.getNotificationDirectory(
+            workspaceRoot
+          )
+        : undefined;
+
+    const runId = crypto.randomUUID();
+    const headlessEnv: Record<string, string> = {
+      FLIGHTPATH_RUN_ID: runId,
+      ...hookEnv,
+    };
+    if (notifyDir) {
+      headlessEnv.FLIGHTPATH_NOTIFY_DIR = notifyDir;
+    }
+    if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
+      headlessEnv.FLIGHTPATH_DIAGNOSTIC_LOGS = "true";
+    }
+
+    const hookMonitor =
+      notifyDir && this.deps.hostCallbacks.onNotificationEvent
+        ? new HookEventMonitor({
+            runId,
+            notifyDir,
+            onEvent: (event) =>
+              this.deps.hostCallbacks.onNotificationEvent!(event),
+          })
+        : null;
+    hookMonitor?.start();
 
     const executeWithRecovery = async (args: string[]): Promise<boolean> => {
       try {
@@ -300,7 +337,8 @@ export class CliExecutionRunner {
           args,
           session.promptArgument,
           session.tempFilePaths,
-          responseCallback
+          responseCallback,
+          headlessEnv
         );
       } catch (error) {
         if (
@@ -334,7 +372,8 @@ export class CliExecutionRunner {
               argsWithoutResume,
               session.promptArgument,
               session.tempFilePaths,
-              retryCallback
+              retryCallback,
+              headlessEnv
             );
           }
         }
@@ -345,11 +384,13 @@ export class CliExecutionRunner {
 
     try {
       const success = await executeWithRecovery(baseArgs);
+      hookMonitor?.stop();
       if (!success && this.deps.runtimeState.isCancelling()) {
         this.deps.runtimeState.setFailureReason("Stopped by user");
       }
       return success;
     } catch (error) {
+      hookMonitor?.stop();
       Log.error("❌ Headless execution error", error);
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return false;
@@ -380,6 +421,39 @@ export class CliExecutionRunner {
       this.deps.runtimeState.setFailureReason(getErrorMessage(error));
       return { success: false };
     }
+  }
+
+  private buildHookEnvVars(session: CliExecutionSession): Record<string, string> {
+    const settings = configService.getAll().notifications;
+    const hookEvents = settings.events.hookEvents;
+    const enabledEvents = Object.entries(hookEvents)
+      .filter(([, enabled]) => enabled)
+      .map(([event]) => event);
+
+    if (enabledEvents.length === 0) {
+      return {};
+    }
+
+    const ctx = session.workflowContext;
+    const env: Record<string, string> = {
+      FLIGHTPATH_NOTIFY_HOOK_EVENTS: enabledEvents.join(","),
+    };
+
+    if (ctx?.instanceId) {
+      env.FLIGHTPATH_WORKFLOW_ID = ctx.instanceId;
+    }
+    if (ctx?.workflowName) {
+      env.FLIGHTPATH_WORKFLOW_NAME = ctx.workflowName;
+    }
+    if (ctx !== undefined) {
+      env.FLIGHTPATH_PROMPT_INDEX = String(ctx.promptIndex);
+      const promptName = ctx.allPrompts[ctx.promptIndex]?.name;
+      if (promptName) {
+        env.FLIGHTPATH_PROMPT_NAME = promptName;
+      }
+    }
+    env.FLIGHTPATH_HARNESS_ID = this.deps.provider.config.harnessId;
+    return env;
   }
 
   private async executeInTerminal(
@@ -424,18 +498,34 @@ export class CliExecutionRunner {
       }
 
       const runId = crypto.randomUUID();
-      const terminalEnv: Record<string, string> = { FLIGHTPATH_RUN_ID: runId };
+      const terminalEnv: Record<string, string> = {
+        FLIGHTPATH_RUN_ID: runId,
+        ...this.buildHookEnvVars(session),
+      };
       if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
         terminalEnv.FLIGHTPATH_DIAGNOSTIC_LOGS = "true";
       }
 
       const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
+      let notifyDir: string | undefined;
       if (workspaceRoot && this.deps.provider.notificationMonitor) {
-        terminalEnv.FLIGHTPATH_NOTIFY_DIR =
+        notifyDir =
           this.deps.provider.notificationMonitor.getNotificationDirectory(
             workspaceRoot
           );
+        terminalEnv.FLIGHTPATH_NOTIFY_DIR = notifyDir;
       }
+
+      const hookMonitor =
+        notifyDir && this.deps.hostCallbacks.onNotificationEvent
+          ? new HookEventMonitor({
+              runId,
+              notifyDir,
+              onEvent: (event) =>
+                this.deps.hostCallbacks.onNotificationEvent!(event),
+            })
+          : null;
+      hookMonitor?.start();
 
       await this.deps.transportCoordinator.startInteractiveProcess(
         args,
@@ -454,6 +544,7 @@ export class CliExecutionRunner {
       });
 
       if (!discovery) {
+        hookMonitor?.stop();
         return { success: false };
       }
 
@@ -469,6 +560,8 @@ export class CliExecutionRunner {
         sessionId: discovery.sessionId,
         startTime,
       });
+
+      hookMonitor?.stop();
 
       // Keep lastInteractiveContext in sync with the latest session ID in case
       // the log monitor extracted a new one during this run.

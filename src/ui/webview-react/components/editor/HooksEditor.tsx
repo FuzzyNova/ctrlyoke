@@ -1,13 +1,5 @@
 import React, { useCallback, useMemo } from "react";
-
-const HOOK_EVENTS = [
-  { value: "stop", label: "Stop (session end)" },
-  { value: "sessionStart", label: "Session Start" },
-  { value: "preToolUse", label: "Pre Tool Use" },
-  { value: "postToolUse", label: "Post Tool Use" },
-  { value: "userPromptSubmit", label: "User Prompt Submit" },
-  { value: "permissionRequest", label: "Permission Request" },
-] as const;
+import { HOOK_EVENT_METADATA } from "@root/types/DashboardConstants";
 
 interface HookEntry {
   event: string;
@@ -153,9 +145,9 @@ export const HooksEditor: React.FC<HooksEditorProps> = ({
               onChange={(e) => handleUpdateHook(index, "event", e.target.value)}
               className="bg-input-bg text-input-fg border border-input-border rounded px-1 py-0.5 text-xs min-w-[120px]"
             >
-              {HOOK_EVENTS.map((ev) => (
-                <option key={ev.value} value={ev.value}>
-                  {ev.label}
+              {HOOK_EVENT_METADATA.map((m) => (
+                <option key={m.event} value={m.event}>
+                  {m.label}
                 </option>
               ))}
             </select>
