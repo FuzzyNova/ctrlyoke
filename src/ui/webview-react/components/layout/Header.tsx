@@ -324,6 +324,8 @@ export const Header: React.FC<{
             {/* Settings button */}
             <button
               className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                globalSettingsOpen ? "fp-contrast-active " : ""
+              }${
                 globalSettingsOpen
                   ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -331,6 +333,7 @@ export const Header: React.FC<{
               onClick={toggleGlobalSettings}
               title="Global Settings"
               aria-label="Open global settings"
+              aria-pressed={globalSettingsOpen}
             >
               <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
             </button>
@@ -351,6 +354,8 @@ export const Header: React.FC<{
           {isMobile && (
             <button
               className={`control-button flex items-center justify-center mr-2 gap-0.5 pl-3.5 pr-2 ${btnSize.mobileToggleButton} rounded-r border-y border-r border-btn-border transition-colors ${
+                mobileStepsOpen ? "fp-contrast-active " : ""
+              }${
                 mobileStepsOpen
                   ? "bg-btn-bg text-btn-fg"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -358,6 +363,7 @@ export const Header: React.FC<{
               onClick={onToggleMobileSteps}
               title="Steps"
               aria-label="Toggle steps panel"
+              aria-pressed={mobileStepsOpen}
             >
               <i className={`codicon codicon-list-ordered ${btnSize.icon}`} />
             </button>
@@ -366,6 +372,8 @@ export const Header: React.FC<{
           {isMobile && (
             <button
               className={`control-button flex items-center justify-center ml-2 gap-0.5 pl-2 pr-3.5 ${btnSize.mobileToggleButton} rounded-l border-y border-l border-btn-border transition-colors ${
+                mobileWorkflowPropsOpen ? "fp-contrast-active " : ""
+              }${
                 mobileWorkflowPropsOpen
                   ? "bg-btn-bg text-btn-fg"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
@@ -373,6 +381,7 @@ export const Header: React.FC<{
               onClick={onToggleMobileWorkflowProps}
               title="Workflow Properties"
               aria-label="Toggle workflow properties"
+              aria-pressed={mobileWorkflowPropsOpen}
             >
               <i className={`codicon codicon-settings ${btnSize.icon}`} />
             </button>

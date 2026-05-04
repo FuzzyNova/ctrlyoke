@@ -189,7 +189,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           // Edit mode buttons
           <>
             <button
-              className="btn-editor-cancel px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-cancel border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onCancel}
               disabled={isCLIManaged}
               title={
@@ -203,7 +203,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </button>
 
             <button
-              className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-update border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
               disabled={isCLIManaged || !hasContent || isPromptBeingSent}
               title={
@@ -221,7 +221,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </button>
 
             <button
-              className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-delete border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
               disabled={isCLIManaged || isPromptActivelyRunning}
               title={
@@ -246,7 +246,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           // New prompt mode buttons
           <>
             <button
-              className="btn-editor-queue px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-queue border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
               disabled={isCLIManaged || !hasContent}
               title={
@@ -260,7 +260,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </button>
 
             <button
-              className="btn-editor-run px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-run border border-btn-border px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onRun}
               disabled={isCLIManaged || !hasContent}
               title={

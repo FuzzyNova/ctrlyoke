@@ -34,6 +34,8 @@ module.exports = {
         "terminal-bg":
           "var(--vscode-terminal-background, var(--vscode-editor-background))",
         "focus-border": "var(--vscode-focusBorder)",
+        "contrast-active-border":
+          "var(--vscode-contrastActiveBorder, transparent)",
         "focus-highlight":
           "var(--vscode-list-focusHighlightForeground, #2aaaff)",
         "widget-border": "var(--vscode-widget-border)",
@@ -44,9 +46,14 @@ module.exports = {
         "btn-fg": "var(--vscode-button-foreground)",
         // button.border is null in most themes — transparent matches VS Code's design intent
         "btn-border": "var(--vscode-button-border, transparent)",
-        "btn-secondary-bg": "var(--vscode-button-secondaryBackground)",
-        "btn-secondary-hover": "var(--vscode-button-secondaryHoverBackground)",
-        "btn-secondary-fg": "var(--vscode-button-secondaryForeground)",
+        // HC themes omit secondary button colors and rely on borders instead.
+        // Fall back to the primary button tokens so buttons still render predictably.
+        "btn-secondary-bg":
+          "var(--vscode-button-secondaryBackground, var(--vscode-button-background))",
+        "btn-secondary-hover":
+          "var(--vscode-button-secondaryHoverBackground, var(--vscode-button-background))",
+        "btn-secondary-fg":
+          "var(--vscode-button-secondaryForeground, var(--vscode-button-foreground))",
 
         // Inputs
         "input-bg": "var(--vscode-input-background)",
@@ -119,6 +126,8 @@ module.exports = {
 
         // Toolbar / keybinding
         "toolbar-hover-bg": "var(--vscode-toolbar-hoverBackground)",
+        "toolbar-hover-outline":
+          "var(--vscode-toolbar-hoverOutline, transparent)",
         "keybinding-bg":
           "var(--vscode-keybindingLabel-background, rgba(128,128,128,0.17))",
 

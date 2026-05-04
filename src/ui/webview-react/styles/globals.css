@@ -449,6 +449,37 @@ button .codicon {
    Component Classes
    ============================================================================ */
 @layer components {
+  /* VS Code HC themes use hover outlines instead of filled button hover colors.
+     Keep the outline transparent by default so standard themes are unchanged. */
+  button.bg-btn-bg,
+  button.bg-btn-secondary-bg,
+  button.bg-input-error-bg,
+  button.control-button,
+  button.icon-btn,
+  button.fp-mode-switch-btn,
+  button[class*="hover:bg-toolbar-hover-bg"] {
+    outline: 1px dashed transparent;
+    outline-offset: -1px;
+  }
+
+  button.bg-btn-bg:hover:not(:disabled),
+  button.bg-btn-secondary-bg:hover:not(:disabled),
+  button.bg-input-error-bg:hover:not(:disabled),
+  button.control-button:hover:not(:disabled),
+  button.icon-btn:hover:not(:disabled),
+  button.fp-mode-switch-btn:hover:not(:disabled),
+  button[class*="hover:bg-toolbar-hover-bg"]:hover:not(:disabled) {
+    outline-color: var(--vscode-toolbar-hoverOutline, transparent);
+  }
+
+  button.fp-contrast-active:not(:disabled),
+  button.fp-contrast-active:hover:not(:disabled),
+  button.fp-mode-switch-btn-active:not(:disabled),
+  button.fp-mode-switch-btn-active:hover:not(:disabled) {
+    outline: 1px solid var(--vscode-contrastActiveBorder, transparent);
+    outline-offset: -1px;
+  }
+
   /* Icon-only button used in panel headers and output toolbars.
      Provides consistent hover feedback across all header action buttons. */
   .icon-btn {

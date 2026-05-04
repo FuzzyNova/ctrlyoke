@@ -12,6 +12,10 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
     surface === "input"
       ? "var(--vscode-input-foreground)"
       : "var(--vscode-editor-foreground)";
+  const selectionForegroundColor =
+    "var(--vscode-editor-selectionForeground, var(--vscode-editor-foreground))";
+  const autocompleteSelectedOutlineColor =
+    "var(--vscode-listFilterWidget-outline, transparent)";
 
   return EditorView.theme(
     {
@@ -50,6 +54,9 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
       "&.cm-focused .cm-selectionBackground": {
         backgroundColor:
           "var(--vscode-editor-selectionBackground, rgba(57, 148, 188, 0.55)) !important",
+      },
+      ".cm-line::selection, .cm-line ::selection": {
+        color: `${selectionForegroundColor} !important`,
       },
       ".cm-activeLine":
         surface === "input"
@@ -96,6 +103,8 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
       ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
         backgroundColor: "var(--vscode-editorSuggestWidget-selectedBackground)",
         color: "var(--vscode-editorSuggestWidget-selectedForeground)",
+        outline: `1px solid ${autocompleteSelectedOutlineColor}`,
+        outlineOffset: "-1px",
       },
       ".cm-completion-file .cm-completionIcon": {
         color: "var(--vscode-symbolIcon-fileForeground, #858585)",
