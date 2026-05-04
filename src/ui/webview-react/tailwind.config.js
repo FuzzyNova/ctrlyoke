@@ -44,6 +44,7 @@ module.exports = {
         "btn-bg": "var(--vscode-button-background)",
         "btn-hover": "var(--vscode-button-hoverBackground)",
         "btn-fg": "var(--vscode-button-foreground)",
+        "btn-separator": "var(--vscode-button-separator)",
         // button.border is null in most themes — transparent matches VS Code's design intent
         "btn-border": "var(--vscode-button-border, transparent)",
         // HC themes omit secondary button colors and rely on borders instead.

@@ -500,7 +500,7 @@ button .codicon {
     @apply relative inline-flex rounded border border-btn-border overflow-hidden flex-shrink-0;
   }
   .fp-button-group-divider {
-    @apply w-px self-stretch bg-btn-border opacity-40;
+    @apply w-px self-stretch bg-btn-separator opacity-40;
   }
 
   /* ── True tab style ────────────────────────────────────────────────────────
