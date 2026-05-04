@@ -28,7 +28,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           role="tab"
           title="Explorer"
         >
-          <i className="codicon codicon-files text-sm" />
+          <i className="codicon codicon-files codicon-sm px-1 sm:px-0" />
           <span className="hidden sm:inline">Explorer</span>
         </button>
         <button
@@ -38,7 +38,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           role="tab"
           title="Source Control"
         >
-          <i className="codicon codicon-source-control text-sm" />
+          <i className="codicon codicon-source-control codicon-sm px-1 sm:px-0" />
           <span className="hidden sm:inline">Source Control</span>
         </button>
       </div>
@@ -46,8 +46,10 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       {/* Title — takes remaining space, truncates before touching side elements */}
       <div className="flex-1 min-w-0 flex flex-col items-center px-2 select-none pointer-events-none">
         <div className="flex items-center gap-1 text-sm font-medium text-editor-fg opacity-70 max-w-full min-w-0">
-          <i className="codicon codicon-project text-sm flex-shrink-0" />
-          <span className="truncate" data-testid="workspace-name">Workspace: {workspaceName}</span>
+          <i className="codicon codicon-project codicon-sm flex-shrink-0" />
+          <span className="truncate" data-testid="workspace-name">
+            Workspace: {workspaceName}
+          </span>
         </div>
         {workspacePath && (
           <span

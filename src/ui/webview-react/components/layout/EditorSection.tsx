@@ -172,7 +172,9 @@ export const EditorSection: React.FC = () => {
               onClick={() => setStepType(STEP_TYPES.PROMPT)}
               title="Prompt step — sends text to an AI harness"
             >
-              <i className="codicon codicon-comment" />
+              <i
+                className={`codicon codicon-comment codicon-sm ${isNarrow ? "px-1" : ""}`}
+              />
               {!isNarrow && <span>Prompt</span>}
             </button>
             <div className="fp-mode-switch-divider">
@@ -184,7 +186,9 @@ export const EditorSection: React.FC = () => {
               onClick={() => setStepType(STEP_TYPES.SCRIPT)}
               title="Script step — runs a shell command with no AI interaction"
             >
-              <i className="codicon codicon-terminal-powershell" />
+              <i
+                className={`codicon codicon-terminal-powershell codicon-sm ${isNarrow ? "px-1" : ""}`}
+              />
               {!isNarrow && <span>Script</span>}
             </button>
           </div>

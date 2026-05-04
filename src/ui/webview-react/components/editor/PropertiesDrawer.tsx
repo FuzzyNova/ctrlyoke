@@ -374,6 +374,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-[100] h-full flex flex-col overflow-hidden ${
         isOpen ? "translate-y-0" : "translate-y-full"
       }`}
+      {...(!isOpen && { inert: true })}
     >
       {/* Header */}
       <div className="drawer-header shrink-0 flex items-center justify-between px-4 py-0 border-b border-panel-border bg-sidebar-drop-bg z-10">

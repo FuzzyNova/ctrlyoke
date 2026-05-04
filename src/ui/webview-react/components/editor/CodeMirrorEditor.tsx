@@ -18,7 +18,7 @@ import {
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
-import { history, historyKeymap } from "@codemirror/commands";
+import { history, historyKeymap, insertTab } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import {
   linter,
@@ -682,6 +682,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
               return true;
             },
           },
+          // Fallback: insert a tab character when no completion is active.
+          // completionKeymap binds Tab to acceptCompletion (returns true only
+          // when a completion dropdown is open), so this only fires when there
+          // is nothing to accept — preventing Tab from moving DOM focus away.
+          { key: "Tab", run: insertTab },
         ]),
         placeholder(placeholderText),
         createThemeExtension(surface),

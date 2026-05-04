@@ -34,6 +34,8 @@ module.exports = {
         "terminal-bg":
           "var(--vscode-terminal-background, var(--vscode-editor-background))",
         "focus-border": "var(--vscode-focusBorder)",
+        "focus-border-hover":
+          "color-mix(in srgb, var(--vscode-focusBorder) 65%, white)",
         "contrast-active-border":
           "var(--vscode-contrastActiveBorder, transparent)",
         "focus-highlight":

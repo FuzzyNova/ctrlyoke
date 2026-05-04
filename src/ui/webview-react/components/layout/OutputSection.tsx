@@ -1032,7 +1032,9 @@ export const OutputSection: React.FC = () => {
                 className={`fp-tab ${activeOutputTab === "output" ? "fp-tab-active" : "fp-tab-inactive"}`}
                 onClick={() => setActiveOutputTab(terminalWorkflowId, "output")}
               >
-                <i className="codicon codicon-output text-sm" />
+                <i
+                  className={`codicon codicon-output codicon-sm ${isHeaderNarrow ? "px-1" : ""}`}
+                />
                 {!isHeaderNarrow && <span>Output</span>}
               </button>
               <button
@@ -1049,7 +1051,9 @@ export const OutputSection: React.FC = () => {
                   }
                 }}
               >
-                <i className="codicon codicon-terminal text-sm" />
+                <i
+                  className={`codicon codicon-terminal codicon-sm ${isHeaderNarrow ? "px-1" : ""}`}
+                />
                 {!isHeaderNarrow && <span>Terminal</span>}
                 {terminalSessionActive && (
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse" />
