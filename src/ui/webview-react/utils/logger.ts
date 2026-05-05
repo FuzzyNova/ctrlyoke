@@ -18,8 +18,33 @@ function log(
       message: text,
     });
   } catch {
-    // VS Code API not yet available (early init) — fall back to console
-    console[level](message, ...args);
+    // VS Code API not yet available (early init) — forward through the
+    // injected bootstrap logger if present so the extension session log still
+    // captures startup failures before React fully connects.
+    if (typeof window !== "undefined") {
+      try {
+        window.__flightpathBootstrapLog?.(level, text);
+        if (window.__flightpathBootstrapLog) {
+          return;
+        }
+      } catch {
+        // Fall through to console output.
+      }
+    }
+
+    if (level === LOG_LEVELS.ERROR) {
+      console.error(message, ...args);
+      return;
+    }
+    if (level === LOG_LEVELS.WARN) {
+      console.warn(message, ...args);
+      return;
+    }
+    if (level === LOG_LEVELS.INFO) {
+      console.info(message, ...args);
+      return;
+    }
+    console.debug(message, ...args);
   }
 }
 

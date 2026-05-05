@@ -86,6 +86,8 @@ beforeEach(() => {
   webviewWarnMock.mockReset();
   sessionStorage.clear();
   vi.useRealTimers();
+  // Reset reconnect watchdog per-page-load flag so tests are independent.
+  reconnectWatchdog.clearFreshPageReadySent();
 });
 
 // ---------------------------------------------------------------------------
@@ -381,6 +383,83 @@ describe("restart lifecycle", () => {
     });
 
     expect(reloadSpy).not.toHaveBeenCalled();
+    reloadSpy.mockRestore();
+  });
+
+  it("does not schedule watchdog on RECONNECT when fresh page already sent READY", () => {
+    vi.useFakeTimers();
+    const reloadSpy = vi
+      .spyOn(
+        reconnectWatchdog.reconnectWatchdogHooks,
+        "reloadPanelForReconnect"
+      )
+      .mockImplementation(() => undefined);
+
+    // Simulate BootstrapApp having sent READY on this fresh page load.
+    reconnectWatchdog.markFreshPageReadySent();
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RECONNECT);
+      vi.advanceTimersByTime(1600);
+    });
+
+    expect(reloadSpy).not.toHaveBeenCalled();
+    reloadSpy.mockRestore();
+  });
+
+  it("schedules watchdog on RECONNECT in retained context (CLIENT_ID_ASSIGNED previously received)", () => {
+    vi.useFakeTimers();
+    const reloadSpy = vi
+      .spyOn(
+        reconnectWatchdog.reconnectWatchdogHooks,
+        "reloadPanelForReconnect"
+      )
+      .mockImplementation(() => undefined);
+
+    // Simulate retained context: freshPageReadySent was cleared when
+    // CLIENT_ID_ASSIGNED arrived in the previous session.
+    // clearFreshPageReadySent() is called in beforeEach, so the default state
+    // is already false — no extra setup needed.
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RECONNECT);
+      vi.advanceTimersByTime(1600);
+    });
+
+    expect(reloadSpy).toHaveBeenCalledOnce();
+    reloadSpy.mockRestore();
+  });
+
+  it("clears freshPageReadySent flag when CLIENT_ID_ASSIGNED arrives", () => {
+    renderHook(() => useMessageHandler());
+
+    // Simulate fresh page having sent READY.
+    reconnectWatchdog.markFreshPageReadySent();
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "panel" });
+    });
+
+    // After CLIENT_ID_ASSIGNED, the flag should be cleared so the next
+    // extension host restart (retained context) can arm the watchdog again.
+    vi.useFakeTimers();
+    const reloadSpy = vi
+      .spyOn(
+        reconnectWatchdog.reconnectWatchdogHooks,
+        "reloadPanelForReconnect"
+      )
+      .mockImplementation(() => undefined);
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.RECONNECT);
+      vi.advanceTimersByTime(1600);
+    });
+
+    expect(reloadSpy).toHaveBeenCalledOnce();
     reloadSpy.mockRestore();
   });
 });

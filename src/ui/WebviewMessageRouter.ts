@@ -103,10 +103,26 @@ export class WebviewMessageRouter {
    * Route a webview message to the appropriate handler.
    */
   async route(message: any, options?: WebviewRouteOptions): Promise<void> {
+    const queuedAt = Date.now();
+    if (message?.type === MESSAGE_TYPES.READY) {
+      Log.debug(
+        `[WebviewMessageRouter] queueing READY clientId=${options?.clientTag ?? PANEL_CLIENT_ID}`
+      );
+    }
     this.routeQueue = this.routeQueue.then(() =>
-      this.withScopedContext(options?.postMessage, options?.clientTag, () =>
-        this.routeSingleMessage(message)
-      )
+      this.withScopedContext(options?.postMessage, options?.clientTag, async () => {
+        if (message?.type === MESSAGE_TYPES.READY) {
+          Log.debug(
+            `[WebviewMessageRouter] processing READY clientId=${this.clientId} queuedForMs=${Date.now() - queuedAt}`
+          );
+        }
+        await this.routeSingleMessage(message);
+        if (message?.type === MESSAGE_TYPES.READY) {
+          Log.debug(
+            `[WebviewMessageRouter] finished READY clientId=${this.clientId} totalElapsedMs=${Date.now() - queuedAt}`
+          );
+        }
+      })
     );
 
     await this.routeQueue;
@@ -137,6 +153,39 @@ export class WebviewMessageRouter {
     this.getCurrentPostMessage()(message);
   }
 
+  private async completeBrowserReadyAfterStartup(
+    orchestrator: WorkflowOrchestrator,
+    send: PostMessageFn,
+    clientId: string
+  ): Promise<void> {
+    try {
+      Log.debug(
+        `[WebviewMessageRouter] browser READY follow-up waiting for startup auto-load clientId=${clientId}`
+      );
+
+      const loadedWorkflowId = await orchestrator.awaitStartupAutoLoad();
+      const alreadyReplayed = orchestrator.hasViewedWorkflow(clientId);
+      if (loadedWorkflowId && !alreadyReplayed) {
+        await orchestrator.replayWorkflowStateTo(
+          loadedWorkflowId,
+          send,
+          clientId
+        );
+      }
+
+      await this.settingsSync.sendWorkflowPropertiesToSettings(send, clientId);
+      this.settingsSync.sendStartupComplete(send);
+
+      Log.debug(
+        `[WebviewMessageRouter] browser READY follow-up complete clientId=${clientId} loadedWorkflowId=${loadedWorkflowId ?? "(none)"} alreadyReplayed=${alreadyReplayed}`
+      );
+    } catch (error) {
+      Log.error(
+        `[WebviewMessageRouter] browser READY follow-up failed clientId=${clientId}: ${getErrorMessage(error)}`
+      );
+    }
+  }
+
   private async routeSingleMessage(message: any): Promise<void> {
     try {
       const handler = this.handlers.get(message.type);
@@ -163,6 +212,9 @@ export class WebviewMessageRouter {
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.READY, async (message) => {
+      Log.debug(
+        `[WebviewMessageRouter] READY received clientId=${this.clientId} preferredWorkingFilePath=${typeof message.preferredWorkingFilePath === "string" ? message.preferredWorkingFilePath : "(none)"}`
+      );
       if (this.clientId === PANEL_CLIENT_ID) {
         // Cancel RECONNECT retries before any awaited startup work so a valid
         // panel READY immediately stops further nudges from the extension.
@@ -202,33 +254,16 @@ export class WebviewMessageRouter {
         if (this.clientId !== PANEL_CLIENT_ID) {
           const send = this.scopedPostMessage;
           const clientId = this.clientId;
-
-          // Await startup auto-load completion regardless of when this client
-          // connected (before, during, or after). The promise always resolves.
-          // This eliminates the race condition where the old boolean flag was
-          // true (triggered) but the auto-load callback hadn't fired yet.
-          const loadedWorkflowId = await orchestrator.awaitStartupAutoLoad();
-
-          // If auto-load found a session AND handleClientReady hasn't already
-          // replayed it (via the panel's viewedId fallback), send a targeted
-          // replay now with the definitive workflow ID.
-          const alreadyReplayed = orchestrator.hasViewedWorkflow(clientId);
-          if (loadedWorkflowId && !alreadyReplayed) {
-            await orchestrator.replayWorkflowStateTo(
-              loadedWorkflowId,
-              send,
-              clientId
-            );
-          }
-
-          await this.settingsSync.sendWorkflowPropertiesToSettings(
-            this.getCurrentPostMessage(),
+          // Do not await the browser startup follow-up while holding the
+          // shared routeQueue. Browser READY can arrive before panel READY
+          // during extension reloads, and awaitStartupAutoLoad() depends on
+          // the panel READY path reaching setDashboardReady(). Running this
+          // continuation in the background avoids deadlocking panel startup.
+          void this.completeBrowserReadyAfterStartup(
+            orchestrator,
+            send,
             clientId
           );
-          // Send STARTUP_COMPLETE directly — the hub broadcast from
-          // triggerAutoLoad's finally block may have fired before this client
-          // connected, so we guarantee delivery here.
-          this.settingsSync.sendStartupComplete(this.getCurrentPostMessage());
         }
       }
 

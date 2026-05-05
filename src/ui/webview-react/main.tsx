@@ -8,12 +8,15 @@ import "./styles/globals.css";
 
 const root = document.getElementById("root");
 window.__flightpathReactMounted = true;
+WebviewLog.debug(`[main] entry rootFound=${Boolean(root)}`);
 if (!root) {
   WebviewLog.error("[main] root element not found");
 } else {
   const start = async () => {
     try {
+      WebviewLog.debug("[main] rehydrating uiStore");
       await useUiStore.persist.rehydrate();
+      WebviewLog.debug("[main] uiStore rehydrated, calling ReactDOM.createRoot");
       ReactDOM.createRoot(root).render(
         <React.StrictMode>
           <ErrorBoundary>
@@ -21,6 +24,7 @@ if (!root) {
           </ErrorBoundary>
         </React.StrictMode>
       );
+      WebviewLog.debug("[main] ReactDOM.createRoot().render() returned");
     } catch (error) {
       WebviewLog.error(
         `[main] bootstrap failed: ${error instanceof Error ? error.message : String(error)}`

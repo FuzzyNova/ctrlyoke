@@ -16,7 +16,10 @@ import { useUiStore } from "../store/uiStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { sendMessage } from "@hooks/useMessageHandler";
 import type { MessageHandlerMap } from "./useMessageHandler";
-import { clearPanelReconnectReloadWatchdog } from "./reconnectWatchdog";
+import {
+  clearPanelReconnectReloadWatchdog,
+  clearFreshPageReadySent,
+} from "./reconnectWatchdog";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
 function isScriptPtySession(session: {
   kind?: string;
@@ -40,8 +43,18 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   handlers[MESSAGE_TYPES.CLIENT_ID_ASSIGNED] = (message: any) => {
     const { clientId } = message;
     if (clientId) {
+      // Signal the HTML-level handshake watchdog that the extension connection
+      // succeeded so it does not reload the panel unnecessarily.
+      window.__flightpathPanelHandshakeDone = true;
+      // Reset the fresh-page flag so future RECONNECT messages (e.g. on the
+      // next extension host restart) correctly schedule the retained-context
+      // reload watchdog.
+      clearFreshPageReadySent();
       clearPanelReconnectReloadWatchdog();
       useUiStore.getState().setMyClientId(clientId as string);
+      WebviewLog.debug(
+        `[CLIENT_ID_ASSIGNED] clientId=${clientId} — handshake complete`
+      );
     }
   };
   // --------------------------------------------------------------------------

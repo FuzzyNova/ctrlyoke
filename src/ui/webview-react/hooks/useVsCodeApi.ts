@@ -12,6 +12,10 @@ declare global {
     vscodeApi?: VsCodeApi;
     __flightpathStandalone?: boolean;
     __flightpathReactMounted?: boolean;
+    /** Set to true when CLIENT_ID_ASSIGNED arrives; used by the HTML handshake watchdog. */
+    __flightpathPanelHandshakeDone?: boolean;
+    __flightpathBootstrapLog?: (level: string, message: string) => void;
+    __flightpathFlushBootstrapLogs?: () => void;
     acquireVsCodeApi?: () => VsCodeApi;
   }
 }
@@ -21,6 +25,17 @@ export const isStandalone =
   typeof window !== "undefined" && !!window.__flightpathStandalone;
 
 let vscodeApi: VsCodeApi | undefined;
+
+function flushBootstrapLogs(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.__flightpathFlushBootstrapLogs?.();
+  } catch {
+    // Best-effort flush only.
+  }
+}
 
 function resolveVsCodeApi(): VsCodeApi | undefined {
   if (typeof window === "undefined") {
@@ -32,11 +47,13 @@ function resolveVsCodeApi(): VsCodeApi | undefined {
   // forever if a newer one is present.
   if (window.vscodeApi && window.vscodeApi !== vscodeApi) {
     vscodeApi = window.vscodeApi;
+    flushBootstrapLogs();
   }
 
   if (!vscodeApi && typeof window.acquireVsCodeApi === "function") {
     vscodeApi = window.acquireVsCodeApi();
     window.vscodeApi = vscodeApi;
+    flushBootstrapLogs();
   }
 
   return vscodeApi;

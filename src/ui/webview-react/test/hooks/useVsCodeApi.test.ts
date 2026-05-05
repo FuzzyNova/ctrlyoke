@@ -3,12 +3,13 @@
  *
  * The VS Code API is mocked in test/setup.ts via window.vscodeApi.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useVsCodeApi, getVsCodeApi } from "@hooks/useVsCodeApi";
 
 beforeEach(() => {
   window.vscodeApi = window.acquireVsCodeApi?.();
+  delete window.__flightpathFlushBootstrapLogs;
 });
 
 // ---------------------------------------------------------------------------
@@ -60,6 +61,15 @@ describe("useVsCodeApi", () => {
 
     const { result } = renderHook(() => useVsCodeApi());
     expect(result.current).toBe(replacementApi);
+  });
+
+  it("flushes buffered bootstrap logs when the API resolves", () => {
+    const flushMock = vi.fn();
+    window.__flightpathFlushBootstrapLogs = flushMock;
+
+    renderHook(() => useVsCodeApi());
+
+    expect(flushMock).toHaveBeenCalled();
   });
 });
 

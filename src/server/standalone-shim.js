@@ -45,6 +45,10 @@
   const MAX_CONNECT_FAILURES = 5;
   let connectionBannerShown = false;
   const pendingInbound = [];
+  // Millisecond timestamp until which an expected server restart is in progress.
+  // While active, connection failures don't count toward the banner threshold.
+  // Set by window.__fpExpectServerRestart() called from DEV_RESTARTING handler.
+  let serverRestartExpectedUntil = 0;
 
   function getWebSocketUrl() {
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -326,22 +330,28 @@
       clearConnectWatchdog();
       if (ws === socket) ws = undefined;
       if (!socketOpened) {
-        consecutiveConnectFailures++;
-        if (consecutiveConnectFailures >= MAX_CONNECT_FAILURES) {
-          connectionBannerShown = true;
-          clearReconnectTimer();
-          // Close any socket that the watchdog's synchronous connect() may have
-          // already created before this close event fired.
-          if (ws && ws.readyState !== WebSocket.CLOSED) {
-            try {
-              ws.close();
-            } catch {
-              /* best-effort */
+        // During an expected server restart (e.g. Rebuild All & Reload) don't
+        // count failures toward the banner threshold — the server will be down
+        // for the duration of the rebuild + VS Code reload (20-60+ seconds).
+        const duringExpectedRestart = Date.now() < serverRestartExpectedUntil;
+        if (!duringExpectedRestart) {
+          consecutiveConnectFailures++;
+          if (consecutiveConnectFailures >= MAX_CONNECT_FAILURES) {
+            connectionBannerShown = true;
+            clearReconnectTimer();
+            // Close any socket that the watchdog's synchronous connect() may have
+            // already created before this close event fired.
+            if (ws && ws.readyState !== WebSocket.CLOSED) {
+              try {
+                ws.close();
+              } catch {
+                /* best-effort */
+              }
+              ws = undefined;
             }
-            ws = undefined;
+            showConnectionErrorBanner();
+            return;
           }
-          showConnectionErrorBanner();
-          return;
         }
       }
       scheduleReconnect();
@@ -454,6 +464,21 @@
   window.addEventListener("online", () => {
     refreshConnectionOnForeground(true);
   });
+
+  // Called by React's DEV_RESTARTING handler when a full rebuild + window reload
+  // is about to happen. Suppresses the consecutive-failure counter so the shim
+  // keeps retrying for the full duration instead of showing the error banner.
+  window.__fpExpectServerRestart = function (durationMs) {
+    serverRestartExpectedUntil = Date.now() + durationMs;
+    // If the banner is already visible from a previous failure burst, hide it
+    // and resume retrying — the server may come back during this window.
+    if (connectionBannerShown) {
+      connectionBannerShown = false;
+      consecutiveConnectFailures = 0;
+      hideConnectionErrorBanner();
+      connect();
+    }
+  };
 
   connect();
 

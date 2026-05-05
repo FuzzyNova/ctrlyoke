@@ -10,7 +10,7 @@
  * - Sets up message listener with proper cleanup
  */
 import { useEffect, useCallback, useMemo } from "react";
-import { getVsCodeApi } from "./useVsCodeApi";
+import { getVsCodeApi, isStandalone } from "./useVsCodeApi";
 import { useWorkflowStore } from "../store/workflowStore";
 import {
   useSettingsStore,
@@ -396,6 +396,9 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   handlers[MESSAGE_TYPES.DEV_RESTARTING] = (message) => {
+    WebviewLog.debug(
+      `[DEV_RESTARTING] command=${message.command ?? "(none)"} isStandalone=${isStandalone}`
+    );
     useUiStore.setState({
       devRestarting: true,
       startupReady: false,
@@ -410,12 +413,24 @@ function createMessageHandlers(): MessageHandlerMap {
     // as a self-healing fallback if the READY handshake doesn't complete.
     if (message.command !== "workbench.action.reloadWindow") {
       schedulePanelReconnectReloadWatchdog();
+    } else if (isStandalone) {
+      // Tell the standalone shim to be patient with reconnects during the full
+      // rebuild + window reload cycle, which can take 20-60+ seconds.
+      // Without this the shim exhausts its 5 consecutive-failure limit (~5 s)
+      // and shows a permanent error banner before the server comes back.
+      const expectFn = (window as unknown as Record<string, unknown>)[
+        "__fpExpectServerRestart"
+      ];
+      if (typeof expectFn === "function") {
+        (expectFn as (ms: number) => void)(120000);
+      }
     }
   };
 
   handlers[MESSAGE_TYPES.RECONNECT] = () => {
     // Extension host restarted but VS Code retained the old webview context.
     // Reset startup state and re-send READY so the new host can initialize.
+    WebviewLog.debug("[RECONNECT] received — re-sending READY");
     useUiStore.setState({
       devRestarting: false,
       startupReady: false,
@@ -426,6 +441,10 @@ function createMessageHandlers(): MessageHandlerMap {
       type: MESSAGE_TYPES.READY,
       preferredWorkingFilePath: activeWorkflowWorkingFilePath,
     });
+    // schedulePanelReconnectReloadWatchdog() is a no-op when this is a fresh
+    // page load that already sent READY via BootstrapApp (freshPageReadySent=true).
+    // It only arms the watchdog for retained contexts where the panel hasn't
+    // yet received CLIENT_ID_ASSIGNED from the new extension host.
     schedulePanelReconnectReloadWatchdog();
   };
 
