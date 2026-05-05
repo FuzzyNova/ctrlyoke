@@ -28,7 +28,7 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
     <div
       className={
         className ??
-        "flex items-center border-t border-panel-border bg-sidebar-bg overflow-x-hidden"
+        "flex items-center border-t border-panel-border bg-sidebar-bg overflow-x-hidden h-10"
       }
     >
       {DRAWER_TABS.map((tab) => {
@@ -57,12 +57,12 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
             {codicon ? (
               <span
                 className={`codicon codicon-${codicon}`}
-                style={{ fontSize: 16 }}
+                style={{ fontSize: 20 }}
               />
             ) : (
               <HarnessIcon
                 harnessId={harnessId}
-                size={18}
+                size={20}
                 className={
                   isActive ? "opacity-100" : "opacity-80 hover:opacity-100"
                 }

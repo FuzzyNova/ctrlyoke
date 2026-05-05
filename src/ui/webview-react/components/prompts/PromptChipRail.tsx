@@ -172,7 +172,7 @@ function FinalStepChip({
   const borderBarClass = getChipBorderClass(status);
   return (
     <div
-      className="relative flex flex-col px-1 py-1 border-t-2 border-panel-border hover:bg-toolbar-hover-bg transition-colors cursor-pointer"
+      className="relative flex flex-col px-1 h-10 items-center justify-center border-t-2 border-panel-border hover:bg-toolbar-hover-bg transition-colors cursor-pointer overflow-hidden"
       role="button"
       tabIndex={0}
       onClick={onChipClick}
@@ -193,13 +193,16 @@ function FinalStepChip({
       <div
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`}
       />
-      {/* Row 1: "F" label + status icon */}
-      <div className="flex items-center justify-between w-full">
+      {/* Row 1: "FINAL" label */}
+      <div className="flex justify-center w-full">
         <span
           className={`text-xxs leading-none select-none font-semibold ${hasFinalStep ? "text-terminal-ansiGreen" : "text-description-fg"}`}
         >
-          F
+          FINAL
         </span>
+      </div>
+      {/* Row 2: status icon centered */}
+      <div className="flex justify-center w-full">
         <StatusIcon
           status={status}
           disabled={!hasFinalStep}

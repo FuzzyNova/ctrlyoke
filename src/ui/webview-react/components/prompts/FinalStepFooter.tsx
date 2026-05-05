@@ -117,7 +117,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
 
           {/* Phase badge */}
           {phase && (
-            <div className="mt-0.5text-xxs opacity-75">
+            <div className="mt-0.5 text-xxs opacity-75">
               {phase === FINAL_STEP_PHASES.FINAL_STEP ? "Final Step" : "Queue"}
             </div>
           )}
@@ -141,7 +141,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
       )}
 
       <div
-        className={`h-9 px-2 flex items-center gap-2 ${
+        className={`h-[39px] px-2 flex items-center gap-2 ${
           isSelected
             ? "bg-list-active-bg text-list-active-fg"
             : "hover:bg-list-hover-bg text-foreground"
