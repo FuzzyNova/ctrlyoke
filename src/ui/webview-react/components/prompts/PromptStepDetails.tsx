@@ -85,10 +85,15 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
       {/* Harness / model metadata */}
       {(harnessLabel || modelLabel) && (
         <div
-          className={`mt-0.5 flex items-center gap-1 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+          className={`mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           {harnessLabel && (
-            <span>
+            <span
+              className="min-w-0 truncate"
+              title={
+                harnessIsDefault ? `${harnessLabel} (default)` : harnessLabel
+              }
+            >
               {harnessLabel}
               {harnessIsDefault && (
                 <span className="opacity-60"> (default)</span>
@@ -96,10 +101,13 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
             </span>
           )}
           {harnessLabel && modelLabel && (
-            <span className="opacity-40 mx-0.5">·</span>
+            <span className="mx-0.5 flex-shrink-0 opacity-40">·</span>
           )}
           {modelLabel && (
-            <span>
+            <span
+              className="min-w-0 truncate"
+              title={modelIsDefault ? `${modelLabel} (default)` : modelLabel}
+            >
               {modelLabel}
               {modelIsDefault && <span className="opacity-60"> (default)</span>}
             </span>

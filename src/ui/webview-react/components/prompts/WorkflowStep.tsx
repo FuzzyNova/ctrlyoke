@@ -233,7 +233,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
           )}
         </span>
         {/* Content column: title + details */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           {isScript ? (
             // Script step variant
             <>
@@ -309,7 +309,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
               />
             </div>
             {/* Percentage label */}
-            <span className="text-[8px] leading-none text-description-fg opacity-75 mt-0.5">
+            <span className="text-xxs leading-none text-description-fg opacity-75 mt-0.5">
               {contextPct}%
             </span>
           </div>
