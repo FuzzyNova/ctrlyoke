@@ -236,8 +236,11 @@ export function getQwenModelName(model: string): string | undefined {
  * @returns Context window size in tokens
  */
 export function getClaudeContextWindowSize(modelId: string): number {
-  if (modelId.includes("[1m]") || modelId.includes("1m")) {
+  if (modelId.includes("[1m]") || modelId.includes("1m") || modelId.includes("opus")) {
     return 1_000_000;
+  }
+  if (modelId.includes("sonnet")) {
+    return 400_000;
   }
   return 200_000;
 }
