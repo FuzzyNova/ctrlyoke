@@ -877,17 +877,31 @@ export class WorkflowInstance {
         return;
       }
 
+      const executionState = this.getAuthoritativeExecutionState();
+      const isRestartFromBeginning =
+        !continueFromCurrent &&
+        !isAppendContinuation &&
+        (executionState === EXECUTION_STATES.COMPLETED ||
+          executionState === EXECUTION_STATES.PAUSED ||
+          executionState === EXECUTION_STATES.STOPPED ||
+          executionState === EXECUTION_STATES.ERROR);
+
+      if (isRestartFromBeginning) {
+        // Gracefully terminate live inject integrations before creating the new
+        // execution integration. Ctrl+C gives the CLI time to clean up; dispose()
+        // then releases the event emitters and any headless process handle.
+        for (const liveIntegration of this.liveInjectIntegrations.values()) {
+          liveIntegration.closeTerminalGracefully();
+          liveIntegration.dispose();
+        }
+        this.liveInjectIntegrations.clear();
+      }
+
       // Create the execution integration only after passing pre-flight checks.
       const integration = this.createIntegrationForMode(modeOverride);
 
-      const executionState = this.getAuthoritativeExecutionState();
       if (!continueFromCurrent && !isAppendContinuation) {
-        if (
-          executionState === EXECUTION_STATES.COMPLETED ||
-          executionState === EXECUTION_STATES.PAUSED ||
-          executionState === EXECUTION_STATES.STOPPED ||
-          executionState === EXECUTION_STATES.ERROR
-        ) {
+        if (isRestartFromBeginning) {
           Log.debug(
             `FlightPath: Queue in ${executionState} state, restarting from beginning`
           );

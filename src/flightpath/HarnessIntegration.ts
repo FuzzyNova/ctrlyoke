@@ -256,6 +256,18 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Gracefully terminate the underlying process before disposal.
+   * For PTY-based harnesses (CliIntegration), sends Ctrl+C and waits before killing
+   * so the CLI can clean up. No-op for all other harnesses.
+   *
+   * Call this before dispose() when the user explicitly restarts from beginning,
+   * so the previous run's process exits cleanly rather than being hard-killed.
+   */
+  closeTerminalGracefully(): void {
+    // no-op for non-PTY harnesses
+  }
+
+  /**
    * Returns true if this integration can be reused for the next run without disposing
    * and recreating it. True when inject mode is configured and the underlying PTY
    * session is still alive with a known inject context.

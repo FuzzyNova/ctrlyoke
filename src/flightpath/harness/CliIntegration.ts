@@ -1259,6 +1259,15 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
+   * Sends Ctrl+C to the live PTY and schedules a hard kill after 500 ms, giving
+   * the CLI time to clean up before the next run spawns a fresh process.
+   * Called by WorkflowInstance when the user explicitly restarts from beginning.
+   */
+  override closeTerminalGracefully(): void {
+    this.transportCoordinator.closeTerminal();
+  }
+
+  /**
    * Dispose of resources.
    * If closeTerminalWhenPromptCompletes is false (default), the terminal is kept open
    * so the user can review output. The next prompt launch will close it before reuse.
