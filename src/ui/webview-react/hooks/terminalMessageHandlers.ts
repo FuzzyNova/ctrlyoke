@@ -52,9 +52,6 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       clearFreshPageReadySent();
       clearPanelReconnectReloadWatchdog();
       useUiStore.getState().setMyClientId(clientId as string);
-      WebviewLog.debug(
-        `[CLIENT_ID_ASSIGNED] clientId=${clientId} — handshake complete`
-      );
     }
   };
   // --------------------------------------------------------------------------

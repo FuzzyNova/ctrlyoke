@@ -103,26 +103,10 @@ export class WebviewMessageRouter {
    * Route a webview message to the appropriate handler.
    */
   async route(message: any, options?: WebviewRouteOptions): Promise<void> {
-    const queuedAt = Date.now();
-    if (message?.type === MESSAGE_TYPES.READY) {
-      Log.debug(
-        `[WebviewMessageRouter] queueing READY clientId=${options?.clientTag ?? PANEL_CLIENT_ID}`
-      );
-    }
     this.routeQueue = this.routeQueue.then(() =>
-      this.withScopedContext(options?.postMessage, options?.clientTag, async () => {
-        if (message?.type === MESSAGE_TYPES.READY) {
-          Log.debug(
-            `[WebviewMessageRouter] processing READY clientId=${this.clientId} queuedForMs=${Date.now() - queuedAt}`
-          );
-        }
-        await this.routeSingleMessage(message);
-        if (message?.type === MESSAGE_TYPES.READY) {
-          Log.debug(
-            `[WebviewMessageRouter] finished READY clientId=${this.clientId} totalElapsedMs=${Date.now() - queuedAt}`
-          );
-        }
-      })
+      this.withScopedContext(options?.postMessage, options?.clientTag, () =>
+        this.routeSingleMessage(message)
+      )
     );
 
     await this.routeQueue;
@@ -159,10 +143,6 @@ export class WebviewMessageRouter {
     clientId: string
   ): Promise<void> {
     try {
-      Log.debug(
-        `[WebviewMessageRouter] browser READY follow-up waiting for startup auto-load clientId=${clientId}`
-      );
-
       const loadedWorkflowId = await orchestrator.awaitStartupAutoLoad();
       const alreadyReplayed = orchestrator.hasViewedWorkflow(clientId);
       if (loadedWorkflowId && !alreadyReplayed) {
@@ -175,10 +155,6 @@ export class WebviewMessageRouter {
 
       await this.settingsSync.sendWorkflowPropertiesToSettings(send, clientId);
       this.settingsSync.sendStartupComplete(send);
-
-      Log.debug(
-        `[WebviewMessageRouter] browser READY follow-up complete clientId=${clientId} loadedWorkflowId=${loadedWorkflowId ?? "(none)"} alreadyReplayed=${alreadyReplayed}`
-      );
     } catch (error) {
       Log.error(
         `[WebviewMessageRouter] browser READY follow-up failed clientId=${clientId}: ${getErrorMessage(error)}`
@@ -212,9 +188,6 @@ export class WebviewMessageRouter {
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.READY, async (message) => {
-      Log.debug(
-        `[WebviewMessageRouter] READY received clientId=${this.clientId} preferredWorkingFilePath=${typeof message.preferredWorkingFilePath === "string" ? message.preferredWorkingFilePath : "(none)"}`
-      );
       if (this.clientId === PANEL_CLIENT_ID) {
         // Cancel RECONNECT retries before any awaited startup work so a valid
         // panel READY immediately stops further nudges from the extension.

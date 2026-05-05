@@ -191,39 +191,23 @@ export class FlightPathWebviewProvider
       ],
     };
 
-    Log.debug("resolveWebviewView() — setting webview.html (fresh page load)");
     const html = this._getHtmlForWebview(webviewView.webview);
     webviewView.webview.html = html;
-    Log.debug("resolveWebviewView() — webview.html set, registering message handler");
 
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage((message) => {
-      Log.debug(
-        `[panel->extension] received message type=${typeof message?.type === "string" ? message.type : "(unknown)"}`
-      );
       if (message?.type === MESSAGE_TYPES.READY) {
-        Log.debug(
-          "[panel->extension] raw READY received — cancelling pending RECONNECT retries before queued routing"
-        );
         this.cancelReconnectRetry();
       }
       void this.routeMessage(message);
     });
-    webviewView.onDidChangeVisibility(() => {
-      Log.debug(
-        `resolveWebviewView() visibility changed — visible=${webviewView.visible}`
-      );
-    });
     webviewView.onDidDispose(() => {
-      Log.debug("resolveWebviewView() webview disposed");
       if (this.view === webviewView) {
         this.panelReady = false;
         this.view = undefined;
       }
       this.cancelReconnectRetry();
     });
-
-    Log.debug("resolveWebviewView() complete — view is now set, starting reconnect recovery");
 
     this.startPanelReconnectRecovery(webviewView);
 
@@ -260,21 +244,14 @@ export class FlightPathWebviewProvider
     // extension side while the first load is still in progress.
     const session = ++this.reconnectRetrySession;
 
-    let attempt = 0;
     void retryWithBackoff(
       async () => {
         if (
           this.reconnectRetrySession !== session ||
           this.view !== webviewView
         ) {
-          Log.debug(
-            `[resolveWebviewView] RECONNECT retry cancelled (session=${session} attempt=${attempt})`
-          );
           return true; // cancelled
         }
-        Log.debug(
-          `[resolveWebviewView] sending RECONNECT (session=${session} attempt=${attempt++})`
-        );
         this.postMessage({ type: MESSAGE_TYPES.RECONNECT });
         return null; // keep retrying
       },

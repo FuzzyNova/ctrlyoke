@@ -1,9 +1,7 @@
 // Captured before the React bundle loads so the retained-panel reconnect path
-// can reuse the latest API object. No imports — compiled as a standalone IIFE.
+// can reuse the latest API object. No imports; compiled as a standalone IIFE.
 declare const __fpLogMessageType__: string;
 declare const __fpLogLevels__: {
-  DEBUG: string;
-  INFO: string;
   WARN: string;
   ERROR: string;
 };
@@ -20,7 +18,6 @@ type FlightPathBootstrapWindow = Window &
   typeof globalThis & {
     vscodeApi?: VsCodeApiLike;
     acquireVsCodeApi?: () => VsCodeApiLike;
-    __flightpathStandalone?: boolean;
     __flightpathBootstrapLogInstalled?: boolean;
     __flightpathBootstrapLogQueue?: BootstrapLogEntry[];
     __flightpathBootstrapLog?: (
@@ -44,15 +41,7 @@ function writeConsole(level: BootstrapLogLevel, message: string): void {
     console.error(message);
     return;
   }
-  if (level === __fpLogLevels__.WARN) {
-    console.warn(message);
-    return;
-  }
-  if (level === __fpLogLevels__.INFO) {
-    console.info(message);
-    return;
-  }
-  console.debug(message);
+  console.warn(message);
 }
 
 function tryPostBootstrapLog(entry: BootstrapLogEntry): boolean {
@@ -79,9 +68,15 @@ function installBootstrapLogger(): void {
     (flightpathWindow.__flightpathBootstrapLogQueue = []);
 
   const enqueueOrPost = (level: BootstrapLogLevel, message: string): void => {
+    const prefixedMessage = `[bootstrap] ${message}`;
+    if (level !== __fpLogLevels__.WARN && level !== __fpLogLevels__.ERROR) {
+      console.debug(prefixedMessage);
+      return;
+    }
+
     const entry = {
       level,
-      message: `[bootstrap] ${message}`,
+      message: prefixedMessage,
     };
     if (!tryPostBootstrapLog(entry)) {
       queue.push(entry);
@@ -116,81 +111,23 @@ function installBootstrapLogger(): void {
       `unhandled rejection: ${formatUnknownError(event.reason)}`
     );
   });
-
-  document.addEventListener("readystatechange", () => {
-    enqueueOrPost(
-      __fpLogLevels__.DEBUG,
-      `document readyState=${document.readyState}`
-    );
-  });
-
-  window.addEventListener("DOMContentLoaded", () => {
-    enqueueOrPost(__fpLogLevels__.DEBUG, "DOMContentLoaded");
-  });
-
-  window.addEventListener("load", () => {
-    enqueueOrPost(__fpLogLevels__.DEBUG, "window load");
-  });
-
-  window.addEventListener("pageshow", (event) => {
-    enqueueOrPost(
-      __fpLogLevels__.DEBUG,
-      `pageshow persisted=${event.persisted}`
-    );
-  });
-
-  window.addEventListener("pagehide", (event) => {
-    enqueueOrPost(
-      __fpLogLevels__.WARN,
-      `pagehide persisted=${event.persisted}`
-    );
-  });
-
-  window.addEventListener("beforeunload", () => {
-    enqueueOrPost(__fpLogLevels__.WARN, "beforeunload");
-  });
-
-  document.addEventListener("visibilitychange", () => {
-    enqueueOrPost(
-      __fpLogLevels__.DEBUG,
-      `visibilitychange state=${document.visibilityState}`
-    );
-  });
 }
 
 installBootstrapLogger();
-const bootstrapLog = flightpathWindow.__flightpathBootstrapLog;
-
-bootstrapLog?.(
-  __fpLogLevels__.DEBUG,
-  `bootstrap script start standalone=${Boolean(flightpathWindow.__flightpathStandalone)}`
-);
-
-if (flightpathWindow.vscodeApi) {
-  bootstrapLog?.(
-    __fpLogLevels__.DEBUG,
-    "window.vscodeApi already present before acquireVsCodeApi()"
-  );
-}
 
 if (typeof flightpathWindow.acquireVsCodeApi !== "function") {
-  bootstrapLog?.(
-    __fpLogLevels__.WARN,
-    "window.acquireVsCodeApi is unavailable before React bootstrap"
-  );
+  if (!flightpathWindow.vscodeApi) {
+    flightpathWindow.__flightpathBootstrapLog?.(
+      __fpLogLevels__.WARN,
+      "window.acquireVsCodeApi is unavailable before React bootstrap"
+    );
+  }
 } else if (!flightpathWindow.vscodeApi) {
-  bootstrapLog?.(__fpLogLevels__.DEBUG, "calling acquireVsCodeApi()");
   try {
     flightpathWindow.vscodeApi = flightpathWindow.acquireVsCodeApi();
-    bootstrapLog?.(
-      __fpLogLevels__.DEBUG,
-      flightpathWindow.vscodeApi
-        ? "acquireVsCodeApi() succeeded"
-        : "acquireVsCodeApi() returned no API object"
-    );
     flightpathWindow.__flightpathFlushBootstrapLogs?.();
   } catch (error) {
-    bootstrapLog?.(
+    flightpathWindow.__flightpathBootstrapLog?.(
       __fpLogLevels__.ERROR,
       `acquireVsCodeApi() threw: ${formatUnknownError(error)}`
     );

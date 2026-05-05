@@ -34,9 +34,6 @@ export default function BootstrapApp() {
     useState<DashboardAppComponent | null>(null);
 
   useEffect(() => {
-    WebviewLog.debug(
-      `[BootstrapApp] effect start isStandalone=${isStandalone} preferredWorkingFilePath=${initialPreferredWorkingFilePathRef.current ?? "(none)"}`
-    );
     const initialPreferredWorkingFilePath =
       initialPreferredWorkingFilePathRef.current;
     // In standalone (browser) mode the shim sends READY at WebSocket open for
@@ -53,7 +50,6 @@ export default function BootstrapApp() {
     // (only --vscode-* props are captured here), corrupting cachedThemeVars on the
     // server and breaking body-class-based icon inversion for subsequent connections.
     if (!isStandalone) {
-      WebviewLog.debug("[BootstrapApp] sending READY (fresh page load)");
       vscode.postMessage({
         type: MESSAGE_TYPES.READY,
         preferredWorkingFilePath: initialPreferredWorkingFilePath,
@@ -68,10 +64,8 @@ export default function BootstrapApp() {
     let cancelled = false;
     const loadDashboardApp = async () => {
       try {
-        WebviewLog.debug("[BootstrapApp] importing App module");
         const module = await import("./App");
         if (!cancelled) {
-          WebviewLog.debug("[BootstrapApp] App module resolved, setting state");
           setDashboardApp(() => module.default);
         }
       } catch (error) {
@@ -85,7 +79,6 @@ export default function BootstrapApp() {
     void loadDashboardApp();
     return () => {
       cancelled = true;
-      WebviewLog.debug("[BootstrapApp] effect cleanup");
     };
   }, [vscode]);
 

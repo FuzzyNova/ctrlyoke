@@ -59,25 +59,16 @@ export function schedulePanelReconnectReloadWatchdog(): void {
   // firing window.location.reload() here would corrupt the acquireVsCodeApi()
   // lifecycle and cause the raw-HTML regression.
   if (freshPageReadySent) {
-    WebviewLog.debug(
-      "[reconnectWatchdog] skipping watchdog: fresh-page READY already sent, waiting for CLIENT_ID_ASSIGNED"
-    );
     return;
   }
 
   clearPanelReconnectReloadTimer();
-  WebviewLog.debug(
-    `[reconnectWatchdog] scheduling ${PANEL_RECONNECT_RELOAD_DELAY_MS}ms reload watchdog (retained context)`
-  );
   panelReconnectReloadTimer = window.setTimeout(() => {
     panelReconnectReloadTimer = undefined;
 
     // The new extension host has already assigned this panel an identity, so
     // the reconnect succeeded and a hard reload is no longer needed.
     if (useUiStore.getState().myClientId) {
-      WebviewLog.debug(
-        "[reconnectWatchdog] watchdog fired but CLIENT_ID_ASSIGNED already received — aborting"
-      );
       clearPanelReconnectReloadWatchdog();
       return;
     }
@@ -96,9 +87,6 @@ export function schedulePanelReconnectReloadWatchdog(): void {
       Number.isFinite(lastReloadAt) &&
       now - lastReloadAt < PANEL_RECONNECT_RELOAD_COOLDOWN_MS
     ) {
-      WebviewLog.debug(
-        `[reconnectWatchdog] watchdog fired but within cooldown (last reload ${now - lastReloadAt}ms ago) — aborting`
-      );
       return;
     }
 

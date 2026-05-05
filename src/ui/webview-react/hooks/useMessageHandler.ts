@@ -396,9 +396,6 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   handlers[MESSAGE_TYPES.DEV_RESTARTING] = (message) => {
-    WebviewLog.debug(
-      `[DEV_RESTARTING] command=${message.command ?? "(none)"} isStandalone=${isStandalone}`
-    );
     useUiStore.setState({
       devRestarting: true,
       startupReady: false,
@@ -430,7 +427,6 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.RECONNECT] = () => {
     // Extension host restarted but VS Code retained the old webview context.
     // Reset startup state and re-send READY so the new host can initialize.
-    WebviewLog.debug("[RECONNECT] received — re-sending READY");
     useUiStore.setState({
       devRestarting: false,
       startupReady: false,
