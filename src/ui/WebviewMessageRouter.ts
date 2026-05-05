@@ -488,6 +488,7 @@ export class WebviewMessageRouter {
           mcpServers: message.workflowProperties?.mcpServers,
           hooks: message.workflowProperties?.hooks,
           endCondition: message.workflowProperties?.endCondition,
+          preCondition: message.workflowProperties?.preCondition,
           priorContext: message.workflowProperties?.priorContext,
           additionalArgs: message.workflowProperties?.additionalArgs,
           toolPermissions: message.workflowProperties?.toolPermissions,

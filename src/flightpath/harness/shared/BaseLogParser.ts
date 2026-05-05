@@ -192,9 +192,21 @@ export abstract class BaseLogParser implements ILogParser {
    * Harnesses that carry per-event context window data should override this.
    */
   extractLiveContextWindow(
-    _event: BaseCliEvent
+    _event: BaseCliEvent,
+    _modelId: string
   ): { used: number; size: number } | null {
     return null;
+  }
+
+  /**
+   * Resolved model ID for the current execution.
+   * Set by CliLogMonitor before monitoring begins; used as the fallback model
+   * in all context-window lookups when log events do not embed the model name.
+   */
+  protected resolvedModel = "";
+
+  setCurrentModel(model: string): void {
+    this.resolvedModel = model;
   }
 
   /**

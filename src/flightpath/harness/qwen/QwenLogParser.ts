@@ -331,7 +331,7 @@ export class QwenLogParser extends BaseLogParser {
             cachedInputTokens:
               totalCachedTokens > 0 ? totalCachedTokens : undefined,
             contextWindowUsedTokens,
-            contextWindowSize: getQwenContextWindowSize(model ?? ""),
+            contextWindowSize: getQwenContextWindowSize(model ?? this.resolvedModel),
           }
         : undefined;
 
@@ -373,12 +373,13 @@ export class QwenLogParser extends BaseLogParser {
   }
 
   override extractLiveContextWindow(
-    event: BaseCliEvent
+    event: BaseCliEvent,
+    modelId: string
   ): { used: number; size: number } | null {
     const e = event as QwenProviderEvent;
     if (e.type === "assistant" && e.usageMetadata?.promptTokenCount != null) {
       const used = e.usageMetadata.promptTokenCount;
-      const size = getQwenContextWindowSize(e.model ?? "");
+      const size = getQwenContextWindowSize(e.model ?? modelId);
       return used > 0 && size ? { used, size } : null;
     }
     return null;

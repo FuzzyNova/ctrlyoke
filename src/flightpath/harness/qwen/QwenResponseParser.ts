@@ -150,7 +150,7 @@ export class QwenResponseParser
         outputTokens,
         totalTokens: usage.total_tokens || inputTokens + outputTokens,
         contextWindowUsedTokens: inputTokens + outputTokens,
-        contextWindowSize: getQwenContextWindowSize(model ?? ""),
+        contextWindowSize: getQwenContextWindowSize(model ?? this.resolvedModel),
       };
     }
 

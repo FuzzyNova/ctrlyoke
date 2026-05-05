@@ -328,7 +328,7 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
             cachedInputTokens:
               totalCachedTokens > 0 ? totalCachedTokens : undefined,
             contextWindowUsedTokens,
-            contextWindowSize: getGeminiContextWindowSize(model ?? ""),
+            contextWindowSize: getGeminiContextWindowSize(model ?? this.resolvedModel),
           }
         : undefined;
 
@@ -363,13 +363,14 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
   }
 
   override extractLiveContextWindow(
-    event: BaseCliEvent
+    event: BaseCliEvent,
+    modelId: string
   ): { used: number; size: number } | null {
     if (event.type === "gemini") {
       const msg = event as unknown as GeminiLogMessage;
       if (msg.tokens?.input == null) return null;
       const used = msg.tokens.input;
-      const size = getGeminiContextWindowSize(msg.model ?? "");
+      const size = getGeminiContextWindowSize(msg.model ?? modelId);
       return used > 0 && size ? { used, size } : null;
     }
     return null;

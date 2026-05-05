@@ -6,7 +6,7 @@ import { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
-import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
+import { getCopilotContextWindowSize } from "../../../utils/ModelConstants";
 import {
   UniversalCliOutput,
   ThinkingBlock,
@@ -311,7 +311,7 @@ export class CopilotLogParser extends BaseLogParser {
     const effectiveInputTokens =
       contextWindowUsedTokens > 0 ? contextWindowUsedTokens : inputTokens;
     const effectiveContextWindowSize =
-      contextWindowSize ?? COPILOT_CLI_CONTEXT_WINDOW_SIZE;
+      contextWindowSize ?? getCopilotContextWindowSize(model ?? this.resolvedModel);
 
     return {
       events: outputEvents,
@@ -375,12 +375,13 @@ export class CopilotLogParser extends BaseLogParser {
   }
 
   override extractLiveContextWindow(
-    event: BaseCliEvent
+    event: BaseCliEvent,
+    modelId: string
   ): { used: number; size: number } | null {
     if (event.type === "session.truncation") {
       const data = (event as any).data;
       const used = data?.postTruncationTokensInMessages;
-      const size = data?.tokenLimit ?? COPILOT_CLI_CONTEXT_WINDOW_SIZE;
+      const size = data?.tokenLimit ?? getCopilotContextWindowSize(modelId);
       return used != null && used > 0 ? { used, size } : null;
     }
     return null;

@@ -107,9 +107,11 @@ export class CliLogMonitor {
   async monitor(
     logPath: string,
     sessionId: string | null,
-    startTime: Date
+    startTime: Date,
+    model: string
   ): Promise<LogMonitorResult> {
     const parser = this.deps.logParser;
+    parser.setCurrentModel?.(model);
     const events: BaseCliEvent[] = [];
     // undefined means unlimited (-1 setting) — no timeout will be set
     const timeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
@@ -240,7 +242,7 @@ export class CliLogMonitor {
           this.deps.hostCallbacks.onContextWindowUpdate &&
           parser.extractLiveContextWindow
         ) {
-          const ctx = parser.extractLiveContextWindow(event);
+          const ctx = parser.extractLiveContextWindow(event, model);
           if (ctx) {
             this.deps.hostCallbacks.onContextWindowUpdate(ctx.used, ctx.size);
           }

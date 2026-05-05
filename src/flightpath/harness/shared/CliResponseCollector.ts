@@ -37,7 +37,9 @@ export class CliResponseCollector {
     executionStartTime: Date;
     resolvedSessionId?: string;
     label?: string;
+    model?: string;
   }): Promise<CollectedHeadlessResponse> {
+    this.deps.provider.responseParser.setCurrentModel?.(params.model ?? "");
     let parsedOutput = this.deps.provider.responseParser.parse(
       params.stdout,
       params.stderr,

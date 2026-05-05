@@ -60,6 +60,14 @@ export interface IResponseParser {
    * @returns True if this is a recoverable session error (retry without resume), false otherwise
    */
   isRecoverableSessionError?(error: unknown): boolean;
+
+  /**
+   * Set the resolved model ID for the current execution.
+   *
+   * Called by CliResponseCollector before parsing headless output.
+   * Stored as the fallback model when the output stream does not embed the model name.
+   */
+  setCurrentModel?(model: string): void;
 }
 
 /**
@@ -69,6 +77,17 @@ export interface IResponseParser {
  * Providers can extend this class to avoid duplicating common logic.
  */
 export abstract class ResponseParserBase implements IResponseParser {
+  /**
+   * Resolved model ID for the current execution.
+   * Set by CliResponseCollector before parsing; used as the fallback model
+   * in context-window lookups when the output stream does not embed the model name.
+   */
+  protected resolvedModel = "";
+
+  setCurrentModel(model: string): void {
+    this.resolvedModel = model;
+  }
+
   abstract parse(
     stdout: string,
     stderr: string,

@@ -190,7 +190,8 @@ export class OpenCodeLogParser extends BaseLogParser {
   }
 
   override extractLiveContextWindow(
-    event: BaseCliEvent
+    event: BaseCliEvent,
+    _modelId: string
   ): { used: number; size: number } | null {
     if (event.type === "step_finish") {
       const tokens = (event as Record<string, any>).part?.tokens as

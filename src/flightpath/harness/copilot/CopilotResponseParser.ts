@@ -12,7 +12,7 @@ import {
   CLI_EVENT_TYPES,
   HARNESS_IDS,
 } from "../../../types/DashboardConstants";
-import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
+import { getCopilotContextWindowSize } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { CopilotToolBuilder } from "./CopilotToolBuilder";
 
@@ -209,7 +209,7 @@ export class CopilotResponseParser
         inputTokens: 0,
         outputTokens: totalOutputTokens,
         totalTokens: totalOutputTokens,
-        contextWindowSize: COPILOT_CLI_CONTEXT_WINDOW_SIZE,
+        contextWindowSize: getCopilotContextWindowSize(model),
       };
     }
 
@@ -268,7 +268,7 @@ export class CopilotResponseParser
               totalTokens: tokenCounts.prompt + tokenCounts.completion,
               cachedInputTokens: tokenCounts.cached,
               contextWindowUsedTokens: tokenCounts.prompt,
-              contextWindowSize: COPILOT_CLI_CONTEXT_WINDOW_SIZE,
+              contextWindowSize: getCopilotContextWindowSize(this.resolvedModel),
             }
           : undefined,
         harness: HARNESS_IDS.COPILOT_CLI,

@@ -113,8 +113,8 @@ suite("ModelConstants", () => {
   });
 
   suite("getClaudeContextWindowSize", () => {
-    test("returns 200k for standard model", () => {
-      assert.strictEqual(getClaudeContextWindowSize("sonnet"), 200_000);
+    test("returns 400k for sonnet model", () => {
+      assert.strictEqual(getClaudeContextWindowSize("sonnet"), 400_000);
     });
 
     test("returns 1M for [1m] variant", () => {

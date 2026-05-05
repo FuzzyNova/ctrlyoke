@@ -600,7 +600,8 @@ export class CodexLogParser extends BaseLogParser {
   }
 
   override extractLiveContextWindow(
-    event: BaseCliEvent
+    event: BaseCliEvent,
+    _modelId: string
   ): { used: number; size: number } | null {
     const e = event as any;
     if (e.type === "event_msg" && e.payload?.type === "token_count") {

@@ -71,6 +71,7 @@ interface CliResponseCollectorLike {
     executionStartTime: Date;
     resolvedSessionId?: string;
     label?: string;
+    model?: string;
   }): Promise<CollectedHeadlessResponse>;
 }
 
@@ -602,7 +603,8 @@ export class CliExecutionRunner {
     const result = await monitor.monitor(
       logPath,
       params.sessionId,
-      params.startTime
+      params.startTime,
+      session.resolvedProperties?.model ?? ""
     );
 
     if (result.parsedOutput) {
@@ -653,6 +655,7 @@ export class CliExecutionRunner {
         executionStartTime: session.executionStartTime,
         resolvedSessionId: session.resolvedSessionId,
         label,
+        model: session.resolvedProperties?.model ?? "",
       });
 
       session.recordHeadlessResponse(collected);

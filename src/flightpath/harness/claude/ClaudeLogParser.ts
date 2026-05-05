@@ -313,7 +313,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 cacheCreatedTokens:
                   cacheCreationTokens > 0 ? cacheCreationTokens : undefined,
                 contextWindowUsedTokens,
-                contextWindowSize: getClaudeContextWindowSize(model ?? ""),
+                contextWindowSize: getClaudeContextWindowSize(model ?? this.resolvedModel),
               }
             : undefined,
         ...(cacheCreationTokens > 0 || cacheReadTokens > 0
@@ -393,7 +393,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   }
 
   override extractLiveContextWindow(
-    event: BaseCliEvent
+    event: BaseCliEvent,
+    modelId: string
   ): { used: number; size: number } | null {
     if (event.type === "assistant") {
       const assistantEvent = event as ClaudeProviderEvent;
@@ -403,8 +404,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         (usage.input_tokens ?? 0) +
         (usage.cache_creation_input_tokens ?? 0) +
         (usage.cache_read_input_tokens ?? 0);
-      const model = assistantEvent.message?.model as string | undefined;
-      const size = getClaudeContextWindowSize(model ?? "");
+      const eventModel = assistantEvent.message?.model as string | undefined;
+      const size = getClaudeContextWindowSize(eventModel ?? modelId);
       return used > 0 && size ? { used, size } : null;
     }
     return null;

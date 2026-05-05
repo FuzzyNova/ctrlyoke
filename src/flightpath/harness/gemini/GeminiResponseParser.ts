@@ -129,7 +129,7 @@ export class GeminiResponseParser
           (usage.total_tokens as number) || inputTokens + outputTokens,
         cachedInputTokens: cachedTokens > 0 ? cachedTokens : undefined,
         contextWindowUsedTokens: inputTokens + outputTokens,
-        contextWindowSize: getGeminiContextWindowSize(model ?? ""),
+        contextWindowSize: getGeminiContextWindowSize(model ?? this.resolvedModel),
       };
     }
 

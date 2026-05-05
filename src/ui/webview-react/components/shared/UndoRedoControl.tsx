@@ -144,6 +144,7 @@ interface PromptChangeFields {
   model?: string | null;
   agent?: string | null;
   endCondition?: unknown;
+  preCondition?: unknown;
   skills?: unknown;
   mcpServers?: unknown;
   hooks?: unknown;
@@ -166,6 +167,8 @@ function describePromptChange(
     return `Changed agent on ${scope} to ${strVal(n.agent)}`;
   if (JSON.stringify(p.endCondition) !== JSON.stringify(n.endCondition))
     return `Changed end condition on ${scope}`;
+  if (JSON.stringify(p.preCondition) !== JSON.stringify(n.preCondition))
+    return `Changed pre condition on ${scope}`;
   if (JSON.stringify(p.skills) !== JSON.stringify(n.skills))
     return `Changed skills on ${scope}`;
   if (JSON.stringify(p.mcpServers) !== JSON.stringify(n.mcpServers))
@@ -235,6 +238,10 @@ function describeChange(
     JSON.stringify(prevWP.endCondition) !== JSON.stringify(nextWP.endCondition)
   )
     return `Changed workflow end condition`;
+  if (
+    JSON.stringify(prevWP.preCondition) !== JSON.stringify(nextWP.preCondition)
+  )
+    return `Changed workflow pre condition`;
   if (JSON.stringify(prevWP.mcpServers) !== JSON.stringify(nextWP.mcpServers))
     return `Changed workflow MCP servers`;
   if (JSON.stringify(prevWP.hooks) !== JSON.stringify(nextWP.hooks))

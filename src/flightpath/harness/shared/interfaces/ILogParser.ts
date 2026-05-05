@@ -322,6 +322,15 @@ export interface ILogParser {
    * @returns { used, size } token counts, or null if event has no context info
    */
   extractLiveContextWindow?(
-    event: BaseCliEvent
+    event: BaseCliEvent,
+    modelId: string
   ): { used: number; size: number } | null;
+
+  /**
+   * Set the resolved model ID for the current execution.
+   *
+   * Called by CliLogMonitor before starting to monitor a session.
+   * Stored as the fallback model when log events do not embed the model name.
+   */
+  setCurrentModel?(model: string): void;
 }
