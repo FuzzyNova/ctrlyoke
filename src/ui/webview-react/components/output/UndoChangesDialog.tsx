@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Modal } from "../shared/Modal";
 import { Button } from "../shared/Button";
+import { ExpandCollapseAllDiffsButton } from "../shared/ExpandCollapseAllDiffsButton";
 import { MESSAGE_TYPES } from "../../types/messages";
 import type {
   UndoFileInstruction,
@@ -13,6 +14,7 @@ import type {
   OutputExecutionTarget,
 } from "@root/types/OutputHistoryTypes";
 import { useWorkflowStore } from "@store/workflowStore";
+import { useUiStore } from "@store/uiStore";
 import { sendMessage } from "../../hooks/useMessageHandler";
 import { DiffView } from "./ToolCallOutput";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
@@ -150,12 +152,14 @@ interface FileRowItemProps {
   row: FileRow;
   checked: boolean;
   onChange: (path: string, checked: boolean) => void;
+  globallyCollapsed?: boolean;
 }
 
 const FileRowItem: React.FC<FileRowItemProps> = ({
   row,
   checked,
   onChange,
+  globallyCollapsed = true,
 }) => {
   const undoable = row.instruction !== null;
   const isDisabled = !undoable;
@@ -221,8 +225,8 @@ const FileRowItem: React.FC<FileRowItemProps> = ({
           newContent={row.newContent}
           structuredPatch={row.structuredPatch}
           language={getLanguageFromPath(row.path)}
-          globallyCollapsed={true}
-          className="ml-5"
+          globallyCollapsed={globallyCollapsed}
+          className="sm:ml-5"
         />
       )}
     </div>
@@ -349,6 +353,10 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   const [resultState, setResultState] = useState<
     "idle" | "success" | "partial" | "error"
   >(RESULT_STATE.IDLE);
+  const [dialogDiffsCollapsed, setDialogDiffsCollapsed] = useState(true);
+
+  const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
+  const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
 
   const undoResult = useWorkflowStore((s) => s.undoResults[requestId]);
   const clearUndoResult = useWorkflowStore((s) => s.clearUndoResult);
@@ -483,6 +491,36 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   const canConfirm =
     checkedCount > 0 && !isSubmitting && resultState === RESULT_STATE.IDLE;
 
+  const hasDiffs = useMemo(() => {
+    if (isWorkflowMode) {
+      return workflowRows.some(
+        (r) =>
+          (r.structuredPatch && r.structuredPatch.length > 0) ||
+          (r.oldContent && r.newContent)
+      );
+    }
+    if (mode === DIALOG_MODE.REDO) {
+      return redoRows.some(
+        (r) => (r.instruction.structuredPatch?.length ?? 0) > 0
+      );
+    }
+    return allUndoRows.some(
+      (r) =>
+        (r.structuredPatch && r.structuredPatch.length > 0) ||
+        (r.oldContent && r.newContent)
+    );
+  }, [isWorkflowMode, workflowRows, mode, redoRows, allUndoRows]);
+
+  function handleExpandAllDiffs() {
+    setDialogDiffsCollapsed(false);
+    expandAllDiffs();
+  }
+
+  function handleCollapseAllDiffs() {
+    setDialogDiffsCollapsed(true);
+    collapseAllDiffs();
+  }
+
   const dialogTitle = isWorkflowMode
     ? mode === DIALOG_MODE.REDO
       ? "Redo workflow changes"
@@ -534,6 +572,16 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       onClose={onClose}
       size="lg"
       footer={footer}
+      fullWidthOnNarrow
+      headerActions={
+        hasDiffs && resultState === RESULT_STATE.IDLE ? (
+          <ExpandCollapseAllDiffsButton
+            anyDiffCollapsed={dialogDiffsCollapsed}
+            onExpand={handleExpandAllDiffs}
+            onCollapse={handleCollapseAllDiffs}
+          />
+        ) : undefined
+      }
     >
       {/* Result banner */}
       {resultState !== RESULT_STATE.IDLE && (
@@ -623,8 +671,8 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                               <DiffView
                                 structuredPatch={inst.structuredPatch}
                                 language={getLanguageFromPath(row.path)}
-                                globallyCollapsed={true}
-                                className="ml-5"
+                                globallyCollapsed={dialogDiffsCollapsed}
+                                className="sm:ml-5"
                               />
                             )}
                           </div>
@@ -649,6 +697,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                             onChange={(_, checked) =>
                               handleToggle(row.key, checked)
                             }
+                            globallyCollapsed={dialogDiffsCollapsed}
                           />
                         );
                       })}
@@ -695,8 +744,8 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                       <DiffView
                         structuredPatch={row.instruction.structuredPatch}
                         language={getLanguageFromPath(row.path)}
-                        globallyCollapsed={true}
-                        className="ml-5"
+                        globallyCollapsed={dialogDiffsCollapsed}
+                        className="sm:ml-5"
                       />
                     )}
                   </div>
@@ -724,6 +773,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                     row={row}
                     checked={checkedPaths.has(row.path)}
                     onChange={handleToggle}
+                    globallyCollapsed={dialogDiffsCollapsed}
                   />
                 ))}
               </>
@@ -741,6 +791,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                     row={row}
                     checked={checkedPaths.has(row.path)}
                     onChange={handleToggle}
+                    globallyCollapsed={dialogDiffsCollapsed}
                   />
                 ))}
               </>

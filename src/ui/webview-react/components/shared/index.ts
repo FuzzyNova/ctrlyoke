@@ -55,3 +55,4 @@ export {
   type ActionDropdownProps,
 } from "./ActionDropdown";
 export { DropdownPortal } from "./DropdownPortal";
+export { ExpandCollapseAllDiffsButton } from "./ExpandCollapseAllDiffsButton";

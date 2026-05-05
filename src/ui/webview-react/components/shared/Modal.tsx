@@ -8,6 +8,10 @@ interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
+  /** Extra content rendered between the title and the close button in the header. */
+  headerActions?: React.ReactNode;
+  /** When true, the modal takes full width (no horizontal margin, no rounded corners) below the sm breakpoint. */
+  fullWidthOnNarrow?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,6 +21,8 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   size = "md",
+  headerActions,
+  fullWidthOnNarrow = false,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -61,7 +67,7 @@ export const Modal: React.FC<ModalProps> = ({
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, no action triggered */}
         <div
           ref={modalRef}
-          className={`relative w-full ${sizeClasses[size]} mx-4 bg-editor-bg rounded-lg shadow-xl border border-panel-border pointer-events-auto`}
+          className={`relative w-full ${sizeClasses[size]} ${fullWidthOnNarrow ? "sm:mx-4 sm:rounded-lg" : "mx-4 rounded-lg"} bg-editor-bg shadow-xl border border-panel-border pointer-events-auto`}
           onClick={(e) => e.stopPropagation()}
           tabIndex={-1}
           role="dialog"
@@ -70,25 +76,28 @@ export const Modal: React.FC<ModalProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-panel-border">
             <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-            <button
-              onClick={onClose}
-              className="text-description-fg hover:text-foreground transition-colors"
-              aria-label="Close modal"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <div className="flex items-center gap-1">
+              {headerActions}
+              <button
+                onClick={onClose}
+                className="text-description-fg hover:text-foreground transition-colors"
+                aria-label="Close modal"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Body */}

@@ -12,7 +12,7 @@ import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { CliOutput, StatusMessage } from "../output";
 import { Modal } from "../shared";
-import { RunSelector, IconToggleButton } from "../shared";
+import { RunSelector, IconToggleButton, ExpandCollapseAllDiffsButton } from "../shared";
 import { TerminalSessionIcon } from "../output/TerminalSessionIcon";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import { generateId } from "@utils/string";
@@ -1309,22 +1309,11 @@ export const OutputSection: React.FC = () => {
                 />
               )}
               {hasOutput && (
-                <button
-                  className="icon-btn py-1 px-1"
-                  title={
-                    anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"
-                  }
-                  aria-label={
-                    anyDiffCollapsed ? "Expand all diffs" : "Collapse all diffs"
-                  }
-                  onClick={() =>
-                    anyDiffCollapsed ? expandAllDiffs() : collapseAllDiffs()
-                  }
-                >
-                  <i
-                    className={`codicon codicon-sm ${anyDiffCollapsed ? "codicon-diff" : "codicon-diff-ignored"}`}
-                  />
-                </button>
+                <ExpandCollapseAllDiffsButton
+                  anyDiffCollapsed={anyDiffCollapsed}
+                  onExpand={expandAllDiffs}
+                  onCollapse={collapseAllDiffs}
+                />
               )}
               <button
                 className="icon-btn py-1 px-1"
