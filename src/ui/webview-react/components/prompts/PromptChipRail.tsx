@@ -268,7 +268,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   } = useWorkflowStore();
   const { loadedWorkflows, activeWorkflowId, setFinalStepFooterExpanded } =
     useUiStore();
-  const { selectFinalStep, selectPrompt } = useEditorStore();
+  const { selectFinalStep, selectPrompt, deselect } = useEditorStore();
   const { globalSettings } = useSettingsStore();
 
   const isCLIManaged =
@@ -392,7 +392,23 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
       </div>
 
       {/* Prompt chips — scrollable, scrollbars hidden */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-hide">
+      <div
+        className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-hide"
+        role="listbox"
+        tabIndex={0}
+        onClick={(e) => {
+          // Deselect the current step when clicking blank space in the rail.
+          // Only fire when the click target is this container itself (not a child).
+          if (e.target === e.currentTarget) {
+            deselect();
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            deselect();
+          }
+        }}
+      >
         {prompts.length === 0 ? (
           <div className="flex items-center justify-center py-2">
             <i className="codicon codicon-dash text-xxs text-description-fg" />

@@ -140,7 +140,7 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
                   key="session"
                   className="inline-flex items-center gap-0.5"
                 >
-                  <span>{sessionId.substring(0, 6)}</span>
+                  <span>{sessionId.slice(-6)}</span>
                   <button
                     type="button"
                     className="icon-btn py-0 px-0.5"
