@@ -3,6 +3,7 @@ import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { type HarnessId } from "../../types/messages";
+import { FOOTER_PICKERS } from "../../types/messages";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { HarnessDropdown, HarnessIcon, HARNESS_DISPLAY_NAMES } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
@@ -29,7 +30,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
     unhideDropdownOption,
   } = useUiStore();
 
-  const isOpen = footerOpenPicker === "harness";
+  const isOpen = footerOpenPicker === FOOTER_PICKERS.HARNESS;
 
   const resolvedHarness = (workflowProperties.harness ??
     globalSettings.harness) as HarnessId;

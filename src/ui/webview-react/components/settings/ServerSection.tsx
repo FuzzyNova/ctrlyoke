@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
-import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
+import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
 import {
   ICON_BG_COLOR_DEFAULT,
   ICON_FG_COLOR_DEFAULT,
@@ -81,7 +81,7 @@ export function ServerSection({
   }, [server.tls?.enabled, displayUrl]);
 
   const generatedCertLocation =
-    activeScope === "user" ? "~/.flightpath/certs/" : ".flightpath/certs/";
+    activeScope === SETTING_SCOPES.USER ? "~/.flightpath/certs/" : ".flightpath/certs/";
 
   const [showQr, setShowQr] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -450,7 +450,7 @@ export function ServerSection({
               <p className="text-xs text-description-fg italic">
                 The generated cert is saved to{" "}
                 <code>{generatedCertLocation}</code>
-                {activeScope === "workspace"
+                {activeScope === SETTING_SCOPES.WORKSPACE
                   ? " in the current workspace and gitignored."
                   : " in your user FlightPath folder."}{" "}
                 Browsers will show a warning on first visit — click proceed to

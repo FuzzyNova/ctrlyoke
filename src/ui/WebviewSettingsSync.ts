@@ -14,6 +14,7 @@ import {
   MODEL_OPTION_VALUES,
   PANEL_CLIENT_ID,
   VSCODE_COMMANDS,
+  PROMPT_PROPERTIES,
   type HarnessId,
   type HarnessStatusString,
 } from "../types/DashboardConstants";
@@ -520,32 +521,32 @@ export class WebviewSettingsSync {
     value: any,
     harness?: string
   ): Promise<void> {
-    if (property === "model" && harness) {
+    if (property === PROMPT_PROPERTIES.MODEL && harness) {
       await ConfigurationUtils.setModelForHarness(harness as HarnessId, value);
-    } else if (property === "additionalArgs" && harness) {
+    } else if (property === PROMPT_PROPERTIES.ADDITIONAL_ARGS && harness) {
       await ConfigurationUtils.setAdditionalArgsForHarness(
         harness as HarnessId,
         value ?? ""
       );
-    } else if (property === "agent") {
+    } else if (property === PROMPT_PROPERTIES.AGENT) {
       await ConfigurationUtils.setDefaultAgent(value || "");
-    } else if (property === "skills") {
+    } else if (property === PROMPT_PROPERTIES.SKILLS) {
       await ConfigurationUtils.setDefaultSkills(value || []);
-    } else if (property === "resumeSession") {
+    } else if (property === PROMPT_PROPERTIES.RESUME_SESSION) {
       await ConfigurationUtils.updateSetting(
         CONFIG_KEYS.WORKFLOW_RESUME_EXISTING_SESSION,
         value
       );
-    } else if (property === "mcpServers") {
+    } else if (property === PROMPT_PROPERTIES.MCP_SERVERS) {
       // null (None mode) → [] so we never write null to an array-typed setting
       await ConfigurationUtils.setDefaultMcpServers(value ?? []);
-    } else if (property === "hooks") {
+    } else if (property === PROMPT_PROPERTIES.HOOKS) {
       await ConfigurationUtils.setDefaultHooks(value ?? []);
-    } else if (property === "endCondition") {
+    } else if (property === PROMPT_PROPERTIES.END_CONDITION) {
       await ConfigurationUtils.setDefaultEndCondition(value ?? null);
-    } else if (property === "preCondition") {
+    } else if (property === PROMPT_PROPERTIES.PRE_CONDITION) {
       await ConfigurationUtils.setDefaultPreCondition(value ?? null);
-    } else if (property === "toolPermissions") {
+    } else if (property === PROMPT_PROPERTIES.TOOL_PERMISSIONS) {
       const override = value as ToolPermissionsOverride | null;
       await ConfigurationUtils.updateSetting(
         CONFIG_KEYS.TOOLS_PERMISSION_MODE,

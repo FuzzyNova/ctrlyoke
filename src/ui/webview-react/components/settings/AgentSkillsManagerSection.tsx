@@ -1,7 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useHarnessFileStore } from "@store/useHarnessFileStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  HARNESS_INFO,
+  SETTING_SCOPES,
+  SPECIAL_TARGET_IDS,
+  HARNESS_FILE_TYPES,
+} from "@root/types/DashboardConstants";
 import type { HarnessId, AnyTargetId } from "@root/types/DashboardConstants";
 import type { ManagedFile } from "@root/types/WebviewMessageTypes";
 import { ActionDropdown } from "@components/shared/ActionDropdown";
@@ -22,9 +28,9 @@ const ELIGIBLE_HARNESS_IDS: HarnessId[] = ALL_HARNESS_IDS.filter(
 );
 
 function getTargetLabel(id: AnyTargetId): string {
-  if (id === "flightpath") return "FlightPath";
-  if (id === "agents") return "Agents";
-  if (id === "vscode") return "VS Code";
+  if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) return "FlightPath";
+  if (id === SPECIAL_TARGET_IDS.AGENTS) return "Agents";
+  if (id === SPECIAL_TARGET_IDS.VSCODE) return "VS Code";
   const info = HARNESS_INFO[id as keyof typeof HARNESS_INFO];
   return info?.shortName ?? id;
 }
@@ -122,7 +128,7 @@ function HarnessBadge({ id, scope }: { id: AnyTargetId; scope: "workspace" | "us
             : "bg-list-hover-bg text-foreground border border-panel-border"
         }`}
     >
-      {getTargetLabel(id)}{scope === "user" ? " ·user" : ""}
+      {getTargetLabel(id)}{scope === SETTING_SCOPES.USER ? " ·user" : ""}
     </span>
   );
 }
@@ -145,8 +151,8 @@ function FileRow({ file, availableIds, onSave, onDelete }: FileRowProps) {
 
   // Primary source path: prefer flightpath workspace, then flightpath user, then first
   const primaryLoc =
-    file.locations.find((l) => l.harnessId === "flightpath" && l.scope === "workspace") ??
-    file.locations.find((l) => l.harnessId === "flightpath" && l.scope === "user") ??
+    file.locations.find((l) => l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH && l.scope === SETTING_SCOPES.WORKSPACE) ??
+    file.locations.find((l) => l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH && l.scope === SETTING_SCOPES.USER) ??
     file.locations[0];
 
   const deleteItems: ActionDropdownItem[] = file.locations.map((loc) => ({
@@ -215,13 +221,13 @@ function AllActionsBar({ files, availableIds, onSave, onDeleteAll }: AllActionsB
   const [targetId, setTargetId] = useState<AnyTargetId>(HARNESS_IDS.CLAUDE_CLI as HarnessId);
 
   const scopeTargets =
-    scope === "workspace" ? getWorkspaceTargets(availableIds) : getUserTargets(availableIds);
+    scope === SETTING_SCOPES.WORKSPACE ? getWorkspaceTargets(availableIds) : getUserTargets(availableIds);
 
   // Reset target when scope or available harnesses change if current target isn't in the list
   const handleScopeChange = (newScope: "workspace" | "user") => {
     setScope(newScope);
     const targets =
-      newScope === "workspace" ? getWorkspaceTargets(availableIds) : getUserTargets(availableIds);
+      newScope === SETTING_SCOPES.WORKSPACE ? getWorkspaceTargets(availableIds) : getUserTargets(availableIds);
     if (!targets.includes(targetId)) {
       setTargetId(targets[0] ?? "flightpath");
     }
@@ -344,8 +350,8 @@ export function AgentSkillsManagerSection() {
     (id: AnyTargetId, scope: "workspace" | "user") => {
       const files = managedFiles.map((f) => {
         const primary =
-          f.locations.find((l) => l.harnessId === "flightpath" && l.scope === "workspace") ??
-          f.locations.find((l) => l.harnessId === "flightpath" && l.scope === "user") ??
+          f.locations.find((l) => l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH && l.scope === SETTING_SCOPES.WORKSPACE) ??
+          f.locations.find((l) => l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH && l.scope === SETTING_SCOPES.USER) ??
           f.locations[0];
         return { sourcePath: primary.path, name: f.name };
       });
@@ -384,8 +390,8 @@ export function AgentSkillsManagerSection() {
         <div className="fp-mode-switch" role="group" aria-label="Agent or skill type">
           <button
             type="button"
-            onClick={() => setActiveType("agent")}
-            className={`fp-mode-switch-btn ${activeType === "agent" ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            onClick={() => setActiveType(HARNESS_FILE_TYPES.AGENT)}
+            className={`fp-mode-switch-btn ${activeType === HARNESS_FILE_TYPES.AGENT ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
             title="Manage agent files"
           >
             <i className="codicon codicon-agent codicon-sm" />
@@ -396,8 +402,8 @@ export function AgentSkillsManagerSection() {
           </div>
           <button
             type="button"
-            onClick={() => setActiveType("skill")}
-            className={`fp-mode-switch-btn ${activeType === "skill" ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            onClick={() => setActiveType(HARNESS_FILE_TYPES.SKILL)}
+            className={`fp-mode-switch-btn ${activeType === HARNESS_FILE_TYPES.SKILL ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
             title="Manage skill files"
           >
             <i className="codicon codicon-tools codicon-sm" />

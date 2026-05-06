@@ -2,6 +2,7 @@ import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
+import { FOOTER_PICKERS } from "../../types/messages";
 import { SkillsSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 
@@ -21,7 +22,7 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
     useSettingsStore();
   const { footerOpenPicker, setFooterOpenPicker } = useUiStore();
 
-  const isOpen = footerOpenPicker === "skills";
+  const isOpen = footerOpenPicker === FOOTER_PICKERS.SKILLS;
 
   const resolvedSkills =
     workflowProperties.skills === undefined

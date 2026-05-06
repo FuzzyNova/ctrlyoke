@@ -24,6 +24,7 @@ import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
 import {
   HARNESS_INFO,
   FINAL_STEP_PHASES,
+  STEP_TYPES,
   type FinalStepPhase,
 } from "../types/messages";
 import { mapOrderedHistoryEntriesToMessages } from "./outputProjection";
@@ -365,7 +366,7 @@ export function generateMarkdownExport(
 
       const isFinalStep = item.target.kind === FINAL_STEP_PHASES.FINAL_STEP;
       const stepNum = item.target.index + 1;
-      const isScript = (output as { source?: string }).source === "script";
+      const isScript = (output as { source?: string }).source === STEP_TYPES.SCRIPT;
 
       const stepDisplayName =
         item.stepName ||

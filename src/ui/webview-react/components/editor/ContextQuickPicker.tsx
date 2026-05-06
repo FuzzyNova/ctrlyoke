@@ -3,6 +3,7 @@ import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { SESSION_ID_SENTINELS } from "../../types/messages";
+import { FOOTER_PICKERS } from "../../types/messages";
 import { getResumeSessionOptions } from "../../types/dropdownNamespaces";
 import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
@@ -22,7 +23,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
   const { globalSettings, workflowProperties } = useSettingsStore();
   const { footerOpenPicker, setFooterOpenPicker } = useUiStore();
 
-  const isOpen = footerOpenPicker === "context";
+  const isOpen = footerOpenPicker === FOOTER_PICKERS.CONTEXT;
   const isOverride = properties.resumeSession !== undefined;
 
   // ── valueLabel builder ────────────────────────────────────────────────────

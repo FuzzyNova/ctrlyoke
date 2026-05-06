@@ -1,15 +1,15 @@
 import { create } from "zustand";
-import { MESSAGE_TYPES } from "@/types/messages";
+import { MESSAGE_TYPES, HARNESS_FILE_TYPES, type HarnessFileType } from "@/types/messages";
 import type { ManagedFile } from "@root/types/WebviewMessageTypes";
 import { sendMessage } from "@hooks/useMessageHandler";
 
 interface HarnessFileState {
   managedFiles: ManagedFile[];
-  activeType: "agent" | "skill";
+  activeType: HarnessFileType;
   loading: boolean;
   error: string | null;
 
-  setActiveType: (type: "agent" | "skill") => void;
+  setActiveType: (type: HarnessFileType) => void;
   setFiles: (files: ManagedFile[]) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -18,37 +18,37 @@ interface HarnessFileState {
   exportFile: (
     sourcePath: string,
     harnessId: string,
-    fileType: "agent" | "skill",
+    fileType: HarnessFileType,
     overwrite: boolean,
     scope: "workspace" | "user"
   ) => void;
   deleteFile: (
     name: string,
     harnessId: string,
-    fileType: "agent" | "skill",
+    fileType: HarnessFileType,
     scope: "workspace" | "user"
   ) => void;
   syncAll: (
     files: Array<{ sourcePath: string; name: string }>,
     targetHarnessId: string,
-    fileType: "agent" | "skill",
+    fileType: HarnessFileType,
     scope: "workspace" | "user"
   ) => void;
   deleteAll: (
     harnessId: string,
-    fileType: "agent" | "skill",
+    fileType: HarnessFileType,
     scope: "workspace" | "user"
   ) => void;
   openHarnessDir: (
     harnessId: string,
-    fileType: "agent" | "skill",
+    fileType: HarnessFileType,
     scope: "workspace" | "user"
   ) => void;
 }
 
 export const useHarnessFileStore = create<HarnessFileState>((set, get) => ({
   managedFiles: [],
-  activeType: "agent",
+  activeType: HARNESS_FILE_TYPES.AGENT,
   loading: false,
   error: null,
 

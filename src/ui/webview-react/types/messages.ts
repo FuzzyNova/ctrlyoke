@@ -38,6 +38,10 @@ export {
   STEP_TYPES,
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
+  SETTING_SCOPES,
+  HARNESS_FILE_TYPES,
+  FOOTER_PICKERS,
+  SPECIAL_TARGET_IDS,
   type ConditionAction,
   type CompareSource,
   type RetryPromptPlaceholder,
@@ -60,6 +64,9 @@ export {
   type TerminalSessionStatus,
   type SessionKind,
   type ShellKind,
+  type SettingScope,
+  type HarnessFileType,
+  type FooterPicker,
 } from "@root/types/DashboardConstants";
 
 // Re-export all message and data types from WebviewMessageTypes

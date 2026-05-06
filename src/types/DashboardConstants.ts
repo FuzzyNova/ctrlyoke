@@ -498,11 +498,11 @@ export const HARNESS_INFO = {
     name: "Copilot Chat",
     shortName: "Copilot Chat",
   },
-  [HARNESS_IDS.CLAUDE_CLI]: { name: "Claude CLI", shortName: "Claude Code" },
-  [HARNESS_IDS.CODEX_CLI]: { name: "Codex CLI", shortName: "Codex" },
-  [HARNESS_IDS.OPENCODE_CLI]: { name: "OpenCode CLI", shortName: "OpenCode" },
-  [HARNESS_IDS.QWEN_CLI]: { name: "Qwen Code CLI", shortName: "Qwen Code" },
-  [HARNESS_IDS.GEMINI_CLI]: { name: "Gemini CLI", shortName: "Gemini" },
+  [HARNESS_IDS.CLAUDE_CLI]: { name: "Claude Code", shortName: "Claude Code" },
+  [HARNESS_IDS.CODEX_CLI]: { name: "Codex", shortName: "Codex" },
+  [HARNESS_IDS.OPENCODE_CLI]: { name: "OpenCode", shortName: "OpenCode" },
+  [HARNESS_IDS.QWEN_CLI]: { name: "Qwen Code", shortName: "Qwen Code" },
+  [HARNESS_IDS.GEMINI_CLI]: { name: "Gemini", shortName: "Gemini" },
 } as const;
 
 // ============================================================================
@@ -1155,6 +1155,51 @@ export const WORKFLOW_ATTEMPT_COMMANDS = {
 // DEFAULT WORKFLOW NAME - Placeholder used when no workflow has been named
 // ============================================================================
 export const DEFAULT_WORKFLOW_NAME = "New Workflow";
+
+// ============================================================================
+// SETTING SCOPES - VS Code config scope values (workspace or user)
+// ============================================================================
+export const SETTING_SCOPES = {
+  USER: "user",
+  WORKSPACE: "workspace",
+  DEFAULT: "default",
+} as const;
+
+export type SettingScope = (typeof SETTING_SCOPES)[keyof typeof SETTING_SCOPES];
+
+// ============================================================================
+// HARNESS FILE TYPES - File type discriminants for the harness file manager
+// ============================================================================
+export const HARNESS_FILE_TYPES = {
+  AGENT: "agent",
+  SKILL: "skill",
+} as const;
+
+export type HarnessFileType =
+  (typeof HARNESS_FILE_TYPES)[keyof typeof HARNESS_FILE_TYPES];
+
+// ============================================================================
+// FOOTER PICKERS - Footer quick-picker panel identifiers
+// ============================================================================
+export const FOOTER_PICKERS = {
+  HARNESS: "harness",
+  MODEL: "model",
+  AGENT: "agent",
+  SKILLS: "skills",
+  PERMISSIONS: "permissions",
+  CONTEXT: "context",
+} as const;
+
+export type FooterPicker = (typeof FOOTER_PICKERS)[keyof typeof FOOTER_PICKERS];
+
+// ============================================================================
+// SPECIAL TARGET IDS - Non-harness targets in the harness file manager
+// ============================================================================
+export const SPECIAL_TARGET_IDS = {
+  FLIGHTPATH: "flightpath",
+  VSCODE: "vscode",
+  AGENTS: "agents",
+} as const;
 
 // ============================================================================
 // TYPE HELPERS - For TypeScript type safety

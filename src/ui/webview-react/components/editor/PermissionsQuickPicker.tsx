@@ -3,6 +3,7 @@ import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { PERMISSION_MODES } from "@root/types/DashboardConstants";
+import { FOOTER_PICKERS } from "@root/types/DashboardConstants";
 import type {
   ToolPermissionsOverride,
   ToolPermissionMode,
@@ -29,7 +30,7 @@ export const PermissionsQuickPicker: React.FC<PermissionsQuickPickerProps> = ({
   const { workflowProperties, globalSettings } = useSettingsStore();
   const { footerOpenPicker, setFooterOpenPicker } = useUiStore();
 
-  const isOpen = footerOpenPicker === "permissions";
+  const isOpen = footerOpenPicker === FOOTER_PICKERS.PERMISSIONS;
   const isOverride = properties.toolPermissions !== undefined;
 
   const resolvedModeLabel = (() => {

@@ -3,7 +3,7 @@ import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
-import { MESSAGE_TYPES } from "@/types/messages";
+import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
 import { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 import {
   GeneralSection,
@@ -122,8 +122,8 @@ export function GlobalSettingsDrawer() {
           <div className="fp-mode-switch ml-2" role="group" aria-label="Settings scope">
             <button
               type="button"
-              onClick={() => setActiveScope("user")}
-              className={`fp-mode-switch-btn ${activeScope === "user" ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+              onClick={() => setActiveScope(SETTING_SCOPES.USER)}
+              className={`fp-mode-switch-btn ${activeScope === SETTING_SCOPES.USER ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
               title="Edit user-scoped settings"
             >
               <i className="codicon codicon-person" />
@@ -134,8 +134,8 @@ export function GlobalSettingsDrawer() {
             </div>
             <button
               type="button"
-              onClick={() => setActiveScope("workspace")}
-              className={`fp-mode-switch-btn ${activeScope === "workspace" ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+              onClick={() => setActiveScope(SETTING_SCOPES.WORKSPACE)}
+              className={`fp-mode-switch-btn ${activeScope === SETTING_SCOPES.WORKSPACE ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
               title="Edit workspace-scoped settings"
             >
               <i className="codicon codicon-project" />

@@ -1,13 +1,14 @@
 import type { SettingSource } from "@root/types/WebviewMessageTypes";
+import { SETTING_SCOPES } from "@root/types/DashboardConstants";
 
 interface Props {
   source: SettingSource;
 }
 
 export function SettingSourceBadge({ source }: Props) {
-  if (source === "default") return null;
+  if (source === SETTING_SCOPES.DEFAULT) return null;
 
-  const isWorkspace = source === "workspace";
+  const isWorkspace = source === SETTING_SCOPES.WORKSPACE;
   return (
     <span
       className={`inline-flex items-center px-1 py-0 text-xxs font-mono rounded border leading-[14px] ${

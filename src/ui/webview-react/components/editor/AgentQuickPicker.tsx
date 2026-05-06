@@ -3,6 +3,7 @@ import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
 import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
+import { FOOTER_PICKERS } from "../../types/messages";
 import { CustomSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
 
@@ -28,7 +29,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
     unhideDropdownOption,
   } = useUiStore();
 
-  const isOpen = footerOpenPicker === "agent";
+  const isOpen = footerOpenPicker === FOOTER_PICKERS.AGENT;
 
   const resolvedAgent =
     workflowProperties.agent === undefined

@@ -6,6 +6,7 @@ import {
 } from "zustand/middleware";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type { WorkflowSummary } from "../types/messages";
+import { type FooterPicker } from "../types/messages";
 import type {
   LocalMcpServerEntry,
   RegistryMcpEntry,
@@ -202,14 +203,7 @@ interface UiState {
   } | null;
 
   // Footer quick picker state (transient, not persisted)
-  footerOpenPicker:
-    | "harness"
-    | "model"
-    | "agent"
-    | "skills"
-    | "permissions"
-    | "context"
-    | null;
+  footerOpenPicker: FooterPicker | null;
 
   // MCP Discovery state
   mcpDiscoveryTab: "local" | "registry";

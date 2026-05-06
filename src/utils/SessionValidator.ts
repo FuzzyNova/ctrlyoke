@@ -1,4 +1,8 @@
-import { HARNESS_IDS, type HarnessId } from "../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  HARNESS_INFO,
+  type HarnessId,
+} from "../types/DashboardConstants";
 import { Log } from "./Log";
 
 /**
@@ -61,10 +65,16 @@ export class SessionValidator {
   static validate(sessionId: string, harness: HarnessId): boolean {
     switch (harness) {
       case HARNESS_IDS.COPILOT_CLI:
-        return this.validateUuid(sessionId, "Copilot CLI");
+        return this.validateUuid(
+          sessionId,
+          HARNESS_INFO[HARNESS_IDS.COPILOT_CLI].name
+        );
 
       case HARNESS_IDS.CLAUDE_CLI:
-        return this.validateUuid(sessionId, "Claude CLI");
+        return this.validateUuid(
+          sessionId,
+          HARNESS_INFO[HARNESS_IDS.CLAUDE_CLI].name
+        );
 
       case HARNESS_IDS.CODEX_CLI:
         return this.validateCodexThreadId(sessionId);
@@ -73,10 +83,16 @@ export class SessionValidator {
         return this.validateOpenCodeSessionId(sessionId);
 
       case HARNESS_IDS.QWEN_CLI:
-        return this.validateUuid(sessionId, "Qwen CLI");
+        return this.validateUuid(
+          sessionId,
+          HARNESS_INFO[HARNESS_IDS.QWEN_CLI].name
+        );
 
       case HARNESS_IDS.GEMINI_CLI:
-        return this.validateUuid(sessionId, "Gemini CLI");
+        return this.validateUuid(
+          sessionId,
+          HARNESS_INFO[HARNESS_IDS.GEMINI_CLI].name
+        );
 
       case HARNESS_IDS.COPILOT_CHAT:
         // Chat mode doesn't use session IDs
@@ -125,9 +141,7 @@ export class SessionValidator {
   private static validateCodexThreadId(sessionId: string): boolean {
     const trimmed = sessionId.trim();
     if (trimmed.length === 0) {
-      Log.warn(
-        `⚠️ Empty session ID for Codex CLI. Starting new session instead.`
-      );
+      Log.warn(`⚠️ Empty session ID for Codex. Starting new session instead.`);
       return false;
     }
     return true;
