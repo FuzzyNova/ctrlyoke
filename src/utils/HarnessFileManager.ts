@@ -5,9 +5,13 @@ import { getErrorMessage } from "./ErrorUtils";
 import type { HarnessId } from "../types/DashboardConstants";
 import {
   getHarnessAgentDirs,
+  getHarnessUserAgentDirs,
   getHarnessSkillDirs,
+  getHarnessUserSkillDirs,
   getFlightPathAgentDir,
   getFlightPathSkillDir,
+  getFlightPathUserAgentDir,
+  getFlightPathUserSkillDir,
   getAllHarnessIds,
   HARNESS_AGENT_EXTENSION,
 } from "./HarnessDirectoryUtils";
@@ -19,6 +23,8 @@ import { isAccessibleDirectory, formatDisplayName } from "./DiscoveryUtils";
 
 export interface ManagedFileLocation {
   harnessId: HarnessId | "flightpath";
+  /** Whether this copy lives in a workspace dir or a user-level dir */
+  scope: "workspace" | "user";
   path: string;
 }
 
@@ -62,7 +68,7 @@ async function copyDir(src: string, dest: string): Promise<void> {
 }
 
 /**
- * Collect all agent locations across all harness workspace dirs and .flightpath/.
+ * Collect all agent locations across all harness workspace dirs, user dirs, and .flightpath/.
  */
 async function collectAgentLocations(
   workspaceRoot: string
@@ -81,35 +87,51 @@ async function collectAgentLocations(
     byName.get(name)!.locations.push(loc);
   };
 
-  // FlightPath dir
-  const fpDir = getFlightPathAgentDir(workspaceRoot);
-  if (await isAccessibleDirectory(fpDir)) {
-    const files = await fs.promises.readdir(fpDir).catch(() => [] as string[]);
+  const scanAgentDir = async (
+    dir: string,
+    harnessId: HarnessId | "flightpath",
+    scope: "workspace" | "user"
+  ) => {
+    if (!(await isAccessibleDirectory(dir))) return;
+    const ext =
+      harnessId === "flightpath"
+        ? ".agent.md"
+        : HARNESS_AGENT_EXTENSION[harnessId as HarnessId] ?? ".agent.md";
+    const files = await fs.promises.readdir(dir).catch(() => [] as string[]);
     for (const f of files) {
-      if (f.endsWith(".agent.md")) {
-        const name = f.replace(/\.agent\.md$/, "");
-        addAgent(name, { harnessId: "flightpath", path: path.join(fpDir, f) });
-      }
+      if (!f.endsWith(ext)) continue;
+      const name = f.endsWith(".agent.md")
+        ? f.slice(0, -".agent.md".length)
+        : f.slice(0, -ext.length);
+      addAgent(name, { harnessId, scope, path: path.join(dir, f) });
+    }
+  };
+
+  // FlightPath workspace dir
+  await scanAgentDir(getFlightPathAgentDir(workspaceRoot), "flightpath", "workspace");
+
+  // FlightPath user dir (~/.flightpath/agents)
+  await scanAgentDir(getFlightPathUserAgentDir(), "flightpath", "user");
+
+  // Workspace harness dirs (deduplicate by resolved path)
+  const scannedWorkspace = new Set<string>();
+  for (const harnessId of getAllHarnessIds()) {
+    for (const dir of getHarnessAgentDirs(harnessId, workspaceRoot)) {
+      const normalized = path.normalize(dir);
+      if (scannedWorkspace.has(normalized)) continue;
+      scannedWorkspace.add(normalized);
+      await scanAgentDir(dir, harnessId, "workspace");
     }
   }
 
-  // All harness workspace dirs
+  // User harness dirs (deduplicate by resolved path)
+  const scannedUser = new Set<string>();
   for (const harnessId of getAllHarnessIds()) {
-    const dirs = getHarnessAgentDirs(harnessId, workspaceRoot);
-    const ext = HARNESS_AGENT_EXTENSION[harnessId];
-
-    for (const dir of dirs) {
-      if (!(await isAccessibleDirectory(dir))) continue;
-      const files = await fs.promises.readdir(dir).catch(() => [] as string[]);
-      for (const f of files) {
-        if (!f.endsWith(ext)) continue;
-        // Strip .agent.md preferentially: a .agent.md file in a .md-extension
-        // harness dir (e.g. claude-cli) should yield name "foo", not "foo.agent"
-        const name = f.endsWith(".agent.md")
-          ? f.slice(0, -".agent.md".length)
-          : f.slice(0, -ext.length);
-        addAgent(name, { harnessId, path: path.join(dir, f) });
-      }
+    for (const dir of getHarnessUserAgentDirs(harnessId)) {
+      const normalized = path.normalize(dir);
+      if (scannedUser.has(normalized)) continue;
+      scannedUser.add(normalized);
+      await scanAgentDir(dir, harnessId, "user");
     }
   }
 
@@ -117,7 +139,7 @@ async function collectAgentLocations(
 }
 
 /**
- * Collect all skill locations across all harness workspace dirs and .flightpath/.
+ * Collect all skill locations across all harness workspace dirs, user dirs, and .flightpath/.
  */
 async function collectSkillLocations(
   workspaceRoot: string
@@ -140,43 +162,47 @@ async function collectSkillLocations(
     return fs.existsSync(path.join(dir, name, "SKILL.md"));
   };
 
-  // FlightPath dir
-  const fpDir = getFlightPathSkillDir(workspaceRoot);
-  if (await isAccessibleDirectory(fpDir)) {
+  const scanSkillDir = async (
+    dir: string,
+    harnessId: HarnessId | "flightpath",
+    scope: "workspace" | "user"
+  ) => {
+    if (!(await isAccessibleDirectory(dir))) return;
     const entries = await fs.promises
-      .readdir(fpDir, { withFileTypes: true })
+      .readdir(dir, { withFileTypes: true })
       .catch(() => [] as fs.Dirent[]);
     for (const e of entries) {
-      if (e.isDirectory() && (await isSkillDir(fpDir, e.name))) {
-        addSkill(e.name, {
-          harnessId: "flightpath",
-          path: path.join(fpDir, e.name),
-        });
+      if (e.isDirectory() && (await isSkillDir(dir, e.name))) {
+        addSkill(e.name, { harnessId, scope, path: path.join(dir, e.name) });
       }
+    }
+  };
+
+  // FlightPath workspace dir
+  await scanSkillDir(getFlightPathSkillDir(workspaceRoot), "flightpath", "workspace");
+
+  // FlightPath user dir (~/.flightpath/skills)
+  await scanSkillDir(getFlightPathUserSkillDir(), "flightpath", "user");
+
+  // Workspace harness dirs (deduplicate by resolved path)
+  const scannedWorkspace = new Set<string>();
+  for (const harnessId of getAllHarnessIds()) {
+    for (const dir of getHarnessSkillDirs(harnessId, workspaceRoot)) {
+      const normalized = path.normalize(dir);
+      if (scannedWorkspace.has(normalized)) continue;
+      scannedWorkspace.add(normalized);
+      await scanSkillDir(dir, harnessId, "workspace");
     }
   }
 
-  // All harness workspace dirs (deduplicate by resolved path)
-  const scanned = new Set<string>();
+  // User harness dirs (deduplicate by resolved path)
+  const scannedUser = new Set<string>();
   for (const harnessId of getAllHarnessIds()) {
-    const dirs = getHarnessSkillDirs(harnessId, workspaceRoot);
-    for (const dir of dirs) {
+    for (const dir of getHarnessUserSkillDirs(harnessId)) {
       const normalized = path.normalize(dir);
-      if (scanned.has(normalized)) continue;
-      scanned.add(normalized);
-
-      if (!(await isAccessibleDirectory(dir))) continue;
-      const entries = await fs.promises
-        .readdir(dir, { withFileTypes: true })
-        .catch(() => [] as fs.Dirent[]);
-      for (const e of entries) {
-        if (e.isDirectory() && (await isSkillDir(dir, e.name))) {
-          addSkill(e.name, {
-            harnessId,
-            path: path.join(dir, e.name),
-          });
-        }
-      }
+      if (scannedUser.has(normalized)) continue;
+      scannedUser.add(normalized);
+      await scanSkillDir(dir, harnessId, "user");
     }
   }
 
@@ -208,18 +234,21 @@ export class HarnessFileManager {
   /**
    * Copy an agent/skill to a target harness directory, creating the dir if needed.
    * @param overwrite If false (default), throws if the destination already exists.
+   * @param scope Whether to target the workspace dir or the user-level dir (default: "workspace").
    */
   static async exportToHarness(
     sourcePath: string,
     targetHarnessId: HarnessId | "flightpath",
     workspaceRoot: string,
     type: "agent" | "skill",
-    overwrite = false
+    overwrite = false,
+    scope: "workspace" | "user" = "workspace"
   ): Promise<void> {
     const targetDir = HarnessFileManager.getTargetDir(
       targetHarnessId,
       workspaceRoot,
-      type
+      type,
+      scope
     );
     await ensureDir(targetDir);
 
@@ -253,35 +282,41 @@ export class HarnessFileManager {
 
   /**
    * Copy an agent/skill into .flightpath/agents or .flightpath/skills.
+   * @param scope "workspace" (default) copies to workspace .flightpath/; "user" copies to ~/.flightpath/.
    */
   static async importToFlightPath(
     sourcePath: string,
     workspaceRoot: string,
     type: "agent" | "skill",
-    overwrite = false
+    overwrite = false,
+    scope: "workspace" | "user" = "workspace"
   ): Promise<void> {
     return HarnessFileManager.exportToHarness(
       sourcePath,
       "flightpath",
       workspaceRoot,
       type,
-      overwrite
+      overwrite,
+      scope
     );
   }
 
   /**
    * Delete a file/directory from a specific harness directory.
+   * @param scope Whether to delete from the workspace dir or the user-level dir (default: "workspace").
    */
   static async deleteFromHarness(
     name: string,
     harnessId: HarnessId | "flightpath",
     workspaceRoot: string,
-    type: "agent" | "skill"
+    type: "agent" | "skill",
+    scope: "workspace" | "user" = "workspace"
   ): Promise<void> {
     const targetDir = HarnessFileManager.getTargetDir(
       harnessId,
       workspaceRoot,
-      type
+      type,
+      scope
     );
 
     if (type === "agent") {
@@ -334,11 +369,13 @@ export class HarnessFileManager {
 
   /**
    * Delete every discovered agent/skill that exists in a specific harness directory.
+   * @param scope Whether to delete from the workspace dir or the user-level dir (default: "workspace").
    */
   static async deleteAllFromHarness(
     harnessId: HarnessId | "flightpath",
     workspaceRoot: string,
-    type: "agent" | "skill"
+    type: "agent" | "skill",
+    scope: "workspace" | "user" = "workspace"
   ): Promise<void> {
     const files =
       type === "agent"
@@ -346,39 +383,49 @@ export class HarnessFileManager {
         : await collectSkillLocations(workspaceRoot);
 
     for (const file of files) {
-      if (file.locations.some((l) => l.harnessId === harnessId)) {
+      if (file.locations.some((l) => l.harnessId === harnessId && l.scope === scope)) {
         await HarnessFileManager.deleteFromHarness(
           file.name,
           harnessId,
           workspaceRoot,
-          type
+          type,
+          scope
         );
       }
     }
   }
 
   /**
-   * Returns the primary target directory for a harness + type combination.
-   * Uses the first directory in the workspace dirs list.
+   * Returns the primary target directory for a harness + type + scope combination.
    */
   static getTargetDir(
     harnessId: HarnessId | "flightpath",
     workspaceRoot: string,
-    type: "agent" | "skill"
+    type: "agent" | "skill",
+    scope: "workspace" | "user" = "workspace"
   ): string {
     if (harnessId === "flightpath") {
+      if (scope === "user") {
+        return type === "agent"
+          ? getFlightPathUserAgentDir()
+          : getFlightPathUserSkillDir();
+      }
       return type === "agent"
         ? getFlightPathAgentDir(workspaceRoot)
         : getFlightPathSkillDir(workspaceRoot);
     }
 
     const dirs =
-      type === "agent"
-        ? getHarnessAgentDirs(harnessId as HarnessId, workspaceRoot)
-        : getHarnessSkillDirs(harnessId as HarnessId, workspaceRoot);
+      scope === "user"
+        ? type === "agent"
+          ? getHarnessUserAgentDirs(harnessId as HarnessId)
+          : getHarnessUserSkillDirs(harnessId as HarnessId)
+        : type === "agent"
+          ? getHarnessAgentDirs(harnessId as HarnessId, workspaceRoot)
+          : getHarnessSkillDirs(harnessId as HarnessId, workspaceRoot);
 
     if (dirs.length === 0) {
-      throw new Error(`No ${type} directory configured for harness ${harnessId}`);
+      throw new Error(`No ${type} directory configured for harness ${harnessId} (${scope})`);
     }
     return dirs[0];
   }

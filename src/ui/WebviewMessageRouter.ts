@@ -51,12 +51,6 @@ import {
 } from "../utils/McpDiscoveryUtils";
 import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder";
 import { HarnessFileManager } from "../utils/HarnessFileManager";
-import {
-  getHarnessAgentDirs,
-  getFlightPathAgentDir,
-  getHarnessSkillDirs,
-  getFlightPathSkillDir,
-} from "../utils/HarnessDirectoryUtils";
 
 const execFileAsync = promisify(execFile);
 const GIT_VALIDATION_TIMEOUT_MS = 5000;
@@ -611,7 +605,8 @@ export class WebviewMessageRouter {
           message.harnessId,
           workspaceRoot,
           message.fileType,
-          message.overwrite ?? false
+          message.overwrite ?? false,
+          message.scope ?? "workspace"
         );
         const files = await HarnessFileManager.resolveAllLocations(
           workspaceRoot,
@@ -665,7 +660,8 @@ export class WebviewMessageRouter {
           message.name,
           message.harnessId,
           workspaceRoot,
-          message.fileType
+          message.fileType,
+          message.scope ?? "workspace"
         );
         const files = await HarnessFileManager.resolveAllLocations(
           workspaceRoot,
@@ -697,7 +693,8 @@ export class WebviewMessageRouter {
             message.targetHarnessId,
             workspaceRoot,
             message.fileType,
-            true
+            true,
+            message.scope ?? "workspace"
           );
         }
         const files = await HarnessFileManager.resolveAllLocations(
@@ -724,7 +721,8 @@ export class WebviewMessageRouter {
         await HarnessFileManager.deleteAllFromHarness(
           message.harnessId,
           workspaceRoot,
-          message.fileType
+          message.fileType,
+          message.scope ?? "workspace"
         );
         const files = await HarnessFileManager.resolveAllLocations(
           workspaceRoot,
@@ -746,20 +744,21 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.OPEN_HARNESS_DIR, async (message) => {
       const workspaceRoot = this.getWorkspaceRoot();
-      const dirPath =
-        message.harnessId === "flightpath"
-          ? message.fileType === "agent"
-            ? getFlightPathAgentDir(workspaceRoot)
-            : getFlightPathSkillDir(workspaceRoot)
-          : message.fileType === "agent"
-            ? getHarnessAgentDirs(message.harnessId, workspaceRoot)[0]
-            : getHarnessSkillDirs(message.harnessId, workspaceRoot)[0];
-
-      if (dirPath) {
-        await vscode.commands.executeCommand(
-          "revealFileInOS",
-          vscode.Uri.file(dirPath)
+      try {
+        const dirPath = HarnessFileManager.getTargetDir(
+          message.harnessId,
+          workspaceRoot,
+          message.fileType,
+          message.scope ?? "workspace"
         );
+        if (dirPath) {
+          await vscode.commands.executeCommand(
+            "revealFileInOS",
+            vscode.Uri.file(dirPath)
+          );
+        }
+      } catch {
+        // No dir configured for this harness/scope combination
       }
     });
 

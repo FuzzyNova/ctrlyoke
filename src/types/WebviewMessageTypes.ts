@@ -1185,6 +1185,8 @@ export interface SaveMcpWorkspaceServersMessage {
 export interface ManagedFileLocation {
   /** The harness this location belongs to, or "flightpath" for the FP-exclusive dir */
   harnessId: HarnessId | "flightpath";
+  /** Whether this copy lives in a workspace dir or a user-level (~/) dir */
+  scope: "workspace" | "user";
   /** Absolute path to the file (agent) or directory (skill) on disk */
   path: string;
 }
@@ -1218,6 +1220,7 @@ export interface ExportToHarnessMessage {
   harnessId: HarnessId | "flightpath";
   fileType: "agent" | "skill";
   overwrite?: boolean;
+  scope: "workspace" | "user";
 }
 
 /** Webview → Extension: copy a file into .flightpath/agents or .flightpath/skills */
@@ -1234,6 +1237,7 @@ export interface DeleteFromHarnessMessage {
   name: string;
   harnessId: HarnessId | "flightpath";
   fileType: "agent" | "skill";
+  scope: "workspace" | "user";
 }
 
 /** Webview → Extension: copy all files to a single harness dir (or "flightpath") */
@@ -1243,6 +1247,7 @@ export interface SyncAllToHarnessMessage {
   files: Array<{ sourcePath: string; name: string }>;
   targetHarnessId: HarnessId | "flightpath";
   fileType: "agent" | "skill";
+  scope: "workspace" | "user";
 }
 
 /** Webview → Extension: delete all discovered files from a specific harness dir (or "flightpath") */
@@ -1250,6 +1255,7 @@ export interface DeleteAllFromHarnessMessage {
   type: typeof MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS;
   harnessId: HarnessId | "flightpath";
   fileType: "agent" | "skill";
+  scope: "workspace" | "user";
 }
 
 /** Extension → Webview: result of a file operation (export/import/delete/sync) */
@@ -1266,6 +1272,7 @@ export interface OpenHarnessDirMessage {
   type: typeof MESSAGE_TYPES.OPEN_HARNESS_DIR;
   harnessId: HarnessId | "flightpath";
   fileType: "agent" | "skill";
+  scope: "workspace" | "user";
 }
 
 /**

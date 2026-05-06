@@ -27,15 +27,29 @@ function getHarnessLabel(id: HarnessId | "flightpath"): string {
   return info?.shortName ?? id;
 }
 
+// Encode/decode harnessId + scope into a single dropdown value string
+function encodeTarget(harnessId: HarnessId | "flightpath", scope: "workspace" | "user"): string {
+  return `${harnessId}:${scope}`;
+}
+
+function decodeTarget(encoded: string): { harnessId: HarnessId | "flightpath"; scope: "workspace" | "user" } {
+  const colonIdx = encoded.lastIndexOf(":");
+  return {
+    harnessId: encoded.slice(0, colonIdx) as HarnessId | "flightpath",
+    scope: encoded.slice(colonIdx + 1) as "workspace" | "user",
+  };
+}
+
 // ============================================================================
 // Badge
 // ============================================================================
 
 interface BadgeProps {
   id: HarnessId | "flightpath";
+  scope: "workspace" | "user";
 }
 
-function HarnessBadge({ id }: BadgeProps) {
+function HarnessBadge({ id, scope }: BadgeProps) {
   const isFp = id === "flightpath";
   return (
     <span
@@ -46,7 +60,7 @@ function HarnessBadge({ id }: BadgeProps) {
             : "bg-list-hover-bg text-foreground border border-panel-border"
         }`}
     >
-      {getHarnessLabel(id)}
+      {getHarnessLabel(id)}{scope === "user" ? " ·user" : ""}
     </span>
   );
 }
@@ -57,33 +71,49 @@ function HarnessBadge({ id }: BadgeProps) {
 
 interface FileRowProps {
   file: ManagedFile;
-  onExport: (sourcePath: string, targetId: string) => void;
-  onImport: (sourcePath: string) => void;
-  onDelete: (name: string, harnessId: string) => void;
+  onSave: (sourcePath: string, harnessId: string, scope: "workspace" | "user") => void;
+  onDelete: (name: string, harnessId: string, scope: "workspace" | "user") => void;
 }
 
-function FileRow({ file, onExport, onImport, onDelete }: FileRowProps) {
-  const locationIds = new Set(file.locations.map((l) => l.harnessId));
-  const hasFlightPath = locationIds.has("flightpath");
+function FileRow({ file, onSave, onDelete }: FileRowProps) {
+  const locationKeys = new Set(
+    file.locations.map((l) => encodeTarget(l.harnessId, l.scope))
+  );
 
-  // Primary source path (prefer flightpath, else first location)
+  // Primary source path (prefer flightpath workspace, then flightpath user, then first)
   const primaryLoc: ManagedFileLocation =
-    file.locations.find((l) => l.harnessId === "flightpath") ??
+    file.locations.find((l) => l.harnessId === "flightpath" && l.scope === "workspace") ??
+    file.locations.find((l) => l.harnessId === "flightpath" && l.scope === "user") ??
     file.locations[0];
 
-  const exportItems: ActionDropdownItem[] = DISPLAYED_HARNESS_IDS.map((id) => {
-    const present = locationIds.has(id);
-    return {
-      label: getHarnessLabel(id),
-      value: id,
-      disabled: present,
-      title: present ? "Already present" : undefined,
-    };
-  });
+  const saveItems: ActionDropdownItem[] = [
+    ...DISPLAYED_HARNESS_IDS.flatMap((id) =>
+      (["workspace", "user"] as const).map((scope) => {
+        const encoded = encodeTarget(id, scope);
+        const present = locationKeys.has(encoded);
+        return {
+          label: `${getHarnessLabel(id)} (${scope})`,
+          value: encoded,
+          disabled: present,
+          title: present ? "Already present" : undefined,
+        };
+      })
+    ),
+    ...( (["workspace", "user"] as const).map((scope) => {
+      const encoded = encodeTarget("flightpath", scope);
+      const present = locationKeys.has(encoded);
+      return {
+        label: `FlightPath (${scope})`,
+        value: encoded,
+        disabled: present,
+        title: present ? "Already present" : undefined,
+      };
+    }) ),
+  ];
 
   const deleteItems: ActionDropdownItem[] = file.locations.map((loc) => ({
-    label: `${getHarnessLabel(loc.harnessId)} — ${loc.harnessId === "flightpath" ? "FP dir" : "native dir"}`,
-    value: loc.harnessId,
+    label: `${getHarnessLabel(loc.harnessId)} (${loc.scope})`,
+    value: encodeTarget(loc.harnessId, loc.scope),
   }));
 
   return (
@@ -95,37 +125,33 @@ function FileRow({ file, onExport, onImport, onDelete }: FileRowProps) {
 
       {/* Location badges (left) + actions (right) — share one responsive row */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           {file.locations.map((loc) => (
             <HarnessBadge
-              key={`${loc.harnessId}-${loc.path}`}
+              key={`${loc.harnessId}-${loc.scope}-${loc.path}`}
               id={loc.harnessId}
+              scope={loc.scope}
             />
           ))}
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
-          {!hasFlightPath && (
-            <button
-              type="button"
-              onClick={() => onImport(primaryLoc.path)}
-              className="px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
-              title="Copy to .flightpath directory"
-            >
-              Import
-            </button>
-          )}
-
           <ActionDropdown
-            label="Export"
-            items={exportItems}
-            onSelect={(targetId) => onExport(primaryLoc.path, targetId)}
+            label="Save"
+            items={saveItems}
+            onSelect={(encoded) => {
+              const { harnessId, scope } = decodeTarget(encoded);
+              onSave(primaryLoc.path, harnessId, scope);
+            }}
           />
 
           <ActionDropdown
             label="Delete"
             items={deleteItems}
-            onSelect={(harnessId) => onDelete(file.name, harnessId)}
+            onSelect={(encoded) => {
+              const { harnessId, scope } = decodeTarget(encoded);
+              onDelete(file.name, harnessId, scope);
+            }}
             className="text-error-fg"
           />
         </div>
@@ -135,32 +161,32 @@ function FileRow({ file, onExport, onImport, onDelete }: FileRowProps) {
 }
 
 // ============================================================================
-// All-actions bar (Sync All / Delete All)
+// All-actions bar (Save All / Delete All)
 // ============================================================================
 
-type BulkAction = "sync" | "delete";
+type BulkAction = "save" | "delete";
 
 interface AllActionsBarProps {
   files: ManagedFile[];
-  onSync: (targetId: string) => void;
-  onDeleteAll: (targetId: string) => void;
+  onSave: (encoded: string) => void;
+  onDeleteAll: (encoded: string) => void;
 }
 
-function AllActionsBar({ files, onSync, onDeleteAll }: AllActionsBarProps) {
-  const [action, setAction] = useState<BulkAction>("sync");
-  const [target, setTarget] = useState<HarnessId | "flightpath">(
-    HARNESS_IDS.CLAUDE_CLI as HarnessId
+function AllActionsBar({ files, onSave, onDeleteAll }: AllActionsBarProps) {
+  const [action, setAction] = useState<BulkAction>("save");
+  const [target, setTarget] = useState<string>(
+    encodeTarget(HARNESS_IDS.CLAUDE_CLI as HarnessId, "workspace")
   );
 
   const handleExecute = () => {
-    if (action === "sync") {
-      onSync(target);
+    if (action === "save") {
+      onSave(target);
     } else {
       onDeleteAll(target);
     }
   };
 
-  const preposition = action === "sync" ? "to:" : "from:";
+  const preposition = action === "save" ? "to:" : "from:";
 
   return (
     <div className="flex items-center gap-2 pt-3 border-t border-panel-border">
@@ -169,7 +195,7 @@ function AllActionsBar({ files, onSync, onDeleteAll }: AllActionsBarProps) {
         onChange={(e) => setAction(e.target.value as BulkAction)}
         className="h-6 bg-input-bg border border-input-border rounded px-2 text-xs text-foreground focus:outline-none focus:border-focus-border shrink-0"
       >
-        <option value="sync">Sync All</option>
+        <option value="save">Save All</option>
         <option value="delete">Delete All</option>
       </select>
 
@@ -179,15 +205,21 @@ function AllActionsBar({ files, onSync, onDeleteAll }: AllActionsBarProps) {
 
       <select
         value={target}
-        onChange={(e) => setTarget(e.target.value as HarnessId | "flightpath")}
+        onChange={(e) => setTarget(e.target.value)}
         className="h-6 flex-1 min-w-0 bg-input-bg border border-input-border rounded px-2 text-xs text-foreground focus:outline-none focus:border-focus-border"
       >
-        {DISPLAYED_HARNESS_IDS.map((id) => (
-          <option key={id} value={id}>
-            {getHarnessLabel(id)}
+        {DISPLAYED_HARNESS_IDS.flatMap((id) =>
+          (["workspace", "user"] as const).map((scope) => (
+            <option key={encodeTarget(id, scope)} value={encodeTarget(id, scope)}>
+              {getHarnessLabel(id)} ({scope})
+            </option>
+          ))
+        )}
+        {(["workspace", "user"] as const).map((scope) => (
+          <option key={encodeTarget("flightpath", scope)} value={encodeTarget("flightpath", scope)}>
+            FlightPath ({scope})
           </option>
         ))}
-        <option value="flightpath">FlightPath</option>
       </select>
 
       <button
@@ -201,7 +233,7 @@ function AllActionsBar({ files, onSync, onDeleteAll }: AllActionsBarProps) {
               : "bg-btn-bg text-btn-fg hover:bg-btn-hover"
           }`}
       >
-        {action === "sync" ? "Sync All" : "Delete All"}
+        {action === "save" ? "Save All" : "Delete All"}
       </button>
     </div>
   );
@@ -219,7 +251,6 @@ export function AgentSkillsManagerSection() {
   const setActiveType = useHarnessFileStore((s) => s.setActiveType);
   const requestFiles = useHarnessFileStore((s) => s.requestFiles);
   const exportFile = useHarnessFileStore((s) => s.exportFile);
-  const importFile = useHarnessFileStore((s) => s.importFile);
   const deleteFile = useHarnessFileStore((s) => s.deleteFile);
   const syncAll = useHarnessFileStore((s) => s.syncAll);
   const deleteAll = useHarnessFileStore((s) => s.deleteAll);
@@ -228,60 +259,61 @@ export function AgentSkillsManagerSection() {
   const [confirmDelete, setConfirmDelete] = useState<{
     name: string;
     harnessId: string;
+    scope: "workspace" | "user";
   } | null>(null);
 
   const [confirmDeleteAll, setConfirmDeleteAll] = useState<{
     harnessId: string;
+    scope: "workspace" | "user";
   } | null>(null);
 
   useEffect(() => {
     requestFiles();
   }, [requestFiles]);
 
-  const handleExport = useCallback(
-    (sourcePath: string, targetId: string) => {
-      exportFile(sourcePath, targetId, activeType, false);
+  const handleSave = useCallback(
+    (sourcePath: string, harnessId: string, scope: "workspace" | "user") => {
+      exportFile(sourcePath, harnessId, activeType, false, scope);
     },
     [exportFile, activeType]
   );
 
-  const handleImport = useCallback(
-    (sourcePath: string) => {
-      importFile(sourcePath, activeType, false);
+  const handleDeleteRequest = useCallback(
+    (name: string, harnessId: string, scope: "workspace" | "user") => {
+      setConfirmDelete({ name, harnessId, scope });
     },
-    [importFile, activeType]
+    []
   );
-
-  const handleDeleteRequest = useCallback((name: string, harnessId: string) => {
-    setConfirmDelete({ name, harnessId });
-  }, []);
 
   const handleDeleteConfirm = useCallback(() => {
     if (!confirmDelete) return;
-    deleteFile(confirmDelete.name, confirmDelete.harnessId, activeType);
+    deleteFile(confirmDelete.name, confirmDelete.harnessId, activeType, confirmDelete.scope);
     setConfirmDelete(null);
   }, [confirmDelete, deleteFile, activeType]);
 
-  const handleSyncAll = useCallback(
-    (targetId: string) => {
+  const handleSaveAll = useCallback(
+    (encoded: string) => {
+      const { harnessId, scope } = decodeTarget(encoded);
       const files = managedFiles.map((f) => {
         const primary =
-          f.locations.find((l) => l.harnessId === "flightpath") ??
+          f.locations.find((l) => l.harnessId === "flightpath" && l.scope === "workspace") ??
+          f.locations.find((l) => l.harnessId === "flightpath" && l.scope === "user") ??
           f.locations[0];
         return { sourcePath: primary.path, name: f.name };
       });
-      syncAll(files, targetId, activeType);
+      syncAll(files, harnessId, activeType, scope);
     },
     [managedFiles, syncAll, activeType]
   );
 
-  const handleDeleteAllRequest = useCallback((targetId: string) => {
-    setConfirmDeleteAll({ harnessId: targetId });
+  const handleDeleteAllRequest = useCallback((encoded: string) => {
+    const { harnessId, scope } = decodeTarget(encoded);
+    setConfirmDeleteAll({ harnessId, scope });
   }, []);
 
   const handleDeleteAllConfirm = useCallback(() => {
     if (!confirmDeleteAll) return;
-    deleteAll(confirmDeleteAll.harnessId, activeType);
+    deleteAll(confirmDeleteAll.harnessId, activeType, confirmDeleteAll.scope);
     setConfirmDeleteAll(null);
   }, [confirmDeleteAll, deleteAll, activeType]);
 
@@ -292,9 +324,10 @@ export function AgentSkillsManagerSection() {
       </h3>
 
       <p className="text-xs text-description-fg">
-        Manage agent and skill files across harness directories. Export to give
-        a harness native subagent-spawn access; import to bring files into the
-        FlightPath-exclusive directory.
+        Manage agent and skill files across harness directories. Save to a
+        harness directory to give it native subagent-spawn access. Workspace
+        dirs live inside the project; user dirs live in your home folder and
+        apply globally.
       </p>
 
       {/* Type switcher + Open Folder */}
@@ -328,13 +361,21 @@ export function AgentSkillsManagerSection() {
             <ActionDropdown
               label="Open Folder"
               items={[
-                ...DISPLAYED_HARNESS_IDS.map((id) => ({
-                  label: getHarnessLabel(id),
-                  value: id,
+                ...DISPLAYED_HARNESS_IDS.flatMap((id) =>
+                  (["workspace", "user"] as const).map((scope) => ({
+                    label: `${getHarnessLabel(id)} (${scope})`,
+                    value: encodeTarget(id, scope),
+                  }))
+                ),
+                ...(["workspace", "user"] as const).map((scope) => ({
+                  label: `FlightPath (${scope})`,
+                  value: encodeTarget("flightpath", scope),
                 })),
-                { label: "FlightPath", value: "flightpath" },
               ]}
-              onSelect={(id) => openHarnessDir(id, activeType)}
+              onSelect={(encoded) => {
+                const { harnessId, scope } = decodeTarget(encoded);
+                openHarnessDir(harnessId, activeType, scope);
+              }}
             />
           </div>
         )}
@@ -363,17 +404,16 @@ export function AgentSkillsManagerSection() {
             <FileRow
               key={file.name}
               file={file}
-              onExport={handleExport}
-              onImport={handleImport}
+              onSave={handleSave}
               onDelete={handleDeleteRequest}
             />
           ))}
       </div>
 
-      {/* Bulk actions (Sync All / Delete All) */}
+      {/* Bulk actions (Save All / Delete All) */}
       <AllActionsBar
         files={managedFiles}
-        onSync={handleSyncAll}
+        onSave={handleSaveAll}
         onDeleteAll={handleDeleteAllRequest}
       />
 
@@ -396,9 +436,9 @@ export function AgentSkillsManagerSection() {
                 {getHarnessLabel(
                   confirmDelete.harnessId as HarnessId | "flightpath"
                 )}
-              </strong>
-              ? This only deletes the file from that directory — other copies
-              are not affected.
+              </strong>{" "}
+              ({confirmDelete.scope})? This only deletes the file from that
+              directory — other copies are not affected.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -439,8 +479,9 @@ export function AgentSkillsManagerSection() {
                 {getHarnessLabel(
                   confirmDeleteAll.harnessId as HarnessId | "flightpath"
                 )}
-              </strong>
-              . Copies in other directories are not affected.
+              </strong>{" "}
+              ({confirmDeleteAll.scope}). Copies in other directories are not
+              affected.
             </p>
             <div className="flex justify-end gap-2">
               <button

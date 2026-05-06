@@ -19,27 +19,30 @@ interface HarnessFileState {
     sourcePath: string,
     harnessId: string,
     fileType: "agent" | "skill",
-    overwrite?: boolean
-  ) => void;
-  importFile: (
-    sourcePath: string,
-    fileType: "agent" | "skill",
-    overwrite?: boolean
+    overwrite: boolean,
+    scope: "workspace" | "user"
   ) => void;
   deleteFile: (
     name: string,
     harnessId: string,
-    fileType: "agent" | "skill"
+    fileType: "agent" | "skill",
+    scope: "workspace" | "user"
   ) => void;
   syncAll: (
     files: Array<{ sourcePath: string; name: string }>,
     targetHarnessId: string,
-    fileType: "agent" | "skill"
+    fileType: "agent" | "skill",
+    scope: "workspace" | "user"
   ) => void;
-  deleteAll: (harnessId: string, fileType: "agent" | "skill") => void;
+  deleteAll: (
+    harnessId: string,
+    fileType: "agent" | "skill",
+    scope: "workspace" | "user"
+  ) => void;
   openHarnessDir: (
     harnessId: string,
-    fileType: "agent" | "skill"
+    fileType: "agent" | "skill",
+    scope: "workspace" | "user"
   ) => void;
 }
 
@@ -65,49 +68,43 @@ export const useHarnessFileStore = create<HarnessFileState>((set, get) => ({
     });
   },
 
-  exportFile: (sourcePath, harnessId, fileType, overwrite = false) => {
+  exportFile: (sourcePath, harnessId, fileType, overwrite, scope) => {
     set({ loading: true, error: null });
     sendMessage(MESSAGE_TYPES.EXPORT_TO_HARNESS, {
       sourcePath,
       harnessId,
       fileType,
       overwrite,
+      scope,
     });
   },
 
-  importFile: (sourcePath, fileType, overwrite = false) => {
-    set({ loading: true, error: null });
-    sendMessage(MESSAGE_TYPES.IMPORT_TO_FLIGHTPATH, {
-      sourcePath,
-      fileType,
-      overwrite,
-    });
-  },
-
-  deleteFile: (name, harnessId, fileType) => {
+  deleteFile: (name, harnessId, fileType, scope) => {
     set({ loading: true, error: null });
     sendMessage(MESSAGE_TYPES.DELETE_FROM_HARNESS, {
       name,
       harnessId,
       fileType,
+      scope,
     });
   },
 
-  syncAll: (files, targetHarnessId, fileType) => {
+  syncAll: (files, targetHarnessId, fileType, scope) => {
     set({ loading: true, error: null });
     sendMessage(MESSAGE_TYPES.SYNC_ALL_TO_HARNESS, {
       files,
       targetHarnessId,
       fileType,
+      scope,
     });
   },
 
-  deleteAll: (harnessId, fileType) => {
+  deleteAll: (harnessId, fileType, scope) => {
     set({ loading: true, error: null });
-    sendMessage(MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS, { harnessId, fileType });
+    sendMessage(MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS, { harnessId, fileType, scope });
   },
 
-  openHarnessDir: (harnessId, fileType) => {
-    sendMessage(MESSAGE_TYPES.OPEN_HARNESS_DIR, { harnessId, fileType });
+  openHarnessDir: (harnessId, fileType, scope) => {
+    sendMessage(MESSAGE_TYPES.OPEN_HARNESS_DIR, { harnessId, fileType, scope });
   },
 }));

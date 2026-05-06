@@ -21,11 +21,7 @@ export interface AgentInfo {
   /** Full path to the agent file */
   path: string;
   /** Source location of the agent */
-  source:
-    | "user"
-    | "workspace-github"
-    | "workspace-claude"
-    | "workspace-flightpath";
+  source: "user" | "workspace" | "workspace-flightpath";
 }
 
 /**
@@ -75,7 +71,7 @@ export class AgentDiscovery {
             scanned.add(normalized);
             const harnessAgents = await this.discoverAgentsInDirectory(
               dir,
-              "workspace-github" // source label kept generic; file manager owns the per-harness detail
+              "workspace"
             );
             agents.push(...harnessAgents);
           }

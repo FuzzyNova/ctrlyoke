@@ -57,7 +57,8 @@ export const SkillsSelect: React.FC<{
     const updated = current.includes(name)
       ? current.filter((s) => s !== name)
       : [...current, name];
-    onChange(updated);
+    // If user unchecks all skills, revert to "inherit" (undefined) rather than leaving an empty selection
+    onChange(updated.length === 0 ? undefined : updated);
   };
 
   // ── Shared list content ───────────────────────────────────────────────────
@@ -123,7 +124,7 @@ export const SkillsSelect: React.FC<{
                 <span className="flex flex-col min-w-0">
                   <span className="font-medium truncate">{skill.name}</span>
                   {skill.description && (
-                    <span className="text-xxs text-description-fg whitespace-normal break-words">
+                    <span className="text-xxs text-description-fg truncate">
                       {skill.description}
                     </span>
                   )}

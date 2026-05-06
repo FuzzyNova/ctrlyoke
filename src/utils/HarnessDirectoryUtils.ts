@@ -146,6 +146,20 @@ export function getFlightPathSkillDir(workspaceRoot: string): string {
 }
 
 /**
+ * Returns the user-level FlightPath agent directory (~/.flightpath/agents).
+ */
+export function getFlightPathUserAgentDir(): string {
+  return path.join(os.homedir(), PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.AGENTS_DIR);
+}
+
+/**
+ * Returns the user-level FlightPath skill directory (~/.flightpath/skills).
+ */
+export function getFlightPathUserSkillDir(): string {
+  return path.join(os.homedir(), PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.SKILLS_DIR);
+}
+
+/**
  * Returns all known harness IDs that have workspace agent directories.
  */
 export function getAllHarnessIds(): HarnessId[] {
