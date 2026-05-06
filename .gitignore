@@ -19,6 +19,11 @@ package.json.backup
 .flightpath/capabilities.json
 manual-test/hooks/output/
 
+# VitePress build artifacts
+docs/.vitepress/dist
+docs/.vitepress/.temp
+docs/.vitepress/cache
+
 # Copilot CLI OTEL telemetry file (created when CWD is workspace root because
 # COPILOT_OTEL_FILE_EXPORTER_PATH is set to the relative path "NUL")
 /NUL

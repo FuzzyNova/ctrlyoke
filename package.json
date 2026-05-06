@@ -615,6 +615,9 @@
     "watch:webview": "npm run generate-custom-icons && vite build --watch --config src/ui/webview-react/vite.config.ts --mode development",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "dev:webview": "npm run generate-custom-icons && vite --config src/ui/webview-react/vite.config.ts",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "vscode:prepublish": "npm run build:prod",
     "build:prod": "npm run build:extension && npm run build:webview",
     "build:extension": "npm run typecheck:extension && node scripts/strip-dev-commands.mjs && node esbuild.js --production",
@@ -681,6 +684,7 @@
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vite-plugin-static-copy": "^3.2.0",
+    "vitepress": "^1.6.4",
     "vitest": "^3.2.4"
   },
   "bundledDependencies": [

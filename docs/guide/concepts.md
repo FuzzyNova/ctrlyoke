@@ -1,0 +1,69 @@
+# Core concepts
+
+## Harness
+
+A **harness** is the execution strategy FlightPath uses to talk to an AI assistant. The term covers both CLI-backed integrations and the Copilot Chat window integration.
+
+FlightPath currently supports:
+
+- `copilot-cli`
+- `claude-cli`
+- `codex-cli`
+- `opencode-cli`
+- `qwen-cli`
+- `gemini-cli`
+- `copilot-chat`
+
+## Workflow
+
+A workflow is a `.flightpath.yaml`, `.flightpath.json`, or `.prompt.md` file that describes work to run. YAML and JSON support multi-step automation. Markdown prompt files are the simplest one-step format.
+
+## Step
+
+A workflow `steps` array can contain two kinds of step:
+
+| Type | Purpose |
+| --- | --- |
+| Prompt step | Sends a prompt to a harness |
+| Script step | Runs a shell command without any AI interaction |
+
+Prompt steps default to type `prompt`, so the `type` field is optional unless you want to be explicit.
+
+## Final step
+
+`finalStep` runs after the queue completes. It is useful for review passes, post-processing, or dynamic queue extension loops.
+
+If the final step has `mcpServers: ["flightpath"]` and appends more prompts, FlightPath runs the new queue items and then executes the final step again.
+
+## Session
+
+A session is the underlying conversation or thread maintained by a harness. FlightPath can:
+
+- start a new session
+- resume the immediately previous session with `resumeSession: true`
+- resume a specific earlier step with `sessionId: 1`
+- resume an exact harness session ID string
+
+Session reuse is provider-aware. FlightPath does not try to resume a Claude session in Copilot or the other way around.
+
+## Context references
+
+Prompts can include structured references that the prompt editor understands:
+
+| Syntax | Purpose |
+| --- | --- |
+| `@path/to/file.ts` | Attach a full file |
+| `@path/to/dir/` | Attach a directory tree |
+| `#selection:path/to/file.ts:10-25` | Attach a line range |
+| `#sym:path/to/file.ts:SymbolName:42` | Attach a symbol definition |
+| `~diff`, `~staged`, `~stash:0`, `~<commit>` | Attach git change context |
+| `$previous`, `$all`, `$step:1` | Inject prior FlightPath output |
+
+## End conditions and pre-conditions
+
+These are script-based gates:
+
+- **Pre-condition** runs before a prompt and can continue, skip, or stop
+- **End condition** runs after a prompt and can continue, retry, or stop
+
+Use them when a workflow should react to actual project state instead of trusting the model's self-report.
