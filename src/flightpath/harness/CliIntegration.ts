@@ -771,6 +771,12 @@ export class CliIntegration extends HarnessIntegration {
     // Dispatch hook setup at the integration layer so providers don't have to
     // remember to handle both interactive and headless cases in buildCliArgs().
     if (workspaceRoot) {
+      // Remove hook artifacts from the previous prompt before setting up new ones.
+      // Providers that write per-prompt files (Copilot: .github/hooks/*.json,
+      // Claude: .flightpath/temp/claude-hook-settings-*.json) implement this so
+      // that hooks from earlier prompts don't persist into the current prompt's run.
+      await this.provider.cleanupPreviousPromptHooks?.(workspaceRoot);
+
       const userHooks =
         session.workflowContext?.resolvedProperties?.hooks ?? undefined;
       const enabledNotificationHookEvents =
@@ -790,13 +796,13 @@ export class CliIntegration extends HarnessIntegration {
             enabledNotificationHookEvents
           )) ?? [];
         baseArgs.push(...hookArgs);
-      } else if (
-        userHooks?.length ||
-        enabledNotificationHookEvents.length > 0
-      ) {
-        // Headless: register user hooks and selected FlightPath hook notifications.
+      } else if (this.provider.buildHeadlessUserHookArgs) {
+        // Headless: always call when the provider supports it, even with no user hooks
+        // or notification events — guarantees hooks from a previous prompt are cleared
+        // before this prompt runs (providers with per-prompt files or settings.json
+        // registration both handle the empty-hooks case correctly).
         const hookArgs =
-          (await this.provider.buildHeadlessUserHookArgs?.(
+          (await this.provider.buildHeadlessUserHookArgs(
             extensionPath,
             workspaceRoot,
             promptIndex,

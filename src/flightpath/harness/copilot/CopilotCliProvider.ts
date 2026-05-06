@@ -376,6 +376,19 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
+   * Delete hook files written for the previous prompt before building hooks for the next.
+   * Prevents .github/hooks/ from accumulating files across prompts — Copilot CLI reads
+   * every JSON file in that directory, so leftover files would cause previous-prompt
+   * hooks to fire during subsequent prompts.
+   */
+  async cleanupPreviousPromptHooks(_workspaceRoot: string): Promise<void> {
+    for (const hookPath of this.hookFilePaths) {
+      await fs.unlink(hookPath).catch(() => {});
+    }
+    this.hookFilePaths = [];
+  }
+
+  /**
    * Return additional file paths to delete after workflow cleanup.
    *
    * Includes all per-prompt hook files created during this workflow's

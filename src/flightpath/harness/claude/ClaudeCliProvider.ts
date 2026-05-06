@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as fs from "fs/promises";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
@@ -279,7 +280,6 @@ export class ClaudeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
-    const fs = require("fs/promises");
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -349,7 +349,6 @@ export class ClaudeCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
-    const fs = require("fs/promises");
     const settingsJson =
       enabledNotificationHookEvents.length > 0
         ? (() => {
@@ -406,6 +405,19 @@ export class ClaudeCliProvider implements ICliProvider {
       deniedTools: ConfigurationUtils.getCliDeniedTools(),
     };
     return this.toolPermissionMapper.buildArgs(config);
+  }
+
+  /**
+   * Delete hook settings files written for the previous prompt before building hooks for the next.
+   * Prevents .flightpath/temp/ from accumulating per-prompt settings files across a workflow.
+   * Claude reads only the specific --settings file passed per prompt, so old files don't affect
+   * behavior, but cleaning them avoids temp dir clutter between prompts.
+   */
+  async cleanupPreviousPromptHooks(_workspaceRoot: string): Promise<void> {
+    for (const settingsPath of this.hookSettingsPaths) {
+      await fs.unlink(settingsPath).catch(() => {});
+    }
+    this.hookSettingsPaths = [];
   }
 
   /**

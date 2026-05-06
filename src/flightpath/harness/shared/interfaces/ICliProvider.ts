@@ -223,6 +223,19 @@ export interface ICliProvider {
   ): Promise<void>;
 
   /**
+   * Delete hook artifacts written for the previous prompt before building hooks for the next.
+   * Called by CliIntegration at the start of each prompt's hook setup phase.
+   *
+   * Providers that write per-prompt hook files (Copilot: .github/hooks/*.json,
+   * Claude: .flightpath/temp/claude-hook-settings-*.json) implement this to prevent
+   * files from previous prompts accumulating and firing unintended hooks.
+   *
+   * Providers that use ref-counted settings.json (Codex, Gemini, Qwen) do not need
+   * this — registerWorkflow() replaces the workflow's entry on each call.
+   */
+  cleanupPreviousPromptHooks?(workspaceRoot: string): Promise<void>;
+
+  /**
    * Build CLI arguments for tool permissions.
    * Called for both interactive and headless modes.
    * For undefined toolPermissions, falls back to global ConfigurationUtils settings.
