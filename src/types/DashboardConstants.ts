@@ -1166,6 +1166,13 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type FinalStepPhase =
   (typeof FINAL_STEP_PHASES)[keyof typeof FINAL_STEP_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
+/**
+ * All valid target IDs for the file manager — harness IDs plus special dirs.
+ * "flightpath" → .flightpath/agents|skills (workspace) or ~/.flightpath/agents|skills (user)
+ * "agents"     → .agents|.agents/skills (workspace) or ~/.agents|~/.agents/skills (user)
+ * "vscode"     → VS Code user prompts dir (user-only; Windows/macOS/Linux variants)
+ */
+export type AnyTargetId = HarnessId | "flightpath" | "vscode" | "agents";
 export type StatusMessageSeverity =
   (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
 export type ActionType = (typeof ACTION_TYPES)[keyof typeof ACTION_TYPES];

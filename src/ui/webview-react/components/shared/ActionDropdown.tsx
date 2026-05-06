@@ -8,6 +8,8 @@ export interface ActionDropdownItem {
   value: string;
   disabled?: boolean;
   title?: string;
+  /** If true, renders as a non-interactive section header (value is used as React key only) */
+  header?: boolean;
 }
 
 export interface ActionDropdownProps {
@@ -59,26 +61,35 @@ export function ActionDropdown({
       </button>
 
       <DropdownPortal isOpen={open} popupPos={popupPos} ref={popupRef}>
-            {items.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                disabled={item.disabled}
-                title={item.title}
-                onClick={() => {
-                  setOpen(false);
-                  onSelect(item.value);
-                }}
-                className={`block w-full text-left px-3 py-1.5 text-xs transition-colors
-                  ${
-                    item.disabled
-                      ? "text-disabled-fg cursor-default"
-                      : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cursor-pointer"
-                  }`}
-              >
-                {item.label}
-              </button>
-            ))}
+            {items.map((item) =>
+              item.header ? (
+                <div
+                  key={item.value}
+                  className="px-3 pt-2 pb-0.5 text-xxs font-semibold uppercase tracking-wide text-description-fg select-none"
+                >
+                  {item.label}
+                </div>
+              ) : (
+                <button
+                  key={item.value}
+                  type="button"
+                  disabled={item.disabled}
+                  title={item.title}
+                  onClick={() => {
+                    setOpen(false);
+                    onSelect(item.value);
+                  }}
+                  className={`block w-full text-left px-3 py-1.5 text-xs transition-colors
+                    ${
+                      item.disabled
+                        ? "text-disabled-fg cursor-default"
+                        : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cursor-pointer"
+                    }`}
+                >
+                  {item.label}
+                </button>
+              )
+            )}
           </DropdownPortal>
     </div>
   );

@@ -21,7 +21,7 @@ const HARNESS_WORKSPACE_AGENT_DIRS: Record<HarnessId, string[]> = {
 const HARNESS_USER_AGENT_DIRS: Record<HarnessId, string[]> = {
   [HARNESS_IDS.CLAUDE_CLI]: ["~/.claude/agents"],
   [HARNESS_IDS.COPILOT_CLI]: ["~/.copilot/agents"],
-  [HARNESS_IDS.CODEX_CLI]: ["~/.codex/agents", "~/.agents"],
+  [HARNESS_IDS.CODEX_CLI]: ["~/.codex/agents"],
   [HARNESS_IDS.GEMINI_CLI]: ["~/.gemini/agents"],
   [HARNESS_IDS.OPENCODE_CLI]: ["~/.config/opencode/agents"],
   [HARNESS_IDS.QWEN_CLI]: ["~/.qwen/agents"],
@@ -31,8 +31,8 @@ const HARNESS_USER_AGENT_DIRS: Record<HarnessId, string[]> = {
 const HARNESS_WORKSPACE_SKILL_DIRS: Record<HarnessId, string[]> = {
   [HARNESS_IDS.CLAUDE_CLI]: [".claude/skills"],
   [HARNESS_IDS.COPILOT_CLI]: [".github/skills"],
-  [HARNESS_IDS.CODEX_CLI]: [".agents/skills"],
-  [HARNESS_IDS.GEMINI_CLI]: [".gemini/skills", ".agents/skills"],
+  [HARNESS_IDS.CODEX_CLI]: [".codex/skills"],
+  [HARNESS_IDS.GEMINI_CLI]: [".gemini/skills"],
   [HARNESS_IDS.OPENCODE_CLI]: [".opencode/skills"],
   [HARNESS_IDS.QWEN_CLI]: [".qwen/skills"],
   [HARNESS_IDS.COPILOT_CHAT]: [".github/skills"],
@@ -41,8 +41,8 @@ const HARNESS_WORKSPACE_SKILL_DIRS: Record<HarnessId, string[]> = {
 const HARNESS_USER_SKILL_DIRS: Record<HarnessId, string[]> = {
   [HARNESS_IDS.CLAUDE_CLI]: ["~/.claude/skills"],
   [HARNESS_IDS.COPILOT_CLI]: ["~/.copilot/skills"],
-  [HARNESS_IDS.CODEX_CLI]: ["~/.codex/skills", "~/.agents/skills"],
-  [HARNESS_IDS.GEMINI_CLI]: ["~/.gemini/skills", "~/.agents/skills"],
+  [HARNESS_IDS.CODEX_CLI]: ["~/.codex/skills"],
+  [HARNESS_IDS.GEMINI_CLI]: ["~/.gemini/skills"],
   [HARNESS_IDS.OPENCODE_CLI]: ["~/.config/opencode/skills"],
   [HARNESS_IDS.QWEN_CLI]: ["~/.qwen/skills"],
   [HARNESS_IDS.COPILOT_CHAT]: ["~/.copilot/skills"],
@@ -157,6 +157,65 @@ export function getFlightPathUserAgentDir(): string {
  */
 export function getFlightPathUserSkillDir(): string {
   return path.join(os.homedir(), PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.SKILLS_DIR);
+}
+
+// ============================================================================
+// Generic "Agents" directory (~/.agents / .agents)
+// ============================================================================
+
+/** Workspace .agents/agents directory (used by Codex, Gemini, Qwen, Copilot, etc.). */
+export function getAgentsWorkspaceAgentDir(workspaceRoot: string): string {
+  return path.join(workspaceRoot, ".agents");
+}
+
+/** User ~/.agents directory. */
+export function getAgentsUserAgentDir(): string {
+  return path.join(os.homedir(), ".agents");
+}
+
+/** Workspace .agents/skills directory. */
+export function getAgentsWorkspaceSkillDir(workspaceRoot: string): string {
+  return path.join(workspaceRoot, ".agents", "skills");
+}
+
+/** User ~/.agents/skills directory. */
+export function getAgentsUserSkillDir(): string {
+  return path.join(os.homedir(), ".agents", "skills");
+}
+
+// ============================================================================
+// VS Code user prompts directory
+// ============================================================================
+
+function getVSCodeVariant(): string {
+  const execPath = process.execPath.toLowerCase();
+  if (execPath.includes("insiders")) return "Code - Insiders";
+  if (execPath.includes("vscodium")) return "VSCodium";
+  return "Code";
+}
+
+/**
+ * Returns VS Code user prompts directories for the running VS Code variant.
+ * Windows: %APPDATA%\Code\User\prompts\
+ * macOS:   ~/Library/Application Support/Code/User/prompts/
+ * Linux:   $XDG_CONFIG_HOME/Code/User/prompts/ (default: ~/.config/Code/User/prompts/)
+ */
+export function getVSCodeUserAgentDirs(): string[] {
+  const variant = getVSCodeVariant();
+  const platform = os.platform();
+
+  if (platform === "win32") {
+    const appData = process.env.APPDATA;
+    if (!appData) return [];
+    return [path.join(appData, variant, "User", "prompts")];
+  } else if (platform === "darwin") {
+    return [
+      path.join(os.homedir(), "Library", "Application Support", variant, "User", "prompts"),
+    ];
+  } else {
+    const configDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+    return [path.join(configDir, variant, "User", "prompts")];
+  }
 }
 
 /**

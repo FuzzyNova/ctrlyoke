@@ -2,7 +2,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { Log } from "./Log";
 import { getErrorMessage } from "./ErrorUtils";
-import type { HarnessId } from "../types/DashboardConstants";
+import type { HarnessId, AnyTargetId } from "../types/DashboardConstants";
 import {
   getHarnessAgentDirs,
   getHarnessUserAgentDirs,
@@ -12,6 +12,11 @@ import {
   getFlightPathSkillDir,
   getFlightPathUserAgentDir,
   getFlightPathUserSkillDir,
+  getAgentsWorkspaceAgentDir,
+  getAgentsUserAgentDir,
+  getAgentsWorkspaceSkillDir,
+  getAgentsUserSkillDir,
+  getVSCodeUserAgentDirs,
   getAllHarnessIds,
   HARNESS_AGENT_EXTENSION,
 } from "./HarnessDirectoryUtils";
@@ -22,7 +27,7 @@ import { isAccessibleDirectory, formatDisplayName } from "./DiscoveryUtils";
 // ============================================================================
 
 export interface ManagedFileLocation {
-  harnessId: HarnessId | "flightpath";
+  harnessId: AnyTargetId;
   /** Whether this copy lives in a workspace dir or a user-level dir */
   scope: "workspace" | "user";
   path: string;
@@ -89,49 +94,64 @@ async function collectAgentLocations(
 
   const scanAgentDir = async (
     dir: string,
-    harnessId: HarnessId | "flightpath",
-    scope: "workspace" | "user"
+    targetId: AnyTargetId,
+    scope: "workspace" | "user",
+    scannedSet?: Set<string>
   ) => {
+    const normalized = path.normalize(dir);
+    if (scannedSet) {
+      if (scannedSet.has(normalized)) return;
+      scannedSet.add(normalized);
+    }
     if (!(await isAccessibleDirectory(dir))) return;
     const ext =
-      harnessId === "flightpath"
+      targetId === "flightpath" || targetId === "agents" || targetId === "vscode"
         ? ".agent.md"
-        : HARNESS_AGENT_EXTENSION[harnessId as HarnessId] ?? ".agent.md";
+        : HARNESS_AGENT_EXTENSION[targetId as HarnessId] ?? ".agent.md";
     const files = await fs.promises.readdir(dir).catch(() => [] as string[]);
     for (const f of files) {
-      if (!f.endsWith(ext)) continue;
-      const name = f.endsWith(".agent.md")
+      // Accept both .agent.md and plain .md for vscode/agents (multi-harness dirs)
+      const isAgentMd = f.endsWith(".agent.md");
+      const isPlainMd = f.endsWith(".md") && !isAgentMd;
+      if (!f.endsWith(ext) && !(isPlainMd && (targetId === "agents" || targetId === "vscode"))) continue;
+      const name = isAgentMd
         ? f.slice(0, -".agent.md".length)
-        : f.slice(0, -ext.length);
-      addAgent(name, { harnessId, scope, path: path.join(dir, f) });
+        : f.slice(0, -".md".length);
+      addAgent(name, { harnessId: targetId, scope, path: path.join(dir, f) });
     }
   };
 
-  // FlightPath workspace dir
-  await scanAgentDir(getFlightPathAgentDir(workspaceRoot), "flightpath", "workspace");
+  // Track scanned dirs to deduplicate across all passes
+  const scannedWorkspace = new Set<string>();
+  const scannedUser = new Set<string>();
+
+  // FlightPath workspace dir (first so it takes priority)
+  await scanAgentDir(getFlightPathAgentDir(workspaceRoot), "flightpath", "workspace", scannedWorkspace);
 
   // FlightPath user dir (~/.flightpath/agents)
-  await scanAgentDir(getFlightPathUserAgentDir(), "flightpath", "user");
+  await scanAgentDir(getFlightPathUserAgentDir(), "flightpath", "user", scannedUser);
 
-  // Workspace harness dirs (deduplicate by resolved path)
-  const scannedWorkspace = new Set<string>();
+  // Generic "Agents" dirs (.agents / ~/.agents) — scanned before harness dirs so dedup
+  // labels them "agents" rather than any specific harness that also points here (e.g. Codex)
+  await scanAgentDir(getAgentsWorkspaceAgentDir(workspaceRoot), "agents", "workspace", scannedWorkspace);
+  await scanAgentDir(getAgentsUserAgentDir(), "agents", "user", scannedUser);
+
+  // VS Code user prompts dirs (user-only)
+  for (const dir of getVSCodeUserAgentDirs()) {
+    await scanAgentDir(dir, "vscode", "user", scannedUser);
+  }
+
+  // Harness workspace dirs (dedup — skips any dir already claimed above)
   for (const harnessId of getAllHarnessIds()) {
     for (const dir of getHarnessAgentDirs(harnessId, workspaceRoot)) {
-      const normalized = path.normalize(dir);
-      if (scannedWorkspace.has(normalized)) continue;
-      scannedWorkspace.add(normalized);
-      await scanAgentDir(dir, harnessId, "workspace");
+      await scanAgentDir(dir, harnessId, "workspace", scannedWorkspace);
     }
   }
 
-  // User harness dirs (deduplicate by resolved path)
-  const scannedUser = new Set<string>();
+  // Harness user dirs (dedup — skips any dir already claimed above)
   for (const harnessId of getAllHarnessIds()) {
     for (const dir of getHarnessUserAgentDirs(harnessId)) {
-      const normalized = path.normalize(dir);
-      if (scannedUser.has(normalized)) continue;
-      scannedUser.add(normalized);
-      await scanAgentDir(dir, harnessId, "user");
+      await scanAgentDir(dir, harnessId, "user", scannedUser);
     }
   }
 
@@ -164,45 +184,50 @@ async function collectSkillLocations(
 
   const scanSkillDir = async (
     dir: string,
-    harnessId: HarnessId | "flightpath",
-    scope: "workspace" | "user"
+    targetId: AnyTargetId,
+    scope: "workspace" | "user",
+    scannedSet?: Set<string>
   ) => {
+    const normalized = path.normalize(dir);
+    if (scannedSet) {
+      if (scannedSet.has(normalized)) return;
+      scannedSet.add(normalized);
+    }
     if (!(await isAccessibleDirectory(dir))) return;
     const entries = await fs.promises
       .readdir(dir, { withFileTypes: true })
       .catch(() => [] as fs.Dirent[]);
     for (const e of entries) {
       if (e.isDirectory() && (await isSkillDir(dir, e.name))) {
-        addSkill(e.name, { harnessId, scope, path: path.join(dir, e.name) });
+        addSkill(e.name, { harnessId: targetId, scope, path: path.join(dir, e.name) });
       }
     }
   };
 
-  // FlightPath workspace dir
-  await scanSkillDir(getFlightPathSkillDir(workspaceRoot), "flightpath", "workspace");
+  const scannedWorkspace = new Set<string>();
+  const scannedUser = new Set<string>();
+
+  // FlightPath workspace dir (first for priority)
+  await scanSkillDir(getFlightPathSkillDir(workspaceRoot), "flightpath", "workspace", scannedWorkspace);
 
   // FlightPath user dir (~/.flightpath/skills)
-  await scanSkillDir(getFlightPathUserSkillDir(), "flightpath", "user");
+  await scanSkillDir(getFlightPathUserSkillDir(), "flightpath", "user", scannedUser);
 
-  // Workspace harness dirs (deduplicate by resolved path)
-  const scannedWorkspace = new Set<string>();
+  // Generic "Agents" skill dirs — before harness dirs so dedup assigns correct label
+  await scanSkillDir(getAgentsWorkspaceSkillDir(workspaceRoot), "agents", "workspace", scannedWorkspace);
+  await scanSkillDir(getAgentsUserSkillDir(), "agents", "user", scannedUser);
+
+  // Harness workspace skill dirs (dedup — skips any dir already claimed above)
   for (const harnessId of getAllHarnessIds()) {
     for (const dir of getHarnessSkillDirs(harnessId, workspaceRoot)) {
-      const normalized = path.normalize(dir);
-      if (scannedWorkspace.has(normalized)) continue;
-      scannedWorkspace.add(normalized);
-      await scanSkillDir(dir, harnessId, "workspace");
+      await scanSkillDir(dir, harnessId, "workspace", scannedWorkspace);
     }
   }
 
-  // User harness dirs (deduplicate by resolved path)
-  const scannedUser = new Set<string>();
+  // Harness user skill dirs (dedup — skips any dir already claimed above)
   for (const harnessId of getAllHarnessIds()) {
     for (const dir of getHarnessUserSkillDirs(harnessId)) {
-      const normalized = path.normalize(dir);
-      if (scannedUser.has(normalized)) continue;
-      scannedUser.add(normalized);
-      await scanSkillDir(dir, harnessId, "user");
+      await scanSkillDir(dir, harnessId, "user", scannedUser);
     }
   }
 
@@ -238,7 +263,7 @@ export class HarnessFileManager {
    */
   static async exportToHarness(
     sourcePath: string,
-    targetHarnessId: HarnessId | "flightpath",
+    targetHarnessId: AnyTargetId,
     workspaceRoot: string,
     type: "agent" | "skill",
     overwrite = false,
@@ -253,10 +278,10 @@ export class HarnessFileManager {
     await ensureDir(targetDir);
 
     if (type === "agent") {
-      const destExt =
-        targetHarnessId === "flightpath"
-          ? ".agent.md"
-          : HARNESS_AGENT_EXTENSION[targetHarnessId as HarnessId] ?? ".agent.md";
+      const isHarnessId = targetHarnessId in HARNESS_AGENT_EXTENSION;
+      const destExt = isHarnessId
+        ? HARNESS_AGENT_EXTENSION[targetHarnessId as HarnessId]
+        : ".agent.md";
 
       // Determine internal name from source (strip whatever extension it has)
       const srcBase = path.basename(sourcePath);
@@ -307,7 +332,7 @@ export class HarnessFileManager {
    */
   static async deleteFromHarness(
     name: string,
-    harnessId: HarnessId | "flightpath",
+    harnessId: AnyTargetId,
     workspaceRoot: string,
     type: "agent" | "skill",
     scope: "workspace" | "user" = "workspace"
@@ -320,10 +345,10 @@ export class HarnessFileManager {
     );
 
     if (type === "agent") {
-      const ext =
-        harnessId === "flightpath"
-          ? ".agent.md"
-          : HARNESS_AGENT_EXTENSION[harnessId as HarnessId] ?? ".agent.md";
+      const isHarnessId = harnessId in HARNESS_AGENT_EXTENSION;
+      const ext = isHarnessId
+        ? HARNESS_AGENT_EXTENSION[harnessId as HarnessId]
+        : ".agent.md";
       const filePath = path.join(targetDir, `${name}${ext}`);
       await fs.promises.rm(filePath, { force: true });
       Log.info(`Deleted agent "${name}" from ${filePath}`);
@@ -372,7 +397,7 @@ export class HarnessFileManager {
    * @param scope Whether to delete from the workspace dir or the user-level dir (default: "workspace").
    */
   static async deleteAllFromHarness(
-    harnessId: HarnessId | "flightpath",
+    harnessId: AnyTargetId,
     workspaceRoot: string,
     type: "agent" | "skill",
     scope: "workspace" | "user" = "workspace"
@@ -399,20 +424,36 @@ export class HarnessFileManager {
    * Returns the primary target directory for a harness + type + scope combination.
    */
   static getTargetDir(
-    harnessId: HarnessId | "flightpath",
+    harnessId: AnyTargetId,
     workspaceRoot: string,
     type: "agent" | "skill",
     scope: "workspace" | "user" = "workspace"
   ): string {
     if (harnessId === "flightpath") {
       if (scope === "user") {
-        return type === "agent"
-          ? getFlightPathUserAgentDir()
-          : getFlightPathUserSkillDir();
+        return type === "agent" ? getFlightPathUserAgentDir() : getFlightPathUserSkillDir();
       }
       return type === "agent"
         ? getFlightPathAgentDir(workspaceRoot)
         : getFlightPathSkillDir(workspaceRoot);
+    }
+
+    if (harnessId === "agents") {
+      if (scope === "user") {
+        return type === "agent" ? getAgentsUserAgentDir() : getAgentsUserSkillDir();
+      }
+      return type === "agent"
+        ? getAgentsWorkspaceAgentDir(workspaceRoot)
+        : getAgentsWorkspaceSkillDir(workspaceRoot);
+    }
+
+    if (harnessId === "vscode") {
+      // VS Code prompts dir is user-only; no workspace equivalent
+      const dirs = getVSCodeUserAgentDirs();
+      if (dirs.length === 0) {
+        throw new Error("No VS Code user prompts directory found");
+      }
+      return dirs[0];
     }
 
     const dirs =
