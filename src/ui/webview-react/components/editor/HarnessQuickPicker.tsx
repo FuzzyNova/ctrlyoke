@@ -66,7 +66,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
       icon={
         <HarnessIcon
           harnessId={activeHarnessId}
-          size={14}
+          size={16}
           dimmed={!isOverride}
         />
       }

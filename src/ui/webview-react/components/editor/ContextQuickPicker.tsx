@@ -104,7 +104,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       showLabel={showLabel}
       icon={
         <i
-          className={`codicon codicon-book transition-opacity ${isOverride ? "text-focus-border" : "opacity-40"}`}
+          className={`codicon codicon-book codicon-sm transition-opacity ${isOverride ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}

@@ -62,7 +62,7 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
       showLabel={showLabel && skillsValue !== undefined}
       icon={
         <i
-          className={`codicon codicon-tools transition-opacity ${skillsValue !== undefined ? "text-focus-border" : "opacity-40"}`}
+          className={`codicon codicon-tools codicon-sm transition-opacity ${skillsValue !== undefined ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}

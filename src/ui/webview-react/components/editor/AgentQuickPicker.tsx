@@ -56,7 +56,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
       showLabel={showLabel && properties.agent !== undefined}
       icon={
         <i
-          className={`codicon codicon-agent transition-opacity ${properties.agent !== undefined ? "text-focus-border" : "opacity-40"}`}
+          className={`codicon codicon-agent codicon-sm transition-opacity ${properties.agent !== undefined ? "text-focus-border" : "opacity-40"}`}
         />
       }
       valueLabel={valueLabel}
