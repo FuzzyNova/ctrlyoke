@@ -40,7 +40,7 @@ interface WorkflowStepProps {
   isSelected?: boolean;
   /** Click handler for selection */
   onClick?: () => void;
-  /** Harness display name (e.g. "Claude CLI") */
+  /** Harness display name (e.g. "Claude Code") */
   harnessLabel?: string;
   /** True when harness is inherited (not set at prompt level) */
   harnessIsDefault?: boolean;
