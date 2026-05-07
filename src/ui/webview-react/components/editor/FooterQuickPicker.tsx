@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useClickOutside } from "@hooks/useClickOutside";
+import {
+  constrainPopupToViewport,
+  parsePixelProp,
+} from "@utils/dropdownUtils";
 
 interface FooterQuickPickerProps {
   /** Icon-only mode (narrow, < 380px) */
@@ -62,18 +66,30 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
     bottom: number;
     left: number;
     maxHeight: number;
+    minWidth?: number;
+    maxWidth: number;
   } | null>(null);
 
   const updatePosition = useCallback(() => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
+      const requestedMinWidth = parsePixelProp(popupMinWidth);
+      const requestedMaxWidth = parsePixelProp(popupMaxWidth);
+      const constrained = constrainPopupToViewport({
+        left: rect.left,
+        minWidth: requestedMinWidth,
+        maxWidth: requestedMaxWidth,
+        preferredWidth: requestedMaxWidth ?? requestedMinWidth,
+      });
       setPopupPos({
         bottom: window.innerHeight - rect.top + 4,
-        left: rect.left,
+        left: constrained.left,
         maxHeight: rect.top - 4,
+        minWidth: constrained.minWidth,
+        maxWidth: constrained.maxWidth,
       });
     }
-  }, []);
+  }, [popupMaxWidth, popupMinWidth]);
 
   // Compute/update position whenever the popup opens or the window moves.
   // Reset to null on close so stale coordinates never flash on next open.
@@ -131,8 +147,8 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
             style={{
               bottom: popupPos.bottom,
               left: popupPos.left,
-              minWidth: popupMinWidth,
-              maxWidth: popupMaxWidth,
+              minWidth: popupPos.minWidth,
+              maxWidth: popupPos.maxWidth,
               maxHeight: popupPos.maxHeight,
             }}
           >

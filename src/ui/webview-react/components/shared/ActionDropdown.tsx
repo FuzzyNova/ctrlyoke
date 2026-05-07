@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
+import { constrainPopupToViewport } from "@utils/dropdownUtils";
 import { DropdownPortal } from "./DropdownPortal";
 
 export interface ActionDropdownItem {
@@ -55,19 +56,27 @@ export function ActionDropdown({
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const dropdownMinWidth = items.some((item) => item.description) ? 240 : 140;
 
   const rawPos = useDropdownPortalPosition(buttonRef, open);
   const popupPos = rawPos
-    ? {
-        top: rawPos.top,
-        bottom: rawPos.bottom,
-        left: rawPos.left,
-        minWidth: Math.max(
-          rawPos.width ?? 0,
-          items.some((item) => item.description) ? 240 : 140
-        ),
-        maxHeight: rawPos.maxHeight,
-      }
+    ? (() => {
+        const constrained = constrainPopupToViewport({
+          left: rawPos.left,
+          width: rawPos.width,
+          minWidth: Math.max(rawPos.width ?? 0, dropdownMinWidth),
+          preferredWidth: dropdownMinWidth,
+        });
+        return {
+          top: rawPos.top,
+          bottom: rawPos.bottom,
+          left: constrained.left,
+          width: constrained.width,
+          minWidth: constrained.minWidth,
+          maxWidth: constrained.maxWidth,
+          maxHeight: rawPos.maxHeight,
+        };
+      })()
     : null;
   useClickOutside([buttonRef, popupRef], open, () => setOpen(false));
 
@@ -84,39 +93,39 @@ export function ActionDropdown({
       </button>
 
       <DropdownPortal isOpen={open} popupPos={popupPos} ref={popupRef}>
-            {items.map((item) =>
-              item.header ? (
-                <div
-                  key={item.value}
-                  className="px-3 pt-2 pb-0.5 text-xxs font-semibold uppercase tracking-wide text-description-fg select-none"
-                >
-                  {item.label}
-                </div>
-              ) : (
-                <button
-                  key={item.value}
-                  type="button"
-                  disabled={item.disabled}
-                  title={
-                    [item.title, item.description].filter(Boolean).join("\n") ||
-                    undefined
-                  }
-                  onClick={() => {
-                    setOpen(false);
-                    onSelect(item.value);
-                  }}
-                  className={`block w-full text-left px-3 py-1.5 text-xs transition-colors
+        {items.map((item) =>
+          item.header ? (
+            <div
+              key={item.value}
+              className="px-3 pt-2 pb-0.5 text-xxs font-semibold uppercase tracking-wide text-description-fg select-none"
+            >
+              {item.label}
+            </div>
+          ) : (
+            <button
+              key={item.value}
+              type="button"
+              disabled={item.disabled}
+              title={
+                [item.title, item.description].filter(Boolean).join("\n") ||
+                undefined
+              }
+              onClick={() => {
+                setOpen(false);
+                onSelect(item.value);
+              }}
+              className={`block w-full text-left px-3 py-1.5 text-xs transition-colors
                     ${
                       item.disabled
                         ? "text-disabled-fg cursor-default"
                         : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cursor-pointer"
                     }`}
-                >
-                  <ActionDropdownItemContent item={item} />
-                </button>
-              )
-            )}
-          </DropdownPortal>
+            >
+              <ActionDropdownItemContent item={item} />
+            </button>
+          )
+        )}
+      </DropdownPortal>
     </div>
   );
 }

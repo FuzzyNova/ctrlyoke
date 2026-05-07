@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
+import { constrainPopupToViewport } from "@utils/dropdownUtils";
 import { DropdownPortal } from "./DropdownPortal";
 import {
   ActionDropdownItemContent,
@@ -28,8 +29,8 @@ export interface FlyoutActionDropdownProps {
 // Component
 // ============================================================================
 
-const L1_MIN_WIDTH = 160;
-const L2_MIN_WIDTH = 240;
+const LEVEL_ONE_MIN_WIDTH = 160;
+const LEVEL_TWO_MIN_WIDTH = 240;
 
 /**
  * A two-level flyout dropdown.
@@ -44,58 +45,94 @@ export function FlyoutActionDropdown({
   onSelect,
   className = "",
 }: FlyoutActionDropdownProps) {
-  const [l1Open, setL1Open] = useState(false);
+  const [isLevelOneOpen, setIsLevelOneOpen] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
-  const [l2Top, setL2Top] = useState<number>(0);
-  const [l2Left, setL2Left] = useState<number>(0);
-  const [l2MaxHeight, setL2MaxHeight] = useState<number>(400);
+  const [levelTwoTop, setLevelTwoTop] = useState<number>(0);
+  const [levelTwoLeft, setLevelTwoLeft] = useState<number>(0);
+  const [levelTwoMaxHeight, setLevelTwoMaxHeight] = useState<number>(400);
+  const [levelTwoMaxWidth, setLevelTwoMaxWidth] = useState<number>(LEVEL_TWO_MIN_WIDTH);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const l1Ref = useRef<HTMLDivElement>(null);
-  const l2Ref = useRef<HTMLDivElement>(null);
+  const levelOneDropdownRef = useRef<HTMLDivElement>(null);
+  const levelTwoDropdownRef = useRef<HTMLDivElement>(null);
+  const activeGroupButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const l1RawPos = useDropdownPortalPosition(buttonRef, l1Open);
-  const l1Pos = l1RawPos
-    ? { ...l1RawPos, minWidth: Math.max(l1RawPos.width ?? 0, L1_MIN_WIDTH) }
+  const levelOneRawPosition = useDropdownPortalPosition(buttonRef, isLevelOneOpen);
+  const levelOnePopupPosition = levelOneRawPosition
+    ? (() => {
+        const constrained = constrainPopupToViewport({
+          left: levelOneRawPosition.left,
+          width: levelOneRawPosition.width,
+          minWidth: Math.max(levelOneRawPosition.width ?? 0, LEVEL_ONE_MIN_WIDTH),
+          preferredWidth: LEVEL_ONE_MIN_WIDTH,
+        });
+        return {
+          ...levelOneRawPosition,
+          left: constrained.left,
+          width: constrained.width,
+          minWidth: constrained.minWidth,
+          maxWidth: constrained.maxWidth,
+        };
+      })()
     : null;
 
   const closeAll = useCallback(() => {
-    setL1Open(false);
+    setIsLevelOneOpen(false);
     setActiveGroupId(null);
+    activeGroupButtonRef.current = null;
   }, []);
 
-  useClickOutside([buttonRef, l1Ref, l2Ref], l1Open, closeAll);
+  useClickOutside(
+    [buttonRef, levelOneDropdownRef, levelTwoDropdownRef],
+    isLevelOneOpen,
+    closeAll
+  );
+
+  const updateLevelTwoPosition = useCallback((groupButton: HTMLButtonElement) => {
+    const rowRect = groupButton.getBoundingClientRect();
+    const levelOneDropdownElement = levelOneDropdownRef.current;
+    if (!levelOneDropdownElement) return;
+
+    const levelOneRect = levelOneDropdownElement.getBoundingClientRect();
+    const leftCandidate = levelOneRect.right + 4;
+    const preferredLeft =
+      leftCandidate + LEVEL_TWO_MIN_WIDTH > window.innerWidth
+        ? levelOneRect.left - LEVEL_TWO_MIN_WIDTH - 4
+        : leftCandidate;
+    const constrained = constrainPopupToViewport({
+      left: preferredLeft,
+      minWidth: LEVEL_TWO_MIN_WIDTH,
+      preferredWidth: LEVEL_TWO_MIN_WIDTH,
+    });
+
+    setLevelTwoTop(rowRect.top);
+    setLevelTwoLeft(constrained.left);
+    setLevelTwoMaxWidth(constrained.maxWidth);
+    setLevelTwoMaxHeight(Math.max(0, window.innerHeight - rowRect.top - 8));
+  }, []);
 
   const handleTrigger = () => {
-    setL1Open((prev) => {
-      if (prev) setActiveGroupId(null);
-      return !prev;
+    setIsLevelOneOpen((previousIsLevelOneOpen) => {
+      if (previousIsLevelOneOpen) {
+        setActiveGroupId(null);
+        activeGroupButtonRef.current = null;
+      }
+      return !previousIsLevelOneOpen;
     });
   };
 
   const handleGroupClick = useCallback(
-    (groupId: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    (groupId: string, event: React.MouseEvent<HTMLButtonElement>) => {
       if (activeGroupId === groupId) {
         setActiveGroupId(null);
+        activeGroupButtonRef.current = null;
         return;
       }
       setActiveGroupId(groupId);
-
-      const rowRect = e.currentTarget.getBoundingClientRect();
-      const l1El = l1Ref.current;
-      if (l1El) {
-        const l1Rect = l1El.getBoundingClientRect();
-        const leftCandidate = l1Rect.right + 4;
-        const left =
-          leftCandidate + L2_MIN_WIDTH > window.innerWidth
-            ? l1Rect.left - L2_MIN_WIDTH - 4
-            : leftCandidate;
-        setL2Top(rowRect.top);
-        setL2Left(left);
-        setL2MaxHeight(window.innerHeight - rowRect.top - 8);
-      }
+      activeGroupButtonRef.current = event.currentTarget;
+      updateLevelTwoPosition(event.currentTarget);
     },
-    [activeGroupId]
+    [activeGroupId, updateLevelTwoPosition]
   );
 
   const handleSelect = useCallback(
@@ -108,6 +145,26 @@ export function FlyoutActionDropdown({
 
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
+  useEffect(() => {
+    if (!isLevelOneOpen || activeGroupId === null || !activeGroupButtonRef.current) {
+      return;
+    }
+
+    const refresh = () => {
+      if (activeGroupButtonRef.current) {
+        updateLevelTwoPosition(activeGroupButtonRef.current);
+      }
+    };
+
+    refresh();
+    window.addEventListener("resize", refresh);
+    window.addEventListener("scroll", refresh, true);
+    return () => {
+      window.removeEventListener("resize", refresh);
+      window.removeEventListener("scroll", refresh, true);
+    };
+  }, [activeGroupId, isLevelOneOpen, updateLevelTwoPosition]);
+
   return (
     <div className={`relative inline-block ${className}`}>
       <button
@@ -117,16 +174,20 @@ export function FlyoutActionDropdown({
         className="flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
       >
         <span className="truncate">{label}</span>
-        <i className={`codicon codicon-chevron-${l1Open ? "up" : "down"} text-[10px]`} />
+        <i className={`codicon codicon-chevron-${isLevelOneOpen ? "up" : "down"} text-[10px]`} />
       </button>
 
       {/* Level 1 — group headers */}
-      <DropdownPortal isOpen={l1Open} popupPos={l1Pos} ref={l1Ref}>
+      <DropdownPortal
+        isOpen={isLevelOneOpen}
+        popupPos={levelOnePopupPosition}
+        ref={levelOneDropdownRef}
+      >
         {groups.map((group) => (
           <button
             key={group.id}
             type="button"
-            onClick={(e) => handleGroupClick(group.id, e)}
+            onClick={(event) => handleGroupClick(group.id, event)}
             className={`flex items-center justify-between w-full px-3 py-1.5 text-xs transition-colors cursor-pointer
               ${
                 activeGroupId === group.id
@@ -145,10 +206,16 @@ export function FlyoutActionDropdown({
         isOpen={activeGroupId !== null}
         popupPos={
           activeGroupId !== null
-            ? { top: l2Top, left: l2Left, minWidth: L2_MIN_WIDTH, maxHeight: l2MaxHeight }
+            ? {
+                top: levelTwoTop,
+                left: levelTwoLeft,
+                minWidth: Math.min(LEVEL_TWO_MIN_WIDTH, levelTwoMaxWidth),
+                maxWidth: levelTwoMaxWidth,
+                maxHeight: levelTwoMaxHeight,
+              }
             : null
         }
-        ref={l2Ref}
+        ref={levelTwoDropdownRef}
       >
         {activeGroup?.items.map((item) => (
           <button

@@ -34,6 +34,7 @@ export const DropdownPortal = forwardRef<HTMLDivElement, DropdownPortalProps>(
           left: popupPos.left,
           width: popupPos.width,
           minWidth: popupPos.minWidth,
+          maxWidth: popupPos.maxWidth,
           maxHeight: popupPos.maxHeight,
         }}
       >
