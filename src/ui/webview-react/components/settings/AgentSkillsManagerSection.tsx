@@ -547,11 +547,28 @@ export function AgentSkillsManagerSection() {
       {confirmDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setConfirmDelete(null)}
+          role="button"
+          tabIndex={0}
+          aria-label={`Close delete ${activeType} dialog`}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setConfirmDelete(null);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              (event.key === "Enter" || event.key === " " || event.key === "Escape")
+            ) {
+              event.preventDefault();
+              setConfirmDelete(null);
+            }
+          }}
         >
           <div
             className="bg-editor-bg border border-panel-border rounded p-4 max-w-sm w-full mx-4 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
           >
             <p className="text-sm text-foreground mb-1 font-semibold">
               Delete {activeType}?
@@ -586,11 +603,28 @@ export function AgentSkillsManagerSection() {
       {confirmDeleteAll && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setConfirmDeleteAll(null)}
+          role="button"
+          tabIndex={0}
+          aria-label={`Close delete all ${activeType} dialog`}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setConfirmDeleteAll(null);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              (event.key === "Enter" || event.key === " " || event.key === "Escape")
+            ) {
+              event.preventDefault();
+              setConfirmDeleteAll(null);
+            }
+          }}
         >
           <div
             className="bg-editor-bg border border-panel-border rounded p-4 max-w-sm w-full mx-4 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
           >
             <p className="text-sm text-foreground mb-1 font-semibold">
               Delete all {activeType}s?

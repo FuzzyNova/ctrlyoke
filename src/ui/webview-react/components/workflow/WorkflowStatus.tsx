@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -104,26 +104,44 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
   }, [loadedWorkflows]);
 
-  const syntheticActiveWorkflow =
-    activeWorkflowId &&
-    isWorkflowActive(executionState) &&
-    !loadedWorkflows.some((w) => w.id === activeWorkflowId)
-      ? {
-          id: activeWorkflowId,
-          workflowName:
-            workflowName ||
-            (fileName ? getWorkflowNameFromPath(fileName) : DEFAULT_WORKFLOW_NAME),
-          filePath: activeWorkflowWorkingFilePath ?? fileName ?? "",
-          workingFilePath: activeWorkflowWorkingFilePath ?? undefined,
-          executionState,
-          currentStep,
-          totalSteps,
-        }
-      : null;
+  const syntheticActiveWorkflow = useMemo(
+    () =>
+      activeWorkflowId &&
+      isWorkflowActive(executionState) &&
+      !loadedWorkflows.some((w) => w.id === activeWorkflowId)
+        ? {
+            id: activeWorkflowId,
+            workflowName:
+              workflowName ||
+              (fileName
+                ? getWorkflowNameFromPath(fileName)
+                : DEFAULT_WORKFLOW_NAME),
+            filePath: activeWorkflowWorkingFilePath ?? fileName ?? "",
+            workingFilePath: activeWorkflowWorkingFilePath ?? undefined,
+            executionState,
+            currentStep,
+            totalSteps,
+          }
+        : null,
+    [
+      activeWorkflowId,
+      activeWorkflowWorkingFilePath,
+      currentStep,
+      executionState,
+      fileName,
+      loadedWorkflows,
+      totalSteps,
+      workflowName,
+    ]
+  );
 
-  const effectiveLoadedWorkflows = syntheticActiveWorkflow
-    ? [...loadedWorkflows, syntheticActiveWorkflow]
-    : loadedWorkflows;
+  const effectiveLoadedWorkflows = useMemo(
+    () =>
+      syntheticActiveWorkflow
+        ? [...loadedWorkflows, syntheticActiveWorkflow]
+        : loadedWorkflows,
+    [loadedWorkflows, syntheticActiveWorkflow]
+  );
 
   const recentWorkflowHasActiveTerminal = useCallback(
     (workflow: RecentWorkflow) => {
