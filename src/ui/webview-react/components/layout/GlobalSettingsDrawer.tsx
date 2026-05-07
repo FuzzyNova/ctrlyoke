@@ -15,7 +15,6 @@ import {
   ChatSection,
   McpHooksSection,
   QueueSection,
-  HistorySection,
   ServerSection,
   NotificationsSection,
   DeveloperSection,
@@ -33,7 +32,6 @@ const ALL_TABS = [
   { id: "chat", label: "Chat", icon: "codicon-comment-discussion" },
   { id: "mcp", label: "MCP & Hooks", icon: "codicon-plug" },
   { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
-  { id: "history", label: "History", icon: "codicon-history" },
   { id: "server", label: "Server", icon: "codicon-server" },
   {
     id: "agentskillsmanager",
@@ -200,9 +198,6 @@ export function GlobalSettingsDrawer() {
             )}
             {fullSettings && effectiveActiveTab === "queue" && (
               <QueueSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "history" && (
-              <HistorySection settings={fullSettings} {...sectionProps} />
             )}
             {fullSettings && effectiveActiveTab === "server" && (
               <ServerSection settings={fullSettings} {...sectionProps} />

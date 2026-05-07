@@ -52,7 +52,7 @@ export function HarnessesSection({
           id="harness-active"
           value={settings.settings.harness}
           onChange={(e) => onUpdate("harness", e.target.value)}
-          className="bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         >
           {CLI_HARNESSES.map((id) => (
             <option key={id} value={id}>
@@ -116,7 +116,7 @@ export function HarnessesSection({
                       )
                     }
                     placeholder="Default"
-                    className="bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                    className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
                   />
                 )}
               </SettingInputRow>
@@ -142,7 +142,7 @@ export function HarnessesSection({
                       )
                     }
                     placeholder="None"
-                    className="bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+                    className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
                   />
                 </SettingInputRow>
               )}

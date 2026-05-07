@@ -7,7 +7,6 @@ export { TerminalSection } from "./TerminalSection";
 export { ChatSection } from "./ChatSection";
 export { McpHooksSection } from "./McpHooksSection";
 export { QueueSection } from "./QueueSection";
-export { HistorySection } from "./HistorySection";
 export { ServerSection } from "./ServerSection";
 export { DeveloperSection } from "./DeveloperSection";
 export { NotificationsSection } from "./NotificationsSection";

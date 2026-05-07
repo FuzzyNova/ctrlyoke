@@ -3,6 +3,7 @@ import type {
   SettingSource,
 } from "@root/types/WebviewMessageTypes";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
+import { SettingInputRow } from "../shared/SettingInputRow";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -19,6 +20,7 @@ export function GeneralSection({
 }: Props) {
   const ui = settings.settings.ui;
   const exec = settings.settings.execution;
+  const history = settings.settings.history;
   const sources = settings.sources as Record<string, SettingSource>;
 
   const rowProps = { sources, onReset, activeScope };
@@ -120,6 +122,36 @@ export function GeneralSection({
           path="execution.autoDeleteTempFiles"
           {...rowProps}
         />
+      </div>
+      <div className="pt-3 border-t border-panel-border mt-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          History
+        </h3>
+        <SettingToggleRow
+          label="Save output history"
+          description="Save the output of each workflow run for later review."
+          checked={history.saveOutput}
+          onChange={(v) => onUpdate("history.saveOutput", v)}
+          path="history.saveOutput"
+          {...rowProps}
+        />
+        <SettingInputRow
+          label="Max history runs (-1 = unlimited)"
+          id="history-max-runs"
+          path="history.maxRuns"
+          {...rowProps}
+        >
+          <input
+            id="history-max-runs"
+            type="number"
+            min={-1}
+            value={history.maxRuns}
+            onChange={(e) =>
+              onUpdate("history.maxRuns", parseInt(e.target.value, 10) || -1)
+            }
+            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          />
+        </SettingInputRow>
       </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">

@@ -203,6 +203,7 @@ export function FlyoutActionDropdown({
 
       {/* Level 2 — items for the active group */}
       <DropdownPortal
+        className="overflow-y-auto"
         isOpen={activeGroupId !== null}
         popupPos={
           activeGroupId !== null
