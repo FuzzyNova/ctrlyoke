@@ -594,7 +594,15 @@ export class WebviewMessageRouter {
         workspaceRoot,
         message.fileType
       );
-      this.emitMessage({ type: MESSAGE_TYPES.HARNESS_FILES_RESULT, files });
+      const targetDirectories = HarnessFileManager.resolveTargetDirectories(
+        workspaceRoot,
+        message.fileType
+      );
+      this.emitMessage({
+        type: MESSAGE_TYPES.HARNESS_FILES_RESULT,
+        files,
+        targetDirectories,
+      });
     });
 
     table.set(MESSAGE_TYPES.EXPORT_TO_HARNESS, async (message) => {
@@ -608,15 +616,20 @@ export class WebviewMessageRouter {
           message.overwrite ?? false,
           message.scope ?? "workspace"
         );
-        const files = await HarnessFileManager.resolveAllLocations(
-          workspaceRoot,
-          message.fileType
-        );
-        this.emitMessage({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: true,
-          files,
-        });
+          const files = await HarnessFileManager.resolveAllLocations(
+            workspaceRoot,
+            message.fileType
+          );
+          const targetDirectories = HarnessFileManager.resolveTargetDirectories(
+            workspaceRoot,
+            message.fileType
+          );
+          this.emitMessage({
+            type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+            success: true,
+            files,
+            targetDirectories,
+          });
       } catch (error) {
         this.emitMessage({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
@@ -635,15 +648,20 @@ export class WebviewMessageRouter {
           message.fileType,
           message.overwrite ?? false
         );
-        const files = await HarnessFileManager.resolveAllLocations(
-          workspaceRoot,
-          message.fileType
-        );
-        this.emitMessage({
-          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-          success: true,
-          files,
-        });
+          const files = await HarnessFileManager.resolveAllLocations(
+            workspaceRoot,
+            message.fileType
+          );
+          const targetDirectories = HarnessFileManager.resolveTargetDirectories(
+            workspaceRoot,
+            message.fileType
+          );
+          this.emitMessage({
+            type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+            success: true,
+            files,
+            targetDirectories,
+          });
       } catch (error) {
         this.emitMessage({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
@@ -667,10 +685,15 @@ export class WebviewMessageRouter {
           workspaceRoot,
           message.fileType
         );
+        const targetDirectories = HarnessFileManager.resolveTargetDirectories(
+          workspaceRoot,
+          message.fileType
+        );
         this.emitMessage({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: true,
           files,
+          targetDirectories,
         });
       } catch (error) {
         this.emitMessage({
@@ -701,10 +724,15 @@ export class WebviewMessageRouter {
           workspaceRoot,
           message.fileType
         );
+        const targetDirectories = HarnessFileManager.resolveTargetDirectories(
+          workspaceRoot,
+          message.fileType
+        );
         this.emitMessage({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
           success: true,
           files,
+          targetDirectories,
         });
       } catch (error) {
         this.emitMessage({
@@ -751,14 +779,26 @@ export class WebviewMessageRouter {
           message.fileType,
           message.scope ?? "workspace"
         );
-        if (dirPath) {
-          await vscode.commands.executeCommand(
-            "revealFileInOS",
-            vscode.Uri.file(dirPath)
+        if (!fs.existsSync(dirPath)) {
+          throw new Error(
+            `The ${message.scope ?? "workspace"} ${message.fileType} folder does not exist yet: ${dirPath}`
           );
         }
-      } catch {
-        // No dir configured for this harness/scope combination
+
+        await vscode.commands.executeCommand(
+          "revealFileInOS",
+          vscode.Uri.file(dirPath)
+        );
+        this.emitMessage({
+          type: MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT,
+          success: true,
+        });
+      } catch (error) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT,
+          success: false,
+          error: getErrorMessage(error),
+        });
       }
     });
 

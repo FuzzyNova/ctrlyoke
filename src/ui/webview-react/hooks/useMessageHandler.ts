@@ -1344,7 +1344,9 @@ function createMessageHandlers(): MessageHandlerMap {
   // HARNESS_FILES_RESULT - File enumeration results
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.HARNESS_FILES_RESULT] = (message) => {
-    useHarnessFileStore.getState().setFiles(message.files ?? []);
+    useHarnessFileStore
+      .getState()
+      .setFiles(message.files ?? [], message.targetDirectories ?? []);
   };
 
   // --------------------------------------------------------------------------
@@ -1354,13 +1356,24 @@ function createMessageHandlers(): MessageHandlerMap {
     const store = useHarnessFileStore.getState();
     if (message.success) {
       if (message.files) {
-        store.setFiles(message.files);
+        store.setFiles(message.files, message.targetDirectories);
       } else {
         store.setLoading(false);
       }
       store.setError(null);
     } else {
       store.setError(message.error ?? "Operation failed");
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // OPEN_HARNESS_DIR_RESULT - Result of an open-folder request
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT] = (message) => {
+    if (!message.success) {
+      useUiStore
+        .getState()
+        .showToast(message.error ?? "Unable to open folder", "warning");
     }
   };
 

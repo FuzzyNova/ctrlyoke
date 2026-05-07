@@ -6,6 +6,7 @@ import { DropdownPortal } from "./DropdownPortal";
 export interface ActionDropdownItem {
   label: string;
   value: string;
+  description?: string;
   disabled?: boolean;
   title?: string;
   /** If true, renders as a non-interactive section header (value is used as React key only) */
@@ -17,6 +18,25 @@ export interface ActionDropdownProps {
   items: ActionDropdownItem[];
   onSelect: (value: string) => void;
   className?: string;
+}
+
+export function ActionDropdownItemContent({
+  item,
+}: {
+  item: ActionDropdownItem;
+}) {
+  if (!item.description) {
+    return <>{item.label}</>;
+  }
+
+  return (
+    <span className="flex min-w-0 flex-col">
+      <span className="truncate">{item.label}</span>
+      <span className="truncate text-xxs leading-tight text-current opacity-70">
+        {item.description}
+      </span>
+    </span>
+  );
 }
 
 /**
@@ -42,7 +62,10 @@ export function ActionDropdown({
         top: rawPos.top,
         bottom: rawPos.bottom,
         left: rawPos.left,
-        minWidth: Math.max(rawPos.width ?? 0, 140),
+        minWidth: Math.max(
+          rawPos.width ?? 0,
+          items.some((item) => item.description) ? 240 : 140
+        ),
         maxHeight: rawPos.maxHeight,
       }
     : null;
@@ -54,9 +77,9 @@ export function ActionDropdown({
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((p) => !p)}
-        className="flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+        className="flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
       >
-        {label}
+        <span className="truncate">{label}</span>
         <i className={`codicon codicon-chevron-${open ? "up" : "down"} text-[10px]`} />
       </button>
 
@@ -74,7 +97,10 @@ export function ActionDropdown({
                   key={item.value}
                   type="button"
                   disabled={item.disabled}
-                  title={item.title}
+                  title={
+                    [item.title, item.description].filter(Boolean).join("\n") ||
+                    undefined
+                  }
                   onClick={() => {
                     setOpen(false);
                     onSelect(item.value);
@@ -86,7 +112,7 @@ export function ActionDropdown({
                         : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cursor-pointer"
                     }`}
                 >
-                  {item.label}
+                  <ActionDropdownItemContent item={item} />
                 </button>
               )
             )}

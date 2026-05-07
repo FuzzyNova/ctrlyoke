@@ -40,6 +40,12 @@ export interface ManagedFile {
   locations: ManagedFileLocation[];
 }
 
+export interface ManagedTargetDirectory {
+  harnessId: AnyTargetId;
+  scope: "workspace" | "user";
+  path: string;
+}
+
 export interface SyncResult {
   harnessId: HarnessId;
   success: boolean;
@@ -239,6 +245,40 @@ async function collectSkillLocations(
 // ============================================================================
 
 export class HarnessFileManager {
+  static resolveTargetDirectories(
+    workspaceRoot: string,
+    type: "agent" | "skill"
+  ): ManagedTargetDirectory[] {
+    const targets: AnyTargetId[] = [
+      "flightpath",
+      "agents",
+      "vscode",
+      ...getAllHarnessIds(),
+    ];
+    const directories: ManagedTargetDirectory[] = [];
+
+    for (const scope of ["workspace", "user"] as const) {
+      for (const harnessId of targets) {
+        try {
+          directories.push({
+            harnessId,
+            scope,
+            path: HarnessFileManager.getTargetDir(
+              harnessId,
+              workspaceRoot,
+              type,
+              scope
+            ),
+          });
+        } catch {
+          // Some targets only exist for one scope/type combination.
+        }
+      }
+    }
+
+    return directories;
+  }
+
   /**
    * Enumerate all locations where a given agent/skill is present.
    */

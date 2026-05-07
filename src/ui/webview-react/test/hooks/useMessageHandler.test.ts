@@ -631,6 +631,31 @@ describe("NOTIFICATION_EVENT", () => {
 });
 
 // ---------------------------------------------------------------------------
+// OPEN_HARNESS_DIR_RESULT
+// ---------------------------------------------------------------------------
+
+describe("OPEN_HARNESS_DIR_RESULT", () => {
+  it("shows a warning toast when the folder could not be opened", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT, {
+        success: false,
+        error:
+          "The workspace skill folder does not exist yet: C:\\dev\\FlightPath\\.flightpath\\skills",
+      });
+    });
+
+    expect(useUiStore.getState().toast).toEqual({
+      message:
+        "The workspace skill folder does not exist yet: C:\\dev\\FlightPath\\.flightpath\\skills",
+      type: "warning",
+      visible: true,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // OUTPUT_HISTORY_LOADED
 // ---------------------------------------------------------------------------
 

@@ -9,7 +9,10 @@ import {
   HARNESS_FILE_TYPES,
 } from "@root/types/DashboardConstants";
 import type { HarnessId, AnyTargetId } from "@root/types/DashboardConstants";
-import type { ManagedFile } from "@root/types/WebviewMessageTypes";
+import type {
+  ManagedFile,
+  ManagedTargetDirectory,
+} from "@root/types/WebviewMessageTypes";
 import { ActionDropdown } from "@components/shared/ActionDropdown";
 import type { ActionDropdownItem } from "@components/shared/ActionDropdown";
 import { FlyoutActionDropdown } from "@components/shared/FlyoutActionDropdown";
@@ -48,6 +51,33 @@ function decodeTarget(encoded: string): { id: AnyTargetId; scope: "workspace" | 
   };
 }
 
+function formatPathForDisplay(folderPath: string): string {
+  return folderPath.split("\\").join("/");
+}
+
+function getParentFolderPath(filePath: string): string {
+  const normalized = filePath.split("\\").join("/");
+  const lastSlash = normalized.lastIndexOf("/");
+  return lastSlash >= 0 ? normalized.slice(0, lastSlash) : normalized;
+}
+
+function getLocationFolderPath(file: ManagedFile, locationIndex: number): string {
+  const location = file.locations[locationIndex];
+  return file.type === HARNESS_FILE_TYPES.SKILL
+    ? location.path
+    : getParentFolderPath(location.path);
+}
+
+function getTargetDirectoryPath(
+  targetDirectories: ManagedTargetDirectory[],
+  id: AnyTargetId,
+  scope: "workspace" | "user"
+): string | undefined {
+  return targetDirectories.find(
+    (dir) => dir.harnessId === id && dir.scope === scope
+  )?.path;
+}
+
 // ============================================================================
 // Dropdown item builders — two-level (Workspace / User sections)
 // ============================================================================
@@ -72,18 +102,35 @@ function getUserTargets(availableIds: Set<HarnessId>): AnyTargetId[] {
 
 function buildSaveFlyoutGroups(
   presentKeys: Set<string>,
-  availableIds: Set<HarnessId>
+  availableIds: Set<HarnessId>,
+  targetDirectories: ManagedTargetDirectory[]
 ): FlyoutGroup[] {
   const wsItems: ActionDropdownItem[] = getWorkspaceTargets(availableIds).map((id) => {
     const encoded = encodeTarget(id, "workspace");
     const present = presentKeys.has(encoded);
-    return { label: getTargetLabel(id), value: encoded, disabled: present, title: present ? "Already present" : undefined };
+    return {
+      label: getTargetLabel(id),
+      value: encoded,
+      description: formatPathForDisplay(
+        getTargetDirectoryPath(targetDirectories, id, "workspace") ?? ""
+      ),
+      disabled: present,
+      title: present ? "Already present" : undefined,
+    };
   });
 
   const userItems: ActionDropdownItem[] = getUserTargets(availableIds).map((id) => {
     const encoded = encodeTarget(id, "user");
     const present = presentKeys.has(encoded);
-    return { label: getTargetLabel(id), value: encoded, disabled: present, title: present ? "Already present" : undefined };
+    return {
+      label: getTargetLabel(id),
+      value: encoded,
+      description: formatPathForDisplay(
+        getTargetDirectoryPath(targetDirectories, id, "user") ?? ""
+      ),
+      disabled: present,
+      title: present ? "Already present" : undefined,
+    };
   });
 
   return [
@@ -92,7 +139,10 @@ function buildSaveFlyoutGroups(
   ];
 }
 
-function buildOpenFolderGroups(availableIds: Set<HarnessId>): FlyoutGroup[] {
+function buildOpenFolderGroups(
+  availableIds: Set<HarnessId>,
+  targetDirectories: ManagedTargetDirectory[]
+): FlyoutGroup[] {
   return [
     {
       id: "workspace",
@@ -100,6 +150,9 @@ function buildOpenFolderGroups(availableIds: Set<HarnessId>): FlyoutGroup[] {
       items: getWorkspaceTargets(availableIds).map((id) => ({
         label: getTargetLabel(id),
         value: encodeTarget(id, "workspace"),
+        description: formatPathForDisplay(
+          getTargetDirectoryPath(targetDirectories, id, "workspace") ?? ""
+        ),
       })),
     },
     {
@@ -108,6 +161,9 @@ function buildOpenFolderGroups(availableIds: Set<HarnessId>): FlyoutGroup[] {
       items: getUserTargets(availableIds).map((id) => ({
         label: getTargetLabel(id),
         value: encodeTarget(id, "user"),
+        description: formatPathForDisplay(
+          getTargetDirectoryPath(targetDirectories, id, "user") ?? ""
+        ),
       })),
     },
   ];
@@ -140,11 +196,18 @@ function HarnessBadge({ id, scope }: { id: AnyTargetId; scope: "workspace" | "us
 interface FileRowProps {
   file: ManagedFile;
   availableIds: Set<HarnessId>;
+  targetDirectories: ManagedTargetDirectory[];
   onSave: (sourcePath: string, id: AnyTargetId, scope: "workspace" | "user") => void;
   onDelete: (name: string, id: AnyTargetId, scope: "workspace" | "user") => void;
 }
 
-function FileRow({ file, availableIds, onSave, onDelete }: FileRowProps) {
+function FileRow({
+  file,
+  availableIds,
+  targetDirectories,
+  onSave,
+  onDelete,
+}: FileRowProps) {
   const presentKeys = new Set(
     file.locations.map((l) => encodeTarget(l.harnessId, l.scope))
   );
@@ -155,9 +218,10 @@ function FileRow({ file, availableIds, onSave, onDelete }: FileRowProps) {
     file.locations.find((l) => l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH && l.scope === SETTING_SCOPES.USER) ??
     file.locations[0];
 
-  const deleteItems: ActionDropdownItem[] = file.locations.map((loc) => ({
+  const deleteItems: ActionDropdownItem[] = file.locations.map((loc, index) => ({
     label: `${getTargetLabel(loc.harnessId)} (${loc.scope})`,
     value: encodeTarget(loc.harnessId, loc.scope),
+    description: formatPathForDisplay(getLocationFolderPath(file, index)),
   }));
 
   return (
@@ -180,7 +244,11 @@ function FileRow({ file, availableIds, onSave, onDelete }: FileRowProps) {
         <div className="flex items-center gap-1.5 ml-auto">
           <FlyoutActionDropdown
             label="Save"
-            groups={buildSaveFlyoutGroups(presentKeys, availableIds)}
+            groups={buildSaveFlyoutGroups(
+              presentKeys,
+              availableIds,
+              targetDirectories
+            )}
             onSelect={(encoded) => {
               const { id, scope } = decodeTarget(encoded);
               onSave(primaryLoc.path, id, scope);
@@ -211,11 +279,18 @@ type BulkAction = "save" | "delete";
 interface AllActionsBarProps {
   files: ManagedFile[];
   availableIds: Set<HarnessId>;
+  targetDirectories: ManagedTargetDirectory[];
   onSave: (id: AnyTargetId, scope: "workspace" | "user") => void;
   onDeleteAll: (id: AnyTargetId, scope: "workspace" | "user") => void;
 }
 
-function AllActionsBar({ files, availableIds, onSave, onDeleteAll }: AllActionsBarProps) {
+function AllActionsBar({
+  files,
+  availableIds,
+  targetDirectories,
+  onSave,
+  onDeleteAll,
+}: AllActionsBarProps) {
   const [action, setAction] = useState<BulkAction>("save");
   const [scope, setScope] = useState<"workspace" | "user">("workspace");
   const [targetId, setTargetId] = useState<AnyTargetId>(HARNESS_IDS.CLAUDE_CLI as HarnessId);
@@ -234,6 +309,13 @@ function AllActionsBar({ files, availableIds, onSave, onDeleteAll }: AllActionsB
   };
 
   const preposition = action === "save" ? "to:" : "from:";
+  const targetItems: ActionDropdownItem[] = scopeTargets.map((id) => ({
+    label: getTargetLabel(id),
+    value: id,
+    description: formatPathForDisplay(
+      getTargetDirectoryPath(targetDirectories, id, scope) ?? ""
+    ),
+  }));
 
   return (
     <div className="flex items-center gap-2 pt-3 border-t border-panel-border flex-wrap">
@@ -257,17 +339,12 @@ function AllActionsBar({ files, availableIds, onSave, onDeleteAll }: AllActionsB
         <option value="user">User</option>
       </select>
 
-      <select
-        value={targetId}
-        onChange={(e) => setTargetId(e.target.value as AnyTargetId)}
-        className="h-6 flex-1 min-w-0 bg-input-bg border border-input-border rounded px-2 text-xs text-foreground focus:outline-none focus:border-focus-border"
-      >
-        {scopeTargets.map((id) => (
-          <option key={id} value={id}>
-            {getTargetLabel(id)}
-          </option>
-        ))}
-      </select>
+      <ActionDropdown
+        label={getTargetLabel(targetId)}
+        items={targetItems}
+        onSelect={(value) => setTargetId(value as AnyTargetId)}
+        className="flex-1 min-w-[220px]"
+      />
 
       <button
         type="button"
@@ -295,6 +372,7 @@ function AllActionsBar({ files, availableIds, onSave, onDeleteAll }: AllActionsB
 
 export function AgentSkillsManagerSection() {
   const managedFiles = useHarnessFileStore((s) => s.managedFiles);
+  const targetDirectories = useHarnessFileStore((s) => s.targetDirectories);
   const activeType = useHarnessFileStore((s) => s.activeType);
   const loading = useHarnessFileStore((s) => s.loading);
   const error = useHarnessFileStore((s) => s.error);
@@ -415,7 +493,7 @@ export function AgentSkillsManagerSection() {
           <div className="ml-auto">
             <FlyoutActionDropdown
               label="Open Folder"
-              groups={buildOpenFolderGroups(availableIds)}
+              groups={buildOpenFolderGroups(availableIds, targetDirectories)}
               onSelect={(encoded) => {
                 const { id, scope } = decodeTarget(encoded);
                 openHarnessDir(id, activeType, scope);
@@ -449,6 +527,7 @@ export function AgentSkillsManagerSection() {
               key={file.name}
               file={file}
               availableIds={availableIds}
+              targetDirectories={targetDirectories}
               onSave={handleSave}
               onDelete={handleDeleteRequest}
             />
@@ -459,6 +538,7 @@ export function AgentSkillsManagerSection() {
       <AllActionsBar
         files={managedFiles}
         availableIds={availableIds}
+        targetDirectories={targetDirectories}
         onSave={handleSaveAll}
         onDeleteAll={handleDeleteAllRequest}
       />

@@ -222,6 +222,7 @@ export const MESSAGE_TYPES = {
   DELETE_ALL_FROM_HARNESS: "deleteAllFromHarness", // Webview -> Extension: { harnessId, fileType }
   HARNESS_FILE_OP_RESULT: "harnessFileOpResult", // Extension -> Webview: { success, error?, files? }
   OPEN_HARNESS_DIR: "openHarnessDir", // Webview -> Extension: { harnessId, fileType }
+  OPEN_HARNESS_DIR_RESULT: "openHarnessDirResult", // Extension -> Webview: { success, error? }
 
   // Settings — Webview → Extension
   UPDATE_CONFIRM_DELETE: "updateConfirmDelete", // Update confirmDeleteOperations setting: { value: boolean }

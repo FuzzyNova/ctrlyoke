@@ -1203,6 +1203,13 @@ export interface ManagedFile {
   locations: ManagedFileLocation[];
 }
 
+/** A target directory shown in the Agent/Skills manager UI */
+export interface ManagedTargetDirectory {
+  harnessId: AnyTargetId;
+  scope: "workspace" | "user";
+  path: string;
+}
+
 /** Webview → Extension: enumerate all agents or skills */
 export interface RequestHarnessFilesMessage {
   type: typeof MESSAGE_TYPES.REQUEST_HARNESS_FILES;
@@ -1213,6 +1220,7 @@ export interface RequestHarnessFilesMessage {
 export interface HarnessFilesResultMessage {
   type: typeof MESSAGE_TYPES.HARNESS_FILES_RESULT;
   files: ManagedFile[];
+  targetDirectories?: ManagedTargetDirectory[];
 }
 
 /** Webview → Extension: copy a file to a target dir */
@@ -1267,6 +1275,7 @@ export interface HarnessFileOpResultMessage {
   error?: string;
   /** Updated file list after the operation (re-broadcast for convenience) */
   files?: ManagedFile[];
+  targetDirectories?: ManagedTargetDirectory[];
 }
 
 /** Webview → Extension: open target directory in Explorer/Finder */
@@ -1275,6 +1284,13 @@ export interface OpenHarnessDirMessage {
   harnessId: AnyTargetId;
   fileType: "agent" | "skill";
   scope: "workspace" | "user";
+}
+
+/** Extension → Webview: result of an open-folder request */
+export interface OpenHarnessDirResultMessage {
+  type: typeof MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT;
+  success: boolean;
+  error?: string;
 }
 
 /**
@@ -1361,4 +1377,5 @@ export type IncomingMessage =
   | DevCommandUnavailableMessage
   | HarnessFilesResultMessage
   | HarnessFileOpResultMessage
+  | OpenHarnessDirResultMessage
   | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE };

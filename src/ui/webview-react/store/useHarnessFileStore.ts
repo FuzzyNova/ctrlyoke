@@ -1,16 +1,23 @@
 import { create } from "zustand";
 import { MESSAGE_TYPES, HARNESS_FILE_TYPES, type HarnessFileType } from "@/types/messages";
-import type { ManagedFile } from "@root/types/WebviewMessageTypes";
+import type {
+  ManagedFile,
+  ManagedTargetDirectory,
+} from "@root/types/WebviewMessageTypes";
 import { sendMessage } from "@hooks/useMessageHandler";
 
 interface HarnessFileState {
   managedFiles: ManagedFile[];
+  targetDirectories: ManagedTargetDirectory[];
   activeType: HarnessFileType;
   loading: boolean;
   error: string | null;
 
   setActiveType: (type: HarnessFileType) => void;
-  setFiles: (files: ManagedFile[]) => void;
+  setFiles: (
+    files: ManagedFile[],
+    targetDirectories?: ManagedTargetDirectory[]
+  ) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
 
@@ -48,6 +55,7 @@ interface HarnessFileState {
 
 export const useHarnessFileStore = create<HarnessFileState>((set, get) => ({
   managedFiles: [],
+  targetDirectories: [],
   activeType: HARNESS_FILE_TYPES.AGENT,
   loading: false,
   error: null,
@@ -57,7 +65,12 @@ export const useHarnessFileStore = create<HarnessFileState>((set, get) => ({
     get().requestFiles();
   },
 
-  setFiles: (files) => set({ managedFiles: files, loading: false }),
+  setFiles: (files, targetDirectories) =>
+    set((state) => ({
+      managedFiles: files,
+      targetDirectories: targetDirectories ?? state.targetDirectories,
+      loading: false,
+    })),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
 

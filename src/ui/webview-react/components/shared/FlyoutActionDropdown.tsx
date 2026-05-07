@@ -2,7 +2,10 @@ import { useState, useRef, useCallback } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
-import type { ActionDropdownItem } from "./ActionDropdown";
+import {
+  ActionDropdownItemContent,
+  type ActionDropdownItem,
+} from "./ActionDropdown";
 
 // ============================================================================
 // Public types
@@ -25,7 +28,8 @@ export interface FlyoutActionDropdownProps {
 // Component
 // ============================================================================
 
-const L2_MIN_WIDTH = 160;
+const L1_MIN_WIDTH = 160;
+const L2_MIN_WIDTH = 240;
 
 /**
  * A two-level flyout dropdown.
@@ -52,7 +56,7 @@ export function FlyoutActionDropdown({
 
   const l1RawPos = useDropdownPortalPosition(buttonRef, l1Open);
   const l1Pos = l1RawPos
-    ? { ...l1RawPos, minWidth: Math.max(l1RawPos.width ?? 0, L2_MIN_WIDTH) }
+    ? { ...l1RawPos, minWidth: Math.max(l1RawPos.width ?? 0, L1_MIN_WIDTH) }
     : null;
 
   const closeAll = useCallback(() => {
@@ -110,9 +114,9 @@ export function FlyoutActionDropdown({
         ref={buttonRef}
         type="button"
         onClick={handleTrigger}
-        className="flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
+        className="flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
       >
-        {label}
+        <span className="truncate">{label}</span>
         <i className={`codicon codicon-chevron-${l1Open ? "up" : "down"} text-[10px]`} />
       </button>
 
@@ -151,7 +155,10 @@ export function FlyoutActionDropdown({
             key={item.value}
             type="button"
             disabled={item.disabled}
-            title={item.title}
+            title={
+              [item.title, item.description].filter(Boolean).join("\n") ||
+              undefined
+            }
             onClick={() => handleSelect(item.value)}
             className={`block w-full text-left px-3 py-1.5 text-xs transition-colors
               ${
@@ -160,7 +167,7 @@ export function FlyoutActionDropdown({
                   : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg cursor-pointer"
               }`}
           >
-            {item.label}
+            <ActionDropdownItemContent item={item} />
           </button>
         ))}
       </DropdownPortal>
