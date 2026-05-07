@@ -86,14 +86,19 @@ export const EditorSection: React.FC = () => {
 
   const handleRespectGitignoreChange = useCallback(
     (checked: boolean) => {
+      const scope =
+        globalSettings.settingSources["ui.respectGitignoreForCompletions"] ===
+        "workspace"
+          ? "workspace"
+          : "user";
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
         path: "ui.respectGitignoreForCompletions",
         value: checked,
-        scope: "user",
+        scope,
       });
     },
-    [vscode]
+    [vscode, globalSettings.settingSources]
   );
 
   const handleNameKeyDown = (e: React.KeyboardEvent) => {

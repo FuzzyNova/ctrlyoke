@@ -39,6 +39,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const setError = useWorkspaceViewerStore((s) => s.setError);
 
   const showHiddenFiles = useSettingsStore((s) => s.globalSettings.showHiddenFiles);
+  const showHiddenFilesScope = useSettingsStore((s) =>
+    s.globalSettings.settingSources["ui.showHiddenFiles"] === "workspace" ? "workspace" : "user"
+  );
   const vscode = useVsCodeApi();
 
   const isMobile = useIsMobile();
@@ -235,7 +238,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
         </div>
 
         <button
-          onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path: "ui.showHiddenFiles", value: !showHiddenFiles, scope: "user" })}
+          onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path: "ui.showHiddenFiles", value: !showHiddenFiles, scope: showHiddenFilesScope })}
           className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
             showHiddenFiles
               ? "hover:bg-btn-secondary-hover text-editor-fg"

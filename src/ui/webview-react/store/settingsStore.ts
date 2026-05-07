@@ -103,6 +103,8 @@ export interface GlobalSettings {
   defaultEndCondition: EndCondition | null;
   defaultPreCondition: PreCondition | null;
   terminal?: TerminalSettings;
+  /** Per-leaf-path source map: "workspace" if a workspace file owns the setting, "user" if a user file does, absent if at default */
+  settingSources: Record<string, string>;
 }
 
 /**
@@ -300,6 +302,7 @@ const initialGlobalSettings: GlobalSettings = {
     mobileControlBar: TERMINAL_MOBILE_CONTROL_BAR.AUTO,
     mobileCustomShortcuts: [],
   },
+  settingSources: {},
 };
 
 const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {

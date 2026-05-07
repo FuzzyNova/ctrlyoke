@@ -39,6 +39,9 @@ export const WorkflowFilePickerModal: React.FC<
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const showHiddenFiles = useSettingsStore((s) => s.globalSettings.showHiddenFiles);
+  const showHiddenFilesScope = useSettingsStore((s) =>
+    s.globalSettings.settingSources["ui.showHiddenFiles"] === "workspace" ? "workspace" : "user"
+  );
   const vscode = useVsCodeApi();
 
   useEffect(() => {
@@ -131,7 +134,7 @@ export const WorkflowFilePickerModal: React.FC<
             </label>
             <button
               type="button"
-              onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path: "ui.showHiddenFiles", value: !showHiddenFiles, scope: "user" })}
+              onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path: "ui.showHiddenFiles", value: !showHiddenFiles, scope: showHiddenFilesScope })}
               className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded transition-colors ${
                 showHiddenFiles
                   ? "text-foreground hover:bg-btn-secondary-hover"

@@ -737,6 +737,7 @@ export class WebviewSettingsSync {
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,
       defaultPreCondition: ConfigurationUtils.getDefaultPreCondition() ?? null,
       workspaceRoot,
+      settingSources: configService.getLeafSources(),
     };
   }
 

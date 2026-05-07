@@ -169,6 +169,9 @@ export const OutputSection: React.FC = () => {
   const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
+  const terminalFontSizeScope = useSettingsStore((s) =>
+    s.globalSettings.settingSources["terminal.fontSize"] === "workspace" ? "workspace" : "user"
+  );
   const updateTerminalFontSize = useCallback(
     (size: number) => {
       const next = Math.min(24, Math.max(8, size));
@@ -177,23 +180,31 @@ export const OutputSection: React.FC = () => {
         type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
         path: "terminal.fontSize",
         value: next,
-        scope: "user",
+        scope: terminalFontSizeScope,
       });
     },
-    [setTerminalFontSize]
+    [setTerminalFontSize, terminalFontSizeScope]
   );
 
   // Execution mode toggle
   const executionMode = useSettingsStore((s) => s.globalSettings.executionMode);
-  const handleExecutionModeChange = useCallback((active: boolean) => {
-    const vscode = getVsCodeApi();
-    vscode?.postMessage({
-      type: MESSAGE_TYPES.CHANGE_EXECUTION_MODE,
-      executionMode: active
-        ? EXECUTION_MODES.INTERACTIVE
-        : EXECUTION_MODES.HEADLESS,
-    });
-  }, []);
+  const executionModeScope = useSettingsStore((s) =>
+    s.globalSettings.settingSources["execution.mode"] === "workspace"
+      ? "workspace"
+      : "user"
+  );
+  const handleExecutionModeChange = useCallback(
+    (active: boolean) => {
+      const vscode = getVsCodeApi();
+      vscode?.postMessage({
+        type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+        path: "execution.mode",
+        value: active ? EXECUTION_MODES.INTERACTIVE : EXECUTION_MODES.HEADLESS,
+        scope: executionModeScope,
+      });
+    },
+    [executionModeScope]
+  );
 
   // Terminal tab state
   const workspaceRoot = useSettingsStore((s) => s.globalSettings.workspaceRoot);

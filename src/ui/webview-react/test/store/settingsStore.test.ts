@@ -171,6 +171,7 @@ describe("setGlobalSettings", () => {
       workspaceRoot: "",
       defaultEndCondition: null,
       defaultPreCondition: null,
+      settingSources: {},
     };
     useSettingsStore.getState().setGlobalSettings(settings);
     expect(useSettingsStore.getState().globalSettings.harness).toBe(
