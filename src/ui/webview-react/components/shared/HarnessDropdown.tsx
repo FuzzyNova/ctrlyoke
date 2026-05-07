@@ -247,15 +247,22 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
-  const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(160);
+  const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(180);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  const popupPos = useDropdownPortalPosition(
+    buttonRef,
+    isOpen,
+    dropdownMaxHeight
+  );
   useClickOutside(
     [buttonRef, popupRef],
     isOpen,
-    () => { setIsOpen(false); setShowHidden(false); },
+    () => {
+      setIsOpen(false);
+      setShowHidden(false);
+    },
     !inline
   );
 

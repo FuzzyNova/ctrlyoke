@@ -1,0 +1,13 @@
+{
+  "steps": [
+    {
+      "name": "start",
+      "prompt": "Just say: 'Workflow started, waiting for final step.'"
+    }
+  ],
+  "finalStep": {
+    "name": "final-step-check",
+    "mcpServers": ["flightpath"],
+    "prompt": "Call the tool 'flightpath_queue_status' (no parameters needed). Examine the JSON response.\n\nLook at the completed steps. If a step named 'added by final step' is listed in the completed steps:\n  Say: 'TEST PASSED — the appended step ran and finalStep was called again.'\n\nIf NO step named 'added by final step' exists in the completed steps:\n  Call 'flightpath_append_queue' to add a new step with:\n    name: 'added by final step'\n    prompt: 'Just say: hi'\n  After appending, say: 'Appended new step — finalStep will run again once it completes.'\n\nDo nothing else."
+  }
+}

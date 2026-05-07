@@ -103,7 +103,7 @@ export function runWorkflowFile(
       workflowFile,
       "--headless",
       "--timeout",
-      "60",
+      "180",
       ...varArgs,
     ],
     {

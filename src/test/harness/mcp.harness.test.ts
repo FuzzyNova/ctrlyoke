@@ -50,6 +50,100 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
   });
 
   // -------------------------------------------------------------------------
+  // Test: finalStep appends via MCP, appended step runs, finalStep re-fires
+  // -------------------------------------------------------------------------
+  //
+  // Workflow:
+  //   Step 1   — AI writes an initial marker file (proves regular step ran).
+  //   finalStep pass 1 — AI calls flightpath_queue_status, finds no
+  //              "fp-appended-step" in completed steps, calls
+  //              flightpath_append_queue to add one.
+  //   Step 2   — (dynamically appended) AI writes the appended marker file.
+  //   finalStep pass 2 — AI calls flightpath_queue_status, finds
+  //              "fp-appended-step" in completed steps, writes the
+  //              final-pass-2 marker file.
+  //
+  // Assertions:
+  //   - CLI exits 0.
+  //   - Initial marker exists (regular step ran).
+  //   - Appended marker exists (MCP-appended step ran).
+  //   - Final-pass-2 marker exists (finalStep fired again after appended step).
+  // -------------------------------------------------------------------------
+
+  test("copilot-cli: finalStep appends via MCP, appended step runs, finalStep executes again", function () {
+    this.timeout(HARNESS_TIMEOUT_MS);
+
+    const initialFile = path.join(tmpDir, "fp-initial.txt");
+    const appendedFile = path.join(tmpDir, "fp-appended.txt");
+    const finalPass2File = path.join(tmpDir, "fp-final-pass2.txt");
+
+    const appendedPath = appendedFile.replace(/\\/g, "/");
+    const finalPass2Path = finalPass2File.replace(/\\/g, "/");
+    const initialPath = initialFile.replace(/\\/g, "/");
+
+    const workflow: PromptFile = {
+      harness: "copilot-cli" as any,
+      model: HARNESS_MODELS["copilot-cli"],
+      steps: [
+        {
+          name: "initial",
+          prompt: `Run the bash command exactly as written: \`echo FP_INITIAL > "${initialPath}"\`. Do not explain — just run it.`,
+        },
+      ],
+      finalStep: {
+        name: "fp-final-step",
+        mcpServers: ["flightpath"],
+        prompt: [
+          "Call the tool 'flightpath_queue_status' (no parameters).",
+          "Examine the JSON response. Look for a completed step named 'fp-appended-step'.",
+          "",
+          `IF 'fp-appended-step' IS in the completed steps: run exactly \`echo FP_FINAL_PASS2 > "${finalPass2Path}"\` and say: "Second finalStep pass."`,
+          "",
+          `IF 'fp-appended-step' is NOT in the completed steps: call 'flightpath_append_queue' with one step — name "fp-appended-step", prompt "Run exactly: echo FP_APPENDED > \\"${appendedPath}\\". Do not explain — just run it." Then say: "First finalStep pass: appended fp-appended-step."`,
+          "",
+          "Do nothing else.",
+        ].join("\n"),
+      } as any,
+    };
+
+    const result = runWorkflowFile(workflow, tmpDir, "fp-final-step");
+
+    if (logAndMaybeSkip("copilot-cli (finalStep+mcp)", result)) return;
+
+    assert.strictEqual(
+      result.exitCode,
+      0,
+      `copilot-cli: CLI exited with code ${result.exitCode}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`
+    );
+
+    assert.ok(
+      fs.existsSync(initialFile),
+      `copilot-cli: initial step marker not created — initial step may not have run\nstdout: ${result.stdout}`
+    );
+
+    assert.ok(
+      fs.existsSync(appendedFile),
+      [
+        "copilot-cli: appended step marker not created.",
+        "This means the finalStep did not call flightpath_append_queue,",
+        "or the appended step did not execute.",
+        `Expected file: ${appendedFile}`,
+        `stdout: ${result.stdout}`,
+      ].join("\n")
+    );
+
+    assert.ok(
+      fs.existsSync(finalPass2File),
+      [
+        "copilot-cli: finalStep second-pass marker not created.",
+        "This means finalStep did not execute a second time after the appended step ran.",
+        `Expected file: ${finalPass2File}`,
+        `stdout: ${result.stdout}`,
+      ].join("\n")
+    );
+  });
+
+  // -------------------------------------------------------------------------
   // Test: AI extends the queue via the flightpath_append_queue MCP tool
   // -------------------------------------------------------------------------
   //

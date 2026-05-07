@@ -69,7 +69,7 @@ export const IconToggleButton: React.FC<{
       aria-pressed={active}
       className={`control-button flex items-center gap-1 px-1 bg-transparent border-none cursor-pointer leading-none transition-colors ${
         active
-          ? "text-focus-border hover:text-focus-border-hover"
+          ? "text-widget-highlight-fg hover:text-widget-highlight-fg-hover"
           : "text-description-fg hover:text-foreground"
       }`}
     >
