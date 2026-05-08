@@ -239,6 +239,14 @@ export const OutputSection: React.FC = () => {
     null;
 
   const [headerRef, isHeaderNarrow] = useElementNarrow(600);
+  const [veryNarrowRef, isHeaderVeryNarrow] = useElementNarrow(400);
+  const mergedHeaderRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      headerRef(node);
+      veryNarrowRef(node);
+    },
+    [headerRef, veryNarrowRef]
+  );
 
   const outputRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -1022,7 +1030,7 @@ export const OutputSection: React.FC = () => {
     >
       {/* Section Header */}
       <div
-        ref={headerRef}
+        ref={mergedHeaderRef}
         className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
       >
         {/* Left: clickable collapse area + tab buttons + font size controls + execution mode */}
@@ -1239,7 +1247,7 @@ export const OutputSection: React.FC = () => {
                   return (
                     <button
                       type="button"
-                      className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors"
+                      className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors min-w-0 overflow-hidden"
                       style={{ touchAction: "manipulation" }}
                       title={`Undo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
                       onClick={() =>
@@ -1251,10 +1259,12 @@ export const OutputSection: React.FC = () => {
                         })
                       }
                     >
-                      <i className="codicon codicon-discard text-xs" />
-                      <span>
-                        {isHeaderNarrow ? "Undo" : `Undo ${count} changes`}
-                      </span>
+                      <i className="codicon codicon-discard text-xs flex-shrink-0" />
+                      {!isHeaderVeryNarrow && (
+                        <span className="truncate">
+                          {isHeaderNarrow ? "Undo" : `Undo ${count} changes`}
+                        </span>
+                      )}
                     </button>
                   );
                 })()}
@@ -1268,7 +1278,7 @@ export const OutputSection: React.FC = () => {
                   return (
                     <button
                       type="button"
-                      className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-terminal-ansiGreen hover:opacity-80 transition-opacity"
+                      className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-terminal-ansiGreen hover:opacity-80 transition-opacity min-w-0 overflow-hidden"
                       style={{ touchAction: "manipulation" }}
                       title={`Redo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
                       onClick={() =>
@@ -1280,10 +1290,12 @@ export const OutputSection: React.FC = () => {
                         })
                       }
                     >
-                      <i className="codicon codicon-redo text-xs" />
-                      <span>
-                        {isHeaderNarrow ? "Redo" : `Redo ${count} changes`}
-                      </span>
+                      <i className="codicon codicon-redo text-xs flex-shrink-0" />
+                      {!isHeaderVeryNarrow && (
+                        <span className="truncate">
+                          {isHeaderNarrow ? "Redo" : `Redo ${count} changes`}
+                        </span>
+                      )}
                     </button>
                   );
                 })()}

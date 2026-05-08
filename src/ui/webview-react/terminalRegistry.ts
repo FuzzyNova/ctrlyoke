@@ -18,6 +18,7 @@ import {
   TERMINAL_MOBILE_CONTROL_BAR,
 } from "@root/types/DashboardConstants";
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
+import { WebviewLog } from "./utils/logger";
 
 export type { Terminal, ITheme };
 
@@ -211,7 +212,7 @@ export const terminalRegistry = {
   ): Promise<void> {
     const entry = registry.get(makeKey(workflowId, sessionId));
     const isFirstRender = !entry?.term.element;
-    console.debug(
+    WebviewLog.debug(
       `[terminalRegistry.attach] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
         `entryExists=${!!entry} firstRender=${isFirstRender} ` +
         `containerConnected=${container.isConnected} containerSize=${container.offsetWidth}x${container.offsetHeight}`
@@ -242,7 +243,7 @@ export const terminalRegistry = {
       try {
         const containerSize = `${container.offsetWidth}x${container.offsetHeight}`;
         const containerDisplay = getComputedStyle(container).display;
-        console.debug(
+        WebviewLog.debug(
           `[terminalRegistry.attach] rAF resize — container display=${containerDisplay} size=${containerSize} ` +
             `domElConnected=${entry.domEl.isConnected} controllerCols=${entry.controllerCols ?? "none"}`
         );
@@ -270,7 +271,7 @@ export const terminalRegistry = {
    */
   detach(workflowId: string, sessionId: string): void {
     const entry = registry.get(makeKey(workflowId, sessionId));
-    console.debug(
+    WebviewLog.debug(
       `[terminalRegistry.detach] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
         `entryExists=${!!entry} domElConnected=${entry?.domEl.isConnected ?? false}`
     );
@@ -416,7 +417,7 @@ export const terminalRegistry = {
    * Called when a new run starts.
    */
   clearAiCliSessions(workflowId: string, sessionIds: string[]): void {
-    console.debug(
+    WebviewLog.debug(
       `[terminalRegistry.clearAiCliSessions] wf=${workflowId.slice(0, 8)} clearing ${sessionIds.length} session(s): ` +
         `[${sessionIds.map((id) => id.slice(0, 8)).join(", ")}]`
     );
@@ -437,7 +438,7 @@ export const terminalRegistry = {
     const key = makeKey(workflowId, sessionId);
     const entry = registry.get(key);
     if (entry) {
-      console.debug(
+      WebviewLog.debug(
         `[terminalRegistry.clearSession] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
       );
       entry.term.dispose();

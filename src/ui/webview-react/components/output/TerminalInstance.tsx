@@ -9,6 +9,7 @@ import {
   SESSION_KINDS,
 } from "../../types/messages";
 import "@xterm/xterm/css/xterm.css";
+import { WebviewLog } from "@/utils/logger";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
@@ -50,7 +51,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   // Mount effect: create registry entry, attach to DOM, flush pending output
   useEffect(() => {
     let cancelled = false;
-    console.debug(
+    WebviewLog.debug(
       `[TerminalInstance] mount effect start wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
         `containerConnected=${containerRef.current?.isConnected ?? false} ` +
         `registryHasEntry=${!!terminalRegistry.get(workflowId, sessionId)}`
@@ -248,7 +249,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
     async function mount() {
       if (!containerRef.current) {
-        console.debug(
+        WebviewLog.debug(
           `[TerminalInstance] mount aborted — containerRef.current is null`
         );
         return;
@@ -257,12 +258,12 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       // Create or retrieve the registry entry (async: dynamic imports)
       const entry = await terminalRegistry.create(workflowId, sessionId);
       if (cancelled || !containerRef.current) {
-        console.debug(
+        WebviewLog.debug(
           `[TerminalInstance] mount aborted after create — cancelled=${cancelled} containerNull=${!containerRef.current}`
         );
         return;
       }
-      console.debug(
+      WebviewLog.debug(
         `[TerminalInstance] mount: entry created/retrieved wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
           `isNewEntry=${!entry.term.element}`
       );
@@ -295,7 +296,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         sessionId,
         containerRef.current
       );
-      console.debug(
+      WebviewLog.debug(
         `[TerminalInstance] attach complete wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
           `domElConnected=${terminalRegistry.get(workflowId, sessionId)?.domEl.isConnected ?? false} ` +
           `containerConnected=${containerRef.current?.isConnected ?? false}`
@@ -321,7 +322,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
           const captured = entry.inputCapture.accumulate(input);
           if (captured) {
             // TODO: emit ad-hoc prompt capture event for Output tab attribution
-            console.debug("[FlightPath] Ad-hoc prompt captured:", captured);
+            WebviewLog.debug("[FlightPath] Ad-hoc prompt captured:", captured);
           }
         });
       }
@@ -383,7 +384,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
     return () => {
       cancelled = true;
-      console.debug(
+      WebviewLog.debug(
         `[TerminalInstance] unmount cleanup wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
           `registryHasEntry=${!!terminalRegistry.get(workflowId, sessionId)}`
       );
@@ -420,7 +421,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       });
       const captured = entry.inputCapture.accumulate(input);
       if (captured) {
-        console.debug("[FlightPath] Ad-hoc prompt captured:", captured);
+        WebviewLog.debug("[FlightPath] Ad-hoc prompt captured:", captured);
       }
     });
     // Becoming controller: restore fit-to-container sizing.

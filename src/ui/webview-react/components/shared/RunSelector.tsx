@@ -119,16 +119,16 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
           hover:text-foreground
           hover:bg-list-hover-bg
           transition-colors focus:outline-none focus-visible:ring-1
-          focus-visible:ring-focus-border"
+          focus-visible:ring-focus-border min-w-0 overflow-hidden"
       >
         {isLiveRunActive && !isViewingHistory && (
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse mr-0.5" />
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse mr-0.5 flex-shrink-0" />
         )}
-        <span>
+        <span className="truncate">
           {narrow ? "Runs" : `Run ${currentRunNumber} of ${availableRuns}`}
         </span>
         <svg
-          className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          className={`w-3 h-3 transition-transform flex-shrink-0 ${isOpen ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
