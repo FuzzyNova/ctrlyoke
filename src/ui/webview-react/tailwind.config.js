@@ -210,6 +210,8 @@ module.exports = {
           "var(--vscode-terminal-ansiBrightYellow, #f5f543)",
         "terminal-ansiBrightRed":
           "var(--vscode-terminal-ansiBrightRed, #f14c4c)",
+        "terminal-foreground":
+          "var(--vscode-terminal-foreground, var(--vscode-editor-foreground))",
 
         // ── Execution state badge backgrounds (VS Code theme vars with fallbacks) ──
         "exec-idle-bg":

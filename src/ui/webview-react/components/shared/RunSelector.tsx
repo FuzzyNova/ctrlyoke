@@ -18,6 +18,8 @@ export interface RunSelectorProps {
   runStates?: (string | undefined)[];
   /** When true, show compact "Runs" label instead of "Run X of X". */
   narrow?: boolean;
+  /** When true, show only the history icon and dropdown toggle. */
+  veryNarrow?: boolean;
 }
 
 /**
@@ -43,6 +45,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
   runTimestamps,
   runStates,
   narrow,
+  veryNarrow,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -114,19 +117,22 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         title="Select run to view"
-        className="flex items-center gap-1 px-2 py-0.5 text-xs rounded
+        className={`flex items-center gap-1 ${veryNarrow ? "px-1" : "px-2"} py-0.5 text-xs rounded
           text-description-fg
           hover:text-foreground
           hover:bg-list-hover-bg
           transition-colors focus:outline-none focus-visible:ring-1
-          focus-visible:ring-focus-border min-w-0 overflow-hidden"
+          focus-visible:ring-focus-border min-w-0`}
       >
-        {isLiveRunActive && !isViewingHistory && (
+        <i className="codicon codicon-history text-xs flex-shrink-0" />
+        {!veryNarrow && isLiveRunActive && !isViewingHistory && (
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse mr-0.5 flex-shrink-0" />
         )}
-        <span className="truncate">
-          {narrow ? "Runs" : `Run ${currentRunNumber} of ${availableRuns}`}
-        </span>
+        {!veryNarrow && (
+          <span className="text-nowrap">
+            {narrow ? "Runs" : `Run ${currentRunNumber} of ${availableRuns}`}
+          </span>
+        )}
         <svg
           className={`w-3 h-3 transition-transform flex-shrink-0 ${isOpen ? "rotate-180" : ""}`}
           fill="none"

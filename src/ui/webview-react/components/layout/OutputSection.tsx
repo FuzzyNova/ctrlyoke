@@ -12,7 +12,11 @@ import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { CliOutput, StatusMessage } from "../output";
 import { Modal } from "../shared";
-import { RunSelector, IconToggleButton, ExpandCollapseAllDiffsButton } from "../shared";
+import {
+  RunSelector,
+  IconToggleButton,
+  ExpandCollapseAllDiffsButton,
+} from "../shared";
 import { TerminalSessionIcon } from "../output/TerminalSessionIcon";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import { generateId } from "@utils/string";
@@ -170,7 +174,9 @@ export const OutputSection: React.FC = () => {
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
   const terminalFontSizeScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["terminal.fontSize"] === "workspace" ? "workspace" : "user"
+    s.globalSettings.settingSources["terminal.fontSize"] === "workspace"
+      ? "workspace"
+      : "user"
   );
   const updateTerminalFontSize = useCallback(
     (size: number) => {
@@ -238,7 +244,7 @@ export const OutputSection: React.FC = () => {
     terminalSessions[0] ??
     null;
 
-  const [headerRef, isHeaderNarrow] = useElementNarrow(600);
+  const [headerRef, isHeaderNarrow] = useElementNarrow(650);
   const [veryNarrowRef, isHeaderVeryNarrow] = useElementNarrow(400);
   const mergedHeaderRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -682,6 +688,11 @@ export const OutputSection: React.FC = () => {
     finalStepWorkspaceSnapshots,
     undoRecords,
   ]);
+  const showCompactWorkflowUndoRedoLabels =
+    workflowUndoRedoData.undoEntries.length > 0 &&
+    workflowUndoRedoData.redoEntries.length > 0;
+  const useCompactOutputHeaderLabels =
+    isHeaderNarrow || showCompactWorkflowUndoRedoLabels;
 
   // ── Diff line count helper ─────────────────────────────────────────────────
 
@@ -1247,7 +1258,7 @@ export const OutputSection: React.FC = () => {
                   return (
                     <button
                       type="button"
-                      className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors min-w-0 overflow-hidden"
+                      className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors min-w-0"
                       style={{ touchAction: "manipulation" }}
                       title={`Undo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
                       onClick={() =>
@@ -1261,8 +1272,10 @@ export const OutputSection: React.FC = () => {
                     >
                       <i className="codicon codicon-discard text-xs flex-shrink-0" />
                       {!isHeaderVeryNarrow && (
-                        <span className="truncate">
-                          {isHeaderNarrow ? "Undo" : `Undo ${count} changes`}
+                        <span className="text-nowrap">
+                          {useCompactOutputHeaderLabels
+                            ? "Undo"
+                            : `Undo ${count} change${count !== 1 ? "s" : ""}`}
                         </span>
                       )}
                     </button>
@@ -1278,7 +1291,7 @@ export const OutputSection: React.FC = () => {
                   return (
                     <button
                       type="button"
-                      className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-terminal-ansiGreen hover:opacity-80 transition-opacity min-w-0 overflow-hidden"
+                      className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-terminal-ansiGreen hover:opacity-80 transition-opacity min-w-0"
                       style={{ touchAction: "manipulation" }}
                       title={`Redo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
                       onClick={() =>
@@ -1292,8 +1305,10 @@ export const OutputSection: React.FC = () => {
                     >
                       <i className="codicon codicon-redo text-xs flex-shrink-0" />
                       {!isHeaderVeryNarrow && (
-                        <span className="truncate">
-                          {isHeaderNarrow ? "Redo" : `Redo ${count} changes`}
+                        <span>
+                          {useCompactOutputHeaderLabels
+                            ? "Redo"
+                            : `Redo ${count} change${count !== 1 ? "s" : ""}`}
                         </span>
                       )}
                     </button>
@@ -1305,7 +1320,8 @@ export const OutputSection: React.FC = () => {
                   currentRunIndex={viewingRunIndex}
                   isViewingHistory={isViewingHistory}
                   isLiveRunActive={executionState === EXECUTION_STATES.RUNNING}
-                  narrow={isHeaderNarrow}
+                  narrow={useCompactOutputHeaderLabels}
+                  veryNarrow={isHeaderVeryNarrow}
                   runTimestamps={runTimestamps}
                   runStates={runStates}
                   onSelectRun={(runIndex) => {
