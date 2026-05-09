@@ -48,13 +48,16 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const selectDiff = useWorkspaceViewerStore((s) => s.selectDiff);
   const setDiffData = useWorkspaceViewerStore((s) => s.setDiffData);
   const setDiffLoading = useWorkspaceViewerStore((s) => s.setDiffLoading);
+  const mobileDiffVisible = useWorkspaceViewerStore((s) => s.mobileDiffVisible);
+  const setMobileDiffVisible = useWorkspaceViewerStore(
+    (s) => s.setMobileDiffVisible
+  );
   const setScmError = useWorkspaceViewerStore((s) => s.setScmError);
   const confirmDeleteOperations = useSettingsStore(
     (s) => s.globalSettings.confirmDeleteOperations
   );
 
   const isMobile = useIsMobile();
-  const [mobileDiffVisible, setMobileDiffVisible] = useState(false);
   const [incomingCommitCount, setIncomingCommitCount] = useState(0);
   const [outgoingCommitCount, setOutgoingCommitCount] = useState(0);
   const [pendingDiscard, setPendingDiscard] =
@@ -102,7 +105,14 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         setDiffLoading(false);
       }
     },
-    [isMobile, selectDiff, setDiffData, setDiffLoading, setScmError]
+    [
+      isMobile,
+      selectDiff,
+      setDiffData,
+      setDiffLoading,
+      setMobileDiffVisible,
+      setScmError,
+    ]
   );
 
   const refreshAfterMutation = useCallback(
@@ -405,9 +415,6 @@ export const WorkspaceSourceControlPane: React.FC = () => {
             <i className="codicon codicon-arrow-left text-sm" />
             <span className="text-sm">Back</span>
           </button>
-          <span className="flex-1 text-sm truncate text-editor-fg min-w-0 ml-1">
-            {selectedDiffPath}
-          </span>
         </div>
         <div className="flex-1 overflow-auto">
           <WorkspaceDiffPane />

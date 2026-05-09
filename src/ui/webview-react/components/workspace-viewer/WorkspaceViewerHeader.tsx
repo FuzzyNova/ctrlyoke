@@ -1,4 +1,6 @@
 import React from "react";
+import { useIsMobile } from "@hooks/useMediaQuery";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 
 interface WorkspaceViewerHeaderProps {
   activeTab: "explorer" | "sourceControl";
@@ -7,15 +9,41 @@ interface WorkspaceViewerHeaderProps {
   workspacePath?: string;
 }
 
+const getFileName = (filePath: string): string =>
+  filePath.split(/[/\\]/).filter(Boolean).pop() ?? filePath;
+
 export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
   activeTab,
   onTabChange,
   onClose,
   workspacePath,
 }) => {
+  const selectedFilePath = useWorkspaceViewerStore((s) => s.selectedFilePath);
+  const fileDirty = useWorkspaceViewerStore((s) => s.fileDirty);
+  const mobileEditorVisible = useWorkspaceViewerStore(
+    (s) => s.mobileEditorVisible
+  );
+  const selectedDiffPath = useWorkspaceViewerStore((s) => s.selectedDiffPath);
+  const mobileDiffVisible = useWorkspaceViewerStore((s) => s.mobileDiffVisible);
+  const isMobile = useIsMobile();
+
   const workspaceName = workspacePath
     ? (workspacePath.split(/[/\\]/).filter(Boolean).pop() ?? workspacePath)
     : "FlightPath Workspace";
+  const explorerFileVisible =
+    activeTab === "explorer" &&
+    selectedFilePath !== null &&
+    (!isMobile || mobileEditorVisible);
+  const diffFileVisible =
+    activeTab === "sourceControl" &&
+    selectedDiffPath !== null &&
+    (!isMobile || mobileDiffVisible);
+  const titleFilePath = explorerFileVisible
+    ? selectedFilePath
+    : diffFileVisible
+      ? selectedDiffPath
+      : null;
+  const showDirtyDot = explorerFileVisible && fileDirty;
 
   return (
     <div className="flex items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0">
@@ -46,17 +74,29 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       {/* Title — takes remaining space, truncates before touching side elements */}
       <div className="flex-1 min-w-0 flex flex-col items-center px-2 select-none pointer-events-none">
         <div className="flex items-center gap-1 text-sm font-medium text-editor-fg opacity-70 max-w-full min-w-0">
-          <i className="codicon codicon-project codicon-sm flex-shrink-0" />
+          <i
+            className={`codicon ${titleFilePath ? "codicon-file" : "codicon-project"} codicon-sm flex-shrink-0`}
+          />
           <span className="truncate" data-testid="workspace-name">
-            Workspace: {workspaceName}
+            {titleFilePath
+              ? getFileName(titleFilePath)
+              : `Workspace: ${workspaceName}`}
           </span>
+          {showDirtyDot && (
+            <span
+              className="text-[var(--status-warning)] flex-shrink-0"
+              title="Unsaved changes"
+            >
+              ●
+            </span>
+          )}
         </div>
-        {workspacePath && (
+        {(titleFilePath || workspacePath) && (
           <span
             className="text-xs text-description-fg truncate w-full text-center"
-            title={workspacePath}
+            title={titleFilePath ?? workspacePath}
           >
-            {workspacePath}
+            {titleFilePath ?? workspacePath}
           </span>
         )}
       </div>

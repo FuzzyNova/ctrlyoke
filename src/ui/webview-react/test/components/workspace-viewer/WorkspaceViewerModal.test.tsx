@@ -115,6 +115,39 @@ describe("WorkspaceViewerModal — tabs", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Header title
+// ---------------------------------------------------------------------------
+
+describe("WorkspaceViewerModal — header title", () => {
+  it("shows the selected explorer file name and path in the header", () => {
+    useWorkspaceViewerStore.setState({
+      isOpen: true,
+      selectedFilePath: "src/index.ts",
+      fileDirty: true,
+    });
+
+    render(<WorkspaceViewerModal />);
+
+    expect(screen.getByText("index.ts")).toBeInTheDocument();
+    expect(screen.getByText("src/index.ts")).toBeInTheDocument();
+    expect(screen.getByTitle("Unsaved changes")).toBeInTheDocument();
+  });
+
+  it("shows the selected source-control diff file name and path in the header", () => {
+    useWorkspaceViewerStore.setState({
+      isOpen: true,
+      activeTab: "sourceControl",
+      selectedDiffPath: "src/fileA.ts",
+    });
+
+    render(<WorkspaceViewerModal />);
+
+    expect(screen.getByText("fileA.ts")).toBeInTheDocument();
+    expect(screen.getByText("src/fileA.ts")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Close button — clean file
 // ---------------------------------------------------------------------------
 
@@ -283,9 +316,7 @@ describe("workspaceViewerStore — cached file drafts", () => {
       fileDrafts: { "src/index.ts": { content: "changed" } },
     });
 
-    useWorkspaceViewerStore
-      .getState()
-      .discardFileDraft("src/index.ts", "disk");
+    useWorkspaceViewerStore.getState().discardFileDraft("src/index.ts", "disk");
 
     const state = useWorkspaceViewerStore.getState();
     expect(state.fileContent).toBe("disk");

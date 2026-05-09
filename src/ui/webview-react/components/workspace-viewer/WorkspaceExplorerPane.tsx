@@ -359,17 +359,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0 min-h-[2.25rem]">
         {selectedFilePath ? (
           <>
-            <span className="flex-1 text-sm truncate text-editor-fg min-w-0">
-              {selectedFilePath}
-              {fileDirty && (
-                <span
-                  className="ml-1.5 text-[var(--status-warning)]"
-                  title="Unsaved changes"
-                >
-                  ●
-                </span>
-              )}
-            </span>
+            <div className="flex-1" />
             {!fileReadOnly && (
               <>
                 <button
@@ -464,17 +454,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           <i className="codicon codicon-arrow-left text-sm" />
           <span className="text-sm">Back</span>
         </button>
-        <span className="flex-1 text-sm truncate text-editor-fg min-w-0 ml-1">
-          {selectedFilePath}
-          {fileDirty && (
-            <span
-              className="ml-1.5 text-[var(--status-warning)]"
-              title="Unsaved changes"
-            >
-              ●
-            </span>
-          )}
-        </span>
+        <div className="flex-1" />
         {!fileReadOnly && (
           <>
             <button

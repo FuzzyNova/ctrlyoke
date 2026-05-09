@@ -38,6 +38,9 @@ interface WorkspaceViewerState {
   // Mobile: in explorer tab, whether the file editor is shown (vs directory list)
   mobileEditorVisible: boolean;
 
+  // Mobile: in source control tab, whether the diff is shown (vs changed-file list)
+  mobileDiffVisible: boolean;
+
   // Source control
   sourceControlFiles: SourceControlFile[];
   sourceControlLoading: boolean;
@@ -88,6 +91,7 @@ interface WorkspaceViewerActions {
 
   // Mobile editor visibility
   setMobileEditorVisible(v: boolean): void;
+  setMobileDiffVisible(v: boolean): void;
 
   // Source control
   setSourceControlFiles(files: SourceControlFile[]): void;
@@ -132,6 +136,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   fileDrafts: {},
 
   mobileEditorVisible: false,
+  mobileDiffVisible: false,
 
   sourceControlFiles: [],
   sourceControlLoading: false,
@@ -325,6 +330,10 @@ export const useWorkspaceViewerStore = create<
 
       setMobileEditorVisible(v) {
         set({ mobileEditorVisible: v });
+      },
+
+      setMobileDiffVisible(v) {
+        set({ mobileDiffVisible: v });
       },
 
       // --- Source control ---
