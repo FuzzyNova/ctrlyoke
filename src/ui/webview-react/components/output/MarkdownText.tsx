@@ -1,6 +1,8 @@
 import React, { useMemo } from "react";
 import { Streamdown, defaultRemarkPlugins } from "streamdown";
 import { findAndReplace } from "mdast-util-find-and-replace";
+import { visit } from "unist-util-visit";
+import { toString as mdastToString } from "mdast-util-to-string";
 import type { Root } from "mdast";
 import { openFile } from "@hooks/useMessageHandler";
 import {
@@ -144,6 +146,23 @@ function extractFilePath(href: string): string {
   return href;
 }
 
+/**
+ * Splits a file path that may have a trailing `:line` suffix (e.g.
+ * `src/foo.ts:45`) into the bare path and an optional 1-based line number.
+ * Windows drive letters (C:) are never mistaken because lastIndexOf finds the
+ * *last* colon, and drive colons always sit at index 1.
+ */
+function parseFilePathAndLine(raw: string): { path: string; line?: number } {
+  const colon = raw.lastIndexOf(":");
+  if (colon > 1) {
+    const suffix = raw.slice(colon + 1);
+    if (/^\d+$/.test(suffix)) {
+      return { path: raw.slice(0, colon), line: parseInt(suffix, 10) };
+    }
+  }
+  return { path: raw };
+}
+
 /** Button that opens a local file in VS Code on click. */
 function FileRefButton({
   filePath,
@@ -152,12 +171,14 @@ function FileRefButton({
   filePath: string;
   children?: React.ReactNode;
 }) {
+  const { path, line } = parseFilePathAndLine(filePath);
+  const title = line !== undefined ? `Open ${path}:${line}` : `Open ${path}`;
   return (
     <button
       type="button"
-      className="group text-link-fg inline-flex items-center gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
-      onClick={() => openFile(filePath)}
-      title={`Open ${filePath}`}
+      className="group inline-flex items-center gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
+      onClick={() => openFile(path, line)}
+      title={title}
     >
       <i className="codicon codicon-file text-xxs opacity-70" />
       <span className="group-hover:underline">{children}</span>
@@ -165,10 +186,39 @@ function FileRefButton({
   );
 }
 
+/**
+ * Remark plugin that converts explicit markdown links whose href is a local
+ * file path (Windows absolute, file://, or relative ./) into <file-ref> nodes.
+ *
+ * Without this, rehype-harden intercepts these <a> elements in the HAST
+ * pipeline — before the React `a` component renderer runs — and replaces
+ * them with a <span> suffixed with " [blocked]" because Windows paths like
+ * C:\... fail URL validation. Converting to <file-ref> here bypasses both
+ * rehype-sanitize and rehype-harden entirely.
+ */
+function remarkLocalLinks() {
+  return (tree: Root): undefined => {
+    visit(tree, "link", (node, index, parent) => {
+      if (!parent || typeof index !== "number") return;
+      if (!isLocalFileHref(node.url)) return;
+
+      const filePath = extractFilePath(node.url);
+      const encoded = encodeURIComponent(filePath);
+      const displayText = escapeHtml(mdastToString(node) || filePath);
+
+      (parent.children as typeof parent.children)[index] = {
+        type: "html",
+        value: `<file-ref path="${encoded}">${displayText}</file-ref>`,
+      };
+    });
+  };
+}
+
 // Module-level stable array so Streamdown's memo doesn't see a new reference.
-// Spread streamdown's defaults (remarkGfm) first, then add our file-link plugin.
+// Spread streamdown's defaults (remarkGfm) first, then add our file-link plugins.
 const REMARK_PLUGINS = [
   ...Object.values(defaultRemarkPlugins),
+  remarkLocalLinks,
   remarkFileLinks,
 ];
 

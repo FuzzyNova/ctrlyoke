@@ -2071,5 +2071,9 @@ export function selectPromptForEdit(index: number): void {
  * Open a file in VS Code editor
  */
 export function openFile(path: string, line?: number): void {
-  sendMessage(MESSAGE_TYPES.OPEN_FILE, { path, line });
+  sendMessage(MESSAGE_TYPES.OPEN_FILE, {
+    path,
+    lineStart: line,
+    lineEnd: line,
+  });
 }
