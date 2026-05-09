@@ -4,12 +4,12 @@ FlightPath exposes built-in tools for workflows and chat integrations that need 
 
 ## Built-in tool list
 
-| Tool | Purpose |
-| --- | --- |
-| `flightpath_queue_status` | Return queue metadata and step state |
-| `flightpath_append_queue` | Append prompts to the current queue |
+| Tool                      | Purpose                                         |
+| ------------------------- | ----------------------------------------------- |
+| `flightpath_queue_status` | Return queue metadata and step state            |
+| `flightpath_append_queue` | Append prompts to the current queue             |
 | `flightpath_capabilities` | Return available harnesses and supported models |
-| `flightpath_read_output` | Read output from completed prompts |
+| `flightpath_read_output`  | Read output from completed prompts              |
 
 ## `flightpath_append_queue`
 

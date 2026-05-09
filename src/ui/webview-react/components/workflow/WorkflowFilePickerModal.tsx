@@ -38,9 +38,14 @@ export const WorkflowFilePickerModal: React.FC<
   const [manualPath, setManualPath] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const showHiddenFiles = useSettingsStore((s) => s.globalSettings.showHiddenFiles);
+  const showHiddenFiles = useSettingsStore(
+    (s) => s.globalSettings.showHiddenFiles
+  );
   const showHiddenFilesScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["ui.showHiddenFiles"] === SETTING_SCOPES.WORKSPACE ? SETTING_SCOPES.WORKSPACE : SETTING_SCOPES.USER
+    s.globalSettings.settingSources["ui.showHiddenFiles"] ===
+    SETTING_SCOPES.WORKSPACE
+      ? SETTING_SCOPES.WORKSPACE
+      : SETTING_SCOPES.USER
   );
   const vscode = useVsCodeApi();
 
@@ -89,7 +94,11 @@ export const WorkflowFilePickerModal: React.FC<
     const normalizedQuery = query.trim().toLowerCase();
     return files.filter((file) => {
       if (!showHiddenFiles && hasHiddenSegment(file.relativePath)) return false;
-      if (normalizedQuery && !file.relativePath.toLowerCase().includes(normalizedQuery)) return false;
+      if (
+        normalizedQuery &&
+        !file.relativePath.toLowerCase().includes(normalizedQuery)
+      )
+        return false;
       return true;
     });
   }, [files, query, showHiddenFiles]);
@@ -134,7 +143,14 @@ export const WorkflowFilePickerModal: React.FC<
             </label>
             <button
               type="button"
-              onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path: "ui.showHiddenFiles", value: !showHiddenFiles, scope: showHiddenFilesScope })}
+              onClick={() =>
+                vscode.postMessage({
+                  type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+                  path: "ui.showHiddenFiles",
+                  value: !showHiddenFiles,
+                  scope: showHiddenFilesScope,
+                })
+              }
               className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded transition-colors ${
                 showHiddenFiles
                   ? "text-foreground hover:bg-btn-secondary-hover"

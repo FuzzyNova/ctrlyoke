@@ -32,24 +32,24 @@ finalStep:
 
 ## Root-level fields you will use first
 
-| Field | Purpose |
-| --- | --- |
-| `harness` | Select the harness |
-| `model` | Override the harness model |
-| `steps` | Ordered list of work to run |
-| `finalStep` | Prompt or script that runs after the queue |
-| `vars` | Workflow-level variables for `{{name}}` substitution |
+| Field       | Purpose                                              |
+| ----------- | ---------------------------------------------------- |
+| `harness`   | Select the harness                                   |
+| `model`     | Override the harness model                           |
+| `steps`     | Ordered list of work to run                          |
+| `finalStep` | Prompt or script that runs after the queue           |
+| `vars`      | Workflow-level variables for `{{name}}` substitution |
 
 ## Prompt step fields you will use first
 
-| Field | Purpose |
-| --- | --- |
-| `name` | Human-readable label in the dashboard |
-| `prompt` | Inline prompt text or a path to `.prompt.md`, `.md`, or `.txt` |
-| `resumeSession` | Continue the previous compatible session |
-| `sessionId` | Resume a specific prior step or exact session |
-| `endCondition` | Validate after the step completes |
-| `preCondition` | Gate before the step runs |
+| Field           | Purpose                                                        |
+| --------------- | -------------------------------------------------------------- |
+| `name`          | Human-readable label in the dashboard                          |
+| `prompt`        | Inline prompt text or a path to `.prompt.md`, `.md`, or `.txt` |
+| `resumeSession` | Continue the previous compatible session                       |
+| `sessionId`     | Resume a specific prior step or exact session                  |
+| `endCondition`  | Validate after the step completes                              |
+| `preCondition`  | Gate before the step runs                                      |
 
 ## Script steps
 

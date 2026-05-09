@@ -57,6 +57,7 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 - History is a self-contained snapshot that renders independently of current prompts
 
 **Key methods:**
+
 - `initializeRun(workingFilePath)` / `finalizeRun(state)` — lifecycle for a single execution run
 - `saveExecutionOutput(output, stepIndex)` — writes CLI output events via `TimelineRecorder`
 - `appendStatusMessage(message)` / `appendRuntimeTransition(event)` — appends non-output timeline events
@@ -84,6 +85,7 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 - `getEventsPathFromManifestPath(manifestPath)` — resolves events path from manifest path
 
 **Instance methods:**
+
 - `readManifest(manifestPath)` — reads and parses `manifest.json`
 - `readEvents(manifestPath)` — reads and parses all events from `events.jsonl`
 
@@ -131,7 +133,7 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 3. **Lock file watcher** — detects workflow completion (lock deleted = CLI finished)
    **Heartbeat poll:** 10-second fallback poll to detect stale locks (CLI crash where lock file remains but heartbeat is stale).
    **`onFinished` event** — fired when the lock is deleted or goes stale; `WorkflowOrchestrator` disposes the session on this event.
-**Helper exports:**
+   **Helper exports:**
 
 - `getHistoryRunTimestamp(historyFilePath)` — extracts numeric timestamp from a history file path
 - `getRunEntryNameForHistoryPath(historyFilePath)` — extracts the run entry name from a history file path

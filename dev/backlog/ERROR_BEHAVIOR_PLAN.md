@@ -23,12 +23,12 @@ responds when the **harness itself** fails.
 `errorBehavior` is for harness/session failures only. It does not replace the existing
 step validation or script failure mechanisms.
 
-| Situation | Mechanism | Notes |
-| --- | --- | --- |
-| End condition script returns false | `endCondition` | Existing output validation |
-| Pre-condition script returns false | `preCondition` | Existing pre-run gate |
-| `type: script` step fails | `onFail` | Existing script-step behavior |
-| Harness/session failure | `errorBehavior` | New harness failure policy |
+| Situation                          | Mechanism       | Notes                         |
+| ---------------------------------- | --------------- | ----------------------------- |
+| End condition script returns false | `endCondition`  | Existing output validation    |
+| Pre-condition script returns false | `preCondition`  | Existing pre-run gate         |
+| `type: script` step fails          | `onFail`        | Existing script-step behavior |
+| Harness/session failure            | `errorBehavior` | New harness failure policy    |
 
 Examples of harness/session failures:
 
@@ -56,10 +56,10 @@ steps:
 
 ### `onError`
 
-| Value | Behavior |
-| --- | --- |
-| `stop` | Mark the step failed and stop the workflow. Default behavior. |
-| `retry` | Retry the same step. After retries are exhausted, stop the workflow. |
+| Value      | Behavior                                                                        |
+| ---------- | ------------------------------------------------------------------------------- |
+| `stop`     | Mark the step failed and stop the workflow. Default behavior.                   |
+| `retry`    | Retry the same step. After retries are exhausted, stop the workflow.            |
 | `continue` | Mark the step failed, record the harness failure, and advance to the next step. |
 
 ### TypeScript shape

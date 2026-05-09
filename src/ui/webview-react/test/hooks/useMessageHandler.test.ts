@@ -935,9 +935,7 @@ describe("EXECUTION_STARTED", () => {
     });
 
     expect(useUiStore.getState().outputCollapsed).toBe(false);
-    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
-      "output"
-    );
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe("output");
   });
 
   it("leaves the current view alone when headless auto-focus is disabled", () => {
@@ -1110,9 +1108,7 @@ describe("TERMINAL_STARTED", () => {
     });
 
     expect(useUiStore.getState().outputCollapsed).toBe(true);
-    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe(
-      "output"
-    );
+    expect(useUiStore.getState().activeOutputTabs["workflow-1"]).toBe("output");
   });
 
   it("updates existing session metadata when inject mode reuses the PTY", () => {

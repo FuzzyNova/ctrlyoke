@@ -313,7 +313,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 cacheCreatedTokens:
                   cacheCreationTokens > 0 ? cacheCreationTokens : undefined,
                 contextWindowUsedTokens,
-                contextWindowSize: getClaudeContextWindowSize(model ?? this.resolvedModel),
+                contextWindowSize: getClaudeContextWindowSize(
+                  model ?? this.resolvedModel
+                ),
               }
             : undefined,
         ...(cacheCreationTokens > 0 || cacheReadTokens > 0

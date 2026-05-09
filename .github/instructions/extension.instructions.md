@@ -125,13 +125,13 @@ server.start().catch(() => process.exit(1));
 
 **Tools exposed by `mcp-server.ts` (five tools):**
 
-| Tool ID                      | Operation                                                   |
-| ---------------------------- | ----------------------------------------------------------- |
-| `flightpath_queue_status`    | Read active queue state                                     |
-| `flightpath_append_queue`    | Append steps; resumes execution if queue was completed      |
-| `flightpath_capabilities`    | Return available harnesses and models                       |
-| `flightpath_read_output`     | Read AI response text from completed prompts                |
-| `flightpath_global_status`   | Read status of ALL workflows in the workspace queue (MCP-only — not a LM tool in `extension.ts`) |
+| Tool ID                    | Operation                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------ |
+| `flightpath_queue_status`  | Read active queue state                                                                          |
+| `flightpath_append_queue`  | Append steps; resumes execution if queue was completed                                           |
+| `flightpath_capabilities`  | Return available harnesses and models                                                            |
+| `flightpath_read_output`   | Read AI response text from completed prompts                                                     |
+| `flightpath_global_status` | Read status of ALL workflows in the workspace queue (MCP-only — not a LM tool in `extension.ts`) |
 
 The first four share the same tool IDs as the LM tools registered in `extension.ts`. `flightpath_global_status` is exclusive to the MCP server; it is not registered as a VS Code LM tool.
 

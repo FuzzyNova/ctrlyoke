@@ -32,8 +32,12 @@ describe("WorkspaceCommitArea", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "Push (1)" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pull (2)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Push (1)" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pull (2)" })
+    ).toBeInTheDocument();
   });
 
   it("renders the commit action as a full-width button", () => {
@@ -45,6 +49,8 @@ describe("WorkspaceCommitArea", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "Commit" }).className).toContain("w-full");
+    expect(screen.getByRole("button", { name: "Commit" }).className).toContain(
+      "w-full"
+    );
   });
 });

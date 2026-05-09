@@ -91,7 +91,9 @@ export async function workspaceDiff(
   );
 }
 
-export async function workspaceStage(req: WorkspaceStageRequest): Promise<void> {
+export async function workspaceStage(
+  req: WorkspaceStageRequest
+): Promise<void> {
   return hostedFetch<void>("/api/workspace-viewer/stage", {
     method: "POST",
     body: JSON.stringify(req),

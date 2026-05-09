@@ -32,11 +32,19 @@ function getStatusBadge(file: SourceControlFile): string {
 
 export const WorkspaceSourceControlPane: React.FC = () => {
   const vscode = useVsCodeApi();
-  const sourceControlFiles = useWorkspaceViewerStore((s) => s.sourceControlFiles);
+  const sourceControlFiles = useWorkspaceViewerStore(
+    (s) => s.sourceControlFiles
+  );
   const selectedDiffPath = useWorkspaceViewerStore((s) => s.selectedDiffPath);
-  const sourceControlLoading = useWorkspaceViewerStore((s) => s.sourceControlLoading);
-  const setSourceControlFiles = useWorkspaceViewerStore((s) => s.setSourceControlFiles);
-  const setSourceControlLoading = useWorkspaceViewerStore((s) => s.setSourceControlLoading);
+  const sourceControlLoading = useWorkspaceViewerStore(
+    (s) => s.sourceControlLoading
+  );
+  const setSourceControlFiles = useWorkspaceViewerStore(
+    (s) => s.setSourceControlFiles
+  );
+  const setSourceControlLoading = useWorkspaceViewerStore(
+    (s) => s.setSourceControlLoading
+  );
   const selectDiff = useWorkspaceViewerStore((s) => s.selectDiff);
   const setDiffData = useWorkspaceViewerStore((s) => s.setDiffData);
   const setDiffLoading = useWorkspaceViewerStore((s) => s.setDiffLoading);
@@ -82,7 +90,12 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       if (isMobile) setMobileDiffVisible(true);
       try {
         const result = await workspaceDiff(filePath);
-        setDiffData(result.oldContent, result.newContent, result.language, result.kind);
+        setDiffData(
+          result.oldContent,
+          result.newContent,
+          result.language,
+          result.kind
+        );
       } catch (err) {
         setScmError(String(err));
       } finally {
@@ -99,7 +112,9 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         return;
       }
 
-      const selectedStillExists = files.some((file) => file.path === selectedDiffPath);
+      const selectedStillExists = files.some(
+        (file) => file.path === selectedDiffPath
+      );
       if (!selectedStillExists) {
         if (isMobile) {
           setMobileDiffVisible(false);
@@ -174,7 +189,12 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
       void performDiscard(paths);
     },
-    [confirmDeleteOperations, openDiscardWarning, performDiscard, sourceControlFiles]
+    [
+      confirmDeleteOperations,
+      openDiscardWarning,
+      performDiscard,
+      sourceControlFiles,
+    ]
   );
 
   const handleStageAll = useCallback(async () => {
@@ -254,7 +274,10 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-sm text-editor-fg"
           title={file.path}
         >
-          <span className="flex-shrink-0 text-xs font-mono font-bold" style={badgeStyle}>
+          <span
+            className="flex-shrink-0 text-xs font-mono font-bold"
+            style={badgeStyle}
+          >
             {badge}
           </span>
           <span className="min-w-0 flex-1 truncate text-xs">{file.path}</span>
@@ -427,7 +450,11 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           size="sm"
           footer={
             <>
-              <Button variant="secondary" size="md" onClick={() => setPendingDiscard(null)}>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setPendingDiscard(null)}
+              >
                 Cancel
               </Button>
               <Button variant="danger" size="md" onClick={handleConfirmDiscard}>
@@ -479,7 +506,11 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         size="sm"
         footer={
           <>
-            <Button variant="secondary" size="md" onClick={() => setPendingDiscard(null)}>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setPendingDiscard(null)}
+            >
               Cancel
             </Button>
             <Button variant="danger" size="md" onClick={handleConfirmDiscard}>

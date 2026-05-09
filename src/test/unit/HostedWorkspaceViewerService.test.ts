@@ -29,7 +29,12 @@ suite("HostedWorkspaceViewerService", () => {
     runGit(cwd, "config", "user.email", "flightpath@example.com");
   }
 
-  function commitFile(cwd: string, fileName: string, content: string, message: string): void {
+  function commitFile(
+    cwd: string,
+    fileName: string,
+    content: string,
+    message: string
+  ): void {
     fs.writeFileSync(path.join(cwd, fileName), content);
     runGit(cwd, "add", fileName);
     runGit(cwd, "commit", "-m", message);
@@ -70,10 +75,7 @@ suite("HostedWorkspaceViewerService", () => {
       const kinds = result.entries.map((e) => e.kind);
       const firstDir = kinds.indexOf("directory");
       const firstFile = kinds.indexOf("file");
-      assert.ok(
-        firstDir < firstFile,
-        "directories should appear before files"
-      );
+      assert.ok(firstDir < firstFile, "directories should appear before files");
     });
 
     test("returns empty entries for path traversal attempt", async () => {
@@ -224,10 +226,7 @@ suite("HostedWorkspaceViewerService", () => {
     test("normalises CRLF content to match original EOL", async () => {
       const root = createWorkspace();
       // Original file uses CRLF
-      fs.writeFileSync(
-        path.join(root, "crlf.txt"),
-        "line1\r\nline2\r\n"
-      );
+      fs.writeFileSync(path.join(root, "crlf.txt"), "line1\r\nline2\r\n");
 
       const svc = new HostedWorkspaceViewerService(root);
       // Submit content with mixed or LF endings
@@ -284,7 +283,12 @@ suite("HostedWorkspaceViewerService", () => {
       commitFile(root, "tracked.txt", "one\n", "initial commit");
       runGit(root, "push", "-u", "origin", "HEAD");
 
-      runGit(path.dirname(peerRoot), "clone", remoteRoot, path.basename(peerRoot));
+      runGit(
+        path.dirname(peerRoot),
+        "clone",
+        remoteRoot,
+        path.basename(peerRoot)
+      );
       configureGitIdentity(peerRoot);
       commitFile(peerRoot, "tracked.txt", "two\n", "remote commit");
       runGit(peerRoot, "push", "origin", "HEAD");

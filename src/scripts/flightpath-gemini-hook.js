@@ -30,7 +30,11 @@
 
 const fs = require("fs");
 const path = require("path");
-const { initializeLogger, readStdinJson, maybeWriteHookArtifact } = require("./flightpath-hook-utils");
+const {
+  initializeLogger,
+  readStdinJson,
+  maybeWriteHookArtifact,
+} = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-gemini-hook";
 const SCRIPT_PREFIX = "FlightPath Gemini Hook";
@@ -66,7 +70,10 @@ function main() {
     });
 
     const HANDLED_EVENTS = new Set([
-      "SessionStart", "AfterAgent", "BeforeTool", "AfterTool",
+      "SessionStart",
+      "AfterAgent",
+      "BeforeTool",
+      "AfterTool",
     ]);
 
     if (!HANDLED_EVENTS.has(hookEvent)) {
@@ -79,14 +86,22 @@ function main() {
 
     // Map Gemini-native event → logical event
     const LOGICAL_EVENT_MAP = {
-      "SessionStart": "sessionStart",
-      "AfterAgent": "stop",
-      "BeforeTool": "preToolUse",
-      "AfterTool": "postToolUse",
+      SessionStart: "sessionStart",
+      AfterAgent: "stop",
+      BeforeTool: "preToolUse",
+      AfterTool: "postToolUse",
     };
     const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
-      maybeWriteHookArtifact(logicalEvent, hookEvent, hookInput, notifyDir, sessionId, toolName, debugLog);
+      maybeWriteHookArtifact(
+        logicalEvent,
+        hookEvent,
+        hookInput,
+        notifyDir,
+        sessionId,
+        toolName,
+        debugLog
+      );
     }
 
     // BeforeTool / AfterTool don't need notification files

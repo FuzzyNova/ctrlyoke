@@ -311,7 +311,8 @@ export class CopilotLogParser extends BaseLogParser {
     const effectiveInputTokens =
       contextWindowUsedTokens > 0 ? contextWindowUsedTokens : inputTokens;
     const effectiveContextWindowSize =
-      contextWindowSize ?? getCopilotContextWindowSize(model ?? this.resolvedModel);
+      contextWindowSize ??
+      getCopilotContextWindowSize(model ?? this.resolvedModel);
 
     return {
       events: outputEvents,

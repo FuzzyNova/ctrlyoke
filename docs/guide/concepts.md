@@ -22,9 +22,9 @@ A workflow is a `.flightpath.yaml`, `.flightpath.json`, or `.prompt.md` file tha
 
 A workflow `steps` array can contain two kinds of step:
 
-| Type | Purpose |
-| --- | --- |
-| Prompt step | Sends a prompt to a harness |
+| Type        | Purpose                                         |
+| ----------- | ----------------------------------------------- |
+| Prompt step | Sends a prompt to a harness                     |
 | Script step | Runs a shell command without any AI interaction |
 
 Prompt steps default to type `prompt`, so the `type` field is optional unless you want to be explicit.
@@ -50,14 +50,14 @@ Session reuse is provider-aware. FlightPath does not try to resume a Claude sess
 
 Prompts can include structured references that the prompt editor understands:
 
-| Syntax | Purpose |
-| --- | --- |
-| `@path/to/file.ts` | Attach a full file |
-| `@path/to/dir/` | Attach a directory tree |
-| `#selection:path/to/file.ts:10-25` | Attach a line range |
-| `#sym:path/to/file.ts:SymbolName:42` | Attach a symbol definition |
-| `~diff`, `~staged`, `~stash:0`, `~<commit>` | Attach git change context |
-| `$previous`, `$all`, `$step:1` | Inject prior FlightPath output |
+| Syntax                                      | Purpose                        |
+| ------------------------------------------- | ------------------------------ |
+| `@path/to/file.ts`                          | Attach a full file             |
+| `@path/to/dir/`                             | Attach a directory tree        |
+| `#selection:path/to/file.ts:10-25`          | Attach a line range            |
+| `#sym:path/to/file.ts:SymbolName:42`        | Attach a symbol definition     |
+| `~diff`, `~staged`, `~stash:0`, `~<commit>` | Attach git change context      |
+| `$previous`, `$all`, `$step:1`              | Inject prior FlightPath output |
 
 ## End conditions and pre-conditions
 

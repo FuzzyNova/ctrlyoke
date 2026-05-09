@@ -130,7 +130,12 @@ export class CodexToolBuilder {
       ];
     }
 
-    return BaseToolBuilder.buildInitiatedEvents(toolName, params, callId, timestamp);
+    return BaseToolBuilder.buildInitiatedEvents(
+      toolName,
+      params,
+      callId,
+      timestamp
+    );
   }
 
   /**
@@ -197,8 +202,8 @@ export class CodexToolBuilder {
             timestamp,
             data: {
               command:
-                (primaryInitiatedData as BashCommandData | undefined)?.command ??
-                "",
+                (primaryInitiatedData as BashCommandData | undefined)
+                  ?.command ?? "",
               exitCode: exitCode ?? 0,
               output: outputText,
               error: success ? undefined : outputText,
@@ -213,7 +218,8 @@ export class CodexToolBuilder {
             type: CLI_EVENT_TYPES.FILE_READ,
             timestamp,
             data: {
-              path: (primaryInitiatedData as FileReadData | undefined)?.path ?? "",
+              path:
+                (primaryInitiatedData as FileReadData | undefined)?.path ?? "",
               content: outputText,
               status,
               success,
@@ -227,7 +233,8 @@ export class CodexToolBuilder {
             type: CLI_EVENT_TYPES.FILE_WRITE,
             timestamp,
             data: {
-              path: (primaryInitiatedData as FileWriteData | undefined)?.path ?? "",
+              path:
+                (primaryInitiatedData as FileWriteData | undefined)?.path ?? "",
               content:
                 (primaryInitiatedData as FileWriteData | undefined)?.content ??
                 "",
@@ -244,7 +251,8 @@ export class CodexToolBuilder {
             timestamp,
             data: {
               path:
-                (primaryInitiatedData as FileDeleteData | undefined)?.path ?? "",
+                (primaryInitiatedData as FileDeleteData | undefined)?.path ??
+                "",
               status,
               success,
             } as FileDeleteData,
@@ -579,9 +587,7 @@ export class CodexToolBuilder {
           continue;
         }
 
-        hunk.lines.push(
-          " " + line.substring(line.startsWith(" ") ? 1 : 0)
-        );
+        hunk.lines.push(" " + line.substring(line.startsWith(" ") ? 1 : 0));
         hunk.oldLines++;
         hunk.newLines++;
         oldLineNum++;

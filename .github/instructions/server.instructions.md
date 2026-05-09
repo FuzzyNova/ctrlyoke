@@ -34,14 +34,16 @@ constructor(
 `dispose()` calls `hub.removeClient(this)`, clears the heartbeat interval, closes all WebSocket connections, the WSS, and the HTTP server.
 
 **Supporting services** (instantiated in constructor):
+
 - `WebPushService` — manages VAPID keys and push subscriptions persisted under `.flightpath/notifications/`
 - `HostedWorkspaceViewerService` — workspace-scoped file read/write and git operations for the browser editor
 - `PngIconService` (singleton `pngIconService`) — renders SVG icons to PNG (180×180 and 512×512) via `@resvg/resvg-wasm`
 
 **Supporting modules:**
+
 - `HostedServerMessageFactory.ts` — `createHostedHarnessStatusUpdate()` builds harness status messages used by `notifyHarnessAvailability`
 - `HostedServiceWorkerScript.ts` — `buildHostedServiceWorkerScript()` injects `DashboardConstants` placeholders into `flightpath-service-worker.js` at request time
-</architecture>
+  </architecture>
 
 <security>
 All API routes and the HTML entry point require authentication. Static assets (JS/CSS/fonts, shim, service worker, icons) are served without a token because the browser fetches them without query params after loading the entry HTML.
@@ -118,12 +120,13 @@ Routes are registered in this order (first match wins):
 5. Injects `class`, `data-aff-uri`, `data-dic-uri`, `data-logo-uri` on `<body>`; class is `vscode-dark`/`vscode-light`/`vscode-high-contrast` derived from cached theme vars
 6. Replaces the VS Code CSP `<meta>` with a browser-compatible policy; `connect-src` allows the request host's WebSocket URL plus localhost loopback forms
 7. Before `</head>`: injects theme `<style>` block (`:root { ... }`), PWA icon `<link>` tags with cache-busting color params, `<link rel="manifest">` with token, `<script src="/standalone-shim.js">`
-</httpRoutes>
+   </httpRoutes>
 
 <websocketProtocol>
 WebSocket endpoint: `ws://localhost:{port}/ws?token={token}` (path `/ws`).
 
 **On connection:**
+
 1. Token validated — closes with code 4401 if invalid
 2. Client added to `this.connections` and `socketLiveness` WeakMap
 3. `clientTag` assigned as `"browser:N"` (incremented per connection)
@@ -141,6 +144,7 @@ WebSocket endpoint: `ws://localhost:{port}/ws?token={token}` (path `/ws`).
 `standalone-shim.js` is a self-executing browser script injected into every page. It replaces `acquireVsCodeApi()` with a WebSocket bridge.
 
 **What it does:**
+
 - Generates a stable per-tab ID (`fpTabId`) in `sessionStorage`; state persisted to `localStorage` under `fpState-{tabId}` (tabs are independent)
 - Opens `ws://{location.host}/ws?token={token}` (token extracted from current URL)
 - Queues outbound messages until socket is open; reconnects without reloading; flushes queue after reconnect
@@ -170,6 +174,7 @@ webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
 server.dispose();
 webviewProvider.setRunningServerUrl(undefined);
 webviewProvider.setThemeVarsCapturedCallback(undefined);
+
 ```
 
 `listen()` is async and returns the full public URL including token. If the configured port is in use, it retries with port `0` (OS-assigned). Binds to `bindAddress` (default `127.0.0.1`). When `bindAddress === "0.0.0.0"`, `getAvailableIps()` returns non-loopback IPv4 addresses for LAN display.
@@ -198,3 +203,4 @@ webviewProvider.setThemeVarsCapturedCallback(undefined);
 - `src/types/IconColorDefaults.ts` — `ICON_BG_COLOR_DEFAULT`, `ICON_FG_COLOR_DEFAULT`
 - `src/ui/webview-react/` — the React app being served (Vite output in `out/ui/webview-react/`)
 </relatedFiles>
+```

@@ -1397,8 +1397,12 @@ suite("CodexLogParser", () => {
         completedFileEditEvents.map((event) => (event.data as any).status),
         ["completed", "completed"]
       );
-      assert.ok((completedFileEditEvents[0].data as any).structuredPatch?.length);
-      assert.ok((completedFileEditEvents[1].data as any).structuredPatch?.length);
+      assert.ok(
+        (completedFileEditEvents[0].data as any).structuredPatch?.length
+      );
+      assert.ok(
+        (completedFileEditEvents[1].data as any).structuredPatch?.length
+      );
     });
   });
 

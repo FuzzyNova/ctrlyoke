@@ -152,10 +152,7 @@ export class CodexLogParser extends BaseLogParser {
    * Key: call_id, Value: tool metadata plus the initiated event so completion
    * events can preserve path and diff data that Codex omits from tool output.
    */
-  private toolCallMap: Map<
-    string,
-    CodexTrackedToolCall
-  > = new Map();
+  private toolCallMap: Map<string, CodexTrackedToolCall> = new Map();
 
   /**
    * Streaming-path tool call tracking map
@@ -163,10 +160,7 @@ export class CodexLogParser extends BaseLogParser {
    * Parallel to toolCallMap but exclusively used by extractStructuredEventsFromEvent
    * so that streaming state never contaminates extractResponse()'s toolCallMap.
    */
-  private pendingStreamingCalls: Map<
-    string,
-    CodexTrackedToolCall
-  > = new Map();
+  private pendingStreamingCalls: Map<string, CodexTrackedToolCall> = new Map();
 
   /**
    * Extract complete response from Codex log events
@@ -297,12 +291,13 @@ export class CodexLogParser extends BaseLogParser {
               const toolName = item.name?.toLowerCase() || "";
               const params = (item.input || {}) as Record<string, unknown>;
               const callId = item.id as string | undefined;
-              const eventsForTool = CodexToolBuilder.buildLogToolInitiatedEvents(
-                toolName,
-                params,
-                callId,
-                timestamp
-              );
+              const eventsForTool =
+                CodexToolBuilder.buildLogToolInitiatedEvents(
+                  toolName,
+                  params,
+                  callId,
+                  timestamp
+                );
               if (
                 callId &&
                 eventsForTool.length > 0 &&

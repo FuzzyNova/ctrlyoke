@@ -17,6 +17,11 @@ export class GeminiToolBuilder {
     toolId: string | undefined,
     timestamp: number
   ): CliEvent[] {
-    return BaseToolBuilder.buildInitiatedEvents(toolName, input, toolId, timestamp);
+    return BaseToolBuilder.buildInitiatedEvents(
+      toolName,
+      input,
+      toolId,
+      timestamp
+    );
   }
 }

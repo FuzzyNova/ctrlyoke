@@ -80,7 +80,8 @@ export const HEADER_BUTTON_SIZES = {
   },
   /** Mobile / touch: height controlled by --fp-touch-target in globals.css */
   touch: {
-    iconButton: "h-[var(--fp-touch-target)] min-w-[var(--fp-touch-target)] px-2 text-sm",
+    iconButton:
+      "h-[var(--fp-touch-target)] min-w-[var(--fp-touch-target)] px-2 text-sm",
     groupContainer: "h-[var(--fp-touch-target)]",
     splitButtonMain: "h-full px-2 sm:px-3 text-sm",
     splitButtonDropdown:

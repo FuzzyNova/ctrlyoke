@@ -42,8 +42,8 @@ const SCRIPT_NAME = "flightpath-claude-hook";
 const SCRIPT_PREFIX = "FlightPath Claude Hook";
 
 function main() {
-const notifyDir = process.argv[2];
-const encodedDecisionHook = process.argv[3];
+  const notifyDir = process.argv[2];
+  const encodedDecisionHook = process.argv[3];
   const debugLog = initializeLogger(SCRIPT_NAME, notifyDir);
 
   debugLog("🚀 Claude hook script invoked", {
@@ -73,8 +73,12 @@ const encodedDecisionHook = process.argv[3];
     });
 
     const HANDLED_EVENTS = new Set([
-      "SessionStart", "Stop",
-      "PreToolUse", "PostToolUse", "UserPromptSubmit", "PermissionRequest",
+      "SessionStart",
+      "Stop",
+      "PreToolUse",
+      "PostToolUse",
+      "UserPromptSubmit",
+      "PermissionRequest",
     ]);
 
     if (!HANDLED_EVENTS.has(hookEvent)) {
@@ -89,16 +93,24 @@ const encodedDecisionHook = process.argv[3];
     // permissionRequest — before any stdout/notify file activity.
     // NOTE: PermissionRequest is a decision hook — we must NOT produce stdout.
     const LOGICAL_EVENT_MAP = {
-      "PreToolUse": "preToolUse",
-      "PostToolUse": "postToolUse",
-      "UserPromptSubmit": "userPromptSubmit",
-      "PermissionRequest": "permissionRequest",
-      "Stop": "stop",
-      "SessionStart": "sessionStart",
+      PreToolUse: "preToolUse",
+      PostToolUse: "postToolUse",
+      UserPromptSubmit: "userPromptSubmit",
+      PermissionRequest: "permissionRequest",
+      Stop: "stop",
+      SessionStart: "sessionStart",
     };
     const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
-      maybeWriteHookArtifact(logicalEvent, hookEvent, hookInput, notifyDir, sessionId, toolName, debugLog);
+      maybeWriteHookArtifact(
+        logicalEvent,
+        hookEvent,
+        hookInput,
+        notifyDir,
+        sessionId,
+        toolName,
+        debugLog
+      );
     }
 
     if (hookEvent === "PermissionRequest") {
@@ -120,8 +132,11 @@ const encodedDecisionHook = process.argv[3];
     }
 
     // Events that don't need notification file I/O
-    if (hookEvent === "PreToolUse" || hookEvent === "PostToolUse" ||
-        hookEvent === "UserPromptSubmit") {
+    if (
+      hookEvent === "PreToolUse" ||
+      hookEvent === "PostToolUse" ||
+      hookEvent === "UserPromptSubmit"
+    ) {
       debugLog(`✅ Hook ${hookEvent} completed`);
       process.exit(0);
     }

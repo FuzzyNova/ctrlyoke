@@ -8,17 +8,17 @@ description: >-
   content before sending to the AI.
 oneOf:
   - title: Single Step
-    $ref: '#/definitions/workflowStep'
+    $ref: "#/definitions/workflowStep"
   - title: Multiple Steps (or Working File)
     allOf:
-      - $ref: '#/definitions/executionProperties'
+      - $ref: "#/definitions/executionProperties"
       - properties:
           steps:
             type: array
             items:
-              $ref: '#/definitions/workflowStep'
+              $ref: "#/definitions/workflowStep"
           finalStep:
-            $ref: '#/definitions/workflowStep'
+            $ref: "#/definitions/workflowStep"
             description: >-
               A step that always runs after all queued prompts complete. Can be an AI prompt or a
               script step. If mcpServers includes "flightpath" and the finalStep appends prompts,
@@ -33,7 +33,7 @@ oneOf:
             type: number
             description: Timestamp when workflow started (working files only)
           _runtime:
-            $ref: '#/definitions/runtimeMetadata'
+            $ref: "#/definitions/runtimeMetadata"
           vars:
             type: object
             description: >-
@@ -117,7 +117,7 @@ definitions:
         oneOf:
           - type: string
             pattern: ^[a-zA-Z0-9-_]+$
-          - type: 'null'
+          - type: "null"
         description: >-
           Custom agent to use for this prompt. Specify ONLY the agent name without file extensions
           (e.g., 'flightpath-orchestrator' for file 'flightpath-orchestrator.agent.md'). The agent's
@@ -141,9 +141,9 @@ definitions:
                   description: >-
                     A well-known MCP server ID (e.g., "flightpath" to enable dynamic queue
                     extension).
-                - $ref: '#/definitions/mcpServerConfig'
+                - $ref: "#/definitions/mcpServerConfig"
             description: MCP servers to attach. Include "flightpath" to enable dynamic queue extension.
-          - type: 'null'
+          - type: "null"
             description: Explicitly disable inherited MCP servers.
         description: >-
           MCP servers to attach to the harness for this prompt/workflow. Include "flightpath" to
@@ -153,11 +153,11 @@ definitions:
         oneOf:
           - type: array
             items:
-              $ref: '#/definitions/userHookConfig'
+              $ref: "#/definitions/userHookConfig"
             description: >-
               User-defined hooks. Per-event override: events present replace the tier below for that
               event; absent events inherit.
-          - type: 'null'
+          - type: "null"
             description: Explicitly disables all hooks for this prompt/workflow.
         description: >-
           User-defined hooks run alongside FlightPath's completion-detection hooks. Supported events
@@ -180,7 +180,7 @@ definitions:
             items:
               type: string
               pattern: ^[a-zA-Z0-9-_]+$
-          - type: 'null'
+          - type: "null"
         description: >-
           List of skill names to attach to this prompt. Only the skill frontmatter is attached
           (progressive disclosure) — the harness reads the full SKILL.md when using the skill.
@@ -189,16 +189,16 @@ definitions:
           disable inherited skills.
       endCondition:
         oneOf:
-          - $ref: '#/definitions/endCondition'
-          - type: 'null'
+          - $ref: "#/definitions/endCondition"
+          - type: "null"
         description: >-
           End condition validation to run after this prompt completes. Use null to explicitly
           disable end condition inheritance from the workflow level (even if the workflow defines
           one). Omitting this field inherits the workflow-level end condition (if any).
       preCondition:
         oneOf:
-          - $ref: '#/definitions/preCondition'
-          - type: 'null'
+          - $ref: "#/definitions/preCondition"
+          - type: "null"
         description: >-
           Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or
           stop the workflow. When set at workflow level, all prompts inherit it unless overridden.
@@ -235,7 +235,7 @@ definitions:
       additionalArgs:
         oneOf:
           - type: string
-          - type: 'null'
+          - type: "null"
         description: >-
           Additional CLI flags appended to FlightPath's standard argument set. FlightPath continues
           to manage model, permissions, workspace dirs, and session flags normally. Tokens are
@@ -279,7 +279,7 @@ definitions:
                   Tool patterns to deny (takes precedence over allow list). Ignored by Codex,
                   OpenCode, and Gemini (mode-only harnesses).
             additionalProperties: false
-          - type: 'null'
+          - type: "null"
         description: >-
           Tool permission overrides for this prompt/workflow. Use null to explicitly disable
           inherited overrides and fall back to global VS Code settings. Set mode to 'passthrough' to
@@ -287,12 +287,12 @@ definitions:
           configuration.
   workflowStep:
     oneOf:
-      - $ref: '#/definitions/promptStep'
-      - $ref: '#/definitions/scriptStep'
+      - $ref: "#/definitions/promptStep"
+      - $ref: "#/definitions/scriptStep"
   promptStep:
     type: object
     allOf:
-      - $ref: '#/definitions/executionProperties'
+      - $ref: "#/definitions/executionProperties"
       - properties:
           type:
             type: string
@@ -317,7 +317,7 @@ definitions:
               to the prompt file's directory, then workspace root, then .flightpath directory.
               Absolute paths are also supported.
           _runtime:
-            $ref: '#/definitions/promptRuntimeMetadata'
+            $ref: "#/definitions/promptRuntimeMetadata"
             description: Per-prompt runtime execution metadata (optional, added automatically during execution)
         required:
           - prompt
@@ -373,7 +373,7 @@ definitions:
           What to do when the script fails or returns is not matched. 'continue': log a warning and
           advance the queue. 'stopWorkflow': halt execution (default).
       _runtime:
-        $ref: '#/definitions/promptRuntimeMetadata'
+        $ref: "#/definitions/promptRuntimeMetadata"
         description: Per-step runtime execution metadata (optional, added automatically during execution)
     required:
       - type
@@ -485,7 +485,7 @@ definitions:
       Script gate that runs before the prompt. Determines whether to run the prompt, skip it, or
       stop the workflow.
     allOf:
-      - $ref: '#/definitions/scriptProperties'
+      - $ref: "#/definitions/scriptProperties"
     properties:
       onPass:
         type: string
@@ -515,7 +515,7 @@ definitions:
     type: object
     description: Per-prompt runtime execution metadata (optional, added automatically during execution)
     allOf:
-      - $ref: '#/definitions/executionProperties'
+      - $ref: "#/definitions/executionProperties"
       - properties:
           startedAt:
             type: number
@@ -665,7 +665,7 @@ definitions:
           - type: array
             items:
               type: string
-        description: 'Tools to auto-approve: true = all tools, string[] = specific tools'
+        description: "Tools to auto-approve: true = all tools, string[] = specific tools"
       url:
         type: string
         description: Remote endpoint URL for streamable-http or SSE servers (e.g. "https://mcp.example.com")

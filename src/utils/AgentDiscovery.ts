@@ -8,7 +8,11 @@ import {
   getHarnessAgentDirs,
   getFlightPathAgentDir,
 } from "./HarnessDirectoryUtils";
-import { HARNESS_IDS, DISCOVERY_SOURCES, type DiscoverySource } from "../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  DISCOVERY_SOURCES,
+  type DiscoverySource,
+} from "../types/DashboardConstants";
 
 /**
  * Represents a discovered agent file
@@ -117,7 +121,10 @@ export class AgentDiscovery {
 
     const results: AgentInfo[] = [];
     for (const dir of dirs) {
-      const agents = await this.discoverAgentsInDirectory(dir, DISCOVERY_SOURCES.USER);
+      const agents = await this.discoverAgentsInDirectory(
+        dir,
+        DISCOVERY_SOURCES.USER
+      );
       results.push(...agents);
     }
     return results;

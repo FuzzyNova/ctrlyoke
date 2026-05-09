@@ -6,7 +6,10 @@ import type { TerminalSession } from "@store/terminalStore";
 import { getShellCodiconName } from "@utils/terminalPresentation";
 
 interface TerminalSessionIconProps {
-  session: Pick<TerminalSession, "harnessId" | "shellKind" | "status" | "stepName">;
+  session: Pick<
+    TerminalSession,
+    "harnessId" | "shellKind" | "status" | "stepName"
+  >;
 }
 
 export const TerminalSessionIcon: React.FC<TerminalSessionIconProps> = ({

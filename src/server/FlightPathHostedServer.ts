@@ -903,8 +903,10 @@ export class FlightPathHostedServer
     // favicon/icon resources aggressively and often ignore Cache-Control headers) pick up the
     // new icon as soon as colors change. The server-side route ignores these params — they exist
     // solely to bust the browser's icon cache. PNG icons are static and need no versioning.
-    const { iconBgColor = ICON_BG_COLOR_DEFAULT, iconFgColor = ICON_FG_COLOR_DEFAULT } =
-      configService.getAll().server;
+    const {
+      iconBgColor = ICON_BG_COLOR_DEFAULT,
+      iconFgColor = ICON_FG_COLOR_DEFAULT,
+    } = configService.getAll().server;
     const iconColorParam = `?bg=${iconBgColor.replace("#", "")}&fg=${iconFgColor.replace("#", "")}`;
     const hostedIconLinks = [
       // sizes="any" signals this is a scalable SVG — browsers that support SVG will prefer it
@@ -940,8 +942,10 @@ export class FlightPathHostedServer
 
   private serveColorizedSvg(svgPath: string, res: express.Response): void {
     try {
-      const { iconBgColor = ICON_BG_COLOR_DEFAULT, iconFgColor = ICON_FG_COLOR_DEFAULT } =
-        configService.getAll().server;
+      const {
+        iconBgColor = ICON_BG_COLOR_DEFAULT,
+        iconFgColor = ICON_FG_COLOR_DEFAULT,
+      } = configService.getAll().server;
       const svg = fs
         .readFileSync(svgPath, "utf8")
         .replace(new RegExp(ICON_BG_COLOR_DEFAULT, "gi"), iconBgColor)
@@ -959,8 +963,10 @@ export class FlightPathHostedServer
     res: express.Response
   ): Promise<void> {
     try {
-      const { iconBgColor = ICON_BG_COLOR_DEFAULT, iconFgColor = ICON_FG_COLOR_DEFAULT } =
-        configService.getAll().server;
+      const {
+        iconBgColor = ICON_BG_COLOR_DEFAULT,
+        iconFgColor = ICON_FG_COLOR_DEFAULT,
+      } = configService.getAll().server;
       const buffer =
         size === "small"
           ? await pngIconService.getSmall(svgPath, iconBgColor, iconFgColor)
@@ -985,8 +991,10 @@ export class FlightPathHostedServer
   }
 
   private buildManifest(): Record<string, unknown> {
-    const { iconBgColor = ICON_BG_COLOR_DEFAULT, iconFgColor = ICON_FG_COLOR_DEFAULT } =
-      configService.getAll().server;
+    const {
+      iconBgColor = ICON_BG_COLOR_DEFAULT,
+      iconFgColor = ICON_FG_COLOR_DEFAULT,
+    } = configService.getAll().server;
     const iconColorParam = `?bg=${iconBgColor.replace("#", "")}&fg=${iconFgColor.replace("#", "")}`;
     return {
       name: "FlightPath",

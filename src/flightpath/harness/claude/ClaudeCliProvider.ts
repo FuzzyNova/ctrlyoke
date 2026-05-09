@@ -293,7 +293,13 @@ export class ClaudeCliProvider implements ICliProvider {
       notifyDir,
       workspaceRoot,
       userHooks,
-      [...new Set<HookEvent>(["sessionStart", "stop", ...enabledNotificationHookEvents])]
+      [
+        ...new Set<HookEvent>([
+          "sessionStart",
+          "stop",
+          ...enabledNotificationHookEvents,
+        ]),
+      ]
     );
     if (hookConfig.type !== "json-string") {
       throw new Error("Unexpected hook config type for Claude CLI");

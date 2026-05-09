@@ -82,7 +82,9 @@ export class HookEventMonitor {
           this.opts.onEvent(event);
         }
       } catch (err) {
-        Log.debug(`[HookEventMonitor] failed to build event for ${file}: ${err}`);
+        Log.debug(
+          `[HookEventMonitor] failed to build event for ${file}: ${err}`
+        );
       }
     }
   }

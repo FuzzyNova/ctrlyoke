@@ -77,7 +77,13 @@ export class ClaudeToolBuilder {
       }));
     }
 
-    return BaseToolBuilder.buildInitiatedEvents(toolName, input, toolId, timestamp, ct);
+    return BaseToolBuilder.buildInitiatedEvents(
+      toolName,
+      input,
+      toolId,
+      timestamp,
+      ct
+    );
   }
 
   // ── TOOL RESULTS ───────────────────────────────────────────────────────────

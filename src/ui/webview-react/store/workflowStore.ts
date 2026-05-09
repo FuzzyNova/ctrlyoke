@@ -16,10 +16,7 @@ import {
 } from "../types/messages";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
-import {
-  isWorkflowRunning,
-  isWorkflowActive,
-} from "../utils/status";
+import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
 
 /**
  * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptStep

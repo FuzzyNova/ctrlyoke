@@ -52,8 +52,14 @@ export default defineConfig({
             { text: "Overview", link: "/workflows/" },
             { text: "YAML format", link: "/workflows/yaml-format" },
             { text: "JSON format", link: "/workflows/json-format" },
-            { text: "Prompt Markdown format", link: "/workflows/prompt-md-format" },
-            { text: "Session management", link: "/workflows/session-management" },
+            {
+              text: "Prompt Markdown format",
+              link: "/workflows/prompt-md-format",
+            },
+            {
+              text: "Session management",
+              link: "/workflows/session-management",
+            },
             { text: "Context references", link: "/workflows/context-files" },
             { text: "Agents and skills", link: "/workflows/agents-and-skills" },
             { text: "End conditions", link: "/workflows/end-conditions" },

@@ -230,7 +230,10 @@ export const useWorkspaceViewerStore = create<
   },
 
   setFileReadOnly(readOnly, reason) {
-    set({ fileReadOnly: readOnly, fileReadOnlyReason: readOnly ? reason : undefined });
+    set({
+      fileReadOnly: readOnly,
+      fileReadOnlyReason: readOnly ? reason : undefined,
+    });
   },
 
   clearFile() {
@@ -271,7 +274,8 @@ export const useWorkspaceViewerStore = create<
   setSourceControlFiles(files) {
     const selectedDiffPath = get().selectedDiffPath;
     const selectedStillExists =
-      selectedDiffPath !== null && files.some((file) => file.path === selectedDiffPath);
+      selectedDiffPath !== null &&
+      files.some((file) => file.path === selectedDiffPath);
 
     set({
       sourceControlFiles: files,

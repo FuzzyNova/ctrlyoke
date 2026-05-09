@@ -32,6 +32,11 @@ export class QwenToolBuilder {
     toolCallId: string,
     timestamp: number
   ): CliEvent[] {
-    return BaseToolBuilder.buildInitiatedEvents(toolName, toolInput, toolCallId, timestamp);
+    return BaseToolBuilder.buildInitiatedEvents(
+      toolName,
+      toolInput,
+      toolCallId,
+      timestamp
+    );
   }
 }

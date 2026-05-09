@@ -50,20 +50,27 @@ export function FlyoutActionDropdown({
   const [levelTwoTop, setLevelTwoTop] = useState<number>(0);
   const [levelTwoLeft, setLevelTwoLeft] = useState<number>(0);
   const [levelTwoMaxHeight, setLevelTwoMaxHeight] = useState<number>(400);
-  const [levelTwoMaxWidth, setLevelTwoMaxWidth] = useState<number>(LEVEL_TWO_MIN_WIDTH);
+  const [levelTwoMaxWidth, setLevelTwoMaxWidth] =
+    useState<number>(LEVEL_TWO_MIN_WIDTH);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const levelOneDropdownRef = useRef<HTMLDivElement>(null);
   const levelTwoDropdownRef = useRef<HTMLDivElement>(null);
   const activeGroupButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const levelOneRawPosition = useDropdownPortalPosition(buttonRef, isLevelOneOpen);
+  const levelOneRawPosition = useDropdownPortalPosition(
+    buttonRef,
+    isLevelOneOpen
+  );
   const levelOnePopupPosition = levelOneRawPosition
     ? (() => {
         const constrained = constrainPopupToViewport({
           left: levelOneRawPosition.left,
           width: levelOneRawPosition.width,
-          minWidth: Math.max(levelOneRawPosition.width ?? 0, LEVEL_ONE_MIN_WIDTH),
+          minWidth: Math.max(
+            levelOneRawPosition.width ?? 0,
+            LEVEL_ONE_MIN_WIDTH
+          ),
           preferredWidth: LEVEL_ONE_MIN_WIDTH,
         });
         return {
@@ -88,28 +95,31 @@ export function FlyoutActionDropdown({
     closeAll
   );
 
-  const updateLevelTwoPosition = useCallback((groupButton: HTMLButtonElement) => {
-    const rowRect = groupButton.getBoundingClientRect();
-    const levelOneDropdownElement = levelOneDropdownRef.current;
-    if (!levelOneDropdownElement) return;
+  const updateLevelTwoPosition = useCallback(
+    (groupButton: HTMLButtonElement) => {
+      const rowRect = groupButton.getBoundingClientRect();
+      const levelOneDropdownElement = levelOneDropdownRef.current;
+      if (!levelOneDropdownElement) return;
 
-    const levelOneRect = levelOneDropdownElement.getBoundingClientRect();
-    const leftCandidate = levelOneRect.right + 4;
-    const preferredLeft =
-      leftCandidate + LEVEL_TWO_MIN_WIDTH > window.innerWidth
-        ? levelOneRect.left - LEVEL_TWO_MIN_WIDTH - 4
-        : leftCandidate;
-    const constrained = constrainPopupToViewport({
-      left: preferredLeft,
-      minWidth: LEVEL_TWO_MIN_WIDTH,
-      preferredWidth: LEVEL_TWO_MIN_WIDTH,
-    });
+      const levelOneRect = levelOneDropdownElement.getBoundingClientRect();
+      const leftCandidate = levelOneRect.right + 4;
+      const preferredLeft =
+        leftCandidate + LEVEL_TWO_MIN_WIDTH > window.innerWidth
+          ? levelOneRect.left - LEVEL_TWO_MIN_WIDTH - 4
+          : leftCandidate;
+      const constrained = constrainPopupToViewport({
+        left: preferredLeft,
+        minWidth: LEVEL_TWO_MIN_WIDTH,
+        preferredWidth: LEVEL_TWO_MIN_WIDTH,
+      });
 
-    setLevelTwoTop(rowRect.top);
-    setLevelTwoLeft(constrained.left);
-    setLevelTwoMaxWidth(constrained.maxWidth);
-    setLevelTwoMaxHeight(Math.max(0, window.innerHeight - rowRect.top - 8));
-  }, []);
+      setLevelTwoTop(rowRect.top);
+      setLevelTwoLeft(constrained.left);
+      setLevelTwoMaxWidth(constrained.maxWidth);
+      setLevelTwoMaxHeight(Math.max(0, window.innerHeight - rowRect.top - 8));
+    },
+    []
+  );
 
   const handleTrigger = () => {
     setIsLevelOneOpen((previousIsLevelOneOpen) => {
@@ -146,7 +156,11 @@ export function FlyoutActionDropdown({
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? null;
 
   useEffect(() => {
-    if (!isLevelOneOpen || activeGroupId === null || !activeGroupButtonRef.current) {
+    if (
+      !isLevelOneOpen ||
+      activeGroupId === null ||
+      !activeGroupButtonRef.current
+    ) {
       return;
     }
 
@@ -174,7 +188,9 @@ export function FlyoutActionDropdown({
         className="flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
       >
         <span className="truncate">{label}</span>
-        <i className={`codicon codicon-chevron-${isLevelOneOpen ? "up" : "down"} text-[10px]`} />
+        <i
+          className={`codicon codicon-chevron-${isLevelOneOpen ? "up" : "down"} text-[10px]`}
+        />
       </button>
 
       {/* Level 1 — group headers */}

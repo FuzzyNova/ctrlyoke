@@ -17,27 +17,27 @@ flightpath run my-workflow.flightpath.yaml
 
 ### Important options
 
-| Option | Meaning |
-| --- | --- |
-| `-H, --harness <harness>` | Harness override |
-| `-m, --model <model>` | Model override |
-| `-d, --cwd <path>` | Working directory |
-| `-t, --timeout <seconds>` | Overall prompt timeout |
-| `--script-timeout <seconds>` | End-condition script timeout |
-| `--headless` | Force headless mode |
-| `--interactive` | Force interactive mode |
-| `--allow-tool <pattern>` | Allow tool pattern |
-| `--deny-tool <pattern>` | Deny tool pattern |
-| `--allow-all-tools` | Dangerously allow all tools |
-| `--add-dir <path>` | Add an allowed directory |
-| `--var key=value` | Set a substitution variable |
-| `-p, --prompt <text>` | Inline prompt instead of a file |
-| `--resume <session-id>` | Resume a session |
-| `--new-session` | Ignore resume behavior and start fresh |
-| `--json` | Emit JSON output |
-| `-q, --quiet` | Only print errors |
-| `--verbose` | Enable debug output |
-| `--no-color` | Disable colored output |
+| Option                       | Meaning                                |
+| ---------------------------- | -------------------------------------- |
+| `-H, --harness <harness>`    | Harness override                       |
+| `-m, --model <model>`        | Model override                         |
+| `-d, --cwd <path>`           | Working directory                      |
+| `-t, --timeout <seconds>`    | Overall prompt timeout                 |
+| `--script-timeout <seconds>` | End-condition script timeout           |
+| `--headless`                 | Force headless mode                    |
+| `--interactive`              | Force interactive mode                 |
+| `--allow-tool <pattern>`     | Allow tool pattern                     |
+| `--deny-tool <pattern>`      | Deny tool pattern                      |
+| `--allow-all-tools`          | Dangerously allow all tools            |
+| `--add-dir <path>`           | Add an allowed directory               |
+| `--var key=value`            | Set a substitution variable            |
+| `-p, --prompt <text>`        | Inline prompt instead of a file        |
+| `--resume <session-id>`      | Resume a session                       |
+| `--new-session`              | Ignore resume behavior and start fresh |
+| `--json`                     | Emit JSON output                       |
+| `-q, --quiet`                | Only print errors                      |
+| `--verbose`                  | Enable debug output                    |
+| `--no-color`                 | Disable colored output                 |
 
 ### Examples
 

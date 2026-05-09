@@ -238,7 +238,13 @@ export class CodexCliProvider implements ICliProvider {
       workspaceRoot,
       workflowKey,
       userHooks,
-      [...new Set<HookEvent>(["sessionStart", "stop", ...enabledNotificationHookEvents])]
+      [
+        ...new Set<HookEvent>([
+          "sessionStart",
+          "stop",
+          ...enabledNotificationHookEvents,
+        ]),
+      ]
     );
     Log.debug(
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
@@ -278,8 +284,9 @@ export class CodexCliProvider implements ICliProvider {
             if (hookConfig.type !== "json") {
               throw new Error("Unexpected hook config type for Codex CLI");
             }
-            return (hookConfig.config as Record<string, Record<string, unknown[]>>)
-              .hooks;
+            return (
+              hookConfig.config as Record<string, Record<string, unknown[]>>
+            ).hooks;
           })()
         : {};
     const workflowUserHooks = this.buildUserHooksSection(

@@ -149,14 +149,22 @@ export function getFlightPathSkillDir(workspaceRoot: string): string {
  * Returns the user-level FlightPath agent directory (~/.flightpath/agents).
  */
 export function getFlightPathUserAgentDir(): string {
-  return path.join(os.homedir(), PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.AGENTS_DIR);
+  return path.join(
+    os.homedir(),
+    PATH_CONSTANTS.FLIGHTPATH_DIR,
+    PATH_CONSTANTS.AGENTS_DIR
+  );
 }
 
 /**
  * Returns the user-level FlightPath skill directory (~/.flightpath/skills).
  */
 export function getFlightPathUserSkillDir(): string {
-  return path.join(os.homedir(), PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.SKILLS_DIR);
+  return path.join(
+    os.homedir(),
+    PATH_CONSTANTS.FLIGHTPATH_DIR,
+    PATH_CONSTANTS.SKILLS_DIR
+  );
 }
 
 // ============================================================================
@@ -210,10 +218,18 @@ export function getVSCodeUserAgentDirs(): string[] {
     return [path.join(appData, variant, "User", "prompts")];
   } else if (platform === "darwin") {
     return [
-      path.join(os.homedir(), "Library", "Application Support", variant, "User", "prompts"),
+      path.join(
+        os.homedir(),
+        "Library",
+        "Application Support",
+        variant,
+        "User",
+        "prompts"
+      ),
     ];
   } else {
-    const configDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+    const configDir =
+      process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
     return [path.join(configDir, variant, "User", "prompts")];
   }
 }

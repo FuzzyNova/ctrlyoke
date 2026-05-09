@@ -184,8 +184,7 @@ export function buildPromptReferenceInsertion(
   const referencesText = request.references.join("\n");
 
   if (request.mode === PROMPT_EDITOR_INSERT_MODES.APPEND) {
-    const prefix =
-      docText.length > 0 && !docText.endsWith("\n") ? "\n" : "";
+    const prefix = docText.length > 0 && !docText.endsWith("\n") ? "\n" : "";
     return {
       from: docText.length,
       to: docText.length,

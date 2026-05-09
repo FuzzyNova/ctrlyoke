@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import { MESSAGE_TYPES, HARNESS_FILE_TYPES, type HarnessFileType, type SettingWriteScope } from "@/types/messages";
+import {
+  MESSAGE_TYPES,
+  HARNESS_FILE_TYPES,
+  type HarnessFileType,
+  type SettingWriteScope,
+} from "@/types/messages";
 import type {
   ManagedFile,
   ManagedTargetDirectory,
@@ -114,7 +119,11 @@ export const useHarnessFileStore = create<HarnessFileState>((set, get) => ({
 
   deleteAll: (harnessId, fileType, scope) => {
     set({ loading: true, error: null });
-    sendMessage(MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS, { harnessId, fileType, scope });
+    sendMessage(MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS, {
+      harnessId,
+      fileType,
+      scope,
+    });
   },
 
   openHarnessDir: (harnessId, fileType, scope) => {

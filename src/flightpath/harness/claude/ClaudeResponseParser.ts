@@ -202,7 +202,9 @@ export class ClaudeResponseParser
         cachedInputTokens: usage.cache_read_input_tokens,
         cacheCreatedTokens: usage.cache_creation_input_tokens,
         contextWindowUsedTokens,
-        contextWindowSize: getClaudeContextWindowSize(model ?? this.resolvedModel),
+        contextWindowSize: getClaudeContextWindowSize(
+          model ?? this.resolvedModel
+        ),
       };
     }
 

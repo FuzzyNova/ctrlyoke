@@ -89,7 +89,9 @@ export function ActionDropdown({
         className="flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
       >
         <span className="truncate">{label}</span>
-        <i className={`codicon codicon-chevron-${open ? "up" : "down"} text-[10px]`} />
+        <i
+          className={`codicon codicon-chevron-${open ? "up" : "down"} text-[10px]`}
+        />
       </button>
 
       <DropdownPortal isOpen={open} popupPos={popupPos} ref={popupRef}>

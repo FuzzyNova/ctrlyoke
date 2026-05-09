@@ -32,9 +32,7 @@ describe("terminalPresentation", () => {
     expect(getShellCodiconName(undefined, "powershell")).toBe(
       "codicon-terminal-powershell"
     );
-    expect(getShellCodiconName(undefined, "zsh")).toBe(
-      "codicon-terminal-bash"
-    );
+    expect(getShellCodiconName(undefined, "zsh")).toBe("codicon-terminal-bash");
     expect(getShellCodiconName(undefined, "cmd")).toBe("codicon-terminal");
   });
 

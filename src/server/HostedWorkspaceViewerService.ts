@@ -323,9 +323,13 @@ export class HostedWorkspaceViewerService {
   async getStatus(): Promise<WorkspaceScmStatusResponse> {
     try {
       const [{ stdout }, syncCounts] = await Promise.all([
-        execFileAsync("git", ["-C", this.workspaceRoot, "status", "--porcelain=v1"], {
-          timeout: GIT_TIMEOUT_MS,
-        }),
+        execFileAsync(
+          "git",
+          ["-C", this.workspaceRoot, "status", "--porcelain=v1"],
+          {
+            timeout: GIT_TIMEOUT_MS,
+          }
+        ),
         this.getSyncCounts(),
       ]);
       return {

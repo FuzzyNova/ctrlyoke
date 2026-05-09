@@ -187,7 +187,13 @@ export class GeminiCliProvider implements ICliProvider {
       notifyDir,
       workspaceRoot,
       userHooks,
-      [...new Set<HookEvent>(["sessionStart", "stop", ...enabledNotificationHookEvents])]
+      [
+        ...new Set<HookEvent>([
+          "sessionStart",
+          "stop",
+          ...enabledNotificationHookEvents,
+        ]),
+      ]
     );
     if (hookConfig.type !== "json") {
       throw new Error("Unexpected hook config type for Gemini CLI");
@@ -244,8 +250,9 @@ export class GeminiCliProvider implements ICliProvider {
             if (hookConfig.type !== "json") {
               throw new Error("Unexpected hook config type for Gemini CLI");
             }
-            return (hookConfig.config as Record<string, Record<string, unknown[]>>)
-              .hooks;
+            return (
+              hookConfig.config as Record<string, Record<string, unknown[]>>
+            ).hooks;
           })()
         : {};
     await this.registerHooksInSettings(

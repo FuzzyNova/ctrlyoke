@@ -47,12 +47,15 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   const hideEnabled = namespace !== undefined;
   const nonHideable = nonHideableValues ?? DEFAULT_NON_HIDEABLE;
 
-  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
-  useClickOutside(
-    [buttonRef, popupRef],
+  const popupPos = useDropdownPortalPosition(
+    buttonRef,
     isOpen,
-    () => { setIsOpen(false); setShowHidden(false); }
+    dropdownMaxHeight
   );
+  useClickOutside([buttonRef, popupRef], isOpen, () => {
+    setIsOpen(false);
+    setShowHidden(false);
+  });
 
   const toggleValue = (value: string) => {
     if (selectedValues.includes(value)) {
@@ -129,160 +132,160 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
       </button>
 
       <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
-            {/* Show hidden toggle — at top when expanding upward (end-cap is the visual end) */}
-            {popupPos?.bottom !== undefined && hideEnabled && (
-              <div className="border-b border-dropdown-border bg-editor-bg flex-shrink-0">
-                <button
-                  type="button"
-                  disabled={hiddenOptions.length === 0}
-                  onClick={() => setShowHidden((s) => !s)}
-                  className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-                >
-                  {showHidden
-                    ? "Hide hidden"
-                    : hiddenOptions.length > 0
-                      ? `Show hidden (${hiddenOptions.length})`
-                      : "Show hidden"}
-                </button>
-              </div>
-            )}
+        {/* Show hidden toggle — at top when expanding upward (end-cap is the visual end) */}
+        {popupPos?.bottom !== undefined && hideEnabled && (
+          <div className="border-b border-dropdown-border bg-editor-bg flex-shrink-0">
+            <button
+              type="button"
+              disabled={hiddenOptions.length === 0}
+              onClick={() => setShowHidden((s) => !s)}
+              className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+            >
+              {showHidden
+                ? "Hide hidden"
+                : hiddenOptions.length > 0
+                  ? `Show hidden (${hiddenOptions.length})`
+                  : "Show hidden"}
+            </button>
+          </div>
+        )}
 
-            {/* Scrollable options area */}
-            <div className="overflow-y-auto min-h-0 flex-1">
-              {visibleOptions.length === 0 && !hideEnabled ? (
-                <div className="px-3 py-2 text-xs text-description-fg">
-                  No skills available
-                </div>
-              ) : (
-                visibleOptions.map((option) => {
-                  const isSelected = selectedValues.includes(option.value);
-                  return (
-                    <div
-                      key={option.value}
-                      className={`group w-full flex items-start focus:outline-none border-none cursor-pointer ${
-                        isSelected
-                          ? "bg-dropdown-selected-bg text-list-active-fg"
-                          : "hover:bg-list-hover-bg hover:text-list-highlight-fg"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleValue(option.value)}
-                        className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => {}}
-                          aria-hidden={true}
-                          className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
-                          tabIndex={-1}
-                        />
-                        <span className="flex flex-col min-w-0">
-                          <span className="font-medium truncate">
-                            {option.label}
-                          </span>
-                          {option.description && (
-                            <span className="text-xxs text-description-fg truncate">
-                              {option.description}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                      {/* Eye-closed hide button — hover-only */}
-                      {canHide(option.value) && (
-                        <button
-                          type="button"
-                          title="Hide this option"
-                          aria-label="Hide this option"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleHide(option.value);
-                          }}
-                          className="flex-shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
-                        >
-                          <i className="codicon codicon-eye-closed text-xs" />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-
-              {/* Hidden section (inside scroll area) */}
-              {hideEnabled && showHidden && hiddenOptions.length > 0 && (
-                <>
-                  <div className="border-t border-dropdown-border my-0" />
-                  {hiddenOptions.map((option) => {
-                    const isSelected = selectedValues.includes(option.value);
-                    return (
-                      <div
-                        key={option.value}
-                        className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
-                      >
-                        {/* Eye icon at far left — unhide action */}
-                        <button
-                          type="button"
-                          title="Unhide this option"
-                          aria-label="Unhide this option"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUnhideOption?.(option.value);
-                          }}
-                          className="flex-shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
-                        >
-                          <i className="codicon codicon-eye text-xs" />
-                        </button>
-                        {/* Clicking checkbox or label: unhide + check */}
-                        <button
-                          type="button"
-                          onClick={() => handleUnhideAndCheck(option.value)}
-                          className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            aria-hidden={true}
-                            className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
-                            tabIndex={-1}
-                          />
-                          <span className="flex flex-col min-w-0">
-                            <span className="font-medium truncate text-description-fg">
-                              {option.label}
-                            </span>
-                            {option.description && (
-                              <span className="text-xxs text-description-fg truncate">
-                                {option.description}
-                              </span>
-                            )}
-                          </span>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </>
-              )}
+        {/* Scrollable options area */}
+        <div className="overflow-y-auto min-h-0 flex-1">
+          {visibleOptions.length === 0 && !hideEnabled ? (
+            <div className="px-3 py-2 text-xs text-description-fg">
+              No skills available
             </div>
-
-            {/* Show hidden toggle — at bottom when expanding downward */}
-            {popupPos?.top !== undefined && hideEnabled && (
-              <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
-                <button
-                  type="button"
-                  disabled={hiddenOptions.length === 0}
-                  onClick={() => setShowHidden((s) => !s)}
-                  className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+          ) : (
+            visibleOptions.map((option) => {
+              const isSelected = selectedValues.includes(option.value);
+              return (
+                <div
+                  key={option.value}
+                  className={`group w-full flex items-start focus:outline-none border-none cursor-pointer ${
+                    isSelected
+                      ? "bg-dropdown-selected-bg text-list-active-fg"
+                      : "hover:bg-list-hover-bg hover:text-list-highlight-fg"
+                  }`}
                 >
-                  {showHidden
-                    ? "Hide hidden"
-                    : hiddenOptions.length > 0
-                      ? `Show hidden (${hiddenOptions.length})`
-                      : "Show hidden"}
-                </button>
-              </div>
-            )}
-          </DropdownPortal>
+                  <button
+                    type="button"
+                    onClick={() => toggleValue(option.value)}
+                    className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {}}
+                      aria-hidden={true}
+                      className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                      tabIndex={-1}
+                    />
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-medium truncate">
+                        {option.label}
+                      </span>
+                      {option.description && (
+                        <span className="text-xxs text-description-fg truncate">
+                          {option.description}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                  {/* Eye-closed hide button — hover-only */}
+                  {canHide(option.value) && (
+                    <button
+                      type="button"
+                      title="Hide this option"
+                      aria-label="Hide this option"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleHide(option.value);
+                      }}
+                      className="flex-shrink-0 self-center px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+                    >
+                      <i className="codicon codicon-eye-closed text-xs" />
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+
+          {/* Hidden section (inside scroll area) */}
+          {hideEnabled && showHidden && hiddenOptions.length > 0 && (
+            <>
+              <div className="border-t border-dropdown-border my-0" />
+              {hiddenOptions.map((option) => {
+                const isSelected = selectedValues.includes(option.value);
+                return (
+                  <div
+                    key={option.value}
+                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
+                  >
+                    {/* Eye icon at far left — unhide action */}
+                    <button
+                      type="button"
+                      title="Unhide this option"
+                      aria-label="Unhide this option"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUnhideOption?.(option.value);
+                      }}
+                      className="flex-shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+                    >
+                      <i className="codicon codicon-eye text-xs" />
+                    </button>
+                    {/* Clicking checkbox or label: unhide + check */}
+                    <button
+                      type="button"
+                      onClick={() => handleUnhideAndCheck(option.value)}
+                      className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        aria-hidden={true}
+                        className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                        tabIndex={-1}
+                      />
+                      <span className="flex flex-col min-w-0">
+                        <span className="font-medium truncate text-description-fg">
+                          {option.label}
+                        </span>
+                        {option.description && (
+                          <span className="text-xxs text-description-fg truncate">
+                            {option.description}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+
+        {/* Show hidden toggle — at bottom when expanding downward */}
+        {popupPos?.top !== undefined && hideEnabled && (
+          <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
+            <button
+              type="button"
+              disabled={hiddenOptions.length === 0}
+              onClick={() => setShowHidden((s) => !s)}
+              className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+            >
+              {showHidden
+                ? "Hide hidden"
+                : hiddenOptions.length > 0
+                  ? `Show hidden (${hiddenOptions.length})`
+                  : "Show hidden"}
+            </button>
+          </div>
+        )}
+      </DropdownPortal>
     </div>
   );
 };

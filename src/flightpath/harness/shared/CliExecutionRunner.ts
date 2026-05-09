@@ -424,7 +424,9 @@ export class CliExecutionRunner {
     }
   }
 
-  private buildHookEnvVars(session: CliExecutionSession): Record<string, string> {
+  private buildHookEnvVars(
+    session: CliExecutionSession
+  ): Record<string, string> {
     const settings = configService.getAll().notifications;
     const hookEvents = settings.events.hookEvents;
     const enabledEvents = Object.entries(hookEvents)

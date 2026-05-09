@@ -45,8 +45,8 @@ const SCRIPT_NAME = "flightpath-codex-notify";
 const SCRIPT_PREFIX = "FlightPath Codex Hook";
 
 function main() {
-const notifyDir = process.argv[2];
-const encodedDecisionHook = process.argv[3];
+  const notifyDir = process.argv[2];
+  const encodedDecisionHook = process.argv[3];
 
   // Unconditional invocation log — written before any flag checks so we can confirm
   // the hook script is being called at all, regardless of diagnostic settings.
@@ -95,8 +95,12 @@ const encodedDecisionHook = process.argv[3];
     });
 
     const HANDLED_EVENTS = new Set([
-      "SessionStart", "Stop",
-      "PreToolUse", "PostToolUse", "UserPromptSubmit", "PermissionRequest",
+      "SessionStart",
+      "Stop",
+      "PreToolUse",
+      "PostToolUse",
+      "UserPromptSubmit",
+      "PermissionRequest",
     ]);
 
     if (!HANDLED_EVENTS.has(hookEvent)) {
@@ -109,16 +113,24 @@ const encodedDecisionHook = process.argv[3];
 
     // Map native event to logical name
     const LOGICAL_EVENT_MAP = {
-      "PreToolUse": "preToolUse",
-      "PostToolUse": "postToolUse",
-      "UserPromptSubmit": "userPromptSubmit",
-      "PermissionRequest": "permissionRequest",
-      "Stop": "stop",
-      "SessionStart": "sessionStart",
+      PreToolUse: "preToolUse",
+      PostToolUse: "postToolUse",
+      UserPromptSubmit: "userPromptSubmit",
+      PermissionRequest: "permissionRequest",
+      Stop: "stop",
+      SessionStart: "sessionStart",
     };
     const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
-      maybeWriteHookArtifact(logicalEvent, hookEvent, hookInput, notifyDir, sessionId, toolName, debugLog);
+      maybeWriteHookArtifact(
+        logicalEvent,
+        hookEvent,
+        hookInput,
+        notifyDir,
+        sessionId,
+        toolName,
+        debugLog
+      );
     }
 
     if (hookEvent === "PermissionRequest") {
@@ -140,8 +152,11 @@ const encodedDecisionHook = process.argv[3];
     }
 
     // Events that don't need notification file I/O
-    if (hookEvent === "PreToolUse" || hookEvent === "PostToolUse" ||
-        hookEvent === "UserPromptSubmit") {
+    if (
+      hookEvent === "PreToolUse" ||
+      hookEvent === "PostToolUse" ||
+      hookEvent === "UserPromptSubmit"
+    ) {
       debugLog(`✅ Hook ${hookEvent} completed`);
       process.exit(0);
     }

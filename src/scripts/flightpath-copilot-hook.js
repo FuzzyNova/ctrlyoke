@@ -42,7 +42,11 @@
 
 const fs = require("fs");
 const path = require("path");
-const { initializeLogger, readStdinJson, maybeWriteHookArtifact } = require("./flightpath-hook-utils");
+const {
+  initializeLogger,
+  readStdinJson,
+  maybeWriteHookArtifact,
+} = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-copilot-hook";
 const SCRIPT_PREFIX = "FlightPath Copilot Hook";
@@ -79,7 +83,8 @@ function main() {
     });
 
     const sessionId = hookInput.sessionId || hookInput.session_id;
-    const toolName = hookInput.toolName || hookInput.tool_name || hookInput.tool?.name;
+    const toolName =
+      hookInput.toolName || hookInput.tool_name || hookInput.tool?.name;
 
     if (sessionId) {
       debugLog("🔑 Session ID found!", { hookType, sessionId });
@@ -92,15 +97,23 @@ function main() {
 
     // Map copilot hook type to logical event name
     const LOGICAL_EVENT_MAP = {
-      "sessionStart": "sessionStart",
-      "agentStop": "stop",
-      "preToolUse": "preToolUse",
-      "postToolUse": "postToolUse",
-      "userPromptSubmitted": "userPromptSubmit",
+      sessionStart: "sessionStart",
+      agentStop: "stop",
+      preToolUse: "preToolUse",
+      postToolUse: "postToolUse",
+      userPromptSubmitted: "userPromptSubmit",
     };
     const logicalEvent = LOGICAL_EVENT_MAP[hookType];
     if (logicalEvent && notifyDir) {
-      maybeWriteHookArtifact(logicalEvent, hookType, hookInput, notifyDir, sessionId, toolName, debugLog);
+      maybeWriteHookArtifact(
+        logicalEvent,
+        hookType,
+        hookInput,
+        notifyDir,
+        sessionId,
+        toolName,
+        debugLog
+      );
     }
 
     if (hookType === "sessionStart" || hookType === "agentStop") {

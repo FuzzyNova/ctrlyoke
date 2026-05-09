@@ -429,15 +429,13 @@ export class WorkflowOrchestrator {
   }
 
   getRunningWorkflows(): WorkflowInstance[] {
-    return [...this.instances.values()].filter(
-      (w) => {
-        const status = w.getQueueState().status;
-        return (
-          status === EXECUTION_STATES.RUNNING ||
-          status === EXECUTION_STATES.PAUSING
-        );
-      }
-    );
+    return [...this.instances.values()].filter((w) => {
+      const status = w.getQueueState().status;
+      return (
+        status === EXECUTION_STATES.RUNNING ||
+        status === EXECUTION_STATES.PAUSING
+      );
+    });
   }
 
   getActiveWorkflow(): WorkflowInstance | undefined {

@@ -176,7 +176,8 @@ export const OutputSection: React.FC = () => {
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
   const terminalFontSizeScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["terminal.fontSize"] === SETTING_SCOPES.WORKSPACE
+    s.globalSettings.settingSources["terminal.fontSize"] ===
+    SETTING_SCOPES.WORKSPACE
       ? SETTING_SCOPES.WORKSPACE
       : SETTING_SCOPES.USER
   );
@@ -197,7 +198,8 @@ export const OutputSection: React.FC = () => {
   // Execution mode toggle
   const executionMode = useSettingsStore((s) => s.globalSettings.executionMode);
   const executionModeScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["execution.mode"] === SETTING_SCOPES.WORKSPACE
+    s.globalSettings.settingSources["execution.mode"] ===
+    SETTING_SCOPES.WORKSPACE
       ? SETTING_SCOPES.WORKSPACE
       : SETTING_SCOPES.USER
   );

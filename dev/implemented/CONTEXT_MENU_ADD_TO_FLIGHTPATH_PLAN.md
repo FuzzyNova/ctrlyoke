@@ -124,14 +124,14 @@ This avoids polluting Explorer, Editor, and SCM menus with many top-level action
 
 ### Surface-to-reference mapping
 
-| Surface | User action | Inserted reference |
-| --- | --- | --- |
-| Explorer file | Right-click file → Add to FlightPath | `@path/to/file` |
-| Explorer folder | Right-click folder → Add to FlightPath | `@path/to/folder/` |
-| Editor with selection | Right-click selection → Add to FlightPath | `#selection:path:start-end` |
-| Editor without selection | Right-click symbol/cursor → Add to FlightPath | `#sym:path:Symbol:line` if resolvable, else fallback |
-| SCM changed file(s) | Right-click changed resource(s) → Add to FlightPath | `@path` per selected resource |
-| Timeline commit item | Right-click commit item → Add to FlightPath | `~<hash>` |
+| Surface                  | User action                                         | Inserted reference                                   |
+| ------------------------ | --------------------------------------------------- | ---------------------------------------------------- |
+| Explorer file            | Right-click file → Add to FlightPath                | `@path/to/file`                                      |
+| Explorer folder          | Right-click folder → Add to FlightPath              | `@path/to/folder/`                                   |
+| Editor with selection    | Right-click selection → Add to FlightPath           | `#selection:path:start-end`                          |
+| Editor without selection | Right-click symbol/cursor → Add to FlightPath       | `#sym:path:Symbol:line` if resolvable, else fallback |
+| SCM changed file(s)      | Right-click changed resource(s) → Add to FlightPath | `@path` per selected resource                        |
+| Timeline commit item     | Right-click commit item → Add to FlightPath         | `~<hash>`                                            |
 
 ### Symbol fallback behavior
 

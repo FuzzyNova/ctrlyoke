@@ -403,20 +403,20 @@ Do **not** re-use the refractor-based highlighting from `syntaxHighlighting.tsx`
 
 **Language extension mapping**: create a helper in `src/ui/webview-react/utils/codemirrorLanguage.ts` that maps language names to CodeMirror language extensions. Start with the languages already supported by packages that will be added:
 
-| Language | Package |
-|---|---|
-| javascript / jsx | `@codemirror/lang-javascript` |
-| typescript / tsx | `@codemirror/lang-javascript` (TypeScript dialect) |
-| python | `@codemirror/lang-python` |
-| rust | `@codemirror/lang-rust` |
-| json | `@codemirror/lang-json` |
-| html / markup | `@codemirror/lang-html` |
-| css / scss | `@codemirror/lang-css` |
-| yaml | `@codemirror/lang-yaml` (already installed via lang-markdown peer) |
-| markdown | `@codemirror/lang-markdown` (already installed) |
-| java | `@codemirror/lang-java` |
-| cpp / c | `@codemirror/lang-cpp` |
-| php | `@codemirror/lang-php` |
+| Language         | Package                                                            |
+| ---------------- | ------------------------------------------------------------------ |
+| javascript / jsx | `@codemirror/lang-javascript`                                      |
+| typescript / tsx | `@codemirror/lang-javascript` (TypeScript dialect)                 |
+| python           | `@codemirror/lang-python`                                          |
+| rust             | `@codemirror/lang-rust`                                            |
+| json             | `@codemirror/lang-json`                                            |
+| html / markup    | `@codemirror/lang-html`                                            |
+| css / scss       | `@codemirror/lang-css`                                             |
+| yaml             | `@codemirror/lang-yaml` (already installed via lang-markdown peer) |
+| markdown         | `@codemirror/lang-markdown` (already installed)                    |
+| java             | `@codemirror/lang-java`                                            |
+| cpp / c          | `@codemirror/lang-cpp`                                             |
+| php              | `@codemirror/lang-php`                                             |
 
 Add these packages to `package.json` devDependencies (they are already bundled by Vite so they stay webview-only).
 
@@ -428,31 +428,55 @@ import { tags } from "@lezer/highlight";
 
 export function createWorkspaceEditorHighlightExtension() {
   const style = HighlightStyle.define([
-    { tag: [tags.keyword, tags.definitionKeyword, tags.modifier],
-      color: "var(--vscode-symbolIcon-functionForeground, #569cd6)" },
-    { tag: [tags.string, tags.character, tags.attributeValue],
-      color: "var(--vscode-debugTokenExpression-string, #ce9178)" },
-    { tag: tags.number,
-      color: "var(--vscode-debugTokenExpression-number, #b5cea8)" },
-    { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment],
-      color: "var(--vscode-charts-green, #6a9955)", fontStyle: "italic" },
-    { tag: [tags.function(tags.variableName), tags.function(tags.name)],
-      color: "#dcdcaa" },
-    { tag: [tags.className, tags.typeName, tags.namespace],
-      color: "var(--vscode-chat-editedFileForeground, #4ec9b0)" },
-    { tag: [tags.variableName, tags.propertyName, tags.attributeName,
-            tags.local(tags.variableName), tags.definition(tags.variableName)],
-      color: "var(--vscode-symbolIcon-variableForeground, #9cdcfe)" },
-    { tag: [tags.bool, tags.null],
-      color: "var(--vscode-debugTokenExpression-boolean, #4e94ce)" },
-    { tag: tags.regexp,
-      color: "var(--vscode-charts-red, #d16969)" },
-    { tag: tags.tagName,
-      color: "var(--vscode-symbolIcon-constructorForeground, #4ec9b0)" },
-    { tag: [tags.selector, tags.className],
-      color: "var(--vscode-chat-editedFileForeground, #d7ba7d)" },
-    { tag: tags.url,
-      color: "var(--vscode-textLink-foreground, #4e94ce)" },
+    {
+      tag: [tags.keyword, tags.definitionKeyword, tags.modifier],
+      color: "var(--vscode-symbolIcon-functionForeground, #569cd6)",
+    },
+    {
+      tag: [tags.string, tags.character, tags.attributeValue],
+      color: "var(--vscode-debugTokenExpression-string, #ce9178)",
+    },
+    {
+      tag: tags.number,
+      color: "var(--vscode-debugTokenExpression-number, #b5cea8)",
+    },
+    {
+      tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment],
+      color: "var(--vscode-charts-green, #6a9955)",
+      fontStyle: "italic",
+    },
+    {
+      tag: [tags.function(tags.variableName), tags.function(tags.name)],
+      color: "#dcdcaa",
+    },
+    {
+      tag: [tags.className, tags.typeName, tags.namespace],
+      color: "var(--vscode-chat-editedFileForeground, #4ec9b0)",
+    },
+    {
+      tag: [
+        tags.variableName,
+        tags.propertyName,
+        tags.attributeName,
+        tags.local(tags.variableName),
+        tags.definition(tags.variableName),
+      ],
+      color: "var(--vscode-symbolIcon-variableForeground, #9cdcfe)",
+    },
+    {
+      tag: [tags.bool, tags.null],
+      color: "var(--vscode-debugTokenExpression-boolean, #4e94ce)",
+    },
+    { tag: tags.regexp, color: "var(--vscode-charts-red, #d16969)" },
+    {
+      tag: tags.tagName,
+      color: "var(--vscode-symbolIcon-constructorForeground, #4ec9b0)",
+    },
+    {
+      tag: [tags.selector, tags.className],
+      color: "var(--vscode-chat-editedFileForeground, #d7ba7d)",
+    },
+    { tag: tags.url, color: "var(--vscode-textLink-foreground, #4e94ce)" },
   ]);
   return syntaxHighlighting(style);
 }
@@ -655,16 +679,18 @@ The feature should be browser-only at the UI layer and hosted-only at the data l
 In `Header.tsx`, in the `header-left` div after the Save button and before the Settings button:
 
 ```tsx
-{isStandalone && (
-  <button
-    className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-    onClick={openWorkspaceViewer}
-    title="Explore files and changes"
-    aria-label="Explore files and changes"
-  >
-    <i className="codicon codicon-files" />
-  </button>
-)}
+{
+  isStandalone && (
+    <button
+      className="control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+      onClick={openWorkspaceViewer}
+      title="Explore files and changes"
+      aria-label="Explore files and changes"
+    >
+      <i className="codicon codicon-files" />
+    </button>
+  );
+}
 ```
 
 `isStandalone` is already exported from `hooks/useVsCodeApi.ts`. `openWorkspaceViewer` calls `workspaceViewerStore.open()`.
@@ -737,11 +763,23 @@ These are cleaner than sprinkling raw `fetch("/api/...")` calls or language-swit
 ### New request types (add to `HostedWorkspaceViewerTypes.ts`)
 
 ```ts
-interface WorkspaceStageRequest   { path: string }
-interface WorkspaceUnstageRequest { path: string }
-interface WorkspaceCommitRequest  { message: string }
-interface WorkspacePushResponse   { branch: string; remote: string }
-interface WorkspacePullResponse   { branch: string; remote: string }
+interface WorkspaceStageRequest {
+  path: string;
+}
+interface WorkspaceUnstageRequest {
+  path: string;
+}
+interface WorkspaceCommitRequest {
+  message: string;
+}
+interface WorkspacePushResponse {
+  branch: string;
+  remote: string;
+}
+interface WorkspacePullResponse {
+  branch: string;
+  remote: string;
+}
 ```
 
 ---

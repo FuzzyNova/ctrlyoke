@@ -328,7 +328,9 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
             cachedInputTokens:
               totalCachedTokens > 0 ? totalCachedTokens : undefined,
             contextWindowUsedTokens,
-            contextWindowSize: getGeminiContextWindowSize(model ?? this.resolvedModel),
+            contextWindowSize: getGeminiContextWindowSize(
+              model ?? this.resolvedModel
+            ),
           }
         : undefined;
 

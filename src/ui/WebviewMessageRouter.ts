@@ -622,20 +622,20 @@ export class WebviewMessageRouter {
           message.overwrite ?? false,
           message.scope ?? "workspace"
         );
-          const files = await HarnessFileManager.resolveAllLocations(
-            workspaceRoot,
-            message.fileType
-          );
-          const targetDirectories = HarnessFileManager.resolveTargetDirectories(
-            workspaceRoot,
-            message.fileType
-          );
-          this.emitMessage({
-            type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-            success: true,
-            files,
-            targetDirectories,
-          });
+        const files = await HarnessFileManager.resolveAllLocations(
+          workspaceRoot,
+          message.fileType
+        );
+        const targetDirectories = HarnessFileManager.resolveTargetDirectories(
+          workspaceRoot,
+          message.fileType
+        );
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: true,
+          files,
+          targetDirectories,
+        });
       } catch (error) {
         this.emitMessage({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
@@ -654,20 +654,20 @@ export class WebviewMessageRouter {
           message.fileType,
           message.overwrite ?? false
         );
-          const files = await HarnessFileManager.resolveAllLocations(
-            workspaceRoot,
-            message.fileType
-          );
-          const targetDirectories = HarnessFileManager.resolveTargetDirectories(
-            workspaceRoot,
-            message.fileType
-          );
-          this.emitMessage({
-            type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
-            success: true,
-            files,
-            targetDirectories,
-          });
+        const files = await HarnessFileManager.resolveAllLocations(
+          workspaceRoot,
+          message.fileType
+        );
+        const targetDirectories = HarnessFileManager.resolveTargetDirectories(
+          workspaceRoot,
+          message.fileType
+        );
+        this.emitMessage({
+          type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
+          success: true,
+          files,
+          targetDirectories,
+        });
       } catch (error) {
         this.emitMessage({
           type: MESSAGE_TYPES.HARNESS_FILE_OP_RESULT,
@@ -1131,7 +1131,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.PAUSE_WORKFLOW, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        Log.debug(`[WebviewMessageRouter] PAUSE_WORKFLOW received: inst:${workflowId.slice(0, 8)}`);
+        Log.debug(
+          `[WebviewMessageRouter] PAUSE_WORKFLOW received: inst:${workflowId.slice(0, 8)}`
+        );
         await this.getOrchestrator()?.pauseWorkflow(workflowId);
       }
     });
@@ -1139,7 +1141,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.CANCEL_PAUSE_WORKFLOW, async (message) => {
       const { workflowId } = message;
       if (workflowId) {
-        Log.debug(`[WebviewMessageRouter] CANCEL_PAUSE_WORKFLOW received: inst:${workflowId.slice(0, 8)}`);
+        Log.debug(
+          `[WebviewMessageRouter] CANCEL_PAUSE_WORKFLOW received: inst:${workflowId.slice(0, 8)}`
+        );
         await this.getOrchestrator()?.cancelPauseWorkflow(workflowId);
       }
     });
@@ -1147,7 +1151,9 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.RESUME_WORKFLOW, (message) => {
       const { workflowId, workingFilePath } = message;
       if (workflowId) {
-        Log.debug(`[WebviewMessageRouter] RESUME_WORKFLOW received: inst:${workflowId.slice(0, 8)}`);
+        Log.debug(
+          `[WebviewMessageRouter] RESUME_WORKFLOW received: inst:${workflowId.slice(0, 8)}`
+        );
         // Fire-and-forget: resumeWorkflow can call executeLoadedPromptFile which
         // awaits the entire workflow execution loop. Awaiting here would block
         // routeQueue for the full run duration, preventing stop/pause/switch-workflow

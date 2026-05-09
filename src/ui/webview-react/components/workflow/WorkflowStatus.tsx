@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -197,7 +203,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   );
 
   const isMobile = useIsMobile();
-  const wfStatusSize = isMobile ? WORKFLOW_STATUS_BUTTON_SIZES.touch : WORKFLOW_STATUS_BUTTON_SIZES.default;
+  const wfStatusSize = isMobile
+    ? WORKFLOW_STATUS_BUTTON_SIZES.touch
+    : WORKFLOW_STATUS_BUTTON_SIZES.default;
   const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(300);
 
   // Refs
@@ -362,7 +370,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Switch to a loaded workflow
   const handleSwitchWorkflow = useCallback(
     (workflowId: string) => {
-      const workflow = effectiveLoadedWorkflows.find((w) => w.id === workflowId);
+      const workflow = effectiveLoadedWorkflows.find(
+        (w) => w.id === workflowId
+      );
       setActiveWorkflowWorkingFilePath(workflow?.workingFilePath ?? null);
       if (workflow && isWorkflowRunning(workflow.executionState)) {
         useWorkflowStore.getState().clearHistoryOutputs();
@@ -518,8 +528,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     ].some((value) => value?.toLowerCase().includes(normalizedWorkflowSearch));
   };
 
-  const filteredEffectiveLoadedWorkflows =
-    effectiveLoadedWorkflows.filter(workflowMatchesSearch);
+  const filteredEffectiveLoadedWorkflows = effectiveLoadedWorkflows.filter(
+    workflowMatchesSearch
+  );
   const filteredRecentWorkflows = recentWorkflows.filter(
     (recentWorkflow) =>
       workflowMatchesSearch(recentWorkflow) &&
@@ -607,7 +618,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           </button>
 
           {/* Separator — mirrors VS Code's monaco-button-dropdown-separator */}
-          <div className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} flex-shrink-0`}>
+          <div
+            className={`bg-cmd-bg text-cmd-fg ${wfStatusSize.separatorPy} flex-shrink-0`}
+          >
             <div className="w-px h-full bg-current opacity-40" />
           </div>
 
@@ -623,7 +636,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           >
             {/* Pulsing dot: another loaded workflow is running */}
             {effectiveLoadedWorkflows.some(
-              (w) => isWorkflowRunning(w.executionState) && w.id !== activeWorkflowId
+              (w) =>
+                isWorkflowRunning(w.executionState) && w.id !== activeWorkflowId
             ) && (
               <span
                 className="inline-block w-2 h-2 rounded-full bg-indicator-success animate-pulse"

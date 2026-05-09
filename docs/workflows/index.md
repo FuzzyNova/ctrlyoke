@@ -2,11 +2,11 @@
 
 FlightPath supports three file formats:
 
-| Format | Extension | Best use |
-| --- | --- | --- |
-| YAML | `.flightpath.yaml`, `.flightpath.yml` | Multi-step workflows written by hand |
-| JSON | `.flightpath.json` | Generated workflows and automation |
-| Markdown | `.prompt.md` | Single prompt files |
+| Format   | Extension                             | Best use                             |
+| -------- | ------------------------------------- | ------------------------------------ |
+| YAML     | `.flightpath.yaml`, `.flightpath.yml` | Multi-step workflows written by hand |
+| JSON     | `.flightpath.json`                    | Generated workflows and automation   |
+| Markdown | `.prompt.md`                          | Single prompt files                  |
 
 ## Current schema shape
 

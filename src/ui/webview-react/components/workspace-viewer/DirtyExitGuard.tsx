@@ -46,7 +46,8 @@ export function DirtyExitGuard({
             Unsaved changes
           </h3>
           <p className="text-xs text-editor-fg opacity-70">
-            Do you want to save changes to <span className="font-medium">{fileName}</span>?
+            Do you want to save changes to{" "}
+            <span className="font-medium">{fileName}</span>?
           </p>
         </div>
         <div className="flex flex-col gap-2">

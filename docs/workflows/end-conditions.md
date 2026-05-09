@@ -24,14 +24,14 @@ endCondition:
 
 ## Important fields
 
-| Field | Meaning |
-| --- | --- |
-| `script` | Command or script path to execute |
-| `returns` | Expected value |
-| `compareSource` | Compare against `stdout`, `stderr`, `exitCode`, or `auto` |
-| `maxRetries` | Retry limit after validation failure |
-| `retryPrompt` | Template sent back to the harness on retry |
-| `resumeSessionOnRetry` | Whether retries stay in the same conversation |
+| Field                  | Meaning                                                   |
+| ---------------------- | --------------------------------------------------------- |
+| `script`               | Command or script path to execute                         |
+| `returns`              | Expected value                                            |
+| `compareSource`        | Compare against `stdout`, `stderr`, `exitCode`, or `auto` |
+| `maxRetries`           | Retry limit after validation failure                      |
+| `retryPrompt`          | Template sent back to the harness on retry                |
+| `resumeSessionOnRetry` | Whether retries stay in the same conversation             |
 
 ## Pre-condition
 

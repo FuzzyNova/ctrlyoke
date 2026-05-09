@@ -21,14 +21,14 @@ Two complementary search features:
 The history timeline stores rich, structured data per run. Each `events.jsonl` file is
 JSONL — one `WorkflowTimelineEvent` per line. The searchable fields are:
 
-| Event type                | Searchable content                                                  |
-|---------------------------|---------------------------------------------------------------------|
-| `cliOutputRecorded`       | `payload.cliOutput.prompt` (prompt text sent to the AI)             |
-| `cliOutputRecorded`       | `payload.cliOutput.response` (full AI response text)                |
-| `cliOutputRecorded`       | `payload.cliOutput.cliCommand` (CLI command string)                 |
-| `cliOutputRecorded`       | File paths in `payload.cliOutput.structured.events[]` (FILE_EDIT, FILE_WRITE, FILE_READ, FILE_DELETE data.path) |
-| `cliOutputRecorded`       | Bash command strings (`data.command` in BASH events)                |
-| `statusMessageRecorded`   | `payload.statusMessage.message`                                     |
+| Event type              | Searchable content                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `cliOutputRecorded`     | `payload.cliOutput.prompt` (prompt text sent to the AI)                                                         |
+| `cliOutputRecorded`     | `payload.cliOutput.response` (full AI response text)                                                            |
+| `cliOutputRecorded`     | `payload.cliOutput.cliCommand` (CLI command string)                                                             |
+| `cliOutputRecorded`     | File paths in `payload.cliOutput.structured.events[]` (FILE_EDIT, FILE_WRITE, FILE_READ, FILE_DELETE data.path) |
+| `cliOutputRecorded`     | Bash command strings (`data.command` in BASH events)                                                            |
+| `statusMessageRecorded` | `payload.statusMessage.message`                                                                                 |
 
 Everything searchable lives in the history files — no need to read working files for search.
 
@@ -44,18 +44,18 @@ ranked `HistorySearchResult[]`.
 
 ```typescript
 export interface HistorySearchResult {
-  workflowId: string;           // directory name under .history/
-  workflowName: string;         // extracted from workflowId (strip timestamp suffix)
-  runId: number;                // 1-based run number from manifest
-  runIndex: number;             // 0 = most recent, for LOAD_RUN_HISTORY message
-  startedAt: number;            // run timestamp, for display
-  executionState: string;       // completed / running / error / cancelled
+  workflowId: string; // directory name under .history/
+  workflowName: string; // extracted from workflowId (strip timestamp suffix)
+  runId: number; // 1-based run number from manifest
+  runIndex: number; // 0 = most recent, for LOAD_RUN_HISTORY message
+  startedAt: number; // run timestamp, for display
+  executionState: string; // completed / running / error / cancelled
   target: OutputExecutionTarget; // { kind, stepIndex } or { kind, loopIndex }
   matchType: "response" | "file" | "bash" | "status" | "prompt";
-  matchSnippet: string;         // ~100-char excerpt with the match centered
-  matchContext: string;         // display label: "Prompt 2" / "Final Step Loop 1"
-  filePath?: string;            // populated for matchType === "file"
-  workflowFilePath: string;     // absolute path for LOAD_WORKFLOW message
+  matchSnippet: string; // ~100-char excerpt with the match centered
+  matchContext: string; // display label: "Prompt 2" / "Final Step Loop 1"
+  filePath?: string; // populated for matchType === "file"
+  workflowFilePath: string; // absolute path for LOAD_WORKFLOW message
 }
 ```
 
@@ -77,6 +77,7 @@ For each workflow-id directory in historyBaseDir:
 ```
 
 **Performance considerations:**
+
 - Search is initiated on demand (not indexed), so debounce to 400ms before firing.
 - Cap results at 50 total. Stop scanning events.jsonl files once cap is reached.
 - Scan runs newest-first within each workflow; scan workflows alphabetically.
@@ -91,8 +92,8 @@ For each workflow-id directory in historyBaseDir:
 Add to `src/types/DashboardConstants.ts`:
 
 ```typescript
-MESSAGE_TYPES.SEARCH_HISTORY          // webview → extension: { query: string }
-MESSAGE_TYPES.SEARCH_HISTORY_RESULTS  // extension → webview: { query: string, results: HistorySearchResult[], hasMore: boolean }
+MESSAGE_TYPES.SEARCH_HISTORY; // webview → extension: { query: string }
+MESSAGE_TYPES.SEARCH_HISTORY_RESULTS; // extension → webview: { query: string, results: HistorySearchResult[], hasMore: boolean }
 ```
 
 The extension side handles `SEARCH_HISTORY` in `FlightPathWebviewProvider` (or its
@@ -110,6 +111,7 @@ path so the webview can open the workflow. The working file lives in
 
 `WorkflowStatus.tsx` already has a `workflowSearch` state driving local filtering. The
 enhancement adds a global-history search mode that activates when:
+
 - The workflow title search input gains focus AND the query length ≥ 2 characters, OR
 - A toggle/icon button explicitly switches to "history search" mode.
 
@@ -161,6 +163,7 @@ pre-populated with that query and clears `pendingFindQuery`.
 ### State additions
 
 **`uiStore`:**
+
 ```typescript
 historySearchResults: HistorySearchResult[];
 historySearchQuery: string;
@@ -180,17 +183,19 @@ A floating bar that appears inside `OutputSection`, overlaid at the top-right of
 output scroll area (matching VS Code's native find widget position).
 
 **State (managed in OutputSection or a `useOutputFind` hook):**
+
 ```typescript
 interface OutputFindState {
   isOpen: boolean;
   query: string;
   matchCount: number;
-  currentMatch: number;   // 1-based, 0 if no matches
+  currentMatch: number; // 1-based, 0 if no matches
   caseSensitive: boolean;
 }
 ```
 
 **Controls:**
+
 - Text input
 - `N of M` match counter
 - Up/Down arrows (prev/next match)
@@ -198,6 +203,7 @@ interface OutputFindState {
 - Close button (×)
 
 **Keyboard:**
+
 - `Ctrl+F` / `Cmd+F` → open (key handler added to OutputSection)
 - `Enter` / `F3` → next match
 - `Shift+Enter` / `Shift+F3` → prev match
@@ -212,7 +218,11 @@ where supported, with a `TreeWalker` + `Range` fallback for older browsers.
 **Recommended approach (CSS Custom Highlight API — supported in Chrome 105+, Edge 105+, Safari 17.2+):**
 
 ```typescript
-function applyHighlights(container: HTMLElement, query: string, caseSensitive: boolean): Range[] {
+function applyHighlights(
+  container: HTMLElement,
+  query: string,
+  caseSensitive: boolean
+): Range[] {
   CSS.highlights.delete("fp-find");
   if (!query) return [];
 
@@ -222,7 +232,9 @@ function applyHighlights(container: HTMLElement, query: string, caseSensitive: b
 
   let node: Text | null;
   while ((node = walker.nextNode() as Text | null)) {
-    const text = caseSensitive ? node.textContent ?? "" : (node.textContent ?? "").toLowerCase();
+    const text = caseSensitive
+      ? (node.textContent ?? "")
+      : (node.textContent ?? "").toLowerCase();
     let idx = 0;
     while ((idx = text.indexOf(normalQuery, idx)) !== -1) {
       const range = new Range();
@@ -241,13 +253,20 @@ function applyHighlights(container: HTMLElement, query: string, caseSensitive: b
 ```
 
 In `globals.css`:
+
 ```css
 ::highlight(fp-find) {
-  background-color: var(--vscode-editor-findMatchHighlightBackground, rgba(255,200,0,0.3));
+  background-color: var(
+    --vscode-editor-findMatchHighlightBackground,
+    rgba(255, 200, 0, 0.3)
+  );
   color: inherit;
 }
 ::highlight(fp-find-current) {
-  background-color: var(--vscode-editor-findMatchBackground, rgba(255,150,0,0.6));
+  background-color: var(
+    --vscode-editor-findMatchBackground,
+    rgba(255, 150, 0, 0.6)
+  );
   color: inherit;
 }
 ```
@@ -270,45 +289,74 @@ path. Implement fallback only if testing reveals it's needed.
 New file: `src/ui/webview-react/hooks/useOutputFind.ts`
 
 ```typescript
-export function useOutputFind(containerRef: RefObject<HTMLElement | null>, externalQuery?: string | null) {
+export function useOutputFind(
+  containerRef: RefObject<HTMLElement | null>,
+  externalQuery?: string | null
+) {
   const [state, setState] = useState<OutputFindState>({
-    isOpen: false, query: "", matchCount: 0, currentMatch: 0, caseSensitive: false,
+    isOpen: false,
+    query: "",
+    matchCount: 0,
+    currentMatch: 0,
+    caseSensitive: false,
   });
 
   const matchesRef = useRef<Range[]>([]);
 
   const open = useCallback((initialQuery?: string) => {
-    setState(prev => ({ ...prev, isOpen: true, query: initialQuery ?? prev.query }));
+    setState((prev) => ({
+      ...prev,
+      isOpen: true,
+      query: initialQuery ?? prev.query,
+    }));
   }, []);
 
   const close = useCallback(() => {
     CSS.highlights?.delete("fp-find");
     CSS.highlights?.delete("fp-find-current");
-    setState(prev => ({ ...prev, isOpen: false, query: "", matchCount: 0, currentMatch: 0 }));
+    setState((prev) => ({
+      ...prev,
+      isOpen: false,
+      query: "",
+      matchCount: 0,
+      currentMatch: 0,
+    }));
   }, []);
 
   // Re-run search when query, caseSensitive, or rendered content changes
   // (OutputSection passes allMessages.length as a dep to trigger re-search)
-  const search = useCallback((query: string, caseSensitive: boolean) => {
-    if (!containerRef.current || !query) {
-      CSS.highlights?.delete("fp-find");
-      CSS.highlights?.delete("fp-find-current");
-      matchesRef.current = [];
-      setState(prev => ({ ...prev, matchCount: 0, currentMatch: 0 }));
-      return;
-    }
-    const matches = applyHighlights(containerRef.current, query, caseSensitive);
-    matchesRef.current = matches;
-    setState(prev => ({ ...prev, matchCount: matches.length, currentMatch: matches.length > 0 ? 1 : 0 }));
-    if (matches[0]) scrollToRange(matches[0]);
-    setCurrentHighlight(0);
-  }, [containerRef]);
+  const search = useCallback(
+    (query: string, caseSensitive: boolean) => {
+      if (!containerRef.current || !query) {
+        CSS.highlights?.delete("fp-find");
+        CSS.highlights?.delete("fp-find-current");
+        matchesRef.current = [];
+        setState((prev) => ({ ...prev, matchCount: 0, currentMatch: 0 }));
+        return;
+      }
+      const matches = applyHighlights(
+        containerRef.current,
+        query,
+        caseSensitive
+      );
+      matchesRef.current = matches;
+      setState((prev) => ({
+        ...prev,
+        matchCount: matches.length,
+        currentMatch: matches.length > 0 ? 1 : 0,
+      }));
+      if (matches[0]) scrollToRange(matches[0]);
+      setCurrentHighlight(0);
+    },
+    [containerRef]
+  );
 
   const navigate = useCallback((direction: 1 | -1) => {
     const matches = matchesRef.current;
     if (matches.length === 0) return;
-    setState(prev => {
-      const next = ((prev.currentMatch - 1 + direction + matches.length) % matches.length);
+    setState((prev) => {
+      const next =
+        (prev.currentMatch - 1 + direction + matches.length) % matches.length;
       scrollToRange(matches[next]);
       setCurrentHighlight(next);
       return { ...prev, currentMatch: next + 1 };
@@ -316,12 +364,15 @@ export function useOutputFind(containerRef: RefObject<HTMLElement | null>, exter
   }, []);
 
   // Ctrl+F / Cmd+F keyboard handler (attached to the output section element)
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-      e.preventDefault();
-      open();
-    }
-  }, [open]);
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+        e.preventDefault();
+        open();
+      }
+    },
+    [open]
+  );
 
   // When externalQuery arrives (from global history search jump), open with it
   useEffect(() => {
@@ -333,6 +384,7 @@ export function useOutputFind(containerRef: RefObject<HTMLElement | null>, exter
 ```
 
 `scrollToRange` scrolls the container so the range is visible:
+
 ```typescript
 function scrollToRange(range: Range) {
   range.startContainer.parentElement?.scrollIntoView({ block: "nearest" });
@@ -340,6 +392,7 @@ function scrollToRange(range: Range) {
 ```
 
 `setCurrentHighlight` updates the `fp-find-current` Highlight:
+
 ```typescript
 function setCurrentHighlight(index: number) {
   CSS.highlights?.delete("fp-find-current");
@@ -353,12 +406,18 @@ function setCurrentHighlight(index: number) {
 `OutputSection` gets a `useOutputFind` call using `outputRef` as the container:
 
 ```tsx
-const pendingFindQuery = useUiStore(s => s.pendingFindQuery);
-const clearPendingFindQuery = useUiStore(s => s.clearPendingFindQuery);
+const pendingFindQuery = useUiStore((s) => s.pendingFindQuery);
+const clearPendingFindQuery = useUiStore((s) => s.clearPendingFindQuery);
 
-const { state: findState, setState: setFindState, open: openFind,
-        close: closeFind, search: runSearch, navigate: navigateFind,
-        handleKeyDown: handleFindKeyDown } = useOutputFind(outputRef, pendingFindQuery);
+const {
+  state: findState,
+  setState: setFindState,
+  open: openFind,
+  close: closeFind,
+  search: runSearch,
+  navigate: navigateFind,
+  handleKeyDown: handleFindKeyDown,
+} = useOutputFind(outputRef, pendingFindQuery);
 
 // Clear the pending query after opening
 useEffect(() => {
@@ -370,7 +429,12 @@ useEffect(() => {
   if (findState.isOpen && findState.query) {
     runSearch(findState.query, findState.caseSensitive);
   }
-}, [allMessages.length, findState.isOpen, findState.query, findState.caseSensitive]);
+}, [
+  allMessages.length,
+  findState.isOpen,
+  findState.query,
+  findState.caseSensitive,
+]);
 
 // Attach keyboard listener to output container
 useEffect(() => {
@@ -421,7 +485,7 @@ right of the output area, left of the minimap).
 
 1. Add `pendingFindQuery` to `uiStore`
 2. Create `useOutputFind` hook
-3. Create `OutputFindBar` component  
+3. Create `OutputFindBar` component
 4. Integrate into `OutputSection`
 5. Add CSS highlight rules to `globals.css`
 

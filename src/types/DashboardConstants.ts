@@ -1171,7 +1171,10 @@ export const SETTING_SCOPES = {
 
 export type SettingScope = (typeof SETTING_SCOPES)[keyof typeof SETTING_SCOPES];
 /** Scopes that accept writes — workspace or user (excludes the read-only "default" tier) */
-export type SettingWriteScope = Exclude<SettingScope, typeof SETTING_SCOPES.DEFAULT>;
+export type SettingWriteScope = Exclude<
+  SettingScope,
+  typeof SETTING_SCOPES.DEFAULT
+>;
 
 // ============================================================================
 // DISCOVERY SOURCES - Origin labels for discovered agent/skill files
@@ -1185,7 +1188,8 @@ export const DISCOVERY_SOURCES = {
   WORKSPACE_FLIGHTPATH: "workspace-flightpath",
 } as const;
 
-export type DiscoverySource = (typeof DISCOVERY_SOURCES)[keyof typeof DISCOVERY_SOURCES];
+export type DiscoverySource =
+  (typeof DISCOVERY_SOURCES)[keyof typeof DISCOVERY_SOURCES];
 
 // ============================================================================
 // HARNESS FILE TYPES - File type discriminants for the harness file manager

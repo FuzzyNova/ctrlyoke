@@ -34,8 +34,17 @@ export const SkillsSelect: React.FC<{
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
-  useClickOutside([buttonRef, popupRef], isOpen, () => setIsOpen(false), !inline);
+  const popupPos = useDropdownPortalPosition(
+    buttonRef,
+    isOpen,
+    dropdownMaxHeight
+  );
+  useClickOutside(
+    [buttonRef, popupRef],
+    isOpen,
+    () => setIsOpen(false),
+    !inline
+  );
 
   const selectedSkills = Array.isArray(value) ? value : [];
 
@@ -160,8 +169,8 @@ export const SkillsSelect: React.FC<{
       </button>
 
       <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
-          {listContent}
-        </DropdownPortal>
+        {listContent}
+      </DropdownPortal>
     </div>
   );
 };

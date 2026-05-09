@@ -4,10 +4,7 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type {
-  HookEvent,
-  UserHookConfig,
-} from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
  * Qwen Code CLI Notification Monitor
@@ -71,7 +68,11 @@ export class QwenNotificationMonitor
     };
 
     const hooks: Record<string, unknown[]> = {};
-    for (const event of flightpathEvents ?? ["sessionStart", "userPromptSubmit", "stop"]) {
+    for (const event of flightpathEvents ?? [
+      "sessionStart",
+      "userPromptSubmit",
+      "stop",
+    ]) {
       const nativeEvent = eventMap[event];
       if (!nativeEvent) {
         continue;

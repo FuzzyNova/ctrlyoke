@@ -2,9 +2,9 @@
 
 FlightPath ships with two command-line entry points:
 
-| Command | Purpose |
-| --- | --- |
-| `flightpath` | Execute or validate workflow files |
+| Command          | Purpose                                  |
+| ---------------- | ---------------------------------------- |
+| `flightpath`     | Execute or validate workflow files       |
 | `flightpath-mcp` | Run the standalone FlightPath MCP server |
 
 ## What the CLI shares with the extension

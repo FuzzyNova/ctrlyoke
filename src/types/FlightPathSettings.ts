@@ -10,7 +10,10 @@ import {
   type BrowserNotificationMode,
   type HookEvent,
 } from "./DashboardConstants";
-import { ICON_BG_COLOR_DEFAULT, ICON_FG_COLOR_DEFAULT } from "./IconColorDefaults";
+import {
+  ICON_BG_COLOR_DEFAULT,
+  ICON_FG_COLOR_DEFAULT,
+} from "./IconColorDefaults";
 import type {
   EndCondition,
   McpServerConfig,

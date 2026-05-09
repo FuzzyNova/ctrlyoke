@@ -238,7 +238,9 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       {/* Separator — mirrors VS Code's monaco-button-dropdown-separator:
           outer div fills with button background (padding creates the inset),
           inner 1px div is the visible hairline using --vscode-button-separator */}
-      <div className={`${separatorClass} ${btnSizes.separatorPy} flex-shrink-0`}>
+      <div
+        className={`${separatorClass} ${btnSizes.separatorPy} flex-shrink-0`}
+      >
         <div className="w-px h-full bg-current opacity-40" />
       </div>
 

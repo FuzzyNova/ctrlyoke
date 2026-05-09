@@ -20,14 +20,14 @@ Command Palette → FlightPath: Open FlightPath Panel
 
 FlightPath does not bundle AI assistants. It orchestrates harnesses that you already have installed.
 
-| Harness | What you need |
-| --- | --- |
-| `copilot-cli` | GitHub Copilot CLI installed and signed in |
-| `claude-cli` | Claude Code CLI installed and signed in |
-| `codex-cli` | Codex CLI installed and signed in |
-| `opencode-cli` | OpenCode CLI configured with a provider |
-| `qwen-cli` | Qwen Code CLI installed and configured |
-| `gemini-cli` | Gemini CLI installed and configured |
+| Harness        | What you need                                |
+| -------------- | -------------------------------------------- |
+| `copilot-cli`  | GitHub Copilot CLI installed and signed in   |
+| `claude-cli`   | Claude Code CLI installed and signed in      |
+| `codex-cli`    | Codex CLI installed and signed in            |
+| `opencode-cli` | OpenCode CLI configured with a provider      |
+| `qwen-cli`     | Qwen Code CLI installed and configured       |
+| `gemini-cli`   | Gemini CLI installed and configured          |
 | `copilot-chat` | GitHub Copilot Chat extension inside VS Code |
 
 Start with `copilot-cli` or `claude-cli` unless you already know you need another harness.

@@ -107,7 +107,11 @@ export class FileConfigBackend implements ConfigBackend {
     // empty/corrupt (which would cause the next set() call to silently
     // wipe all settings).
     const tmpPath = `${this.configPath}.tmp`;
-    await fs.promises.writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+    await fs.promises.writeFile(
+      tmpPath,
+      JSON.stringify(data, null, 2),
+      "utf-8"
+    );
     await fs.promises.rename(tmpPath, this.configPath);
   }
 

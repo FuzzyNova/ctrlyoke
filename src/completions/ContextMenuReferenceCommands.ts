@@ -8,9 +8,7 @@ import {
   toWorkspaceRelativeReferencePath,
 } from "./ContextReferenceBuilder";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
-import {
-  PROMPT_EDITOR_INSERT_MODES,
-} from "../types/DashboardConstants";
+import { PROMPT_EDITOR_INSERT_MODES } from "../types/DashboardConstants";
 import type { PromptEditorInsertRequest } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 
@@ -25,9 +23,7 @@ interface TimelineItemLike {
 }
 
 export class ContextMenuReferenceCommands {
-  constructor(
-    private readonly webviewProvider: FlightPathWebviewProvider
-  ) {}
+  constructor(private readonly webviewProvider: FlightPathWebviewProvider) {}
 
   async addFileToPromptEditor(uri: vscode.Uri): Promise<void> {
     if (!uri) {
@@ -79,8 +75,10 @@ export class ContextMenuReferenceCommands {
         ? vscode.window.activeTextEditor
         : undefined;
 
-    const startLine = editor && !editor.selection.isEmpty ? editor.selection.start.line + 1 : 1;
-    const endLine = editor && !editor.selection.isEmpty ? editor.selection.end.line + 1 : 1;
+    const startLine =
+      editor && !editor.selection.isEmpty ? editor.selection.start.line + 1 : 1;
+    const endLine =
+      editor && !editor.selection.isEmpty ? editor.selection.end.line + 1 : 1;
 
     await this.insertReferences([
       buildSelectionReference(relativePath, startLine, endLine),
@@ -108,7 +106,10 @@ export class ContextMenuReferenceCommands {
         ? vscode.window.activeTextEditor
         : undefined;
 
-    const targetLine = Math.max(1, lineNumber ?? (editor?.selection.active.line ?? 0) + 1);
+    const targetLine = Math.max(
+      1,
+      lineNumber ?? (editor?.selection.active.line ?? 0) + 1
+    );
     const symbolReference = await this.tryBuildSymbolReference(uri, targetLine);
     if (symbolReference) {
       await this.insertReferences([symbolReference]);
@@ -199,7 +200,10 @@ export class ContextMenuReferenceCommands {
         symbol.range.start.line + 1
       );
     } catch (error) {
-      Log.warn("FlightPath: Failed to resolve symbol for editor context", error);
+      Log.warn(
+        "FlightPath: Failed to resolve symbol for editor context",
+        error
+      );
       return undefined;
     }
   }
@@ -227,9 +231,7 @@ export class ContextMenuReferenceCommands {
   }
 
   private extractScmResourceUris(args: unknown[]): vscode.Uri[] {
-    const flattened = args.flatMap((arg) =>
-      Array.isArray(arg) ? arg : [arg]
-    );
+    const flattened = args.flatMap((arg) => (Array.isArray(arg) ? arg : [arg]));
     const seen = new Set<string>();
     const uris: vscode.Uri[] = [];
 

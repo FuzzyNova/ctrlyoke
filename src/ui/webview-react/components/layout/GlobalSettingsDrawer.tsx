@@ -3,7 +3,11 @@ import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
-import { MESSAGE_TYPES, SETTING_SCOPES, type SettingWriteScope } from "@/types/messages";
+import {
+  MESSAGE_TYPES,
+  SETTING_SCOPES,
+  type SettingWriteScope,
+} from "@/types/messages";
 import { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 import {
   GeneralSection,
@@ -53,7 +57,9 @@ export function GlobalSettingsDrawer() {
   const serverRunning = useSettingsStore((s) => s.serverRunning);
   const dev = useSettingsStore((s) => s.dev);
   const [drawerRef, isNarrow] = useElementNarrow(580);
-  const [activeScope, setActiveScope] = useState<SettingWriteScope>(SETTING_SCOPES.USER);
+  const [activeScope, setActiveScope] = useState<SettingWriteScope>(
+    SETTING_SCOPES.USER
+  );
   const visibleTabs = TABS.filter((t) => t.id !== "developer" || dev?.enabled);
   const effectiveActiveTab = visibleTabs.some((t) => t.id === activeTab)
     ? activeTab
@@ -117,7 +123,11 @@ export function GlobalSettingsDrawer() {
           </span>
 
           {/* Scope toggle */}
-          <div className="fp-mode-switch ml-2" role="group" aria-label="Settings scope">
+          <div
+            className="fp-mode-switch ml-2"
+            role="group"
+            aria-label="Settings scope"
+          >
             <button
               type="button"
               onClick={() => setActiveScope(SETTING_SCOPES.USER)}

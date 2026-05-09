@@ -43,6 +43,7 @@ Before investing in a native app, we can meaningfully improve the PWA experience
 Result: user saves two FlightPath workspaces to homescreen → two distinct colored icons → immediately recognizable.
 
 The server already builds a theme block (`buildThemeStyleBlock`) and injects it into HTML, so the plumbing for per-workspace color config is largely there. The main additions are:
+
 - Config field for `accentColor`
 - SVG colorization utility (reuse the logic from `generate-app-icons.mjs`)
 - Dynamic icon routes in `FlightPathHostedServer`

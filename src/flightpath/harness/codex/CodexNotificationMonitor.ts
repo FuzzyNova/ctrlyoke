@@ -4,10 +4,7 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type {
-  HookEvent,
-  UserHookConfig,
-} from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
  * Codex CLI Notification Monitor
@@ -60,7 +57,10 @@ export class CodexNotificationMonitor
     userHooks?: UserHookConfig[],
     flightpathEvents?: HookEvent[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      notifyDir
+    );
     const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
     const eventMap: Record<HookEvent, string> = {
       stop: "Stop",

@@ -20,26 +20,27 @@ Automate AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwe
 <instructionFiles>
 Detailed implementation guidelines live in `.github/instructions/`. Read the relevant file before modifying code in that area.
 
-| File Pattern | Instruction File |
-|---|---|
-| `src/extension.ts`, `src/mcp-server.ts` | `extension.instructions.md` |
-| `src/flightpath/*.ts` (top-level only) | `flightpath-core.instructions.md` |
-| `src/flightpath/harness/**` | `harness-integrations.instructions.md` |
-| `src/flightpath/harness/chat/**` | `flightpath-chat.instructions.md` |
-| `src/flightpath/orchestration/**` | `flightpath-orchestration.instructions.md` |
-| `src/cli.ts`, `src/cli/**` | `flightpath-cli-binary.instructions.md` |
-| `src/config/**` | `config.instructions.md` |
-| `src/platform/**` | `platform.instructions.md` |
-| `src/server/**` | `server.instructions.md` |
-| `src/ui/**` (excl. webview-react) | `ui.instructions.md` |
-| `src/ui/webview-react/**` | `webview-react.instructions.md` |
-| `src/types/**` | `types.instructions.md` |
-| `src/utils/**` | `utils.instructions.md` |
-| `src/completions/**` | `completions.instructions.md` |
-| `src/templates/**` | `templates.instructions.md` |
-| `src/scripts/**` | `scripts.instructions.md` |
-| `src/test/**` | `test.instructions.md` |
-| `src/dev/**` | `dev.instructions.md` |
+| File Pattern                            | Instruction File                           |
+| --------------------------------------- | ------------------------------------------ |
+| `src/extension.ts`, `src/mcp-server.ts` | `extension.instructions.md`                |
+| `src/flightpath/*.ts` (top-level only)  | `flightpath-core.instructions.md`          |
+| `src/flightpath/harness/**`             | `harness-integrations.instructions.md`     |
+| `src/flightpath/harness/chat/**`        | `flightpath-chat.instructions.md`          |
+| `src/flightpath/orchestration/**`       | `flightpath-orchestration.instructions.md` |
+| `src/cli.ts`, `src/cli/**`              | `flightpath-cli-binary.instructions.md`    |
+| `src/config/**`                         | `config.instructions.md`                   |
+| `src/platform/**`                       | `platform.instructions.md`                 |
+| `src/server/**`                         | `server.instructions.md`                   |
+| `src/ui/**` (excl. webview-react)       | `ui.instructions.md`                       |
+| `src/ui/webview-react/**`               | `webview-react.instructions.md`            |
+| `src/types/**`                          | `types.instructions.md`                    |
+| `src/utils/**`                          | `utils.instructions.md`                    |
+| `src/completions/**`                    | `completions.instructions.md`              |
+| `src/templates/**`                      | `templates.instructions.md`                |
+| `src/scripts/**`                        | `scripts.instructions.md`                  |
+| `src/test/**`                           | `test.instructions.md`                     |
+| `src/dev/**`                            | `dev.instructions.md`                      |
+
 </instructionFiles>
 
 <architecture>
@@ -113,31 +114,31 @@ User loads workflow (.flightpath.yaml/.json/.prompt.md)
 <navigationGuide>
 ### Key Source Files (Quick Reference)
 
-| File                                      | Role                                                                           |
-| ----------------------------------------- | ------------------------------------------------------------------------------ |
-| `src/extension.ts`                        | Entry point — activates harnesses, registers commands, LM tools, and providers |
-| `src/mcp-server.ts`                       | Standalone MCP server binary (`flightpath-mcp`)                                |
-| `src/cli.ts`                              | Standalone CLI binary entry point (`flightpath`)                               |
-| `src/platform/PlatformAdapter.ts`         | Abstract interface for VS Code / CLI platform abstraction                      |
-| `src/flightpath/WorkflowOrchestrator.ts`  | Singleton registry — harness lifecycle, cross-cutting resources                |
-| `src/flightpath/WorkflowInstance.ts`      | Per-workflow execution state (queue, executor, history, output buffer)         |
-| `src/flightpath/WorkflowStateMachine.ts`  | Sole owner of runtime status transitions                                       |
-| `src/flightpath/HarnessIntegration.ts`    | Abstract base class for all harnesses                                          |
-| `src/flightpath/PromptQueue.ts`           | Prompt list with hash-based deduplication                                      |
-| `src/flightpath/WorkflowExecutor.ts`      | Sequential execution loop (two-phase: queue → finalStep)                       |
-| `src/flightpath/PromptFileParser.ts`      | YAML/JSON parsing with AJV validation                                          |
-| `src/flightpath/EndConditionEvaluator.ts` | Script validation in isolated child process                                    |
-| `src/flightpath/IntegrationFactory.ts`    | Factory for creating harness-specific CliIntegration instances                 |
-| `src/flightpath/VsCodeIntegrationFactory.ts` | Extends IntegrationFactory with VS Code-only harness support (copilot-chat) |
-| `src/config/FlightPathConfigService.ts`   | Platform-agnostic config singleton (CLI + extension core)                      |
-| `src/types/DashboardConstants.ts`         | **Single source of truth** for all shared constants (100+ message types)       |
-| `src/types/FlightPathTypes.ts`            | Core workflow types (PromptItem, Harness enum, ExecutionProperties, etc.)      |
-| `src/utils/ConfigurationUtils.ts`         | All VS Code settings access centralized here                                   |
-| `src/utils/ModelConstants.ts`             | Single source of truth for model lists                                         |
-| `src/utils/McpDiscoveryUtils.ts`          | Local and registry MCP server discovery                                        |
-| `src/ui/DashboardBroadcastHub.ts`         | Fan-out hub — decouples orchestrator from webview and other dashboard sinks    |
-| `src/ui/FlightPathWebviewProvider.ts`     | React webview lifecycle and message routing                                    |
-| `/schemas/prompt-schema.json`             | JSON Schema for prompt files (source — never edit `out/schemas/`)              |
+| File                                         | Role                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------ |
+| `src/extension.ts`                           | Entry point — activates harnesses, registers commands, LM tools, and providers |
+| `src/mcp-server.ts`                          | Standalone MCP server binary (`flightpath-mcp`)                                |
+| `src/cli.ts`                                 | Standalone CLI binary entry point (`flightpath`)                               |
+| `src/platform/PlatformAdapter.ts`            | Abstract interface for VS Code / CLI platform abstraction                      |
+| `src/flightpath/WorkflowOrchestrator.ts`     | Singleton registry — harness lifecycle, cross-cutting resources                |
+| `src/flightpath/WorkflowInstance.ts`         | Per-workflow execution state (queue, executor, history, output buffer)         |
+| `src/flightpath/WorkflowStateMachine.ts`     | Sole owner of runtime status transitions                                       |
+| `src/flightpath/HarnessIntegration.ts`       | Abstract base class for all harnesses                                          |
+| `src/flightpath/PromptQueue.ts`              | Prompt list with hash-based deduplication                                      |
+| `src/flightpath/WorkflowExecutor.ts`         | Sequential execution loop (two-phase: queue → finalStep)                       |
+| `src/flightpath/PromptFileParser.ts`         | YAML/JSON parsing with AJV validation                                          |
+| `src/flightpath/EndConditionEvaluator.ts`    | Script validation in isolated child process                                    |
+| `src/flightpath/IntegrationFactory.ts`       | Factory for creating harness-specific CliIntegration instances                 |
+| `src/flightpath/VsCodeIntegrationFactory.ts` | Extends IntegrationFactory with VS Code-only harness support (copilot-chat)    |
+| `src/config/FlightPathConfigService.ts`      | Platform-agnostic config singleton (CLI + extension core)                      |
+| `src/types/DashboardConstants.ts`            | **Single source of truth** for all shared constants (100+ message types)       |
+| `src/types/FlightPathTypes.ts`               | Core workflow types (PromptItem, Harness enum, ExecutionProperties, etc.)      |
+| `src/utils/ConfigurationUtils.ts`            | All VS Code settings access centralized here                                   |
+| `src/utils/ModelConstants.ts`                | Single source of truth for model lists                                         |
+| `src/utils/McpDiscoveryUtils.ts`             | Local and registry MCP server discovery                                        |
+| `src/ui/DashboardBroadcastHub.ts`            | Fan-out hub — decouples orchestrator from webview and other dashboard sinks    |
+| `src/ui/FlightPathWebviewProvider.ts`        | React webview lifecycle and message routing                                    |
+| `/schemas/prompt-schema.json`                | JSON Schema for prompt files (source — never edit `out/schemas/`)              |
 
 </navigationGuide>
 
@@ -407,23 +408,23 @@ See `dev/implemented/ADDING_NEW_CLI_HARNESS.md`. Creates files in `src/flightpat
 
 ## Where Things Live (Single Sources of Truth)
 
-| What                                                              | Location                            |
-| ----------------------------------------------------------------- | ----------------------------------- |
-| All shared string constants (message types, states, harness IDs)  | `src/types/DashboardConstants.ts`   |
-| Core workflow types (`PromptItem`, `Harness` enum, `WorkingFile`) | `src/types/FlightPathTypes.ts`      |
-| Universal CLI output types                                        | `src/types/CliOutputTypes.ts`       |
-| Extension ↔ webview message contracts                             | `src/types/WebviewMessageTypes.ts`  |
-| Workflow context for harness sendPrompt calls                     | `src/types/WorkflowContextTypes.ts` |
-| Structured global settings interface                              | `src/types/FlightPathSettings.ts`   |
-| Per-run output history and undo types                             | `src/types/OutputHistoryTypes.ts`   |
-| Event-sourced timeline types (run history v2)                     | `src/types/WorkflowTimelineTypes.ts`|
-| Dashboard sink interface (decouples WorkflowInstance from vscode) | `src/types/IDashboardSink.ts`       |
-| Model lists and display names                                     | `src/utils/ModelConstants.ts`       |
-| All VS Code settings access                                       | `src/utils/ConfigurationUtils.ts`   |
+| What                                                              | Location                                |
+| ----------------------------------------------------------------- | --------------------------------------- |
+| All shared string constants (message types, states, harness IDs)  | `src/types/DashboardConstants.ts`       |
+| Core workflow types (`PromptItem`, `Harness` enum, `WorkingFile`) | `src/types/FlightPathTypes.ts`          |
+| Universal CLI output types                                        | `src/types/CliOutputTypes.ts`           |
+| Extension ↔ webview message contracts                             | `src/types/WebviewMessageTypes.ts`      |
+| Workflow context for harness sendPrompt calls                     | `src/types/WorkflowContextTypes.ts`     |
+| Structured global settings interface                              | `src/types/FlightPathSettings.ts`       |
+| Per-run output history and undo types                             | `src/types/OutputHistoryTypes.ts`       |
+| Event-sourced timeline types (run history v2)                     | `src/types/WorkflowTimelineTypes.ts`    |
+| Dashboard sink interface (decouples WorkflowInstance from vscode) | `src/types/IDashboardSink.ts`           |
+| Model lists and display names                                     | `src/utils/ModelConstants.ts`           |
+| All VS Code settings access                                       | `src/utils/ConfigurationUtils.ts`       |
 | Platform-agnostic config access (core + CLI)                      | `src/config/FlightPathConfigService.ts` |
-| Prompt file JSON schema                                           | `schemas/prompt-schema.json`        |
-| Directory path name constants                                     | `ConfigurationUtils.PATH_CONSTANTS` |
-| Platform abstraction contract                                     | `src/platform/PlatformAdapter.ts`   |
+| Prompt file JSON schema                                           | `schemas/prompt-schema.json`            |
+| Directory path name constants                                     | `ConfigurationUtils.PATH_CONSTANTS`     |
+| Platform abstraction contract                                     | `src/platform/PlatformAdapter.ts`       |
 
 </singleSourcesOfTruth>
 

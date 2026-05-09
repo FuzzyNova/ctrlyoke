@@ -261,7 +261,15 @@ function isHookEventEnabled(logicalEvent) {
  * @param {string|undefined} toolName - Tool name for preToolUse/postToolUse
  * @param {function} debugLog - Logger function
  */
-function maybeWriteHookArtifact(logicalEvent, nativeHookEvent, hookInput, notifyDir, sessionId, toolName, debugLog) {
+function maybeWriteHookArtifact(
+  logicalEvent,
+  nativeHookEvent,
+  hookInput,
+  notifyDir,
+  sessionId,
+  toolName,
+  debugLog
+) {
   if (!isHookEventEnabled(logicalEvent)) {
     return;
   }
@@ -299,7 +307,10 @@ function writeHookArtifact(notifyDir, artifact, debugLog) {
     const filePath = path.join(notifyDir, fileName);
     fs.writeFileSync(filePath, JSON.stringify(artifact));
     if (debugLog) {
-      debugLog("📤 writeHookArtifact: wrote artifact", { filePath, event: artifact.hookEvent });
+      debugLog("📤 writeHookArtifact: wrote artifact", {
+        filePath,
+        event: artifact.hookEvent,
+      });
     }
   } catch (err) {
     if (debugLog) {

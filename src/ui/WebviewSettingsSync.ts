@@ -994,16 +994,8 @@ export class WebviewSettingsSync {
     await fs.writeFile(certPath, pems.cert, "utf8");
     await fs.writeFile(keyPath, pems.private, "utf8");
 
-    await configService.set(
-      CONFIG_KEYS.SERVER_TLS_CERT_PATH,
-      certPath,
-      scope
-    );
-    await configService.set(
-      CONFIG_KEYS.SERVER_TLS_KEY_PATH,
-      keyPath,
-      scope
-    );
+    await configService.set(CONFIG_KEYS.SERVER_TLS_CERT_PATH, certPath, scope);
+    await configService.set(CONFIG_KEYS.SERVER_TLS_KEY_PATH, keyPath, scope);
     await this.handleGlobalSettingsLoadRequest(postMessage);
 
     this.emitMessage(

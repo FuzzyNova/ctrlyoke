@@ -331,7 +331,9 @@ export class QwenLogParser extends BaseLogParser {
             cachedInputTokens:
               totalCachedTokens > 0 ? totalCachedTokens : undefined,
             contextWindowUsedTokens,
-            contextWindowSize: getQwenContextWindowSize(model ?? this.resolvedModel),
+            contextWindowSize: getQwenContextWindowSize(
+              model ?? this.resolvedModel
+            ),
           }
         : undefined;
 

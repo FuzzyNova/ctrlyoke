@@ -21,23 +21,17 @@ import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 // ---------------------------------------------------------------------------
 
 // Stub both content panes so they don't kick off API calls on mount.
-vi.mock(
-  "@components/workspace-viewer/WorkspaceExplorerPane",
-  () => ({
-    WorkspaceExplorerPane: () => (
-      <div data-testid="explorer-pane">ExplorerPane</div>
-    ),
-  })
-);
+vi.mock("@components/workspace-viewer/WorkspaceExplorerPane", () => ({
+  WorkspaceExplorerPane: () => (
+    <div data-testid="explorer-pane">ExplorerPane</div>
+  ),
+}));
 
-vi.mock(
-  "@components/workspace-viewer/WorkspaceSourceControlPane",
-  () => ({
-    WorkspaceSourceControlPane: () => (
-      <div data-testid="source-control-pane">SourceControlPane</div>
-    ),
-  })
-);
+vi.mock("@components/workspace-viewer/WorkspaceSourceControlPane", () => ({
+  WorkspaceSourceControlPane: () => (
+    <div data-testid="source-control-pane">SourceControlPane</div>
+  ),
+}));
 
 // ---------------------------------------------------------------------------
 // Store reset
@@ -55,9 +49,7 @@ describe("WorkspaceViewerModal — visibility", () => {
   it("renders nothing when isOpen is false", () => {
     render(<WorkspaceViewerModal />);
 
-    expect(
-      screen.queryByText("FlightPath Workspace")
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("FlightPath Workspace")).not.toBeInTheDocument();
   });
 
   it("renders the modal when isOpen is true", () => {
@@ -226,7 +218,9 @@ describe("workspaceViewerStore — file read-only state", () => {
     useWorkspaceViewerStore.getState().setFileReadOnly(false);
 
     expect(useWorkspaceViewerStore.getState().fileReadOnly).toBe(false);
-    expect(useWorkspaceViewerStore.getState().fileReadOnlyReason).toBeUndefined();
+    expect(
+      useWorkspaceViewerStore.getState().fileReadOnlyReason
+    ).toBeUndefined();
   });
 
   it("selectFile resets fileReadOnly state", () => {
@@ -238,7 +232,9 @@ describe("workspaceViewerStore — file read-only state", () => {
     useWorkspaceViewerStore.getState().selectFile("src/index.ts");
 
     expect(useWorkspaceViewerStore.getState().fileReadOnly).toBe(false);
-    expect(useWorkspaceViewerStore.getState().fileReadOnlyReason).toBeUndefined();
+    expect(
+      useWorkspaceViewerStore.getState().fileReadOnlyReason
+    ).toBeUndefined();
   });
 
   it("clearFile resets fileReadOnly state", () => {
@@ -250,7 +246,9 @@ describe("workspaceViewerStore — file read-only state", () => {
     useWorkspaceViewerStore.getState().clearFile();
 
     expect(useWorkspaceViewerStore.getState().fileReadOnly).toBe(false);
-    expect(useWorkspaceViewerStore.getState().fileReadOnlyReason).toBeUndefined();
+    expect(
+      useWorkspaceViewerStore.getState().fileReadOnlyReason
+    ).toBeUndefined();
   });
 });
 

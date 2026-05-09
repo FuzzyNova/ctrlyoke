@@ -33,11 +33,11 @@ FlightPath turns AI assistants into a repeatable workflow runner. Instead of pas
 
 It ships in two forms:
 
-| Surface | What it is |
-| --- | --- |
+| Surface           | What it is                                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
 | VS Code extension | Dashboard UI, prompt editor, embedded terminal, schema validation, and harness orchestration inside VS Code |
-| `flightpath` CLI | Headless or interactive workflow execution from a terminal or CI job |
-| `flightpath-mcp` | Standalone MCP server used for queue inspection and queue extension |
+| `flightpath` CLI  | Headless or interactive workflow execution from a terminal or CI job                                        |
+| `flightpath-mcp`  | Standalone MCP server used for queue inspection and queue extension                                         |
 
 ## Where to start
 

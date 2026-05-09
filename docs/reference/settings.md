@@ -13,24 +13,24 @@ These settings apply to both the extension and the standalone CLI where relevant
 
 ## Top-level sections
 
-| Section | Purpose |
-| --- | --- |
-| `harness` | Default harness |
-| `models` | Per-harness model defaults |
-| `additionalArgs` | Per-harness extra CLI arguments |
-| `execution` | Interactive vs headless behavior, prompt timeout, script timeout |
-| `tools` | Permission mode, allow/deny lists, harness-specific tool controls |
-| `workflow` | Defaults for new workflows |
-| `chat` | Copilot Chat behavior |
-| `mcp` | Default MCP servers |
-| `hooks` | Global user-defined hooks |
-| `queue` | Queue size and execution time limits |
-| `history` | Output history retention |
-| `terminal` | Embedded terminal behavior |
-| `ui` | Webview and prompt-editor behavior |
-| `server` | Hosted dashboard server settings |
-| `notifications` | VS Code and browser notification preferences |
-| `enableDiagnosticLogs` | Extra logging |
+| Section                | Purpose                                                           |
+| ---------------------- | ----------------------------------------------------------------- |
+| `harness`              | Default harness                                                   |
+| `models`               | Per-harness model defaults                                        |
+| `additionalArgs`       | Per-harness extra CLI arguments                                   |
+| `execution`            | Interactive vs headless behavior, prompt timeout, script timeout  |
+| `tools`                | Permission mode, allow/deny lists, harness-specific tool controls |
+| `workflow`             | Defaults for new workflows                                        |
+| `chat`                 | Copilot Chat behavior                                             |
+| `mcp`                  | Default MCP servers                                               |
+| `hooks`                | Global user-defined hooks                                         |
+| `queue`                | Queue size and execution time limits                              |
+| `history`              | Output history retention                                          |
+| `terminal`             | Embedded terminal behavior                                        |
+| `ui`                   | Webview and prompt-editor behavior                                |
+| `server`               | Hosted dashboard server settings                                  |
+| `notifications`        | VS Code and browser notification preferences                      |
+| `enableDiagnosticLogs` | Extra logging                                                     |
 
 ## Common settings
 

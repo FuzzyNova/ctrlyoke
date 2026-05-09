@@ -90,7 +90,9 @@ export function WorkflowDefaultsSection({
     return (
       <div className="flex items-center gap-1.5">
         <span>{label}</span>
-        {source && source !== "default" && <SettingSourceBadge source={source} />}
+        {source && source !== "default" && (
+          <SettingSourceBadge source={source} />
+        )}
         <button
           type="button"
           aria-label={`Reset ${label}`}
@@ -106,7 +108,9 @@ export function WorkflowDefaultsSection({
                 : undefined
           }
           className={`w-4 h-4 flex items-center justify-center rounded text-description-fg hover:text-foreground transition-opacity ${
-            canReset ? "opacity-0 group-hover:opacity-100" : "opacity-0 pointer-events-none"
+            canReset
+              ? "opacity-0 group-hover:opacity-100"
+              : "opacity-0 pointer-events-none"
           }`}
         >
           <i className="codicon codicon-discard text-xxs" />

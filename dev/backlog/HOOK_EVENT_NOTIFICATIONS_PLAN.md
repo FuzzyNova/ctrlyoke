@@ -126,14 +126,14 @@ That means the current runtime plumbing is not enough for headless parity.
 
 ### Supported harness matrix
 
-| Logical event         | Claude CLI         | Copilot CLI         | Codex CLI          | Qwen CLI           | Gemini CLI        | OpenCode             |
-| --------------------- | ------------------ | ------------------- | ------------------ | ------------------ | ----------------- | -------------------- |
-| `stop`                | `Stop`             | `agentStop`         | `Stop`             | `Stop`             | `AfterAgent`      | `session.status idle` |
-| `sessionStart`        | `SessionStart`     | `sessionStart`      | `SessionStart`     | `SessionStart`     | `SessionStart`    | `session.created`     |
-| `preToolUse`          | `PreToolUse`       | `preToolUse`        | `PreToolUse`       | `PreToolUse`       | `BeforeTool`      | `tool.execute.before` |
-| `postToolUse`         | `PostToolUse`      | `postToolUse`       | `PostToolUse`      | `PostToolUse`      | `AfterTool`       | `tool.execute.after`  |
-| `userPromptSubmit`    | `UserPromptSubmit` | `userPromptSubmitted` | `UserPromptSubmit` | `UserPromptSubmit` | `BeforeAgent`     | `session.status busy` |
-| `permissionRequest`   | `PermissionRequest` | unsupported        | `PermissionRequest` | unsupported        | unsupported       | `permission.asked`    |
+| Logical event       | Claude CLI          | Copilot CLI           | Codex CLI           | Qwen CLI           | Gemini CLI     | OpenCode              |
+| ------------------- | ------------------- | --------------------- | ------------------- | ------------------ | -------------- | --------------------- |
+| `stop`              | `Stop`              | `agentStop`           | `Stop`              | `Stop`             | `AfterAgent`   | `session.status idle` |
+| `sessionStart`      | `SessionStart`      | `sessionStart`        | `SessionStart`      | `SessionStart`     | `SessionStart` | `session.created`     |
+| `preToolUse`        | `PreToolUse`        | `preToolUse`          | `PreToolUse`        | `PreToolUse`       | `BeforeTool`   | `tool.execute.before` |
+| `postToolUse`       | `PostToolUse`       | `postToolUse`         | `PostToolUse`       | `PostToolUse`      | `AfterTool`    | `tool.execute.after`  |
+| `userPromptSubmit`  | `UserPromptSubmit`  | `userPromptSubmitted` | `UserPromptSubmit`  | `UserPromptSubmit` | `BeforeAgent`  | `session.status busy` |
+| `permissionRequest` | `PermissionRequest` | unsupported           | `PermissionRequest` | unsupported        | unsupported    | `permission.asked`    |
 
 Unsupported events should remain valid to store in global settings and should simply no-op on harnesses that do not expose them.
 
@@ -145,12 +145,16 @@ Add a new notification-settings branch:
 
 ```ts
 notifications: {
-  vscode: { enabled: boolean };
-  browser: { mode: BrowserNotificationMode };
+  vscode: {
+    enabled: boolean;
+  }
+  browser: {
+    mode: BrowserNotificationMode;
+  }
   events: {
     workflowComplete: NotificationEventMode;
     promptComplete: NotificationEventMode;
-  };
+  }
   hookEvents: {
     stop: boolean;
     sessionStart: boolean;
@@ -158,7 +162,7 @@ notifications: {
     postToolUse: boolean;
     userPromptSubmit: boolean;
     permissionRequest: boolean;
-  };
+  }
   includeWorkflowName: boolean;
   includePromptName: boolean;
   onlyWhenWindowUnfocused: boolean;
@@ -288,7 +292,7 @@ Update:
 
 Implementation shape:
 
-- completion notifications are still *detected* where they are today
+- completion notifications are still _detected_ where they are today
 - once built, both completion and hook notifications should flow through the same generic dispatch method
 - panel webview delivery should continue to use `MESSAGE_TYPES.NOTIFICATION_EVENT`
 - hosted browser delivery should continue to reuse the current broadcast + push code path
@@ -564,13 +568,13 @@ Unsupported. No implementation work beyond keeping UI copy accurate.
 
 Extend `src/ui/webview-react/components/settings/NotificationsSection.tsx` with a new compact table:
 
-| Event              | Notify   | Meaning |
-| ------------------ | -------- | ------- |
-| Session Start      | checkbox | AI session started for this prompt |
-| User Prompt Submit | checkbox | prompt submitted into the harness |
-| Pre Tool Use       | checkbox | before a tool call |
-| Post Tool Use      | checkbox | after a tool call |
-| Stop               | checkbox | harness completion hook |
+| Event              | Notify   | Meaning                                                  |
+| ------------------ | -------- | -------------------------------------------------------- |
+| Session Start      | checkbox | AI session started for this prompt                       |
+| User Prompt Submit | checkbox | prompt submitted into the harness                        |
+| Pre Tool Use       | checkbox | before a tool call                                       |
+| Post Tool Use      | checkbox | after a tool call                                        |
+| Stop               | checkbox | harness completion hook                                  |
 | Permission Request | checkbox | harness is asking for an interactive permission decision |
 
 Behavior:

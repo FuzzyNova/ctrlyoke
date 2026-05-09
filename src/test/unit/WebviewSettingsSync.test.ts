@@ -6,7 +6,10 @@ import * as vscode from "vscode";
 import { suite, test, afterEach } from "mocha";
 import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
-import { MESSAGE_TYPES, type SettingWriteScope } from "../../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  type SettingWriteScope,
+} from "../../types/DashboardConstants";
 import { configService } from "../../config/FlightPathConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../../types/FlightPathSettings";
@@ -105,12 +108,14 @@ suite("WebviewSettingsSync", () => {
       const originalSet = configService.set.bind(configService);
 
       const homeDir = tempDir("user-home");
-      const setCalls: Array<{ key: string; value: unknown; scope: string }> = [];
+      const setCalls: Array<{ key: string; value: unknown; scope: string }> =
+        [];
 
       try {
         configService.get = ((key: string) =>
-          key === CONFIG_KEYS.SERVER ? { bindAddress: "127.0.0.1" } : undefined
-        ) as typeof configService.get;
+          key === CONFIG_KEYS.SERVER
+            ? { bindAddress: "127.0.0.1" }
+            : undefined) as typeof configService.get;
         configService.set = (async (key, value, scope) => {
           setCalls.push({ key, value, scope });
         }) as typeof configService.set;
@@ -164,7 +169,8 @@ suite("WebviewSettingsSync", () => {
       const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
 
       const workspaceRoot = tempDir("workspace-root");
-      const setCalls: Array<{ key: string; value: unknown; scope: string }> = [];
+      const setCalls: Array<{ key: string; value: unknown; scope: string }> =
+        [];
 
       try {
         Object.defineProperty(vscode.workspace, "workspaceFolders", {
@@ -172,8 +178,9 @@ suite("WebviewSettingsSync", () => {
           configurable: true,
         });
         configService.get = ((key: string) =>
-          key === CONFIG_KEYS.SERVER ? { bindAddress: "127.0.0.1" } : undefined
-        ) as typeof configService.get;
+          key === CONFIG_KEYS.SERVER
+            ? { bindAddress: "127.0.0.1" }
+            : undefined) as typeof configService.get;
         configService.set = (async (key, value, scope) => {
           setCalls.push({ key, value, scope });
         }) as typeof configService.set;

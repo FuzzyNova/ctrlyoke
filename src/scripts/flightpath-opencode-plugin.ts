@@ -216,68 +216,69 @@ export const FlightPathHook = async (_hookContext: unknown) => {
       });
     } catch (e) {
       _debugLog("❌ Failed to write start file", { error: String(e) });
-  }
-}
-
-function _buildHookArtifactBase():
-  | Omit<HookArtifact, "hookEvent" | "nativeHookEvent" | "rawHookData">
-  | null {
-  if (!NOTIFY_DIR || !RUN_ID) {
-    return null;
-  }
-  return {
-    runId: RUN_ID,
-    timestamp: Date.now(),
-    workflowId: process.env.FLIGHTPATH_WORKFLOW_ID || "",
-    workflowName: process.env.FLIGHTPATH_WORKFLOW_NAME || "",
-    promptIndex: parseInt(process.env.FLIGHTPATH_PROMPT_INDEX || "0", 10),
-    promptName: process.env.FLIGHTPATH_PROMPT_NAME || "",
-    harnessId: process.env.FLIGHTPATH_HARNESS_ID || "",
-  };
-}
-
-function _writeHookArtifact(
-  hookEvent: string,
-  nativeHookEvent: string,
-  rawHookData: unknown,
-  extras: {
-    sessionId?: string;
-    toolName?: string;
-  } = {}
-): void {
-  if (!ENABLED_HOOK_EVENTS.has(hookEvent) || !NOTIFY_DIR) {
-    return;
+    }
   }
 
-  const base = _buildHookArtifactBase();
-  if (!base) {
-    return;
-  }
-
-  try {
-    mkdirSync(NOTIFY_DIR, { recursive: true });
-    const artifact: HookArtifact = {
-      ...base,
-      hookEvent,
-      nativeHookEvent,
-      sessionId: extras.sessionId,
-      toolName: extras.toolName,
-      rawHookData,
+  function _buildHookArtifactBase(): Omit<
+    HookArtifact,
+    "hookEvent" | "nativeHookEvent" | "rawHookData"
+  > | null {
+    if (!NOTIFY_DIR || !RUN_ID) {
+      return null;
+    }
+    return {
+      runId: RUN_ID,
+      timestamp: Date.now(),
+      workflowId: process.env.FLIGHTPATH_WORKFLOW_ID || "",
+      workflowName: process.env.FLIGHTPATH_WORKFLOW_NAME || "",
+      promptIndex: parseInt(process.env.FLIGHTPATH_PROMPT_INDEX || "0", 10),
+      promptName: process.env.FLIGHTPATH_PROMPT_NAME || "",
+      harnessId: process.env.FLIGHTPATH_HARNESS_ID || "",
     };
-    const filePath = path.join(
-      NOTIFY_DIR,
-      `${artifact.runId}-hook-${artifact.timestamp}-${process.pid}-${hookArtifactCounter++}.json`
-    );
-    writeFileSync(filePath, JSON.stringify(artifact));
-    _debugLog("📤 Wrote hook artifact", {
-      hookEvent,
-      nativeHookEvent,
-      filePath,
-    });
-  } catch (error) {
-    _debugLog("❌ Failed to write hook artifact", { error: String(error) });
   }
-}
+
+  function _writeHookArtifact(
+    hookEvent: string,
+    nativeHookEvent: string,
+    rawHookData: unknown,
+    extras: {
+      sessionId?: string;
+      toolName?: string;
+    } = {}
+  ): void {
+    if (!ENABLED_HOOK_EVENTS.has(hookEvent) || !NOTIFY_DIR) {
+      return;
+    }
+
+    const base = _buildHookArtifactBase();
+    if (!base) {
+      return;
+    }
+
+    try {
+      mkdirSync(NOTIFY_DIR, { recursive: true });
+      const artifact: HookArtifact = {
+        ...base,
+        hookEvent,
+        nativeHookEvent,
+        sessionId: extras.sessionId,
+        toolName: extras.toolName,
+        rawHookData,
+      };
+      const filePath = path.join(
+        NOTIFY_DIR,
+        `${artifact.runId}-hook-${artifact.timestamp}-${process.pid}-${hookArtifactCounter++}.json`
+      );
+      writeFileSync(filePath, JSON.stringify(artifact));
+      _debugLog("📤 Wrote hook artifact", {
+        hookEvent,
+        nativeHookEvent,
+        filePath,
+      });
+    } catch (error) {
+      _debugLog("❌ Failed to write hook artifact", { error: String(error) });
+    }
+  }
 
   return {
     event: async ({
@@ -369,9 +370,14 @@ function _writeHookArtifact(
             _runUserHooks("userPromptSubmit");
           } else if (status.type === "idle") {
             _debugLog("🛑 session.status idle (main)", { sessionID });
-            _writeHookArtifact("stop", "session.status idle", event.properties, {
-              sessionId: sessionID,
-            });
+            _writeHookArtifact(
+              "stop",
+              "session.status idle",
+              event.properties,
+              {
+                sessionId: sessionID,
+              }
+            );
             if (NOTIFY_DIR) {
               try {
                 mkdirSync(NOTIFY_DIR, { recursive: true });

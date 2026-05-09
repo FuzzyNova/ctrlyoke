@@ -3,7 +3,11 @@ import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
-import { workspaceTree, workspaceFile, workspaceSaveFile } from "@utils/hostedApi";
+import {
+  workspaceTree,
+  workspaceFile,
+  workspaceSaveFile,
+} from "@utils/hostedApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { WorkspaceFileEditor } from "./WorkspaceFileEditor";
 import { DirtyExitGuard } from "./DirtyExitGuard";
@@ -13,20 +17,30 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const explorerEntries = useWorkspaceViewerStore((s) => s.explorerEntries);
   const explorerLoading = useWorkspaceViewerStore((s) => s.explorerLoading);
   const setExplorerPath = useWorkspaceViewerStore((s) => s.setExplorerPath);
-  const setExplorerEntries = useWorkspaceViewerStore((s) => s.setExplorerEntries);
-  const setExplorerLoading = useWorkspaceViewerStore((s) => s.setExplorerLoading);
+  const setExplorerEntries = useWorkspaceViewerStore(
+    (s) => s.setExplorerEntries
+  );
+  const setExplorerLoading = useWorkspaceViewerStore(
+    (s) => s.setExplorerLoading
+  );
   const selectedFilePath = useWorkspaceViewerStore((s) => s.selectedFilePath);
   const fileContent = useWorkspaceViewerStore((s) => s.fileContent);
   const fileDirty = useWorkspaceViewerStore((s) => s.fileDirty);
   const fileLoading = useWorkspaceViewerStore((s) => s.fileLoading);
   const fileSaving = useWorkspaceViewerStore((s) => s.fileSaving);
   const fileReadOnly = useWorkspaceViewerStore((s) => s.fileReadOnly);
-  const fileReadOnlyReason = useWorkspaceViewerStore((s) => s.fileReadOnlyReason);
+  const fileReadOnlyReason = useWorkspaceViewerStore(
+    (s) => s.fileReadOnlyReason
+  );
   const dirtyExitPending = useWorkspaceViewerStore((s) => s.dirtyExitPending);
-  const mobileEditorVisible = useWorkspaceViewerStore((s) => s.mobileEditorVisible);
+  const mobileEditorVisible = useWorkspaceViewerStore(
+    (s) => s.mobileEditorVisible
+  );
   const selectFile = useWorkspaceViewerStore((s) => s.selectFile);
   const setFileContent = useWorkspaceViewerStore((s) => s.setFileContent);
-  const setOriginalFileContent = useWorkspaceViewerStore((s) => s.setOriginalFileContent);
+  const setOriginalFileContent = useWorkspaceViewerStore(
+    (s) => s.setOriginalFileContent
+  );
   const markFileSaved = useWorkspaceViewerStore((s) => s.markFileSaved);
   const setFileLoading = useWorkspaceViewerStore((s) => s.setFileLoading);
   const setFileSaving = useWorkspaceViewerStore((s) => s.setFileSaving);
@@ -35,12 +49,19 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const promptDirtyExit = useWorkspaceViewerStore((s) => s.promptDirtyExit);
   const confirmDirtyExit = useWorkspaceViewerStore((s) => s.confirmDirtyExit);
   const cancelDirtyExit = useWorkspaceViewerStore((s) => s.cancelDirtyExit);
-  const setMobileEditorVisible = useWorkspaceViewerStore((s) => s.setMobileEditorVisible);
+  const setMobileEditorVisible = useWorkspaceViewerStore(
+    (s) => s.setMobileEditorVisible
+  );
   const setError = useWorkspaceViewerStore((s) => s.setError);
 
-  const showHiddenFiles = useSettingsStore((s) => s.globalSettings.showHiddenFiles);
+  const showHiddenFiles = useSettingsStore(
+    (s) => s.globalSettings.showHiddenFiles
+  );
   const showHiddenFilesScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["ui.showHiddenFiles"] === SETTING_SCOPES.WORKSPACE ? SETTING_SCOPES.WORKSPACE : SETTING_SCOPES.USER
+    s.globalSettings.settingSources["ui.showHiddenFiles"] ===
+    SETTING_SCOPES.WORKSPACE
+      ? SETTING_SCOPES.WORKSPACE
+      : SETTING_SCOPES.USER
   );
   const vscode = useVsCodeApi();
 
@@ -167,7 +188,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // Handles both forward-slash and backslash separators.
   const renderBreadcrumb = () => {
     const sep = explorerPath.includes("\\") ? "\\" : "/";
-    const segments = explorerPath ? explorerPath.split(/[/\\]/).filter(Boolean) : [];
+    const segments = explorerPath
+      ? explorerPath.split(/[/\\]/).filter(Boolean)
+      : [];
     const crumbs: React.ReactNode[] = [
       <button
         key="root"
@@ -183,7 +206,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
       const segPath = segments.slice(0, i + 1).join(sep);
       const isLast = i === segments.length - 1;
       crumbs.push(
-        <span key={`sep-${i}`} className="opacity-40 text-xs mx-0.5 select-none">
+        <span
+          key={`sep-${i}`}
+          className="opacity-40 text-xs mx-0.5 select-none"
+        >
           /
         </span>
       );
@@ -238,7 +264,14 @@ export const WorkspaceExplorerPane: React.FC = () => {
         </div>
 
         <button
-          onClick={() => vscode.postMessage({ type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, path: "ui.showHiddenFiles", value: !showHiddenFiles, scope: showHiddenFilesScope })}
+          onClick={() =>
+            vscode.postMessage({
+              type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+              path: "ui.showHiddenFiles",
+              value: !showHiddenFiles,
+              scope: showHiddenFilesScope,
+            })
+          }
           className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
             showHiddenFiles
               ? "hover:bg-btn-secondary-hover text-editor-fg"
@@ -247,7 +280,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
           title={showHiddenFiles ? "Hide dotfiles" : "Show dotfiles"}
           aria-label={showHiddenFiles ? "Hide dotfiles" : "Show dotfiles"}
         >
-          <i className={`codicon ${showHiddenFiles ? "codicon-eye" : "codicon-eye-closed"} text-xs`} />
+          <i
+            className={`codicon ${showHiddenFiles ? "codicon-eye" : "codicon-eye-closed"} text-xs`}
+          />
         </button>
 
         <button
@@ -331,7 +366,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
             <span className="flex-1 text-sm truncate text-editor-fg min-w-0">
               {selectedFilePath}
               {fileDirty && (
-                <span className="ml-1.5 text-[var(--status-warning)]" title="Unsaved changes">
+                <span
+                  className="ml-1.5 text-[var(--status-warning)]"
+                  title="Unsaved changes"
+                >
                   ●
                 </span>
               )}
@@ -374,7 +412,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
           ) : fileReadOnly ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-2 text-editor-fg opacity-70">
               <i className="codicon codicon-info text-2xl" />
-              <p className="text-sm">{fileReadOnlyReason ?? "This file cannot be edited"}</p>
+              <p className="text-sm">
+                {fileReadOnlyReason ?? "This file cannot be edited"}
+              </p>
             </div>
           ) : (
             <WorkspaceFileEditor
@@ -420,7 +460,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
         <span className="flex-1 text-sm truncate text-editor-fg min-w-0 ml-1">
           {selectedFilePath}
           {fileDirty && (
-            <span className="ml-1.5 text-[var(--status-warning)]" title="Unsaved changes">
+            <span
+              className="ml-1.5 text-[var(--status-warning)]"
+              title="Unsaved changes"
+            >
               ●
             </span>
           )}
@@ -456,7 +499,9 @@ export const WorkspaceExplorerPane: React.FC = () => {
         ) : fileReadOnly ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 text-editor-fg opacity-70">
             <i className="codicon codicon-info text-2xl" />
-            <p className="text-sm">{fileReadOnlyReason ?? "This file cannot be edited"}</p>
+            <p className="text-sm">
+              {fileReadOnlyReason ?? "This file cannot be edited"}
+            </p>
           </div>
         ) : (
           <WorkspaceFileEditor

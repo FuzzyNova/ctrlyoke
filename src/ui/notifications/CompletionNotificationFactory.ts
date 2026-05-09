@@ -60,7 +60,6 @@ export interface HookArtifact {
   rawHookData: Record<string, unknown>;
 }
 
-
 interface WorkflowNotificationInput {
   summary: WorkflowSummary;
   settings: FlightPathNotificationSettings;

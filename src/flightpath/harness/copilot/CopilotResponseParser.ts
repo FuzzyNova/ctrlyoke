@@ -268,7 +268,9 @@ export class CopilotResponseParser
               totalTokens: tokenCounts.prompt + tokenCounts.completion,
               cachedInputTokens: tokenCounts.cached,
               contextWindowUsedTokens: tokenCounts.prompt,
-              contextWindowSize: getCopilotContextWindowSize(this.resolvedModel),
+              contextWindowSize: getCopilotContextWindowSize(
+                this.resolvedModel
+              ),
             }
           : undefined,
         harness: HARNESS_IDS.COPILOT_CLI,

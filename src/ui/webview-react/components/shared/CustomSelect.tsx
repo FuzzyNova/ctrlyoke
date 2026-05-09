@@ -112,11 +112,18 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     }
   };
 
-  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  const popupPos = useDropdownPortalPosition(
+    buttonRef,
+    isOpen,
+    dropdownMaxHeight
+  );
   useClickOutside(
     [buttonRef, popupRef],
     isOpen,
-    () => { setIsOpen(false); setShowHidden(false); },
+    () => {
+      setIsOpen(false);
+      setShowHidden(false);
+    },
     !inline
   );
 

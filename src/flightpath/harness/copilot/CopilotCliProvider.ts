@@ -301,7 +301,13 @@ export class CopilotCliProvider implements ICliProvider {
       notifyDir,
       workspaceRoot,
       userHooks,
-      [...new Set<HookEvent>(["sessionStart", "stop", ...enabledNotificationHookEvents])]
+      [
+        ...new Set<HookEvent>([
+          "sessionStart",
+          "stop",
+          ...enabledNotificationHookEvents,
+        ]),
+      ]
     );
     const hookFileName = CopilotCliProvider.buildHookFileName(
       promptIndex,

@@ -9,7 +9,11 @@ import {
   getHarnessSkillDirs,
   getFlightPathSkillDir,
 } from "./HarnessDirectoryUtils";
-import { HARNESS_IDS, DISCOVERY_SOURCES, type DiscoverySource } from "../types/DashboardConstants";
+import {
+  HARNESS_IDS,
+  DISCOVERY_SOURCES,
+  type DiscoverySource,
+} from "../types/DashboardConstants";
 
 /**
  * Represents a discovered skill
@@ -24,7 +28,10 @@ export interface SkillInfo {
   /** Description parsed from frontmatter */
   description: string;
   /** Source location of the skill */
-  source: Exclude<DiscoverySource, typeof DISCOVERY_SOURCES.WORKSPACE_FLIGHTPATH>;
+  source: Exclude<
+    DiscoverySource,
+    typeof DISCOVERY_SOURCES.WORKSPACE_FLIGHTPATH
+  >;
 }
 
 /**
@@ -112,7 +119,11 @@ export class SkillDiscovery {
         for (const harnessId of Object.values(HARNESS_IDS)) {
           for (const dir of getHarnessSkillDirs(harnessId, workspaceRoot)) {
             skills.push(
-              ...(await this.discoverInPath(dir, DISCOVERY_SOURCES.WORKSPACE, scannedPaths))
+              ...(await this.discoverInPath(
+                dir,
+                DISCOVERY_SOURCES.WORKSPACE,
+                scannedPaths
+              ))
             );
           }
         }

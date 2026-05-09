@@ -4,10 +4,7 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type {
-  HookEvent,
-  UserHookConfig,
-} from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
  * OpenCode CLI Notification Monitor

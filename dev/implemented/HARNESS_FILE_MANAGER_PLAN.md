@@ -24,15 +24,15 @@ This feature adds a **Harness File Manager** UI to the settings panel that lets 
 
 ### The Multi-Harness Gap
 
-| Location                     | Discovered by FlightPath | Native subagent spawn   |
-| ---------------------------- | ------------------------ | ----------------------- |
-| `.claude/agents/`            | ✅                       | Claude only             |
-| `.github/agents/`            | ✅                       | Copilot only            |
-| `.agents/`                   | ✅                       | Codex only              |
-| `.gemini/agents/`            | ✅                       | Gemini only             |
-| `.opencode/agents/`          | ✅                       | OpenCode only           |
-| `.qwen/agents/`              | ✅                       | Qwen only               |
-| `.flightpath/agents/`        | ✅                       | None (FP-exclusive)     |
+| Location              | Discovered by FlightPath | Native subagent spawn |
+| --------------------- | ------------------------ | --------------------- |
+| `.claude/agents/`     | ✅                       | Claude only           |
+| `.github/agents/`     | ✅                       | Copilot only          |
+| `.agents/`            | ✅                       | Codex only            |
+| `.gemini/agents/`     | ✅                       | Gemini only           |
+| `.opencode/agents/`   | ✅                       | OpenCode only         |
+| `.qwen/agents/`       | ✅                       | Qwen only             |
+| `.flightpath/agents/` | ✅                       | None (FP-exclusive)   |
 
 When a user switches harnesses (e.g., Claude → Codex), their agent files stay in `.claude/agents/`.
 FlightPath still injects them into every prompt via `<agentInstructions>`, but:
@@ -65,11 +65,11 @@ which harnesses should have native access to them — without leaving the Flight
 
 Three resource types are managed:
 
-| Type   | Unit                  | Harness native dirs (workspace)                                                                                       | FP dir                          |
-| ------ | --------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| Agents | `*.agent.md` file¹    | `.claude/agents/`, `.github/agents/`, `.agents/`, `.gemini/agents/`, `.opencode/agents/`, `.qwen/agents/`             | `.flightpath/agents/`           |
-| Skills | `<name>/SKILL.md` dir | `.claude/skills/`, `.github/skills/`, `.agents/skills/`, `.gemini/skills/`, `.opencode/skills/`, `.qwen/skills/`      | `.flightpath/skills/`           |
-| MCP    | config entry          | `~/.claude.json`, `.vscode/mcp.json`, harness-specific config                                                         | `flightpath.mcpServers` setting |
+| Type   | Unit                  | Harness native dirs (workspace)                                                                                  | FP dir                          |
+| ------ | --------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Agents | `*.agent.md` file¹    | `.claude/agents/`, `.github/agents/`, `.agents/`, `.gemini/agents/`, `.opencode/agents/`, `.qwen/agents/`        | `.flightpath/agents/`           |
+| Skills | `<name>/SKILL.md` dir | `.claude/skills/`, `.github/skills/`, `.agents/skills/`, `.gemini/skills/`, `.opencode/skills/`, `.qwen/skills/` | `.flightpath/skills/`           |
+| MCP    | config entry          | `~/.claude.json`, `.vscode/mcp.json`, harness-specific config                                                    | `flightpath.mcpServers` setting |
 
 ¹ Gemini uses `*.md` (not `*.agent.md`) in its native agents directory. Export to Gemini must
 rename `name.agent.md` → `name.md`; import from Gemini must treat all `*.md` files as agents.
@@ -126,58 +126,58 @@ Each harness has separate workspace-level and user-level path lists.
 // Workspace-relative agent directories per harness
 // Note: "gemini-cli" native files use *.md, not *.agent.md — see AgentFileExtension below
 const HARNESS_WORKSPACE_AGENT_DIRS: Record<HarnessId, string[]> = {
-  "claude-cli":    [".claude/agents"],
-  "copilot-cli":  [".github/agents"],
-  "codex-cli":    [".agents"],
-  "gemini-cli":   [".gemini/agents"],
+  "claude-cli": [".claude/agents"],
+  "copilot-cli": [".github/agents"],
+  "codex-cli": [".agents"],
+  "gemini-cli": [".gemini/agents"],
   "opencode-cli": [".opencode/agents"],
-  "qwen-cli":     [".qwen/agents"],
+  "qwen-cli": [".qwen/agents"],
   "copilot-chat": [".github/agents"],
 };
 
 // User-home agent directories per harness (absolute, ~-expanded)
 const HARNESS_USER_AGENT_DIRS: Record<HarnessId, string[]> = {
-  "claude-cli":    ["~/.claude/agents"],
-  "copilot-cli":  ["~/.copilot/agents"],
-  "codex-cli":    ["~/.codex/agents", "~/.agents"],   // ~/.agents is the AgentSkills.io standard; ~/.codex is harness-native
-  "gemini-cli":   ["~/.gemini/agents"],
+  "claude-cli": ["~/.claude/agents"],
+  "copilot-cli": ["~/.copilot/agents"],
+  "codex-cli": ["~/.codex/agents", "~/.agents"], // ~/.agents is the AgentSkills.io standard; ~/.codex is harness-native
+  "gemini-cli": ["~/.gemini/agents"],
   "opencode-cli": ["~/.config/opencode/agents"],
-  "qwen-cli":     ["~/.qwen/agents"],
+  "qwen-cli": ["~/.qwen/agents"],
   "copilot-chat": ["~/.copilot/agents"],
 };
 
 // Workspace-relative skill directories per harness
 // Gemini supports both its own .gemini/skills/ AND the Codex-style .agents/skills/
 const HARNESS_WORKSPACE_SKILL_DIRS: Record<HarnessId, string[]> = {
-  "claude-cli":    [".claude/skills"],
-  "copilot-cli":  [".github/skills"],
-  "codex-cli":    [".agents/skills"],
-  "gemini-cli":   [".gemini/skills", ".agents/skills"],
+  "claude-cli": [".claude/skills"],
+  "copilot-cli": [".github/skills"],
+  "codex-cli": [".agents/skills"],
+  "gemini-cli": [".gemini/skills", ".agents/skills"],
   "opencode-cli": [".opencode/skills"],
-  "qwen-cli":     [".qwen/skills"],
+  "qwen-cli": [".qwen/skills"],
   "copilot-chat": [".github/skills"],
 };
 
 // User-home skill directories per harness (absolute, ~-expanded)
 const HARNESS_USER_SKILL_DIRS: Record<HarnessId, string[]> = {
-  "claude-cli":    ["~/.claude/skills"],
-  "copilot-cli":  ["~/.copilot/skills"],
-  "codex-cli":    ["~/.codex/skills", "~/.agents/skills"],  // ~/.agents/skills is AgentSkills.io standard; ~/.codex/skills is harness-native
-  "gemini-cli":   ["~/.gemini/skills", "~/.agents/skills"],
+  "claude-cli": ["~/.claude/skills"],
+  "copilot-cli": ["~/.copilot/skills"],
+  "codex-cli": ["~/.codex/skills", "~/.agents/skills"], // ~/.agents/skills is AgentSkills.io standard; ~/.codex/skills is harness-native
+  "gemini-cli": ["~/.gemini/skills", "~/.agents/skills"],
   "opencode-cli": ["~/.config/opencode/skills"],
-  "qwen-cli":     ["~/.qwen/skills"],
+  "qwen-cli": ["~/.qwen/skills"],
   "copilot-chat": ["~/.copilot/skills"],
 };
 
 // File extension used when reading/writing agents for each harness.
 // Gemini uses plain *.md; all others use *.agent.md.
 const HARNESS_AGENT_EXTENSION: Record<HarnessId, string> = {
-  "claude-cli":    ".agent.md",
-  "copilot-cli":  ".agent.md",
-  "codex-cli":    ".agent.md",
-  "gemini-cli":   ".md",
+  "claude-cli": ".agent.md",
+  "copilot-cli": ".agent.md",
+  "codex-cli": ".agent.md",
+  "gemini-cli": ".md",
   "opencode-cli": ".agent.md",
-  "qwen-cli":     ".agent.md",
+  "qwen-cli": ".agent.md",
   "copilot-chat": ".agent.md",
 };
 ```

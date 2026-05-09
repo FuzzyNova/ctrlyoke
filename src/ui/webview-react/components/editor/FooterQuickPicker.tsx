@@ -1,10 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useClickOutside } from "@hooks/useClickOutside";
-import {
-  constrainPopupToViewport,
-  parsePixelProp,
-} from "@utils/dropdownUtils";
+import { constrainPopupToViewport, parsePixelProp } from "@utils/dropdownUtils";
 
 interface FooterQuickPickerProps {
   /** Icon-only mode (narrow, < 380px) */

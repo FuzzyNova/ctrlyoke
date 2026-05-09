@@ -1,4 +1,7 @@
-import type { SettingSource, SettingWriteScope } from "@root/types/WebviewMessageTypes";
+import type {
+  SettingSource,
+  SettingWriteScope,
+} from "@root/types/WebviewMessageTypes";
 import { SettingSourceBadge } from "./SettingSourceBadge";
 
 interface Props {

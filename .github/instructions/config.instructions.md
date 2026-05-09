@@ -33,16 +33,16 @@ import { configService } from "../config/FlightPathConfigService";
 
 **Key methods:**
 
-| Method                    | Purpose                                                                                           |
-| ------------------------- | ------------------------------------------------------------------------------------------------- |
-| `get(key)`                | Get a top-level setting by key (type-safe, `keyof FlightPathGlobalSettings`)                      |
-| `getNested(path)`         | Get a nested value using dot-notation (e.g. `"execution.mode"`) — returns `unknown`               |
-| `resolve(key)`            | Like `get()` but also returns the `SettingSource` (`"cli" \| "workspace" \| "user" \| "default"`) |
-| `getAll()`                | Full merged settings object                                                                       |
+| Method                    | Purpose                                                                                                                                                                     |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get(key)`                | Get a top-level setting by key (type-safe, `keyof FlightPathGlobalSettings`)                                                                                                |
+| `getNested(path)`         | Get a nested value using dot-notation (e.g. `"execution.mode"`) — returns `unknown`                                                                                         |
+| `resolve(key)`            | Like `get()` but also returns the `SettingSource` (`"cli" \| "workspace" \| "user" \| "default"`)                                                                           |
+| `getAll()`                | Full merged settings object                                                                                                                                                 |
 | `getLeafSources()`        | Returns a dot-notation path → `SettingSource` map for every leaf in workspace/user backends; used by the settings UI to show per-setting source indicators and enable reset |
-| `set(path, value, scope)` | Write to workspace or user backend via dot-notation; calls `notify()` automatically               |
-| `subscribe(listener)`     | Subscribe to change notifications; returns an unsubscribe function                                |
-| `notify()`                | Broadcast change to all subscribers (call after external mutations)                               |
+| `set(path, value, scope)` | Write to workspace or user backend via dot-notation; calls `notify()` automatically                                                                                         |
+| `subscribe(listener)`     | Subscribe to change notifications; returns an unsubscribe function                                                                                                          |
+| `notify()`                | Broadcast change to all subscribers (call after external mutations)                                                                                                         |
 
 **Setup methods (called once during startup):**
 
@@ -111,24 +111,24 @@ Only flags that were explicitly passed by the user go into the overlay — Comma
 <settingsStructure>
 **`FlightPathGlobalSettings`** top-level keys (see `src/types/FlightPathSettings.ts` for full details):
 
-| Key                    | Type                                 | Purpose                                                                                                         |
-| ---------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `harness`              | `HarnessId`                          | Active harness (`"copilot-cli"`, `"claude-cli"`, etc.)                                                          |
-| `models`               | `Partial<Record<HarnessId, string>>` | Per-harness model selection                                                                                     |
-| `additionalArgs`       | `Partial<Record<HarnessId, string>>` | Per-harness extra CLI args (excludes `copilot-chat`)                                                            |
-| `execution`            | object                               | `mode`, `injectMode`, `maxPromptTimeout`, `scriptTimeout`, `closeTerminalOnComplete`, `autoDeleteTempFiles`     |
-| `tools`                | object                               | Permission modes, allowed/denied/allowedDirs lists, Copilot/Codex-specific sandbox and approval settings        |
-| `workflow`             | object                               | Format, template, agent, skills, session resume behavior, `defaultEndCondition`, `defaultPreCondition`          |
-| `chat`                 | object                               | Window location, timeouts, agent mode, native attachments                                                       |
-| `mcp`                  | object                               | Default MCP server configs (`defaultServers`)                                                                   |
-| `hooks`                | `UserHookConfig[]`                   | User-defined hook configs                                                                                       |
-| `queue`                | object                               | Max size, execution time limits, `unlimitedMode`, `notifyOnExtension`                                           |
-| `history`              | object                               | Output saving, max run retention                                                                                 |
-| `terminal`             | `TerminalSettings`                   | Embedded terminal display: font, scrollback, cursor, shell executable, mobile control bar and shortcuts         |
-| `ui`                   | object                               | Display flags, gitignore filtering, confirmation dialogs, output focus and panel behavior                       |
-| `server`               | object                               | Embedded server: enabled, port, standalonePort, bindAddress, TLS, theme, icon colors                           |
-| `notifications`        | `FlightPathNotificationSettings`     | VS Code and browser notification settings; per-event modes (`workflowComplete`, `promptComplete`)               |
-| `enableDiagnosticLogs` | `boolean`                            | Global diagnostic logging toggle                                                                                |
+| Key                    | Type                                 | Purpose                                                                                                     |
+| ---------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `harness`              | `HarnessId`                          | Active harness (`"copilot-cli"`, `"claude-cli"`, etc.)                                                      |
+| `models`               | `Partial<Record<HarnessId, string>>` | Per-harness model selection                                                                                 |
+| `additionalArgs`       | `Partial<Record<HarnessId, string>>` | Per-harness extra CLI args (excludes `copilot-chat`)                                                        |
+| `execution`            | object                               | `mode`, `injectMode`, `maxPromptTimeout`, `scriptTimeout`, `closeTerminalOnComplete`, `autoDeleteTempFiles` |
+| `tools`                | object                               | Permission modes, allowed/denied/allowedDirs lists, Copilot/Codex-specific sandbox and approval settings    |
+| `workflow`             | object                               | Format, template, agent, skills, session resume behavior, `defaultEndCondition`, `defaultPreCondition`      |
+| `chat`                 | object                               | Window location, timeouts, agent mode, native attachments                                                   |
+| `mcp`                  | object                               | Default MCP server configs (`defaultServers`)                                                               |
+| `hooks`                | `UserHookConfig[]`                   | User-defined hook configs                                                                                   |
+| `queue`                | object                               | Max size, execution time limits, `unlimitedMode`, `notifyOnExtension`                                       |
+| `history`              | object                               | Output saving, max run retention                                                                            |
+| `terminal`             | `TerminalSettings`                   | Embedded terminal display: font, scrollback, cursor, shell executable, mobile control bar and shortcuts     |
+| `ui`                   | object                               | Display flags, gitignore filtering, confirmation dialogs, output focus and panel behavior                   |
+| `server`               | object                               | Embedded server: enabled, port, standalonePort, bindAddress, TLS, theme, icon colors                        |
+| `notifications`        | `FlightPathNotificationSettings`     | VS Code and browser notification settings; per-event modes (`workflowComplete`, `promptComplete`)           |
+| `enableDiagnosticLogs` | `boolean`                            | Global diagnostic logging toggle                                                                            |
 
 **`PartialFlightPathSettings`** — shallow-partial version (top-level keys optional, nested objects also partial). Used for config file contents and the CLI overlay.
 

@@ -66,15 +66,16 @@ export function constrainPopupToViewport({
   padding?: number;
 }): HorizontalPopupConstraint {
   const availableWidth = Math.max(0, viewportWidth - padding * 2);
-  const effectiveMaxWidth = Math.min(maxWidth ?? Number.POSITIVE_INFINITY, availableWidth);
-  const effectiveWidth = width !== undefined ? Math.min(width, effectiveMaxWidth) : undefined;
+  const effectiveMaxWidth = Math.min(
+    maxWidth ?? Number.POSITIVE_INFINITY,
+    availableWidth
+  );
+  const effectiveWidth =
+    width !== undefined ? Math.min(width, effectiveMaxWidth) : undefined;
   const effectiveMinWidth =
     minWidth !== undefined ? Math.min(minWidth, effectiveMaxWidth) : undefined;
   const clampWidth = Math.min(
-    Math.max(
-      effectiveWidth ?? 0,
-      preferredWidth ?? effectiveMinWidth ?? 0
-    ),
+    Math.max(effectiveWidth ?? 0, preferredWidth ?? effectiveMinWidth ?? 0),
     effectiveMaxWidth
   );
   const clampedLeft = Math.max(

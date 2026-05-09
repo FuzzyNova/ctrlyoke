@@ -82,7 +82,9 @@ export function ServerSection({
   }, [server.tls?.enabled, displayUrl]);
 
   const generatedCertLocation =
-    activeScope === SETTING_SCOPES.USER ? "~/.flightpath/certs/" : ".flightpath/certs/";
+    activeScope === SETTING_SCOPES.USER
+      ? "~/.flightpath/certs/"
+      : ".flightpath/certs/";
 
   const [showQr, setShowQr] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -323,9 +325,7 @@ export function ServerSection({
                 type="color"
                 value={localBg}
                 onChange={(e) => setLocalBg(e.target.value)}
-                onBlur={(e) =>
-                  onUpdate("server.iconBgColor", e.target.value)
-                }
+                onBlur={(e) => onUpdate("server.iconBgColor", e.target.value)}
                 className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
                 title="Icon background color"
               />
@@ -343,9 +343,7 @@ export function ServerSection({
                 type="color"
                 value={localFg}
                 onChange={(e) => setLocalFg(e.target.value)}
-                onBlur={(e) =>
-                  onUpdate("server.iconFgColor", e.target.value)
-                }
+                onBlur={(e) => onUpdate("server.iconFgColor", e.target.value)}
                 className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
                 title="Icon foreground color"
               />
@@ -360,9 +358,8 @@ export function ServerSection({
           />
         </div>
         <p className="text-xs text-description-fg italic">
-          SVG favicon and PWA icon update immediately. PNG icon clients
-          (iOS &lt; 26 homescreen) use the colors saved at the last
-          settings update.
+          SVG favicon and PWA icon update immediately. PNG icon clients (iOS
+          &lt; 26 homescreen) use the colors saved at the last settings update.
         </p>
       </div>
 

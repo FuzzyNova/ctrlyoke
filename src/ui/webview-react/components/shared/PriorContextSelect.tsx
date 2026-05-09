@@ -35,7 +35,6 @@ export const PRIOR_CONTEXT_KEYWORD_LABELS: Record<KeywordMode, string> = {
   custom: "Custom",
 };
 
-
 function getMode(value: PriorContext | undefined): KeywordMode {
   if (value === undefined) return "default";
   if (Array.isArray(value)) return "custom";
@@ -85,7 +84,11 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  const popupPos = useDropdownPortalPosition(buttonRef, isOpen, dropdownMaxHeight);
+  const popupPos = useDropdownPortalPosition(
+    buttonRef,
+    isOpen,
+    dropdownMaxHeight
+  );
   useClickOutside([buttonRef, popupRef], isOpen, () => setIsOpen(false));
 
   const mode = getMode(value);
@@ -202,35 +205,35 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
         </button>
 
         <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
-              <div className="overflow-y-auto min-h-0 flex-1">
-                {keywords.map((k) => {
-                  const isSelected = displayMode === k;
-                  const label =
-                    k === "default" && defaultLabel
-                      ? defaultLabel
-                      : PRIOR_CONTEXT_KEYWORD_LABELS[k];
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => selectKeyword(k)}
-                      className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
-                        isSelected
-                          ? "bg-dropdown-selected-bg text-list-active-fg"
-                          : "hover:bg-list-hover-bg cursor-pointer"
-                      }`}
-                    >
-                      <i
-                        className={`codicon codicon-check text-xxs flex-shrink-0 ${
-                          isSelected ? "visible" : "invisible"
-                        }`}
-                      />
-                      <span>{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </DropdownPortal>
+          <div className="overflow-y-auto min-h-0 flex-1">
+            {keywords.map((k) => {
+              const isSelected = displayMode === k;
+              const label =
+                k === "default" && defaultLabel
+                  ? defaultLabel
+                  : PRIOR_CONTEXT_KEYWORD_LABELS[k];
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => selectKeyword(k)}
+                  className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
+                    isSelected
+                      ? "bg-dropdown-selected-bg text-list-active-fg"
+                      : "hover:bg-list-hover-bg cursor-pointer"
+                  }`}
+                >
+                  <i
+                    className={`codicon codicon-check text-xxs flex-shrink-0 ${
+                      isSelected ? "visible" : "invisible"
+                    }`}
+                  />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </DropdownPortal>
       </div>
 
       {/* Custom range input — always rendered, disabled when not in custom mode */}

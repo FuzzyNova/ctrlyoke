@@ -8,7 +8,11 @@ import {
   SPECIAL_TARGET_IDS,
   HARNESS_FILE_TYPES,
 } from "@root/types/DashboardConstants";
-import type { HarnessId, AnyTargetId, SettingWriteScope } from "@root/types/DashboardConstants";
+import type {
+  HarnessId,
+  AnyTargetId,
+  SettingWriteScope,
+} from "@root/types/DashboardConstants";
 import type {
   ManagedFile,
   ManagedTargetDirectory,
@@ -43,7 +47,10 @@ function encodeTarget(id: AnyTargetId, scope: SettingWriteScope): string {
   return `${id}:${scope}`;
 }
 
-function decodeTarget(encoded: string): { id: AnyTargetId; scope: SettingWriteScope } {
+function decodeTarget(encoded: string): {
+  id: AnyTargetId;
+  scope: SettingWriteScope;
+} {
   const colonIdx = encoded.lastIndexOf(":");
   return {
     id: encoded.slice(0, colonIdx) as AnyTargetId,
@@ -61,7 +68,10 @@ function getParentFolderPath(filePath: string): string {
   return lastSlash >= 0 ? normalized.slice(0, lastSlash) : normalized;
 }
 
-function getLocationFolderPath(file: ManagedFile, locationIndex: number): string {
+function getLocationFolderPath(
+  file: ManagedFile,
+  locationIndex: number
+): string {
   const location = file.locations[locationIndex];
   return file.type === HARNESS_FILE_TYPES.SKILL
     ? location.path
@@ -105,33 +115,37 @@ function buildSaveFlyoutGroups(
   availableIds: Set<HarnessId>,
   targetDirectories: ManagedTargetDirectory[]
 ): FlyoutGroup[] {
-  const wsItems: ActionDropdownItem[] = getWorkspaceTargets(availableIds).map((id) => {
-    const encoded = encodeTarget(id, "workspace");
-    const present = presentKeys.has(encoded);
-    return {
-      label: getTargetLabel(id),
-      value: encoded,
-      description: formatPathForDisplay(
-        getTargetDirectoryPath(targetDirectories, id, "workspace") ?? ""
-      ),
-      disabled: present,
-      title: present ? "Already present" : undefined,
-    };
-  });
+  const wsItems: ActionDropdownItem[] = getWorkspaceTargets(availableIds).map(
+    (id) => {
+      const encoded = encodeTarget(id, "workspace");
+      const present = presentKeys.has(encoded);
+      return {
+        label: getTargetLabel(id),
+        value: encoded,
+        description: formatPathForDisplay(
+          getTargetDirectoryPath(targetDirectories, id, "workspace") ?? ""
+        ),
+        disabled: present,
+        title: present ? "Already present" : undefined,
+      };
+    }
+  );
 
-  const userItems: ActionDropdownItem[] = getUserTargets(availableIds).map((id) => {
-    const encoded = encodeTarget(id, "user");
-    const present = presentKeys.has(encoded);
-    return {
-      label: getTargetLabel(id),
-      value: encoded,
-      description: formatPathForDisplay(
-        getTargetDirectoryPath(targetDirectories, id, "user") ?? ""
-      ),
-      disabled: present,
-      title: present ? "Already present" : undefined,
-    };
-  });
+  const userItems: ActionDropdownItem[] = getUserTargets(availableIds).map(
+    (id) => {
+      const encoded = encodeTarget(id, "user");
+      const present = presentKeys.has(encoded);
+      return {
+        label: getTargetLabel(id),
+        value: encoded,
+        description: formatPathForDisplay(
+          getTargetDirectoryPath(targetDirectories, id, "user") ?? ""
+        ),
+        disabled: present,
+        title: present ? "Already present" : undefined,
+      };
+    }
+  );
 
   return [
     { id: "workspace", label: "Workspace", items: wsItems },
@@ -173,7 +187,13 @@ function buildOpenFolderGroups(
 // Badge
 // ============================================================================
 
-function HarnessBadge({ id, scope }: { id: AnyTargetId; scope: SettingWriteScope }) {
+function HarnessBadge({
+  id,
+  scope,
+}: {
+  id: AnyTargetId;
+  scope: SettingWriteScope;
+}) {
   const isFp = id === "flightpath";
   return (
     <span
@@ -184,7 +204,8 @@ function HarnessBadge({ id, scope }: { id: AnyTargetId; scope: SettingWriteScope
             : "bg-list-hover-bg text-foreground border border-panel-border"
         }`}
     >
-      {getTargetLabel(id)}{scope === SETTING_SCOPES.USER ? " ·user" : ""}
+      {getTargetLabel(id)}
+      {scope === SETTING_SCOPES.USER ? " ·user" : ""}
     </span>
   );
 }
@@ -197,7 +218,11 @@ interface FileRowProps {
   file: ManagedFile;
   availableIds: Set<HarnessId>;
   targetDirectories: ManagedTargetDirectory[];
-  onSave: (sourcePath: string, id: AnyTargetId, scope: SettingWriteScope) => void;
+  onSave: (
+    sourcePath: string,
+    id: AnyTargetId,
+    scope: SettingWriteScope
+  ) => void;
   onDelete: (name: string, id: AnyTargetId, scope: SettingWriteScope) => void;
 }
 
@@ -214,15 +239,25 @@ function FileRow({
 
   // Primary source path: prefer flightpath workspace, then flightpath user, then first
   const primaryLoc =
-    file.locations.find((l) => l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH && l.scope === SETTING_SCOPES.WORKSPACE) ??
-    file.locations.find((l) => l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH && l.scope === SETTING_SCOPES.USER) ??
+    file.locations.find(
+      (l) =>
+        l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+        l.scope === SETTING_SCOPES.WORKSPACE
+    ) ??
+    file.locations.find(
+      (l) =>
+        l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+        l.scope === SETTING_SCOPES.USER
+    ) ??
     file.locations[0];
 
-  const deleteItems: ActionDropdownItem[] = file.locations.map((loc, index) => ({
-    label: `${getTargetLabel(loc.harnessId)} (${loc.scope})`,
-    value: encodeTarget(loc.harnessId, loc.scope),
-    description: formatPathForDisplay(getLocationFolderPath(file, index)),
-  }));
+  const deleteItems: ActionDropdownItem[] = file.locations.map(
+    (loc, index) => ({
+      label: `${getTargetLabel(loc.harnessId)} (${loc.scope})`,
+      value: encodeTarget(loc.harnessId, loc.scope),
+      description: formatPathForDisplay(getLocationFolderPath(file, index)),
+    })
+  );
 
   return (
     <div className="py-2 px-3 border-b border-panel-border last:border-0">
@@ -292,17 +327,25 @@ function AllActionsBar({
   onDeleteAll,
 }: AllActionsBarProps) {
   const [action, setAction] = useState<BulkAction>("save");
-  const [scope, setScope] = useState<SettingWriteScope>(SETTING_SCOPES.WORKSPACE);
-  const [targetId, setTargetId] = useState<AnyTargetId>(HARNESS_IDS.CLAUDE_CLI as HarnessId);
+  const [scope, setScope] = useState<SettingWriteScope>(
+    SETTING_SCOPES.WORKSPACE
+  );
+  const [targetId, setTargetId] = useState<AnyTargetId>(
+    HARNESS_IDS.CLAUDE_CLI as HarnessId
+  );
 
   const scopeTargets =
-    scope === SETTING_SCOPES.WORKSPACE ? getWorkspaceTargets(availableIds) : getUserTargets(availableIds);
+    scope === SETTING_SCOPES.WORKSPACE
+      ? getWorkspaceTargets(availableIds)
+      : getUserTargets(availableIds);
 
   // Reset target when scope or available harnesses change if current target isn't in the list
   const handleScopeChange = (newScope: SettingWriteScope) => {
     setScope(newScope);
     const targets =
-      newScope === SETTING_SCOPES.WORKSPACE ? getWorkspaceTargets(availableIds) : getUserTargets(availableIds);
+      newScope === SETTING_SCOPES.WORKSPACE
+        ? getWorkspaceTargets(availableIds)
+        : getUserTargets(availableIds);
     if (!targets.includes(targetId)) {
       setTargetId(targets[0] ?? "flightpath");
     }
@@ -328,7 +371,9 @@ function AllActionsBar({
         <option value="delete">Delete All</option>
       </select>
 
-      <span className="text-xs text-description-fg shrink-0">{preposition}</span>
+      <span className="text-xs text-description-fg shrink-0">
+        {preposition}
+      </span>
 
       <select
         value={scope}
@@ -420,7 +465,12 @@ export function AgentSkillsManagerSection() {
 
   const handleDeleteConfirm = useCallback(() => {
     if (!confirmDelete) return;
-    deleteFile(confirmDelete.name, confirmDelete.id, activeType, confirmDelete.scope);
+    deleteFile(
+      confirmDelete.name,
+      confirmDelete.id,
+      activeType,
+      confirmDelete.scope
+    );
     setConfirmDelete(null);
   }, [confirmDelete, deleteFile, activeType]);
 
@@ -428,8 +478,16 @@ export function AgentSkillsManagerSection() {
     (id: AnyTargetId, scope: SettingWriteScope) => {
       const files = managedFiles.map((f) => {
         const primary =
-          f.locations.find((l) => l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH && l.scope === SETTING_SCOPES.WORKSPACE) ??
-          f.locations.find((l) => l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH && l.scope === SETTING_SCOPES.USER) ??
+          f.locations.find(
+            (l) =>
+              l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+              l.scope === SETTING_SCOPES.WORKSPACE
+          ) ??
+          f.locations.find(
+            (l) =>
+              l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+              l.scope === SETTING_SCOPES.USER
+          ) ??
           f.locations[0];
         return { sourcePath: primary.path, name: f.name };
       });
@@ -465,7 +523,11 @@ export function AgentSkillsManagerSection() {
 
       {/* Type switcher + Open Folder */}
       <div className="flex items-center gap-2">
-        <div className="fp-mode-switch" role="group" aria-label="Agent or skill type">
+        <div
+          className="fp-mode-switch"
+          role="group"
+          aria-label="Agent or skill type"
+        >
           <button
             type="button"
             onClick={() => setActiveType(HARNESS_FILE_TYPES.AGENT)}
@@ -558,7 +620,9 @@ export function AgentSkillsManagerSection() {
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" || event.key === " " || event.key === "Escape")
+              (event.key === "Enter" ||
+                event.key === " " ||
+                event.key === "Escape")
             ) {
               event.preventDefault();
               setConfirmDelete(null);
@@ -575,8 +639,8 @@ export function AgentSkillsManagerSection() {
             </p>
             <p className="text-xs text-description-fg mb-4">
               Remove <strong>{confirmDelete.name}</strong> from{" "}
-              <strong>{getTargetLabel(confirmDelete.id)}</strong>{" "}
-              ({confirmDelete.scope})? This only deletes the file from that
+              <strong>{getTargetLabel(confirmDelete.id)}</strong> (
+              {confirmDelete.scope})? This only deletes the file from that
               directory — other copies are not affected.
             </p>
             <div className="flex justify-end gap-2">
@@ -614,7 +678,9 @@ export function AgentSkillsManagerSection() {
           onKeyDown={(event) => {
             if (
               event.target === event.currentTarget &&
-              (event.key === "Enter" || event.key === " " || event.key === "Escape")
+              (event.key === "Enter" ||
+                event.key === " " ||
+                event.key === "Escape")
             ) {
               event.preventDefault();
               setConfirmDeleteAll(null);
@@ -631,8 +697,8 @@ export function AgentSkillsManagerSection() {
             </p>
             <p className="text-xs text-description-fg mb-4">
               Remove every discovered {activeType} from{" "}
-              <strong>{getTargetLabel(confirmDeleteAll.id)}</strong>{" "}
-              ({confirmDeleteAll.scope}). Copies in other directories are not
+              <strong>{getTargetLabel(confirmDeleteAll.id)}</strong> (
+              {confirmDeleteAll.scope}). Copies in other directories are not
               affected.
             </p>
             <div className="flex justify-end gap-2">

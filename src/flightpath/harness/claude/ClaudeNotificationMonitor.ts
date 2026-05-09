@@ -4,10 +4,7 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type {
-  HookEvent,
-  UserHookConfig,
-} from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
 
 /**
  * Claude CLI Notification Monitor
@@ -76,7 +73,10 @@ export class ClaudeNotificationMonitor
     userHooks?: UserHookConfig[],
     flightpathEvents?: HookEvent[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      notifyDir
+    );
     const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
     const permissionRequestHook = userHooks?.find(
       (hook) => hook.event === "permissionRequest"

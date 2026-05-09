@@ -76,10 +76,15 @@ suite("WorkflowStateMachine", () => {
 
   test("cancelPause transitions PAUSING → RUNNING", () => {
     const runtime = new WorkflowStateMachine();
-    const transitions: Array<{ command: string; from: string; to: string }> = [];
+    const transitions: Array<{ command: string; from: string; to: string }> =
+      [];
 
     runtime.onDidTransition((t) => {
-      transitions.push({ command: t.command, from: t.previous.status, to: t.current.status });
+      transitions.push({
+        command: t.command,
+        from: t.previous.status,
+        to: t.current.status,
+      });
     });
 
     assert.strictEqual(runtime.startExecution(), true);
@@ -87,9 +92,21 @@ suite("WorkflowStateMachine", () => {
     assert.strictEqual(runtime.cancelPause(), true);
 
     assert.deepStrictEqual(transitions, [
-      { command: "startExecution", from: EXECUTION_STATES.IDLE, to: EXECUTION_STATES.RUNNING },
-      { command: "pause", from: EXECUTION_STATES.RUNNING, to: EXECUTION_STATES.PAUSING },
-      { command: "cancelPause", from: EXECUTION_STATES.PAUSING, to: EXECUTION_STATES.RUNNING },
+      {
+        command: "startExecution",
+        from: EXECUTION_STATES.IDLE,
+        to: EXECUTION_STATES.RUNNING,
+      },
+      {
+        command: "pause",
+        from: EXECUTION_STATES.RUNNING,
+        to: EXECUTION_STATES.PAUSING,
+      },
+      {
+        command: "cancelPause",
+        from: EXECUTION_STATES.PAUSING,
+        to: EXECUTION_STATES.RUNNING,
+      },
     ]);
   });
 

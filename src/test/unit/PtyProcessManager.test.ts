@@ -10,7 +10,9 @@ suite("PtyProcessManager", () => {
       SHELL_KINDS.PWSH
     );
     assert.strictEqual(
-      resolveShellKind("C:\\Program Files\\PowerShell\\7-preview\\pwsh-preview.exe"),
+      resolveShellKind(
+        "C:\\Program Files\\PowerShell\\7-preview\\pwsh-preview.exe"
+      ),
       SHELL_KINDS.PWSH
     );
     assert.strictEqual(
@@ -29,6 +31,9 @@ suite("PtyProcessManager", () => {
       resolveShellKind("C:\\Windows\\System32\\wsl.exe"),
       SHELL_KINDS.WSL
     );
-    assert.strictEqual(resolveShellKind("/usr/bin/nushell"), SHELL_KINDS.NUSHELL);
+    assert.strictEqual(
+      resolveShellKind("/usr/bin/nushell"),
+      SHELL_KINDS.NUSHELL
+    );
   });
 });
