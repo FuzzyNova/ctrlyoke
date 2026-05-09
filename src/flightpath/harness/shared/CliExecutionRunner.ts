@@ -239,6 +239,13 @@ export class CliExecutionRunner {
     }
 
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
+
+    // Re-send focus-in immediately before submit in case the terminal lost focus
+    // during the 200ms window (e.g., user clicked elsewhere). Without this,
+    // some TUIs silently drop the CR because their input handler is deactivated.
+    this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
     const submitWritten =
       this.deps.transportCoordinator.writeToCurrentPtySession(submit);
 
