@@ -50,7 +50,6 @@ import {
   SESSION_KINDS,
   STEP_TYPES,
   SETTING_SCOPES,
-  type SettingWriteScope,
 } from "../../types/messages";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import {
