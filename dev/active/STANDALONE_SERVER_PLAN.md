@@ -26,7 +26,7 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 ## Goals
 
 - Finish the shared dashboard transport seam (`IDashboardProvider` + `IDashboardSink`) so one orchestrator can drive the VS Code panel and browser clients simultaneously
-- Serve the existing React webview at `http://localhost:<port>` in any browser with zero React code changes
+- Serve the existing React webview at `http://localhost:<port>` in any browser with minimal React code changes; browser-mode storage must be explicitly abstracted away from VS Code webview state APIs
 - Full feature parity with the VS Code dashboard (parallel workflows, switcher, history, all message types)
 - Replace VS Code-specific APIs with browser-compatible equivalents via a minimal shim (standalone only)
 - Reuse `WorkflowOrchestrator` directly in both modes — no parallel orchestration logic
@@ -181,12 +181,12 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | `src/flightpath/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` (multiple watchers)             | Same watcher abstraction; inject adapter into constructor                                                              |
 | `src/completions/CompletionHelpers.ts`              | `vscode.workspace.findFiles()`, Git extension                                | Node.js `fs` + `fast-glob` + `ignore`                                                                                  |
 
-### Already Platform-Agnostic (zero changes)
+### Already Platform-Agnostic (zero or minimal changes)
 
 - `src/flightpath/PromptQueue.ts` / `WorkflowExecutor.ts`
 - `src/flightpath/PromptFileParser.ts` / `EndConditionEvaluator.ts`
 - `src/flightpath/harness/CliIntegration.ts` + all CLI harnesses
-- `src/ui/webview-react/**` — entire React app and all stores
+- `src/ui/webview-react/**` — React components and most stores are reusable, but the browser storage backend must not assume VS Code's `getState()` / `setState()` semantics
 - `src/types/**` — MESSAGE_TYPES, EXECUTION_STATES, WorkflowSummary, etc.
 
 ---
@@ -510,7 +510,9 @@ This file already exists and is already shared by the hosted server. Standalone 
 
 ```javascript
 (function () {
-  let _state = JSON.parse(sessionStorage.getItem("fpState") || "{}");
+  const workspaceKey = new URLSearchParams(location.search).get("workspaceKey") || "default";
+  const stateKey = `flightpath:${workspaceKey}:webviewState`;
+  let _state = JSON.parse(localStorage.getItem(stateKey) || "{}");
   const ws = new WebSocket(`ws://${location.host}/ws`);
   const pending = [];
 
@@ -546,13 +548,15 @@ This file already exists and is already shared by the hosted server. Standalone 
     },
     setState(s) {
       _state = s;
-      sessionStorage.setItem("fpState", JSON.stringify(s));
+      localStorage.setItem(stateKey, JSON.stringify(s));
     },
   };
 })();
 ```
 
-**Why `sessionStorage`?** Matches VS Code's `setState` semantics — cleared on tab close, persisted through refresh.
+**Why `localStorage` in standalone?** Standalone has no VS Code webview lifecycle to restore state after the browser tab is closed. Use browser `localStorage`, scoped by a server-provided `workspaceKey`, for durable UI preferences and unsaved workspace viewer drafts. Keep true connection/session data in memory or `sessionStorage`; do not put auth tokens, live workflow state, terminal buffers, or orchestrator snapshots in localStorage.
+
+**Migration note:** The hosted server can continue using the shared shim, but standalone should treat the shim's `getState()` / `setState()` implementation as the browser storage backend. If `src/ui/webview-react/utils/vsCodeStateStorage.ts` exists, it should be renamed or wrapped as a platform-neutral `webviewStateStorage` helper so Zustand stores are not semantically tied to VS Code.
 
 **Why `themeVarsUpdated` is handled outside React?** Patching `document.documentElement.style` is a CSS-level operation, not state. Routing it through React's message dispatch and store would add round-trip latency with no benefit. The React app never reads these vars directly — Tailwind's CSS custom property references (`var(--vscode-*)`) pick them up automatically from the DOM.
 
@@ -1084,6 +1088,7 @@ Full message coverage including multi-workflow types:
 - All orchestrator events broadcast to `connections: Set<WebSocket>` (all open tabs see the same state)
 - New tab connects → receives full initial state: settings, `WORKFLOWS_LIST`, active workflow data
 - Tab closes → removed from connection set; orchestrator continues running
+- Browser `localStorage` is shared across tabs for the same origin/workspace key. Persisted UI preferences and workspace viewer drafts should be treated as client-local browser state, not orchestrator state. For MVP, use last-write-wins across tabs; a later hardening pass can listen for `storage` events and warn when two tabs edit the same unsaved file draft.
 
 ---
 
@@ -1114,12 +1119,25 @@ Server validates harness at startup and rejects `copilot-chat` with a clear erro
 
 ## State Persistence
 
-| VS Code mechanism   | Standalone replacement                   |
-| ------------------- | ---------------------------------------- |
-| `vscode.setState()` | `sessionStorage.setItem('fpState', ...)` |
-| `vscode.getState()` | `sessionStorage.getItem('fpState')`      |
+Standalone mode changes the storage model. The VS Code sidebar can persist through VS Code's webview state API, but a standalone browser tab needs browser-native storage. Do not rely on `sessionStorage` for editor drafts because it disappears when the tab closes.
 
-Handled entirely by the Phase 3 shim. No changes to any store.
+| State category                                      | VS Code / hosted extension behavior                                              | Standalone server behavior                                                                                 |
+| --------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Zustand persisted UI state (`uiStore`)              | `vscode.getState()` / `vscode.setState()` via the webview state storage adapter   | `localStorage` through the shim, scoped by `workspaceKey`                                                   |
+| Prompt editor webview state (`editorStore`)         | Existing root webview state object                                                | Same shim contract, backed by scoped `localStorage`                                                        |
+| Workspace viewer unsaved drafts (`fileDrafts`)      | Persisted through the shared webview state storage adapter                        | Persisted through scoped `localStorage`, so closing/reopening a browser tab does not lose unsaved edits     |
+| Live workflow/orchestrator state                    | Extension/orchestrator memory plus `.flightpath/.queue` and `.flightpath/.history` | Server/orchestrator memory plus `.flightpath/.queue` and `.flightpath/.history`; never browser localStorage |
+| Recent workflow list / server-level preferences     | VS Code context/global state or FlightPath config service                         | File-backed storage, likely `.flightpath/server-state.json` or `~/.flightpath/server-state.json`            |
+| Auth token / TLS secrets                            | VS Code secret/global storage + config                                            | Server-side token file or ephemeral CLI token; never browser localStorage                                   |
+
+Implementation requirements:
+
+1. Rename or wrap `src/ui/webview-react/utils/vsCodeStateStorage.ts` as a platform-neutral helper such as `webviewStateStorage.ts`. The helper may still call `window.vscodeApi.getState()` / `setState()`, but the name should reflect the abstraction rather than VS Code specifically.
+2. Update `src/server/standalone-shim.js` so `getState()` / `setState()` read and write `localStorage`, not `sessionStorage`, in standalone mode.
+3. Scope the key by workspace identity. `FlightPathServer` should inject a stable `workspaceKey` into the served HTML or query string. A good default is a hash of the canonical workspace root plus server instance identity where needed.
+4. Keep storage values client-local. Browser storage is for UI layout, prompt/editor draft state, and workspace viewer unsaved file drafts. It is not an authoritative source for workflows, run history, source-control status, token secrets, or files on disk.
+5. Add a `storageVersion` field inside the persisted root object. The first standalone release can start at version `1`; future migrations can clear or transform stale draft formats safely.
+6. Add tests for both storage modes: VS Code-style shim state and standalone browser `localStorage` state. At minimum, cover `uiStore`, `editorStore`, and `workspaceViewerStore.fileDrafts`.
 
 ---
 
@@ -1139,12 +1157,13 @@ Handled entirely by the Phase 3 shim. No changes to any store.
 
 5. **`StandaloneServerAdapter`** (Phase 5) — mirror `CliAdapter`; always `cliExecutionMode: "headless"` unless we explicitly decide to support an interactive server-shell mode
 6. **`FlightPathServer`** (Phase 6) — HTTP + WS, connection registry, broadcast hub wiring, targeted initial-state sync, and reuse of the existing hosted HTML/shim/token behavior
-7. **`WebSocketMessageRouter`** (Phase 7) — all message handlers; replace VS Code command execution with direct orchestrator/service calls while keeping reply scoping correct
-8. **`CompletionService`** (Phase 8) — file/dir completions with `fast-glob` + `ignore`; regex symbol heuristic
-9. **`ServerFileWatcher`** + `PlatformAdapter.createFileWatcher()` seam (Phase 9) — chokidar, verify every watcher construction path
-10. **`flightpath server` CLI command** (Phase 10) — `program.command('server')` + `resolveServerConfig()` + `RUNNER_IDS.SERVER`
-11. **Standalone launch UX** — print tokenized local/LAN URLs, OSC-8 clickable links, terminal QR code, and HTTPS certificate guidance when applicable
-12. **Manual testing** — standalone first: launch from npm-installed CLI, open browser and phone clients, verify token gating, reconnects, TLS, parallel workflows, watch mode, and completions
+7. **Browser storage backend** — update `standalone-shim.js` to use workspace-scoped `localStorage`, rename/wrap the React storage helper away from `vsCodeStateStorage`, and verify `uiStore`, `editorStore`, and `workspaceViewerStore.fileDrafts` persist correctly outside VS Code
+8. **`WebSocketMessageRouter`** (Phase 7) — all message handlers; replace VS Code command execution with direct orchestrator/service calls while keeping reply scoping correct
+9. **`CompletionService`** (Phase 8) — file/dir completions with `fast-glob` + `ignore`; regex symbol heuristic
+10. **`ServerFileWatcher`** + `PlatformAdapter.createFileWatcher()` seam (Phase 9) — chokidar, verify every watcher construction path
+11. **`flightpath server` CLI command** (Phase 10) — `program.command('server')` + `resolveServerConfig()` + `RUNNER_IDS.SERVER`
+12. **Standalone launch UX** — print tokenized local/LAN URLs, OSC-8 clickable links, terminal QR code, and HTTPS certificate guidance when applicable
+13. **Manual testing** — standalone first: launch from npm-installed CLI, open browser and phone clients, verify token gating, reconnects, TLS, parallel workflows, watch mode, completions, and unsaved workspace viewer draft recovery after browser tab close/reopen
 
 ---
 
@@ -1164,3 +1183,7 @@ Handled entirely by the Phase 3 shim. No changes to any store.
 5. **Recent workflow history storage**: VS Code stores this in `context.globalState`. The standalone server needs a file-based equivalent (for example `.flightpath/.history/recent.json` in the workspace or `~/.flightpath/history.json`).
 
 6. **Standalone theme model**: should browser clients use a static light/dark theme from config/CLI, or should the server eventually support per-client theme preference independent of the process default?
+
+7. **Standalone browser storage scope**: should `workspaceKey` be only a hash of the canonical workspace root, or should it include port/server identity to avoid collisions when multiple standalone servers serve the same workspace with different config?
+
+8. **Unsaved draft conflict behavior**: if two browser tabs edit the same workspace viewer file draft before either saves, is MVP last-write-wins acceptable, or should the UI detect `localStorage` `storage` events and show a conflict warning?

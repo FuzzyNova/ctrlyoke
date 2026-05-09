@@ -10,7 +10,6 @@ import {
 } from "@utils/hostedApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { WorkspaceFileEditor } from "./WorkspaceFileEditor";
-import { DirtyExitGuard } from "./DirtyExitGuard";
 
 export const WorkspaceExplorerPane: React.FC = () => {
   const explorerPath = useWorkspaceViewerStore((s) => s.explorerPath);
@@ -32,23 +31,19 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const fileReadOnlyReason = useWorkspaceViewerStore(
     (s) => s.fileReadOnlyReason
   );
-  const dirtyExitPending = useWorkspaceViewerStore((s) => s.dirtyExitPending);
   const mobileEditorVisible = useWorkspaceViewerStore(
     (s) => s.mobileEditorVisible
   );
   const selectFile = useWorkspaceViewerStore((s) => s.selectFile);
   const setFileContent = useWorkspaceViewerStore((s) => s.setFileContent);
-  const setOriginalFileContent = useWorkspaceViewerStore(
-    (s) => s.setOriginalFileContent
+  const setLoadedFileContent = useWorkspaceViewerStore(
+    (s) => s.setLoadedFileContent
   );
+  const discardFileDraft = useWorkspaceViewerStore((s) => s.discardFileDraft);
   const markFileSaved = useWorkspaceViewerStore((s) => s.markFileSaved);
   const setFileLoading = useWorkspaceViewerStore((s) => s.setFileLoading);
   const setFileSaving = useWorkspaceViewerStore((s) => s.setFileSaving);
   const setFileReadOnly = useWorkspaceViewerStore((s) => s.setFileReadOnly);
-  const clearFile = useWorkspaceViewerStore((s) => s.clearFile);
-  const promptDirtyExit = useWorkspaceViewerStore((s) => s.promptDirtyExit);
-  const confirmDirtyExit = useWorkspaceViewerStore((s) => s.confirmDirtyExit);
-  const cancelDirtyExit = useWorkspaceViewerStore((s) => s.cancelDirtyExit);
   const setMobileEditorVisible = useWorkspaceViewerStore(
     (s) => s.setMobileEditorVisible
   );
@@ -115,8 +110,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           setFileReadOnly(true, result.reason);
         } else {
           setFileReadOnly(false);
-          setOriginalFileContent(result.content);
-          setFileContent(result.content);
+          setLoadedFileContent(filePath, result.content);
         }
       } catch (err) {
         setError(String(err));
@@ -128,38 +122,26 @@ export const WorkspaceExplorerPane: React.FC = () => {
       isMobile,
       selectFile,
       setFileLoading,
-      setFileContent,
-      setOriginalFileContent,
+      setLoadedFileContent,
       setFileReadOnly,
       setMobileEditorVisible,
       setError,
     ]
   );
 
-  const guardDirtyExit = useCallback(
-    (action: () => void) => {
-      if (fileDirty) {
-        promptDirtyExit(action);
-      } else {
-        action();
-      }
-    },
-    [fileDirty, promptDirtyExit]
-  );
-
   const handleBack = useCallback(() => {
     if (parentPath !== null) {
-      guardDirtyExit(() => loadDirectory(parentPath));
+      loadDirectory(parentPath);
     }
-  }, [parentPath, guardDirtyExit, loadDirectory]);
+  }, [parentPath, loadDirectory]);
 
   const handleRefresh = useCallback(() => {
     loadDirectory(explorerPath);
   }, [explorerPath, loadDirectory]);
 
   const handleMobileBack = useCallback(() => {
-    guardDirtyExit(() => setMobileEditorVisible(false));
-  }, [guardDirtyExit, setMobileEditorVisible]);
+    setMobileEditorVisible(false);
+  }, [setMobileEditorVisible]);
 
   const handleSave = useCallback(async () => {
     if (!selectedFilePath) return;
@@ -174,15 +156,29 @@ export const WorkspaceExplorerPane: React.FC = () => {
     }
   }, [selectedFilePath, fileContent, setFileSaving, markFileSaved, setError]);
 
-  const handleDirtyExitSave = useCallback(async () => {
-    await handleSave();
-    confirmDirtyExit();
-  }, [handleSave, confirmDirtyExit]);
-
-  const handleDirtyExitDiscard = useCallback(() => {
-    clearFile();
-    confirmDirtyExit();
-  }, [clearFile, confirmDirtyExit]);
+  const handleDiscardUnsaved = useCallback(async () => {
+    if (!selectedFilePath) return;
+    setFileLoading(true);
+    try {
+      const result = await workspaceFile(selectedFilePath);
+      if (result.readOnly) {
+        setFileReadOnly(true, result.reason);
+      } else {
+        setFileReadOnly(false);
+        discardFileDraft(selectedFilePath, result.content);
+      }
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setFileLoading(false);
+    }
+  }, [
+    selectedFilePath,
+    setFileLoading,
+    setFileReadOnly,
+    discardFileDraft,
+    setError,
+  ]);
 
   // Build breadcrumb segments from the current explorerPath.
   // Handles both forward-slash and backslash separators.
@@ -322,7 +318,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                       if (entry.kind === "directory") {
                         loadDirectory(entry.path);
                       } else {
-                        guardDirtyExit(() => openFile(entry.path));
+                        openFile(entry.path);
                       }
                     }}
                     className={`w-full flex items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
@@ -375,23 +371,42 @@ export const WorkspaceExplorerPane: React.FC = () => {
               )}
             </span>
             {!fileReadOnly && (
-              <button
-                onClick={handleSave}
-                disabled={fileSaving || !fileDirty}
-                className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
-                  fileDirty && !fileSaving
-                    ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
-                    : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
-                }`}
-                title={fileDirty ? "Save file" : "No changes to save"}
-              >
-                {fileSaving ? (
-                  <i className="codicon codicon-loading animate-spin" />
-                ) : (
-                  <i className="codicon codicon-save" />
-                )}
-                Save
-              </button>
+              <>
+                <button
+                  onClick={handleDiscardUnsaved}
+                  disabled={fileSaving || fileLoading || !fileDirty}
+                  className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
+                    fileDirty && !fileSaving && !fileLoading
+                      ? "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                      : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
+                  }`}
+                  title={
+                    fileDirty
+                      ? "Discard unsaved changes and reload from disk"
+                      : "No unsaved changes to discard"
+                  }
+                >
+                  <i className="codicon codicon-discard" />
+                  Discard
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={fileSaving || !fileDirty}
+                  className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
+                    fileDirty && !fileSaving
+                      ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
+                      : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
+                  }`}
+                  title={fileDirty ? "Save file" : "No changes to save"}
+                >
+                  {fileSaving ? (
+                    <i className="codicon codicon-loading animate-spin" />
+                  ) : (
+                    <i className="codicon codicon-save" />
+                  )}
+                  Save
+                </button>
+              </>
             )}
           </>
         ) : (
@@ -431,14 +446,6 @@ export const WorkspaceExplorerPane: React.FC = () => {
           <p className="text-sm">Select a file to edit</p>
         </div>
       )}
-
-      <DirtyExitGuard
-        isOpen={dirtyExitPending}
-        filePath={selectedFilePath ?? ""}
-        onSave={handleDirtyExitSave}
-        onDiscard={handleDirtyExitDiscard}
-        onCancel={cancelDirtyExit}
-      />
     </div>
   );
 
@@ -469,23 +476,42 @@ export const WorkspaceExplorerPane: React.FC = () => {
           )}
         </span>
         {!fileReadOnly && (
-          <button
-            onClick={handleSave}
-            disabled={fileSaving || !fileDirty}
-            className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
-              fileDirty && !fileSaving
-                ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
-                : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
-            }`}
-            title={fileDirty ? "Save file" : "No changes to save"}
-          >
-            {fileSaving ? (
-              <i className="codicon codicon-loading animate-spin" />
-            ) : (
-              <i className="codicon codicon-save" />
-            )}
-            Save
-          </button>
+          <>
+            <button
+              onClick={handleDiscardUnsaved}
+              disabled={fileSaving || fileLoading || !fileDirty}
+              className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
+                fileDirty && !fileSaving && !fileLoading
+                  ? "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                  : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
+              }`}
+              title={
+                fileDirty
+                  ? "Discard unsaved changes and reload from disk"
+                  : "No unsaved changes to discard"
+              }
+            >
+              <i className="codicon codicon-discard" />
+              Discard
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={fileSaving || !fileDirty}
+              className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
+                fileDirty && !fileSaving
+                  ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
+                  : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
+              }`}
+              title={fileDirty ? "Save file" : "No changes to save"}
+            >
+              {fileSaving ? (
+                <i className="codicon codicon-loading animate-spin" />
+              ) : (
+                <i className="codicon codicon-save" />
+              )}
+              Save
+            </button>
+          </>
         )}
       </div>
 
@@ -513,14 +539,6 @@ export const WorkspaceExplorerPane: React.FC = () => {
           />
         )}
       </div>
-
-      <DirtyExitGuard
-        isOpen={dirtyExitPending}
-        filePath={selectedFilePath ?? ""}
-        onSave={handleDirtyExitSave}
-        onDiscard={handleDirtyExitDiscard}
-        onCancel={cancelDirtyExit}
-      />
     </div>
   );
 

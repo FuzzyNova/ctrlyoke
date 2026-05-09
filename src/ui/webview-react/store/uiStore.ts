@@ -1,10 +1,6 @@
 import { create } from "zustand";
-import {
-  persist,
-  createJSONStorage,
-  type StateStorage,
-} from "zustand/middleware";
-import { getVsCodeApi } from "../hooks/useVsCodeApi";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
 import type { WorkflowSummary } from "../types/messages";
 import { type FooterPicker } from "../types/messages";
 import type {
@@ -13,53 +9,6 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import type { McpServerConfig } from "@root/types/FlightPathTypes";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
-
-// ============================================================================
-// VS Code State Storage Adapter
-// ============================================================================
-
-/**
- * Raw StateStorage adapter backed by the VS Code webview state API.
- *
- * Unlike localStorage, vscode.getState()/setState() persists across VS Code
- * restarts for sidebar webview views — VS Code serializes the state when the
- * extension host shuts down and restores it when the view is next opened.
- *
- * The adapter stores Zustand's serialized blob under a namespaced key within
- * the shared vscode state object, so it coexists safely with editorStore's
- * data which is written directly to the root vscode state.
- */
-const vsCodeRawStorage: StateStorage = {
-  getItem(name: string): string | null {
-    try {
-      const vscode = getVsCodeApi();
-      const root = vscode.getState() ?? {};
-      const value = root[name];
-      return typeof value === "string" ? value : null;
-    } catch {
-      return null;
-    }
-  },
-  setItem(name: string, value: string): void {
-    try {
-      const vscode = getVsCodeApi();
-      const root = vscode.getState() ?? {};
-      vscode.setState({ ...root, [name]: value });
-    } catch {
-      // Swallow — best-effort persistence
-    }
-  },
-  removeItem(name: string): void {
-    try {
-      const vscode = getVsCodeApi();
-      const root = vscode.getState() ?? {};
-      const { [name]: _removed, ...rest } = root as Record<string, unknown>;
-      vscode.setState(rest);
-    } catch {
-      // Swallow
-    }
-  },
-};
 
 /**
  * A single template variable — name plus optional UI metadata.

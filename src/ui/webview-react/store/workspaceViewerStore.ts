@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
 import type {
   WorkspaceEntry,
   SourceControlFile,
@@ -8,6 +10,10 @@ import type {
 // ============================================================================
 // State
 // ============================================================================
+
+interface CachedFileDraft {
+  content: string;
+}
 
 interface WorkspaceViewerState {
   isOpen: boolean;
@@ -27,10 +33,7 @@ interface WorkspaceViewerState {
   fileSaving: boolean;
   fileReadOnly: boolean;
   fileReadOnlyReason: string | undefined;
-
-  // Dirty-exit guard
-  dirtyExitPending: boolean;
-  dirtyExitAction: (() => void) | null;
+  fileDrafts: Record<string, CachedFileDraft>;
 
   // Mobile: in explorer tab, whether the file editor is shown (vs directory list)
   mobileEditorVisible: boolean;
@@ -64,6 +67,7 @@ interface WorkspaceViewerActions {
   // Modal control
   open(): void;
   close(): void;
+  reset(): void;
   setActiveTab(tab: "explorer" | "sourceControl"): void;
 
   // Explorer
@@ -74,17 +78,13 @@ interface WorkspaceViewerActions {
   // File editor
   selectFile(path: string): void;
   setFileContent(content: string): void;
-  setOriginalFileContent(content: string): void;
+  setLoadedFileContent(path: string, content: string): void;
+  discardFileDraft(path: string, diskContent: string): void;
   markFileSaved(content?: string): void;
   setFileLoading(loading: boolean): void;
   setFileSaving(saving: boolean): void;
   setFileReadOnly(readOnly: boolean, reason?: string): void;
   clearFile(): void;
-
-  // Dirty-exit guard
-  promptDirtyExit(action: () => void): void;
-  confirmDirtyExit(): void;
-  cancelDirtyExit(): void;
 
   // Mobile editor visibility
   setMobileEditorVisible(v: boolean): void;
@@ -129,9 +129,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   fileSaving: false,
   fileReadOnly: false,
   fileReadOnlyReason: undefined,
-
-  dirtyExitPending: false,
-  dirtyExitAction: null,
+  fileDrafts: {},
 
   mobileEditorVisible: false,
 
@@ -159,192 +157,262 @@ const INITIAL_STATE: WorkspaceViewerState = {
 
 export const useWorkspaceViewerStore = create<
   WorkspaceViewerState & WorkspaceViewerActions
->((set, get) => ({
-  ...INITIAL_STATE,
+>()(
+  persist(
+    (set, get) => ({
+      ...INITIAL_STATE,
 
-  // --- Modal control ---
+      // --- Modal control ---
 
-  open() {
-    set({ isOpen: true });
-  },
+      open() {
+        set({ isOpen: true });
+      },
 
-  close() {
-    set({ ...INITIAL_STATE });
-  },
+      close() {
+        set({
+          isOpen: false,
+          explorerLoading: false,
+          fileLoading: false,
+          fileSaving: false,
+          sourceControlLoading: false,
+          diffLoading: false,
+          committing: false,
+          pushing: false,
+          pulling: false,
+          scmError: null,
+          error: null,
+        });
+      },
 
-  setActiveTab(tab) {
-    set({ activeTab: tab });
-  },
+      reset() {
+        set({ ...INITIAL_STATE });
+      },
 
-  // --- Explorer ---
+      setActiveTab(tab) {
+        set({ activeTab: tab });
+      },
 
-  setExplorerPath(path) {
-    set({ explorerPath: path });
-  },
+      // --- Explorer ---
 
-  setExplorerEntries(entries) {
-    set({ explorerEntries: entries });
-  },
+      setExplorerPath(path) {
+        set({ explorerPath: path });
+      },
 
-  setExplorerLoading(loading) {
-    set({ explorerLoading: loading });
-  },
+      setExplorerEntries(entries) {
+        set({ explorerEntries: entries });
+      },
 
-  // --- File editor ---
+      setExplorerLoading(loading) {
+        set({ explorerLoading: loading });
+      },
 
-  selectFile(path) {
-    set({
-      selectedFilePath: path,
-      fileContent: "",
-      originalFileContent: "",
-      fileDirty: false,
-      fileReadOnly: false,
-      fileReadOnlyReason: undefined,
-    });
-  },
+      // --- File editor ---
 
-  setFileContent(content) {
-    const { originalFileContent } = get();
-    set({ fileContent: content, fileDirty: content !== originalFileContent });
-  },
+      selectFile(path) {
+        const draft = get().fileDrafts[path];
+        set({
+          selectedFilePath: path,
+          fileContent: draft?.content ?? "",
+          originalFileContent: "",
+          fileDirty: draft !== undefined,
+          fileReadOnly: false,
+          fileReadOnlyReason: undefined,
+        });
+      },
 
-  setOriginalFileContent(content) {
-    set({ originalFileContent: content });
-  },
+      setFileContent(content) {
+        const { selectedFilePath, originalFileContent, fileDrafts } = get();
+        const fileDirty = content !== originalFileContent;
+        const nextDrafts =
+          selectedFilePath === null
+            ? fileDrafts
+            : fileDirty
+              ? { ...fileDrafts, [selectedFilePath]: { content } }
+              : Object.fromEntries(
+                  Object.entries(fileDrafts).filter(
+                    ([path]) => path !== selectedFilePath
+                  )
+                );
 
-  markFileSaved(content) {
-    const savedContent = content ?? get().fileContent;
-    set({
-      fileContent: savedContent,
-      originalFileContent: savedContent,
-      fileDirty: false,
-    });
-  },
+        set({ fileContent: content, fileDirty, fileDrafts: nextDrafts });
+      },
 
-  setFileLoading(loading) {
-    set({ fileLoading: loading });
-  },
+      setLoadedFileContent(path, content) {
+        const draft = get().fileDrafts[path];
+        const fileContent = draft?.content ?? content;
+        const fileDirty = fileContent !== content;
+        const nextDrafts =
+          draft !== undefined && !fileDirty
+            ? Object.fromEntries(
+                Object.entries(get().fileDrafts).filter(
+                  ([draftPath]) => draftPath !== path
+                )
+              )
+            : get().fileDrafts;
 
-  setFileSaving(saving) {
-    set({ fileSaving: saving });
-  },
+        set({
+          selectedFilePath: path,
+          fileContent,
+          originalFileContent: content,
+          fileDirty,
+          fileDrafts: nextDrafts,
+        });
+      },
 
-  setFileReadOnly(readOnly, reason) {
-    set({
-      fileReadOnly: readOnly,
-      fileReadOnlyReason: readOnly ? reason : undefined,
-    });
-  },
+      discardFileDraft(path, diskContent) {
+        const nextDrafts = Object.fromEntries(
+          Object.entries(get().fileDrafts).filter(
+            ([draftPath]) => draftPath !== path
+          )
+        );
 
-  clearFile() {
-    set({
-      selectedFilePath: null,
-      fileContent: "",
-      originalFileContent: "",
-      fileDirty: false,
-      fileReadOnly: false,
-      fileReadOnlyReason: undefined,
-    });
-  },
+        set({
+          selectedFilePath: path,
+          fileContent: diskContent,
+          originalFileContent: diskContent,
+          fileDirty: false,
+          fileDrafts: nextDrafts,
+        });
+      },
 
-  // --- Dirty-exit guard ---
+      markFileSaved(content) {
+        const { selectedFilePath, fileDrafts } = get();
+        const savedContent = content ?? get().fileContent;
+        const nextDrafts =
+          selectedFilePath === null
+            ? fileDrafts
+            : Object.fromEntries(
+                Object.entries(fileDrafts).filter(
+                  ([path]) => path !== selectedFilePath
+                )
+              );
 
-  promptDirtyExit(action) {
-    set({ dirtyExitPending: true, dirtyExitAction: action });
-  },
+        set({
+          fileContent: savedContent,
+          originalFileContent: savedContent,
+          fileDirty: false,
+          fileDrafts: nextDrafts,
+        });
+      },
 
-  confirmDirtyExit() {
-    const { dirtyExitAction } = get();
-    set({ dirtyExitPending: false, dirtyExitAction: null });
-    dirtyExitAction?.();
-  },
+      setFileLoading(loading) {
+        set({ fileLoading: loading });
+      },
 
-  cancelDirtyExit() {
-    set({ dirtyExitPending: false, dirtyExitAction: null });
-  },
+      setFileSaving(saving) {
+        set({ fileSaving: saving });
+      },
 
-  // --- Mobile ---
+      setFileReadOnly(readOnly, reason) {
+        set({
+          fileReadOnly: readOnly,
+          fileReadOnlyReason: readOnly ? reason : undefined,
+        });
+      },
 
-  setMobileEditorVisible(v) {
-    set({ mobileEditorVisible: v });
-  },
+      clearFile() {
+        set({
+          selectedFilePath: null,
+          fileContent: "",
+          originalFileContent: "",
+          fileDirty: false,
+          fileReadOnly: false,
+          fileReadOnlyReason: undefined,
+        });
+      },
 
-  // --- Source control ---
+      // --- Mobile ---
 
-  setSourceControlFiles(files) {
-    const selectedDiffPath = get().selectedDiffPath;
-    const selectedStillExists =
-      selectedDiffPath !== null &&
-      files.some((file) => file.path === selectedDiffPath);
+      setMobileEditorVisible(v) {
+        set({ mobileEditorVisible: v });
+      },
 
-    set({
-      sourceControlFiles: files,
-      ...(selectedDiffPath !== null && !selectedStillExists
-        ? {
-            selectedDiffPath: null,
-            diffOldContent: "",
-            diffNewContent: "",
-            diffLanguage: undefined,
-            diffKind: null,
-            diffLoading: false,
-          }
-        : {}),
-    });
-  },
+      // --- Source control ---
 
-  setSourceControlLoading(loading) {
-    set({ sourceControlLoading: loading });
-  },
+      setSourceControlFiles(files) {
+        const selectedDiffPath = get().selectedDiffPath;
+        const selectedStillExists =
+          selectedDiffPath !== null &&
+          files.some((file) => file.path === selectedDiffPath);
 
-  selectDiff(path) {
-    set({ selectedDiffPath: path });
-  },
+        set({
+          sourceControlFiles: files,
+          ...(selectedDiffPath !== null && !selectedStillExists
+            ? {
+                selectedDiffPath: null,
+                diffOldContent: "",
+                diffNewContent: "",
+                diffLanguage: undefined,
+                diffKind: null,
+                diffLoading: false,
+              }
+            : {}),
+        });
+      },
 
-  clearDiff() {
-    set({
-      selectedDiffPath: null,
-      diffOldContent: "",
-      diffNewContent: "",
-      diffLanguage: undefined,
-      diffKind: null,
-      diffLoading: false,
-    });
-  },
+      setSourceControlLoading(loading) {
+        set({ sourceControlLoading: loading });
+      },
 
-  setDiffData(oldContent, newContent, language, kind) {
-    set({
-      diffOldContent: oldContent,
-      diffNewContent: newContent,
-      diffLanguage: language,
-      diffKind: kind,
-    });
-  },
+      selectDiff(path) {
+        set({ selectedDiffPath: path });
+      },
 
-  setDiffLoading(loading) {
-    set({ diffLoading: loading });
-  },
+      clearDiff() {
+        set({
+          selectedDiffPath: null,
+          diffOldContent: "",
+          diffNewContent: "",
+          diffLanguage: undefined,
+          diffKind: null,
+          diffLoading: false,
+        });
+      },
 
-  setCommitMessage(msg) {
-    set({ commitMessage: msg });
-  },
+      setDiffData(oldContent, newContent, language, kind) {
+        set({
+          diffOldContent: oldContent,
+          diffNewContent: newContent,
+          diffLanguage: language,
+          diffKind: kind,
+        });
+      },
 
-  setCommitting(v) {
-    set({ committing: v });
-  },
+      setDiffLoading(loading) {
+        set({ diffLoading: loading });
+      },
 
-  setPushing(v) {
-    set({ pushing: v });
-  },
+      setCommitMessage(msg) {
+        set({ commitMessage: msg });
+      },
 
-  setPulling(v) {
-    set({ pulling: v });
-  },
+      setCommitting(v) {
+        set({ committing: v });
+      },
 
-  setScmError(err) {
-    set({ scmError: err });
-  },
+      setPushing(v) {
+        set({ pushing: v });
+      },
 
-  setError(err) {
-    set({ error: err });
-  },
-}));
+      setPulling(v) {
+        set({ pulling: v });
+      },
+
+      setScmError(err) {
+        set({ scmError: err });
+      },
+
+      setError(err) {
+        set({ error: err });
+      },
+    }),
+    {
+      name: "flightpath-workspace-viewer-state",
+      skipHydration: true,
+      storage: createJSONStorage(() => vsCodeRawStorage),
+      partialize: (state) => ({
+        fileDrafts: state.fileDrafts,
+      }),
+    }
+  )
+);

@@ -4,6 +4,7 @@ import BootstrapApp from "./BootstrapApp";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 import { WebviewLog } from "@utils/logger";
 import { useUiStore } from "@store/uiStore";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import "./styles/globals.css";
 
 const root = document.getElementById("root");
@@ -14,6 +15,7 @@ if (!root) {
   const start = async () => {
     try {
       await useUiStore.persist.rehydrate();
+      await useWorkspaceViewerStore.persist.rehydrate();
       ReactDOM.createRoot(root).render(
         <React.StrictMode>
           <ErrorBoundary>

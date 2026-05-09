@@ -11,9 +11,7 @@ const EXIT_DURATION_MS = 220;
 export const WorkspaceViewerModal: React.FC = () => {
   const isOpen = useWorkspaceViewerStore((s) => s.isOpen);
   const activeTab = useWorkspaceViewerStore((s) => s.activeTab);
-  const fileDirty = useWorkspaceViewerStore((s) => s.fileDirty);
   const close = useWorkspaceViewerStore((s) => s.close);
-  const promptDirtyExit = useWorkspaceViewerStore((s) => s.promptDirtyExit);
   const setActiveTab = useWorkspaceViewerStore((s) => s.setActiveTab);
   const workspacePath = useSettingsStore((s) => s.globalSettings.workspaceRoot);
 
@@ -50,12 +48,8 @@ export const WorkspaceViewerModal: React.FC = () => {
   }, [closing]);
 
   const handleClose = useCallback(() => {
-    if (fileDirty) {
-      promptDirtyExit(close);
-    } else {
-      close();
-    }
-  }, [fileDirty, promptDirtyExit, close]);
+    close();
+  }, [close]);
 
   if (!rendering) return null;
 

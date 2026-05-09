@@ -38,7 +38,7 @@ vi.mock("@components/workspace-viewer/WorkspaceSourceControlPane", () => ({
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  useWorkspaceViewerStore.getState().close();
+  useWorkspaceViewerStore.getState().reset();
 });
 
 // ---------------------------------------------------------------------------
@@ -133,11 +133,11 @@ describe("WorkspaceViewerModal — close (no dirty file)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Close button — dirty file triggers guard
+// Close button — dirty file keeps cached changes
 // ---------------------------------------------------------------------------
 
 describe("WorkspaceViewerModal — close (dirty file)", () => {
-  it("does not close immediately when there is a dirty file", async () => {
+  it("closes immediately and leaves dirty editor state cached", async () => {
     const user = userEvent.setup();
     useWorkspaceViewerStore.setState({
       isOpen: true,
@@ -152,51 +152,9 @@ describe("WorkspaceViewerModal — close (dirty file)", () => {
       screen.getByRole("button", { name: /close workspace viewer/i })
     );
 
-    // Modal is still open — dirty guard should have fired instead
-    expect(useWorkspaceViewerStore.getState().isOpen).toBe(true);
-    expect(useWorkspaceViewerStore.getState().dirtyExitPending).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// workspaceViewerStore — state management
-// ---------------------------------------------------------------------------
-
-describe("workspaceViewerStore — dirty exit guard actions", () => {
-  it("promptDirtyExit sets dirtyExitPending=true and stores the action", () => {
-    const action = vi.fn();
-    useWorkspaceViewerStore.getState().promptDirtyExit(action);
-
-    const state = useWorkspaceViewerStore.getState();
-    expect(state.dirtyExitPending).toBe(true);
-    expect(state.dirtyExitAction).toBe(action);
-  });
-
-  it("confirmDirtyExit clears state and calls the stored action", () => {
-    const action = vi.fn();
-    useWorkspaceViewerStore.setState({
-      dirtyExitPending: true,
-      dirtyExitAction: action,
-    });
-
-    useWorkspaceViewerStore.getState().confirmDirtyExit();
-
-    expect(action).toHaveBeenCalledOnce();
-    expect(useWorkspaceViewerStore.getState().dirtyExitPending).toBe(false);
-    expect(useWorkspaceViewerStore.getState().dirtyExitAction).toBeNull();
-  });
-
-  it("cancelDirtyExit clears state without calling the action", () => {
-    const action = vi.fn();
-    useWorkspaceViewerStore.setState({
-      dirtyExitPending: true,
-      dirtyExitAction: action,
-    });
-
-    useWorkspaceViewerStore.getState().cancelDirtyExit();
-
-    expect(action).not.toHaveBeenCalled();
-    expect(useWorkspaceViewerStore.getState().dirtyExitPending).toBe(false);
+    expect(useWorkspaceViewerStore.getState().isOpen).toBe(false);
+    expect(useWorkspaceViewerStore.getState().fileContent).toBe("changed");
+    expect(useWorkspaceViewerStore.getState().fileDirty).toBe(true);
   });
 });
 
@@ -266,6 +224,74 @@ describe("workspaceViewerStore — save state", () => {
     expect(state.fileContent).toBe("updated");
     expect(state.originalFileContent).toBe("updated");
     expect(state.fileDirty).toBe(false);
+  });
+});
+
+describe("workspaceViewerStore — cached file drafts", () => {
+  it("caches dirty content per file", () => {
+    useWorkspaceViewerStore.getState().selectFile("src/index.ts");
+    useWorkspaceViewerStore
+      .getState()
+      .setLoadedFileContent("src/index.ts", "original");
+
+    useWorkspaceViewerStore.getState().setFileContent("changed");
+
+    const state = useWorkspaceViewerStore.getState();
+    expect(state.fileDirty).toBe(true);
+    expect(state.fileDrafts["src/index.ts"]?.content).toBe("changed");
+  });
+
+  it("reopens a file with its cached dirty content after loading disk content", () => {
+    useWorkspaceViewerStore.setState({
+      fileDrafts: { "src/index.ts": { content: "changed" } },
+    });
+
+    useWorkspaceViewerStore.getState().selectFile("src/index.ts");
+    useWorkspaceViewerStore
+      .getState()
+      .setLoadedFileContent("src/index.ts", "original");
+
+    const state = useWorkspaceViewerStore.getState();
+    expect(state.fileContent).toBe("changed");
+    expect(state.originalFileContent).toBe("original");
+    expect(state.fileDirty).toBe(true);
+  });
+
+  it("clears the cached draft after saving", () => {
+    useWorkspaceViewerStore.setState({
+      selectedFilePath: "src/index.ts",
+      fileContent: "changed",
+      originalFileContent: "original",
+      fileDirty: true,
+      fileDrafts: { "src/index.ts": { content: "changed" } },
+    });
+
+    useWorkspaceViewerStore.getState().markFileSaved("changed");
+
+    expect(useWorkspaceViewerStore.getState().fileDirty).toBe(false);
+    expect(
+      useWorkspaceViewerStore.getState().fileDrafts["src/index.ts"]
+    ).toBeUndefined();
+  });
+
+  it("clears the cached draft when discarding back to disk content", () => {
+    useWorkspaceViewerStore.setState({
+      selectedFilePath: "src/index.ts",
+      fileContent: "changed",
+      originalFileContent: "original",
+      fileDirty: true,
+      fileDrafts: { "src/index.ts": { content: "changed" } },
+    });
+
+    useWorkspaceViewerStore
+      .getState()
+      .discardFileDraft("src/index.ts", "disk");
+
+    const state = useWorkspaceViewerStore.getState();
+    expect(state.fileContent).toBe("disk");
+    expect(state.originalFileContent).toBe("disk");
+    expect(state.fileDirty).toBe(false);
+    expect(state.fileDrafts["src/index.ts"]).toBeUndefined();
   });
 });
 
