@@ -390,7 +390,7 @@ function createMessageHandlers(): MessageHandlerMap {
     useUiStore
       .getState()
       .showToast(
-        message.success ? "Build completed" : "Build failed",
+        message.success ? "Command completed" : "Command failed",
         message.success ? "success" : "error"
       );
   };

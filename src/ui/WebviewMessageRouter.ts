@@ -333,6 +333,7 @@ export class WebviewMessageRouter {
       MESSAGE_TYPES.DEV_BUILD_EXTENSION,
       routeDevAction("buildExtension")
     );
+    table.set(MESSAGE_TYPES.DEV_BUILD_WEBVIEW, routeDevAction("buildWebview"));
     table.set(MESSAGE_TYPES.DEV_BUILD_ALL, routeDevAction("buildAll"));
     table.set(MESSAGE_TYPES.DEV_RELOAD_WINDOW, routeDevAction("reloadWindow"));
     table.set(
@@ -344,9 +345,14 @@ export class WebviewMessageRouter {
       routeDevAction("buildExtensionAndReload")
     );
     table.set(
+      MESSAGE_TYPES.DEV_BUILD_WEBVIEW_AND_RELOAD,
+      routeDevAction("buildWebviewAndReload")
+    );
+    table.set(
       MESSAGE_TYPES.DEV_BUILD_ALL_AND_RELOAD,
       routeDevAction("buildAllAndReload")
     );
+    table.set(MESSAGE_TYPES.DEV_RUN_TESTS, routeDevAction("runTests"));
     table.set(
       MESSAGE_TYPES.DEV_SEND_TEST_NOTIFICATION,
       routeDevAction("sendTestNotification")

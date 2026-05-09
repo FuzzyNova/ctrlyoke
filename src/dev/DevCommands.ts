@@ -32,11 +32,14 @@ import { MESSAGE_TYPES } from "../types/DashboardConstants";
 
 export type DevDashboardAction =
   | "buildExtension"
+  | "buildWebview"
   | "buildAll"
   | "reloadWindow"
   | "restartExtensionHost"
   | "buildExtensionAndReload"
+  | "buildWebviewAndReload"
   | "buildAllAndReload"
+  | "runTests"
   | "sendTestNotification";
 
 export interface DevDashboardActionOptions {
@@ -94,7 +97,7 @@ function summarizeBuildError(stderr: string, stdout: string): string {
 
 async function runNpmBuild(
   context: vscode.ExtensionContext,
-  scriptName: "compile:extension" | "compile",
+  scriptName: "compile:extension" | "compile:webview" | "compile" | "test",
   postMessage: (message: unknown) => void
 ): Promise<DevBuildResult> {
   if (isBuilding) {
@@ -281,16 +284,28 @@ export async function handleDevDashboardAction(
   }
 
   const scriptName =
-    action === "buildAll" || action === "buildAllAndReload"
-      ? "compile"
-      : "compile:extension";
+    action === "buildExtension" || action === "buildExtensionAndReload"
+      ? "compile:extension"
+      : action === "buildWebview" || action === "buildWebviewAndReload"
+        ? "compile:webview"
+        : action === "runTests"
+          ? "test"
+          : "compile";
   const result = await runNpmBuild(context, scriptName, postMessage);
   if (!result.success) {
     return;
   }
 
-  if (action === "buildExtensionAndReload" || action === "buildAllAndReload") {
+  if (action === "buildWebviewAndReload") {
     await executeRestartCommand(DEV_RELOAD_WINDOW_COMMAND, postMessage);
+    return;
+  }
+
+  if (action === "buildExtensionAndReload" || action === "buildAllAndReload") {
+    await executeRestartCommand(
+      DEV_RESTART_EXTENSION_HOST_COMMAND,
+      postMessage
+    );
   }
 }
 

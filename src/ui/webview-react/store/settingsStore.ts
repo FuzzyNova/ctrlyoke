@@ -62,7 +62,7 @@ export interface HarnessStatus {
 
 export interface DevBuildState {
   isBuilding: boolean;
-  script: "compile:extension" | "compile" | null;
+  script: "compile:extension" | "compile:webview" | "compile" | "test" | null;
   command: string | null;
   output: string;
   lastResult: {
@@ -237,7 +237,7 @@ interface SettingsActions {
   // Developer dashboard
   setDevStatus: (dev: DevStatus | null) => void;
   startDevBuild: (
-    script: "compile:extension" | "compile",
+    script: "compile:extension" | "compile:webview" | "compile" | "test",
     command: string
   ) => void;
   appendDevBuildOutput: (stream: "stdout" | "stderr", chunk: string) => void;

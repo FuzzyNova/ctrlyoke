@@ -350,11 +350,14 @@ export interface DevStatus {
 
 export type DevDashboardAction =
   | "buildExtension"
+  | "buildWebview"
   | "buildAll"
   | "reloadWindow"
   | "restartExtensionHost"
   | "buildExtensionAndReload"
+  | "buildWebviewAndReload"
   | "buildAllAndReload"
+  | "runTests"
   | "sendTestNotification";
 
 export interface DevStatusMessage {
@@ -364,7 +367,7 @@ export interface DevStatusMessage {
 
 export interface DevBuildStartedMessage {
   type: typeof MESSAGE_TYPES.DEV_BUILD_STARTED;
-  script: "compile:extension" | "compile";
+  script: "compile:extension" | "compile:webview" | "compile" | "test";
   command: string;
 }
 

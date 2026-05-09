@@ -5,7 +5,7 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import { Button } from "@components/shared/Button";
 
 const TERMINATION_WARNING =
-  "Active workflows, PTY sessions, and CLI processes will be terminated.";
+  "Reload and restart actions terminate active workflows, PTY sessions, and CLI processes.";
 
 interface DevAction {
   label: string;
@@ -48,23 +48,36 @@ export function DeveloperSection() {
       messageType: MESSAGE_TYPES.DEV_SEND_TEST_NOTIFICATION,
     },
     {
+      label: "Run Tests",
+      messageType: MESSAGE_TYPES.DEV_RUN_TESTS,
+    },
+    {
+      label: "Rebuild UI",
+      messageType: MESSAGE_TYPES.DEV_BUILD_WEBVIEW,
+    },
+    {
+      label: "Rebuild UI & Reload Window",
+      messageType: MESSAGE_TYPES.DEV_BUILD_WEBVIEW_AND_RELOAD,
+      disabled: !dev.commands.reloadWindow,
+    },
+    {
       label: "Rebuild Extension",
       messageType: MESSAGE_TYPES.DEV_BUILD_EXTENSION,
     },
+    {
+      label: "Rebuild Extension & Restart",
+      messageType: MESSAGE_TYPES.DEV_BUILD_EXTENSION_AND_RELOAD,
+      disabled: !dev.commands.restartExtensionHost,
+    },
     { label: "Rebuild All", messageType: MESSAGE_TYPES.DEV_BUILD_ALL },
+    {
+      label: "Rebuild All & Restart",
+      messageType: MESSAGE_TYPES.DEV_BUILD_ALL_AND_RELOAD,
+      disabled: !dev.commands.restartExtensionHost,
+    },
     {
       label: "Reload Window",
       messageType: MESSAGE_TYPES.DEV_RELOAD_WINDOW,
-      disabled: !dev.commands.reloadWindow,
-    },
-    {
-      label: "Rebuild Extension & Reload",
-      messageType: MESSAGE_TYPES.DEV_BUILD_EXTENSION_AND_RELOAD,
-      disabled: !dev.commands.reloadWindow,
-    },
-    {
-      label: "Rebuild All & Reload",
-      messageType: MESSAGE_TYPES.DEV_BUILD_ALL_AND_RELOAD,
       disabled: !dev.commands.reloadWindow,
     },
     ...(dev.commands.restartExtensionHost
@@ -88,13 +101,14 @@ export function DeveloperSection() {
           Developer
         </h3>
         <p className="text-xs text-description-fg">
-          Build output comes from the extension host. Reload and restart actions
-          replace the running extension code after a successful build.
+          Command output comes from the extension host. Use reload for UI-only
+          changes and restart the extension host whenever extension code is
+          rebuilt.
         </p>
       </div>
 
       <div className="text-xs text-description-fg space-y-1">
-        <div>Build date: {formatBuildDate(dev.buildDate)}</div>
+        <div>Extension build date: {formatBuildDate(dev.buildDate)}</div>
         <div>
           Restart Extension Host:{" "}
           {dev.commands.restartExtensionHost ? "available" : "unavailable"}
@@ -123,7 +137,7 @@ export function DeveloperSection() {
       <div className="border-t border-panel-border pt-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
-            Build Output
+            Command Output
           </h3>
           <Button
             type="button"
@@ -164,7 +178,7 @@ export function DeveloperSection() {
         )}
 
         <pre className="min-h-40 max-h-80 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
-          {devBuild.output || "No build output yet."}
+          {devBuild.output || "No command output yet."}
         </pre>
       </div>
     </div>

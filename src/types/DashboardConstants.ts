@@ -276,11 +276,14 @@ export const MESSAGE_TYPES = {
 
   // Developer dashboard actions — Webview → Extension (dev builds only)
   DEV_BUILD_EXTENSION: "dev:buildExtension",
+  DEV_BUILD_WEBVIEW: "dev:buildWebview",
   DEV_BUILD_ALL: "dev:buildAll",
   DEV_RELOAD_WINDOW: "dev:reloadWindow",
   DEV_RESTART_EXTENSION_HOST: "dev:restartExtensionHost",
   DEV_BUILD_EXTENSION_AND_RELOAD: "dev:buildExtensionAndReload",
+  DEV_BUILD_WEBVIEW_AND_RELOAD: "dev:buildWebviewAndReload",
   DEV_BUILD_ALL_AND_RELOAD: "dev:buildAllAndReload",
+  DEV_RUN_TESTS: "dev:runTests",
   DEV_SEND_TEST_NOTIFICATION: "dev:sendTestNotification",
   DEV_REQUEST_STATUS: "dev:requestStatus",
 
