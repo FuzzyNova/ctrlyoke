@@ -4,7 +4,7 @@ import { Modal } from "@components/shared/Modal";
 import { hostedFetch } from "@utils/hostedApi";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
-import { MESSAGE_TYPES } from "@/types/messages";
+import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
 import type { WorkflowFileEntry } from "@root/utils/WorkflowFileDiscovery";
 
 interface WorkflowFilesResponse {
@@ -40,7 +40,7 @@ export const WorkflowFilePickerModal: React.FC<
   const [error, setError] = useState<string | null>(null);
   const showHiddenFiles = useSettingsStore((s) => s.globalSettings.showHiddenFiles);
   const showHiddenFilesScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["ui.showHiddenFiles"] === "workspace" ? "workspace" : "user"
+    s.globalSettings.settingSources["ui.showHiddenFiles"] === SETTING_SCOPES.WORKSPACE ? SETTING_SCOPES.WORKSPACE : SETTING_SCOPES.USER
   );
   const vscode = useVsCodeApi();
 

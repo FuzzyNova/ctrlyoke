@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import { suite, test, afterEach } from "mocha";
 import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
-import { MESSAGE_TYPES } from "../../types/DashboardConstants";
+import { MESSAGE_TYPES, type SettingWriteScope } from "../../types/DashboardConstants";
 import { configService } from "../../config/FlightPathConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../../types/FlightPathSettings";
@@ -526,12 +526,12 @@ suite("WebviewSettingsSync", () => {
 
   suite("WebviewMessageRouter — GENERATE_SERVER_CERT handler", () => {
     test("should forward the active scope to WebviewSettingsSync", async () => {
-      let receivedScope: "workspace" | "user" | undefined;
+      let receivedScope: SettingWriteScope | undefined;
 
       const mockSettingsSync = {
         handleGenerateServerCert: async (
           _postMessage: any,
-          scope: "workspace" | "user"
+          scope: SettingWriteScope
         ) => {
           receivedScope = scope;
         },

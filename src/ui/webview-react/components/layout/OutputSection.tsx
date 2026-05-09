@@ -49,6 +49,8 @@ import {
   FINAL_STEP_PHASES,
   SESSION_KINDS,
   STEP_TYPES,
+  SETTING_SCOPES,
+  type SettingWriteScope,
 } from "../../types/messages";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import {
@@ -174,9 +176,9 @@ export const OutputSection: React.FC = () => {
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
   const terminalFontSizeScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["terminal.fontSize"] === "workspace"
-      ? "workspace"
-      : "user"
+    s.globalSettings.settingSources["terminal.fontSize"] === SETTING_SCOPES.WORKSPACE
+      ? SETTING_SCOPES.WORKSPACE
+      : SETTING_SCOPES.USER
   );
   const updateTerminalFontSize = useCallback(
     (size: number) => {
@@ -195,9 +197,9 @@ export const OutputSection: React.FC = () => {
   // Execution mode toggle
   const executionMode = useSettingsStore((s) => s.globalSettings.executionMode);
   const executionModeScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["execution.mode"] === "workspace"
-      ? "workspace"
-      : "user"
+    s.globalSettings.settingSources["execution.mode"] === SETTING_SCOPES.WORKSPACE
+      ? SETTING_SCOPES.WORKSPACE
+      : SETTING_SCOPES.USER
   );
   const handleExecutionModeChange = useCallback(
     (active: boolean) => {

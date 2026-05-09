@@ -1,13 +1,14 @@
 import type {
   FullGlobalSettings,
   SettingSource,
+  SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { SettingInputRow } from "../shared/SettingInputRow";
 
 interface Props {
   settings: FullGlobalSettings;
-  activeScope: "workspace" | "user";
+  activeScope: SettingWriteScope;
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }

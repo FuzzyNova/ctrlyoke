@@ -9,7 +9,7 @@ import {
   getHarnessSkillDirs,
   getFlightPathSkillDir,
 } from "./HarnessDirectoryUtils";
-import { HARNESS_IDS } from "../types/DashboardConstants";
+import { HARNESS_IDS, DISCOVERY_SOURCES, type DiscoverySource } from "../types/DashboardConstants";
 
 /**
  * Represents a discovered skill
@@ -24,7 +24,7 @@ export interface SkillInfo {
   /** Description parsed from frontmatter */
   description: string;
   /** Source location of the skill */
-  source: "user" | "workspace";
+  source: Exclude<DiscoverySource, typeof DISCOVERY_SOURCES.WORKSPACE_FLIGHTPATH>;
 }
 
 /**
@@ -71,7 +71,7 @@ export class SkillDiscovery {
       skills.push(
         ...(await this.discoverInPath(
           this.getUserPath(".claude", "skills"),
-          "user",
+          DISCOVERY_SOURCES.USER,
           scannedPaths
         ))
       );
@@ -80,7 +80,7 @@ export class SkillDiscovery {
       skills.push(
         ...(await this.discoverInPath(
           this.getUserPath(".copilot", "skills"),
-          "user",
+          DISCOVERY_SOURCES.USER,
           scannedPaths
         ))
       );
@@ -89,7 +89,7 @@ export class SkillDiscovery {
       skills.push(
         ...(await this.discoverInPath(
           this.getUserPath(".agents", "skills"),
-          "user",
+          DISCOVERY_SOURCES.USER,
           scannedPaths
         ))
       );
@@ -103,7 +103,7 @@ export class SkillDiscovery {
         skills.push(
           ...(await this.discoverInPath(
             getFlightPathSkillDir(workspaceRoot),
-            "workspace",
+            DISCOVERY_SOURCES.WORKSPACE,
             scannedPaths
           ))
         );
@@ -112,7 +112,7 @@ export class SkillDiscovery {
         for (const harnessId of Object.values(HARNESS_IDS)) {
           for (const dir of getHarnessSkillDirs(harnessId, workspaceRoot)) {
             skills.push(
-              ...(await this.discoverInPath(dir, "workspace", scannedPaths))
+              ...(await this.discoverInPath(dir, DISCOVERY_SOURCES.WORKSPACE, scannedPaths))
             );
           }
         }
@@ -122,7 +122,7 @@ export class SkillDiscovery {
         skills.push(
           ...(await this.discoverInPath(
             path.join(parentDir, ".agents", "skills"),
-            "workspace",
+            DISCOVERY_SOURCES.WORKSPACE,
             scannedPaths
           ))
         );
@@ -132,7 +132,7 @@ export class SkillDiscovery {
           skills.push(
             ...(await this.discoverInPath(
               path.join(gitRoot, ".agents", "skills"),
-              "workspace",
+              DISCOVERY_SOURCES.WORKSPACE,
               scannedPaths
             ))
           );

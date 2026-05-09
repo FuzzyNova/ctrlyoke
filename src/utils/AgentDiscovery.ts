@@ -8,7 +8,7 @@ import {
   getHarnessAgentDirs,
   getFlightPathAgentDir,
 } from "./HarnessDirectoryUtils";
-import { HARNESS_IDS } from "../types/DashboardConstants";
+import { HARNESS_IDS, DISCOVERY_SOURCES, type DiscoverySource } from "../types/DashboardConstants";
 
 /**
  * Represents a discovered agent file
@@ -21,7 +21,7 @@ export interface AgentInfo {
   /** Full path to the agent file */
   path: string;
   /** Source location of the agent */
-  source: "user" | "workspace" | "workspace-flightpath";
+  source: DiscoverySource;
 }
 
 /**
@@ -71,7 +71,7 @@ export class AgentDiscovery {
             scanned.add(normalized);
             const harnessAgents = await this.discoverAgentsInDirectory(
               dir,
-              "workspace"
+              DISCOVERY_SOURCES.WORKSPACE
             );
             agents.push(...harnessAgents);
           }
@@ -83,7 +83,7 @@ export class AgentDiscovery {
         const fpDir = getFlightPathAgentDir(workspaceRoot);
         const fpAgents = await this.discoverAgentsInDirectory(
           fpDir,
-          "workspace-flightpath"
+          DISCOVERY_SOURCES.WORKSPACE_FLIGHTPATH
         );
         agents.push(...fpAgents);
       }
@@ -117,7 +117,7 @@ export class AgentDiscovery {
 
     const results: AgentInfo[] = [];
     for (const dir of dirs) {
-      const agents = await this.discoverAgentsInDirectory(dir, "user");
+      const agents = await this.discoverAgentsInDirectory(dir, DISCOVERY_SOURCES.USER);
       results.push(...agents);
     }
     return results;

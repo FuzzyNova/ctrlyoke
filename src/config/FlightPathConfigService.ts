@@ -3,8 +3,9 @@ import type {
   PartialFlightPathSettings,
 } from "../types/FlightPathSettings";
 import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../types/FlightPathSettings";
+import { SETTING_SCOPES, type SettingScope, type SettingWriteScope } from "../types/DashboardConstants";
 
-export type SettingSource = "cli" | "workspace" | "user" | "default";
+export type SettingSource = "cli" | SettingScope;
 
 export interface ResolvedSetting<T> {
   value: T;
@@ -137,10 +138,10 @@ export class FlightPathConfigService {
   async set(
     path: string,
     value: unknown,
-    scope: "workspace" | "user"
+    scope: SettingWriteScope
   ): Promise<void> {
     const backend =
-      scope === "workspace" ? this.workspaceBackend : this.userBackend;
+      scope === SETTING_SCOPES.WORKSPACE ? this.workspaceBackend : this.userBackend;
     if (!backend) {
       throw new Error(`No ${scope} backend configured`);
     }

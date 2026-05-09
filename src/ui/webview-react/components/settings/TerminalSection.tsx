@@ -8,6 +8,7 @@ import {
 import type {
   FullGlobalSettings,
   SettingSource,
+  SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import type { TerminalShortcut } from "@root/types/FlightPathSettings";
 import { CustomSelect } from "../shared/CustomSelect";
@@ -16,7 +17,7 @@ import { SettingToggleRow } from "../shared/SettingToggleRow";
 
 interface Props {
   settings: FullGlobalSettings;
-  activeScope: "workspace" | "user";
+  activeScope: SettingWriteScope;
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }
@@ -86,7 +87,7 @@ function NumberField({
   path?: string;
   sources?: Record<string, SettingSource>;
   onReset?: (path: string) => void;
-  activeScope?: "workspace" | "user";
+  activeScope?: SettingWriteScope;
 }) {
   const isInvalid = value < min || value > max;
   return (
@@ -144,7 +145,7 @@ function FontStepper({
   path?: string;
   sources?: Record<string, SettingSource>;
   onReset?: (path: string) => void;
-  activeScope?: "workspace" | "user";
+  activeScope?: SettingWriteScope;
 }) {
   const min = 8;
   const max = 24;

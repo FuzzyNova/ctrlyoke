@@ -133,32 +133,32 @@ async function collectAgentLocations(
   const scannedUser = new Set<string>();
 
   // FlightPath workspace dir (first so it takes priority)
-  await scanAgentDir(getFlightPathAgentDir(workspaceRoot), "flightpath", "workspace", scannedWorkspace);
+  await scanAgentDir(getFlightPathAgentDir(workspaceRoot), "flightpath", SETTING_SCOPES.WORKSPACE, scannedWorkspace);
 
   // FlightPath user dir (~/.flightpath/agents)
-  await scanAgentDir(getFlightPathUserAgentDir(), "flightpath", "user", scannedUser);
+  await scanAgentDir(getFlightPathUserAgentDir(), "flightpath", SETTING_SCOPES.USER, scannedUser);
 
   // Generic "Agents" dirs (.agents / ~/.agents) — scanned before harness dirs so dedup
   // labels them "agents" rather than any specific harness that also points here (e.g. Codex)
-  await scanAgentDir(getAgentsWorkspaceAgentDir(workspaceRoot), "agents", "workspace", scannedWorkspace);
-  await scanAgentDir(getAgentsUserAgentDir(), "agents", "user", scannedUser);
+  await scanAgentDir(getAgentsWorkspaceAgentDir(workspaceRoot), "agents", SETTING_SCOPES.WORKSPACE, scannedWorkspace);
+  await scanAgentDir(getAgentsUserAgentDir(), "agents", SETTING_SCOPES.USER, scannedUser);
 
   // VS Code user prompts dirs (user-only)
   for (const dir of getVSCodeUserAgentDirs()) {
-    await scanAgentDir(dir, "vscode", "user", scannedUser);
+    await scanAgentDir(dir, "vscode", SETTING_SCOPES.USER, scannedUser);
   }
 
   // Harness workspace dirs (dedup — skips any dir already claimed above)
   for (const harnessId of getAllHarnessIds()) {
     for (const dir of getHarnessAgentDirs(harnessId, workspaceRoot)) {
-      await scanAgentDir(dir, harnessId, "workspace", scannedWorkspace);
+      await scanAgentDir(dir, harnessId, SETTING_SCOPES.WORKSPACE, scannedWorkspace);
     }
   }
 
   // Harness user dirs (dedup — skips any dir already claimed above)
   for (const harnessId of getAllHarnessIds()) {
     for (const dir of getHarnessUserAgentDirs(harnessId)) {
-      await scanAgentDir(dir, harnessId, "user", scannedUser);
+      await scanAgentDir(dir, harnessId, SETTING_SCOPES.USER, scannedUser);
     }
   }
 
@@ -215,26 +215,26 @@ async function collectSkillLocations(
   const scannedUser = new Set<string>();
 
   // FlightPath workspace dir (first for priority)
-  await scanSkillDir(getFlightPathSkillDir(workspaceRoot), "flightpath", "workspace", scannedWorkspace);
+  await scanSkillDir(getFlightPathSkillDir(workspaceRoot), "flightpath", SETTING_SCOPES.WORKSPACE, scannedWorkspace);
 
   // FlightPath user dir (~/.flightpath/skills)
-  await scanSkillDir(getFlightPathUserSkillDir(), "flightpath", "user", scannedUser);
+  await scanSkillDir(getFlightPathUserSkillDir(), "flightpath", SETTING_SCOPES.USER, scannedUser);
 
   // Generic "Agents" skill dirs — before harness dirs so dedup assigns correct label
-  await scanSkillDir(getAgentsWorkspaceSkillDir(workspaceRoot), "agents", "workspace", scannedWorkspace);
-  await scanSkillDir(getAgentsUserSkillDir(), "agents", "user", scannedUser);
+  await scanSkillDir(getAgentsWorkspaceSkillDir(workspaceRoot), "agents", SETTING_SCOPES.WORKSPACE, scannedWorkspace);
+  await scanSkillDir(getAgentsUserSkillDir(), "agents", SETTING_SCOPES.USER, scannedUser);
 
   // Harness workspace skill dirs (dedup — skips any dir already claimed above)
   for (const harnessId of getAllHarnessIds()) {
     for (const dir of getHarnessSkillDirs(harnessId, workspaceRoot)) {
-      await scanSkillDir(dir, harnessId, "workspace", scannedWorkspace);
+      await scanSkillDir(dir, harnessId, SETTING_SCOPES.WORKSPACE, scannedWorkspace);
     }
   }
 
   // Harness user skill dirs (dedup — skips any dir already claimed above)
   for (const harnessId of getAllHarnessIds()) {
     for (const dir of getHarnessUserSkillDirs(harnessId)) {
-      await scanSkillDir(dir, harnessId, "user", scannedUser);
+      await scanSkillDir(dir, harnessId, SETTING_SCOPES.USER, scannedUser);
     }
   }
 
@@ -258,7 +258,7 @@ export class HarnessFileManager {
     ];
     const directories: ManagedTargetDirectory[] = [];
 
-    for (const scope of ["workspace", "user"] as const) {
+    for (const scope of [SETTING_SCOPES.WORKSPACE, SETTING_SCOPES.USER] as const) {
       for (const harnessId of targets) {
         try {
           directories.push({
@@ -471,7 +471,7 @@ export class HarnessFileManager {
     scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): string {
     if (harnessId === "flightpath") {
-      if (scope === "user") {
+      if (scope === SETTING_SCOPES.USER) {
         return type === "agent" ? getFlightPathUserAgentDir() : getFlightPathUserSkillDir();
       }
       return type === "agent"
@@ -480,7 +480,7 @@ export class HarnessFileManager {
     }
 
     if (harnessId === "agents") {
-      if (scope === "user") {
+      if (scope === SETTING_SCOPES.USER) {
         return type === "agent" ? getAgentsUserAgentDir() : getAgentsUserSkillDir();
       }
       return type === "agent"
@@ -498,7 +498,7 @@ export class HarnessFileManager {
     }
 
     const dirs =
-      scope === "user"
+      scope === SETTING_SCOPES.USER
         ? type === "agent"
           ? getHarnessUserAgentDirs(harnessId as HarnessId)
           : getHarnessUserSkillDirs(harnessId as HarnessId)

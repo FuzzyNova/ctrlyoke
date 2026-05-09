@@ -17,6 +17,7 @@ import {
   PROMPT_PROPERTIES,
   type HarnessId,
   type HarnessStatusString,
+  type SettingWriteScope,
 } from "../types/DashboardConstants";
 import {
   ConfigurationUtils,
@@ -891,7 +892,7 @@ export class WebviewSettingsSync {
   async handleUpdateGlobalSetting(
     path: string,
     value: unknown,
-    scope: "workspace" | "user",
+    scope: SettingWriteScope,
     postMessage: PostMessageFn
   ): Promise<void> {
     await configService.set(path, value, scope);
@@ -925,7 +926,7 @@ export class WebviewSettingsSync {
 
   async handleGenerateServerCert(
     postMessage: PostMessageFn,
-    scope: "workspace" | "user",
+    scope: SettingWriteScope,
     homedirFn: () => string = os.homedir
   ): Promise<void> {
     const baseDir =

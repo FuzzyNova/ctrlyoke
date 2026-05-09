@@ -39,6 +39,7 @@ export {
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
   SETTING_SCOPES,
+  DISCOVERY_SOURCES,
   HARNESS_FILE_TYPES,
   FOOTER_PICKERS,
   SPECIAL_TARGET_IDS,
@@ -65,6 +66,8 @@ export {
   type SessionKind,
   type ShellKind,
   type SettingScope,
+  type SettingWriteScope,
+  type DiscoverySource,
   type HarnessFileType,
   type FooterPicker,
 } from "@root/types/DashboardConstants";

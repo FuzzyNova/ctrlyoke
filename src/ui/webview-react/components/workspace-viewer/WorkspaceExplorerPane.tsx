@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
-import { MESSAGE_TYPES } from "@/types/messages";
+import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
 import { workspaceTree, workspaceFile, workspaceSaveFile } from "@utils/hostedApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { WorkspaceFileEditor } from "./WorkspaceFileEditor";
@@ -40,7 +40,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
   const showHiddenFiles = useSettingsStore((s) => s.globalSettings.showHiddenFiles);
   const showHiddenFilesScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["ui.showHiddenFiles"] === "workspace" ? "workspace" : "user"
+    s.globalSettings.settingSources["ui.showHiddenFiles"] === SETTING_SCOPES.WORKSPACE ? SETTING_SCOPES.WORKSPACE : SETTING_SCOPES.USER
   );
   const vscode = useVsCodeApi();
 

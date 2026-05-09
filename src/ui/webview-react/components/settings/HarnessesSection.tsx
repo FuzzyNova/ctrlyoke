@@ -1,6 +1,7 @@
 import type {
   FullGlobalSettings,
   SettingSource,
+  SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
@@ -10,7 +11,7 @@ import { SettingInputRow } from "../shared/SettingInputRow";
 
 interface Props {
   settings: FullGlobalSettings;
-  activeScope: "workspace" | "user";
+  activeScope: SettingWriteScope;
   onUpdate: (path: string, value: unknown) => void;
   onReset: (path: string) => void;
 }

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { MESSAGE_TYPES, HARNESS_FILE_TYPES, type HarnessFileType } from "@/types/messages";
+import { MESSAGE_TYPES, HARNESS_FILE_TYPES, type HarnessFileType, type SettingWriteScope } from "@/types/messages";
 import type {
   ManagedFile,
   ManagedTargetDirectory,
@@ -27,29 +27,29 @@ interface HarnessFileState {
     harnessId: string,
     fileType: HarnessFileType,
     overwrite: boolean,
-    scope: "workspace" | "user"
+    scope: SettingWriteScope
   ) => void;
   deleteFile: (
     name: string,
     harnessId: string,
     fileType: HarnessFileType,
-    scope: "workspace" | "user"
+    scope: SettingWriteScope
   ) => void;
   syncAll: (
     files: Array<{ sourcePath: string; name: string }>,
     targetHarnessId: string,
     fileType: HarnessFileType,
-    scope: "workspace" | "user"
+    scope: SettingWriteScope
   ) => void;
   deleteAll: (
     harnessId: string,
     fileType: HarnessFileType,
-    scope: "workspace" | "user"
+    scope: SettingWriteScope
   ) => void;
   openHarnessDir: (
     harnessId: string,
     fileType: HarnessFileType,
-    scope: "workspace" | "user"
+    scope: SettingWriteScope
   ) => void;
 }
 

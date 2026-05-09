@@ -1,4 +1,4 @@
-import type { SettingSource } from "@root/types/WebviewMessageTypes";
+import type { SettingSource, SettingWriteScope } from "@root/types/WebviewMessageTypes";
 import { SettingSourceBadge } from "./SettingSourceBadge";
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
   path?: string;
   sources?: Record<string, SettingSource>;
   onReset?: (path: string) => void;
-  activeScope?: "workspace" | "user";
+  activeScope?: SettingWriteScope;
 }
 
 export function SettingToggleRow({
