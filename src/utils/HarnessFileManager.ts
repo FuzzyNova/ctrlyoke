@@ -2,7 +2,8 @@ import * as path from "path";
 import * as fs from "fs";
 import { Log } from "./Log";
 import { getErrorMessage } from "./ErrorUtils";
-import type { HarnessId, AnyTargetId } from "../types/DashboardConstants";
+import type { HarnessId, AnyTargetId, SettingWriteScope } from "../types/DashboardConstants";
+import { SETTING_SCOPES } from "../types/DashboardConstants";
 import {
   getHarnessAgentDirs,
   getHarnessUserAgentDirs,
@@ -29,7 +30,7 @@ import { isAccessibleDirectory, formatDisplayName } from "./DiscoveryUtils";
 export interface ManagedFileLocation {
   harnessId: AnyTargetId;
   /** Whether this copy lives in a workspace dir or a user-level dir */
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
   path: string;
 }
 
@@ -42,7 +43,7 @@ export interface ManagedFile {
 
 export interface ManagedTargetDirectory {
   harnessId: AnyTargetId;
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
   path: string;
 }
 
@@ -101,7 +102,7 @@ async function collectAgentLocations(
   const scanAgentDir = async (
     dir: string,
     targetId: AnyTargetId,
-    scope: "workspace" | "user",
+    scope: SettingWriteScope,
     scannedSet?: Set<string>
   ) => {
     const normalized = path.normalize(dir);
@@ -191,7 +192,7 @@ async function collectSkillLocations(
   const scanSkillDir = async (
     dir: string,
     targetId: AnyTargetId,
-    scope: "workspace" | "user",
+    scope: SettingWriteScope,
     scannedSet?: Set<string>
   ) => {
     const normalized = path.normalize(dir);
@@ -307,7 +308,7 @@ export class HarnessFileManager {
     workspaceRoot: string,
     type: "agent" | "skill",
     overwrite = false,
-    scope: "workspace" | "user" = "workspace"
+    scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): Promise<void> {
     const targetDir = HarnessFileManager.getTargetDir(
       targetHarnessId,
@@ -354,7 +355,7 @@ export class HarnessFileManager {
     workspaceRoot: string,
     type: "agent" | "skill",
     overwrite = false,
-    scope: "workspace" | "user" = "workspace"
+    scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): Promise<void> {
     return HarnessFileManager.exportToHarness(
       sourcePath,
@@ -375,7 +376,7 @@ export class HarnessFileManager {
     harnessId: AnyTargetId,
     workspaceRoot: string,
     type: "agent" | "skill",
-    scope: "workspace" | "user" = "workspace"
+    scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): Promise<void> {
     const targetDir = HarnessFileManager.getTargetDir(
       harnessId,
@@ -440,7 +441,7 @@ export class HarnessFileManager {
     harnessId: AnyTargetId,
     workspaceRoot: string,
     type: "agent" | "skill",
-    scope: "workspace" | "user" = "workspace"
+    scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): Promise<void> {
     const files =
       type === "agent"
@@ -467,7 +468,7 @@ export class HarnessFileManager {
     harnessId: AnyTargetId,
     workspaceRoot: string,
     type: "agent" | "skill",
-    scope: "workspace" | "user" = "workspace"
+    scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): string {
     if (harnessId === "flightpath") {
       if (scope === "user") {

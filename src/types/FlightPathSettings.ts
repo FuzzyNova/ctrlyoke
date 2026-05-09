@@ -188,7 +188,15 @@ export type PartialFlightPathSettings = {
 /** Default values for all settings */
 export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
   harness: "copilot-cli",
-  models: {},
+  models: {
+    "copilot-cli": "claude-sonnet-4.6",
+    "copilot-chat": "claude-sonnet-4.6",
+    "claude-cli": "sonnet",
+    "codex-cli": "gpt-5.5",
+    "opencode-cli": "opencode/big-pickle",
+    "qwen-cli": "qwen3.5-plus",
+    "gemini-cli": "gemini-3-flash-preview",
+  },
   additionalArgs: {},
   execution: {
     mode: "interactive",

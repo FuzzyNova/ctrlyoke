@@ -99,10 +99,7 @@ export function HarnessesSection({
                     onChange={(v) =>
                       onUpdate(`models.${harnessId}`, v || undefined)
                     }
-                    options={[
-                      { value: "", label: "Default" },
-                      ...discoveredModels,
-                    ]}
+                    options={discoveredModels}
                   />
                 ) : (
                   <input
@@ -115,7 +112,7 @@ export function HarnessesSection({
                         e.target.value || undefined
                       )
                     }
-                    placeholder="Default"
+                    placeholder="Enter model ID"
                     className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
                   />
                 )}

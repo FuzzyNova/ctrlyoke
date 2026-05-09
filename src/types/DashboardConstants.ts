@@ -1170,6 +1170,8 @@ export const SETTING_SCOPES = {
 } as const;
 
 export type SettingScope = (typeof SETTING_SCOPES)[keyof typeof SETTING_SCOPES];
+/** Scopes that accept writes — workspace or user (excludes the read-only "default" tier) */
+export type SettingWriteScope = Exclude<SettingScope, typeof SETTING_SCOPES.DEFAULT>;
 
 // ============================================================================
 // HARNESS FILE TYPES - File type discriminants for the harness file manager

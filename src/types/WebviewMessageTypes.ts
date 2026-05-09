@@ -30,6 +30,8 @@ import {
   type CompletionNotificationSeverity,
   type HookEvent,
   type NotificationKind,
+  type SettingScope,
+  type SettingWriteScope,
 } from "./DashboardConstants";
 import type {
   WorkflowSummary,
@@ -72,10 +74,13 @@ export {
   HARNESS_IDS,
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  SETTING_SCOPES,
   type MessageType,
   type StatusMessageSeverity,
   type ActionType,
   type AnyTargetId,
+  type SettingScope,
+  type SettingWriteScope,
 } from "./DashboardConstants";
 
 // Re-export WorkflowSummary, WorkflowStep, and PreCondition for webview consumers
@@ -813,7 +818,7 @@ export interface GlobalSettingsUpdatedMessage {
 // GLOBAL SETTINGS DRAWER TYPES
 // ============================================================================
 
-export type SettingSource = "workspace" | "user" | "default";
+export type SettingSource = SettingScope;
 
 export interface FullGlobalSettings {
   settings: FlightPathGlobalSettings;
@@ -838,13 +843,13 @@ export interface UpdateGlobalSettingMessage {
   type: typeof MESSAGE_TYPES.UPDATE_GLOBAL_SETTING;
   path: string;
   value: unknown;
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
 }
 
 /** Webview → Extension: generate a self-signed server cert for the active scope */
 export interface GenerateServerCertMessage {
   type: typeof MESSAGE_TYPES.GENERATE_SERVER_CERT;
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
 }
 
 /** Extension → Webview: acknowledge a setting update */
@@ -1191,7 +1196,7 @@ export interface ManagedFileLocation {
   /** The target ID for this location (harness ID or special dir like "flightpath", "agents", "vscode") */
   harnessId: AnyTargetId;
   /** Whether this copy lives in a workspace dir or a user-level (~/) dir */
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
   /** Absolute path to the file (agent) or directory (skill) on disk */
   path: string;
 }
@@ -1209,7 +1214,7 @@ export interface ManagedFile {
 /** A target directory shown in the Agent/Skills manager UI */
 export interface ManagedTargetDirectory {
   harnessId: AnyTargetId;
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
   path: string;
 }
 
@@ -1233,7 +1238,7 @@ export interface ExportToHarnessMessage {
   harnessId: AnyTargetId;
   fileType: "agent" | "skill";
   overwrite?: boolean;
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
 }
 
 /** Webview → Extension: copy a file into .flightpath/agents or .flightpath/skills */
@@ -1250,7 +1255,7 @@ export interface DeleteFromHarnessMessage {
   name: string;
   harnessId: AnyTargetId;
   fileType: "agent" | "skill";
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
 }
 
 /** Webview → Extension: copy all files to a single target dir */
@@ -1260,7 +1265,7 @@ export interface SyncAllToHarnessMessage {
   files: Array<{ sourcePath: string; name: string }>;
   targetHarnessId: AnyTargetId;
   fileType: "agent" | "skill";
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
 }
 
 /** Webview → Extension: delete all discovered files from a specific target dir */
@@ -1268,7 +1273,7 @@ export interface DeleteAllFromHarnessMessage {
   type: typeof MESSAGE_TYPES.DELETE_ALL_FROM_HARNESS;
   harnessId: AnyTargetId;
   fileType: "agent" | "skill";
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
 }
 
 /** Extension → Webview: result of a file operation (export/import/delete/sync) */
@@ -1286,7 +1291,7 @@ export interface OpenHarnessDirMessage {
   type: typeof MESSAGE_TYPES.OPEN_HARNESS_DIR;
   harnessId: AnyTargetId;
   fileType: "agent" | "skill";
-  scope: "workspace" | "user";
+  scope: SettingWriteScope;
 }
 
 /** Extension → Webview: result of an open-folder request */
