@@ -176,7 +176,7 @@ function FileRefButton({
   return (
     <button
       type="button"
-      className="group inline-flex items-center gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
+      className="group inline-flex items-baseline gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
       onClick={() => openFile(path, line)}
       title={title}
     >
