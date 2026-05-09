@@ -12,6 +12,14 @@ interface WorkspaceViewerHeaderProps {
 const getFileName = (filePath: string): string =>
   filePath.split(/[/\\]/).filter(Boolean).pop() ?? filePath;
 
+const getWorkspaceFilePath = (
+  workspaceName: string | null,
+  filePath: string
+): string => {
+  const relativePath = filePath.replace(/^[/\\]+/, "").replace(/\\/g, "/");
+  return workspaceName ? `${workspaceName}/${relativePath}` : relativePath;
+};
+
 export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
   activeTab,
   onTabChange,
@@ -27,9 +35,10 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
   const mobileDiffVisible = useWorkspaceViewerStore((s) => s.mobileDiffVisible);
   const isMobile = useIsMobile();
 
-  const workspaceName = workspacePath
+  const workspaceRootName = workspacePath
     ? (workspacePath.split(/[/\\]/).filter(Boolean).pop() ?? workspacePath)
-    : "FlightPath Workspace";
+    : null;
+  const workspaceName = workspaceRootName ?? "FlightPath Workspace";
   const explorerFileVisible =
     activeTab === "explorer" &&
     selectedFilePath !== null &&
@@ -44,6 +53,9 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       ? selectedDiffPath
       : null;
   const showDirtyDot = explorerFileVisible && fileDirty;
+  const subtitle = titleFilePath
+    ? getWorkspaceFilePath(workspaceRootName, titleFilePath)
+    : workspacePath;
 
   return (
     <div className="flex items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0">
@@ -91,12 +103,12 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
             </span>
           )}
         </div>
-        {(titleFilePath || workspacePath) && (
+        {subtitle && (
           <span
             className="text-xs text-description-fg truncate w-full text-center"
-            title={titleFilePath ?? workspacePath}
+            title={subtitle}
           >
-            {titleFilePath ?? workspacePath}
+            {subtitle}
           </span>
         )}
       </div>

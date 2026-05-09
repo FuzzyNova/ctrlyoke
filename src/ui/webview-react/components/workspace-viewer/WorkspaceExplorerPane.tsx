@@ -191,7 +191,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       <button
         key="root"
         onClick={() => loadDirectory("")}
-        className="hover:underline text-editor-fg opacity-70 hover:opacity-100 text-xs"
+        className="max-w-full truncate whitespace-nowrap hover:underline text-editor-fg opacity-70 hover:opacity-100 text-xs"
         title="Go to workspace root"
       >
         {rootLabel || "workspace"}
@@ -204,14 +204,17 @@ export const WorkspaceExplorerPane: React.FC = () => {
       crumbs.push(
         <span
           key={`sep-${i}`}
-          className="opacity-40 text-xs mx-0.5 select-none"
+          className="whitespace-nowrap opacity-40 text-xs mx-0.5 select-none"
         >
           /
         </span>
       );
       if (isLast) {
         crumbs.push(
-          <span key={segPath} className="text-editor-fg text-xs font-medium">
+          <span
+            key={segPath}
+            className="max-w-full truncate whitespace-nowrap text-editor-fg text-xs font-medium"
+          >
             {segment}
           </span>
         );
@@ -220,7 +223,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           <button
             key={segPath}
             onClick={() => loadDirectory(segPath)}
-            className="hover:underline text-editor-fg opacity-70 hover:opacity-100 text-xs"
+            className="max-w-full truncate whitespace-nowrap hover:underline text-editor-fg opacity-70 hover:opacity-100 text-xs"
           >
             {segment}
           </button>
@@ -253,8 +256,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
           <i className="codicon codicon-arrow-left text-xs" />
         </button>
 
-        <div className="flex-1 flex items-center overflow-hidden min-w-0 px-1">
-          <div className="flex items-center flex-nowrap overflow-hidden">
+        <div className="flex-1 min-w-0 px-1 py-0.5">
+          <div className="flex flex-wrap items-center min-w-0">
             {renderBreadcrumb()}
           </div>
         </div>

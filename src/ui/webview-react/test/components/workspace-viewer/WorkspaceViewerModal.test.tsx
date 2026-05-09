@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkspaceViewerModal } from "@components/workspace-viewer/WorkspaceViewerModal";
+import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 
 // ---------------------------------------------------------------------------
@@ -39,6 +40,7 @@ vi.mock("@components/workspace-viewer/WorkspaceSourceControlPane", () => ({
 
 beforeEach(() => {
   useWorkspaceViewerStore.getState().reset();
+  useSettingsStore.getState().updateGlobalSetting("workspaceRoot", "");
 });
 
 // ---------------------------------------------------------------------------
@@ -125,11 +127,14 @@ describe("WorkspaceViewerModal — header title", () => {
       selectedFilePath: "src/index.ts",
       fileDirty: true,
     });
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("workspaceRoot", "C:\\dev\\FlightPath");
 
     render(<WorkspaceViewerModal />);
 
     expect(screen.getByText("index.ts")).toBeInTheDocument();
-    expect(screen.getByText("src/index.ts")).toBeInTheDocument();
+    expect(screen.getByText("FlightPath/src/index.ts")).toBeInTheDocument();
     expect(screen.getByTitle("Unsaved changes")).toBeInTheDocument();
   });
 
@@ -139,11 +144,14 @@ describe("WorkspaceViewerModal — header title", () => {
       activeTab: "sourceControl",
       selectedDiffPath: "src/fileA.ts",
     });
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("workspaceRoot", "C:\\dev\\FlightPath");
 
     render(<WorkspaceViewerModal />);
 
     expect(screen.getByText("fileA.ts")).toBeInTheDocument();
-    expect(screen.getByText("src/fileA.ts")).toBeInTheDocument();
+    expect(screen.getByText("FlightPath/src/fileA.ts")).toBeInTheDocument();
   });
 });
 
