@@ -353,35 +353,26 @@ export const WorkspaceExplorerPane: React.FC = () => {
   );
 
   // ---------------------------------------------------------------------------
-  // File editor column (right column, wide viewports)
+  // File editor column (right column on desktop; full-screen on mobile)
   // ---------------------------------------------------------------------------
 
   const fileEditorColumn = (
     <div className="flex-1 flex flex-col overflow-hidden relative">
       {/* File toolbar */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0 min-h-[2.25rem]">
+        {isMobile && (
+          <button
+            onClick={handleMobileBack}
+            className="flex items-center gap-1 text-editor-fg hover:opacity-80 transition-opacity"
+          >
+            <i className="codicon codicon-arrow-left text-sm" />
+            <span className="text-sm">Back</span>
+          </button>
+        )}
         {selectedFilePath ? (
           <>
-            <div className="flex-1" />
             {!fileReadOnly && (
               <>
-                <button
-                  onClick={handleDiscardUnsaved}
-                  disabled={fileSaving || fileLoading || !fileDirty}
-                  className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
-                    fileDirty && !fileSaving && !fileLoading
-                      ? "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                      : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
-                  }`}
-                  title={
-                    fileDirty
-                      ? "Discard unsaved changes and reload from disk"
-                      : "No unsaved changes to discard"
-                  }
-                >
-                  <i className="codicon codicon-discard" />
-                  Discard
-                </button>
                 <button
                   onClick={handleSave}
                   disabled={fileSaving || !fileDirty}
@@ -399,13 +390,32 @@ export const WorkspaceExplorerPane: React.FC = () => {
                   )}
                   Save
                 </button>
+                <button
+                  onClick={handleDiscardUnsaved}
+                  disabled={fileSaving || fileLoading || !fileDirty}
+                  className={`ml-auto flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
+                    fileDirty && !fileSaving && !fileLoading
+                      ? "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                      : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
+                  }`}
+                  title={
+                    fileDirty
+                      ? "Discard unsaved changes and reload from disk"
+                      : "No unsaved changes to discard"
+                  }
+                >
+                  <i className="codicon codicon-debug-restart" />
+                  Discard
+                </button>
               </>
             )}
           </>
         ) : (
-          <span className="text-sm text-editor-fg opacity-40 select-none">
-            No file selected
-          </span>
+          !isMobile && (
+            <span className="text-sm text-editor-fg opacity-40 select-none">
+              No file selected
+            </span>
+          )
         )}
       </div>
 
@@ -443,96 +453,13 @@ export const WorkspaceExplorerPane: React.FC = () => {
   );
 
   // ---------------------------------------------------------------------------
-  // Mobile: full-screen editor view (shown when mobileEditorVisible = true)
-  // ---------------------------------------------------------------------------
-
-  const mobileEditorView = (
-    <div className="flex-1 flex flex-col overflow-hidden relative">
-      {/* Mobile toolbar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border flex-shrink-0">
-        <button
-          onClick={handleMobileBack}
-          className="flex items-center gap-1 min-h-[44px] text-editor-fg hover:opacity-80 transition-opacity"
-        >
-          <i className="codicon codicon-arrow-left text-sm" />
-          <span className="text-sm">Back</span>
-        </button>
-        <div className="flex-1" />
-        {!fileReadOnly && (
-          <>
-            <button
-              onClick={handleDiscardUnsaved}
-              disabled={fileSaving || fileLoading || !fileDirty}
-              className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
-                fileDirty && !fileSaving && !fileLoading
-                  ? "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                  : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
-              }`}
-              title={
-                fileDirty
-                  ? "Discard unsaved changes and reload from disk"
-                  : "No unsaved changes to discard"
-              }
-            >
-              <i className="codicon codicon-discard" />
-              Discard
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={fileSaving || !fileDirty}
-              className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
-                fileDirty && !fileSaving
-                  ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
-                  : "border-transparent bg-transparent text-editor-fg opacity-40 cursor-default"
-              }`}
-              title={fileDirty ? "Save file" : "No changes to save"}
-            >
-              {fileSaving ? (
-                <i className="codicon codicon-loading animate-spin" />
-              ) : (
-                <i className="codicon codicon-save" />
-              )}
-              Save
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* File editor */}
-      <div className="flex-1 overflow-hidden">
-        {fileLoading ? (
-          <div className="flex items-center gap-2 p-4 opacity-50 text-editor-fg">
-            <i className="codicon codicon-loading animate-spin" />
-            <span className="text-sm">Loading file…</span>
-          </div>
-        ) : fileReadOnly ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-editor-fg opacity-70">
-            <i className="codicon codicon-info text-2xl" />
-            <p className="text-sm">
-              {fileReadOnlyReason ?? "This file cannot be edited"}
-            </p>
-          </div>
-        ) : (
-          <WorkspaceFileEditor
-            filePath={selectedFilePath ?? ""}
-            content={fileContent}
-            onChange={(newContent) => setFileContent(newContent)}
-            onSave={handleSave}
-            saving={fileSaving}
-          />
-        )}
-      </div>
-    </div>
-  );
-
-  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
   if (isMobile) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        {mobileEditorVisible ? mobileEditorView : directoryListColumn}
+        {mobileEditorVisible ? fileEditorColumn : directoryListColumn}
       </div>
     );
   }
