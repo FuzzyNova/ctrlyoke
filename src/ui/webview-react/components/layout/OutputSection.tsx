@@ -258,6 +258,7 @@ export const OutputSection: React.FC = () => {
   const sectionRef = useRef<HTMLElement>(null);
   const autoscrollEnabled = useRef(true);
   const isProgrammaticScroll = useRef(false);
+  const measureFrameRef = useRef<number | null>(null);
 
   // Scroll position tracked for the minimap viewport indicator
   const [minimapScrollTop, setMinimapScrollTop] = useState(0);
@@ -436,15 +437,29 @@ export const OutputSection: React.FC = () => {
       setDiffMeasurements(newDiffMeasurements);
     };
 
+    const scheduleMeasure = () => {
+      if (measureFrameRef.current !== null) return;
+      measureFrameRef.current = requestAnimationFrame(() => {
+        measureFrameRef.current = null;
+        measure();
+      });
+    };
+
     measure();
-    const resizeObserver = new ResizeObserver(measure);
+    // Re-measure on the next frame so remounted DiffView children have time to
+    // reinsert anchors and stamp their minimap metadata before we read the DOM.
+    scheduleMeasure();
+
+    const resizeObserver = new ResizeObserver(scheduleMeasure);
     resizeObserver.observe(container);
     // Watch for individual diff expand/collapse — DiffView stamps data-diff-collapsed
     // on [data-diff-anchor] elements, but the container's clientHeight doesn't change
     // (it's overflow-y-auto with fixed visual height), so ResizeObserver won't fire.
-    // MutationObserver catches the attribute change and triggers a re-measure.
-    const mutationObserver = new MutationObserver(measure);
+    // MutationObserver also watches childList so remounted output content can
+    // repopulate diff anchors even when the scroll container size stays fixed.
+    const mutationObserver = new MutationObserver(scheduleMeasure);
     mutationObserver.observe(container, {
+      childList: true,
       attributes: true,
       subtree: true,
       attributeFilter: [
@@ -455,13 +470,25 @@ export const OutputSection: React.FC = () => {
       ],
     });
     return () => {
+      if (measureFrameRef.current !== null) {
+        cancelAnimationFrame(measureFrameRef.current);
+        measureFrameRef.current = null;
+      }
       resizeObserver.disconnect();
       mutationObserver.disconnect();
     };
     // activeOutputTab is included so a re-measure fires when switching back from
     // the terminal tab — the output div is unmounted while terminal is active, so
     // its DOM measurements become stale and must be refreshed on re-mount.
-  }, [allMessages, uniqueStepTargets, diffsCollapsed, activeOutputTab]);
+    // outputCollapsed is included for the same reason when the OutputSection stays
+    // mounted as a collapsed bar and later expands in-place.
+  }, [
+    allMessages,
+    uniqueStepTargets,
+    diffsCollapsed,
+    activeOutputTab,
+    outputCollapsed,
+  ]);
 
   // Export handler
   const handleExport = useCallback(() => {
