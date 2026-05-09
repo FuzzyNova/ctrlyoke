@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -9,7 +9,10 @@ import {
   workspaceSaveFile,
 } from "@utils/hostedApi";
 import { useIsMobile } from "@hooks/useMediaQuery";
-import { WorkspaceFileEditor } from "./WorkspaceFileEditor";
+import {
+  WorkspaceFileEditor,
+  type WorkspaceFileEditorHandle,
+} from "./WorkspaceFileEditor";
 
 export const WorkspaceExplorerPane: React.FC = () => {
   const explorerPath = useWorkspaceViewerStore((s) => s.explorerPath);
@@ -61,6 +64,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const vscode = useVsCodeApi();
 
   const isMobile = useIsMobile();
+
+  const editorRef = useRef<WorkspaceFileEditorHandle>(null);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   // Nav metadata kept in local state — not needed globally
   const [parentPath, setParentPath] = useState<string | null>(null);
@@ -156,8 +163,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
     }
   }, [selectedFilePath, fileContent, setFileSaving, markFileSaved, setError]);
 
-  const handleDiscardUnsaved = useCallback(async () => {
-    if (!selectedFilePath) return;
+  const handleDiscardUnsaved = useCallback(async () => {    if (!selectedFilePath) return;
     setFileLoading(true);
     try {
       const result = await workspaceFile(selectedFilePath);
@@ -179,6 +185,22 @@ export const WorkspaceExplorerPane: React.FC = () => {
     discardFileDraft,
     setError,
   ]);
+
+  const handleUndo = useCallback(() => {
+    editorRef.current?.undo();
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    editorRef.current?.redo();
+  }, []);
+
+  const handleUndoRedoChange = useCallback(
+    (newCanUndo: boolean, newCanRedo: boolean) => {
+      setCanUndo(newCanUndo);
+      setCanRedo(newCanRedo);
+    },
+    []
+  );
 
   // Build breadcrumb segments from the current explorerPath.
   // Handles both forward-slash and backslash separators.
@@ -390,6 +412,44 @@ export const WorkspaceExplorerPane: React.FC = () => {
                   )}
                   Save
                 </button>
+                {/* Undo / Redo merged control */}
+                <div
+                  className="fp-button-group"
+                  role="group"
+                  aria-label="Undo / Redo"
+                >
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    disabled={!canUndo}
+                    title="Undo"
+                    aria-label="Undo"
+                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-xs transition-colors focus:outline-none focus-visible:ring-1 ${
+                      canUndo
+                        ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                        : "bg-btn-secondary-bg text-btn-secondary-fg opacity-40 cursor-not-allowed"
+                    }`}
+                  >
+                    <i className="codicon codicon-discard" />
+                  </button>
+                  <div className="bg-btn-secondary-bg text-btn-secondary-fg py-0.5 flex-shrink-0">
+                    <div className="w-px h-full bg-current opacity-40" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRedo}
+                    disabled={!canRedo}
+                    title="Redo"
+                    aria-label="Redo"
+                    className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-xs transition-colors focus:outline-none focus-visible:ring-1 ${
+                      canRedo
+                        ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                        : "bg-btn-secondary-bg text-btn-secondary-fg opacity-40 cursor-not-allowed"
+                    }`}
+                  >
+                    <i className="codicon codicon-redo" />
+                  </button>
+                </div>
                 <button
                   onClick={handleDiscardUnsaved}
                   disabled={fileSaving || fileLoading || !fileDirty}
@@ -436,11 +496,13 @@ export const WorkspaceExplorerPane: React.FC = () => {
             </div>
           ) : (
             <WorkspaceFileEditor
+              ref={editorRef}
               filePath={selectedFilePath}
               content={fileContent}
               onChange={(newContent) => setFileContent(newContent)}
               onSave={handleSave}
               saving={fileSaving}
+              onUndoRedoChange={handleUndoRedoChange}
             />
           )}
         </div>
