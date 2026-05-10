@@ -177,7 +177,7 @@ function FileRefButton({
     <button
       type="button"
       className="group inline-flex items-baseline gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
-      onClick={() => openFile(path, line)}
+      onClick={() => line !== undefined ? openFile(path, line) : openFile(path)}
       title={title}
     >
       <i className="codicon codicon-file text-xxs opacity-70" />
