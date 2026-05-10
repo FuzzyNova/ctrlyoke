@@ -12,7 +12,10 @@ import type { HarnessId } from "../types/DashboardConstants";
 import { isScriptStep } from "../types/FlightPathTypes";
 
 const execFileAsync = promisify(execFile);
-const MAX_DIFF_BYTES = 8 * 1024;
+// ~200k tokens at ~4 bytes/token; leaves room for system prompt and instructions.
+// The harness handles actual context-window limits natively — this is just a safeguard
+// against truly pathological diffs (e.g. generated files, minified bundles).
+const MAX_DIFF_BYTES = 750 * 1024;
 
 export interface DiffResult {
   diff: string;
@@ -180,12 +183,20 @@ export class CommitMessageGenerator {
       );
     }
 
-    const responseText = firstStep._runtime?.responseText;
-    if (!responseText?.trim()) {
+    const rawResponse = firstStep._runtime?.responseText;
+    if (!rawResponse?.trim()) {
       throw new Error("Commit message generation produced an empty response");
     }
 
-    return responseText.trim();
+    // Strip thinking blocks and file-operation annotations — for a commit message we
+    // only want the pure assistant text, not reasoning traces or tool-call summaries.
+    // These formats are defined by CliResponseTextExtractor.extractTextFromEvents().
+    const responseText = rawResponse
+      .replace(/\n?\[Thinking\][\s\S]*?\[\/Thinking\]/g, "")
+      .replace(/\n\[(Created|Edited|Deleted):[^\]]*\]/g, "")
+      .trim();
+
+    return responseText;
   }
 
   async generate(

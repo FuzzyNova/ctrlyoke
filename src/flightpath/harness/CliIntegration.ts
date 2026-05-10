@@ -207,8 +207,22 @@ export class CliIntegration extends HarnessIntegration {
    * In VS Code context, reads from the file-based config service via ConfigurationUtils.
    * In CLI context, the resolved execution mode (from flags/TTY detection) is written
    * to the configService overlay in cli.ts, so ConfigurationUtils returns the correct value.
+   *
+   * When the platform adapter exposes a `getConfig()` method (i.e. CliAdapter), its value
+   * takes precedence over the global configService. This allows callers like
+   * CommitMessageGenerator to force headless mode via CliAdapter without affecting VS Code
+   * user settings — mirrors the duck-typing pattern used by isVsCodeContext().
    */
   protected getExecutionMode(): CliExecutionMode {
+    const adapter = this.platform as unknown as {
+      getConfig?: (key: string, defaultValue: string) => string;
+    };
+    if (typeof adapter.getConfig === "function") {
+      const mode = adapter.getConfig("cliExecutionMode", "");
+      if (mode === "headless" || mode === "interactive") {
+        return mode as CliExecutionMode;
+      }
+    }
     return ConfigurationUtils.getCliExecutionMode() as CliExecutionMode;
   }
 
