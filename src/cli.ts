@@ -2,7 +2,9 @@ import { Command } from "commander";
 import chalk from "chalk";
 import * as path from "path";
 import * as crypto from "crypto";
+import * as readline from "readline";
 import { access } from "fs/promises";
+
 import { CliAdapter } from "./platform/CliAdapter";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
 import { registerCliAdapter } from "./platform/vscode-shim";
@@ -111,12 +113,17 @@ program
 
 program
   .command("commit")
-  .description("Generate an AI-powered commit message and print it to stdout")
+  .description("Generate an AI-powered commit message and commit")
   .option("-m, --model <model>", "Override model for commit message generation")
   .option(
     "-d, --cwd <path>",
     "Working directory (default: current directory)"
   )
+  .option(
+    "--print-only",
+    "Print the generated message to stdout without committing"
+  )
+  .option("-y, --yes", "Skip confirmation prompt and commit automatically")
   .action(async (options: CommitCommandOptions) => {
     await commitCommand(options);
   });
@@ -579,6 +586,8 @@ async function validateCommand(file: string): Promise<void> {
 interface CommitCommandOptions {
   model?: string;
   cwd?: string;
+  printOnly?: boolean;
+  yes?: boolean;
 }
 
 async function commitCommand(options: CommitCommandOptions): Promise<void> {
@@ -630,9 +639,54 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     process.exit(1);
   }
 
-  // Print only the message to stdout so callers can pipe it:
-  //   git commit -m "$(flightpath commit)"
-  console.log(message);
+  if (options.printOnly) {
+    // Pipe-friendly: only the message goes to stdout.
+    //   git commit -m "$(flightpath commit --print-only)"
+    console.log(message);
+    return;
+  }
+
+  console.error();
+  console.error(chalk.bold("Generated commit message:"));
+  console.error(chalk.dim("─".repeat(52)));
+  console.error(message);
+  console.error(chalk.dim("─".repeat(52)));
+  console.error();
+
+  if (!diffResult.staged) {
+    console.error(
+      chalk.yellow(
+        "Note: Generated from unstaged changes. Stage files before committing."
+      )
+    );
+    console.error();
+  }
+
+  if (!options.yes) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stderr,
+    });
+    const answer = await new Promise<string>((resolve) => {
+      rl.question("Commit with this message? [y/N] ", resolve);
+    });
+    rl.close();
+    if (!answer.toLowerCase().startsWith("y")) {
+      console.error("Aborted.");
+      process.exit(0);
+    }
+  }
+
+  const { GitCommitter } = await import("./git/GitCommitter");
+  const committer = new GitCommitter();
+  try {
+    await committer.commit(message, workingDir);
+    console.error(chalk.green("✓ Committed successfully"));
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(chalk.red(`Error: ${errMsg}`));
+    process.exit(1);
+  }
 }
 
 /**
