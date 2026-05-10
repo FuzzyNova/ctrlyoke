@@ -11,3 +11,4 @@ export { ServerSection } from "./ServerSection";
 export { DeveloperSection } from "./DeveloperSection";
 export { NotificationsSection } from "./NotificationsSection";
 export { AgentSkillsManagerSection } from "./AgentSkillsManagerSection";
+export { CommitSection } from "./CommitSection";

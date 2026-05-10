@@ -23,6 +23,7 @@ import {
   NotificationsSection,
   DeveloperSection,
   AgentSkillsManagerSection,
+  CommitSection,
 } from "../settings";
 
 const ALL_TABS = [
@@ -42,6 +43,7 @@ const ALL_TABS = [
     label: "Agent & Skills Manager",
     icon: "codicon-agent",
   },
+  { id: "commit", label: "Commit Message", icon: "codicon-git-commit" },
   { id: "developer", label: "Developer", icon: "codicon-tools" },
 ];
 
@@ -214,6 +216,9 @@ export function GlobalSettingsDrawer() {
             )}
             {effectiveActiveTab === "agentskillsmanager" && (
               <AgentSkillsManagerSection />
+            )}
+            {fullSettings && effectiveActiveTab === "commit" && (
+              <CommitSection settings={fullSettings} {...sectionProps} />
             )}
             {dev?.enabled && effectiveActiveTab === "developer" && (
               <DeveloperSection />
