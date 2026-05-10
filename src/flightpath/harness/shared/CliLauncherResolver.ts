@@ -5,10 +5,8 @@ import { Log } from "../../../utils/Log";
 import { resolveWindowsShell } from "../PtyProcessManager";
 
 const execFileAsync = promisify(execFile);
-const WINDOWS_CMD_WRAPPER =
-  "& $args[0] @($args | Select-Object -Skip 1)";
 
-type CliLauncherKind = "direct" | "powershell-file" | "powershell-command";
+type CliLauncherKind = "direct" | "powershell-file" | "cmd-file";
 
 interface CliLauncher {
   kind: CliLauncherKind;
@@ -106,6 +104,8 @@ async function resolveWindowsLauncher(commandName: string): Promise<CliLauncher>
   }
 
   const extension = path.extname(resolvedPath).toLowerCase();
+  Log.debug(`[CliLauncherResolver] ${commandName} → "${resolvedPath}" (${extension || "no ext"})`);
+
   if (extension === ".ps1") {
     return {
       kind: "powershell-file",
@@ -117,14 +117,9 @@ async function resolveWindowsLauncher(commandName: string): Promise<CliLauncher>
 
   if (extension === ".cmd" || extension === ".bat") {
     return {
-      kind: "powershell-command",
-      command: shell,
-      prefixArgs: [
-        "-NoProfile",
-        "-Command",
-        WINDOWS_CMD_WRAPPER,
-        resolvedPath,
-      ],
+      kind: "cmd-file",
+      command: "cmd.exe",
+      prefixArgs: ["/c", resolvedPath],
       resolvedPath,
     };
   }
@@ -143,11 +138,16 @@ async function getWindowsCommandMetadata(
 ): Promise<WindowsCommandMetadata | undefined> {
   try {
     const escapedName = escapePowerShellSingleQuoted(commandName);
+    // Prefer Application (.exe, .cmd, .bat) over ExternalScript (.ps1).
+    // npm .ps1 shims check $MyInvocation.ExpectingInput and pipe $input to node
+    // when stdin is an open pipe, causing a 30-second hang via execFileAsync.
+    // The .cmd counterpart calls node directly and avoids this issue.
     const script =
-      `$cmd = Get-Command -Name '${escapedName}' ` +
-      `-CommandType Application,ExternalScript -ErrorAction Stop | ` +
-      "Select-Object -First 1 Name,CommandType,Source,Path,Definition; " +
-      "$cmd | ConvertTo-Json -Compress";
+      `$cmd = Get-Command -Name '${escapedName}' -CommandType Application ` +
+      `-ErrorAction SilentlyContinue | Select-Object -First 1 Name,CommandType,Source,Path,Definition; ` +
+      `if (-not $cmd) { $cmd = Get-Command -Name '${escapedName}' -CommandType ExternalScript ` +
+      `-ErrorAction SilentlyContinue | Select-Object -First 1 Name,CommandType,Source,Path,Definition }; ` +
+      `if ($cmd) { $cmd | ConvertTo-Json -Compress }`;
     const { stdout } = await execFileAsync(shell, ["-NoProfile", "-Command", script], {
       encoding: "utf8",
       timeout: 5000,
