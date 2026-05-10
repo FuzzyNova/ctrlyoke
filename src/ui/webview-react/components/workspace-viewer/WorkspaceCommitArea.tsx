@@ -49,7 +49,9 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
     setGeneratingCommitMessage(true);
     setScmError(null);
     try {
-      const result = await workspaceGenerateCommitMessage();
+      const result = await workspaceGenerateCommitMessage(
+        commitMessage.trim() || undefined
+      );
       setCommitMessage(result.message);
       if (!result.staged) {
         setScmError(
@@ -62,6 +64,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
       setGeneratingCommitMessage(false);
     }
   }, [
+    commitMessage,
     generatingCommitMessage,
     setGeneratingCommitMessage,
     setCommitMessage,

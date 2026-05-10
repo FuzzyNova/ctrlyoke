@@ -827,9 +827,12 @@ export class FlightPathHostedServer
     this.app.post(
       "/api/workspace-viewer/generate-commit-message",
       requireToken,
-      async (_req, res) => {
+      async (req, res) => {
         try {
-          const result = await this.viewerService.generateCommitMessage();
+          const instructions = typeof req.body?.instructions === "string"
+            ? req.body.instructions
+            : undefined;
+          const result = await this.viewerService.generateCommitMessage(instructions);
           if (!result) {
             res
               .status(422)

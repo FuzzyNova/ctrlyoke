@@ -120,6 +120,10 @@ program
     "Working directory (default: current directory)"
   )
   .option(
+    "--hint <text>",
+    "Extra instructions or starting draft to guide the generated message"
+  )
+  .option(
     "--print-only",
     "Print the generated message to stdout without committing"
   )
@@ -586,6 +590,7 @@ async function validateCommand(file: string): Promise<void> {
 interface CommitCommandOptions {
   model?: string;
   cwd?: string;
+  hint?: string;
   printOnly?: boolean;
   yes?: boolean;
 }
@@ -632,7 +637,12 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   console.error(chalk.dim("Generating commit message..."));
   let message: string;
   try {
-    message = await generator.generateMessage(diffResult.diff, workingDir);
+    message = await generator.generateMessage(
+      diffResult.diff,
+      workingDir,
+      undefined,
+      options.hint
+    );
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Error: ${errMsg}`));

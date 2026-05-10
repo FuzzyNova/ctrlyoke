@@ -28,9 +28,13 @@ export class ScmCommitCommand {
         token.onCancellationRequested(() => abortController.abort());
 
         try {
+          // Capture any existing text as instructions before overwriting it
+          const existingText = vscode.scm.inputBox.value.trim() || undefined;
+
           const result = await this.generator.generate(
             cwd,
-            abortController.signal
+            abortController.signal,
+            existingText
           );
 
           if (!result) {

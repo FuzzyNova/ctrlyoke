@@ -561,8 +561,8 @@ export class HostedWorkspaceViewerService {
 
   // ── Commit message generation ────────────────────────────────────────────
 
-  async generateCommitMessage(): Promise<CommitResult | null> {
-    return this.commitGenerator.generate(this.workspaceRoot);
+  async generateCommitMessage(instructions?: string): Promise<CommitResult | null> {
+    return this.commitGenerator.generate(this.workspaceRoot, undefined, instructions);
   }
 
   // ── Git pull ─────────────────────────────────────────────────────────────

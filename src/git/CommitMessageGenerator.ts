@@ -103,7 +103,8 @@ export class CommitMessageGenerator {
   async generateMessage(
     diff: string,
     cwd: string,
-    token?: AbortSignal
+    token?: AbortSignal,
+    instructions?: string
   ): Promise<string> {
     const rawHarness =
       ConfigurationUtils.getCommitHarness() ||
@@ -112,7 +113,10 @@ export class CommitMessageGenerator {
     const model = ConfigurationUtils.getCommitModel() || undefined;
     const commitPrompt = ConfigurationUtils.getCommitPrompt();
 
-    const fullPrompt = `${commitPrompt}\n\n${diff}`;
+    const instructionsSection = instructions?.trim()
+      ? `\n\nUser's starting draft or instructions — use as a guide for the message:\n${instructions.trim()}`
+      : "";
+    const fullPrompt = `${commitPrompt}\n\n${diff}${instructionsSection}`;
 
     const config: ResolvedCliConfig = {
       harness,
@@ -186,14 +190,20 @@ export class CommitMessageGenerator {
 
   async generate(
     cwd: string,
-    token?: AbortSignal
+    token?: AbortSignal,
+    instructions?: string
   ): Promise<CommitResult | null> {
     const diffResult = await this.getDiff(cwd);
     if (!diffResult) {
       return null;
     }
 
-    const message = await this.generateMessage(diffResult.diff, cwd, token);
+    const message = await this.generateMessage(
+      diffResult.diff,
+      cwd,
+      token,
+      instructions
+    );
     return {
       message,
       staged: diffResult.staged,

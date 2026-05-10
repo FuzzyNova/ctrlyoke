@@ -140,9 +140,14 @@ export async function workspacePull(): Promise<WorkspacePullResponse> {
   });
 }
 
-export async function workspaceGenerateCommitMessage(): Promise<WorkspaceGenerateCommitMessageResponse> {
+export async function workspaceGenerateCommitMessage(
+  instructions?: string
+): Promise<WorkspaceGenerateCommitMessageResponse> {
   return hostedFetch<WorkspaceGenerateCommitMessageResponse>(
     "/api/workspace-viewer/generate-commit-message",
-    { method: "POST" }
+    {
+      method: "POST",
+      body: instructions ? JSON.stringify({ instructions }) : undefined,
+    }
   );
 }
