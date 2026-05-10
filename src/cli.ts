@@ -2,7 +2,6 @@ import { Command } from "commander";
 import chalk from "chalk";
 import * as path from "path";
 import * as crypto from "crypto";
-import * as readline from "readline";
 import { access } from "fs/promises";
 import { CliAdapter } from "./platform/CliAdapter";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
@@ -112,14 +111,12 @@ program
 
 program
   .command("commit")
-  .description("Generate an AI-powered commit message and optionally commit")
+  .description("Generate an AI-powered commit message and print it to stdout")
   .option("-m, --model <model>", "Override model for commit message generation")
   .option(
     "-d, --cwd <path>",
     "Working directory (default: current directory)"
   )
-  .option("--dry-run", "Print the generated message without committing")
-  .option("-y, --yes", "Skip confirmation prompt and commit automatically")
   .action(async (options: CommitCommandOptions) => {
     await commitCommand(options);
   });
@@ -582,8 +579,6 @@ async function validateCommand(file: string): Promise<void> {
 interface CommitCommandOptions {
   model?: string;
   cwd?: string;
-  dryRun?: boolean;
-  yes?: boolean;
 }
 
 async function commitCommand(options: CommitCommandOptions): Promise<void> {
@@ -608,26 +603,24 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   const { CommitMessageGenerator } = await import(
     "./git/CommitMessageGenerator"
   );
-  const { GitCommitter } = await import("./git/GitCommitter");
   const generator = new CommitMessageGenerator();
-  const committer = new GitCommitter();
 
-  console.log(chalk.dim("Checking for changes..."));
+  console.error(chalk.dim("Checking for changes..."));
   const diffResult = await generator.getDiff(workingDir);
   if (!diffResult) {
-    console.log("No changes detected. Stage or modify files first.");
+    console.error("No changes detected. Stage or modify files first.");
     process.exit(0);
   }
 
   if (diffResult.truncated) {
-    console.warn(
+    console.error(
       chalk.yellow(
         "Warning: Diff exceeded 8 KB and was truncated. Commit message may be incomplete."
       )
     );
   }
 
-  console.log(chalk.dim("Generating commit message..."));
+  console.error(chalk.dim("Generating commit message..."));
   let message: string;
   try {
     message = await generator.generateMessage(diffResult.diff, workingDir);
@@ -637,50 +630,9 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     process.exit(1);
   }
 
-  console.log();
-  console.log(chalk.bold("Generated commit message:"));
-  console.log(chalk.dim("─".repeat(52)));
+  // Print only the message to stdout so callers can pipe it:
+  //   git commit -m "$(flightpath commit)"
   console.log(message);
-  console.log(chalk.dim("─".repeat(52)));
-  console.log();
-
-  if (options.dryRun) {
-    console.log(chalk.dim("(dry-run — not committing)"));
-    process.exit(0);
-  }
-
-  if (!diffResult.staged) {
-    console.log(
-      chalk.yellow(
-        "Note: Generated from unstaged changes. Stage files before committing."
-      )
-    );
-    console.log();
-  }
-
-  if (!options.yes) {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    const answer = await new Promise<string>((resolve) => {
-      rl.question(`Commit with this message? [y/N] `, resolve);
-    });
-    rl.close();
-    if (!answer.toLowerCase().startsWith("y")) {
-      console.log("Aborted.");
-      process.exit(0);
-    }
-  }
-
-  try {
-    await committer.commit(message, workingDir);
-    console.log(chalk.green("✓ Committed successfully"));
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`Error: ${errMsg}`));
-    process.exit(1);
-  }
 }
 
 /**
