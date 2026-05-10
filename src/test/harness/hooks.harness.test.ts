@@ -48,12 +48,12 @@ type HarnessId =
 
 /** Active harnesses for this test run. Comment out any you don't want to run. */
 const HARNESSES: HarnessId[] = [
-  // "copilot-cli",
-  // "claude-cli",
-  // "codex-cli",
-  // "opencode-cli",
+  "copilot-cli",
+  "claude-cli",
+  "codex-cli",
+  "opencode-cli",
   "qwen-cli",
-  // "gemini-cli",
+  "gemini-cli",
 ];
 
 /**
