@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LocalTextInput } from "../shared/LocalInputs";
 import {
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
@@ -89,7 +90,18 @@ function NumberField({
   onReset?: (path: string) => void;
   activeScope?: SettingWriteScope;
 }) {
-  const isInvalid = value < min || value > max;
+  const [localValue, setLocalValue] = useState(String(value));
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) {
+      setLocalValue(String(value));
+    }
+  }, [value]);
+
+  const displayNum = Number(localValue);
+  const isInvalid = Number.isFinite(displayNum) && (displayNum < min || displayNum > max);
+
   return (
     <SettingInputRow
       label={label}
@@ -105,14 +117,11 @@ function NumberField({
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(e) => {
-          const next = Number(e.target.value);
-          if (Number.isFinite(next)) {
-            onChange(next);
-          }
-        }}
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onFocus={() => { focused.current = true; }}
         onBlur={(e) => {
+          focused.current = false;
           const next = Number(e.target.value);
           if (Number.isFinite(next)) {
             onChange(clampNumber(next, min, max));
@@ -598,14 +607,11 @@ export function TerminalSection({
           path="terminal.wordSeparators"
           {...rowProps}
         >
-          <input
+          <LocalTextInput
             id="terminal-word-separators"
-            type="text"
             value={terminal.wordSeparators}
             placeholder={" ()[]{}',\"`"}
-            onChange={(e) =>
-              onUpdate("terminal.wordSeparators", e.target.value)
-            }
+            onCommit={(v) => onUpdate("terminal.wordSeparators", v)}
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
           />
         </SettingInputRow>
@@ -659,13 +665,10 @@ export function TerminalSection({
                 path="terminal.shellExecutable"
                 {...rowProps}
               >
-                <input
-                  type="text"
+                <LocalTextInput
                   value={terminal.shellExecutable}
                   placeholder="C:\\Program Files\\PowerShell\\7\\pwsh.exe"
-                  onChange={(e) =>
-                    onUpdate("terminal.shellExecutable", e.target.value)
-                  }
+                  onCommit={(v) => onUpdate("terminal.shellExecutable", v)}
                   className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
                 />
               </SettingInputRow>
@@ -691,18 +694,15 @@ export function TerminalSection({
               path="terminal.shellExecutable"
               {...rowProps}
             >
-              <input
+              <LocalTextInput
                 id="terminal-shell"
-                type="text"
                 value={terminal.shellExecutable}
                 placeholder={
                   platform === "mac"
                     ? "Auto-detected from $SHELL, then /bin/zsh"
                     : "Auto-detected from $SHELL, then /bin/bash"
                 }
-                onChange={(e) =>
-                  onUpdate("terminal.shellExecutable", e.target.value)
-                }
+                onCommit={(v) => onUpdate("terminal.shellExecutable", v)}
                 className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
               />
             </SettingInputRow>
@@ -782,16 +782,15 @@ export function TerminalSection({
             ) : (
               terminal.mobileCustomShortcuts.map((shortcut, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <input
-                    type="text"
+                  <LocalTextInput
                     value={shortcut.label}
                     placeholder="Label"
                     aria-label={`Shortcut ${index + 1} label`}
-                    onChange={(e) =>
+                    onCommit={(v) =>
                       onUpdate(
                         "terminal.mobileCustomShortcuts",
                         updateShortcut(terminal.mobileCustomShortcuts, index, {
-                          label: e.target.value,
+                          label: v,
                         })
                       )
                     }

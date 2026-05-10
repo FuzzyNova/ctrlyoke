@@ -5,6 +5,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { SettingInputRow } from "../shared/SettingInputRow";
+import { LocalNumberInput } from "../shared/LocalInputs";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -142,14 +143,12 @@ export function GeneralSection({
           path="history.maxRuns"
           {...rowProps}
         >
-          <input
+          <LocalNumberInput
             id="history-max-runs"
-            type="number"
             min={-1}
             value={history.maxRuns}
-            onChange={(e) =>
-              onUpdate("history.maxRuns", parseInt(e.target.value, 10) || -1)
-            }
+            onCommit={(v) => onUpdate("history.maxRuns", v)}
+            parse={(v) => parseInt(v, 10) || -1}
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
           />
         </SettingInputRow>

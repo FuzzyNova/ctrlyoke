@@ -49,6 +49,7 @@ export { AnimatedSection } from "./AnimatedSection";
 export { SettingSourceBadge } from "./SettingSourceBadge";
 export { SettingToggleRow } from "./SettingToggleRow";
 export { SettingInputRow } from "./SettingInputRow";
+export { LocalTextInput, LocalNumberInput, LocalTextarea } from "./LocalInputs";
 export {
   ActionDropdown,
   type ActionDropdownItem,

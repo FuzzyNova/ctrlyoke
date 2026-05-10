@@ -7,6 +7,7 @@ import type {
 import { PRIOR_CONTEXT_KEYWORDS } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { CustomSelect } from "../shared/CustomSelect";
+import { LocalTextInput } from "../shared/LocalInputs";
 import { MultiCheckboxDropdown } from "../shared/MultiCheckboxDropdown";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -145,11 +146,10 @@ export function WorkflowDefaultsSection({
         path="workflow.defaultTemplate"
         {...rowProps}
       >
-        <input
+        <LocalTextInput
           id="workflow-default-template"
-          type="text"
           value={wf.defaultTemplate}
-          onChange={(e) => onUpdate("workflow.defaultTemplate", e.target.value)}
+          onCommit={(v) => onUpdate("workflow.defaultTemplate", v)}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </SettingInputRow>
@@ -160,11 +160,10 @@ export function WorkflowDefaultsSection({
         path="workflow.defaultAgent"
         {...rowProps}
       >
-        <input
+        <LocalTextInput
           id="workflow-default-agent"
-          type="text"
           value={wf.defaultAgent}
-          onChange={(e) => onUpdate("workflow.defaultAgent", e.target.value)}
+          onCommit={(v) => onUpdate("workflow.defaultAgent", v)}
           placeholder="None"
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />

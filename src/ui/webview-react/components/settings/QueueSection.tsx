@@ -3,6 +3,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { LocalNumberInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
@@ -35,14 +36,12 @@ export function QueueSection({
         path="queue.maxSize"
         {...rowProps}
       >
-        <input
+        <LocalNumberInput
           id="queue-max-size"
-          type="number"
           min={1}
           value={queue.maxSize}
-          onChange={(e) =>
-            onUpdate("queue.maxSize", parseInt(e.target.value, 10) || 10)
-          }
+          onCommit={(v) => onUpdate("queue.maxSize", v)}
+          parse={(v) => parseInt(v, 10) || 10}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </SettingInputRow>
@@ -52,17 +51,12 @@ export function QueueSection({
         path="queue.maxWorkflowExecutionTime"
         {...rowProps}
       >
-        <input
+        <LocalNumberInput
           id="queue-max-execution-time"
-          type="number"
           min={-1}
           value={queue.maxWorkflowExecutionTime}
-          onChange={(e) =>
-            onUpdate(
-              "queue.maxWorkflowExecutionTime",
-              parseInt(e.target.value, 10) || -1
-            )
-          }
+          onCommit={(v) => onUpdate("queue.maxWorkflowExecutionTime", v)}
+          parse={(v) => parseInt(v, 10) || -1}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </SettingInputRow>

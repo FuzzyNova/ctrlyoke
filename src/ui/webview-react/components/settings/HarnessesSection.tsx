@@ -7,6 +7,7 @@ import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
 import { CustomSelect } from "@components/shared";
+import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 
 interface Props {
@@ -103,15 +104,11 @@ export function HarnessesSection({
                     options={discoveredModels}
                   />
                 ) : (
-                  <input
+                  <LocalTextInput
                     id={`model-${harnessId}`}
-                    type="text"
                     value={currentModel}
-                    onChange={(e) =>
-                      onUpdate(
-                        `models.${harnessId}`,
-                        e.target.value || undefined
-                      )
+                    onCommit={(v) =>
+                      onUpdate(`models.${harnessId}`, v || undefined)
                     }
                     placeholder="Enter model ID"
                     className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
@@ -125,18 +122,17 @@ export function HarnessesSection({
                   path={`additionalArgs.${harnessId}`}
                   {...rowProps}
                 >
-                  <input
+                  <LocalTextInput
                     id={`extra-args-${harnessId}`}
-                    type="text"
                     value={
                       (additionalArgs as Record<string, string | undefined>)[
                         harnessId
                       ] ?? ""
                     }
-                    onChange={(e) =>
+                    onCommit={(v) =>
                       onUpdate(
                         `additionalArgs.${harnessId}`,
-                        e.target.value || undefined
+                        v || undefined
                       )
                     }
                     placeholder="None"

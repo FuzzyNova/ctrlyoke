@@ -4,6 +4,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
+import { LocalNumberInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
@@ -54,17 +55,12 @@ export function ExecutionSection({
         path="execution.maxPromptTimeout"
         {...rowProps}
       >
-        <input
+        <LocalNumberInput
           id="exec-max-prompt-timeout"
-          type="number"
           min={-1}
           value={exec.maxPromptTimeout}
-          onChange={(e) =>
-            onUpdate(
-              "execution.maxPromptTimeout",
-              parseInt(e.target.value, 10) || -1
-            )
-          }
+          onCommit={(v) => onUpdate("execution.maxPromptTimeout", v)}
+          parse={(v) => parseInt(v, 10) || -1}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </SettingInputRow>
@@ -74,17 +70,12 @@ export function ExecutionSection({
         path="execution.scriptTimeout"
         {...rowProps}
       >
-        <input
+        <LocalNumberInput
           id="exec-script-timeout"
-          type="number"
           min={1}
           value={exec.scriptTimeout}
-          onChange={(e) =>
-            onUpdate(
-              "execution.scriptTimeout",
-              parseInt(e.target.value, 10) || 30
-            )
-          }
+          onCommit={(v) => onUpdate("execution.scriptTimeout", v)}
+          parse={(v) => parseInt(v, 10) || 30}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </SettingInputRow>

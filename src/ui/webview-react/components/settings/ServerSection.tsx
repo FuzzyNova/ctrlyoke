@@ -11,6 +11,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import appIconSvg from "../../../../../images/flightpath-app-icon.svg?raw";
@@ -255,11 +256,10 @@ export function ServerSection({
             path="server.port"
             {...rowProps}
           >
-            <input
+            <LocalNumberInput
               id="server-port"
-              type="number"
               value={server.port}
-              onChange={(e) => onUpdate("server.port", Number(e.target.value))}
+              onCommit={(v) => onUpdate("server.port", v)}
               className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
             />
           </SettingInputRow>
@@ -273,13 +273,10 @@ export function ServerSection({
             path="server.standalonePort"
             {...rowProps}
           >
-            <input
+            <LocalNumberInput
               id="server-standalone-port"
-              type="number"
               value={server.standalonePort}
-              onChange={(e) =>
-                onUpdate("server.standalonePort", Number(e.target.value))
-              }
+              onCommit={(v) => onUpdate("server.standalonePort", v)}
               className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
             />
           </SettingInputRow>
@@ -393,14 +390,11 @@ export function ServerSection({
                 path="server.tls.certPath"
                 {...rowProps}
               >
-                <input
+                <LocalTextInput
                   id="tls-cert-path"
-                  type="text"
                   value={server.tls?.certPath ?? ""}
                   placeholder="/path/to/cert.pem"
-                  onChange={(e) =>
-                    onUpdate("server.tls.certPath", e.target.value)
-                  }
+                  onCommit={(v) => onUpdate("server.tls.certPath", v)}
                   className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
                 />
               </SettingInputRow>
@@ -410,14 +404,11 @@ export function ServerSection({
                 path="server.tls.keyPath"
                 {...rowProps}
               >
-                <input
+                <LocalTextInput
                   id="tls-key-path"
-                  type="text"
                   value={server.tls?.keyPath ?? ""}
                   placeholder="/path/to/key.pem"
-                  onChange={(e) =>
-                    onUpdate("server.tls.keyPath", e.target.value)
-                  }
+                  onCommit={(v) => onUpdate("server.tls.keyPath", v)}
                   className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
                 />
               </SettingInputRow>

@@ -7,7 +7,7 @@ import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
 import { FLIGHTPATH_SETTINGS_DEFAULTS } from "@root/types/FlightPathSettings";
 import { useSettingsStore } from "@store/settingsStore";
-import { CustomSelect } from "@components/shared";
+import { CustomSelect, LocalTextInput, LocalTextarea } from "@components/shared";
 import { SettingInputRow } from "../shared/SettingInputRow";
 
 interface Props {
@@ -94,11 +94,10 @@ export function CommitSection({
             options={discoveredModels}
           />
         ) : (
-          <input
+          <LocalTextInput
             id="commit-model"
-            type="text"
             value={currentModel}
-            onChange={(e) => onUpdate("commit.model", e.target.value)}
+            onCommit={(v) => onUpdate("commit.model", v)}
             placeholder="Harness default"
             className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
           />
@@ -112,11 +111,11 @@ export function CommitSection({
         description="Prompt sent to the AI along with the git diff. The AI should return only the commit message text."
         {...rowProps}
       >
-        <textarea
+        <LocalTextarea
           id="commit-prompt"
           rows={5}
           value={commit.prompt as string}
-          onChange={(e) => onUpdate("commit.prompt", e.target.value)}
+          onCommit={(v) => onUpdate("commit.prompt", v)}
           placeholder={DEFAULT_PROMPT}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border resize-y font-mono"
         />

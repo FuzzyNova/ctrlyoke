@@ -4,6 +4,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
+import { LocalTextarea } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
@@ -70,14 +71,14 @@ export function PermissionsSection({
           path="tools.allowed"
           {...rowProps}
         >
-          <textarea
+          <LocalTextarea
             id="tools-allowed"
             rows={3}
             value={tools.allowed.join("\n")}
-            onChange={(e) =>
+            onCommit={(v) =>
               onUpdate(
                 "tools.allowed",
-                e.target.value
+                v
                   .split("\n")
                   .map((t) => t.trim())
                   .filter(Boolean)
@@ -93,14 +94,14 @@ export function PermissionsSection({
           path="tools.denied"
           {...rowProps}
         >
-          <textarea
+          <LocalTextarea
             id="tools-denied"
             rows={3}
             value={tools.denied.join("\n")}
-            onChange={(e) =>
+            onCommit={(v) =>
               onUpdate(
                 "tools.denied",
-                e.target.value
+                v
                   .split("\n")
                   .map((t) => t.trim())
                   .filter(Boolean)
@@ -121,14 +122,14 @@ export function PermissionsSection({
           path="tools.allowedDirs"
           {...rowProps}
         >
-          <textarea
+          <LocalTextarea
             id="allowed-dirs"
             rows={3}
             value={tools.allowedDirs.join("\n")}
-            onChange={(e) =>
+            onCommit={(v) =>
               onUpdate(
                 "tools.allowedDirs",
-                e.target.value
+                v
                   .split("\n")
                   .map((d) => d.trim())
                   .filter(Boolean)

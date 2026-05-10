@@ -4,6 +4,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { CustomSelect } from "../shared/CustomSelect";
+import { LocalNumberInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 
@@ -55,17 +56,12 @@ export function ChatSection({
         path="chat.inactivityTimeout"
         {...rowProps}
       >
-        <input
+        <LocalNumberInput
           id="chat-inactivity-timeout"
-          type="number"
           min={0}
           value={chat.inactivityTimeout}
-          onChange={(e) =>
-            onUpdate(
-              "chat.inactivityTimeout",
-              parseInt(e.target.value, 10) || 300
-            )
-          }
+          onCommit={(v) => onUpdate("chat.inactivityTimeout", v)}
+          parse={(v) => parseInt(v, 10) || 300}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         />
       </SettingInputRow>
