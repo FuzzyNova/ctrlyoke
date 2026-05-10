@@ -490,23 +490,22 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character.
     // --output-format json enables structured JSONL output for reliable response/session parsing.
-    return ["--output-format", "json", "--prompt", `"${prompt}"`, ...baseArgs];
+    return ["--output-format", "json", "--prompt", prompt, ...baseArgs];
   }
 
   /**
-   * Build CLI command for interactive TUI mode
+   * Build CLI arguments for interactive TUI mode
    *
    * Copilot interactive mode: copilot -i "prompt text" [args...]
    * Note: buildCliArgs() already filtered out headless-only flags when isInteractive=true
    *
    * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
    * @param promptText The prompt text to include
-   * @returns Complete command string
+   * @returns Complete arguments array
    */
-  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
-    return `${this.config.name} -i "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
+  buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
+    return ["-i", promptText, ...baseArgs];
   }
 
   /**

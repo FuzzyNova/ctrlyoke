@@ -242,21 +242,23 @@ export class CliProcessManager {
    * Used exclusively in the standalone CLI binary (CliAdapter context).
    * The VS Code extension always uses createTerminal() instead.
    *
-   * @param command Full shell command string (e.g. "claude \"@file\" --model foo")
+   * @param command Executable path or command name
+   * @param args Raw argv entries passed to the executable
    * @param workingDirectory Working directory for the child process
    */
   async spawnInteractive(
     command: string,
+    args: string[],
     workingDirectory: string,
     env?: NodeJS.ProcessEnv
   ): Promise<void> {
     return new Promise<void>((resolve) => {
-      this.logger?.(`📤 Spawning interactive: ${command}`);
+      this.logger?.(`📤 Spawning interactive: ${command} ${args.join(" ")}`);
 
-      const child = spawn(command, [], {
+      const child = spawn(command, args, {
         cwd: workingDirectory,
         stdio: "inherit",
-        shell: true,
+        shell: false,
         ...(env ? { env } : {}),
       });
 

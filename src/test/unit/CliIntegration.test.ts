@@ -78,7 +78,11 @@ function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
       "--prompt",
       prompt,
     ],
-    buildInteractiveTuiCommand: () => "test-cli",
+    buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+      "--prompt",
+      promptText,
+      ...baseArgs,
+    ],
     checkAvailability: async () => true,
   } as unknown as ICliProvider;
 

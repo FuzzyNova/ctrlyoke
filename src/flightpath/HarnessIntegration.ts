@@ -162,10 +162,12 @@ export abstract class HarnessIntegration {
   /** Maximum character length for prompts passed directly on the command line. */
   private static readonly MAX_SIMPLE_PROMPT_LENGTH = 3000;
   /**
-   * Characters safe to pass directly on the command line without temp-file escaping.
-   * Includes `\` (Windows path separators — safe inside double-quoted shell strings since
-   * the only chars `\` escapes are `"`, `$`, `` ` ``, `\`, and newline, all excluded here)
-   * and `~` (Unix home-dir prefix — never expanded inside double quotes).
+   * Characters safe to pass directly as a single CLI argument without falling back
+   * to temp-file prompt assembly.
+   *
+   * The runtime launch path now uses argv-based process spawning instead of shell
+   * command strings, but we still keep this fast-path conservative so large or
+   * syntax-heavy prompts naturally flow into the file-based path.
    */
   private static readonly SAFE_CHARS_PATTERN =
     /^[a-zA-Z0-9\s.,!?:;\-_()@#/\\~]*$/;
@@ -812,10 +814,10 @@ export abstract class HarnessIntegration {
    * - Short length (≤300 characters)
    * - No shell-dangerous characters (quotes, backslashes, newlines, metacharacters, etc.)
    *
-   * **Security-critical for CLI:** We're conservative because on Windows, node-pty
-   * spawns via `pwsh -NoProfile -Command <tuiCommand>`, embedding the prompt in
-   * the command line passed to CreateProcess (32767-char OS limit). Even well under
-   * that limit, special characters can break shell parsing or introduce injection risks.
+   * **CLI behavior:** We still keep this fast path conservative even though runtime
+   * execution now uses argv-based spawning rather than shell command strings. Complex
+   * prompts are better handled through temp files so the harness receives the exact
+   * structured content without relying on large inline arguments.
    *
    * For chat harnesses the same check applies as a fast-path gate: if it passes,
    * the prompt is short and clean enough to type inline, skipping temp file I/O.

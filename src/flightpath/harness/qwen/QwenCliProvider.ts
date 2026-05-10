@@ -501,23 +501,22 @@ export class QwenCliProvider implements ICliProvider {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote special characters
     // --output-format stream-json enables structured JSON output for reliable parsing
-    return [`"${prompt}"`, "--output-format", "stream-json", ...baseArgs];
+    return [prompt, "--output-format", "stream-json", ...baseArgs];
   }
 
   /**
-   * Build CLI command for interactive TUI mode
+   * Build CLI arguments for interactive TUI mode
    *
    * Qwen interactive mode: qwen "prompt text" [args...] (no --output-format = interactive)
    * Note: buildCliArgs() already filtered out headless-only flags when isInteractive=true
    *
    * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
    * @param promptText The prompt text to include
-   * @returns Complete command string
+   * @returns Complete arguments array
    */
-  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
-    return `${this.config.name} -i "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
+  buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
+    return ["-i", promptText, ...baseArgs];
   }
 
   /**

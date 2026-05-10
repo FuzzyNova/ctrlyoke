@@ -9,12 +9,14 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "./CliProviderUtils";
+import {
+  resolveCliCommand,
+  type CliResolvedCommand,
+} from "./CliLauncherResolver";
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import {
   getPtyProcessManager,
   ptyPostMessage,
-  resolveUnixShell,
-  resolveWindowsShell,
 } from "../PtyProcessManager";
 import type { PtyProcessManager, PtySession } from "../PtyProcessManager";
 
@@ -42,6 +44,10 @@ interface CliTransportCoordinatorHostCallbacks {
 export interface CliTransportCoordinatorDeps {
   provider: ICliProvider;
   processManager: CliProcessManager;
+  resolveCliCommand?: (
+    commandName: string,
+    args: string[]
+  ) => Promise<CliResolvedCommand>;
   runtimeState: CliTransportCoordinatorRuntimeState;
   hostCallbacks: CliTransportCoordinatorHostCallbacks;
   getPtyManager?: () => PtyProcessManager | null;
@@ -62,15 +68,15 @@ export class CliTransportCoordinator {
     resolvedSessionId?: string
   ): Promise<{ success: boolean; sessionId?: string }> {
     try {
-      const tuiCommand = this.deps.provider.buildInteractiveTuiCommand(
+      const interactiveArgs = this.deps.provider.buildInteractiveArgs(
         args,
         promptArgument
       );
-      const commandStr = String(tuiCommand).replace(/\s+/g, " ").trim();
+      const command = await this.resolveProviderCommand(interactiveArgs);
 
       this.deps.hostCallbacks.onCommandPrepared({
         promptArgument,
-        cliCommand: commandStr,
+        cliCommand: command.displayCommand,
       });
 
       const startTime = new Date();
@@ -84,7 +90,12 @@ export class CliTransportCoordinator {
       let hookSessionId: string | undefined;
 
       const spawnPromise = this.deps.processManager
-        .spawnInteractive(commandStr, workingDir, interactiveEnv)
+        .spawnInteractive(
+          command.command,
+          command.args,
+          workingDir,
+          interactiveEnv
+        )
         .finally(() => {
           processExited = true;
         });
@@ -142,16 +153,16 @@ export class CliTransportCoordinator {
     workflowContext?: WorkflowContext,
     env?: Record<string, string>
   ): Promise<void> {
-    const tuiCommand = this.deps.provider.buildInteractiveTuiCommand(
+    const interactiveArgs = this.deps.provider.buildInteractiveArgs(
       args,
       promptArgument
     );
-    const commandStr = String(tuiCommand).replace(/\s+/g, " ").trim();
+    const command = await this.resolveProviderCommand(interactiveArgs);
 
     this.deps.hostCallbacks.onBeforeInteractiveStart(workflowContext);
     this.deps.hostCallbacks.onCommandPrepared({
       promptArgument,
-      cliCommand: commandStr,
+      cliCommand: command.displayCommand,
     });
 
     const ptyManager = this.deps.getPtyManager?.() ?? getPtyProcessManager();
@@ -167,14 +178,6 @@ export class CliTransportCoordinator {
         promptNumber: undefined,
       };
       const { stepName, promptNumber } = stepMetadata;
-      const shell =
-        process.platform === "win32"
-          ? resolveWindowsShell()
-          : resolveUnixShell();
-      const shellArgs =
-        process.platform === "win32"
-          ? ["-NoProfile", "-Command", String(tuiCommand)]
-          : ["-c", String(tuiCommand)];
       const cwd = this.deps.runtimeState.getWorkspaceRoot() ?? process.cwd();
       const mergedEnv = env ? { ...process.env, ...env } : process.env;
       const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -205,8 +208,8 @@ export class CliTransportCoordinator {
           promptNumber,
           harnessId,
           sessionId: preSessionId,
-          command: shell,
-          args: shellArgs,
+          command: command.command,
+          args: command.args,
           cwd,
           env: mergedEnv,
           onData: (ptySession, chunk) => {
@@ -314,23 +317,22 @@ export class CliTransportCoordinator {
         Log.info("🚀 Starting headless mode with direct prompt (fast path)");
       }
 
-      const shellSafePrompt = promptArgument.replace(/[\r\n]+/g, " ");
       const headlessArgs = this.deps.provider.buildHeadlessArgs(
         args,
-        shellSafePrompt
+        promptArgument
       );
-      const displayCommand = `${this.deps.provider.config.name} ${headlessArgs.join(" ")}`;
+      const command = await this.resolveProviderCommand(headlessArgs);
 
       this.deps.hostCallbacks.onCommandPrepared({
         promptArgument,
-        cliCommand: displayCommand,
+        cliCommand: command.displayCommand,
       });
 
       const shouldStream = this.deps.provider.config.shouldStreamHeadlessOutput;
       const streamState = new Map<string, any>();
       const result = await this.spawnProcess(
-        this.deps.provider.config.name,
-        headlessArgs,
+        command.command,
+        command.args,
         {
           timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
           env,
@@ -497,7 +499,6 @@ export class CliTransportCoordinator {
       onStdout?: (chunk: string) => void;
     } = {}
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    const shell = process.platform === "win32" ? resolveWindowsShell() : true;
     const baseEnv = CliProviderUtils.buildProcessEnv();
     const env = options.env ? { ...baseEnv, ...options.env } : baseEnv;
 
@@ -505,7 +506,7 @@ export class CliTransportCoordinator {
       cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
       timeout: options.timeout,
       onStdout: options.onStdout,
-      shell,
+      shell: false,
       env,
     });
 
@@ -527,5 +528,13 @@ export class CliTransportCoordinator {
         `Step ${promptNumber}`,
       promptNumber,
     };
+  }
+
+  private async resolveProviderCommand(
+    args: string[]
+  ): Promise<CliResolvedCommand> {
+    const resolveCommand =
+      this.deps.resolveCliCommand ?? resolveCliCommand;
+    return resolveCommand(this.deps.provider.config.name, args);
   }
 }

@@ -75,7 +75,10 @@ function createProvider(options?: {
       ...baseArgs,
       prompt,
     ],
-    buildInteractiveTuiCommand: () => "test-cli",
+    buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+      promptText,
+      ...baseArgs,
+    ],
     checkAvailability: async () => true,
   } as unknown as ICliProvider;
 }
@@ -248,7 +251,12 @@ suite("CliExecutionRunner", () => {
       new CliExecutionSession({ prompt: { prompt: "send this" } })
     );
 
-    assert.deepStrictEqual(writes, ["\x1b[I", "send this", "\r"]);
+    assert.deepStrictEqual(writes, [
+      "\x1b[I",
+      "send this",
+      "\x1b[I",
+      "\r",
+    ]);
     assert.deepStrictEqual(result, { injected: false });
   });
 

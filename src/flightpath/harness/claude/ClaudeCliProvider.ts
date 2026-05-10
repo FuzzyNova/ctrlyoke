@@ -449,9 +449,8 @@ export class ClaudeCliProvider implements ICliProvider {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character
     return [
-      `"${prompt}"`,
+      prompt,
       "-p", // Print mode (non-interactive)
       "--output-format",
       "stream-json", // JSON streaming for parsing
@@ -461,17 +460,17 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
-   * Build CLI command for interactive TUI mode
+   * Build CLI arguments for interactive TUI mode
    *
    * Claude interactive mode: claude "prompt text" [args...] (no -p flag = interactive)
    * Note: buildCliArgs() already filtered out headless-only flags when isInteractive=true
    *
    * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
    * @param promptText The prompt text to include
-   * @returns Complete command string
+   * @returns Complete arguments array
    */
-  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
-    return `${this.config.name} "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
+  buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
+    return [promptText, ...baseArgs];
   }
 
   /**

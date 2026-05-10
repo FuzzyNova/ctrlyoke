@@ -223,21 +223,20 @@ export class OpenCodeCliProvider implements ICliProvider {
    * @returns Complete arguments array with prompt appended
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote spaces/special chars
-    return [...baseArgs, `"${prompt}"`];
+    return [...baseArgs, prompt];
   }
 
   /**
-   * Build CLI command for interactive TUI mode.
+   * Build CLI arguments for interactive TUI mode.
    *
    * opencode --prompt "prompt text" -m model [-s sessionId]
    *
    * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
    * @param promptText The prompt text to include
-   * @returns Complete command string
+   * @returns Complete arguments array
    */
-  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
-    return `${this.config.name} --prompt "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
+  buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
+    return ["--prompt", promptText, ...baseArgs];
   }
 
   /**

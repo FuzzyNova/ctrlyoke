@@ -6,7 +6,8 @@ import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
-import { resolveUnixShell, resolveWindowsShell } from "../PtyProcessManager";
+import { parseArgString } from "../../../utils/CliArgParser";
+import { resolveCliCommand } from "./CliLauncherResolver";
 import { CLI_VERSION_CHECK_TIMEOUT_MS } from "./interfaces/ICliProvider";
 
 const execFileAsync = promisify(execFile);
@@ -37,27 +38,21 @@ interface GetCliVersionOptions extends CliVersionCommandOptions {
  */
 export class CliProviderUtils {
   /**
-   * Execute a CLI version command through the same resolved shell used for interactive PTYs.
-   *
-   * On Windows this matters because CLI shims may be PowerShell/cmd shims that are not
-   * directly executable via CreateProcess. Using execFile for the shell itself avoids
-   * Node's default shell selection while still letting the user's shell resolve the CLI.
+   * Execute a CLI version command through the same launcher resolution path used
+   * for runtime prompt execution.
    */
   static async runVersionCommand(
     versionCommand: string,
     options: CliVersionCommandOptions = {}
   ): Promise<string> {
     const execute = async (): Promise<string> => {
-      const shell =
-        process.platform === "win32"
-          ? resolveWindowsShell()
-          : resolveUnixShell();
-      const shellArgs =
-        process.platform === "win32"
-          ? ["-NoProfile", "-Command", versionCommand]
-          : ["-c", versionCommand];
+      const [commandName, ...commandArgs] = parseArgString(versionCommand);
+      if (!commandName) {
+        throw new Error("Version command is empty");
+      }
 
-      const { stdout } = await execFileAsync(shell, shellArgs, {
+      const resolved = await resolveCliCommand(commandName, commandArgs);
+      const { stdout } = await execFileAsync(resolved.command, resolved.args, {
         encoding: "utf8",
         timeout: options.timeoutMs ?? CLI_VERSION_CHECK_TIMEOUT_MS,
       });

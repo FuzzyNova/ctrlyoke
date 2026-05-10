@@ -404,19 +404,17 @@ export class GeminiCliProvider implements ICliProvider {
   }
 
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote spaces/special chars
-    const quotedPrompt = `"${prompt.replace(/"/g, '\\"')}"`;
     return [
       "--prompt",
-      quotedPrompt,
+      prompt,
       "--output-format",
       "stream-json",
       ...baseArgs,
     ];
   }
 
-  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
-    return `gemini --prompt-interactive "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
+  buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
+    return ["--prompt-interactive", promptText, ...baseArgs];
   }
 
   /**

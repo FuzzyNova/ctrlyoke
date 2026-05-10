@@ -79,6 +79,9 @@ export interface HarnessConfig {
  *   buildHeadlessArgs(baseArgs: string[], promptFileRef: string): string[] {
  *     return [...baseArgs, promptFileRef];
  *   }
+ *   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
+ *     return ["--prompt", promptText, ...baseArgs];
+ *   }
  *   // ... implement other methods
  * }
  * ```
@@ -141,12 +144,12 @@ export interface ICliProvider {
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[];
 
   /**
-   * Build CLI command for interactive TUI mode
+   * Build CLI arguments for interactive TUI mode
    * @param baseArgs Base arguments array
    * @param promptText The prompt text to include in command arguments
-   * @returns Complete command string
+   * @returns Complete arguments array
    */
-  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string;
+  buildInteractiveArgs(baseArgs: string[], promptText: string): string[];
 
   /**
    * Format a file path reference for this CLI.

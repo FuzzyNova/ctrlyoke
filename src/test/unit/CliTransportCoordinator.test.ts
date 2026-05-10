@@ -6,8 +6,17 @@ import { MESSAGE_TYPES, SESSION_KINDS } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 
+async function resolveCommand(command: string, args: string[]) {
+  return {
+    command,
+    args,
+    displayCommand: [command, ...args].join(" "),
+    launcherKind: "direct" as const,
+  };
+}
+
 suite("CliTransportCoordinator", () => {
-  test("should normalize headless prompt text and emit prompt-ready info", async () => {
+  test("should preserve headless prompt text and emit prompt-ready info", async () => {
     let preparedCommand:
       | { promptArgument: string; cliCommand: string }
       | undefined;
@@ -41,21 +50,26 @@ suite("CliTransportCoordinator", () => {
           ...baseArgs,
           prompt,
         ],
-        buildInteractiveTuiCommand: () => "test-cli",
+        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+          promptText,
+          ...baseArgs,
+        ],
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {
         spawn: async (
           _command: string,
           args: string[],
-          options?: { onStdout?: (chunk: string) => void }
+          options?: { onStdout?: (chunk: string) => void; shell?: boolean }
         ) => {
-          assert.strictEqual(args[0], "line one line two");
+          assert.strictEqual(args[0], "line one\nline two");
+          assert.strictEqual(options?.shell, false);
           options?.onStdout?.("chunk");
           return { stdout: "stdout", stderr: "", exitCode: 0 };
         },
         isActive: () => false,
       } as any,
+      resolveCliCommand: resolveCommand,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
 
@@ -95,7 +109,7 @@ suite("CliTransportCoordinator", () => {
     assert.strictEqual(success, true);
     assert.deepStrictEqual(preparedCommand, {
       promptArgument: "line one\nline two",
-      cliCommand: "test-cli line one line two",
+      cliCommand: "test-cli line one\nline two",
     });
     assert.deepStrictEqual(streamedChunks, ["processed:chunk"]);
     assert.deepStrictEqual(cleanedTempPaths, [["temp-a.md"]]);
@@ -133,7 +147,10 @@ suite("CliTransportCoordinator", () => {
           ...baseArgs,
           prompt,
         ],
-        buildInteractiveTuiCommand: () => "test-cli",
+        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+          promptText,
+          ...baseArgs,
+        ],
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {
@@ -144,6 +161,7 @@ suite("CliTransportCoordinator", () => {
         }),
         isActive: () => false,
       } as any,
+      resolveCliCommand: resolveCommand,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
         isCancelling: () => true,
@@ -222,7 +240,10 @@ suite("CliTransportCoordinator", () => {
             ...baseArgs,
             prompt,
           ],
-          buildInteractiveTuiCommand: () => "test-cli",
+          buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+            promptText,
+            ...baseArgs,
+          ],
           checkAvailability: async () => true,
         } as unknown as ICliProvider,
         processManager: {
@@ -236,6 +257,7 @@ suite("CliTransportCoordinator", () => {
           },
           isActive: () => false,
         } as any,
+        resolveCliCommand: resolveCommand,
         runtimeState: {
           getWorkspaceRoot: () => process.cwd(),
 
@@ -305,10 +327,15 @@ suite("CliTransportCoordinator", () => {
           ...baseArgs,
           prompt,
         ],
-        buildInteractiveTuiCommand: () => "test-cli --interactive",
+        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+          "--interactive",
+          promptText,
+          ...baseArgs,
+        ],
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {} as any,
+      resolveCliCommand: resolveCommand,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
 
@@ -393,10 +420,15 @@ suite("CliTransportCoordinator", () => {
           ...baseArgs,
           prompt,
         ],
-        buildInteractiveTuiCommand: () => "test-cli --interactive",
+        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+          "--interactive",
+          promptText,
+          ...baseArgs,
+        ],
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {} as any,
+      resolveCliCommand: resolveCommand,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
         isCancelling: () => false,
@@ -490,10 +522,15 @@ suite("CliTransportCoordinator", () => {
           ...baseArgs,
           prompt,
         ],
-        buildInteractiveTuiCommand: () => "test-cli --interactive",
+        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+          "--interactive",
+          promptText,
+          ...baseArgs,
+        ],
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {} as any,
+      resolveCliCommand: resolveCommand,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
         isCancelling: () => false,
@@ -572,7 +609,11 @@ suite("CliTransportCoordinator", () => {
           ...baseArgs,
           prompt,
         ],
-        buildInteractiveTuiCommand: () => "test-cli --interactive",
+        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+          "--interactive",
+          promptText,
+          ...baseArgs,
+        ],
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {
@@ -583,6 +624,7 @@ suite("CliTransportCoordinator", () => {
           disposedAll = true;
         },
       } as any,
+      resolveCliCommand: resolveCommand,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
         isCancelling: () => false,
@@ -675,17 +717,23 @@ suite("CliTransportCoordinator", () => {
           ...baseArgs,
           prompt,
         ],
-        buildInteractiveTuiCommand: () => "test-cli --interactive",
+        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+          "--interactive",
+          promptText,
+          ...baseArgs,
+        ],
         checkAvailability: async () => true,
       } as unknown as ICliProvider,
       processManager: {
-        spawnInteractive: async () => {
+        spawnInteractive: async (_command: string, args: string[]) => {
+          assert.deepStrictEqual(args, ["--interactive", "prompt"]);
           await new Promise((resolve) => setTimeout(resolve, 10));
         },
         disposeProcess: () => {
           disposedProcess = true;
         },
       } as any,
+      resolveCliCommand: resolveCommand,
       runtimeState: {
         getWorkspaceRoot: () => process.cwd(),
 
