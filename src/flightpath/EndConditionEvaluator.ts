@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import { spawn } from "child_process";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -188,26 +189,39 @@ export class EndConditionEvaluator {
 
   /**
    * Resolve script path relative to workspace or absolute.
-   * After resolution, validates the path is within the workspace root for security.
+   *
+   * Resolution order:
+   *   1. Absolute path — validated against workspace root OR home scripts dir
+   *   2. Relative to workingDirectory — same validation
+   *   3. Relative to workspace root — validated within workspace
+   *   4. Relative to .flightpath/ dir — validated within workspace
+   *   5. Relative to ~/.flightpath/scripts — user-level shared scripts, validated within home scripts dir
+   *
+   * All resolved paths are canonicalized with realpath() to prevent sibling-prefix
+   * and symlink-escape bypasses before the boundary check.
    */
   private async resolveScriptPath(
     scriptPath: string,
     workingDirectory?: string
   ): Promise<string | null> {
     const workspaceRoot = this.platform.getWorkspaceRoot();
+    const homeScriptsDir = EndConditionEvaluator.getUserHomeScriptsDir();
 
     // Try absolute path first
     if (path.isAbsolute(scriptPath)) {
       try {
         await fs.promises.access(scriptPath);
-        // Security: validate absolute path is within workspace
-        if (workspaceRoot && !scriptPath.startsWith(workspaceRoot)) {
+        const canonical =
+          await EndConditionEvaluator.canonicalizePath(scriptPath);
+        if (
+          !(await this.isAllowedPath(canonical, workspaceRoot, homeScriptsDir))
+        ) {
           Log.error(
-            `Security: Script path "${scriptPath}" is outside workspace root "${workspaceRoot}"`
+            `Security: Script path "${scriptPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
           );
           return null;
         }
-        return scriptPath;
+        return canonical;
       } catch {
         return null;
       }
@@ -218,14 +232,17 @@ export class EndConditionEvaluator {
       const fullPath = path.resolve(workingDirectory, scriptPath);
       try {
         await fs.promises.access(fullPath);
-        // Security: validate resolved path is within workspace
-        if (workspaceRoot && !fullPath.startsWith(workspaceRoot)) {
+        const canonical =
+          await EndConditionEvaluator.canonicalizePath(fullPath);
+        if (
+          !(await this.isAllowedPath(canonical, workspaceRoot, homeScriptsDir))
+        ) {
           Log.error(
-            `Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}"`
+            `Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}" and home scripts directory "${homeScriptsDir}"`
           );
           return null;
         }
-        return fullPath;
+        return canonical;
       } catch {
         // Continue to workspace resolution
       }
@@ -236,7 +253,17 @@ export class EndConditionEvaluator {
       const workspacePath = path.resolve(workspaceRoot, scriptPath);
       try {
         await fs.promises.access(workspacePath);
-        return workspacePath;
+        const canonical =
+          await EndConditionEvaluator.canonicalizePath(workspacePath);
+        const canonicalRoot =
+          await EndConditionEvaluator.canonicalizePath(workspaceRoot);
+        if (!EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)) {
+          Log.error(
+            `Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
+          );
+          return null;
+        }
+        return canonical;
       } catch {
         // Continue to .flightpath directory
       }
@@ -249,13 +276,108 @@ export class EndConditionEvaluator {
       );
       try {
         await fs.promises.access(flightpathPath);
-        return flightpathPath;
+        const canonical =
+          await EndConditionEvaluator.canonicalizePath(flightpathPath);
+        const canonicalRoot =
+          await EndConditionEvaluator.canonicalizePath(workspaceRoot);
+        if (!EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)) {
+          Log.error(
+            `Security: Script path traversal detected: "${flightpathPath}" resolves outside workspace root "${workspaceRoot}"`
+          );
+          return null;
+        }
+        return canonical;
       } catch {
-        // Script not found
+        // Continue to home scripts directory
       }
     }
 
+    // Try in ~/.flightpath/scripts (user shared scripts directory)
+    const homeScriptPath = path.resolve(homeScriptsDir, scriptPath);
+    try {
+      await fs.promises.access(homeScriptPath);
+      const canonical =
+        await EndConditionEvaluator.canonicalizePath(homeScriptPath);
+      const canonicalHomeScripts =
+        await EndConditionEvaluator.canonicalizePath(homeScriptsDir);
+      if (
+        !EndConditionEvaluator.isWithinDirectory(canonical, canonicalHomeScripts)
+      ) {
+        Log.error(
+          `Security: Script path traversal detected in home scripts directory: "${homeScriptPath}"`
+        );
+        return null;
+      }
+      return canonical;
+    } catch {
+      // Script not found
+    }
+
     return null;
+  }
+
+  /**
+   * Check if a canonicalized candidate path is within the workspace root OR the
+   * user home scripts directory. Both allowed roots are also canonicalized.
+   */
+  private async isAllowedPath(
+    canonicalCandidate: string,
+    workspaceRoot: string,
+    homeScriptsDir: string
+  ): Promise<boolean> {
+    if (workspaceRoot) {
+      const canonicalRoot =
+        await EndConditionEvaluator.canonicalizePath(workspaceRoot);
+      if (EndConditionEvaluator.isWithinDirectory(canonicalCandidate, canonicalRoot)) {
+        return true;
+      }
+    }
+    const canonicalHomeScripts =
+      await EndConditionEvaluator.canonicalizePath(homeScriptsDir);
+    return EndConditionEvaluator.isWithinDirectory(
+      canonicalCandidate,
+      canonicalHomeScripts
+    );
+  }
+
+  /**
+   * Canonicalize a path using realpath to resolve symlinks and normalize
+   * separators. Falls back to the original path if realpath fails (e.g., the
+   * path does not exist on disk).
+   */
+  static async canonicalizePath(p: string): Promise<string> {
+    try {
+      return await fs.promises.realpath(p);
+    } catch {
+      return p;
+    }
+  }
+
+  /**
+   * Returns true if `candidate` is equal to or a direct descendant of `directory`.
+   * Both paths must be canonicalized (via canonicalizePath) before calling.
+   *
+   * Using `path.sep` prevents sibling-prefix bypass attacks where a path like
+   * `C:\dev\FlightPath-evil` would incorrectly match workspace root `C:\dev\FlightPath`.
+   */
+  static isWithinDirectory(candidate: string, directory: string): boolean {
+    return (
+      candidate === directory ||
+      candidate.startsWith(directory + path.sep)
+    );
+  }
+
+  /**
+   * Returns the user's shared FlightPath scripts directory (~/.flightpath/scripts).
+   * Scripts placed here can be referenced from any workspace, giving users a
+   * single location for shared scripts without copying them per-project.
+   */
+  static getUserHomeScriptsDir(): string {
+    return path.join(
+      os.homedir(),
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.SCRIPTS_DIR
+    );
   }
 
   /**

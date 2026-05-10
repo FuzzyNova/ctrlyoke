@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as path from "path";
+import * as os from "os";
 import * as vscode from "vscode";
 import {
   EndConditionEvaluator,
@@ -358,6 +360,108 @@ suite("EndConditionEvaluator Tests", () => {
     test("should kill all processes on killAllProcesses()", () => {
       evaluator.killAllProcesses();
       // Should not throw
+    });
+  });
+
+  suite("isWithinDirectory - Boundary Security", () => {
+    test("should accept exact directory match", () => {
+      const dir = path.join("C:", "dev", "FlightPath");
+      assert.strictEqual(
+        EndConditionEvaluator.isWithinDirectory(dir, dir),
+        true
+      );
+    });
+
+    test("should accept immediate child path", () => {
+      const dir = path.join("C:", "dev", "FlightPath");
+      const child = path.join(dir, "scripts", "check.py");
+      assert.strictEqual(
+        EndConditionEvaluator.isWithinDirectory(child, dir),
+        true
+      );
+    });
+
+    test("should accept deeply nested child path", () => {
+      const dir = path.join("C:", "dev", "FlightPath");
+      const child = path.join(dir, "a", "b", "c", "d.js");
+      assert.strictEqual(
+        EndConditionEvaluator.isWithinDirectory(child, dir),
+        true
+      );
+    });
+
+    test("should reject sibling path sharing same prefix (CVE bypass)", () => {
+      // C:\dev\FlightPath-evil must NOT pass the check for C:\dev\FlightPath
+      const workspace = path.join("C:", "dev", "FlightPath");
+      const sibling = path.join("C:", "dev", "FlightPath-evil", "payload.ps1");
+      assert.strictEqual(
+        EndConditionEvaluator.isWithinDirectory(sibling, workspace),
+        false
+      );
+    });
+
+    test("should reject parent directory", () => {
+      const workspace = path.join("C:", "dev", "FlightPath");
+      const parent = path.join("C:", "dev");
+      assert.strictEqual(
+        EndConditionEvaluator.isWithinDirectory(parent, workspace),
+        false
+      );
+    });
+
+    test("should reject root directory", () => {
+      const workspace = path.join("C:", "dev", "FlightPath");
+      assert.strictEqual(
+        EndConditionEvaluator.isWithinDirectory(path.sep, workspace),
+        false
+      );
+    });
+
+    test("should reject completely unrelated path", () => {
+      const workspace = path.join("C:", "dev", "FlightPath");
+      const unrelated = path.join("C:", "tmp", "evil.sh");
+      assert.strictEqual(
+        EndConditionEvaluator.isWithinDirectory(unrelated, workspace),
+        false
+      );
+    });
+
+    test("should work with Unix-style paths", () => {
+      if (process.platform === "win32") return; // Skip on Windows
+      const workspace = "/home/user/project";
+      assert.strictEqual(
+        EndConditionEvaluator.isWithinDirectory(
+          "/home/user/project/scripts/check.py",
+          workspace
+        ),
+        true
+      );
+      assert.strictEqual(
+        EndConditionEvaluator.isWithinDirectory(
+          "/home/user/project-evil/hack.sh",
+          workspace
+        ),
+        false
+      );
+    });
+  });
+
+  suite("getUserHomeScriptsDir", () => {
+    test("should return a path inside the home directory", () => {
+      const dir = EndConditionEvaluator.getUserHomeScriptsDir();
+      assert.ok(
+        dir.startsWith(os.homedir()),
+        `Expected dir to start with home dir "${os.homedir()}", got: "${dir}"`
+      );
+    });
+
+    test("should end with .flightpath/scripts", () => {
+      const dir = EndConditionEvaluator.getUserHomeScriptsDir();
+      const expectedSuffix = path.join(".flightpath", "scripts");
+      assert.ok(
+        dir.endsWith(expectedSuffix),
+        `Expected dir to end with "${expectedSuffix}", got: "${dir}"`
+      );
     });
   });
 });

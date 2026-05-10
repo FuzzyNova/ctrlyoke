@@ -130,7 +130,9 @@ Sequential prompt execution with pause/resume support.
 
 <endConditionEvaluator>
 Executes validation scripts in isolated child processes.
-**Security:** Workspace-only paths enforced; absolute paths outside workspace root are rejected
+**Security:** Paths are canonicalized via `fs.realpath()` before boundary checks to prevent sibling-prefix and symlink-escape attacks. Allowed locations: workspace root OR `~/.flightpath/scripts`. Use `isWithinDirectory(canonical, dir)` (checks `candidate === dir || candidate.startsWith(dir + path.sep)`) — never plain `startsWith` without the separator.
+**Home scripts dir:** `~/.flightpath/scripts` — user-level shared scripts valid across all workspaces. Resolution order: absolute → relative to workingDirectory → workspace root → .flightpath/ dir → home scripts dir.
+**Static helpers:** `canonicalizePath(p)` (realpath with fallback), `isWithinDirectory(candidate, dir)`, `getUserHomeScriptsDir()`
 **Process management:** Uses `CliProcessManager` for process lifecycle
 **Supported script types:** .py (`python3`/`python`), .js (`node`), .ts (`npx ts-node`), .sh, .bat/.cmd, .ps1 (`pwsh`/`powershell`)
 **Direct command fallback:** If script file not found, treats the value as a direct shell command
