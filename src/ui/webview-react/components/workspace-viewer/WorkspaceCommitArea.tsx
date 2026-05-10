@@ -5,6 +5,7 @@ import {
   workspacePush,
   workspacePull,
   workspaceStage,
+  workspaceGenerateCommitMessage,
 } from "@utils/hostedApi";
 
 interface WorkspaceCommitAreaProps {
@@ -24,6 +25,9 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
 }) => {
   const commitMessage = useWorkspaceViewerStore((s) => s.commitMessage);
   const committing = useWorkspaceViewerStore((s) => s.committing);
+  const generatingCommitMessage = useWorkspaceViewerStore(
+    (s) => s.generatingCommitMessage
+  );
   const pushing = useWorkspaceViewerStore((s) => s.pushing);
   const pulling = useWorkspaceViewerStore((s) => s.pulling);
   const scmError = useWorkspaceViewerStore((s) => s.scmError);
@@ -32,10 +36,37 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   );
   const setCommitMessage = useWorkspaceViewerStore((s) => s.setCommitMessage);
   const setCommitting = useWorkspaceViewerStore((s) => s.setCommitting);
+  const setGeneratingCommitMessage = useWorkspaceViewerStore(
+    (s) => s.setGeneratingCommitMessage
+  );
   const setPushing = useWorkspaceViewerStore((s) => s.setPushing);
   const setPulling = useWorkspaceViewerStore((s) => s.setPulling);
   const setScmError = useWorkspaceViewerStore((s) => s.setScmError);
   const clearDiff = useWorkspaceViewerStore((s) => s.clearDiff);
+
+  const handleGenerate = useCallback(async () => {
+    if (generatingCommitMessage) return;
+    setGeneratingCommitMessage(true);
+    setScmError(null);
+    try {
+      const result = await workspaceGenerateCommitMessage();
+      setCommitMessage(result.message);
+      if (!result.staged) {
+        setScmError(
+          "Generated from unstaged changes. Stage files for a more accurate message."
+        );
+      }
+    } catch (err) {
+      setScmError(String(err));
+    } finally {
+      setGeneratingCommitMessage(false);
+    }
+  }, [
+    generatingCommitMessage,
+    setGeneratingCommitMessage,
+    setCommitMessage,
+    setScmError,
+  ]);
 
   const handleCommit = useCallback(async () => {
     if (commitMessage.trim() === "" || committing) return;
@@ -129,13 +160,27 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         </button>
       </div>
 
-      <textarea
-        value={commitMessage}
-        onChange={(e) => setCommitMessage(e.target.value)}
-        placeholder="Commit message..."
-        rows={3}
-        className="w-full resize-none rounded border border-panel-border bg-input-bg text-editor-fg text-xs px-2 py-1.5 placeholder-editor-fg placeholder-opacity-40 focus:outline-none focus:border-focus-border"
-      />
+      <div className="flex gap-1 items-start">
+        <textarea
+          value={commitMessage}
+          onChange={(e) => setCommitMessage(e.target.value)}
+          placeholder="Commit message..."
+          rows={3}
+          className="flex-1 min-w-0 resize-none rounded border border-panel-border bg-input-bg text-editor-fg text-xs px-2 py-1.5 placeholder-editor-fg placeholder-opacity-40 focus:outline-none focus:border-focus-border"
+        />
+        <button
+          onClick={handleGenerate}
+          disabled={generatingCommitMessage}
+          title="Generate commit message"
+          className="flex-shrink-0 w-8 flex items-center justify-center self-stretch rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
+        >
+          {generatingCommitMessage ? (
+            <i className="codicon codicon-loading animate-spin" />
+          ) : (
+            <i className="codicon codicon-sparkle" />
+          )}
+        </button>
+      </div>
 
       <button
         onClick={handleCommit}

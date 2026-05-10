@@ -50,6 +50,7 @@ import {
 } from "./WebPushService";
 import { pngIconService } from "./PngIconService";
 import { HostedWorkspaceViewerService } from "./HostedWorkspaceViewerService";
+import type { WorkspaceGenerateCommitMessageResponse } from "../types/HostedWorkspaceViewerTypes";
 
 export class FlightPathHostedServer
   implements IDashboardProvider, IDashboardSink
@@ -819,6 +820,31 @@ export class FlightPathHostedServer
         } catch (err) {
           Log.error(`workspace-viewer /pull error: ${String(err)}`);
           res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/generate-commit-message",
+      requireToken,
+      async (_req, res) => {
+        try {
+          const result = await this.viewerService.generateCommitMessage();
+          if (!result) {
+            res
+              .status(422)
+              .json({ error: "No changes detected. Stage or modify files first." });
+            return;
+          }
+          res.json({
+            message: result.message,
+            staged: result.staged,
+            truncated: result.truncated,
+          } satisfies WorkspaceGenerateCommitMessageResponse);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          Log.error(`workspace-viewer /generate-commit-message error: ${message}`);
+          res.status(500).json({ error: message });
         }
       }
     );

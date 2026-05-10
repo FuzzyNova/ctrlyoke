@@ -206,6 +206,12 @@
         "command": "flightpath.addTimelineCommitToPromptEditor",
         "title": "Add Commit to FlightPath",
         "category": "FlightPath"
+      },
+      {
+        "command": "flightpath.generateCommitMessage",
+        "title": "Generate Commit Message",
+        "category": "FlightPath",
+        "icon": "$(sparkle)"
       }
     ],
     "keybindings": [
@@ -306,6 +312,9 @@
         {
           "command": "flightpath.addTimelineCommitToPromptEditor",
           "when": "false"
+        },
+        {
+          "command": "flightpath.generateCommitMessage"
         }
       ],
       "explorer/context": [
@@ -432,6 +441,13 @@
           "command": "flightpath.addTimelineCommitToPromptEditor",
           "when": "timelineItem =~ /git:file:commit\\b/",
           "group": "2_flightpath"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "flightpath.generateCommitMessage",
+          "when": "scmProvider == git",
+          "group": "navigation"
         }
       ]
     },

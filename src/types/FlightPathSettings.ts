@@ -141,6 +141,13 @@ export interface FlightPathGlobalSettings {
   // Notifications
   notifications: FlightPathNotificationSettings;
 
+  // Commit message generation
+  commit: {
+    harness: HarnessId | "";
+    model: string;
+    prompt: string;
+  };
+
   // Advanced
   enableDiagnosticLogs: boolean;
 }
@@ -340,6 +347,14 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     includeWorkflowName: true,
     includePromptName: true,
     onlyWhenWindowUnfocused: true,
+  },
+  commit: {
+    harness: "",
+    model: "",
+    prompt:
+      "Generate a concise, conventional commit message based on the following git diff. " +
+      "Return ONLY the commit message — no explanation, no code fences. " +
+      "Follow the Conventional Commits format (type(scope): description).",
   },
   enableDiagnosticLogs: false,
 };

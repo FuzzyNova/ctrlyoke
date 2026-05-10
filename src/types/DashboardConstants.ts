@@ -1292,4 +1292,5 @@ export const VSCODE_COMMANDS = {
   ENABLE_SERVER: "flightpath.enableServer",
   DISABLE_SERVER: "flightpath.disableServer",
   REGENERATE_SERVER_TOKEN: "flightpath.regenerateServerToken",
+  GENERATE_COMMIT_MESSAGE: "flightpath.generateCommitMessage",
 } as const;

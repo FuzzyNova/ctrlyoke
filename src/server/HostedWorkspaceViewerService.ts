@@ -3,6 +3,7 @@ import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { Log } from "../utils/Log";
+import { CommitMessageGenerator, type CommitResult } from "../git/CommitMessageGenerator";
 import type {
   WorkspaceTreeResponse,
   WorkspaceFileResponse,
@@ -88,6 +89,8 @@ function normalizeScmPath(p: string): string {
 }
 
 export class HostedWorkspaceViewerService {
+  private readonly commitGenerator = new CommitMessageGenerator();
+
   constructor(private readonly workspaceRoot: string) {}
 
   // ── Path safety ──────────────────────────────────────────────────────────
@@ -554,6 +557,12 @@ export class HostedWorkspaceViewerService {
       timeout: GIT_TIMEOUT_MS,
     });
     return { branch, remote };
+  }
+
+  // ── Commit message generation ────────────────────────────────────────────
+
+  async generateCommitMessage(): Promise<CommitResult | null> {
+    return this.commitGenerator.generate(this.workspaceRoot);
   }
 
   // ── Git pull ─────────────────────────────────────────────────────────────

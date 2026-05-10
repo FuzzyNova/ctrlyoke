@@ -10,6 +10,7 @@ import type {
   WorkspaceCommitRequest,
   WorkspacePushResponse,
   WorkspacePullResponse,
+  WorkspaceGenerateCommitMessageResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
 
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
@@ -137,4 +138,11 @@ export async function workspacePull(): Promise<WorkspacePullResponse> {
   return hostedFetch<WorkspacePullResponse>("/api/workspace-viewer/pull", {
     method: "POST",
   });
+}
+
+export async function workspaceGenerateCommitMessage(): Promise<WorkspaceGenerateCommitMessageResponse> {
+  return hostedFetch<WorkspaceGenerateCommitMessageResponse>(
+    "/api/workspace-viewer/generate-commit-message",
+    { method: "POST" }
+  );
 }

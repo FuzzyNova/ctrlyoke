@@ -94,3 +94,9 @@ export interface WorkspacePullResponse {
   branch: string;
   remote: string;
 }
+
+export interface WorkspaceGenerateCommitMessageResponse {
+  message: string;
+  staged: boolean;
+  truncated: boolean;
+}

@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import { HostedWorkspaceViewerService } from "../../server/HostedWorkspaceViewerService";
+import { CommitMessageGenerator, type CommitResult } from "../../git/CommitMessageGenerator";
 
 suite("HostedWorkspaceViewerService", () => {
   const tempRoots: string[] = [];
@@ -234,6 +235,70 @@ suite("HostedWorkspaceViewerService", () => {
 
       const written = fs.readFileSync(path.join(root, "crlf.txt"), "utf8");
       assert.ok(written.includes("\r\n"), "should normalise to CRLF");
+    });
+  });
+
+  // ── generateCommitMessage ─────────────────────────────────────────────────
+
+  suite("generateCommitMessage", () => {
+    // Capture the real `generate` method once; each teardown restores it.
+    const originalGenerate = CommitMessageGenerator.prototype.generate;
+
+    teardown(() => {
+      CommitMessageGenerator.prototype.generate = originalGenerate;
+    });
+
+    test("returns null when generate returns null", async () => {
+      const root = createWorkspace();
+      CommitMessageGenerator.prototype.generate = async () => null;
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.generateCommitMessage();
+
+      assert.strictEqual(result, null);
+    });
+
+    test("returns CommitResult on success", async () => {
+      const root = createWorkspace();
+      const expected: CommitResult = {
+        message: "feat: add thing",
+        staged: true,
+        truncated: false,
+      };
+      CommitMessageGenerator.prototype.generate = async () => expected;
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.generateCommitMessage();
+
+      assert.deepStrictEqual(result, expected);
+    });
+
+    test("returns truncated=true when diff was truncated", async () => {
+      const root = createWorkspace();
+      CommitMessageGenerator.prototype.generate = async () => ({
+        message: "chore: update deps",
+        staged: false,
+        truncated: true,
+      });
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.generateCommitMessage();
+
+      assert.ok(result !== null, "result should not be null");
+      assert.strictEqual(result.truncated, true);
+    });
+
+    test("propagates errors from generate", async () => {
+      const root = createWorkspace();
+      CommitMessageGenerator.prototype.generate = async () => {
+        throw new Error("generation failed");
+      };
+
+      const svc = new HostedWorkspaceViewerService(root);
+      await assert.rejects(
+        () => svc.generateCommitMessage(),
+        /generation failed/
+      );
     });
   });
 

@@ -1,13 +1,16 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceCommitArea } from "@components/workspace-viewer/WorkspaceCommitArea";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { workspaceGenerateCommitMessage } from "@utils/hostedApi";
 
 vi.mock("@utils/hostedApi", () => ({
   workspaceCommit: vi.fn(),
   workspacePull: vi.fn(),
   workspacePush: vi.fn(),
   workspaceStage: vi.fn(),
+  workspaceGenerateCommitMessage: vi.fn(),
 }));
 
 describe("WorkspaceCommitArea", () => {
@@ -52,5 +55,104 @@ describe("WorkspaceCommitArea", () => {
     expect(screen.getByRole("button", { name: "Commit" }).className).toContain(
       "w-full"
     );
+  });
+
+  describe("generate button", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      useWorkspaceViewerStore.setState({ generatingCommitMessage: false });
+    });
+
+    function renderCommitArea() {
+      return render(
+        <WorkspaceCommitArea
+          incomingCommitCount={0}
+          onRefresh={vi.fn().mockResolvedValue(undefined)}
+          outgoingCommitCount={0}
+        />
+      );
+    }
+
+    it("renders the generate button", () => {
+      renderCommitArea();
+
+      expect(
+        screen.getByRole("button", { name: "Generate commit message" })
+      ).toBeInTheDocument();
+    });
+
+    it("calls workspaceGenerateCommitMessage when generate button is clicked", async () => {
+      const user = userEvent.setup();
+      vi.mocked(workspaceGenerateCommitMessage).mockResolvedValue({
+        message: "feat: test",
+        staged: true,
+        truncated: false,
+      });
+      renderCommitArea();
+
+      await user.click(
+        screen.getByRole("button", { name: "Generate commit message" })
+      );
+
+      await waitFor(() => {
+        expect(workspaceGenerateCommitMessage).toHaveBeenCalledOnce();
+      });
+    });
+
+    it("populates the commit message textarea on success", async () => {
+      const user = userEvent.setup();
+      vi.mocked(workspaceGenerateCommitMessage).mockResolvedValue({
+        message: "feat: test",
+        staged: true,
+        truncated: false,
+      });
+      renderCommitArea();
+
+      await user.click(
+        screen.getByRole("button", { name: "Generate commit message" })
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("textbox")).toHaveValue("feat: test");
+      });
+    });
+
+    it("disables the generate button while generating", async () => {
+      const user = userEvent.setup();
+      // Return a promise that never resolves to keep the loading state active.
+      vi.mocked(workspaceGenerateCommitMessage).mockReturnValue(
+        new Promise(() => {})
+      );
+      renderCommitArea();
+
+      const generateButton = screen.getByRole("button", {
+        name: "Generate commit message",
+      });
+      await user.click(generateButton);
+
+      await waitFor(() => {
+        expect(generateButton).toBeDisabled();
+      });
+    });
+
+    it("does not crash when workspaceGenerateCommitMessage rejects", async () => {
+      const user = userEvent.setup();
+      vi.mocked(workspaceGenerateCommitMessage).mockRejectedValue(
+        new Error("Network error")
+      );
+      renderCommitArea();
+
+      const generateButton = screen.getByRole("button", {
+        name: "Generate commit message",
+      });
+      await user.click(generateButton);
+
+      // After the rejection the error is caught and the button re-enables.
+      await waitFor(() => {
+        expect(generateButton).not.toBeDisabled();
+      });
+      // The component should still be present in the document.
+      expect(screen.getByRole("button", { name: "Commit" })).toBeInTheDocument();
+    });
   });
 });

@@ -35,6 +35,7 @@ export const CONFIG_KEYS = {
   SERVER: "server",
   NOTIFICATIONS: "notifications",
   ENABLE_DIAGNOSTIC_LOGS: "enableDiagnosticLogs",
+  COMMIT: "commit",
 
   // Dot-notation paths (used with configService.set())
   WORKFLOW_DEFAULT_END_CONDITION: "workflow.defaultEndCondition",
@@ -649,6 +650,22 @@ export const ConfigurationUtils = {
    */
   shouldOmitAgentsAndSkillsOnResume(): boolean {
     return configService.get(CONFIG_KEYS.WORKFLOW).omitAgentsSkillsOnResume;
+  },
+
+  // ============================================================
+  // COMMIT MESSAGE SETTINGS
+  // ============================================================
+
+  getCommitHarness(): HarnessId | "" {
+    return configService.get(CONFIG_KEYS.COMMIT).harness as HarnessId | "";
+  },
+
+  getCommitModel(): string {
+    return configService.get(CONFIG_KEYS.COMMIT).model;
+  },
+
+  getCommitPrompt(): string {
+    return configService.get(CONFIG_KEYS.COMMIT).prompt;
   },
 
   // ============================================================

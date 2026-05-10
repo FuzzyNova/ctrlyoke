@@ -16,6 +16,7 @@ import {
   MESSAGE_TYPES,
   MODEL_OPTION_VALUES,
   PANEL_CLIENT_ID,
+  VSCODE_COMMANDS,
   type QueuePosition,
 } from "./types/DashboardConstants";
 import {
@@ -50,6 +51,7 @@ import {
   createWorkspaceConfigBackend,
 } from "./config/FileConfigBackend";
 import { NotificationManager } from "./ui/NotificationManager";
+import { ScmCommitCommand } from "./scm/ScmCommitCommand";
 
 let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
@@ -926,6 +928,13 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
     );
 
+  // Generate Commit Message command (SCM panel button)
+  const scmCommitCommand = new ScmCommitCommand();
+  const generateCommitMessageCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.GENERATE_COMMIT_MESSAGE,
+    () => scmCommitCommand.execute(context)
+  );
+
   // Initialize Workspace command (manual reinit for existing users)
   const initWorkspaceCommand = vscode.commands.registerCommand(
     "flightpath.initWorkspace",
@@ -1073,7 +1082,8 @@ function registerCommands(context: vscode.ExtensionContext) {
     initWorkspaceCommand,
     enableServerCommand,
     disableServerCommand,
-    regenerateServerTokenCommand
+    regenerateServerTokenCommand,
+    generateCommitMessageCommand
   );
 
   // Auto-start hosted server if enabled in config (must be after command registration)

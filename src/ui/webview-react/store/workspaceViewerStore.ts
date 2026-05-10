@@ -54,6 +54,7 @@ interface WorkspaceViewerState {
   // Commit area
   commitMessage: string;
   committing: boolean;
+  generatingCommitMessage: boolean;
   pushing: boolean;
   pulling: boolean;
   scmError: string | null;
@@ -107,6 +108,7 @@ interface WorkspaceViewerActions {
   setDiffLoading(loading: boolean): void;
   setCommitMessage(msg: string): void;
   setCommitting(v: boolean): void;
+  setGeneratingCommitMessage(v: boolean): void;
   setPushing(v: boolean): void;
   setPulling(v: boolean): void;
   setScmError(err: string | null): void;
@@ -149,6 +151,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
 
   commitMessage: "",
   committing: false,
+  generatingCommitMessage: false,
   pushing: false,
   pulling: false,
   scmError: null,
@@ -182,6 +185,7 @@ export const useWorkspaceViewerStore = create<
           sourceControlLoading: false,
           diffLoading: false,
           committing: false,
+          generatingCommitMessage: false,
           pushing: false,
           pulling: false,
           scmError: null,
@@ -397,6 +401,10 @@ export const useWorkspaceViewerStore = create<
 
       setCommitting(v) {
         set({ committing: v });
+      },
+
+      setGeneratingCommitMessage(v) {
+        set({ generatingCommitMessage: v });
       },
 
       setPushing(v) {
