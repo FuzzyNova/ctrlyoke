@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { CommitMessageGenerator } from "../git/CommitMessageGenerator";
+import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 
 export class ScmCommitCommand {
   private readonly generator = new CommitMessageGenerator();
@@ -31,20 +32,33 @@ export class ScmCommitCommand {
           // Capture any existing text as instructions before overwriting it
           const existingText = vscode.scm.inputBox.value.trim() || undefined;
 
-          const result = await this.generator.generate(
-            cwd,
-            abortController.signal,
-            existingText
-          );
-
-          if (!result) {
+          const diffResult = await this.generator.getDiff(cwd);
+          if (!diffResult) {
             void vscode.window.showInformationMessage(
               "FlightPath: No changes detected. Stage or modify files first."
             );
             return;
           }
 
-          if (result.truncated) {
+          commitMessageGenerationTracker.setLastRecord({
+            source: "scm",
+            workingDirectory: cwd,
+            commands: diffResult.commands,
+            output: diffResult.diff,
+            staged: diffResult.staged,
+            truncated: diffResult.truncated,
+            includesUntrackedFiles: diffResult.includesUntrackedFiles,
+            generatedAt: Date.now(),
+          });
+
+          const message = await this.generator.generateMessage(
+            diffResult.diff,
+            cwd,
+            abortController.signal,
+            existingText
+          );
+
+          if (diffResult.truncated) {
             void vscode.window.showWarningMessage(
               "FlightPath: Diff exceeded 8 KB and was truncated. Commit message may be incomplete."
             );
@@ -52,9 +66,9 @@ export class ScmCommitCommand {
 
           // Write the generated message to the SCM input box
           const inputBox = vscode.scm.inputBox;
-          inputBox.value = result.message;
+          inputBox.value = message;
 
-          if (!result.staged) {
+          if (!diffResult.staged) {
             void vscode.window.showInformationMessage(
               "FlightPath: Generated from unstaged changes. Remember to stage files before committing."
             );

@@ -21,6 +21,8 @@ export interface DiffResult {
   diff: string;
   staged: boolean;
   truncated: boolean;
+  commands: string[];
+  includesUntrackedFiles: boolean;
 }
 
 export interface CommitResult {
@@ -32,6 +34,7 @@ export interface CommitResult {
 export class CommitMessageGenerator {
   async getDiff(cwd: string): Promise<DiffResult | null> {
     // Primary: staged changes
+    const stagedCommand = "git diff --cached";
     try {
       const { stdout: stagedDiff } = await execFileAsync(
         "git",
@@ -44,6 +47,8 @@ export class CommitMessageGenerator {
           diff: stagedDiff.slice(0, MAX_DIFF_BYTES),
           staged: true,
           truncated,
+          commands: [stagedCommand],
+          includesUntrackedFiles: false,
         };
       }
     } catch {
@@ -52,6 +57,8 @@ export class CommitMessageGenerator {
 
     // Fallback: unstaged tracked + untracked files
     const parts: string[] = [];
+    const commands = [stagedCommand, "git diff"];
+    let includesUntrackedFiles = false;
     try {
       const { stdout: trackedDiff } = await execFileAsync("git", ["diff"], {
         cwd,
@@ -65,12 +72,14 @@ export class CommitMessageGenerator {
     }
 
     try {
+      commands.push("git ls-files --others --exclude-standard");
       const { stdout: untrackedOut } = await execFileAsync(
         "git",
         ["ls-files", "--others", "--exclude-standard"],
         { cwd, encoding: "utf8" }
       );
       const untrackedFiles = untrackedOut.trim().split("\n").filter(Boolean);
+      includesUntrackedFiles = untrackedFiles.length > 0;
       for (const filePath of untrackedFiles) {
         try {
           const content = await fs.readFile(path.join(cwd, filePath), "utf8");
@@ -100,6 +109,8 @@ export class CommitMessageGenerator {
       diff: combined.slice(0, MAX_DIFF_BYTES),
       staged: false,
       truncated,
+      commands,
+      includesUntrackedFiles,
     };
   }
 

@@ -18,6 +18,7 @@ import {
   TERMINAL_MOBILE_CONTROL_BAR,
 } from "@root/types/DashboardConstants";
 import type {
+  CommitMessageGenerationRecord,
   DevStatus,
   FullGlobalSettings,
   PreCondition,
@@ -181,6 +182,7 @@ interface SettingsState {
   // Developer dashboard controls (dev builds only)
   dev: DevStatus | null;
   devBuild: DevBuildState;
+  lastCommitMessageGeneration: CommitMessageGenerationRecord | null;
 }
 
 /**
@@ -243,6 +245,11 @@ interface SettingsActions {
   appendDevBuildOutput: (stream: "stdout" | "stderr", chunk: string) => void;
   completeDevBuild: (result: DevBuildState["lastResult"]) => void;
   clearDevBuildOutput: () => void;
+
+  // Commit message generation
+  setLastCommitMessageGeneration: (
+    record: CommitMessageGenerationRecord | null
+  ) => void;
 
   // Effective value resolution (workflow > global)
   getEffectiveHarness: () => HarnessId;
@@ -365,6 +372,7 @@ const initialState: SettingsState = {
     output: "",
     lastResult: null,
   },
+  lastCommitMessageGeneration: null,
 };
 
 export const useSettingsStore = create<SettingsState & SettingsActions>(
@@ -511,6 +519,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
           lastResult: null,
         },
       })),
+
+    setLastCommitMessageGeneration: (record) =>
+      set({ lastCommitMessageGeneration: record }),
 
     // ============================================================================
     // EFFECTIVE VALUE RESOLUTION (Workflow > Global)

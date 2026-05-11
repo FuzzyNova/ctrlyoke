@@ -7,7 +7,8 @@ import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
 import { FLIGHTPATH_SETTINGS_DEFAULTS } from "@root/types/FlightPathSettings";
 import { useSettingsStore } from "@store/settingsStore";
-import { CustomSelect, LocalTextInput, LocalTextarea } from "@components/shared";
+import { CustomSelect } from "@components/shared/CustomSelect";
+import { LocalTextInput, LocalTextarea } from "@components/shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 
 interface Props {
@@ -38,6 +39,9 @@ export function CommitSection({
   const commit = settings.settings.commit;
   const sources = settings.sources as Record<string, SettingSource>;
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
+  const lastCommitMessageGeneration = useSettingsStore(
+    (s) => s.lastCommitMessageGeneration
+  );
   const rowProps = { sources, onReset, activeScope };
 
   // Resolve the effective harness for model discovery: explicit override or active global harness
@@ -45,6 +49,21 @@ export function CommitSection({
     (commit.harness as string) || settings.settings.harness;
   const discoveredModels = getModelsForHarness(effectiveHarness as HarnessId);
   const currentModel = (commit.model as string) ?? "";
+  const generationStatus = lastCommitMessageGeneration
+    ? lastCommitMessageGeneration.staged
+      ? "Used staged diff from git."
+      : lastCommitMessageGeneration.includesUntrackedFiles
+        ? "Used working tree diff plus generated hunks for untracked files."
+        : "Used working tree diff because no staged diff was found."
+    : null;
+  const generationSource = lastCommitMessageGeneration
+    ? lastCommitMessageGeneration.source === "scm"
+      ? "VS Code SCM button"
+      : "Workspace viewer"
+    : null;
+  const generatedAt = lastCommitMessageGeneration
+    ? new Date(lastCommitMessageGeneration.generatedAt).toLocaleString()
+    : null;
 
   return (
     <div className="space-y-4">
@@ -53,7 +72,7 @@ export function CommitSection({
       </h3>
       <p className="text-xs text-description-fg -mt-2">
         Configure the AI harness, model, and system prompt used when generating
-        commit messages via the sparkle button (SCM panel, hosted dashboard) or
+        commit messages via the generate button (SCM panel, hosted dashboard) or
         the <code className="font-mono">flightpath commit</code> CLI command.
       </p>
 
@@ -120,6 +139,64 @@ export function CommitSection({
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border resize-y font-mono"
         />
       </SettingInputRow>
+
+      <div className="border-t border-panel-border pt-3 space-y-2">
+        <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+          Last Generation Input
+        </h3>
+
+        <p className="text-xs text-description-fg">
+          Shows the most recent real git diff text appended to the commit
+          prompt before FlightPath asked the selected harness to generate a
+          commit message. Opening this section does not run git or generate a
+          new preview.
+        </p>
+
+        {generationSource ? (
+          <div className="text-xs text-description-fg">
+            Last triggered from: {generationSource}
+          </div>
+        ) : null}
+
+        {generatedAt ? (
+          <div className="text-xs text-description-fg">
+            Generated at: {generatedAt}
+          </div>
+        ) : null}
+
+        {lastCommitMessageGeneration?.commands.length ? (
+          <div className="text-xs text-description-fg">
+            Git commands:
+            <pre className="mt-1 max-h-20 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+              {lastCommitMessageGeneration.commands.join("\n")}
+            </pre>
+          </div>
+        ) : null}
+
+        {lastCommitMessageGeneration?.workingDirectory ? (
+          <div className="text-xs text-description-fg">
+            Working directory:{" "}
+            <code className="font-mono">
+              {lastCommitMessageGeneration.workingDirectory}
+            </code>
+          </div>
+        ) : null}
+
+        {generationStatus ? (
+          <div className="text-xs text-description-fg">{generationStatus}</div>
+        ) : null}
+
+        {lastCommitMessageGeneration?.truncated ? (
+          <div className="text-xs text-warning-fg">
+            The diff was truncated before being sent to the AI.
+          </div>
+        ) : null}
+
+        <pre className="min-h-40 max-h-80 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+          {lastCommitMessageGeneration?.output ??
+            "No commit message generation has run yet."}
+        </pre>
+      </div>
     </div>
   );
 }

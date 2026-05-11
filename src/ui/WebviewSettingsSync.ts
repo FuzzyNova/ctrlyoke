@@ -50,6 +50,7 @@ import { SkillDiscovery } from "../utils/SkillDiscovery";
 import type { SkillInfo } from "../utils/SkillDiscovery";
 import { configService } from "../config/FlightPathConfigService";
 import type { DevStatus } from "../types/WebviewMessageTypes";
+import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 
 /**
  * Harness availability status
@@ -884,6 +885,7 @@ export class WebviewSettingsSync {
       {
         type: MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED,
         settings: { settings: allSettings, sources },
+        commitMessageGeneration: commitMessageGenerationTracker.getLastRecord(),
       },
       postMessage
     );

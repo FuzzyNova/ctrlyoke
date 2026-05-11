@@ -404,6 +404,22 @@ export interface DevCommandUnavailableMessage {
   reason?: string;
 }
 
+export interface CommitMessageGenerationRecord {
+  source: "scm" | "workspace-viewer";
+  workingDirectory: string;
+  commands: string[];
+  output: string;
+  staged: boolean;
+  truncated: boolean;
+  includesUntrackedFiles: boolean;
+  generatedAt: number;
+}
+
+export interface CommitMessageGenerationUpdatedMessage {
+  type: typeof MESSAGE_TYPES.COMMIT_MESSAGE_GENERATION_UPDATED;
+  record: CommitMessageGenerationRecord | null;
+}
+
 /**
  * File selected message (extension -> webview)
  */
@@ -836,6 +852,7 @@ export interface GlobalSettingsLoadRequestMessage {
 export interface GlobalSettingsLoadedMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED;
   settings: FullGlobalSettings;
+  commitMessageGeneration?: CommitMessageGenerationRecord | null;
 }
 
 /** Webview → Extension: update a single setting */
@@ -1383,6 +1400,7 @@ export type IncomingMessage =
   | DevBuildCompletedMessage
   | DevRestartingMessage
   | DevCommandUnavailableMessage
+  | CommitMessageGenerationUpdatedMessage
   | HarnessFilesResultMessage
   | HarnessFileOpResultMessage
   | OpenHarnessDirResultMessage

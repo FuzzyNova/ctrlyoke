@@ -4,6 +4,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { Log } from "../utils/Log";
 import { CommitMessageGenerator, type CommitResult } from "../git/CommitMessageGenerator";
+import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import type {
   WorkspaceTreeResponse,
   WorkspaceFileResponse,
@@ -562,7 +563,34 @@ export class HostedWorkspaceViewerService {
   // ── Commit message generation ────────────────────────────────────────────
 
   async generateCommitMessage(instructions?: string): Promise<CommitResult | null> {
-    return this.commitGenerator.generate(this.workspaceRoot, undefined, instructions);
+    const diffResult = await this.commitGenerator.getDiff(this.workspaceRoot);
+    if (!diffResult) {
+      return null;
+    }
+
+    commitMessageGenerationTracker.setLastRecord({
+      source: "workspace-viewer",
+      workingDirectory: this.workspaceRoot,
+      commands: diffResult.commands,
+      output: diffResult.diff,
+      staged: diffResult.staged,
+      truncated: diffResult.truncated,
+      includesUntrackedFiles: diffResult.includesUntrackedFiles,
+      generatedAt: Date.now(),
+    });
+
+    const message = await this.commitGenerator.generateMessage(
+      diffResult.diff,
+      this.workspaceRoot,
+      undefined,
+      instructions
+    );
+
+    return {
+      message,
+      staged: diffResult.staged,
+      truncated: diffResult.truncated,
+    };
   }
 
   // ── Git pull ─────────────────────────────────────────────────────────────

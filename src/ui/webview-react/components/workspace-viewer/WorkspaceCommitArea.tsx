@@ -180,7 +180,10 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
           {generatingCommitMessage ? (
             <i className="codicon codicon-loading animate-spin" />
           ) : (
-            <i className="codicon codicon-sparkle" />
+            <i
+              aria-hidden="true"
+              className="custom-icon icon-generate-commit-message"
+            />
           )}
         </button>
       </div>

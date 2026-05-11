@@ -241,16 +241,19 @@ suite("HostedWorkspaceViewerService", () => {
   // ── generateCommitMessage ─────────────────────────────────────────────────
 
   suite("generateCommitMessage", () => {
-    // Capture the real `generate` method once; each teardown restores it.
-    const originalGenerate = CommitMessageGenerator.prototype.generate;
+    const originalGetDiff = CommitMessageGenerator.prototype.getDiff;
+    const originalGenerateMessage =
+      CommitMessageGenerator.prototype.generateMessage;
 
     teardown(() => {
-      CommitMessageGenerator.prototype.generate = originalGenerate;
+      CommitMessageGenerator.prototype.getDiff = originalGetDiff;
+      CommitMessageGenerator.prototype.generateMessage =
+        originalGenerateMessage;
     });
 
-    test("returns null when generate returns null", async () => {
+    test("returns null when getDiff returns null", async () => {
       const root = createWorkspace();
-      CommitMessageGenerator.prototype.generate = async () => null;
+      CommitMessageGenerator.prototype.getDiff = async () => null;
 
       const svc = new HostedWorkspaceViewerService(root);
       const result = await svc.generateCommitMessage();
@@ -265,7 +268,15 @@ suite("HostedWorkspaceViewerService", () => {
         staged: true,
         truncated: false,
       };
-      CommitMessageGenerator.prototype.generate = async () => expected;
+      CommitMessageGenerator.prototype.getDiff = async () => ({
+        diff: "diff --git a/a b/a",
+        staged: true,
+        truncated: false,
+        commands: ["git diff --cached"],
+        includesUntrackedFiles: false,
+      });
+      CommitMessageGenerator.prototype.generateMessage = async () =>
+        expected.message;
 
       const svc = new HostedWorkspaceViewerService(root);
       const result = await svc.generateCommitMessage();
@@ -275,11 +286,15 @@ suite("HostedWorkspaceViewerService", () => {
 
     test("returns truncated=true when diff was truncated", async () => {
       const root = createWorkspace();
-      CommitMessageGenerator.prototype.generate = async () => ({
-        message: "chore: update deps",
+      CommitMessageGenerator.prototype.getDiff = async () => ({
+        diff: "diff --git a/a b/a",
         staged: false,
         truncated: true,
+        commands: ["git diff --cached", "git diff"],
+        includesUntrackedFiles: false,
       });
+      CommitMessageGenerator.prototype.generateMessage = async () =>
+        "chore: update deps";
 
       const svc = new HostedWorkspaceViewerService(root);
       const result = await svc.generateCommitMessage();
@@ -290,7 +305,14 @@ suite("HostedWorkspaceViewerService", () => {
 
     test("propagates errors from generate", async () => {
       const root = createWorkspace();
-      CommitMessageGenerator.prototype.generate = async () => {
+      CommitMessageGenerator.prototype.getDiff = async () => ({
+        diff: "diff --git a/a b/a",
+        staged: false,
+        truncated: false,
+        commands: ["git diff --cached", "git diff"],
+        includesUntrackedFiles: false,
+      });
+      CommitMessageGenerator.prototype.generateMessage = async () => {
         throw new Error("generation failed");
       };
 

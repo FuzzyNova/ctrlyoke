@@ -356,6 +356,9 @@ function createMessageHandlers(): MessageHandlerMap {
         applyTerminalSettings(message.settings.settings.terminal);
       }
     }
+    settingsStore.setLastCommitMessageGeneration(
+      message.commitMessageGeneration ?? null
+    );
   };
 
   handlers[MESSAGE_TYPES.GLOBAL_SETTING_UPDATED] = (message) => {
@@ -448,6 +451,12 @@ function createMessageHandlers(): MessageHandlerMap {
     useUiStore
       .getState()
       .showToast(message.reason ?? "Developer command unavailable", "error");
+  };
+
+  handlers[MESSAGE_TYPES.COMMIT_MESSAGE_GENERATION_UPDATED] = (message) => {
+    useSettingsStore
+      .getState()
+      .setLastCommitMessageGeneration(message.record ?? null);
   };
 
   // --------------------------------------------------------------------------

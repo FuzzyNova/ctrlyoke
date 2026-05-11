@@ -76,9 +76,14 @@ describe("WorkspaceCommitArea", () => {
     it("renders the generate button", () => {
       renderCommitArea();
 
+      const generateButton = screen.getByRole("button", {
+        name: "Generate commit message",
+      });
+
+      expect(generateButton).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "Generate commit message" })
-      ).toBeInTheDocument();
+        generateButton.querySelector(".custom-icon.icon-generate-commit-message")
+      ).not.toBeNull();
     });
 
     it("calls workspaceGenerateCommitMessage when generate button is clicked", async () => {

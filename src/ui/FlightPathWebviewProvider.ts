@@ -53,6 +53,7 @@ import type { PostMessageFn } from "./WebviewSettingsSync";
 import { DashboardBroadcastHub } from "./DashboardBroadcastHub";
 import { IS_DEV_MODE } from "../utils/BuildConfig";
 import { retryWithBackoff } from "../utils/RetryUtils";
+import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 
 // Re-export CliOutput for external use
 export type { CliOutput } from "../types/WebviewMessageTypes";
@@ -83,6 +84,7 @@ export class FlightPathWebviewProvider
   private hub?: DashboardBroadcastHub;
   private modelsLoadedDisposable?: vscode.Disposable;
   private configServiceUnsubscribe?: () => void;
+  private commitMessageGenerationUnsubscribe?: () => void;
   private runningServerUrl?: string;
   private runningServerAvailableIps: string[] = [];
   private panelReady = false;
@@ -166,6 +168,14 @@ export class FlightPathWebviewProvider
         );
       }
     });
+
+    this.commitMessageGenerationUnsubscribe =
+      commitMessageGenerationTracker.subscribe((record) => {
+        this.postMessage({
+          type: MESSAGE_TYPES.COMMIT_MESSAGE_GENERATION_UPDATED,
+          record,
+        });
+      });
 
     // Discover available agents and skills in background
     this.settingsSync.discoverAgents();
@@ -1122,6 +1132,7 @@ export class FlightPathWebviewProvider
   public dispose(): void {
     this.modelsLoadedDisposable?.dispose();
     this.configServiceUnsubscribe?.();
+    this.commitMessageGenerationUnsubscribe?.();
     this.cancelReconnectRetry();
   }
 
