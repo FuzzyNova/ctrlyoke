@@ -38,6 +38,19 @@
       "preLaunchTask": "npm: compile:prod"
     },
     {
+      "name": "Run Extension (Debug, Isolated)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--disable-extension=nhickster.flightpath",
+        "${workspaceFolder}/flightpath-test.code-workspace"
+      ],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "npm: compile"
+    },
+    {
       "name": "Extension Tests",
       "type": "extensionHost",
       "request": "launch",

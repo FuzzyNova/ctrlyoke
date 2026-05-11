@@ -461,12 +461,12 @@
         {
           "command": "flightpath.generateCommitMessage",
           "when": "scmProvider == git && !flightpath.generatingCommitMessage",
-          "group": "navigation@2"
+          "group": "navigation@-1"
         },
         {
           "command": "flightpath.cancelCommitMessageGeneration",
           "when": "scmProvider == git && flightpath.generatingCommitMessage",
-          "group": "navigation@2"
+          "group": "navigation@-1"
         }
       ]
     },
