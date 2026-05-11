@@ -113,13 +113,22 @@ export class CopilotToolPermissionMapper
   /**
    * Convert tool pattern to Copilot CLI format
    *
-   * Filters out read-only tools (always allowed, no args needed).
-   * Passes through other patterns as-is (Copilot uses same format as user config).
+   * Handles three input forms:
+   * - Claude-format MCP: `mcp__serverid__toolname` → `serverid(toolname)`
+   * - Copilot-format MCP: `serverid(toolname)` → pass through
+   * - Regular tools: filter read-only, pass through others
    *
    * @param pattern Tool pattern from user config
    * @returns Converted pattern, or null if should be filtered
    */
   private convertToCopilotFormat(pattern: string): string | null {
+    // Convert Claude-format MCP tool patterns to Copilot format.
+    // Claude uses `mcp__<serverId>__<toolName>`; Copilot uses `serverId(toolName)`.
+    const mcpConverted = this.convertMcpPattern(pattern);
+    if (mcpConverted !== null) {
+      return mcpConverted;
+    }
+
     // Parse pattern to extract tool name
     const parsed = this.parsePattern(pattern);
     if (!parsed) {
@@ -136,5 +145,21 @@ export class CopilotToolPermissionMapper
 
     // Copilot uses same pattern format as user config
     return pattern;
+  }
+
+  /**
+   * Convert a Claude-format MCP pattern (`mcp__<serverId>__<toolName>`)
+   * to Copilot format (`serverId(toolName)`).
+   * Returns null if the pattern is not in Claude MCP format.
+   */
+  private convertMcpPattern(pattern: string): string | null {
+    if (!pattern.startsWith("mcp__")) return null;
+    const rest = pattern.slice(5); // Remove "mcp__" prefix
+    const sepIdx = rest.indexOf("__");
+    if (sepIdx < 1) return null; // Need at least one char for serverId
+    const serverId = rest.slice(0, sepIdx);
+    const toolName = rest.slice(sepIdx + 2);
+    if (!serverId || !toolName) return null;
+    return `${serverId}(${toolName})`;
   }
 }

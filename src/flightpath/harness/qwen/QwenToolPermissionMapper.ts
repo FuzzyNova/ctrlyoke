@@ -49,13 +49,28 @@ export class QwenToolPermissionMapper
     );
 
     if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-      // YOLO mode - bypass all approval prompts
+      // YOLO mode - bypass all approval prompts and tool restrictions.
+      // Consistent with all other harnesses: dangerouslyAllowAll means everything
+      // is permitted, including ignored deny lists. If Qwen enforces deny rules
+      // in YOLO mode that is a Qwen bug, not something FlightPath works around.
       args.push("-y");
       Log.debug("🔓 Qwen YOLO mode enabled (dangerouslyAllowAll)");
     } else if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
-      // Auto-approve most operations
+      // Auto-approve most operations but still respect deny lists.
       args.push("--approval-mode", "auto-edit");
       Log.debug("✅ Qwen auto-edit mode enabled (allowAll)");
+
+      // Denied tools apply in allowAll mode (e.g. MCP tool filtering during
+      // commit message generation: mcp__flightpath-commit__*).
+      if (config.deniedTools.length > 0) {
+        const deniedArgs = this.convertFlightPathPatternsToQwenTools(
+          config.deniedTools
+        );
+        if (deniedArgs.length > 0) {
+          args.push("--exclude-tools", deniedArgs.join(","));
+          Log.debug(`🚫 Qwen excluded tools: ${deniedArgs.join(", ")}`);
+        }
+      }
     } else {
       // Custom mode - use default approval with allow/deny lists
       args.push("--approval-mode", "default");

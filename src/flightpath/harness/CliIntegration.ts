@@ -7,7 +7,7 @@ import {
   CliResult,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
-import { PromptStep } from "../../types/FlightPathTypes";
+import { PromptStep, McpServerConfig } from "../../types/FlightPathTypes";
 import { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -16,6 +16,7 @@ import type { TempFileManager } from "../../utils/TempFileManager";
 import { Log } from "../../utils/Log";
 import {
   EXECUTION_MODES,
+  PERMISSION_MODES,
   type ExecutionMode,
   type HarnessId,
   HOOK_EVENT_ORDER,
@@ -839,18 +840,19 @@ export class CliIntegration extends HarnessIntegration {
     // limit permissions to headless-only in buildCliArgs().
     // Use session.resolvedProperties (prompt > workflow > settings) so prompt-level
     // overrides take precedence over workflow-level defaults.
+    // Merge any server-level deniedTools from McpServerConfig objects before dispatching.
+    const effectiveToolPermissions = this.mergeServerDeniedTools(
+      session.resolvedProperties?.toolPermissions,
+      session.resolvedProperties?.mcpServers
+    );
     const permissionArgs =
-      this.provider.buildPermissionArgs?.(
-        session.resolvedProperties?.toolPermissions
-      ) ?? [];
+      this.provider.buildPermissionArgs?.(effectiveToolPermissions) ?? [];
     baseArgs.push(...permissionArgs);
 
     const success = isInteractive
       ? await this.executionRunner.executeInteractive(session, baseArgs)
       : await (() => {
-          this.warnIfHeadlessWithoutPermissions(
-            session.resolvedProperties?.toolPermissions
-          );
+          this.warnIfHeadlessWithoutPermissions(effectiveToolPermissions);
           return this.executionRunner.executeHeadless(session, baseArgs);
         })();
 
@@ -1053,6 +1055,41 @@ export class CliIntegration extends HarnessIntegration {
         Log.appendLine(`\n[STATISTICS] ${statistics}`);
       }
     }
+  }
+
+  // ============================================================
+  // TOOL PERMISSION HELPERS
+  // ============================================================
+
+  /**
+   * Merge server-level `deniedTools` from McpServerConfig objects into the tool permission config.
+   *
+   * Each McpServerConfig may declare bare tool names to deny (e.g. `["flightpath_append_queue"]`).
+   * These are translated to `mcp__<id>__<tool>` patterns and appended to the resolved deny list
+   * before the harness-specific `buildPermissionArgs` call.
+   *
+   * Returns the original config unchanged when no server specifies `deniedTools`, keeping the
+   * fast path free of allocation overhead. Returns `null` as-is (none mode — no permission flags).
+   */
+  private mergeServerDeniedTools(
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    mcpServers: (string | McpServerConfig)[] | null | undefined
+  ): ToolPermissionConfig | null | undefined {
+    if (!mcpServers) return toolPermissions;
+    const serverDenied = (mcpServers as (string | McpServerConfig)[])
+      .filter(
+        (s): s is McpServerConfig =>
+          typeof s === "object" && s !== null && !!s.deniedTools?.length
+      )
+      .flatMap((s) => s.deniedTools!.map((tool) => `mcp__${s.id}__${tool}`));
+    if (serverDenied.length === 0) return toolPermissions;
+    if (toolPermissions === null) return null;
+    const base = toolPermissions ?? {
+      mode: PERMISSION_MODES.ALLOW_ALL,
+      allowedTools: [],
+      deniedTools: [],
+    };
+    return { ...base, deniedTools: [...base.deniedTools, ...serverDenied] };
   }
 
   // ============================================================

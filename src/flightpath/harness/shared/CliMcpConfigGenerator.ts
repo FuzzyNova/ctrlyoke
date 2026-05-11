@@ -56,6 +56,12 @@ export interface McpConfigResult {
   configPath?: string;
 }
 
+export interface InlineTomlMcpServerOptions {
+  defaultToolsApprovalMode?: "auto" | "prompt" | "approve";
+  enabledTools?: string[];
+  disabledTools?: string[];
+}
+
 /**
  * Shared MCP server configuration utilities (harness-agnostic)
  *
@@ -63,6 +69,63 @@ export interface McpConfigResult {
  * Each harness integration calls the appropriate methods directly.
  */
 export class CliMcpConfigGenerator {
+  private static quoteInlineTomlString(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+  }
+
+  private static formatInlineTomlStringArray(values: string[]): string {
+    return `[${values.map((value) => this.quoteInlineTomlString(value)).join(",")}]`;
+  }
+
+  private static formatInlineTomlEnv(env: Record<string, string>): string {
+    return `{${Object.entries(env)
+      .map(([key, value]) => `${key}=${this.quoteInlineTomlString(value)}`)
+      .join(",")}}`;
+  }
+
+  /**
+   * Generate inline TOML configuration for a stdio MCP server entry.
+   *
+   * Used by Codex CLI, which accepts repeated `-c key=value` overrides.
+   */
+  static generateInlineTomlStdioServerConfig(
+    serverName: string,
+    command: string,
+    args?: string[],
+    env?: Record<string, string>,
+    options?: InlineTomlMcpServerOptions
+  ): string {
+    const parts = [`command=${this.quoteInlineTomlString(command)}`];
+
+    if (args && args.length > 0) {
+      parts.push(`args=${this.formatInlineTomlStringArray(args)}`);
+    }
+
+    if (env && Object.keys(env).length > 0) {
+      parts.push(`env=${this.formatInlineTomlEnv(env)}`);
+    }
+
+    if (options?.defaultToolsApprovalMode) {
+      parts.push(
+        `default_tools_approval_mode=${this.quoteInlineTomlString(options.defaultToolsApprovalMode)}`
+      );
+    }
+
+    if (options?.enabledTools && options.enabledTools.length > 0) {
+      parts.push(
+        `enabled_tools=${this.formatInlineTomlStringArray(options.enabledTools)}`
+      );
+    }
+
+    if (options?.disabledTools && options.disabledTools.length > 0) {
+      parts.push(
+        `disabled_tools=${this.formatInlineTomlStringArray(options.disabledTools)}`
+      );
+    }
+
+    return `mcp_servers.${serverName}={${parts.join(",")}}`;
+  }
+
   /**
    * Compute the path for a file-based MCP config in .flightpath/temp/.
    *
@@ -272,21 +335,21 @@ export class CliMcpConfigGenerator {
     const escapedServerPath = serverPath.replace(/\\/g, "/");
     const escapedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
 
-    // Build inline TOML config
-    let envPart = `FLIGHTPATH_WORKSPACE='${escapedWorkspaceRoot}'`;
+    const env: Record<string, string> = {
+      FLIGHTPATH_WORKSPACE: escapedWorkspaceRoot,
+    };
     if (workingFilePath) {
-      const escapedWorkingFile = workingFilePath.replace(/\\/g, "/");
-      envPart += `,FLIGHTPATH_WORKING_FILE='${escapedWorkingFile}'`;
+      env.FLIGHTPATH_WORKING_FILE = workingFilePath.replace(/\\/g, "/");
     }
     if (additionalEnv) {
-      for (const [key, value] of Object.entries(additionalEnv)) {
-        envPart += `,${key}='${value}'`;
-      }
+      Object.assign(env, additionalEnv);
     }
-    return (
-      `mcp_servers.${serverName}={command='node',` +
-      `args=['${escapedServerPath}'],` +
-      `env={${envPart}}}`
+
+    return this.generateInlineTomlStdioServerConfig(
+      serverName,
+      "node",
+      [escapedServerPath],
+      env
     );
   }
 }

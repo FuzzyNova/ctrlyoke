@@ -2,15 +2,19 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../utils/ConfigurationUtils";
 import { CliAdapter } from "../platform/CliAdapter";
 import type { ResolvedCliConfig } from "../platform/CliAdapter";
 import { IntegrationFactory } from "../flightpath/IntegrationFactory";
 import { CliIntegration } from "../flightpath/harness/CliIntegration";
 import { WorkflowInstance } from "../flightpath/WorkflowInstance";
+import { Log } from "../utils/Log";
 import { EXECUTION_MODES, PERMISSION_MODES } from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
-import { isScriptStep } from "../types/FlightPathTypes";
+import { isScriptStep, type McpServerConfig } from "../types/FlightPathTypes";
 
 const execFileAsync = promisify(execFile);
 // ~200k tokens at ~4 bytes/token; leaves room for system prompt and instructions.
@@ -131,7 +135,6 @@ export class CommitMessageGenerator {
     const instructionsSection = instructions?.trim()
       ? `\n\nUser's starting draft or instructions — use as a guide for the message:\n${instructions.trim()}`
       : "";
-    const fullPrompt = `${commitPrompt}\n\n${diff}${instructionsSection}`;
 
     const config: ResolvedCliConfig = {
       harness,
@@ -153,6 +156,72 @@ export class CommitMessageGenerator {
     };
 
     const platform = new CliAdapter(config);
+
+    // Probe for the MCP server so we can capture the commit message via a structured tool call
+    // rather than parsing prose response text. This eliminates "I'm going to read the prompt..."
+    // preamble from polluting the commit message.
+    const mcpServerPath = path.join(
+      platform.getExtensionPath(),
+      "out",
+      "mcp-server.js"
+    );
+    const tempDir = path.join(
+      cwd,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.TEMP_DIR
+    );
+    const commitOutputPath = path.join(
+      tempDir,
+      `commit-output-${Date.now()}.txt`
+    );
+
+    let useMcpCapture = false;
+    try {
+      await fs.access(mcpServerPath);
+      useMcpCapture = true;
+    } catch {
+      // MCP server not found (e.g. dev environment without a build) — fall back to text extraction
+    }
+
+    if (useMcpCapture) {
+      await fs.mkdir(tempDir, { recursive: true });
+    }
+
+    // When MCP capture is active, append a single instruction line telling the AI to use the tool.
+    // The tool description already says "do not output as plain text", but an explicit instruction
+    // in the prompt reinforces it and prevents the AI from outputting the message twice.
+    const mcpInstruction = useMcpCapture
+      ? "\n\nSubmit the commit message using the `flightpath_submit_commit_message` tool. Do not output it as text."
+      : "";
+    const fullPrompt = `${commitPrompt}\n\n${diff}${instructionsSection}${mcpInstruction}`;
+
+    const mcpServerConfig: McpServerConfig | undefined = useMcpCapture
+      ? {
+          id: "flightpath-commit",
+          command: "node",
+          args: [mcpServerPath.replace(/\\/g, "/")],
+          env: {
+            FLIGHTPATH_WORKSPACE: cwd.replace(/\\/g, "/"),
+            FLIGHTPATH_COMMIT_OUTPUT: commitOutputPath.replace(/\\/g, "/"),
+          },
+          autoApprove: true,
+          // Deny all queue-management tools — the AI only needs submit_commit_message.
+          deniedTools: [
+            "flightpath_queue_status",
+            "flightpath_append_queue",
+            "flightpath_capabilities",
+            "flightpath_read_output",
+            "flightpath_global_status",
+          ],
+        }
+      : undefined;
+
+    if (useMcpCapture && mcpServerConfig) {
+      Log.debug(
+        `[CommitMessageGenerator] MCP capture enabled for ${harness} via ${mcpServerConfig.id}`
+      );
+    }
+
     const factory = new IntegrationFactory(platform);
     const detectorIntegration = factory.createForExecution(harness);
 
@@ -173,7 +242,7 @@ export class CommitMessageGenerator {
       harness,
       model,
       resumeSession: false,
-      mcpServers: null,
+      mcpServers: mcpServerConfig ? [mcpServerConfig] : null,
       agent: null,
       skills: null,
       additionalArgs: null,
@@ -205,6 +274,33 @@ export class CommitMessageGenerator {
         ? detectorIntegration.getLastSpawnedCommand()
         : undefined;
 
+    // Primary path: read the commit message written by flightpath_submit_commit_message.
+    if (useMcpCapture) {
+      let mcpMessage: string | undefined;
+      try {
+        const raw = await fs.readFile(commitOutputPath, "utf8");
+        mcpMessage = raw.trim() || undefined;
+      } catch {
+        // Tool was not called — fall through to text extraction below
+      }
+      try {
+        await fs.unlink(commitOutputPath);
+      } catch {
+        // Best-effort cleanup
+      }
+      if (mcpMessage) {
+        Log.debug(
+          `[CommitMessageGenerator] Captured commit message via MCP tool for ${harness}`
+        );
+        return { message: mcpMessage, prompt: fullPrompt, cliCommand };
+      }
+
+      Log.warn(
+        `[CommitMessageGenerator] MCP capture was enabled for ${harness} but no commit message was submitted; falling back to response text extraction`
+      );
+    }
+
+    // Fallback: extract from response text (MCP unavailable or tool not called).
     const state = instance.promptQueue.getState();
     const firstStep = state.steps[0];
     if (!firstStep || isScriptStep(firstStep)) {

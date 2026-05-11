@@ -61,22 +61,52 @@ function envStringToObject(raw: string): Record<string, string> | undefined {
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+/** User-visible FlightPath MCP tools that can be selectively disabled. */
+const FLIGHTPATH_USER_TOOLS: { id: string; label: string; description: string }[] = [
+  { id: "flightpath_queue_status", label: "Queue status", description: "Read this workflow's queue and execution state" },
+  { id: "flightpath_append_queue", label: "Append to queue", description: "Add prompts after the current step or at the end" },
+  { id: "flightpath_capabilities", label: "Capabilities", description: "List installed harnesses and their available models" },
+  { id: "flightpath_read_output", label: "Read output", description: "Read AI response text from completed steps" },
+  { id: "flightpath_global_status", label: "Global status", description: "List all workflows running in this workspace" },
+];
+
 function hasFlightpath(arr: (string | McpServerConfig)[]): boolean {
-  return arr.includes("flightpath");
+  return (
+    arr.includes("flightpath") ||
+    arr.some((s) => typeof s === "object" && s !== null && (s as McpServerConfig).id === "flightpath")
+  );
+}
+
+/** Return the FlightPath entry as an McpServerConfig object, or undefined if not present. */
+function getFlightpathConfig(arr: (string | McpServerConfig)[]): McpServerConfig | undefined {
+  return arr.find(
+    (s): s is McpServerConfig =>
+      typeof s === "object" && s !== null && (s as McpServerConfig).id === "flightpath"
+  ) as McpServerConfig | undefined;
 }
 
 function getUserServers(arr: (string | McpServerConfig)[]): McpServerConfig[] {
   return arr.filter(
-    (s): s is McpServerConfig => typeof s === "object" && s !== null
+    (s): s is McpServerConfig =>
+      typeof s === "object" && s !== null && (s as McpServerConfig).id !== "flightpath"
   );
 }
 
 function buildArray(
   includeFlightpath: boolean,
+  flightpathDeniedTools: string[],
   userServers: McpServerConfig[]
 ): (string | McpServerConfig)[] {
   const result: (string | McpServerConfig)[] = [];
-  if (includeFlightpath) result.push("flightpath");
+  if (includeFlightpath) {
+    // Store as plain string when no tools are denied (preserves existing behaviour);
+    // store as an object only when some tools are restricted.
+    if (flightpathDeniedTools.length > 0) {
+      result.push({ id: "flightpath", deniedTools: flightpathDeniedTools });
+    } else {
+      result.push("flightpath");
+    }
+  }
   result.push(...userServers);
   return result;
 }
@@ -130,6 +160,8 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
 }) => {
   const arr = Array.isArray(value) ? value : [];
   const fpEnabled = hasFlightpath(arr);
+  const fpConfig = getFlightpathConfig(arr);
+  const fpDenied = fpConfig?.deniedTools ?? [];
   const servers = getUserServers(arr);
   const isEmpty = arr.length === 0;
 
@@ -141,29 +173,28 @@ const McpServersReadOnly: React.FC<{ value: McpServersValue }> = ({
           Built-in
         </div>
         <div
-          className={`flex items-start gap-2 px-2 py-1.5 rounded border text-left ${
-            fpEnabled
-              ? "border-focus-border bg-editor-bg"
-              : "border-panel-border"
+          className={`flex flex-col rounded border text-left ${
+            fpEnabled ? "border-focus-border bg-editor-bg" : "border-panel-border"
           }`}
         >
-          <input
-            type="checkbox"
-            checked={fpEnabled}
-            readOnly
-            aria-label="FlightPath built-in enabled"
-            className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border pointer-events-none"
-            tabIndex={-1}
-          />
-          <span className="flex flex-col min-w-0">
-            <span className="text-xs font-medium text-foreground">
-              FlightPath
+          <div className="flex items-start gap-2 px-2 py-1.5">
+            <input
+              type="checkbox"
+              checked={fpEnabled}
+              readOnly
+              aria-label="FlightPath built-in enabled"
+              className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border pointer-events-none"
+              tabIndex={-1}
+            />
+            <span className="flex flex-col min-w-0">
+              <span className="text-xs font-medium text-foreground">FlightPath</span>
+              <span className="text-xxs text-description-fg">
+                {fpEnabled && fpDenied.length > 0
+                  ? `${FLIGHTPATH_USER_TOOLS.length - fpDenied.length} of ${FLIGHTPATH_USER_TOOLS.length} tools enabled`
+                  : "Dynamic queue extension"}
+              </span>
             </span>
-            <span className="text-xxs text-description-fg">
-              Dynamic queue extension (flightpath_append_queue,
-              flightpath_queue_status)
-            </span>
-          </span>
+          </div>
         </div>
       </div>
 
@@ -390,6 +421,8 @@ export const McpServersEditor: React.FC<{
   // The editable array — null/undefined both treated as empty
   const currentArray = Array.isArray(value) ? value : [];
   const flightpathEnabled = hasFlightpath(currentArray);
+  const flightpathConfig = getFlightpathConfig(currentArray);
+  const flightpathDeniedTools: string[] = flightpathConfig?.deniedTools ?? [];
   const userServers = getUserServers(currentArray);
 
   // Request workspace servers when entering custom mode for the first time
@@ -450,7 +483,15 @@ export const McpServersEditor: React.FC<{
   }, [mode, showDiscovery, discoveryTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFlightpathToggle = () => {
-    onChange(buildArray(!flightpathEnabled, userServers));
+    onChange(buildArray(!flightpathEnabled, flightpathDeniedTools, userServers));
+  };
+
+  const handleFlightpathToolToggle = (toolId: string) => {
+    const isDenied = flightpathDeniedTools.includes(toolId);
+    const nextDenied = isDenied
+      ? flightpathDeniedTools.filter((t) => t !== toolId)
+      : [...flightpathDeniedTools, toolId];
+    onChange(buildArray(flightpathEnabled, nextDenied, userServers));
   };
 
   const handleToggleServer = (server: McpServerConfig) => {
@@ -458,6 +499,7 @@ export const McpServersEditor: React.FC<{
       onChange(
         buildArray(
           flightpathEnabled,
+          flightpathDeniedTools,
           userServers.filter((s) => s.id !== server.id)
         )
       );
@@ -465,7 +507,7 @@ export const McpServersEditor: React.FC<{
       // Use the workspace copy (may have updated config vs orphan)
       const fullServer =
         effectiveServers.find((s) => s.id === server.id) ?? server;
-      onChange(buildArray(flightpathEnabled, [...userServers, fullServer]));
+      onChange(buildArray(flightpathEnabled, flightpathDeniedTools, [...userServers, fullServer]));
     }
   };
 
@@ -478,6 +520,7 @@ export const McpServersEditor: React.FC<{
     onChange(
       buildArray(
         flightpathEnabled,
+        flightpathDeniedTools,
         userServers.filter((s) => s.id !== id)
       )
     );
@@ -514,6 +557,7 @@ export const McpServersEditor: React.FC<{
       onChange(
         buildArray(
           flightpathEnabled,
+          flightpathDeniedTools,
           userServers.map((s) => (s.id === oldId ? updatedServer : s))
         )
       );
@@ -538,7 +582,7 @@ export const McpServersEditor: React.FC<{
       onWorkspaceServersChange?.(newWorkspace);
     }
     if (!userServers.some((s) => s.id === server.id)) {
-      onChange(buildArray(flightpathEnabled, [...userServers, server]));
+      onChange(buildArray(flightpathEnabled, flightpathDeniedTools, [...userServers, server]));
     }
   };
 
@@ -729,38 +773,69 @@ export const McpServersEditor: React.FC<{
             <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
               Built-in
             </div>
-            <button
-              type="button"
-              onClick={handleFlightpathToggle}
-              aria-label={
-                flightpathEnabled
-                  ? "Disable FlightPath MCP server"
-                  : "Enable FlightPath MCP server"
-              }
-              className={`flex items-start gap-2 px-2 py-1.5 rounded border text-left transition-colors ${
+            <div
+              className={`flex flex-col rounded border transition-colors ${
                 flightpathEnabled
                   ? "border-focus-border bg-editor-bg"
-                  : "border-panel-border hover:border-focus-border"
+                  : "border-panel-border"
               }`}
             >
-              <input
-                type="checkbox"
-                checked={flightpathEnabled}
-                onChange={() => {}}
-                aria-label="FlightPath enabled"
-                className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border pointer-events-none"
-                tabIndex={-1}
-              />
-              <span className="flex flex-col min-w-0">
-                <span className="text-xs font-medium text-foreground">
-                  FlightPath
+              {/* Server enable/disable toggle */}
+              <button
+                type="button"
+                onClick={handleFlightpathToggle}
+                aria-label={
+                  flightpathEnabled
+                    ? "Disable FlightPath MCP server"
+                    : "Enable FlightPath MCP server"
+                }
+                className="flex items-start gap-2 px-2 py-1.5 text-left hover:bg-toolbar-hover-bg rounded-t transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={flightpathEnabled}
+                  onChange={() => {}}
+                  aria-label="FlightPath enabled"
+                  className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border pointer-events-none"
+                  tabIndex={-1}
+                />
+                <span className="flex flex-col min-w-0">
+                  <span className="text-xs font-medium text-foreground">FlightPath</span>
+                  <span className="text-xxs text-description-fg">
+                    {flightpathEnabled && flightpathDeniedTools.length > 0
+                      ? `${FLIGHTPATH_USER_TOOLS.length - flightpathDeniedTools.length} of ${FLIGHTPATH_USER_TOOLS.length} tools enabled`
+                      : "Dynamic queue extension"}
+                  </span>
                 </span>
-                <span className="text-xxs text-description-fg">
-                  Dynamic queue extension (flightpath_append_queue,
-                  flightpath_queue_status)
-                </span>
-              </span>
-            </button>
+              </button>
+              {/* Per-tool checkboxes (only when server is enabled) */}
+              {flightpathEnabled && (
+                <div className="px-2 pb-1.5 flex flex-col gap-0.5 border-t border-panel-border">
+                  {FLIGHTPATH_USER_TOOLS.map((tool) => {
+                    const denied = flightpathDeniedTools.includes(tool.id);
+                    return (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        onClick={() => handleFlightpathToolToggle(tool.id)}
+                        aria-label={denied ? `Enable ${tool.label}` : `Disable ${tool.label}`}
+                        className="flex items-center gap-1.5 py-0.5 text-left hover:bg-toolbar-hover-bg rounded px-1 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!denied}
+                          onChange={() => {}}
+                          className="w-3 h-3 flex-shrink-0 accent-focus-border pointer-events-none"
+                          tabIndex={-1}
+                        />
+                        <span className="text-xxs font-medium text-foreground">{tool.label}</span>
+                        <span className="text-xxs text-description-fg font-mono truncate ml-auto">{tool.id}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Installed servers */}

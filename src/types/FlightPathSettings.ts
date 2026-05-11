@@ -353,17 +353,18 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     model: "",
     prompt:
       "Generate a conventional commit message based on the included git diff. " +
-      "Return ONLY the commit message based on the included diff — no explanation, no code fences, no author or co-author attribution lines. " +
-      "You do not need to read extra instruction files or make tool calls, the diff you receive is the complete context you have for generating the commit message. " +
+      "Return ONLY the final commit message content based on the included diff — no explanation, no code fences, no author or co-author attribution lines. " +
+      "Treat the provided diff and any optional user draft as the complete context for composing the message; do not read extra instruction files or inspect other workspace files unless explicitly instructed. " +
       "Follow the Conventional Commits format: one or more 'type(scope): short description' header lines (use multiple headers if the change covers multiple distinct features or fixes), " +
-      "followed by a blank line, then one or more body paragraphs explaining the implementation details of what changed and why." +
-      "Use markdown formatting in the body to improve readability where appropriate. Use bullet points for lists where necessary.\n\n" +
+      "followed by a blank line, then one or more body paragraphs explaining the implementation details of what changed and why. " +
+      "Use markdown formatting in the body to improve readability where appropriate. Use bullet points for lists where necessary. " +
+      "If you are explicitly instructed to submit the message with a tool, call that tool with the complete commit message and do not repeat the message outside the tool call.\n\n" +
       "Example format:\n" +
       "feat(auth): add OAuth2 login support\n\n" +
       "Implemented OAuth2 authorization code flow using the existing HTTP client. " +
       "Token refresh is handled automatically on 401 responses. " +
       "Session state is persisted to localStorage to survive page reloads\n\n" +
-      "Only return the commit message, no extra text. Here is the git diff to generate the commit message for:\n",
+      "Only return or submit the commit message, no extra text. Here is the git diff to generate the commit message for:\n",
   },
   enableDiagnosticLogs: false,
 };

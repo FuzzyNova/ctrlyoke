@@ -59,6 +59,13 @@ export interface McpServerConfig {
   transport?: "streamable-http" | "sse";
   /** HTTP headers to send with every request (remote servers only, e.g. Authorization) */
   headers?: Record<string, string>;
+  /**
+   * Tool names from this server to deny at execution time.
+   * Use bare tool names without the `mcp__serverid__` prefix (e.g. `["flightpath_append_queue"]`).
+   * Translated to `mcp__<id>__<tool>` deny patterns and merged into the harness permission args.
+   * Supported on harnesses that accept tool deny patterns (e.g. Claude CLI `--disallowedTools`).
+   */
+  deniedTools?: string[];
 }
 
 /**

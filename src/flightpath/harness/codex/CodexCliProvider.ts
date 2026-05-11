@@ -578,7 +578,8 @@ export class CodexCliProvider implements ICliProvider {
   /**
    * Generate MCP server configuration arguments for Codex CLI
    *
-   * Codex CLI uses -c 'mcp_servers.flightpath={...}' inline TOML format.
+   * Codex CLI uses repeated -c/--config overrides in inline TOML format.
+   * Supports the built-in FlightPath server and user-defined stdio servers.
    *
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
@@ -590,21 +591,81 @@ export class CodexCliProvider implements ICliProvider {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    _userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
-    // Codex uses inline TOML format which only supports the FlightPath server
-    if (!mcpServerPath) {
+    if (!mcpServerPath && (!userServers || userServers.length === 0)) {
       return null;
     }
+
     try {
-      const tomlConfig = CliMcpConfigGenerator.generateInlineTomlConfig(
-        "flightpath",
-        mcpServerPath,
-        workspaceRoot,
-        workingFilePath,
-        additionalEnv
-      );
-      return ["-c", tomlConfig];
+      const configArgs: string[] = [];
+
+      if (mcpServerPath) {
+        configArgs.push(
+          "-c",
+          CliMcpConfigGenerator.generateInlineTomlConfig(
+            "flightpath",
+            mcpServerPath,
+            workspaceRoot,
+            workingFilePath,
+            additionalEnv
+          )
+        );
+
+        configArgs.push(
+          "-c",
+          "mcp_servers.flightpath.default_tools_approval_mode='approve'"
+        );
+      }
+
+      for (const server of userServers ?? []) {
+        if (server.url) {
+          Log.warn(
+            `⚠️ Codex CLI inline MCP config does not yet support remote server "${server.id}". Skipping.`
+          );
+          continue;
+        }
+        if (!server.command) {
+          Log.warn(
+            `⚠️ Codex CLI MCP server "${server.id}" is missing a command. Skipping.`
+          );
+          continue;
+        }
+
+        const normalizedArgs = server.args?.map((arg) =>
+          arg.replace(/\\/g, "/")
+        );
+        const normalizedEnv = Object.fromEntries(
+          Object.entries(server.env ?? {}).map(([key, value]) => [
+            key,
+            value.replace(/\\/g, "/"),
+          ])
+        );
+
+        configArgs.push(
+          "-c",
+          CliMcpConfigGenerator.generateInlineTomlStdioServerConfig(
+            server.id,
+            server.command,
+            normalizedArgs,
+            normalizedEnv,
+            {
+              defaultToolsApprovalMode: server.autoApprove
+                ? "approve"
+                : undefined,
+              disabledTools: server.deniedTools,
+            }
+          )
+        );
+      }
+
+      if (configArgs.length > 0) {
+        Log.debug(
+          `🔧 Codex MCP config overrides added for ${configArgs.length / 2} server(s)`
+        );
+      }
+
+      return configArgs.length > 0 ? configArgs : null;
     } catch (error) {
       Log.error("Failed to generate MCP config for Codex CLI", error);
       return null;

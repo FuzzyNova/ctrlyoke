@@ -213,12 +213,21 @@ export class CliProviderUtils {
     }
 
     const mcpServers = workflowContext.resolvedProperties?.mcpServers;
-    const hasFlightpathServer =
-      mcpServers != null && mcpServers.includes("flightpath");
 
-    // Extract user-defined server configs (objects, not strings)
+    // A McpServerConfig object with id === "flightpath" is treated as the built-in
+    // FlightPath server — it may carry a deniedTools list for per-tool access control.
+    const flightpathServerObj = (mcpServers ?? []).find(
+      (s): s is McpServerConfig =>
+        typeof s === "object" && s !== null && s.id === "flightpath"
+    );
+    const hasFlightpathServer =
+      (mcpServers != null && mcpServers.includes("flightpath")) ||
+      !!flightpathServerObj;
+
+    // Extract user-defined server configs (objects with id !== "flightpath")
     const userServers = (mcpServers ?? []).filter(
-      (s): s is McpServerConfig => typeof s === "object"
+      (s): s is McpServerConfig =>
+        typeof s === "object" && s !== null && s.id !== "flightpath"
     );
 
     // Trigger MCP config if "flightpath" is listed OR user-defined servers are present

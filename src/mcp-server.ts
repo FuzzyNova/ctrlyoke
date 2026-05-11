@@ -247,6 +247,21 @@ class FlightPathMCPServer {
               properties: {},
             },
           },
+          {
+            name: "flightpath_submit_commit_message",
+            description:
+              "Submit the generated commit message to FlightPath. Call this tool with the complete commit message text once you have composed it. Only call this tool when explicitly instructed to do so.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                message: {
+                  type: "string",
+                  description: "The complete commit message",
+                },
+              },
+              required: ["message"],
+            },
+          },
         ],
       };
     });
@@ -291,6 +306,11 @@ class FlightPathMCPServer {
               log("Handling global_status...");
               result = await this.handleGlobalStatus();
               log("global_status completed successfully");
+              return result;
+            case "flightpath_submit_commit_message":
+              log("Handling submit_commit_message...");
+              result = await this.handleSubmitCommitMessage(args);
+              log("submit_commit_message completed successfully");
               return result;
             default:
               throw new Error(`Unknown tool: ${name}`);
@@ -875,6 +895,36 @@ class FlightPathMCPServer {
       }
       throw error;
     }
+  }
+
+  /**
+   * Handle flightpath_submit_commit_message tool invocation.
+   * Writes the commit message to the output path specified by FLIGHTPATH_COMMIT_OUTPUT.
+   * Used exclusively by CommitMessageGenerator to capture the AI-generated commit message
+   * as a structured tool argument rather than parsing prose response text.
+   */
+  private async handleSubmitCommitMessage(args: any) {
+    const { message } = args as { message: string };
+    if (!message?.trim()) {
+      throw new Error("message is required and cannot be empty");
+    }
+
+    const outputPath = process.env.FLIGHTPATH_COMMIT_OUTPUT;
+    if (outputPath) {
+      await fs.writeFile(outputPath, message.trim(), "utf8");
+      log("Commit message written to:", outputPath);
+    } else {
+      log("FLIGHTPATH_COMMIT_OUTPUT not set — message captured but not persisted");
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ success: true }),
+        },
+      ],
+    };
   }
 
   /**
