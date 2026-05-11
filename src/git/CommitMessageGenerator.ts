@@ -6,6 +6,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { CliAdapter } from "../platform/CliAdapter";
 import type { ResolvedCliConfig } from "../platform/CliAdapter";
 import { IntegrationFactory } from "../flightpath/IntegrationFactory";
+import { CliIntegration } from "../flightpath/harness/CliIntegration";
 import { WorkflowInstance } from "../flightpath/WorkflowInstance";
 import { EXECUTION_MODES, PERMISSION_MODES } from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
@@ -119,7 +120,7 @@ export class CommitMessageGenerator {
     cwd: string,
     token?: AbortSignal,
     instructions?: string
-  ): Promise<string> {
+  ): Promise<{ message: string; prompt: string; cliCommand?: string }> {
     const rawHarness =
       ConfigurationUtils.getCommitHarness() ||
       ConfigurationUtils.getIntegrationMode();
@@ -199,6 +200,11 @@ export class CommitMessageGenerator {
       throw new Error("Commit message generation cancelled");
     }
 
+    const cliCommand =
+      detectorIntegration instanceof CliIntegration
+        ? detectorIntegration.getLastSpawnedCommand()
+        : undefined;
+
     const state = instance.promptQueue.getState();
     const firstStep = state.steps[0];
     if (!firstStep || isScriptStep(firstStep)) {
@@ -230,7 +236,7 @@ export class CommitMessageGenerator {
     responseText = responseText.replace(/^"([\s\S]*)"$/, "$1").trim();
     responseText = responseText.replace(/^'([\s\S]*)'$/, "$1").trim();
 
-    return responseText;
+    return { message: responseText, prompt: fullPrompt, cliCommand };
   }
 
   async generate(
@@ -243,7 +249,7 @@ export class CommitMessageGenerator {
       return null;
     }
 
-    const message = await this.generateMessage(
+    const { message } = await this.generateMessage(
       diffResult.diff,
       cwd,
       token,

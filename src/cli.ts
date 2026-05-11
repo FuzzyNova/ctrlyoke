@@ -657,12 +657,12 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   console.error(chalk.dim("Generating commit message..."));
   let message: string;
   try {
-    message = await generator.generateMessage(
+    ({ message } = await generator.generateMessage(
       diffResult.diff,
       workingDir,
       undefined,
       options.hint
-    );
+    ));
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(chalk.red(`Error: ${errMsg}`));

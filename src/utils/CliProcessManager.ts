@@ -37,11 +37,16 @@ const KILL_ESCALATION_DELAY_MS = 3000;
 export class CliProcessManager {
   private currentProcess?: ChildProcess;
   private killTimeoutId?: NodeJS.Timeout;
+  private lastSpawnedCommand?: string;
 
   constructor(
     private workspaceRoot: string,
     private logger?: (msg: string) => void
   ) {}
+
+  getLastSpawnedCommand(): string | undefined {
+    return this.lastSpawnedCommand;
+  }
 
   /**
    * Spawn a CLI process with full control over stdin/stdout/stderr.
@@ -57,7 +62,8 @@ export class CliProcessManager {
       let stderr = "";
       let settled = false;
 
-      this.logger?.(`📤 Spawning: ${command} ${args.join(" ")}`);
+      this.lastSpawnedCommand = `${command} ${args.join(" ")}`;
+      this.logger?.(`📤 Spawning: ${this.lastSpawnedCommand}`);
 
       // When using a shell, concatenate command + args into a single string.
       // Node.js DEP0190 warns when args is non-empty with shell:true because the

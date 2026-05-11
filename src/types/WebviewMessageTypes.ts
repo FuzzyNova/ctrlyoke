@@ -413,6 +413,9 @@ export interface CommitMessageGenerationRecord {
   truncated: boolean;
   includesUntrackedFiles: boolean;
   generatedAt: number;
+  prompt?: string;
+  generatedMessage?: string;
+  cliCommand?: string;
 }
 
 export interface CommitMessageGenerationUpdatedMessage {

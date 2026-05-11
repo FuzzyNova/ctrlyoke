@@ -275,8 +275,11 @@ suite("HostedWorkspaceViewerService", () => {
         commands: ["git diff --cached"],
         includesUntrackedFiles: false,
       });
-      CommitMessageGenerator.prototype.generateMessage = async () =>
-        expected.message;
+      CommitMessageGenerator.prototype.generateMessage = async () => ({
+        message: expected.message,
+        prompt: "",
+        cliCommand: undefined,
+      });
 
       const svc = new HostedWorkspaceViewerService(root);
       const result = await svc.generateCommitMessage();
@@ -293,8 +296,11 @@ suite("HostedWorkspaceViewerService", () => {
         commands: ["git diff --cached", "git diff"],
         includesUntrackedFiles: false,
       });
-      CommitMessageGenerator.prototype.generateMessage = async () =>
-        "chore: update deps";
+      CommitMessageGenerator.prototype.generateMessage = async () => ({
+        message: "chore: update deps",
+        prompt: "",
+        cliCommand: undefined,
+      });
 
       const svc = new HostedWorkspaceViewerService(root);
       const result = await svc.generateCommitMessage();

@@ -568,6 +568,13 @@ export class HostedWorkspaceViewerService {
       return null;
     }
 
+    const { message, prompt, cliCommand } = await this.commitGenerator.generateMessage(
+      diffResult.diff,
+      this.workspaceRoot,
+      undefined,
+      instructions
+    );
+
     commitMessageGenerationTracker.setLastRecord({
       source: "workspace-viewer",
       workingDirectory: this.workspaceRoot,
@@ -577,14 +584,10 @@ export class HostedWorkspaceViewerService {
       truncated: diffResult.truncated,
       includesUntrackedFiles: diffResult.includesUntrackedFiles,
       generatedAt: Date.now(),
+      prompt,
+      generatedMessage: message,
+      cliCommand,
     });
-
-    const message = await this.commitGenerator.generateMessage(
-      diffResult.diff,
-      this.workspaceRoot,
-      undefined,
-      instructions
-    );
 
     return {
       message,

@@ -786,18 +786,23 @@ export class CliIntegration extends HarnessIntegration {
     // Dispatch hook setup at the integration layer so providers don't have to
     // remember to handle both interactive and headless cases in buildCliArgs().
     if (workspaceRoot) {
+      const resolvedHooks = session.workflowContext?.resolvedProperties?.hooks;
+      const hooksExplicitlyDisabled = resolvedHooks === null;
+      const userHooks = resolvedHooks ?? undefined;
+      const enabledNotificationHookEvents = hooksExplicitlyDisabled
+        ? []
+        : this.getEnabledHookNotificationEvents();
+      const promptIndex = session.workflowContext?.promptIndex ?? 0;
+      const workingFilePath = session.workflowContext?.workingFilePath;
+
       // Remove hook artifacts from the previous prompt before setting up new ones.
       // Providers that write per-prompt files (Copilot: .github/hooks/*.json,
       // Claude: .flightpath/temp/claude-hook-settings-*.json) implement this so
       // that hooks from earlier prompts don't persist into the current prompt's run.
-      await this.provider.cleanupPreviousPromptHooks?.(workspaceRoot);
-
-      const userHooks =
-        session.workflowContext?.resolvedProperties?.hooks ?? undefined;
-      const enabledNotificationHookEvents =
-        this.getEnabledHookNotificationEvents();
-      const promptIndex = session.workflowContext?.promptIndex ?? 0;
-      const workingFilePath = session.workflowContext?.workingFilePath;
+      // Skip when hooks are explicitly disabled (null) — no prior hooks to clean up.
+      if (!hooksExplicitlyDisabled) {
+        await this.provider.cleanupPreviousPromptHooks?.(workspaceRoot);
+      }
 
       if (isInteractive) {
         // Notification hooks (FlightPath completion detection + user hooks combined)
@@ -811,9 +816,9 @@ export class CliIntegration extends HarnessIntegration {
             enabledNotificationHookEvents
           )) ?? [];
         baseArgs.push(...hookArgs);
-      } else if (this.provider.buildHeadlessUserHookArgs) {
-        // Headless: always call when the provider supports it, even with no user hooks
-        // or notification events — guarantees hooks from a previous prompt are cleared
+      } else if (this.provider.buildHeadlessUserHookArgs && !hooksExplicitlyDisabled) {
+        // Headless: call when the provider supports it (unless hooks explicitly disabled),
+        // even with no user hooks — guarantees hooks from a previous prompt are cleared
         // before this prompt runs (providers with per-prompt files or settings.json
         // registration both handle the empty-hooks case correctly).
         const hookArgs =
@@ -1211,6 +1216,10 @@ export class CliIntegration extends HarnessIntegration {
 
   isIntegrationAvailable(): boolean {
     return this.isAvailable;
+  }
+
+  getLastSpawnedCommand(): string | undefined {
+    return this.processManager.getLastSpawnedCommand();
   }
 
   isReady(): boolean {

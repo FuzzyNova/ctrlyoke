@@ -18,6 +18,21 @@ interface Props {
   onReset: (path: string) => void;
 }
 
+const MAX_PROMPT_LINES = 500;
+
+function PromptPreview({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const truncated = lines.length > MAX_PROMPT_LINES;
+  const display = truncated
+    ? lines.slice(0, MAX_PROMPT_LINES).join("\n") + "\n... (truncated)"
+    : text;
+  return (
+    <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+      {display}
+    </pre>
+  );
+}
+
 const ALL_HARNESSES: HarnessId[] = [
   HARNESS_IDS.COPILOT_CLI,
   HARNESS_IDS.CLAUDE_CLI,
@@ -192,10 +207,42 @@ export function CommitSection({
           </div>
         ) : null}
 
-        <pre className="min-h-40 max-h-80 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
-          {lastCommitMessageGeneration?.output ??
-            "No commit message generation has run yet."}
-        </pre>
+        {lastCommitMessageGeneration ? (
+          <>
+            {lastCommitMessageGeneration.cliCommand ? (
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-description-fg">
+                  Harness command:
+                </div>
+                <pre className="overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+                  {lastCommitMessageGeneration.cliCommand}
+                </pre>
+              </div>
+            ) : null}
+
+            <div className="space-y-1">
+              <div className="text-xs font-semibold text-description-fg">
+                Prompt sent to harness:
+              </div>
+              <PromptPreview text={lastCommitMessageGeneration.prompt ?? lastCommitMessageGeneration.output} />
+            </div>
+
+            {lastCommitMessageGeneration.generatedMessage ? (
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-description-fg">
+                  Generated message:
+                </div>
+                <pre className="overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+                  {lastCommitMessageGeneration.generatedMessage}
+                </pre>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <pre className="min-h-20 overflow-auto whitespace-pre-wrap rounded border border-input-border bg-input-bg p-2 text-xs text-foreground">
+            No commit message generation has run yet.
+          </pre>
+        )}
       </div>
     </div>
   );

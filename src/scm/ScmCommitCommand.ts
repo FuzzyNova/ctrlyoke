@@ -4,6 +4,27 @@ import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTr
 import { VSCODE_CONTEXT_KEYS } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 
+interface GitRepository {
+  rootUri: vscode.Uri;
+  inputBox: { value: string };
+}
+interface GitExtension {
+  getAPI(version: 1): { repositories: GitRepository[] };
+}
+
+function getGitInputBox(cwd: string): { value: string } | undefined {
+  try {
+    const gitExt = vscode.extensions.getExtension<GitExtension>("vscode.git")?.exports;
+    const api = gitExt?.getAPI(1);
+    const repo =
+      api?.repositories.find((r) => r.rootUri.fsPath === cwd) ??
+      api?.repositories[0];
+    return repo?.inputBox;
+  } catch {
+    return undefined;
+  }
+}
+
 export class ScmCommitCommand {
   private readonly generator = new CommitMessageGenerator();
   private activeAbortController: AbortController | null = null;
@@ -49,9 +70,8 @@ export class ScmCommitCommand {
           token.onCancellationRequested(() => abortController.abort());
 
           try {
-            // Capture any existing text as instructions before overwriting it
-            // vscode.scm.inputBox is the deprecated legacy API and can be undefined at runtime
-            const existingText = vscode.scm.inputBox?.value.trim() || undefined;
+            const inputBox = getGitInputBox(cwd);
+            const existingText = inputBox?.value.trim() || undefined;
 
             const diffResult = await this.generator.getDiff(cwd);
             if (!diffResult) {
@@ -60,6 +80,13 @@ export class ScmCommitCommand {
               );
               return;
             }
+
+            const { message, prompt, cliCommand } = await this.generator.generateMessage(
+              diffResult.diff,
+              cwd,
+              abortController.signal,
+              existingText
+            );
 
             commitMessageGenerationTracker.setLastRecord({
               source: "scm",
@@ -70,14 +97,10 @@ export class ScmCommitCommand {
               truncated: diffResult.truncated,
               includesUntrackedFiles: diffResult.includesUntrackedFiles,
               generatedAt: Date.now(),
+              prompt,
+              generatedMessage: message,
+              cliCommand,
             });
-
-            const message = await this.generator.generateMessage(
-              diffResult.diff,
-              cwd,
-              abortController.signal,
-              existingText
-            );
 
             if (diffResult.truncated) {
               void vscode.window.showWarningMessage(
@@ -86,7 +109,6 @@ export class ScmCommitCommand {
             }
 
             // Write the generated message to the SCM input box
-            const inputBox = vscode.scm.inputBox;
             if (inputBox) {
               inputBox.value = message;
             }
