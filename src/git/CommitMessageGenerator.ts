@@ -136,11 +136,12 @@ export class CommitMessageGenerator {
       harness,
       model,
       cwd,
+      newSession: true,
       timeout: 120_000,
       scriptTimeout: 30_000,
       allowedTools: [],
       deniedTools: [],
-      allowAllTools: true,
+      allowAllTools: false,
       additionalDirs: [],
       vars: {},
       verbose: false,
@@ -202,10 +203,20 @@ export class CommitMessageGenerator {
     // Strip thinking blocks and file-operation annotations — for a commit message we
     // only want the pure assistant text, not reasoning traces or tool-call summaries.
     // These formats are defined by CliResponseTextExtractor.extractTextFromEvents().
-    const responseText = rawResponse
+    let responseText = rawResponse
       .replace(/\n?\[Thinking\][\s\S]*?\[\/Thinking\]/g, "")
       .replace(/\n\[(Created|Edited|Deleted):[^\]]*\]/g, "")
       .trim();
+
+    // Strip wrapper code fences (e.g. ```commit\n...\n``` or ```\n...\n```)
+    responseText = responseText
+      .replace(/^```[a-z]*\n?([\s\S]*?)\n?```$/i, "$1")
+      .trim();
+    // Strip single-backtick wrapping
+    responseText = responseText.replace(/^`([\s\S]*)`$/, "$1").trim();
+    // Strip surrounding double or single quotes (only when the entire message is wrapped)
+    responseText = responseText.replace(/^"([\s\S]*)"$/, "$1").trim();
+    responseText = responseText.replace(/^'([\s\S]*)'$/, "$1").trim();
 
     return responseText;
   }

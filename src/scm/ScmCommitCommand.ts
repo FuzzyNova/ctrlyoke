@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { CommitMessageGenerator } from "../git/CommitMessageGenerator";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import { VSCODE_CONTEXT_KEYS } from "../types/DashboardConstants";
+import { Log } from "../utils/Log";
 
 export class ScmCommitCommand {
   private readonly generator = new CommitMessageGenerator();
@@ -49,7 +50,8 @@ export class ScmCommitCommand {
 
           try {
             // Capture any existing text as instructions before overwriting it
-            const existingText = vscode.scm.inputBox.value.trim() || undefined;
+            // vscode.scm.inputBox is the deprecated legacy API and can be undefined at runtime
+            const existingText = vscode.scm.inputBox?.value.trim() || undefined;
 
             const diffResult = await this.generator.getDiff(cwd);
             if (!diffResult) {
@@ -85,7 +87,9 @@ export class ScmCommitCommand {
 
             // Write the generated message to the SCM input box
             const inputBox = vscode.scm.inputBox;
-            inputBox.value = message;
+            if (inputBox) {
+              inputBox.value = message;
+            }
 
             if (!diffResult.staged) {
               void vscode.window.showInformationMessage(
@@ -93,9 +97,13 @@ export class ScmCommitCommand {
               );
             }
           } catch (err) {
-            if (token.isCancellationRequested || abortController.signal.aborted) {
+            if (
+              token.isCancellationRequested ||
+              abortController.signal.aborted
+            ) {
               return;
             }
+            Log.error("Commit message generation failed", err);
             const message = err instanceof Error ? err.message : String(err);
             void vscode.window.showErrorMessage(`FlightPath: ${message}`);
           }

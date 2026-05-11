@@ -352,9 +352,15 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     harness: "",
     model: "",
     prompt:
-      "Generate a concise, conventional commit message based on the following git diff. " +
-      "Return ONLY the commit message — no explanation, no code fences. " +
-      "Follow the Conventional Commits format (type(scope): description).",
+      "Generate a conventional commit message based on the following git diff. " +
+      "Return ONLY the commit message — no explanation, no code fences, no author or co-author attribution lines. " +
+      "Follow the Conventional Commits format: one or more 'type(scope): short description' header lines (use multiple headers if the change covers multiple distinct features or fixes), " +
+      "followed by a blank line, then a body paragraph explaining the implementation details of what changed and why. " +
+      "Example format:\n" +
+      "feat(auth): add OAuth2 login support\n\n" +
+      "Implemented OAuth2 authorization code flow using the existing HTTP client. " +
+      "Token refresh is handled automatically on 401 responses. " +
+      "Session state is persisted to localStorage to survive page reloads.",
   },
   enableDiagnosticLogs: false,
 };
