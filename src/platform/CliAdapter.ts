@@ -1,6 +1,9 @@
 import * as path from "path";
 import type { PlatformAdapter } from "./PlatformAdapter";
-import { PERMISSION_MODES } from "../types/DashboardConstants";
+import type {
+  ExecutionMode,
+  PermissionMode,
+} from "../types/DashboardConstants";
 import { configService } from "../config/FlightPathConfigService";
 
 export interface ResolvedCliConfig {
@@ -9,16 +12,24 @@ export interface ResolvedCliConfig {
   cwd?: string;
   timeout: number;
   scriptTimeout: number;
+  /** Explicit tool permission mode. Use PERMISSION_MODES constants. */
+  permissionMode: PermissionMode;
   allowedTools: string[];
   deniedTools: string[];
-  /** When true, maps to "dangerouslyAllowAll" tool permissions mode. */
-  allowAllTools: boolean;
   /** Extra directories to pass as --add-dir to Copilot CLI (from --add-dir flags). */
   additionalDirs: string[];
-  /** Session ID to resume (--resume flag). */
-  resume?: string;
-  /** Force-start a brand-new session even if the workflow says resumeSession. */
-  newSession?: boolean;
+  /**
+   * Session ID to resume (from --resume <id> flag).
+   * When set, the first prompt step will resume this session.
+   */
+  sessionId?: string;
+  /**
+   * Whether to resume an existing session. Mirrors PromptFile.resumeSession semantics:
+   * - false: always start a new session (equivalent to the old --new-session flag)
+   * - true: resume the existing session
+   * - undefined: inherit from workflow file / global setting
+   */
+  resumeSession?: boolean;
   verbose: boolean;
   quiet: boolean;
   json: boolean;
@@ -37,7 +48,7 @@ export interface ResolvedCliConfig {
    * correct value when CliIntegration reads the execution mode via the
    * platform adapter rather than vscode.workspace.getConfiguration().
    */
-  cliExecutionMode: "interactive" | "headless";
+  cliExecutionMode: ExecutionMode;
 }
 
 /**
@@ -55,14 +66,7 @@ export class CliAdapter implements PlatformAdapter {
       case "cliDeniedTools":
         return this.config.deniedTools as unknown as T;
       case "cliToolPermissions":
-        if (this.config.allowAllTools)
-          return PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL as unknown as T;
-        if (
-          this.config.allowedTools.length > 0 ||
-          this.config.deniedTools.length > 0
-        )
-          return PERMISSION_MODES.CUSTOM as unknown as T;
-        return PERMISSION_MODES.ALLOW_ALL as unknown as T;
+        return this.config.permissionMode as unknown as T;
 
       // ── Additional directories (--add-dir) ─────────────────────────────
       // CliProviderUtils.getWorkspaceDirs() reads this key to build --add-dir args.
@@ -88,16 +92,15 @@ export class CliAdapter implements PlatformAdapter {
       case "maxPromptExecutionTime":
         return Math.round(this.config.timeout / 1000) as unknown as T;
 
-      // ── Fallback: config service (file-based) then direct property ────────
+      // ── Session resumption ──────────────────────────────────────────────
+      // Maps to PropertyResolver tier-3 (global setting fallback).
+      case "resumeExistingSession":
+        return (this.config.resumeSession ?? false) as unknown as T;
+
+      // ── Fallback: config service only (file-based settings) ────────────
+      // Do NOT fall back to this.config[key] — config field names don't match
+      // VS Code setting key names, so property-name collisions cause silent bugs.
       default: {
-        // Prefer direct CLI config properties (explicit flag values) first,
-        // then fall back to the config service (reads user/workspace config files).
-        const directValue = (this.config as unknown as Record<string, unknown>)[
-          key
-        ] as T;
-        if (directValue !== undefined) {
-          return directValue;
-        }
         const serviceValue = configService.getNested(key);
         if (serviceValue !== undefined) {
           return serviceValue as unknown as T;

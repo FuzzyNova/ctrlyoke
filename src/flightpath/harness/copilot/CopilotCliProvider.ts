@@ -333,6 +333,12 @@ export class CopilotCliProvider implements ICliProvider {
     userHooks: UserHookConfig[] | undefined,
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
+    const hasUserHooks = userHooks && userHooks.length > 0;
+    if (!hasUserHooks && enabledNotificationHookEvents.length === 0) {
+      // Nothing to configure — skip hook file creation.
+      // Cleanup of any previous prompt's hook file is handled by cleanupPreviousPromptHooks.
+      return [];
+    }
     const config =
       enabledNotificationHookEvents.length > 0
         ? this.notificationMonitor.buildHookConfig(

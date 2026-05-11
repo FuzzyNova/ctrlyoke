@@ -7,7 +7,7 @@ import { CliAdapter } from "../platform/CliAdapter";
 import type { ResolvedCliConfig } from "../platform/CliAdapter";
 import { IntegrationFactory } from "../flightpath/IntegrationFactory";
 import { WorkflowInstance } from "../flightpath/WorkflowInstance";
-import { EXECUTION_MODES } from "../types/DashboardConstants";
+import { EXECUTION_MODES, PERMISSION_MODES } from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
 import { isScriptStep } from "../types/FlightPathTypes";
 
@@ -136,14 +136,14 @@ export class CommitMessageGenerator {
       harness,
       model,
       cwd,
-      newSession: true,
-      timeout: 120_000,
-      scriptTimeout: 30_000,
+      permissionMode: PERMISSION_MODES.ALLOW_ALL,
       allowedTools: [],
       deniedTools: [],
-      allowAllTools: false,
       additionalDirs: [],
       vars: {},
+      resumeSession: false,
+      timeout: 120_000,
+      scriptTimeout: 30_000,
       verbose: false,
       quiet: true,
       json: false,
@@ -165,7 +165,19 @@ export class CommitMessageGenerator {
       cwd
     );
 
-    instance.loadPromptString(fullPrompt);
+    // Suppress all VS Code global settings that could bleed into this one-shot call:
+    // mcpServers, agent, skills, additionalArgs, and hooks all have VS Code tier-3
+    // fallbacks in PropertyResolver — null/empty sentinels stop resolution at tier-2.
+    instance.loadPromptString(fullPrompt, {
+      harness,
+      model,
+      resumeSession: false,
+      mcpServers: null,
+      agent: null,
+      skills: null,
+      additionalArgs: null,
+      hooks: null,
+    });
 
     let abortListener: (() => void) | undefined;
     if (token) {

@@ -15,9 +15,14 @@ import {
   STEP_STATUS,
   HARNESS_IDS,
   EXECUTION_MODES,
+  PERMISSION_MODES,
   RUNNER_IDS,
 } from "./types/DashboardConstants";
-import type { ExecutionMode, HarnessId } from "./types/DashboardConstants";
+import type {
+  ExecutionMode,
+  HarnessId,
+  PermissionMode,
+} from "./types/DashboardConstants";
 import { isScriptStep } from "./types/FlightPathTypes";
 import { configService } from "./config/FlightPathConfigService";
 import {
@@ -77,7 +82,10 @@ program
     collectRepeatable,
     [] as string[]
   )
-  .option("--allow-all-tools", "Dangerously allow all tools without approval")
+  .option(
+    "--permission-mode <mode>",
+    "Tool permission mode: dangerouslyAllowAll, allowAll, custom (default: auto-detect)"
+  )
   .option(
     "--add-dir <path>",
     "Add directory to Copilot CLI allowed paths (repeatable)",
@@ -91,10 +99,13 @@ program
     {} as Record<string, string>
   )
   .option("-p, --prompt <text>", "Inline prompt string (alternative to file)")
-  .option("--resume <session-id>", "Resume an existing session by ID")
   .option(
-    "--new-session",
-    "Force a new session (ignore workflow resumeSession)"
+    "--session-id <id>",
+    "Session ID to resume (implies --resume-session)"
+  )
+  .option(
+    "--[no-]resume-session",
+    "Override resumeSession: --resume-session forces resume, --no-resume-session forces new session"
   )
   .option("--json", "Output results as JSON")
   .option("-q, --quiet", "Suppress all output except errors")
@@ -115,10 +126,7 @@ program
   .command("commit")
   .description("Generate an AI-powered commit message and commit")
   .option("-m, --model <model>", "Override model for commit message generation")
-  .option(
-    "-d, --cwd <path>",
-    "Working directory (default: current directory)"
-  )
+  .option("-d, --cwd <path>", "Working directory (default: current directory)")
   .option(
     "--hint <text>",
     "Extra instructions or starting draft to guide the generated message"
@@ -146,12 +154,12 @@ interface RunOptions {
   interactive?: boolean;
   allowTool: string[];
   denyTool: string[];
-  allowAllTools?: boolean;
+  permissionMode?: string;
   addDir: string[];
   var: Record<string, string>;
   prompt?: string;
-  resume?: string;
-  newSession?: boolean;
+  sessionId?: string;
+  resumeSession?: boolean;
   json?: boolean;
   quiet?: boolean;
   verbose?: boolean;
@@ -232,14 +240,18 @@ async function runCommand(
   // Detect execution mode: explicit flags override TTY auto-detection
   const executionMode = getExecutionMode(options);
 
-  // In headless mode, auto-apply tool permissions unless the user specified
+  // In headless mode, auto-apply dangerouslyAllowAll unless the user specified
   // custom allow/deny lists (which imply deliberate control).
   const hasCustomTools =
     (options.allowTool && options.allowTool.length > 0) ||
     (options.denyTool && options.denyTool.length > 0);
-  const allowAllTools =
-    options.allowAllTools ??
-    (executionMode === EXECUTION_MODES.HEADLESS && !hasCustomTools);
+  const permissionMode: PermissionMode = options.permissionMode
+    ? (options.permissionMode as PermissionMode)
+    : hasCustomTools
+      ? PERMISSION_MODES.CUSTOM
+      : executionMode === EXECUTION_MODES.HEADLESS
+        ? PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL
+        : PERMISSION_MODES.ALLOW_ALL;
 
   const config: ResolvedCliConfig = {
     harness: options.harness || HARNESS_IDS.COPILOT_CLI,
@@ -247,13 +259,13 @@ async function runCommand(
     cwd: workingDir,
     timeout: parseInt(options.timeout, 10) * 1000,
     scriptTimeout: parseInt(options.scriptTimeout, 10) * 1000,
+    permissionMode,
     allowedTools: options.allowTool || [],
     deniedTools: options.denyTool || [],
-    allowAllTools,
     additionalDirs: options.addDir || [],
     vars: options.var || {},
-    resume: options.resume,
-    newSession: options.newSession,
+    sessionId: options.sessionId,
+    resumeSession: options.resumeSession,
     verbose: options.verbose ?? false,
     quiet: options.quiet ?? false,
     json: options.json ?? false,
@@ -289,8 +301,13 @@ async function runCommand(
     // regardless of what the user's config file says.
     overlay.execution = { mode: executionMode };
   }
-  if (options.allowAllTools) {
-    overlay.tools = { permissionMode: "dangerouslyAllowAll" };
+  if (options.permissionMode) {
+    overlay.tools = {
+      permissionMode: options.permissionMode as
+        | "dangerouslyAllowAll"
+        | "allowAll"
+        | "custom",
+    };
   }
   if (options.allowTool?.length) {
     overlay.tools = { ...overlay.tools, allowed: options.allowTool };
@@ -486,17 +503,23 @@ async function runCommand(
     // getState() returns a shallow copy but prompts[] is the same array reference,
     // so mutations to PromptStep objects propagate into the queue's internal state.
     const queueState = instance.promptQueue.getState();
-    if (config.resume && queueState.steps.length > 0) {
+    if (config.sessionId && queueState.steps.length > 0) {
       const firstStep = queueState.steps[0];
       if (!isScriptStep(firstStep)) {
-        firstStep.sessionId = config.resume;
+        firstStep.sessionId = config.sessionId;
         firstStep.resumeSession = true;
       }
-    } else if (config.newSession) {
+    } else if (config.resumeSession === false) {
       for (const step of queueState.steps) {
         if (!isScriptStep(step)) {
           delete step.sessionId;
           step.resumeSession = false;
+        }
+      }
+    } else if (config.resumeSession === true) {
+      for (const step of queueState.steps) {
+        if (!isScriptStep(step)) {
+          step.resumeSession = true;
         }
       }
     }
@@ -596,9 +619,7 @@ interface CommitCommandOptions {
 }
 
 async function commitCommand(options: CommitCommandOptions): Promise<void> {
-  const workingDir = options.cwd
-    ? path.resolve(options.cwd)
-    : process.cwd();
+  const workingDir = options.cwd ? path.resolve(options.cwd) : process.cwd();
 
   Log.initializeCli(workingDir, false);
 
@@ -614,9 +635,8 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
     configService.setCliOverlay(overlay);
   }
 
-  const { CommitMessageGenerator } = await import(
-    "./git/CommitMessageGenerator"
-  );
+  const { CommitMessageGenerator } =
+    await import("./git/CommitMessageGenerator");
   const generator = new CommitMessageGenerator();
 
   console.error(chalk.dim("Checking for changes..."));

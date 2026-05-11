@@ -667,10 +667,16 @@ export class WorkflowInstance {
    * Load an inline prompt string into the queue without a file.
    * Behaves like loading a single-prompt .prompt.md file.
    */
-  loadPromptString(promptText: string): void {
+  loadPromptString(
+    promptText: string,
+    workflowOverrides?: Partial<PromptFile>
+  ): void {
     this.promptQueue.clearQueue();
     this.filePath = "";
-    const promptFile: PromptFile = { steps: [{ prompt: promptText }] };
+    const promptFile: PromptFile = {
+      steps: [{ prompt: promptText }],
+      ...workflowOverrides,
+    };
     this.currentPromptFile = { filePath: "<inline>", promptFile };
     this.promptQueue.loadPrompts(promptFile);
     this.propagateWorkflowNameToIntegrations();
