@@ -333,6 +333,10 @@ module.exports = {
         "modal-exit": "modal-exit 0.22s ease-in forwards",
       },
 
+      screens: {
+        xs: "340px",
+      },
+
       fontSize: {
         xxs: ["0.625rem", { lineHeight: "1rem" }],
       },

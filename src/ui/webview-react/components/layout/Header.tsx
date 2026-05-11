@@ -402,7 +402,7 @@ export const Header: React.FC<{
               } ${
                 canRun && !isCLIManaged
                   ? "flex bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                  : "hidden sm:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+                  : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
               }`}
               onClick={handleRun}
               disabled={!canRun || isCLIManaged}
@@ -423,7 +423,7 @@ export const Header: React.FC<{
             </button>
 
             <div
-              className={`fp-button-group-divider ${canRun && !isCLIManaged && (canPause || canCancelPause || canResume) ? "" : "hidden sm:block"}`}
+              className={`fp-button-group-divider ${canRun && !isCLIManaged && (canPause || canCancelPause || canResume) ? "" : "hidden xs:block"}`}
             />
 
             {/* Pause/Resume Button */}
@@ -431,7 +431,7 @@ export const Header: React.FC<{
               className={`control-button items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 (canPause || canCancelPause || canResume) && !isCLIManaged
                   ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                  : "hidden sm:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+                  : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
               }`}
               onClick={handlePauseResume}
               disabled={
@@ -472,7 +472,7 @@ export const Header: React.FC<{
             </button>
 
             <div
-              className={`fp-button-group-divider ${(canPause || canCancelPause || canResume) && !isCLIManaged && (canStop || isCLIManaged) ? "" : "hidden sm:block"}`}
+              className={`fp-button-group-divider ${(canPause || canCancelPause || canResume) && !isCLIManaged && (canStop || isCLIManaged) ? "" : "hidden xs:block"}`}
             />
 
             {/* Stop Button */}
@@ -480,7 +480,7 @@ export const Header: React.FC<{
               className={`control-button items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 canStop || isCLIManaged
                   ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                  : "hidden sm:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+                  : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
               }`}
               onClick={isCLIManaged ? handleStopCliRun : handleStop}
               disabled={!canStop && !isCLIManaged}
