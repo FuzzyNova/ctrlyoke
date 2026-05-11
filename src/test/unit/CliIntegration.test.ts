@@ -41,6 +41,26 @@ class MockVsCodePlatform implements PlatformAdapter {
   }
 }
 
+class TestCliIntegration extends CliIntegration {
+  public formatRefs(
+    agentRefs: string[],
+    skillRefs: string[],
+    directRefs: string[],
+    contextRefs: string[],
+    excerptRefs: string[],
+    promptRefs: string[]
+  ): string {
+    return this.formatCategorizedReferences(
+      agentRefs,
+      skillRefs,
+      directRefs,
+      contextRefs,
+      excerptRefs,
+      promptRefs
+    );
+  }
+}
+
 function createProvider(overrides?: Partial<ICliProvider>): ICliProvider {
   const provider = {
     config: {
@@ -118,6 +138,16 @@ function createHeadlessIntegration(
   );
 }
 
+function createTestIntegration(
+  overrides?: Partial<ICliProvider>
+): TestCliIntegration {
+  return new TestCliIntegration(
+    createProvider(overrides),
+    new MockVsCodePlatform(),
+    false
+  );
+}
+
 suite("CliIntegration", () => {
   setup(() => {
     configService.setCliOverlay({
@@ -186,6 +216,25 @@ suite("CliIntegration", () => {
       "session-from-output"
     );
     assert.strictEqual(integration.getLastCliCommand(), "test --prompt say hi");
+  });
+
+  test("should keep categorized CLI wrapper prompts on one line", () => {
+    const integration = createTestIntegration();
+
+    const formatted = integration.formatRefs(
+      [],
+      [],
+      ["@src/ui/webview-react/components/output/CliOutput.tsx"],
+      [],
+      [],
+      ["@.flightpath/temp/example.prompt.md"]
+    );
+
+    assert.strictEqual(
+      formatted,
+      "using these file references @src/ui/webview-react/components/output/CliOutput.tsx, follow the instructions in @.flightpath/temp/example.prompt.md "
+    );
+    assert.strictEqual(/[\r\n]/u.test(formatted), false);
   });
 
   test("should reuse resolved session IDs when the runner does not extract a new one", async () => {

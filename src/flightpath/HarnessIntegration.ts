@@ -450,7 +450,8 @@ export abstract class HarnessIntegration {
    *
    * The excerpt prefix is "using" when it is the first clause, "and" otherwise.
    *
-   * @param joinSeparator Separator between clauses — ",\n" for CLI, ", " for Chat
+   * @param joinSeparator Separator between clauses; callers choose the separator
+   * appropriate for their transport.
    */
   protected static formatCategorizedInstruction(
     agentRefs: string[],

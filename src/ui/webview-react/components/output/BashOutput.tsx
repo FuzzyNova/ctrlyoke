@@ -56,6 +56,11 @@ export const BashOutput = memo<BashOutputProps>(
     const hasCommandLabel = sanitizedCommand.length > 0;
     const sanitizedOutput = sanitizeTerminalOutput(output || "");
     const sanitizedError = sanitizeTerminalOutput(error || "");
+    const hasDuplicateOutputAndError =
+      sanitizedOutput.trim().length > 0 &&
+      sanitizedOutput.trim() === sanitizedError.trim();
+    const renderedOutput = hasDuplicateOutputAndError ? "" : sanitizedOutput;
+    const renderedError = sanitizedError;
 
     // Check if status is "initiated" (command still running)
     const isRunning = status === OPERATION_STATUS.INITIATED;
@@ -166,13 +171,13 @@ export const BashOutput = memo<BashOutputProps>(
         {isCompleted && (
           <>
             {renderExpandableContent(
-              sanitizedOutput,
+              renderedOutput,
               "output",
               outputExpanded,
               setOutputExpanded
             )}
             {renderExpandableContent(
-              sanitizedError,
+              renderedError,
               "error",
               errorExpanded,
               setErrorExpanded

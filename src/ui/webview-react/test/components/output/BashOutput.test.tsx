@@ -32,6 +32,24 @@ describe("BashOutput", () => {
     expect(screen.getByText(/command not found/)).toBeInTheDocument();
   });
 
+  it("deduplicates identical output and error by keeping the error rendering", () => {
+    render(
+      <BashOutput
+        command="bad"
+        output="Exception during run: Error: Cannot find module 'vscode'"
+        error="Exception during run: Error: Cannot find module 'vscode'"
+        exitCode={1}
+        status={OPERATION_STATUS.FAILED}
+      />
+    );
+
+    const matches = screen.getAllByText(
+      /Exception during run: Error: Cannot find module 'vscode'/
+    );
+    expect(matches).toHaveLength(1);
+    expect(matches[0].closest(".text-error-fg")).not.toBeNull();
+  });
+
   it("does not render output/error while command is running", () => {
     render(
       <BashOutput

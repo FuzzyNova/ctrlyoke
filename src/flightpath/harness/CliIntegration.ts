@@ -352,7 +352,8 @@ export class CliIntegration extends HarnessIntegration {
       directRefs,
       contextRefs,
       excerptRefs,
-      promptRefs
+      promptRefs,
+      ", "
     );
   }
 
