@@ -13,7 +13,7 @@ import { PERMISSION_MODES } from "../../../types/DashboardConstants";
  *
  * Codex CLI uses mode-based permissions (no granular tool patterns):
  * - dangerouslyAllowAll → --dangerously-bypass-approvals-and-sandbox
- * - allowAll → --full-auto (= workspace-write sandbox + on-request approval)
+ * - allowAll → Auto preset (= workspace-write sandbox + on-request approval)
  * - custom → -s <sandboxMode> -a <approvalPolicy>
  *
  * Note: Codex does NOT support granular tool patterns like Copilot/Claude.
@@ -21,12 +21,12 @@ import { PERMISSION_MODES } from "../../../types/DashboardConstants";
  *
  * Sandbox modes (-s / --sandbox):
  * - "read-only": Read-only filesystem access
- * - "workspace-write": Read + write within workspace (default for --full-auto)
+ * - "workspace-write": Read + write within workspace (Auto preset)
  * - "danger-full-access": Unrestricted filesystem access (dangerous)
  *
  * Approval policies (-a / --ask-for-approval):
  * - "untrusted": Only run trusted read commands without asking; escalate others
- * - "on-request": Model decides when to ask (default for --full-auto)
+ * - "on-request": Model decides when to ask (Auto preset)
  * - "never": Never ask for approval (dangerous)
  *
  * If allowedTools or deniedTools are configured, a warning is logged
@@ -36,6 +36,13 @@ export class CodexToolPermissionMapper
   extends ToolPermissionMapperBase
   implements IToolPermissionMapper
 {
+  private readonly AUTO_PRESET_ARGS = [
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "on-request",
+  ];
+
   /**
    * Build CLI arguments for tool permissions
    *
@@ -55,8 +62,8 @@ export class CodexToolPermissionMapper
    * Use this when you need fine-grained control over sandbox and approval.
    *
    * @param config Tool permission configuration
-   * @param sandboxMode Codex sandbox mode ("none" | "filesystem" | "network")
-   * @param approvalPolicy Codex approval policy ("auto" | "interactive" | "deny")
+   * @param sandboxMode Codex sandbox mode ("read-only" | "workspace-write" | "danger-full-access")
+   * @param approvalPolicy Codex approval policy ("untrusted" | "on-request" | "never")
    * @returns CLI arguments array
    */
   buildCodexSpecificArgs(
@@ -77,8 +84,8 @@ export class CodexToolPermissionMapper
         return ["--dangerously-bypass-approvals-and-sandbox"];
 
       case PERMISSION_MODES.ALLOW_ALL:
-        // Safe automation: auto-grant all but respect deny list
-        return ["--full-auto"];
+        // Use the explicit Auto preset flags instead of deprecated --full-auto.
+        return [...this.AUTO_PRESET_ARGS];
 
       case PERMISSION_MODES.CUSTOM:
         // Use Codex-specific sandbox and approval settings
@@ -87,13 +94,16 @@ export class CodexToolPermissionMapper
           return ["-s", sandboxMode, "-a", approvalPolicy];
         } else {
           Log.warn(
-            "⚠️ Custom mode requires sandboxMode and approvalPolicy for Codex. Falling back to --full-auto."
+            "⚠️ Custom mode requires sandboxMode and approvalPolicy for Codex. Falling back to the Auto preset."
           );
-          return ["--full-auto"];
+          return [...this.AUTO_PRESET_ARGS];
         }
 
+      case PERMISSION_MODES.NONE:
+        return [];
+
       default:
-        return ["--full-auto"];
+        return [...this.AUTO_PRESET_ARGS];
     }
   }
 }

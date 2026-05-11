@@ -274,21 +274,36 @@ suite("ToolPermissionMappers", () => {
         ]);
       });
 
-      test("allowAll → --full-auto", () => {
+      test("allowAll → explicit Auto preset flags", () => {
         const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
-        assert.deepStrictEqual(args, ["--full-auto"]);
+        assert.deepStrictEqual(args, [
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+        ]);
       });
 
-      test("custom without sandbox/approval config → fallback --full-auto", () => {
+      test("custom without sandbox/approval config → fallback to explicit Auto preset flags", () => {
         const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM, [], []));
-        assert.deepStrictEqual(args, ["--full-auto"]);
+        assert.deepStrictEqual(args, [
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+        ]);
       });
 
-      test("custom mode with allowed/denied patterns → still --full-auto (Codex doesn't support granular patterns)", () => {
+      test("custom mode with allowed/denied patterns → still Auto preset flags (Codex doesn't support granular patterns)", () => {
         const args = mapper.buildArgs(
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
         );
-        assert.deepStrictEqual(args, ["--full-auto"]);
+        assert.deepStrictEqual(args, [
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+        ]);
       });
     });
 
@@ -296,37 +311,52 @@ suite("ToolPermissionMappers", () => {
       test("dangerouslyAllowAll → --dangerously-bypass-approvals-and-sandbox regardless of sandbox/approval args", () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL),
-          "none",
-          "auto"
+          "read-only",
+          "on-request"
         );
         assert.deepStrictEqual(args, [
           "--dangerously-bypass-approvals-and-sandbox",
         ]);
       });
 
-      test("allowAll → --full-auto", () => {
+      test("allowAll → explicit Auto preset flags", () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.ALLOW_ALL),
-          "filesystem",
-          "interactive"
+          "read-only",
+          "never"
         );
-        assert.deepStrictEqual(args, ["--full-auto"]);
+        assert.deepStrictEqual(args, [
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+        ]);
       });
 
       test("custom with sandboxMode and approvalPolicy → -s <mode> -a <policy>", () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM),
-          "filesystem",
-          "auto"
+          "workspace-write",
+          "on-request"
         );
-        assert.deepStrictEqual(args, ["-s", "filesystem", "-a", "auto"]);
+        assert.deepStrictEqual(args, [
+          "-s",
+          "workspace-write",
+          "-a",
+          "on-request",
+        ]);
       });
 
-      test("custom without sandboxMode/approvalPolicy → fallback --full-auto", () => {
+      test("custom without sandboxMode/approvalPolicy → fallback to explicit Auto preset flags", () => {
         const args = mapper.buildCodexSpecificArgs(
           cfg(PERMISSION_MODES.CUSTOM)
         );
-        assert.deepStrictEqual(args, ["--full-auto"]);
+        assert.deepStrictEqual(args, [
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+        ]);
       });
     });
 

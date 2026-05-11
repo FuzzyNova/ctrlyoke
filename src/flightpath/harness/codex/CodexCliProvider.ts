@@ -53,7 +53,7 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  * - OpenAI token format in usage metadata
  * - Completion detection via {"type": "turn.completed"} events
  * - Supports --resume flag for session continuation
- * - Mode-based permissions (--full-auto, --dangerously-bypass-approvals-and-sandbox)
+ * - Mode-based permissions (Auto preset flags, --dangerously-bypass-approvals-and-sandbox)
  *
  * Usage:
  * ```typescript
@@ -112,7 +112,7 @@ export class CodexCliProvider implements ICliProvider {
    * - Model selection (with validation and fallback)
    * - Workspace directories (--add-dir)
    * - Session management (resume subcommand with session ID)
-   * - Tool permissions (sandbox mode, approval policy, --full-auto)
+   * - Tool permissions (sandbox mode, approval policy, Auto preset flags)
    * - Hook settings (interactive mode only: --enable codex_hooks + .codex/hooks.json)
    *
    * @param prompt The prompt item with model/agent/session settings
