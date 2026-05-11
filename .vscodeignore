@@ -16,6 +16,8 @@
 !images/icon.png
 !images/flightpath-icon.svg
 !images/flightpath-sidebar-icon.svg
+!images/flightpath-icon-simple-light.svg
+!images/flightpath-icon-simple-dark.svg
 
 # Bundled extension and MCP server entrypoints.
 # cli.js is released as a standalone npm package, not bundled with the VSIX.

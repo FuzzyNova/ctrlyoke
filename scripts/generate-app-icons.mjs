@@ -4,6 +4,9 @@
  * Generate app icons from the two primary SVG sources:
  *   - images/flightpath-icon.svg        → icon.png (512), apple-touch-icon.png (180), flightpath-app-icon.svg
  *   - images/flightpath-icon-simple.svg → flightpath-icon-color-simple.svg, flightpath-icon-color-simple.png (512)
+ *                                       → flightpath-icon-simple-light.svg (#424242, for VS Code light themes)
+ *                                       → flightpath-icon-simple-dark.svg  (#C5C5C5, for VS Code dark themes)
+ *                                       → src/ui/icons/generate-commit-message.svg (copy, currentColor for inline use)
  *
  * All generated icons use #1076ba background with #ffffff fill/stroke.
  * Uses @resvg/resvg-wasm for PNG rendering — no native tools (Inkscape, etc.) required.
@@ -23,13 +26,15 @@ const imagesDir = join(rootDir, "images");
 
 const BG_COLOR = "#1076ba";
 const FG_COLOR = "#ffffff";
+const LIGHT_THEME_ICON_COLOR = "#424242";
+const DARK_THEME_ICON_COLOR = "#C5C5C5";
 
-/** Replace all theme-relative and hardcoded dark colors with white. */
-function colorize(svg) {
+/** Replace all theme-relative and hardcoded colors with the given color. */
+function colorize(svg, color = FG_COLOR) {
   return svg
-    .replace(/currentColor/g, FG_COLOR)
-    .replace(/stroke:#[0-9a-fA-F]{3,6}/g, `stroke:${FG_COLOR}`)
-    .replace(/fill:#[0-9a-fA-F]{3,6}/g, `fill:${FG_COLOR}`);
+    .replace(/currentColor/g, color)
+    .replace(/stroke:#[0-9a-fA-F]{3,6}/g, `stroke:${color}`)
+    .replace(/fill:#[0-9a-fA-F]{3,6}/g, `fill:${color}`);
 }
 
 /** Insert a solid background rect as the first child of <svg>. */
@@ -42,7 +47,7 @@ function addBackground(svg, color) {
 }
 
 function applyColors(svg) {
-  return addBackground(colorize(svg), BG_COLOR);
+  return addBackground(colorize(svg, FG_COLOR), BG_COLOR);
 }
 
 /** Render an SVG string to PNG at the given width (square) using resvg-wasm. */
@@ -87,6 +92,30 @@ try {
   const faviconSvgPath = join(imagesDir, "flightpath-icon-color-simple.svg");
   writeFileSync(faviconSvgPath, coloredSimple, "utf8");
   console.log("✓ images/flightpath-icon-color-simple.svg");
+
+  // VS Code SCM toolbar icon variants — light/dark themes require hardcoded colors
+  // because VS Code renders { light, dark } command icons as <img> (no CSS cascade).
+  writeFileSync(
+    join(imagesDir, "flightpath-icon-simple-light.svg"),
+    colorize(simpleSvg, LIGHT_THEME_ICON_COLOR),
+    "utf8"
+  );
+  console.log("✓ images/flightpath-icon-simple-light.svg");
+
+  writeFileSync(
+    join(imagesDir, "flightpath-icon-simple-dark.svg"),
+    colorize(simpleSvg, DARK_THEME_ICON_COLOR),
+    "utf8"
+  );
+  console.log("✓ images/flightpath-icon-simple-dark.svg");
+
+  // Keep src/ui/icons/generate-commit-message.svg in sync with the source SVG.
+  writeFileSync(
+    join(rootDir, "src", "ui", "icons", "generate-commit-message.svg"),
+    simpleSvg,
+    "utf8"
+  );
+  console.log("✓ src/ui/icons/generate-commit-message.svg");
 
   // PNG exports via resvg-wasm
   console.log("\nRendering PNGs via resvg-wasm...");
