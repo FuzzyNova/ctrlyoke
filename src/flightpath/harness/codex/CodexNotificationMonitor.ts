@@ -3,6 +3,7 @@ import {
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
+import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
 
@@ -77,11 +78,6 @@ export class CodexNotificationMonitor
       ? Buffer.from(permissionRequestHook.command, "utf8").toString("base64")
       : undefined;
 
-    const makeEntry = (cmd: string) => ({
-      matcher: "",
-      hooks: [{ type: "command", command: cmd }],
-    });
-
     const hooks: Record<string, unknown[]> = {};
     for (const event of selectedEvents) {
       const nativeEvent = eventMap[event];
@@ -89,7 +85,9 @@ export class CodexNotificationMonitor
         event === "permissionRequest" && encodedDecisionHook
           ? `${command} "${encodedDecisionHook}"`
           : command;
-      hooks[nativeEvent] = [makeEntry(eventCommand)];
+      hooks[nativeEvent] = [
+        createCodexCommandHookGroup(nativeEvent, eventCommand),
+      ];
     }
 
     return {

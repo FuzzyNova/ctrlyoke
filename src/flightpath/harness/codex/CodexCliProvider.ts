@@ -12,6 +12,7 @@ import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
 import { CodexLogParser } from "./CodexLogParser";
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
+import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
 import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
 import { SettingsJsonHooksTracker } from "../shared/SettingsJsonHooksTracker";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
@@ -244,23 +245,24 @@ export class CodexCliProvider implements ICliProvider {
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const workflowKey = workingFilePath ?? workspaceRoot;
-    await this.writeCodexHooks(
+    const hookEvents = [
+      ...new Set<HookEvent>([
+        "sessionStart",
+        "stop",
+        ...enabledNotificationHookEvents,
+      ]),
+    ];
+    const trustArgs = await this.writeCodexHooks(
       extensionPath,
       workspaceRoot,
       workflowKey,
       userHooks,
-      [
-        ...new Set<HookEvent>([
-          "sessionStart",
-          "stop",
-          ...enabledNotificationHookEvents,
-        ]),
-      ]
+      hookEvents
     );
     Log.debug(
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
     );
-    return ["--enable", "hooks"];
+    return ["--enable", "hooks", ...trustArgs];
   }
 
   /**
@@ -304,6 +306,7 @@ export class CodexCliProvider implements ICliProvider {
       userHooks,
       enabledNotificationHookEvents
     );
+    let trustArgs: string[] = [];
     await CodexCliProvider.lockProvider.withLock(async () => {
       await CodexCliProvider.hooksTracker.registerWorkflow(
         workflowKey,
@@ -311,9 +314,12 @@ export class CodexCliProvider implements ICliProvider {
         flightpathHooksSection,
         workflowUserHooks
       );
+      trustArgs = SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+        CodexCliProvider.hooksTracker.getCodexTrustState(workspaceRoot)
+      );
     });
     Log.debug(`🔔 Configured user hooks for Codex headless mode`);
-    return ["--enable", "hooks"];
+    return ["--enable", "hooks", ...trustArgs];
   }
 
   /**
@@ -360,7 +366,7 @@ export class CodexCliProvider implements ICliProvider {
     workflowKey: string,
     userHooks?: UserHookConfig[],
     flightpathEvents?: HookEvent[]
-  ): Promise<void> {
+  ): Promise<string[]> {
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -392,6 +398,7 @@ export class CodexCliProvider implements ICliProvider {
     );
 
     // Register hooks via ref-counted tracker under lock
+    let trustArgs: string[] = [];
     await CodexCliProvider.lockProvider.withLock(async () => {
       await CodexCliProvider.hooksTracker.registerWorkflow(
         workflowKey,
@@ -399,7 +406,12 @@ export class CodexCliProvider implements ICliProvider {
         flightpathHooksSection,
         workflowUserHooks
       );
+      trustArgs = SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+        CodexCliProvider.hooksTracker.getCodexTrustState(workspaceRoot)
+      );
     });
+
+    return trustArgs;
   }
 
   /**
@@ -508,10 +520,9 @@ export class CodexCliProvider implements ICliProvider {
       const nativeEvent = codexEventMap[uh.event];
       if (!nativeEvent) continue;
       if (!section[nativeEvent]) section[nativeEvent] = [];
-      section[nativeEvent].push({
-        matcher: "",
-        hooks: [{ type: "command", command: uh.command }],
-      });
+      section[nativeEvent].push(
+        createCodexCommandHookGroup(nativeEvent, uh.command)
+      );
     }
     return section;
   }

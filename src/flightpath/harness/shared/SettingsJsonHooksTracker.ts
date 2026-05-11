@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { normalizeCodexHookMatcher } from "./CodexHookUtils";
 import { Log } from "../../../utils/Log";
 
 type HookStateEntry = {
@@ -170,8 +171,7 @@ export class SettingsJsonHooksTracker {
       // File doesn't exist — start fresh
     }
 
-    const { events: baseHooks, state: baseState } = this.getBaselineHooksData();
-    const isCodex = this.toolName === "codex";
+    const { events: baseHooks } = this.getBaselineHooksData();
 
     // Collect all event names
     const allEvents = new Set<string>();
@@ -189,66 +189,27 @@ export class SettingsJsonHooksTracker {
 
     // Merge: FlightPath first, workflow user hooks middle, baseline last
     const mergedHooks: Record<string, unknown[]> = {};
-    const mergedState: Record<string, HookStateEntry> = {};
     for (const event of allEvents) {
       const eventGroups: unknown[] = [];
-      let groupIndex = 0;
       for (const wfHooks of this.workflowHooks.values()) {
         for (const group of wfHooks.flightpath[event] ?? []) {
           eventGroups.push(group);
-          if (isCodex) {
-            this.addCodexTrustedState(
-              mergedState,
-              settingsPath,
-              event,
-              groupIndex,
-              group
-            );
-          }
-          groupIndex += 1;
         }
 
         for (const group of wfHooks.userHooks[event] ?? []) {
           eventGroups.push(group);
-          if (isCodex) {
-            this.addCodexTrustedState(
-              mergedState,
-              settingsPath,
-              event,
-              groupIndex,
-              group
-            );
-          }
-          groupIndex += 1;
         }
       }
 
       const baselineHandlers = baseHooks[event] ?? [];
-      baselineHandlers.forEach((group, baselineGroupIndex) => {
+      baselineHandlers.forEach((group) => {
         eventGroups.push(group);
-        if (isCodex) {
-          this.remapCodexBaselineState(
-            mergedState,
-            baseState,
-            settingsPath,
-            event,
-            baselineGroupIndex,
-            groupIndex,
-            group
-          );
-        }
-        groupIndex += 1;
       });
 
       mergedHooks[event] = eventGroups;
     }
 
-    const mergedHooksSection: Record<string, unknown> = { ...mergedHooks };
-    if (isCodex && Object.keys(mergedState).length > 0) {
-      mergedHooksSection.state = mergedState;
-    }
-
-    settings.hooks = mergedHooksSection;
+    settings.hooks = mergedHooks;
 
     await fs.mkdir(path.join(workspaceRoot, this.settingsDir), {
       recursive: true,
@@ -328,6 +289,29 @@ export class SettingsJsonHooksTracker {
     return { events, state };
   }
 
+  getCodexTrustState(workspaceRoot: string): Record<string, HookStateEntry> {
+    if (this.toolName !== "codex") {
+      return {};
+    }
+
+    const settingsPath = path.join(
+      workspaceRoot,
+      this.settingsDir,
+      this.settingsFile
+    );
+    return this.buildCodexMergedState(settingsPath);
+  }
+
+  static serializeCodexInlineTrustOverride(
+    state: Record<string, HookStateEntry>
+  ): string[] {
+    if (Object.keys(state).length === 0) {
+      return [];
+    }
+
+    return ["-c", `hooks.state=${this.toInlineTomlValue(state)}`];
+  }
+
   private parseHookStateEntry(value: unknown): HookStateEntry | null {
     const entry = this.asRecord(value);
     if (!entry) {
@@ -359,7 +343,10 @@ export class SettingsJsonHooksTracker {
     groupIndex: number,
     group: unknown
   ): void {
-    const matcher = this.getHookGroupMatcher(group);
+    const matcher = normalizeCodexHookMatcher(
+      event,
+      this.getHookGroupMatcher(group)
+    );
     const handlers = this.getHookHandlers(group);
     handlers.forEach((handler, handlerIndex) => {
       const commandHook = this.parseCodexCommandHook(handler);
@@ -379,6 +366,69 @@ export class SettingsJsonHooksTracker {
         ),
       };
     });
+  }
+
+  private buildCodexMergedState(
+    settingsPath: string
+  ): Record<string, HookStateEntry> {
+    const { events: baseHooks, state: baseState } = this.getBaselineHooksData();
+    const mergedState: Record<string, HookStateEntry> = {};
+
+    const allEvents = new Set<string>();
+    for (const key of Object.keys(baseHooks)) {
+      allEvents.add(key);
+    }
+    for (const wfHooks of this.workflowHooks.values()) {
+      for (const key of Object.keys(wfHooks.flightpath)) {
+        allEvents.add(key);
+      }
+      for (const key of Object.keys(wfHooks.userHooks)) {
+        allEvents.add(key);
+      }
+    }
+
+    for (const event of allEvents) {
+      let groupIndex = 0;
+      for (const wfHooks of this.workflowHooks.values()) {
+        for (const group of wfHooks.flightpath[event] ?? []) {
+          this.addCodexTrustedState(
+            mergedState,
+            settingsPath,
+            event,
+            groupIndex,
+            group
+          );
+          groupIndex += 1;
+        }
+
+        for (const group of wfHooks.userHooks[event] ?? []) {
+          this.addCodexTrustedState(
+            mergedState,
+            settingsPath,
+            event,
+            groupIndex,
+            group
+          );
+          groupIndex += 1;
+        }
+      }
+
+      const baselineHandlers = baseHooks[event] ?? [];
+      baselineHandlers.forEach((group, baselineGroupIndex) => {
+        this.remapCodexBaselineState(
+          mergedState,
+          baseState,
+          settingsPath,
+          event,
+          baselineGroupIndex,
+          groupIndex,
+          group
+        );
+        groupIndex += 1;
+      });
+    }
+
+    return mergedState;
   }
 
   private remapCodexBaselineState(
@@ -507,6 +557,36 @@ export class SettingsJsonHooksTracker {
         sorted[key] = this.canonicalizeJson(record[key]);
         return sorted;
       }, {});
+  }
+
+  private static toInlineTomlValue(value: unknown): string {
+    if (typeof value === "string") {
+      return JSON.stringify(value);
+    }
+
+    if (typeof value === "boolean") {
+      return value ? "true" : "false";
+    }
+
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? String(value) : "0";
+    }
+
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => this.toInlineTomlValue(item)).join(", ")}]`;
+    }
+
+    if (!value || typeof value !== "object") {
+      return "{}";
+    }
+
+    const entries = Object.entries(value as Record<string, unknown>)
+      .map(
+        ([key, entryValue]) =>
+          `${JSON.stringify(key)} = ${this.toInlineTomlValue(entryValue)}`
+      )
+      .join(", ");
+    return `{ ${entries} }`;
   }
 
   private buildCodexHookKey(

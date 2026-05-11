@@ -1,0 +1,26 @@
+const CODEX_EVENTS_WITH_MATCHERS = new Set([
+  "PreToolUse",
+  "PermissionRequest",
+  "PostToolUse",
+  "SessionStart",
+  "PreCompact",
+  "PostCompact",
+]);
+
+export function normalizeCodexHookMatcher(
+  eventName: string,
+  matcher: string | undefined
+): string | undefined {
+  return CODEX_EVENTS_WITH_MATCHERS.has(eventName) ? matcher : undefined;
+}
+
+export function createCodexCommandHookGroup(
+  eventName: string,
+  command: string
+): Record<string, unknown> {
+  const matcher = normalizeCodexHookMatcher(eventName, "");
+  return {
+    ...(matcher !== undefined ? { matcher } : {}),
+    hooks: [{ type: "command", command }],
+  };
+}

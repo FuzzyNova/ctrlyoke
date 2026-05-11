@@ -51,6 +51,25 @@ function codexTrustedHash(
   return `sha256:${digest}`;
 }
 
+function codexInlineTrustOverride(
+  state: Record<string, { enabled?: boolean; trusted_hash?: string }>
+): string[] {
+  const entries = Object.entries(state).map(([key, value]) => {
+    const fields: string[] = [];
+    if (value.enabled !== undefined) {
+      fields.push(`"enabled" = ${value.enabled ? "true" : "false"}`);
+    }
+    if (value.trusted_hash !== undefined) {
+      fields.push(`"trusted_hash" = ${JSON.stringify(value.trusted_hash)}`);
+    }
+    return `${JSON.stringify(key)} = { ${fields.join(", ")} }`;
+  });
+
+  return entries.length > 0
+    ? ["-c", `hooks.state={ ${entries.join(", ")} }`]
+    : [];
+}
+
 suite("SettingsJsonHooksTracker", () => {
   let tmpDir: string;
   let settingsDir: string;
@@ -231,19 +250,60 @@ suite("SettingsJsonHooksTracker", () => {
     );
 
     const settings = JSON.parse(await fs.readFile(codexHooksPath, "utf-8"));
-    assert.deepStrictEqual(settings.hooks.state, {
-      [`${codexHooksPath}:session_start:0:0`]: {
-        trusted_hash: codexTrustedHash(
-          "session_start",
-          "",
-          "node notify.js",
-          600
-        ),
+    assert.strictEqual(settings.hooks.state, undefined);
+    assert.deepStrictEqual(
+      SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+        tracker.getCodexTrustState(tmpDir)
+      ),
+      codexInlineTrustOverride({
+        [`${codexHooksPath}:session_start:0:0`]: {
+          trusted_hash: codexTrustedHash(
+            "session_start",
+            "",
+            "node notify.js",
+            600
+          ),
+        },
+        [`${codexHooksPath}:stop:0:0`]: {
+          trusted_hash: codexTrustedHash("stop", undefined, "node fp.js", 600),
+        },
+      })
+    );
+  });
+
+  test("should omit matcher from Codex trust hash for matcherless events", async () => {
+    const codexHooksPath = path.join(tmpDir, ".codex", "hooks.json");
+    const tracker = SettingsJsonHooksTracker.getInstance("codex");
+
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      {
+        UserPromptSubmit: [
+          {
+            matcher: "",
+            hooks: [{ type: "command", command: "node prompt-check.js" }],
+          },
+        ],
       },
-      [`${codexHooksPath}:stop:0:0`]: {
-        trusted_hash: codexTrustedHash("stop", "", "node fp.js", 600),
-      },
-    });
+      {}
+    );
+
+    assert.deepStrictEqual(
+      SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+        tracker.getCodexTrustState(tmpDir)
+      ),
+      codexInlineTrustOverride({
+        [`${codexHooksPath}:user_prompt_submit:0:0`]: {
+          trusted_hash: codexTrustedHash(
+            "user_prompt_submit",
+            undefined,
+            "node prompt-check.js",
+            600
+          ),
+        },
+      })
+    );
   });
 
   test("should remap existing Codex hook state when FlightPath prepends hooks", async () => {
@@ -283,15 +343,21 @@ suite("SettingsJsonHooksTracker", () => {
     );
 
     const settings = JSON.parse(await fs.readFile(codexHooksPath, "utf-8"));
-    assert.deepStrictEqual(settings.hooks.state, {
-      [`${codexHooksPath}:stop:0:0`]: {
-        trusted_hash: codexTrustedHash("stop", "", "node fp.js", 600),
-      },
-      [`${codexHooksPath}:stop:1:0`]: {
-        enabled: false,
-        trusted_hash: "sha256:baseline",
-      },
-    });
+    assert.strictEqual(settings.hooks.state, undefined);
+    assert.deepStrictEqual(
+      SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+        tracker.getCodexTrustState(tmpDir)
+      ),
+      codexInlineTrustOverride({
+        [`${codexHooksPath}:stop:0:0`]: {
+          trusted_hash: codexTrustedHash("stop", undefined, "node fp.js", 600),
+        },
+        [`${codexHooksPath}:stop:1:0`]: {
+          enabled: false,
+          trusted_hash: "sha256:baseline",
+        },
+      })
+    );
   });
 
   test("should keep existing settings file when only hooks were temporary", async () => {
