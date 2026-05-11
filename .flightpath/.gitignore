@@ -8,3 +8,4 @@ capabilities.json
 .gitignore
 certs/
 notifications/
+settings.json
