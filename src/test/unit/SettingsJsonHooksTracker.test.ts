@@ -2,7 +2,54 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
+import * as crypto from "crypto";
 import { SettingsJsonHooksTracker } from "../../flightpath/harness/shared/SettingsJsonHooksTracker";
+
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => canonicalizeJson(item));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  return Object.keys(value as Record<string, unknown>)
+    .sort((left, right) => left.localeCompare(right))
+    .reduce<Record<string, unknown>>((sorted, key) => {
+      sorted[key] = canonicalizeJson((value as Record<string, unknown>)[key]);
+      return sorted;
+    }, {});
+}
+
+function codexTrustedHash(
+  eventName: string,
+  matcher: string | undefined,
+  command: string,
+  timeout: number,
+  statusMessage?: string
+): string {
+  const identity: Record<string, unknown> = {
+    event_name: eventName,
+    hooks: [
+      {
+        async: false,
+        command,
+        timeout,
+        type: "command",
+        ...(statusMessage !== undefined ? { statusMessage } : {}),
+      },
+    ],
+    ...(matcher !== undefined ? { matcher } : {}),
+  };
+
+  const serialized = JSON.stringify(canonicalizeJson(identity));
+  const digest = crypto
+    .createHash("sha256")
+    .update(serialized, "utf8")
+    .digest("hex");
+  return `sha256:${digest}`;
+}
 
 suite("SettingsJsonHooksTracker", () => {
   let tmpDir: string;
@@ -159,6 +206,92 @@ suite("SettingsJsonHooksTracker", () => {
     await tracker.unregisterWorkflow("wf-1", tmpDir);
 
     await assert.rejects(fs.access(codexHooksPath), /ENOENT/);
+  });
+
+  test("should auto-trust Codex hooks injected by FlightPath", async () => {
+    const codexHooksPath = path.join(tmpDir, ".codex", "hooks.json");
+    const tracker = SettingsJsonHooksTracker.getInstance("codex");
+
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      {
+        Stop: [
+          { matcher: "", hooks: [{ type: "command", command: "node fp.js" }] },
+        ],
+      },
+      {
+        SessionStart: [
+          {
+            matcher: "",
+            hooks: [{ type: "command", command: "node notify.js" }],
+          },
+        ],
+      }
+    );
+
+    const settings = JSON.parse(await fs.readFile(codexHooksPath, "utf-8"));
+    assert.deepStrictEqual(settings.hooks.state, {
+      [`${codexHooksPath}:session_start:0:0`]: {
+        trusted_hash: codexTrustedHash(
+          "session_start",
+          "",
+          "node notify.js",
+          600
+        ),
+      },
+      [`${codexHooksPath}:stop:0:0`]: {
+        trusted_hash: codexTrustedHash("stop", "", "node fp.js", 600),
+      },
+    });
+  });
+
+  test("should remap existing Codex hook state when FlightPath prepends hooks", async () => {
+    const codexDir = path.join(tmpDir, ".codex");
+    const codexHooksPath = path.join(codexDir, "hooks.json");
+    await fs.mkdir(codexDir, { recursive: true });
+    await fs.writeFile(
+      codexHooksPath,
+      JSON.stringify({
+        hooks: {
+          Stop: [
+            {
+              matcher: "",
+              hooks: [{ type: "command", command: "echo baseline" }],
+            },
+          ],
+          state: {
+            [`${codexHooksPath}:stop:0:0`]: {
+              enabled: false,
+              trusted_hash: "sha256:baseline",
+            },
+          },
+        },
+      })
+    );
+
+    const tracker = SettingsJsonHooksTracker.getInstance("codex");
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      {
+        Stop: [
+          { matcher: "", hooks: [{ type: "command", command: "node fp.js" }] },
+        ],
+      },
+      {}
+    );
+
+    const settings = JSON.parse(await fs.readFile(codexHooksPath, "utf-8"));
+    assert.deepStrictEqual(settings.hooks.state, {
+      [`${codexHooksPath}:stop:0:0`]: {
+        trusted_hash: codexTrustedHash("stop", "", "node fp.js", 600),
+      },
+      [`${codexHooksPath}:stop:1:0`]: {
+        enabled: false,
+        trusted_hash: "sha256:baseline",
+      },
+    });
   });
 
   test("should keep existing settings file when only hooks were temporary", async () => {

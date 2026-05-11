@@ -49,7 +49,7 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  *
  * Codex CLI-specific features:
  * - Uses JSONL output format (multiple {"type": "..."} events)
- * - Hook-based completion via --enable codex_hooks + .codex/hooks.json
+ * - Hook-based completion via --enable hooks + .codex/hooks.json
  * - OpenAI token format in usage metadata
  * - Completion detection via {"type": "turn.completed"} events
  * - Supports --resume flag for session continuation
@@ -113,7 +113,7 @@ export class CodexCliProvider implements ICliProvider {
    * - Workspace directories (--add-dir)
    * - Session management (resume subcommand with session ID)
    * - Tool permissions (sandbox mode, approval policy, Auto preset flags)
-   * - Hook settings (interactive mode only: --enable codex_hooks + .codex/hooks.json)
+   * - Hook settings (interactive mode only: --enable hooks + .codex/hooks.json)
    *
    * @param prompt The prompt item with model/agent/session settings
    * @param isInteractive Whether this is interactive TUI or headless mode
@@ -197,7 +197,7 @@ export class CodexCliProvider implements ICliProvider {
 
     // Hook setup (interactive notification hooks) is dispatched by
     // CliIntegration.runExecutionSession() via buildNotificationHookArgs() — not here.
-    // buildNotificationHookArgs() returns ["--enable", "codex_hooks"] for interactive mode.
+    // buildNotificationHookArgs() returns ["--enable", "hooks"] for interactive mode.
 
     // Session management
     const shouldResume = CliProviderUtils.shouldResumeSession(
@@ -230,10 +230,10 @@ export class CodexCliProvider implements ICliProvider {
    * Writes hooks to .codex/hooks.json and enables the Codex hook system.
    *
    * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
-   * Unlike Qwen/Gemini, Codex has no trusted_hooks.json — hooks run without
-   * any trust prompt when codex_hooks is enabled.
+   * Codex tracks trust in hooks.state. New or modified unmanaged hooks need
+   * review before they can run, even when the hooks feature is enabled.
    *
-   * @returns ["--enable", "codex_hooks"] — required for Codex to activate its hook system
+   * @returns ["--enable", "hooks"] — required for Codex to activate its hook system
    */
   async buildNotificationHookArgs(
     extensionPath: string,
@@ -260,13 +260,13 @@ export class CodexCliProvider implements ICliProvider {
     Log.debug(
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
     );
-    return ["--enable", "codex_hooks"];
+    return ["--enable", "hooks"];
   }
 
   /**
    * Set up user-only hooks for headless execution.
    * No FlightPath notification hooks are included since headless uses process-exit for completion.
-   * Returns ["--enable", "codex_hooks"] so Codex activates its hook system.
+   * Returns ["--enable", "hooks"] so Codex activates its hook system.
    */
   async buildHeadlessUserHookArgs(
     extensionPath: string,
@@ -313,7 +313,7 @@ export class CodexCliProvider implements ICliProvider {
       );
     });
     Log.debug(`🔔 Configured user hooks for Codex headless mode`);
-    return ["--enable", "codex_hooks"];
+    return ["--enable", "hooks"];
   }
 
   /**

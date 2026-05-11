@@ -1,9 +1,20 @@
+import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { Log } from "../../../utils/Log";
 
+type HookStateEntry = {
+  enabled?: boolean;
+  trusted_hash?: string;
+};
+
+type WorkflowHookLayers = {
+  flightpath: Record<string, unknown[]>;
+  userHooks: Record<string, unknown[]>;
+};
+
 /**
- * Manages FlightPath hook injection into settings.json for Qwen and Gemini CLIs.
+ * Manages FlightPath hook injection into settings.json / hooks.json.
  *
  * Parallel safety: hooks injected by workflow A are preserved until A unregisters,
  * regardless of other workflows. Original hooks restored only on last unregister.
@@ -15,20 +26,15 @@ import { Log } from "../../../utils/Log";
 export class SettingsJsonHooksTracker {
   private static instances = new Map<string, SettingsJsonHooksTracker>();
 
-  /** Original hooks from settings.json before any FlightPath workflow touched it. */
-  private baseline: Record<string, unknown[]> | null | undefined = undefined;
+  /** Original hooks section before any FlightPath workflow touched it. */
+  private baselineHooksSection: Record<string, unknown> | null | undefined =
+    undefined;
 
   /** Whether the target settings/hooks file existed before FlightPath touched it. */
   private baselineFileExisted: boolean | undefined = undefined;
 
   /** Per-workflow FlightPath hooks + user hooks, keyed by workflowKey. */
-  private workflowHooks = new Map<
-    string,
-    {
-      flightpath: Record<string, unknown[]>;
-      userHooks: Record<string, unknown[]>;
-    }
-  >();
+  private workflowHooks = new Map<string, WorkflowHookLayers>();
 
   private readonly toolName: string;
   /** Subdirectory under workspace root (e.g. ".qwen", ".gemini", ".codex") */
@@ -80,7 +86,7 @@ export class SettingsJsonHooksTracker {
     // First registration captures the baseline
     if (this.workflowHooks.size === 0) {
       const baseline = await this.readBaseline(settingsPath);
-      this.baseline = baseline.hooks;
+      this.baselineHooksSection = baseline.hooks;
       this.baselineFileExisted = baseline.fileExisted;
     }
 
@@ -117,7 +123,7 @@ export class SettingsJsonHooksTracker {
     if (this.workflowHooks.size === 0) {
       // Last workflow — restore baseline
       await this.restoreBaseline(settingsPath);
-      this.baseline = undefined;
+      this.baselineHooksSection = undefined;
       this.baselineFileExisted = undefined;
     } else {
       // Other workflows still active — rebuild without this one
@@ -131,7 +137,7 @@ export class SettingsJsonHooksTracker {
 
   private async readBaseline(settingsPath: string): Promise<{
     fileExisted: boolean;
-    hooks: Record<string, unknown[]> | null;
+    hooks: Record<string, unknown> | null;
   }> {
     let content: string;
     try {
@@ -144,7 +150,7 @@ export class SettingsJsonHooksTracker {
       const settings = JSON.parse(content);
       return {
         fileExisted: true,
-        hooks: (settings.hooks as Record<string, unknown[]>) ?? null,
+        hooks: this.asRecord(settings.hooks),
       };
     } catch {
       return { fileExisted: true, hooks: null };
@@ -164,13 +170,8 @@ export class SettingsJsonHooksTracker {
       // File doesn't exist — start fresh
     }
 
-    // Start with baseline hooks (deep copy arrays)
-    const baseHooks: Record<string, unknown[]> = {};
-    if (this.baseline) {
-      for (const key of Object.keys(this.baseline)) {
-        baseHooks[key] = [...(this.baseline[key] || [])];
-      }
-    }
+    const { events: baseHooks, state: baseState } = this.getBaselineHooksData();
+    const isCodex = this.toolName === "codex";
 
     // Collect all event names
     const allEvents = new Set<string>();
@@ -188,28 +189,66 @@ export class SettingsJsonHooksTracker {
 
     // Merge: FlightPath first, workflow user hooks middle, baseline last
     const mergedHooks: Record<string, unknown[]> = {};
+    const mergedState: Record<string, HookStateEntry> = {};
     for (const event of allEvents) {
-      const fpHandlers: unknown[] = [];
-      const userHandlers: unknown[] = [];
-
+      const eventGroups: unknown[] = [];
+      let groupIndex = 0;
       for (const wfHooks of this.workflowHooks.values()) {
-        if (wfHooks.flightpath[event]) {
-          fpHandlers.push(...wfHooks.flightpath[event]);
+        for (const group of wfHooks.flightpath[event] ?? []) {
+          eventGroups.push(group);
+          if (isCodex) {
+            this.addCodexTrustedState(
+              mergedState,
+              settingsPath,
+              event,
+              groupIndex,
+              group
+            );
+          }
+          groupIndex += 1;
         }
-        if (wfHooks.userHooks[event]) {
-          userHandlers.push(...wfHooks.userHooks[event]);
+
+        for (const group of wfHooks.userHooks[event] ?? []) {
+          eventGroups.push(group);
+          if (isCodex) {
+            this.addCodexTrustedState(
+              mergedState,
+              settingsPath,
+              event,
+              groupIndex,
+              group
+            );
+          }
+          groupIndex += 1;
         }
       }
 
       const baselineHandlers = baseHooks[event] ?? [];
-      mergedHooks[event] = [
-        ...fpHandlers,
-        ...userHandlers,
-        ...baselineHandlers,
-      ];
+      baselineHandlers.forEach((group, baselineGroupIndex) => {
+        eventGroups.push(group);
+        if (isCodex) {
+          this.remapCodexBaselineState(
+            mergedState,
+            baseState,
+            settingsPath,
+            event,
+            baselineGroupIndex,
+            groupIndex,
+            group
+          );
+        }
+        groupIndex += 1;
+      });
+
+      mergedHooks[event] = eventGroups;
     }
 
-    settings.hooks = mergedHooks;
+    const mergedHooksSection: Record<string, unknown> = { ...mergedHooks };
+    if (isCodex && Object.keys(mergedState).length > 0) {
+      mergedHooksSection.state = mergedState;
+    }
+
+    settings.hooks = mergedHooksSection;
 
     await fs.mkdir(path.join(workspaceRoot, this.settingsDir), {
       recursive: true,
@@ -236,10 +275,10 @@ export class SettingsJsonHooksTracker {
         return;
       }
 
-      if (this.baseline === null) {
+      if (this.baselineHooksSection === null) {
         delete settings.hooks;
       } else {
-        settings.hooks = this.baseline;
+        settings.hooks = this.baselineHooksSection;
       }
 
       await fs.writeFile(
@@ -252,5 +291,260 @@ export class SettingsJsonHooksTracker {
         `Failed to restore hooks baseline for ${this.toolName}: ${error}`
       );
     }
+  }
+
+  private getBaselineHooksData(): {
+    events: Record<string, unknown[]>;
+    state: Record<string, HookStateEntry>;
+  } {
+    const events: Record<string, unknown[]> = {};
+    const state: Record<string, HookStateEntry> = {};
+    const hooksSection = this.baselineHooksSection;
+    if (!hooksSection) {
+      return { events, state };
+    }
+
+    for (const [key, value] of Object.entries(hooksSection)) {
+      if (key === "state") {
+        const stateEntries = this.asRecord(value);
+        if (!stateEntries) {
+          continue;
+        }
+
+        for (const [stateKey, rawState] of Object.entries(stateEntries)) {
+          const parsed = this.parseHookStateEntry(rawState);
+          if (parsed) {
+            state[stateKey] = parsed;
+          }
+        }
+        continue;
+      }
+
+      if (Array.isArray(value)) {
+        events[key] = [...value];
+      }
+    }
+
+    return { events, state };
+  }
+
+  private parseHookStateEntry(value: unknown): HookStateEntry | null {
+    const entry = this.asRecord(value);
+    if (!entry) {
+      return null;
+    }
+
+    const parsed: HookStateEntry = {};
+    if (typeof entry.enabled === "boolean") {
+      parsed.enabled = entry.enabled;
+    }
+
+    const trustedHash =
+      typeof entry.trusted_hash === "string"
+        ? entry.trusted_hash
+        : typeof entry.trustedHash === "string"
+          ? entry.trustedHash
+          : undefined;
+    if (trustedHash) {
+      parsed.trusted_hash = trustedHash;
+    }
+
+    return Object.keys(parsed).length > 0 ? parsed : null;
+  }
+
+  private addCodexTrustedState(
+    mergedState: Record<string, HookStateEntry>,
+    settingsPath: string,
+    event: string,
+    groupIndex: number,
+    group: unknown
+  ): void {
+    const matcher = this.getHookGroupMatcher(group);
+    const handlers = this.getHookHandlers(group);
+    handlers.forEach((handler, handlerIndex) => {
+      const commandHook = this.parseCodexCommandHook(handler);
+      if (!commandHook) {
+        return;
+      }
+
+      mergedState[
+        this.buildCodexHookKey(settingsPath, event, groupIndex, handlerIndex)
+      ] = {
+        trusted_hash: this.computeCodexTrustedHash(
+          event,
+          matcher,
+          commandHook.command,
+          commandHook.timeout,
+          commandHook.statusMessage
+        ),
+      };
+    });
+  }
+
+  private remapCodexBaselineState(
+    mergedState: Record<string, HookStateEntry>,
+    baselineState: Record<string, HookStateEntry>,
+    settingsPath: string,
+    event: string,
+    baselineGroupIndex: number,
+    mergedGroupIndex: number,
+    group: unknown
+  ): void {
+    const handlers = this.getHookHandlers(group);
+    handlers.forEach((_, handlerIndex) => {
+      const originalKey = this.buildCodexHookKey(
+        settingsPath,
+        event,
+        baselineGroupIndex,
+        handlerIndex
+      );
+      const originalState = baselineState[originalKey];
+      if (!originalState) {
+        return;
+      }
+
+      mergedState[
+        this.buildCodexHookKey(
+          settingsPath,
+          event,
+          mergedGroupIndex,
+          handlerIndex
+        )
+      ] = { ...originalState };
+    });
+  }
+
+  private getHookGroupMatcher(group: unknown): string | undefined {
+    const parsed = this.asRecord(group);
+    return typeof parsed?.matcher === "string" ? parsed.matcher : undefined;
+  }
+
+  private getHookHandlers(group: unknown): unknown[] {
+    const parsed = this.asRecord(group);
+    return Array.isArray(parsed?.hooks) ? parsed.hooks : [];
+  }
+
+  private parseCodexCommandHook(
+    handler: unknown
+  ): { command: string; timeout: number; statusMessage?: string } | null {
+    const parsed = this.asRecord(handler);
+    if (
+      !parsed ||
+      parsed.type !== "command" ||
+      typeof parsed.command !== "string"
+    ) {
+      return null;
+    }
+
+    const timeoutSource =
+      typeof parsed.timeout === "number"
+        ? parsed.timeout
+        : typeof parsed.timeoutSec === "number"
+          ? parsed.timeoutSec
+          : undefined;
+    const timeout =
+      timeoutSource === undefined
+        ? 600
+        : Math.max(1, Math.trunc(timeoutSource));
+
+    const statusMessage =
+      typeof parsed.statusMessage === "string"
+        ? parsed.statusMessage
+        : typeof parsed.status_message === "string"
+          ? parsed.status_message
+          : undefined;
+
+    return {
+      command: parsed.command,
+      timeout,
+      statusMessage,
+    };
+  }
+
+  private computeCodexTrustedHash(
+    event: string,
+    matcher: string | undefined,
+    command: string,
+    timeout: number,
+    statusMessage?: string
+  ): string {
+    const identity: Record<string, unknown> = {
+      event_name: this.getCodexEventKeyLabel(event),
+      hooks: [
+        {
+          async: false,
+          command,
+          timeout,
+          type: "command",
+          ...(statusMessage !== undefined ? { statusMessage } : {}),
+        },
+      ],
+      ...(matcher !== undefined ? { matcher } : {}),
+    };
+
+    const canonical = this.canonicalizeJson(identity);
+    const serialized = JSON.stringify(canonical);
+    const hex = crypto
+      .createHash("sha256")
+      .update(serialized, "utf8")
+      .digest("hex");
+    return `sha256:${hex}`;
+  }
+
+  private canonicalizeJson(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map((item) => this.canonicalizeJson(item));
+    }
+
+    const record = this.asRecord(value);
+    if (!record) {
+      return value;
+    }
+
+    return Object.keys(record)
+      .sort((left, right) => left.localeCompare(right))
+      .reduce<Record<string, unknown>>((sorted, key) => {
+        sorted[key] = this.canonicalizeJson(record[key]);
+        return sorted;
+      }, {});
+  }
+
+  private buildCodexHookKey(
+    settingsPath: string,
+    event: string,
+    groupIndex: number,
+    handlerIndex: number
+  ): string {
+    return `${settingsPath}:${this.getCodexEventKeyLabel(event)}:${groupIndex}:${handlerIndex}`;
+  }
+
+  private getCodexEventKeyLabel(event: string): string {
+    switch (event) {
+      case "PreToolUse":
+        return "pre_tool_use";
+      case "PermissionRequest":
+        return "permission_request";
+      case "PostToolUse":
+        return "post_tool_use";
+      case "PreCompact":
+        return "pre_compact";
+      case "PostCompact":
+        return "post_compact";
+      case "SessionStart":
+        return "session_start";
+      case "UserPromptSubmit":
+        return "user_prompt_submit";
+      case "Stop":
+        return "stop";
+      default:
+        return event.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+    }
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || Array.isArray(value) || typeof value !== "object") {
+      return null;
+    }
+    return value as Record<string, unknown>;
   }
 }

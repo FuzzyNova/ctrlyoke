@@ -3,7 +3,10 @@ import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { Log } from "../utils/Log";
-import { CommitMessageGenerator, type CommitResult } from "../git/CommitMessageGenerator";
+import {
+  CommitMessageGenerator,
+  type CommitResult,
+} from "../git/CommitMessageGenerator";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import type {
   WorkspaceTreeResponse,
@@ -325,28 +328,37 @@ export class HostedWorkspaceViewerService {
   // ── Git status ───────────────────────────────────────────────────────────
 
   async getStatus(): Promise<WorkspaceScmStatusResponse> {
-    try {
-      const [{ stdout }, syncCounts] = await Promise.all([
-        execFileAsync(
-          "git",
-          ["-C", this.workspaceRoot, "status", "--porcelain=v1"],
-          {
-            timeout: GIT_TIMEOUT_MS,
-          }
-        ),
-        this.getSyncCounts(),
-      ]);
-      return {
-        files: this.parsePorcelainV1(stdout),
-        ...syncCounts,
-      };
-    } catch {
+    const [statusResult, syncCountsResult] = await Promise.allSettled([
+      execFileAsync(
+        "git",
+        ["-C", this.workspaceRoot, "status", "--porcelain=v1"],
+        {
+          timeout: GIT_TIMEOUT_MS,
+        }
+      ),
+      this.getSyncCounts(),
+    ]);
+
+    if (statusResult.status !== "fulfilled") {
       return {
         files: [],
         incomingCommitCount: 0,
         outgoingCommitCount: 0,
       };
     }
+
+    const syncCounts =
+      syncCountsResult.status === "fulfilled"
+        ? syncCountsResult.value
+        : {
+            incomingCommitCount: 0,
+            outgoingCommitCount: 0,
+          };
+
+    return {
+      files: this.parsePorcelainV1(statusResult.value.stdout),
+      ...syncCounts,
+    };
   }
 
   private async getSyncCounts(): Promise<
@@ -562,18 +574,21 @@ export class HostedWorkspaceViewerService {
 
   // ── Commit message generation ────────────────────────────────────────────
 
-  async generateCommitMessage(instructions?: string): Promise<CommitResult | null> {
+  async generateCommitMessage(
+    instructions?: string
+  ): Promise<CommitResult | null> {
     const diffResult = await this.commitGenerator.getDiff(this.workspaceRoot);
     if (!diffResult) {
       return null;
     }
 
-    const { message, prompt, cliCommand } = await this.commitGenerator.generateMessage(
-      diffResult.diff,
-      this.workspaceRoot,
-      undefined,
-      instructions
-    );
+    const { message, prompt, cliCommand } =
+      await this.commitGenerator.generateMessage(
+        diffResult.diff,
+        this.workspaceRoot,
+        undefined,
+        instructions
+      );
 
     commitMessageGenerationTracker.setLastRecord({
       source: "workspace-viewer",

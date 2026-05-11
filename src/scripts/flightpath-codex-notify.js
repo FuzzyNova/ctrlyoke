@@ -11,7 +11,7 @@
  * - SessionStart: Called when a new session starts (provides session ID immediately)
  * - Stop: Called when execution completes
  *
- * Usage (configured by FlightPath via .codex/hooks.json, requires --enable codex_hooks):
+ * Usage (configured by FlightPath via .codex/hooks.json, requires --enable hooks):
  *   { "hooks": { "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "node <script> <notifyDir>" }] }], "Stop": [...] } }
  *
  * Hook input format (from Codex via stdin):

@@ -10,7 +10,7 @@ import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
  * Codex CLI Notification Monitor
  *
  * Hook configuration: Written to .codex/hooks.json in workspace.
- * Requires --enable codex_hooks flag to activate the hook system.
+ * Requires --enable hooks flag to activate the hook system.
  * Notification directory: .flightpath/temp/codex-notifications/
  * Notification script: flightpath-codex-notify.js
  *
@@ -24,7 +24,7 @@ import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
  * All monitoring logic (waitForSessionStart, monitorForCompletion,
  * cleanupNotificationFiles, extractSessionId) is inherited from NotificationMonitorBase.
  *
- * Hook events supported (via --enable codex_hooks):
+ * Hook events supported (via --enable hooks):
  *   SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop
  *
  * | Logical event      | Codex native event |
