@@ -62,6 +62,17 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  * ```
  */
 export class CodexCliProvider implements ICliProvider {
+  private buildToolApprovalOverrideArgs(server: McpServerConfig): string[] {
+    if (!Array.isArray(server.autoApprove) || server.autoApprove.length === 0) {
+      return [];
+    }
+
+    return server.autoApprove.flatMap((toolName) => [
+      "-c",
+      `mcp_servers.${server.id}.tools.${toolName}.approval_mode='approve'`,
+    ]);
+  }
+
   /**
    * Shared singleton tracker for parallel-safe hooks management in .codex/hooks.json.
    * SettingsJsonMcpTracker("codex") is used solely as a mutex provider — Codex does
@@ -619,44 +630,62 @@ export class CodexCliProvider implements ICliProvider {
       }
 
       for (const server of userServers ?? []) {
+        if (server.url && server.transport === "sse") {
+          Log.warn(
+            `⚠️ Codex CLI does not support SSE MCP server "${server.id}". Skipping.`
+          );
+          continue;
+        }
+
+        if (!server.url && !server.command) {
+          Log.warn(
+            `⚠️ Codex CLI MCP server "${server.id}" is missing a command or URL. Skipping.`
+          );
+          continue;
+        }
+
         if (server.url) {
-          Log.warn(
-            `⚠️ Codex CLI inline MCP config does not yet support remote server "${server.id}". Skipping.`
+          configArgs.push(
+            "-c",
+            CliMcpConfigGenerator.generateInlineTomlRemoteServerConfig(
+              server.id,
+              server.url,
+              server.headers,
+              {
+                defaultToolsApprovalMode:
+                  server.autoApprove === true ? "approve" : undefined,
+                disabledTools: server.deniedTools,
+              }
+            )
           );
-          continue;
-        }
-        if (!server.command) {
-          Log.warn(
-            `⚠️ Codex CLI MCP server "${server.id}" is missing a command. Skipping.`
+        } else {
+          const normalizedArgs = server.args?.map((arg) =>
+            arg.replace(/\\/g, "/")
           );
-          continue;
+          const normalizedEnv = Object.fromEntries(
+            Object.entries(server.env ?? {}).map(([key, value]) => [
+              key,
+              value.replace(/\\/g, "/"),
+            ])
+          );
+
+          configArgs.push(
+            "-c",
+            CliMcpConfigGenerator.generateInlineTomlStdioServerConfig(
+              server.id,
+              server.command!,
+              normalizedArgs,
+              normalizedEnv,
+              {
+                defaultToolsApprovalMode:
+                  server.autoApprove === true ? "approve" : undefined,
+                disabledTools: server.deniedTools,
+              }
+            )
+          );
         }
 
-        const normalizedArgs = server.args?.map((arg) =>
-          arg.replace(/\\/g, "/")
-        );
-        const normalizedEnv = Object.fromEntries(
-          Object.entries(server.env ?? {}).map(([key, value]) => [
-            key,
-            value.replace(/\\/g, "/"),
-          ])
-        );
-
-        configArgs.push(
-          "-c",
-          CliMcpConfigGenerator.generateInlineTomlStdioServerConfig(
-            server.id,
-            server.command,
-            normalizedArgs,
-            normalizedEnv,
-            {
-              defaultToolsApprovalMode: server.autoApprove
-                ? "approve"
-                : undefined,
-              disabledTools: server.deniedTools,
-            }
-          )
-        );
+        configArgs.push(...this.buildToolApprovalOverrideArgs(server));
       }
 
       if (configArgs.length > 0) {

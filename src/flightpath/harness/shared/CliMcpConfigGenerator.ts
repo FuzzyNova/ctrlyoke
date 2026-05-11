@@ -127,6 +127,44 @@ export class CliMcpConfigGenerator {
   }
 
   /**
+   * Generate inline TOML configuration for a streamable HTTP MCP server entry.
+   *
+   * Codex models remote MCP servers with `url` plus optional `http_headers`.
+   */
+  static generateInlineTomlRemoteServerConfig(
+    serverName: string,
+    url: string,
+    headers?: Record<string, string>,
+    options?: InlineTomlMcpServerOptions
+  ): string {
+    const parts = [`url=${this.quoteInlineTomlString(url)}`];
+
+    if (headers && Object.keys(headers).length > 0) {
+      parts.push(`http_headers=${this.formatInlineTomlEnv(headers)}`);
+    }
+
+    if (options?.defaultToolsApprovalMode) {
+      parts.push(
+        `default_tools_approval_mode=${this.quoteInlineTomlString(options.defaultToolsApprovalMode)}`
+      );
+    }
+
+    if (options?.enabledTools && options.enabledTools.length > 0) {
+      parts.push(
+        `enabled_tools=${this.formatInlineTomlStringArray(options.enabledTools)}`
+      );
+    }
+
+    if (options?.disabledTools && options.disabledTools.length > 0) {
+      parts.push(
+        `disabled_tools=${this.formatInlineTomlStringArray(options.disabledTools)}`
+      );
+    }
+
+    return `mcp_servers.${serverName}={${parts.join(",")}}`;
+  }
+
+  /**
    * Compute the path for a file-based MCP config in .flightpath/temp/.
    *
    * Single source of truth for all file-based MCP config paths. Both
