@@ -209,9 +209,18 @@
       },
       {
         "command": "flightpath.generateCommitMessage",
-        "title": "Generate Commit Message",
+        "title": "Generate Commit Message with FlightPath",
         "category": "FlightPath",
-        "icon": "$(sparkle)"
+        "icon": {
+          "light": "images/flightpath-icon-simple.svg",
+          "dark": "images/flightpath-icon-simple.svg"
+        }
+      },
+      {
+        "command": "flightpath.cancelCommitMessageGeneration",
+        "title": "Cancel Commit Message Generation",
+        "category": "FlightPath",
+        "icon": "$(stop-circle)"
       }
     ],
     "keybindings": [
@@ -314,7 +323,12 @@
           "when": "false"
         },
         {
-          "command": "flightpath.generateCommitMessage"
+          "command": "flightpath.generateCommitMessage",
+          "when": "!flightpath.generatingCommitMessage"
+        },
+        {
+          "command": "flightpath.cancelCommitMessageGeneration",
+          "when": "flightpath.generatingCommitMessage"
         }
       ],
       "explorer/context": [
@@ -446,7 +460,12 @@
       "scm/title": [
         {
           "command": "flightpath.generateCommitMessage",
-          "when": "scmProvider == git",
+          "when": "scmProvider == git && !flightpath.generatingCommitMessage",
+          "group": "navigation"
+        },
+        {
+          "command": "flightpath.cancelCommitMessageGeneration",
+          "when": "scmProvider == git && flightpath.generatingCommitMessage",
           "group": "navigation"
         }
       ]

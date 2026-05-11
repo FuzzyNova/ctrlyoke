@@ -135,13 +135,18 @@ function generateCustomIcons() {
 
 /* Size variants (matching codicons) */
 .custom-icon.icon-small {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .custom-icon.icon-large {
   width: 20px;
   height: 20px;
+}
+
+.custom-icon.icon-extra-large {
+  width: 24px;
+  height: 24px;
 }
 
 /* Individual icon masks */

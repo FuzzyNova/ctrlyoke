@@ -934,6 +934,10 @@ function registerCommands(context: vscode.ExtensionContext) {
     VSCODE_COMMANDS.GENERATE_COMMIT_MESSAGE,
     () => scmCommitCommand.execute(context)
   );
+  const cancelCommitMessageGenerationCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.CANCEL_COMMIT_MESSAGE_GENERATION,
+    () => scmCommitCommand.cancel()
+  );
 
   // Initialize Workspace command (manual reinit for existing users)
   const initWorkspaceCommand = vscode.commands.registerCommand(
@@ -1083,7 +1087,8 @@ function registerCommands(context: vscode.ExtensionContext) {
     enableServerCommand,
     disableServerCommand,
     regenerateServerTokenCommand,
-    generateCommitMessageCommand
+    generateCommitMessageCommand,
+    cancelCommitMessageGenerationCommand
   );
 
   // Auto-start hosted server if enabled in config (must be after command registration)

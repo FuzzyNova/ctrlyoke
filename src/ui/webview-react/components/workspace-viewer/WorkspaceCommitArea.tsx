@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
   workspaceCommit,
@@ -44,13 +44,18 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   const setScmError = useWorkspaceViewerStore((s) => s.setScmError);
   const clearDiff = useWorkspaceViewerStore((s) => s.clearDiff);
 
+  const generateAbortControllerRef = useRef<AbortController | null>(null);
+
   const handleGenerate = useCallback(async () => {
     if (generatingCommitMessage) return;
+    const abortController = new AbortController();
+    generateAbortControllerRef.current = abortController;
     setGeneratingCommitMessage(true);
     setScmError(null);
     try {
       const result = await workspaceGenerateCommitMessage(
-        commitMessage.trim() || undefined
+        commitMessage.trim() || undefined,
+        abortController.signal
       );
       setCommitMessage(result.message);
       if (!result.staged) {
@@ -59,8 +64,10 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
         );
       }
     } catch (err) {
+      if (abortController.signal.aborted) return;
       setScmError(String(err));
     } finally {
+      generateAbortControllerRef.current = null;
       setGeneratingCommitMessage(false);
     }
   }, [
@@ -70,6 +77,10 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
     setCommitMessage,
     setScmError,
   ]);
+
+  const handleCancelGenerate = useCallback(() => {
+    generateAbortControllerRef.current?.abort();
+  }, []);
 
   const handleCommit = useCallback(async () => {
     if (commitMessage.trim() === "" || committing) return;
@@ -172,13 +183,13 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
           className="flex-1 min-w-0 resize-none rounded border border-panel-border bg-input-bg text-editor-fg text-xs px-2 py-1.5 placeholder-editor-fg placeholder-opacity-40 focus:outline-none focus:border-focus-border"
         />
         <button
-          onClick={handleGenerate}
-          disabled={generatingCommitMessage}
-          title="Generate commit message"
-          className="flex-shrink-0 w-8 flex items-center justify-center self-stretch rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:opacity-50"
+          onClick={generatingCommitMessage ? handleCancelGenerate : handleGenerate}
+          title={generatingCommitMessage ? "Cancel generation" : "Generate commit message with FlightPath"}
+          data-testid="generate-commit-message-btn"
+          className="flex-shrink-0 w-8 flex items-center justify-center self-stretch rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover"
         >
           {generatingCommitMessage ? (
-            <i className="codicon codicon-loading animate-spin" />
+            <i className="codicon codicon-stop-circle" />
           ) : (
             <i
               aria-hidden="true"

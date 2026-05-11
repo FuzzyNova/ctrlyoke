@@ -1294,4 +1294,10 @@ export const VSCODE_COMMANDS = {
   DISABLE_SERVER: "flightpath.disableServer",
   REGENERATE_SERVER_TOKEN: "flightpath.regenerateServerToken",
   GENERATE_COMMIT_MESSAGE: "flightpath.generateCommitMessage",
+  CANCEL_COMMIT_MESSAGE_GENERATION: "flightpath.cancelCommitMessageGeneration",
+} as const;
+
+// VS Code context keys set by the extension (used in package.json `when` clauses)
+export const VSCODE_CONTEXT_KEYS = {
+  GENERATING_COMMIT_MESSAGE: "flightpath.generatingCommitMessage",
 } as const;

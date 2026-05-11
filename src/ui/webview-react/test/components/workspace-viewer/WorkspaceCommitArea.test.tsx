@@ -76,9 +76,7 @@ describe("WorkspaceCommitArea", () => {
     it("renders the generate button", () => {
       renderCommitArea();
 
-      const generateButton = screen.getByRole("button", {
-        name: "Generate commit message",
-      });
+      const generateButton = screen.getByTestId("generate-commit-message-btn");
 
       expect(generateButton).toBeInTheDocument();
       expect(
@@ -96,7 +94,7 @@ describe("WorkspaceCommitArea", () => {
       renderCommitArea();
 
       await user.click(
-        screen.getByRole("button", { name: "Generate commit message" })
+        screen.getByTestId("generate-commit-message-btn")
       );
 
       await waitFor(() => {
@@ -114,7 +112,7 @@ describe("WorkspaceCommitArea", () => {
       renderCommitArea();
 
       await user.click(
-        screen.getByRole("button", { name: "Generate commit message" })
+        screen.getByTestId("generate-commit-message-btn")
       );
 
       await waitFor(() => {
@@ -122,7 +120,7 @@ describe("WorkspaceCommitArea", () => {
       });
     });
 
-    it("disables the generate button while generating", async () => {
+    it("shows the stop icon while generating and keeps the button enabled", async () => {
       const user = userEvent.setup();
       // Return a promise that never resolves to keep the loading state active.
       vi.mocked(workspaceGenerateCommitMessage).mockReturnValue(
@@ -130,13 +128,12 @@ describe("WorkspaceCommitArea", () => {
       );
       renderCommitArea();
 
-      const generateButton = screen.getByRole("button", {
-        name: "Generate commit message",
-      });
+      const generateButton = screen.getByTestId("generate-commit-message-btn");
       await user.click(generateButton);
 
       await waitFor(() => {
-        expect(generateButton).toBeDisabled();
+        expect(generateButton).not.toBeDisabled();
+        expect(generateButton.querySelector(".codicon-stop-circle")).not.toBeNull();
       });
     });
 
@@ -147,9 +144,7 @@ describe("WorkspaceCommitArea", () => {
       );
       renderCommitArea();
 
-      const generateButton = screen.getByRole("button", {
-        name: "Generate commit message",
-      });
+      const generateButton = screen.getByTestId("generate-commit-message-btn");
       await user.click(generateButton);
 
       // After the rejection the error is caught and the button re-enables.
