@@ -79,7 +79,7 @@ suite("HarnessToolPermissionMappers", () => {
         );
         assert.ok(args.includes("--allow-all-tools"));
         assert.ok(args.includes("--deny-tool"));
-        assert.ok(args.some((a) => a.includes("write")));
+        assert.ok(args.includes("write"));
       });
 
       test("custom mode with allowed tools produces --allow-tool", () => {
@@ -120,15 +120,11 @@ suite("HarnessToolPermissionMappers", () => {
           args.includes("--allow-tool"),
           "write should survive filtering"
         );
-        // The quoted arg should contain write
         const allowValues = argsAfterFlag(args, "--allow-tool");
-        assert.ok(
-          allowValues.some((v) => v.includes("write")),
-          "write preserved"
-        );
+        assert.ok(allowValues.includes("write"), "write preserved");
         // read and grep should be filtered
         assert.ok(
-          !allowValues.some((v) => v === '"read"' || v === '"grep"'),
+          !allowValues.some((v) => v === "read" || v === "grep"),
           "read-only tools removed"
         );
       });
@@ -157,9 +153,7 @@ suite("HarnessToolPermissionMappers", () => {
         );
         assert.ok(args.includes("--allow-tool"));
         const allowValues = argsAfterFlag(args, "--allow-tool");
-        assert.ok(
-          allowValues.some((v) => v.includes("github(search_repositories)"))
-        );
+        assert.ok(allowValues.includes("github(search_repositories)"));
       });
     });
 

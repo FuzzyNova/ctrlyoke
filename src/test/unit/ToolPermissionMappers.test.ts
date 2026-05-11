@@ -55,11 +55,9 @@ suite("ToolPermissionMappers", () => {
         assert.ok(args.includes("--deny-tool"));
         const denyIndex = args.indexOf("--deny-tool");
         assert.ok(denyIndex !== -1);
-        // At least one quoted deny entry follows
         const afterDeny = args.slice(denyIndex + 1);
-        assert.ok(
-          afterDeny.some((a) => a.includes("write") || a.includes("shell"))
-        );
+        assert.ok(afterDeny.includes("write"));
+        assert.ok(afterDeny.includes("shell"));
       });
 
       test("custom mode with allowed tools → --allow-tool entries", () => {
@@ -69,9 +67,8 @@ suite("ToolPermissionMappers", () => {
         assert.ok(args.includes("--allow-tool"), "should contain --allow-tool");
         const allowIndex = args.indexOf("--allow-tool");
         const afterAllow = args.slice(allowIndex + 1);
-        assert.ok(
-          afterAllow.some((a) => a.includes("write") || a.includes("shell"))
-        );
+        assert.ok(afterAllow.includes("write"));
+        assert.ok(afterAllow.includes("shell"));
       });
 
       test("custom mode with no allowed tools → no --allow-tool flag", () => {

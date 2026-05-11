@@ -74,8 +74,7 @@ export class CopilotToolPermissionMapper
       });
 
       if (convertedAllowTools.length > 0) {
-        const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
-        args.push("--allow-tool", ...quotedTools);
+        args.push("--allow-tool", ...convertedAllowTools);
         Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
       }
     }
@@ -94,8 +93,7 @@ export class CopilotToolPermissionMapper
       });
 
       if (convertedDenyTools.length > 0) {
-        const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
-        args.push("--deny-tool", ...quotedTools);
+        args.push("--deny-tool", ...convertedDenyTools);
         Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
       }
     }
