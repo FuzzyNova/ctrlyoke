@@ -103,20 +103,29 @@ export class QwenToolPermissionMapper
   }
 
   /**
-   * Convert FlightPath tool patterns to Qwen tool names
+   * Convert FlightPath tool patterns to Qwen tool specifiers.
    *
    * FlightPath uses patterns like "shell(git:*)" which need to be
-   * converted to Qwen's tool name format.
+   * converted to Qwen's tool specifier format.
    *
-   * Qwen tool names are typically simple identifiers like:
-   * - Bash, Write, Read, Edit, Delete
-   * - MCP tools: mcp__servername_toolname
+   * Qwen supports sub-command filtering with the same parentheses syntax as
+   * Claude Code, but uses a space instead of a colon as the command/args separator:
+   *   FlightPath: shell(rm:*)      → Qwen: Bash(rm *)
+   *   FlightPath: shell(git:*)     → Qwen: Bash(git *)
+   *   FlightPath: shell            → Qwen: Bash          (block all shell)
+   *
+   * MCP tools support server-level wildcards:
+   *   mcp__servername              → matches all tools from that server
+   *   mcp__servername__toolname    → matches one specific tool
+   *
+   * Deduplicates via Set so multiple shell(X:*) patterns mapping to the same
+   * Qwen specifier don't produce repeated entries (e.g. Bash,Bash,Bash).
    *
    * @param patterns FlightPath tool patterns
-   * @returns Qwen tool names array
+   * @returns Qwen tool specifiers array (deduplicated)
    */
   private convertFlightPathPatternsToQwenTools(patterns: string[]): string[] {
-    const qwenTools: string[] = [];
+    const qwenTools = new Set<string>();
 
     for (const pattern of patterns) {
       const parsed = this.parsePattern(pattern);
@@ -130,42 +139,94 @@ export class QwenToolPermissionMapper
       const [toolName, toolArgs] = parsed;
       const normalizedToolName = toolName.toLowerCase();
 
-      // Map FlightPath tool names to Qwen equivalents
-      if (normalizedToolName === "shell" || normalizedToolName === "bash") {
-        qwenTools.push("Bash");
+      if (
+        normalizedToolName === "shell" ||
+        normalizedToolName === "bash" ||
+        normalizedToolName === "run_shell_command"
+      ) {
+        qwenTools.add(this.buildQwenShellSpec("Bash", toolArgs));
       } else if (
         normalizedToolName === "write" ||
         normalizedToolName === "create"
       ) {
-        qwenTools.push("Write");
+        qwenTools.add("Write");
       } else if (normalizedToolName === "read") {
-        qwenTools.push("Read");
+        qwenTools.add("Read");
       } else if (
         normalizedToolName === "edit" ||
         normalizedToolName === "str_replace"
       ) {
-        qwenTools.push("Edit");
+        qwenTools.add("Edit");
       } else if (
         normalizedToolName === "delete" ||
         normalizedToolName === "remove"
       ) {
-        qwenTools.push("Delete");
+        qwenTools.add("Delete");
       } else if (
         normalizedToolName === "web_search" ||
-        normalizedToolName === "search"
+        normalizedToolName === "search" ||
+        normalizedToolName === "web_fetch"
       ) {
-        qwenTools.push("WebSearch");
+        qwenTools.add("WebFetch");
       } else if (normalizedToolName === "mcp") {
-        // MCP tools: preserve full pattern for server matching
+        // MCP tools: preserve full pattern for server-level or tool-level matching.
+        // Qwen supports: mcp__server (all tools) and mcp__server__tool (specific).
         if (toolArgs) {
-          qwenTools.push(`mcp__${toolArgs.replace(/[()]/g, "")}`);
+          qwenTools.add(`mcp__${toolArgs.replace(/[()]/g, "")}`);
         }
       } else {
         // Unknown tool - pass through as-is
-        qwenTools.push(toolName);
+        qwenTools.add(toolName);
       }
     }
 
-    return qwenTools;
+    return [...qwenTools];
+  }
+
+  /**
+   * Convert a FlightPath shell pattern to a Qwen Bash specifier.
+   *
+   * Qwen uses a space between command and argument glob (Bash(rm *)), while
+   * FlightPath uses a colon (shell(rm:*)). A bare "shell"/"shell(*)"/"shell(*:*)"
+   * with no specific command means "block all shell" → plain "Bash".
+   *
+   * @param qwenToolName The Qwen tool name (e.g. "Bash")
+   * @param toolArgs Raw args from parsePattern, including parentheses (e.g. "(rm:*)")
+   * @returns Qwen specifier string (e.g. "Bash(rm *)" or "Bash")
+   */
+  private buildQwenShellSpec(qwenToolName: string, toolArgs: string): string {
+    if (!toolArgs) {
+      return qwenToolName;
+    }
+
+    // Strip surrounding parens: "(rm:*)" → "rm:*"
+    const inner = toolArgs.replace(/^\(|\)$/g, "");
+
+    // Pure wildcards mean "all commands" — emit the bare tool name
+    if (!inner || inner === "*" || inner === "*:*") {
+      return qwenToolName;
+    }
+
+    const colonIdx = inner.indexOf(":");
+    if (colonIdx === -1) {
+      // No colon: treat entire inner as command name (e.g. shell(npm) → Bash(npm *))
+      return `${qwenToolName}(${inner} *)`;
+    }
+
+    const command = inner.substring(0, colonIdx);
+    const argPattern = inner.substring(colonIdx + 1);
+
+    // Wildcard command with specific args is still effectively "all commands" → bare tool
+    if (!command || command === "*") {
+      return qwenToolName;
+    }
+
+    if (!argPattern || argPattern === "*") {
+      // "command with any args" → Bash(command *)
+      return `${qwenToolName}(${command} *)`;
+    }
+
+    // Specific command + specific arg pattern → Bash(command argPattern)
+    return `${qwenToolName}(${command} ${argPattern})`;
   }
 }
