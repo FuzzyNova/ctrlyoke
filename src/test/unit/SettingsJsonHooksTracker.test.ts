@@ -54,16 +54,18 @@ function codexTrustedHash(
 function codexInlineTrustOverride(
   state: Record<string, { enabled?: boolean; trusted_hash?: string }>
 ): string[] {
-  const entries = Object.entries(state).map(([key, value]) => {
-    const fields: string[] = [];
-    if (value.enabled !== undefined) {
-      fields.push(`"enabled" = ${value.enabled ? "true" : "false"}`);
-    }
-    if (value.trusted_hash !== undefined) {
-      fields.push(`"trusted_hash" = ${JSON.stringify(value.trusted_hash)}`);
-    }
-    return `${JSON.stringify(key)} = { ${fields.join(", ")} }`;
-  });
+  const entries = Object.entries(state)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => {
+      const fields: string[] = [];
+      if (value.enabled !== undefined) {
+        fields.push(`"enabled" = ${value.enabled ? "true" : "false"}`);
+      }
+      if (value.trusted_hash !== undefined) {
+        fields.push(`"trusted_hash" = ${JSON.stringify(value.trusted_hash)}`);
+      }
+      return `${JSON.stringify(key)} = { ${fields.join(", ")} }`;
+    });
 
   return entries.length > 0
     ? ["-c", `hooks.state={ ${entries.join(", ")} }`]

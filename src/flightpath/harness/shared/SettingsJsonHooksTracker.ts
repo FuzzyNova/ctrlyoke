@@ -581,6 +581,7 @@ export class SettingsJsonHooksTracker {
     }
 
     const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
       .map(
         ([key, entryValue]) =>
           `${JSON.stringify(key)} = ${this.toInlineTomlValue(entryValue)}`
