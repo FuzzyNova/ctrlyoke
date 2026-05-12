@@ -246,7 +246,7 @@ export class QwenCliProvider implements ICliProvider {
       scriptPath,
       notifyDir,
       workspaceRoot,
-      undefined,
+      userHooks,
       [
         ...new Set<HookEvent>([
           "sessionStart",
@@ -259,19 +259,26 @@ export class QwenCliProvider implements ICliProvider {
     const flightpathHooksSection = (
       hookConfig as { type: string; config: { hooks: Record<string, unknown> } }
     ).config.hooks as Record<string, unknown[]>;
-
-    // Pre-trust the FlightPath hook command (no quotes — see buildHookConfig note)
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-    const flightpathKey = `:node ${normalizedScriptPath} ${normalizedNotifyDir}`;
+    const wrappedFlightpathEvents = [
+      ...new Set<HookEvent>([
+        "sessionStart",
+        "userPromptSubmit",
+        "stop",
+        ...enabledNotificationHookEvents,
+      ]),
+    ];
+    const flightpathHookKeys = this.buildTrustedHookKeys(
+      flightpathHooksSection
+    );
 
     const workflowKey = workingFilePath ?? workspaceRoot;
     await this.registerHooksInSettings(
       workspaceRoot,
       workflowKey,
       flightpathHooksSection,
-      flightpathKey,
-      userHooks
+      flightpathHookKeys,
+      userHooks,
+      wrappedFlightpathEvents
     );
     Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
     return [];
@@ -303,7 +310,7 @@ export class QwenCliProvider implements ICliProvider {
               ),
               this.notificationMonitor.getNotificationDirectory(workspaceRoot),
               workspaceRoot,
-              undefined,
+              userHooks,
               enabledNotificationHookEvents
             ) as {
               type: string;
@@ -315,8 +322,9 @@ export class QwenCliProvider implements ICliProvider {
       workspaceRoot,
       workflowKey,
       flightpathHooksSection,
-      undefined,
-      userHooks
+      this.buildTrustedHookKeys(flightpathHooksSection),
+      userHooks,
+      enabledNotificationHookEvents
     );
     Log.debug(`🔔 Configured user hooks for Qwen headless mode`);
     return [];
@@ -351,29 +359,14 @@ export class QwenCliProvider implements ICliProvider {
     workspaceRoot: string,
     workflowKey: string,
     flightpathHooksSection: Record<string, unknown[]>,
-    flightpathHookKey: string | undefined,
-    userHooks: UserHookConfig[] | undefined
+    flightpathHookKeys: string[],
+    userHooks: UserHookConfig[] | undefined,
+    wrappedFlightpathEvents: HookEvent[] = []
   ): Promise<void> {
-    const qwenEventMap: Record<string, string> = {
-      stop: "Stop",
-      sessionStart: "SessionStart",
-      preToolUse: "PreToolUse",
-      postToolUse: "PostToolUse",
-      userPromptSubmit: "UserPromptSubmit",
-    };
-
-    const workflowUserHooks: Record<string, unknown[]> = {};
-    if (userHooks) {
-      for (const uh of userHooks) {
-        const nativeEvent = qwenEventMap[uh.event];
-        if (!nativeEvent) continue;
-        if (!workflowUserHooks[nativeEvent])
-          workflowUserHooks[nativeEvent] = [];
-        workflowUserHooks[nativeEvent].push({
-          hooks: [{ type: "command", command: uh.command }],
-        });
-      }
-    }
+    const workflowUserHooks = this.buildUserHooksSection(
+      userHooks,
+      wrappedFlightpathEvents
+    );
 
     // Register hooks via ref-counted tracker under shared mutex
     await QwenCliProvider.mcpTracker.withLock(async () => {
@@ -400,11 +393,10 @@ export class QwenCliProvider implements ICliProvider {
     if (!trustedHooks[workspaceRoot]) {
       trustedHooks[workspaceRoot] = [];
     }
-    if (
-      flightpathHookKey &&
-      !trustedHooks[workspaceRoot].includes(flightpathHookKey)
-    ) {
-      trustedHooks[workspaceRoot].push(flightpathHookKey);
+    for (const flightpathHookKey of flightpathHookKeys) {
+      if (!trustedHooks[workspaceRoot].includes(flightpathHookKey)) {
+        trustedHooks[workspaceRoot].push(flightpathHookKey);
+      }
     }
 
     if (userHooks) {
@@ -422,6 +414,57 @@ export class QwenCliProvider implements ICliProvider {
       JSON.stringify(trustedHooks, null, 2),
       "utf-8"
     );
+  }
+
+  private buildUserHooksSection(
+    userHooks?: UserHookConfig[],
+    wrappedFlightpathEvents: HookEvent[] = []
+  ): Record<string, unknown[]> {
+    const section: Record<string, unknown[]> = {};
+    for (const uh of userHooks ?? []) {
+      if (
+        uh.event === "permissionRequest" &&
+        wrappedFlightpathEvents.includes("permissionRequest")
+      ) {
+        continue;
+      }
+      const nativeEvent = QwenNotificationMonitor.EVENT_MAP[uh.event];
+      if (!nativeEvent) continue;
+      if (!section[nativeEvent]) {
+        section[nativeEvent] = [];
+      }
+      section[nativeEvent].push({
+        hooks: [{ type: "command", command: uh.command }],
+      });
+    }
+    return section;
+  }
+
+  private buildTrustedHookKeys(
+    hooksSection: Record<string, unknown[]>
+  ): string[] {
+    const keys = new Set<string>();
+    for (const groups of Object.values(hooksSection)) {
+      for (const group of groups) {
+        if (!group || typeof group !== "object") {
+          continue;
+        }
+        const hooks = (group as { hooks?: unknown[] }).hooks;
+        if (!Array.isArray(hooks)) {
+          continue;
+        }
+        for (const hook of hooks) {
+          if (!hook || typeof hook !== "object") {
+            continue;
+          }
+          const command = (hook as { command?: unknown }).command;
+          if (typeof command === "string" && command.length > 0) {
+            keys.add(`:${command}`);
+          }
+        }
+      }
+    }
+    return [...keys];
   }
 
   /**

@@ -24,6 +24,15 @@ export class QwenNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  static readonly EVENT_MAP: Partial<Record<HookEvent, string>> = {
+    stop: "Stop",
+    sessionStart: "SessionStart",
+    preToolUse: "PreToolUse",
+    postToolUse: "PostToolUse",
+    userPromptSubmit: "UserPromptSubmit",
+    permissionRequest: "PermissionRequest",
+  };
+
   /**
    * Qwen's reliable session-start signal is UserPromptSubmit, not SessionStart.
    * SessionStart fires fire-and-forget in AppContainer's useEffect and may not
@@ -45,7 +54,7 @@ export class QwenNotificationMonitor
     scriptPath: string,
     notifyDir: string,
     _workspaceRoot: string,
-    _userHooks?: UserHookConfig[],
+    userHooks?: UserHookConfig[],
     flightpathEvents?: HookEvent[]
   ): HookConfig {
     // No quotes: Qwen's hook runner calls spawn(cmd.exe, ['/d','/s','/c', command], {shell:false}).
@@ -58,14 +67,12 @@ export class QwenNotificationMonitor
       notifyDir,
       false
     );
-
-    const eventMap: Partial<Record<HookEvent, string>> = {
-      stop: "Stop",
-      sessionStart: "SessionStart",
-      preToolUse: "PreToolUse",
-      postToolUse: "PostToolUse",
-      userPromptSubmit: "UserPromptSubmit",
-    };
+    const permissionRequestHook = userHooks?.find(
+      (hook) => hook.event === "permissionRequest"
+    );
+    const encodedDecisionHook = permissionRequestHook
+      ? Buffer.from(permissionRequestHook.command, "utf8").toString("base64")
+      : undefined;
 
     const hooks: Record<string, unknown[]> = {};
     for (const event of flightpathEvents ?? [
@@ -73,11 +80,17 @@ export class QwenNotificationMonitor
       "userPromptSubmit",
       "stop",
     ]) {
-      const nativeEvent = eventMap[event];
+      const nativeEvent = QwenNotificationMonitor.EVENT_MAP[event];
       if (!nativeEvent) {
         continue;
       }
-      hooks[nativeEvent] = [{ hooks: [{ type: "command", command }] }];
+      const eventCommand =
+        event === "permissionRequest" && encodedDecisionHook
+          ? `${command} ${encodedDecisionHook}`
+          : command;
+      hooks[nativeEvent] = [
+        { hooks: [{ type: "command", command: eventCommand }] },
+      ];
     }
 
     return {

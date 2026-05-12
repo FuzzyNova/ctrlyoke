@@ -46,6 +46,7 @@ const {
   initializeLogger,
   readStdinJson,
   maybeWriteHookArtifact,
+  runDecisionHook,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-copilot-hook";
@@ -53,6 +54,7 @@ const SCRIPT_PREFIX = "FlightPath Copilot Hook";
 
 function main() {
   const notifyDir = process.argv[2];
+  const encodedDecisionHook = process.argv[4];
   const debugLog = initializeLogger(SCRIPT_NAME, notifyDir);
 
   debugLog("🚀 Hook script invoked", {
@@ -102,6 +104,7 @@ function main() {
       preToolUse: "preToolUse",
       postToolUse: "postToolUse",
       userPromptSubmitted: "userPromptSubmit",
+      permissionRequest: "permissionRequest",
     };
     const logicalEvent = LOGICAL_EVENT_MAP[hookType];
     if (logicalEvent && notifyDir) {
@@ -114,6 +117,25 @@ function main() {
         toolName,
         debugLog
       );
+    }
+
+    if (hookType === "permissionRequest") {
+      if (encodedDecisionHook) {
+        const decisionHookCommand = Buffer.from(
+          encodedDecisionHook,
+          "base64"
+        ).toString("utf8");
+        process.exit(
+          runDecisionHook(
+            decisionHookCommand,
+            JSON.stringify(hookInput),
+            debugLog
+          )
+        );
+      }
+
+      debugLog(`✅ Hook ${hookType} completed successfully`);
+      process.exit(0);
     }
 
     if (hookType === "sessionStart" || hookType === "agentStop") {

@@ -524,7 +524,7 @@ export const HARNESS_INFO = {
  * | "preToolUse"        | PreToolUse       | preToolUse          | BeforeTool   | PreToolUse        | tool.execute.before        |
  * | "postToolUse"       | PostToolUse      | postToolUse         | AfterTool    | PostToolUse       | tool.execute.after         |
  * | "userPromptSubmit"  | UserPromptSubmit | userPromptSubmitted | BeforeAgent  | UserPromptSubmit  | session.status { busy }    |
- * | "permissionRequest" | PermissionRequest| n/a                 | n/a          | PermissionRequest | permission.asked           |
+ * | "permissionRequest" | PermissionRequest| permissionRequest   | Notification | PermissionRequest | permission.asked           |
  */
 export type HookEvent =
   | "stop"
@@ -622,7 +622,10 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
     description: "Fires when the AI requests permission to perform an action.",
     supportedHarnesses: [
       HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
       HARNESS_IDS.CODEX_CLI,
+      HARNESS_IDS.GEMINI_CLI,
+      HARNESS_IDS.QWEN_CLI,
       HARNESS_IDS.OPENCODE_CLI,
     ],
   },

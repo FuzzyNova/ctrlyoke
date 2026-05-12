@@ -31,6 +31,7 @@ export class CopilotNotificationMonitor
     preToolUse: "preToolUse",
     postToolUse: "postToolUse",
     userPromptSubmit: "userPromptSubmitted",
+    permissionRequest: "permissionRequest",
   };
 
   /**
@@ -91,19 +92,34 @@ export class CopilotNotificationMonitor
 
     // Map logical event names to Copilot's native event names
     const eventMap = CopilotNotificationMonitor.EVENT_MAP;
+    const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
+    const permissionRequestHook = userHooks?.find(
+      (hook) => hook.event === "permissionRequest"
+    );
+    const encodedDecisionHook = permissionRequestHook
+      ? Buffer.from(permissionRequestHook.command, "utf8").toString("base64")
+      : undefined;
 
     const hooks: Record<string, unknown[]> = {};
 
-    for (const event of flightpathEvents ?? ["sessionStart", "stop"]) {
+    for (const event of selectedEvents) {
       const nativeEvent = eventMap[event];
       if (!nativeEvent) {
         continue;
       }
+      const bashCommand =
+        event === "permissionRequest" && encodedDecisionHook
+          ? `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeEvent}" "${encodedDecisionHook}"`
+          : `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeEvent}"`;
+      const powershellCommand =
+        event === "permissionRequest" && encodedDecisionHook
+          ? `node "${psScriptPath}" "${psNotifyDir}" "${nativeEvent}" "${encodedDecisionHook}"`
+          : `node "${psScriptPath}" "${psNotifyDir}" "${nativeEvent}"`;
       hooks[nativeEvent] = [
         {
           type: "command",
-          bash: `node "${bashScriptPath}" "${bashNotifyDir}" "${nativeEvent}"`,
-          powershell: `node "${psScriptPath}" "${psNotifyDir}" "${nativeEvent}"`,
+          bash: bashCommand,
+          powershell: powershellCommand,
           timeoutSec: 10,
         },
       ];
@@ -112,6 +128,12 @@ export class CopilotNotificationMonitor
     // Append user hooks
     if (userHooks) {
       for (const uh of userHooks) {
+        if (
+          uh.event === "permissionRequest" &&
+          selectedEvents.includes("permissionRequest")
+        ) {
+          continue;
+        }
         const nativeEvent = eventMap[uh.event];
         if (!nativeEvent) continue;
         if (!hooks[nativeEvent]) hooks[nativeEvent] = [];

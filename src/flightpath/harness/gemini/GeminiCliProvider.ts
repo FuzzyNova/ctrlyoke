@@ -201,18 +201,23 @@ export class GeminiCliProvider implements ICliProvider {
     const flightpathHooksSection = (
       hookConfig.config as Record<string, unknown>
     )["hooks"] as Record<string, unknown[]>;
-
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-    const hookKey = `:node "${normalizedScriptPath}" "${normalizedNotifyDir}"`;
+    const wrappedFlightpathEvents = [
+      ...new Set<HookEvent>([
+        "sessionStart",
+        "stop",
+        ...enabledNotificationHookEvents,
+      ]),
+    ];
+    const hookKeys = this.buildTrustedHookKeys(flightpathHooksSection);
 
     const workflowKey = workingFilePath ?? workspaceRoot;
     await this.registerHooksInSettings(
       workspaceRoot,
       workflowKey,
       flightpathHooksSection,
-      hookKey,
-      userHooks
+      hookKeys,
+      userHooks,
+      wrappedFlightpathEvents
     );
     Log.debug(`🔔 Configured AfterAgent hook for Gemini completion detection`);
     return [];
@@ -259,8 +264,9 @@ export class GeminiCliProvider implements ICliProvider {
       workspaceRoot,
       workflowKey,
       flightpathHooksSection,
-      undefined,
-      userHooks
+      this.buildTrustedHookKeys(flightpathHooksSection),
+      userHooks,
+      enabledNotificationHookEvents
     );
     Log.debug(`🔔 Configured user hooks for Gemini headless mode`);
     return [];
@@ -295,26 +301,14 @@ export class GeminiCliProvider implements ICliProvider {
     workspaceRoot: string,
     workflowKey: string,
     flightpathHooksSection: Record<string, unknown[]>,
-    flightpathHookKey: string | undefined,
-    userHooks: UserHookConfig[] | undefined
+    flightpathHookKeys: string[],
+    userHooks: UserHookConfig[] | undefined,
+    wrappedFlightpathEvents: HookEvent[] = []
   ): Promise<void> {
-    const geminiEventMap: Record<string, string> = {
-      stop: "AfterAgent",
-      sessionStart: "SessionStart",
-    };
-
-    const workflowUserHooks: Record<string, unknown[]> = {};
-    if (userHooks) {
-      for (const uh of userHooks) {
-        const nativeEvent = geminiEventMap[uh.event];
-        if (!nativeEvent) continue;
-        if (!workflowUserHooks[nativeEvent])
-          workflowUserHooks[nativeEvent] = [];
-        workflowUserHooks[nativeEvent].push({
-          hooks: [{ type: "command", command: uh.command }],
-        });
-      }
-    }
+    const workflowUserHooks = this.buildUserHooksSection(
+      userHooks,
+      wrappedFlightpathEvents
+    );
 
     await GeminiCliProvider.mcpTracker.withLock(async () => {
       await GeminiCliProvider.hooksTracker.registerWorkflow(
@@ -340,11 +334,10 @@ export class GeminiCliProvider implements ICliProvider {
     if (!trustedHooks[workspaceRoot]) {
       trustedHooks[workspaceRoot] = [];
     }
-    if (
-      flightpathHookKey &&
-      !trustedHooks[workspaceRoot].includes(flightpathHookKey)
-    ) {
-      trustedHooks[workspaceRoot].push(flightpathHookKey);
+    for (const flightpathHookKey of flightpathHookKeys) {
+      if (!trustedHooks[workspaceRoot].includes(flightpathHookKey)) {
+        trustedHooks[workspaceRoot].push(flightpathHookKey);
+      }
     }
 
     if (userHooks) {
@@ -362,6 +355,57 @@ export class GeminiCliProvider implements ICliProvider {
       JSON.stringify(trustedHooks, null, 2),
       "utf-8"
     );
+  }
+
+  private buildUserHooksSection(
+    userHooks?: UserHookConfig[],
+    wrappedFlightpathEvents: HookEvent[] = []
+  ): Record<string, unknown[]> {
+    const section: Record<string, unknown[]> = {};
+    for (const uh of userHooks ?? []) {
+      if (
+        uh.event === "permissionRequest" &&
+        wrappedFlightpathEvents.includes("permissionRequest")
+      ) {
+        continue;
+      }
+      const nativeEvent = GeminiNotificationMonitor.EVENT_MAP[uh.event];
+      if (!nativeEvent) continue;
+      if (!section[nativeEvent]) {
+        section[nativeEvent] = [];
+      }
+      section[nativeEvent].push({
+        hooks: [{ type: "command", command: uh.command }],
+      });
+    }
+    return section;
+  }
+
+  private buildTrustedHookKeys(
+    hooksSection: Record<string, unknown[]>
+  ): string[] {
+    const keys = new Set<string>();
+    for (const groups of Object.values(hooksSection)) {
+      for (const group of groups) {
+        if (!group || typeof group !== "object") {
+          continue;
+        }
+        const hooks = (group as { hooks?: unknown[] }).hooks;
+        if (!Array.isArray(hooks)) {
+          continue;
+        }
+        for (const hook of hooks) {
+          if (!hook || typeof hook !== "object") {
+            continue;
+          }
+          const command = (hook as { command?: unknown }).command;
+          if (typeof command === "string" && command.length > 0) {
+            keys.add(`:${command}`);
+          }
+        }
+      }
+    }
+    return [...keys];
   }
 
   /**
@@ -404,13 +448,7 @@ export class GeminiCliProvider implements ICliProvider {
   }
 
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    return [
-      "--prompt",
-      prompt,
-      "--output-format",
-      "stream-json",
-      ...baseArgs,
-    ];
+    return ["--prompt", prompt, "--output-format", "stream-json", ...baseArgs];
   }
 
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {

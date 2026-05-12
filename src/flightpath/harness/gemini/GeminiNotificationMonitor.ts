@@ -24,6 +24,16 @@ export class GeminiNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  static readonly EVENT_MAP: Partial<Record<HookEvent, string>> = {
+    stop: "AfterAgent",
+    sessionStart: "SessionStart",
+    preToolUse: "BeforeTool",
+    postToolUse: "AfterTool",
+    userPromptSubmit: "BeforeAgent",
+    // Gemini surfaces tool permission alerts through the Notification hook.
+    permissionRequest: "Notification",
+  };
+
   /**
    * Build hook configuration for Gemini CLI.
    *
@@ -41,30 +51,39 @@ export class GeminiNotificationMonitor
       scriptPath,
       notifyDir
     );
-    const flightpathEntry = { hooks: [{ type: "command", command }] };
-
-    // Map logical event names to Gemini's native event names
-    const eventMap: Partial<Record<HookEvent, string>> = {
-      stop: "AfterAgent",
-      sessionStart: "SessionStart",
-      preToolUse: "BeforeTool",
-      postToolUse: "AfterTool",
-      userPromptSubmit: "BeforeAgent",
-    };
+    const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
+    const permissionRequestHook = userHooks?.find(
+      (hook) => hook.event === "permissionRequest"
+    );
+    const encodedDecisionHook = permissionRequestHook
+      ? Buffer.from(permissionRequestHook.command, "utf8").toString("base64")
+      : undefined;
 
     const hooks: Record<string, unknown[]> = {};
-    for (const event of flightpathEvents ?? ["sessionStart", "stop"]) {
-      const nativeEvent = eventMap[event];
+    for (const event of selectedEvents) {
+      const nativeEvent = GeminiNotificationMonitor.EVENT_MAP[event];
       if (!nativeEvent) {
         continue;
       }
-      hooks[nativeEvent] = [flightpathEntry];
+      const eventCommand =
+        event === "permissionRequest" && encodedDecisionHook
+          ? `${command} "${encodedDecisionHook}"`
+          : command;
+      hooks[nativeEvent] = [
+        { hooks: [{ type: "command", command: eventCommand }] },
+      ];
     }
 
     // Append user hooks to their respective events
     if (userHooks) {
       for (const uh of userHooks) {
-        const nativeEvent = eventMap[uh.event];
+        if (
+          uh.event === "permissionRequest" &&
+          selectedEvents.includes("permissionRequest")
+        ) {
+          continue;
+        }
+        const nativeEvent = GeminiNotificationMonitor.EVENT_MAP[uh.event];
         if (!nativeEvent) continue; // Skip unsupported events
         if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
         hooks[nativeEvent].push({

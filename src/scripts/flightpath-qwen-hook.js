@@ -37,6 +37,7 @@ const {
   initializeLogger,
   readStdinJson,
   maybeWriteHookArtifact,
+  runDecisionHook,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-qwen-hook";
@@ -44,6 +45,7 @@ const SCRIPT_PREFIX = "FlightPath Qwen Hook";
 
 function main() {
   const notifyDir = process.argv[2];
+  const encodedDecisionHook = process.argv[3];
 
   // Unconditional invocation log — written before any flag checks so we can confirm
   // the hook script is being called at all, regardless of diagnostic settings.
@@ -97,6 +99,7 @@ function main() {
       "Stop",
       "PreToolUse",
       "PostToolUse",
+      "PermissionRequest",
     ]);
 
     if (!HANDLED_EVENTS.has(hookEvent)) {
@@ -113,6 +116,7 @@ function main() {
       UserPromptSubmit: "userPromptSubmit",
       Stop: "stop",
       SessionStart: "sessionStart",
+      PermissionRequest: "permissionRequest",
     };
     const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
@@ -125,6 +129,24 @@ function main() {
         toolName,
         debugLog
       );
+    }
+
+    if (hookEvent === "PermissionRequest") {
+      if (encodedDecisionHook) {
+        const decisionHookCommand = Buffer.from(
+          encodedDecisionHook,
+          "base64"
+        ).toString("utf8");
+        process.exit(
+          runDecisionHook(
+            decisionHookCommand,
+            JSON.stringify(hookInput),
+            debugLog
+          )
+        );
+      }
+      debugLog(`✅ Hook ${hookEvent} completed`);
+      process.exit(0);
     }
 
     // Events that don't need notification file I/O

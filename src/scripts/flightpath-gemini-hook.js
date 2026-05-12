@@ -10,6 +10,8 @@
  * Supported hook events:
  * - SessionStart: Called when new session starts (provides session ID immediately)
  * - AfterAgent: Called when execution completes (normalized to "Stop" in notification)
+ * - Notification: Gemini's system alert hook; ToolPermission alerts are treated
+ *   as FlightPath permission-request events
  *
  * Usage (configured by FlightPath via .gemini/settings.json):
  *   { "hooks": { "SessionStart": [...], "AfterAgent": [...] } }
@@ -34,6 +36,7 @@ const {
   initializeLogger,
   readStdinJson,
   maybeWriteHookArtifact,
+  runDecisionHook,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-gemini-hook";
@@ -41,6 +44,7 @@ const SCRIPT_PREFIX = "FlightPath Gemini Hook";
 
 function main() {
   const notifyDir = process.argv[2];
+  const encodedDecisionHook = process.argv[3];
   const debugLog = initializeLogger(SCRIPT_NAME, notifyDir);
 
   debugLog("🚀 Gemini hook script invoked", {
@@ -74,6 +78,7 @@ function main() {
       "AfterAgent",
       "BeforeTool",
       "AfterTool",
+      "Notification",
     ]);
 
     if (!HANDLED_EVENTS.has(hookEvent)) {
@@ -83,6 +88,9 @@ function main() {
 
     const sessionId = hookInput.session_id;
     const toolName = hookInput.tool_name || hookInput.tool?.name;
+    const isPermissionNotification =
+      hookEvent === "Notification" &&
+      hookInput.notification_type === "ToolPermission";
 
     // Map Gemini-native event → logical event
     const LOGICAL_EVENT_MAP = {
@@ -91,7 +99,9 @@ function main() {
       BeforeTool: "preToolUse",
       AfterTool: "postToolUse",
     };
-    const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
+    const logicalEvent = isPermissionNotification
+      ? "permissionRequest"
+      : LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
       maybeWriteHookArtifact(
         logicalEvent,
@@ -102,6 +112,32 @@ function main() {
         toolName,
         debugLog
       );
+    }
+
+    if (hookEvent === "Notification") {
+      if (!isPermissionNotification) {
+        debugLog("⏭️ Ignoring non-permission notification", {
+          notificationType: hookInput.notification_type,
+        });
+        process.exit(0);
+      }
+
+      if (encodedDecisionHook) {
+        const decisionHookCommand = Buffer.from(
+          encodedDecisionHook,
+          "base64"
+        ).toString("utf8");
+        process.exit(
+          runDecisionHook(
+            decisionHookCommand,
+            JSON.stringify(hookInput),
+            debugLog
+          )
+        );
+      }
+
+      debugLog(`✅ Hook ${hookEvent} completed`);
+      process.exit(0);
     }
 
     // BeforeTool / AfterTool don't need notification files
