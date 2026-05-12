@@ -12,6 +12,12 @@ export interface TabIconOverride {
   activeColor?: string;
 }
 
+export const FOCUS_TAB_OVERRIDE: TabIconOverride = {
+  color: "text-focus-border",
+  hoverColor: "hover:text-focus-highlight",
+  activeColor: "text-focus-highlight",
+};
+
 /**
  * Returns the tab icon override for the Permissions tab based on the resolved
  * permission mode. None returns undefined (use default styling).
@@ -50,11 +56,7 @@ export function getHooksTabOverride(
   hooks: object[] | null | undefined
 ): TabIconOverride | undefined {
   if (Array.isArray(hooks) && hooks.length > 0) {
-    return {
-      color: "text-focus-border",
-      hoverColor: "hover:text-focus-highlight",
-      activeColor: "text-focus-highlight",
-    };
+    return FOCUS_TAB_OVERRIDE;
   }
   return undefined;
 }
@@ -64,11 +66,7 @@ export function getMcpTabOverride(
   mcpServers: (string | object)[] | null | undefined
 ): TabIconOverride | undefined {
   if (Array.isArray(mcpServers) && mcpServers.length > 0) {
-    return {
-      color: "text-focus-border",
-      hoverColor: "hover:text-focus-highlight",
-      activeColor: "text-focus-highlight",
-    };
+    return FOCUS_TAB_OVERRIDE;
   }
   return undefined;
 }
@@ -78,11 +76,7 @@ export function getValidationTabOverride(
   endCondition: { script?: string } | null | undefined
 ): TabIconOverride | undefined {
   if (endCondition?.script) {
-    return {
-      color: "text-focus-border",
-      hoverColor: "hover:text-focus-highlight",
-      activeColor: "text-focus-highlight",
-    };
+    return FOCUS_TAB_OVERRIDE;
   }
   return undefined;
 }
@@ -100,11 +94,7 @@ export function getContextTabOverride(
     ? priorContext.length > 0
     : typeof priorContext === "string" && priorContext !== "none";
   if (sessionActive || contextActive) {
-    return {
-      color: "text-focus-border",
-      hoverColor: "hover:text-focus-highlight",
-      activeColor: "text-focus-highlight",
-    };
+    return FOCUS_TAB_OVERRIDE;
   }
   return undefined;
 }

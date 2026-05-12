@@ -6,8 +6,7 @@ import {
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
-import { useVsCodeApi } from "../../hooks/useVsCodeApi";
-import { MESSAGE_TYPES } from "../../types/messages";
+import { useMcpServerActions } from "../../hooks/useMcpServerActions";
 import {
   HARNESS_IDS,
   CONDITION_ACTIONS,
@@ -88,47 +87,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     mcpRegistryError,
     mcpWorkspaceServers,
     mcpWorkspaceServersLoading,
-    setMcpLocalServersLoading,
-    setMcpRegistryLoading,
-    setMcpWorkspaceServersLoading,
-    setMcpWorkspaceServers,
   } = useUiStore();
 
-  const vscode = useVsCodeApi();
-
-  const handleRequestLocalServers = useCallback(() => {
-    setMcpLocalServersLoading(true);
-    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_LOCAL_SERVERS });
-  }, [vscode, setMcpLocalServersLoading]);
-
-  const handleSearchRegistry = useCallback(
-    (query: string, cursor?: string, updatedSince?: string) => {
-      setMcpRegistryLoading(true);
-      vscode.postMessage({
-        type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY,
-        query,
-        cursor,
-        updatedSince,
-      });
-    },
-    [vscode, setMcpRegistryLoading]
-  );
-
-  const handleRequestWorkspaceServers = useCallback(() => {
-    setMcpWorkspaceServersLoading(true);
-    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_WORKSPACE_SERVERS });
-  }, [vscode, setMcpWorkspaceServersLoading]);
-
-  const handleWorkspaceServersChange = useCallback(
-    (servers: import("@root/types/FlightPathTypes").McpServerConfig[]) => {
-      setMcpWorkspaceServers(servers);
-      vscode.postMessage({
-        type: MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS,
-        servers,
-      });
-    },
-    [vscode, setMcpWorkspaceServers]
-  );
+  const {
+    handleRequestLocalServers,
+    handleSearchRegistry,
+    handleRequestWorkspaceServers,
+    handleWorkspaceServersChange,
+  } = useMcpServerActions();
   const handleResetAllToInherit = useCallback(() => {
     setProperty("harness", undefined);
     setProperty("model", undefined);

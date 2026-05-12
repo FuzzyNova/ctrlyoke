@@ -12,6 +12,8 @@ export { useMediaQuery, useIsMobile } from "./useMediaQuery";
 export { useElementNarrow } from "./useElementNarrow";
 export { useUndoRedoKeyHandler } from "./useUndoRedoKeyHandler";
 export { useDrawerTabOverrides } from "./useDrawerTabOverrides";
+export { useSettingsDrawerTabOverrides } from "./useSettingsDrawerTabOverrides";
+export { useMcpServerActions } from "./useMcpServerActions";
 export { usePromptStatus } from "./usePromptStatus";
 export { useContextPct } from "./useContextPct";
 export { useStepClickHandler } from "./useStepClickHandler";

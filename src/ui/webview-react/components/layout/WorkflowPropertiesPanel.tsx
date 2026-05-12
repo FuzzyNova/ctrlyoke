@@ -9,6 +9,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
+import { useMcpServerActions } from "../../hooks/useMcpServerActions";
 import {
   MESSAGE_TYPES,
   SESSION_ID_SENTINELS,
@@ -151,10 +152,6 @@ export const WorkflowPropertiesPanel: React.FC<{
     mcpRegistryError,
     mcpWorkspaceServers,
     mcpWorkspaceServersLoading,
-    setMcpLocalServersLoading,
-    setMcpRegistryLoading,
-    setMcpWorkspaceServersLoading,
-    setMcpWorkspaceServers,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -176,6 +173,12 @@ export const WorkflowPropertiesPanel: React.FC<{
     getEffectivePriorContext,
     getEffectiveAdditionalArgs,
   } = useSettingsStore();
+  const {
+    handleRequestLocalServers,
+    handleSearchRegistry,
+    handleRequestWorkspaceServers,
+    handleWorkspaceServersChange,
+  } = useMcpServerActions();
 
   // Active drawer page
   const [activePage, setActivePage] = useState<DrawerPage>(
@@ -542,40 +545,6 @@ export const WorkflowPropertiesPanel: React.FC<{
       });
     },
     [syncWorkflowPropertiesForUndo, vscode]
-  );
-
-  const handleRequestLocalServers = useCallback(() => {
-    setMcpLocalServersLoading(true);
-    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_LOCAL_SERVERS });
-  }, [vscode, setMcpLocalServersLoading]);
-
-  const handleSearchRegistry = useCallback(
-    (query: string, cursor?: string, updatedSince?: string) => {
-      setMcpRegistryLoading(true);
-      vscode.postMessage({
-        type: MESSAGE_TYPES.REQUEST_MCP_REGISTRY,
-        query,
-        cursor,
-        updatedSince,
-      });
-    },
-    [vscode, setMcpRegistryLoading]
-  );
-
-  const handleRequestWorkspaceServers = useCallback(() => {
-    setMcpWorkspaceServersLoading(true);
-    vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_MCP_WORKSPACE_SERVERS });
-  }, [vscode, setMcpWorkspaceServersLoading]);
-
-  const handleWorkspaceServersChange = useCallback(
-    (servers: import("@root/types/FlightPathTypes").McpServerConfig[]) => {
-      setMcpWorkspaceServers(servers);
-      vscode.postMessage({
-        type: MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS,
-        servers,
-      });
-    },
-    [vscode, setMcpWorkspaceServers]
   );
 
   const handleToolPermissionsChange = useCallback(

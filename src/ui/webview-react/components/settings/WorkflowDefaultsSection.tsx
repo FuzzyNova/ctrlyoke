@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type {
   FullGlobalSettings,
+  SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { useSettingsDrawerTabOverrides } from "../../hooks/useSettingsDrawerTabOverrides";
 import { DrawerTabBar } from "../shared/DrawerTabBar";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { DefaultsHarnessPage } from "./defaults/DefaultsHarnessPage";
@@ -27,6 +29,11 @@ export function WorkflowDefaultsSection({
 }: Props) {
   const [activePage, setActivePage] = useState<DrawerPage>(
     DRAWER_PAGES.HARNESS
+  );
+  const sources = settings.sources as Record<string, SettingSource>;
+  const tabOverrides = useSettingsDrawerTabOverrides(
+    sources,
+    settings.settings.defaults.toolPermissions.mode
   );
 
   const pageProps = { settings, activeScope, onUpdate, onReset };
@@ -55,8 +62,8 @@ export function WorkflowDefaultsSection({
         activeTab={activePage}
         onTabChange={setActivePage}
         isNarrow={false}
+        tabOverrides={tabOverrides}
       />
     </div>
   );
 }
-
