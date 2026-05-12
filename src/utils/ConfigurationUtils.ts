@@ -19,15 +19,11 @@ import { configService } from "../config/FlightPathConfigService";
  */
 export const CONFIG_KEYS = {
   // Top-level section keys (used with configService.get())
-  HARNESS: "harness",
-  MODELS: "models",
-  ADDITIONAL_ARGS: "additionalArgs",
+  GENERAL: "general",
+  DEFAULTS: "defaults",
+  PERMISSIONS: "permissions",
   EXECUTION: "execution",
-  TOOLS: "tools",
-  WORKFLOW: "workflow",
   CHAT: "chat",
-  MCP: "mcp",
-  HOOKS: "hooks",
   QUEUE: "queue",
   HISTORY: "history",
   TERMINAL: "terminal",
@@ -38,16 +34,22 @@ export const CONFIG_KEYS = {
   COMMIT: "commit",
 
   // Dot-notation paths (used with configService.set())
-  WORKFLOW_DEFAULT_END_CONDITION: "workflow.defaultEndCondition",
-  WORKFLOW_DEFAULT_PRE_CONDITION: "workflow.defaultPreCondition",
-  WORKFLOW_DEFAULT_AGENT: "workflow.defaultAgent",
-  WORKFLOW_DEFAULT_SKILLS: "workflow.defaultSkills",
-  WORKFLOW_DEFAULT_TEMPLATE: "workflow.defaultTemplate",
-  WORKFLOW_RESUME_EXISTING_SESSION: "workflow.resumeExistingSession",
+  DEFAULTS_HARNESS: "defaults.harness",
+  DEFAULTS_MODELS: "defaults.models",
+  DEFAULTS_ADDITIONAL_ARGS: "defaults.additionalArgs",
+  DEFAULTS_AGENT: "defaults.agent",
+  DEFAULTS_SKILLS: "defaults.skills",
+  DEFAULTS_RESUME_SESSION: "defaults.resumeSession",
+  DEFAULTS_END_CONDITION: "defaults.endCondition",
+  DEFAULTS_PRE_CONDITION: "defaults.preCondition",
+  DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
+  DEFAULTS_TOOL_PERMISSIONS_MODE: "defaults.toolPermissions.mode",
+  DEFAULTS_TOOL_PERMISSIONS_ALLOWED: "defaults.toolPermissions.allowedTools",
+  DEFAULTS_TOOL_PERMISSIONS_DENIED: "defaults.toolPermissions.deniedTools",
+  DEFAULTS_MCP_SERVERS: "defaults.mcpServers",
+  DEFAULTS_HOOKS: "defaults.hooks",
+  GENERAL_DEFAULT_TEMPLATE: "general.defaultTemplate",
   EXECUTION_MODE: "execution.mode",
-  TOOLS_PERMISSION_MODE: "tools.permissionMode",
-  TOOLS_ALLOWED: "tools.allowed",
-  TOOLS_DENIED: "tools.denied",
   SERVER_ENABLED: "server.enabled",
   SERVER_TLS_CERT_PATH: "server.tls.certPath",
   SERVER_TLS_KEY_PATH: "server.tls.keyPath",
@@ -55,7 +57,6 @@ export const CONFIG_KEYS = {
   UI_CONFIRM_RESET_OPERATIONS: "ui.confirmResetOperations",
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
-  MCP_DEFAULT_SERVERS: "mcp.defaultServers",
   EXTENSION_NAMESPACE: "flightpath.",
 } as const;
 
@@ -188,7 +189,7 @@ export const ConfigurationUtils = {
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
    */
   getIntegrationMode(): HarnessId {
-    const mode = configService.get(CONFIG_KEYS.HARNESS) as HarnessId;
+    const mode = configService.get(CONFIG_KEYS.DEFAULTS).harness as HarnessId;
     const validIds = Object.values(HARNESS_IDS) as HarnessId[];
     return validIds.includes(mode) ? mode : HARNESS_IDS.COPILOT_CLI;
   },
@@ -225,32 +226,32 @@ export const ConfigurationUtils = {
    * Get the default end condition for new workflows (null/undefined = disabled)
    */
   getDefaultEndCondition(): EndCondition | null | undefined {
-    return configService.get(CONFIG_KEYS.WORKFLOW).defaultEndCondition;
+    return configService.get(CONFIG_KEYS.DEFAULTS).endCondition;
   },
 
   /**
    * Get the default pre-condition for new workflows (null/undefined = disabled)
    */
   getDefaultPreCondition(): PreCondition | null | undefined {
-    return configService.get(CONFIG_KEYS.WORKFLOW).defaultPreCondition;
+    return configService.get(CONFIG_KEYS.DEFAULTS).preCondition;
   },
 
   /**
-   * Get default max retries for end conditions (reads from defaultEndCondition)
+   * Get default max retries for end conditions (reads from endCondition)
    */
   getDefaultMaxRetries(): number {
     return (
-      configService.get(CONFIG_KEYS.WORKFLOW).defaultEndCondition?.maxRetries ??
+      configService.get(CONFIG_KEYS.DEFAULTS).endCondition?.maxRetries ??
       0
     );
   },
 
   /**
-   * Get default retry prompt template (reads from defaultEndCondition)
+   * Get default retry prompt template (reads from endCondition)
    */
   getDefaultRetryPrompt(): string {
     return (
-      configService.get(CONFIG_KEYS.WORKFLOW).defaultEndCondition
+      configService.get(CONFIG_KEYS.DEFAULTS).endCondition
         ?.retryPrompt ?? ""
     );
   },
@@ -260,7 +261,7 @@ export const ConfigurationUtils = {
    */
   async setDefaultEndCondition(value: EndCondition | null): Promise<void> {
     await configService.set(
-      CONFIG_KEYS.WORKFLOW_DEFAULT_END_CONDITION,
+      CONFIG_KEYS.DEFAULTS_END_CONDITION,
       value,
       CONFIG_SCOPE.USER
     );
@@ -271,7 +272,7 @@ export const ConfigurationUtils = {
    */
   async setDefaultPreCondition(value: PreCondition | null): Promise<void> {
     await configService.set(
-      CONFIG_KEYS.WORKFLOW_DEFAULT_PRE_CONDITION,
+      CONFIG_KEYS.DEFAULTS_PRE_CONDITION,
       value,
       CONFIG_SCOPE.USER
     );
@@ -281,7 +282,7 @@ export const ConfigurationUtils = {
    * Get default workflow format (yaml or json)
    */
   getDefaultWorkflowFormat(): "yaml" | "json" {
-    return configService.get(CONFIG_KEYS.WORKFLOW).defaultFormat;
+    return configService.get(CONFIG_KEYS.GENERAL).defaultFormat;
   },
 
   /**
@@ -296,7 +297,7 @@ export const ConfigurationUtils = {
    */
   getCliModel(): string {
     return (
-      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.COPILOT_CLI] ??
+      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.COPILOT_CLI] ??
       DEFAULT_MODELS[HARNESS_IDS.COPILOT_CLI]
     );
   },
@@ -332,14 +333,14 @@ export const ConfigurationUtils = {
    * Not supported by gemini-cli, opencode-cli, or copilot-chat.
    */
   getCliAllowedDirs(): string[] {
-    return configService.get(CONFIG_KEYS.TOOLS).allowedDirs;
+    return configService.get(CONFIG_KEYS.PERMISSIONS).allowedDirs;
   },
 
   /**
    * Get CLI tool permissions mode (shared between Copilot and Claude)
    */
   getCliToolPermissions(): Exclude<PermissionMode, "none"> {
-    return configService.get(CONFIG_KEYS.TOOLS).permissionMode as Exclude<
+    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions.mode as Exclude<
       PermissionMode,
       "none"
     >;
@@ -426,7 +427,7 @@ export const ConfigurationUtils = {
    * Check if all paths should be allowed for Copilot CLI
    */
   shouldAllowAllPaths(): boolean {
-    return configService.get(CONFIG_KEYS.TOOLS).copilotAllowAllPaths;
+    return configService.get(CONFIG_KEYS.PERMISSIONS).copilotAllowAllPaths;
   },
 
   // ============================================================
@@ -438,7 +439,7 @@ export const ConfigurationUtils = {
    */
   getClaudeCliModel(): string {
     return (
-      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.CLAUDE_CLI] ??
+      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.CLAUDE_CLI] ??
       DEFAULT_MODELS[HARNESS_IDS.CLAUDE_CLI]
     );
   },
@@ -452,7 +453,7 @@ export const ConfigurationUtils = {
    */
   getOpenCodeCliModel(): string {
     return (
-      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.OPENCODE_CLI] ??
+      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.OPENCODE_CLI] ??
       DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI]
     );
   },
@@ -466,7 +467,7 @@ export const ConfigurationUtils = {
    */
   getQwenCliModel(): string {
     return (
-      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.QWEN_CLI] ??
+      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.QWEN_CLI] ??
       DEFAULT_MODELS[HARNESS_IDS.QWEN_CLI]
     );
   },
@@ -480,7 +481,7 @@ export const ConfigurationUtils = {
    */
   getGeminiCliModel(): string {
     return (
-      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.GEMINI_CLI] ??
+      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.GEMINI_CLI] ??
       DEFAULT_MODELS[HARNESS_IDS.GEMINI_CLI]
     );
   },
@@ -494,7 +495,7 @@ export const ConfigurationUtils = {
    */
   getCodexCliModel(): string {
     return (
-      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.CODEX_CLI] ??
+      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.CODEX_CLI] ??
       DEFAULT_MODELS[HARNESS_IDS.CODEX_CLI]
     );
   },
@@ -504,7 +505,7 @@ export const ConfigurationUtils = {
    * Options: read-only, workspace-write, danger-full-access
    */
   getCodexSandboxMode(): string {
-    return configService.get(CONFIG_KEYS.TOOLS).codexSandboxMode;
+    return configService.get(CONFIG_KEYS.PERMISSIONS).codexSandboxMode;
   },
 
   /**
@@ -512,7 +513,7 @@ export const ConfigurationUtils = {
    * Options: untrusted, on-request, never
    */
   getCodexApprovalPolicy(): string {
-    return configService.get(CONFIG_KEYS.TOOLS).codexApprovalPolicy;
+    return configService.get(CONFIG_KEYS.PERMISSIONS).codexApprovalPolicy;
   },
 
   // ============================================================
@@ -529,7 +530,7 @@ export const ConfigurationUtils = {
       return "";
     }
     return (
-      configService.get(CONFIG_KEYS.ADDITIONAL_ARGS)[
+      configService.get(CONFIG_KEYS.DEFAULTS).additionalArgs[
         harness as Exclude<HarnessId, "copilot-chat">
       ] ?? ""
     );
@@ -539,14 +540,14 @@ export const ConfigurationUtils = {
    * Get allowed tools for CLI operations (shared between Copilot and Claude)
    */
   getCliAllowedTools(): string[] {
-    return configService.get(CONFIG_KEYS.TOOLS).allowed;
+    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions.allowedTools;
   },
 
   /**
    * Get denied tools for CLI operations (shared between Copilot and Claude)
    */
   getCliDeniedTools(): string[] {
-    return configService.get(CONFIG_KEYS.TOOLS).denied;
+    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions.deniedTools;
   },
 
   // ============================================================
@@ -557,14 +558,14 @@ export const ConfigurationUtils = {
    * Get the default prior context injection mode for workflow prompts.
    */
   getPriorContext(): string {
-    return configService.get(CONFIG_KEYS.WORKFLOW).priorContext;
+    return configService.get(CONFIG_KEYS.DEFAULTS).priorContext;
   },
 
   /**
    * Check if existing chat session should be resumed per prompt
    */
   shouldResumeExistingSession(): boolean {
-    return configService.get(CONFIG_KEYS.WORKFLOW).resumeExistingSession;
+    return configService.get(CONFIG_KEYS.DEFAULTS).resumeSession;
   },
 
   /**
@@ -586,14 +587,14 @@ export const ConfigurationUtils = {
    * Get default workflow template ID
    */
   getDefaultWorkflowTemplate(): string {
-    return configService.get(CONFIG_KEYS.WORKFLOW).defaultTemplate;
+    return configService.get(CONFIG_KEYS.GENERAL).defaultTemplate;
   },
 
   /**
    * Check if recent session should be auto-loaded on startup
    */
   shouldAutoLoadRecentSession(): boolean {
-    return configService.get(CONFIG_KEYS.WORKFLOW).autoLoadRecentSession;
+    return configService.get(CONFIG_KEYS.GENERAL).autoLoadRecentSession;
   },
 
   // ============================================================
@@ -605,7 +606,7 @@ export const ConfigurationUtils = {
    */
   getCopilotChatModel(): string {
     return (
-      configService.get(CONFIG_KEYS.MODELS)[HARNESS_IDS.COPILOT_CHAT] ??
+      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.COPILOT_CHAT] ??
       DEFAULT_MODELS[HARNESS_IDS.COPILOT_CHAT]
     );
   },
@@ -615,7 +616,7 @@ export const ConfigurationUtils = {
    * Returns empty string if no default agent is selected
    */
   getDefaultAgent(): string {
-    return configService.get(CONFIG_KEYS.WORKFLOW).defaultAgent;
+    return configService.get(CONFIG_KEYS.DEFAULTS).agent;
   },
 
   /**
@@ -623,7 +624,7 @@ export const ConfigurationUtils = {
    * Returns empty array if no default skills are selected
    */
   getDefaultSkills(): string[] {
-    return configService.get(CONFIG_KEYS.WORKFLOW).defaultSkills ?? [];
+    return configService.get(CONFIG_KEYS.DEFAULTS).skills ?? [];
   },
 
   /**
@@ -649,7 +650,7 @@ export const ConfigurationUtils = {
    * in the first message of that session.
    */
   shouldOmitAgentsAndSkillsOnResume(): boolean {
-    return configService.get(CONFIG_KEYS.WORKFLOW).omitAgentsSkillsOnResume;
+    return configService.get(CONFIG_KEYS.GENERAL).omitAgentsSkillsOnResume;
   },
 
   // ============================================================
@@ -708,7 +709,7 @@ export const ConfigurationUtils = {
    * Set the default harness integration mode
    */
   async setIntegrationMode(harness: HarnessId): Promise<void> {
-    await configService.set(CONFIG_KEYS.HARNESS, harness, CONFIG_SCOPE.USER);
+    await configService.set(CONFIG_KEYS.DEFAULTS_HARNESS, harness, CONFIG_SCOPE.USER);
   },
 
   /**
@@ -716,7 +717,7 @@ export const ConfigurationUtils = {
    */
   async setModelForHarness(harness: HarnessId, model: string): Promise<void> {
     await configService.set(
-      `${CONFIG_KEYS.MODELS}.${harness}`,
+      `${CONFIG_KEYS.DEFAULTS_MODELS}.${harness}`,
       model,
       CONFIG_SCOPE.USER
     );
@@ -732,7 +733,7 @@ export const ConfigurationUtils = {
     // Pass undefined to remove the setting entirely when args is empty —
     // avoids leaving a "" entry in settings.json.
     await configService.set(
-      `${CONFIG_KEYS.ADDITIONAL_ARGS}.${harness}`,
+      `${CONFIG_KEYS.DEFAULTS_ADDITIONAL_ARGS}.${harness}`,
       args || undefined,
       CONFIG_SCOPE.USER
     );
@@ -743,7 +744,7 @@ export const ConfigurationUtils = {
    */
   async setDefaultAgent(agent: string): Promise<void> {
     await configService.set(
-      CONFIG_KEYS.WORKFLOW_DEFAULT_AGENT,
+      CONFIG_KEYS.DEFAULTS_AGENT,
       agent,
       CONFIG_SCOPE.USER
     );
@@ -754,7 +755,7 @@ export const ConfigurationUtils = {
    */
   async setDefaultSkills(skills: string[]): Promise<void> {
     await configService.set(
-      CONFIG_KEYS.WORKFLOW_DEFAULT_SKILLS,
+      CONFIG_KEYS.DEFAULTS_SKILLS,
       skills,
       CONFIG_SCOPE.USER
     );
@@ -776,7 +777,7 @@ export const ConfigurationUtils = {
    */
   async setResumeExistingSession(enabled: boolean): Promise<void> {
     await configService.set(
-      CONFIG_KEYS.WORKFLOW_RESUME_EXISTING_SESSION,
+      CONFIG_KEYS.DEFAULTS_RESUME_SESSION,
       enabled,
       CONFIG_SCOPE.USER
     );
@@ -786,7 +787,7 @@ export const ConfigurationUtils = {
    * Get the default MCP servers from settings
    */
   getDefaultMcpServers(): (string | McpServerConfig)[] {
-    return configService.get(CONFIG_KEYS.MCP).defaultServers;
+    return configService.get(CONFIG_KEYS.DEFAULTS).mcpServers;
   },
 
   /**
@@ -796,7 +797,7 @@ export const ConfigurationUtils = {
     servers: (string | McpServerConfig)[]
   ): Promise<void> {
     await configService.set(
-      CONFIG_KEYS.MCP_DEFAULT_SERVERS,
+      CONFIG_KEYS.DEFAULTS_MCP_SERVERS,
       servers,
       CONFIG_SCOPE.USER
     );
@@ -806,14 +807,14 @@ export const ConfigurationUtils = {
    * Get the default hooks from settings
    */
   getDefaultHooks(): UserHookConfig[] {
-    return configService.get(CONFIG_KEYS.HOOKS);
+    return configService.get(CONFIG_KEYS.DEFAULTS).hooks;
   },
 
   /**
    * Set the default hooks in settings
    */
   async setDefaultHooks(hooks: UserHookConfig[]): Promise<void> {
-    await configService.set(CONFIG_KEYS.HOOKS, hooks, CONFIG_SCOPE.USER);
+    await configService.set(CONFIG_KEYS.DEFAULTS_HOOKS, hooks, CONFIG_SCOPE.USER);
   },
 
   /**
@@ -821,7 +822,7 @@ export const ConfigurationUtils = {
    */
   async setDefaultWorkflowTemplate(templateId: string): Promise<void> {
     await configService.set(
-      CONFIG_KEYS.WORKFLOW_DEFAULT_TEMPLATE,
+      CONFIG_KEYS.GENERAL_DEFAULT_TEMPLATE,
       templateId,
       CONFIG_SCOPE.USER
     );

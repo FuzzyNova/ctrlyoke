@@ -12,12 +12,10 @@ import { GlobalSettingsVerticalTabBar } from "./GlobalSettingsVerticalTabBar";
 import {
   GeneralSection,
   WorkflowDefaultsSection,
-  HarnessesSection,
-  PermissionsSection,
+  AdvancedPermissionsSection,
   ExecutionSection,
   TerminalSection,
   ChatSection,
-  McpHooksSection,
   QueueSection,
   ServerSection,
   NotificationsSection,
@@ -29,13 +27,11 @@ import {
 const ALL_TABS = [
   { id: "general", label: "General", icon: "codicon-settings" },
   { id: "workflow", label: "Workflow Defaults", icon: "codicon-globe" },
-  { id: "harnesses", label: "Harnesses & Models", icon: "codicon-robot" },
-  { id: "permissions", label: "Permissions", icon: "codicon-shield" },
+  { id: "permissions", label: "Advanced Permissions", icon: "codicon-shield" },
   { id: "execution", label: "Execution", icon: "codicon-play" },
   { id: "notifications", label: "Notifications", icon: "codicon-bell" },
   { id: "terminal", label: "Terminal", icon: "codicon-terminal" },
   { id: "chat", label: "Chat", icon: "codicon-comment-discussion" },
-  { id: "mcp", label: "MCP & Hooks", icon: "codicon-plug" },
   { id: "queue", label: "Queue", icon: "codicon-list-ordered" },
   { id: "server", label: "Server", icon: "codicon-server" },
   {
@@ -175,63 +171,64 @@ export function GlobalSettingsDrawer() {
           iconOnly={isNarrow}
         />
 
-        {/* Right: section content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-4 max-w-2xl">
-            {fullSettings && effectiveActiveTab === "general" && (
-              <GeneralSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "workflow" && (
-              <WorkflowDefaultsSection
-                settings={fullSettings}
-                {...sectionProps}
-              />
-            )}
-            {fullSettings && effectiveActiveTab === "harnesses" && (
-              <HarnessesSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "permissions" && (
-              <PermissionsSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "execution" && (
-              <ExecutionSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "notifications" && (
-              <NotificationsSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "terminal" && (
-              <TerminalSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "chat" && (
-              <ChatSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "mcp" && (
-              <McpHooksSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "queue" && (
-              <QueueSection settings={fullSettings} {...sectionProps} />
-            )}
-            {fullSettings && effectiveActiveTab === "server" && (
-              <ServerSection settings={fullSettings} {...sectionProps} />
-            )}
-            {effectiveActiveTab === "agentskillsmanager" && (
-              <AgentSkillsManagerSection />
-            )}
-            {fullSettings && effectiveActiveTab === "commit" && (
-              <CommitSection settings={fullSettings} {...sectionProps} />
-            )}
-            {dev?.enabled && effectiveActiveTab === "developer" && (
-              <DeveloperSection />
-            )}
-            {!fullSettings &&
-              effectiveActiveTab !== "developer" &&
-              effectiveActiveTab !== "agentskillsmanager" && (
-                <div className="text-description-fg text-sm">
-                  Loading settings…
-                </div>
-              )}
+        {/* Right: section content.
+            The "workflow" tab renders WorkflowDefaultsSection which owns its
+            own scrolling and uses h-full + DrawerTabBar pinned at the bottom.
+            It must be a direct flex child so h-full resolves to a definite
+            size. All other tabs use the standard scrollable wrapper. */}
+        {fullSettings && effectiveActiveTab === "workflow" ? (
+          <div className="flex-1 flex flex-col min-h-0">
+            <WorkflowDefaultsSection settings={fullSettings} {...sectionProps} />
           </div>
-        </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4 max-w-2xl">
+              {fullSettings && effectiveActiveTab === "general" && (
+                <GeneralSection settings={fullSettings} {...sectionProps} />
+              )}
+              {fullSettings && effectiveActiveTab === "permissions" && (
+                <AdvancedPermissionsSection
+                  settings={fullSettings}
+                  {...sectionProps}
+                />
+              )}
+              {fullSettings && effectiveActiveTab === "execution" && (
+                <ExecutionSection settings={fullSettings} {...sectionProps} />
+              )}
+              {fullSettings && effectiveActiveTab === "notifications" && (
+                <NotificationsSection settings={fullSettings} {...sectionProps} />
+              )}
+              {fullSettings && effectiveActiveTab === "terminal" && (
+                <TerminalSection settings={fullSettings} {...sectionProps} />
+              )}
+              {fullSettings && effectiveActiveTab === "chat" && (
+                <ChatSection settings={fullSettings} {...sectionProps} />
+              )}
+              {fullSettings && effectiveActiveTab === "queue" && (
+                <QueueSection settings={fullSettings} {...sectionProps} />
+              )}
+              {fullSettings && effectiveActiveTab === "server" && (
+                <ServerSection settings={fullSettings} {...sectionProps} />
+              )}
+              {effectiveActiveTab === "agentskillsmanager" && (
+                <AgentSkillsManagerSection />
+              )}
+              {fullSettings && effectiveActiveTab === "commit" && (
+                <CommitSection settings={fullSettings} {...sectionProps} />
+              )}
+              {dev?.enabled && effectiveActiveTab === "developer" && (
+                <DeveloperSection />
+              )}
+              {!fullSettings &&
+                effectiveActiveTab !== "developer" &&
+                effectiveActiveTab !== "agentskillsmanager" && (
+                  <div className="text-description-fg text-sm">
+                    Loading settings…
+                  </div>
+                )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

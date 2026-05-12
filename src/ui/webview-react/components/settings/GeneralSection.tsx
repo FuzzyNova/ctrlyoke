@@ -5,7 +5,8 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
 import { SettingInputRow } from "../shared/SettingInputRow";
-import { LocalNumberInput } from "../shared/LocalInputs";
+import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
+import { CustomSelect } from "../shared/CustomSelect";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -20,6 +21,7 @@ export function GeneralSection({
   onUpdate,
   onReset,
 }: Props) {
+  const general = settings.settings.general;
   const ui = settings.settings.ui;
   const exec = settings.settings.execution;
   const history = settings.settings.history;
@@ -30,8 +32,65 @@ export function GeneralSection({
   return (
     <div className="space-y-1">
       <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-        UI Preferences
+        Workflow File Defaults
       </h3>
+      <SettingInputRow
+        label="Default format"
+        description="Default file format used when creating new workflows."
+        id="general-default-format"
+        path="general.defaultFormat"
+        {...rowProps}
+      >
+        <CustomSelect
+          id="general-default-format"
+          value={general.defaultFormat}
+          onChange={(v) => onUpdate("general.defaultFormat", v)}
+          options={[
+            { value: "yaml", label: "YAML (.flightpath.yaml)" },
+            { value: "json", label: "JSON (.flightpath.json)" },
+          ]}
+        />
+      </SettingInputRow>
+      <SettingInputRow
+        label="Default template"
+        description="Template ID used when creating new workflows. Use 'blank' for a minimal starter."
+        id="general-default-template"
+        path="general.defaultTemplate"
+        {...rowProps}
+      >
+        <LocalTextInput
+          id="general-default-template"
+          value={general.defaultTemplate}
+          onCommit={(v) => onUpdate("general.defaultTemplate", v || "blank")}
+          placeholder="blank"
+          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+        />
+      </SettingInputRow>
+      <div className="pt-3 border-t border-panel-border mt-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          Session Behavior
+        </h3>
+        <SettingToggleRow
+          label="Auto-load recent session"
+          description="Automatically load the most recently used workflow when the extension starts."
+          checked={general.autoLoadRecentSession}
+          onChange={(v) => onUpdate("general.autoLoadRecentSession", v)}
+          path="general.autoLoadRecentSession"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Omit agents & skills on resume"
+          description="Strip agent and skills overrides when resuming an existing session to avoid re-applying them."
+          checked={general.omitAgentsSkillsOnResume}
+          onChange={(v) => onUpdate("general.omitAgentsSkillsOnResume", v)}
+          path="general.omitAgentsSkillsOnResume"
+          {...rowProps}
+        />
+      </div>
+      <div className="pt-3 border-t border-panel-border mt-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          UI Preferences
+        </h3>
       <SettingToggleRow
         label="Show CLI output"
         description="Display the AI CLI output in the output panel."
@@ -112,6 +171,7 @@ export function GeneralSection({
         path="ui.showHiddenFiles"
         {...rowProps}
       />
+      </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           File Management

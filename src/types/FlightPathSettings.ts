@@ -24,14 +24,46 @@ import type {
 type CliAdditionalArgsHarnessId = Exclude<HarnessId, "copilot-chat">;
 
 export interface FlightPathGlobalSettings {
-  // Core
-  harness: HarnessId;
+  // General (format/template/behavior toggles)
+  general: {
+    defaultFormat: "yaml" | "json";
+    defaultTemplate: string;
+    autoLoadRecentSession: boolean;
+    omitAgentsSkillsOnResume: boolean;
+  };
 
-  // Models (per-harness)
-  models: Partial<Record<HarnessId, string>>;
+  // Defaults (mirrors executionProperties 1:1)
+  defaults: {
+    harness: HarnessId;
+    models: Partial<Record<HarnessId, string>>;
+    additionalArgs: Partial<Record<CliAdditionalArgsHarnessId, string>>;
+    agent: string;
+    skills: string[];
+    resumeSession: boolean;
+    priorContext: string;
+    mcpServers: (string | McpServerConfig)[];
+    hooks: UserHookConfig[];
+    toolPermissions: {
+      mode: "dangerouslyAllowAll" | "allowAll" | "custom";
+      allowedTools: string[];
+      deniedTools: string[];
+    };
+    /** Default end condition applied to all new workflows. null/undefined = disabled. */
+    endCondition?: EndCondition | null;
+    /** Default pre-condition applied to all new workflows. null/undefined = disabled. */
+    preCondition?: PreCondition | null;
+  };
 
-  // Additional args (per-harness) — replaces 6 separate VS Code settings
-  additionalArgs: Partial<Record<CliAdditionalArgsHarnessId, string>>;
+  // Permissions (harness-specific advanced settings)
+  permissions: {
+    // Shared across copilot-cli, claude-cli, codex-cli, qwen-cli (not supported by gemini-cli, opencode-cli, copilot-chat)
+    allowedDirs: string[];
+    // Copilot CLI-specific
+    copilotAllowAllPaths: boolean;
+    // Codex CLI-specific
+    codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
+    codexApprovalPolicy: "untrusted" | "on-request" | "never";
+  };
 
   // Execution
   execution: {
@@ -44,36 +76,6 @@ export interface FlightPathGlobalSettings {
     autoDeleteTempFiles: boolean;
   };
 
-  // Tools
-  tools: {
-    permissionMode: "dangerouslyAllowAll" | "allowAll" | "custom";
-    allowed: string[];
-    denied: string[];
-    // Shared across copilot-cli, claude-cli, codex-cli, qwen-cli (not supported by gemini-cli, opencode-cli, copilot-chat)
-    allowedDirs: string[];
-    // Copilot CLI-specific
-    copilotAllowAllPaths: boolean;
-    // Codex CLI-specific
-    codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
-    codexApprovalPolicy: "untrusted" | "on-request" | "never";
-  };
-
-  // Workflow defaults
-  workflow: {
-    defaultFormat: "yaml" | "json";
-    defaultTemplate: string;
-    defaultAgent: string;
-    defaultSkills: string[];
-    resumeExistingSession: boolean;
-    priorContext: string;
-    autoLoadRecentSession: boolean;
-    omitAgentsSkillsOnResume: boolean;
-    /** Default end condition applied to all new workflows. null/undefined = disabled. */
-    defaultEndCondition?: EndCondition | null;
-    /** Default pre-condition applied to all new workflows. null/undefined = disabled. */
-    defaultPreCondition?: PreCondition | null;
-  };
-
   // Chat
   chat: {
     windowLocation: "chatPanel" | "newTab" | "newWindow";
@@ -82,12 +84,6 @@ export interface FlightPathGlobalSettings {
     forceAgentMode: boolean;
     useNativeAttachments: boolean;
   };
-
-  // MCP & Hooks
-  mcp: {
-    defaultServers: (string | McpServerConfig)[];
-  };
-  hooks: UserHookConfig[];
 
   // Queue
   queue: {
@@ -188,26 +184,85 @@ export interface TerminalShortcut {
   sequence: string;
 }
 
-/** Partial version of FlightPathGlobalSettings for config file contents */
+/** Partial version of FlightPathGlobalSettings for config file contents (3-level deep partial) */
 export type PartialFlightPathSettings = {
   [K in keyof FlightPathGlobalSettings]?: FlightPathGlobalSettings[K] extends object
-    ? Partial<FlightPathGlobalSettings[K]>
+    ? {
+        [J in keyof FlightPathGlobalSettings[K]]?: FlightPathGlobalSettings[K][J] extends object
+          ? Partial<FlightPathGlobalSettings[K][J]>
+          : FlightPathGlobalSettings[K][J];
+      }
     : FlightPathGlobalSettings[K];
 };
 
 /** Default values for all settings */
 export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
-  harness: "copilot-cli",
-  models: {
-    "copilot-cli": "claude-sonnet-4.6",
-    "copilot-chat": "claude-sonnet-4.6",
-    "claude-cli": "sonnet",
-    "codex-cli": "gpt-5.5",
-    "opencode-cli": "opencode/big-pickle",
-    "qwen-cli": "qwen3.5-plus",
-    "gemini-cli": "gemini-3-flash-preview",
+  general: {
+    defaultFormat: "yaml",
+    defaultTemplate: "blank",
+    autoLoadRecentSession: true,
+    omitAgentsSkillsOnResume: true,
   },
-  additionalArgs: {},
+  defaults: {
+    harness: "copilot-cli",
+    models: {
+      "copilot-cli": "claude-sonnet-4.6",
+      "copilot-chat": "claude-sonnet-4.6",
+      "claude-cli": "sonnet",
+      "codex-cli": "gpt-5.5",
+      "opencode-cli": "opencode/big-pickle",
+      "qwen-cli": "qwen3.5-plus",
+      "gemini-cli": "gemini-3-flash-preview",
+    },
+    additionalArgs: {},
+    agent: "",
+    skills: [],
+    resumeSession: false,
+    priorContext: "none",
+    mcpServers: [],
+    hooks: [],
+    toolPermissions: {
+      mode: "allowAll",
+      allowedTools: [
+        "write",
+        "shell(git status)",
+        "shell(git diff)",
+        "shell(git add:*)",
+        "shell(git commit:*)",
+        "shell(git log:*)",
+        "shell(npm:*)",
+        "shell(yarn:*)",
+        "shell(pnpm:*)",
+        "shell(node:*)",
+        "shell(npx:*)",
+      ],
+      deniedTools: [
+        "shell(rm:*)",
+        "shell(del:*)",
+        "shell(Remove-Item:*)",
+        "shell(rd:*)",
+        "shell(rmdir:*)",
+        "shell(sudo:*)",
+        "shell(chmod:*)",
+        "shell(chown:*)",
+        "shell(git push:*)",
+        "shell(git reset:*)",
+        "shell(git checkout:*)",
+        "shell(git clean:*)",
+        "shell(docker rm:*)",
+        "shell(docker rmi:*)",
+        "shell(kubectl delete:*)",
+      ],
+    },
+    endCondition: null,
+    preCondition: null,
+  },
+  permissions: {
+    allowedDirs: [],
+    copilotAllowAllPaths: true,
+    codexSandboxMode: "workspace-write",
+    codexApprovalPolicy: "on-request",
+  },
   execution: {
     mode: "interactive",
     injectMode: false,
@@ -216,55 +271,6 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,
   },
-  tools: {
-    permissionMode: "allowAll",
-    allowed: [
-      "write",
-      "shell(git status)",
-      "shell(git diff)",
-      "shell(git add:*)",
-      "shell(git commit:*)",
-      "shell(git log:*)",
-      "shell(npm:*)",
-      "shell(yarn:*)",
-      "shell(pnpm:*)",
-      "shell(node:*)",
-      "shell(npx:*)",
-    ],
-    denied: [
-      "shell(rm:*)",
-      "shell(del:*)",
-      "shell(Remove-Item:*)",
-      "shell(rd:*)",
-      "shell(rmdir:*)",
-      "shell(sudo:*)",
-      "shell(chmod:*)",
-      "shell(chown:*)",
-      "shell(git push:*)",
-      "shell(git reset:*)",
-      "shell(git checkout:*)",
-      "shell(git clean:*)",
-      "shell(docker rm:*)",
-      "shell(docker rmi:*)",
-      "shell(kubectl delete:*)",
-    ],
-    allowedDirs: [],
-    copilotAllowAllPaths: true,
-    codexSandboxMode: "workspace-write",
-    codexApprovalPolicy: "on-request",
-  },
-  workflow: {
-    defaultFormat: "yaml",
-    defaultTemplate: "blank",
-    defaultAgent: "",
-    defaultSkills: [],
-    resumeExistingSession: false,
-    priorContext: "none",
-    autoLoadRecentSession: true,
-    omitAgentsSkillsOnResume: true,
-    defaultEndCondition: null,
-    defaultPreCondition: null,
-  },
   chat: {
     windowLocation: "chatPanel",
     inactivityTimeout: 300,
@@ -272,10 +278,6 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     forceAgentMode: false,
     useNativeAttachments: false,
   },
-  mcp: {
-    defaultServers: [],
-  },
-  hooks: [],
   queue: {
     maxSize: 10,
     maxWorkflowExecutionTime: -1,

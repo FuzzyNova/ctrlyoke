@@ -286,10 +286,10 @@ async function runCommand(
   const overlay: PartialFlightPathSettings = {};
   // --harness: only include when not the default (copilot-cli)
   if (options.harness && options.harness !== HARNESS_IDS.COPILOT_CLI) {
-    overlay.harness = options.harness as HarnessId;
+    overlay.defaults = { harness: options.harness as HarnessId };
   }
   if (options.model) {
-    overlay.models = { [config.harness as HarnessId]: options.model };
+    overlay.defaults = { ...overlay.defaults, models: { [config.harness as HarnessId]: options.model } };
   }
   if (options.headless) {
     overlay.execution = { mode: "headless" };
@@ -302,18 +302,24 @@ async function runCommand(
     overlay.execution = { mode: executionMode };
   }
   if (options.permissionMode) {
-    overlay.tools = {
-      permissionMode: options.permissionMode as
-        | "dangerouslyAllowAll"
-        | "allowAll"
-        | "custom",
+    overlay.defaults = {
+      ...overlay.defaults,
+      toolPermissions: {
+        mode: options.permissionMode as "dangerouslyAllowAll" | "allowAll" | "custom",
+      },
     };
   }
   if (options.allowTool?.length) {
-    overlay.tools = { ...overlay.tools, allowed: options.allowTool };
+    overlay.defaults = {
+      ...overlay.defaults,
+      toolPermissions: { ...(overlay.defaults?.toolPermissions ?? {}), allowedTools: options.allowTool },
+    };
   }
   if (options.denyTool?.length) {
-    overlay.tools = { ...overlay.tools, denied: options.denyTool };
+    overlay.defaults = {
+      ...overlay.defaults,
+      toolPermissions: { ...(overlay.defaults?.toolPermissions ?? {}), deniedTools: options.denyTool },
+    };
   }
   configService.setCliOverlay(overlay);
 

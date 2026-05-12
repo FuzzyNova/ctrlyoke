@@ -33,8 +33,8 @@ export function HarnessesSection({
   onUpdate,
   onReset,
 }: Props) {
-  const models = settings.settings.models;
-  const additionalArgs = settings.settings.additionalArgs;
+  const models = settings.settings.defaults.models;
+  const additionalArgs = settings.settings.defaults.additionalArgs;
   const sources = settings.sources as Record<string, SettingSource>;
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
   const rowProps = { sources, onReset, activeScope };
@@ -47,13 +47,13 @@ export function HarnessesSection({
       <SettingInputRow
         label="Active harness"
         id="harness-active"
-        path="harness"
+        path="defaults.harness"
         {...rowProps}
       >
         <select
           id="harness-active"
-          value={settings.settings.harness}
-          onChange={(e) => onUpdate("harness", e.target.value)}
+          value={settings.settings.defaults.harness}
+          onChange={(e) => onUpdate("defaults.harness", e.target.value)}
           className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
         >
           {CLI_HARNESSES.map((id) => (
@@ -91,7 +91,7 @@ export function HarnessesSection({
               <SettingInputRow
                 label="Model"
                 id={`model-${harnessId}`}
-                path={`models.${harnessId}`}
+                path={`defaults.models.${harnessId}`}
                 {...rowProps}
               >
                 {discoveredModels.length > 0 ? (
@@ -99,7 +99,7 @@ export function HarnessesSection({
                     id={`model-${harnessId}`}
                     value={currentModel}
                     onChange={(v) =>
-                      onUpdate(`models.${harnessId}`, v || undefined)
+                      onUpdate(`defaults.models.${harnessId}`, v || undefined)
                     }
                     options={discoveredModels}
                   />
@@ -108,7 +108,7 @@ export function HarnessesSection({
                     id={`model-${harnessId}`}
                     value={currentModel}
                     onCommit={(v) =>
-                      onUpdate(`models.${harnessId}`, v || undefined)
+                      onUpdate(`defaults.models.${harnessId}`, v || undefined)
                     }
                     placeholder="Enter model ID"
                     className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
@@ -119,7 +119,7 @@ export function HarnessesSection({
                 <SettingInputRow
                   label="Extra args"
                   id={`extra-args-${harnessId}`}
-                  path={`additionalArgs.${harnessId}`}
+                  path={`defaults.additionalArgs.${harnessId}`}
                   {...rowProps}
                 >
                   <LocalTextInput
@@ -131,7 +131,7 @@ export function HarnessesSection({
                     }
                     onCommit={(v) =>
                       onUpdate(
-                        `additionalArgs.${harnessId}`,
+                        `defaults.additionalArgs.${harnessId}`,
                         v || undefined
                       )
                     }

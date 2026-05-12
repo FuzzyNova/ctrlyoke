@@ -15,12 +15,6 @@ interface Props {
   onReset: (path: string) => void;
 }
 
-const PERMISSION_MODE_OPTIONS = [
-  { value: "allowAll", label: "Allow All" },
-  { value: "dangerouslyAllowAll", label: "Dangerously Allow All" },
-  { value: "custom", label: "Custom" },
-];
-
 const CODEX_SANDBOX_OPTIONS = [
   { value: "read-only", label: "Read Only" },
   { value: "workspace-write", label: "Workspace Write" },
@@ -33,102 +27,35 @@ const CODEX_APPROVAL_OPTIONS = [
   { value: "never", label: "Never" },
 ];
 
-export function PermissionsSection({
+export function AdvancedPermissionsSection({
   settings,
   activeScope,
   onUpdate,
   onReset,
 }: Props) {
-  const tools = settings.settings.tools;
+  const permissions = settings.settings.permissions;
   const sources = settings.sources as Record<string, SettingSource>;
-
   const rowProps = { sources, onReset, activeScope };
 
   return (
     <div className="space-y-4">
       <div>
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
-          Permission Mode
-        </h3>
-        <SettingInputRow
-          label="Mode"
-          id="tools-permission-mode"
-          path="tools.permissionMode"
-          {...rowProps}
-        >
-          <CustomSelect
-            id="tools-permission-mode"
-            value={tools.permissionMode}
-            onChange={(v) => onUpdate("tools.permissionMode", v)}
-            options={PERMISSION_MODE_OPTIONS}
-          />
-        </SettingInputRow>
-      </div>
-      <div className="space-y-3 mt-2">
-        <SettingInputRow
-          label="Allowed tools (one per line)"
-          id="tools-allowed"
-          path="tools.allowed"
-          {...rowProps}
-        >
-          <LocalTextarea
-            id="tools-allowed"
-            rows={3}
-            value={tools.allowed.join("\n")}
-            onCommit={(v) =>
-              onUpdate(
-                "tools.allowed",
-                v
-                  .split("\n")
-                  .map((t) => t.trim())
-                  .filter(Boolean)
-              )
-            }
-            placeholder={"read\nglob\ngrep"}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
-          />
-        </SettingInputRow>
-        <SettingInputRow
-          label="Denied tools (one per line)"
-          id="tools-denied"
-          path="tools.denied"
-          {...rowProps}
-        >
-          <LocalTextarea
-            id="tools-denied"
-            rows={3}
-            value={tools.denied.join("\n")}
-            onCommit={(v) =>
-              onUpdate(
-                "tools.denied",
-                v
-                  .split("\n")
-                  .map((t) => t.trim())
-                  .filter(Boolean)
-              )
-            }
-            placeholder={"shell(rm:*)\nwrite"}
-            className="w-full bg-input-bg border border-input-border rounded px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-focus-border resize-none font-mono"
-          />
-        </SettingInputRow>
-      </div>
-      <div className="border-t border-panel-border pt-4">
-        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           Allowed Directories
         </h3>
         <SettingInputRow
           label="Additional directories (one per line)"
           id="allowed-dirs"
-          path="tools.allowedDirs"
+          path="permissions.allowedDirs"
           {...rowProps}
         >
           <LocalTextarea
             id="allowed-dirs"
             rows={3}
-            value={tools.allowedDirs.join("\n")}
+            value={permissions.allowedDirs.join("\n")}
             onCommit={(v) =>
               onUpdate(
-                "tools.allowedDirs",
+                "permissions.allowedDirs",
                 v
                   .split("\n")
                   .map((d) => d.trim())
@@ -150,9 +77,9 @@ export function PermissionsSection({
         <SettingToggleRow
           label="Allow all paths"
           description="Allow the Copilot CLI to access all file paths."
-          checked={tools.copilotAllowAllPaths}
-          onChange={(v) => onUpdate("tools.copilotAllowAllPaths", v)}
-          path="tools.copilotAllowAllPaths"
+          checked={permissions.copilotAllowAllPaths}
+          onChange={(v) => onUpdate("permissions.copilotAllowAllPaths", v)}
+          path="permissions.copilotAllowAllPaths"
           {...rowProps}
         />
       </div>
@@ -168,26 +95,26 @@ export function PermissionsSection({
           <SettingInputRow
             label="Sandbox mode"
             id="codex-sandbox-mode"
-            path="tools.codexSandboxMode"
+            path="permissions.codexSandboxMode"
             {...rowProps}
           >
             <CustomSelect
               id="codex-sandbox-mode"
-              value={tools.codexSandboxMode}
-              onChange={(v) => onUpdate("tools.codexSandboxMode", v)}
+              value={permissions.codexSandboxMode}
+              onChange={(v) => onUpdate("permissions.codexSandboxMode", v)}
               options={CODEX_SANDBOX_OPTIONS}
             />
           </SettingInputRow>
           <SettingInputRow
             label="Approval policy"
             id="codex-approval-policy"
-            path="tools.codexApprovalPolicy"
+            path="permissions.codexApprovalPolicy"
             {...rowProps}
           >
             <CustomSelect
               id="codex-approval-policy"
-              value={tools.codexApprovalPolicy}
-              onChange={(v) => onUpdate("tools.codexApprovalPolicy", v)}
+              value={permissions.codexApprovalPolicy}
+              onChange={(v) => onUpdate("permissions.codexApprovalPolicy", v)}
               options={CODEX_APPROVAL_OPTIONS}
             />
           </SettingInputRow>

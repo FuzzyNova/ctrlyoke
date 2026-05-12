@@ -5,122 +5,9 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "harness": {
-      "type": "string",
-      "enum": [
-        "copilot-cli",
-        "copilot-chat",
-        "claude-cli",
-        "codex-cli",
-        "opencode-cli",
-        "qwen-cli",
-        "gemini-cli"
-      ],
-      "description": "The default harness to use for new workflows."
-    },
-    "models": {
+    "general": {
       "type": "object",
-      "description": "The default model to use for each harness for new workflows.",
-      "properties": {
-        "copilot-cli": { "type": "string" },
-        "copilot-chat": { "type": "string" },
-        "claude-cli": { "type": "string" },
-        "codex-cli": { "type": "string" },
-        "opencode-cli": { "type": "string" },
-        "qwen-cli": { "type": "string" },
-        "gemini-cli": { "type": "string" }
-      },
-      "additionalProperties": false
-    },
-    "additionalArgs": {
-      "type": "object",
-      "description": "The default additional CLI arguments for each harness for new workflows.",
-      "properties": {
-        "copilot-cli": { "type": "string" },
-        "claude-cli": { "type": "string" },
-        "codex-cli": { "type": "string" },
-        "opencode-cli": { "type": "string" },
-        "qwen-cli": { "type": "string" },
-        "gemini-cli": { "type": "string" }
-      },
-      "additionalProperties": false
-    },
-    "execution": {
-      "type": "object",
-      "description": "Execution settings.",
-      "additionalProperties": false,
-      "properties": {
-        "mode": {
-          "type": "string",
-          "enum": ["interactive", "headless"],
-          "description": "Whether prompts run in an interactive terminal or headless mode."
-        },
-        "injectMode": {
-          "type": "boolean",
-          "description": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug."
-        },
-        "maxPromptTimeout": {
-          "type": "number",
-          "description": "Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited."
-        },
-        "scriptTimeout": {
-          "type": "number",
-          "description": "Maximum time in seconds for end-condition scripts to run."
-        },
-        "closeTerminalOnComplete": {
-          "type": "boolean",
-          "description": "Automatically close the terminal when execution completes."
-        },
-        "autoDeleteTempFiles": {
-          "type": "boolean",
-          "description": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .flightpath/temp/ for debugging."
-        }
-      }
-    },
-    "tools": {
-      "type": "object",
-      "description": "Tool permission settings.",
-      "additionalProperties": false,
-      "properties": {
-        "permissionMode": {
-          "type": "string",
-          "enum": ["dangerouslyAllowAll", "allowAll", "custom"],
-          "description": "Global tool permission mode."
-        },
-        "allowed": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Explicitly allowed tools (used when permissionMode is 'custom')."
-        },
-        "denied": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Explicitly denied tools (used when permissionMode is 'custom')."
-        },
-        "allowedDirs": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Additional directories to allow tool access to. Applies to copilot-cli, claude-cli, codex-cli, and qwen-cli. Not supported by gemini-cli, opencode-cli, or copilot-chat."
-        },
-        "copilotAllowAllPaths": {
-          "type": "boolean",
-          "description": "Allow Copilot CLI to access all paths."
-        },
-        "codexSandboxMode": {
-          "type": "string",
-          "enum": ["read-only", "workspace-write", "danger-full-access"],
-          "description": "Sandbox mode for Codex CLI."
-        },
-        "codexApprovalPolicy": {
-          "type": "string",
-          "enum": ["untrusted", "on-request", "never"],
-          "description": "Approval policy for Codex CLI tool calls."
-        }
-      }
-    },
-    "workflow": {
-      "type": "object",
-      "description": "Workflow default settings.",
+      "description": "General format, template, and behavior settings.",
       "additionalProperties": false,
       "properties": {
         "defaultFormat": {
@@ -132,23 +19,6 @@
           "type": "string",
           "description": "Default template to use for new workflows."
         },
-        "defaultAgent": {
-          "type": "string",
-          "description": "Default agent to use in new workflows."
-        },
-        "defaultSkills": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Default skills to include in new workflows."
-        },
-        "resumeExistingSession": {
-          "type": "boolean",
-          "description": "Resume an existing session when running a workflow."
-        },
-        "priorContext": {
-          "type": "string",
-          "description": "Prior context to inject before the first prompt."
-        },
         "autoLoadRecentSession": {
           "type": "boolean",
           "description": "Automatically load the most recent session on startup."
@@ -156,8 +26,127 @@
         "omitAgentsSkillsOnResume": {
           "type": "boolean",
           "description": "Omit agents/skills declarations when resuming an existing session."
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Default execution properties applied to all new workflows (mirrors ExecutionProperties).",
+      "additionalProperties": false,
+      "properties": {
+        "harness": {
+          "type": "string",
+          "enum": [
+            "copilot-cli",
+            "copilot-chat",
+            "claude-cli",
+            "codex-cli",
+            "opencode-cli",
+            "qwen-cli",
+            "gemini-cli"
+          ],
+          "description": "The default harness to use for new workflows."
         },
-        "defaultEndCondition": {
+        "models": {
+          "type": "object",
+          "description": "The default model to use for each harness for new workflows.",
+          "properties": {
+            "copilot-cli": { "type": "string" },
+            "copilot-chat": { "type": "string" },
+            "claude-cli": { "type": "string" },
+            "codex-cli": { "type": "string" },
+            "opencode-cli": { "type": "string" },
+            "qwen-cli": { "type": "string" },
+            "gemini-cli": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "additionalArgs": {
+          "type": "object",
+          "description": "The default additional CLI arguments for each harness for new workflows.",
+          "properties": {
+            "copilot-cli": { "type": "string" },
+            "claude-cli": { "type": "string" },
+            "codex-cli": { "type": "string" },
+            "opencode-cli": { "type": "string" },
+            "qwen-cli": { "type": "string" },
+            "gemini-cli": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "agent": {
+          "type": "string",
+          "description": "Default agent to use in new workflows."
+        },
+        "skills": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Default skills to include in new workflows."
+        },
+        "resumeSession": {
+          "type": "boolean",
+          "description": "Resume an existing session when running a workflow."
+        },
+        "priorContext": {
+          "type": "string",
+          "description": "Prior context to inject before the first prompt."
+        },
+        "mcpServers": {
+          "type": "array",
+          "description": "Default MCP servers to attach to each prompt execution.",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "command": { "type": "string" },
+                  "args": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                  }
+                },
+                "additionalProperties": true
+              }
+            ]
+          }
+        },
+        "hooks": {
+          "type": "array",
+          "description": "User-defined hooks to run at various execution lifecycle points.",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "toolPermissions": {
+          "type": "object",
+          "description": "Default tool permission settings for prompt execution.",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["dangerouslyAllowAll", "allowAll", "custom"],
+              "description": "Global tool permission mode."
+            },
+            "allowedTools": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Explicitly allowed tools (used when mode is 'custom')."
+            },
+            "deniedTools": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Explicitly denied tools (used when mode is 'custom')."
+            }
+          }
+        },
+        "endCondition": {
           "oneOf": [
             {
               "type": "object",
@@ -214,7 +203,7 @@
             }
           ]
         },
-        "defaultPreCondition": {
+        "preCondition": {
           "oneOf": [
             {
               "type": "object",
@@ -259,6 +248,64 @@
         }
       }
     },
+    "permissions": {
+      "type": "object",
+      "description": "Harness-specific path and sandbox permission settings.",
+      "additionalProperties": false,
+      "properties": {
+        "allowedDirs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional directories to allow tool access to. Applies to copilot-cli, claude-cli, codex-cli, and qwen-cli. Not supported by gemini-cli, opencode-cli, or copilot-chat."
+        },
+        "copilotAllowAllPaths": {
+          "type": "boolean",
+          "description": "Allow Copilot CLI to access all paths."
+        },
+        "codexSandboxMode": {
+          "type": "string",
+          "enum": ["read-only", "workspace-write", "danger-full-access"],
+          "description": "Sandbox mode for Codex CLI."
+        },
+        "codexApprovalPolicy": {
+          "type": "string",
+          "enum": ["untrusted", "on-request", "never"],
+          "description": "Approval policy for Codex CLI tool calls."
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "description": "Execution settings.",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["interactive", "headless"],
+          "description": "Whether prompts run in an interactive terminal or headless mode."
+        },
+        "injectMode": {
+          "type": "boolean",
+          "description": "When true, keeps the TUI alive between prompts and writes follow-up prompts directly into the PTY. Faster than restarting and avoids the Claude Code resume cache bug."
+        },
+        "maxPromptTimeout": {
+          "type": "number",
+          "description": "Maximum time in seconds to wait for a prompt to complete. Use -1 for unlimited."
+        },
+        "scriptTimeout": {
+          "type": "number",
+          "description": "Maximum time in seconds for end-condition scripts to run."
+        },
+        "closeTerminalOnComplete": {
+          "type": "boolean",
+          "description": "Automatically close the terminal when execution completes."
+        },
+        "autoDeleteTempFiles": {
+          "type": "boolean",
+          "description": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .flightpath/temp/ for debugging."
+        }
+      }
+    },
     "chat": {
       "type": "object",
       "description": "Copilot Chat harness settings.",
@@ -285,46 +332,6 @@
           "type": "boolean",
           "description": "Use native VS Code chat attachment API instead of inline text."
         }
-      }
-    },
-    "mcp": {
-      "type": "object",
-      "description": "MCP server configuration.",
-      "additionalProperties": false,
-      "properties": {
-        "defaultServers": {
-          "type": "array",
-          "description": "Default MCP servers to attach to each prompt execution.",
-          "items": {
-            "oneOf": [
-              { "type": "string" },
-              {
-                "type": "object",
-                "properties": {
-                  "id": { "type": "string" },
-                  "command": { "type": "string" },
-                  "args": {
-                    "type": "array",
-                    "items": { "type": "string" }
-                  },
-                  "env": {
-                    "type": "object",
-                    "additionalProperties": { "type": "string" }
-                  }
-                },
-                "additionalProperties": true
-              }
-            ]
-          }
-        }
-      }
-    },
-    "hooks": {
-      "type": "array",
-      "description": "User-defined hooks to run at various execution lifecycle points.",
-      "items": {
-        "type": "object",
-        "additionalProperties": true
       }
     },
     "queue": {

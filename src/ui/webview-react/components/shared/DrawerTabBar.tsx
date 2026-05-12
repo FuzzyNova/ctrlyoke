@@ -7,8 +7,11 @@ import type { TabIconOverride } from "./tabBadgeUtils";
 interface DrawerTabBarProps {
   activeTab: DrawerPage;
   onTabChange: (id: DrawerPage) => void;
-  /** Active harness ID — renders HarnessIcon on the Harness tab instead of a codicon */
-  harnessId: HarnessId;
+  /**
+   * Active harness ID — renders HarnessIcon on the Harness tab instead of a codicon.
+   * When omitted, the Harness tab falls back to `codicon-robot`.
+   */
+  harnessId?: HarnessId;
   /** Whether the drawer is narrow — retained for parent compatibility */
   isNarrow: boolean;
   /** Per-tab icon/color overrides driven by resolved property state */
@@ -59,13 +62,18 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
                 className={`codicon codicon-${codicon}`}
                 style={{ fontSize: 20 }}
               />
-            ) : (
+            ) : harnessId ? (
               <HarnessIcon
                 harnessId={harnessId}
                 size={20}
                 className={
                   isActive ? "opacity-100" : "opacity-80 hover:opacity-100"
                 }
+              />
+            ) : (
+              <span
+                className="codicon codicon-robot"
+                style={{ fontSize: 20 }}
               />
             )}
           </button>

@@ -1,14 +1,20 @@
 export { GeneralSection } from "./GeneralSection";
 export { WorkflowDefaultsSection } from "./WorkflowDefaultsSection";
 export { HarnessesSection } from "./HarnessesSection";
-export { PermissionsSection } from "./PermissionsSection";
+export { AdvancedPermissionsSection } from "./AdvancedPermissionsSection";
 export { ExecutionSection } from "./ExecutionSection";
 export { TerminalSection } from "./TerminalSection";
 export { ChatSection } from "./ChatSection";
-export { McpHooksSection } from "./McpHooksSection";
 export { QueueSection } from "./QueueSection";
 export { ServerSection } from "./ServerSection";
 export { DeveloperSection } from "./DeveloperSection";
 export { NotificationsSection } from "./NotificationsSection";
 export { AgentSkillsManagerSection } from "./AgentSkillsManagerSection";
 export { CommitSection } from "./CommitSection";
+// Defaults sub-pages
+export { DefaultsHarnessPage } from "./defaults/DefaultsHarnessPage";
+export { DefaultsContextPage } from "./defaults/DefaultsContextPage";
+export { DefaultsValidationPage } from "./defaults/DefaultsValidationPage";
+export { DefaultsMcpPage } from "./defaults/DefaultsMcpPage";
+export { DefaultsHooksPage } from "./defaults/DefaultsHooksPage";
+export { DefaultsPermissionsPage } from "./defaults/DefaultsPermissionsPage";

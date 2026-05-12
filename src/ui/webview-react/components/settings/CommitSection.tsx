@@ -61,7 +61,7 @@ export function CommitSection({
 
   // Resolve the effective harness for model discovery: explicit override or active global harness
   const effectiveHarness =
-    (commit.harness as string) || settings.settings.harness;
+    (commit.harness as string) || settings.settings.defaults.harness;
   const discoveredModels = getModelsForHarness(effectiveHarness as HarnessId);
   const currentModel = (commit.model as string) ?? "";
   const generationStatus = lastCommitMessageGeneration

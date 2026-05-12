@@ -35,7 +35,7 @@ suite("FlightPathConfigService", () => {
 
   test("returns all defaults when no backends are set", () => {
     const all = service.getAll();
-    assert.strictEqual(all.harness, FLIGHTPATH_SETTINGS_DEFAULTS.harness);
+    assert.strictEqual(all.defaults.harness, FLIGHTPATH_SETTINGS_DEFAULTS.defaults.harness);
     assert.strictEqual(
       all.execution.mode,
       FLIGHTPATH_SETTINGS_DEFAULTS.execution.mode
@@ -52,10 +52,10 @@ suite("FlightPathConfigService", () => {
 
   test("user backend values override defaults", () => {
     service.setUserBackend(
-      makeBackend({ harness: "claude-cli", enableDiagnosticLogs: true })
+      makeBackend({ defaults: { harness: "claude-cli" }, enableDiagnosticLogs: true })
     );
     const all = service.getAll();
-    assert.strictEqual(all.harness, "claude-cli");
+    assert.strictEqual(all.defaults.harness, "claude-cli");
     assert.strictEqual(all.enableDiagnosticLogs, true);
     // Other defaults should still be present
     assert.strictEqual(
@@ -65,16 +65,16 @@ suite("FlightPathConfigService", () => {
   });
 
   test("workspace backend overrides user backend", () => {
-    service.setUserBackend(makeBackend({ harness: "claude-cli" }));
-    service.setWorkspaceBackend(makeBackend({ harness: "codex-cli" }));
-    assert.strictEqual(service.get("harness"), "codex-cli");
+    service.setUserBackend(makeBackend({ defaults: { harness: "claude-cli" } }));
+    service.setWorkspaceBackend(makeBackend({ defaults: { harness: "codex-cli" } }));
+    assert.strictEqual(service.get("defaults").harness, "codex-cli");
   });
 
   test("CLI overlay overrides workspace backend", () => {
-    service.setUserBackend(makeBackend({ harness: "claude-cli" }));
-    service.setWorkspaceBackend(makeBackend({ harness: "codex-cli" }));
-    service.setCliOverlay({ harness: "gemini-cli" });
-    assert.strictEqual(service.get("harness"), "gemini-cli");
+    service.setUserBackend(makeBackend({ defaults: { harness: "claude-cli" } }));
+    service.setWorkspaceBackend(makeBackend({ defaults: { harness: "codex-cli" } }));
+    service.setCliOverlay({ defaults: { harness: "gemini-cli" } });
+    assert.strictEqual(service.get("defaults").harness, "gemini-cli");
   });
 
   test("deep merge: workspace execution.mode does not wipe execution.scriptTimeout", () => {
@@ -96,32 +96,32 @@ suite("FlightPathConfigService", () => {
 
   suite("resolve(key)", () => {
     test('returns source "default" when no backends set', () => {
-      const result = service.resolve("harness");
+      const result = service.resolve("defaults");
       assert.strictEqual(result.source, "default");
-      assert.strictEqual(result.value, FLIGHTPATH_SETTINGS_DEFAULTS.harness);
+      assert.strictEqual((result.value as typeof FLIGHTPATH_SETTINGS_DEFAULTS.defaults).harness, FLIGHTPATH_SETTINGS_DEFAULTS.defaults.harness);
     });
 
     test('returns source "user" when user backend provides key', () => {
-      service.setUserBackend(makeBackend({ harness: "claude-cli" }));
-      const result = service.resolve("harness");
+      service.setUserBackend(makeBackend({ defaults: { harness: "claude-cli" } }));
+      const result = service.resolve("defaults");
       assert.strictEqual(result.source, "user");
-      assert.strictEqual(result.value, "claude-cli");
+      assert.strictEqual((result.value as typeof FLIGHTPATH_SETTINGS_DEFAULTS.defaults).harness, "claude-cli");
     });
 
     test('returns source "workspace" when workspace backend provides key', () => {
-      service.setUserBackend(makeBackend({ harness: "claude-cli" }));
-      service.setWorkspaceBackend(makeBackend({ harness: "codex-cli" }));
-      const result = service.resolve("harness");
+      service.setUserBackend(makeBackend({ defaults: { harness: "claude-cli" } }));
+      service.setWorkspaceBackend(makeBackend({ defaults: { harness: "codex-cli" } }));
+      const result = service.resolve("defaults");
       assert.strictEqual(result.source, "workspace");
-      assert.strictEqual(result.value, "codex-cli");
+      assert.strictEqual((result.value as typeof FLIGHTPATH_SETTINGS_DEFAULTS.defaults).harness, "codex-cli");
     });
 
     test('returns source "cli" when CLI overlay provides key', () => {
-      service.setWorkspaceBackend(makeBackend({ harness: "codex-cli" }));
-      service.setCliOverlay({ harness: "gemini-cli" });
-      const result = service.resolve("harness");
+      service.setWorkspaceBackend(makeBackend({ defaults: { harness: "codex-cli" } }));
+      service.setCliOverlay({ defaults: { harness: "gemini-cli" } });
+      const result = service.resolve("defaults");
       assert.strictEqual(result.source, "cli");
-      assert.strictEqual(result.value, "gemini-cli");
+      assert.strictEqual((result.value as typeof FLIGHTPATH_SETTINGS_DEFAULTS.defaults).harness, "gemini-cli");
     });
   });
 
@@ -182,12 +182,12 @@ suite("FileConfigBackend", () => {
     const configPath = path.join(tmpDir, "settings.json");
     fs.writeFileSync(
       configPath,
-      JSON.stringify({ harness: "claude-cli", enableDiagnosticLogs: true }),
+      JSON.stringify({ defaults: { harness: "claude-cli" }, enableDiagnosticLogs: true }),
       "utf-8"
     );
     const backend = new FileConfigBackend(configPath);
     const result = backend.getAll();
-    assert.strictEqual(result.harness, "claude-cli");
+    assert.strictEqual(result.defaults?.harness, "claude-cli");
     assert.strictEqual(result.enableDiagnosticLogs, true);
   });
 
@@ -201,23 +201,23 @@ suite("FileConfigBackend", () => {
   test("set() creates file and directory if they do not exist", async () => {
     const configPath = path.join(tmpDir, "sub", "settings.json");
     const backend = new FileConfigBackend(configPath);
-    await backend.set("harness", "claude-cli");
+    await backend.set("defaults.harness", "claude-cli");
     assert.ok(fs.existsSync(configPath), "config file should be created");
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    assert.strictEqual(content.harness, "claude-cli");
+    assert.strictEqual(content.defaults?.harness, "claude-cli");
   });
 
   test("set() updates an existing top-level setting", async () => {
     const configPath = path.join(tmpDir, "settings.json");
     fs.writeFileSync(
       configPath,
-      JSON.stringify({ harness: "copilot-cli" }),
+      JSON.stringify({ defaults: { harness: "copilot-cli" } }),
       "utf-8"
     );
     const backend = new FileConfigBackend(configPath);
-    await backend.set("harness", "gemini-cli");
+    await backend.set("defaults.harness", "gemini-cli");
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    assert.strictEqual(content.harness, "gemini-cli");
+    assert.strictEqual(content.defaults?.harness, "gemini-cli");
   });
 
   test("set() updates a nested setting without wiping siblings", async () => {
@@ -238,7 +238,7 @@ suite("FileConfigBackend", () => {
     const configPath = path.join(tmpDir, "settings.json");
     fs.writeFileSync(
       configPath,
-      JSON.stringify({ harness: "claude-cli", enableDiagnosticLogs: true }),
+      JSON.stringify({ defaults: { harness: "claude-cli" }, enableDiagnosticLogs: true }),
       "utf-8"
     );
     const backend = new FileConfigBackend(configPath);
