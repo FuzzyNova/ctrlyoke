@@ -1,319 +1,246 @@
-# FlightPath - Quick Start Guide
+# FlightPath Quick Start
 
-## 🚀 Getting Started in 5 Minutes
-
-### Step 1: Check Your Setup
-
-Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) and run:
-
-```
-FlightPath: Show Copilot Integration Status
-```
-
-You should see:
-
-- ✅ **Direct automation available** - Ready to go! Full automation enabled
-- ❌ **Direct automation unavailable** - Copilot Chat not ready, follow troubleshooting steps
-
-### Step 2: Test Automation (Optional but Recommended)
-
-```
-FlightPath: Test Automation
-```
-
-This sends a test message to Copilot Chat. If you see the message appear automatically, you're ready to go!
-
-### Step 3: Create Your First Workflow
-
-**Option A: Use Example File**
-
-1. Navigate to `.flightpath/examples/` folder
-2. Open `zero-interaction-demo.flightpath.json`
-3. Run: `FlightPath: Take Off`
-4. Select the demo file
-5. Click "Take Off"
-6. Watch prompts execute automatically! 🎉
-
-**Option B: Create New File**
-
-1. Run: `FlightPath: Create Prompt File`
-2. Name it: `my-workflow.flightpath.json`
-3. Add your prompts (see examples below)
-4. Run: `FlightPath: Take Off`
-
-### Step 4: Watch the Magic
-
-When you click "Take Off":
-
-- FlightPath opens Copilot Chat
-- Types your prompts automatically
-- Submits and verifies each prompt
-- Waits for Copilot to finish responding (using Language Model Tool)
-- Proceeds to next prompt automatically
-- No manual intervention needed! ✨
+FlightPath automates AI coding assistants — Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, Gemini CLI, and Copilot Chat — through structured prompt workflows you define in YAML, JSON, or Markdown.
 
 ---
 
-## 📝 Workflow File Examples
+## Prerequisites
 
-### Simple Markdown Prompt
+FlightPath drives whichever AI CLI tool you have installed. You need at least one:
 
-Create: `analyze-code.prompt.md`
+| Harness        | CLI Tool                                    |
+| -------------- | ------------------------------------------- |
+| `copilot-cli`  | `gh` with GitHub Copilot extension          |
+| `claude-cli`   | `claude` (Claude Code CLI)                  |
+| `codex-cli`    | `codex` (OpenAI Codex CLI)                  |
+| `opencode-cli` | `opencode`                                  |
+| `qwen-cli`     | Qwen Code CLI                               |
+| `gemini-cli`   | `gemini` (Google Gemini CLI)                |
+| `copilot-chat` | GitHub Copilot Chat VS Code extension       |
+
+The default harness is `copilot-cli`. Change it in **FlightPath Settings** inside the dashboard, or set it per-workflow (see below).
+
+---
+
+## Step 1: Initialize Your Workspace
+
+Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run:
+
+```
+FlightPath: Initialize Workspace
+```
+
+This creates the `.flightpath/` directory structure in your workspace root:
+
+```
+.flightpath/
+  workflows/     # ready-to-run workflow files
+  prompts/       # draft single prompts
+  scripts/       # end condition validation scripts
+  templates/     # custom workflow templates
+```
+
+---
+
+## Step 2: Create Your First Workflow
+
+**From a template (recommended for new users):**
+
+1. Run `FlightPath: New Workflow from Template`
+2. Choose a template (blank, simple-feature, fix-tests, full-feature)
+3. Name and save the file
+
+**From scratch:**
+
+Create a file ending in `.flightpath.yaml` anywhere in your workspace:
+
+```yaml
+harness: copilot-cli
+
+prompts:
+  - name: analyze
+    prompt: |
+      Analyze #file:src/app.ts and identify any issues with error handling.
+
+  - name: fix
+    prompt: |
+      Fix the error handling issues you identified.
+    resumeSession: true
+```
+
+The simplest possible workflow is a single `.prompt.md` file:
 
 ```markdown
-Analyze the FlightPath extension architecture and suggest improvements for better code organization. Focus on the separation of concerns between components.
+Analyze #file:src/app.ts and suggest improvements.
 ```
 
-Then right-click the file and select **FlightPath: Run with FlightPath** (or press the play icon in the editor title bar).
+---
 
-### Simple Single Prompt (Markdown)
+## Step 3: Run a Workflow
 
-Create: `analyze-code.prompt.md`
+**From the Explorer:**
+
+Right-click any `.flightpath.yaml`, `.flightpath.json`, or `.prompt.md` file and select **Run with FlightPath**.
+
+**From the FlightPath panel:**
+
+1. Open the panel: run `FlightPath: Open FlightPath Panel`
+2. Click **Select Prompt File** and choose your workflow
+3. Click **Run**
+
+The dashboard shows live output from the AI as each step executes. Use the **Pause**, **Resume**, and **Stop** buttons to control execution.
+
+---
+
+## Workflow File Formats
+
+Three formats are supported. All share the same JSON Schema and the same fields.
+
+**YAML** (`.flightpath.yaml`) — recommended for multi-step workflows:
+
+```yaml
+harness: claude-cli
+model: claude-sonnet-4-5
+
+prompts:
+  - name: step-1
+    prompt: Implement the feature described in #file:.flightpath/prompts/spec.prompt.md
+    endCondition:
+      script: npm test
+      returns: "true"
+      maxRetries: 3
+      retryPrompt: |
+        Tests failed with: {stderr}
+        Please fix the failures.
+
+  - name: step-2
+    prompt: Update the README to document the new feature.
+    resumeSession: true
+```
+
+**JSON** (`.flightpath.json`) — for programmatic generation or CI/CD:
+
+```json
+{
+  "harness": "claude-cli",
+  "prompts": [
+    { "prompt": "Analyze the codebase and create a summary." }
+  ]
+}
+```
+
+**Markdown** (`.prompt.md`) — for a single prompt with no configuration:
 
 ```markdown
-Analyze #file:src/extension.ts for potential improvements.
-
-Focus on:
-
-- Code organization
-- Type safety
-- Error handling
-```
-
-### Multi-Step Workflow
-
-Create: `refactor-workflow.flightpath.json`
-
-```json
-{
-  "prompts": [
-    {
-      "prompt": "/explain #file:src/extension.ts Identify code smells in this file"
-    },
-    {
-      "prompt": "/explain #file:src/extension.ts Suggest refactoring strategies"
-    },
-    {
-      "prompt": "/new #file:src/extension.ts Show an example of the improved code"
-    }
-  ]
-}
-```
-
-### Context-Aware Analysis
-
-```json
-{
-  "prompts": [
-    {
-      "prompt": "@workspace /explain Analyze the architecture of this project"
-    },
-    {
-      "prompt": "/explain #file:src/flightpath/FlightPathManager.ts #file:src/flightpath/CopilotIntegration.ts What SOLID principles are being followed?"
-    }
-  ]
-}
+Review #file:src/utils.ts for potential bugs and suggest fixes.
 ```
 
 ---
 
-## 🎯 Pro Tips
+## Choosing and Configuring a Harness
 
-### 1. Use Copilot Chat Syntax
+Set the harness in **FlightPath Settings** (gear icon in the dashboard) or override it per-workflow:
 
-FlightPath prompts use native Copilot Chat syntax:
+```yaml
+harness: claude-cli      # override for this workflow
+model: claude-opus-4-5   # override model for this workflow
 
-- `@workspace` - Include workspace-wide context
-- `#file:path/to/file.ext` - Reference specific files
-- `#file:path/to/file.ext:45-120` - Reference line ranges
-- `#selection` - Reference current editor selection
-- `/fix` - For fixing errors or issues
-- `/explain` - For explanations and analysis
-- `/new` - For creating new code
-- `/tests` - For generating or fixing tests
-
-Example final-form prompt:
-
-```json
-{
-  "prompt": "/fix #file:src/app.ts:45-67 Fix the memory leak in the event handler"
-}
+prompts:
+  - prompt: ...
+    harness: codex-cli   # override for this specific step
+    model: gpt-5
 ```
 
-### 2. Context Variables
+Each harness supports two execution modes:
+- **Interactive** — opens a visible terminal, useful for workflows that require watching or interaction
+- **Headless** — runs in the background, captures output without a visible terminal
 
-Include context directly in your prompt text:
-
-- **Workspace**: `@workspace` at the start
-- **Files**: `#file:relative/path/to/file.ext`
-- **Line Ranges**: `#file:path/to/file.ext:startLine-endLine`
-- **Selection**: `#selection` (when you have text selected)
-
-Example:
-
-```json
-{
-  "prompt": "/explain @workspace #file:src/extension.ts #file:package.json Analyze the project structure"
-}
-```
-
-### 3. Workflow Patterns
-
-**Analysis → Suggestion → Implementation**
-
-```json
-{
-  "prompts": [
-    { "prompt": "/explain #file:src/app.ts Analyze current code" },
-    { "prompt": "/explain #file:src/app.ts Suggest improvements" },
-    { "prompt": "/new #file:src/app.ts Show example implementation" }
-  ]
-}
-```
-
-**Incremental Refinement**
-
-```json
-{
-  "prompts": [
-    {
-      "prompt": "/new #file:src/utils/input.ts Create a function to handle user input"
-    },
-    {
-      "prompt": "/fix #file:src/utils/input.ts Add error handling to the previous function"
-    },
-    {
-      "prompt": "/fix #file:src/utils/input.ts Add input validation and sanitization"
-    }
-  ]
-}
-```
-
-### 4. Queue Append - Extend Running Workflows
-
-**Add follow-up prompts without clearing the dashboard:**
-
-1. **Start a workflow** (e.g., `initial-analysis.flightpath.json`)
-2. **While it's running** (or after completion), right-click another prompt file
-3. **Select "Queue with FlightPath"**
-4. **New prompts are appended** to the current queue
-5. **All output preserved** - dashboard shows continuous history
-
-**Example Use Cases:**
-
-- **Follow-up questions**: Ask clarifying questions after initial analysis
-- **Sequential workflows**: Run workflow A, then automatically queue workflow B
-- **Interactive debugging**: Add investigation prompts during active debugging
-
-**Keyboard Shortcut:** Open a prompt file and click the "Queue" icon (➕) in the editor title bar.
-
-**Tips:**
-
-- Works with running, paused, and completed queues
-- Respects queue size limits (`maxQueueSize` setting)
-- Auto-executes when appending to completed queues
-- Blocked when queue is cancelled or errored (must clear first)
+Switch modes in FlightPath Settings or via the `cliExecutionMode` setting.
 
 ---
 
-## 🛠️ Troubleshooting
+## Appending to a Running Workflow
 
-### Automation Not Available?
+You can extend a workflow while it is running, paused, or after it completes without clearing history.
 
-If you see "Direct automation unavailable":
+1. Right-click any prompt file in the Explorer
+2. Select **Queue with FlightPath** (appends to the end of the current queue)
+3. Or select **Queue Next with FlightPath** (inserts immediately after the current step)
 
-1. **Ensure Copilot Chat is installed**:
-   - Extensions → Search for "GitHub Copilot Chat"
-   - Install and reload VS Code if needed
-
-2. **Wait for initialization**:
-   - FlightPath polls for Copilot availability on startup (up to 30 seconds)
-   - Check status bar for initialization status
-   - Status bar shows: Initializing → Waiting → Ready
-
-3. **Manually retry detection**:
-   - Run: `FlightPath: Retry Copilot Detection`
-   - This restarts the background polling process
-
-4. **Check required commands**:
-   - Run: `FlightPath: Show Copilot Integration Status`
-   - Verify all required VS Code commands are available
-   - Update VS Code if using an older version (requires 1.85.0+)
-
-### Prompts Not Sending?
-
-1. **Check Copilot is responding**: Open Copilot Chat manually and send a test message
-2. **Check status**: Run `FlightPath: Show Copilot Integration Status`
-3. **Test automation**: Run `FlightPath: Test Automation`
-4. **View logs**: View → Output → FlightPath (Debug Console)
-
-### Workflow Stuck?
-
-- **Pause**: `FlightPath: Pause Execution`
-- **Resume**: `FlightPath: Resume Execution`
-- **Stop**: `FlightPath: Stop Execution`
-
-### Submit Keeps Retrying?
-
-If you see "Submit verification failed" messages:
-
-- Copilot may still be responding to the previous prompt
-- FlightPath automatically retries with exponential backoff (up to 5 attempts)
-- If it fails after retries, the workflow will show an error
-- Try increasing wait time by stopping and restarting the workflow
+The dashboard shows all output continuously regardless of how many files were queued.
 
 ---
 
-## 📚 Where to Store Files
+## End Conditions
 
-FlightPath looks for prompt files in:
+End conditions let FlightPath validate each step before moving to the next. If validation fails, FlightPath retries with an error-aware prompt:
 
-```
-your-workspace/
-  .flightpath/             ← Recommended location
-    *.prompt.md            ← Simple single prompts
-    *.flightpath.yaml      ← Multi-step workflows (recommended)
-    *.flightpath.json      ← Multi-step workflows (automation/CI/CD)
+```yaml
+prompts:
+  - prompt: Fix the failing tests.
+    endCondition:
+      script: npm test
+      returns: "true"
+      maxRetries: 3
+      retryPrompt: |
+        Tests still failing: {stderr}
+        Fix all failures before continuing.
 ```
 
-You can also store them anywhere in your workspace!
+The script runs in an isolated child process. The `returns` value is compared against `stdout`. Template variables `{stdout}`, `{stderr}`, `{exitCode}` are available in `retryPrompt`.
 
 ---
 
-## 🎓 Learning Resources
+## Command Reference
 
-- **Full Documentation**: See `docs/COPILOT_INTEGRATION.md`
-- **Architecture Overview**: See `docs/ARCHITECTURE.md`
-- **Response Handling Details**: See `docs/COPILOT_RESPONSE_HANDLING.md`
-- **Example Files**: Check `.flightpath/examples/`
-- **Schema Files**: See `schemas/` for JSON validation
+| Command                                  | What It Does                                      |
+| ---------------------------------------- | ------------------------------------------------- |
+| `FlightPath: Open FlightPath Panel`      | Open the dashboard sidebar                        |
+| `FlightPath: Initialize Workspace`       | Create `.flightpath/` directory structure         |
+| `FlightPath: New Workflow from Template` | Create a workflow from a built-in template        |
+| `FlightPath: Create Prompt File`         | Create a new workflow file                        |
+| `FlightPath: New Draft Prompt`           | Create a draft `.prompt.md` in `.flightpath/prompts/` |
+| `FlightPath: Run` (editor title bar)     | Run the active workflow file                      |
+| `FlightPath: Pause Execution`            | Pause after the current step completes            |
+| `FlightPath: Resume Execution`           | Resume a paused workflow                          |
+| `FlightPath: Stop Execution`             | Stop and reset the current workflow               |
+| `FlightPath: Resume Session`             | Reconnect to an interrupted session               |
+| `FlightPath: Show Output Panel`          | Open the FlightPath output log                    |
 
----
+Right-click context menu on workflow files:
 
-## 🆘 Common Commands
-
-| Command                                       | What It Does             |
-| --------------------------------------------- | ------------------------ |
-| `FlightPath: Take Off`                        | Start a workflow         |
-| `FlightPath: Show Copilot Integration Status` | Check automation status  |
-| `FlightPath: Test Automation`                 | Test if automation works |
-| `FlightPath: Create Prompt File`              | Create new workflow file |
-| `FlightPath: Pause Execution`                 | Pause current workflow   |
-| `FlightPath: Resume Execution`                | Resume paused workflow   |
-| `FlightPath: Stop Execution`                  | Stop and reset workflow  |
-
----
-
-## 💡 Next Steps
-
-1. ✅ Test automation with demo file
-2. ✅ Create your first custom workflow
-3. ✅ Experiment with context options
-4. ✅ Try multi-step workflows
-5. ✅ Share your workflows with team
+| Action                         | Effect                                             |
+| ------------------------------ | -------------------------------------------------- |
+| Run with FlightPath            | Load and immediately run the file                  |
+| Load in FlightPath             | Load without running (edit first)                  |
+| Queue with FlightPath          | Append to the current workflow queue               |
+| Queue Next with FlightPath     | Insert after the currently running step            |
 
 ---
 
-**Happy Automating! 🚀**
+## Troubleshooting
 
-_FlightPath - Automate GitHub Copilot with structured prompt workflows_
+**Workflow never completes**
+
+Check `.flightpath/logs/flightpath-<harness>-hook-debug.log`. The Stop hook should fire when the AI finishes — if it is not firing, the AI may have exited abnormally or the CLI version changed its output format.
+
+**Wrong harness or model used**
+
+Settings follow three-tier precedence: prompt-level overrides > workflow-level defaults > VS Code extension settings. Check that you have not accidentally set a harness at a level that is being overridden.
+
+**Workflow stuck after a crash**
+
+Delete the stale runner file at `.flightpath/.queue/<name>.runner.json` if the PID it references is no longer alive. FlightPath checks for stale locks on startup but does not auto-clean mid-session.
+
+**Output is missing or incomplete**
+
+Open `.flightpath/.queue/<name>.flightpath.json` — this is the live working copy of the workflow. Each step's `_runtime` block contains `sessionId`, `startedAt`, `completedAt`, and `responseText` for diagnosis.
+
+---
+
+## Further Reading
+
+- `docs/ADDING_NEW_CLI_HARNESS.md` — adding support for a new AI CLI tool
+- `docs/SESSION_MANAGEMENT.md` — session ID resolution and cross-harness validation
+- `docs/QUEUE_APPEND_FEATURE.md` — dynamic queue extension details
+- `.flightpath/scripts/` — end condition script examples after workspace initialization

@@ -1,7 +1,7 @@
 {
   "name": "flightpath",
   "displayName": "FlightPath",
-  "description": "Automate GitHub Copilot with structured prompt workflows",
+  "description": "Automate AI coding assistants (Copilot, Claude, Codex, Gemini) through structured YAML/JSON prompt workflows with sequential execution, retry logic, and a live dashboard.",
   "version": "0.1.0",
   "publisher": "nhickster",
   "license": "Elastic-2.0",
@@ -19,8 +19,25 @@
   },
   "categories": [
     "Other",
-    "Machine Learning"
+    "Machine Learning",
+    "Programming Languages"
   ],
+  "keywords": [
+    "AI",
+    "automation",
+    "copilot",
+    "claude",
+    "codex",
+    "gemini",
+    "workflow",
+    "prompt",
+    "agent",
+    "LLM"
+  ],
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
   "activationEvents": [
     "onStartupFinished",
     "workspaceContains:**/*.flightpath.yaml",
