@@ -1,6 +1,6 @@
 {
   "mcpServers": {},
-  "$version": 3,
+  "$version": 4,
   "permissions": {
     "allow": ["Bash(npm run *)", "Bash(findstr *)", "Bash(type *)"]
   }

@@ -300,6 +300,13 @@ export interface ICliProvider {
   getInteractiveSpawnEnv?(): NodeJS.ProcessEnv;
 
   /**
+   * Return headless-only environment overrides.
+   * Use this when a harness must see specific variables on the parent process
+   * at spawn time as well as on the spawned child.
+   */
+  getHeadlessSpawnEnv?(): NodeJS.ProcessEnv;
+
+  /**
    * Extract session ID from log files (optional)
    *
    * For CLIs that don't include session ID in their output (like Copilot),

@@ -81,6 +81,7 @@ export class CopilotCliProvider implements ICliProvider {
 
   /** Hook files created for both interactive and headless mode (cleaned up after workflow). */
   private hookFilePaths: string[] = [];
+  private enablePromptModeRepoHooksForHeadlessRun = false;
 
   constructor() {
     // No initialization needed
@@ -123,6 +124,8 @@ export class CopilotCliProvider implements ICliProvider {
       workingFilePath?: string;
     }
   ): Promise<string[]> {
+    this.enablePromptModeRepoHooksForHeadlessRun = false;
+
     const args: string[] = [];
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
@@ -334,6 +337,8 @@ export class CopilotCliProvider implements ICliProvider {
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const hasUserHooks = userHooks && userHooks.length > 0;
+    this.enablePromptModeRepoHooksForHeadlessRun =
+      hasUserHooks || enabledNotificationHookEvents.length > 0;
     if (!hasUserHooks && enabledNotificationHookEvents.length === 0) {
       // Nothing to configure — skip hook file creation.
       // Cleanup of any previous prompt's hook file is handled by cleanupPreviousPromptHooks.
@@ -366,6 +371,12 @@ export class CopilotCliProvider implements ICliProvider {
     await this.createHookFile(config, workspaceRoot, hookFileName);
     Log.debug(`🔔 Configured user hooks for headless mode`);
     return [];
+  }
+
+  getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
+    return this.enablePromptModeRepoHooksForHeadlessRun
+      ? { GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS: "true" }
+      : {};
   }
 
   /**

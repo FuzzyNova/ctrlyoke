@@ -14,10 +14,7 @@ import {
   type CliResolvedCommand,
 } from "./CliLauncherResolver";
 import type { ICliProvider } from "./interfaces/ICliProvider";
-import {
-  getPtyProcessManager,
-  ptyPostMessage,
-} from "../PtyProcessManager";
+import { getPtyProcessManager, ptyPostMessage } from "../PtyProcessManager";
 import type { PtyProcessManager, PtySession } from "../PtyProcessManager";
 
 interface CliTransportCoordinatorCommandInfo {
@@ -330,40 +327,36 @@ export class CliTransportCoordinator {
 
       const shouldStream = this.deps.provider.config.shouldStreamHeadlessOutput;
       const streamState = new Map<string, any>();
-      const result = await this.spawnProcess(
-        command.command,
-        command.args,
-        {
-          timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
-          env,
-          onStdout: shouldStream
-            ? (chunk) => {
-                if (ConfigurationUtils.shouldLogRawCliOutput()) {
-                  Log.debug(
-                    `[${this.deps.provider.config.displayName} RAW OUTPUT]: ${chunk}`
-                  );
-                }
-
-                if (this.deps.provider.responseParser.processStreamingChunk) {
-                  const processedChunk =
-                    this.deps.provider.responseParser.processStreamingChunk(
-                      chunk,
-                      streamState
-                    );
-                  if (processedChunk !== undefined) {
-                    if (Array.isArray(processedChunk)) {
-                      this.deps.hostCallbacks.onStreamingEvents(processedChunk);
-                    } else {
-                      this.deps.hostCallbacks.onStreamingChunk(processedChunk);
-                    }
-                  }
-                } else {
-                  this.deps.hostCallbacks.onStreamingChunk(chunk);
-                }
+      const result = await this.spawnProcess(command.command, command.args, {
+        timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
+        env,
+        onStdout: shouldStream
+          ? (chunk) => {
+              if (ConfigurationUtils.shouldLogRawCliOutput()) {
+                Log.debug(
+                  `[${this.deps.provider.config.displayName} RAW OUTPUT]: ${chunk}`
+                );
               }
-            : undefined,
-        }
-      );
+
+              if (this.deps.provider.responseParser.processStreamingChunk) {
+                const processedChunk =
+                  this.deps.provider.responseParser.processStreamingChunk(
+                    chunk,
+                    streamState
+                  );
+                if (processedChunk !== undefined) {
+                  if (Array.isArray(processedChunk)) {
+                    this.deps.hostCallbacks.onStreamingEvents(processedChunk);
+                  } else {
+                    this.deps.hostCallbacks.onStreamingChunk(processedChunk);
+                  }
+                }
+              } else {
+                this.deps.hostCallbacks.onStreamingChunk(chunk);
+              }
+            }
+          : undefined,
+      });
 
       if (this.deps.runtimeState.isCancelling()) {
         Log.info("⏹️ Prompt execution cancelled by user");
@@ -499,19 +492,58 @@ export class CliTransportCoordinator {
       onStdout?: (chunk: string) => void;
     } = {}
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    const baseEnv = CliProviderUtils.buildProcessEnv();
+    const headlessEnvOverrides = this.deps.provider.getHeadlessSpawnEnv?.();
+    const baseEnv = {
+      ...CliProviderUtils.buildProcessEnv(),
+      ...headlessEnvOverrides,
+    };
     const env = options.env ? { ...baseEnv, ...options.env } : baseEnv;
 
-    const result = await this.deps.processManager.spawn(command, args, {
-      cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
-      timeout: options.timeout,
-      onStdout: options.onStdout,
-      shell: false,
-      env,
-    });
+    const result = await this.withProcessEnvOverrides(
+      headlessEnvOverrides,
+      async () =>
+        this.deps.processManager.spawn(command, args, {
+          cwd: this.deps.runtimeState.getWorkspaceRoot() || "",
+          timeout: options.timeout,
+          onStdout: options.onStdout,
+          shell: false,
+          env,
+        })
+    );
 
     Log.info("✅ Process exited - execution complete");
     return result;
+  }
+
+  private async withProcessEnvOverrides<T>(
+    overrides: NodeJS.ProcessEnv | undefined,
+    action: () => Promise<T>
+  ): Promise<T> {
+    if (!overrides || Object.keys(overrides).length === 0) {
+      return action();
+    }
+
+    const previousValues = new Map<string, string | undefined>();
+    for (const [key, value] of Object.entries(overrides)) {
+      previousValues.set(key, process.env[key]);
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+
+    try {
+      return await action();
+    } finally {
+      for (const [key, value] of previousValues) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
   }
 
   private getWorkflowStepMetadata(
@@ -533,8 +565,7 @@ export class CliTransportCoordinator {
   private async resolveProviderCommand(
     args: string[]
   ): Promise<CliResolvedCommand> {
-    const resolveCommand =
-      this.deps.resolveCliCommand ?? resolveCliCommand;
+    const resolveCommand = this.deps.resolveCliCommand ?? resolveCliCommand;
     return resolveCommand(this.deps.provider.config.name, args);
   }
 }

@@ -29,6 +29,8 @@ import type { PromptFile } from "../../types/FlightPathTypes";
 
 /** Path to the compiled CLI binary */
 const CLI_PATH = path.resolve(__dirname, "../../cli.js");
+/** Repository root for harnesses that require repository-scoped hook discovery. */
+const REPO_ROOT = path.resolve(__dirname, "../../..");
 
 /**
  * Timeout (ms) for a single harness run.
@@ -164,8 +166,9 @@ function buildWorkflow(harness: HarnessId, recorderScript: string): PromptFile {
   // Use {{outputFile}} via --var so the path doesn't need escaping in the
   // hook command string (the CLI handles the substitution before passing to
   // the harness config system).
+  const hookScriptPath = recorderScript.replace(/\\/g, "/");
   const hookCmd = (event: string) =>
-    `node "${recorderScript}" ${event} "{{outputFile}}"`;
+    `node ${hookScriptPath} ${event} {{outputFile}}`;
 
   return {
     harness: harness as any,
@@ -203,7 +206,9 @@ function runHarness(
   recorderScript: string
 ): HarnessRunResult {
   const outputFile = path.join(tmpDir, `${harness}-hooks.jsonl`);
+  const outputFileArg = outputFile.replace(/\\/g, "/");
   const workflowFile = path.join(tmpDir, `${harness}-test.flightpath.json`);
+  const harnessCwd = harness === "copilot-cli" ? REPO_ROOT : tmpDir;
 
   const workflow = buildWorkflow(harness, recorderScript);
   fs.writeFileSync(workflowFile, JSON.stringify(workflow, null, 2));
@@ -218,12 +223,12 @@ function runHarness(
       "--timeout",
       "60",
       "--var",
-      `outputFile=${outputFile}`,
+      `outputFile=${outputFileArg}`,
     ],
     {
       encoding: "utf8",
       timeout: HARNESS_TIMEOUT_MS,
-      cwd: tmpDir,
+      cwd: harnessCwd,
     }
   );
 
