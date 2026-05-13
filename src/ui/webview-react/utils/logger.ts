@@ -44,7 +44,9 @@ function log(
       console.info(message, ...args);
       return;
     }
-    console.debug(message, ...args);
+    // console.debug is filtered by default in webview DevTools (Verbose level
+    // required), so use console.log to keep debug messages visible.
+    console.log(message, ...args);
   }
 }
 

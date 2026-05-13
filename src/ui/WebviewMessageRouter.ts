@@ -2348,6 +2348,9 @@ export class WebviewMessageRouter {
       case LOG_LEVELS.DEBUG:
         Log.debug(prefixed);
         break;
+      case LOG_LEVELS.INFO:
+        Log.info(prefixed);
+        break;
       case LOG_LEVELS.WARN:
         Log.warn(prefixed);
         break;

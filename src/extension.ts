@@ -284,6 +284,24 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   try {
+    // Initialize config service with file-based backends BEFORE Log.initialize()
+    // so isDiagnosticLogsEnabled() reads the correct user/workspace value when
+    // deciding whether to open the log file.
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    const userConfigBackend = createUserConfigBackend(() => {
+      configService.notify();
+    });
+    configService.setUserBackend(userConfigBackend);
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      const workspaceConfigBackend = createWorkspaceConfigBackend(
+        workspaceFolders[0].uri.fsPath,
+        () => {
+          configService.notify();
+        }
+      );
+      configService.setWorkspaceBackend(workspaceConfigBackend);
+    }
+
     // Initialize logging system early (creates output channel)
     Log.initialize(context);
     // Initialize model registry (queries available Copilot models)
@@ -293,7 +311,6 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     // Initialize workspace and clean up orphaned temp files
-    const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
       const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
@@ -331,23 +348,6 @@ export async function activate(context: vscode.ExtensionContext) {
           );
         }
       });
-    }
-
-    // Initialize config service with file-based backends so settings from
-    // ~/.flightpath/settings.json and <workspace>/.flightpath/settings.json
-    // are resolved by ConfigurationUtils throughout the extension.
-    const userConfigBackend = createUserConfigBackend(() => {
-      configService.notify();
-    });
-    configService.setUserBackend(userConfigBackend);
-    if (workspaceFolders && workspaceFolders.length > 0) {
-      const workspaceConfigBackend = createWorkspaceConfigBackend(
-        workspaceFolders[0].uri.fsPath,
-        () => {
-          configService.notify();
-        }
-      );
-      configService.setWorkspaceBackend(workspaceConfigBackend);
     }
 
     // Register React webview provider (Phase 4 - unified provider)
