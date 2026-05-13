@@ -1881,7 +1881,7 @@ export class WebviewMessageRouter {
       const isAbsolute =
         /^[A-Za-z]:\//.test(trimmedPath) || trimmedPath.startsWith("/");
       const targetUri = isAbsolute
-        ? vscode.Uri.file(trimmedPath.replace(/\//g, "\\"))
+        ? vscode.Uri.file(trimmedPath)
         : vscode.Uri.joinPath(
             workspaceFolder.uri,
             ...trimmedPath.split("/").filter(Boolean)
