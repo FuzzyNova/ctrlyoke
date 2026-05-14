@@ -631,6 +631,10 @@ export class CliExecutionRunner {
       );
     }
 
+    if (result.timedOut) {
+      throw new Error("Log monitoring timeout");
+    }
+
     return { success: result.success, sessionId: result.sessionId };
   }
 

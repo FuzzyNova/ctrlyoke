@@ -248,6 +248,92 @@ suite("WorkflowInstance finalStep replay", () => {
 });
 
 suite("WorkflowInstance runtime transitions", () => {
+  test("loading a stale running working file restores it as stopped without starting execution", async () => {
+    const platform = new MockPlatform();
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "flightpath-stale-running-")
+    );
+    const workingFilePath = path.join(tempDir, "stale.flightpath.json");
+
+    try {
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify(
+          {
+            workflowName: "stale",
+            startedAt: Date.now(),
+            lastModifiedAt: Date.now(),
+            steps: [{ prompt: "unfinished" }],
+            _runtime: {
+              currentIndex: 0,
+              executionState: EXECUTION_STATES.RUNNING,
+            },
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const dashboardSink: any = {
+        updateFileSelected: async () => {},
+        updateSessionRestored: async () => {},
+        updateExecutionStarted: () => {},
+        notifyRunHistoryUpdated: () => {},
+        updateProgress: () => {},
+        updateExecutionState: () => {},
+        updateWorkflowName: () => {},
+        updateStepStatus: () => {},
+        updateRetryAttempt: () => {},
+        updateCliOutput: () => {},
+        updateCliStreamingChunk: () => {},
+        updateCliStreamingEvents: () => {},
+        updateStepsExtended: () => {},
+        updatePromptDeleted: () => {},
+        updateFinalStep: () => {},
+        updateFinalStepStatus: () => {},
+        updateFinalStepOutput: () => {},
+        updateFinalStepStreamingChunk: () => {},
+        updateFinalStepStreamingEvents: () => {},
+        updateStatusMessage: () => {},
+        notifyWorkflowStateReset: () => {},
+        notifyStartPositionSet: () => {},
+        notifyPromptsReordered: () => {},
+      };
+
+      const instance = new WorkflowInstance(
+        platform,
+        dashboardSink,
+        new MockIntegrationFactory(platform),
+        () => new MockHarnessIntegration(undefined, false),
+        () => {},
+        () => {},
+        tempDir
+      );
+
+      let autoStarted = false;
+      (instance as any).startWorkflowExecution = async () => {
+        autoStarted = true;
+      };
+
+      await instance.loadWorkingFile(workingFilePath);
+
+      assert.strictEqual(autoStarted, false);
+      assert.strictEqual(
+        instance.getQueueState().status,
+        EXECUTION_STATES.STOPPED
+      );
+
+      const persisted = JSON.parse(await fs.readFile(workingFilePath, "utf8"));
+      assert.strictEqual(
+        persisted._runtime.executionState,
+        EXECUTION_STATES.STOPPED
+      );
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("drives execution-state updates and cancelled-step status from runtime transitions", async () => {
     const platform = new MockPlatform();
 

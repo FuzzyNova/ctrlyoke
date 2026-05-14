@@ -27,6 +27,9 @@ export interface LogMonitorResult {
    *  All CLI harnesses are TUIs that stay open between prompts, so any process exit
    *  before a Stop hook or log-based completion event is abnormal (Ctrl+C, crash, SIGKILL). */
   processExited?: { exitCode: number };
+  /** Set when monitoring ended because the maxPromptTimeout elapsed. Partial output (if any)
+   *  is captured in parsedOutput/cliResult so it can be saved before the error is re-thrown. */
+  timedOut?: boolean;
 }
 
 /**
@@ -116,7 +119,7 @@ export class CliLogMonitor {
     // undefined means unlimited (-1 setting) — no timeout will be set
     const timeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
 
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve) => {
       let completed = false;
       let draining = false;
       let timeoutHandle: NodeJS.Timeout | undefined;
@@ -391,8 +394,50 @@ export class CliLogMonitor {
       if (timeoutMs !== undefined) {
         timeoutHandle = setTimeout(() => {
           Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
+          if (cancellationInterval) {
+            clearInterval(cancellationInterval);
+          }
           watcher.close();
-          reject(new Error("Log monitoring timeout"));
+          void (async () => {
+            try {
+              const newEntries = await parser.readNewLines(logPath);
+              for (const entry of newEntries) {
+                const entryTime = getEntryTimestamp(entry);
+                if (entryTime && entryTime < startTime) {
+                  continue;
+                }
+                events.push(entry);
+              }
+            } catch {
+              // ignore read errors during timeout flush
+            }
+
+            const partialResponse =
+              events.length > 0 ? parser.extractResponse(events) : undefined;
+            const partialText = partialResponse
+              ? extractTextFromEvents(partialResponse)
+              : undefined;
+            const effectiveSessionId =
+              partialResponse?.metadata.sessionId || sessionId || undefined;
+
+            const partialResult: CliResult | undefined = partialText
+              ? {
+                  success: false,
+                  response: partialText,
+                  statistics: "",
+                  exitCode: -1,
+                  sessionId: effectiveSessionId,
+                }
+              : undefined;
+
+            resolve({
+              success: false,
+              timedOut: true,
+              sessionId: sessionId || undefined,
+              parsedOutput: partialResponse,
+              cliResult: partialResult,
+            });
+          })();
         }, timeoutMs);
       }
 

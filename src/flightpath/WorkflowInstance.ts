@@ -701,12 +701,12 @@ export class WorkflowInstance {
 
     await this.promptFileLoader.reloadFromWorkingFile(
       workingFilePath,
-      "replace"
+      "replace",
+      true
     );
 
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
-    await this.resumeRestoredRunningWorkflowIfNeeded();
   }
 
   /**
@@ -744,12 +744,11 @@ export class WorkflowInstance {
     await this.promptFileLoader.reloadFromWorkingFile(
       workingFilePath,
       "replace",
-      true // isAutoLoad — prevents auto-starting RUNNING workflows
+      true
     );
 
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
-    await this.resumeRestoredRunningWorkflowIfNeeded();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2638,22 +2637,6 @@ export class WorkflowInstance {
     };
   }
 
-  private async resumeRestoredRunningWorkflowIfNeeded(): Promise<void> {
-    const state = this.promptQueue.getState();
-    if (
-      this.getAuthoritativeExecutionState() !== EXECUTION_STATES.RUNNING ||
-      this.activeIntegration ||
-      this.startPending
-    ) {
-      return;
-    }
-
-    Log.debug(
-      `[inst:${this.id.slice(0, 8)}] Resuming restored RUNNING workflow explicitly`
-    );
-    await this.autoStartWithHistory(state);
-  }
-
   private onQueueStateChanged(state: QueueState): void {
     const executionState = this.getAuthoritativeExecutionState();
     Log.debug(
@@ -2695,65 +2678,6 @@ export class WorkflowInstance {
 
     this.lastKnownStepCount = state.steps.length;
     this.lastKnownWorkflowName = state.workflowName ?? "";
-  }
-
-  /**
-   * Auto-starts workflow execution with proper history file and EXECUTION_STARTED notification.
-   *
-   * Fixes the Queue+Resume bug on completed workflows:
-   * - Bug 1: historyFilePath was always "" → output never saved to history
-   * - Bug 2: EXECUTION_STARTED was never sent → webview stayed in history view mode,
-   *   hiding live output behind the old run's history data
-   *
-   * Called from explicit restore/resume paths when a working file is rehydrated as RUNNING
-   * and the instance needs to attach execution/history state without queue-status polling.
-   */
-  private async autoStartWithHistory(state: QueueState): Promise<void> {
-    const workingFilePath = state.workingFilePath || undefined;
-    let historyFilePath = "";
-
-    if (workingFilePath) {
-      const workflowId =
-        this.outputHistoryManager.extractWorkflowId(workingFilePath);
-      historyFilePath =
-        await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
-    }
-
-    // Send EXECUTION_STARTED so the dashboard switches from history view to live
-    // view and correctly updates step count / continuation state.
-    if (this.dashboardSink) {
-      const fileName =
-        (this.currentPromptFile
-          ? path.basename(this.currentPromptFile.filePath)
-          : undefined) ||
-        this.workflowName ||
-        (workingFilePath ? path.basename(workingFilePath) : "");
-
-      if (state.currentIndex > 0 && historyFilePath) {
-        // Continuation: preserve previously completed steps in the UI output area
-        this.dashboardSink.updateExecutionStarted(
-          this.id,
-          fileName,
-          state.steps.length,
-          true, // isContinuation
-          state.currentIndex // preserveStepCount
-        );
-      } else {
-        // Fresh start: clear all previous output buffers
-        this.clearOutputBuffers();
-        this.dashboardSink.updateExecutionStarted(
-          this.id,
-          fileName,
-          state.steps.length
-        );
-      }
-    }
-
-    await this.startWorkflowExecution(
-      undefined,
-      historyFilePath,
-      workingFilePath
-    );
   }
 
   private async initializeNewWorkflow(

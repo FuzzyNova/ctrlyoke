@@ -334,7 +334,7 @@ export class PromptQueue {
    */
   async restoreFromWorkingFile(
     workingFilePath: string,
-    isAutoLoad: boolean = false
+    preventRunningAutoStart: boolean = false
   ): Promise<void> {
     try {
       // Read the working file
@@ -382,17 +382,24 @@ export class PromptQueue {
       }
 
       // Determine execution state
-      // When auto-loading on startup, NEVER restore as RUNNING (prevents unwanted auto-start)
+      // When loading a persisted working file for display, NEVER restore as active
+      // unless the caller explicitly wants to continue execution. Loading a dashboard
+      // view must not start or imply an active VS Code runner after a restart/crash.
       // Force to STOPPED — preserves per-prompt progress so the user can see how far the
       // workflow got and resume from the current prompt. PAUSED is semantically wrong here
       // (it implies the user intentionally paused); STOPPED signals "aborted, position kept".
       let executionState = runtime?.executionState || EXECUTION_STATES.IDLE;
       let forcedToStopped = false;
-      if (isAutoLoad && executionState === EXECUTION_STATES.RUNNING) {
+      if (
+        preventRunningAutoStart &&
+        (executionState === EXECUTION_STATES.RUNNING ||
+          executionState === EXECUTION_STATES.PAUSING ||
+          executionState === EXECUTION_STATES.CANCELLING)
+      ) {
         executionState = EXECUTION_STATES.STOPPED;
         forcedToStopped = true;
         Log.info(
-          "Auto-load: Forced RUNNING state to STOPPED to prevent auto-start"
+          "Working file load: forced active state to STOPPED to prevent auto-start"
         );
       }
 
@@ -464,7 +471,10 @@ export class PromptQueue {
       // handleGetRecentWorkflows reads see the correct state, not "running".
       if (forcedToStopped) {
         await this.updateWorkingFile().catch((err) =>
-          Log.warn("Auto-load: failed to persist STOPPED state to disk:", err)
+          Log.warn(
+            "Working file load: failed to persist STOPPED state to disk:",
+            err
+          )
         );
       }
 

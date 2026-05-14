@@ -630,6 +630,16 @@ export class WorkflowOrchestrator {
       return;
     }
 
+    // If startup has not finished wiring CLI watch sessions yet, a preferred
+    // working-file load can arrive before setupCliWatching() sees an active CLI
+    // lock. Register the CLI session first so a dashboard view load never
+    // converts an actively CLI-managed RUNNING file to a VS Code instance.
+    if (await this.ensureCliWatchSession(filePath)) {
+      this.setViewedWorkflowId(clientId, workflowId);
+      await this.replayWorkflowStateTo(workflowId, send, clientId);
+      return;
+    }
+
     // Check if already in instances registry by working file path
     const existing = [...this.instances.values()].find(
       (w) => w.getSummary().workingFilePath === filePath

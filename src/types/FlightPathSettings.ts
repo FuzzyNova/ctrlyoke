@@ -266,7 +266,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
   execution: {
     mode: "interactive",
     injectMode: false,
-    maxPromptTimeout: 10800,
+    maxPromptTimeout: -1,
     scriptTimeout: 30,
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,
