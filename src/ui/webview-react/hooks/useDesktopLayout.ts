@@ -14,9 +14,10 @@ import { WebviewLog } from "@utils/logger";
 import { readPanelSnapshot } from "@utils/panelSnapshot";
 import { syncCollapsiblePanel } from "@utils/panelSync";
 import { useUiStore } from "@store/uiStore";
+import { centerPanelMountDefaults } from "@utils/panelSync";
 import {
-  PANEL_COLLAPSED_SIZE_DEFAULT,
   PANEL_COLLAPSED_SIZE_DEFAULT_PX,
+  DEFAULT_DESKTOP_SIZES,
 } from "../constants";
 
 interface DesktopLayoutParams {
@@ -65,35 +66,35 @@ export function useDesktopLayout({
   const remountStableFramesRef = useRef(0);
   const remountPreviousTotalSizeRef = useRef<number | null>(null);
 
-  // Size persistence — initialized from store so sizes survive VS Code restarts
+  // Size persistence — initialized from store so sizes survive VS Code restarts.
+  // Migrate legacy editor values: pre-pixel-based storage used percentages (< 100),
+  // so any stored value < 100 is treated as a stale percentage and reset to the default px.
+  const storedSizes = useUiStore.getState().lastDesktopSizes;
   const lastDesktopSizes = useRef({
-    ...useUiStore.getState().lastDesktopSizes,
+    ...storedSizes,
+    editor:
+      storedSizes.editor >= 100
+        ? storedSizes.editor
+        : DEFAULT_DESKTOP_SIZES.editor,
   });
 
   // Stable mount defaults — only recomputed by App.tsx on Group remount
   // transitions; keeping them constant while the Group is alive prevents the
   // library from re-initialising and clobbering imperative calls.
-  // steps/settings use pixel strings; output/editor use percentage strings.
+  // steps/settings/editor use pixel strings; output uses a percentage string.
   const desktopMountDefaults = useRef({
     steps: `${lastDesktopSizes.current.steps}px`,
     settings: `${lastDesktopSizes.current.settings}px`,
   });
   // undefined means "no defaultSize" → the Panel uses flexGrow:1, which gives
-  // ne(group) the full container height so collapsedSize % is computed correctly.
-  const mountDefaultOutput = useRef<string | undefined>(
-    outputCollapsed
-      ? PANEL_COLLAPSED_SIZE_DEFAULT
-      : editorCollapsed
-        ? undefined
-        : String(lastDesktopSizes.current.output)
+  // the group the full container height so collapsedSize % is computed correctly.
+  const { output: initOutput, editor: initEditor } = centerPanelMountDefaults(
+    outputCollapsed,
+    editorCollapsed,
+    lastDesktopSizes.current.editor
   );
-  const mountDefaultEditor = useRef<string | undefined>(
-    editorCollapsed
-      ? PANEL_COLLAPSED_SIZE_DEFAULT
-      : outputCollapsed
-        ? undefined
-        : String(lastDesktopSizes.current.editor)
-  );
+  const mountDefaultOutput = useRef<string | undefined>(initOutput);
+  const mountDefaultEditor = useRef<string | undefined>(initEditor);
 
   // Tracks both-collapsed → one-open transition; App.tsx updates this during
   // render to recompute mountDefault* before the Group remounts.
@@ -133,7 +134,7 @@ export function useDesktopLayout({
         },
         editor: {
           collapsed: editor.collapsed,
-          sizePct: editor.sizePct,
+          sizePx: editor.sizePx,
         },
       },
       lastDesktopSizes: { ...lastDesktopSizes.current },
@@ -170,11 +171,16 @@ export function useDesktopLayout({
       return;
     }
 
-    const outputSize = Math.round(lastDesktopSizes.current.output);
-    const editorSize = 100 - outputSize;
+    const totalPx = getVerticalGroupTotalPx();
+    if (totalPx <= 0) return;
+
+    const editorPct = Number(
+      ((lastDesktopSizes.current.editor / totalPx) * 100).toFixed(3)
+    );
+    const outputPct = Number((100 - editorPct).toFixed(3));
     const layout = {
-      "output-panel": outputSize,
-      "editor-panel": editorSize,
+      "output-panel": outputPct,
+      "editor-panel": editorPct,
     };
 
     try {

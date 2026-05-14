@@ -11,8 +11,8 @@ import type {
   GroupImperativeHandle,
 } from "react-resizable-panels";
 import { useUiStore } from "@store/uiStore";
-import { syncCollapsiblePanel } from "@utils/panelSync";
-import { PANEL_COLLAPSED_SIZE_DEFAULT } from "../constants";
+import { centerPanelMountDefaults, syncCollapsiblePanel } from "@utils/panelSync";
+import { DEFAULT_MOBILE_SIZES } from "../constants";
 
 interface MobileLayoutParams {
   isMobile: boolean;
@@ -40,8 +40,17 @@ export function useMobileLayout({
   // Gate: closed when both panels collapse (Group unmounts), opened after sync
   const mobileInitializedRef = useRef(false);
 
-  // Size persistence — initialized from store so sizes survive VS Code restarts
-  const lastMobileSizes = useRef({ ...useUiStore.getState().lastMobileSizes });
+  // Size persistence — initialized from store so sizes survive VS Code restarts.
+  // Migrate legacy editor values: pre-pixel-based storage used percentages (< 100),
+  // so any stored value < 100 is treated as a stale percentage and reset to the default px.
+  const storedMobileSizes = useUiStore.getState().lastMobileSizes;
+  const lastMobileSizes = useRef({
+    ...storedMobileSizes,
+    editor:
+      storedMobileSizes.editor >= 100
+        ? storedMobileSizes.editor
+        : DEFAULT_MOBILE_SIZES.editor,
+  });
 
   // Stable mount defaults for each center panel.
   // Collapsed panels mount at "30px"; the open sibling gets undefined (flexGrow:1)
@@ -49,18 +58,9 @@ export function useMobileLayout({
   const mobileMountDefaults = useRef<{
     output: string | undefined;
     editor: string | undefined;
-  }>({
-    output: outputCollapsed
-      ? PANEL_COLLAPSED_SIZE_DEFAULT
-      : editorCollapsed
-        ? undefined
-        : String(lastMobileSizes.current.output),
-    editor: editorCollapsed
-      ? PANEL_COLLAPSED_SIZE_DEFAULT
-      : outputCollapsed
-        ? undefined
-        : String(lastMobileSizes.current.editor),
-  });
+  }>(
+    centerPanelMountDefaults(outputCollapsed, editorCollapsed, lastMobileSizes.current.editor)
+  );
 
   // Tracks all-collapsed → some-open transition; App.tsx updates this during
   // render to recompute mobileMountDefaults before the Group remounts.

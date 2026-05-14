@@ -25,19 +25,19 @@ export const PANEL_MIN_SIZE_CENTER_COLUMN = "360px";
 export const PANEL_MAX_SIZE_SIDEBAR = "480px";
 
 /** Default panel sizes for desktop layout — single source of truth for initial layout.
- *  steps/settings are in pixels; output/editor are percentages. */
+ *  steps/settings/editor are in pixels; output is a percentage. */
 export const DEFAULT_DESKTOP_SIZES = {
   steps: 240,
   output: 60,
-  editor: 40,
+  editor: 280,
   settings: 240,
 };
 
-/** Default panel sizes (percentage) for mobile layout */
+/** Default panel sizes for mobile layout — output is a percentage; editor is in pixels. */
 export const DEFAULT_MOBILE_SIZES = {
   steps: 10,
   output: 50,
-  editor: 30,
+  editor: 240,
   settings: 10,
 };
 

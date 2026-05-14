@@ -54,8 +54,8 @@ export interface RecentWorkflow {
 }
 
 /** Panel size snapshot for desktop or mobile layout.
- *  Desktop: steps/settings are in pixels; output/editor are percentages.
- *  Mobile: output/editor are percentages. */
+ *  Desktop: steps/settings/editor are in pixels; output is a percentage.
+ *  Mobile: editor is in pixels; output is a percentage. */
 export interface PanelSizes {
   steps: number;
   output: number;
