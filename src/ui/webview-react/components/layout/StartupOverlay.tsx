@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { useUiStore } from "@store/uiStore";
+import { WebviewLog } from "@utils/logger";
 
 const STARTUP_TIMEOUT_MS = 8000;
 
@@ -26,7 +27,12 @@ export const StartupOverlay: React.FC = () => {
   // the only recovery path until RECONNECT arrives and clears devRestarting.
   useEffect(() => {
     if (startupReady) return;
-    const id = setTimeout(() => setStartupReady(true), STARTUP_TIMEOUT_MS);
+    const id = setTimeout(() => {
+      WebviewLog.warn(
+        `[startup] Safety timeout (${STARTUP_TIMEOUT_MS}ms) fired — STARTUP_COMPLETE has not arrived yet; dismissing overlay`
+      );
+      setStartupReady(true);
+    }, STARTUP_TIMEOUT_MS);
     return () => clearTimeout(id);
   }, [startupReady, setStartupReady]);
 

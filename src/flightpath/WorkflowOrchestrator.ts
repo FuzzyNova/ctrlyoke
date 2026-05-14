@@ -154,6 +154,8 @@ export class WorkflowOrchestrator {
   private orchestratorInitialized: boolean = false;
   /** Guards triggerStartupAutoLoadIfReady so triggerAutoLoad fires at most once. */
   private startupAutoLoadTriggered: boolean = false;
+  /** Timestamp (ms) when setDashboardReady was first called — used to compute READY→STARTUP_COMPLETE latency. */
+  private dashboardReadyAt: number = 0;
 
   /** MCP server provider for injecting user-defined MCP servers into VS Code (chat harness only) */
   private mcpServerProvider?: FlightPathMcpServerProvider;
@@ -827,21 +829,33 @@ export class WorkflowOrchestrator {
   async setDashboardReady(panelSend?: (msg: unknown) => void): Promise<void> {
     Log.info("✅ Dashboard is ready");
     this.dashboardReady = true;
+    if (!this.dashboardReadyAt) {
+      this.dashboardReadyAt = Date.now();
+    }
 
     if (panelSend) {
       this.storedPanelSend = panelSend;
-      // Re-hydrate via targeted replay to the panel (handles webview reloads).
-      // Skip terminal replay — the panel READY handler's dedicated PTY reconnect
-      // loop sends TERMINAL_STARTED + reconnect buffers after this returns.
-      const viewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
-      if (viewedId) {
-        await this.replayWorkflowStateTo(
-          viewedId,
-          panelSend,
-          this.PANEL_CLIENT_ID,
-          { skipTerminalReplay: true }
-        );
+      if (this._autoLoadHasSettled) {
+        // Startup already finished (webview reload or reconnect) — replay now so
+        // the panel re-hydrates immediately. Skip terminal replay: the READY
+        // handler's PTY reconnect loop sends TERMINAL_STARTED + reconnect buffers.
+        const viewedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+        if (viewedId) {
+          await this.replayWorkflowStateTo(
+            viewedId,
+            panelSend,
+            this.PANEL_CLIENT_ID,
+            { skipTerminalReplay: true }
+          );
+        }
       }
+      // If startup is still in progress (!_autoLoadHasSettled), skip the replay
+      // here. Multiple READY messages arrive during startup (BootstrapApp +
+      // App.tsx, doubled in React StrictMode dev builds) and each triggered a
+      // full replay, causing SESSION_RESTORED to clear liveOrderedEntries and
+      // flash the output section. The single replay inside triggerAutoLoad
+      // (just before STARTUP_COMPLETE broadcasts) is the only one the panel
+      // needs — storedPanelSend is up to date so it will reach the right client.
     } else {
       // Fallback path when the panel send function is not available (e.g. during tests
       // or before the webview mounts). Re-send run history so any already-connected
@@ -899,6 +913,21 @@ export class WorkflowOrchestrator {
             `triggerAutoLoad: keeping panel's persisted workflow "${path.basename(panelWorkingFilePath)}" instead of loading most recent`
           );
           loadedWorkflowId = panelViewedId;
+          // Replay state to the panel now that startup is complete. This is the
+          // only replay for the fresh-startup path (setDashboardReady no longer
+          // replays while _autoLoadHasSettled is false), so the panel needs it
+          // here before STARTUP_COMPLETE broadcasts.
+          if (this.storedPanelSend) {
+            await this.replayWorkflowStateTo(
+              panelViewedId,
+              this.storedPanelSend,
+              this.PANEL_CLIENT_ID
+            );
+          }
+          if (this.storedPostAutoLoadCallback) {
+            await this.storedPostAutoLoadCallback();
+            this.storedPostAutoLoadCallback = undefined;
+          }
           return;
         }
         Log.debug("Triggering auto-load of recent session");
@@ -950,6 +979,12 @@ export class WorkflowOrchestrator {
       // whether a session was found or an exception occurred. This ensures:
       // - Browser clients awaiting awaitStartupAutoLoad() unblock immediately.
       // - The webview overlay lifts via hub broadcast (panel fresh startup).
+      const readyToCompleteMs = this.dashboardReadyAt
+        ? Date.now() - this.dashboardReadyAt
+        : -1;
+      Log.debug(
+        `[startup] Broadcasting STARTUP_COMPLETE — session: ${loadedWorkflowId ?? "none"}, READY→COMPLETE: ${readyToCompleteMs}ms`
+      );
       this._autoLoadHasSettled = true;
       this.resolveStartupAutoLoad(loadedWorkflowId);
       this.dashboardBroadcastHub.notifyStartupComplete();

@@ -1423,7 +1423,11 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STARTUP_COMPLETE] = () => {
     const { fileName } = useWorkflowStore.getState();
-    const { activeWorkflowWorkingFilePath } = useUiStore.getState();
+    const { activeWorkflowWorkingFilePath, startupReady } =
+      useUiStore.getState();
+    WebviewLog.debug(
+      `[startup] STARTUP_COMPLETE received — overlay already dismissed: ${startupReady}`
+    );
     clearPanelReconnectReloadWatchdog();
     useUiStore.getState().setStartupReady(true);
     // If startup completed with no session and no persisted target workflow,
