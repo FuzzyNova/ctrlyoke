@@ -849,6 +849,18 @@ export class CliIntegration extends HarnessIntegration {
       this.provider.buildPermissionArgs?.(effectiveToolPermissions) ?? [];
     baseArgs.push(...permissionArgs);
 
+    // Append suffix args last — these are args that must follow ALL global flags.
+    // Used by Codex for "resume <session-id>": a subcommand that must come after
+    // --enable hooks and -c hooks.state=... to avoid them being misread as subcommand args.
+    const suffixArgs =
+      this.provider.buildCliSuffix?.(
+        session.resolvedSessionId,
+        session.workflowContext
+      ) ?? [];
+    if (suffixArgs.length > 0) {
+      baseArgs.push(...suffixArgs);
+    }
+
     const success = isInteractive
       ? await this.executionRunner.executeInteractive(session, baseArgs)
       : await (() => {

@@ -339,4 +339,31 @@ export interface ICliProvider {
    * @returns Enriched output (or same object if no changes needed)
    */
   augmentParsedOutput?(output: UniversalCliOutput): Promise<UniversalCliOutput>;
+
+  /**
+   * Build CLI arguments that must appear AFTER all other args (hooks, permissions, etc.).
+   *
+   * Use this for CLI subcommands that must be the last positional token in the assembled
+   * command — specifically Codex's `resume <session-id>`, which is a subcommand rather
+   * than a flag. Placing it before global flags (`--enable hooks`, `-c hooks.state=...`)
+   * causes those flags to be parsed as subcommand args instead of global config, breaking
+   * hook trust-state injection.
+   *
+   * Called by CliIntegration after hook args and permission args are pushed onto baseArgs.
+   * Other providers leave this unimplemented (returns undefined → treated as []).
+   *
+   * @param sessionId Resolved session ID for resumption (if any)
+   * @param workflowContext Optional workflow context (resolvedProperties.resumeSession used)
+   * @returns Args to append last, or undefined (treated as empty)
+   */
+  buildCliSuffix?(
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: WorkflowStep[];
+      filePath?: string;
+      resolvedProperties?: { resumeSession?: boolean };
+      workingFilePath?: string;
+    }
+  ): string[];
 }

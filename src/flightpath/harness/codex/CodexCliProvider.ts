@@ -209,21 +209,45 @@ export class CodexCliProvider implements ICliProvider {
       `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, sessionId=${sessionId ?? "none"}, shouldResume=${shouldResume}`
     );
 
-    if (shouldResume) {
-      // Resume existing session: codex [exec] [--json] ... resume <session-id>
-      args.push("resume");
-      args.push(sessionId!);
-      Log.debug(`✅ Added resume subcommand with session: ${sessionId}`);
-    } else if (resolvedResumeSession && !sessionId) {
+    if (resolvedResumeSession && !sessionId) {
       Log.debug(`⚠️ Resume requested but no session ID available`);
-    } else {
+    } else if (!shouldResume) {
       Log.debug(`🆕 Starting new session`);
     }
 
     // Note: Prompt is NOT included here - it's a positional argument
-    // handled by the execution methods (buildHeadlessArgs, etc.)
+    // handled by the execution methods (buildHeadlessArgs, etc.).
+    // Note: "resume <session-id>" is NOT added here — it must appear AFTER all global
+    // flags (hooks, permissions). See buildCliSuffix().
 
     return args;
+  }
+
+  /**
+   * Append "resume <session-id>" as the final args in the assembled command.
+   *
+   * Codex's "resume" is a CLI subcommand (not a flag), so it must come AFTER all global
+   * flags such as "--enable hooks" and "-c hooks.state=...". Placing it before those flags
+   * causes Codex to parse them as subcommand args rather than global config, which breaks
+   * hook trust-state injection and causes hash validation failures for resume sessions.
+   */
+  buildCliSuffix(
+    sessionId: string | undefined,
+    workflowContext?: {
+      resolvedProperties?: { resumeSession?: boolean };
+    }
+  ): string[] {
+    const resolvedResumeSession =
+      workflowContext?.resolvedProperties?.resumeSession;
+    const shouldResume = CliProviderUtils.shouldResumeSession(
+      resolvedResumeSession,
+      sessionId
+    );
+    if (shouldResume) {
+      Log.debug(`✅ Appending resume subcommand with session: ${sessionId}`);
+      return ["resume", sessionId!];
+    }
+    return [];
   }
 
   /**
