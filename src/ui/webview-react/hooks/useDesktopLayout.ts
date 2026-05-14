@@ -17,6 +17,8 @@ import { useUiStore } from "@store/uiStore";
 import { centerPanelMountDefaults } from "@utils/panelSync";
 import {
   PANEL_COLLAPSED_SIZE_DEFAULT_PX,
+  PANEL_MIN_SIZE_CENTER,
+  PANEL_MIN_SIZE_EDITOR_PX,
   DEFAULT_DESKTOP_SIZES,
 } from "../constants";
 
@@ -162,6 +164,31 @@ export function useDesktopLayout({
     return outputPx + editorPx;
   };
 
+  const getRestoredCenterLayout = (totalPx: number) => {
+    const outputMinPct = Number(PANEL_MIN_SIZE_CENTER);
+    const editorMinPct = Number(
+      ((PANEL_MIN_SIZE_EDITOR_PX / totalPx) * 100).toFixed(3)
+    );
+    const editorMaxPct = Number((100 - outputMinPct).toFixed(3));
+    const clampEditorPct = (pct: number) =>
+      Math.min(editorMaxPct, Math.max(editorMinPct, pct));
+
+    const editorPctFromStoredPx = Number(
+      ((lastDesktopSizes.current.editor / totalPx) * 100).toFixed(3)
+    );
+    const editorPct =
+      editorPctFromStoredPx >= editorMinPct &&
+      editorPctFromStoredPx <= editorMaxPct
+        ? editorPctFromStoredPx
+        : clampEditorPct(100 - lastDesktopSizes.current.output);
+    const outputPct = Number((100 - editorPct).toFixed(3));
+
+    return {
+      "output-panel": outputPct,
+      "editor-panel": editorPct,
+    };
+  };
+
   const setLayoutFromStoredSizes = (reason: string) => {
     if (!verticalGroupRef.current) {
       WebviewLog.error("[LAYOUT] verticalGroupRef.current is null", {
@@ -174,14 +201,7 @@ export function useDesktopLayout({
     const totalPx = getVerticalGroupTotalPx();
     if (totalPx <= 0) return;
 
-    const editorPct = Number(
-      ((lastDesktopSizes.current.editor / totalPx) * 100).toFixed(3)
-    );
-    const outputPct = Number((100 - editorPct).toFixed(3));
-    const layout = {
-      "output-panel": outputPct,
-      "editor-panel": editorPct,
-    };
+    const layout = getRestoredCenterLayout(totalPx);
 
     try {
       verticalGroupRef.current.setLayout(layout);

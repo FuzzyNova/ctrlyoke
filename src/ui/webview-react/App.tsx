@@ -20,6 +20,7 @@ import {
   PANEL_COLLAPSED_SIZE_DEFAULT,
   PANEL_COLLAPSED_SIZE_SIDEBAR,
   PANEL_MIN_SIZE_CENTER,
+  PANEL_MIN_SIZE_EDITOR,
   PANEL_MIN_SIZE_CENTER_COLUMN,
   PANEL_MIN_SIZE_SIDEBAR,
   PANEL_MAX_SIZE_SIDEBAR,
@@ -363,6 +364,19 @@ function App() {
                   }
                   const isCollapsed =
                     mobile.mobileOutputRef.current?.isCollapsed() ?? false;
+                  const isEditorCollapsed =
+                    mobile.mobileEditorRef.current?.isCollapsed() ??
+                    editorCollapsed;
+                  if (!isCollapsed && !isEditorCollapsed) {
+                    const sizePct =
+                      mobile.mobileOutputRef.current?.getSize().asPercentage;
+                    if (sizePct != null) {
+                      mobile.lastMobileSizes.current.output = sizePct;
+                      useUiStore
+                        .getState()
+                        .setLastMobileSizes({ output: sizePct });
+                    }
+                  }
                   if (isCollapsed !== outputCollapsed) {
                     setOutputCollapsed(isCollapsed);
                   }
@@ -431,7 +445,7 @@ function App() {
                 groupResizeBehavior="preserve-pixel-size"
                 collapsible
                 collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
-                minSize={PANEL_MIN_SIZE_CENTER}
+                minSize={PANEL_MIN_SIZE_EDITOR}
                 id="mobile-editor-panel"
                 onResize={() => {
                   if (!mobile.mobileInitializedRef.current || !uiLayoutReady) {
@@ -439,7 +453,10 @@ function App() {
                   }
                   const isCollapsed =
                     mobile.mobileEditorRef.current?.isCollapsed() ?? false;
-                  if (!isCollapsed) {
+                  const isOutputCollapsed =
+                    mobile.mobileOutputRef.current?.isCollapsed() ??
+                    outputCollapsed;
+                  if (!isCollapsed && !isOutputCollapsed) {
                     const sizePx =
                       mobile.mobileEditorRef.current?.getSize().inPixels;
                     if (sizePx != null) {
@@ -596,6 +613,23 @@ function App() {
                       desktop.outputRef.current?.isCollapsed() ?? false;
                     if (!desktop.initializedRef.current || !uiLayoutReady)
                       return;
+                    const isEditorCollapsed =
+                      desktop.editorRef.current?.isCollapsed() ??
+                      editorCollapsed;
+                    if (
+                      !isRemountUnstable &&
+                      !isOutputCollapsed &&
+                      !isEditorCollapsed
+                    ) {
+                      const sizePct =
+                        desktop.outputRef.current?.getSize().asPercentage;
+                      if (sizePct != null) {
+                        desktop.lastDesktopSizes.current.output = sizePct;
+                        useUiStore
+                          .getState()
+                          .setLastDesktopSizes({ output: sizePct });
+                      }
+                    }
                     if (!isRemountUnstable) {
                       setOutputCollapsed(isOutputCollapsed);
                     }
@@ -612,7 +646,7 @@ function App() {
                   groupResizeBehavior="preserve-pixel-size"
                   collapsible
                   collapsedSize={PANEL_COLLAPSED_SIZE_DEFAULT}
-                  minSize={PANEL_MIN_SIZE_CENTER}
+                  minSize={PANEL_MIN_SIZE_EDITOR}
                   id="editor-panel"
                   onResize={() => {
                     const isRemountUnstable =
@@ -622,13 +656,22 @@ function App() {
                       desktop.editorRef.current?.isCollapsed() ?? false;
                     if (!desktop.initializedRef.current || !uiLayoutReady)
                       return;
-                    if (!isRemountUnstable && !isEditorCollapsed) {
+                    const isOutputCollapsed =
+                      desktop.outputRef.current?.isCollapsed() ??
+                      outputCollapsed;
+                    if (
+                      !isRemountUnstable &&
+                      !isEditorCollapsed &&
+                      !isOutputCollapsed
+                    ) {
                       const sizePx =
                         desktop.editorRef.current?.getSize().inPixels;
                       if (sizePx != null) {
                         const px = Math.round(sizePx);
                         desktop.lastDesktopSizes.current.editor = px;
-                        useUiStore.getState().setLastDesktopSizes({ editor: px });
+                        useUiStore
+                          .getState()
+                          .setLastDesktopSizes({ editor: px });
                       }
                     }
                     if (!isRemountUnstable) {

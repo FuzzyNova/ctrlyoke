@@ -18,6 +18,10 @@ export const PANEL_MIN_SIZE_SIDEBAR = "192px";
 /** Minimum panel size as percentage for vertical center panels (output/editor) */
 export const PANEL_MIN_SIZE_CENTER = "15";
 
+/** Minimum height in pixels for the prompt editor before it can collapse */
+export const PANEL_MIN_SIZE_EDITOR = "100px";
+export const PANEL_MIN_SIZE_EDITOR_PX = 100;
+
 /** Minimum width in pixels for the desktop center column (output/editor) */
 export const PANEL_MIN_SIZE_CENTER_COLUMN = "360px";
 
