@@ -6,7 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
-import { useUiStore } from "../../store/uiStore";
+import { useUiStore, type RecentWorkflow } from "../../store/uiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
@@ -34,15 +34,6 @@ import { WORKFLOW_STATUS_BUTTON_SIZES } from "../../constants";
 
 interface WorkflowStatusProps {
   className?: string;
-}
-
-interface RecentWorkflow {
-  workflowName: string;
-  filePath: string;
-  executionState: string;
-  lastModifiedAt?: number;
-  startedAt?: number;
-  isFavorite?: boolean;
 }
 
 function sortRecentWorkflows(workflows: RecentWorkflow[]): RecentWorkflow[] {
@@ -74,6 +65,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     loadedWorkflows,
     activeWorkflowId,
     activeWorkflowWorkingFilePath,
+    recentWorkflows,
+    setRecentWorkflows,
     setActiveWorkflowWorkingFilePath,
   } = useUiStore();
   const { globalSettings } = useSettingsStore();
@@ -196,10 +189,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownTop, setDropdownTop] = useState(0);
   const [workflowSearch, setWorkflowSearch] = useState("");
-  const [recentWorkflows, setRecentWorkflows] = useState<RecentWorkflow[]>([]);
   // Pending workflow path waiting for delete confirmation
   const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(
     null
+  );
+  const sortedRecentWorkflows = useMemo(
+    () => sortRecentWorkflows(recentWorkflows),
+    [recentWorkflows]
   );
 
   const isMobile = useIsMobile();
@@ -242,23 +238,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   useEffect(() => {
     vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Handle message from extension with recent workflows
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const message = event.data;
-      if (message.type === MESSAGE_TYPES.RECENT_WORKFLOWS) {
-        const workflows = message.workflows || [];
-        WebviewLog.debug(
-          `[WorkflowStatus:RECENT_WORKFLOWS] received ${workflows.length} recent workflows`
-        );
-        setRecentWorkflows(sortRecentWorkflows(workflows));
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -415,21 +394,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Remove a single entry from recent workflow history — shows confirm modal or deletes directly
   const handleRemoveWorkflow = useCallback(
     (filePath: string) => {
-      if (!globalSettings.confirmDeleteOperations) {
-        // Skip modal — user opted out of delete confirmation
-        vscode.postMessage({
-          type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
-          filePath,
-        });
-        setRecentWorkflows((prev) =>
-          prev.filter((w) => w.filePath !== filePath)
-        );
-        return;
-      }
+    if (!globalSettings.confirmDeleteOperations) {
+      // Skip modal — user opted out of delete confirmation
+      vscode.postMessage({
+        type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+        filePath,
+      });
+      setRecentWorkflows(
+        useUiStore
+          .getState()
+          .recentWorkflows.filter((w) => w.filePath !== filePath)
+      );
+      return;
+    }
       // Show confirmation modal
       setPendingDeletePath(filePath);
     },
-    [globalSettings.confirmDeleteOperations, vscode]
+    [globalSettings.confirmDeleteOperations, setRecentWorkflows, vscode]
   );
 
   // Confirmed: actually remove the workflow history entry
@@ -439,11 +420,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
       filePath: pendingDeletePath,
     });
-    setRecentWorkflows((prev) =>
-      prev.filter((w) => w.filePath !== pendingDeletePath)
+    setRecentWorkflows(
+      useUiStore
+        .getState()
+        .recentWorkflows.filter((w) => w.filePath !== pendingDeletePath)
     );
     setPendingDeletePath(null);
-  }, [pendingDeletePath, vscode]);
+  }, [pendingDeletePath, setRecentWorkflows, vscode]);
 
   const handleRemoveWorkflowCancel = useCallback(() => {
     setPendingDeletePath(null);
@@ -456,9 +439,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         filePath,
       });
 
-      setRecentWorkflows((prev) =>
+      setRecentWorkflows(
         sortRecentWorkflows(
-          prev.map((workflow) =>
+          useUiStore.getState().recentWorkflows.map((workflow) =>
             workflow.filePath === filePath
               ? {
                   ...workflow,
@@ -469,7 +452,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         )
       );
     },
-    [vscode]
+    [setRecentWorkflows, vscode]
   );
 
   // Pause a specific workflow by ID
@@ -531,7 +514,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const filteredEffectiveLoadedWorkflows = effectiveLoadedWorkflows.filter(
     workflowMatchesSearch
   );
-  const filteredRecentWorkflows = recentWorkflows.filter(
+  const filteredRecentWorkflows = sortedRecentWorkflows.filter(
     (recentWorkflow) =>
       workflowMatchesSearch(recentWorkflow) &&
       !effectiveLoadedWorkflows.some(

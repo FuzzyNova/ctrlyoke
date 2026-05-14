@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { memo, useMemo } from "react";
 import { Streamdown, defaultRemarkPlugins } from "streamdown";
 import { findAndReplace } from "mdast-util-find-and-replace";
 import { visit } from "unist-util-visit";
@@ -177,7 +177,9 @@ function FileRefButton({
     <button
       type="button"
       className="group inline-flex items-baseline gap-0.5 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
-      onClick={() => line !== undefined ? openFile(path, line) : openFile(path)}
+      onClick={() =>
+        line !== undefined ? openFile(path, line) : openFile(path)
+      }
       title={title}
     >
       <i className="codicon codicon-file text-xxs opacity-70" />
@@ -250,7 +252,7 @@ interface MarkdownTextProps {
  *   drawn from the symbol-icon palette (interface blue, function purple,
  *   class amber) — similar to how Claude and Copilot colour their responses.
  */
-export const MarkdownText: React.FC<MarkdownTextProps> = ({
+const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   children,
   animated = false,
   className,
@@ -450,3 +452,6 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
     </Streamdown>
   );
 };
+
+export const MarkdownText = memo(MarkdownTextComponent);
+MarkdownText.displayName = "MarkdownText";

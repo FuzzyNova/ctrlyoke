@@ -9,7 +9,7 @@ import { render, screen, waitFor, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkflowStatus } from "@components/workflow/WorkflowStatus";
 import { useWorkflowStore } from "@store/workflowStore";
-import { useUiStore } from "@store/uiStore";
+import { useUiStore, type RecentWorkflow } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
 import {
@@ -32,6 +32,12 @@ beforeEach(() => {
   ).postMessage = postMessageSpy;
   postMessageSpy.mockClear();
 });
+
+function setRecentWorkflows(workflows: RecentWorkflow[]): void {
+  act(() => {
+    useUiStore.getState().setRecentWorkflows(workflows);
+  });
+}
 
 describe("WorkflowStatus — empty state", () => {
   it("shows 'New Workflow' when fileName is null", () => {
@@ -160,24 +166,14 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("populates recent workflows list on RECENT_WORKFLOWS message", async () => {
     render(<WorkflowStatus />);
-    // Dispatch the RECENT_WORKFLOWS message
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          data: {
-            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-            workflows: [
-              {
-                workflowName: "Workflow A",
-                filePath: "/path/a.yaml",
-                executionState: "idle",
-                isFavorite: false,
-              },
-            ],
-          },
-        })
-      );
-    });
+    setRecentWorkflows([
+      {
+        workflowName: "Workflow A",
+        filePath: "/path/a.yaml",
+        executionState: "idle",
+        isFavorite: false,
+      },
+    ]);
     // Open the dropdown
     const user = userEvent.setup();
     await user.click(
@@ -193,31 +189,22 @@ describe("WorkflowStatus — loaded state", () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
 
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          data: {
-            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-            workflows: [
-              {
-                workflowName: "Regular Workflow",
-                filePath: "/path/regular.yaml",
-                executionState: EXECUTION_STATES.IDLE,
-                lastModifiedAt: 200,
-                isFavorite: false,
-              },
-              {
-                workflowName: "Favorite Workflow",
-                filePath: "/path/favorite.yaml",
-                executionState: EXECUTION_STATES.IDLE,
-                lastModifiedAt: 100,
-                isFavorite: true,
-              },
-            ],
-          },
-        })
-      );
-    });
+    setRecentWorkflows([
+      {
+        workflowName: "Regular Workflow",
+        filePath: "/path/regular.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        lastModifiedAt: 200,
+        isFavorite: false,
+      },
+      {
+        workflowName: "Favorite Workflow",
+        filePath: "/path/favorite.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        lastModifiedAt: 100,
+        isFavorite: true,
+      },
+    ]);
 
     await user.click(
       screen.getByRole("button", { name: /Show recent workflows/i })
@@ -236,31 +223,22 @@ describe("WorkflowStatus — loaded state", () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
 
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          data: {
-            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-            workflows: [
-              {
-                workflowName: "Workflow A",
-                filePath: "/path/a.yaml",
-                executionState: EXECUTION_STATES.IDLE,
-                lastModifiedAt: 100,
-                isFavorite: false,
-              },
-              {
-                workflowName: "Workflow B",
-                filePath: "/path/b.yaml",
-                executionState: EXECUTION_STATES.IDLE,
-                lastModifiedAt: 200,
-                isFavorite: false,
-              },
-            ],
-          },
-        })
-      );
-    });
+    setRecentWorkflows([
+      {
+        workflowName: "Workflow A",
+        filePath: "/path/a.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        lastModifiedAt: 100,
+        isFavorite: false,
+      },
+      {
+        workflowName: "Workflow B",
+        filePath: "/path/b.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        lastModifiedAt: 200,
+        isFavorite: false,
+      },
+    ]);
 
     await user.click(
       screen.getByRole("button", { name: /Show recent workflows/i })
@@ -357,22 +335,13 @@ describe("WorkflowStatus — loaded state", () => {
     });
 
     render(<WorkflowStatus />);
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          data: {
-            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-            workflows: [
-              {
-                workflowName: "Completed Workflow",
-                filePath: "/workspace/my-workflow.flightpath.yaml",
-                executionState: EXECUTION_STATES.COMPLETED,
-              },
-            ],
-          },
-        })
-      );
-    });
+    setRecentWorkflows([
+      {
+        workflowName: "Completed Workflow",
+        filePath: "/workspace/my-workflow.flightpath.yaml",
+        executionState: EXECUTION_STATES.COMPLETED,
+      },
+    ]);
 
     await user.click(
       screen.getByRole("button", { name: /Show recent workflows/i })
@@ -387,27 +356,18 @@ describe("WorkflowStatus — loaded state", () => {
     const user = userEvent.setup();
     render(<WorkflowStatus />);
 
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          data: {
-            type: MESSAGE_TYPES.RECENT_WORKFLOWS,
-            workflows: [
-              {
-                workflowName: "Alpha Workflow",
-                filePath: "/path/alpha.yaml",
-                executionState: EXECUTION_STATES.IDLE,
-              },
-              {
-                workflowName: "Beta Workflow",
-                filePath: "/path/beta.yaml",
-                executionState: EXECUTION_STATES.IDLE,
-              },
-            ],
-          },
-        })
-      );
-    });
+    setRecentWorkflows([
+      {
+        workflowName: "Alpha Workflow",
+        filePath: "/path/alpha.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+      {
+        workflowName: "Beta Workflow",
+        filePath: "/path/beta.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+      },
+    ]);
 
     await user.click(
       screen.getByRole("button", { name: /Show recent workflows/i })

@@ -711,14 +711,6 @@ export const CliOutput = memo<CliOutputProps>(
     }
     const [dialogState, setDialogState] = useState<CliDialogState | null>(null);
 
-    const workspaceSnapshotsFromStore = useWorkflowStore(
-      (s) => s.workspaceSnapshots
-    );
-    const finalStepWorkspaceSnapshotsFromStore = useWorkflowStore(
-      (s) => s.finalStepWorkspaceSnapshots
-    );
-    const undoRecordsFromStore = useWorkflowStore((s) => s.undoRecords);
-
     const target: UndoExecutionTarget = useMemo(
       () =>
         isFinalStep
@@ -730,6 +722,14 @@ export const CliOutput = memo<CliOutputProps>(
       ? `finalStep-${stepIndex}`
       : `queue-${stepIndex}`;
     const resolvedRunIndex = runIndex ?? output.runIndex ?? 0;
+    const workspaceSnapshotFromStore = useWorkflowStore((s) =>
+      isFinalStep
+        ? s.finalStepWorkspaceSnapshots[stepIndex]
+        : s.workspaceSnapshots[stepIndex]
+    );
+    const undoRecordFromStore = useWorkflowStore(
+      (s) => s.undoRecords[targetKey]
+    );
 
     // Prefix for diff measurement anchor IDs in StructuredOutput.
     // Format: fp-diff-{kind}-{stepIndex}-r{runIndex}-a{attemptIndex}
@@ -741,12 +741,8 @@ export const CliOutput = memo<CliOutputProps>(
       attemptIndex
     );
 
-    const effectiveUndoRecord = undoRecord ?? undoRecordsFromStore[targetKey];
-    const effectiveSnapshot =
-      workspaceSnapshot ??
-      (isFinalStep
-        ? finalStepWorkspaceSnapshotsFromStore[stepIndex]
-        : workspaceSnapshotsFromStore[stepIndex]);
+    const effectiveUndoRecord = undoRecord ?? undoRecordFromStore;
+    const effectiveSnapshot = workspaceSnapshot ?? workspaceSnapshotFromStore;
 
     const fileUndoMode: "undo" | "redo" =
       effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { memo, useState, useCallback, useEffect, useRef } from "react";
 import { type FinalStepPhase } from "../../types/messages";
 
 // ============================================================================
@@ -55,7 +55,6 @@ export interface MinimapStep {
 interface OutputMinimapProps {
   steps: MinimapStep[];
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  scrollTop: number;
 }
 
 // ============================================================================
@@ -90,10 +89,11 @@ const DIFF_ADDED_COLOR =
  * so moving the mouse from the dot to the popup never leaves the container and
  * never triggers onMouseLeave.
  */
-export const OutputMinimap: React.FC<OutputMinimapProps> = ({
+const MIN_THUMB_PX = 24;
+
+const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   steps,
   scrollContainerRef,
-  scrollTop,
 }) => {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   // pinnedKey: popup opened by tap/click (stays open until tapped away).
@@ -119,7 +119,6 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
   // Thumb height is floored at MIN_THUMB_PX so it remains grabbable even when
   // the content is very long. The top position is recalculated to match so the
   // thumb still accurately tracks the scroll position.
-  const MIN_THUMB_PX = 24;
   const [viewportPct, setViewportPct] = useState({ top: 0, height: 100 });
 
   useEffect(() => {
@@ -131,7 +130,9 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
       const railHeight = railRef.current?.clientHeight ?? 0;
 
       if (scrollHeight <= clientHeight || railHeight === 0) {
-        setViewportPct({ top: 0, height: 100 });
+        setViewportPct((prev) =>
+          prev.top === 0 && prev.height === 100 ? prev : { top: 0, height: 100 }
+        );
         return;
       }
 
@@ -140,18 +141,28 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
       const scrollRange = scrollHeight - clientHeight;
       const topPx = (el.scrollTop / scrollRange) * (railHeight - thumbPx);
 
-      setViewportPct({
+      const next = {
         top: (topPx / railHeight) * 100,
         height: (thumbPx / railHeight) * 100,
-      });
+      };
+      setViewportPct((prev) =>
+        Math.abs(prev.top - next.top) < 0.01 &&
+        Math.abs(prev.height - next.height) < 0.01
+          ? prev
+          : next
+      );
     };
 
     update();
     const observer = new ResizeObserver(update);
     observer.observe(el);
     if (railRef.current) observer.observe(railRef.current);
-    return () => observer.disconnect();
-  }, [scrollContainerRef, scrollTop]);
+    el.addEventListener("scroll", update, { passive: true });
+    return () => {
+      observer.disconnect();
+      el.removeEventListener("scroll", update);
+    };
+  }, [scrollContainerRef]);
 
   // ── Draggable thumb ────────────────────────────────────────────────────────
 
@@ -575,3 +586,6 @@ export const OutputMinimap: React.FC<OutputMinimapProps> = ({
     </div>
   );
 };
+
+export const OutputMinimap = memo(OutputMinimapComponent);
+OutputMinimap.displayName = "OutputMinimap";
