@@ -34,7 +34,10 @@ import {
 } from "./EndConditionHandler";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { Log } from "../utils/Log";
-import { PropertyResolver } from "../utils/PropertyResolver";
+import {
+  PropertyResolver,
+  type ResolvedProperties,
+} from "../utils/PropertyResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { VarSubstitutor } from "../utils/VarSubstitutor";
 import {
@@ -574,7 +577,12 @@ export class WorkflowExecutor {
     }
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      this.updateDashboardForPromptStart(context, prompt, target.stepIndex);
+      this.updateDashboardForPromptStart(
+        context,
+        prompt,
+        target.stepIndex,
+        resolvedProperties
+      );
       integration.setWorkflowProgress(target.stepIndex + 1, progress.total);
       Log.info(`Executing prompt ${target.stepIndex + 1}/${progress.total}`);
     } else {
@@ -703,10 +711,14 @@ export class WorkflowExecutor {
         target.kind === FINAL_STEP_PHASES.QUEUE &&
         context.dashboardProvider
       ) {
-        context.dashboardProvider.updateStepStatus(signedStepIndex, {
-          state: STEP_STATUS.COMPLETED,
-          duration,
-        });
+        context.dashboardProvider.updateStepStatus(
+          signedStepIndex,
+          { state: STEP_STATUS.COMPLETED, duration },
+          {
+            harness: prompt._runtime?.harness,
+            model: prompt._runtime?.model,
+          }
+        );
       }
     } else {
       runtime.completeAttempt(target, 0);
@@ -714,10 +726,14 @@ export class WorkflowExecutor {
         target.kind === FINAL_STEP_PHASES.QUEUE &&
         context.dashboardProvider
       ) {
-        context.dashboardProvider.updateStepStatus(signedStepIndex, {
-          state: STEP_STATUS.COMPLETED,
-          duration,
-        });
+        context.dashboardProvider.updateStepStatus(
+          signedStepIndex,
+          { state: STEP_STATUS.COMPLETED, duration },
+          {
+            harness: prompt._runtime?.harness,
+            model: prompt._runtime?.model,
+          }
+        );
       }
     }
 
@@ -1996,15 +2012,21 @@ export class WorkflowExecutor {
   private updateDashboardForPromptStart(
     context: WorkflowExecutionContext,
     _step: WorkflowStep,
-    currentIndex: number
+    currentIndex: number,
+    resolvedProperties?: ResolvedProperties
   ): void {
     if (!context.dashboardProvider) {
       return;
     }
 
-    context.dashboardProvider.updateStepStatus(currentIndex, {
-      state: STEP_STATUS.RUNNING,
-    });
+    context.dashboardProvider.updateStepStatus(
+      currentIndex,
+      { state: STEP_STATUS.RUNNING },
+      {
+        harness: resolvedProperties?.harness,
+        model: resolvedProperties?.model,
+      }
+    );
   }
 
   private async handlePromptSendFailure(

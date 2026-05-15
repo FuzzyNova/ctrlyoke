@@ -199,7 +199,10 @@ export const WorkflowStepsPanel: React.FC<{
   //
   // For pending steps, compute from the three-tier precedence (step →
   // workflow → global) so the display stays live and reflects any changes.
-  const getStepHarnessModel = (step: (typeof steps)[0]) => {
+  const getStepHarnessModel = (
+    step: (typeof steps)[0],
+    status?: StepStatus
+  ) => {
     if (isScriptStep(step))
       return {
         harnessLabel: undefined,
@@ -207,9 +210,20 @@ export const WorkflowStepsPanel: React.FC<{
         modelLabel: undefined,
         modelIsDefault: true,
       };
-    if (step._runtime?.harness ?? step._runtime?.model) {
-      const h = step._runtime!.harness;
-      const m = step._runtime!.model;
+    // Use runtime values when they're present, OR when the step has reached a
+    // terminal status and any _runtime exists — this covers the case where a step
+    // completed after the last SESSION_RESTORED so harness/model weren't yet in
+    // the working file snapshot but were since delivered via STEP_STATUS_CHANGED.
+    const isTerminalStatus =
+      status === STEP_STATUS.COMPLETED ||
+      status === STEP_STATUS.FAILED ||
+      status === STEP_STATUS.CANCELLED;
+    if (
+      (step._runtime?.harness ?? step._runtime?.model) ||
+      (isTerminalStatus && step._runtime != null)
+    ) {
+      const h = step._runtime?.harness;
+      const m = step._runtime?.model;
       return {
         harnessLabel: h
           ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
@@ -740,7 +754,7 @@ export const WorkflowStepsPanel: React.FC<{
                 const isSelected =
                   selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
                   selectionTarget.index === index;
-                const harnessModel = getStepHarnessModel(step);
+                const harnessModel = getStepHarnessModel(step, status);
                 const overrides = getStepOverrides(step);
                 const runtimeMeta = step._runtime;
                 return (
@@ -833,7 +847,7 @@ export const WorkflowStepsPanel: React.FC<{
                   const isSelected =
                     selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
                     selectionTarget.index === index;
-                  const harnessModel = getStepHarnessModel(step);
+                  const harnessModel = getStepHarnessModel(step, status);
                   const overrides = getStepOverrides(step);
                   const runtimeMeta = step._runtime;
                   // Target index for set-position is currentStep + visual offset,
