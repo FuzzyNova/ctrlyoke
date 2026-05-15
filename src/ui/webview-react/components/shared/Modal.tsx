@@ -10,6 +10,8 @@ interface ModalProps {
   size?: "sm" | "md" | "lg" | "xl";
   /** Extra content rendered between the title and the close button in the header. */
   headerActions?: React.ReactNode;
+  /** Optional subtitle rendered on its own row below the title+actions row in the header. */
+  headerSubtitle?: React.ReactNode;
   /** When true, the modal takes full width (no horizontal margin, no rounded corners) below the sm breakpoint. */
   fullWidthOnNarrow?: boolean;
 }
@@ -22,6 +24,7 @@ export const Modal: React.FC<ModalProps> = ({
   footer,
   size = "md",
   headerActions,
+  headerSubtitle,
   fullWidthOnNarrow = false,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
@@ -74,30 +77,37 @@ export const Modal: React.FC<ModalProps> = ({
           aria-modal="true"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-panel-border">
-            <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-            <div className="flex items-center gap-1">
-              {headerActions}
-              <button
-                onClick={onClose}
-                className="text-description-fg hover:text-foreground transition-colors"
-                aria-label="Close modal"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          <div className="px-6 py-4 border-b border-panel-border">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+              <div className="flex items-center gap-1">
+                {headerActions}
+                <button
+                  onClick={onClose}
+                  className="text-description-fg hover:text-foreground transition-colors"
+                  aria-label="Close modal"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
+            {headerSubtitle && (
+              <div className="mt-1 text-sm text-description-fg truncate">
+                {headerSubtitle}
+              </div>
+            )}
           </div>
 
           {/* Body */}

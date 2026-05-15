@@ -521,15 +521,23 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
     collapseAllDiffs();
   }
 
+  const isSingleFileUndo =
+    !isWorkflowMode &&
+    mode === DIALOG_MODE.UNDO &&
+    input?.scope.mode === "singleFile";
+
   const dialogTitle = isWorkflowMode
     ? mode === DIALOG_MODE.REDO
       ? "Redo workflow changes"
       : "Undo workflow changes"
     : mode === DIALOG_MODE.REDO
       ? "Redo Changes"
-      : input?.scope.mode === "singleFile"
-        ? `Undo changes — ${input.scope.path}`
-        : "Undo prompt changes";
+      : "Undo Changes";
+
+  const dialogSubtitle =
+    isSingleFileUndo && input?.scope.mode === "singleFile"
+      ? input.scope.path
+      : undefined;
 
   const confirmLabel =
     mode === DIALOG_MODE.REDO
@@ -573,6 +581,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
       size="lg"
       footer={footer}
       fullWidthOnNarrow
+      headerSubtitle={dialogSubtitle}
       headerActions={
         hasDiffs && resultState === RESULT_STATE.IDLE ? (
           <ExpandCollapseAllDiffsButton
