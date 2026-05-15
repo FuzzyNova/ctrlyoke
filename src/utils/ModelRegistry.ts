@@ -239,9 +239,20 @@ async function queryOpenCodeModels(): Promise<void> {
     Log.debug(
       "Querying OpenCode for available models via 'opencode models --verbose'..."
     );
-    const { stdout } = await execAsync("opencode models --verbose", {
-      timeout: 10000,
-    });
+    let stdout = "";
+    try {
+      ({ stdout } = await execAsync("opencode models --verbose", {
+        timeout: 10000,
+      }));
+    } catch (execError) {
+      // opencode sometimes exits non-zero (e.g. internal "JSON Parse error") but
+      // still writes the full model list to stdout before failing. Recover it.
+      stdout = (execError as NodeJS.ErrnoException & { stdout?: string }).stdout ?? "";
+      if (!stdout.trim()) {
+        throw execError;
+      }
+      Log.debug(`opencode models --verbose exited non-zero but stdout has content — attempting parse`);
+    }
     const ids = parseOpenCodeVerboseOutput(stdout);
     if (ids.length > 0) {
       cachedOpenCodeModelIds = ids;
