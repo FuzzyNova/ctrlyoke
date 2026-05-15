@@ -846,7 +846,7 @@ export class CliIntegration extends HarnessIntegration {
       session.resolvedProperties?.mcpServers
     );
     const permissionArgs =
-      this.provider.buildPermissionArgs?.(effectiveToolPermissions) ?? [];
+      this.provider.buildPermissionArgs?.(effectiveToolPermissions, isInteractive) ?? [];
     baseArgs.push(...permissionArgs);
 
     // Append suffix args last — these are args that must follow ALL global flags.

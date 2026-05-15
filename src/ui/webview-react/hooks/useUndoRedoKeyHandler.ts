@@ -1,9 +1,138 @@
 import { useEffect } from "react";
-import { useWorkflowStore } from "../store/workflowStore";
+import { useWorkflowStore, type WorkflowStep } from "../store/workflowStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { WebviewLog } from "@utils/logger";
-import { MESSAGE_TYPES } from "../types/messages";
+import {
+  MESSAGE_TYPES,
+  PROMPT_TERMINAL_STATUS,
+  STEP_STATUS,
+  type StepStatus,
+} from "../types/messages";
 import { getVsCodeApi } from "./useVsCodeApi";
+
+type RuntimeDecoratedStep = WorkflowStep & {
+  status?: StepStatus;
+  details?: unknown;
+};
+
+type RuntimeSnapshot = {
+  status?: StepStatus;
+  _runtime?: RuntimeDecoratedStep["_runtime"];
+  details?: unknown;
+};
+
+const undoRedoRuntimeCache = new Map<string, RuntimeSnapshot>();
+
+function stepText(step: WorkflowStep): string {
+  return "script" in step && typeof step.script === "string"
+    ? step.script
+    : "prompt" in step && typeof step.prompt === "string"
+      ? step.prompt
+      : "";
+}
+
+function runtimeCacheKeys(step: WorkflowStep, index: number): string[] {
+  const type = "type" in step && step.type ? step.type : "prompt";
+  const name = "name" in step && step.name ? step.name : "";
+  const text = stepText(step);
+  return [
+    `${index}\u0000${type}\u0000${name}\u0000${text}`,
+    `${type}\u0000${name}\u0000${text}`,
+  ];
+}
+
+function getRuntimeSnapshot(step: WorkflowStep): RuntimeSnapshot | undefined {
+  const decorated = step as RuntimeDecoratedStep;
+  const snapshot: RuntimeSnapshot = {};
+  if (decorated.status !== undefined) {
+    snapshot.status = decorated.status;
+  }
+  if (decorated._runtime !== undefined) {
+    snapshot._runtime = decorated._runtime;
+  }
+  if (decorated.details !== undefined) {
+    snapshot.details = decorated.details;
+  }
+  return Object.keys(snapshot).length > 0 ? snapshot : undefined;
+}
+
+export function rememberUndoRedoRuntime(steps: WorkflowStep[]): void {
+  steps.forEach((step, index) => {
+    const snapshot = getRuntimeSnapshot(step);
+    if (!snapshot) return;
+    for (const key of runtimeCacheKeys(step, index)) {
+      undoRedoRuntimeCache.set(key, snapshot);
+    }
+  });
+}
+
+function findCachedRuntime(
+  step: WorkflowStep,
+  index: number
+): RuntimeSnapshot | undefined {
+  for (const key of runtimeCacheKeys(step, index)) {
+    const snapshot = undoRedoRuntimeCache.get(key);
+    if (snapshot) return snapshot;
+  }
+  return undefined;
+}
+
+function deriveCurrentStepFromRuntime(steps: WorkflowStep[]): number {
+  const firstPendingIndex = steps.findIndex(
+    (step) => (step as RuntimeDecoratedStep)._runtime?.completedAt === undefined
+  );
+  return firstPendingIndex === -1 ? steps.length : firstPendingIndex;
+}
+
+function deriveStatusFromRuntime(
+  runtime: RuntimeDecoratedStep["_runtime"] | undefined,
+  fallback: StepStatus | undefined
+): StepStatus | undefined {
+  if (runtime?.completedAt === undefined) {
+    return fallback;
+  }
+
+  const terminalStatus =
+    "terminalStatus" in runtime ? runtime.terminalStatus : undefined;
+
+  return terminalStatus === PROMPT_TERMINAL_STATUS.CANCELLED
+    ? STEP_STATUS.CANCELLED
+    : terminalStatus === PROMPT_TERMINAL_STATUS.FAILED
+      ? STEP_STATUS.FAILED
+      : STEP_STATUS.COMPLETED;
+}
+
+export function mergeRuntimeForUndoRedo(
+  restoredSteps: WorkflowStep[],
+  liveSteps: WorkflowStep[]
+): WorkflowStep[] {
+  const merged = restoredSteps.map((step, index) => {
+    const live = liveSteps[index] as RuntimeDecoratedStep | undefined;
+    const restored = step as RuntimeDecoratedStep;
+    const cached = findCachedRuntime(step, index);
+
+    const runtime = restored._runtime ?? cached?._runtime ?? live?._runtime;
+    const status = deriveStatusFromRuntime(
+      runtime,
+      restored.status ?? cached?.status ?? live?.status
+    );
+    const details = restored.details ?? cached?.details ?? live?.details;
+
+    return {
+      ...restored,
+      ...(status !== undefined ? { status } : {}),
+      ...(runtime !== undefined ? { _runtime: runtime } : {}),
+      ...(details !== undefined ? { details } : {}),
+    } as WorkflowStep;
+  });
+
+  rememberUndoRedoRuntime(merged);
+  return merged;
+}
+
+export function clearUndoRedoRuntimeCacheForTests(): void {
+  undoRedoRuntimeCache.clear();
+}
 
 export function useUndoRedoKeyHandler() {
   useEffect(() => {
@@ -53,6 +182,14 @@ export function useUndoRedoKeyHandler() {
         `[UndoRedo] ${isUndo ? "undo" : "redo"} — pastStates=${temporal.pastStates.length} futureStates=${temporal.futureStates.length}`
       );
 
+      // Capture live runtime state before applying undo/redo. The zundo equality
+      // guard prevents snapshots from recording runtime-only changes, but the
+      // snapshot content may still lack current _runtime/status/details (e.g. when
+      // a snapshot was taken before the step was run). Re-attaching them keeps the
+      // UI consistent and ensures the server message includes the current session IDs.
+      const preUndoSteps = useWorkflowStore.getState().steps;
+      rememberUndoRedoRuntime(preUndoSteps);
+
       if (isUndo) temporal.undo();
       else temporal.redo();
 
@@ -61,14 +198,26 @@ export function useUndoRedoKeyHandler() {
         `[UndoRedo] after ${isUndo ? "undo" : "redo"} — pastStates=${after.pastStates.length} futureStates=${after.futureStates.length}`
       );
 
-      // Sync restored state to extension host so working file and queue stay consistent
+      // Merge live _runtime/status/details back into the restored steps so the UI
+      // doesn't flash to "pending" for already-completed steps and the server
+      // receives complete step data (including session IDs for resume).
       const ws = useWorkflowStore.getState();
+      const mergedSteps = mergeRuntimeForUndoRedo(ws.steps, preUndoSteps);
+      // Apply merged runtime state without creating a new undo entry.
+      useWorkflowStore.temporal.getState().pause();
+      useWorkflowStore.setState({
+        steps: mergedSteps,
+        currentStep: deriveCurrentStepFromRuntime(mergedSteps),
+        totalSteps: mergedSteps.length,
+      });
+      useWorkflowStore.temporal.getState().resume();
+
       const workflowProperties = ws.undoWorkflowProperties;
       // Sync workflowProperties back to settingsStore so UI reflects the restored state
       useSettingsStore.getState().setWorkflowProperties(workflowProperties);
       getVsCodeApi().postMessage({
         type: MESSAGE_TYPES.UNDO_REDO_SYNC,
-        steps: ws.steps,
+        steps: mergedSteps,
         finalStep: ws.finalStep,
         workflowProperties,
       });

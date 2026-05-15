@@ -8,6 +8,10 @@ import type { UndoableWorkflowState, WorkflowStep } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import {
+  mergeRuntimeForUndoRedo,
+  rememberUndoRedoRuntime,
+} from "@hooks/useUndoRedoKeyHandler";
 import { MESSAGE_TYPES } from "../../types/messages";
 import { STEP_STATUS } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
@@ -361,8 +365,9 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     }) => {
       useWorkflowStore.temporal.getState().pause();
       useWorkflowStore.setState((state) => {
-        const reconciledSteps = state.steps.map((step, index) =>
-          reconcileStepRuntime(step, previousState.steps[index])
+        const reconciledSteps = mergeRuntimeForUndoRedo(
+          state.steps,
+          previousState.steps
         );
         const reconciledFinalStep = state.finalStep
           ? reconcileStepRuntime(
@@ -392,6 +397,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       steps: useWorkflowStore.getState().steps,
       finalStep: useWorkflowStore.getState().finalStep,
     };
+    rememberUndoRedoRuntime(previousState.steps);
     useWorkflowStore.temporal.getState().undo();
     normalizeAfterHistoryAction(previousState);
     syncToVsCode();
@@ -403,6 +409,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       steps: useWorkflowStore.getState().steps,
       finalStep: useWorkflowStore.getState().finalStep,
     };
+    rememberUndoRedoRuntime(previousState.steps);
     useWorkflowStore.temporal.getState().redo();
     normalizeAfterHistoryAction(previousState);
     syncToVsCode();
@@ -415,6 +422,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
         steps: useWorkflowStore.getState().steps,
         finalStep: useWorkflowStore.getState().finalStep,
       };
+      rememberUndoRedoRuntime(previousState.steps);
       const temporal = useWorkflowStore.temporal.getState();
       for (let i = 0; i < stepCount; i++) {
         if (direction === "redo") {
@@ -441,6 +449,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       workflowName: s.workflowName ?? null,
       finalStep: s.finalStep ?? null,
       undoWorkflowProperties: s.undoWorkflowProperties ?? {},
+      runtimeUndoGeneration: s.runtimeUndoGeneration ?? 0,
     };
     // futureStates[0] = oldest future (last to redo), futureStates[length-1] = most recently undone (first to redo)
     // Display oldest-future first (top) so the most steps appear at the top, matching undo ordering.

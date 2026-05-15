@@ -278,7 +278,7 @@ describe("CliOutput", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(
-      screen.getByRole("heading", { name: "Undo changes — src/example.ts" })
+      screen.getByRole("heading", { name: "Undo Changes" })
     ).toBeInTheDocument();
     expect(dialog).toHaveTextContent("src/example.ts");
     expect(

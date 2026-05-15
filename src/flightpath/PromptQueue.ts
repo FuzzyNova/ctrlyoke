@@ -32,6 +32,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { WorkingFileManager } from "./WorkingFileManager";
 import type { IWorkingFileQueueAccess } from "./WorkingFileManager";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
+import { stripViewOnlyWorkflowStepFields } from "./WorkflowStepSanitizer";
 
 /**
  * Get effective maxRetries value with smart defaults
@@ -97,6 +98,7 @@ export class PromptQueue {
   private currentRetryCount: number = 0; // Track retry attempts for current prompt
   private readonly workingFileManager: WorkingFileManager;
   private readonly stateMachine: WorkflowStateMachine;
+  private readonly runtimeArchive = new Map<string, PromptRuntimeMetadata>();
 
   // Public event for state changes
   public readonly onDidChangeState = this.onStateChanged.event;
@@ -1354,6 +1356,10 @@ export class PromptQueue {
       throw new Error("Cannot delete the currently executing prompt");
     }
 
+    this.state.steps.forEach((step, stepIndex) => {
+      this.archiveStepRuntime(step, stepIndex, "deletePrompt");
+    });
+
     // Remove the prompt
     this.state.steps.splice(index, 1);
 
@@ -1420,6 +1426,11 @@ export class PromptQueue {
     if (toIndex === currentIndex) return;
 
     if (toIndex < currentIndex) {
+      this.state.steps.forEach((step, index) => {
+        if (index >= toIndex) {
+          this.archiveStepRuntime(step, index, "setStartPosition");
+        }
+      });
       this.state.steps = this.state.steps.map((step, index) => {
         if (index < toIndex) return step;
         const { _runtime, ...rest } = step;
@@ -1447,6 +1458,7 @@ export class PromptQueue {
       });
     }
 
+    this.state.steps = this.state.steps.map(stripViewOnlyWorkflowStepFields);
     this.state.currentIndex = toIndex;
     this.stateMachine.reset();
     this.state.completedIndices = new Set<string>(
@@ -1480,29 +1492,141 @@ export class PromptQueue {
 
   /**
    * Replace all prompts with the state restored by an undo/redo operation.
-   * Preserves completed results (0..currentIndex-1); resets pending slots to PENDING.
+   * Rebuilds results/currentIndex from restored per-step runtime metadata.
    * Does NOT emit a state change event — the webview already has the correct state.
    * The working file watcher ignores changes in non-running states, so no re-broadcast occurs.
    */
   public async syncStepsForUndoRedo(newSteps: WorkflowStep[]): Promise<void> {
-    const currentIndex = this.state.currentIndex;
-    this.state.steps = newSteps;
+    let restoredFromArchive = 0;
+    const incomingWithRuntime = newSteps.filter((step) => step._runtime).length;
 
-    // Preserve completed results; reset pending slots to PENDING
-    const completedResults = this.state.results.slice(0, currentIndex);
-    const pendingResults = newSteps.slice(currentIndex).map((step) => ({
+    this.state.steps.forEach((step, index) => {
+      this.archiveStepRuntime(step, index, "syncStepsForUndoRedo");
+    });
+
+    // Preserve _runtime from existing steps when available, but also accept
+    // _runtime from the restored undo/redo snapshot. That matters for redo after
+    // undo removed a completed prompt: the deleted step has no same-index live
+    // counterpart, so its runtime must come from the redo snapshot.
+    this.state.steps = newSteps.map((newStep, i) => {
+      const persistableStep = stripViewOnlyWorkflowStepFields(newStep);
+      const existing = this.state.steps[i];
+      const existingRuntime =
+        existing &&
+        this.getStepIdentityKey(existing) ===
+          this.getStepIdentityKey(persistableStep)
+          ? existing._runtime
+          : undefined;
+      const archivedRuntime = this.getArchivedRuntime(persistableStep, i);
+      const runtime =
+        existingRuntime ?? persistableStep._runtime ?? archivedRuntime;
+      if (!existingRuntime && !persistableStep._runtime && archivedRuntime) {
+        restoredFromArchive++;
+      }
+      if (runtime) {
+        return { ...persistableStep, _runtime: runtime };
+      }
+      return persistableStep;
+    });
+
+    const restoredCurrentIndex = this.getCurrentIndexFromRuntime(
+      this.state.steps
+    );
+    this.state.currentIndex = restoredCurrentIndex;
+    this.state.completedIndices = new Set<string>(
+      this.state.steps
+        .map((step, index) =>
+          step._runtime?.completedAt !== undefined ? String(index) : undefined
+        )
+        .filter((index): index is string => index !== undefined)
+    );
+
+    this.state.results = this.state.steps.map((step, index) => ({
       prompt: isScriptStep(step) ? step.script : step.prompt,
-      status: STEP_STATUS.PENDING,
+      status: this.getResultStatusFromRuntime(step, index, restoredCurrentIndex),
       timestamp: new Date(),
     }));
-    this.state.results = [...completedResults, ...pendingResults];
 
     // Persist to working file (skip merge — we know exactly what we want)
     await this.updateWorkingFile(true);
 
     Log.debug(
-      `[PromptQueue] syncStepsForUndoRedo: ${newSteps.length} steps, currentIndex=${currentIndex}`
+      `[PromptQueue] syncStepsForUndoRedo: ${newSteps.length} steps, currentIndex=${restoredCurrentIndex}, ` +
+        `incomingRuntime=${incomingWithRuntime}, restoredFromArchive=${restoredFromArchive}, archiveSize=${this.runtimeArchive.size}`
     );
+  }
+
+  private getCurrentIndexFromRuntime(steps: WorkflowStep[]): number {
+    const firstPendingIndex = steps.findIndex(
+      (step) => step._runtime?.completedAt === undefined
+    );
+    return firstPendingIndex === -1 ? steps.length : firstPendingIndex;
+  }
+
+  private getStepIdentityKey(step: WorkflowStep): string {
+    const type = step.type ?? "prompt";
+    const name = step.name ?? "";
+    const text = isScriptStep(step) ? step.script : step.prompt;
+    return `${type}\0${name}\0${text}`;
+  }
+
+  private getStepRuntimeArchiveKeys(
+    step: WorkflowStep,
+    index: number
+  ): string[] {
+    const identity = this.getStepIdentityKey(step);
+    return [`${index}\0${identity}`, identity];
+  }
+
+  private archiveStepRuntime(
+    step: WorkflowStep | undefined,
+    index: number,
+    reason: string
+  ): void {
+    if (!step?._runtime) {
+      return;
+    }
+
+    const runtime = { ...step._runtime };
+    for (const key of this.getStepRuntimeArchiveKeys(step, index)) {
+      this.runtimeArchive.set(key, runtime);
+    }
+    Log.debug(
+      `[PromptQueue] archived _runtime for undo (${reason}) index=${index}, archiveSize=${this.runtimeArchive.size}`
+    );
+  }
+
+  private getArchivedRuntime(
+    step: WorkflowStep,
+    index: number
+  ): PromptRuntimeMetadata | undefined {
+    for (const key of this.getStepRuntimeArchiveKeys(step, index)) {
+      const runtime = this.runtimeArchive.get(key);
+      if (runtime) {
+        return { ...runtime };
+      }
+    }
+    return undefined;
+  }
+
+  private getResultStatusFromRuntime(
+    step: WorkflowStep,
+    index: number,
+    currentIndex: number
+  ): (typeof STEP_STATUS)[keyof typeof STEP_STATUS] {
+    if (step._runtime?.completedAt !== undefined) {
+      const terminal = step._runtime.terminalStatus;
+      return terminal === PROMPT_TERMINAL_STATUS.CANCELLED
+        ? STEP_STATUS.CANCELLED
+        : terminal === PROMPT_TERMINAL_STATUS.FAILED
+          ? STEP_STATUS.FAILED
+          : STEP_STATUS.COMPLETED;
+    }
+
+    return index === currentIndex &&
+      this.stateMachine.status === EXECUTION_STATES.RUNNING
+      ? STEP_STATUS.SENT
+      : STEP_STATUS.PENDING;
   }
 
   /**

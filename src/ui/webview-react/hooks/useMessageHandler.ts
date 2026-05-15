@@ -45,6 +45,7 @@ import { useTerminalStore } from "../store/terminalStore";
 import { useHarnessFileStore } from "../store/useHarnessFileStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
+import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
 import {
   clearPanelReconnectReloadWatchdog,
   schedulePanelReconnectReloadWatchdog,
@@ -242,6 +243,15 @@ function applyTerminalSetting(path: string, value: unknown): void {
     [key]: value,
   } as TerminalSettings;
   applyTerminalSettings(nextSettings);
+}
+
+function isTerminalStepStatus(status: unknown): boolean {
+  return (
+    status === STEP_STATUS.COMPLETED ||
+    status === STEP_STATUS.FAILED ||
+    status === STEP_STATUS.CANCELLED ||
+    status === STEP_STATUS.SKIPPED
+  );
 }
 
 // ============================================================================
@@ -644,6 +654,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const prevCurrentStep = workflowStore.currentStep;
     const newCurrentStep = message.currentIndex as number;
 
+    rememberUndoRedoRuntime(workflowStore.steps);
     workflowStore.applyStartPositionChange(message.steps || [], newCurrentStep);
 
     // For rewind: clear live CLI outputs for rewound steps
@@ -664,6 +675,7 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.PROMPT_DELETED] = (message) => {
     const workflowStore = useWorkflowStore.getState();
 
+    rememberUndoRedoRuntime(workflowStore.steps);
     workflowStore.setFileName(message.fileName);
     workflowStore.setPrompts(message.steps || []);
     // Pause around setFinalStep — the delete action is already recorded by
@@ -911,6 +923,18 @@ function createMessageHandlers(): MessageHandlerMap {
       }
     }
     const workflowStore = useWorkflowStore.getState();
+    const steps = workflowStore.steps;
+    if (steps.length > 0) {
+      const completedSteps = steps.map((step) => {
+        const currentStatus = (step as { status?: StepStatus }).status;
+        return isTerminalStepStatus(currentStatus)
+          ? step
+          : ({ ...step, status: STEP_STATUS.COMPLETED } as typeof step);
+      });
+      useWorkflowStore.temporal.getState().pause();
+      workflowStore.setPrompts(completedSteps);
+      useWorkflowStore.temporal.getState().resume();
+    }
     workflowStore.setExecutionState(EXECUTION_STATES.COMPLETED);
   };
 

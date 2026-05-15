@@ -350,9 +350,13 @@ export class CodexCliProvider implements ICliProvider {
    * Build CLI arguments for tool permissions.
    * Called for both interactive and headless modes by CliIntegration.runExecutionSession().
    * Uses Codex-specific permission mapper with sandbox/approval settings.
+   *
+   * Note: --ask-for-approval / -a is only valid in interactive mode (not `codex exec`).
+   * isInteractive is forwarded to the mapper so it can omit unsupported flags.
    */
   buildPermissionArgs(
-    toolPermissions: ToolPermissionConfig | null | undefined
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    isInteractive?: boolean
   ): string[] {
     if (toolPermissions === null) {
       // none mode — skip permission flags entirely
@@ -368,7 +372,7 @@ export class CodexCliProvider implements ICliProvider {
     };
     const permissionArgs = (
       this.toolPermissionMapper as CodexToolPermissionMapper
-    ).buildCodexSpecificArgs(config, sandboxMode, approvalPolicy);
+    ).buildCodexSpecificArgs(config, sandboxMode, approvalPolicy, isInteractive);
     args.push(...permissionArgs);
     // Add additional allowed directories when not in dangerous mode
     if (config.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {

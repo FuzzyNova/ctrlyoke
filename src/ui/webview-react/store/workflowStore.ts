@@ -128,6 +128,8 @@ interface WorkflowState {
   /** Shadow copy of settingsStore.workflowProperties for undo tracking. Kept in sync
    *  with settingsStore but stored here so zundo can snapshot it alongside prompts. */
   undoWorkflowProperties: WorkflowProperties;
+  /** Incremented for user actions whose only undoable change may be runtime state. */
+  runtimeUndoGeneration: number;
   /** Live context window usage per step index, updated during prompt execution */
   liveContextWindow: Record<number, { used: number; size: number }>;
 }
@@ -300,6 +302,7 @@ const initialState: WorkflowState = {
   undoResults: {},
   undoRecords: {},
   undoWorkflowProperties: {},
+  runtimeUndoGeneration: 0,
   liveContextWindow: {},
 };
 
@@ -744,10 +747,12 @@ export const useWorkflowStore = create<
         withUndoPause(() => set(() => ({ historyOutputs: null }))),
 
       resetExecutionState: (steps) => {
-        // Not wrapped in pause/resume — this is a user-initiated action.
-        // partialize ensures only prompts/workflowName/finalStep are snapshotted,
-        // so executionState/currentStep changes here are NOT recorded in undo history.
-        set(() => ({
+        // Not wrapped in pause/resume — this is a user-initiated action (Reset button).
+        // Steps are reset to PENDING and included in the undo snapshot so the user
+        // can undo the reset. executionState/currentStep are not in partialize and
+        // won't appear in the undo history. The equality guard prevents a snapshot if
+        // only _runtime/status changed (e.g., reset on already-idle steps).
+        set((state) => ({
           steps: steps.map((p) => ({
             ...p,
             status: STEP_STATUS.PENDING,
@@ -758,6 +763,7 @@ export const useWorkflowStore = create<
           finalStepStatus: null,
           finalStepLoopCount: 0,
           finalStepPhase: null,
+          runtimeUndoGeneration: state.runtimeUndoGeneration + 1,
           // liveOrderedEntries, retryStates, streamingChunks, historyOutputs,
           // finalStepStreamingChunks are intentionally preserved
           // so the run history and output panel are unaffected.
@@ -803,12 +809,13 @@ export const useWorkflowStore = create<
         // Not wrapped in pause/resume — this is a user-initiated action.
         // partialize ensures only prompts/workflowName/finalStep are snapshotted,
         // so currentStep/executionState changes here are NOT recorded in undo history.
-        set(() => ({
+        set((state) => ({
           steps,
           currentStep: newCurrentStep,
           totalSteps: steps.length,
           executionState: EXECUTION_STATES.IDLE,
           finalStepStatus: null,
+          runtimeUndoGeneration: state.runtimeUndoGeneration + 1,
         }));
       },
 
@@ -1118,7 +1125,40 @@ export const useWorkflowStore = create<
         workflowName: state.workflowName,
         finalStep: state.finalStep,
         undoWorkflowProperties: state.undoWorkflowProperties,
+        runtimeUndoGeneration: state.runtimeUndoGeneration,
       }),
+      // Prevent snapshot creation when only runtime fields changed.
+      // Snapshots should only record user-editable content (prompt text, step
+      // structure, workflow properties). Runtime-only changes (_runtime, status,
+      // details) should never pollute the undo stack — running a workflow must
+      // not cause undo to become enabled.
+      equality: (a, b) => {
+        if (
+          a.workflowName !== b.workflowName ||
+          a.steps.length !== b.steps.length ||
+          a.finalStep !== b.finalStep ||
+          a.runtimeUndoGeneration !== b.runtimeUndoGeneration ||
+          JSON.stringify(a.undoWorkflowProperties) !==
+            JSON.stringify(b.undoWorkflowProperties)
+        ) {
+          return false;
+        }
+        for (let i = 0; i < a.steps.length; i++) {
+          const sa = a.steps[i] as any;
+          const sb = b.steps[i] as any;
+          if (
+            sa.prompt !== sb.prompt ||
+            sa.script !== sb.script ||
+            sa.name !== sb.name ||
+            sa.model !== sb.model ||
+            sa.harness !== sb.harness ||
+            sa.type !== sb.type
+          ) {
+            return false;
+          }
+        }
+        return true;
+      },
       limit: 100,
     }
   )
@@ -1154,6 +1194,7 @@ export interface UndoableWorkflowState {
   workflowName: string | null;
   finalStep: WorkflowStep | null;
   undoWorkflowProperties: WorkflowProperties;
+  runtimeUndoGeneration: number;
 }
 
 /**

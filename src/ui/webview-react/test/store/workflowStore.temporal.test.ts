@@ -13,6 +13,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
+  clearUndoRedoRuntimeCacheForTests,
+  mergeRuntimeForUndoRedo,
+  rememberUndoRedoRuntime,
+} from "@hooks/useUndoRedoKeyHandler";
+import {
   EXECUTION_STATES,
   STEP_STATUS,
   FINAL_STEP_PHASES,
@@ -51,6 +56,7 @@ beforeEach(() => {
   store().resetWorkflow();
   // resetWorkflow calls t.clear() internally, but be explicit.
   temporal().clear();
+  clearUndoRedoRuntimeCacheForTests();
 });
 
 // ---------------------------------------------------------------------------
@@ -176,15 +182,16 @@ describe("STEP_STATUS_CHANGED handler simulation", () => {
     expect(temporal().pastStates).toHaveLength(0);
   });
 
-  it("would have polluted the stack without pause (documents the original bug)", () => {
+  it("equality guard: runtime-only changes do not pollute the stack even without pause", () => {
     loadWorkflow([makePrompt(), makePrompt({ prompt: "second" })]);
 
-    // Without pause — the old broken behaviour
+    // Without pause — previously this would add 2 spurious undo entries.
+    // The zundo equality guard now considers states equal when only _runtime/status
+    // differ, so no snapshots are created regardless of pause.
     store().updatePrompt(0, { status: STEP_STATUS.RUNNING });
     store().updatePrompt(0, { status: STEP_STATUS.COMPLETED });
 
-    // Two runtime status changes → two spurious undo entries
-    expect(temporal().pastStates).toHaveLength(2);
+    expect(temporal().pastStates).toHaveLength(0);
   });
 });
 
@@ -295,6 +302,30 @@ describe("PROMPT_DELETED handler simulation", () => {
     expect(store().steps).toHaveLength(2);
     expect((store().steps[1] as any).prompt).toBe("second");
   });
+
+  it("undo after deleting a completed prompt restores its runtime", () => {
+    loadWorkflow([
+      makePrompt({ _runtime: { sessionId: "s1", completedAt: 100 } as any }),
+      makePrompt({
+        prompt: "second",
+        status: STEP_STATUS.COMPLETED,
+        _runtime: { sessionId: "s2", startedAt: 100, completedAt: 200 } as any,
+      }),
+    ]);
+
+    rememberUndoRedoRuntime(store().steps);
+    store().setPrompts([store().steps[0]]);
+
+    const beforeUndo = store().steps;
+    temporal().undo();
+    const undoMerged = mergeRuntimeForUndoRedo(store().steps, beforeUndo);
+    temporal().pause();
+    store().setPrompts(undoMerged);
+    temporal().resume();
+
+    expect(store().steps).toHaveLength(2);
+    expect((store().steps[1] as any)._runtime?.sessionId).toBe("s2");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -367,5 +398,145 @@ describe("undo/redo round-trips", () => {
     // executionState is not in the partialized snapshot — it stays as-is
     expect(store().executionState).toBe(EXECUTION_STATES.RUNNING);
     expect((store().steps[0] as any).prompt).toBe("hello world");
+  });
+
+  it("set start position records an undo entry and restores cleared runtime", () => {
+    loadWorkflow([
+      makePrompt({
+        status: STEP_STATUS.COMPLETED,
+        _runtime: { sessionId: "s1", startedAt: 100, completedAt: 200 } as any,
+      }),
+      makePrompt({
+        prompt: "second",
+        status: STEP_STATUS.COMPLETED,
+        _runtime: { sessionId: "s2", startedAt: 300, completedAt: 400 } as any,
+      }),
+    ]);
+
+    rememberUndoRedoRuntime(store().steps);
+    store().applyStartPositionChange(
+      [
+        store().steps[0],
+        { prompt: "second", status: STEP_STATUS.PENDING } as any,
+      ],
+      1
+    );
+
+    expect(temporal().pastStates).toHaveLength(1);
+    expect((store().steps[1] as any)._runtime).toBeUndefined();
+
+    const beforeUndo = store().steps;
+    temporal().undo();
+    const undoMerged = mergeRuntimeForUndoRedo(store().steps, beforeUndo);
+    temporal().pause();
+    store().setPrompts(undoMerged);
+    temporal().resume();
+
+    expect((store().steps[1] as any)._runtime?.sessionId).toBe("s2");
+    expect((store().steps[1] as any).status).toBe(STEP_STATUS.COMPLETED);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Equality guard — running a workflow must not pollute the undo stack
+// The zundo equality function treats states as equal when only runtime fields
+// (_runtime, status, details) differ, even if setPrompts is called unpaused.
+// ---------------------------------------------------------------------------
+describe("equality guard: workflow execution must not create undo entries", () => {
+  it("_runtime change alone does not create a snapshot", () => {
+    loadWorkflow([makePrompt()]);
+
+    // Simulate a run completing: _runtime is set (unpaused, as a safeguard test)
+    store().updatePrompt(0, {
+      _runtime: { sessionId: "abc", elapsed: 1000 } as any,
+    });
+
+    expect(temporal().pastStates).toHaveLength(0);
+  });
+
+  it("status change alone does not create a snapshot", () => {
+    loadWorkflow([makePrompt()]);
+    store().updatePrompt(0, { status: STEP_STATUS.COMPLETED });
+    expect(temporal().pastStates).toHaveLength(0);
+  });
+
+  it("content change still records a snapshot alongside runtime changes", () => {
+    loadWorkflow([makePrompt()]);
+
+    // Prompt text changes — this IS a content change, must be undoable
+    store().updatePrompt(0, {
+      prompt: "edited",
+      status: STEP_STATUS.RUNNING,
+    });
+
+    expect(temporal().pastStates).toHaveLength(1);
+  });
+
+  it("adding a step records 1 snapshot even when existing steps have _runtime", () => {
+    loadWorkflow([
+      makePrompt({ _runtime: { sessionId: "s1", elapsed: 500 } as any }),
+    ]);
+
+    // User adds a second step after the first has already run
+    store().setPrompts([
+      makePrompt({ _runtime: { sessionId: "s1", elapsed: 500 } as any }),
+      makePrompt({ prompt: "step 2" }),
+    ]);
+
+    // Count changed → 1 snapshot (not 0 due to equality guard ignoring count)
+    expect(temporal().pastStates).toHaveLength(1);
+  });
+
+  it("undo after adding a step preserves existing _runtime in the snapshot", () => {
+    loadWorkflow([
+      makePrompt({ _runtime: { sessionId: "s1", elapsed: 500 } as any }),
+    ]);
+
+    store().setPrompts([
+      makePrompt({ _runtime: { sessionId: "s1", elapsed: 500 } as any }),
+      makePrompt({ prompt: "step 2" }),
+    ]);
+    expect(temporal().pastStates).toHaveLength(1);
+
+    temporal().undo();
+
+    // Back to 1 step — _runtime preserved in snapshot as it was
+    expect(store().steps).toHaveLength(1);
+    expect((store().steps[0] as any)._runtime?.sessionId).toBe("s1");
+  });
+
+  it("redo after undoing a completed added step restores that step's runtime", () => {
+    loadWorkflow([makePrompt()]);
+
+    store().setPrompts([makePrompt(), makePrompt({ prompt: "step 2" })]);
+    store().updatePrompt(1, {
+      status: STEP_STATUS.COMPLETED,
+      _runtime: {
+        sessionId: "s2",
+        startedAt: 100,
+        completedAt: 200,
+      } as any,
+    });
+
+    const beforeUndo = store().steps;
+    rememberUndoRedoRuntime(beforeUndo);
+    temporal().undo();
+    const undoMerged = mergeRuntimeForUndoRedo(store().steps, beforeUndo);
+    temporal().pause();
+    store().setPrompts(undoMerged);
+    temporal().resume();
+
+    expect(store().steps).toHaveLength(1);
+
+    const beforeRedo = store().steps;
+    temporal().redo();
+    const redoMerged = mergeRuntimeForUndoRedo(store().steps, beforeRedo);
+    temporal().pause();
+    store().setPrompts(redoMerged);
+    temporal().resume();
+
+    expect(store().steps).toHaveLength(2);
+    expect((store().steps[1] as any)._runtime?.sessionId).toBe("s2");
+    expect((store().steps[1] as any).status).toBe(STEP_STATUS.COMPLETED);
   });
 });

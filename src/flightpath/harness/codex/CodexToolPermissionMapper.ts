@@ -61,15 +61,22 @@ export class CodexToolPermissionMapper
    * This is a Codex-specific method for advanced permission control.
    * Use this when you need fine-grained control over sandbox and approval.
    *
+   * Note: --ask-for-approval / -a is an interactive-only flag. In headless exec mode
+   * (`codex exec`) it is not a recognised argument and will cause an error. When
+   * isInteractive is false (or undefined), approval-policy flags are omitted entirely
+   * because `codex exec` controls approval through its sandbox mode alone.
+   *
    * @param config Tool permission configuration
    * @param sandboxMode Codex sandbox mode ("read-only" | "workspace-write" | "danger-full-access")
    * @param approvalPolicy Codex approval policy ("untrusted" | "on-request" | "never")
+   * @param isInteractive Whether running in interactive TUI mode (false → headless exec mode)
    * @returns CLI arguments array
    */
   buildCodexSpecificArgs(
     config: ToolPermissionConfig,
     sandboxMode?: string,
-    approvalPolicy?: string
+    approvalPolicy?: string,
+    isInteractive?: boolean
   ): string[] {
     // Warn if tool patterns are configured (unsupported by Codex)
     if (config.allowedTools.length > 0 || config.deniedTools.length > 0) {
@@ -78,32 +85,50 @@ export class CodexToolPermissionMapper
       );
     }
 
+    // --ask-for-approval / -a is an interactive-only flag: not recognised by `codex exec`.
+    // Only suppress it when isInteractive is explicitly false (headless exec mode).
+    // When undefined (e.g. buildArgs() or tests that don't pass the flag), behave as before.
+    const includeApprovalFlag = isInteractive !== false;
+
     switch (config.mode) {
       case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
         // Bypass ALL checks (dangerous!)
         return ["--dangerously-bypass-approvals-and-sandbox"];
 
       case PERMISSION_MODES.ALLOW_ALL:
-        // Use the explicit Auto preset flags instead of deprecated --full-auto.
-        return [...this.AUTO_PRESET_ARGS];
+        // Auto preset: workspace-write sandbox + on-request approval.
+        // --ask-for-approval is not a valid flag for `codex exec` (headless), so omit it.
+        if (includeApprovalFlag) {
+          return [...this.AUTO_PRESET_ARGS];
+        }
+        return ["--sandbox", "workspace-write"];
 
       case PERMISSION_MODES.CUSTOM:
-        // Use Codex-specific sandbox and approval settings
-        // Note: --add-dir is handled elsewhere, not here
+        // Use Codex-specific sandbox and approval settings.
+        // -a / --ask-for-approval is interactive-only; omit for headless exec.
         if (sandboxMode && approvalPolicy) {
-          return ["-s", sandboxMode, "-a", approvalPolicy];
+          if (includeApprovalFlag) {
+            return ["-s", sandboxMode, "-a", approvalPolicy];
+          }
+          return ["-s", sandboxMode];
         } else {
           Log.warn(
             "⚠️ Custom mode requires sandboxMode and approvalPolicy for Codex. Falling back to the Auto preset."
           );
-          return [...this.AUTO_PRESET_ARGS];
+          if (includeApprovalFlag) {
+            return [...this.AUTO_PRESET_ARGS];
+          }
+          return ["--sandbox", "workspace-write"];
         }
 
       case PERMISSION_MODES.NONE:
         return [];
 
       default:
-        return [...this.AUTO_PRESET_ARGS];
+        if (includeApprovalFlag) {
+          return [...this.AUTO_PRESET_ARGS];
+        }
+        return ["--sandbox", "workspace-write"];
     }
   }
 }

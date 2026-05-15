@@ -1,6 +1,7 @@
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
+import { stripViewOnlyWorkflowStepFields } from "./WorkflowStepSanitizer";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { EndConditionHandler } from "./EndConditionHandler";
@@ -1598,8 +1599,14 @@ export class WorkflowInstance {
 
     // Sync finalStep if it changed
     if (finalStep !== null) {
-      this.promptQueue.updateWorkflowProperty("finalStep", finalStep);
-      await this.promptQueue.updateWorkingFileProperties({ finalStep });
+      const persistableFinalStep = stripViewOnlyWorkflowStepFields(finalStep);
+      this.promptQueue.updateWorkflowProperty(
+        "finalStep",
+        persistableFinalStep
+      );
+      await this.promptQueue.updateWorkingFileProperties({
+        finalStep: persistableFinalStep,
+      });
     } else {
       this.promptQueue.updateWorkflowProperty("finalStep", undefined);
       await this.promptQueue.updateWorkingFileProperties(

@@ -244,9 +244,12 @@ export interface ICliProvider {
    * For undefined toolPermissions, falls back to global ConfigurationUtils settings.
    * For null toolPermissions (none mode), returns [] — no permission flags injected.
    * Returns permission args to append to baseArgs after all other args.
+   * isInteractive is passed so providers can omit flags unsupported in headless/exec mode
+   * (e.g. Codex: --ask-for-approval / -a is interactive-only, not valid for `codex exec`).
    */
   buildPermissionArgs?(
-    toolPermissions: ToolPermissionConfig | null | undefined
+    toolPermissions: ToolPermissionConfig | null | undefined,
+    isInteractive?: boolean
   ): string[];
 
   /**

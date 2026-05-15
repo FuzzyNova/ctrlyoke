@@ -519,6 +519,70 @@ suite("HarnessToolPermissionMappers", () => {
       });
     });
 
+    suite("buildCodexSpecificArgs — headless exec mode (isInteractive: false)", () => {
+      test("dangerouslyAllowAll → bypass flag (unchanged in headless)", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL),
+          undefined,
+          undefined,
+          false
+        );
+        assert.deepStrictEqual(args, [
+          "--dangerously-bypass-approvals-and-sandbox",
+        ]);
+      });
+
+      test("allowAll → --sandbox workspace-write only (no --ask-for-approval)", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.ALLOW_ALL),
+          undefined,
+          undefined,
+          false
+        );
+        assert.deepStrictEqual(args, ["--sandbox", "workspace-write"]);
+      });
+
+      test("custom with sandbox+approval → -s only (no -a)", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.CUSTOM),
+          "workspace-write",
+          "on-request",
+          false
+        );
+        assert.deepStrictEqual(args, ["-s", "workspace-write"]);
+      });
+
+      test("custom with read-only sandbox+approval → -s read-only only (no -a)", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.CUSTOM),
+          "read-only",
+          "untrusted",
+          false
+        );
+        assert.deepStrictEqual(args, ["-s", "read-only"]);
+      });
+
+      test("custom missing sandbox/approval → fallback without --ask-for-approval", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.CUSTOM),
+          undefined,
+          undefined,
+          false
+        );
+        assert.deepStrictEqual(args, ["--sandbox", "workspace-write"]);
+      });
+
+      test("none mode → no flags (unchanged)", () => {
+        const args = mapper.buildCodexSpecificArgs(
+          cfg(PERMISSION_MODES.NONE),
+          undefined,
+          undefined,
+          false
+        );
+        assert.deepStrictEqual(args, []);
+      });
+    });
+
     suite("hasFullPermissions", () => {
       test("dangerouslyAllowAll → true", () => {
         assert.strictEqual(

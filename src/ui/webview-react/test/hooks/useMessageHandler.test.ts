@@ -570,6 +570,28 @@ describe("EXECUTION_COMPLETED", () => {
       EXECUTION_STATES.COMPLETED
     );
   });
+
+  it("marks non-terminal prompt statuses completed", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Step 0"), makePrompt("Step 1")],
+      });
+      useWorkflowStore.getState().setStepStatus(0, STEP_STATUS.COMPLETED);
+      useWorkflowStore.getState().setStepStatus(1, STEP_STATUS.RUNNING);
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.EXECUTION_COMPLETED);
+    });
+
+    const prompts = useWorkflowStore.getState().steps;
+    expect((prompts[0] as any).status).toBe(STEP_STATUS.COMPLETED);
+    expect((prompts[1] as any).status).toBe(STEP_STATUS.COMPLETED);
+    expect(useWorkflowStore.temporal.getState().pastStates).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

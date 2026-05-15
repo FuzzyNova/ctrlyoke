@@ -15,6 +15,7 @@ import {
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { withFileLock } from "../utils/FileLockUtils";
+import { stripViewOnlyWorkflowStepFields } from "./WorkflowStepSanitizer";
 
 /**
  * Interface providing queue state access for working file persistence operations.
@@ -262,9 +263,9 @@ export class WorkingFileManager {
 
         // Now write back the steps array (merged or direct from memory)
         // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
-        workingFile.steps = this.queueAccess.getSteps().map((step) => ({
-          ...step,
-        }));
+        workingFile.steps = this.queueAccess
+          .getSteps()
+          .map(stripViewOnlyWorkflowStepFields);
         // Count steps with _runtime metadata (Phase 4: Session Management)
         const stepsWithRuntime = workingFile.steps.filter(
           (p) => p._runtime

@@ -478,7 +478,7 @@ export class WebviewMessageRouter {
         this.clientId
       );
       if ("workflowProperties" in message) {
-        const workflowProperties = {
+        const raw = {
           harness: message.workflowProperties?.harness,
           model: message.workflowProperties?.model,
           agent: message.workflowProperties?.agent,
@@ -493,11 +493,20 @@ export class WebviewMessageRouter {
           additionalArgs: message.workflowProperties?.additionalArgs,
           toolPermissions: message.workflowProperties?.toolPermissions,
         };
-        this.settingsSync.handleUpdateWorkflowProperties(
-          workflowProperties,
-          this.getCurrentPostMessage(),
-          this.clientId
+        // Strip undefined values: undo restores known state but should not delete
+        // properties the undo snapshot predates (e.g. toolPermissions seeded after
+        // snapshot capture). Passing undefined would trigger allowDeletes and wipe
+        // the live working file value, causing inject-mode mismatches on the next step.
+        const workflowProperties = Object.fromEntries(
+          Object.entries(raw).filter(([, v]) => v !== undefined)
         );
+        if (Object.keys(workflowProperties).length > 0) {
+          this.settingsSync.handleUpdateWorkflowProperties(
+            workflowProperties,
+            this.getCurrentPostMessage(),
+            this.clientId
+          );
+        }
       }
     });
 

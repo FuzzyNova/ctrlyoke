@@ -969,6 +969,33 @@ suite("PromptQueue State Machine Tests", () => {
       assert.ok(state.completedIndices.has("0"));
     });
 
+    test("should strip webview-only status fields when changing start position", async () => {
+      const steps = [
+        { prompt: "p0", status: STEP_STATUS.COMPLETED },
+        { prompt: "p1", status: STEP_STATUS.COMPLETED },
+      ] as unknown as PromptStep[];
+      queue.loadPrompts(createPromptFile(steps));
+      (queue as any).state.currentIndex = 2;
+      (queue as any).state.steps[0]._runtime = {
+        startedAt: 100,
+        completedAt: 200,
+      };
+      (queue as any).state.steps[1]._runtime = {
+        startedAt: 300,
+        completedAt: 400,
+      };
+      (queue as any).state.results[0].status = STEP_STATUS.COMPLETED;
+      (queue as any).state.results[1].status = STEP_STATUS.COMPLETED;
+
+      await queue.setStartPosition(1);
+
+      const state = queue.getState();
+      assert.strictEqual((state.steps[0] as any).status, undefined);
+      assert.strictEqual((state.steps[1] as any).status, undefined);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
+    });
+
     test("should skip-ahead: mark prompts currentIndex..toIndex-1 as SKIPPED in results", async () => {
       const steps: PromptStep[] = [
         { prompt: "p0" },
@@ -1166,6 +1193,211 @@ suite("PromptQueue State Machine Tests", () => {
         undefined,
         "new MCP prompt should have no _runtime"
       );
+    });
+  });
+
+  suite("syncStepsForUndoRedo", () => {
+    test("should restore runtime from a redone step and strip webview-only fields", async () => {
+      queue.loadPrompts(createPromptFile([{ prompt: "p0" }]));
+
+      await queue.syncStepsForUndoRedo([
+        {
+          prompt: "p0",
+          status: STEP_STATUS.COMPLETED,
+          _runtime: {
+            sessionId: "s0",
+            startedAt: 10,
+            completedAt: 20,
+          },
+        } as any,
+        {
+          prompt: "p1",
+          status: STEP_STATUS.COMPLETED,
+          details: { ignored: true },
+          _runtime: {
+            sessionId: "s1",
+            startedAt: 100,
+            completedAt: 200,
+          },
+        } as any,
+      ]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps.length, 2);
+      assert.strictEqual(state.currentIndex, 2);
+      assert.strictEqual((state.steps[0] as any).status, undefined);
+      assert.strictEqual((state.steps[1] as any).status, undefined);
+      assert.strictEqual((state.steps[1] as any).details, undefined);
+      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s1");
+      assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
+    });
+
+    test("should not copy shifted runtime onto a restored deleted prompt", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { prompt: "p0" },
+          {
+            prompt: "p2",
+            _runtime: {
+              sessionId: "s2",
+              startedAt: 300,
+              completedAt: 400,
+            },
+          },
+        ])
+      );
+
+      await queue.syncStepsForUndoRedo([
+        { prompt: "p0" },
+        {
+          prompt: "p1",
+          _runtime: {
+            sessionId: "s1",
+            startedAt: 100,
+            completedAt: 200,
+          },
+        } as any,
+        {
+          prompt: "p2",
+          _runtime: {
+            sessionId: "s2",
+            startedAt: 300,
+            completedAt: 400,
+          },
+        } as any,
+      ]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s1");
+      assert.strictEqual(state.steps[2]._runtime?.sessionId, "s2");
+    });
+
+    test("should restore deleted prompt runtime from the queue archive when webview snapshot lacks it", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          {
+            prompt: "p0",
+            _runtime: {
+              sessionId: "s0",
+              startedAt: 100,
+              completedAt: 200,
+            },
+          },
+        ])
+      );
+      (queue as any).state.currentIndex = 1;
+
+      await queue.deletePrompt(0);
+      await queue.syncStepsForUndoRedo([{ prompt: "p0" }]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
+      assert.strictEqual(state.currentIndex, 1);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
+    });
+
+    test("should restore shifted completed prompt runtime after undoing delete", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          {
+            prompt: "p0",
+            _runtime: {
+              sessionId: "s0",
+              startedAt: 100,
+              completedAt: 200,
+            },
+          },
+          {
+            prompt: "p1",
+            _runtime: {
+              sessionId: "s1",
+              startedAt: 300,
+              completedAt: 400,
+            },
+          },
+        ])
+      );
+      (queue as any).state.currentIndex = 2;
+
+      await queue.deletePrompt(0);
+      await queue.syncStepsForUndoRedo([{ prompt: "p0" }, { prompt: "p1" }]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
+      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s1");
+      assert.strictEqual(state.currentIndex, 2);
+      assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
+    });
+
+    test("should restore completed added prompt runtime when redo snapshot lacks it", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          {
+            prompt: "p0",
+            _runtime: {
+              sessionId: "s0",
+              startedAt: 100,
+              completedAt: 200,
+            },
+          },
+          {
+            prompt: "added",
+            _runtime: {
+              sessionId: "s-added",
+              startedAt: 300,
+              completedAt: 400,
+            },
+          },
+        ])
+      );
+      (queue as any).state.currentIndex = 2;
+
+      await queue.syncStepsForUndoRedo([{ prompt: "p0" }]);
+      await queue.syncStepsForUndoRedo([{ prompt: "p0" }, { prompt: "added" }]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
+      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s-added");
+      assert.strictEqual(state.currentIndex, 2);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
+    });
+
+    test("should restore start-position-cleared runtime from the queue archive", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          {
+            prompt: "p0",
+            _runtime: {
+              sessionId: "s0",
+              startedAt: 100,
+              completedAt: 200,
+            },
+          },
+          {
+            prompt: "p1",
+            _runtime: {
+              sessionId: "s1",
+              startedAt: 300,
+              completedAt: 400,
+            },
+          },
+        ])
+      );
+      (queue as any).state.currentIndex = 2;
+      (queue as any).state.results[0].status = STEP_STATUS.COMPLETED;
+      (queue as any).state.results[1].status = STEP_STATUS.COMPLETED;
+
+      await queue.setStartPosition(1);
+      assert.strictEqual(queue.getState().steps[1]._runtime, undefined);
+
+      await queue.syncStepsForUndoRedo([{ prompt: "p0" }, { prompt: "p1" }]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
+      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s1");
+      assert.strictEqual(state.currentIndex, 2);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
     });
   });
 });
