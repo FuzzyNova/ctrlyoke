@@ -21,7 +21,7 @@ import {
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
 import { getGeminiContextWindowSize } from "../../../utils/ModelConstants";
-import { GeminiToolBuilder } from "./GeminiToolBuilder";
+import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 
 /**
  * A tool call within a Gemini message in the session log file.
@@ -261,7 +261,7 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
           for (const tc of event.toolCalls) {
             // Emit INITIATED tool call event
             outputEvents.push(
-              ...GeminiToolBuilder.buildInitiatedEvents(
+              ...BaseToolBuilder.buildInitiatedEvents(
                 tc.name,
                 tc.args || {},
                 tc.id,
@@ -571,7 +571,7 @@ export class GeminiLogParser extends BaseLogParser implements ILogParser {
     if (msg.toolCalls) {
       for (const tc of msg.toolCalls) {
         cliEvents.push(
-          ...GeminiToolBuilder.buildInitiatedEvents(
+          ...BaseToolBuilder.buildInitiatedEvents(
             tc.name,
             tc.args || {},
             tc.id,

@@ -50,39 +50,22 @@ export class ClaudeToolPermissionMapper
     const args: string[] = ["--permission-mode", "bypassPermissions"];
 
     if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
-      // Allow all tools (--tools "default") but still apply deny list
       args.push("--tools", "default");
     } else {
-      // Custom mode - convert and add specific allow patterns
-      const convertedAllowTools: string[] = [];
-
-      config.allowedTools.forEach((tool) => {
-        const claudeTool = this.convertToClaudeFormat(tool);
-        if (!convertedAllowTools.includes(claudeTool)) {
-          convertedAllowTools.push(claudeTool);
-        }
-      });
-
+      const convertedAllowTools = this.convertUnique(config.allowedTools, (t) =>
+        this.convertToClaudeFormat(t)
+      );
       if (convertedAllowTools.length > 0) {
-        const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
-        args.push("--allowedTools", ...quotedTools);
+        args.push("--allowedTools", ...convertedAllowTools.map((t) => `"${t}"`));
         Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
       }
     }
 
-    // Add deny patterns (for both allowAll and custom modes)
-    const convertedDenyTools: string[] = [];
-
-    config.deniedTools.forEach((tool) => {
-      const claudeTool = this.convertToClaudeFormat(tool);
-      if (!convertedDenyTools.includes(claudeTool)) {
-        convertedDenyTools.push(claudeTool);
-      }
-    });
-
+    const convertedDenyTools = this.convertUnique(config.deniedTools, (t) =>
+      this.convertToClaudeFormat(t)
+    );
     if (convertedDenyTools.length > 0) {
-      const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
-      args.push("--disallowedTools", ...quotedTools);
+      args.push("--disallowedTools", ...convertedDenyTools.map((t) => `"${t}"`));
       Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
     }
 

@@ -164,4 +164,27 @@ export abstract class ToolPermissionMapperBase implements IToolPermissionMapper 
   protected normalizeTool(toolName: string): string {
     return toolName.toLowerCase();
   }
+
+  /**
+   * Convert and deduplicate a list of tool patterns using the given converter.
+   *
+   * When converter returns null the original pattern is skipped (filtered out).
+   * Pass a `filtered` array to collect those skipped patterns for diagnostics.
+   */
+  protected convertUnique(
+    tools: string[],
+    converter: (tool: string) => string | null,
+    filtered?: string[]
+  ): string[] {
+    const result: string[] = [];
+    for (const tool of tools) {
+      const converted = converter(tool);
+      if (converted === null) {
+        filtered?.push(tool);
+      } else if (!result.includes(converted)) {
+        result.push(converted);
+      }
+    }
+    return result;
+  }
 }

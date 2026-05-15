@@ -15,7 +15,7 @@ import { Log } from "../../../utils/Log";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { getQwenContextWindowSize } from "../../../utils/ModelConstants";
-import { QwenToolBuilder } from "./QwenToolBuilder";
+import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 
 /**
  * Extended usage statistics from Qwen Code CLI.
@@ -210,7 +210,7 @@ export class QwenResponseParser
       // Handle tool_use blocks - map to semantic event types
       if (contentBlock.type === "tool_use") {
         events.push(
-          ...QwenToolBuilder.buildInitiatedEvents(
+          ...BaseToolBuilder.buildInitiatedEvents(
             contentBlock.name,
             contentBlock.input || {},
             contentBlock.id,

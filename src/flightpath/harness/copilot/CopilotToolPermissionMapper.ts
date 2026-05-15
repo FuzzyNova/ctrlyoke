@@ -55,50 +55,34 @@ export class CopilotToolPermissionMapper
     const args: string[] = [];
     const filteredTools: string[] = [];
 
-    // Add allow mode first
     if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
       args.push("--yolo");
     } else if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
       args.push("--allow-all-tools");
     } else {
-      // Custom mode - convert and add specific allow patterns
-      const convertedAllowTools: string[] = [];
-
-      config.allowedTools.forEach((tool) => {
-        const converted = this.convertToCopilotFormat(tool);
-        if (converted === null) {
-          filteredTools.push(tool);
-        } else if (!convertedAllowTools.includes(converted)) {
-          convertedAllowTools.push(converted);
-        }
-      });
-
+      const convertedAllowTools = this.convertUnique(
+        config.allowedTools,
+        (t) => this.convertToCopilotFormat(t),
+        filteredTools
+      );
       if (convertedAllowTools.length > 0) {
         args.push("--allow-tool", ...convertedAllowTools);
         Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
       }
     }
 
-    // Add denied tool patterns (unless dangerouslyAllowAll mode)
     if (config.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-      const convertedDenyTools: string[] = [];
-
-      config.deniedTools.forEach((tool) => {
-        const converted = this.convertToCopilotFormat(tool);
-        if (converted === null) {
-          filteredTools.push(tool);
-        } else if (!convertedDenyTools.includes(converted)) {
-          convertedDenyTools.push(converted);
-        }
-      });
-
+      const convertedDenyTools = this.convertUnique(
+        config.deniedTools,
+        (t) => this.convertToCopilotFormat(t),
+        filteredTools
+      );
       if (convertedDenyTools.length > 0) {
         args.push("--deny-tool", ...convertedDenyTools);
         Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
       }
     }
 
-    // Log filtered tools for visibility
     if (filteredTools.length > 0) {
       Log.debug(
         `ℹ️ Filtered out tools not requiring Copilot permission: ${filteredTools.join(", ")} (read-only operations are always allowed)`

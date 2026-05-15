@@ -67,12 +67,7 @@ export class QwenNotificationMonitor
       notifyDir,
       false
     );
-    const permissionRequestHook = userHooks?.find(
-      (hook) => hook.event === "permissionRequest"
-    );
-    const encodedDecisionHook = permissionRequestHook
-      ? Buffer.from(permissionRequestHook.command, "utf8").toString("base64")
-      : undefined;
+    const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
 
     const hooks: Record<string, unknown[]> = {};
     for (const event of flightpathEvents ?? [

@@ -47,55 +47,17 @@ export class GeminiNotificationMonitor
     userHooks?: UserHookConfig[],
     flightpathEvents?: HookEvent[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(
-      scriptPath,
-      notifyDir
-    );
+    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
     const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
-    const permissionRequestHook = userHooks?.find(
-      (hook) => hook.event === "permissionRequest"
+    const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
+    const hooks = this.buildCommandHooks(
+      command,
+      GeminiNotificationMonitor.EVENT_MAP,
+      selectedEvents,
+      userHooks,
+      encodedDecisionHook
     );
-    const encodedDecisionHook = permissionRequestHook
-      ? Buffer.from(permissionRequestHook.command, "utf8").toString("base64")
-      : undefined;
-
-    const hooks: Record<string, unknown[]> = {};
-    for (const event of selectedEvents) {
-      const nativeEvent = GeminiNotificationMonitor.EVENT_MAP[event];
-      if (!nativeEvent) {
-        continue;
-      }
-      const eventCommand =
-        event === "permissionRequest" && encodedDecisionHook
-          ? `${command} "${encodedDecisionHook}"`
-          : command;
-      hooks[nativeEvent] = [
-        { hooks: [{ type: "command", command: eventCommand }] },
-      ];
-    }
-
-    // Append user hooks to their respective events
-    if (userHooks) {
-      for (const uh of userHooks) {
-        if (
-          uh.event === "permissionRequest" &&
-          selectedEvents.includes("permissionRequest")
-        ) {
-          continue;
-        }
-        const nativeEvent = GeminiNotificationMonitor.EVENT_MAP[uh.event];
-        if (!nativeEvent) continue; // Skip unsupported events
-        if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
-        hooks[nativeEvent].push({
-          hooks: [{ type: "command", command: uh.command }],
-        });
-      }
-    }
-
-    return {
-      type: "json",
-      config: { hooks },
-    };
+    return { type: "json", config: { hooks } };
   }
 
   getNotificationDirectory(workspaceRoot: string): string {

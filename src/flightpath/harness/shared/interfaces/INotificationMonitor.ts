@@ -434,6 +434,71 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
   // ── Protected helpers ────────────────────────────────────────────────────
 
   /**
+   * Base64-encodes the permissionRequest hook command so it can be safely passed
+   * as a CLI argument. Returns undefined when no permissionRequest hook is configured.
+   */
+  protected encodePermissionRequestHook(
+    userHooks: UserHookConfig[] | undefined
+  ): string | undefined {
+    const hook = userHooks?.find((h) => h.event === "permissionRequest");
+    return hook
+      ? Buffer.from(hook.command, "utf8").toString("base64")
+      : undefined;
+  }
+
+  /**
+   * Builds the hooks record for harnesses that use the command-style hook entry format:
+   *   { hooks: [{ type: "command", command: "..." }] }
+   *
+   * Handles:
+   *   - Main FlightPath event hooks (with optional permissionRequest encoding)
+   *   - Appending user-defined hooks (skipping permissionRequest if already registered)
+   *
+   * Used by Claude and Gemini which share this hook entry format.
+   * Returns the hooks record; callers serialize it as json-string or json.
+   */
+  protected buildCommandHooks(
+    command: string,
+    eventMap: Partial<Record<HookEvent, string>>,
+    selectedEvents: string[],
+    userHooks: UserHookConfig[] | undefined,
+    encodedDecisionHook: string | undefined
+  ): Record<string, unknown[]> {
+    const hooks: Record<string, unknown[]> = {};
+
+    for (const event of selectedEvents) {
+      const nativeEvent = eventMap[event as HookEvent];
+      if (!nativeEvent) continue;
+      const eventCommand =
+        event === "permissionRequest" && encodedDecisionHook
+          ? `${command} "${encodedDecisionHook}"`
+          : command;
+      hooks[nativeEvent] = [
+        { hooks: [{ type: "command", command: eventCommand }] },
+      ];
+    }
+
+    if (userHooks) {
+      for (const uh of userHooks) {
+        if (
+          uh.event === "permissionRequest" &&
+          selectedEvents.includes("permissionRequest")
+        ) {
+          continue;
+        }
+        const nativeEvent = eventMap[uh.event];
+        if (!nativeEvent) continue;
+        if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
+        hooks[nativeEvent].push({
+          hooks: [{ type: "command", command: uh.command }],
+        });
+      }
+    }
+
+    return hooks;
+  }
+
+  /**
    * Simple delay utility
    */
   protected delay(ms: number): Promise<void> {

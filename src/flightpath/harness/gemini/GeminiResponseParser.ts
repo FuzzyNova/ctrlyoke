@@ -13,7 +13,7 @@ import {
 } from "../../../types/DashboardConstants";
 import { getGeminiContextWindowSize } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
-import { GeminiToolBuilder } from "./GeminiToolBuilder";
+import { BaseToolBuilder } from "../shared/BaseToolBuilder";
 
 /**
  * Gemini CLI Response Parser
@@ -73,7 +73,7 @@ export class GeminiResponseParser
 
       if (json.type === "tool_use") {
         events.push(
-          ...GeminiToolBuilder.buildInitiatedEvents(
+          ...BaseToolBuilder.buildInitiatedEvents(
             json.tool_name as string,
             (json.parameters as Record<string, unknown>) || {},
             json.tool_id as string | undefined,
@@ -175,7 +175,7 @@ export class GeminiResponseParser
 
       if (json.type === "tool_use") {
         events.push(
-          ...GeminiToolBuilder.buildInitiatedEvents(
+          ...BaseToolBuilder.buildInitiatedEvents(
             json.tool_name as string,
             (json.parameters as Record<string, unknown>) || {},
             json.tool_id as string | undefined,
