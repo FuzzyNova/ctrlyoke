@@ -77,10 +77,23 @@ function findCachedRuntime(
   return undefined;
 }
 
-function deriveCurrentStepFromRuntime(steps: WorkflowStep[]): number {
-  const firstPendingIndex = steps.findIndex(
-    (step) => (step as RuntimeDecoratedStep)._runtime?.completedAt === undefined
+function isTerminalStatus(status: StepStatus | undefined): boolean {
+  return (
+    status === STEP_STATUS.COMPLETED ||
+    status === STEP_STATUS.FAILED ||
+    status === STEP_STATUS.CANCELLED ||
+    status === STEP_STATUS.SKIPPED
   );
+}
+
+function deriveCurrentStepFromRuntime(steps: WorkflowStep[]): number {
+  const firstPendingIndex = steps.findIndex((step) => {
+    const decorated = step as RuntimeDecoratedStep;
+    return (
+      decorated._runtime?.completedAt === undefined &&
+      !isTerminalStatus(decorated.status)
+    );
+  });
   return firstPendingIndex === -1 ? steps.length : firstPendingIndex;
 }
 
@@ -112,9 +125,16 @@ export function mergeRuntimeForUndoRedo(
     const cached = findCachedRuntime(step, index);
 
     const runtime = restored._runtime ?? cached?._runtime ?? live?._runtime;
+    // Only trust restored.status if it is terminal. Snapshots may store a stale
+    // "pending" status written by loadWorkflow/EXECUTION_STARTED before the step
+    // ran. A non-terminal restored status must never override a live/cached
+    // "completed" status from a run that happened after the snapshot was taken.
+    const restoredStatus = isTerminalStatus(restored.status)
+      ? restored.status
+      : undefined;
     const status = deriveStatusFromRuntime(
       runtime,
-      restored.status ?? cached?.status ?? live?.status
+      restoredStatus ?? cached?.status ?? live?.status
     );
     const details = restored.details ?? cached?.details ?? live?.details;
 

@@ -871,12 +871,14 @@ function createMessageHandlers(): MessageHandlerMap {
       useWorkflowStore.temporal.getState().pause();
       workflowStore.updatePrompt(stepIndex, {
         status: status.state || status,
-        _runtime: details
+        ...(details !== undefined
           ? {
-              ...workflowStore.steps[stepIndex]._runtime,
-              ...details,
+              _runtime: {
+                ...workflowStore.steps[stepIndex]._runtime,
+                ...details,
+              },
             }
-          : undefined,
+          : {}),
       });
       useWorkflowStore.temporal.getState().resume();
     }
