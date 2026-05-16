@@ -360,6 +360,8 @@ interface UiActions {
 
   // Reset UI to defaults
   resetUi: () => void;
+  // Reset persisted layout state to initial defaults (for dev testing)
+  resetLayoutState: () => void;
 }
 
 const initialState: UiState = {
@@ -375,7 +377,7 @@ const initialState: UiState = {
   lastDesktopSizes: { ...DEFAULT_DESKTOP_SIZES },
   lastMobileSizes: { ...DEFAULT_MOBILE_SIZES },
   propertiesDrawerOpen: false,
-  settingsCollapsed: true,
+  settingsCollapsed: false,
   selectedOutputStep: null,
   newWorkflowModalOpen: false,
   templates: [],
@@ -876,6 +878,28 @@ export const useUiStore = create<UiState & UiActions>()(
           toast: null,
           footerOpenPicker: null,
         }),
+
+      resetLayoutState: () => {
+        // Remove the persisted key from vscode state so the next reload starts fresh.
+        // Calling set() immediately after re-persists the defaults, so the current
+        // session also reflects the initial values.
+        void useUiStore.persist.clearStorage();
+        set({
+          stepsCollapsed: initialState.stepsCollapsed,
+          outputCollapsed: initialState.outputCollapsed,
+          editorCollapsed: initialState.editorCollapsed,
+          settingsCollapsed: initialState.settingsCollapsed,
+          lastDesktopSizes: { ...initialState.lastDesktopSizes },
+          lastMobileSizes: { ...initialState.lastMobileSizes },
+          mobileStepsOpen: initialState.mobileStepsOpen,
+          mobileStepsMode: initialState.mobileStepsMode,
+          terminalRailCollapsed: initialState.terminalRailCollapsed,
+          terminalRailSizePx: initialState.terminalRailSizePx,
+          diffsCollapsed: initialState.diffsCollapsed,
+          outputFontSize: initialState.outputFontSize,
+          terminalFontSize: initialState.terminalFontSize,
+        });
+      },
     }),
     {
       name: "flightpath-ui-state",

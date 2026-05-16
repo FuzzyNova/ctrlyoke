@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useSettingsStore } from "@store/settingsStore";
+import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { Button } from "@components/shared/Button";
@@ -28,6 +29,8 @@ export function DeveloperSection() {
   const clearDevBuildOutput = useSettingsStore(
     (state) => state.clearDevBuildOutput
   );
+  const resetLayoutState = useUiStore((s) => s.resetLayoutState);
+  const showToast = useUiStore((s) => s.showToast);
 
   useEffect(() => {
     vscode.postMessage({ type: MESSAGE_TYPES.DEV_REQUEST_STATUS });
@@ -132,6 +135,30 @@ export function DeveloperSection() {
             </Button>
           ))}
         </div>
+      </div>
+
+      <div className="border-t border-panel-border pt-3 space-y-2">
+        <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+          Layout Testing
+        </h3>
+        <p className="text-xs text-description-fg">
+          Clears persisted panel sizes and collapse states so the next reload
+          shows what a new user sees. Reload the window after clicking.
+        </p>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            resetLayoutState();
+            showToast(
+              "Layout state cleared. Reload the window to see default panel sizes.",
+              "info"
+            );
+          }}
+        >
+          Reset Layout to Defaults
+        </Button>
       </div>
 
       <div className="border-t border-panel-border pt-3 space-y-2">

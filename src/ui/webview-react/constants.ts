@@ -33,7 +33,7 @@ export const PANEL_MAX_SIZE_SIDEBAR = "480px";
 export const DEFAULT_DESKTOP_SIZES = {
   steps: 240,
   output: 60,
-  editor: 280,
+  editor: 180,
   settings: 240,
 };
 
@@ -41,7 +41,7 @@ export const DEFAULT_DESKTOP_SIZES = {
 export const DEFAULT_MOBILE_SIZES = {
   steps: 10,
   output: 50,
-  editor: 240,
+  editor: 180,
   settings: 10,
 };
 
