@@ -164,6 +164,7 @@ describe("setGlobalSettings", () => {
         deniedTools: [],
       },
       respectGitignore: false,
+      autoExpandEditorWhenTyping: true,
       confirmDeleteOperations: false,
       confirmResetOperations: false,
       showHiddenFiles: true,

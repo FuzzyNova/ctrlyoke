@@ -111,6 +111,7 @@ export interface FlightPathGlobalSettings {
     autoFocusOutputOnExecution: boolean;
     openPromptsInSecondGroup: boolean;
     respectGitignoreForCompletions: boolean;
+    autoExpandEditorWhenTyping: boolean;
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;
     showHiddenFiles: boolean;
@@ -309,6 +310,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     autoFocusOutputOnExecution: true,
     openPromptsInSecondGroup: false,
     respectGitignoreForCompletions: true,
+    autoExpandEditorWhenTyping: true,
     confirmDeleteOperations: true,
     confirmResetOperations: true,
     showHiddenFiles: true,

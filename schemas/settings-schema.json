@@ -475,6 +475,10 @@
           "type": "boolean",
           "description": "Filter file completions using .gitignore rules."
         },
+        "autoExpandEditorWhenTyping": {
+          "type": "boolean",
+          "description": "Automatically grow the editor panel as you type past its current height, up to 60% of the available area. Shrinks back when text is deleted or the prompt is submitted."
+        },
         "confirmDeleteOperations": {
           "type": "boolean",
           "description": "Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files."

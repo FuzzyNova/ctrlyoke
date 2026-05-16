@@ -725,6 +725,8 @@ export class WebviewSettingsSync {
         deniedTools: ConfigurationUtils.getCliDeniedTools(),
       },
       respectGitignore,
+      autoExpandEditorWhenTyping:
+        ConfigurationUtils.shouldAutoExpandEditorWhenTyping(),
       confirmDeleteOperations:
         ConfigurationUtils.shouldConfirmDeleteOperations(),
       confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations(),

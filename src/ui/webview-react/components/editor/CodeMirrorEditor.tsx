@@ -253,6 +253,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const onRunRef = useRef(onRun);
   const onQueueRef = useRef(onQueue);
   const readOnlyRef = useRef(readOnly);
+  // Tracks last reported signed-overflow to avoid redundant events
+  const lastOverflowRef = useRef<number | null>(null);
   const pendingCompletionResolveRef = useRef<((value: any) => void) | null>(
     null
   );
@@ -761,6 +763,36 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             const newValue = update.state.doc.toString();
             onChangeRef.current(newValue);
           }
+          if (
+            mode === "prompt" &&
+            (update.docChanged || update.geometryChanged)
+          ) {
+            const cause = update.docChanged ? "doc" : "geometry";
+            WebviewLog.debug(`[FP-AE] updateListener fired cause=${cause} docChanged=${update.docChanged} geometryChanged=${update.geometryChanged}`);
+            update.view.requestMeasure({
+              read(v: EditorView) {
+                // contentHeight is CodeMirror's computed document height — unlike
+                // scrollDOM.scrollHeight it CAN go below clientHeight when content
+                // is deleted, giving us the negative value we need to trigger shrink.
+                const so = v.contentHeight - v.scrollDOM.clientHeight;
+                WebviewLog.debug(`[FP-AE] requestMeasure.read contentH=${v.contentHeight} clientH=${v.scrollDOM.clientHeight} signedOverflow=${so} lastOverflow=${lastOverflowRef.current}`);
+                return so;
+              },
+              write(signedOverflow: number) {
+                if (!viewRef.current) return;
+                const changed = lastOverflowRef.current === null || Math.abs(signedOverflow - lastOverflowRef.current) >= 1;
+                WebviewLog.debug(`[FP-AE] requestMeasure.write signedOverflow=${signedOverflow} lastOverflow=${lastOverflowRef.current} changed=${changed} cause=${cause}`);
+                if (changed) {
+                  lastOverflowRef.current = signedOverflow;
+                  window.dispatchEvent(
+                    new CustomEvent("fp-editor-overflow-change", {
+                      detail: { signedOverflow, cause },
+                    })
+                  );
+                }
+              },
+            });
+          }
         }),
       ],
       parent: editorRef.current,
@@ -770,6 +802,27 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
     // Dispatch ready event
     window.dispatchEvent(new CustomEvent("codemirror-ready"));
+
+    // Check overflow immediately after mount so loading an existing prompt
+    // with lots of content triggers auto-expand (treat as a doc event).
+    if (mode === "prompt") {
+      view.requestMeasure({
+        read(v: EditorView) {
+          return v.contentHeight - v.scrollDOM.clientHeight;
+        },
+        write(signedOverflow: number) {
+          if (!viewRef.current) return;
+          if (Math.abs(signedOverflow - (lastOverflowRef.current ?? 0)) >= 1) {
+            lastOverflowRef.current = signedOverflow;
+            window.dispatchEvent(
+              new CustomEvent("fp-editor-overflow-change", {
+                detail: { signedOverflow, cause: "doc" },
+              })
+            );
+          }
+        },
+      });
+    }
 
     return () => {
       view.destroy();

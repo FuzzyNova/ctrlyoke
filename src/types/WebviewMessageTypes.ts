@@ -329,6 +329,7 @@ export interface InitMessageData {
     hooks: UserHookConfig[];
     autoFocusOutputOnExecution?: boolean;
     respectGitignore?: boolean;
+    autoExpandEditorWhenTyping?: boolean;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     showHiddenFiles?: boolean;
@@ -826,6 +827,7 @@ export interface GlobalSettingsUpdatedMessage {
     hooks: UserHookConfig[];
     autoFocusOutputOnExecution?: boolean;
     respectGitignore?: boolean;
+    autoExpandEditorWhenTyping?: boolean;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     showHiddenFiles?: boolean;

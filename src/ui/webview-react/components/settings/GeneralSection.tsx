@@ -148,6 +148,14 @@ export function GeneralSection({
         {...rowProps}
       />
       <SettingToggleRow
+        label="Auto-expand editor when typing"
+        description="Automatically grow the editor panel as you type past its current height, up to 60% of the available area. Shrinks back when text is deleted or the prompt is submitted."
+        checked={ui.autoExpandEditorWhenTyping}
+        onChange={(v) => onUpdate("ui.autoExpandEditorWhenTyping", v)}
+        path="ui.autoExpandEditorWhenTyping"
+        {...rowProps}
+      />
+      <SettingToggleRow
         label="Confirm delete operations"
         description="Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files."
         checked={ui.confirmDeleteOperations}

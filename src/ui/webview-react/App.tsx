@@ -10,8 +10,10 @@ import { useIsMobile } from "@hooks/useMediaQuery";
 import { useDesktopLayout } from "@hooks/useDesktopLayout";
 import { useMobileLayout } from "@hooks/useMobileLayout";
 import { useUiStore } from "@store/uiStore";
+import { useSettingsStore } from "@store/settingsStore";
 import { clearNotificationBadgeCount } from "@utils/browserNotifications";
 import { centerPanelMountDefaults } from "@utils/panelSync";
+import { WebviewLog } from "@utils/logger";
 import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see
@@ -86,6 +88,147 @@ function App() {
     outputCollapsed,
     editorCollapsed,
   });
+
+  // ── Editor auto-expand refs ─────────────────────────────────────────────────
+  // How many pixels above the user's base size the editor is currently
+  // auto-expanded (0 = at base, never persisted).
+  const editorAutoExpandPxRef = useRef(0);
+  // Signed overflow as of the last doc-change event. Used to detect the
+  // 0→>0 transition that enters auto-expand mode.  Updated on doc events and
+  // on geometry events that create overflow (e.g. user drags panel smaller).
+  const prevDocSignedOverflowRef = useRef(0);
+
+  // Stable handler ref — re-assigned each render so it always closes over the
+  // latest isMobile / collapsed state without re-registering the listener.
+  const overflowHandlerRef = useRef<(e: Event) => void>(() => {});
+  overflowHandlerRef.current = (e: Event) => {
+    const { signedOverflow, cause } = (
+      e as CustomEvent<{ signedOverflow: number; cause: "doc" | "geometry" }>
+    ).detail;
+
+    const autoExpand =
+      useSettingsStore.getState().globalSettings.autoExpandEditorWhenTyping;
+    WebviewLog.debug(`[FP-AE] handler received cause=${cause} signedOverflow=${signedOverflow} autoExpand=${autoExpand} isMobile=${isMobile}`);
+    if (autoExpand === false) return;
+
+    if (cause === "geometry") {
+      if (signedOverflow > 0) {
+        prevDocSignedOverflowRef.current = signedOverflow;
+      }
+      WebviewLog.debug(`[FP-AE] geometry event — skipping (prevDoc now=${prevDocSignedOverflowRef.current})`);
+      return;
+    }
+
+    // ── doc event ────────────────────────────────────────────────────────────
+    const A = editorAutoExpandPxRef.current;
+    const prevDoc = prevDocSignedOverflowRef.current;
+    prevDocSignedOverflowRef.current = signedOverflow;
+
+    const shouldEnter = A === 0 && prevDoc <= 0 && signedOverflow > 0;
+    WebviewLog.debug(`[FP-AE] doc event A=${A} prevDoc=${prevDoc} signedOverflow=${signedOverflow} shouldEnter=${shouldEnter} outputCollapsed=${outputCollapsed} editorCollapsed=${editorCollapsed}`);
+    if (!shouldEnter && A === 0) {
+      WebviewLog.debug(`[FP-AE] early exit — not in mode and no entry`);
+      return;
+    }
+
+    if (isMobile) {
+      // ── Mobile ─────────────────────────────────────────────────────────────
+      if (outputCollapsed || editorCollapsed) return;
+      const mobileOutputRef = mobile.mobileOutputRef;
+      const mobileEditorRef = mobile.mobileEditorRef;
+      const mobileCenterGroupRef = mobile.mobileCenterGroupRef;
+      if (
+        !mobileCenterGroupRef.current ||
+        !mobileOutputRef.current ||
+        !mobileEditorRef.current
+      )
+        return;
+
+      const outputPx = mobileOutputRef.current.getSize().inPixels ?? 0;
+      const editorPx = mobileEditorRef.current.getSize().inPixels ?? 0;
+      const totalPx = outputPx + editorPx;
+      if (totalPx <= 0) return;
+
+      const basePx = mobile.lastMobileSizes.current.editor;
+      const maxAutoExpand = Math.max(0, totalPx * 0.6 - basePx);
+      const targetA = Math.max(
+        0,
+        Math.min(A + signedOverflow, maxAutoExpand)
+      );
+      if (Math.abs(targetA - A) < 1) return;
+
+      const targetEditorPx = basePx + targetA;
+      const editorPct = Number(((targetEditorPx / totalPx) * 100).toFixed(3));
+      const outputPct = Number((100 - editorPct).toFixed(3));
+
+      // Set BEFORE setLayout so onResize sees the new value immediately,
+      // regardless of whether setLayout fires onResize synchronously or async.
+      editorAutoExpandPxRef.current = targetA;
+      try {
+        mobileCenterGroupRef.current.setLayout({
+          "mobile-output-panel": outputPct,
+          "mobile-editor-panel": editorPct,
+        });
+      } catch {
+        // ignore setLayout errors during unstable states
+      }
+    } else {
+      // ── Desktop ────────────────────────────────────────────────────────────
+      if (outputCollapsed || editorCollapsed) {
+        WebviewLog.debug(`[FP-AE] desktop skip — outputCollapsed=${outputCollapsed} editorCollapsed=${editorCollapsed}`);
+        return;
+      }
+      if (
+        !desktop.verticalGroupRef.current ||
+        !desktop.outputRef.current ||
+        !desktop.editorRef.current
+      ) {
+        WebviewLog.debug(`[FP-AE] desktop skip — refs not ready`);
+        return;
+      }
+
+      const outputPx = desktop.outputRef.current.getSize().inPixels ?? 0;
+      const editorPx = desktop.editorRef.current.getSize().inPixels ?? 0;
+      const totalPx = outputPx + editorPx;
+      if (totalPx <= 0) {
+        WebviewLog.debug(`[FP-AE] desktop skip — totalPx=${totalPx}`);
+        return;
+      }
+
+      const basePx = desktop.lastDesktopSizes.current.editor;
+      const maxAutoExpand = Math.max(0, totalPx * 0.6 - basePx);
+      const targetA = Math.max(0, Math.min(A + signedOverflow, maxAutoExpand));
+      WebviewLog.debug(`[FP-AE] desktop calc basePx=${basePx} editorPx=${editorPx} totalPx=${totalPx} maxAutoExpand=${maxAutoExpand} targetA=${targetA} currentA=${A}`);
+
+      if (Math.abs(targetA - A) < 1) {
+        WebviewLog.debug(`[FP-AE] desktop skip — no meaningful change (targetA=${targetA} A=${A})`);
+        return;
+      }
+
+      const targetEditorPx = basePx + targetA;
+      const editorPct = Number(((targetEditorPx / totalPx) * 100).toFixed(3));
+      const outputPct = Number((100 - editorPct).toFixed(3));
+
+      WebviewLog.debug(`[FP-AE] desktop setLayout editorPct=${editorPct} outputPct=${outputPct} targetEditorPx=${targetEditorPx}`);
+      editorAutoExpandPxRef.current = targetA;
+      try {
+        desktop.verticalGroupRef.current.setLayout({
+          "output-panel": outputPct,
+          "editor-panel": editorPct,
+        });
+      } catch (err) {
+        WebviewLog.debug(`[FP-AE] desktop setLayout error`, err);
+        editorAutoExpandPxRef.current = A; // revert on error
+      }
+    }
+  };
+
+  // Register the stable event listener once
+  useEffect(() => {
+    const listener = (e: Event) => overflowHandlerRef.current(e);
+    window.addEventListener("fp-editor-overflow-change", listener);
+    return () => window.removeEventListener("fp-editor-overflow-change", listener);
+  }, []);
 
   // Mobile overlay closing animation state.
   // When true, the overlay stays mounted but plays a slide-out animation.
@@ -461,8 +604,17 @@ function App() {
                       mobile.mobileEditorRef.current?.getSize().inPixels;
                     if (sizePx != null) {
                       const px = Math.round(sizePx);
-                      mobile.lastMobileSizes.current.editor = px;
-                      useUiStore.getState().setLastMobileSizes({ editor: px });
+                      const basePx = mobile.lastMobileSizes.current.editor;
+                      const autoExpectedPx =
+                        basePx + editorAutoExpandPxRef.current;
+                      const isAutoExpandResize =
+                        editorAutoExpandPxRef.current > 0 &&
+                        Math.abs(px - autoExpectedPx) < 3;
+                      if (!isAutoExpandResize) {
+                        mobile.lastMobileSizes.current.editor = px;
+                        useUiStore.getState().setLastMobileSizes({ editor: px });
+                        editorAutoExpandPxRef.current = 0;
+                      }
                     }
                   }
                   if (isCollapsed !== editorCollapsed) {
@@ -668,10 +820,23 @@ function App() {
                         desktop.editorRef.current?.getSize().inPixels;
                       if (sizePx != null) {
                         const px = Math.round(sizePx);
-                        desktop.lastDesktopSizes.current.editor = px;
-                        useUiStore
-                          .getState()
-                          .setLastDesktopSizes({ editor: px });
+                        const basePx = desktop.lastDesktopSizes.current.editor;
+                        const autoExpectedPx =
+                          basePx + editorAutoExpandPxRef.current;
+                        const isAutoExpandResize =
+                          editorAutoExpandPxRef.current > 0 &&
+                          Math.abs(px - autoExpectedPx) < 3;
+                        WebviewLog.debug(`[FP-AE] onResize px=${px} basePx=${basePx} autoExpectedPx=${autoExpectedPx} editorAutoExpandPx=${editorAutoExpandPxRef.current} isAutoExpandResize=${isAutoExpandResize}`);
+                        if (!isAutoExpandResize) {
+                          desktop.lastDesktopSizes.current.editor = px;
+                          useUiStore
+                            .getState()
+                            .setLastDesktopSizes({ editor: px });
+                          editorAutoExpandPxRef.current = 0;
+                          WebviewLog.debug(`[FP-AE] onResize: saved as new base px=${px} reset autoExpand`);
+                        } else {
+                          WebviewLog.debug(`[FP-AE] onResize: auto-expand resize detected, skipping base update`);
+                        }
                       }
                     }
                     if (!isRemountUnstable) {

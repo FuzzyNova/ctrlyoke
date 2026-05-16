@@ -292,6 +292,10 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.UI).respectGitignoreForCompletions;
   },
 
+  shouldAutoExpandEditorWhenTyping(): boolean {
+    return configService.get(CONFIG_KEYS.UI).autoExpandEditorWhenTyping;
+  },
+
   /**
    * Get the default CLI model (Copilot CLI)
    */

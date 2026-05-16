@@ -96,6 +96,7 @@ export interface GlobalSettings {
     deniedTools: string[];
   };
   respectGitignore: boolean;
+  autoExpandEditorWhenTyping: boolean;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
   showHiddenFiles: boolean;
@@ -289,6 +290,7 @@ const initialGlobalSettings: GlobalSettings = {
     deniedTools: [],
   },
   respectGitignore: true,
+  autoExpandEditorWhenTyping: true,
   confirmDeleteOperations: true,
   confirmResetOperations: true,
   showHiddenFiles: true,
