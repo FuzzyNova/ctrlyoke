@@ -188,6 +188,8 @@ interface UiState {
   // NOT persisted: every panel open should show the overlay until startup settles.
   startupReady: boolean;
   devRestarting: boolean;
+  /** True when FlightPath has not yet been initialized in this workspace and the user must approve before startup proceeds. */
+  workspaceInitRequired: boolean;
 
   // This client's identity assigned by the extension host on connect.
   // Used to derive isController for terminal sessions.
@@ -351,6 +353,7 @@ interface UiActions {
   // Startup overlay
   setStartupReady: (ready: boolean) => void;
   setDevRestarting: (restarting: boolean) => void;
+  setWorkspaceInitRequired: (required: boolean) => void;
 
   // Client identity
   setMyClientId: (clientId: string) => void;
@@ -419,6 +422,7 @@ const initialState: UiState = {
   globalSettingsActiveTab: "general",
   startupReady: false,
   devRestarting: false,
+  workspaceInitRequired: false,
   myClientId: "",
 };
 
@@ -841,10 +845,13 @@ export const useUiStore = create<UiState & UiActions>()(
       setStartupReady: (ready) =>
         set({
           startupReady: ready,
-          ...(ready ? { devRestarting: false } : {}),
+          ...(ready ? { devRestarting: false, workspaceInitRequired: false } : {}),
         }),
       setDevRestarting: (restarting) =>
         set({ devRestarting: restarting, startupReady: !restarting }),
+
+      setWorkspaceInitRequired: (required) =>
+        set({ workspaceInitRequired: required }),
 
       setMyClientId: (clientId) => set({ myClientId: clientId }),
 

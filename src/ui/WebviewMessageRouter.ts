@@ -1410,6 +1410,12 @@ export class WebviewMessageRouter {
       }
     });
 
+    // ── Workspace initialization ────────────────────────────────────────────
+    table.set(MESSAGE_TYPES.INITIALIZE_WORKSPACE, async () => {
+      const orchestrator = this.getOrchestrator();
+      await orchestrator?.handleInitializeWorkspace();
+    });
+
     return table;
   }
 

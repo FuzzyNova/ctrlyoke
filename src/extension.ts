@@ -310,44 +310,54 @@ export async function activate(context: vscode.ExtensionContext) {
       Log.warn("FlightPath: Model registry initialization failed:", err);
     });
 
-    // Initialize workspace and clean up orphaned temp files
+    // Initialize workspace and clean up orphaned temp files.
+    // If FlightPath has not yet been initialized in this workspace, defer
+    // initialization until the user approves via the "Initialize FlightPath"
+    // prompt in the dashboard.
+    let pendingInitWorkspaceRoot: string | undefined;
     if (workspaceFolders && workspaceFolders.length > 0) {
       const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
-      // Auto-initialize .flightpath directory on first run
-      WorkspaceInitializer.initializeIfNeeded(workspaceRoot)
-        .then((isNew) => {
-          if (isNew) {
-            vscode.window
-              .showInformationMessage(
-                `FlightPath: Workspace initialized! A ${PATH_CONSTANTS.FLIGHTPATH_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
-                "Reveal Folder"
-              )
-              .then((choice) => {
-                if (choice === "Reveal Folder") {
-                  vscode.commands.executeCommand(
-                    "revealFileInOS",
-                    vscode.Uri.file(
-                      path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR)
-                    )
-                  );
-                }
-              });
-          }
-        })
-        .catch((err) => {
-          Log.warn("FlightPath: Workspace initialization failed:", err);
-        });
+      if (WorkspaceInitializer.isInitialized(workspaceRoot)) {
+        // Already initialized — idempotently ensure scaffold is up to date
+        WorkspaceInitializer.initializeIfNeeded(workspaceRoot)
+          .then((isNew) => {
+            if (isNew) {
+              vscode.window
+                .showInformationMessage(
+                  `FlightPath: Workspace initialized! A ${PATH_CONSTANTS.FLIGHTPATH_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
+                  "Reveal Folder"
+                )
+                .then((choice) => {
+                  if (choice === "Reveal Folder") {
+                    vscode.commands.executeCommand(
+                      "revealFileInOS",
+                      vscode.Uri.file(
+                        path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR)
+                      )
+                    );
+                  }
+                });
+            }
+          })
+          .catch((err) => {
+            Log.warn("FlightPath: Workspace initialization failed:", err);
+          });
 
-      // Clean up orphaned temp prompt files (from previous sessions)
-      const tempMgr = new TempFileManager(workspaceRoot);
-      tempMgr.cleanupOrphanedFiles().then((count) => {
-        if (count > 0) {
-          Log.info(
-            `FlightPath: Cleaned up ${count} orphaned temp prompt file(s)`
-          );
-        }
-      });
+        // Clean up orphaned temp prompt files (from previous sessions)
+        const tempMgr = new TempFileManager(workspaceRoot);
+        tempMgr.cleanupOrphanedFiles().then((count) => {
+          if (count > 0) {
+            Log.info(
+              `FlightPath: Cleaned up ${count} orphaned temp prompt file(s)`
+            );
+          }
+        });
+      } else {
+        // Not yet initialized — remember the root so we can set the pending
+        // flag on the orchestrator once it is created below.
+        pendingInitWorkspaceRoot = workspaceRoot;
+      }
     }
 
     // Register React webview provider (Phase 4 - unified provider)
@@ -370,6 +380,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize FlightPath orchestrator with React webview provider
     workflowOrchestrator = new WorkflowOrchestrator(context, webviewProvider);
+
+    // If FlightPath has not yet been initialized in this workspace, gate startup
+    // behind an init prompt. Must be set before initialize() so the check is in
+    // place when READY arrives.
+    if (pendingInitWorkspaceRoot) {
+      workflowOrchestrator.setWorkspaceInitPending(pendingInitWorkspaceRoot);
+    }
 
     // Set orchestrator reference in webview provider (for getting current state)
     webviewProvider.setWorkflowOrchestrator(workflowOrchestrator);

@@ -1407,4 +1407,6 @@ export type IncomingMessage =
   | HarnessFilesResultMessage
   | HarnessFileOpResultMessage
   | OpenHarnessDirResultMessage
-  | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE };
+  | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE }
+  | { type: typeof MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED }
+  | { type: typeof MESSAGE_TYPES.INITIALIZE_WORKSPACE };

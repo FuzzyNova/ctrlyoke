@@ -123,16 +123,23 @@ export class Log {
   /**
    * Open a new timestamped log file in .flightpath/logs/.
    * Called on initialization (dev always, prod when diagnostic logging enabled).
+   *
+   * Bails out silently when .flightpath/ does not yet exist so that file
+   * logging never creates the directory scaffold for untrusted workspaces
+   * (which would bypass the workspace trust gate).
    */
   private static openLogFile(): void {
     if (!this.workspaceRoot) {
       return;
     }
-    const logDir = path.join(
-      this.workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.LOGS_DIR
-    );
+    const fpDir = path.join(this.workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR);
+    // Only write logs if the workspace has already been initialized.
+    // Creating .flightpath/logs/ with { recursive: true } would implicitly
+    // create .flightpath/ itself, bypassing the workspace trust check.
+    if (!fs.existsSync(fpDir)) {
+      return;
+    }
+    const logDir = path.join(fpDir, PATH_CONSTANTS.LOGS_DIR);
     try {
       fs.mkdirSync(logDir, { recursive: true });
       this.logFilePath = path.join(logDir, `flightpath-${Date.now()}.log`);
@@ -141,6 +148,21 @@ export class Log {
     } catch {
       this.logFilePath = undefined;
     }
+  }
+
+  /**
+   * Start writing log output to a file now that the workspace has been
+   * initialized (i.e. trust has just been granted and .flightpath/ exists).
+   *
+   * Called by WorkflowOrchestrator.handleInitializeWorkspace() immediately after
+   * WorkspaceInitializer.initializeIfNeeded() creates the directory scaffold.
+   * No-op if file logging is already active or diagnostic logs are disabled.
+   */
+  static enableWorkspaceFileLogging(): void {
+    if (this.logFilePath) {
+      return; // already logging
+    }
+    this.openLogFile();
   }
 
   /**

@@ -58,6 +58,7 @@ import {
 import { TemplateImporter } from "./orchestration/TemplateImporter";
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
+import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import {
@@ -156,6 +157,10 @@ export class WorkflowOrchestrator {
   private startupAutoLoadTriggered: boolean = false;
   /** Timestamp (ms) when setDashboardReady was first called — used to compute READY→STARTUP_COMPLETE latency. */
   private dashboardReadyAt: number = 0;
+  /** Set when FlightPath has not yet been initialized in this workspace. Blocks startup auto-load until resolved. */
+  private workspaceInitPending: boolean = false;
+  /** The workspace root path waiting for FlightPath initialization. */
+  private pendingInitWorkspaceRoot: string | undefined;
 
   /** MCP server provider for injecting user-defined MCP servers into VS Code (chat harness only) */
   private mcpServerProvider?: FlightPathMcpServerProvider;
@@ -836,6 +841,63 @@ export class WorkflowOrchestrator {
     return !!this.getViewedWorkflowId(clientId);
   }
 
+  /**
+   * Mark FlightPath as not yet initialized in this workspace. Blocks startup
+   * auto-load and broadcasts WORKSPACE_INIT_REQUIRED to the webview instead of
+   * STARTUP_COMPLETE until handleInitializeWorkspace() is called.
+   */
+  setWorkspaceInitPending(workspaceRoot: string): void {
+    this.workspaceInitPending = true;
+    this.pendingInitWorkspaceRoot = workspaceRoot;
+    Log.info(`FlightPath: Workspace initialization pending for "${workspaceRoot}"`);
+  }
+
+  /**
+   * Called when the user approves FlightPath initialization from the dashboard.
+   * Creates the .flightpath/ directory scaffold, then resumes the normal
+   * startup sequence (triggers auto-load and broadcasts STARTUP_COMPLETE).
+   */
+  async handleInitializeWorkspace(): Promise<void> {
+    const workspaceRoot =
+      this.pendingInitWorkspaceRoot ??
+      this.currentWorkspaceFolder?.uri.fsPath;
+
+    if (!workspaceRoot) {
+      Log.warn("FlightPath: handleInitializeWorkspace called with no workspace root");
+      return;
+    }
+
+    try {
+      const isNew =
+        await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
+      // .flightpath/ now exists — start file logging for this session.
+      Log.enableWorkspaceFileLogging();
+      if (isNew) {
+        void vscode.window
+          .showInformationMessage(
+            `FlightPath: Workspace initialized! A ${PATH_CONSTANTS.FLIGHTPATH_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
+            "Reveal Folder"
+          )
+          .then((choice) => {
+            if (choice === "Reveal Folder") {
+              vscode.commands.executeCommand(
+                "revealFileInOS",
+                vscode.Uri.file(
+                  path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR)
+                )
+              );
+            }
+          });
+      }
+    } catch (err) {
+      Log.warn("FlightPath: Workspace initialization failed:", err);
+    }
+
+    this.workspaceInitPending = false;
+    this.pendingInitWorkspaceRoot = undefined;
+    await this.triggerStartupAutoLoadIfReady();
+  }
+
   async setDashboardReady(panelSend?: (msg: unknown) => void): Promise<void> {
     Log.info("✅ Dashboard is ready");
     this.dashboardReady = true;
@@ -898,6 +960,13 @@ export class WorkflowOrchestrator {
       !this.dashboardReady ||
       !this.orchestratorInitialized
     ) {
+      return;
+    }
+
+    if (this.workspaceInitPending) {
+      this.dashboardBroadcastHub.postMessage({
+        type: MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED,
+      });
       return;
     }
 

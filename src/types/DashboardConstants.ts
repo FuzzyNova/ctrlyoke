@@ -274,6 +274,10 @@ export const MESSAGE_TYPES = {
 
   // Startup lifecycle — Extension → Webview
   STARTUP_COMPLETE: "startupComplete", // Extension → Webview: startup sequence done (with or without auto-load)
+  WORKSPACE_INIT_REQUIRED: "workspaceInitRequired", // Extension → Webview: FlightPath not yet initialized in this workspace
+
+  // Workspace trust — Webview → Extension
+  INITIALIZE_WORKSPACE: "initializeWorkspace", // Webview → Extension: user approved FlightPath initialization
 
   // Developer dashboard actions — Webview → Extension (dev builds only)
   DEV_BUILD_EXTENSION: "dev:buildExtension",

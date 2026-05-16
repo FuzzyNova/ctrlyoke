@@ -1465,6 +1465,14 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // WORKSPACE_INIT_REQUIRED - FlightPath not yet initialized; user must approve
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED] = () => {
+    WebviewLog.debug("[startup] WORKSPACE_INIT_REQUIRED received");
+    useUiStore.getState().setWorkspaceInitRequired(true);
+  };
+
+  // --------------------------------------------------------------------------
   // WORKFLOW_UNLOADED - Workflow unloaded, disable UI
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_UNLOADED] = () => {
