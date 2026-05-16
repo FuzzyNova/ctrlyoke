@@ -12,7 +12,6 @@ import type {
 } from "react-resizable-panels";
 import { useUiStore } from "@store/uiStore";
 import { centerPanelMountDefaults, syncCollapsiblePanel } from "@utils/panelSync";
-import { DEFAULT_MOBILE_SIZES } from "../constants";
 
 interface MobileLayoutParams {
   isMobile: boolean;
@@ -41,15 +40,8 @@ export function useMobileLayout({
   const mobileInitializedRef = useRef(false);
 
   // Size persistence — initialized from store so sizes survive VS Code restarts.
-  // Migrate legacy editor values: pre-pixel-based storage used percentages (< 100),
-  // so any stored value < 100 is treated as a stale percentage and reset to the default px.
-  const storedMobileSizes = useUiStore.getState().lastMobileSizes;
   const lastMobileSizes = useRef({
-    ...storedMobileSizes,
-    editor:
-      storedMobileSizes.editor >= 100
-        ? storedMobileSizes.editor
-        : DEFAULT_MOBILE_SIZES.editor,
+    ...useUiStore.getState().lastMobileSizes,
   });
 
   // Stable mount defaults for each center panel.

@@ -39,16 +39,9 @@ export const DEFAULT_DESKTOP_SIZES = {
 
 /** Default panel sizes for mobile layout — output is a percentage; editor is in pixels. */
 export const DEFAULT_MOBILE_SIZES = {
-  steps: 10,
   output: 50,
-  editor: 180,
-  settings: 10,
+  editor: 200,
 };
-
-/** Panel key names derived from the size objects (single source of truth) */
-export const PANEL_KEYS = Object.keys(DEFAULT_MOBILE_SIZES) as ReadonlyArray<
-  keyof typeof DEFAULT_MOBILE_SIZES
->;
 
 /** Separator styling constants for consistent appearance and interaction */
 /** Horizontal separator (vertical resize handle) - thin horizontal line */

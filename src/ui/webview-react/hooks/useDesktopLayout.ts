@@ -19,7 +19,6 @@ import {
   PANEL_COLLAPSED_SIZE_DEFAULT_PX,
   PANEL_MIN_SIZE_CENTER,
   PANEL_MIN_SIZE_EDITOR_PX,
-  DEFAULT_DESKTOP_SIZES,
 } from "../constants";
 
 interface DesktopLayoutParams {
@@ -69,15 +68,8 @@ export function useDesktopLayout({
   const remountPreviousTotalSizeRef = useRef<number | null>(null);
 
   // Size persistence — initialized from store so sizes survive VS Code restarts.
-  // Migrate legacy editor values: pre-pixel-based storage used percentages (< 100),
-  // so any stored value < 100 is treated as a stale percentage and reset to the default px.
-  const storedSizes = useUiStore.getState().lastDesktopSizes;
   const lastDesktopSizes = useRef({
-    ...storedSizes,
-    editor:
-      storedSizes.editor >= 100
-        ? storedSizes.editor
-        : DEFAULT_DESKTOP_SIZES.editor,
+    ...useUiStore.getState().lastDesktopSizes,
   });
 
   // Stable mount defaults — only recomputed by App.tsx on Group remount

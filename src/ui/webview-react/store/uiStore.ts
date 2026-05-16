@@ -53,14 +53,18 @@ export interface RecentWorkflow {
   isFavorite?: boolean;
 }
 
-/** Panel size snapshot for desktop or mobile layout.
- *  Desktop: steps/settings/editor are in pixels; output is a percentage.
- *  Mobile: editor is in pixels; output is a percentage. */
-export interface PanelSizes {
+/** Panel size snapshot for the desktop layout (steps/settings/editor in px; output as %). */
+export interface DesktopPanelSizes {
   steps: number;
   output: number;
   editor: number;
   settings: number;
+}
+
+/** Panel size snapshot for the mobile layout (editor in px; output as %). */
+export interface MobilePanelSizes {
+  output: number;
+  editor: number;
 }
 
 /**
@@ -85,8 +89,8 @@ interface UiState {
   diffResetVersion: number;
 
   // Persisted panel sizes — restored to useRef on mount, written back on resize
-  lastDesktopSizes: PanelSizes;
-  lastMobileSizes: PanelSizes;
+  lastDesktopSizes: DesktopPanelSizes;
+  lastMobileSizes: MobilePanelSizes;
 
   // Drawer state
   propertiesDrawerOpen: boolean;
@@ -215,8 +219,8 @@ interface UiActions {
   collapseAllDiffs: () => void;
 
   // Panel sizes (persisted, written from App.tsx resize handlers)
-  setLastDesktopSizes: (sizes: Partial<PanelSizes>) => void;
-  setLastMobileSizes: (sizes: Partial<PanelSizes>) => void;
+  setLastDesktopSizes: (sizes: Partial<DesktopPanelSizes>) => void;
+  setLastMobileSizes: (sizes: Partial<MobilePanelSizes>) => void;
 
   // Drawer toggles
   togglePropertiesDrawer: () => void;
