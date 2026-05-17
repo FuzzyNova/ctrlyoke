@@ -1,4 +1,5 @@
 import React from "react";
+import { useLongPress } from "../../hooks/useLongPress";
 import { StatusIcon } from "./StatusIcon";
 import { PromptStepDetails } from "./PromptStepDetails";
 import type { PromptOverride } from "./PromptStepDetails";
@@ -77,6 +78,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   const effectiveStatus: StepStatus = hasFinalStep
     ? (status ?? "pending")
     : "pending";
+  const longPressHandlers = useLongPress(onContextMenu);
 
   return (
     <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0">
@@ -109,6 +111,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
                 }
               : undefined
           }
+          {...longPressHandlers}
         >
           {/* Prompt name / text — pl-5 matches PromptStepDetails indent */}
           <div className="text-xs leading-relaxed">
@@ -168,6 +171,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
               }
             : undefined
         }
+        {...longPressHandlers}
       >
         <StatusIcon status={effectiveStatus} disabled={!hasFinalStep} />
         <span className="text-xs font-semibold uppercase tracking-wide">

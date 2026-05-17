@@ -20,6 +20,7 @@ import {
   useStepClickHandler,
   useStepContextMenu,
   useFinalStepContextMenu,
+  useLongPress,
 } from "@hooks/index";
 import { StatusIcon } from "./StatusIcon";
 import {
@@ -93,6 +94,7 @@ function ChipContent({
   onOpenContextMenu,
 }: ChipProps) {
   const borderBarClass = getChipBorderClass(status);
+  const longPressHandlers = useLongPress(onOpenContextMenu);
   return (
     <div
       className={`relative flex flex-col px-1 py-1 border-b border-panel-border hover:bg-toolbar-hover-bg transition-colors${canReorder ? " cursor-grab active:cursor-grabbing" : " cursor-pointer"}`}
@@ -110,6 +112,7 @@ function ChipContent({
         e.stopPropagation();
         onOpenContextMenu(e.clientX, e.clientY);
       }}
+      {...longPressHandlers}
       title={`${isScript ? "Script" : "Prompt"} ${slotNumber} — right-click for options`}
     >
       {/* Left status border bar */}
@@ -170,6 +173,7 @@ function FinalStepChip({
   onOpenContextMenu,
 }: FinalStepChipProps) {
   const borderBarClass = getChipBorderClass(status);
+  const longPressHandlers = useLongPress(onOpenContextMenu);
   return (
     <div
       className="relative flex flex-col px-1 h-10 items-center justify-center border-t-2 border-panel-border hover:bg-toolbar-hover-bg transition-colors cursor-pointer overflow-hidden"
@@ -187,6 +191,7 @@ function FinalStepChip({
         e.stopPropagation();
         onOpenContextMenu(e.clientX, e.clientY);
       }}
+      {...longPressHandlers}
       title="Final Step — right-click for options"
     >
       {/* Left status border bar */}

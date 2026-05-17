@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useLongPress } from "../../hooks/useLongPress";
 import type { DraggableAttributes } from "@dnd-kit/core";
 type SyntheticListenerMap = Record<string, Function>;
 import { StatusIcon } from "./StatusIcon";
@@ -135,6 +136,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   onContextMenu,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const longPressHandlers = useLongPress(onContextMenu);
 
   // Derive context window percentage from live data (running step) or completed output
   const ctx =
@@ -189,6 +191,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             }
           : undefined
       }
+      {...longPressHandlers}
       title="Click to edit"
       role="button"
       tabIndex={0}
