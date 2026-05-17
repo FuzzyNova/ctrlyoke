@@ -23,6 +23,8 @@ interface OpenContextMenuParams {
   isCurrentStep: boolean;
   direction: "rewind" | "forward";
   status: StepStatus;
+  /** Response/output text to copy; undefined disables the Copy output item */
+  outputText?: string;
 }
 
 export function useStepContextMenu({
@@ -58,6 +60,7 @@ export function useStepContextMenu({
         isCurrentStep,
         direction,
         status,
+        outputText,
       }: OpenContextMenuParams
     ) => {
       setContextMenu({
@@ -75,6 +78,27 @@ export function useStepContextMenu({
               ? "Already the current start position"
               : "Cannot change start position while workflow is running",
             onClick: () => handleSetStartPosition(setPositionTarget),
+          },
+          {
+            label: "Copy output",
+            icon: "codicon-copy",
+            disabled: !outputText,
+            disabledTitle: "No output to copy",
+            onClick: () => {
+              if (!outputText) return;
+              if (navigator.clipboard?.writeText) {
+                void navigator.clipboard.writeText(outputText);
+              } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = outputText;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textArea);
+              }
+            },
           },
           {
             label: "Delete",

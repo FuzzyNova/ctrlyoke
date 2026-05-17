@@ -702,6 +702,7 @@ export const CliOutput = memo<CliOutputProps>(
     allStepOutputs,
   }) => {
     const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
+    const [copiedOutput, setCopiedOutput] = useState(false);
 
     interface CliDialogState {
       mode: "undo" | "redo";
@@ -837,6 +838,42 @@ export const CliOutput = memo<CliOutputProps>(
       }
     }, [sessionId]);
 
+    const outputText = useMemo((): string | undefined => {
+      if (typeof output.response === "string" && output.response.trim()) {
+        return output.response;
+      }
+      if (output.structured?.events?.length) {
+        const parts = output.structured.events
+          .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
+          .map((e) => (e.data as TextData).text)
+          .filter(Boolean);
+        if (parts.length > 0) return parts.join("");
+      }
+      return undefined;
+    }, [output.response, output.structured?.events]);
+
+    const handleCopyOutput = useCallback(async () => {
+      if (!outputText) return;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(outputText);
+        } else {
+          const textArea = document.createElement("textarea");
+          textArea.value = outputText;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textArea);
+        }
+        setCopiedOutput(true);
+        window.setTimeout(() => setCopiedOutput(false), 1200);
+      } catch {
+        setCopiedOutput(false);
+      }
+    }, [outputText]);
+
     // Show the streaming indicator only while execution is actively running.
     // When stopped or errored, isStreaming may still be true on the stored output
     // (no final CLI_OUTPUT is sent in those cases), so we gate on isExecutionActive.
@@ -947,10 +984,11 @@ export const CliOutput = memo<CliOutputProps>(
       effectiveSnapshot,
     ]);
 
-    // Token stats — memoized separately; only changes when the run completes
-    // or copiedSessionId changes (copy button feedback).
+    // Token stats — memoized separately; only changes when the run completes,
+    // copiedSessionId changes (copy button feedback), or copy-output state changes.
     const statsNode = useMemo(() => {
-      if (!output.tokens && output.elapsed === undefined && !sessionId) {
+      const canCopyOutput = !output.isStreaming && !!outputText;
+      if (!output.tokens && output.elapsed === undefined && !sessionId && !canCopyOutput) {
         return null;
       }
 
@@ -1017,6 +1055,27 @@ export const CliOutput = memo<CliOutputProps>(
         parts.push(<span key="elapsed">{output.elapsed}s</span>);
       }
 
+      if (!output.isStreaming && outputText) {
+        parts.push(
+          <button
+            key="copy-output"
+            type="button"
+            className={`inline-flex items-center align-middle gap-1 transition-colors ${
+              copiedOutput
+                ? "text-indicator-success"
+                : "text-description-fg hover:text-foreground"
+            }`}
+            onClick={handleCopyOutput}
+            title="Copy output to clipboard"
+          >
+            <i
+              className={`codicon ${copiedOutput ? "codicon-check" : "codicon-copy"}`}
+            />
+            <span>{copiedOutput ? "Copied" : "Copy output"}</span>
+          </button>
+        );
+      }
+
       return (
         <>
           {parts.map((part, index) => (
@@ -1035,6 +1094,9 @@ export const CliOutput = memo<CliOutputProps>(
       harnessName,
       copiedSessionId,
       handleCopySessionId,
+      outputText,
+      copiedOutput,
+      handleCopyOutput,
     ]);
 
     // Compute available undo/redo actions via shared utility.
@@ -1191,6 +1253,27 @@ export const CliOutput = memo<CliOutputProps>(
                 {output.elapsed}s
               </div>
             )}
+
+          {/* Copy output button for script steps */}
+          {!output.isStreaming && outputText && (
+            <div className="mt-[var(--spacing-xs)] text-[length:var(--fp-output-font-size-xs)]">
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1 transition-colors ${
+                  copiedOutput
+                    ? "text-indicator-success"
+                    : "text-description-fg hover:text-foreground"
+                }`}
+                onClick={handleCopyOutput}
+                title="Copy output to clipboard"
+              >
+                <i
+                  className={`codicon ${copiedOutput ? "codicon-check" : "codicon-copy"}`}
+                />
+                <span>{copiedOutput ? "Copied" : "Copy output"}</span>
+              </button>
+            </div>
+          )}
         </div>
       );
     }

@@ -757,6 +757,7 @@ export const WorkflowStepsPanel: React.FC<{
                 const harnessModel = getStepHarnessModel(step, status);
                 const overrides = getStepOverrides(step);
                 const runtimeMeta = step._runtime;
+                const outputText = latestOutput?.response as string | undefined;
                 return (
                   <div
                     key={`step-${index}-${step.name || ""}`}
@@ -799,6 +800,7 @@ export const WorkflowStepsPanel: React.FC<{
                             isCurrentStep: false,
                             direction: "rewind",
                             status,
+                            outputText,
                           })
                         }
                         hideBorderBottom={
@@ -854,6 +856,7 @@ export const WorkflowStepsPanel: React.FC<{
                   // matching the post-reorder backend index for this slot.
                   const setPositionTarget = currentStep + visualIdx;
                   const slotNumber = currentStep + visualIdx + 1;
+                  const outputText = latestOutput?.response as string | undefined;
                   return (
                     <SortableWorkflowStepWrapper
                       key={id}
@@ -893,6 +896,7 @@ export const WorkflowStepsPanel: React.FC<{
                           isCurrentStep,
                           direction: "forward",
                           status,
+                          outputText,
                         })
                       }
                       isScript={isScriptStep(step)}

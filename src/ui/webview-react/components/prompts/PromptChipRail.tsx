@@ -202,7 +202,7 @@ function FinalStepChip({
         </span>
       </div>
       {/* Row 2: status icon centered */}
-      <div className="flex justify-center w-full">
+      <div className="flex justify-center w-full mt-0.5">
         <StatusIcon
           status={status}
           disabled={!hasFinalStep}
