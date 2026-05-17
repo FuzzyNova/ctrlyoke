@@ -186,7 +186,7 @@ export class WorkingFileManager {
       workflowName,
       startedAt: Date.now(),
       lastModifiedAt: Date.now(),
-      steps,
+      steps: steps.map(stripViewOnlyWorkflowStepFields),
       _runtime: {
         currentIndex: 0,
         executionState: EXECUTION_STATES.IDLE,

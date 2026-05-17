@@ -1,7 +1,10 @@
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
-import { stripViewOnlyWorkflowStepFields } from "./WorkflowStepSanitizer";
+import {
+  sanitizeClipboardWorkflowStep,
+  stripViewOnlyWorkflowStepFields,
+} from "./WorkflowStepSanitizer";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { EndConditionHandler } from "./EndConditionHandler";
@@ -1621,6 +1624,42 @@ export class WorkflowInstance {
     );
   }
 
+  async insertWorkflowStepAfterIndex(
+    afterIndex: number,
+    step: unknown
+  ): Promise<void> {
+    const sanitizedStep = sanitizeClipboardWorkflowStep(step);
+
+    if (!this.promptQueue.getState().workingFilePath) {
+      await this.ensureEphemeralWorkingFile();
+    }
+
+    this.reopenRuntimeForContinuationIfNeeded(false);
+    await this.promptQueue.insertStepAfterIndex(
+      afterIndex,
+      sanitizedStep,
+      "Clipboard paste"
+    );
+    this.syncCurrentPromptFileFromQueue();
+
+    if (this.dashboardSink) {
+      const currentState = this.promptQueue.getState();
+      this.dashboardSink.updateStepsExtended(
+        currentState.steps,
+        this.promptQueue.getWorkflowFile().finalStep ?? null,
+        this.getAuthoritativeExecutionState()
+      );
+      this.dashboardSink.updateProgress(
+        currentState.currentIndex,
+        currentState.steps.length
+      );
+    }
+
+    Log.debug(
+      `Inserted workflow step after index ${afterIndex}: ${isScriptStep(sanitizedStep) ? sanitizedStep.script.substring(0, 50) : sanitizedStep.prompt.substring(0, 50)}...`
+    );
+  }
+
   async updatePromptInQueue(
     index: number,
     text: string,
@@ -1677,10 +1716,13 @@ export class WorkflowInstance {
         this.currentPromptFile.promptFile.finalStep = normalized;
       }
     } else if (finalStep && isScriptStep(finalStep)) {
-      this.promptQueue.updateWorkflowProperty("finalStep", finalStep);
-      await this.promptQueue.updateWorkingFileProperties({ finalStep });
+      const persistableFinalStep = stripViewOnlyWorkflowStepFields(finalStep);
+      this.promptQueue.updateWorkflowProperty("finalStep", persistableFinalStep);
+      await this.promptQueue.updateWorkingFileProperties({
+        finalStep: persistableFinalStep,
+      });
       if (this.currentPromptFile) {
-        this.currentPromptFile.promptFile.finalStep = finalStep;
+        this.currentPromptFile.promptFile.finalStep = persistableFinalStep;
       }
     } else {
       this.promptQueue.updateWorkflowProperty("finalStep", undefined);
@@ -2837,6 +2879,9 @@ export class WorkflowInstance {
       type: STEP_TYPES.SCRIPT,
       script,
       ...(name?.trim() ? { name: name.trim() } : {}),
+      ...(props.enabled !== undefined && {
+        enabled: props.enabled as boolean,
+      }),
       ...(props.timeout !== undefined &&
         props.timeout !== null && {
           timeout: props.timeout as number,
@@ -2879,6 +2924,9 @@ export class WorkflowInstance {
       ...(props?.model !== undefined && { model: coerce<string>(props.model) }),
       ...(props?.agent !== undefined && {
         agent: props.agent as string | null,
+      }),
+      ...(props?.enabled !== undefined && {
+        enabled: props.enabled as boolean,
       }),
       ...(props?.resumeSession !== undefined && {
         resumeSession: coerce<boolean>(props.resumeSession),

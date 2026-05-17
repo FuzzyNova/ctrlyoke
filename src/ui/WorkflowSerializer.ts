@@ -189,6 +189,7 @@ export class WorkflowSerializer {
       // and script steps; fields absent from a step are silently skipped).
       const PROMPT_FIELDS = [
         PROMPT_PROPERTIES.NAME,
+        PROMPT_PROPERTIES.ENABLED,
         PROMPT_PROPERTIES.STEP_TYPE,
         PROMPT_PROPERTIES.PROMPT,
         PROMPT_PROPERTIES.SCRIPT,

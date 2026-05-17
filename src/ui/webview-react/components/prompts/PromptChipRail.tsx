@@ -32,7 +32,8 @@ import {
   type StepStatus,
 } from "../../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
-import { isWorkflowRunning } from "../../utils/status";
+import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
+import { buildWorkflowStepEnabledState } from "@utils/stepClipboard";
 import {
   DndContext,
   closestCenter,
@@ -162,6 +163,7 @@ function ChipContent({
 type FinalStepChipProps = {
   status: StepStatus;
   hasFinalStep: boolean;
+  isDisabled: boolean;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
 };
@@ -169,6 +171,7 @@ type FinalStepChipProps = {
 function FinalStepChip({
   status,
   hasFinalStep,
+  isDisabled,
   onChipClick,
   onOpenContextMenu,
 }: FinalStepChipProps) {
@@ -210,7 +213,7 @@ function FinalStepChip({
       <div className="flex justify-center w-full mt-0.5">
         <StatusIcon
           status={status}
-          disabled={!hasFinalStep}
+          disabled={!hasFinalStep || isDisabled}
           className="text-base"
         />
       </div>
@@ -283,6 +286,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const isRunning = isWorkflowRunning(executionState);
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
+  const canPasteStep = executionState !== EXECUTION_STATES.CANCELLING;
   const canReorder = canChangeStartPosition && prompts.length - currentStep > 1;
 
   const getPromptStatus = usePromptStatus();
@@ -293,6 +297,8 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     useStepContextMenu({
       isCLIManaged,
       canChangeStartPosition,
+      canPasteStep,
+      executionState,
       confirmResetOperations: globalSettings.confirmResetOperations,
       totalSteps: prompts.length,
       currentStep,
@@ -324,16 +330,21 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
     selectPrompt,
   ]);
 
-  const handleDisableFinalStep = useCallback(() => {
+  const handleToggleFinalStepEnabled = useCallback(() => {
     if (isCLIManaged || !finalStep) return;
-    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalStep: null });
+    const enabling = finalStep.enabled === false;
+    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
+      finalStep: buildWorkflowStepEnabledState(finalStep, enabling),
+      ...(enabling ? { clearProperties: ["enabled"] } : {}),
+    });
   }, [isCLIManaged, finalStep]);
 
   const { openFinalStepContextMenu, finalStepContextMenuPortal } =
     useFinalStepContextMenu({
       hasFinalStep: !!finalStep,
       isReadOnly: finalStepIsReadOnly,
-      onDisable: handleDisableFinalStep,
+      isDisabled: finalStep?.enabled === false,
+      onToggleEnabled: handleToggleFinalStepEnabled,
     });
 
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
@@ -435,11 +446,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   onChipClick={() => handleStepClick(i)}
                   onOpenContextMenu={(x, y) =>
                     openContextMenu(x, y, {
+                      step: prompt,
                       setPositionTarget: i,
                       deleteIndex: i,
                       isCurrentStep: false,
+                      isExecutionTargetLocked: false,
                       direction: "rewind",
-                      status,
                     })
                   }
                 />
@@ -464,6 +476,10 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   const status = getPromptStatus(prompt, index);
                   const contextPct = getContextPct(index);
                   const slotNumber = currentStep + visualIdx + 1;
+                  const isExecutionTargetLocked =
+                    (isWorkflowActive(executionState) ||
+                      executionState === EXECUTION_STATES.CANCELLING) &&
+                    isCurrentStep;
                   return (
                     <SortableChip
                       key={id}
@@ -477,11 +493,12 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       onChipClick={() => handleStepClick(index)}
                       onOpenContextMenu={(x, y) =>
                         openContextMenu(x, y, {
+                          step: prompt,
                           setPositionTarget: currentStep + visualIdx,
                           deleteIndex: index,
                           isCurrentStep,
+                          isExecutionTargetLocked,
                           direction: "forward",
-                          status,
                         })
                       }
                     />
@@ -497,6 +514,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
       <FinalStepChip
         status={finalStepEffectiveStatus}
         hasFinalStep={hasFinalStep}
+        isDisabled={finalStep?.enabled === false}
         onChipClick={handleFinalStepClick}
         onOpenContextMenu={openFinalStepContextMenu}
       />

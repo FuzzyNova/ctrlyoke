@@ -2,7 +2,9 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import { PromptQueue } from "../flightpath/PromptQueue";
 import {
+  CONDITION_ACTIONS,
   EXECUTION_STATES,
+  STEP_TYPES,
   STEP_STATUS,
   PROMPT_TERMINAL_STATUS,
 } from "../types/DashboardConstants";
@@ -147,6 +149,19 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       const state = queue.getState();
       assert.strictEqual(state.completedIndices.size, 0);
+    });
+
+    test("should preserve enabled flags on loaded steps", () => {
+      queue.loadPrompts(
+        createPromptFile([
+          { prompt: "disabled prompt", enabled: false },
+          { prompt: "enabled prompt" },
+        ])
+      );
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[0].enabled, false);
+      assert.strictEqual(state.steps[1].enabled, undefined);
     });
   });
 
@@ -886,6 +901,81 @@ suite("PromptQueue State Machine Tests", () => {
     });
   });
 
+  suite("insertStepAfterIndex", () => {
+    test("should shift currentIndex and completedIndices when inserting before the current prompt", async () => {
+      const steps: PromptStep[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+        { prompt: "p3" },
+      ];
+      queue.loadPrompts(createPromptFile(steps));
+      (queue as any).state.currentIndex = 2;
+      (queue as any).state.completedIndices = new Set(["0", "1"]);
+      (queue as any).state.results[0].status = STEP_STATUS.COMPLETED;
+      (queue as any).state.results[1].status = STEP_STATUS.COMPLETED;
+
+      await queue.insertStepAfterIndex(0, {
+        name: "inserted",
+        prompt: "inserted prompt",
+        enabled: false,
+        model: "gpt-5.4",
+      });
+
+      const state = queue.getState();
+      assert.deepStrictEqual(
+        state.steps.map((step) => (step as PromptStep).prompt),
+        ["p0", "inserted prompt", "p1", "p2", "p3"]
+      );
+      assert.deepStrictEqual(state.steps[1], {
+        name: "inserted",
+        prompt: "inserted prompt",
+        enabled: false,
+        model: "gpt-5.4",
+      });
+      assert.strictEqual(state.currentIndex, 3);
+      assert.deepStrictEqual([...state.completedIndices].sort(), ["0", "2"]);
+      assert.strictEqual(state.results[1].prompt, "inserted prompt");
+      assert.strictEqual(state.results[1].status, STEP_STATUS.PENDING);
+    });
+
+    test("should preserve script-step shape and leave currentIndex unchanged when inserting after pending work", async () => {
+      const steps: PromptStep[] = [
+        { prompt: "p0" },
+        { prompt: "p1" },
+        { prompt: "p2" },
+      ];
+      queue.loadPrompts(createPromptFile(steps));
+      (queue as any).state.currentIndex = 1;
+      (queue as any).state.completedIndices = new Set(["0"]);
+      (queue as any).state.results[0].status = STEP_STATUS.COMPLETED;
+
+      await queue.insertStepAfterIndex(2, {
+        type: STEP_TYPES.SCRIPT,
+        name: "inserted script",
+        script: "npm test",
+        enabled: true,
+        timeout: 30,
+        onPass: CONDITION_ACTIONS.CONTINUE,
+        onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
+      } as any);
+
+      const state = queue.getState();
+      assert.strictEqual(state.currentIndex, 1);
+      assert.deepStrictEqual(state.steps[3], {
+        type: STEP_TYPES.SCRIPT,
+        name: "inserted script",
+        script: "npm test",
+        enabled: true,
+        timeout: 30,
+        onPass: CONDITION_ACTIONS.CONTINUE,
+        onFail: CONDITION_ACTIONS.STOP_WORKFLOW,
+      });
+      assert.strictEqual(state.results[3].prompt, "npm test");
+      assert.strictEqual(state.results[3].status, STEP_STATUS.PENDING);
+    });
+  });
+
   suite("setStartPosition", () => {
     test("should be a no-op when toIndex equals currentIndex", async () => {
       const steps: PromptStep[] = [
@@ -1193,6 +1283,25 @@ suite("PromptQueue State Machine Tests", () => {
         undefined,
         "new MCP prompt should have no _runtime"
       );
+    });
+
+    test("should adopt persisted enabled changes while preserving in-memory runtime", () => {
+      queue.loadPrompts(createPromptFile([{ prompt: "prompt-0", enabled: true }]));
+      (queue as any).state.steps[0]._runtime = {
+        sessionId: "s0",
+        startedAt: 1000,
+        completedAt: 2000,
+      };
+
+      (queue as any).mergeDiskSteps([
+        { prompt: "prompt-0", enabled: false },
+        { prompt: "prompt-1-mcp" },
+      ]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[0].enabled, false);
+      assert.strictEqual(state.steps[0]._runtime?.sessionId, "s0");
+      assert.strictEqual((state.steps[1] as PromptStep).prompt, "prompt-1-mcp");
     });
   });
 

@@ -102,6 +102,7 @@ export const END_CONDITION_DEFAULTS: EndConditionConfig = {
 export interface SavedNewStepState {
   promptText: string;
   promptName: string;
+  stepEnabled: boolean;
   properties: PropertyValues;
   stepType?: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
   scriptCommand?: string;
@@ -150,6 +151,7 @@ interface EditorState {
 
   // Step type — determines editor mode
   stepType: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT;
+  stepEnabled: boolean;
 
   // Editor content
   promptText: string;
@@ -198,6 +200,7 @@ interface EditorActions {
   setStepType: (
     type: typeof STEP_TYPES.PROMPT | typeof STEP_TYPES.SCRIPT
   ) => void;
+  setStepEnabled: (enabled: boolean) => void;
   setScriptCommand: (command: string) => void;
   setScriptTimeout: (timeout: number | undefined) => void;
   setScriptOnPass: (value: string) => void;
@@ -278,6 +281,7 @@ const initialState: EditorState = {
   pendingEdits: {},
   hasActiveQueue: false,
   stepType: STEP_TYPES.PROMPT,
+  stepEnabled: true,
   promptText: "",
   promptName: "",
   scriptCommand: "",
@@ -354,6 +358,7 @@ export const useEditorStore = create<
         selectedPromptIndex: null,
         originalPromptData: null,
         stepType: savedNewPromptState.stepType ?? STEP_TYPES.PROMPT,
+        stepEnabled: savedNewPromptState.stepEnabled,
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
@@ -384,6 +389,7 @@ export const useEditorStore = create<
           selectedPromptIndex: null,
           originalPromptData: null,
           stepType: STEP_TYPES.PROMPT,
+          stepEnabled: true,
           promptText: "",
           promptName: "",
           scriptCommand: "",
@@ -402,6 +408,7 @@ export const useEditorStore = create<
           selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
           selectedPromptIndex: null,
           originalPromptData: null,
+          stepEnabled: true,
           stepType: STEP_TYPES.PROMPT,
           scriptCommand: "",
           scriptTimeout: undefined,
@@ -426,6 +433,7 @@ export const useEditorStore = create<
       newPendingEdits[key] = {
         promptText: state.promptText,
         promptName: state.promptName,
+        stepEnabled: state.stepEnabled,
         properties: state.properties,
         stepType: state.stepType,
         scriptCommand: state.scriptCommand,
@@ -445,6 +453,7 @@ export const useEditorStore = create<
         ? {
             promptText: state.promptText,
             promptName: state.promptName,
+            stepEnabled: state.stepEnabled,
             properties: state.properties,
             stepType: state.stepType,
             scriptCommand: state.scriptCommand,
@@ -473,6 +482,7 @@ export const useEditorStore = create<
         originalPromptData: promptData,
         savedNewPromptState,
         stepType: pendingEdit?.stepType ?? STEP_TYPES.SCRIPT,
+        stepEnabled: pendingEdit?.stepEnabled ?? promptData.enabled !== false,
         promptText: pendingEdit?.promptText ?? "",
         promptName: pendingEdit
           ? pendingEdit.promptName
@@ -533,6 +543,7 @@ export const useEditorStore = create<
         originalPromptData: promptData,
         savedNewPromptState,
         stepType: pendingEdit?.stepType ?? STEP_TYPES.PROMPT,
+        stepEnabled: pendingEdit?.stepEnabled ?? promptData.enabled !== false,
         promptText: pendingEdit ? pendingEdit.promptText : promptData.prompt,
         promptName: pendingEdit
           ? pendingEdit.promptName
@@ -572,6 +583,7 @@ export const useEditorStore = create<
         selectedPromptIndex: null,
         originalPromptData: null,
         stepType: savedNewPromptState.stepType ?? STEP_TYPES.PROMPT,
+        stepEnabled: savedNewPromptState.stepEnabled,
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
@@ -604,6 +616,7 @@ export const useEditorStore = create<
           selectedPromptIndex: null,
           originalPromptData: null,
           stepType: STEP_TYPES.PROMPT,
+          stepEnabled: true,
           promptText: "",
           promptName: "",
           scriptCommand: "",
@@ -624,6 +637,7 @@ export const useEditorStore = create<
           selectedPromptIndex: null,
           originalPromptData: null,
           stepType: STEP_TYPES.PROMPT,
+          stepEnabled: true,
           scriptCommand: "",
           scriptTimeout: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
@@ -648,6 +662,7 @@ export const useEditorStore = create<
     newPendingEdits[key] = {
       promptText: state.promptText,
       promptName: state.promptName,
+      stepEnabled: state.stepEnabled,
       properties: state.properties,
       stepType: state.stepType,
       scriptCommand: state.scriptCommand,
@@ -665,6 +680,7 @@ export const useEditorStore = create<
         selectedPromptIndex: null,
         originalPromptData: null,
         stepType: savedNewPromptState.stepType ?? STEP_TYPES.PROMPT,
+        stepEnabled: savedNewPromptState.stepEnabled,
         promptText: savedNewPromptState.promptText,
         promptName: savedNewPromptState.promptName,
         scriptCommand: savedNewPromptState.scriptCommand ?? "",
@@ -693,6 +709,7 @@ export const useEditorStore = create<
           selectedPromptIndex: null,
           originalPromptData: null,
           stepType: STEP_TYPES.PROMPT,
+          stepEnabled: true,
           promptText: "",
           promptName: "",
           scriptCommand: "",
@@ -712,6 +729,7 @@ export const useEditorStore = create<
           selectedPromptIndex: null,
           originalPromptData: null,
           stepType: STEP_TYPES.PROMPT,
+          stepEnabled: true,
           scriptCommand: "",
           scriptTimeout: undefined,
           scriptOnPass: CONDITION_ACTIONS.CONTINUE,
@@ -740,6 +758,12 @@ export const useEditorStore = create<
       set({ stepType: STEP_TYPES.PROMPT, isDirty: true });
     }
   },
+
+  setStepEnabled: (enabled) =>
+    set({
+      stepEnabled: enabled,
+      isDirty: true,
+    }),
 
   setScriptCommand: (command) =>
     set({
@@ -941,6 +965,7 @@ export const useEditorStore = create<
     const editorState = {
       editorText: state.promptText,
       promptName: state.promptName,
+      stepEnabled: state.stepEnabled,
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       selectedPromptIndex: null, // Always null for new prompt state
       properties: state.properties,
@@ -980,6 +1005,7 @@ export const useEditorStore = create<
       selectionTarget: { kind: EDITOR_TARGET_KINDS.NEW_PROMPT },
       promptText: persistedState.editorText ?? "",
       promptName: persistedState.promptName ?? "",
+      stepEnabled: persistedState.stepEnabled !== false,
       properties: {
         ...PROPERTY_DEFAULTS,
         ...(persistedState.properties ?? {}),
@@ -1002,6 +1028,7 @@ export const useEditorStore = create<
       savedNewPromptState: null,
       pendingEdits: {},
       stepType: STEP_TYPES.PROMPT,
+      stepEnabled: true,
       promptText: "",
       promptName: "",
       scriptCommand: "",
@@ -1020,6 +1047,7 @@ export const useEditorStore = create<
     set({
       pendingEdits: {},
       stepType: STEP_TYPES.PROMPT,
+      stepEnabled: true,
       promptText: "",
       promptName: "",
       scriptCommand: "",
@@ -1057,6 +1085,10 @@ export const useEditorStore = create<
     // Add name if provided
     if (promptName.trim()) {
       result.name = promptName.trim();
+    }
+
+    if (!get().stepEnabled) {
+      result.enabled = false;
     }
 
     // Add harness if not default

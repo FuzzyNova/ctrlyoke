@@ -440,7 +440,9 @@ export class PromptQueue {
         if (prompt._runtime?.completedAt !== undefined) {
           const terminal = prompt._runtime.terminalStatus;
           status =
-            terminal === PROMPT_TERMINAL_STATUS.CANCELLED
+            terminal === PROMPT_TERMINAL_STATUS.SKIPPED
+              ? STEP_STATUS.SKIPPED
+              : terminal === PROMPT_TERMINAL_STATUS.CANCELLED
               ? STEP_STATUS.CANCELLED
               : terminal === PROMPT_TERMINAL_STATUS.FAILED
                 ? STEP_STATUS.FAILED
@@ -644,6 +646,31 @@ export class PromptQueue {
   }
 
   /**
+   * Mark current prompt as skipped and move to next.
+   * Persists SKIPPED in _runtime so reload/restore preserves the terminal state.
+   */
+  async skipCurrentAndMoveNext(): Promise<void> {
+    if (!this.hasNext()) {
+      return;
+    }
+
+    const currentResult = this.state.results[this.state.currentIndex];
+    currentResult.status = STEP_STATUS.SKIPPED;
+    currentResult.timestamp = new Date();
+
+    this.markPromptCompleted(
+      this.state.currentIndex,
+      PROMPT_TERMINAL_STATUS.SKIPPED
+    );
+
+    this.resetRetryCount();
+    this.state.currentIndex++;
+    this.emitStateChange();
+
+    await this.updateWorkingFile();
+  }
+
+  /**
    * Get execution progress
    */
   getProgress(): { current: number; total: number; percentage: number } {
@@ -773,13 +800,17 @@ export class PromptQueue {
    * Sets completedAt on the prompt's own _runtime (source of truth) and
    * updates the in-memory fast-lookup index keyed by prompt index.
    */
-  markPromptCompleted(index: number): void {
+  markPromptCompleted(
+    index: number,
+    terminalStatus?: PromptRuntimeMetadata["terminalStatus"]
+  ): void {
     const prompt = this.state.steps[index];
     if (prompt) {
       prompt._runtime = {
         ...prompt._runtime,
         startedAt: prompt._runtime?.startedAt ?? Date.now(),
         completedAt: Date.now(),
+        terminalStatus: terminalStatus ?? PROMPT_TERMINAL_STATUS.COMPLETED,
       };
     }
     // Update in-memory fast-lookup cache (key = prompt index as string)
@@ -993,7 +1024,14 @@ export class PromptQueue {
         : diskStep.prompt;
       const hash = hashPromptContent(content);
       const memoryStep = memoryPromptMap.get(hash);
-      return memoryStep ?? diskStep;
+      if (!memoryStep) {
+        return diskStep;
+      }
+
+      return {
+        ...diskStep,
+        ...(memoryStep._runtime ? { _runtime: memoryStep._runtime } : {}),
+      };
     });
 
     // Rebuild results array to match new step order
@@ -1140,6 +1178,59 @@ export class PromptQueue {
       await this.workingFileManager.updateWorkingFileDirect();
       Log.info(
         `Working file updated. Appended ${steps.length} steps from: ${source} at position: ${position}`
+      );
+    });
+  }
+
+  /**
+   * Insert a single step immediately after an existing queue index.
+   * Shifts currentIndex/completedIndices as needed so the currently-selected
+   * execution position continues to point at the same logical step.
+   */
+  public async insertStepAfterIndex(
+    afterIndex: number,
+    step: WorkflowStep,
+    source: string = "Clipboard paste"
+  ): Promise<void> {
+    if (!this.canAppend()) {
+      throw new Error("Cannot insert step: Queue is in cancelled or error state");
+    }
+
+    const queueLength = this.state.steps.length;
+    const isEmptyInsert = queueLength === 0 && afterIndex === -1;
+    const isValidExistingIndex =
+      queueLength > 0 && afterIndex >= 0 && afterIndex < queueLength;
+
+    if (!isEmptyInsert && !isValidExistingIndex) {
+      throw new Error(`Invalid insert index: ${afterIndex}`);
+    }
+
+    await this.workingFileManager.runInQueue(async () => {
+      const insertIndex = afterIndex + 1;
+      this.state.steps.splice(insertIndex, 0, step);
+      this.state.results.splice(insertIndex, 0, {
+        prompt: isScriptStep(step) ? step.script : step.prompt,
+        status: STEP_STATUS.PENDING,
+        timestamp: new Date(),
+      });
+
+      if (insertIndex <= this.state.currentIndex) {
+        this.state.currentIndex += 1;
+      }
+
+      if (this.state.completedIndices.size > 0) {
+        const updated = new Set<string>();
+        for (const entry of this.state.completedIndices) {
+          const index = parseInt(entry, 10);
+          updated.add(String(index > afterIndex ? index + 1 : index));
+        }
+        this.state.completedIndices = updated;
+      }
+
+      this.emitStateChange();
+      await this.workingFileManager.updateWorkingFileDirect();
+      Log.info(
+        `Inserted step from ${source} after index ${afterIndex} (insertIndex=${insertIndex})`
       );
     });
   }
@@ -1453,6 +1544,7 @@ export class PromptQueue {
           _runtime: {
             ...(prompt._runtime ?? { startedAt: Date.now() }),
             completedAt: Date.now(),
+            terminalStatus: PROMPT_TERMINAL_STATUS.SKIPPED,
           },
         };
       });
@@ -1616,7 +1708,9 @@ export class PromptQueue {
   ): (typeof STEP_STATUS)[keyof typeof STEP_STATUS] {
     if (step._runtime?.completedAt !== undefined) {
       const terminal = step._runtime.terminalStatus;
-      return terminal === PROMPT_TERMINAL_STATUS.CANCELLED
+      return terminal === PROMPT_TERMINAL_STATUS.SKIPPED
+        ? STEP_STATUS.SKIPPED
+        : terminal === PROMPT_TERMINAL_STATUS.CANCELLED
         ? STEP_STATUS.CANCELLED
         : terminal === PROMPT_TERMINAL_STATUS.FAILED
           ? STEP_STATUS.FAILED

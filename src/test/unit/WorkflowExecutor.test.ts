@@ -201,6 +201,29 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(queue.getFinalStepRuntime(), undefined);
   });
 
+  test("skips disabled queue steps without sending them to the harness", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    queue.loadPrompts({
+      steps: [
+        { prompt: "disabled-step", enabled: false },
+        { prompt: "enabled-step" },
+      ],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.deepStrictEqual(integration.sentPrompts, ["enabled-step"]);
+    assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.SKIPPED);
+    assert.strictEqual(
+      queue.getState().steps[0]._runtime?.terminalStatus,
+      STEP_STATUS.SKIPPED
+    );
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+  });
+
   test("runs finalStep once after queue drains", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
@@ -224,6 +247,31 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(runtime?.loopCount, 0);
     assert.strictEqual(runtime?.status, STEP_STATUS.COMPLETED);
     assert.ok(runtime?.completedAt);
+  });
+
+  test("keeps disabled finalStep present but skips execution", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    queue.loadPrompts({
+      steps: [{ prompt: "queue-1" }],
+      finalStep: { prompt: "final-disabled", enabled: false },
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.deepStrictEqual(integration.sentPrompts, ["queue-1"]);
+    assert.strictEqual(
+      queue.getWorkflowFile().finalStep?.enabled,
+      false,
+      "disabled finalStep should remain in the workflow"
+    );
+    const runtime = queue.getFinalStepRuntime();
+    assert.ok(runtime);
+    assert.strictEqual(runtime?.status, STEP_STATUS.SKIPPED);
+    assert.strictEqual(runtime?.phase, FINAL_STEP_PHASES.FINAL_STEP);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
   });
 
   test("repeats loop when finalStep appends queue work", async () => {

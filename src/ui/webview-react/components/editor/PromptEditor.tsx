@@ -60,6 +60,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     restoreFromVsCodeState,
     hasActiveQueue,
     stepType,
+    stepEnabled,
     scriptCommand,
     scriptTimeout,
     scriptOnPass,
@@ -410,9 +411,15 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties.push("toolPermissions");
       }
 
+      if (!stepEnabled) {
+        result.enabled = false;
+      } else if (includeNullsForDefaults) {
+        clearProperties.push("enabled");
+      }
+
       return { properties: result, clearProperties };
     },
-    [properties]
+    [properties, stepEnabled]
   );
 
   // Ref to hold the last submitted text so we can restore it on failure
@@ -476,6 +483,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               compareSource: scriptCompareSource,
             }),
             ...(scriptReturns && { returns: scriptReturns }),
+            ...(!stepEnabled && { enabled: false }),
           },
           action: finalAction,
           promptName: promptName.trim(),
@@ -519,6 +527,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       scriptOnFail,
       scriptCompareSource,
       scriptReturns,
+      stepEnabled,
       promptText,
       promptName,
       getPropertyValues,
@@ -544,7 +553,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           compareSource: scriptCompareSource,
         }),
         ...(scriptReturns && { returns: scriptReturns }),
+        ...(!stepEnabled && { enabled: false }),
       };
+      const clearProperties = stepEnabled ? ["enabled"] : undefined;
 
       if (selectionTarget.kind === FINAL_STEP_PHASES.QUEUE) {
         vscode.postMessage({
@@ -552,6 +563,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           index: selectionTarget.index,
           text: command,
           properties: scriptProperties,
+          clearProperties,
           promptName: promptName.trim(),
         });
         if (isPromptCompleted) {
@@ -578,7 +590,9 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
               compareSource: scriptCompareSource,
             }),
             ...(scriptReturns && { returns: scriptReturns }),
+            ...(!stepEnabled && { enabled: false }),
           },
+          clearProperties,
         });
       } else {
         return;
@@ -633,6 +647,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     scriptOnFail,
     scriptCompareSource,
     scriptReturns,
+    stepEnabled,
     selectionTarget,
     promptText,
     getPropertyValues,

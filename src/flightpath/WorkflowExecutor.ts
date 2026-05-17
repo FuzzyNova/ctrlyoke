@@ -162,6 +162,10 @@ function getExecutionTargetRunKey(target: ExecutionTarget): string {
     : `final:${target.loopIndex}`;
 }
 
+function isStepEnabled(step: WorkflowStep | undefined | null): boolean {
+  return step != null && step.enabled !== false;
+}
+
 /**
  * Drives the sequential execution loop for a FlightPath workflow.
  *
@@ -486,6 +490,16 @@ export class WorkflowExecutor {
       return false;
     }
 
+    if (!isStepEnabled(step)) {
+      return this.handleSkippedStep(
+        step,
+        target,
+        context,
+        "Skipped because enabled=false",
+        "[Disabled]"
+      );
+    }
+
     // Route script steps directly — no AI harness interaction needed
     if (isScriptStep(step)) {
       const stepIndex =
@@ -772,7 +786,9 @@ export class WorkflowExecutor {
   private async handleSkippedStep(
     step: WorkflowStep,
     target: ExecutionTarget,
-    context: WorkflowExecutionContext
+    context: WorkflowExecutionContext,
+    reason: string = "Skipped by pre-condition",
+    logPrefix: string = "[Pre-condition]"
   ): Promise<boolean> {
     const stepLabel =
       !isScriptStep(step) && (step as PromptStep).name
@@ -781,17 +797,23 @@ export class WorkflowExecutor {
           ? (step as ScriptStep).script.split(/\s+/)[0]
           : "prompt";
 
-    Log.info(`[Pre-condition] Step skipped — ${stepLabel}`);
+    Log.info(`${logPrefix} Step skipped — ${stepLabel}`);
+    await this.trackStatusMessage(
+      context,
+      target,
+      `${reason}: ${stepLabel}`,
+      STATUS_MESSAGE_SEVERITY.INFO
+    );
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       const stepIndex = target.stepIndex;
       if (context.dashboardProvider && stepIndex >= 0) {
         context.dashboardProvider.updateStepStatus(stepIndex, {
           state: STEP_STATUS.SKIPPED,
-          message: "Skipped by pre-condition",
+          message: reason,
         });
       }
-      await this.promptQueue.completeCurrentAndMoveNext();
+      await this.promptQueue.skipCurrentAndMoveNext();
       if (context.dashboardProvider) {
         const live = this.promptQueue.getProgress();
         context.dashboardProvider.updateProgress(live.current, live.total);
@@ -2398,13 +2420,16 @@ export class WorkflowExecutor {
 
   private async finalizeWorkflowExecution(): Promise<void> {
     const finalState = this.getRuntime().status;
+    const hasExecutableFinalStep = isStepEnabled(
+      this.promptQueue.getWorkflowFile().finalStep
+    );
     // When paused and the queue is fully drained with no finalStep defined,
     // auto-complete rather than leaving the workflow stuck in PAUSED indefinitely.
     // Workflows WITH a finalStep stay paused so the user can resume and run/continue it.
     const pausedWithQueueDrained =
       finalState === EXECUTION_STATES.PAUSED &&
       !this.promptQueue.hasNext() &&
-      !this.promptQueue.getWorkflowFile().finalStep;
+      !hasExecutableFinalStep;
     if (
       pausedWithQueueDrained ||
       (finalState !== EXECUTION_STATES.PAUSED &&

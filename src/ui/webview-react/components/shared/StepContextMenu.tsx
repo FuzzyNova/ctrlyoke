@@ -9,13 +9,25 @@ export type StepContextMenuItem = {
   onClick: () => void;
 };
 
+export type StepContextMenuDivider = {
+  type: "divider";
+};
+
+export type StepContextMenuEntry = StepContextMenuItem | StepContextMenuDivider;
+
 export type StepContextMenuState = {
   x: number;
   y: number;
-  items: StepContextMenuItem[];
+  items: StepContextMenuEntry[];
 };
 
 type StepContextMenuProps = StepContextMenuState & { onClose: () => void };
+
+function isDividerEntry(
+  item: StepContextMenuEntry
+): item is StepContextMenuDivider {
+  return "type" in item && item.type === "divider";
+}
 
 /**
  * Fixed-position context menu rendered into document.body via portal.
@@ -81,26 +93,34 @@ export function StepContextMenu({
         e.stopPropagation();
       }}
     >
-      {items.map((item, i) => (
-        <button
-          key={i}
-          className={`flex items-center gap-1.5 w-full px-2.5 py-1 text-xs text-left transition-colors ${
-            item.disabled
-              ? "text-description-fg cursor-not-allowed opacity-50"
-              : "text-foreground hover:bg-toolbar-hover-bg cursor-pointer"
-          }`}
-          disabled={item.disabled}
-          title={item.disabled ? item.disabledTitle : undefined}
-          onClick={() => {
-            if (item.disabled) return;
-            onClose();
-            item.onClick();
-          }}
-        >
-          <i className={`codicon ${item.icon} text-xxs`} />
-          {item.label}
-        </button>
-      ))}
+      {items.map((item, i) =>
+        isDividerEntry(item) ? (
+          <div
+            key={i}
+            role="separator"
+            className="h-px my-0.5 mx-1 bg-panel-border"
+          />
+        ) : (
+          <button
+            key={i}
+            className={`flex items-center gap-1.5 w-full px-2.5 py-1 text-xs text-left transition-colors ${
+              item.disabled
+                ? "text-description-fg cursor-not-allowed opacity-50"
+                : "text-foreground hover:bg-toolbar-hover-bg cursor-pointer"
+            }`}
+            disabled={item.disabled}
+            title={item.disabled ? item.disabledTitle : undefined}
+            onClick={() => {
+              if (item.disabled) return;
+              onClose();
+              item.onClick();
+            }}
+          >
+            <i className={`codicon ${item.icon} text-xxs`} />
+            {item.label}
+          </button>
+        )
+      )}
     </div>,
     document.body
   );

@@ -31,6 +31,7 @@ import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import type { WebviewSettingsSync, PostMessageFn } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
 import type {
+  InsertWorkflowStepMessage,
   UndoPromptChangesMessage,
   UndoFileInstruction,
   RedoPromptChangesMessage,
@@ -439,6 +440,10 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.UPDATE_PROMPT, (message) => {
       this.handleUpdatePrompt(message);
+    });
+
+    table.set(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, async (message) => {
+      await this.handleInsertWorkflowStep(message);
     });
 
     table.set(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, async (message) => {
@@ -1475,6 +1480,29 @@ export class WebviewMessageRouter {
       Log.error("Failed to update prompt:", error);
       vscode.window.showErrorMessage(
         `Failed to update prompt: ${getErrorMessage(error)}`
+      );
+    }
+  }
+
+  private async handleInsertWorkflowStep(
+    message: InsertWorkflowStepMessage
+  ): Promise<void> {
+    const orchestrator = this.getOrchestrator();
+    if (!orchestrator) {
+      Log.error("WorkflowOrchestrator not initialized");
+      return;
+    }
+
+    try {
+      await orchestrator.insertWorkflowStepAfterIndex(
+        message.afterIndex,
+        message.step,
+        this.clientId
+      );
+    } catch (error) {
+      Log.error("Failed to insert workflow step:", error);
+      vscode.window.showErrorMessage(
+        `Failed to insert workflow step: ${getErrorMessage(error)}`
       );
     }
   }

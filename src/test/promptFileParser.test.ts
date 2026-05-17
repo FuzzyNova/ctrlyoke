@@ -1,4 +1,6 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
 import * as path from "path";
 import { PromptFileParser } from "../flightpath/PromptFileParser";
 import type { PromptStep } from "../types/FlightPathTypes";
@@ -101,6 +103,40 @@ suite("PromptFileParser Tests", () => {
       // Prompts without explicit resumeSession should be undefined (will use global setting at execution time)
       assert.strictEqual(result.steps[0].resumeSession, undefined);
       assert.strictEqual(result.steps[1].resumeSession, undefined);
+    });
+
+    test("should preserve enabled on prompt steps, script steps, and finalStep", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "flightpath-parser-enabled-")
+      );
+      const filePath = path.join(tempDir, "enabled.flightpath.json");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify(
+            {
+              steps: [
+                { prompt: "enabled prompt", enabled: false },
+                { type: "script", script: "echo hi", enabled: false },
+              ],
+              finalStep: { prompt: "final prompt", enabled: false },
+            },
+            null,
+            2
+          ),
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assertValidResult(result);
+        assert.strictEqual(result.steps[0].enabled, false);
+        assert.strictEqual(result.steps[1].enabled, false);
+        assert.strictEqual((result as any).finalStep?.enabled, false);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
     });
   });
 

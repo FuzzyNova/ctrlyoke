@@ -306,6 +306,11 @@ definitions:
               Optional human-readable display label shown in the FlightPath dashboard. If omitted,
               the dashboard shows a truncated preview of the prompt text.
             maxLength: 100
+          enabled:
+            type: boolean
+            description: >-
+              Whether this step executes. When omitted, the step is enabled. Set to false to keep
+              the step in the workflow but skip execution.
           prompt:
             type: string
             description: >-
@@ -331,6 +336,11 @@ definitions:
       name:
         type: string
         maxLength: 100
+      enabled:
+        type: boolean
+        description: >-
+          Whether this step executes. When omitted, the step is enabled. Set to false to keep the
+          step in the workflow but skip execution.
       script:
         type: string
         description: Shell command or path to script. Resolved relative to workspace root or .flightpath/.
@@ -531,6 +541,7 @@ definitions:
               - completed
               - cancelled
               - failed
+              - skipped
             description: >-
               Terminal state of this prompt. Absent or 'completed' means successful completion. Used
               to restore the correct visual status after a working file reload.

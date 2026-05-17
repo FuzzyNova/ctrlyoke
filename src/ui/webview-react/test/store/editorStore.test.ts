@@ -51,6 +51,7 @@ describe("initial state", () => {
 
   it("starts with empty prompt text and clean state", () => {
     expect(store().promptText).toBe("");
+    expect(store().stepEnabled).toBe(true);
     expect(store().isDirty).toBe(false);
     expect(store().hasContent()).toBe(false);
   });
@@ -189,6 +190,11 @@ describe("enterEditMode", () => {
     store().enterEditMode(2, item);
     expect(store().properties.harness).toBe("codex-cli");
     expect(store().properties.model).toBe("gpt-5");
+  });
+
+  it("loads disabled state from the step payload", () => {
+    store().enterEditMode(2, makePromptStep({ enabled: false }));
+    expect(store().stepEnabled).toBe(false);
   });
 
   it("saves new-prompt draft as savedNewPromptState", () => {
@@ -333,6 +339,18 @@ describe("prompt editor inserts", () => {
   });
 });
 
+describe("step enabled state", () => {
+  it("preserves a toggled enabled state in pending edits", () => {
+    store().enterEditMode(0, makePromptStep({ enabled: false }));
+    store().setStepEnabled(true);
+    store().deselect();
+
+    store().enterEditMode(0, makePromptStep({ enabled: false }));
+
+    expect(store().stepEnabled).toBe(true);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // getPromptProperties
 // ---------------------------------------------------------------------------
@@ -363,6 +381,15 @@ describe("getPromptProperties", () => {
     const props = store().getPromptProperties();
     expect(props.harness).toBe("claude-cli");
     expect(props.model).toBe("claude-opus-4");
+  });
+
+  it("includes enabled=false only when the step is disabled", () => {
+    store().setPromptText("Do a thing");
+    expect("enabled" in store().getPromptProperties()).toBe(false);
+
+    store().setStepEnabled(false);
+
+    expect(store().getPromptProperties().enabled).toBe(false);
   });
 
   it("includes endCondition when script is non-empty", () => {

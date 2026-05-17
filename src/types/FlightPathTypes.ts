@@ -306,6 +306,8 @@ export interface PromptStep extends ExecutionProperties {
   /** Step type discriminant — defaults to "prompt" when absent */
   type?: typeof STEP_TYPES.PROMPT;
   name?: string; // Optional human-readable display label
+  /** When false, the step remains in the workflow but never executes. */
+  enabled?: boolean;
   prompt: string;
   sessionId?: string | number; // Session ID for resuming conversations (string for CLI, number for Copilot Chat)
   _runtime?: PromptRuntimeMetadata; // Per-prompt runtime metadata
@@ -318,6 +320,8 @@ export interface PromptStep extends ExecutionProperties {
 export interface ScriptStep extends ScriptProperties {
   type: typeof STEP_TYPES.SCRIPT;
   name?: string;
+  /** When false, the step remains in the workflow but never executes. */
+  enabled?: boolean;
   /** What to do when the script passes. Default: "continue". */
   onPass?: ScriptStepAction;
   /** What to do when the script fails. Default: "stopWorkflow". */

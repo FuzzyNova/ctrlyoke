@@ -23,7 +23,7 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
     if (disabled) {
       return {
         icon: "codicon-circle-slash",
-        colorClass: "text-description-fg",
+        colorClass: "text-disabled-fg",
       };
     }
     switch (status) {

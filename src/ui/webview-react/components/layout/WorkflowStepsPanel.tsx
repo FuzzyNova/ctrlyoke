@@ -49,7 +49,14 @@ import {
 } from "@dnd-kit/sortable";
 import { BoundaryBar } from "../prompts/BoundaryBar";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
-import { isWorkflowRunning } from "../../utils/status";
+import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
+import {
+  buildWorkflowStepEnabledState,
+  isEditableClipboardTarget,
+  readWorkflowStepFromClipboard,
+  serializeWorkflowStepText,
+  writeClipboardText,
+} from "@utils/stepClipboard";
 
 /** Local type guard for script steps */
 function isScriptStep(step: WorkflowStep): step is ScriptStep {
@@ -178,6 +185,7 @@ export const WorkflowStepsPanel: React.FC<{
   const isRunning = isWorkflowRunning(executionState);
   const canChangeStartPosition =
     !isRunning && executionState !== EXECUTION_STATES.CANCELLING;
+  const canPasteStep = executionState !== EXECUTION_STATES.CANCELLING;
   const {
     openContextMenu,
     handleSetStartPosition,
@@ -186,6 +194,8 @@ export const WorkflowStepsPanel: React.FC<{
   } = useStepContextMenu({
     isCLIManaged,
     canChangeStartPosition,
+    canPasteStep,
+    executionState,
     confirmResetOperations: globalSettings.confirmResetOperations,
     totalSteps: steps.length,
     currentStep,
@@ -474,10 +484,47 @@ export const WorkflowStepsPanel: React.FC<{
     selectPrompt,
   ]);
 
-  const handleDisableFinalStep = useCallback(() => {
+  const handleToggleFinalStepEnabled = useCallback(() => {
     if (isCLIManaged || !finalStep) return;
-    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalStep: null });
+    const enabling = finalStep.enabled === false;
+    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, {
+      finalStep: buildWorkflowStepEnabledState(finalStep, enabling),
+      ...(enabling ? { clearProperties: ["enabled"] } : {}),
+    });
   }, [isCLIManaged, finalStep]);
+
+  const handleSelectedStepCopy = useCallback(() => {
+    if (selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE) {
+      return;
+    }
+
+    const selectedStep = steps[selectionTarget.index];
+    if (!selectedStep) {
+      return;
+    }
+
+    void writeClipboardText(serializeWorkflowStepText(selectedStep));
+  }, [selectionTarget, steps]);
+
+  const handleSelectedStepPaste = useCallback(() => {
+    if (
+      isCLIManaged ||
+      !canPasteStep ||
+      selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE
+    ) {
+      return;
+    }
+
+    const afterIndex = selectionTarget.index;
+    void readWorkflowStepFromClipboard()
+      .then((step) => {
+        sendMessage(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, {
+          afterIndex,
+          step,
+        });
+      })
+      .catch(() => {});
+  }, [canPasteStep, isCLIManaged, selectionTarget]);
 
   const finalStepIsReadOnly =
     isCLIManaged ||
@@ -488,7 +535,8 @@ export const WorkflowStepsPanel: React.FC<{
     useFinalStepContextMenu({
       hasFinalStep: !!finalStep,
       isReadOnly: finalStepIsReadOnly,
-      onDisable: handleDisableFinalStep,
+      isDisabled: finalStep?.enabled === false,
+      onToggleEnabled: handleToggleFinalStepEnabled,
     });
 
   // Compute resolved harness/model for the final step using the same
@@ -724,6 +772,39 @@ export const WorkflowStepsPanel: React.FC<{
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             deselect();
+            return;
+          }
+
+          if (
+            !e.ctrlKey ||
+            e.altKey ||
+            e.metaKey ||
+            e.shiftKey ||
+            isEditableClipboardTarget(e.target)
+          ) {
+            return;
+          }
+
+          const key = e.key.toLowerCase();
+          if (key === "c") {
+            if (selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE) {
+              return;
+            }
+            e.preventDefault();
+            handleSelectedStepCopy();
+            return;
+          }
+
+          if (key === "v") {
+            if (
+              isCLIManaged ||
+              !canPasteStep ||
+              selectionTarget.kind !== FINAL_STEP_PHASES.QUEUE
+            ) {
+              return;
+            }
+            e.preventDefault();
+            handleSelectedStepPaste();
           }
         }}
       >
@@ -758,6 +839,11 @@ export const WorkflowStepsPanel: React.FC<{
                 const overrides = getStepOverrides(step);
                 const runtimeMeta = step._runtime;
                 const outputText = latestOutput?.response as string | undefined;
+                const isDisabled = step.enabled === false;
+                const isExecutionTargetLocked =
+                  (isWorkflowActive(executionState) ||
+                    executionState === EXECUTION_STATES.CANCELLING) &&
+                  index === currentStep;
                 return (
                   <div
                     key={`step-${index}-${step.name || ""}`}
@@ -782,6 +868,7 @@ export const WorkflowStepsPanel: React.FC<{
                         latestOutput={latestOutput}
                         liveContextWindow={liveContextWindow?.[index]}
                         runtimeMeta={runtimeMeta}
+                        isDisabled={isDisabled}
                         isCurrent={false}
                         isSelected={isSelected}
                         onClick={() => handleStepClick(index)}
@@ -795,11 +882,12 @@ export const WorkflowStepsPanel: React.FC<{
                         onSetStartPosition={() => handleSetStartPosition(index)}
                         onContextMenu={(x, y) =>
                           openContextMenu(x, y, {
+                            step,
                             setPositionTarget: index,
                             deleteIndex: index,
                             isCurrentStep: false,
+                            isExecutionTargetLocked,
                             direction: "rewind",
-                            status,
                             outputText,
                           })
                         }
@@ -857,6 +945,11 @@ export const WorkflowStepsPanel: React.FC<{
                   const setPositionTarget = currentStep + visualIdx;
                   const slotNumber = currentStep + visualIdx + 1;
                   const outputText = latestOutput?.response as string | undefined;
+                  const isDisabled = step.enabled === false;
+                  const isExecutionTargetLocked =
+                    (isWorkflowActive(executionState) ||
+                      executionState === EXECUTION_STATES.CANCELLING) &&
+                    isCurrentStep;
                   return (
                     <SortableWorkflowStepWrapper
                       key={id}
@@ -872,6 +965,7 @@ export const WorkflowStepsPanel: React.FC<{
                       latestOutput={latestOutput}
                       liveContextWindow={liveContextWindow?.[index]}
                       runtimeMeta={runtimeMeta}
+                      isDisabled={isDisabled}
                       isCurrent={isCurrent}
                       isSelected={isSelected}
                       onClick={() => handleStepClick(index)}
@@ -891,11 +985,12 @@ export const WorkflowStepsPanel: React.FC<{
                       }
                       onContextMenu={(x, y) =>
                         openContextMenu(x, y, {
+                          step,
                           setPositionTarget,
                           deleteIndex: index,
                           isCurrentStep,
+                          isExecutionTargetLocked,
                           direction: "forward",
-                          status,
                           outputText,
                         })
                       }
@@ -917,9 +1012,10 @@ export const WorkflowStepsPanel: React.FC<{
         isExpanded={finalStepFooterExpanded}
         isSelected={selectionTarget.kind === FINAL_STEP_PHASES.FINAL_STEP}
         isReadOnly={finalStepIsReadOnly}
+        isDisabled={finalStep?.enabled === false}
         onSelect={handleFinalStepSelect}
         onToggleExpanded={toggleFinalStepFooterExpanded}
-        onDisable={handleDisableFinalStep}
+        onToggleEnabled={handleToggleFinalStepEnabled}
         onContextMenu={openFinalStepContextMenu}
         {...getFinalStepHarnessModel()}
         latestOutput={finalStepLatestOutput}

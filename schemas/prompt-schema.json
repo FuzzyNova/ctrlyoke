@@ -321,6 +321,10 @@
               "description": "Optional human-readable display label shown in the FlightPath dashboard. If omitted, the dashboard shows a truncated preview of the prompt text.",
               "maxLength": 100
             },
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
+            },
             "prompt": {
               "type": "string",
               "description": "The prompt text to send to the AI. Can be either: (1) Final-form prompt text with context references expanded inline before sending — use @path/to/file or @path/to/dir/ for files/directories, and #file:path, #selection:path:line-line, or #sym:path:symbol:line for file excerpts and symbols. OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .flightpath directory. Absolute paths are also supported."
@@ -345,6 +349,10 @@
         "name": {
           "type": "string",
           "maxLength": 100
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this step executes. When omitted, the step is enabled. Set to false to keep the step in the workflow but skip execution."
         },
         "script": {
           "type": "string",
@@ -499,7 +507,7 @@
             },
             "terminalStatus": {
               "type": "string",
-              "enum": ["completed", "cancelled", "failed"],
+              "enum": ["completed", "cancelled", "failed", "skipped"],
               "description": "Terminal state of this prompt. Absent or 'completed' means successful completion. Used to restore the correct visual status after a working file reload."
             },
             "retryCount": {

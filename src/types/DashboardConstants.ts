@@ -69,6 +69,7 @@ export const MESSAGE_TYPES = {
   EXECUTE_PROMPT: "executePrompt", // Send/Add with properties
   EXECUTE_PROMPT_ERROR: "executePromptError", // Extension -> Webview: Notify failure so editor can restore content
   UPDATE_PROMPT: "updatePrompt", // Update existing prompt in queue
+  INSERT_WORKFLOW_STEP: "insertWorkflowStep", // Insert a fully-shaped workflow step after a selected index
   CANCEL_EDIT: "cancelEdit", // Exit edit mode
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
   DELETE_PROMPT: "deletePrompt", // Delete prompt from queue
@@ -780,6 +781,7 @@ export const PROMPT_TERMINAL_STATUS = {
   COMPLETED: "completed",
   CANCELLED: "cancelled",
   FAILED: "failed",
+  SKIPPED: "skipped",
 } as const;
 
 export type PromptTerminalStatus =
@@ -941,6 +943,7 @@ export const PROMPT_PROPERTIES = {
   PROMPT: "prompt",
   ID: "id",
   NAME: "name",
+  ENABLED: "enabled",
 
   // Workflow-level properties (multi-step format)
   STEPS: "steps",

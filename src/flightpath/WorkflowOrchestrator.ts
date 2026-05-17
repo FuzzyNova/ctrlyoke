@@ -1579,6 +1579,17 @@ export class WorkflowOrchestrator {
     );
   }
 
+  async insertWorkflowStepAfterIndex(
+    afterIndex: number,
+    step: WorkflowStep,
+    clientId: string = this.PANEL_CLIENT_ID
+  ): Promise<void> {
+    return this.getInstanceForClient(clientId).insertWorkflowStepAfterIndex(
+      afterIndex,
+      step
+    );
+  }
+
   async updateFinalStepInQueue(
     finalStep: PromptStep | null,
     clearProperties?: string[],

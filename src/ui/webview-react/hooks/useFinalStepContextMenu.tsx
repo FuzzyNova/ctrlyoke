@@ -7,13 +7,15 @@ import {
 interface UseFinalStepContextMenuOptions {
   hasFinalStep: boolean;
   isReadOnly: boolean;
-  onDisable: () => void;
+  isDisabled: boolean;
+  onToggleEnabled: () => void;
 }
 
 export function useFinalStepContextMenu({
   hasFinalStep,
   isReadOnly,
-  onDisable,
+  isDisabled,
+  onToggleEnabled,
 }: UseFinalStepContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
@@ -26,18 +28,18 @@ export function useFinalStepContextMenu({
         y,
         items: [
           {
-            label: "Disable final step",
-            icon: "codicon-trash",
+            label: isDisabled ? "Enable final step" : "Disable final step",
+            icon: isDisabled ? "codicon-check" : "codicon-circle-slash",
             disabled: !hasFinalStep || isReadOnly,
             disabledTitle: !hasFinalStep
               ? "No final step configured"
-              : "Cannot disable while final step is running",
-            onClick: onDisable,
+              : "Cannot change while final step is running",
+            onClick: onToggleEnabled,
           },
         ],
       });
     },
-    [hasFinalStep, isReadOnly, onDisable]
+    [hasFinalStep, isDisabled, isReadOnly, onToggleEnabled]
   );
 
   const finalStepContextMenuPortal = contextMenu ? (

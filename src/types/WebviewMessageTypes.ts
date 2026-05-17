@@ -253,6 +253,7 @@ export interface PromptStep {
   /** Step type discriminant — defaults to "prompt" when absent */
   type?: typeof STEP_TYPES.PROMPT;
   name?: string;
+  enabled?: boolean;
   prompt: string;
   harness?: string;
   model?: string;
@@ -940,6 +941,16 @@ export interface OutputHistoryLoadedMessage {
 export interface SetStartPositionMessage {
   type: typeof MESSAGE_TYPES.SET_START_POSITION;
   toIndex: number;
+}
+
+/**
+ * Insert workflow step message (webview -> extension)
+ * `afterIndex` is the existing queue index after which the pasted step should be inserted.
+ */
+export interface InsertWorkflowStepMessage {
+  type: typeof MESSAGE_TYPES.INSERT_WORKFLOW_STEP;
+  afterIndex: number;
+  step: WorkflowStep;
 }
 
 /**

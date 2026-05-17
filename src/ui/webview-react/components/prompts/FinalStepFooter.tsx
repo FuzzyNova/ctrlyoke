@@ -28,9 +28,10 @@ interface FinalStepFooterProps {
   isExpanded: boolean;
   isSelected: boolean;
   isReadOnly: boolean;
+  isDisabled: boolean;
   onSelect: () => void;
   onToggleExpanded: () => void;
-  onDisable: () => void;
+  onToggleEnabled: () => void;
   /** Resolved harness display name (accounting for workflow/global defaults) */
   harnessLabel?: string;
   /** True when harness is inherited (not set at prompt level) */
@@ -63,9 +64,10 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
   isExpanded,
   isSelected,
   isReadOnly,
+  isDisabled,
   onSelect,
   onToggleExpanded,
-  onDisable,
+  onToggleEnabled,
   harnessLabel,
   harnessIsDefault,
   modelLabel,
@@ -79,6 +81,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
     ? (status ?? "pending")
     : "pending";
   const longPressHandlers = useLongPress(onContextMenu);
+  const showDisabledState = !hasFinalStep || isDisabled;
 
   return (
     <div className="border-t border-panel-border bg-sidebar-bg flex-shrink-0">
@@ -88,7 +91,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
             isSelected
               ? "bg-list-active-bg text-list-active-fg"
               : "hover:bg-list-hover-bg text-foreground"
-          } ${isReadOnly ? "" : "cursor-pointer"}`}
+          } ${isReadOnly ? "" : "cursor-pointer"} ${isDisabled && !isSelected ? "opacity-85" : ""}`}
           role="button"
           tabIndex={0}
           onClick={() => {
@@ -117,6 +120,14 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           <div className="text-xs leading-relaxed">
             {truncate(getStepDisplayText(finalStep))}
           </div>
+
+          {isDisabled && (
+            <div className="mt-1">
+              <span className="inline-flex rounded bg-badge-bg px-1 py-[1px] text-xxs text-badge-fg">
+                Disabled
+              </span>
+            </div>
+          )}
 
           {/* Phase badge */}
           {phase && (
@@ -173,7 +184,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
         }
         {...longPressHandlers}
       >
-        <StatusIcon status={effectiveStatus} disabled={!hasFinalStep} />
+        <StatusIcon status={effectiveStatus} disabled={showDisabledState} />
         <span className="text-xs font-semibold uppercase tracking-wide">
           {"Final Step"}
         </span>
@@ -186,8 +197,10 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           </span>
         )}
         {hasFinalStep && finalStep ? (
-          <span className="text-xs font-bold flex-1 opacity-90 text-terminal-ansiGreen">
-            enabled
+          <span
+            className={`text-xs font-bold flex-1 opacity-90 ${isDisabled ? "text-description-fg" : "text-terminal-ansiGreen"}`}
+          >
+            {isDisabled ? "disabled" : "enabled"}
           </span>
         ) : (
           <span className="text-xs flex-1 italic opacity-80 text-foreground">
@@ -206,12 +219,14 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
               className="icon-btn py-0 px-1"
               onClick={(e) => {
                 e.stopPropagation();
-                onDisable();
+                onToggleEnabled();
               }}
-              title="Disable final step"
-              aria-label="Disable final step"
+              title={isDisabled ? "Enable final step" : "Disable final step"}
+              aria-label={isDisabled ? "Enable final step" : "Disable final step"}
             >
-              <i className="codicon codicon-trash text-xs" />
+              <i
+                className={`codicon ${isDisabled ? "codicon-check" : "codicon-circle-slash"} text-xs`}
+              />
             </button>
           )}
           {hasFinalStep && (

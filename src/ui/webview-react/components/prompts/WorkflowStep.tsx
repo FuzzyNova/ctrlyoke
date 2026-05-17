@@ -27,6 +27,8 @@ interface WorkflowStepProps {
   index: number;
   /** Current status */
   status: StepStatus;
+  /** True when the step is present but disabled from execution. */
+  isDisabled?: boolean;
   /** Optional human-readable display name */
   name?: string;
   /** Retry state if retrying */
@@ -111,6 +113,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   text,
   index,
   status,
+  isDisabled = false,
   name,
   retryState,
   details,
@@ -164,7 +167,15 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
     hideBorderBottom ? "" : "border-b border-panel-border",
     "transition-colors",
     dimmed ? "opacity-80" : "",
+    isDisabled ? "opacity-85" : "",
   ];
+
+  const titleTextClass = isSelected
+    ? "text-list-active-fg"
+    : isDisabled
+      ? "text-description-fg"
+      : "text-foreground";
+  const detailsClass = isDisabled && !isSelected ? "opacity-80" : "";
 
   // Add hover and selection states
   if (isSelected) {
@@ -217,7 +228,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
         {/* Icon column: status icon at top, set-start-position button at bottom */}
         <span className="flex-shrink-0 flex flex-col items-center self-stretch">
           <span className="mt-0.5">
-            <StatusIcon status={status} />
+            <StatusIcon status={status} disabled={isDisabled} />
           </span>
           {canSetStartPosition && isHovered && (
             <button
@@ -243,10 +254,15 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
               <div className="flex items-center gap-1 min-w-0">
                 <i className="codicon codicon-terminal-powershell text-xs opacity-60 flex-shrink-0" />
                 <span
-                  className={`text-xs leading-relaxed truncate ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
+                  className={`text-xs leading-relaxed truncate ${titleTextClass}`}
                 >
                   {name ? name : text}
                 </span>
+                {isDisabled && (
+                  <span className="px-1 py-[1px] rounded text-xxs bg-badge-bg text-badge-fg flex-shrink-0">
+                    Disabled
+                  </span>
+                )}
               </div>
               {/* Script command subtitle — only shown when a name is displayed in the title row */}
               {name && text && (
@@ -258,14 +274,16 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
                 </div>
               )}
               {/* Status details (duration, end condition) but no harness/model */}
-              <PromptStepDetails
-                status={status}
-                retryState={retryState}
-                latestOutput={latestOutput}
-                details={details}
-                runtimeMeta={runtimeMeta}
-                isSelected={isSelected}
-              />
+              <div className={detailsClass}>
+                <PromptStepDetails
+                  status={status}
+                  retryState={retryState}
+                  latestOutput={latestOutput}
+                  details={details}
+                  runtimeMeta={runtimeMeta}
+                  isSelected={isSelected}
+                />
+              </div>
             </>
           ) : (
             // Prompt step variant (default)
@@ -273,24 +291,31 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
               <div className="flex items-center gap-1 min-w-0">
                 <i className="codicon codicon-comment text-xs opacity-60 flex-shrink-0" />
                 <span
-                  className={`text-xs leading-relaxed truncate ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
+                  className={`text-xs leading-relaxed truncate ${titleTextClass}`}
                 >
                   {name ? name : text}
                 </span>
+                {isDisabled && (
+                  <span className="px-1 py-[1px] rounded text-xxs bg-badge-bg text-badge-fg flex-shrink-0">
+                    Disabled
+                  </span>
+                )}
               </div>
-              <PromptStepDetails
-                status={status}
-                harnessLabel={harnessLabel}
-                harnessIsDefault={harnessIsDefault}
-                modelLabel={modelLabel}
-                modelIsDefault={modelIsDefault}
-                retryState={retryState}
-                latestOutput={latestOutput}
-                details={details}
-                runtimeMeta={runtimeMeta}
-                isSelected={isSelected}
-                overrides={overrides}
-              />
+              <div className={detailsClass}>
+                <PromptStepDetails
+                  status={status}
+                  harnessLabel={harnessLabel}
+                  harnessIsDefault={harnessIsDefault}
+                  modelLabel={modelLabel}
+                  modelIsDefault={modelIsDefault}
+                  retryState={retryState}
+                  latestOutput={latestOutput}
+                  details={details}
+                  runtimeMeta={runtimeMeta}
+                  isSelected={isSelected}
+                  overrides={overrides}
+                />
+              </div>
             </>
           )}
         </div>

@@ -291,6 +291,7 @@ export class PromptFileParser {
   private buildScriptStep(source: any): ScriptStep {
     const step: ScriptStep = { type: STEP_TYPES.SCRIPT, script: source.script };
     if (source.name !== undefined) step.name = source.name;
+    if (source.enabled !== undefined) step.enabled = source.enabled;
     if (source.timeout !== undefined) step.timeout = source.timeout;
     if (source.compareSource !== undefined)
       step.compareSource = source.compareSource;
@@ -311,6 +312,7 @@ export class PromptFileParser {
 
     // Only include properties that are explicitly set
     if (source.name !== undefined) promptStep.name = source.name;
+    if (source.enabled !== undefined) promptStep.enabled = source.enabled;
     if (source.harness !== undefined) promptStep.harness = source.harness;
     if (source.model !== undefined) promptStep.model = source.model;
     if (source.agent !== undefined) promptStep.agent = source.agent;
@@ -346,6 +348,15 @@ export class PromptFileParser {
     parsed: any,
     promptFilePath: string
   ): Promise<PromptFile> {
+    if (
+      parsed.type === STEP_TYPES.SCRIPT &&
+      typeof parsed.script === "string"
+    ) {
+      return {
+        steps: [this.buildScriptStep(parsed)],
+      };
+    }
+
     // Handle single prompt format
     if (parsed.prompt && typeof parsed.prompt === "string") {
       const resolvedPrompt = await this.resolvePromptContent(

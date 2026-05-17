@@ -34,7 +34,9 @@ export const EditorSection: React.FC = () => {
     setPromptName,
     promptText,
     stepType,
+    stepEnabled,
     setStepType,
+    setStepEnabled,
   } = useEditorStore();
   const tokenCount = useAttachmentTokenCount(promptText);
   const {
@@ -164,40 +166,73 @@ export const EditorSection: React.FC = () => {
           )}
         </div>
 
-        {/* Step type toggle — Prompt | Script */}
-        {!isCLIManaged && (
-          <div
-            className="fp-mode-switch mx-2"
-            role="group"
-            aria-label="Step type"
+        <div className="fp-mode-switch mx-2" role="group" aria-label="Step type">
+          <button
+            type="button"
+            disabled={isCLIManaged}
+            className={`fp-mode-switch-btn ${!isScriptMode ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            onClick={() => setStepType(STEP_TYPES.PROMPT)}
+            title="Prompt step — sends text to an AI harness"
+            aria-label="Prompt step"
           >
-            <button
-              type="button"
-              className={`fp-mode-switch-btn ${!isScriptMode ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-              onClick={() => setStepType(STEP_TYPES.PROMPT)}
-              title="Prompt step — sends text to an AI harness"
-            >
-              <i
-                className={`codicon codicon-comment codicon-sm ${isNarrow ? "px-1" : ""}`}
-              />
-              {!isNarrow && <span>Prompt</span>}
-            </button>
-            <div className="fp-mode-switch-divider">
-              <div className="w-px h-full bg-current opacity-40" />
-            </div>
-            <button
-              type="button"
-              className={`fp-mode-switch-btn ${isScriptMode ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-              onClick={() => setStepType(STEP_TYPES.SCRIPT)}
-              title="Script step — runs a shell command with no AI interaction"
-            >
-              <i
-                className={`codicon codicon-terminal-powershell codicon-sm ${isNarrow ? "px-1" : ""}`}
-              />
-              {!isNarrow && <span>Script</span>}
-            </button>
+            <i
+              className={`codicon codicon-comment codicon-sm ${isNarrow ? "px-1" : ""}`}
+            />
+            {!isNarrow && <span>Prompt</span>}
+          </button>
+          <div className="fp-mode-switch-divider">
+            <div className="w-px h-full bg-current opacity-40" />
           </div>
-        )}
+          <button
+            type="button"
+            disabled={isCLIManaged}
+            className={`fp-mode-switch-btn ${isScriptMode ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            onClick={() => setStepType(STEP_TYPES.SCRIPT)}
+            title="Script step — runs a shell command with no AI interaction"
+            aria-label="Script step"
+          >
+            <i
+              className={`codicon codicon-terminal-powershell codicon-sm ${isNarrow ? "px-1" : ""}`}
+            />
+            {!isNarrow && <span>Script</span>}
+          </button>
+        </div>
+
+        <div
+          className="fp-mode-switch mr-2"
+          role="group"
+          aria-label="Step enabled state"
+        >
+          <button
+            type="button"
+            disabled={isCLIManaged}
+            className={`fp-mode-switch-btn ${stepEnabled ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            onClick={() => setStepEnabled(true)}
+            title="Enabled steps can run as part of the workflow"
+            aria-label="Enable step"
+          >
+            <i
+              className={`codicon codicon-check codicon-sm ${isNarrow ? "px-1" : ""}`}
+            />
+            {!isNarrow && <span>Enabled</span>}
+          </button>
+          <div className="fp-mode-switch-divider">
+            <div className="w-px h-full bg-current opacity-40" />
+          </div>
+          <button
+            type="button"
+            disabled={isCLIManaged}
+            className={`fp-mode-switch-btn ${!stepEnabled ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
+            onClick={() => setStepEnabled(false)}
+            title="Disabled steps stay in the workflow but do not execute"
+            aria-label="Disable step"
+          >
+            <i
+              className={`codicon codicon-circle-slash codicon-sm ${isNarrow ? "px-1" : ""}`}
+            />
+            {!isNarrow && <span>Disabled</span>}
+          </button>
+        </div>
 
         {/* Center: Mode text (clickable to edit name) + token count */}
         <span className="editor-mode-indicator flex-1 text-center text-xs text-description-fg truncate min-w-0">

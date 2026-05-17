@@ -1,28 +1,44 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   StepContextMenu,
   type StepContextMenuState,
 } from "../components/shared/StepContextMenu";
 import { ResetConfirmModal } from "../components/shared/ResetConfirmModal";
 import { sendMessage } from "./useMessageHandler";
-import { MESSAGE_TYPES, STEP_STATUS, type StepStatus } from "../types/messages";
+import {
+  EXECUTION_STATES,
+  MESSAGE_TYPES,
+  type ExecutionState,
+} from "../types/messages";
+import type { WorkflowStep } from "@store/workflowStore";
+import {
+  buildWorkflowStepEnabledUpdate,
+  getWorkflowStepRawText,
+  isScriptWorkflowStep,
+  readWorkflowStepFromClipboard,
+  serializeWorkflowStepText,
+  writeClipboardText,
+} from "@utils/stepClipboard";
 
 interface UseStepContextMenuOptions {
   isCLIManaged: boolean;
   canChangeStartPosition: boolean;
+  canPasteStep: boolean;
+  executionState: ExecutionState;
   confirmResetOperations: boolean;
   totalSteps: number;
   currentStep: number;
 }
 
 interface OpenContextMenuParams {
+  step: WorkflowStep;
   /** Position in current (post-reorder) step array — used for SET_START_POSITION */
   setPositionTarget: number;
   /** Original absolute index in steps[] — used for DELETE_PROMPT */
   deleteIndex: number;
   isCurrentStep: boolean;
+  isExecutionTargetLocked: boolean;
   direction: "rewind" | "forward";
-  status: StepStatus;
   /** Response/output text to copy; undefined disables the Copy output item */
   outputText?: string;
 }
@@ -30,6 +46,8 @@ interface OpenContextMenuParams {
 export function useStepContextMenu({
   isCLIManaged,
   canChangeStartPosition,
+  canPasteStep,
+  executionState,
   confirmResetOperations,
   totalSteps,
   currentStep,
@@ -38,6 +56,7 @@ export function useStepContextMenu({
     null
   );
   const [setPositionIndex, setSetPositionIndex] = useState<number | null>(null);
+  const contextMenuRequestIdRef = useRef(0);
 
   const handleSetStartPosition = useCallback(
     (target: number) => {
@@ -55,20 +74,86 @@ export function useStepContextMenu({
       x: number,
       y: number,
       {
+        step,
         setPositionTarget,
         deleteIndex,
         isCurrentStep,
+        isExecutionTargetLocked,
         direction,
-        status,
         outputText,
       }: OpenContextMenuParams
     ) => {
+      const requestId = ++contextMenuRequestIdRef.current;
+
+      const copyContentLabel =
+        isScriptWorkflowStep(step) ? "Copy Script" : "Copy Prompt";
+      const stepToggleLabel = step.enabled === false ? "Enable" : "Disable";
+      const pasteDisabledTitle = isCLIManaged
+        ? "Read-only — workflow is running via FlightPath CLI"
+        : !canPasteStep
+          ? executionState === EXECUTION_STATES.CANCELLING
+            ? "Cannot paste steps while workflow is cancelling"
+            : "Clipboard does not contain a workflow step"
+          : "Checking clipboard";
+
       setContextMenu({
         x,
         y,
         items: [
           {
-            label: "Set start position",
+            label: "Copy Step",
+            icon: "codicon-copy",
+            disabled: false,
+            onClick: () => {
+              void writeClipboardText(serializeWorkflowStepText(step));
+            },
+          },
+          {
+            label: copyContentLabel,
+            icon: "codicon-copy",
+            disabled: false,
+            onClick: () => {
+              void writeClipboardText(getWorkflowStepRawText(step));
+            },
+          },
+          {
+            label: "Copy Output",
+            icon: "codicon-copy",
+            disabled: !outputText,
+            disabledTitle: "No output to copy",
+            onClick: () => {
+              if (!outputText) return;
+              void writeClipboardText(outputText);
+            },
+          },
+          {
+            label: "Paste Step",
+            icon: "codicon-clipboard",
+            disabled: true,
+            disabledTitle: pasteDisabledTitle,
+            onClick: () => {},
+          },
+          { type: "divider" },
+          {
+            label: stepToggleLabel,
+            icon:
+              step.enabled === false ? "codicon-check" : "codicon-circle-slash",
+            disabled: isCLIManaged,
+            disabledTitle: "Read-only — workflow is running via FlightPath CLI",
+            onClick: () => {
+              const enabled = step.enabled === false;
+              const update = buildWorkflowStepEnabledUpdate(step, enabled);
+              sendMessage(MESSAGE_TYPES.UPDATE_PROMPT, {
+                index: deleteIndex,
+                text: update.text,
+                properties: update.properties,
+                clearProperties: update.clearProperties,
+                promptName: update.promptName,
+              });
+            },
+          },
+          {
+            label: "Set Start Position",
             icon:
               direction === "rewind"
                 ? "codicon-debug-reverse-continue"
@@ -79,41 +164,84 @@ export function useStepContextMenu({
               : "Cannot change start position while workflow is running",
             onClick: () => handleSetStartPosition(setPositionTarget),
           },
-          {
-            label: "Copy output",
-            icon: "codicon-copy",
-            disabled: !outputText,
-            disabledTitle: "No output to copy",
-            onClick: () => {
-              if (!outputText) return;
-              if (navigator.clipboard?.writeText) {
-                void navigator.clipboard.writeText(outputText);
-              } else {
-                const textArea = document.createElement("textarea");
-                textArea.value = outputText;
-                textArea.style.position = "fixed";
-                textArea.style.left = "-9999px";
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand("copy");
-                document.body.removeChild(textArea);
-              }
-            },
-          },
+          { type: "divider" },
           {
             label: "Delete",
             icon: "codicon-trash",
-            disabled: isCLIManaged || status === STEP_STATUS.RUNNING,
+            disabled: isCLIManaged || isExecutionTargetLocked,
             disabledTitle: isCLIManaged
               ? "Read-only — workflow is running via FlightPath CLI"
-              : "Cannot delete a prompt that is currently running",
+              : "Cannot delete the currently executing step",
             onClick: () =>
               sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index: deleteIndex }),
           },
         ],
       });
+
+      if (isCLIManaged || !canPasteStep) {
+        return;
+      }
+
+      void readWorkflowStepFromClipboard()
+        .then((clipboardStep) => {
+          setContextMenu((current) => {
+            if (!current || contextMenuRequestIdRef.current !== requestId) {
+              return current;
+            }
+
+            return {
+              ...current,
+              items: current.items.map((item, index) =>
+                index === 3 && !("type" in item)
+                  ? {
+                      ...item,
+                      disabled: false,
+                      disabledTitle: undefined,
+                      onClick: () =>
+                        sendMessage(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, {
+                          afterIndex: deleteIndex,
+                          step: clipboardStep,
+                        }),
+                    }
+                  : item
+              ),
+            };
+          });
+        })
+        .catch((error: unknown) => {
+          const disabledTitle =
+            error instanceof Error
+              ? error.message
+              : "Clipboard does not contain a workflow step";
+
+          setContextMenu((current) => {
+            if (!current || contextMenuRequestIdRef.current !== requestId) {
+              return current;
+            }
+
+            return {
+              ...current,
+              items: current.items.map((item, index) =>
+                index === 3 && !("type" in item)
+                  ? {
+                      ...item,
+                      disabled: true,
+                      disabledTitle,
+                      onClick: () => {},
+                    }
+                  : item
+              ),
+            };
+          });
+        });
     },
-    [canChangeStartPosition, isCLIManaged, handleSetStartPosition]
+    [
+      canChangeStartPosition,
+      canPasteStep,
+      executionState,
+      handleSetStartPosition,
+      isCLIManaged,
+    ]
   );
 
   const handleSetPositionConfirm = useCallback(() => {
