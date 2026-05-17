@@ -88,6 +88,10 @@ interface UiState {
   // diffsCollapsed was already false, then presses "Expand all" again).
   diffResetVersion: number;
 
+  // Separate persisted preference for the undo/redo dialog's expand/collapse state.
+  // Kept independent from diffsCollapsed so users can configure each independently.
+  undoDialogDiffsCollapsed: boolean;
+
   // Persisted panel sizes — restored to useRef on mount, written back on resize
   lastDesktopSizes: DesktopPanelSizes;
   lastMobileSizes: MobilePanelSizes;
@@ -217,6 +221,7 @@ interface UiActions {
   setDiffsCollapsed: (collapsed: boolean) => void;
   expandAllDiffs: () => void;
   collapseAllDiffs: () => void;
+  setUndoDialogDiffsCollapsed: (collapsed: boolean) => void;
 
   // Panel sizes (persisted, written from App.tsx resize handlers)
   setLastDesktopSizes: (sizes: Partial<DesktopPanelSizes>) => void;
@@ -378,6 +383,7 @@ const initialState: UiState = {
   editorCollapsed: false,
   diffsCollapsed: true, // collapsed by default to keep the DOM lean
   diffResetVersion: 0,
+  undoDialogDiffsCollapsed: true, // dialog defaults collapsed independently
   lastDesktopSizes: { ...DEFAULT_DESKTOP_SIZES },
   lastMobileSizes: { ...DEFAULT_MOBILE_SIZES },
   propertiesDrawerOpen: false,
@@ -443,6 +449,7 @@ const persistedFields = [
   "lastDesktopSizes",
   "lastMobileSizes",
   "diffsCollapsed",
+  "undoDialogDiffsCollapsed",
   "outputFontSize",
   "terminalFontSize",
   "terminalRailCollapsed",
@@ -502,6 +509,9 @@ export const useUiStore = create<UiState & UiActions>()(
           diffsCollapsed: true,
           diffResetVersion: state.diffResetVersion + 1,
         })),
+
+      setUndoDialogDiffsCollapsed: (collapsed) =>
+        set({ undoDialogDiffsCollapsed: collapsed }),
 
       // ============================================================================
       // PANEL SIZES
@@ -900,6 +910,7 @@ export const useUiStore = create<UiState & UiActions>()(
           terminalRailCollapsed: initialState.terminalRailCollapsed,
           terminalRailSizePx: initialState.terminalRailSizePx,
           diffsCollapsed: initialState.diffsCollapsed,
+          undoDialogDiffsCollapsed: initialState.undoDialogDiffsCollapsed,
           outputFontSize: initialState.outputFontSize,
           terminalFontSize: initialState.terminalFontSize,
         });

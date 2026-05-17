@@ -153,6 +153,7 @@ interface FileRowItemProps {
   checked: boolean;
   onChange: (path: string, checked: boolean) => void;
   globallyCollapsed?: boolean;
+  localResetVersion?: number;
 }
 
 const FileRowItem: React.FC<FileRowItemProps> = ({
@@ -160,6 +161,7 @@ const FileRowItem: React.FC<FileRowItemProps> = ({
   checked,
   onChange,
   globallyCollapsed = true,
+  localResetVersion,
 }) => {
   const undoable = row.instruction !== null;
   const isDisabled = !undoable;
@@ -226,6 +228,7 @@ const FileRowItem: React.FC<FileRowItemProps> = ({
           structuredPatch={row.structuredPatch}
           language={getLanguageFromPath(row.path)}
           globallyCollapsed={globallyCollapsed}
+          localResetVersion={localResetVersion}
           className="sm:ml-5"
         />
       )}
@@ -353,10 +356,12 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   const [resultState, setResultState] = useState<
     "idle" | "success" | "partial" | "error"
   >(RESULT_STATE.IDLE);
-  const [dialogDiffsCollapsed, setDialogDiffsCollapsed] = useState(true);
+  const [dialogDiffResetVersion, setDialogDiffResetVersion] = useState(0);
 
-  const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
-  const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
+  const dialogDiffsCollapsed = useUiStore((s) => s.undoDialogDiffsCollapsed);
+  const setUndoDialogDiffsCollapsed = useUiStore(
+    (s) => s.setUndoDialogDiffsCollapsed
+  );
 
   const undoResult = useWorkflowStore((s) => s.undoResults[requestId]);
   const clearUndoResult = useWorkflowStore((s) => s.clearUndoResult);
@@ -512,13 +517,13 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
   }, [isWorkflowMode, workflowRows, mode, redoRows, allUndoRows]);
 
   function handleExpandAllDiffs() {
-    setDialogDiffsCollapsed(false);
-    expandAllDiffs();
+    setUndoDialogDiffsCollapsed(false);
+    setDialogDiffResetVersion((v) => v + 1);
   }
 
   function handleCollapseAllDiffs() {
-    setDialogDiffsCollapsed(true);
-    collapseAllDiffs();
+    setUndoDialogDiffsCollapsed(true);
+    setDialogDiffResetVersion((v) => v + 1);
   }
 
   const isSingleFileUndo =
@@ -681,6 +686,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                                 structuredPatch={inst.structuredPatch}
                                 language={getLanguageFromPath(row.path)}
                                 globallyCollapsed={dialogDiffsCollapsed}
+                                localResetVersion={dialogDiffResetVersion}
                                 className="sm:ml-5"
                               />
                             )}
@@ -707,6 +713,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                               handleToggle(row.key, checked)
                             }
                             globallyCollapsed={dialogDiffsCollapsed}
+                            localResetVersion={dialogDiffResetVersion}
                           />
                         );
                       })}
@@ -754,6 +761,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                         structuredPatch={row.instruction.structuredPatch}
                         language={getLanguageFromPath(row.path)}
                         globallyCollapsed={dialogDiffsCollapsed}
+                        localResetVersion={dialogDiffResetVersion}
                         className="sm:ml-5"
                       />
                     )}
@@ -783,6 +791,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                     checked={checkedPaths.has(row.path)}
                     onChange={handleToggle}
                     globallyCollapsed={dialogDiffsCollapsed}
+                    localResetVersion={dialogDiffResetVersion}
                   />
                 ))}
               </>
@@ -801,6 +810,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                     checked={checkedPaths.has(row.path)}
                     onChange={handleToggle}
                     globallyCollapsed={dialogDiffsCollapsed}
+                    localResetVersion={dialogDiffResetVersion}
                   />
                 ))}
               </>

@@ -74,6 +74,13 @@ interface DiffViewProps {
    * Can be overridden per-instance by the user clicking the expand button.
    */
   globallyCollapsed: boolean;
+  /**
+   * Optional local reset version. Increment to force a re-sync to
+   * `globallyCollapsed` without touching the global `diffResetVersion`.
+   * Used by contexts (e.g. UndoChangesDialog) that manage their own
+   * expand/collapse state independently of the output section.
+   */
+  localResetVersion?: number;
   /** Optional content rendered inline with the expand/collapse toggle */
   actionSlot?: React.ReactNode;
   className?: string;
@@ -85,6 +92,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   structuredPatch,
   language,
   globallyCollapsed,
+  localResetVersion,
   actionSlot,
   className = "",
 }) => {
@@ -92,10 +100,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
   const [isExpanded, setIsExpanded] = useState(!globallyCollapsed);
   const hasExpandableSource = oldContent !== undefined;
 
-  // Snap to global state whenever the global flag or reset version changes.
+  // Snap to global state whenever the global flag or either reset version changes.
   useEffect(() => {
     setIsExpanded(!globallyCollapsed);
-  }, [globallyCollapsed, diffResetVersion]);
+  }, [globallyCollapsed, diffResetVersion, localResetVersion]);
 
   const handleToggle = () => setIsExpanded((prev) => !prev);
 
