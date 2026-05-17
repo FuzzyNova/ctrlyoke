@@ -108,14 +108,6 @@ export function GeneralSection({
         {...rowProps}
       />
       <SettingToggleRow
-        label="Log raw CLI output"
-        description="Write raw CLI output to a log file for debugging."
-        checked={ui.logRawCliOutput}
-        onChange={(v) => onUpdate("ui.logRawCliOutput", v)}
-        path="ui.logRawCliOutput"
-        {...rowProps}
-      />
-      <SettingToggleRow
         label="Headless permission warning"
         description="Warn when headless execution uses limited tool permissions."
         checked={ui.showHeadlessPermissionWarning}
@@ -231,6 +223,19 @@ export function GeneralSection({
           checked={settings.settings.enableDiagnosticLogs}
           onChange={(v) => onUpdate("enableDiagnosticLogs", v)}
           path="enableDiagnosticLogs"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Log raw CLI output"
+          description={
+            !settings.settings.enableDiagnosticLogs
+              ? "Unavailable — requires diagnostic logs to be enabled."
+              : "Write raw CLI output to a log file for debugging."
+          }
+          checked={ui.logRawCliOutput}
+          onChange={(v) => onUpdate("ui.logRawCliOutput", v)}
+          disabled={!settings.settings.enableDiagnosticLogs}
+          path="ui.logRawCliOutput"
           {...rowProps}
         />
       </div>
