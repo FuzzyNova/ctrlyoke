@@ -240,7 +240,7 @@ export const EditorSection: React.FC = () => {
               />
             ) : (
               <span
-                className="cursor-pointer hover:text-foreground transition-colors"
+                className={`cursor-pointer hover:text-foreground transition-colors${!stepEnabled ? " italic" : ""}`}
                 role="button"
                 tabIndex={0}
                 onClick={startNameEditing}
@@ -255,24 +255,31 @@ export const EditorSection: React.FC = () => {
                 {getModeText()}
               </span>
             )}
-            {!isEditingName && !isScriptMode && (
-              <>
-                {" — "}
-                <span
-                  className={`font-bold tabular-nums ${
-                    tokenCount >= 100_000
-                      ? "text-error-fg"
-                      : tokenCount >= 50_000
-                        ? "text-warning-fg"
-                        : ""
-                  }`}
-                >
-                  {tokenCount >= 1_000
-                    ? `${(tokenCount / 1_000).toFixed(1)}K`
-                    : tokenCount.toString()}{" "}
-                  tokens
-                </span>
-              </>
+            {!isEditingName && (
+              !stepEnabled ? (
+                <>
+                  {" — "}
+                  <span className="italic text-warning-fg">disabled</span>
+                </>
+              ) : !isScriptMode ? (
+                <>
+                  {" — "}
+                  <span
+                    className={`font-bold tabular-nums ${
+                      tokenCount >= 100_000
+                        ? "text-error-fg"
+                        : tokenCount >= 50_000
+                          ? "text-warning-fg"
+                          : ""
+                    }`}
+                  >
+                    {tokenCount >= 1_000
+                      ? `${(tokenCount / 1_000).toFixed(1)}K`
+                      : tokenCount.toString()}{" "}
+                    tokens
+                  </span>
+                </>
+              ) : null
             )}
           </span>
         </div>
