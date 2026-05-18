@@ -1619,6 +1619,7 @@ export class WorkflowInstance {
     }
 
     this.dashboardSink?.notifyUndoRedoSynced();
+    await this.reconcileExecutionStateAfterStepChange();
     Log.debug(
       `[WorkflowInstance] syncStepsForUndoRedo: ${steps.length} steps, finalStep=${finalStep ? "set" : "null"}`
     );
@@ -1760,7 +1761,51 @@ export class WorkflowInstance {
         this.promptQueue.getWorkflowFile().finalStep ?? null
       );
     }
+    await this.reconcileExecutionStateAfterStepChange();
     Log.debug(`Deleted prompt ${index}`);
+  }
+
+  /**
+   * Auto-transition execution state after a step list change triggered by a
+   * user edit (delete or undo/redo):
+   *
+   * - STOPPED + all steps completed → COMPLETED
+   *   Handles the case where a user deletes (or undoes the append of) the last
+   *   pending step from a workflow that was re-opened for continuation after
+   *   reaching COMPLETED. The state machine was set to STOPPED by
+   *   `reopenForContinuation`; now that there is no pending work, it should
+   *   revert to COMPLETED.
+   *
+   * - COMPLETED + non-terminal steps present → STOPPED (continuation)
+   *   Handles the symmetric redo case: after undoing a delete (via Ctrl+Z/Y)
+   *   the user may have restored a pending step. The state machine should go
+   *   back to STOPPED so the "Resume" affordance is available.
+   *
+   * Calling `workflowRuntime.complete()` or `reopenForContinuation()` emits a
+   * transition which is picked up by `onRuntimeTransition` → broadcasts
+   * EXECUTION_STATE_CHANGED (and EXECUTION_COMPLETED for the COMPLETED case) to
+   * the webview.  We then re-persist the working file so the on-disk state
+   * matches the new status.
+   */
+  private async reconcileExecutionStateAfterStepChange(): Promise<void> {
+    const status = this.workflowRuntime.status;
+    const queueState = this.promptQueue.getState();
+    const stepCount = queueState.steps.length;
+    const completedCount = this.promptQueue.getCompletedCount();
+
+    if (status === EXECUTION_STATES.STOPPED && stepCount > 0 && completedCount === stepCount) {
+      Log.info(
+        `[WorkflowInstance] reconcileExecutionState: all ${stepCount} step(s) completed while STOPPED — transitioning to COMPLETED`
+      );
+      this.workflowRuntime.complete();
+      await this.promptQueue.updateWorkingFile();
+    } else if (status === EXECUTION_STATES.COMPLETED && stepCount > 0 && completedCount < stepCount) {
+      Log.info(
+        `[WorkflowInstance] reconcileExecutionState: ${stepCount - completedCount} non-terminal step(s) present while COMPLETED — reopening for continuation`
+      );
+      this.workflowRuntime.reopenForContinuation();
+      await this.promptQueue.updateWorkingFile();
+    }
   }
 
   async resetWorkflowState(): Promise<void> {

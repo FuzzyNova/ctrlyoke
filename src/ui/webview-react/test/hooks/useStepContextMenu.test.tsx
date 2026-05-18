@@ -75,8 +75,8 @@ describe("useStepContextMenu", () => {
       "Copy Prompt",
       "Copy Output",
       "Paste Step",
-      "Disable",
       "Set Start Position",
+      "Disable",
       "Delete",
     ]);
     expect(screen.getAllByRole("separator")).toHaveLength(2);
