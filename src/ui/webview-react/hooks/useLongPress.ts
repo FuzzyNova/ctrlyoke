@@ -16,10 +16,15 @@ const MOVE_THRESHOLD = 10;
  *
  * Pass `null` or `undefined` as `callback` to disable — the returned handlers
  * become no-ops and are safe to spread unconditionally.
+ *
+ * Set `requireSelf = true` to only fire when the touch begins directly on the
+ * element (not on a descendant). Useful for background containers where child
+ * elements have their own long-press handlers.
  */
 export function useLongPress(
   callback: ((x: number, y: number) => void) | null | undefined,
-  delay = 500
+  delay = 500,
+  requireSelf = false
 ) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -35,6 +40,7 @@ export function useLongPress(
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
       if (!callback) return;
+      if (requireSelf && e.target !== e.currentTarget) return;
       const touch = e.touches[0];
       const x = touch.clientX;
       const y = touch.clientY;
@@ -45,7 +51,7 @@ export function useLongPress(
         callback(x, y);
       }, delay);
     },
-    [callback, delay]
+    [callback, delay, requireSelf]
   );
 
   const onTouchMove = useCallback(

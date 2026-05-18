@@ -20,6 +20,61 @@ import {
   writeClipboardText,
 } from "@utils/stepClipboard";
 
+/**
+ * Resolves a clipboard read and updates the Paste Step item at `itemIndex` in
+ * the context menu. Shared by `useStepContextMenu` and `usePasteToEndContextMenu`
+ * to avoid duplicating the async state-update logic.
+ */
+function resolveClipboardPasteAsync(
+  setContextMenu: React.Dispatch<React.SetStateAction<StepContextMenuState | null>>,
+  requestId: number,
+  requestIdRef: React.MutableRefObject<number>,
+  afterIndex: number,
+  itemIndex: number
+): void {
+  void readWorkflowStepFromClipboard()
+    .then((clipboardStep) => {
+      setContextMenu((current) => {
+        if (!current || requestIdRef.current !== requestId) return current;
+        return {
+          ...current,
+          items: current.items.map((item, index) =>
+            index === itemIndex && !("type" in item)
+              ? {
+                  ...item,
+                  disabled: false,
+                  disabledTitle: undefined,
+                  onClick: () =>
+                    sendMessage(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, {
+                      afterIndex,
+                      step: clipboardStep,
+                    }),
+                }
+              : item
+          ),
+        };
+      });
+    })
+    .catch((error: unknown) => {
+      const disabledTitle =
+        error instanceof Error
+          ? error.message
+          : "Clipboard does not contain a workflow step";
+
+      setContextMenu((current) => {
+        if (!current || requestIdRef.current !== requestId) return current;
+        return {
+          ...current,
+          items: current.items.map((item, index) =>
+            index === itemIndex && !("type" in item)
+              ? { ...item, disabled: true, disabledTitle, onClick: () => {} }
+              : item
+          ),
+        };
+      });
+    });
+}
+
 interface UseStepContextMenuOptions {
   isCLIManaged: boolean;
   canChangeStartPosition: boolean;
@@ -183,58 +238,13 @@ export function useStepContextMenu({
         return;
       }
 
-      void readWorkflowStepFromClipboard()
-        .then((clipboardStep) => {
-          setContextMenu((current) => {
-            if (!current || contextMenuRequestIdRef.current !== requestId) {
-              return current;
-            }
-
-            return {
-              ...current,
-              items: current.items.map((item, index) =>
-                index === 3 && !("type" in item)
-                  ? {
-                      ...item,
-                      disabled: false,
-                      disabledTitle: undefined,
-                      onClick: () =>
-                        sendMessage(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, {
-                          afterIndex: deleteIndex,
-                          step: clipboardStep,
-                        }),
-                    }
-                  : item
-              ),
-            };
-          });
-        })
-        .catch((error: unknown) => {
-          const disabledTitle =
-            error instanceof Error
-              ? error.message
-              : "Clipboard does not contain a workflow step";
-
-          setContextMenu((current) => {
-            if (!current || contextMenuRequestIdRef.current !== requestId) {
-              return current;
-            }
-
-            return {
-              ...current,
-              items: current.items.map((item, index) =>
-                index === 3 && !("type" in item)
-                  ? {
-                      ...item,
-                      disabled: true,
-                      disabledTitle,
-                      onClick: () => {},
-                    }
-                  : item
-              ),
-            };
-          });
-        });
+      resolveClipboardPasteAsync(
+        setContextMenu,
+        requestId,
+        contextMenuRequestIdRef,
+        deleteIndex,
+        3
+      );
     },
     [
       canChangeStartPosition,
@@ -287,4 +297,78 @@ export function useStepContextMenu({
     contextMenuPortal,
     setPositionModal,
   };
+}
+
+// ─── usePasteToEndContextMenu ─────────────────────────────────────────────────
+
+interface UsePasteToEndContextMenuOptions {
+  isCLIManaged: boolean;
+  canPasteStep: boolean;
+  executionState: ExecutionState;
+  /** Used to compute afterIndex = totalSteps - 1 (end of queue). */
+  totalSteps: number;
+}
+
+/**
+ * Minimal context menu with a single "Paste Step" item that always inserts at
+ * the end of the queue (afterIndex = totalSteps - 1). Designed for right-clicking
+ * or long-pressing blank background areas in the step list panels, enabling
+ * paste into empty workflows and paste-to-end in existing ones.
+ */
+export function usePasteToEndContextMenu({
+  isCLIManaged,
+  canPasteStep,
+  executionState,
+  totalSteps,
+}: UsePasteToEndContextMenuOptions) {
+  const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
+    null
+  );
+  const requestIdRef = useRef(0);
+
+  const openPasteToEndMenu = useCallback(
+    (x: number, y: number) => {
+      const requestId = ++requestIdRef.current;
+      const afterIndex = totalSteps - 1;
+
+      const pasteDisabledTitle = isCLIManaged
+        ? "Read-only — workflow is running via FlightPath CLI"
+        : !canPasteStep
+          ? executionState === EXECUTION_STATES.CANCELLING
+            ? "Cannot paste steps while workflow is cancelling"
+            : "Clipboard does not contain a workflow step"
+          : "Checking clipboard";
+
+      setContextMenu({
+        x,
+        y,
+        items: [
+          {
+            label: "Paste Step",
+            icon: "codicon-clippy",
+            disabled: true,
+            disabledTitle: pasteDisabledTitle,
+            onClick: () => {},
+          },
+        ],
+      });
+
+      if (isCLIManaged || !canPasteStep) return;
+
+      resolveClipboardPasteAsync(
+        setContextMenu,
+        requestId,
+        requestIdRef,
+        afterIndex,
+        0
+      );
+    },
+    [isCLIManaged, canPasteStep, executionState, totalSteps]
+  );
+
+  const pasteToEndMenuPortal = contextMenu ? (
+    <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+  ) : null;
+
+  return { openPasteToEndMenu, pasteToEndMenuPortal };
 }

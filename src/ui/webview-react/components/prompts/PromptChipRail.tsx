@@ -22,6 +22,7 @@ import {
   useFinalStepContextMenu,
   useLongPress,
   useLatestStepOutput,
+  usePasteToEndContextMenu,
 } from "@hooks/index";
 import { StatusIcon } from "./StatusIcon";
 import {
@@ -307,6 +308,16 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
       currentStep,
     });
 
+  const { openPasteToEndMenu, pasteToEndMenuPortal } =
+    usePasteToEndContextMenu({
+      isCLIManaged,
+      canPasteStep,
+      executionState,
+      totalSteps: prompts.length,
+    });
+
+  const bgLongPressHandlers = useLongPress(openPasteToEndMenu, 500, true);
+
   // Final step derived state
   const hasFinalStep = !!finalStep;
   const finalStepIsReadOnly =
@@ -422,6 +433,13 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
             deselect();
           }
         }}
+        onContextMenu={(e) => {
+          // Only open the paste menu when right-clicking blank background
+          // (chip items call e.stopPropagation() so they won't bubble here).
+          e.preventDefault();
+          openPasteToEndMenu(e.clientX, e.clientY);
+        }}
+        {...bgLongPressHandlers}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             deselect();
@@ -530,6 +548,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
 
       {contextMenuPortal}
       {setPositionModal}
+      {pasteToEndMenuPortal}
       {finalStepContextMenuPortal}
     </div>
   );

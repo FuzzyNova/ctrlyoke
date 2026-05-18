@@ -12,6 +12,8 @@ import {
   useStepContextMenu,
   useFinalStepContextMenu,
   useLatestStepOutput,
+  usePasteToEndContextMenu,
+  useLongPress,
 } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import {
@@ -200,6 +202,16 @@ export const WorkflowStepsPanel: React.FC<{
     totalSteps: steps.length,
     currentStep,
   });
+
+  const { openPasteToEndMenu, pasteToEndMenuPortal } =
+    usePasteToEndContextMenu({
+      isCLIManaged,
+      canPasteStep,
+      executionState,
+      totalSteps: steps.length,
+    });
+
+  const bgLongPressHandlers = useLongPress(openPasteToEndMenu, 500, true);
 
   // Compute the harness/model to display for a step.
   //
@@ -747,6 +759,13 @@ export const WorkflowStepsPanel: React.FC<{
             deselect();
           }
         }}
+        onContextMenu={(e) => {
+          // Only open the paste menu when right-clicking blank background
+          // (step items call e.stopPropagation() so they won't bubble here).
+          e.preventDefault();
+          openPasteToEndMenu(e.clientX, e.clientY);
+        }}
+        {...bgLongPressHandlers}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             deselect();
@@ -1001,6 +1020,7 @@ export const WorkflowStepsPanel: React.FC<{
       />
       {contextMenuPortal}
       {setPositionModal}
+      {pasteToEndMenuPortal}
       {finalStepContextMenuPortal}
     </div>
   );
