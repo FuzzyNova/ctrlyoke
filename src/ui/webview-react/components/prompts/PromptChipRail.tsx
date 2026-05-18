@@ -21,6 +21,7 @@ import {
   useStepContextMenu,
   useFinalStepContextMenu,
   useLongPress,
+  useLatestStepOutput,
 } from "@hooks/index";
 import { StatusIcon } from "./StatusIcon";
 import {
@@ -289,6 +290,8 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const canPasteStep = executionState !== EXECUTION_STATES.CANCELLING;
   const canReorder = canChangeStartPosition && prompts.length - currentStep > 1;
 
+  const getLatestOutput = useLatestStepOutput();
+
   const getPromptStatus = usePromptStatus();
   const getContextPct = useContextPct();
   const handleStepClick = useStepClickHandler();
@@ -452,6 +455,9 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       isCurrentStep: false,
                       isExecutionTargetLocked: false,
                       direction: "rewind",
+                      outputText: getLatestOutput(i)?.response as
+                        | string
+                        | undefined,
                     })
                   }
                 />
@@ -499,6 +505,9 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                           isCurrentStep,
                           isExecutionTargetLocked,
                           direction: "forward",
+                          outputText: getLatestOutput(index)?.response as
+                            | string
+                            | undefined,
                         })
                       }
                     />

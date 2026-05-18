@@ -85,8 +85,9 @@ export function useStepContextMenu({
     ) => {
       const requestId = ++contextMenuRequestIdRef.current;
 
-      const copyContentLabel =
-        isScriptWorkflowStep(step) ? "Copy Script" : "Copy Prompt";
+      const copyContentLabel = isScriptWorkflowStep(step)
+        ? "Copy Script"
+        : "Copy Prompt";
       const stepToggleLabel = step.enabled === false ? "Enable" : "Disable";
       const pasteDisabledTitle = isCLIManaged
         ? "Read-only — workflow is running via FlightPath CLI"
@@ -128,10 +129,23 @@ export function useStepContextMenu({
           },
           {
             label: "Paste Step",
-            icon: "codicon-clipboard",
+            icon: "codicon-clippy",
             disabled: true,
             disabledTitle: pasteDisabledTitle,
             onClick: () => {},
+          },
+          { type: "divider" },
+          {
+            label: "Set Start Position",
+            icon:
+              direction === "rewind"
+                ? "codicon-debug-reverse-continue"
+                : "codicon-debug-step-over",
+            disabled: !canChangeStartPosition || isCurrentStep,
+            disabledTitle: isCurrentStep
+              ? "Already the current start position"
+              : "Cannot change start position while workflow is running",
+            onClick: () => handleSetStartPosition(setPositionTarget),
           },
           { type: "divider" },
           {
@@ -152,19 +166,6 @@ export function useStepContextMenu({
               });
             },
           },
-          {
-            label: "Set Start Position",
-            icon:
-              direction === "rewind"
-                ? "codicon-debug-reverse-continue"
-                : "codicon-debug-step-over",
-            disabled: !canChangeStartPosition || isCurrentStep,
-            disabledTitle: isCurrentStep
-              ? "Already the current start position"
-              : "Cannot change start position while workflow is running",
-            onClick: () => handleSetStartPosition(setPositionTarget),
-          },
-          { type: "divider" },
           {
             label: "Delete",
             icon: "codicon-trash",

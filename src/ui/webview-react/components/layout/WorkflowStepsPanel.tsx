@@ -11,6 +11,7 @@ import {
   useStepClickHandler,
   useStepContextMenu,
   useFinalStepContextMenu,
+  useLatestStepOutput,
 } from "@hooks/index";
 import { HARNESS_INFO } from "../../types/messages";
 import {
@@ -152,7 +153,6 @@ export const WorkflowStepsPanel: React.FC<{
     executionState,
     retryStates,
     liveOrderedEntries,
-    historyOutputs,
     finalStep,
     finalStepStatus,
     finalStepLoopCount,
@@ -162,7 +162,6 @@ export const WorkflowStepsPanel: React.FC<{
   const {
     stepsCollapsed,
     togglePromptsCollapse,
-    isViewingHistory,
     loadedWorkflows,
     activeWorkflowId,
     finalStepFooterExpanded,
@@ -172,6 +171,7 @@ export const WorkflowStepsPanel: React.FC<{
 
   const getPromptStatus = usePromptStatus();
   const stepClickHandler = useStepClickHandler();
+  const getLatestOutput = useLatestStepOutput();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
@@ -588,28 +588,6 @@ export const WorkflowStepsPanel: React.FC<{
   const finalStepOverrides = finalStep
     ? getStepOverrides(finalStep)
     : undefined;
-
-  // Get latest output for a step (history-aware)
-  const getLatestOutput = (index: number) => {
-    const cliEntries =
-      isViewingHistory && historyOutputs
-        ? historyOutputs.orderedEntries.filter(
-            (e) =>
-              e.kind === OUTPUT_HISTORY_KINDS.CLI &&
-              "target" in e &&
-              e.target.kind === FINAL_STEP_PHASES.QUEUE &&
-              (e.target as any).stepIndex === index
-          )
-        : liveOrderedEntries.filter(
-            (e) =>
-              e.kind === OUTPUT_HISTORY_KINDS.CLI &&
-              "target" in e &&
-              (e as any).target.kind === FINAL_STEP_PHASES.QUEUE &&
-              (e as any).target.stepIndex === index
-          );
-    if (cliEntries.length === 0) return null;
-    return (cliEntries[cliEntries.length - 1] as any).cliOutput as any;
-  };
 
   // Build details object for a step
   const getStepDetails = (
