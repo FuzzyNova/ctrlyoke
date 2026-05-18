@@ -61,16 +61,18 @@ describe("EditorSection", () => {
   it("defaults new steps to enabled and lets the user disable them", () => {
     render(<EditorSection />);
 
-    const enableButton = screen.getByRole("button", { name: "Enable step" });
-    const disableButton = screen.getByRole("button", { name: "Disable step" });
+    // When enabled, button offers to disable; aria-pressed=false (not disabled)
+    const toggleButton = screen.getByRole("button", { name: "Disable step" });
+    expect(toggleButton).toHaveAttribute("aria-pressed", "false");
+    expect(toggleButton).toHaveClass("text-description-fg");
 
-    expect(enableButton).toHaveClass("fp-mode-switch-btn-active");
-    expect(disableButton).toHaveClass("fp-mode-switch-btn-inactive");
-
-    fireEvent.click(disableButton);
+    fireEvent.click(toggleButton);
 
     expect(useEditorStore.getState().stepEnabled).toBe(false);
-    expect(disableButton).toHaveClass("fp-mode-switch-btn-active");
+    // After disabling, button offers to enable; aria-pressed=true (disabled is active)
+    const enableButton = screen.getByRole("button", { name: "Enable step" });
+    expect(enableButton).toHaveAttribute("aria-pressed", "true");
+    expect(enableButton).toHaveClass("text-warning-fg");
   });
 
   it("loads the disabled state when editing an existing disabled step", () => {
@@ -84,9 +86,10 @@ describe("EditorSection", () => {
 
     render(<EditorSection />);
 
-    expect(
-      screen.getByRole("button", { name: "Disable step" })
-    ).toHaveClass("fp-mode-switch-btn-active");
+    // When disabled, button offers to enable; aria-pressed=true (disabled is active)
+    const toggleButton = screen.getByRole("button", { name: "Enable step" });
+    expect(toggleButton).toHaveAttribute("aria-pressed", "true");
+    expect(toggleButton).toHaveClass("text-warning-fg");
     expect(screen.getByText("Editing: Prompt 1 of 1")).toBeInTheDocument();
   });
 });

@@ -198,96 +198,84 @@ export const EditorSection: React.FC = () => {
           </button>
         </div>
 
-        <div
-          className="fp-mode-switch mr-2"
-          role="group"
-          aria-label="Step enabled state"
-        >
-          <button
-            type="button"
-            disabled={isCLIManaged}
-            className={`fp-mode-switch-btn ${stepEnabled ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-            onClick={() => setStepEnabled(true)}
-            title="Enabled steps can run as part of the workflow"
-            aria-label="Enable step"
-          >
-            <i
-              className={`codicon codicon-check codicon-sm ${isNarrow ? "px-1" : ""}`}
-            />
-            {!isNarrow && <span>Enabled</span>}
-          </button>
-          <div className="fp-mode-switch-divider">
-            <div className="w-px h-full bg-current opacity-40" />
-          </div>
-          <button
-            type="button"
-            disabled={isCLIManaged}
-            className={`fp-mode-switch-btn ${!stepEnabled ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-            onClick={() => setStepEnabled(false)}
-            title="Disabled steps stay in the workflow but do not execute"
-            aria-label="Disable step"
-          >
-            <i
-              className={`codicon codicon-circle-slash codicon-sm ${isNarrow ? "px-1" : ""}`}
-            />
-            {!isNarrow && <span>Disabled</span>}
-          </button>
-        </div>
-
-        {/* Center: Mode text (clickable to edit name) + token count */}
-        <span className="editor-mode-indicator flex-1 text-center text-xs text-description-fg truncate min-w-0">
-          {isCLIManaged ? (
-            "Read-only — CLI run in progress"
-          ) : isEditingName ? (
-            <input
-              ref={nameInputRef}
-              type="text"
-              value={nameEditValue}
-              onChange={(e) => setNameEditValue(e.target.value)}
-              onKeyDown={handleNameKeyDown}
-              onBlur={saveNameEdit}
-              placeholder="Step name (optional)"
-              aria-label="Step name"
-              className="px-1.5 py-0.5 text-xs bg-input-bg text-input-fg border border-focus-border rounded outline-none w-48"
-              style={{ boxShadow: "0 0 0 1px var(--vscode-focusBorder)" }}
-            />
-          ) : (
-            <span
-              className="cursor-pointer hover:text-foreground transition-colors"
-              role="button"
-              tabIndex={0}
-              onClick={startNameEditing}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  startNameEditing();
-                }
-              }}
-              title="Click to set prompt name"
+        {/* Center: Enable toggle + Mode text (clickable to edit name) + token count */}
+        <div className="flex items-center justify-center flex-1 gap-1 min-w-0">
+          {!isCLIManaged && (
+            <button
+              type="button"
+              onClick={() => setStepEnabled(!stepEnabled)}
+              title={
+                stepEnabled
+                  ? "Step is enabled — click to disable"
+                  : "Step is disabled — click to enable"
+              }
+              aria-label={stepEnabled ? "Disable step" : "Enable step"}
+              aria-pressed={!stepEnabled}
+              className={`control-button flex items-center flex-shrink-0 px-0.5 bg-transparent border-none leading-none transition-colors ${
+                !stepEnabled
+                  ? "text-warning-fg hover:text-warning-fg cursor-pointer"
+                  : "text-description-fg hover:text-foreground cursor-pointer"
+              }`}
             >
-              {getModeText()}
-            </span>
+              <i
+                className={`codicon text-sm ${stepEnabled ? "codicon-check" : "codicon-circle-slash"}`}
+              />
+            </button>
           )}
-          {!isEditingName && !isScriptMode && (
-            <>
-              {" — "}
+          <span className="editor-mode-indicator text-center text-xs text-description-fg truncate min-w-0">
+            {isCLIManaged ? (
+              "Read-only — CLI run in progress"
+            ) : isEditingName ? (
+              <input
+                ref={nameInputRef}
+                type="text"
+                value={nameEditValue}
+                onChange={(e) => setNameEditValue(e.target.value)}
+                onKeyDown={handleNameKeyDown}
+                onBlur={saveNameEdit}
+                placeholder="Step name (optional)"
+                aria-label="Step name"
+                className="px-1.5 py-0.5 text-xs bg-input-bg text-input-fg border border-focus-border rounded outline-none w-48"
+                style={{ boxShadow: "0 0 0 1px var(--vscode-focusBorder)" }}
+              />
+            ) : (
               <span
-                className={`font-bold tabular-nums ${
-                  tokenCount >= 100_000
-                    ? "text-error-fg"
-                    : tokenCount >= 50_000
-                      ? "text-warning-fg"
-                      : ""
-                }`}
+                className="cursor-pointer hover:text-foreground transition-colors"
+                role="button"
+                tabIndex={0}
+                onClick={startNameEditing}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    startNameEditing();
+                  }
+                }}
+                title="Click to set prompt name"
               >
-                {tokenCount >= 1_000
-                  ? `${(tokenCount / 1_000).toFixed(1)}K`
-                  : tokenCount.toString()}{" "}
-                tokens
+                {getModeText()}
               </span>
-            </>
-          )}
-        </span>
+            )}
+            {!isEditingName && !isScriptMode && (
+              <>
+                {" — "}
+                <span
+                  className={`font-bold tabular-nums ${
+                    tokenCount >= 100_000
+                      ? "text-error-fg"
+                      : tokenCount >= 50_000
+                        ? "text-warning-fg"
+                        : ""
+                  }`}
+                >
+                  {tokenCount >= 1_000
+                    ? `${(tokenCount / 1_000).toFixed(1)}K`
+                    : tokenCount.toString()}{" "}
+                  tokens
+                </span>
+              </>
+            )}
+          </span>
+        </div>
 
         {/* Right: Git ignore toggle */}
         {!isCLIManaged && (

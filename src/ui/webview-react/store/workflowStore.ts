@@ -1152,7 +1152,8 @@ export const useWorkflowStore = create<
             sa.name !== sb.name ||
             sa.model !== sb.model ||
             sa.harness !== sb.harness ||
-            sa.type !== sb.type
+            sa.type !== sb.type ||
+            sa.enabled !== sb.enabled
           ) {
             return false;
           }

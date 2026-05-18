@@ -155,6 +155,7 @@ interface PromptChangeFields {
   toolPermissions?: unknown;
   additionalArgs?: string | null;
   priorContext?: unknown;
+  enabled?: boolean;
 }
 
 function describePromptChange(
@@ -185,6 +186,8 @@ function describePromptChange(
     return `Changed additional args on ${scope} to ${strVal(n.additionalArgs)}`;
   if (JSON.stringify(p.priorContext) !== JSON.stringify(n.priorContext))
     return `Changed prior context on ${scope}`;
+  if (p.enabled !== n.enabled)
+    return n.enabled === false ? `Disabled ${scope}` : `Enabled ${scope}`;
   return null;
 }
 

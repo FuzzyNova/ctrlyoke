@@ -565,7 +565,8 @@ function createMessageHandlers(): MessageHandlerMap {
           p.prompt !== cur?.prompt ||
           p.name !== cur?.name ||
           p.model !== cur?.model ||
-          p.harness !== cur?.harness
+          p.harness !== cur?.harness ||
+          p.enabled !== cur?.enabled
         );
       });
     // Also suppress undo recording for the initial auto-load (0 → N steps).
