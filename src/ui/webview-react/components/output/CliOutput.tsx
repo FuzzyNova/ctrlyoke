@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState, memo } from "react";
 import {
   buildDiffAnchorPrefix,
+  extractCliOutputText,
   formatExecutionBadge,
   formatTime,
   getFirstWords,
@@ -838,19 +839,7 @@ export const CliOutput = memo<CliOutputProps>(
       }
     }, [sessionId]);
 
-    const outputText = useMemo((): string | undefined => {
-      if (typeof output.response === "string" && output.response.trim()) {
-        return output.response;
-      }
-      if (output.structured?.events?.length) {
-        const parts = output.structured.events
-          .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
-          .map((e) => (e.data as TextData).text)
-          .filter(Boolean);
-        if (parts.length > 0) return parts.join("");
-      }
-      return undefined;
-    }, [output.response, output.structured?.events]);
+    const outputText = useMemo(() => extractCliOutputText(output), [output]);
 
     const handleCopyOutput = useCallback(async () => {
       if (!outputText) return;

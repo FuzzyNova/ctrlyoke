@@ -8,6 +8,8 @@
  * consumers don't need to update their import paths.
  */
 import { truncate } from "./string";
+import type { CliOutput as CliOutputType, TextData } from "../types/cliEvents";
+import { CLI_EVENT_TYPES } from "../types/cliEvents";
 export { escapeHtml, truncate } from "./string";
 export { formatTime, getTimestamp } from "./time";
 export {
@@ -91,6 +93,27 @@ export function buildDiffAnchorPrefix(
   attemptIndex: number
 ): string {
   return `fp-diff-${kindSlug}-${stepIndex}-r${runIndex}-a${attemptIndex}`;
+}
+
+/**
+ * Extracts the plain-text response from a CLI output — checks `response`
+ * first, then falls back to concatenating TEXT events from structured output.
+ * Returns undefined when there is no text content.
+ */
+export function extractCliOutputText(
+  output: CliOutputType
+): string | undefined {
+  if (typeof output.response === "string" && output.response.trim()) {
+    return output.response;
+  }
+  if (output.structured?.events?.length) {
+    const parts = output.structured.events
+      .filter((e) => e.type === CLI_EVENT_TYPES.TEXT)
+      .map((e) => (e.data as TextData).text)
+      .filter(Boolean);
+    if (parts.length > 0) return parts.join("");
+  }
+  return undefined;
 }
 
 /**

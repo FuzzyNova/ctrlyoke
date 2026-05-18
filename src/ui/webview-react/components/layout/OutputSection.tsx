@@ -81,6 +81,7 @@ import {
 import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { buildDiffAnchorPrefix } from "@utils/outputUtils";
+import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 
@@ -660,6 +661,12 @@ export const OutputSection: React.FC = () => {
     });
     return map;
   }, [allMessages]);
+
+  const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
+    allMessages,
+    stepScrollFractions,
+    lastCliIndexPerStep,
+  });
 
   // Check if there's any output
   const hasOutput = allMessages.length > 0;
@@ -1517,6 +1524,10 @@ export const OutputSection: React.FC = () => {
             id="output-content"
             className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
             onScroll={handleScroll}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              openContextMenu(e.clientX, e.clientY, e.currentTarget);
+            }}
           >
             {/* History banner: shown when viewing a historical run */}
             {isViewingHistory && historyOutputs && (
@@ -1694,6 +1705,9 @@ export const OutputSection: React.FC = () => {
           onClose={() => setWorkflowDialogState(null)}
         />
       )}
+
+      {/* Output tab right-click context menu */}
+      {outputContextMenuPortal}
 
       {/* Standalone export modal — browser clients that can't use VS Code save dialog */}
       {exportModalContent !== null && (
