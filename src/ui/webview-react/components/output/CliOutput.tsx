@@ -107,7 +107,7 @@ const ThinkingOutput: React.FC<ThinkingOutputProps> = ({
   const displayLabel = label && label !== "Thinking" ? label : "Thinking";
   return (
     <div className={`my-2 ${className}`}>
-      <div className="text-xs text-description-fg mb-1">● {displayLabel}</div>
+      <div className="text-[length:var(--fp-output-font-size-xs)] text-description-fg mb-1">● {displayLabel}</div>
       <div className="text-description-fg pl-3 border-l border-panel-border">
         <MarkdownText>{text}</MarkdownText>
       </div>

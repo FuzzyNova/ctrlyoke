@@ -353,7 +353,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       // ── Tables ─────────────────────────────────────────────────────────
       table: ({ children: c }: React.HTMLAttributes<HTMLTableElement>) => (
         <div className="overflow-x-auto my-2">
-          <table className="border-collapse text-sm w-full">{c}</table>
+          <table className="border-collapse w-full">{c}</table>
         </div>
       ),
 
