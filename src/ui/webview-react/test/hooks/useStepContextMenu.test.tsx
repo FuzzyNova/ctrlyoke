@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useStepContextMenu } from "@hooks/useStepContextMenu";
 import { EXECUTION_STATES, STEP_TYPES } from "@/types/messages";
@@ -55,15 +55,11 @@ describe("useStepContextMenu", () => {
     cleanup();
   });
 
-  it("renders the queue-step menu in the required order with dividers", async () => {
-    readText.mockResolvedValue(JSON.stringify({ prompt: "Pasted step" }));
-
+  it("renders the queue-step menu in the required order with dividers", () => {
     render(<TestHarness step={{ prompt: "Original prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Paste Step" })).not.toBeDisabled()
-    );
+    expect(screen.getByRole("button", { name: "Paste Step" })).not.toBeDisabled();
 
     const labels = screen
       .getAllByRole("button")
@@ -82,11 +78,7 @@ describe("useStepContextMenu", () => {
     expect(screen.getAllByRole("separator")).toHaveLength(2);
   });
 
-  it("switches the content/toggle labels for disabled script steps", async () => {
-    readText.mockResolvedValue(
-      JSON.stringify({ type: STEP_TYPES.SCRIPT, script: "echo pasted" })
-    );
-
+  it("switches the content/toggle labels for disabled script steps", () => {
     render(
       <TestHarness
         step={{
@@ -98,9 +90,7 @@ describe("useStepContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Paste Step" })).not.toBeDisabled()
-    );
+    expect(screen.getByRole("button", { name: "Paste Step" })).not.toBeDisabled();
 
     expect(screen.getByRole("button", { name: "Copy Script" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable" })).toBeInTheDocument();

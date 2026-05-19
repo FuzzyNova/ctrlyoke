@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import {
   StepContextMenu,
   type StepContextMenuState,
@@ -19,61 +19,7 @@ import {
   serializeWorkflowStepText,
   writeClipboardText,
 } from "@utils/stepClipboard";
-
-/**
- * Resolves a clipboard read and updates the Paste Step item at `itemIndex` in
- * the context menu. Shared by `useStepContextMenu` and `usePasteToEndContextMenu`
- * to avoid duplicating the async state-update logic.
- */
-function resolveClipboardPasteAsync(
-  setContextMenu: React.Dispatch<React.SetStateAction<StepContextMenuState | null>>,
-  requestId: number,
-  requestIdRef: React.MutableRefObject<number>,
-  afterIndex: number,
-  itemIndex: number
-): void {
-  void readWorkflowStepFromClipboard()
-    .then((clipboardStep) => {
-      setContextMenu((current) => {
-        if (!current || requestIdRef.current !== requestId) return current;
-        return {
-          ...current,
-          items: current.items.map((item, index) =>
-            index === itemIndex && !("type" in item)
-              ? {
-                  ...item,
-                  disabled: false,
-                  disabledTitle: undefined,
-                  onClick: () =>
-                    sendMessage(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, {
-                      afterIndex,
-                      step: clipboardStep,
-                    }),
-                }
-              : item
-          ),
-        };
-      });
-    })
-    .catch((error: unknown) => {
-      const disabledTitle =
-        error instanceof Error
-          ? error.message
-          : "Clipboard does not contain a workflow step";
-
-      setContextMenu((current) => {
-        if (!current || requestIdRef.current !== requestId) return current;
-        return {
-          ...current,
-          items: current.items.map((item, index) =>
-            index === itemIndex && !("type" in item)
-              ? { ...item, disabled: true, disabledTitle, onClick: () => {} }
-              : item
-          ),
-        };
-      });
-    });
-}
+import { useUiStore } from "@store/uiStore";
 
 interface UseStepContextMenuOptions {
   isCLIManaged: boolean;
@@ -111,7 +57,6 @@ export function useStepContextMenu({
     null
   );
   const [setPositionIndex, setSetPositionIndex] = useState<number | null>(null);
-  const contextMenuRequestIdRef = useRef(0);
 
   const handleSetStartPosition = useCallback(
     (target: number) => {
@@ -138,19 +83,15 @@ export function useStepContextMenu({
         outputText,
       }: OpenContextMenuParams
     ) => {
-      const requestId = ++contextMenuRequestIdRef.current;
-
       const copyContentLabel = isScriptWorkflowStep(step)
         ? "Copy Script"
         : "Copy Prompt";
       const stepToggleLabel = step.enabled === false ? "Enable" : "Disable";
       const pasteDisabledTitle = isCLIManaged
         ? "Read-only — workflow is running via FlightPath CLI"
-        : !canPasteStep
-          ? executionState === EXECUTION_STATES.CANCELLING
-            ? "Cannot paste steps while workflow is cancelling"
-            : "Clipboard does not contain a workflow step"
-          : "Checking clipboard";
+        : executionState === EXECUTION_STATES.CANCELLING
+          ? "Cannot paste steps while workflow is cancelling"
+          : undefined;
 
       setContextMenu({
         x,
@@ -185,9 +126,25 @@ export function useStepContextMenu({
           {
             label: "Paste Step",
             icon: "codicon-clippy",
-            disabled: true,
+            disabled: isCLIManaged || !canPasteStep,
             disabledTitle: pasteDisabledTitle,
-            onClick: () => {},
+            onClick: () => {
+              void readWorkflowStepFromClipboard()
+                .then((clipboardStep) => {
+                  sendMessage(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, {
+                    afterIndex: deleteIndex,
+                    step: clipboardStep,
+                  });
+                })
+                .catch(() => {
+                  useUiStore
+                    .getState()
+                    .showToast(
+                      "Clipboard does not contain a workflow step",
+                      "warning"
+                    );
+                });
+            },
           },
           { type: "divider" },
           {
@@ -233,18 +190,6 @@ export function useStepContextMenu({
           },
         ],
       });
-
-      if (isCLIManaged || !canPasteStep) {
-        return;
-      }
-
-      resolveClipboardPasteAsync(
-        setContextMenu,
-        requestId,
-        contextMenuRequestIdRef,
-        deleteIndex,
-        3
-      );
     },
     [
       canChangeStartPosition,
@@ -324,20 +269,16 @@ export function usePasteToEndContextMenu({
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
   );
-  const requestIdRef = useRef(0);
 
   const openPasteToEndMenu = useCallback(
     (x: number, y: number) => {
-      const requestId = ++requestIdRef.current;
       const afterIndex = totalSteps - 1;
 
       const pasteDisabledTitle = isCLIManaged
         ? "Read-only — workflow is running via FlightPath CLI"
-        : !canPasteStep
-          ? executionState === EXECUTION_STATES.CANCELLING
-            ? "Cannot paste steps while workflow is cancelling"
-            : "Clipboard does not contain a workflow step"
-          : "Checking clipboard";
+        : executionState === EXECUTION_STATES.CANCELLING
+          ? "Cannot paste steps while workflow is cancelling"
+          : undefined;
 
       setContextMenu({
         x,
@@ -346,22 +287,28 @@ export function usePasteToEndContextMenu({
           {
             label: "Paste Step",
             icon: "codicon-clippy",
-            disabled: true,
+            disabled: isCLIManaged || !canPasteStep,
             disabledTitle: pasteDisabledTitle,
-            onClick: () => {},
+            onClick: () => {
+              void readWorkflowStepFromClipboard()
+                .then((clipboardStep) => {
+                  sendMessage(MESSAGE_TYPES.INSERT_WORKFLOW_STEP, {
+                    afterIndex,
+                    step: clipboardStep,
+                  });
+                })
+                .catch(() => {
+                  useUiStore
+                    .getState()
+                    .showToast(
+                      "Clipboard does not contain a workflow step",
+                      "warning"
+                    );
+                });
+            },
           },
         ],
       });
-
-      if (isCLIManaged || !canPasteStep) return;
-
-      resolveClipboardPasteAsync(
-        setContextMenu,
-        requestId,
-        requestIdRef,
-        afterIndex,
-        0
-      );
     },
     [isCLIManaged, canPasteStep, executionState, totalSteps]
   );
