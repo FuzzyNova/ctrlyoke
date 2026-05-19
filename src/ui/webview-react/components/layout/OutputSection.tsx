@@ -82,6 +82,7 @@ import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { buildDiffAnchorPrefix } from "@utils/outputUtils";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
+import { useLongPress } from "@hooks/useLongPress";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 
@@ -667,6 +668,14 @@ export const OutputSection: React.FC = () => {
     stepScrollFractions,
     lastCliIndexPerStep,
   });
+
+  const handleOutputLongPress = useCallback(
+    (x: number, y: number) => {
+      if (outputRef.current) openContextMenu(x, y, outputRef.current);
+    },
+    [openContextMenu]
+  );
+  const outputLongPressHandlers = useLongPress(handleOutputLongPress);
 
   // Check if there's any output
   const hasOutput = allMessages.length > 0;
@@ -1528,6 +1537,7 @@ export const OutputSection: React.FC = () => {
               e.preventDefault();
               openContextMenu(e.clientX, e.clientY, e.currentTarget);
             }}
+            {...outputLongPressHandlers}
           >
             {/* History banner: shown when viewing a historical run */}
             {isViewingHistory && historyOutputs && (

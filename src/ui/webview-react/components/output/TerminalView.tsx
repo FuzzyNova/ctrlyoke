@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Panel,
   Group,
@@ -7,6 +7,8 @@ import {
 } from "react-resizable-panels";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { useMobileTerminalBar } from "@hooks/useMobileTerminalBar";
+import { useLongPress } from "@hooks/useLongPress";
+import { useTerminalContextMenu } from "@hooks/useTerminalContextMenu";
 import { useTerminalStore } from "@store/terminalStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
@@ -162,7 +164,41 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
   const aiCliSessions = sessions.filter((s) => s.kind === SESSION_KINDS.AI_CLI);
   const shellSessions = sessions.filter((s) => s.kind === SESSION_KINDS.SHELL);
   const hasBothKinds = aiCliSessions.length > 0 && shellSessions.length > 0;
-  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
+
+  const handleCloseSession = useCallback(
+    (session: TerminalSession) => {
+      if (session.kind === SESSION_KINDS.SHELL) {
+        sendMessage(MESSAGE_TYPES.TERMINAL_CLOSE_SHELL, {
+          workflowId,
+          sessionId: session.id,
+        });
+      } else {
+        sendMessage(MESSAGE_TYPES.TERMINAL_CLOSE_AI_CLI, {
+          workflowId,
+          sessionId: session.id,
+        });
+      }
+      terminalRegistry.clearSession(workflowId, session.id);
+      removeSession(workflowId, session.id);
+      const remaining =
+        useTerminalStore.getState().sessions[workflowId] ?? [];
+      if (remaining.length === 0) {
+        setActiveOutputTab(workflowId, "output");
+      }
+    },
+    [workflowId, removeSession, setActiveOutputTab]
+  );
+
+  const { openContextMenu, terminalContextMenuPortal } =
+    useTerminalContextMenu({
+      workflowId,
+      activeSession,
+      isExecutionActive: isWorkflowExecuting,
+      onClose: handleCloseSession,
+    });
+
+  const terminalLongPressHandlers = useLongPress(openContextMenu);
   const { shouldShow: shouldShowMobileTerminalBar } = useMobileTerminalBar();
   const showControlBar =
     shouldShowMobileTerminalBar &&
@@ -216,7 +252,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
         {/* Terminal canvas */}
         <Panel id="terminal-canvas">
           <div className="h-full flex flex-col bg-terminal-bg">
-            <div className="flex-1 min-h-0 relative">
+            <div
+              className="flex-1 min-h-0 relative"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                openContextMenu(e.clientX, e.clientY);
+              }}
+              {...terminalLongPressHandlers}
+            >
               {sessions.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-description-fg text-xs select-none">
                   Starting shell…
@@ -329,6 +372,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
           </>
         )}
       </Group>
+      {terminalContextMenuPortal}
     </div>
   );
 };

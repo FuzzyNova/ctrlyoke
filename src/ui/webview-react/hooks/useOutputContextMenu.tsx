@@ -68,6 +68,9 @@ export function useOutputContextMenu({
 
   const openContextMenu = useCallback(
     (x: number, y: number, scrollContainer: HTMLDivElement) => {
+      // Capture selection before the menu click clears it
+      const selectedText = window.getSelection()?.toString() ?? "";
+
       const containerRect = scrollContainer.getBoundingClientRect();
       const clickPixelPos =
         y - containerRect.top + scrollContainer.scrollTop;
@@ -103,15 +106,11 @@ export function useOutputContextMenu({
         y,
         items: [
           {
-            label: "Copy Step Output",
+            label: "Copy",
             icon: "codicon-copy",
-            disabled: !hoveredOutputText,
-            disabledTitle: hoveredStepKey
-              ? "No output to copy for this step"
-              : "No step under cursor",
+            disabled: false,
             onClick: () => {
-              if (!hoveredOutputText) return;
-              void writeClipboardText(hoveredOutputText);
+              if (selectedText) void writeClipboardText(selectedText);
             },
           },
           { type: "divider" },
@@ -122,6 +121,18 @@ export function useOutputContextMenu({
             disabledTitle: "No output to copy",
             onClick: () => {
               void writeClipboardText(copyAllText);
+            },
+          },
+          {
+            label: "Copy Step Output",
+            icon: "codicon-copy",
+            disabled: !hoveredOutputText,
+            disabledTitle: hoveredStepKey
+              ? "No output to copy for this step"
+              : "No step under cursor",
+            onClick: () => {
+              if (!hoveredOutputText) return;
+              void writeClipboardText(hoveredOutputText);
             },
           },
         ],
