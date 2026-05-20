@@ -246,7 +246,7 @@ async function showSystemNotification(
     },
   };
 
-  if ("serviceWorker" in navigator && window.isSecureContext) {
+  if (isStandalone && "serviceWorker" in navigator && window.isSecureContext) {
     try {
       const registration = await ensureServiceWorkerRegistration();
       await registration.showNotification(event.title, notificationOptions);
