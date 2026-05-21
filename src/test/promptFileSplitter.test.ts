@@ -427,4 +427,91 @@ suite("PromptFileSplitter Tests", () => {
       assert.strictEqual(result.needsSplit, false);
     });
   });
+
+  suite("small leading paragraph followed by oversized paragraph", () => {
+    test("should bundle tiny preamble with oversized content instead of isolating it", () => {
+      // Regression test: a small first paragraph (<minChunkSize) followed by an
+      // oversized second paragraph previously caused the small paragraph to be
+      // flushed as its own standalone chunk due to `|| chunks.length === 0`.
+      const splitter = new PromptFileSplitter({
+        maxTokensPerFile: 2000,
+        minChunkSize: 500,
+      });
+
+      // Para A: tiny preamble well under minChunkSize
+      const preamble = "git diff summary\n2 files changed, 38 insertions, 0 deletions";
+
+      // Para B: a very long paragraph far exceeding maxTokensPerFile.
+      // Use "word " repeats (each ~1 token) rather than repeated single chars
+      // — gpt-tokenizer compresses long same-char runs into very few tokens,
+      // making it unreliable for these threshold tests.
+      const oversizedLine = "diff --git a/styles.css b/styles.css\n" + "word ".repeat(3000);
+
+      const content = preamble + "\n\n" + oversizedLine;
+      const result = splitter.split(content);
+
+      assert.strictEqual(result.needsSplit, true, "Should need splitting");
+
+      // The preamble must appear in the SAME chunk as the start of the large content.
+      assert.ok(
+        result.chunks[0].includes("git diff summary"),
+        "First chunk should include the small preamble"
+      );
+      assert.ok(
+        result.chunks[0].includes("diff --git"),
+        "First chunk should also include the oversized content, not just the preamble"
+      );
+
+      // No chunk should be an isolated preamble-only fragment.
+      const isolatedPreamble = result.chunks.find(
+        (c) => c.includes("git diff summary") && !c.includes("diff --git")
+      );
+      assert.strictEqual(
+        isolatedPreamble,
+        undefined,
+        "Should not produce a standalone chunk containing only the small preamble"
+      );
+    });
+
+    test("should bundle tiny preamble inside an oversized attachment block with large content", () => {
+      // End-to-end variant: the oversized content is wrapped in <attachment> tags,
+      // matching the real scenario where a git diff excerpt has a small header
+      // followed by a huge CSS diff with base64 SVG data.
+      const splitter = new PromptFileSplitter({
+        maxTokensPerFile: 2000,
+        minChunkSize: 500,
+      });
+
+      const attachment =
+        `<attachment id="git:diff">\n` +
+        `Working tree changes\n\n` +
+        `2 files changed\n\n` +
+        `diff --git a/icons.css b/icons.css\n` +
+        "base64_svg_data: " + "word ".repeat(3000) + "\n" +
+        `</attachment>`;
+
+      const result = splitter.split(attachment);
+
+      assert.strictEqual(result.needsSplit, true);
+
+      // The small header must land in the same chunk as the large diff content.
+      assert.ok(
+        result.chunks[0].includes("Working tree changes"),
+        "First chunk should contain the attachment preamble"
+      );
+      assert.ok(
+        result.chunks[0].includes("diff --git"),
+        "First chunk should also contain the start of the large diff, not just the preamble"
+      );
+
+      const isolatedHeader = result.chunks.find(
+        (c) => c.includes("Working tree changes") && !c.includes("diff --git")
+      );
+      assert.strictEqual(
+        isolatedHeader,
+        undefined,
+        "Should not produce an isolated chunk with only the small attachment preamble"
+      );
+    });
+  });
 });
