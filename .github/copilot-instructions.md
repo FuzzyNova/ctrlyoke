@@ -17,34 +17,6 @@ Automate AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwe
 - **@modelcontextprotocol/sdk** — MCP server for external queue management
 </technicalStack>
 
-<instructionFiles>
-Detailed implementation guidelines live in `.github/instructions/`. Read the relevant file before modifying code in that area.
-
-| File Pattern                            | Instruction File                           |
-| --------------------------------------- | ------------------------------------------ |
-| `src/extension.ts`, `src/mcp-server.ts` | `extension.instructions.md`                |
-| `src/flightpath/*.ts` (top-level only)  | `flightpath-core.instructions.md`          |
-| `src/flightpath/harness/**`             | `harness-integrations.instructions.md`     |
-| `src/flightpath/harness/chat/**`        | `flightpath-chat.instructions.md`          |
-| `src/flightpath/orchestration/**`       | `flightpath-orchestration.instructions.md` |
-| `src/cli.ts`, `src/cli/**`              | `flightpath-cli-binary.instructions.md`    |
-| `src/config/**`                         | `config.instructions.md`                   |
-| `src/git/**`                            | `git.instructions.md`                      |
-| `src/platform/**`                       | `platform.instructions.md`                 |
-| `src/scm/**`                            | `scm.instructions.md`                      |
-| `src/server/**`                         | `server.instructions.md`                   |
-| `src/ui/**` (excl. webview-react)       | `ui.instructions.md`                       |
-| `src/ui/webview-react/**`               | `webview-react.instructions.md`            |
-| `src/types/**`                          | `types.instructions.md`                    |
-| `src/utils/**`                          | `utils.instructions.md`                    |
-| `src/completions/**`                    | `completions.instructions.md`              |
-| `src/templates/**`                      | `templates.instructions.md`                |
-| `src/scripts/**`                        | `scripts.instructions.md`                  |
-| `src/test/**`                           | `test.instructions.md`                     |
-| `src/dev/**`                            | `dev.instructions.md`                      |
-
-</instructionFiles>
-
 <architecture>
 
 ## Harness Model

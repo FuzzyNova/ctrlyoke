@@ -1,3 +1,4 @@
+<!-- AUTO-GENERATED — run `npm run generate-agent-files` to update -->
 # FlightPath Project Memory
 
 ## Core Project Context
@@ -6,30 +7,32 @@ Always read the main project instructions:
 
 @.github/copilot-instructions.md
 
-## Selective Instruction Files
+## Instruction Files
 
-The `.github/instructions/` directory contains detailed implementation guidelines organized by file scope. Read the relevant instruction file(s) based on which files you're working with:
+The `.github/instructions/` directory contains detailed implementation guidelines organized by file scope. Read the relevant file before modifying code in that area.
 
-### File Scope Mapping
-
-When editing or analyzing files, read the corresponding instruction file:
-
-| File Pattern                           | Instruction File                                             | When to Read                                                                                   |
-| -------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `src/flightpath/*.ts` (top-level only) | `.github/instructions/flightpath-core.instructions.md`       | HarnessIntegration, WorkflowOrchestrator, PromptQueue, PromptFileParser, EndConditionEvaluator |
-| `src/flightpath/harness/chat/**`       | `.github/instructions/flightpath-chat.instructions.md`       | CopilotChatIntegration (UI automation)                                                         |
-| `src/flightpath/harness/**`            | `.github/instructions/harness-integrations.instructions.md`  | CliIntegration, Harness providers (Copilot, Claude, Codex)                                     |
-| `src/cli.ts`, `src/cli/**`             | `.github/instructions/flightpath-cli-binary.instructions.md` | FlightPath CLI binary, CliAdapter, CliTerminalFormatter                                        |
-| `src/config/**`                        | `.github/instructions/config.instructions.md`                | Configuration service layer (FlightPathConfigService, FileConfigBackend)                       |
-| `src/server/**`                        | `.github/instructions/server.instructions.md`                | Express/WebSocket server for hosted dashboard (FlightPathHostedServer)                         |
-| `src/ui/**`                            | `.github/instructions/ui.instructions.md`                    | Status bar, dashboard, settings webview providers                                              |
-| `src/types/**`                         | `.github/instructions/types.instructions.md`                 | Type definitions and data structures                                                           |
-| `src/templates/**`                     | `.github/instructions/templates.instructions.md`             | End condition script templates                                                                 |
-| `src/test/**`                          | `.github/instructions/test.instructions.md`                  | Testing patterns and conventions                                                               |
-| `src/completions/**`                   | `.github/instructions/completions.instructions.md`           | IntelliSense providers                                                                         |
-| `src/utils/**`                         | `.github/instructions/utils.instructions.md`                 | Utility functions and helpers                                                                  |
-| `src/platform/**`                      | `.github/instructions/platform.instructions.md`              | Platform abstraction (PlatformAdapter, CliAdapter, VsCodeAdapter, vscode-shim)                 |
-| `src/ui/webview-react/**`              | `.github/instructions/webview-react.instructions.md`         | React dashboard (components, stores, hooks)                                                    |
+| File Pattern                                  | Instruction File                         |
+| --------------------------------------------- | ---------------------------------------- |
+| `src/completions/**`                          | completions.instructions.md              |
+| `src/config/**`                               | config.instructions.md                   |
+| `src/dev/**`                                  | dev.instructions.md                      |
+| `src/extension.ts, src/mcp-server.ts`         | extension.instructions.md                |
+| `src/flightpath/harness/chat/**`              | flightpath-chat.instructions.md          |
+| `src/cli.ts,src/cli/**`                       | flightpath-cli-binary.instructions.md    |
+| `src/flightpath/*.ts`                         | flightpath-core.instructions.md          |
+| `src/flightpath/orchestration/**`             | flightpath-orchestration.instructions.md |
+| `src/git/**`                                  | git.instructions.md                      |
+| `src/flightpath/harness/**`                   | harness-integrations.instructions.md     |
+| `src/platform/**`                             | platform.instructions.md                 |
+| `src/scm/**`                                  | scm.instructions.md                      |
+| `src/scripts/**`                              | scripts.instructions.md                  |
+| `src/server/**`                               | server.instructions.md                   |
+| `src/templates/**`                            | templates.instructions.md                |
+| `src/test/**`                                 | test.instructions.md                     |
+| `src/types/**`                                | types.instructions.md                    |
+| `src/ui/**` (excl. `src/ui/webview-react/**`) | ui.instructions.md                       |
+| `src/utils/**`                                | utils.instructions.md                    |
+| `src/ui/webview-react/**`                     | webview-react.instructions.md            |
 
 ### How to Use
 
@@ -39,38 +42,23 @@ When editing or analyzing files, read the corresponding instruction file:
 2. Read the corresponding instruction file in `.github/instructions/[filename]`
 3. Apply the patterns and conventions described in that file
 
-**Examples:**
-
-- Working on `src/flightpath/WorkflowOrchestrator.ts`?
-  - Read: `.github/instructions/flightpath-core.instructions.md`
-
-- Working on `src/ui/FlightPathDashboardProvider.ts`?
-  - Read: `.github/instructions/ui.instructions.md`
-
-- Working on `src/flightpath/harness/CliIntegration.ts`?
-  - Read: `.github/instructions/harness-integrations.instructions.md`
-
-- Working on multiple files across different directories?
-  - Read all relevant instruction files for those directories
-
-### Example Workflow
+### Example
 
 ```
-User: "Help me refactor the FlightPathManager"
+Working on src/flightpath/WorkflowOrchestrator.ts?
+→ Read: .github/instructions/flightpath-core.instructions.md
 
-Claude: Let me read the core FlightPath instructions first.
-@.github/instructions/flightpath-core.instructions.md
-
-[Now I have context about FlightPathManager responsibilities, patterns, and architecture]
+Working on src/flightpath/harness/CliIntegration.ts?
+→ Read: .github/instructions/harness-integrations.instructions.md
 ```
 
 ## Project Status
 
-Pre-release - No backward compatibility constraints. Prioritize clean architecture and bold improvements.
+Pre-release — No backward compatibility constraints. Prioritize clean architecture and bold improvements.
 
 ## Key Principles
 
-- **SOLID principles**: Separation of concerns, always look for opportunities to single source code and follow the DRY principal.
+- **SOLID principles**: Separation of concerns, always look for opportunities to single source code and follow the DRY principle.
 - **DRY (SINGLE SOURCE)**: Never duplicate code that can be single sourced in a helper function or base class.
 - **TypeScript strict mode**: Comprehensive type safety
 - **Single source of truth**: No hardcoded string duplication across files
