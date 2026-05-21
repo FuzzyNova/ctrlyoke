@@ -817,7 +817,10 @@ export class CliIntegration extends HarnessIntegration {
             enabledNotificationHookEvents
           )) ?? [];
         baseArgs.push(...hookArgs);
-      } else if (this.provider.buildHeadlessUserHookArgs && !hooksExplicitlyDisabled) {
+      } else if (
+        this.provider.buildHeadlessUserHookArgs &&
+        !hooksExplicitlyDisabled
+      ) {
         // Headless: call when the provider supports it (unless hooks explicitly disabled),
         // even with no user hooks — guarantees hooks from a previous prompt are cleared
         // before this prompt runs (providers with per-prompt files or settings.json
@@ -846,7 +849,10 @@ export class CliIntegration extends HarnessIntegration {
       session.resolvedProperties?.mcpServers
     );
     const permissionArgs =
-      this.provider.buildPermissionArgs?.(effectiveToolPermissions, isInteractive) ?? [];
+      this.provider.buildPermissionArgs?.(
+        effectiveToolPermissions,
+        isInteractive
+      ) ?? [];
     baseArgs.push(...permissionArgs);
 
     // Append suffix args last — these are args that must follow ALL global flags.

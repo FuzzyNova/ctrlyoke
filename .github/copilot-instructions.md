@@ -335,29 +335,29 @@ prompts:
 
 All settings accessed via `src/utils/ConfigurationUtils.ts`. Prefix: `flightpath`.
 
-| Setting                     | Default                        | Description                                                                                                        |
-| --------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `harness`                   | `copilot-cli`                  | Active harness: `copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli` |
-| `cliExecutionMode`          | `interactive`                  | `interactive` (terminal) or `headless` (background process)                                                        |
-| `copilotCliModel`           | `claude-sonnet-4.5`            | Default model for Copilot CLI                                                                                      |
-| `claudeCliModel`            | `sonnet`                       | Default model for Claude CLI                                                                                       |
-| `codexCliModel`             | `gpt-5.2-codex`                | Default model for Codex CLI                                                                                        |
-| `openCodeCliModel`          | (provider default)             | Default model for OpenCode CLI (provider/model format)                                                             |
-| `qwenCliModel`              | `coder-model`                  | Default model for Qwen Code CLI                                                                                    |
-| `geminiCliModel`            | `gemini-2.5-pro`               | Default model for Gemini CLI                                                                                       |
-| `commit.harness`            | `""`                           | Harness override for AI-generated commit messages; falls back to the normal default harness when empty            |
-| `commit.model`              | `""`                           | Model override for AI-generated commit messages; uses the selected harness default when empty                     |
-| `commit.prompt`             | built-in conventional prompt   | Prompt template used by commit message generation from git diffs                                                   |
-| `cliToolPermissions`        | `allowAll`                     | `dangerouslyAllowAll`, `allowAll`, or `custom`                                                                     |
-| `cliAllowedTools`           | `[]`                           | Tool allow patterns (Copilot format, auto-converted for Claude/Codex)                                              |
-| `cliDeniedTools`            | `[]`                           | Tool deny patterns (takes precedence over allow)                                                                   |
-| `promptsDirectory`          | `.flightpath`                  | Base directory for workflows and scripts                                                                           |
-| `scriptTimeout`             | `30`                           | End condition script timeout in seconds                                                                            |
-| `autoAttachFiles`           | `true`                         | Auto-expand `#selection:` references to inline content                                                             |
-| `enableDynamicQueue`        | `false`                        | Allow AI to extend the workflow queue                                                                              |
-| `showCliOutput`             | `true`                         | Show CLI output in the Output panel                                                                                |
-| `chatInactivityTimeout`     | `300`                          | Seconds before chat timeout (Chat harness only)                                                                    |
-| `treatChatTimeoutAsSuccess` | `true`                         | Treat chat inactivity timeout as completion                                                                        |
+| Setting                     | Default                      | Description                                                                                                        |
+| --------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `harness`                   | `copilot-cli`                | Active harness: `copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli` |
+| `cliExecutionMode`          | `interactive`                | `interactive` (terminal) or `headless` (background process)                                                        |
+| `copilotCliModel`           | `claude-sonnet-4.5`          | Default model for Copilot CLI                                                                                      |
+| `claudeCliModel`            | `sonnet`                     | Default model for Claude CLI                                                                                       |
+| `codexCliModel`             | `gpt-5.2-codex`              | Default model for Codex CLI                                                                                        |
+| `openCodeCliModel`          | (provider default)           | Default model for OpenCode CLI (provider/model format)                                                             |
+| `qwenCliModel`              | `coder-model`                | Default model for Qwen Code CLI                                                                                    |
+| `geminiCliModel`            | `gemini-2.5-pro`             | Default model for Gemini CLI                                                                                       |
+| `commit.harness`            | `""`                         | Harness override for AI-generated commit messages; falls back to the normal default harness when empty             |
+| `commit.model`              | `""`                         | Model override for AI-generated commit messages; uses the selected harness default when empty                      |
+| `commit.prompt`             | built-in conventional prompt | Prompt template used by commit message generation from git diffs                                                   |
+| `cliToolPermissions`        | `allowAll`                   | `dangerouslyAllowAll`, `allowAll`, or `custom`                                                                     |
+| `cliAllowedTools`           | `[]`                         | Tool allow patterns (Copilot format, auto-converted for Claude/Codex)                                              |
+| `cliDeniedTools`            | `[]`                         | Tool deny patterns (takes precedence over allow)                                                                   |
+| `promptsDirectory`          | `.flightpath`                | Base directory for workflows and scripts                                                                           |
+| `scriptTimeout`             | `30`                         | End condition script timeout in seconds                                                                            |
+| `autoAttachFiles`           | `true`                       | Auto-expand `#selection:` references to inline content                                                             |
+| `enableDynamicQueue`        | `false`                      | Allow AI to extend the workflow queue                                                                              |
+| `showCliOutput`             | `true`                       | Show CLI output in the Output panel                                                                                |
+| `chatInactivityTimeout`     | `300`                        | Seconds before chat timeout (Chat harness only)                                                                    |
+| `treatChatTimeoutAsSuccess` | `true`                       | Treat chat inactivity timeout as completion                                                                        |
 
 **Adding new settings:** Add to `package.json` → `contributes.configuration.properties`, then read via `ConfigurationUtils.get<T>("settingName", defaultValue)`. Use `enum` + `enumDescriptions` for dropdowns.
 

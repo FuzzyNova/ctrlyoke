@@ -80,7 +80,9 @@ describe("WorkspaceCommitArea", () => {
 
       expect(generateButton).toBeInTheDocument();
       expect(
-        generateButton.querySelector(".custom-icon.icon-generate-commit-message")
+        generateButton.querySelector(
+          ".custom-icon.icon-generate-commit-message"
+        )
       ).not.toBeNull();
     });
 
@@ -93,9 +95,7 @@ describe("WorkspaceCommitArea", () => {
       });
       renderCommitArea();
 
-      await user.click(
-        screen.getByTestId("generate-commit-message-btn")
-      );
+      await user.click(screen.getByTestId("generate-commit-message-btn"));
 
       await waitFor(() => {
         expect(workspaceGenerateCommitMessage).toHaveBeenCalledOnce();
@@ -111,9 +111,7 @@ describe("WorkspaceCommitArea", () => {
       });
       renderCommitArea();
 
-      await user.click(
-        screen.getByTestId("generate-commit-message-btn")
-      );
+      await user.click(screen.getByTestId("generate-commit-message-btn"));
 
       await waitFor(() => {
         expect(screen.getByRole("textbox")).toHaveValue("feat: test");
@@ -133,7 +131,9 @@ describe("WorkspaceCommitArea", () => {
 
       await waitFor(() => {
         expect(generateButton).not.toBeDisabled();
-        expect(generateButton.querySelector(".codicon-stop-circle")).not.toBeNull();
+        expect(
+          generateButton.querySelector(".codicon-stop-circle")
+        ).not.toBeNull();
       });
     });
 
@@ -152,7 +152,9 @@ describe("WorkspaceCommitArea", () => {
         expect(generateButton).not.toBeDisabled();
       });
       // The component should still be present in the document.
-      expect(screen.getByRole("button", { name: "Commit" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Commit" })
+      ).toBeInTheDocument();
     });
   });
 });

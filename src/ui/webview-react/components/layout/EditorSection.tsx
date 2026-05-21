@@ -166,7 +166,11 @@ export const EditorSection: React.FC = () => {
           )}
         </div>
 
-        <div className="fp-mode-switch mx-2" role="group" aria-label="Step type">
+        <div
+          className="fp-mode-switch mx-2"
+          role="group"
+          aria-label="Step type"
+        >
           <button
             type="button"
             disabled={isCLIManaged}
@@ -255,8 +259,8 @@ export const EditorSection: React.FC = () => {
                 {getModeText()}
               </span>
             )}
-            {!isEditingName && (
-              !stepEnabled ? (
+            {!isEditingName &&
+              (!stepEnabled ? (
                 <>
                   {" — "}
                   <span className="italic text-warning-fg">disabled</span>
@@ -279,8 +283,7 @@ export const EditorSection: React.FC = () => {
                     tokens
                   </span>
                 </>
-              ) : null
-            )}
+              ) : null)}
           </span>
         </div>
 

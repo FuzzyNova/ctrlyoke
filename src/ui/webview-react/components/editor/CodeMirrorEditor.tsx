@@ -768,20 +768,28 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             (update.docChanged || update.geometryChanged)
           ) {
             const cause = update.docChanged ? "doc" : "geometry";
-            WebviewLog.debug(`[FP-AE] updateListener fired cause=${cause} docChanged=${update.docChanged} geometryChanged=${update.geometryChanged}`);
+            WebviewLog.debug(
+              `[FP-AE] updateListener fired cause=${cause} docChanged=${update.docChanged} geometryChanged=${update.geometryChanged}`
+            );
             update.view.requestMeasure({
               read(v: EditorView) {
                 // contentHeight is CodeMirror's computed document height — unlike
                 // scrollDOM.scrollHeight it CAN go below clientHeight when content
                 // is deleted, giving us the negative value we need to trigger shrink.
                 const so = v.contentHeight - v.scrollDOM.clientHeight;
-                WebviewLog.debug(`[FP-AE] requestMeasure.read contentH=${v.contentHeight} clientH=${v.scrollDOM.clientHeight} signedOverflow=${so} lastOverflow=${lastOverflowRef.current}`);
+                WebviewLog.debug(
+                  `[FP-AE] requestMeasure.read contentH=${v.contentHeight} clientH=${v.scrollDOM.clientHeight} signedOverflow=${so} lastOverflow=${lastOverflowRef.current}`
+                );
                 return so;
               },
               write(signedOverflow: number) {
                 if (!viewRef.current) return;
-                const changed = lastOverflowRef.current === null || Math.abs(signedOverflow - lastOverflowRef.current) >= 1;
-                WebviewLog.debug(`[FP-AE] requestMeasure.write signedOverflow=${signedOverflow} lastOverflow=${lastOverflowRef.current} changed=${changed} cause=${cause}`);
+                const changed =
+                  lastOverflowRef.current === null ||
+                  Math.abs(signedOverflow - lastOverflowRef.current) >= 1;
+                WebviewLog.debug(
+                  `[FP-AE] requestMeasure.write signedOverflow=${signedOverflow} lastOverflow=${lastOverflowRef.current} changed=${changed} cause=${cause}`
+                );
                 if (changed) {
                   lastOverflowRef.current = signedOverflow;
                   window.dispatchEvent(

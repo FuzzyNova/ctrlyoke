@@ -829,14 +829,18 @@ export class FlightPathHostedServer
       requireToken,
       async (req, res) => {
         try {
-          const instructions = typeof req.body?.instructions === "string"
-            ? req.body.instructions
-            : undefined;
-          const result = await this.viewerService.generateCommitMessage(instructions);
+          const instructions =
+            typeof req.body?.instructions === "string"
+              ? req.body.instructions
+              : undefined;
+          const result =
+            await this.viewerService.generateCommitMessage(instructions);
           if (!result) {
             res
               .status(422)
-              .json({ error: "No changes detected. Stage or modify files first." });
+              .json({
+                error: "No changes detected. Stage or modify files first.",
+              });
             return;
           }
           res.json({
@@ -846,7 +850,9 @@ export class FlightPathHostedServer
           } satisfies WorkspaceGenerateCommitMessageResponse);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          Log.error(`workspace-viewer /generate-commit-message error: ${message}`);
+          Log.error(
+            `workspace-viewer /generate-commit-message error: ${message}`
+          );
           res.status(500).json({ error: message });
         }
       }

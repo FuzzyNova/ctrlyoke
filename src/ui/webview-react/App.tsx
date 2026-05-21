@@ -108,14 +108,18 @@ function App() {
 
     const autoExpand =
       useSettingsStore.getState().globalSettings.autoExpandEditorWhenTyping;
-    WebviewLog.debug(`[FP-AE] handler received cause=${cause} signedOverflow=${signedOverflow} autoExpand=${autoExpand} isMobile=${isMobile}`);
+    WebviewLog.debug(
+      `[FP-AE] handler received cause=${cause} signedOverflow=${signedOverflow} autoExpand=${autoExpand} isMobile=${isMobile}`
+    );
     if (autoExpand === false) return;
 
     if (cause === "geometry") {
       if (signedOverflow > 0) {
         prevDocSignedOverflowRef.current = signedOverflow;
       }
-      WebviewLog.debug(`[FP-AE] geometry event — skipping (prevDoc now=${prevDocSignedOverflowRef.current})`);
+      WebviewLog.debug(
+        `[FP-AE] geometry event — skipping (prevDoc now=${prevDocSignedOverflowRef.current})`
+      );
       return;
     }
 
@@ -125,7 +129,9 @@ function App() {
     prevDocSignedOverflowRef.current = signedOverflow;
 
     const shouldEnter = A === 0 && prevDoc <= 0 && signedOverflow > 0;
-    WebviewLog.debug(`[FP-AE] doc event A=${A} prevDoc=${prevDoc} signedOverflow=${signedOverflow} shouldEnter=${shouldEnter} outputCollapsed=${outputCollapsed} editorCollapsed=${editorCollapsed}`);
+    WebviewLog.debug(
+      `[FP-AE] doc event A=${A} prevDoc=${prevDoc} signedOverflow=${signedOverflow} shouldEnter=${shouldEnter} outputCollapsed=${outputCollapsed} editorCollapsed=${editorCollapsed}`
+    );
     if (!shouldEnter && A === 0) {
       WebviewLog.debug(`[FP-AE] early exit — not in mode and no entry`);
       return;
@@ -151,10 +157,7 @@ function App() {
 
       const basePx = mobile.lastMobileSizes.current.editor;
       const maxAutoExpand = Math.max(0, totalPx * 0.6 - basePx);
-      const targetA = Math.max(
-        0,
-        Math.min(A + signedOverflow, maxAutoExpand)
-      );
+      const targetA = Math.max(0, Math.min(A + signedOverflow, maxAutoExpand));
       if (Math.abs(targetA - A) < 1) return;
 
       const targetEditorPx = basePx + targetA;
@@ -175,7 +178,9 @@ function App() {
     } else {
       // ── Desktop ────────────────────────────────────────────────────────────
       if (outputCollapsed || editorCollapsed) {
-        WebviewLog.debug(`[FP-AE] desktop skip — outputCollapsed=${outputCollapsed} editorCollapsed=${editorCollapsed}`);
+        WebviewLog.debug(
+          `[FP-AE] desktop skip — outputCollapsed=${outputCollapsed} editorCollapsed=${editorCollapsed}`
+        );
         return;
       }
       if (
@@ -198,10 +203,14 @@ function App() {
       const basePx = desktop.lastDesktopSizes.current.editor;
       const maxAutoExpand = Math.max(0, totalPx * 0.6 - basePx);
       const targetA = Math.max(0, Math.min(A + signedOverflow, maxAutoExpand));
-      WebviewLog.debug(`[FP-AE] desktop calc basePx=${basePx} editorPx=${editorPx} totalPx=${totalPx} maxAutoExpand=${maxAutoExpand} targetA=${targetA} currentA=${A}`);
+      WebviewLog.debug(
+        `[FP-AE] desktop calc basePx=${basePx} editorPx=${editorPx} totalPx=${totalPx} maxAutoExpand=${maxAutoExpand} targetA=${targetA} currentA=${A}`
+      );
 
       if (Math.abs(targetA - A) < 1) {
-        WebviewLog.debug(`[FP-AE] desktop skip — no meaningful change (targetA=${targetA} A=${A})`);
+        WebviewLog.debug(
+          `[FP-AE] desktop skip — no meaningful change (targetA=${targetA} A=${A})`
+        );
         return;
       }
 
@@ -209,7 +218,9 @@ function App() {
       const editorPct = Number(((targetEditorPx / totalPx) * 100).toFixed(3));
       const outputPct = Number((100 - editorPct).toFixed(3));
 
-      WebviewLog.debug(`[FP-AE] desktop setLayout editorPct=${editorPct} outputPct=${outputPct} targetEditorPx=${targetEditorPx}`);
+      WebviewLog.debug(
+        `[FP-AE] desktop setLayout editorPct=${editorPct} outputPct=${outputPct} targetEditorPx=${targetEditorPx}`
+      );
       editorAutoExpandPxRef.current = targetA;
       try {
         desktop.verticalGroupRef.current.setLayout({
@@ -227,7 +238,8 @@ function App() {
   useEffect(() => {
     const listener = (e: Event) => overflowHandlerRef.current(e);
     window.addEventListener("fp-editor-overflow-change", listener);
-    return () => window.removeEventListener("fp-editor-overflow-change", listener);
+    return () =>
+      window.removeEventListener("fp-editor-overflow-change", listener);
   }, []);
 
   // Mobile overlay closing animation state.
@@ -612,7 +624,9 @@ function App() {
                         Math.abs(px - autoExpectedPx) < 3;
                       if (!isAutoExpandResize) {
                         mobile.lastMobileSizes.current.editor = px;
-                        useUiStore.getState().setLastMobileSizes({ editor: px });
+                        useUiStore
+                          .getState()
+                          .setLastMobileSizes({ editor: px });
                         editorAutoExpandPxRef.current = 0;
                       }
                     }
@@ -826,16 +840,22 @@ function App() {
                         const isAutoExpandResize =
                           editorAutoExpandPxRef.current > 0 &&
                           Math.abs(px - autoExpectedPx) < 3;
-                        WebviewLog.debug(`[FP-AE] onResize px=${px} basePx=${basePx} autoExpectedPx=${autoExpectedPx} editorAutoExpandPx=${editorAutoExpandPxRef.current} isAutoExpandResize=${isAutoExpandResize}`);
+                        WebviewLog.debug(
+                          `[FP-AE] onResize px=${px} basePx=${basePx} autoExpectedPx=${autoExpectedPx} editorAutoExpandPx=${editorAutoExpandPxRef.current} isAutoExpandResize=${isAutoExpandResize}`
+                        );
                         if (!isAutoExpandResize) {
                           desktop.lastDesktopSizes.current.editor = px;
                           useUiStore
                             .getState()
                             .setLastDesktopSizes({ editor: px });
                           editorAutoExpandPxRef.current = 0;
-                          WebviewLog.debug(`[FP-AE] onResize: saved as new base px=${px} reset autoExpand`);
+                          WebviewLog.debug(
+                            `[FP-AE] onResize: saved as new base px=${px} reset autoExpand`
+                          );
                         } else {
-                          WebviewLog.debug(`[FP-AE] onResize: auto-expand resize detected, skipping base update`);
+                          WebviewLog.debug(
+                            `[FP-AE] onResize: auto-expand resize detected, skipping base update`
+                          );
                         }
                       }
                     }

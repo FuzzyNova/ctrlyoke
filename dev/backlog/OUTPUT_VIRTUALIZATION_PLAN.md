@@ -85,7 +85,9 @@ const rowVirtualizer = useVirtualizer({
 
 return (
   <div ref={outputRef} className="overflow-y-auto">
-    <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+    <div
+      style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}
+    >
       {rowVirtualizer.getVirtualItems().map((virtualRow) => (
         <div
           key={virtualRow.key}
@@ -340,14 +342,14 @@ Manual tests:
 
 ## Risks and Mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Scroll jump from inaccurate estimated heights | Use per-row-kind estimates and `measureElement`; overscan enough rows around viewport |
-| Minimap markers move as rows are measured | Accept small refinement movement; cache row measurements by stable key |
-| Offscreen diff anchors are unavailable | Drive minimap from row metadata instead of DOM queries |
-| Streaming row re-measures too often | Re-measure only the active row, throttled to animation frames |
-| Dialogs unmount when source row virtualizes away | Keep dialogs owned by `OutputSection` |
-| Feature lands too large | Phase behind a local feature flag until row projection and minimap behavior are stable |
+| Risk                                             | Mitigation                                                                             |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Scroll jump from inaccurate estimated heights    | Use per-row-kind estimates and `measureElement`; overscan enough rows around viewport  |
+| Minimap markers move as rows are measured        | Accept small refinement movement; cache row measurements by stable key                 |
+| Offscreen diff anchors are unavailable           | Drive minimap from row metadata instead of DOM queries                                 |
+| Streaming row re-measures too often              | Re-measure only the active row, throttled to animation frames                          |
+| Dialogs unmount when source row virtualizes away | Keep dialogs owned by `OutputSection`                                                  |
+| Feature lands too large                          | Phase behind a local feature flag until row projection and minimap behavior are stable |
 
 ---
 

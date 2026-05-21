@@ -113,15 +113,15 @@ server.start().catch(() => process.exit(1));
 
 **Environment variables consumed:**
 
-| Variable                     | Default         | Purpose                                             |
-| ---------------------------- | --------------- | --------------------------------------------------- |
-| `FLIGHTPATH_WORKSPACE`       | `process.cwd()` | Workspace root for `.flightpath/.queue/` discovery  |
-| `FLIGHTPATH_WORKING_FILE`    | scan queue dir  | Explicit working file path                          |
-| `FLIGHTPATH_MAX_QUEUE_SIZE`  | `100`           | Max queue entries (0 = unlimited)                   |
-| `FLIGHTPATH_UNLIMITED_MODE`  | `false`         | Bypass size limit entirely                          |
+| Variable                     | Default         | Purpose                                                   |
+| ---------------------------- | --------------- | --------------------------------------------------------- |
+| `FLIGHTPATH_WORKSPACE`       | `process.cwd()` | Workspace root for `.flightpath/.queue/` discovery        |
+| `FLIGHTPATH_WORKING_FILE`    | scan queue dir  | Explicit working file path                                |
+| `FLIGHTPATH_MAX_QUEUE_SIZE`  | `100`           | Max queue entries (0 = unlimited)                         |
+| `FLIGHTPATH_UNLIMITED_MODE`  | `false`         | Bypass size limit entirely                                |
 | `FLIGHTPATH_COMMIT_OUTPUT`   | unset           | Output file written by `flightpath_submit_commit_message` |
-| `FLIGHTPATH_DIAGNOSTIC_LOGS` | `false`         | Write to `.flightpath/logs/flightpath-mcp-<ts>.log` |
-| `NODE_ENV`                   | —               | `development` also enables diagnostic logging       |
+| `FLIGHTPATH_DIAGNOSTIC_LOGS` | `false`         | Write to `.flightpath/logs/flightpath-mcp-<ts>.log`       |
+| `NODE_ENV`                   | —               | `development` also enables diagnostic logging             |
 
 **Transport:** `StdioServerTransport` (stdin/stdout). The TUI captures stderr, so all internal logging writes to the log file — never to stderr or stdout.
 
@@ -129,14 +129,14 @@ server.start().catch(() => process.exit(1));
 
 **Tools exposed by `mcp-server.ts` (six tools):**
 
-| Tool ID                           | Operation                                                                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `flightpath_queue_status`         | Read active queue state                                                                                                   |
-| `flightpath_append_queue`         | Append steps; resumes execution if queue was completed                                                                    |
-| `flightpath_capabilities`         | Return available harnesses and models                                                                                     |
-| `flightpath_read_output`          | Read AI response text from completed prompts                                                                              |
-| `flightpath_global_status`        | Read status of ALL workflows in the workspace queue (MCP-only — not a LM tool in `extension.ts`)                        |
-| `flightpath_submit_commit_message` | Persist a generated commit message to `FLIGHTPATH_COMMIT_OUTPUT` for `CommitMessageGenerator` (MCP-only)                |
+| Tool ID                            | Operation                                                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `flightpath_queue_status`          | Read active queue state                                                                                  |
+| `flightpath_append_queue`          | Append steps; resumes execution if queue was completed                                                   |
+| `flightpath_capabilities`          | Return available harnesses and models                                                                    |
+| `flightpath_read_output`           | Read AI response text from completed prompts                                                             |
+| `flightpath_global_status`         | Read status of ALL workflows in the workspace queue (MCP-only — not a LM tool in `extension.ts`)         |
+| `flightpath_submit_commit_message` | Persist a generated commit message to `FLIGHTPATH_COMMIT_OUTPUT` for `CommitMessageGenerator` (MCP-only) |
 
 The first four share the same tool IDs as the LM tools registered in `extension.ts`. `flightpath_global_status` and `flightpath_submit_commit_message` are MCP-only; neither is registered as a VS Code LM tool. `CommitMessageGenerator` uses the submit tool as the primary capture path so the AI returns the commit message as a structured tool argument instead of prose text.
 

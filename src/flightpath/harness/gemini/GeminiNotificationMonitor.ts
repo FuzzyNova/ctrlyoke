@@ -47,7 +47,10 @@ export class GeminiNotificationMonitor
     userHooks?: UserHookConfig[],
     flightpathEvents?: HookEvent[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(scriptPath, notifyDir);
+    const command = CliNotificationMonitor.buildNodeCommand(
+      scriptPath,
+      notifyDir
+    );
     const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const hooks = this.buildCommandHooks(

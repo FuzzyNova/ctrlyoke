@@ -3,11 +3,11 @@
 **Date:** 2026-04-03 (revised 2026-05-09)
 **Purpose:** Generate conventional commit messages using the workspace's configured FlightPath harness. Three integration points share a single core implementation:
 
-| Surface           | What it does                                                                                       |
-| ----------------- | -------------------------------------------------------------------------------------------------- |
-| **VS Code SCM**   | Button in the SCM title bar — generates message, populates the SCM input box                       |
-| **CLI**           | `flightpath commit` subcommand — generates message then runs `git commit -m`                       |
-| **Hosted server** | Button beside the existing hosted commit textarea — generates a message, populates the textarea    |
+| Surface           | What it does                                                                                    |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| **VS Code SCM**   | Button in the SCM title bar — generates message, populates the SCM input box                    |
+| **CLI**           | `flightpath commit` subcommand — generates message then runs `git commit -m`                    |
+| **Hosted server** | Button beside the existing hosted commit textarea — generates a message, populates the textarea |
 
 ---
 
@@ -424,45 +424,45 @@ Because `WorkspaceCommitArea` is reused in both desktop and mobile layouts via `
 
 ## 9. Isolation Boundary
 
-| File/Layer                                                            | Touched | Notes                                                                  |
-| --------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------- |
-| `src/types/FlightPathSettings.ts`                                     | Yes     | Add `commit` section (shared settings)                                 |
-| `schemas/settings-schema.json`                                        | Yes     | Add `commit` object                                                    |
-| `src/utils/ConfigurationUtils.ts`                                     | Yes     | Add `getCommitHarness()` / `getCommitModel()` / `getCommitPrompt()`    |
-| `src/git/CommitMessageGenerator.ts`                                   | New     | No vscode imports                                                      |
-| `src/git/GitCommitter.ts`                                             | New     | CLI helper                                                             |
-| `src/scm/ScmCommitCommand.ts`                                         | New     | VS Code only (vscode imports allowed)                                  |
-| `src/extension.ts`                                                    | Yes     | Register command                                                       |
-| `package.json`                                                        | Yes     | Command, menu, command icon                                            |
-| `src/cli.ts`                                                          | Yes     | Add `flightpath commit` subcommand                                     |
-| `src/types/HostedWorkspaceViewerTypes.ts`                             | Yes     | Add hosted generate response type                                      |
-| `src/server/HostedWorkspaceViewerService.ts`                          | Yes     | Add generation method; keep existing commit/push/pull methods          |
-| `src/server/FlightPathHostedServer.ts`                                | Yes     | Add `/api/workspace-viewer/generate-commit-message` endpoint           |
-| `src/ui/webview-react/utils/hostedApi.ts`                             | Yes     | Add REST helper                                                        |
-| `src/ui/webview-react/store/workspaceViewerStore.ts`                  | Yes     | Add generation state / optional info state                             |
-| `src/ui/webview-react/components/workspace-viewer/WorkspaceCommitArea.tsx` | Yes     | Add generate button, icon, loading state, 90/10 layout                 |
-| `src/ui/webview-react/test/components/workspace-viewer/WorkspaceCommitArea.test.tsx` | Yes     | Update layout assertions and add generation interaction coverage        |
-| `src/test/unit/HostedWorkspaceViewerService.test.ts`                  | Yes     | Add generator-backed server tests                                      |
+| File/Layer                                                                           | Touched | Notes                                                               |
+| ------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------- |
+| `src/types/FlightPathSettings.ts`                                                    | Yes     | Add `commit` section (shared settings)                              |
+| `schemas/settings-schema.json`                                                       | Yes     | Add `commit` object                                                 |
+| `src/utils/ConfigurationUtils.ts`                                                    | Yes     | Add `getCommitHarness()` / `getCommitModel()` / `getCommitPrompt()` |
+| `src/git/CommitMessageGenerator.ts`                                                  | New     | No vscode imports                                                   |
+| `src/git/GitCommitter.ts`                                                            | New     | CLI helper                                                          |
+| `src/scm/ScmCommitCommand.ts`                                                        | New     | VS Code only (vscode imports allowed)                               |
+| `src/extension.ts`                                                                   | Yes     | Register command                                                    |
+| `package.json`                                                                       | Yes     | Command, menu, command icon                                         |
+| `src/cli.ts`                                                                         | Yes     | Add `flightpath commit` subcommand                                  |
+| `src/types/HostedWorkspaceViewerTypes.ts`                                            | Yes     | Add hosted generate response type                                   |
+| `src/server/HostedWorkspaceViewerService.ts`                                         | Yes     | Add generation method; keep existing commit/push/pull methods       |
+| `src/server/FlightPathHostedServer.ts`                                               | Yes     | Add `/api/workspace-viewer/generate-commit-message` endpoint        |
+| `src/ui/webview-react/utils/hostedApi.ts`                                            | Yes     | Add REST helper                                                     |
+| `src/ui/webview-react/store/workspaceViewerStore.ts`                                 | Yes     | Add generation state / optional info state                          |
+| `src/ui/webview-react/components/workspace-viewer/WorkspaceCommitArea.tsx`           | Yes     | Add generate button, icon, loading state, 90/10 layout              |
+| `src/ui/webview-react/test/components/workspace-viewer/WorkspaceCommitArea.test.tsx` | Yes     | Update layout assertions and add generation interaction coverage    |
+| `src/test/unit/HostedWorkspaceViewerService.test.ts`                                 | Yes     | Add generator-backed server tests                                   |
 
 ---
 
 ## 10. Implementation Order
 
-| #   | Task                                                                                                 | Complexity |
-| --- | ---------------------------------------------------------------------------------------------------- | ---------- |
-| 1   | Add `commit` section to `FlightPathSettings.ts` + defaults                                           | Low        |
-| 2   | Add `commit` to `schemas/settings-schema.json`                                                       | Low        |
-| 3   | Add `getCommitHarness()` / `getCommitModel()` / `getCommitPrompt()` to `ConfigurationUtils.ts`      | Low        |
-| 4   | Implement `src/git/CommitMessageGenerator.ts`                                                        | Medium     |
-| 5   | Implement `src/git/GitCommitter.ts`                                                                  | Low        |
-| 6   | Implement `src/scm/ScmCommitCommand.ts` + register in `extension.ts`                                 | Medium     |
-| 7   | Add the SCM command + `images/flightpath-icon-simple.svg` icon wiring in `package.json`             | Low        |
-| 8   | Add `flightpath commit` subcommand to `src/cli.ts`                                                   | Low        |
-| 9   | Extend hosted workspace viewer types/service/server route for generation-only REST support           | Medium     |
-| 10  | Update `hostedApi.ts`, `workspaceViewerStore.ts`, and `WorkspaceCommitArea.tsx` for the 90/10 UI    | Medium     |
-| 11  | Use the mini FlightPath icon in both the VS Code SCM command and hosted generate button              | Low        |
-| 12  | Add/refresh tests for `WorkspaceCommitArea` and `HostedWorkspaceViewerService`                       | Medium     |
-| 13  | Manual testing: VS Code SCM, CLI, hosted desktop/mobile, empty staging area, large diff, cancel     | Medium     |
+| #   | Task                                                                                             | Complexity |
+| --- | ------------------------------------------------------------------------------------------------ | ---------- |
+| 1   | Add `commit` section to `FlightPathSettings.ts` + defaults                                       | Low        |
+| 2   | Add `commit` to `schemas/settings-schema.json`                                                   | Low        |
+| 3   | Add `getCommitHarness()` / `getCommitModel()` / `getCommitPrompt()` to `ConfigurationUtils.ts`   | Low        |
+| 4   | Implement `src/git/CommitMessageGenerator.ts`                                                    | Medium     |
+| 5   | Implement `src/git/GitCommitter.ts`                                                              | Low        |
+| 6   | Implement `src/scm/ScmCommitCommand.ts` + register in `extension.ts`                             | Medium     |
+| 7   | Add the SCM command + `images/flightpath-icon-simple.svg` icon wiring in `package.json`          | Low        |
+| 8   | Add `flightpath commit` subcommand to `src/cli.ts`                                               | Low        |
+| 9   | Extend hosted workspace viewer types/service/server route for generation-only REST support       | Medium     |
+| 10  | Update `hostedApi.ts`, `workspaceViewerStore.ts`, and `WorkspaceCommitArea.tsx` for the 90/10 UI | Medium     |
+| 11  | Use the mini FlightPath icon in both the VS Code SCM command and hosted generate button          | Low        |
+| 12  | Add/refresh tests for `WorkspaceCommitArea` and `HostedWorkspaceViewerService`                   | Medium     |
+| 13  | Manual testing: VS Code SCM, CLI, hosted desktop/mobile, empty staging area, large diff, cancel  | Medium     |
 
 ---
 

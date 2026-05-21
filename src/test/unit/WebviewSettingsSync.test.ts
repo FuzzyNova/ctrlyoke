@@ -570,22 +570,33 @@ suite("WebviewSettingsSync", () => {
   suite("handleSetAsDefault — toolPermissions", () => {
     test("should write defaults.toolPermissions atomically as one config set call", async () => {
       const originalSet = configService.set.bind(configService);
-      const setCalls: Array<{ key: string; value: unknown; scope: string }> = [];
+      const setCalls: Array<{ key: string; value: unknown; scope: string }> =
+        [];
 
       try {
         configService.set = (async (key, value, scope) => {
           setCalls.push({ key, value, scope });
         }) as typeof configService.set;
 
-        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        const sync = new WebviewSettingsSync(
+          () => {},
+          () => undefined
+        );
         await sync.handleSetAsDefault("toolPermissions", {
           mode: "custom",
           allowedTools: ["read", "write"],
           deniedTools: ["bash"],
         });
 
-        assert.strictEqual(setCalls.length, 1, "exactly one config write should be made");
-        assert.strictEqual(setCalls[0].key, CONFIG_KEYS.DEFAULTS_TOOL_PERMISSIONS);
+        assert.strictEqual(
+          setCalls.length,
+          1,
+          "exactly one config write should be made"
+        );
+        assert.strictEqual(
+          setCalls[0].key,
+          CONFIG_KEYS.DEFAULTS_TOOL_PERMISSIONS
+        );
         assert.deepStrictEqual(setCalls[0].value, {
           mode: "custom",
           allowedTools: ["read", "write"],
@@ -605,8 +616,15 @@ suite("WebviewSettingsSync", () => {
           setCalls.push({ key, value });
         }) as typeof configService.set;
 
-        const sync = new WebviewSettingsSync(() => {}, () => undefined);
-        await sync.handleSetAsDefault("toolPermissions", { mode: "none", allowedTools: [], deniedTools: [] });
+        const sync = new WebviewSettingsSync(
+          () => {},
+          () => undefined
+        );
+        await sync.handleSetAsDefault("toolPermissions", {
+          mode: "none",
+          allowedTools: [],
+          deniedTools: [],
+        });
 
         assert.strictEqual(setCalls.length, 1);
         assert.strictEqual((setCalls[0].value as any).mode, "allowAll");
@@ -624,7 +642,10 @@ suite("WebviewSettingsSync", () => {
           setCalls.push({ key, value });
         }) as typeof configService.set;
 
-        const sync = new WebviewSettingsSync(() => {}, () => undefined);
+        const sync = new WebviewSettingsSync(
+          () => {},
+          () => undefined
+        );
         await sync.handleSetAsDefault("toolPermissions", null);
 
         assert.strictEqual(setCalls.length, 1);

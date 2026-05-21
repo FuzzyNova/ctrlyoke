@@ -861,7 +861,9 @@ export const useUiStore = create<UiState & UiActions>()(
       setStartupReady: (ready) =>
         set({
           startupReady: ready,
-          ...(ready ? { devRestarting: false, workspaceInitRequired: false } : {}),
+          ...(ready
+            ? { devRestarting: false, workspaceInitRequired: false }
+            : {}),
         }),
       setDevRestarting: (restarting) =>
         set({ devRestarting: restarting, startupReady: !restarting }),

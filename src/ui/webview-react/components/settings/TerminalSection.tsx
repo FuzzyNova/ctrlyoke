@@ -100,7 +100,8 @@ function NumberField({
   }, [value]);
 
   const displayNum = Number(localValue);
-  const isInvalid = Number.isFinite(displayNum) && (displayNum < min || displayNum > max);
+  const isInvalid =
+    Number.isFinite(displayNum) && (displayNum < min || displayNum > max);
 
   return (
     <SettingInputRow
@@ -119,7 +120,9 @@ function NumberField({
         step={step}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
-        onFocus={() => { focused.current = true; }}
+        onFocus={() => {
+          focused.current = true;
+        }}
         onBlur={(e) => {
           focused.current = false;
           const next = Number(e.target.value);

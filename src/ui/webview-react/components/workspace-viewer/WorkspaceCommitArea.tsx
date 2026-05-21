@@ -183,8 +183,14 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
           className="flex-1 min-w-0 resize-none rounded border border-panel-border bg-input-bg text-editor-fg text-xs px-2 py-1.5 placeholder-editor-fg placeholder-opacity-40 focus:outline-none focus:border-focus-border"
         />
         <button
-          onClick={generatingCommitMessage ? handleCancelGenerate : handleGenerate}
-          title={generatingCommitMessage ? "Cancel generation" : "Generate commit message with FlightPath"}
+          onClick={
+            generatingCommitMessage ? handleCancelGenerate : handleGenerate
+          }
+          title={
+            generatingCommitMessage
+              ? "Cancel generation"
+              : "Generate commit message with FlightPath"
+          }
           data-testid="generate-commit-message-btn"
           className="flex-shrink-0 w-8 flex items-center justify-center self-stretch rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover"
         >

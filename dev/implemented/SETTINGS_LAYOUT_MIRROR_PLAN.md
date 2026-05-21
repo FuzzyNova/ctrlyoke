@@ -107,30 +107,30 @@ settings-schema.json:
 
 ### Complete Rename Table (all deleted, no aliases)
 
-| Old path | New path |
-|---|---|
-| `harness` | `defaults.harness` |
-| `models.<harnessId>` | `defaults.models.<harnessId>` |
-| `additionalArgs.<harnessId>` | `defaults.additionalArgs.<harnessId>` |
-| `workflow.defaultFormat` | `general.defaultFormat` |
-| `workflow.defaultTemplate` | `general.defaultTemplate` |
-| `workflow.autoLoadRecentSession` | `general.autoLoadRecentSession` |
-| `workflow.omitAgentsSkillsOnResume` | `general.omitAgentsSkillsOnResume` |
-| `workflow.defaultAgent` | `defaults.agent` |
-| `workflow.defaultSkills` | `defaults.skills` |
-| `workflow.resumeExistingSession` | `defaults.resumeSession` |
-| `workflow.priorContext` | `defaults.priorContext` |
-| `workflow.defaultEndCondition` | `defaults.endCondition` |
-| `workflow.defaultPreCondition` | `defaults.preCondition` |
-| `tools.permissionMode` | `defaults.toolPermissions.mode` |
-| `tools.allowed` | `defaults.toolPermissions.allowedTools` |
-| `tools.denied` | `defaults.toolPermissions.deniedTools` |
-| `tools.allowedDirs` | `permissions.allowedDirs` |
-| `tools.copilotAllowAllPaths` | `permissions.copilotAllowAllPaths` |
-| `tools.codexSandboxMode` | `permissions.codexSandboxMode` |
-| `tools.codexApprovalPolicy` | `permissions.codexApprovalPolicy` |
-| `mcp.defaultServers` | `defaults.mcpServers` |
-| `hooks` (root array) | `defaults.hooks` |
+| Old path                            | New path                                |
+| ----------------------------------- | --------------------------------------- |
+| `harness`                           | `defaults.harness`                      |
+| `models.<harnessId>`                | `defaults.models.<harnessId>`           |
+| `additionalArgs.<harnessId>`        | `defaults.additionalArgs.<harnessId>`   |
+| `workflow.defaultFormat`            | `general.defaultFormat`                 |
+| `workflow.defaultTemplate`          | `general.defaultTemplate`               |
+| `workflow.autoLoadRecentSession`    | `general.autoLoadRecentSession`         |
+| `workflow.omitAgentsSkillsOnResume` | `general.omitAgentsSkillsOnResume`      |
+| `workflow.defaultAgent`             | `defaults.agent`                        |
+| `workflow.defaultSkills`            | `defaults.skills`                       |
+| `workflow.resumeExistingSession`    | `defaults.resumeSession`                |
+| `workflow.priorContext`             | `defaults.priorContext`                 |
+| `workflow.defaultEndCondition`      | `defaults.endCondition`                 |
+| `workflow.defaultPreCondition`      | `defaults.preCondition`                 |
+| `tools.permissionMode`              | `defaults.toolPermissions.mode`         |
+| `tools.allowed`                     | `defaults.toolPermissions.allowedTools` |
+| `tools.denied`                      | `defaults.toolPermissions.deniedTools`  |
+| `tools.allowedDirs`                 | `permissions.allowedDirs`               |
+| `tools.copilotAllowAllPaths`        | `permissions.copilotAllowAllPaths`      |
+| `tools.codexSandboxMode`            | `permissions.codexSandboxMode`          |
+| `tools.codexApprovalPolicy`         | `permissions.codexApprovalPolicy`       |
+| `mcp.defaultServers`                | `defaults.mcpServers`                   |
+| `hooks` (root array)                | `defaults.hooks`                        |
 
 ### Files to Update
 
@@ -148,20 +148,24 @@ settings-schema.json:
 ### Global Settings Left Nav Changes
 
 **Remove** from `ALL_TABS` in `GlobalSettingsDrawer.tsx`:
+
 - `harnesses` ("Harnesses & Models") — absorbed into Workflow Defaults → Harness tab
 - `mcp` ("MCP & Hooks") — fully absorbed: `McpHooksSection` contained only `mcp.defaultServers` (→ Defaults MCP tab) and `hooks` (→ Defaults Hooks tab); nothing remains
 
 **Rename**:
+
 - `workflow` label stays "Workflow Defaults" — now renders the tabbed component
 - `permissions` label changes to **"Advanced Permissions"** — retains only harness-specific settings (`allowedDirs`, `copilotAllowAllPaths`, `codexSandboxMode`, `codexApprovalPolicy`)
 
 **General section** (`GeneralSection.tsx`) gains:
+
 - `general.defaultFormat` (was `workflow.defaultFormat`)
 - `general.defaultTemplate` (was `workflow.defaultTemplate`)
 
 **Workflow section** (`WorkflowDefaultsSection.tsx`) becomes the new tabbed component — see below. The `workflow` schema key is **deleted entirely** — every setting it contained has moved to `general` or `defaults`.
 
 **Keep as-is** (not execution-property defaults):
+
 - `general` — now includes format/template (from schema `general.*`) + behavior toggles
 - `execution` — mode, injectMode, timeout, closeTerminalOnComplete, autoDeleteTempFiles
 - `notifications`
@@ -269,18 +273,22 @@ Replaces `PermissionsSection.tsx`. Contains only the harness-specific settings t
 ### Modified Files
 
 **Schema / Types**
+
 - `schemas/settings-schema.json` — full rewrite
 - `src/types/FlightPathSettings.ts` — new `general`, `defaults`, `permissions` sections; old fields deleted
 - `src/types/WebviewMessageTypes.ts` — update `FullGlobalSettings`
 
 **Config Layer**
+
 - `src/config/FlightPathConfigService.ts` — new path reads/writes only
 - `src/utils/ConfigurationUtils.ts` — new path accessors; delete old ones
 
 **UI — Shared**
+
 - `src/ui/webview-react/components/shared/DrawerTabBar.tsx` — make `harnessId` optional; render `codicon-robot` on Harness tab when omitted
 
 **UI — Settings**
+
 - `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx` — remove `harnesses` and `mcp` tabs; rename `permissions` to "Advanced Permissions"
 - `src/ui/webview-react/components/settings/WorkflowDefaultsSection.tsx` — replace body with tabbed container; reuse `HarnessesSection` inside `DefaultsHarnessPage`
 - `src/ui/webview-react/components/settings/GeneralSection.tsx` — add `general.defaultFormat`, `general.defaultTemplate`, `general.autoLoadRecentSession`, `general.omitAgentsSkillsOnResume`
@@ -289,6 +297,7 @@ Replaces `PermissionsSection.tsx`. Contains only the harness-specific settings t
 - `src/ui/webview-react/components/settings/index.ts` — export new pages; update exports
 
 **Extension Host**
+
 - `src/ui/WebviewSettingsSync.ts` — `handleSetAsDefault()` maps property names to config write paths (all change: `"agent"` → `"defaults.agent"`, `"resumeSession"` → `"defaults.resumeSession"`, `"toolPermissions"` now writes `"defaults.toolPermissions"` atomically instead of three separate `tools.*` keys, etc.); `buildGlobalSettingsPayload()` reads each setting individually via `ConfigurationUtils` to build the payload — all reads change to new paths
 - `src/ui/WebviewMessageRouter.ts` — no changes needed; delegates to `WebviewSettingsSync`
 - `src/ui/webview-react/store/settingsStore.ts` — `GlobalSettings` interface and `initialGlobalSettings` constant must match the payload shape from `buildGlobalSettingsPayload()`; the flat fields (`agent`, `skills`, `resumeSession`, `priorContext`, `mcpServers`, `hooks`, `toolPermissions`, `defaultEndCondition`, `defaultPreCondition`, `harnessDefaultModels`, `harnessDefaultAdditionalArgs`) stay flat in the webview store but are now sourced from `defaults.*` on the extension side — no webview store restructuring needed, just verify the field names still align
@@ -303,35 +312,35 @@ Replaces `PermissionsSection.tsx`. Contains only the harness-specific settings t
 
 ## Part 4: executionProperties → defaults Alignment
 
-| `executionProperties` field | Old settings path | New `defaults.*` path |
-|---|---|---|
-| `harness` | `harness` | `defaults.harness` |
-| `model` | `models.<harnessId>` | `defaults.models.<harnessId>` |
-| `additionalArgs` | `additionalArgs.<harnessId>` | `defaults.additionalArgs.<harnessId>` |
-| `agent` | `workflow.defaultAgent` | `defaults.agent` |
-| `skills` | `workflow.defaultSkills` | `defaults.skills` |
-| `resumeSession` | `workflow.resumeExistingSession` | `defaults.resumeSession` |
-| `priorContext` | `workflow.priorContext` | `defaults.priorContext` |
-| `mcpServers` | `mcp.defaultServers` | `defaults.mcpServers` |
-| `hooks` | `hooks` (root) | `defaults.hooks` |
-| `toolPermissions.mode` | `tools.permissionMode` | `defaults.toolPermissions.mode` |
-| `toolPermissions.allowedTools` | `tools.allowed` | `defaults.toolPermissions.allowedTools` |
-| `toolPermissions.deniedTools` | `tools.denied` | `defaults.toolPermissions.deniedTools` |
-| `endCondition` | `workflow.defaultEndCondition` | `defaults.endCondition` |
-| `preCondition` | `workflow.defaultPreCondition` | `defaults.preCondition` |
+| `executionProperties` field    | Old settings path                | New `defaults.*` path                   |
+| ------------------------------ | -------------------------------- | --------------------------------------- |
+| `harness`                      | `harness`                        | `defaults.harness`                      |
+| `model`                        | `models.<harnessId>`             | `defaults.models.<harnessId>`           |
+| `additionalArgs`               | `additionalArgs.<harnessId>`     | `defaults.additionalArgs.<harnessId>`   |
+| `agent`                        | `workflow.defaultAgent`          | `defaults.agent`                        |
+| `skills`                       | `workflow.defaultSkills`         | `defaults.skills`                       |
+| `resumeSession`                | `workflow.resumeExistingSession` | `defaults.resumeSession`                |
+| `priorContext`                 | `workflow.priorContext`          | `defaults.priorContext`                 |
+| `mcpServers`                   | `mcp.defaultServers`             | `defaults.mcpServers`                   |
+| `hooks`                        | `hooks` (root)                   | `defaults.hooks`                        |
+| `toolPermissions.mode`         | `tools.permissionMode`           | `defaults.toolPermissions.mode`         |
+| `toolPermissions.allowedTools` | `tools.allowed`                  | `defaults.toolPermissions.allowedTools` |
+| `toolPermissions.deniedTools`  | `tools.denied`                   | `defaults.toolPermissions.deniedTools`  |
+| `endCondition`                 | `workflow.defaultEndCondition`   | `defaults.endCondition`                 |
+| `preCondition`                 | `workflow.defaultPreCondition`   | `defaults.preCondition`                 |
 
 Settings with no `executionProperties` equivalent (stay outside `defaults`):
 
-| Setting | Old path | New path | UI location |
-|---|---|---|---|
-| Default file format | `workflow.defaultFormat` | `general.defaultFormat` | General tab |
-| Default template | `workflow.defaultTemplate` | `general.defaultTemplate` | General tab |
-| Auto-load recent session | `workflow.autoLoadRecentSession` | `general.autoLoadRecentSession` | General tab |
-| Omit agents/skills on resume | `workflow.omitAgentsSkillsOnResume` | `general.omitAgentsSkillsOnResume` | General tab |
-| Allowed dirs | `tools.allowedDirs` | `permissions.allowedDirs` | Advanced Permissions tab |
-| Copilot all paths | `tools.copilotAllowAllPaths` | `permissions.copilotAllowAllPaths` | Advanced Permissions tab |
-| Codex sandbox mode | `tools.codexSandboxMode` | `permissions.codexSandboxMode` | Advanced Permissions tab |
-| Codex approval policy | `tools.codexApprovalPolicy` | `permissions.codexApprovalPolicy` | Advanced Permissions tab |
+| Setting                      | Old path                            | New path                           | UI location              |
+| ---------------------------- | ----------------------------------- | ---------------------------------- | ------------------------ |
+| Default file format          | `workflow.defaultFormat`            | `general.defaultFormat`            | General tab              |
+| Default template             | `workflow.defaultTemplate`          | `general.defaultTemplate`          | General tab              |
+| Auto-load recent session     | `workflow.autoLoadRecentSession`    | `general.autoLoadRecentSession`    | General tab              |
+| Omit agents/skills on resume | `workflow.omitAgentsSkillsOnResume` | `general.omitAgentsSkillsOnResume` | General tab              |
+| Allowed dirs                 | `tools.allowedDirs`                 | `permissions.allowedDirs`          | Advanced Permissions tab |
+| Copilot all paths            | `tools.copilotAllowAllPaths`        | `permissions.copilotAllowAllPaths` | Advanced Permissions tab |
+| Codex sandbox mode           | `tools.codexSandboxMode`            | `permissions.codexSandboxMode`     | Advanced Permissions tab |
+| Codex approval policy        | `tools.codexApprovalPolicy`         | `permissions.codexApprovalPolicy`  | Advanced Permissions tab |
 
 ---
 

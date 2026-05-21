@@ -178,7 +178,10 @@ export function GlobalSettingsDrawer() {
             size. All other tabs use the standard scrollable wrapper. */}
         {fullSettings && effectiveActiveTab === "workflow" ? (
           <div className="flex-1 flex flex-col min-h-0">
-            <WorkflowDefaultsSection settings={fullSettings} {...sectionProps} />
+            <WorkflowDefaultsSection
+              settings={fullSettings}
+              {...sectionProps}
+            />
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
@@ -196,7 +199,10 @@ export function GlobalSettingsDrawer() {
                 <ExecutionSection settings={fullSettings} {...sectionProps} />
               )}
               {fullSettings && effectiveActiveTab === "notifications" && (
-                <NotificationsSection settings={fullSettings} {...sectionProps} />
+                <NotificationsSection
+                  settings={fullSettings}
+                  {...sectionProps}
+                />
               )}
               {fullSettings && effectiveActiveTab === "terminal" && (
                 <TerminalSection settings={fullSettings} {...sectionProps} />

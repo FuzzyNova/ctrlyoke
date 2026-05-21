@@ -107,7 +107,9 @@ const ThinkingOutput: React.FC<ThinkingOutputProps> = ({
   const displayLabel = label && label !== "Thinking" ? label : "Thinking";
   return (
     <div className={`my-2 ${className}`}>
-      <div className="text-[length:var(--fp-output-font-size-xs)] text-description-fg mb-1">● {displayLabel}</div>
+      <div className="text-[length:var(--fp-output-font-size-xs)] text-description-fg mb-1">
+        ● {displayLabel}
+      </div>
       <div className="text-description-fg pl-3 border-l border-panel-border">
         <MarkdownText>{text}</MarkdownText>
       </div>
@@ -977,7 +979,12 @@ export const CliOutput = memo<CliOutputProps>(
     // copiedSessionId changes (copy button feedback), or copy-output state changes.
     const statsNode = useMemo(() => {
       const canCopyOutput = !output.isStreaming && !!outputText;
-      if (!output.tokens && output.elapsed === undefined && !sessionId && !canCopyOutput) {
+      if (
+        !output.tokens &&
+        output.elapsed === undefined &&
+        !sessionId &&
+        !canCopyOutput
+      ) {
         return null;
       }
 

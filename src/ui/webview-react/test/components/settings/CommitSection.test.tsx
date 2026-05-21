@@ -58,10 +58,12 @@ describe("CommitSection", () => {
       });
     });
 
-    expect(screen.getByText("Last triggered from: Workspace viewer")).toBeInTheDocument();
     expect(
-      screen.getByText((_, element) =>
-        element?.textContent === "git diff --cached\ngit diff"
+      screen.getByText("Last triggered from: Workspace viewer")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_, element) => element?.textContent === "git diff --cached\ngit diff"
       )
     ).toBeInTheDocument();
     expect(screen.getByText(/c:\\dev\\FlightPath/i)).toBeInTheDocument();

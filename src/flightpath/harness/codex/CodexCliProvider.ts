@@ -372,7 +372,12 @@ export class CodexCliProvider implements ICliProvider {
     };
     const permissionArgs = (
       this.toolPermissionMapper as CodexToolPermissionMapper
-    ).buildCodexSpecificArgs(config, sandboxMode, approvalPolicy, isInteractive);
+    ).buildCodexSpecificArgs(
+      config,
+      sandboxMode,
+      approvalPolicy,
+      isInteractive
+    );
     args.push(...permissionArgs);
     // Add additional allowed directories when not in dangerous mode
     if (config.mode !== PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {

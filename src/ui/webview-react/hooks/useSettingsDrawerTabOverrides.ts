@@ -51,7 +51,7 @@ export function useSettingsDrawerTabOverrides(
         ? FOCUS_TAB_OVERRIDE
         : undefined,
       permissions: hasSourceOverride(sources, ["defaults.toolPermissions"])
-        ? getPermissionTabOverride(permissionMode) ?? FOCUS_TAB_OVERRIDE
+        ? (getPermissionTabOverride(permissionMode) ?? FOCUS_TAB_OVERRIDE)
         : undefined,
     }),
     [sources, permissionMode]

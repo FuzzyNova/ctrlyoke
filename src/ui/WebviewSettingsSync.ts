@@ -550,14 +550,17 @@ export class WebviewSettingsSync {
       await ConfigurationUtils.setDefaultPreCondition(value ?? null);
     } else if (property === PROMPT_PROPERTIES.TOOL_PERMISSIONS) {
       const override = value as ToolPermissionsOverride | null;
-      await ConfigurationUtils.updateSetting(CONFIG_KEYS.DEFAULTS_TOOL_PERMISSIONS, {
-        mode:
-          override?.mode && override.mode !== PERMISSION_MODES.NONE
-            ? override.mode
-            : PERMISSION_MODES.ALLOW_ALL,
-        allowedTools: override?.allowedTools ?? [],
-        deniedTools: override?.deniedTools ?? [],
-      });
+      await ConfigurationUtils.updateSetting(
+        CONFIG_KEYS.DEFAULTS_TOOL_PERMISSIONS,
+        {
+          mode:
+            override?.mode && override.mode !== PERMISSION_MODES.NONE
+              ? override.mode
+              : PERMISSION_MODES.ALLOW_ALL,
+          allowedTools: override?.allowedTools ?? [],
+          deniedTools: override?.deniedTools ?? [],
+        }
+      );
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }

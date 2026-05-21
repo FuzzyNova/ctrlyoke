@@ -8,15 +8,15 @@ FlightPath automates AI coding assistants — Copilot CLI, Claude Code, Codex, O
 
 FlightPath drives whichever AI CLI tool you have installed. You need at least one:
 
-| Harness        | CLI Tool                                    |
-| -------------- | ------------------------------------------- |
-| `copilot-cli`  | `gh` with GitHub Copilot extension          |
-| `claude-cli`   | `claude` (Claude Code CLI)                  |
-| `codex-cli`    | `codex` (OpenAI Codex CLI)                  |
-| `opencode-cli` | `opencode`                                  |
-| `qwen-cli`     | Qwen Code CLI                               |
-| `gemini-cli`   | `gemini` (Google Gemini CLI)                |
-| `copilot-chat` | GitHub Copilot Chat VS Code extension       |
+| Harness        | CLI Tool                              |
+| -------------- | ------------------------------------- |
+| `copilot-cli`  | `gh` with GitHub Copilot extension    |
+| `claude-cli`   | `claude` (Claude Code CLI)            |
+| `codex-cli`    | `codex` (OpenAI Codex CLI)            |
+| `opencode-cli` | `opencode`                            |
+| `qwen-cli`     | Qwen Code CLI                         |
+| `gemini-cli`   | `gemini` (Google Gemini CLI)          |
+| `copilot-chat` | GitHub Copilot Chat VS Code extension |
 
 The default harness is `copilot-cli`. Change it in **FlightPath Settings** inside the dashboard, or set it per-workflow (see below).
 
@@ -123,9 +123,7 @@ prompts:
 ```json
 {
   "harness": "claude-cli",
-  "prompts": [
-    { "prompt": "Analyze the codebase and create a summary." }
-  ]
+  "prompts": [{ "prompt": "Analyze the codebase and create a summary." }]
 }
 ```
 
@@ -142,16 +140,17 @@ Review #file:src/utils.ts for potential bugs and suggest fixes.
 Set the harness in **FlightPath Settings** (gear icon in the dashboard) or override it per-workflow:
 
 ```yaml
-harness: claude-cli      # override for this workflow
-model: claude-opus-4-5   # override model for this workflow
+harness: claude-cli # override for this workflow
+model: claude-opus-4-5 # override model for this workflow
 
 prompts:
   - prompt: ...
-    harness: codex-cli   # override for this specific step
+    harness: codex-cli # override for this specific step
     model: gpt-5
 ```
 
 Each harness supports two execution modes:
+
 - **Interactive** — opens a visible terminal, useful for workflows that require watching or interaction
 - **Headless** — runs in the background, captures output without a visible terminal
 
@@ -193,28 +192,28 @@ The script runs in an isolated child process. The `returns` value is compared ag
 
 ## Command Reference
 
-| Command                                  | What It Does                                      |
-| ---------------------------------------- | ------------------------------------------------- |
-| `FlightPath: Open FlightPath Panel`      | Open the dashboard sidebar                        |
-| `FlightPath: Initialize Workspace`       | Create `.flightpath/` directory structure         |
-| `FlightPath: New Workflow from Template` | Create a workflow from a built-in template        |
-| `FlightPath: Create Prompt File`         | Create a new workflow file                        |
+| Command                                  | What It Does                                          |
+| ---------------------------------------- | ----------------------------------------------------- |
+| `FlightPath: Open FlightPath Panel`      | Open the dashboard sidebar                            |
+| `FlightPath: Initialize Workspace`       | Create `.flightpath/` directory structure             |
+| `FlightPath: New Workflow from Template` | Create a workflow from a built-in template            |
+| `FlightPath: Create Prompt File`         | Create a new workflow file                            |
 | `FlightPath: New Draft Prompt`           | Create a draft `.prompt.md` in `.flightpath/prompts/` |
-| `FlightPath: Run` (editor title bar)     | Run the active workflow file                      |
-| `FlightPath: Pause Execution`            | Pause after the current step completes            |
-| `FlightPath: Resume Execution`           | Resume a paused workflow                          |
-| `FlightPath: Stop Execution`             | Stop and reset the current workflow               |
-| `FlightPath: Resume Session`             | Reconnect to an interrupted session               |
-| `FlightPath: Show Output Panel`          | Open the FlightPath output log                    |
+| `FlightPath: Run` (editor title bar)     | Run the active workflow file                          |
+| `FlightPath: Pause Execution`            | Pause after the current step completes                |
+| `FlightPath: Resume Execution`           | Resume a paused workflow                              |
+| `FlightPath: Stop Execution`             | Stop and reset the current workflow                   |
+| `FlightPath: Resume Session`             | Reconnect to an interrupted session                   |
+| `FlightPath: Show Output Panel`          | Open the FlightPath output log                        |
 
 Right-click context menu on workflow files:
 
-| Action                         | Effect                                             |
-| ------------------------------ | -------------------------------------------------- |
-| Run with FlightPath            | Load and immediately run the file                  |
-| Load in FlightPath             | Load without running (edit first)                  |
-| Queue with FlightPath          | Append to the current workflow queue               |
-| Queue Next with FlightPath     | Insert after the currently running step            |
+| Action                     | Effect                                  |
+| -------------------------- | --------------------------------------- |
+| Run with FlightPath        | Load and immediately run the file       |
+| Load in FlightPath         | Load without running (edit first)       |
+| Queue with FlightPath      | Append to the current workflow queue    |
+| Queue Next with FlightPath | Insert after the currently running step |
 
 ---
 

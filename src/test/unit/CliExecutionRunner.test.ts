@@ -251,12 +251,7 @@ suite("CliExecutionRunner", () => {
       new CliExecutionSession({ prompt: { prompt: "send this" } })
     );
 
-    assert.deepStrictEqual(writes, [
-      "\x1b[I",
-      "send this",
-      "\x1b[I",
-      "\r",
-    ]);
+    assert.deepStrictEqual(writes, ["\x1b[I", "send this", "\x1b[I", "\r"]);
     assert.deepStrictEqual(result, { injected: false });
   });
 

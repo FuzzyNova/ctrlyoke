@@ -5,7 +5,10 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, teardown } from "mocha";
 import { HostedWorkspaceViewerService } from "../../server/HostedWorkspaceViewerService";
-import { CommitMessageGenerator, type CommitResult } from "../../git/CommitMessageGenerator";
+import {
+  CommitMessageGenerator,
+  type CommitResult,
+} from "../../git/CommitMessageGenerator";
 
 suite("HostedWorkspaceViewerService", () => {
   const tempRoots: string[] = [];

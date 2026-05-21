@@ -647,7 +647,16 @@
       "properties": {
         "harness": {
           "type": "string",
-          "enum": ["", "copilot-cli", "copilot-chat", "claude-cli", "codex-cli", "opencode-cli", "qwen-cli", "gemini-cli"],
+          "enum": [
+            "",
+            "copilot-cli",
+            "copilot-chat",
+            "claude-cli",
+            "codex-cli",
+            "opencode-cli",
+            "qwen-cli",
+            "gemini-cli"
+          ],
           "description": "Harness to use for commit message generation. Empty = use the workspace default harness."
         },
         "model": {

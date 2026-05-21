@@ -288,8 +288,8 @@ FlightPath uses **adaptive prompt passing** based on prompt complexity:
 CLI integrations provide deterministic, structured automation vs Chat's UI-based approach:
 
 | Aspect                   | CLI Mode                                          | Chat Mode                                               |
-| ------------------------ | ------------------------------------------------- | ------------------------------------------------------- |
-| **Completion detection** | Process exit or escape indicator (deterministic)  | Session file monitoring (`chatSessions/*.json|jsonl`)   |
+| ------------------------ | ------------------------------------------------- | ------------------------------------------------------- | ------- |
+| **Completion detection** | Process exit or escape indicator (deterministic)  | Session file monitoring (`chatSessions/\*.json          | jsonl`) |
 | **Output access**        | Direct stdout/stderr (structured)                 | Session file parsing after request completion           |
 | **Streaming**            | Real-time via execution.read() or stdout chunks   | No streaming (full response only)                       |
 | **Cancellation**         | Kill process or send Ctrl+C                       | Cancel chat command / detect cancellation in session    |

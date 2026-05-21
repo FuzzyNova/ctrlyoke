@@ -91,86 +91,86 @@ export function GeneralSection({
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           UI Preferences
         </h3>
-      <SettingToggleRow
-        label="Show CLI output"
-        description="Display the AI CLI output in the output panel."
-        checked={ui.showCliOutput}
-        onChange={(v) => onUpdate("ui.showCliOutput", v)}
-        path="ui.showCliOutput"
-        {...rowProps}
-      />
-      <SettingToggleRow
-        label="Show CLI command"
-        description="Show the CLI command used to start the AI harness."
-        checked={ui.showCliCommand}
-        onChange={(v) => onUpdate("ui.showCliCommand", v)}
-        path="ui.showCliCommand"
-        {...rowProps}
-      />
-      <SettingToggleRow
-        label="Headless permission warning"
-        description="Warn when headless execution uses limited tool permissions."
-        checked={ui.showHeadlessPermissionWarning}
-        onChange={(v) => onUpdate("ui.showHeadlessPermissionWarning", v)}
-        path="ui.showHeadlessPermissionWarning"
-        {...rowProps}
-      />
-      <SettingToggleRow
-        label="Auto-focus output on execution"
-        description="Automatically expand the output section when a prompt starts. Headless runs show Output; interactive and inject-mode runs show Terminal."
-        checked={ui.autoFocusOutputOnExecution}
-        onChange={(v) => onUpdate("ui.autoFocusOutputOnExecution", v)}
-        path="ui.autoFocusOutputOnExecution"
-        {...rowProps}
-      />
-      <SettingToggleRow
-        label="Open prompts in second group"
-        description="Open prompt files in the second editor group."
-        checked={ui.openPromptsInSecondGroup}
-        onChange={(v) => onUpdate("ui.openPromptsInSecondGroup", v)}
-        path="ui.openPromptsInSecondGroup"
-        {...rowProps}
-      />
-      <SettingToggleRow
-        label="Respect .gitignore for completions"
-        description="Filter file completions using .gitignore rules."
-        checked={ui.respectGitignoreForCompletions}
-        onChange={(v) => onUpdate("ui.respectGitignoreForCompletions", v)}
-        path="ui.respectGitignoreForCompletions"
-        {...rowProps}
-      />
-      <SettingToggleRow
-        label="Auto-expand editor when typing"
-        description="Automatically grow the editor panel as you type past its current height, up to 60% of the available area. Shrinks back when text is deleted or the prompt is submitted."
-        checked={ui.autoExpandEditorWhenTyping}
-        onChange={(v) => onUpdate("ui.autoExpandEditorWhenTyping", v)}
-        path="ui.autoExpandEditorWhenTyping"
-        {...rowProps}
-      />
-      <SettingToggleRow
-        label="Confirm delete operations"
-        description="Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files."
-        checked={ui.confirmDeleteOperations}
-        onChange={(v) => onUpdate("ui.confirmDeleteOperations", v)}
-        path="ui.confirmDeleteOperations"
-        {...rowProps}
-      />
-      <SettingToggleRow
-        label="Confirm reset operations"
-        description="Show a confirmation dialog before resetting the workflow."
-        checked={ui.confirmResetOperations}
-        onChange={(v) => onUpdate("ui.confirmResetOperations", v)}
-        path="ui.confirmResetOperations"
-        {...rowProps}
-      />
-      <SettingToggleRow
-        label="Show hidden files"
-        description="Show dotfiles and hidden directories in the workspace file explorer and workflow file picker."
-        checked={ui.showHiddenFiles}
-        onChange={(v) => onUpdate("ui.showHiddenFiles", v)}
-        path="ui.showHiddenFiles"
-        {...rowProps}
-      />
+        <SettingToggleRow
+          label="Show CLI output"
+          description="Display the AI CLI output in the output panel."
+          checked={ui.showCliOutput}
+          onChange={(v) => onUpdate("ui.showCliOutput", v)}
+          path="ui.showCliOutput"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Show CLI command"
+          description="Show the CLI command used to start the AI harness."
+          checked={ui.showCliCommand}
+          onChange={(v) => onUpdate("ui.showCliCommand", v)}
+          path="ui.showCliCommand"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Headless permission warning"
+          description="Warn when headless execution uses limited tool permissions."
+          checked={ui.showHeadlessPermissionWarning}
+          onChange={(v) => onUpdate("ui.showHeadlessPermissionWarning", v)}
+          path="ui.showHeadlessPermissionWarning"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Auto-focus output on execution"
+          description="Automatically expand the output section when a prompt starts. Headless runs show Output; interactive and inject-mode runs show Terminal."
+          checked={ui.autoFocusOutputOnExecution}
+          onChange={(v) => onUpdate("ui.autoFocusOutputOnExecution", v)}
+          path="ui.autoFocusOutputOnExecution"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Open prompts in second group"
+          description="Open prompt files in the second editor group."
+          checked={ui.openPromptsInSecondGroup}
+          onChange={(v) => onUpdate("ui.openPromptsInSecondGroup", v)}
+          path="ui.openPromptsInSecondGroup"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Respect .gitignore for completions"
+          description="Filter file completions using .gitignore rules."
+          checked={ui.respectGitignoreForCompletions}
+          onChange={(v) => onUpdate("ui.respectGitignoreForCompletions", v)}
+          path="ui.respectGitignoreForCompletions"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Auto-expand editor when typing"
+          description="Automatically grow the editor panel as you type past its current height, up to 60% of the available area. Shrinks back when text is deleted or the prompt is submitted."
+          checked={ui.autoExpandEditorWhenTyping}
+          onChange={(v) => onUpdate("ui.autoExpandEditorWhenTyping", v)}
+          path="ui.autoExpandEditorWhenTyping"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Confirm delete operations"
+          description="Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files."
+          checked={ui.confirmDeleteOperations}
+          onChange={(v) => onUpdate("ui.confirmDeleteOperations", v)}
+          path="ui.confirmDeleteOperations"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Confirm reset operations"
+          description="Show a confirmation dialog before resetting the workflow."
+          checked={ui.confirmResetOperations}
+          onChange={(v) => onUpdate("ui.confirmResetOperations", v)}
+          path="ui.confirmResetOperations"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Show hidden files"
+          description="Show dotfiles and hidden directories in the workspace file explorer and workflow file picker."
+          checked={ui.showHiddenFiles}
+          onChange={(v) => onUpdate("ui.showHiddenFiles", v)}
+          path="ui.showHiddenFiles"
+          {...rowProps}
+        />
       </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">

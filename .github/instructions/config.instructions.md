@@ -111,21 +111,21 @@ Only flags that were explicitly passed by the user go into the overlay — Comma
 <settingsStructure>
 **`FlightPathGlobalSettings`** top-level keys (see `src/types/FlightPathSettings.ts` for full details):
 
-| Key                    | Type                                 | Purpose                                                                                                      |
-| ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `general`              | object                               | Global UX defaults: `defaultFormat`, `defaultTemplate`, `autoLoadRecentSession`, `omitAgentsSkillsOnResume` |
-| `defaults`             | object                               | Workflow-step defaults mirrored from execution properties: harness, models, additional args, agent, skills, resume/prior context, MCP servers, hooks, tool permissions, default end/pre conditions |
-| `permissions`          | object                               | Harness-specific advanced permission settings: allowed dirs, Copilot allow-all-paths, Codex sandbox + approval policy |
-| `execution`            | object                               | `mode`, `injectMode`, `maxPromptTimeout`, `scriptTimeout`, `closeTerminalOnComplete`, `autoDeleteTempFiles` |
-| `chat`                 | object                               | Window location, inactivity timeout, timeout behavior, forced agent mode, native attachments                |
-| `queue`                | object                               | Max size, max workflow execution time, unlimited mode, notify-on-extension behavior                         |
-| `history`              | object                               | Output saving and max run retention                                                                          |
-| `terminal`             | `TerminalSettings`                   | Embedded terminal display: font, scrollback, cursor, shell executable, mobile control bar and shortcuts      |
-| `ui`                   | object                               | Display flags, gitignore filtering, confirmation dialogs, output focus, editor expansion, hidden-file toggle |
-| `server`               | object                               | Hosted dashboard: enabled, ports, theme, bind address, TLS, icon colors                                      |
-| `notifications`        | `FlightPathNotificationSettings`     | VS Code + browser notifications, per-event modes, hook-event toggles, naming/focus behavior                 |
-| `commit`               | object                               | Commit-message generation defaults: harness, model, prompt                                                   |
-| `enableDiagnosticLogs` | `boolean`                            | Global diagnostic logging toggle                                                                             |
+| Key                    | Type                             | Purpose                                                                                                                                                                                            |
+| ---------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `general`              | object                           | Global UX defaults: `defaultFormat`, `defaultTemplate`, `autoLoadRecentSession`, `omitAgentsSkillsOnResume`                                                                                        |
+| `defaults`             | object                           | Workflow-step defaults mirrored from execution properties: harness, models, additional args, agent, skills, resume/prior context, MCP servers, hooks, tool permissions, default end/pre conditions |
+| `permissions`          | object                           | Harness-specific advanced permission settings: allowed dirs, Copilot allow-all-paths, Codex sandbox + approval policy                                                                              |
+| `execution`            | object                           | `mode`, `injectMode`, `maxPromptTimeout`, `scriptTimeout`, `closeTerminalOnComplete`, `autoDeleteTempFiles`                                                                                        |
+| `chat`                 | object                           | Window location, inactivity timeout, timeout behavior, forced agent mode, native attachments                                                                                                       |
+| `queue`                | object                           | Max size, max workflow execution time, unlimited mode, notify-on-extension behavior                                                                                                                |
+| `history`              | object                           | Output saving and max run retention                                                                                                                                                                |
+| `terminal`             | `TerminalSettings`               | Embedded terminal display: font, scrollback, cursor, shell executable, mobile control bar and shortcuts                                                                                            |
+| `ui`                   | object                           | Display flags, gitignore filtering, confirmation dialogs, output focus, editor expansion, hidden-file toggle                                                                                       |
+| `server`               | object                           | Hosted dashboard: enabled, ports, theme, bind address, TLS, icon colors                                                                                                                            |
+| `notifications`        | `FlightPathNotificationSettings` | VS Code + browser notifications, per-event modes, hook-event toggles, naming/focus behavior                                                                                                        |
+| `commit`               | object                           | Commit-message generation defaults: harness, model, prompt                                                                                                                                         |
+| `enableDiagnosticLogs` | `boolean`                        | Global diagnostic logging toggle                                                                                                                                                                   |
 
 **`PartialFlightPathSettings`** — shallow-partial version (top-level keys optional, nested objects also partial). Used for config file contents and the CLI overlay.
 

@@ -56,7 +56,10 @@ export class ClaudeToolPermissionMapper
         this.convertToClaudeFormat(t)
       );
       if (convertedAllowTools.length > 0) {
-        args.push("--allowedTools", ...convertedAllowTools.map((t) => `"${t}"`));
+        args.push(
+          "--allowedTools",
+          ...convertedAllowTools.map((t) => `"${t}"`)
+        );
         Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
       }
     }
@@ -65,7 +68,10 @@ export class ClaudeToolPermissionMapper
       this.convertToClaudeFormat(t)
     );
     if (convertedDenyTools.length > 0) {
-      args.push("--disallowedTools", ...convertedDenyTools.map((t) => `"${t}"`));
+      args.push(
+        "--disallowedTools",
+        ...convertedDenyTools.map((t) => `"${t}"`)
+      );
       Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
     }
 

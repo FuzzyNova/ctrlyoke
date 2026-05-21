@@ -37,7 +37,9 @@ export class WorkspaceInitializer {
    * This check is synchronous and cheap (fs.existsSync only).
    */
   static isInitialized(workspaceRoot: string): boolean {
-    if (fs.existsSync(path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR))) {
+    if (
+      fs.existsSync(path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR))
+    ) {
       return true;
     }
     return (

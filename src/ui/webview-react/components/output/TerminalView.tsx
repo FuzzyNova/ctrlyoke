@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Panel,
   Group,
@@ -181,8 +187,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
       }
       terminalRegistry.clearSession(workflowId, session.id);
       removeSession(workflowId, session.id);
-      const remaining =
-        useTerminalStore.getState().sessions[workflowId] ?? [];
+      const remaining = useTerminalStore.getState().sessions[workflowId] ?? [];
       if (remaining.length === 0) {
         setActiveOutputTab(workflowId, "output");
       }
@@ -190,13 +195,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
     [workflowId, removeSession, setActiveOutputTab]
   );
 
-  const { openContextMenu, terminalContextMenuPortal } =
-    useTerminalContextMenu({
+  const { openContextMenu, terminalContextMenuPortal } = useTerminalContextMenu(
+    {
       workflowId,
       activeSession,
       isExecutionActive: isWorkflowExecuting,
       onClose: handleCloseSession,
-    });
+    }
+  );
 
   const terminalLongPressHandlers = useLongPress(openContextMenu);
   const { shouldShow: shouldShowMobileTerminalBar } = useMobileTerminalBar();

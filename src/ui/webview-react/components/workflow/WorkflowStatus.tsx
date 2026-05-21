@@ -394,19 +394,19 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Remove a single entry from recent workflow history — shows confirm modal or deletes directly
   const handleRemoveWorkflow = useCallback(
     (filePath: string) => {
-    if (!globalSettings.confirmDeleteOperations) {
-      // Skip modal — user opted out of delete confirmation
-      vscode.postMessage({
-        type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
-        filePath,
-      });
-      setRecentWorkflows(
-        useUiStore
-          .getState()
-          .recentWorkflows.filter((w) => w.filePath !== filePath)
-      );
-      return;
-    }
+      if (!globalSettings.confirmDeleteOperations) {
+        // Skip modal — user opted out of delete confirmation
+        vscode.postMessage({
+          type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+          filePath,
+        });
+        setRecentWorkflows(
+          useUiStore
+            .getState()
+            .recentWorkflows.filter((w) => w.filePath !== filePath)
+        );
+        return;
+      }
       // Show confirmation modal
       setPendingDeletePath(filePath);
     },

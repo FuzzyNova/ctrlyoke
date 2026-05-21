@@ -257,7 +257,9 @@ export class EndConditionEvaluator {
           await EndConditionEvaluator.canonicalizePath(workspacePath);
         const canonicalRoot =
           await EndConditionEvaluator.canonicalizePath(workspaceRoot);
-        if (!EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)) {
+        if (
+          !EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)
+        ) {
           Log.error(
             `Security: Script path traversal detected: "${workspacePath}" resolves outside workspace root "${workspaceRoot}"`
           );
@@ -280,7 +282,9 @@ export class EndConditionEvaluator {
           await EndConditionEvaluator.canonicalizePath(flightpathPath);
         const canonicalRoot =
           await EndConditionEvaluator.canonicalizePath(workspaceRoot);
-        if (!EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)) {
+        if (
+          !EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)
+        ) {
           Log.error(
             `Security: Script path traversal detected: "${flightpathPath}" resolves outside workspace root "${workspaceRoot}"`
           );
@@ -301,7 +305,10 @@ export class EndConditionEvaluator {
       const canonicalHomeScripts =
         await EndConditionEvaluator.canonicalizePath(homeScriptsDir);
       if (
-        !EndConditionEvaluator.isWithinDirectory(canonical, canonicalHomeScripts)
+        !EndConditionEvaluator.isWithinDirectory(
+          canonical,
+          canonicalHomeScripts
+        )
       ) {
         Log.error(
           `Security: Script path traversal detected in home scripts directory: "${homeScriptPath}"`
@@ -328,7 +335,12 @@ export class EndConditionEvaluator {
     if (workspaceRoot) {
       const canonicalRoot =
         await EndConditionEvaluator.canonicalizePath(workspaceRoot);
-      if (EndConditionEvaluator.isWithinDirectory(canonicalCandidate, canonicalRoot)) {
+      if (
+        EndConditionEvaluator.isWithinDirectory(
+          canonicalCandidate,
+          canonicalRoot
+        )
+      ) {
         return true;
       }
     }
@@ -362,8 +374,7 @@ export class EndConditionEvaluator {
    */
   static isWithinDirectory(candidate: string, directory: string): boolean {
     return (
-      candidate === directory ||
-      candidate.startsWith(directory + path.sep)
+      candidate === directory || candidate.startsWith(directory + path.sep)
     );
   }
 

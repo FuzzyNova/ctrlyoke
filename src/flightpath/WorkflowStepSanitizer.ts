@@ -37,15 +37,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function cloneStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item) => typeof item === "string")
+  ) {
     return undefined;
   }
   return [...value];
 }
 
-function cloneStringRecord(
-  value: unknown
-): Record<string, string> | undefined {
+function cloneStringRecord(value: unknown): Record<string, string> | undefined {
   if (!isRecord(value)) {
     return undefined;
   }

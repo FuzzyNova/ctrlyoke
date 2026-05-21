@@ -59,7 +59,6 @@ export async function readWorkflowStepFromClipboard(): Promise<WorkflowStep> {
   return parseWorkflowStepClipboardText(await readClipboardText());
 }
 
-
 export function buildWorkflowStepEnabledUpdate(
   step: WorkflowStep,
   enabled: boolean

@@ -222,7 +222,9 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
                 onToggleEnabled();
               }}
               title={isDisabled ? "Enable final step" : "Disable final step"}
-              aria-label={isDisabled ? "Enable final step" : "Disable final step"}
+              aria-label={
+                isDisabled ? "Enable final step" : "Disable final step"
+              }
             >
               <i
                 className={`codicon ${isDisabled ? "codicon-check" : "codicon-circle-slash"} text-xs`}

@@ -59,7 +59,9 @@ describe("useStepContextMenu", () => {
     render(<TestHarness step={{ prompt: "Original prompt" }} />);
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Paste Step" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Paste Step" })
+    ).not.toBeDisabled();
 
     const labels = screen
       .getAllByRole("button")
@@ -90,9 +92,13 @@ describe("useStepContextMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
 
-    expect(screen.getByRole("button", { name: "Paste Step" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Paste Step" })
+    ).not.toBeDisabled();
 
-    expect(screen.getByRole("button", { name: "Copy Script" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Copy Script" })
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable" })).toBeInTheDocument();
   });
 });

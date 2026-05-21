@@ -1718,7 +1718,10 @@ export class WorkflowInstance {
       }
     } else if (finalStep && isScriptStep(finalStep)) {
       const persistableFinalStep = stripViewOnlyWorkflowStepFields(finalStep);
-      this.promptQueue.updateWorkflowProperty("finalStep", persistableFinalStep);
+      this.promptQueue.updateWorkflowProperty(
+        "finalStep",
+        persistableFinalStep
+      );
       await this.promptQueue.updateWorkingFileProperties({
         finalStep: persistableFinalStep,
       });
@@ -1793,13 +1796,21 @@ export class WorkflowInstance {
     const stepCount = queueState.steps.length;
     const completedCount = this.promptQueue.getCompletedCount();
 
-    if (status === EXECUTION_STATES.STOPPED && stepCount > 0 && completedCount === stepCount) {
+    if (
+      status === EXECUTION_STATES.STOPPED &&
+      stepCount > 0 &&
+      completedCount === stepCount
+    ) {
       Log.info(
         `[WorkflowInstance] reconcileExecutionState: all ${stepCount} step(s) completed while STOPPED — transitioning to COMPLETED`
       );
       this.workflowRuntime.complete();
       await this.promptQueue.updateWorkingFile();
-    } else if (status === EXECUTION_STATES.COMPLETED && stepCount > 0 && completedCount < stepCount) {
+    } else if (
+      status === EXECUTION_STATES.COMPLETED &&
+      stepCount > 0 &&
+      completedCount < stepCount
+    ) {
       Log.info(
         `[WorkflowInstance] reconcileExecutionState: ${stepCount - completedCount} non-terminal step(s) present while COMPLETED — reopening for continuation`
       );

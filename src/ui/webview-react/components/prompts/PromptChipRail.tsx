@@ -308,13 +308,14 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
       currentStep,
     });
 
-  const { openPasteToEndMenu, pasteToEndMenuPortal } =
-    usePasteToEndContextMenu({
+  const { openPasteToEndMenu, pasteToEndMenuPortal } = usePasteToEndContextMenu(
+    {
       isCLIManaged,
       canPasteStep,
       executionState,
       totalSteps: prompts.length,
-    });
+    }
+  );
 
   const bgLongPressHandlers = useLongPress(openPasteToEndMenu, 500, true);
 

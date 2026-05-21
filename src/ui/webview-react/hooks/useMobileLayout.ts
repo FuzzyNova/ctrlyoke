@@ -11,7 +11,10 @@ import type {
   GroupImperativeHandle,
 } from "react-resizable-panels";
 import { useUiStore } from "@store/uiStore";
-import { centerPanelMountDefaults, syncCollapsiblePanel } from "@utils/panelSync";
+import {
+  centerPanelMountDefaults,
+  syncCollapsiblePanel,
+} from "@utils/panelSync";
 
 interface MobileLayoutParams {
   isMobile: boolean;
@@ -51,7 +54,11 @@ export function useMobileLayout({
     output: string | undefined;
     editor: string | undefined;
   }>(
-    centerPanelMountDefaults(outputCollapsed, editorCollapsed, lastMobileSizes.current.editor)
+    centerPanelMountDefaults(
+      outputCollapsed,
+      editorCollapsed,
+      lastMobileSizes.current.editor
+    )
   );
 
   // Tracks all-collapsed → some-open transition; App.tsx updates this during

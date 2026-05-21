@@ -17,7 +17,10 @@ export { useMcpServerActions } from "./useMcpServerActions";
 export { usePromptStatus } from "./usePromptStatus";
 export { useContextPct } from "./useContextPct";
 export { useStepClickHandler } from "./useStepClickHandler";
-export { useStepContextMenu, usePasteToEndContextMenu } from "./useStepContextMenu";
+export {
+  useStepContextMenu,
+  usePasteToEndContextMenu,
+} from "./useStepContextMenu";
 export { useFinalStepContextMenu } from "./useFinalStepContextMenu";
 export { useLongPress } from "./useLongPress";
 export { useLatestStepOutput } from "./useLatestStepOutput";

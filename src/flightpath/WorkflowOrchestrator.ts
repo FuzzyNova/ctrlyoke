@@ -849,7 +849,9 @@ export class WorkflowOrchestrator {
   setWorkspaceInitPending(workspaceRoot: string): void {
     this.workspaceInitPending = true;
     this.pendingInitWorkspaceRoot = workspaceRoot;
-    Log.info(`FlightPath: Workspace initialization pending for "${workspaceRoot}"`);
+    Log.info(
+      `FlightPath: Workspace initialization pending for "${workspaceRoot}"`
+    );
   }
 
   /**
@@ -859,11 +861,12 @@ export class WorkflowOrchestrator {
    */
   async handleInitializeWorkspace(): Promise<void> {
     const workspaceRoot =
-      this.pendingInitWorkspaceRoot ??
-      this.currentWorkspaceFolder?.uri.fsPath;
+      this.pendingInitWorkspaceRoot ?? this.currentWorkspaceFolder?.uri.fsPath;
 
     if (!workspaceRoot) {
-      Log.warn("FlightPath: handleInitializeWorkspace called with no workspace root");
+      Log.warn(
+        "FlightPath: handleInitializeWorkspace called with no workspace root"
+      );
       return;
     }
 

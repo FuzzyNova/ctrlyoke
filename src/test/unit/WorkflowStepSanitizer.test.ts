@@ -1,9 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import {
-  CONDITION_ACTIONS,
-  STEP_TYPES,
-} from "../../types/DashboardConstants";
+import { CONDITION_ACTIONS, STEP_TYPES } from "../../types/DashboardConstants";
 import {
   parseClipboardWorkflowStep,
   sanitizeClipboardWorkflowStep,

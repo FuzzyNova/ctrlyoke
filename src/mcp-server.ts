@@ -914,7 +914,9 @@ class FlightPathMCPServer {
       await fs.writeFile(outputPath, message.trim(), "utf8");
       log("Commit message written to:", outputPath);
     } else {
-      log("FLIGHTPATH_COMMIT_OUTPUT not set — message captured but not persisted");
+      log(
+        "FLIGHTPATH_COMMIT_OUTPUT not set — message captured but not persisted"
+      );
     }
 
     return {

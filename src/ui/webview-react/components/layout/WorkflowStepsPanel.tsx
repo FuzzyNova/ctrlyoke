@@ -203,13 +203,14 @@ export const WorkflowStepsPanel: React.FC<{
     currentStep,
   });
 
-  const { openPasteToEndMenu, pasteToEndMenuPortal } =
-    usePasteToEndContextMenu({
+  const { openPasteToEndMenu, pasteToEndMenuPortal } = usePasteToEndContextMenu(
+    {
       isCLIManaged,
       canPasteStep,
       executionState,
       totalSteps: steps.length,
-    });
+    }
+  );
 
   const bgLongPressHandlers = useLongPress(openPasteToEndMenu, 500, true);
 
@@ -941,7 +942,9 @@ export const WorkflowStepsPanel: React.FC<{
                   // matching the post-reorder backend index for this slot.
                   const setPositionTarget = currentStep + visualIdx;
                   const slotNumber = currentStep + visualIdx + 1;
-                  const outputText = latestOutput?.response as string | undefined;
+                  const outputText = latestOutput?.response as
+                    | string
+                    | undefined;
                   const isDisabled = step.enabled === false;
                   const isExecutionTargetLocked =
                     (isWorkflowActive(executionState) ||

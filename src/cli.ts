@@ -289,7 +289,10 @@ async function runCommand(
     overlay.defaults = { harness: options.harness as HarnessId };
   }
   if (options.model) {
-    overlay.defaults = { ...overlay.defaults, models: { [config.harness as HarnessId]: options.model } };
+    overlay.defaults = {
+      ...overlay.defaults,
+      models: { [config.harness as HarnessId]: options.model },
+    };
   }
   if (options.headless) {
     overlay.execution = { mode: "headless" };
@@ -305,20 +308,29 @@ async function runCommand(
     overlay.defaults = {
       ...overlay.defaults,
       toolPermissions: {
-        mode: options.permissionMode as "dangerouslyAllowAll" | "allowAll" | "custom",
+        mode: options.permissionMode as
+          | "dangerouslyAllowAll"
+          | "allowAll"
+          | "custom",
       },
     };
   }
   if (options.allowTool?.length) {
     overlay.defaults = {
       ...overlay.defaults,
-      toolPermissions: { ...(overlay.defaults?.toolPermissions ?? {}), allowedTools: options.allowTool },
+      toolPermissions: {
+        ...(overlay.defaults?.toolPermissions ?? {}),
+        allowedTools: options.allowTool,
+      },
     };
   }
   if (options.denyTool?.length) {
     overlay.defaults = {
       ...overlay.defaults,
-      toolPermissions: { ...(overlay.defaults?.toolPermissions ?? {}), deniedTools: options.denyTool },
+      toolPermissions: {
+        ...(overlay.defaults?.toolPermissions ?? {}),
+        deniedTools: options.denyTool,
+      },
     };
   }
   configService.setCliOverlay(overlay);

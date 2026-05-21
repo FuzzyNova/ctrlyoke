@@ -443,10 +443,10 @@ export class PromptQueue {
             terminal === PROMPT_TERMINAL_STATUS.SKIPPED
               ? STEP_STATUS.SKIPPED
               : terminal === PROMPT_TERMINAL_STATUS.CANCELLED
-              ? STEP_STATUS.CANCELLED
-              : terminal === PROMPT_TERMINAL_STATUS.FAILED
-                ? STEP_STATUS.FAILED
-                : STEP_STATUS.COMPLETED;
+                ? STEP_STATUS.CANCELLED
+                : terminal === PROMPT_TERMINAL_STATUS.FAILED
+                  ? STEP_STATUS.FAILED
+                  : STEP_STATUS.COMPLETED;
         }
         // Check if this is the current prompt (always PENDING or SENT — never CANCELLED)
         else if (index === this.state.currentIndex) {
@@ -1193,7 +1193,9 @@ export class PromptQueue {
     source: string = "Clipboard paste"
   ): Promise<void> {
     if (!this.canAppend()) {
-      throw new Error("Cannot insert step: Queue is in cancelled or error state");
+      throw new Error(
+        "Cannot insert step: Queue is in cancelled or error state"
+      );
     }
 
     const queueLength = this.state.steps.length;
@@ -1635,7 +1637,11 @@ export class PromptQueue {
 
     this.state.results = this.state.steps.map((step, index) => ({
       prompt: isScriptStep(step) ? step.script : step.prompt,
-      status: this.getResultStatusFromRuntime(step, index, restoredCurrentIndex),
+      status: this.getResultStatusFromRuntime(
+        step,
+        index,
+        restoredCurrentIndex
+      ),
       timestamp: new Date(),
     }));
 
@@ -1711,10 +1717,10 @@ export class PromptQueue {
       return terminal === PROMPT_TERMINAL_STATUS.SKIPPED
         ? STEP_STATUS.SKIPPED
         : terminal === PROMPT_TERMINAL_STATUS.CANCELLED
-        ? STEP_STATUS.CANCELLED
-        : terminal === PROMPT_TERMINAL_STATUS.FAILED
-          ? STEP_STATUS.FAILED
-          : STEP_STATUS.COMPLETED;
+          ? STEP_STATUS.CANCELLED
+          : terminal === PROMPT_TERMINAL_STATUS.FAILED
+            ? STEP_STATUS.FAILED
+            : STEP_STATUS.COMPLETED;
     }
 
     return index === currentIndex &&

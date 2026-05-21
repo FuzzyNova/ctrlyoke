@@ -4,9 +4,11 @@ import { CodexCliProvider } from "../../flightpath/harness/codex/CodexCliProvide
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-function makeWorkflowContext(
-  resumeSession?: boolean
-): { promptIndex: number; allPrompts: never[]; resolvedProperties: { resumeSession?: boolean } } {
+function makeWorkflowContext(resumeSession?: boolean): {
+  promptIndex: number;
+  allPrompts: never[];
+  resolvedProperties: { resumeSession?: boolean };
+} {
   return {
     promptIndex: 0,
     allPrompts: [],

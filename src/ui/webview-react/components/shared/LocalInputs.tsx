@@ -9,7 +9,11 @@ type LocalTextInputProps = Omit<
   onCommit: (value: string) => void;
 };
 
-export function LocalTextInput({ value, onCommit, ...props }: LocalTextInputProps) {
+export function LocalTextInput({
+  value,
+  onCommit,
+  ...props
+}: LocalTextInputProps) {
   const local = useLocalInput(value, onCommit);
   return <input type="text" {...props} {...local} />;
 }
@@ -29,9 +33,8 @@ export function LocalNumberInput({
   parse,
   ...props
 }: LocalNumberInputProps) {
-  const local = useLocalInput(
-    String(value),
-    (v) => onCommit(parse ? parse(v) : Number(v))
+  const local = useLocalInput(String(value), (v) =>
+    onCommit(parse ? parse(v) : Number(v))
   );
   return <input type="number" {...props} {...local} />;
 }
@@ -44,7 +47,11 @@ type LocalTextareaProps = Omit<
   onCommit: (value: string) => void;
 };
 
-export function LocalTextarea({ value, onCommit, ...props }: LocalTextareaProps) {
+export function LocalTextarea({
+  value,
+  onCommit,
+  ...props
+}: LocalTextareaProps) {
   const local = useLocalInput(value, onCommit);
   return <textarea {...props} {...local} />;
 }

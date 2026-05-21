@@ -14,7 +14,8 @@ interface GitExtension {
 
 function getGitInputBox(cwd: string): { value: string } | undefined {
   try {
-    const gitExt = vscode.extensions.getExtension<GitExtension>("vscode.git")?.exports;
+    const gitExt =
+      vscode.extensions.getExtension<GitExtension>("vscode.git")?.exports;
     const api = gitExt?.getAPI(1);
     const repo =
       api?.repositories.find((r) => r.rootUri.fsPath === cwd) ??
@@ -81,12 +82,13 @@ export class ScmCommitCommand {
               return;
             }
 
-            const { message, prompt, cliCommand } = await this.generator.generateMessage(
-              diffResult.diff,
-              cwd,
-              abortController.signal,
-              existingText
-            );
+            const { message, prompt, cliCommand } =
+              await this.generator.generateMessage(
+                diffResult.diff,
+                cwd,
+                abortController.signal,
+                existingText
+              );
 
             commitMessageGenerationTracker.setLastRecord({
               source: "scm",

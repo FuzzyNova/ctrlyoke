@@ -55,7 +55,11 @@ export const StartupOverlay: React.FC = () => {
           "color-mix(in srgb, var(--vscode-editor-background) 70%, transparent)",
       }}
       aria-live="polite"
-      aria-label={workspaceInitRequired ? "Initialize FlightPath in this workspace" : "Loading FlightPath\u2026"}
+      aria-label={
+        workspaceInitRequired
+          ? "Initialize FlightPath in this workspace"
+          : "Loading FlightPath\u2026"
+      }
     >
       {workspaceInitRequired ? (
         <div className="flex flex-col items-center gap-4 max-w-xs text-center px-4">
@@ -85,7 +89,9 @@ export const StartupOverlay: React.FC = () => {
                        focus:outline-none focus:ring-1 focus:ring-focus-border
                        cursor-pointer select-none"
             onClick={() =>
-              getVsCodeApi().postMessage({ type: MESSAGE_TYPES.INITIALIZE_WORKSPACE })
+              getVsCodeApi().postMessage({
+                type: MESSAGE_TYPES.INITIALIZE_WORKSPACE,
+              })
             }
           >
             Initialize FlightPath

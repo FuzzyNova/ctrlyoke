@@ -510,7 +510,8 @@ This file already exists and is already shared by the hosted server. Standalone 
 
 ```javascript
 (function () {
-  const workspaceKey = new URLSearchParams(location.search).get("workspaceKey") || "default";
+  const workspaceKey =
+    new URLSearchParams(location.search).get("workspaceKey") || "default";
   const stateKey = `flightpath:${workspaceKey}:webviewState`;
   let _state = JSON.parse(localStorage.getItem(stateKey) || "{}");
   const ws = new WebSocket(`ws://${location.host}/ws`);
@@ -1121,14 +1122,14 @@ Server validates harness at startup and rejects `copilot-chat` with a clear erro
 
 Standalone mode changes the storage model. The VS Code sidebar can persist through VS Code's webview state API, but a standalone browser tab needs browser-native storage. Do not rely on `sessionStorage` for editor drafts because it disappears when the tab closes.
 
-| State category                                      | VS Code / hosted extension behavior                                              | Standalone server behavior                                                                                 |
-| --------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Zustand persisted UI state (`uiStore`)              | `vscode.getState()` / `vscode.setState()` via the webview state storage adapter   | `localStorage` through the shim, scoped by `workspaceKey`                                                   |
-| Prompt editor webview state (`editorStore`)         | Existing root webview state object                                                | Same shim contract, backed by scoped `localStorage`                                                        |
-| Workspace viewer unsaved drafts (`fileDrafts`)      | Persisted through the shared webview state storage adapter                        | Persisted through scoped `localStorage`, so closing/reopening a browser tab does not lose unsaved edits     |
-| Live workflow/orchestrator state                    | Extension/orchestrator memory plus `.flightpath/.queue` and `.flightpath/.history` | Server/orchestrator memory plus `.flightpath/.queue` and `.flightpath/.history`; never browser localStorage |
-| Recent workflow list / server-level preferences     | VS Code context/global state or FlightPath config service                         | File-backed storage, likely `.flightpath/server-state.json` or `~/.flightpath/server-state.json`            |
-| Auth token / TLS secrets                            | VS Code secret/global storage + config                                            | Server-side token file or ephemeral CLI token; never browser localStorage                                   |
+| State category                                  | VS Code / hosted extension behavior                                                | Standalone server behavior                                                                                  |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Zustand persisted UI state (`uiStore`)          | `vscode.getState()` / `vscode.setState()` via the webview state storage adapter    | `localStorage` through the shim, scoped by `workspaceKey`                                                   |
+| Prompt editor webview state (`editorStore`)     | Existing root webview state object                                                 | Same shim contract, backed by scoped `localStorage`                                                         |
+| Workspace viewer unsaved drafts (`fileDrafts`)  | Persisted through the shared webview state storage adapter                         | Persisted through scoped `localStorage`, so closing/reopening a browser tab does not lose unsaved edits     |
+| Live workflow/orchestrator state                | Extension/orchestrator memory plus `.flightpath/.queue` and `.flightpath/.history` | Server/orchestrator memory plus `.flightpath/.queue` and `.flightpath/.history`; never browser localStorage |
+| Recent workflow list / server-level preferences | VS Code context/global state or FlightPath config service                          | File-backed storage, likely `.flightpath/server-state.json` or `~/.flightpath/server-state.json`            |
+| Auth token / TLS secrets                        | VS Code secret/global storage + config                                             | Server-side token file or ephemeral CLI token; never browser localStorage                                   |
 
 Implementation requirements:
 

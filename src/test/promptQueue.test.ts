@@ -1286,7 +1286,9 @@ suite("PromptQueue State Machine Tests", () => {
     });
 
     test("should adopt persisted enabled changes while preserving in-memory runtime", () => {
-      queue.loadPrompts(createPromptFile([{ prompt: "prompt-0", enabled: true }]));
+      queue.loadPrompts(
+        createPromptFile([{ prompt: "prompt-0", enabled: true }])
+      );
       (queue as any).state.steps[0]._runtime = {
         sessionId: "s0",
         startedAt: 1000,

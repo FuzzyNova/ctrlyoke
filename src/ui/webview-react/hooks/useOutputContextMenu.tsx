@@ -72,8 +72,7 @@ export function useOutputContextMenu({
       const selectedText = window.getSelection()?.toString() ?? "";
 
       const containerRect = scrollContainer.getBoundingClientRect();
-      const clickPixelPos =
-        y - containerRect.top + scrollContainer.scrollTop;
+      const clickPixelPos = y - containerRect.top + scrollContainer.scrollTop;
       const scrollHeight = scrollContainer.scrollHeight;
       const clickFraction = scrollHeight > 0 ? clickPixelPos / scrollHeight : 0;
 

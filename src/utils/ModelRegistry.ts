@@ -247,11 +247,14 @@ async function queryOpenCodeModels(): Promise<void> {
     } catch (execError) {
       // opencode sometimes exits non-zero (e.g. internal "JSON Parse error") but
       // still writes the full model list to stdout before failing. Recover it.
-      stdout = (execError as NodeJS.ErrnoException & { stdout?: string }).stdout ?? "";
+      stdout =
+        (execError as NodeJS.ErrnoException & { stdout?: string }).stdout ?? "";
       if (!stdout.trim()) {
         throw execError;
       }
-      Log.debug(`opencode models --verbose exited non-zero but stdout has content — attempting parse`);
+      Log.debug(
+        `opencode models --verbose exited non-zero but stdout has content — attempting parse`
+      );
     }
     const ids = parseOpenCodeVerboseOutput(stdout);
     if (ids.length > 0) {

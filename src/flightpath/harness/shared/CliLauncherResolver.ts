@@ -79,7 +79,9 @@ async function getCliLauncher(commandName: string): Promise<CliLauncher> {
   return resolutionPromise;
 }
 
-async function resolveWindowsLauncher(commandName: string): Promise<CliLauncher> {
+async function resolveWindowsLauncher(
+  commandName: string
+): Promise<CliLauncher> {
   const shell = resolveWindowsShell();
   const metadata = await getWindowsCommandMetadata(commandName, shell);
 
@@ -104,7 +106,9 @@ async function resolveWindowsLauncher(commandName: string): Promise<CliLauncher>
   }
 
   const extension = path.extname(resolvedPath).toLowerCase();
-  Log.debug(`[CliLauncherResolver] ${commandName} → "${resolvedPath}" (${extension || "no ext"})`);
+  Log.debug(
+    `[CliLauncherResolver] ${commandName} → "${resolvedPath}" (${extension || "no ext"})`
+  );
 
   if (extension === ".ps1") {
     return {
@@ -148,10 +152,14 @@ async function getWindowsCommandMetadata(
       `if (-not $cmd) { $cmd = Get-Command -Name '${escapedName}' -CommandType ExternalScript ` +
       `-ErrorAction SilentlyContinue | Select-Object -First 1 Name,CommandType,Source,Path,Definition }; ` +
       `if ($cmd) { $cmd | ConvertTo-Json -Compress }`;
-    const { stdout } = await execFileAsync(shell, ["-NoProfile", "-Command", script], {
-      encoding: "utf8",
-      timeout: 5000,
-    });
+    const { stdout } = await execFileAsync(
+      shell,
+      ["-NoProfile", "-Command", script],
+      {
+        encoding: "utf8",
+        timeout: 5000,
+      }
+    );
     const trimmed = stdout.trim();
     if (!trimmed) {
       return undefined;

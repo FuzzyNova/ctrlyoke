@@ -53,7 +53,9 @@ export class CliProviderUtils {
 
       const resolved = await resolveCliCommand(commandName, commandArgs);
       const timeoutMs = options.timeoutMs ?? CLI_VERSION_CHECK_TIMEOUT_MS;
-      Log.debug(`[runVersionCommand] spawning: ${resolved.displayCommand} (kind=${resolved.launcherKind}, timeout=${timeoutMs}ms)`);
+      Log.debug(
+        `[runVersionCommand] spawning: ${resolved.displayCommand} (kind=${resolved.launcherKind}, timeout=${timeoutMs}ms)`
+      );
       const { stdout } = await execFileAsync(resolved.command, resolved.args, {
         encoding: "utf8",
         timeout: timeoutMs,

@@ -161,10 +161,10 @@ export function CommitSection({
         </h3>
 
         <p className="text-xs text-description-fg">
-          Shows the most recent real git diff text appended to the commit
-          prompt before FlightPath asked the selected harness to generate a
-          commit message. Opening this section does not run git or generate a
-          new preview.
+          Shows the most recent real git diff text appended to the commit prompt
+          before FlightPath asked the selected harness to generate a commit
+          message. Opening this section does not run git or generate a new
+          preview.
         </p>
 
         {generationSource ? (
@@ -224,7 +224,12 @@ export function CommitSection({
               <div className="text-xs font-semibold text-description-fg">
                 Prompt sent to harness:
               </div>
-              <PromptPreview text={lastCommitMessageGeneration.prompt ?? lastCommitMessageGeneration.output} />
+              <PromptPreview
+                text={
+                  lastCommitMessageGeneration.prompt ??
+                  lastCommitMessageGeneration.output
+                }
+              />
             </div>
 
             {lastCommitMessageGeneration.generatedMessage ? (

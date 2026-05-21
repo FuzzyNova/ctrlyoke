@@ -27,15 +27,15 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 <platformAdapter>
 **PlatformAdapter** (`PlatformAdapter.ts`) — the interface contract:
 
-| Method                            | VS Code                                   | CLI                                                                   |
-| --------------------------------- | ----------------------------------------- | --------------------------------------------------------------------- |
+| Method                            | VS Code                                                                                 | CLI                                                                   |
+| --------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `getWorkspaceRoot()`              | `workspaceFolders[0].uri.fsPath` (falls back to `process.cwd()` when no folder is open) | `config.cwd ?? process.cwd()`                                         |
-| `log(message)`                    | `showInformationMessage()`                | `console.log()` (suppressed when `--quiet`)                           |
-| `warn(message)`                   | `showWarningMessage()`                    | `console.warn()` (suppressed when `--quiet`)                          |
-| `error(message)`                  | `showErrorMessage()`                      | `console.error()` (always shown)                                      |
-| `showProgress(message)`           | No-op (status bar handles it)             | `process.stdout.write("\r…")` (suppressed when `--quiet` or `--json`) |
-| `showChoice(message, ...options)` | `showWarningMessage(message, ...options)` | Returns `undefined` (headless — no interactive prompts)               |
-| `getExtensionPath()`              | `context.extensionPath`                   | Resolves package root from `__filename`                               |
+| `log(message)`                    | `showInformationMessage()`                                                              | `console.log()` (suppressed when `--quiet`)                           |
+| `warn(message)`                   | `showWarningMessage()`                                                                  | `console.warn()` (suppressed when `--quiet`)                          |
+| `error(message)`                  | `showErrorMessage()`                                                                    | `console.error()` (always shown)                                      |
+| `showProgress(message)`           | No-op (status bar handles it)                                                           | `process.stdout.write("\r…")` (suppressed when `--quiet` or `--json`) |
+| `showChoice(message, ...options)` | `showWarningMessage(message, ...options)`                                               | Returns `undefined` (headless — no interactive prompts)               |
+| `getExtensionPath()`              | `context.extensionPath`                                                                 | Resolves package root from `__filename`                               |
 
 > **Note:** `getConfig<T>(key, default)` is **not** part of the `PlatformAdapter` interface. In VS Code, config is read via `vscode.workspace.getConfiguration()` directly. In CLI, the vscode-shim intercepts that same call and delegates to `CliAdapter.getConfig()` (see `<vscodeShim>` and `<cliAdapter>`).
 
@@ -66,16 +66,16 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 
 > `getConfig<T>(key, default)` is defined on `CliAdapter` (not on the `PlatformAdapter` interface). It is bridged into config consumers via the vscode-shim's `workspace.getConfiguration().get()`.
 
-| Config Key                                             | Source                                                                                                 |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `cliToolPermissions`                                   | Direct from `config.permissionMode`                                                                    |
-| `cliAllowedTools` / `cliDeniedTools`                   | Direct from `config.allowedTools` / `config.deniedTools`                                               |
-| `copilotCliAllowedDirs`                                | `config.additionalDirs` (for `--add-dir` flags)                                                        |
-| `cliExecutionMode`                                     | `config.cliExecutionMode`                                                                              |
-| `copilotCliModel` / `claudeCliModel` / `codexCliModel` | All map to `config.model` (single `--model` flag)                                                      |
-| `scriptTimeout` / `maxPromptExecutionTime`             | Stored in ms, converted to seconds (÷1000) to match `ConfigurationUtils` expectations                  |
-| `resumeExistingSession`                                | `config.resumeSession ?? false`                                                                        |
-| Other keys                                             | Read from `configService.getNested(key)` first, then fall back to `defaultValue`                       |
+| Config Key                                             | Source                                                                                |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `cliToolPermissions`                                   | Direct from `config.permissionMode`                                                   |
+| `cliAllowedTools` / `cliDeniedTools`                   | Direct from `config.allowedTools` / `config.deniedTools`                              |
+| `copilotCliAllowedDirs`                                | `config.additionalDirs` (for `--add-dir` flags)                                       |
+| `cliExecutionMode`                                     | `config.cliExecutionMode`                                                             |
+| `copilotCliModel` / `claudeCliModel` / `codexCliModel` | All map to `config.model` (single `--model` flag)                                     |
+| `scriptTimeout` / `maxPromptExecutionTime`             | Stored in ms, converted to seconds (÷1000) to match `ConfigurationUtils` expectations |
+| `resumeExistingSession`                                | `config.resumeSession ?? false`                                                       |
+| Other keys                                             | Read from `configService.getNested(key)` first, then fall back to `defaultValue`      |
 
 **Behavioral differences from VsCodeAdapter:**
 

@@ -241,8 +241,7 @@ export const ConfigurationUtils = {
    */
   getDefaultMaxRetries(): number {
     return (
-      configService.get(CONFIG_KEYS.DEFAULTS).endCondition?.maxRetries ??
-      0
+      configService.get(CONFIG_KEYS.DEFAULTS).endCondition?.maxRetries ?? 0
     );
   },
 
@@ -251,8 +250,7 @@ export const ConfigurationUtils = {
    */
   getDefaultRetryPrompt(): string {
     return (
-      configService.get(CONFIG_KEYS.DEFAULTS).endCondition
-        ?.retryPrompt ?? ""
+      configService.get(CONFIG_KEYS.DEFAULTS).endCondition?.retryPrompt ?? ""
     );
   },
 
@@ -344,10 +342,8 @@ export const ConfigurationUtils = {
    * Get CLI tool permissions mode (shared between Copilot and Claude)
    */
   getCliToolPermissions(): Exclude<PermissionMode, "none"> {
-    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions.mode as Exclude<
-      PermissionMode,
-      "none"
-    >;
+    return configService.get(CONFIG_KEYS.DEFAULTS).toolPermissions
+      .mode as Exclude<PermissionMode, "none">;
   },
 
   /**
@@ -457,8 +453,9 @@ export const ConfigurationUtils = {
    */
   getOpenCodeCliModel(): string {
     return (
-      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.OPENCODE_CLI] ??
-      DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI]
+      configService.get(CONFIG_KEYS.DEFAULTS).models[
+        HARNESS_IDS.OPENCODE_CLI
+      ] ?? DEFAULT_MODELS[HARNESS_IDS.OPENCODE_CLI]
     );
   },
 
@@ -610,8 +607,9 @@ export const ConfigurationUtils = {
    */
   getCopilotChatModel(): string {
     return (
-      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.COPILOT_CHAT] ??
-      DEFAULT_MODELS[HARNESS_IDS.COPILOT_CHAT]
+      configService.get(CONFIG_KEYS.DEFAULTS).models[
+        HARNESS_IDS.COPILOT_CHAT
+      ] ?? DEFAULT_MODELS[HARNESS_IDS.COPILOT_CHAT]
     );
   },
 
@@ -713,7 +711,11 @@ export const ConfigurationUtils = {
    * Set the default harness integration mode
    */
   async setIntegrationMode(harness: HarnessId): Promise<void> {
-    await configService.set(CONFIG_KEYS.DEFAULTS_HARNESS, harness, CONFIG_SCOPE.USER);
+    await configService.set(
+      CONFIG_KEYS.DEFAULTS_HARNESS,
+      harness,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**
@@ -818,7 +820,11 @@ export const ConfigurationUtils = {
    * Set the default hooks in settings
    */
   async setDefaultHooks(hooks: UserHookConfig[]): Promise<void> {
-    await configService.set(CONFIG_KEYS.DEFAULTS_HOOKS, hooks, CONFIG_SCOPE.USER);
+    await configService.set(
+      CONFIG_KEYS.DEFAULTS_HOOKS,
+      hooks,
+      CONFIG_SCOPE.USER
+    );
   },
 
   /**

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -163,7 +169,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
     }
   }, [selectedFilePath, fileContent, setFileSaving, markFileSaved, setError]);
 
-  const handleDiscardUnsaved = useCallback(async () => {    if (!selectedFilePath) return;
+  const handleDiscardUnsaved = useCallback(async () => {
+    if (!selectedFilePath) return;
     setFileLoading(true);
     try {
       const result = await workspaceFile(selectedFilePath);
