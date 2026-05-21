@@ -258,6 +258,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
         {/* Terminal canvas */}
         <Panel id="terminal-canvas">
           <div className="h-full flex flex-col bg-terminal-bg">
+            {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
             <div
               className="flex-1 min-h-0 relative"
               onContextMenu={(e) => {

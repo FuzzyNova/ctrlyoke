@@ -1528,6 +1528,7 @@ export const OutputSection: React.FC = () => {
           className={`${outputCollapsed ? "hidden" : "flex"} flex-row min-h-0 flex-1`}
         >
           {/* Scrollable output */}
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
           <div
             ref={outputRef}
             id="output-content"

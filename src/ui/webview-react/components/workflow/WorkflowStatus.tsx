@@ -389,7 +389,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY });
     setRecentWorkflows([]);
     closeDropdown();
-  }, [closeDropdown, vscode]);
+  }, [closeDropdown, setRecentWorkflows, vscode]);
 
   // Remove a single entry from recent workflow history — shows confirm modal or deletes directly
   const handleRemoveWorkflow = useCallback(

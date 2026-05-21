@@ -134,7 +134,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
       await selectFileDiff(selectedDiffPath);
     },
-    [isMobile, loadStatus, selectFileDiff, selectedDiffPath]
+    [isMobile, loadStatus, selectFileDiff, selectedDiffPath, setMobileDiffVisible]
   );
 
   const handleStage = useCallback(
