@@ -36,7 +36,7 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - `FlightPathConfigService.test.ts` (258 lines) - FlightPathConfigService config reads/defaults, FileConfigBackend, settings seeding and FLIGHTPATH_SETTINGS_DEFAULTS
 - `DiscoveryUtils.test.ts` (95 lines) - `formatDisplayName` (kebab→Title Case), `isAccessibleDirectory`
 - `FileLockUtils.test.ts` (119 lines) - `withFileLock` concurrency safety for JSON file operations
-- `TempFileManager.test.ts` (189 lines) - Temp file creation/cleanup inside workspace root (`.flightpath/tmp/`)
+- `TempFileManager.test.ts` (189 lines) - Temp file creation/cleanup inside the workspace root
 - `TypedEmitter.test.ts` (133 lines) - TypedEmitter fire/event pub-sub, subscription disposal
 - `QueueOperations.test.ts` (140 lines) - `getQueueStatus` workflow name extraction, `appendToQueue`
 - `OutputHistoryManager.test.ts` (698 lines) - Timeline-backed workflow output history (manifest + events.jsonl), projection into WorkflowOutputHistory shape
@@ -47,6 +47,7 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - `OpenCodeResponseParser.test.ts` (140 lines) - OpenCode JSON stream parsing (text, tool events, session ID, token usage)
 - `OpenCodeNotificationMonitor.test.ts` (37 lines) - OpenCode hook config (returns none; OpenCode uses plugin file)
 - `CodexResponseParser.test.ts` (85 lines) - Codex JSONL response parsing (deduplication of agent text across item.started/completed events)
+- `CodexCliProvider.test.ts` (103 lines) - Codex resume-subcommand suffix building and argument ordering relative to hook/permission flags
 - `CompletionNotificationFactory.test.ts` (163 lines) - Workflow success/failure notification building, notification suppression modes
 - `ContextReferenceBuilder.test.ts` (77 lines) - Context reference formatting, path quoting for spaces, `@file`/`#sym:` reference construction
 - `FlightPathHostedServer.test.ts` (27 lines) - `HostedServerMessageFactory` webview message shape construction
@@ -63,6 +64,7 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - `WorkflowStateMachine.test.ts` (276 lines) - State machine transitions with ordered event emission (previous/current snapshots)
 - `WorkingFileManager.test.ts` (236 lines) - WorkingFile state (startWork, completeWork, reset)
 - `WorkspaceInitializer.test.ts` (68 lines) - `WorkspaceInitializer.initializeIfNeeded`, directory creation and `.gitignore` generation
+- `WorkflowStepSanitizer.test.ts` (150 lines) - Clipboard-safe step serialization/sanitization that strips transient runtime fields while preserving persistable prompt/script properties
 - `CliArgParser.test.ts` (86 lines) - `parseArgString` CLI arg string tokenization (quoted args, edge cases)
 - `CliExecutionRunner.test.ts` (289 lines) - CliExecutionRunner orchestrates headless/interactive execution lifecycle
 - `CliExecutionSession.test.ts` (92 lines) - CliExecutionSession result/state container
@@ -125,17 +127,17 @@ Comprehensive Mocha test suite covering core business logic, state management, p
 - Nested `suite()` blocks for logical grouping
 - Descriptive test names: "should [expected behavior] when [condition]"
 - TDD style (Mocha UI: `'tdd'`)
-- Total: ~24,957 lines across 82 test files
+- Total: 23,608 lines across 84 `*.test.ts` files
   </testStructure>
 
 <testCoverage>
 **Fully Tested:**
 - Core parsing: PromptFileParser, PromptFileSplitter, FileReferenceParser, CliArgParser, promptPathUtils
 - Validation: ValidationUtils, SessionValidator
-- State management: PromptQueue, PromptIdentity, WorkflowInstance, WorkingFileManager, WorkflowStateMachine
+- State management: PromptQueue, PromptIdentity, WorkflowInstance, WorkingFileManager, WorkflowStateMachine, WorkflowStepSanitizer clipboard serialization helpers
 - Execution: EndConditionEvaluator, EndConditionHandler, RetryUtils, WorkflowExecutor
 - Orchestration: WorkflowOrchestrator (startup auto-load gating), PromptFileLoader (settings defaults), TimelineRecorder, CliWatchSession helpers, WorkspaceInitializer
-- CLI harness shared: CliEventMapper, CliMcpConfigGenerator, CliResponseParser, CliToolPermissionMapper, CliExecutionRunner, CliExecutionSession, CliFailureTracker, CliInteractiveStartupCoordinator, CliPromptPreparer, CliPromptRuntimeCoordinator, CliResponseCollector, CliSessionResolverAdapter, CliTransportCoordinator, CliIntegration (full integration)
+- CLI harness shared: CliEventMapper, CliMcpConfigGenerator, CliResponseParser, CliToolPermissionMapper, CliExecutionRunner, CliExecutionSession, CliFailureTracker, CliInteractiveStartupCoordinator, CliPromptPreparer, CliPromptRuntimeCoordinator, CliResponseCollector, CliSessionResolverAdapter, CliTransportCoordinator, CliIntegration (full integration), CodexCliProvider resume-subcommand ordering
 - Tool permissions: Copilot/Claude/Codex/OpenCode/Qwen/Gemini mappers (ToolPermissionMappers + HarnessToolPermissionMappers)
 - Hooks: SettingsJsonHooksTracker (baseline capture, injection tracking), SettingsJsonMcpTracker (MCP config register/unregister), PropertyResolver hooks resolution
 - OpenCode: OpenCodeResponseParser, OpenCodeNotificationMonitor

@@ -73,7 +73,9 @@ FlightPath uses **composition over inheritance** for harness integrations:
   </coreComponents>
 
 <providerStructure>
-Each provider is self-contained in its own directory with 6 required files:
+Each provider is self-contained in its own directory, but the exact file count varies slightly by harness.
+
+**Most CLI harnesses use the 6-file pattern** (Copilot, Claude, Codex):
 
 ```
 src/flightpath/harness/copilot/
@@ -85,7 +87,27 @@ src/flightpath/harness/copilot/
 └── CopilotLogParser.ts            # Implements ILogParser (log file monitoring/session ID)
 ```
 
-OpenCode is the exception — it has `OpenCodeEventMapper.ts` instead of a ToolBuilder:
+**Gemini and Qwen use a 5-file variant** — no dedicated `*ToolBuilder.ts`; their parsers/log parsers map tool activity directly:
+
+```
+src/flightpath/harness/gemini/
+├── GeminiCliProvider.ts
+├── GeminiResponseParser.ts
+├── GeminiNotificationMonitor.ts
+├── GeminiToolPermissionMapper.ts
+└── GeminiLogParser.ts
+```
+
+```
+src/flightpath/harness/qwen/
+├── QwenCliProvider.ts
+├── QwenResponseParser.ts
+├── QwenNotificationMonitor.ts
+├── QwenToolPermissionMapper.ts
+└── QwenLogParser.ts
+```
+
+**OpenCode is the special case** — it uses `OpenCodeEventMapper.ts` instead of a ToolBuilder:
 
 ```
 src/flightpath/harness/opencode/
@@ -265,17 +287,17 @@ FlightPath uses **adaptive prompt passing** based on prompt complexity:
 <differenceFromChatMode>
 CLI integrations provide deterministic, structured automation vs Chat's UI-based approach:
 
-| Aspect                   | CLI Mode                                          | Chat Mode                          |
-| ------------------------ | ------------------------------------------------- | ---------------------------------- |
-| **Completion detection** | Process exit or escape indicator (deterministic)  | Log file polling (timing-based)    |
-| **Output access**        | Direct stdout/stderr (structured)                 | Clipboard scraping (text-based)    |
-| **Streaming**            | Real-time via execution.read() or stdout chunks   | No streaming (full response only)  |
-| **Cancellation**         | Kill process or send Ctrl+C                       | Cancel chat command                |
-| **Tool permissions**     | CLI arguments (--allow-all-tools, etc.)           | User prompts in chat UI            |
-| **File attachment**      | CLI arguments or file references                  | Native VS Code attachment commands |
-| **Response format**      | Structured (JSON/JSONL/plain text + stats)        | Unstructured text (clipboard)      |
-| **Reliability**          | High (deterministic, no UI dependencies)          | Medium (depends on log timing)     |
-| **User visibility**      | Terminal (interactive) or Output panel (headless) | Chat panel                         |
+| Aspect                   | CLI Mode                                          | Chat Mode                                               |
+| ------------------------ | ------------------------------------------------- | ------------------------------------------------------- |
+| **Completion detection** | Process exit or escape indicator (deterministic)  | Session file monitoring (`chatSessions/*.json|jsonl`)   |
+| **Output access**        | Direct stdout/stderr (structured)                 | Session file parsing after request completion           |
+| **Streaming**            | Real-time via execution.read() or stdout chunks   | No streaming (full response only)                       |
+| **Cancellation**         | Kill process or send Ctrl+C                       | Cancel chat command / detect cancellation in session    |
+| **Tool permissions**     | CLI arguments (--allow-all-tools, etc.)           | User prompts in chat UI                                 |
+| **File attachment**      | CLI arguments or file references                  | Native VS Code attachment commands or temp-file attach  |
+| **Response format**      | Structured (JSON/JSONL/plain text + stats)        | Structured `UniversalCliOutput` reconstructed from chat |
+| **Reliability**          | High (deterministic, no UI dependencies)          | High (session files are the source of truth)            |
+| **User visibility**      | Terminal (interactive) or Output panel (headless) | Chat panel                                              |
 
 **Use CLI when**: Automation, CI/CD, structured workflows, deterministic completion required
 **Use Chat when**: CLI not available, user prefers GUI, exploratory conversations
@@ -582,11 +604,17 @@ Summary of required layers:
 - `buildProcessEnv()` — builds process environment with optional `FLIGHTPATH_DIAGNOSTIC_LOGS`
 - `buildSettingsJsonMcpEntries()` — builds MCP server entries for settings.json format (Gemini/Qwen); FlightPath server gets `trust: true`
 
+**CliLauncherResolver** (src/flightpath/harness/shared/CliLauncherResolver.ts):
+
+- Resolves the actual command launcher before spawn, especially on Windows where CLIs may resolve to `.cmd`, `.bat`, or `.ps1` shims
+- Chooses between direct execution, `cmd.exe /c`, or PowerShell `-File` launchers and caches results per command
+- Exposes `resolveCliCommand()` and `formatCommandForDisplay()` so CLI execution and logging use the same resolved command line
+
 **BaseToolBuilder** (src/flightpath/harness/shared/BaseToolBuilder.ts):
 
 - Shared static utility for building INITIATED `CliEvent` objects from raw tool call payloads
 - `buildInitiatedEvents(toolName, input, toolId, timestamp)` — resolves field names across all harness naming conventions (snake_case, camelCase, harness-specific aliases) and returns a `CliEvent[]`
-- Used by all harness ToolBuilders (Copilot, Claude, Codex, Gemini, Qwen) to avoid duplicated event construction logic
+- Used by dedicated ToolBuilder classes where they exist (Copilot, Claude, Codex) and directly by Gemini/Qwen parsers/log parsers to avoid duplicated event construction logic
 - OpenCode uses `OpenCodeEventMapper.ts` instead (no ToolBuilder)
 
 **CliEventMapper** (src/flightpath/harness/shared/CliEventMapper.ts):
@@ -617,6 +645,18 @@ Summary of required layers:
 - `getAllowedServerNames()` — returns `--allowed-mcp-server-names` values combining baseline + prompt's servers
 - `withLock()` — AsyncMutex-based serialization for all read-modify-write operations on settings.json
 - Used by SettingsJsonHooksTracker (hooks) to share the same file lock
+
+**HookEventMonitor** (src/flightpath/harness/shared/HookEventMonitor.ts):
+
+- Polls the notify directory for `{runId}-hook-*.json` artifacts written by hook scripts when `FLIGHTPATH_NOTIFY_HOOK_EVENTS` enables specific logical events
+- Converts hook artifacts into `FlightPathNotificationEvent` payloads via `CompletionNotificationFactory` and forwards them to the provided callback
+- Deletes artifact files after reading so browser/host notifications are delivered once
+
+**CodexHookUtils** (src/flightpath/harness/shared/CodexHookUtils.ts):
+
+- Normalizes Codex hook matcher behavior for `.codex/hooks.json`
+- `normalizeCodexHookMatcher()` only preserves matcher values for events that support them
+- `createCodexCommandHookGroup()` creates the `{ matcher?, hooks: [...] }` structure shared by Codex hook registration code
 
 **CliExecutionSession** (src/flightpath/harness/shared/CliExecutionSession.ts):
 
@@ -697,10 +737,10 @@ Summary of required layers:
 **INotificationMonitor key types**:
 
 - `HookConfig`: Union type — `{ type: "json"; config: object }` (Copilot/Qwen/Gemini/Codex: JSON object) | `{ type: "json-string"; config: string }` (Claude: JSON string) | `{ type: "none" }` (OpenCode)
-- `buildHookConfig(scriptPath, notifyDir, workspaceRoot, userHooks?)` — builds hook config with optional user-defined hooks merged alongside FlightPath completion-detection hooks
+- `buildHookConfig(scriptPath, notifyDir, workspaceRoot, userHooks?, flightpathEvents?)` — builds hook config with optional user-defined hooks merged alongside the selected FlightPath completion/notification hook events
 - `waitForSessionStart?(config, startTime, runId?, onCancel?)` — optional method for providers that support session start detection
 
-**Note**: These utilities contain NO provider-specific logic. All harness-specific behavior lives in provider directories.
+**Note**: Most files in `shared/` are provider-agnostic coordinators/utilities. Small cross-cutting exceptions such as `CodexHookUtils.ts` exist for format quirks that are still reused outside a single provider class.
 </sharedUtilities>
 
 <userDefinedHooks>
@@ -737,10 +777,10 @@ Summary of required layers:
 
 <importantNotes>
 1. **Composition over inheritance**: Providers use "has-a" not "is-a" relationships
-2. **Zero core changes**: Adding providers NEVER requires modifying CliIntegration or shared utilities
+2. **Shared-capability changes are the exception**: Most new harnesses plug into existing abstractions; only add to CliIntegration/shared utilities when a capability is genuinely cross-provider
 3. **Fresh terminal every time**: Interactive mode always disposes old terminal and creates new one
 4. **Session continuity via flags**: --resume flag for session continuity, NOT terminal reuse
-5. **Adaptive prompt passing**: Simple prompts (<300 chars) passed directly, complex prompts via file
+5. **Adaptive prompt passing**: Simple prompts (roughly ≤3000 chars with no special-shell hazards/newlines) are passed directly; complex prompts use categorized temp files
 6. **TUI completion uses execution.read()**: Stable API, not proposed onDidWriteTerminalData
 7. **Tool permissions are shared**: Single source of truth in settings, mapped per-CLI via provider's IToolPermissionMapper and CliToolPermissionMapper base
 8. **MCP for dynamic queue**: Optional feature, only enabled when flightpath.enableDynamicQueue is true

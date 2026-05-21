@@ -26,7 +26,7 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 
 **`McpServerConfig` interface:** `id` required. Two transport modes — stdio (`command`, `args?`, `env?`, `autoApprove?: boolean | string[]`) or remote (`url`, `transport?: "streamable-http" | "sse"`, `headers?`). Exactly one of `command`/`url` must be set.
 
-**`HookEvent` type:** `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit"` — logical hook event names mapped to CLI-specific event names at inject time. Unsupported events for the active harness are silently skipped.
+**`HookEvent` type:** `"stop" | "sessionStart" | "preToolUse" | "postToolUse" | "userPromptSubmit" | "permissionRequest"` — logical hook event names mapped to CLI-specific event names at inject time. Unsupported events for the active harness are silently skipped.
 
 **`UserHookConfig` interface:** `event: HookEvent`, `command: string`, `timeoutSec?: number` — user-defined hook to run alongside FlightPath's built-in hooks.
 
@@ -52,19 +52,19 @@ Fields: `harness?`, `model?`, `agent?: string | null` (null = explicitly disable
 **Core workflow step interfaces:**
 
 - `PromptFile extends ExecutionProperties` — `prompt?`, `steps?: WorkflowStep[]`, `finalStep?: WorkflowStep`, `vars?: Record<string, string>` (workflow-level variable defaults for `{{varName}}` substitution; CLI `--var key=value` flags take precedence; substituted in prompt text, model, additionalArgs, hook commands, and endCondition script paths)
-- `PromptStep extends ExecutionProperties` — `type?: "prompt"`, `name?`, `prompt`, `sessionId?`, `_runtime?: PromptRuntimeMetadata`
-- `ScriptStep extends ScriptProperties` — `type: "script"`, `name?`, `onPass?: ScriptStepAction`, `onFail?: ScriptStepAction`, `_runtime?: PromptRuntimeMetadata`
+- `PromptStep extends ExecutionProperties` — `type?: "prompt"`, `name?`, `enabled?: boolean`, `prompt`, `sessionId?`, `_runtime?: PromptRuntimeMetadata`
+- `ScriptStep extends ScriptProperties` — `type: "script"`, `name?`, `enabled?: boolean`, `onPass?: ScriptStepAction`, `onFail?: ScriptStepAction`, `_runtime?: PromptRuntimeMetadata`
 - `WorkflowStep = PromptStep | ScriptStep` — discriminated union; use `isScriptStep()` type guard
 - `WorkflowStepType` — `"prompt" | "script"` (derived from `STEP_TYPES`)
-- `PromptRuntimeMetadata extends ExecutionProperties` — `startedAt`, `completedAt?`, `terminalStatus?: PromptTerminalStatus`, `retryCount?`, `responseText?` (for priorContext injection)
-- `WorkingFile extends PromptFile` — `originalFile?`, `workflowName`, `startedAt`, `lastModifiedAt?`, `_runtime?: WorkingFileRuntime`
+- `PromptRuntimeMetadata extends ExecutionProperties` — `startedAt`, `completedAt?`, `terminalStatus?: PromptTerminalStatus`, `retryCount?`, `responseText?`, `sessionId?`, `elapsed?`, `contextWindowUsed?`, `contextWindowSize?`, `scriptOutput?: ScriptRuntimeOutput`
+- `WorkingFile extends PromptFile` — `originalFile?`, `workflowName`, `startedAt`, `lastModifiedAt?`, `isFavorite?`, `_runtime?: WorkingFileRuntime`
 - `WorkingFileRuntime` — `currentIndex`, `executionState: ExecutionState`, `finalStep?: FinalStepRuntimeState`
 - `FinalStepRuntimeState` — `phase: FinalStepPhase`, `loopCount`, `status?`, `startedAt?`, `completedAt?`, `responseTexts?: string[]`
 
 **Runtime state machine types:**
 
 - `WorkflowRuntimeState` — `status: ExecutionState`, `stopped`, `startTime?`, `pausedTime?`, `totalPausedDuration` — owned by `WorkflowStateMachine`
-- `WorkflowRuntimeCommand` — `"startExecution" | "pause" | "resume" | "requestStop" | "confirmStopped" | "complete" | "fail" | "reopenForContinuation"`
+- `WorkflowRuntimeCommand` — `"startExecution" | "pause" | "confirmPaused" | "cancelPause" | "resume" | "requestStop" | "confirmStopped" | "complete" | "fail" | "reopenForContinuation"`
 - `WorkflowRuntimeTransition` — `command`, `previous: WorkflowRuntimeState`, `current: WorkflowRuntimeState`, `timestampMs`
 - `WorkflowAttemptTarget` — `{ kind: "queue"; stepIndex } | { kind: "finalStep"; loopIndex }`
 - `WorkflowAttemptState` — `target`, `attemptIndex`, `status: WorkflowAttemptStatus`, `startedAt`, `completedAt?`, `retryCount?`, `maxRetries?`, `failureReason?`
@@ -220,16 +220,18 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 
 **Constant objects:**
 
-- `MESSAGE_TYPES` — 100+ extension↔webview message type strings (includes Terminal I/O, MCP Discovery, Workflow Undo/Redo)
+- `MESSAGE_TYPES` — 100+ extension↔webview message type strings (includes commit message generation, Terminal I/O, MCP Discovery, Workflow Undo/Redo)
 - `EXECUTION_STATES` — `idle | running | paused | stopped | cancelling | completed | error`
 - `STEP_STATUS` — `pending | sent | running | completed | failed | cancelled | skipped`
 - `FINAL_STEP_PHASES` — `queue | finalStep`
 - `ACTION_TYPES` — `run | queue | runNext | queueNext | runBeforeCurrent`
 - `HARNESS_IDS` — `copilot-cli | copilot-chat | claude-cli | codex-cli | opencode-cli | qwen-cli | gemini-cli`
 - `HARNESS_INFO` — display names per harness (name, shortName)
+- `HOOK_EVENT_ORDER` — canonical hook event order: `stop | sessionStart | preToolUse | postToolUse | userPromptSubmit | permissionRequest`
+- `HOOK_EVENT_METADATA` — hook event label/description/supportedHarnesses records used by settings/UI
 - `EXECUTION_MODES` — `interactive | headless`
 - `MODEL_OPTION_VALUES` — `{ NONE: "none" }` (sentinel for "no model selected" in option lists)
-- `DEFAULT_MODELS` — default model per harness (`copilot-cli: "claude-sonnet-4.6"`, `copilot-chat: "claude-sonnet-4.6"`, `claude-cli: "sonnet"`, `codex-cli: "gpt-5.4"`, `opencode-cli: "anthropic/claude-sonnet-4-6"`, `qwen-cli: "qwen3.5-plus"`, `gemini-cli: "gemini-2.5-pro"`)
+- `DEFAULT_MODELS` — default model per harness (`copilot-cli: "claude-sonnet-4.6"`, `copilot-chat: "claude-sonnet-4.6"`, `claude-cli: "sonnet"`, `codex-cli: "gpt-5.5"`, `opencode-cli: "opencode/big-pickle"`, `qwen-cli: "qwen3.5-plus"`, `gemini-cli: "gemini-3-flash-preview"`)
 - `CLAUDE_CLI_MODELS`, `CODEX_CLI_MODELS`, `QWEN_CLI_MODELS`, `GEMINI_CLI_MODELS` — static model option arrays
 - `HARNESS_STATUS_STRINGS` — `checking | available | unavailable`
 - `UI_STRINGS` — loading/checking text
@@ -275,14 +277,21 @@ ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 - `BROWSER_NOTIFICATION_MODES` — `connectedOnly | push | never`
 - `COMPLETION_NOTIFICATION_KINDS` — `workflow | prompt`
 - `COMPLETION_NOTIFICATION_SEVERITY` — `info | warning | error`
+- `NOTIFICATION_KINDS` / `NOTIFICATION_SEVERITY` — backward-compatible aliases of the completion notification constants
 - `SERVICE_WORKER_BADGE_MESSAGE_TYPES` — badge increment/clear messages for the hosted PWA service worker
 - `HOSTED_ICON_FILES` / `HOSTED_ICON_PATHS` — file names and URL paths for hosted server icons (PNG, SVG, apple-touch-icon)
-- `VSCODE_COMMANDS` — `flightpath.enableServer | flightpath.disableServer | flightpath.regenerateServerToken`
+- `SETTING_SCOPES` — `user | workspace | default` (config tiers; `default` is read-only)
+- `DISCOVERY_SOURCES` — `user | workspace | workspace-flightpath` (origin labels for discovered agent/skill files)
+- `HARNESS_FILE_TYPES` — `agent | skill` (harness file manager discriminants)
+- `FOOTER_PICKERS` — `harness | model | agent | skills | permissions | context` (quick-picker panel IDs)
+- `SPECIAL_TARGET_IDS` — `flightpath | vscode | agents` (non-harness file-manager targets)
+- `VSCODE_COMMANDS` — `flightpath.enableServer | flightpath.disableServer | flightpath.regenerateServerToken | flightpath.generateCommitMessage | flightpath.cancelCommitMessageGeneration`
+- `VSCODE_CONTEXT_KEYS` — `GENERATING_COMMIT_MESSAGE: "flightpath.generatingCommitMessage"` (used in `package.json` `when` clauses)
 - `DEFAULT_WORKFLOW_NAME` — `"New Workflow"`
 - `PANEL_CLIENT_ID` — `"panel"` (well-known VS Code sidebar client)
 - `BROWSER_CLIENT_PREFIX` — `"browser:"` (prefix for all browser WebSocket client IDs)
 
-**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalStepPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `PromptEditorInsertMode`, `TerminalSessionStatus`, `SessionKind`, `ShellKind`, `TerminalCursorStyle`, `TerminalMobileControlBar`, `WorkflowAttemptStatus`, `PromptTerminalStatus`, `InteractiveAbortKind`, `PermissionMode`, `StepType`, `PriorContextKeyword`, `PriorContextItemType`, `GitChangeKind`, `OutputHistoryKind`, `SnapshotStrategy`, `SnapshotBaseSource`, `UndoFileAction`, `TempFileCategory`, `ConditionAction`, `CompareSource`, `RetryPromptPlaceholder`, `WorkflowAttemptCommandValue`, `CompactionTrigger`, `CallerType`, `NotificationEventMode`, `BrowserNotificationMode`, `CompletionNotificationKind`, `CompletionNotificationSeverity`, `ServiceWorkerBadgeMessageType`
+**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `FinalStepPhase`, `HarnessId`, `StatusMessageSeverity`, `ActionType`, `QueuePosition`, `FileOperationStatus`, `CliEventType`, `HarnessStatusString`, `WebviewLogLevel`, `RunnerId`, `LockStatus`, `ExecutionMode`, `EditorTargetKind`, `PromptEditorInsertMode`, `TerminalSessionStatus`, `SessionKind`, `ShellKind`, `TerminalCursorStyle`, `TerminalMobileControlBar`, `WorkflowAttemptStatus`, `PromptTerminalStatus`, `InteractiveAbortKind`, `PermissionMode`, `StepType`, `PriorContextKeyword`, `PriorContextItemType`, `GitChangeKind`, `OutputHistoryKind`, `SnapshotStrategy`, `SnapshotBaseSource`, `UndoFileAction`, `TempFileCategory`, `ConditionAction`, `CompareSource`, `RetryPromptPlaceholder`, `WorkflowAttemptCommandValue`, `CompactionTrigger`, `CallerType`, `NotificationEventMode`, `BrowserNotificationMode`, `CompletionNotificationKind`, `CompletionNotificationSeverity`, `NotificationKind`, `NotificationSeverity`, `ServiceWorkerBadgeMessageType`, `SettingScope`, `SettingWriteScope`, `DiscoverySource`, `HarnessFileType`, `FooterPicker`, `AnyTargetId`
 </dashboardConstants>
 
 <flightPathSettings>
@@ -292,28 +301,28 @@ Structured global settings interface replacing per-key VS Code settings. Single 
 
 **`FlightPathGlobalSettings` interface** — grouped by concern:
 
-- **Core:** `harness: HarnessId`, `models: Partial<Record<HarnessId, string>>`, `additionalArgs: Partial<Record<CliAdditionalArgsHarnessId, string>>` (excludes `copilot-chat`)
+- **General:** `general: { defaultFormat, defaultTemplate, autoLoadRecentSession, omitAgentsSkillsOnResume }`
+- **Defaults:** `defaults` mirrors `ExecutionProperties` defaults: `harness`, `models`, `additionalArgs` (CLI harnesses only; excludes `copilot-chat`), `agent`, `skills`, `resumeSession`, `priorContext`, `mcpServers`, `hooks`, `toolPermissions`, `endCondition?: EndCondition | null`, `preCondition?: PreCondition | null`
+- **Permissions:** `permissions: { allowedDirs, copilotAllowAllPaths, codexSandboxMode, codexApprovalPolicy }`
 - **Execution:** `execution: { mode, injectMode: boolean, maxPromptTimeout, scriptTimeout, closeTerminalOnComplete, autoDeleteTempFiles: boolean }`
-- **Tools:** `tools: { permissionMode, allowed, denied, allowedDirs: string[] (shared across copilot-cli/claude-cli/codex-cli/qwen-cli), copilotAllowAllPaths, codexSandboxMode, codexApprovalPolicy }`
-- **Workflow:** `workflow: { defaultFormat, defaultTemplate, defaultAgent, defaultSkills, resumeExistingSession, priorContext, autoLoadRecentSession, omitAgentsSkillsOnResume, defaultEndCondition?: EndCondition | null, defaultPreCondition?: PreCondition | null }`
 - **Chat:** `chat: { windowLocation, inactivityTimeout, treatTimeoutAsSuccess, forceAgentMode, useNativeAttachments }`
-- **MCP & Hooks:** `mcp: { defaultServers }`, `hooks: UserHookConfig[]`
 - **Queue:** `queue: { maxSize, maxWorkflowExecutionTime, unlimitedMode, notifyOnExtension }`
 - **History:** `history: { saveOutput, maxRuns }`
 - **Terminal:** `terminal: TerminalSettings` — `{ fontSize, lineHeight, scrollback, cursorStyle: TerminalCursorStyle, cursorBlink, macOptionIsMeta, wordSeparators, replayBufferKb, shellExecutable, mobileControlBar: TerminalMobileControlBar, mobileCustomShortcuts: TerminalShortcut[] }`
-- **UI:** `ui: { showCliOutput, showCliCommand, logRawCliOutput, showHeadlessPermissionWarning, autoFocusOutputOnExecution, openPromptsInSecondGroup, respectGitignoreForCompletions, confirmDeleteOperations, confirmResetOperations, showHiddenFiles }`
+- **UI:** `ui: { showCliOutput, showCliCommand, logRawCliOutput, showHeadlessPermissionWarning, autoFocusOutputOnExecution, openPromptsInSecondGroup, respectGitignoreForCompletions, autoExpandEditorWhenTyping, confirmDeleteOperations, confirmResetOperations, showHiddenFiles }`
 - **Server:** `server: { enabled, port, standalonePort, theme, bindAddress: string, tls: { enabled, certPath, keyPath }, iconBgColor, iconFgColor }`
-- **Notifications:** `notifications: FlightPathNotificationSettings` — `{ vscode: { enabled }, browser: { mode: BrowserNotificationMode }, events: { workflowComplete: NotificationEventMode, promptComplete: NotificationEventMode }, includeWorkflowName, includePromptName, onlyWhenWindowUnfocused }`
+- **Notifications:** `notifications: FlightPathNotificationSettings` — `{ vscode: { enabled }, browser: { mode: BrowserNotificationMode }, events: { workflowComplete: NotificationEventMode, promptComplete: NotificationEventMode, hookEvents: { [key in HookEvent]: boolean } }, includeWorkflowName, includePromptName, onlyWhenWindowUnfocused }`
+- **Commit:** `commit: { harness: HarnessId | "", model: string, prompt: string }` — dedicated commit message generation harness/model/prompt override
 - **Advanced:** `enableDiagnosticLogs: boolean`
 
 **Supporting interfaces:**
 
 - `TerminalShortcut` — `{ label: string, sequence: string }`
-- `FlightPathNotificationSettings` — see `notifications` above
+- `FlightPathNotificationSettings` — see `notifications` above; includes the per-hook `hookEvents` toggle map
 
-**`PartialFlightPathSettings`** — shallow-partial version for config file contents (each top-level group is `Partial<...>`).
+**`PartialFlightPathSettings`** — 3-level-deep partial version for config file contents.
 
-**`FLIGHTPATH_SETTINGS_DEFAULTS`** — `FlightPathGlobalSettings` constant with all default values. Reference this when merging user config or resetting settings.
+**`FLIGHTPATH_SETTINGS_DEFAULTS`** — `FlightPathGlobalSettings` constant with all default values, including the default commit-message-generation prompt template.
 </flightPathSettings>
 
 <workflowTimelineTypes>

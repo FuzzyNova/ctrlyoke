@@ -33,9 +33,10 @@ Support classes for `WorkflowOrchestrator` and `WorkflowInstance`. Handles file 
 
 **Responsibility:** First-run workspace scaffold and idempotent re-initialization.
 **Static class** — no instance state; called on every activation.
-**`initializeIfNeeded(workspaceRoot)`** creates all user-facing directories (`workflows/`, `prompts/`, `scripts/`, `agents/`, `skills/`, `templates/`) and writes `.flightpath/.gitignore` excluding runtime dirs (`.queue/`, `.history/`, `.logs/`, `temp/`).
+**`isInitialized(workspaceRoot)`** treats either an existing `.flightpath/` directory or a root-level `.flightpath.yaml` / `.flightpath.yml` / `.flightpath.json` file as prior initialization.
+**`initializeIfNeeded(workspaceRoot)`** creates all user-facing directories (`workflows/`, `prompts/`, `scripts/`, `agents/`, `skills/`, `templates/`) and writes/appends `.flightpath/.gitignore` entries for runtime/generated paths (`.queue/`, `.history/`, `.logs/`, `temp/`, `certs/`, `notifications/`, `capabilities.json`, `.gitignore`).
 **`reinitialize(workspaceRoot)`** — re-runs scaffold without overwriting existing files; safe to call any time.
-**Runtime directories** (`.queue/`, `.history/`, `.logs/`, `temp/`) are intentionally excluded from `USER_DIRECTORIES` — they are created on demand by their respective managers.
+**Runtime directories** (`.queue/`, `.history/`, `.logs/`, `temp/`, `certs/`, `notifications/`) are intentionally excluded from `USER_DIRECTORIES` — they are created on demand by their respective managers.
 
 ## WorkspaceSessionManager
 

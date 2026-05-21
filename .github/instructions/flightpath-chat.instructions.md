@@ -11,7 +11,7 @@ Four classes:
 - **CopilotChatIntegration**: UI automation orchestration, model switching, session management, prompt building
 - **ChatSessionMonitor**: Session file monitoring for 100% reliable completion detection
 - **ChatSessionParser**: Converts session files to UniversalCliOutput format (supports .json and .jsonl)
-- **NativeAttachmentHandler**: File attachment via VS Code commands (`#file:`, `#sym:` references)
+- **NativeAttachmentHandler**: Native file/directory/selection attachment via VS Code commands (`@path`, `#selection:`, `#sym:` references)
 </architecture>
 
 <keyFeatures>
@@ -47,10 +47,11 @@ Monitors VS Code's internal `chatSessions/*.json` and `*.jsonl` files — 100% r
 **Detection algorithm:**
 
 1. **Before send**: `recordPositionBeforeSend()` enumerates session files and caches completed request indices
-2. **Submit**: `submitWithRetry()` calls `workbench.action.chat.submit` and verifies via `findSessionFileByPromptText()`
-3. **Monitoring**: `waitForCompletion()` polls 500ms intervals; inactivity clock resets on each session file mtime change
-4. **Completion**: `isSessionComplete()` — request is complete when `result.timings.totalElapsed > 0`
-5. **Cancellation**: Detected via `result.errorDetails.message.includes("cancel")`
+2. **Submit**: `submitWithRetry()` calls `workbench.action.chat.submit` and verifies via `findSessionFileByPromptText()`, skipping requests that were already complete before the send
+3. **Immediate success path**: if the matched request is already complete, the monitor returns immediately without waiting for another file write
+4. **Monitoring**: `waitForCompletion()` polls 500ms intervals; inactivity clock resets on each session file mtime change
+5. **Completion**: `isSessionComplete()` — request is complete when `result.timings.totalElapsed > 0`
+6. **Cancellation**: Detected via `result.errorDetails.message.includes("cancel")`
 
 **Timeout handling:**
 
@@ -159,13 +160,12 @@ Default uses last request (-1). Returns typed events array.
 <nativeAttachments>
 **NativeAttachmentHandler** (used when `chatUseNativeAttachments=true`):
 
-- Parses `@path` (file/directory) and `#sym:` (symbol) references from prompt via `parseAllFileReferences()`
+- Parses `@path` (file/directory), `#selection:`, and `#sym:` references from prompt via `parseAllFileReferences()`
 - Symbol references resolved to file locations via `resolveSymbol()` before attaching
 - Directories: `workbench.action.chat.attachFolder`
-- Files: open in editor (beside, preview) → `github.copilot.chat.attachFile` → close editor
-- Line ranges: open → set selection → `github.copilot.chat.attachSelection` → close editor
+- Files and selections: open in editor using `preview: true` + `ViewColumn.Beside`, attach via `github.copilot.chat.attachFile` / `github.copilot.chat.attachSelection`, then always close the active editor in a `finally` block
 - 200ms delay between attachments prevents race conditions
-- References kept in prompt text for LLM context
+- Returns the original prompt unchanged; references stay in prompt text for LLM context
   </nativeAttachments>
 
 <initialization>

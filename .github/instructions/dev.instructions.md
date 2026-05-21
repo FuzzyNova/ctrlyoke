@@ -30,9 +30,9 @@ if (IS_DEV_MODE) {
 
 **All commands** are registered with `context.subscriptions.push(...)` so they are properly disposed when the extension deactivates.
 
-**Dashboard build integration**: `DevCommands.ts` exports `handleDevDashboardAction` (and the types `DevDashboardAction`, `DevDashboardActionOptions`, `DevCommandHandlers`) for use by the webview dashboard. `DevBuildResult` is a private interface (not exported). This function handles in-process builds (`compile:extension` or `compile`) and VS Code reload/restart commands triggered from the dashboard dev panel. It streams build stdout/stderr back to the webview via `postMessage` using `MESSAGE_TYPES.DEV_BUILD_STARTED`, `DEV_BUILD_OUTPUT`, `DEV_BUILD_COMPLETED`, `DEV_RESTARTING`, and `DEV_COMMAND_UNAVAILABLE` message types.
+**Dashboard build integration**: `DevCommands.ts` exports `handleDevDashboardAction` (and the types `DevDashboardAction`, `DevDashboardActionOptions`, `DevCommandHandlers`) for use by the webview dashboard. `DevBuildResult` is a private interface (not exported). This function handles in-process builds/tests (`compile:extension`, `compile:webview`, `compile`, `test`) plus VS Code reload/restart commands triggered from the dashboard dev panel. It streams build stdout/stderr back to the webview via `postMessage` using `MESSAGE_TYPES.DEV_BUILD_STARTED`, `DEV_BUILD_OUTPUT`, `DEV_BUILD_COMPLETED`, `DEV_RESTARTING`, and `DEV_COMMAND_UNAVAILABLE` message types.
 
-**`DevDashboardAction`** union type: `"buildExtension" | "buildAll" | "reloadWindow" | "restartExtensionHost" | "buildExtensionAndReload" | "buildAllAndReload" | "sendTestNotification"`.
+**`DevDashboardAction`** union type: `"buildExtension" | "buildWebview" | "buildAll" | "reloadWindow" | "restartExtensionHost" | "buildExtensionAndReload" | "buildWebviewAndReload" | "buildAllAndReload" | "runTests" | "sendTestNotification"`.
 
 **`DevCommandHandlers`** interface: `{ sendTestNotification?: () => Promise<void> }` — passed to `registerDevCommands` to optionally wire up a test notification handler. When provided, registers the `flightpath.dev.sendTestNotification` command and adds it to the devMenu.
 </architecture>
@@ -73,6 +73,6 @@ This flow ensures `ModelConstants.ts`, `package.json`, and `prompt-schema.json` 
 - **context.subscriptions**: Always push disposables to `context.subscriptions` in `registerDevCommands`.
 - **Dynamic imports for test utilities**: Test-only modules are imported dynamically inside command handlers to avoid pulling them into the main bundle even when `IS_DEV_MODE = true`.
 - **Self-contained file**: All dev command logic lives in `DevCommands.ts`. Do not split dev commands across multiple files or import dev utilities from production code paths.
-- **Dashboard build actions**: `handleDevDashboardAction` is exported (not registered as a VS Code command) and called directly by the webview message handler. `buildExtension` uses `compile:extension`; `buildAll` uses `compile`. Build results are streamed to the webview via `postMessage`. `DevBuildResult` is a private interface — do not export it.
+- **Dashboard build actions**: `handleDevDashboardAction` is exported (not registered as a VS Code command) and called directly by the webview message handler. `buildExtension` uses `compile:extension`; `buildWebview` uses `compile:webview`; `buildAll` uses `compile`; `runTests` uses `test`. Build/test results are streamed to the webview via `postMessage`. `DevBuildResult` is a private interface — do not export it.
 - **Optional handlers**: Pass `DevCommandHandlers` to `registerDevCommands` to wire up optional runtime-provided handlers (e.g., `sendTestNotification`). This avoids hard-coding server-layer dependencies in `DevCommands.ts`.
 </conventions>

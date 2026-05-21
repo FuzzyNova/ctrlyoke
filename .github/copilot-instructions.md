@@ -29,7 +29,9 @@ Detailed implementation guidelines live in `.github/instructions/`. Read the rel
 | `src/flightpath/orchestration/**`       | `flightpath-orchestration.instructions.md` |
 | `src/cli.ts`, `src/cli/**`              | `flightpath-cli-binary.instructions.md`    |
 | `src/config/**`                         | `config.instructions.md`                   |
+| `src/git/**`                            | `git.instructions.md`                      |
 | `src/platform/**`                       | `platform.instructions.md`                 |
+| `src/scm/**`                            | `scm.instructions.md`                      |
 | `src/server/**`                         | `server.instructions.md`                   |
 | `src/ui/**` (excl. webview-react)       | `ui.instructions.md`                       |
 | `src/ui/webview-react/**`               | `webview-react.instructions.md`            |
@@ -107,6 +109,8 @@ User loads workflow (.flightpath.yaml/.json/.prompt.md)
 - **VsCodeIntegrationFactory** — extends `IntegrationFactory` with VS Code-only harness support (`copilot-chat`); always used by `WorkflowOrchestrator`; CLI uses base `IntegrationFactory`
 - **WorkflowTaggedSink** — thin proxy around `IDashboardSink` that auto-injects `workflowId` into all sink calls; created by `WorkflowInstance` to eliminate per-call ID passing
 - **FlightPathConfigService** — platform-agnostic config singleton with 4-tier hierarchy (CLI overlay → workspace file → user file → defaults); all config reads in core code go through this singleton
+- **Commit Message Generation** — `src/git/` gathers a staged-first repository diff, runs a one-shot headless harness execution to generate a commit message, captures the result via MCP or response-text fallback, and records provenance in `CommitMessageGenerationTracker`
+- **ScmCommitCommand** — VS Code Source Control command that orchestrates commit message generation from the SCM input box, manages progress/cancellation, and writes generated messages back into the Git UI
 - **React Webview** — Dashboard with 5 Zustand stores, prompt editor (CodeMirror), output viewer, embedded terminal (xterm.js), settings panel; includes ContextQuickPicker and PermissionsQuickPicker footer controls
 
 </architecture>
@@ -131,6 +135,8 @@ User loads workflow (.flightpath.yaml/.json/.prompt.md)
 | `src/flightpath/IntegrationFactory.ts`       | Factory for creating harness-specific CliIntegration instances                 |
 | `src/flightpath/VsCodeIntegrationFactory.ts` | Extends IntegrationFactory with VS Code-only harness support (copilot-chat)    |
 | `src/config/FlightPathConfigService.ts`      | Platform-agnostic config singleton (CLI + extension core)                      |
+| `src/git/CommitMessageGenerator.ts`          | AI-powered commit message generation via staged-first diff analysis            |
+| `src/scm/ScmCommitCommand.ts`                | VS Code SCM integration for commit message generation                          |
 | `src/types/DashboardConstants.ts`            | **Single source of truth** for all shared constants (100+ message types)       |
 | `src/types/FlightPathTypes.ts`               | Core workflow types (PromptItem, Harness enum, ExecutionProperties, etc.)      |
 | `src/utils/ConfigurationUtils.ts`            | All VS Code settings access centralized here                                   |
@@ -223,7 +229,9 @@ src/
 │                                 # WorkspaceSessionManager, OutputHistoryManager,
 │                                 # TimelineRecorder, OutputHistoryTimelineAdapter,
 │                                 # CliWatchSession, WorkspaceInitializer
+├── git/                          # CommitMessageGenerator, CommitMessageGenerationTracker, GitCommitter
 ├── scripts/                      # Hook/notify scripts (6 JS scripts + 1 TypeScript OpenCode plugin)
+├── scm/                          # ScmCommitCommand (VS Code Source Control integration)
 ├── server/                       # Express/WebSocket server for hosted dashboard
 ├── templates/                    # Built-in workflow/agent templates
 ├── types/                        # Core types and shared constants (7 files)
@@ -305,6 +313,7 @@ prompts:
 ### Key Schema Fields
 
 - **`prompt`**: Inline text, or path to `.prompt.md`/`.md`/`.txt` (absolute, workspace-relative, or `.flightpath/`-relative)
+- **`enabled`**: Optional bool for prompt or script steps; when `false`, the step remains in the workflow but is skipped during execution
 - **`resumeSession`**: Continue conversation from previous prompt (bool)
 - **`sessionId`**: Resume by GUID/thread ID, or reference prior prompt by number (`sessionId: 1`)
 - **`harness`**: Per-prompt harness override
@@ -326,26 +335,29 @@ prompts:
 
 All settings accessed via `src/utils/ConfigurationUtils.ts`. Prefix: `flightpath`.
 
-| Setting                     | Default             | Description                                                                                                        |
-| --------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `harness`                   | `copilot-cli`       | Active harness: `copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli` |
-| `cliExecutionMode`          | `interactive`       | `interactive` (terminal) or `headless` (background process)                                                        |
-| `copilotCliModel`           | `claude-sonnet-4.5` | Default model for Copilot CLI                                                                                      |
-| `claudeCliModel`            | `sonnet`            | Default model for Claude CLI                                                                                       |
-| `codexCliModel`             | `gpt-5.2-codex`     | Default model for Codex CLI                                                                                        |
-| `openCodeCliModel`          | (provider default)  | Default model for OpenCode CLI (provider/model format)                                                             |
-| `qwenCliModel`              | `coder-model`       | Default model for Qwen Code CLI                                                                                    |
-| `geminiCliModel`            | `gemini-2.5-pro`    | Default model for Gemini CLI                                                                                       |
-| `cliToolPermissions`        | `allowAll`          | `dangerouslyAllowAll`, `allowAll`, or `custom`                                                                     |
-| `cliAllowedTools`           | `[]`                | Tool allow patterns (Copilot format, auto-converted for Claude/Codex)                                              |
-| `cliDeniedTools`            | `[]`                | Tool deny patterns (takes precedence over allow)                                                                   |
-| `promptsDirectory`          | `.flightpath`       | Base directory for workflows and scripts                                                                           |
-| `scriptTimeout`             | `30`                | End condition script timeout in seconds                                                                            |
-| `autoAttachFiles`           | `true`              | Auto-expand `#selection:` references to inline content                                                             |
-| `enableDynamicQueue`        | `false`             | Allow AI to extend the workflow queue                                                                              |
-| `showCliOutput`             | `true`              | Show CLI output in the Output panel                                                                                |
-| `chatInactivityTimeout`     | `300`               | Seconds before chat timeout (Chat harness only)                                                                    |
-| `treatChatTimeoutAsSuccess` | `true`              | Treat chat inactivity timeout as completion                                                                        |
+| Setting                     | Default                        | Description                                                                                                        |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `harness`                   | `copilot-cli`                  | Active harness: `copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli` |
+| `cliExecutionMode`          | `interactive`                  | `interactive` (terminal) or `headless` (background process)                                                        |
+| `copilotCliModel`           | `claude-sonnet-4.5`            | Default model for Copilot CLI                                                                                      |
+| `claudeCliModel`            | `sonnet`                       | Default model for Claude CLI                                                                                       |
+| `codexCliModel`             | `gpt-5.2-codex`                | Default model for Codex CLI                                                                                        |
+| `openCodeCliModel`          | (provider default)             | Default model for OpenCode CLI (provider/model format)                                                             |
+| `qwenCliModel`              | `coder-model`                  | Default model for Qwen Code CLI                                                                                    |
+| `geminiCliModel`            | `gemini-2.5-pro`               | Default model for Gemini CLI                                                                                       |
+| `commit.harness`            | `""`                           | Harness override for AI-generated commit messages; falls back to the normal default harness when empty            |
+| `commit.model`              | `""`                           | Model override for AI-generated commit messages; uses the selected harness default when empty                     |
+| `commit.prompt`             | built-in conventional prompt   | Prompt template used by commit message generation from git diffs                                                   |
+| `cliToolPermissions`        | `allowAll`                     | `dangerouslyAllowAll`, `allowAll`, or `custom`                                                                     |
+| `cliAllowedTools`           | `[]`                           | Tool allow patterns (Copilot format, auto-converted for Claude/Codex)                                              |
+| `cliDeniedTools`            | `[]`                           | Tool deny patterns (takes precedence over allow)                                                                   |
+| `promptsDirectory`          | `.flightpath`                  | Base directory for workflows and scripts                                                                           |
+| `scriptTimeout`             | `30`                           | End condition script timeout in seconds                                                                            |
+| `autoAttachFiles`           | `true`                         | Auto-expand `#selection:` references to inline content                                                             |
+| `enableDynamicQueue`        | `false`                        | Allow AI to extend the workflow queue                                                                              |
+| `showCliOutput`             | `true`                         | Show CLI output in the Output panel                                                                                |
+| `chatInactivityTimeout`     | `300`                          | Seconds before chat timeout (Chat harness only)                                                                    |
+| `treatChatTimeoutAsSuccess` | `true`                         | Treat chat inactivity timeout as completion                                                                        |
 
 **Adding new settings:** Add to `package.json` → `contributes.configuration.properties`, then read via `ConfigurationUtils.get<T>("settingName", defaultValue)`. Use `enum` + `enumDescriptions` for dropdowns.
 

@@ -29,7 +29,7 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 
 | Method                            | VS Code                                   | CLI                                                                   |
 | --------------------------------- | ----------------------------------------- | --------------------------------------------------------------------- |
-| `getWorkspaceRoot()`              | `workspaceFolders[0].uri.fsPath`          | `config.cwd ?? process.cwd()`                                         |
+| `getWorkspaceRoot()`              | `workspaceFolders[0].uri.fsPath` (falls back to `process.cwd()` when no folder is open) | `config.cwd ?? process.cwd()`                                         |
 | `log(message)`                    | `showInformationMessage()`                | `console.log()` (suppressed when `--quiet`)                           |
 | `warn(message)`                   | `showWarningMessage()`                    | `console.warn()` (suppressed when `--quiet`)                          |
 | `error(message)`                  | `showErrorMessage()`                      | `console.error()` (always shown)                                      |
@@ -56,9 +56,9 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 **`ResolvedCliConfig` interface** — the parsed CLI flags passed to the constructor:
 
 - `harness`, `model`, `cwd`, `timeout`, `scriptTimeout`
-- `allowedTools[]`, `deniedTools[]`, `allowAllTools` (boolean)
-- `additionalDirs[]`, `resume`, `newSession`
-- `verbose`, `quiet`, `json`, `color`, `headless`
+- `permissionMode`, `allowedTools[]`, `deniedTools[]`
+- `additionalDirs[]`, `sessionId?`, `resumeSession?`
+- `verbose`, `quiet`, `json`, `color`, `headless?`
 - `vars: Record<string, string>` — variables from `--var key=value` flags; merged over workflow `vars: defaults`; substituted as `{{key}}` in prompt text, model, additionalArgs, hook commands, and endCondition script paths
 - `cliExecutionMode`: `"interactive" | "headless"` (detected from TTY or overridden by flags)
 
@@ -68,13 +68,14 @@ PlatformAdapter.ts          ← Abstract interface (the contract)
 
 | Config Key                                             | Source                                                                                                 |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `cliToolPermissions`                                   | Derived: `allowAllTools` → `"dangerouslyAllowAll"`, has allow/deny → `"custom"`, else `"allowAll"`     |
+| `cliToolPermissions`                                   | Direct from `config.permissionMode`                                                                    |
 | `cliAllowedTools` / `cliDeniedTools`                   | Direct from `config.allowedTools` / `config.deniedTools`                                               |
 | `copilotCliAllowedDirs`                                | `config.additionalDirs` (for `--add-dir` flags)                                                        |
 | `cliExecutionMode`                                     | `config.cliExecutionMode`                                                                              |
 | `copilotCliModel` / `claudeCliModel` / `codexCliModel` | All map to `config.model` (single `--model` flag)                                                      |
 | `scriptTimeout` / `maxPromptExecutionTime`             | Stored in ms, converted to seconds (÷1000) to match `ConfigurationUtils` expectations                  |
-| Other keys                                             | First: direct property on config object; then: `configService.getNested(key)`; finally: `defaultValue` |
+| `resumeExistingSession`                                | `config.resumeSession ?? false`                                                                        |
+| Other keys                                             | Read from `configService.getNested(key)` first, then fall back to `defaultValue`                       |
 
 **Behavioral differences from VsCodeAdapter:**
 

@@ -19,6 +19,18 @@ Note: "Provider" in class names follows VS Code API naming (CompletionItemProvid
 `PromptPropertyCompletionProvider` registered for: `*.flightpath.{yaml,yml}` only.
 </architecture>
 
+<sourceInventory>
+Current source inventory in `src/completions/`:
+- `CompletionHelpers.ts`
+- `ContextMenuReferenceCommands.ts`
+- `ContextReferenceBuilder.ts`
+- `PromptCompletionProvider.ts`
+- `PromptLinkProvider.ts`
+- `PromptPropertyCompletionProvider.ts`
+
+There are currently no extra helper/provider files in this directory beyond this six-file set.
+</sourceInventory>
+
 <completionProvider>
 **PromptCompletionProvider** provides five types of completions:
 

@@ -52,6 +52,8 @@ Orchestration, parsing, queue, state machine, validation, and template managemen
 **`liveInjectIntegrations` map:** Integrations whose PTY sessions are intentionally kept alive across runs (inject mode). On the next run, entries are re-inserted into `executionIntegrations` so the existing PTY and session context are reused. Each entry is removed when its PTY exits.
 **Dependencies injected by WorkflowOrchestrator:** `integrationFactory` (for per-run execution integrations), `getDetectorIntegration(harness?)` callback, `onWorkflowNameChange`, `onStatusBarUpdate`, `dashboardSink` (the `DashboardBroadcastHub` passed in, then wrapped as a `WorkflowTaggedSink` in the constructor to auto-inject `workflowId`)
 **Events:** `onPromptStart`, `onPromptComplete`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage` — carry typed payloads
+**Queue-editing surface:** `ensureEphemeralWorkingFile()`, `syncStepsForUndoRedo()`, `insertWorkflowStepAfterIndex()`, `updatePromptInQueue()`, `updateFinalStepInQueue()`, `deletePromptFromQueue()`, `reorderPendingPrompts()`, and `setStartPosition()` back the dashboard/editor step-management flows.
+**Execution-state reconciliation after edits:** `reconcileExecutionStateAfterStepChange()` is called after undo/redo sync and delete flows; it flips `STOPPED → COMPLETED` when all remaining steps are terminal and `COMPLETED → STOPPED` when pending work reappears, then re-persists the working file.
 **Background buffering:** `OutputCaptureBuffer` stores per-step output (streaming + completed, for both queue steps and finalStep loops) for replay when switching between multiple parallel workflows
 </workflowInstance>
 
@@ -67,9 +69,11 @@ Orchestration, parsing, queue, state machine, validation, and template managemen
 <promptQueue>
 **State container** with events (NOT event-driven executor — WorkflowExecutor handles the loop)
 **Why not event-driven:** Retry logic requires staying on the same index; deterministic for-loop control
-**Queue topology:** Owns `currentIndex`, `prompts`, `results`, `completedIndices`
+**Queue topology:** Owns `currentIndex`, `steps`, `results`, `completedIndices`, `workingFilePath`, `workflowName`, `queueExtensions`, and `lastReloadTime`; `finalStepRuntime` is tracked alongside the queue for finalStep loop resumption
 **Status delegation:** Runtime execution status (`status`, `stopped`, `startTime`, `pausedTime`, `totalPausedDuration`) is owned by `WorkflowStateMachine`; `PromptQueue` delegates all status transitions to it and projects the state onto `QueueState` via `getState()`
 **Working file persistence:** Delegated to `WorkingFileManager` (extracted from PromptQueue)
+**Editing API:** `updatePrompt()` merges partial `WorkflowStep` updates (including `enabled`), `replaceStep()` swaps step types without retaining stale fields, and `deletePrompt()` rejects deleting the actively executing step
+**Undo/redo restoration:** `syncStepsForUndoRedo()` rebuilds `currentIndex`, `completedIndices`, and `results` from restored `_runtime` metadata; `runtimeArchive` preserves runtime data across delete/undo/redo flows when a same-index live step no longer exists
 **Hash-based deduplication:** Prevents duplicate execution on queue reloads (dynamic queue extension)
 **Smart retry defaults:** `maxRetries`/`retryPrompt` resolve from settings or explicit values via module-level helpers
 </promptQueue>
@@ -119,6 +123,7 @@ Sequential prompt execution with pause/resume support.
   1. **Queue phase** — drains steps via `promptQueue.hasNext()`
   2. **`finalStep` phase** — runs the orchestrator gate once the queue is empty; if new prompts were appended (via MCP queue extension), the outer loop repeats
 **Per-step execution routing:**
+  - Any `WorkflowStep` with `enabled === false` — handled first via `handleSkippedStep()`; queue steps are marked `SKIPPED`, progress advances, and a disabled `finalStep` records skipped runtime then exits the loop cleanly
   - `ScriptStep` (`type: "script"`) — routed directly to `executeScriptStep()`; no AI harness interaction. `onPass`/`onFail` actions control flow (continue, skip, stop).
   - `PromptStep` with `preCondition` — evaluates the pre-condition script first; `onPass`/`onFail` determine whether to run the prompt or skip it
   - `PromptStep` without `preCondition` — normal AI harness execution
@@ -193,6 +198,9 @@ Manages workflow templates (built-in from `out/templates/workflows/`, custom fro
 **Event emitters:** `PromptQueue` emits state changes; `WorkflowStateMachine` emits `onDidTransition` and `onDidAttemptTransition`; `WorkflowInstance` subscribes and updates dashboard/status bar
 **Detector vs execution integrations:** Detector singletons live for the extension lifetime; execution integrations are per-run and disposed after the `finally` block
 **DashboardBroadcastHub:** Fan-out hub in `src/ui/`; `WorkflowOrchestrator` creates it, registers/unregisters dashboard providers on it, and passes it as `IDashboardSink` to `WorkflowInstance`
+**Step enablement pattern:** `enabled?: boolean` lives on both `PromptStep` and `ScriptStep`; disabled steps stay in the queue/working file and are skipped by `WorkflowExecutor` rather than being deleted or specially filtered out
+**Type-change replacement pattern:** When a step changes shape (`PromptStep` ↔ `ScriptStep`), use replacement flows (`replaceStep()`, sanitized rebuilds) instead of merge updates so stale fields from the previous step type are not retained
+**Edit-driven status reconciliation:** After step-list mutations that can change whether pending work exists, call `reconcileExecutionStateAfterStepChange()` so the state machine stays aligned with the edited queue (`STOPPED ↔ COMPLETED`)
 
 **CRITICAL — `replayWorkflowStateTo` is required after loading a working file for the panel:**
 `DashboardBroadcastHub.updateSessionRestored()` is a deliberate **no-op**. SESSION_RESTORED (which carries completed step statuses) is only sent through a direct `PostMessageDashboardSink` — which only exists inside `replayWorkflowStateTo()` and `replayFullStateTo()`. `WorkflowTaggedSink.updateSessionRestored` does forward to the hub, but since the hub is a no-op for this method, SESSION_RESTORED never reaches panels via the hub.

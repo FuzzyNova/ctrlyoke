@@ -9,16 +9,16 @@ VS Code extension entry point (`extension.ts`) and standalone MCP server binary 
 <activationOrder>
 `activate()` runs these steps in strict order. Do not reorder them.
 
-1. `Log.initialize(context)` — creates the output channel; must come first so all subsequent logging works.
-2. `initializeModelRegistry()` — fire-and-forget; unblocks IntelliSense immediately.
-3. `WorkspaceInitializer.initializeIfNeeded()` — creates `.flightpath/` on first run; fire-and-forget.
-4. `TempFileManager.cleanupOrphanedFiles()` — purges stale temp prompt files from prior sessions; fire-and-forget.
-5. `configService.setUserBackend / setWorkspaceBackend` — must happen before any code reads settings.
-6. `new FlightPathWebviewProvider(context)` + `registerWebviewViewProvider` — panel must exist before orchestrator is created.
-7. `initPtyProcessManager(webviewProvider.postMessagePublic)` — PTY must be initialized after the webview but before the orchestrator.
-8. `new WorkflowOrchestrator(context, webviewProvider)` — creates all seven harness integrations.
+1. `configService.setUserBackend / setWorkspaceBackend` — must happen before `Log.initialize(context)` so diagnostic logging reads the correct startup config.
+2. `Log.initialize(context)` — creates the output channel early so all subsequent logging works.
+3. `initializeModelRegistry()` — fire-and-forget; unblocks IntelliSense immediately.
+4. Workspace bootstrap — if the first workspace is already initialized, call `WorkspaceInitializer.initializeIfNeeded()` and `TempFileManager.cleanupOrphanedFiles()` fire-and-forget; otherwise remember `pendingInitWorkspaceRoot` so startup can be gated behind the dashboard init prompt after orchestrator creation.
+5. `new FlightPathWebviewProvider(context)` + `registerWebviewViewProvider` — panel must exist before orchestrator is created.
+6. `initPtyProcessManager(webviewProvider.postMessagePublic)` — PTY must be initialized after the webview but before the orchestrator.
+7. `new WorkflowOrchestrator(context, webviewProvider)` — creates all seven harness integrations.
+8. `workflowOrchestrator.setWorkspaceInitPending(pendingInitWorkspaceRoot)` — only when bootstrap detected an uninitialized workspace; must run before `initialize()`.
 9. `webviewProvider.setWorkflowOrchestrator / setHub` — cross-reference wiring after both objects exist.
-10. `setPtyPostMessage(hub.postMessage)` — upgrades PTY to broadcast through the hub (replaces the panel-only reference from step 7).
+10. `setPtyPostMessage(hub.postMessage)` — upgrades PTY to broadcast through the hub (replaces the panel-only reference from step 6).
 11. `new NotificationManager(() => workflowOrchestrator)` + `hub.addClient(notificationManager)` — registers notification manager as a dashboard sink for VS Code toast notifications.
 12. `webviewProvider.setOutputHistoryManager` — shares the single OutputHistoryManager instance with the webview provider.
 13. `vscode.lm.registerMcpServerDefinitionProvider` — guarded by `typeof … === "function"` for API availability.
@@ -26,7 +26,7 @@ VS Code extension entry point (`extension.ts`) and standalone MCP server binary 
 15. `onDidChangeActiveColorTheme` subscription — theme change listener.
 16. Completion providers (`PromptCompletionProvider` with `@`, `#`, `~`, `$` triggers; `PromptPropertyCompletionProvider`; `PromptLinkProvider`) and `initializeCompletionHelpers`.
 17. `registerLanguageModelTools(context)` — four LM tools.
-18. `registerCommands(context)` — all commands, auto-start hosted server if `configService.get("server")?.enabled`, then dev commands (`registerDevCommands`) only when `IS_DEV_MODE`.
+18. `registerCommands(context)` — registers workflow/dashboard commands, SCM commit-message commands, auto-starts the hosted server if `configService.get("server")?.enabled`, then dev commands (`registerDevCommands`) only when `IS_DEV_MODE`.
     </activationOrder>
 
 <disposableRegistration>
@@ -57,6 +57,9 @@ const myCommand = vscode.commands.registerCommand(
 - Commands that need a `uri` argument (context menu) receive it as the first parameter: `async (uri: vscode.Uri) => { … }`.
 - Context-menu commands always call `saveIfDirty(uri.fsPath)` before executing.
 - Commands that open the dashboard panel call `vscode.commands.executeCommand("flightpath.dashboard.focus")`.
+- SCM commit-message integration uses a single `const scmCommitCommand = new ScmCommitCommand();` local inside `registerCommands()`.
+- `VSCODE_COMMANDS.GENERATE_COMMIT_MESSAGE` registers `flightpath.generateCommitMessage` and delegates to `scmCommitCommand.execute(context)`; `VSCODE_COMMANDS.CANCEL_COMMIT_MESSAGE_GENERATION` delegates to `scmCommitCommand.cancel()`.
+- `ScmCommitCommand` (in `src/scm/ScmCommitCommand.ts`) owns the Source Control progress UI and toggles `VSCODE_CONTEXT_KEYS.GENERATING_COMMIT_MESSAGE` via `setContext`. When a VS Code command ID or context key is shared across files or `package.json` `when` clauses, define it in `src/types/DashboardConstants.ts` (`VSCODE_COMMANDS` / `VSCODE_CONTEXT_KEYS`) instead of duplicating string literals.
 - Server commands (`enableServer`, `disableServer`) access the module-level `hostedServer` variable directly.
 - All registered `Disposable` instances are pushed in a single batch at the end of the function.
 - Dev commands are conditionally registered **after** the batch push, inside `if (IS_DEV_MODE)`.
@@ -76,7 +79,7 @@ All four are pushed to `context.subscriptions` as a single batch. Both `flightpa
 </languageModelTools>
 
 <moduleScope>
-Three module-level variables in `extension.ts`:
+Four module-level variables in `extension.ts`:
 
 ```typescript
 let workflowOrchestrator: WorkflowOrchestrator; // set in activate(), used in commands
@@ -116,6 +119,7 @@ server.start().catch(() => process.exit(1));
 | `FLIGHTPATH_WORKING_FILE`    | scan queue dir  | Explicit working file path                          |
 | `FLIGHTPATH_MAX_QUEUE_SIZE`  | `100`           | Max queue entries (0 = unlimited)                   |
 | `FLIGHTPATH_UNLIMITED_MODE`  | `false`         | Bypass size limit entirely                          |
+| `FLIGHTPATH_COMMIT_OUTPUT`   | unset           | Output file written by `flightpath_submit_commit_message` |
 | `FLIGHTPATH_DIAGNOSTIC_LOGS` | `false`         | Write to `.flightpath/logs/flightpath-mcp-<ts>.log` |
 | `NODE_ENV`                   | —               | `development` also enables diagnostic logging       |
 
@@ -123,17 +127,18 @@ server.start().catch(() => process.exit(1));
 
 **Concurrency:** `operationQueue` (a chained `Promise`) serializes all `flightpath_append_queue` calls to prevent race conditions on the working file. The gate promise always resolves (never rejects) so a failed operation does not block subsequent ones.
 
-**Tools exposed by `mcp-server.ts` (five tools):**
+**Tools exposed by `mcp-server.ts` (six tools):**
 
-| Tool ID                    | Operation                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------------ |
-| `flightpath_queue_status`  | Read active queue state                                                                          |
-| `flightpath_append_queue`  | Append steps; resumes execution if queue was completed                                           |
-| `flightpath_capabilities`  | Return available harnesses and models                                                            |
-| `flightpath_read_output`   | Read AI response text from completed prompts                                                     |
-| `flightpath_global_status` | Read status of ALL workflows in the workspace queue (MCP-only — not a LM tool in `extension.ts`) |
+| Tool ID                           | Operation                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `flightpath_queue_status`         | Read active queue state                                                                                                   |
+| `flightpath_append_queue`         | Append steps; resumes execution if queue was completed                                                                    |
+| `flightpath_capabilities`         | Return available harnesses and models                                                                                     |
+| `flightpath_read_output`          | Read AI response text from completed prompts                                                                              |
+| `flightpath_global_status`        | Read status of ALL workflows in the workspace queue (MCP-only — not a LM tool in `extension.ts`)                        |
+| `flightpath_submit_commit_message` | Persist a generated commit message to `FLIGHTPATH_COMMIT_OUTPUT` for `CommitMessageGenerator` (MCP-only)                |
 
-The first four share the same tool IDs as the LM tools registered in `extension.ts`. `flightpath_global_status` is exclusive to the MCP server; it is not registered as a VS Code LM tool.
+The first four share the same tool IDs as the LM tools registered in `extension.ts`. `flightpath_global_status` and `flightpath_submit_commit_message` are MCP-only; neither is registered as a VS Code LM tool. `CommitMessageGenerator` uses the submit tool as the primary capture path so the AI returns the commit message as a structured tool argument instead of prose text.
 
 **Path constants** in `mcp-server.ts` are redefined as local `const` strings (no import from `ConfigurationUtils`) — the server cannot depend on VS Code extension utilities. Keep them in sync with `ConfigurationUtils.PATH_CONSTANTS`.
 </mcpServer>

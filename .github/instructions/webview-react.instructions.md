@@ -20,7 +20,7 @@ React-based webview UI for FlightPath dashboard. Modern component architecture w
 
 ## Build System
 
-Vite builds the webview as a separate bundle consumed by FlightPathDashboardProvider:
+Vite builds the webview as a separate bundle consumed by FlightPathWebviewProvider:
 
 - Entry: main.tsx
 - Output: out/webview-react/assets/
@@ -167,14 +167,17 @@ src/ui/webview-react/
 │   ├── useDrawerTabOverrides.ts # Computes tab icon/color overrides for DrawerTabBar
 │   ├── useDropdownPortalPosition.ts # Calculates portal position for dropdown menus
 │   ├── useElementNarrow.ts      # ResizeObserver-based width threshold
-│   ├── useFinalStepContextMenu.tsx # Context menu hook for the final step
+│   ├── useFinalStepContextMenu.tsx # Context menu hook for final-step enable/disable
+│   ├── useLatestStepOutput.ts  # History-aware latest CLI output lookup for step UIs
+│   ├── useLongPress.ts         # Touch press-and-hold → context menu coordinates
 │   ├── useMediaQuery.ts         # Responsive layout detection
 │   ├── useMessageHandler.ts     # Message routing from extension
 │   ├── useMobileLayout.ts       # Mobile single-column layout refs
 │   ├── useMobileTerminalBar.ts  # Mobile terminal control bar state
+│   ├── useOutputContextMenu.tsx # Context menu hook for output-pane copy actions
 │   ├── usePromptStatus.ts       # Step status derived state (icon, color, label)
 │   ├── useStepClickHandler.ts   # Step click → editor navigation + selection
-│   ├── useStepContextMenu.tsx   # Context menu hook for queue step rows
+│   ├── useStepContextMenu.tsx   # Queue-step menu + paste-to-end helpers for step UIs
 │   ├── useUndoRedoKeyHandler.ts # Ctrl+Z/Y undo/redo with running guard
 │   └── useVsCodeApi.ts          # VS Code API singleton
 ├── store/                   # Zustand state stores
@@ -222,6 +225,14 @@ src/ui/webview-react/
 │   └── tokenUtils.ts        # Context percentage helpers (calcContextPct)
 └── styles/                  # CSS and Tailwind config
 ```
+
+## Interaction Hooks
+
+- `useStepContextMenu()` builds the shared queue-step context menu used by both `WorkflowStepsPanel` and `PromptChipRail`. Menu items include **Copy Step**, **Copy Prompt/Script**, **Copy Output**, **Paste Step**, **Set Start Position**, **Enable/Disable**, and **Delete**. `usePasteToEndContextMenu()` is the blank-background companion that always pastes after the last queue step.
+- `useFinalStepContextMenu()` exposes the final-step enable/disable menu used by both the expanded footer and collapsed chip rail.
+- `useOutputContextMenu()` powers the output-pane right-click / long-press menu. It derives the hovered step from `stepScrollFractions` + `lastCliIndexPerStep` and offers **Copy**, **Copy All**, and **Copy Step Output**.
+- `useLongPress()` converts touch press-and-hold into `(x, y)` coordinates for context menus, cancels when the finger moves beyond a threshold, and supports `requireSelf=true` for blank-background containers.
+- `useLatestStepOutput()` returns a history-aware getter shared by step UIs. When `uiStore.isViewingHistory=true`, it reads from `historyOutputs.orderedEntries`; otherwise it reads from `liveOrderedEntries`.
 
 </architecture>
 
@@ -273,6 +284,8 @@ interface WorkflowState {
 **Use cases**: Workflow execution, step list (queue + final step), ordered output entries, undo/snapshot tracking, run history browsing
 
 **Run history**: When `uiStore.isViewingHistory=true`, `OutputSection` renders from `historyOutputs` instead of `liveOrderedEntries`. Live entries continue updating normally — history browsing has zero impact on live capture.
+
+**Disabled steps**: `WorkflowStep` is still the `PromptStep | ScriptStep` union, but both shapes now support `enabled?: boolean`. Disabled steps remain in `steps` / `finalStep`, keep their outputs/history, and are rendered/edited in place rather than being removed from the queue.
 
 ### uiStore - Layout and UI State
 
@@ -351,9 +364,9 @@ interface UiState {
   mcpRegistryNextCursor: string | undefined;
   mcpWorkspaceServers: McpServerConfig[] | undefined;
   // Mobile drawer/sidebar state (transient)
-  mobilePromptsOpen: boolean;
-  mobilePromptsMode: "sidebar" | "fullwidth";
-  mobileSettingsOpen: boolean;
+  mobileStepsOpen: boolean;
+  mobileStepsMode: "sidebar" | "fullwidth";
+  mobileWorkflowPropsOpen: boolean;
   // Global settings drawer
   globalSettingsOpen: boolean;
   globalSettingsActiveTab: string;
@@ -376,6 +389,7 @@ interface EditorState {
   hasActiveQueue: boolean;
   // Step type — determines editor mode (prompt vs script)
   stepType: "prompt" | "script";
+  stepEnabled: boolean;
   // Prompt step content
   promptText: string;
   promptName: string;
@@ -390,6 +404,7 @@ interface EditorState {
   properties: PropertyValues;
   isDirty: boolean;
   validationErrors: Record<string, string>;
+  pendingPromptEditorInserts: PromptEditorInsertRequest[];
 }
 ```
 
@@ -401,9 +416,13 @@ interface EditorState {
 
 **endCondition** and **preCondition** are part of `PropertyValues` (not top-level fields)
 
-**Use cases**: Editor content, prompt/script properties, save/revert operations
+**Draft enable state**: `stepEnabled` is stored for new-step drafts, `savedNewPromptState`, and per-step `pendingEdits`. Serialization only writes `enabled: false`; re-enabling clears the property so the step returns to its default enabled state.
 
-**Persistence**: Synced to VS Code webview state API via FlightPathDashboardProvider
+**External inserts**: `pendingPromptEditorInserts` queues `PromptEditorInsertRequest`s coming from VS Code context-menu actions. `preparePromptEditorForInsert()` forces new-step prompt mode before `CodeMirrorEditor` consumes the queued insert.
+
+**Use cases**: Editor content, prompt/script properties, step enable/disable, context-menu driven inserts, save/revert operations
+
+**Persistence**: Only new-step drafts are synced to VS Code webview state. Persisted editor data includes `promptText`, `promptName`, `stepEnabled`, and `properties`.
 
 ### settingsStore - Harness and Model Configuration
 
@@ -422,9 +441,11 @@ interface SettingsState {
 }
 ```
 
-**Use cases**: Harness/model/skills selection, workflow properties, global defaults, hooks resolution, server control
+**Use cases**: Harness/model/skills selection, workflow properties, global defaults, hooks resolution, server control, and UI behavior flags such as `autoExpandEditorWhenTyping`, `confirmDeleteOperations`, and `confirmResetOperations`
 
 **Hooks resolution**: `getEffectiveHooks()` resolves prompt → workflow → global inheritance. Returns workflow-level hooks if defined, otherwise global hooks.
+
+**Editor auto-expand**: `globalSettings.autoExpandEditorWhenTyping` gates the App-level overflow listener. The temporary extra height is tracked in `App.tsx` refs (`editorAutoExpandPxRef`, `prevDocSignedOverflowRef`) rather than persisted in a store.
 
 ### terminalStore - Terminal Session Lifecycle
 
@@ -751,16 +772,17 @@ xterm.js instances live **outside React** in `terminalRegistry.ts`:
 
 ### EditorSection Header
 
-`EditorSection` header contains three zones:
+`EditorSection` header contains four functional groups:
 
 - **Left** — collapse affordance (chevron + icon + "Editor" label)
-- **Center** — mode indicator + token count; clicking the mode text starts **inline prompt name editing** (input replaces text, saves on Enter/blur, cancels on Escape); disabled when `isCLIManaged`
-- **Right** — `IconToggleButton` for `flightpath.respectGitignoreForCompletions` (hidden when `isCLIManaged`); posts `UPDATE_CONFIG` message to extension on toggle
+- **Step type switch** — Prompt/Script segmented control; switching to script closes the PropertiesDrawer, switching back preserves the draft for round-trip editing
+- **Center** — enable/disable toggle + mode indicator + inline name editing + token count (prompt mode only). Disabled steps append `— disabled` with warning styling; the toggle is hidden when `isCLIManaged`.
+- **Right** — `IconToggleButton` for `flightpath.respectGitignoreForCompletions` (hidden when `isCLIManaged`); posts `UPDATE_GLOBAL_SETTING` for `ui.respectGitignoreForCompletions`
 
 **Mode indicator text** format:
 
-- New mode: `"New Prompt"` or `"New: <name>"`
-- Edit mode: `"Editing: <name>"`, `"Editing: Final Prompt"`, or `"Editing: Prompt N of M"`
+- New mode: `"New Prompt"`, `"New Script"`, or `"New: <name>"`
+- Edit mode: `"Editing: <name>"`, `"Editing: Final Step"`, `"Editing: Final Script"`, `"Editing: Script"`, or `"Editing: Prompt N of M"`
 - CLI managed: `"Read-only — CLI run in progress"`
 
 ### OutputSection Header
@@ -768,6 +790,14 @@ xterm.js instances live **outside React** in `terminalRegistry.ts`:
 `OutputSection` header right side shows an **execution mode toggle** (`IconToggleButton`) that switches between `EXECUTION_MODES.INTERACTIVE` and `EXECUTION_MODES.HEADLESS`. It posts a `CHANGE_EXECUTION_MODE` message to the extension and is always visible regardless of the active tab (Output vs Terminal).
 
 The header left side shows Output/Terminal tab buttons (when a terminal session exists), and font size steppers for both output text and terminal.
+
+The scrollable output container itself attaches `useOutputContextMenu()` + `useLongPress()`. Right-click / long-press opens a shared menu with **Copy**, **Copy All**, and **Copy Step Output**; the hook maps the click position back to the hovered queue/final-step output via `stepScrollFractions` + `lastCliIndexPerStep`. Individual `CliOutput` cards also expose copy actions for session IDs and extracted plain-text output.
+
+### Step Context Menus and Paste-to-End
+
+`WorkflowStepsPanel` and `PromptChipRail` share `useStepContextMenu()` for queue steps and `usePasteToEndContextMenu()` for blank-background interactions. Queue-step menus expose **Copy Step**, **Copy Prompt/Script**, **Copy Output**, **Paste Step**, **Set Start Position**, **Enable/Disable**, and **Delete**. Blank-background right-click or long-press opens a single-item **Paste Step** menu that inserts after `totalSteps - 1` (so empty workflows naturally use `afterIndex = -1`).
+
+The final step uses `useFinalStepContextMenu()` for enable/disable only. Disabled queue/final steps stay visible with badges + dimmed styling, and re-enabling clears the `enabled` property instead of deleting/recreating the step. `WorkflowStepsPanel` also handles focused Ctrl+C / Ctrl+V copy-paste for the selected queue step when the event target is not an editable element.
 
 ### EditorFooter Quick Pickers
 
@@ -793,7 +823,11 @@ Full-screen overlay opened via `uiStore.globalSettingsOpen`. Contains a `GlobalS
 
 ### Mobile Layout
 
-On narrow viewports, `PromptChipRail` provides compact chip-based navigation for collapsed/narrow step panel navigation. Controlled by `uiStore.mobilePromptsOpen` and `uiStore.mobilePromptsMode` (`"sidebar"` or `"fullwidth"`). The `useMediaQuery` hook detects mobile breakpoints; `App.tsx` switches between `useDesktopLayout` and `useMobileLayout` refs accordingly.
+On narrow viewports, `PromptChipRail` provides compact chip-based navigation for collapsed/narrow step panel navigation. Controlled by `uiStore.mobileStepsOpen` and `uiStore.mobileStepsMode` (`"sidebar"` or `"fullwidth"`); the workflow-properties overlay uses `uiStore.mobileWorkflowPropsOpen`. The `useMediaQuery` hook detects mobile breakpoints; `App.tsx` switches between `useDesktopLayout` and `useMobileLayout` refs accordingly. Blank background areas in both step UIs support long-press paste-to-end via `useLongPress(..., 500, true)`.
+
+### Editor Auto-Expand
+
+`App.tsx` listens for `fp-editor-overflow-change` and, when `globalSettings.autoExpandEditorWhenTyping` is enabled, temporarily grows the editor panel above the user's persisted base size on both desktop and mobile. Auto-expand is capped at 60% of the center stack, tracked with `editorAutoExpandPxRef` / `prevDocSignedOverflowRef`, and intentionally not persisted in `uiStore`.
 
 ### ScriptConditionEditor
 

@@ -11,7 +11,7 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
 </purpose>
 
 <scripts>
-**`flightpath-hook-utils.js`** — Shared utilities (required by all hook scripts)
+**`flightpath-hook-utils.js`** — Shared utilities (required by all stdin-based hook scripts)
 
 - `getDebugLogPath(logsDir, scriptName)` — returns log file path, creating `logsDir` if needed
 - `getTempLogPath(scriptName)` — fallback: returns path in `os.tmpdir()`
@@ -20,11 +20,14 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
 - `getWorkspaceRootFromNotifyDir(notifyDir)` — navigates `notifyDir/../../..` to reach workspace root
 - `initializeLogger(scriptName, notifyDir)` — checks `FLIGHTPATH_DIAGNOSTIC_LOGS` env var (injected by FlightPath at spawn time); returns a configured logger when enabled, no-op logger otherwise
 - `readStdinJson(scriptPrefix, debugLog, callback)` — reads all stdin as a single JSON object, handles readline setup, JSON parsing, error reporting, then invokes callback with parsed object; used by all stdin-based hooks (Copilot, Claude, Codex, Gemini, Qwen)
+- `runDecisionHook(command, payloadJson, debugLog)` — runs a permission-decision hook, forwards child stdout back to the harness, and returns the child exit code
+- `buildArtifactBase()` / `isHookEventEnabled()` — derive per-run hook artifact metadata from `FLIGHTPATH_*` env vars and filter logical events against `FLIGHTPATH_NOTIFY_HOOK_EVENTS`
+- `writeHookArtifact()` / `maybeWriteHookArtifact()` — write `{runId}-hook-*.json` artifact files consumed by `HookEventMonitor` for browser/host hook notifications
 
 **`flightpath-copilot-hook.js`** — Copilot CLI hook handler
 
-- Handles two events: `sessionStart`, `agentStop`
-- Arguments: `node <script> <notifyDir> <hookType>`
+- Handles six native events: `sessionStart`, `agentStop`, `preToolUse`, `postToolUse`, `userPromptSubmitted`, `permissionRequest`
+- Arguments: `node <script> <notifyDir> <hookType> [encodedDecisionHook]`
 - Input: JSON read from **stdin** via `readStdinJson` (Copilot pipes hook payload including `sessionId`, `cwd`)
 - Registered via `.github/hooks/*.json` config files (one per event):
   ```json
@@ -37,66 +40,75 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
     }
   }
   ```
-- Writes notification files using the **shared schema** so `NotificationMonitorBase` can share all monitoring logic:
+- `sessionStart` / `agentStop` write notification files using the **shared schema** so `NotificationMonitorBase` can share all monitoring logic:
   - `sessionStart` → `{runId|sessionId}-start.json` with `{ hookEvent: "SessionStart", status: "started", ... }`
   - `agentStop` → `{sessionId}-stop.json` with `{ hookEvent: "Stop", status: "completed", ... }`
+- `preToolUse`, `postToolUse`, `userPromptSubmitted`, and `permissionRequest` do not write start/stop files; they optionally emit `{runId}-hook-*.json` artifacts via `maybeWriteHookArtifact()` when `FLIGHTPATH_NOTIFY_HOOK_EVENTS` enables those logical events
+- `permissionRequest` optionally decodes the base64 command passed on argv[4] and proxies the decision via `runDecisionHook()`; without a decision hook it exits 0
 - Start file uses `FLIGHTPATH_RUN_ID` env var as prefix when set (for parallel-workflow collision avoidance), falls back to sessionId
 - Falls back to `${hookType}-${Date.now()}.json` if no session ID is present
 
 **`flightpath-claude-hook.js`** — Claude Code CLI hook handler
 
-- Handles two events: `SessionStart` (session discovery), `Stop` (completion signal)
-- Arguments: `node <script> <notifyDir>` — hook type read from stdin payload field `hook_event_name`
+- Handles six events: `SessionStart`, `Stop`, `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `PermissionRequest`
+- Arguments: `node <script> <notifyDir> [encodedDecisionHook]` — hook type read from stdin payload field `hook_event_name`
 - Input: JSON read from **stdin** via `readStdinJson`; relevant fields: `session_id`, `hook_event_name`, `transcript_path`, `permission_mode`
 - Registered via `--settings` inline JSON passed to `claude`:
   ```json
   {"hooks":{"SessionStart":[...],"Stop":[...]}}
   ```
-- `SessionStart` → `{runId|sessionId}-start.json`, `Stop` → `{sessionId}-stop.json`
+- `SessionStart` / `Stop` write `{runId|sessionId}-start.json` and `{sessionId}-stop.json`
+- `PreToolUse`, `PostToolUse`, and `UserPromptSubmit` are artifact-only events: they emit optional `{runId}-hook-*.json` files but skip notification-file I/O
+- `PermissionRequest` optionally runs a base64-decoded decision hook from argv[3] via `runDecisionHook()`; otherwise it exits 0 without stdout
 - Start file uses `FLIGHTPATH_RUN_ID` env var as prefix when set, falls back to sessionId
-- Ignores any `hook_event_name` other than `SessionStart` or `Stop` (exits 0)
+- Ignores any unhandled `hook_event_name` (exits 0)
 
 **`flightpath-codex-notify.js`** — Codex CLI hook handler
 
-- Handles two events: `SessionStart` (session discovery), `Stop` (completion signal)
-- Arguments: `node <script> <notifyDir>` — hook type read from stdin payload field `hook_event_name`
+- Handles six events: `SessionStart`, `Stop`, `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `PermissionRequest`
+- Arguments: `node <script> <notifyDir> [encodedDecisionHook]` — hook type read from stdin payload field `hook_event_name`
 - Input: JSON read from **stdin** via `readStdinJson`; relevant fields: `session_id`, `hook_event_name`, `transcript_path`, `cwd`, `permission_mode`, `stop_hook_active`, `last_assistant_message`, `source`
 - Registered via `.codex/hooks.json` (requires `--enable codex_hooks`):
   ```json
   { "hooks": { "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "node <script> <notifyDir>" }] }], "Stop": [...] } }
   ```
-- `SessionStart` → `{runId|sessionId}-start.json`, `Stop` → `{sessionId}-stop.json`
-- Start file uses `FLIGHTPATH_RUN_ID` env var as prefix when set, falls back to sessionId
+- `SessionStart` / `Stop` write `{runId|sessionId}-start.json` and `{sessionId}-stop.json`
+- `PreToolUse`, `PostToolUse`, and `UserPromptSubmit` are artifact-only events: they emit optional `{runId}-hook-*.json` files but skip notification-file I/O
+- `PermissionRequest` optionally runs a base64-decoded decision hook from argv[3] via `runDecisionHook()`; otherwise it exits 0 without stdout
 - Has unconditional invocation logging (writes to log before any diagnostic flag checks for troubleshooting)
-- Ignores any `hook_event_name` other than `SessionStart` or `Stop` (exits 0)
+- Ignores any unhandled `hook_event_name` (exits 0)
 
 **`flightpath-gemini-hook.js`** — Gemini CLI hook handler
 
-- Handles two events: `SessionStart` (session discovery), `AfterAgent` (completion signal)
-- Arguments: `node <script> <notifyDir>` — hook type read from stdin payload field `hook_event_name`
+- Handles five events: `SessionStart`, `AfterAgent`, `BeforeTool`, `AfterTool`, `Notification`
+- Arguments: `node <script> <notifyDir> [encodedDecisionHook]` — hook type read from stdin payload field `hook_event_name`
 - Input: JSON read from **stdin** via `readStdinJson`; relevant fields: `session_id`, `hook_event_name`, `transcript_path`, `cwd`
 - Registered via `.gemini/settings.json`:
   ```json
   { "hooks": { "SessionStart": [...], "AfterAgent": [...] } }
   ```
 - Normalizes `AfterAgent` → `Stop` in notification data so `NotificationMonitorBase` works unchanged
-- `SessionStart` → `{runId|sessionId}-start.json`, `AfterAgent` → `{sessionId}-stop.json`
+- `SessionStart` / `AfterAgent` write `{runId|sessionId}-start.json` and `{sessionId}-stop.json`
+- `BeforeTool` and `AfterTool` are artifact-only events: they emit optional `{runId}-hook-*.json` files but skip notification-file I/O
+- `Notification` is only meaningful when `notification_type === "ToolPermission"`; those events map to logical `permissionRequest` and may run a base64-decoded decision hook from argv[3] via `runDecisionHook()`
 - Start file uses `FLIGHTPATH_RUN_ID` env var as prefix when set, falls back to sessionId
-- Ignores any `hook_event_name` other than `SessionStart` or `AfterAgent` (exits 0)
+- Ignores non-permission notifications and any other unhandled `hook_event_name` (exits 0)
 
 **`flightpath-qwen-hook.js`** — Qwen Code CLI hook handler
 
-- Handles three events: `SessionStart`, `UserPromptSubmit` (both treated as start events), `Stop`
-- Arguments: `node <script> <notifyDir>` — hook type read from stdin payload field `hook_event_name`
+- Handles six events: `SessionStart`, `UserPromptSubmit`, `Stop`, `PreToolUse`, `PostToolUse`, `PermissionRequest`
+- Arguments: `node <script> <notifyDir> [encodedDecisionHook]` — hook type read from stdin payload field `hook_event_name`
 - Input: JSON read from **stdin** via `readStdinJson`; relevant fields: `session_id`, `hook_event_name`, `transcript_path`, `permission_mode`, `stop_hook_active`, `last_assistant_message`
 - Registered via `.qwen/settings.json` (requires `--experimental-hooks`):
   ```json
   { "hooks": { "SessionStart": [...], "Stop": [...] } }
   ```
-- `SessionStart`/`UserPromptSubmit` → `{runId|sessionId}-start.json`, `Stop` → `{sessionId}-stop.json`
+- `SessionStart` / `UserPromptSubmit` write `{runId|sessionId}-start.json`; `Stop` writes `{sessionId}-stop.json`
+- `PreToolUse` and `PostToolUse` are artifact-only events: they emit optional `{runId}-hook-*.json` files but skip notification-file I/O
+- `PermissionRequest` optionally runs a base64-decoded decision hook from argv[3] via `runDecisionHook()`; otherwise it exits 0 without stdout
 - Start file uses `FLIGHTPATH_RUN_ID` env var as prefix when set, falls back to sessionId
 - Has unconditional invocation logging (writes to log before any diagnostic flag checks for troubleshooting)
-- Ignores any `hook_event_name` other than `SessionStart`, `UserPromptSubmit`, or `Stop` (exits 0)
+- Ignores any unhandled `hook_event_name` (exits 0)
 
 **`flightpath-opencode-plugin.ts`** — OpenCode completion plugin (TypeScript/ESM)
 
@@ -118,16 +130,23 @@ Most scripts are plain CommonJS Node.js (`.js`). The **OpenCode plugin is the ex
   </scripts>
 
 <notificationMechanism>
-All scripts write JSON notification files that FlightPath's `*NotificationMonitor` polls for:
+The scripts write two kinds of JSON files into the notify directory:
+
+1. **Start/stop notification files** consumed by each harness `*NotificationMonitor`
+2. **Hook artifact files** (`{runId}-hook-*.json`) consumed by `HookEventMonitor` for browser/host notifications
+
+Common flow:
 
 1. Parse input (stdin for Copilot/Claude/Codex/Gemini/Qwen, env vars + plugin API for OpenCode)
-2. Write a JSON notification file to `.flightpath/temp/<harness>-notifications/`
-3. The corresponding `*NotificationMonitor` polls that directory
+2. Optionally write a start/stop notification file to `.flightpath/temp/<harness>-notifications/`
+3. Optionally write a `{runId}-hook-*.json` artifact when `FLIGHTPATH_NOTIFY_HOOK_EVENTS` enables the logical event
+4. The corresponding monitor polls that directory
 
 **File naming (shared convention across stdin-based hooks):**
 
 - Start events: `{runId|sessionId}-start.json` — uses `FLIGHTPATH_RUN_ID` env var when set (prevents parallel-workflow collision), falls back to sessionId
 - Stop events: `{sessionId}-stop.json`
+- Hook artifacts: `{runId}-hook-{timestamp}-{pid}.json`
 - Copilot fallback: `${hookType}-${Date.now()}.json` when no session ID available
 - OpenCode stop: written on `session.status idle` for any non-child session (using inverted childSessions tracking)
 
@@ -171,5 +190,5 @@ Debug logging is **opt-in**: scripts check the `FLIGHTPATH_DIAGNOSTIC_LOGS` envi
 - Prefer `initializeLogger()` + `readStdinJson()` from utils for new stdin-based hooks to avoid boilerplate
 - `process.exit(1)` on fatal argument/parse errors; never throw unhandled exceptions
 - Use `fs.writeFileSync` for atomic-enough single writes; notify monitors read complete files
-- When adding a new harness hook script: arg parsing → diagnostic log init → stdin/argv read → validate → write notification file
+- When adding a new harness hook script: arg parsing → diagnostic log init → stdin/argv read → validate → optionally emit start/stop notifications, hook artifacts, and permission-decision stdout
 </guidelines>

@@ -13,7 +13,7 @@ Shared utilities for file system operations, logging, validation, CLI process ma
 
 **ValidationUtils:** Runtime AJV validation with TypeScript generics, schema compilation/caching, error formatting.
 
-**ConfigurationUtils:** Type-safe config access with `get<T>()`, enum validation (Harness, ExecutionMode), default values, PATH_CONSTANTS for directory names. All VS Code settings access centralized here.
+**ConfigurationUtils:** Centralized `configService` access via named getters/setters plus `getConfigValue<T>()` / `updateSetting()`. Exposes `CONFIG_KEYS`, `CONFIG_SCOPE`, and `PATH_CONSTANTS`; covers defaults, execution, chat, UI, history, hooks/MCP, and commit-message settings, including `getCommitHarness(): HarnessId | ""`, `getCommitModel()`, and `getCommitPrompt()` for `flightpath.commit.*`.
 
 **CliProcessManager:** Spawn CLI processes (headless/interactive), VS Code terminals, shell integration, graceful shutdown (SIGTERM → SIGKILL), coordinated cancellation.
 
@@ -123,7 +123,11 @@ ConfigurationUtils.PATH_CONSTANTS provides single source of truth for directory 
 - HISTORY_DIR: ".history"
 - AGENTS_DIR: "agents"
 - SKILLS_DIR: "skills"
+- CERTS_DIR: "certs"
+- NOTIFICATIONS_DIR: "notifications"
 - CAPABILITIES_FILE: "capabilities.json"
+- PUSH_SUBSCRIPTIONS_FILE: "push-subscriptions.json"
+- VAPID_KEYS_FILE: "vapid-keys.json"
 - MCP_DIR: "mcp"
 - MCP_SERVERS_FILE: "servers.json"
 </pathConstants>

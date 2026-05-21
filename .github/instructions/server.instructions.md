@@ -36,7 +36,7 @@ constructor(
 **Supporting services** (instantiated in constructor):
 
 - `WebPushService` — manages VAPID keys and push subscriptions persisted under `.flightpath/notifications/`
-- `HostedWorkspaceViewerService` — workspace-scoped file read/write and git operations for the browser editor
+- `HostedWorkspaceViewerService` — workspace-scoped file read/write, git operations, and AI-generated commit-message support for the browser editor
 - `PngIconService` (singleton `pngIconService`) — renders SVG icons to PNG (180×180 and 512×512) via `@resvg/resvg-wasm`
 
 **Supporting modules:**
@@ -109,6 +109,7 @@ Routes are registered in this order (first match wins):
 | `POST /api/workspace-viewer/commit` | `HostedWorkspaceViewerService.commit({ message })` |
 | `POST /api/workspace-viewer/push` | `HostedWorkspaceViewerService.push()` |
 | `POST /api/workspace-viewer/pull` | `HostedWorkspaceViewerService.pull()` |
+| `POST /api/workspace-viewer/generate-commit-message` | `HostedWorkspaceViewerService.generateCommitMessage({ instructions? })` — returns 422 when no changes are available |
 | SPA fallback (any unmatched path) | `buildHtml()` |
 
 **`buildHtml()` transformations on `out/ui/webview-react/index.html`:**
@@ -188,7 +189,7 @@ webviewProvider.setThemeVarsCapturedCallback(undefined);
 - **Path resolution:** `resolveWebviewDist()` uses `path.join(__dirname, "ui", "webview-react")` — esbuild sets `__dirname` to `out/` at runtime.
 - **Connection IDs:** `clientTag` format is `"browser:N"` where N increments per connection.
 - **Icon colorization:** SVG icons apply `iconBgColor`/`iconFgColor` from `configService.getAll().server` at request time. PNGs are generated via `PngIconService` (cached; regenerated only when colors change). Cache-busting color params are appended to icon URLs in HTML/manifest so browsers pick up color changes.
-- **Workspace viewer security:** `HostedWorkspaceViewerService.safeResolve()` rejects any path that escapes the workspace root (symlink-aware). All git operations run with `execFile` (no shell injection). Max file read: 2 MB; binary files are rejected.
+- **Workspace viewer security:** `HostedWorkspaceViewerService.safeResolve()` rejects any path that escapes the workspace root (symlink-aware). All git operations and commit-message generation diff collection run with `execFile` (no shell injection). Max file read: 2 MB; binary files are rejected.
 - **Push notification deduplication:** `notifiedEventIds` set prevents the same event from firing more than once per server instance. Stale subscriptions (404/410 responses) are removed automatically by `WebPushService.sendNotification()`.
 </conventions>
 

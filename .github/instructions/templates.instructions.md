@@ -13,6 +13,14 @@ Copied to `out/templates/` during build.
 `check_condition.*` - End condition script templates (5 types: `.py`, `.js`, `.sh`, `.bat`, `.ps1`)
 </directory>
 
+<bundledAssets>
+**Current bundled agents:** `flightpath-orchestrator.agent.md`, `spec-orchestrator.agent.md`
+
+**Current bundled workflow templates:** `simple-feature.flightpath.yaml`, `fix-tests.flightpath.yaml`, `full-feature.flightpath.yaml`, `spec-driven-loop.flightpath.yaml`
+
+These inventories are mirrored in `agents/manifest.json` and `workflows/manifest.json`; keep manifests and physical files in sync.
+</bundledAssets>
+
 <endConditionScripts>
 **Contract:** stdout = expected value, exit 0 = success. Include shebang. Use `subprocess`/`spawn` (not `eval`). Default to returning `"true"`.
 </endConditionScripts>
