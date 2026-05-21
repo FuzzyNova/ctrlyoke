@@ -346,6 +346,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                     style={{
                       top: `${block.scrollFraction * 100}%`,
                       height: `${block.heightFraction * 100}%`,
+                      minHeight: "1px",
                     }}
                   >
                     {block.runs.map((run, runIndex) => {
@@ -396,6 +397,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                 style={{
                   top: `${block.scrollFraction * 100}%`,
                   height: `${block.heightFraction * 100}%`,
+                  minHeight: "1px",
                   background: `linear-gradient(to bottom,
                     ${DIFF_REMOVED_COLOR} 0%,
                     ${DIFF_REMOVED_COLOR} ${removedFraction * 100}%,

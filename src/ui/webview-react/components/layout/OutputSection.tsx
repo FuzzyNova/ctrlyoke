@@ -945,7 +945,7 @@ export const OutputSection: React.FC = () => {
             return;
           const anchorId = `${anchorPrefix}-e${eventIndex}`;
           const measurement = diffMeasurements.get(anchorId);
-          if (!measurement || measurement.heightFraction < 0.0005) return;
+          if (!measurement) return;
           const stats =
             measurement.addedLines > 0 ||
             measurement.removedLines > 0 ||
