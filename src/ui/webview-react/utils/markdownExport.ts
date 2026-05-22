@@ -287,6 +287,22 @@ function renderStructuredEventsToMarkdown(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+export interface ExportOptions {
+  /** Include the CLI command section for prompt steps. Default: true. */
+  includeCommand?: boolean;
+  /**
+   * Include metadata: document header, step headings, token stats, session IDs,
+   * and horizontal rule separators. Default: true.
+   * When false, only prompt text, command (if enabled), and response output are emitted.
+   */
+  includeMetadata?: boolean;
+  /**
+   * 1-based step numbers to include. When undefined all steps are exported.
+   * e.g. [1,2,3,5] exports steps 1–3 and 5.
+   */
+  stepRange?: number[];
+}
+
 /**
  * Generate markdown export content from CLI outputs.
  */
@@ -300,22 +316,28 @@ export function generateMarkdownExport(
   },
   options?: {
     orderedEntries?: ReadonlyArray<OrderedHistoryEntry>;
+    exportOptions?: ExportOptions;
   }
 ): string {
   const lines: string[] = [];
-  const timestamp = new Date().toISOString();
+  const includeCommand = options?.exportOptions?.includeCommand ?? true;
+  const includeMetadata = options?.exportOptions?.includeMetadata ?? true;
+  const stepRange = options?.exportOptions?.stepRange;
 
-  lines.push("# FlightPath Execution Output");
-  lines.push("");
-  lines.push(`**File:** ${metadata.fileName || "Unknown"}`);
-  lines.push(`**Exported:** ${timestamp}`);
-  lines.push(`**Status:** ${metadata.executionState}`);
-  lines.push(
-    `**Progress:** ${metadata.currentStep} of ${metadata.totalSteps} completed`
-  );
-  lines.push("");
-  lines.push("---");
-  lines.push("");
+  if (includeMetadata) {
+    const timestamp = new Date().toISOString();
+    lines.push("# FlightPath Execution Output");
+    lines.push("");
+    lines.push(`**File:** ${metadata.fileName || "Unknown"}`);
+    lines.push(`**Exported:** ${timestamp}`);
+    lines.push(`**Status:** ${metadata.executionState}`);
+    lines.push(
+      `**Progress:** ${metadata.currentStep} of ${metadata.totalSteps} completed`
+    );
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  }
 
   const sortedOutputs: MarkdownExportItem[] =
     options?.orderedEntries && options.orderedEntries.length > 0
@@ -328,13 +350,37 @@ export function generateMarkdownExport(
             (left.sequence ?? 0) - (right.sequence ?? 0)
         );
 
-  if (sortedOutputs.length === 0) {
+  // Assign sequential 1-based step numbers to unique CLI steps in appearance order.
+  const stepSequence = new Map<string, number>();
+  let seq = 0;
+  for (const item of sortedOutputs) {
+    if (item.type === "cli") {
+      const key = `${item.target.kind}:${item.target.index}`;
+      if (!stepSequence.has(key)) {
+        seq++;
+        stepSequence.set(key, seq);
+      }
+    }
+  }
+
+  // Apply step range filter: exclude status messages when a range is active.
+  const filteredOutputs = stepRange
+    ? sortedOutputs.filter((item) => {
+        if (item.type === "status") return false;
+        const key = `${item.target.kind}:${item.target.index}`;
+        const num = stepSequence.get(key);
+        return num !== undefined && stepRange.includes(num);
+      })
+    : sortedOutputs;
+
+  if (filteredOutputs.length === 0) {
     lines.push("*No output captured*");
     return lines.join("\n");
   }
 
-  sortedOutputs.forEach((item) => {
+  filteredOutputs.forEach((item) => {
     if (item.type === "status") {
+      if (!includeMetadata) return;
       const statusMsg = item.data as { message: string; timestamp: string };
       lines.push(`> **[${statusMsg.timestamp}]** ${statusMsg.message}`);
       lines.push("");
@@ -358,32 +404,30 @@ export function generateMarkdownExport(
         };
       };
 
-      const executionLabel = formatExecutionBadge(
-        item.runIndex ?? 0,
-        item.attemptIndex ?? 0,
-        true
-      );
-
-      const isFinalStep = item.target.kind === FINAL_STEP_PHASES.FINAL_STEP;
-      const stepNum = item.target.index + 1;
-      const isScript =
-        (output as { source?: string }).source === STEP_TYPES.SCRIPT;
-
-      const stepDisplayName =
-        item.stepName ||
-        (isScript
-          ? getFirstWords(output.cliCommand, 3)
-          : getFirstWords(output.prompt, 4));
-
-      const stepLabel = isFinalStep
-        ? `Final Step Loop ${stepNum}${item.stepName ? `: ${item.stepName}` : ""}`
-        : `Step ${stepNum}${stepDisplayName ? `: ${stepDisplayName}` : ""}`;
-
-      lines.push(`## ${stepLabel} — ${executionLabel}`);
-      lines.push("");
+      if (includeMetadata) {
+        const executionLabel = formatExecutionBadge(
+          item.runIndex ?? 0,
+          item.attemptIndex ?? 0,
+          true
+        );
+        const isFinalStep = item.target.kind === FINAL_STEP_PHASES.FINAL_STEP;
+        const stepNum = item.target.index + 1;
+        const isScript =
+          (output as { source?: string }).source === STEP_TYPES.SCRIPT;
+        const stepDisplayName =
+          item.stepName ||
+          (isScript
+            ? getFirstWords(output.cliCommand, 3)
+            : getFirstWords(output.prompt, 4));
+        const stepLabel = isFinalStep
+          ? `Final Step Loop ${stepNum}${item.stepName ? `: ${item.stepName}` : ""}`
+          : `Step ${stepNum}${stepDisplayName ? `: ${stepDisplayName}` : ""}`;
+        lines.push(`## ${stepLabel} — ${executionLabel}`);
+        lines.push("");
+      }
 
       if (output.prompt) {
-        lines.push("### Prompt");
+        if (includeMetadata) lines.push("### Prompt");
         lines.push("");
         lines.push("```");
         lines.push(output.prompt);
@@ -391,8 +435,8 @@ export function generateMarkdownExport(
         lines.push("");
       }
 
-      if (output.cliCommand) {
-        lines.push("### CLI Command");
+      if (includeCommand && output.cliCommand) {
+        if (includeMetadata) lines.push("### CLI Command");
         lines.push("");
         lines.push("```bash");
         const workingDir = output.workingDirectory || "workspace";
@@ -402,14 +446,14 @@ export function generateMarkdownExport(
       }
 
       if (output.structured?.events && output.structured.events.length > 0) {
-        lines.push("### Response");
+        if (includeMetadata) lines.push("### Response");
         lines.push("");
         renderStructuredEventsToMarkdown(
           output.structured.events as CliEvent[],
           lines
         );
       } else if (output.response) {
-        lines.push("### Response");
+        if (includeMetadata) lines.push("### Response");
         lines.push("");
         lines.push("```");
         lines.push(output.response);
@@ -417,52 +461,56 @@ export function generateMarkdownExport(
         lines.push("");
       }
 
-      const stats: string[] = [];
-      const sessionId = output.structured?.metadata?.sessionId;
-      const harnessId = output.structured?.metadata?.harness;
-      const harnessName = harnessId
-        ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ??
-          harnessId)
-        : undefined;
+      if (includeMetadata) {
+        const stats: string[] = [];
+        const sessionId = output.structured?.metadata?.sessionId;
+        const harnessId = output.structured?.metadata?.harness;
+        const harnessName = harnessId
+          ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ??
+            harnessId)
+          : undefined;
 
-      if (output.tokens) {
-        const {
-          prompt,
-          completion,
-          cached,
-          contextWindowUsed,
-          contextWindowSize,
-        } = output.tokens;
-        if (contextWindowUsed !== undefined && contextWindowSize) {
-          const fmt = (n: number) =>
-            n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-          const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
+        if (output.tokens) {
+          const {
+            prompt,
+            completion,
+            cached,
+            contextWindowUsed,
+            contextWindowSize,
+          } = output.tokens;
+          if (contextWindowUsed !== undefined && contextWindowSize) {
+            const fmt = (n: number) =>
+              n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+            const pct = Math.round(
+              (contextWindowUsed / contextWindowSize) * 100
+            );
+            stats.push(
+              `Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`
+            );
+          }
+          const total = prompt + completion;
+          const cachedSuffix = cached ? ` / ${cached} cached` : "";
           stats.push(
-            `Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`
+            `Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`
           );
         }
-        const total = prompt + completion;
-        const cachedSuffix = cached ? ` / ${cached} cached` : "";
-        stats.push(
-          `Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`
-        );
-      }
-      if (sessionId) {
-        stats.push(
-          `Session${harnessName ? ` (${harnessName})` : ""}: ${sessionId}`
-        );
-      }
-      if (output.elapsed !== undefined) {
-        stats.push(`${output.elapsed}s`);
-      }
+        if (sessionId) {
+          stats.push(
+            `Session${harnessName ? ` (${harnessName})` : ""}: ${sessionId}`
+          );
+        }
+        if (output.elapsed !== undefined) {
+          stats.push(`${output.elapsed}s`);
+        }
 
-      if (stats.length > 0) {
-        lines.push(`*${stats.join(" | ")}*`);
+        if (stats.length > 0) {
+          lines.push(`*${stats.join(" | ")}*`);
+          lines.push("");
+        }
+
+        lines.push("---");
         lines.push("");
       }
-
-      lines.push("---");
-      lines.push("");
     }
   });
 

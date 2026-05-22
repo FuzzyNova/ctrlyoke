@@ -20,7 +20,11 @@ import {
 import { TerminalSessionIcon } from "../output/TerminalSessionIcon";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import { generateId } from "@utils/string";
-import { generateMarkdownExport } from "@utils/markdownExport";
+import {
+  generateMarkdownExport,
+  type ExportOptions,
+} from "@utils/markdownExport";
+import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 import {
   getRenderedDiffStats,
   toRdvFromContent,
@@ -358,10 +362,12 @@ export const OutputSection: React.FC = () => {
   const [workflowDialogState, setWorkflowDialogState] =
     useState<WorkflowDialogState | null>(null);
 
-  // Standalone-mode export modal (browser clients that can't use VS Code save dialog)
-  const [exportModalContent, setExportModalContent] = useState<string | null>(
-    null
-  );
+  // Export modal state
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportIncludeCommand, setExportIncludeCommand] = useState(true);
+  const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
+  const [exportStepRange, setExportStepRange] = useState("");
+  const [exportStepRangeError, setExportStepRangeError] = useState(false);
 
   // Keep --run-selector-max-h in sync with the output section height so the
   // RunSelector dropdown never overflows the panel boundary.
@@ -570,9 +576,23 @@ export const OutputSection: React.FC = () => {
     outputCollapsed,
   ]);
 
-  // Export handler
+  // Export: open the options modal
   const handleExport = useCallback(() => {
-    const markdownContent = generateMarkdownExport(
+    setExportModalOpen(true);
+  }, []);
+
+  // Count unique CLI steps for use in the export modal range hint
+  const totalCliSteps = useMemo(() => {
+    const seen = new Set<string>();
+    for (const msg of allMessages) {
+      if (msg.type === "cli") seen.add(`${msg.target.kind}:${msg.target.index}`);
+    }
+    return seen.size;
+  }, [allMessages]);
+
+  // Build the export messages array (shared between preview and confirm)
+  const buildExportMessages = useCallback(
+    () =>
       allMessages.map((msg) => ({
         type: msg.type,
         target: msg.target,
@@ -588,6 +608,29 @@ export const OutputSection: React.FC = () => {
               : steps[msg.target.index]?.name?.trim() || undefined
             : undefined,
       })),
+    [allMessages, finalStep?.name, steps]
+  );
+
+  // Export confirm: generate markdown with current options and trigger save/download
+  const handleExportConfirm = useCallback(() => {
+    let parsedRange: number[] | undefined;
+    if (exportStepRange.trim()) {
+      const parsed = parseRangeNotation(exportStepRange);
+      if (!parsed) {
+        setExportStepRangeError(true);
+        return;
+      }
+      parsedRange = parsed;
+    }
+
+    const exportOptions: ExportOptions = {
+      includeCommand: exportIncludeCommand,
+      includeMetadata: exportIncludeMetadata,
+      stepRange: parsedRange,
+    };
+
+    const markdownContent = generateMarkdownExport(
+      buildExportMessages(),
       {
         fileName: fileName || "Unknown",
         executionState,
@@ -599,11 +642,20 @@ export const OutputSection: React.FC = () => {
           isViewingHistory && historyOutputs?.orderedEntries?.length
             ? historyOutputs.orderedEntries
             : undefined,
+        exportOptions,
       }
     );
 
+    setExportModalOpen(false);
+
     if (isStandalone) {
-      setExportModalContent(markdownContent);
+      const blob = new Blob([markdownContent], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${fileName ?? "output"}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
       return;
     }
 
@@ -614,14 +666,15 @@ export const OutputSection: React.FC = () => {
       fileName,
     });
   }, [
-    allMessages,
+    buildExportMessages,
     currentStep,
     executionState,
+    exportIncludeCommand,
+    exportIncludeMetadata,
+    exportStepRange,
     fileName,
-    finalStep?.name,
     historyOutputs,
     isViewingHistory,
-    steps,
     totalSteps,
   ]);
 
@@ -1720,46 +1773,119 @@ export const OutputSection: React.FC = () => {
       {/* Output tab right-click context menu */}
       {outputContextMenuPortal}
 
-      {/* Standalone export modal — browser clients that can't use VS Code save dialog */}
-      {exportModalContent !== null && (
+      {/* Export options modal — used by both VS Code and hosted web server */}
+      {exportModalOpen && (
         <Modal
           isOpen
           title="Export Output"
-          onClose={() => setExportModalContent(null)}
-          size="lg"
+          onClose={() => setExportModalOpen(false)}
+          size="sm"
           footer={
             <>
               <button
                 type="button"
                 className="px-4 py-2 text-sm text-description-fg hover:text-foreground transition-colors"
-                onClick={() => setExportModalContent(null)}
+                onClick={() => setExportModalOpen(false)}
               >
-                Close
+                Cancel
               </button>
               <button
                 type="button"
                 className="px-4 py-2 text-sm bg-btn-bg text-btn-fg hover:bg-btn-hover rounded transition-colors"
-                onClick={() => {
-                  const blob = new Blob([exportModalContent], {
-                    type: "text/markdown",
-                  });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `${fileName ?? "output"}.md`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
+                onClick={handleExportConfirm}
               >
-                <i className="codicon codicon-cloud-download mr-1" />
-                Download
+                {isStandalone ? (
+                  <>
+                    <i className="codicon codicon-cloud-download mr-1" />
+                    Download
+                  </>
+                ) : (
+                  <>
+                    <i className="codicon codicon-share mr-1" />
+                    Export
+                  </>
+                )}
               </button>
             </>
           }
         >
-          <pre className="text-xs text-foreground whitespace-pre-wrap font-mono leading-relaxed overflow-x-auto">
-            {exportModalContent}
-          </pre>
+          <div className="flex flex-col gap-4 py-1">
+            {/* Include command checkbox */}
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={exportIncludeCommand}
+                onChange={(e) => setExportIncludeCommand(e.target.checked)}
+                className="mt-0.5 accent-btn-bg"
+              />
+              <span className="text-sm">
+                <span className="text-foreground font-medium">
+                  Include CLI command
+                </span>
+                <span className="block text-xs text-description-fg mt-0.5">
+                  When unchecked, the command run for each prompt step is
+                  omitted from the export.
+                </span>
+              </span>
+            </label>
+
+            {/* Include metadata checkbox */}
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={exportIncludeMetadata}
+                onChange={(e) => setExportIncludeMetadata(e.target.checked)}
+                className="mt-0.5 accent-btn-bg"
+              />
+              <span className="text-sm">
+                <span className="text-foreground font-medium">
+                  Include metadata
+                </span>
+                <span className="block text-xs text-description-fg mt-0.5">
+                  When unchecked, step headings, token stats, session IDs, and
+                  separators are omitted — giving a clean conversation history.
+                </span>
+              </span>
+            </label>
+
+            {/* Step range input */}
+            <div>
+              <label className="block text-sm text-foreground font-medium mb-1">
+                Step range{" "}
+                <span className="text-description-fg font-normal">
+                  (optional)
+                </span>
+              </label>
+              <input
+                type="text"
+                value={exportStepRange}
+                onChange={(e) => {
+                  setExportStepRange(e.target.value);
+                  setExportStepRangeError(false);
+                }}
+                placeholder={
+                  totalCliSteps > 1
+                    ? `e.g. 1-${totalCliSteps}`
+                    : "e.g. 1,2,4-10"
+                }
+                aria-label="Step range (e.g. 1,2,4-10)"
+                className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${
+                  exportStepRangeError
+                    ? "border-input-error-border"
+                    : "border-input-border"
+                }`}
+              />
+              {exportStepRangeError && (
+                <span className="text-xxs text-error-fg mt-0.5 block">
+                  Use numbers, commas, and ranges (e.g. 1,3,5-10)
+                </span>
+              )}
+              <p className="text-xxs text-description-fg mt-1">
+                Leave blank to export all {totalCliSteps > 0 ? totalCliSteps : ""}{" "}
+                step{totalCliSteps !== 1 ? "s" : ""}.
+              </p>
+            </div>
+          </div>
         </Modal>
       )}
     </section>
