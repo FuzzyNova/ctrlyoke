@@ -316,3 +316,49 @@ describe("resetUi", () => {
     expect(store().propertiesDrawerOpen).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// contentPreviewModal
+// ---------------------------------------------------------------------------
+
+describe("setContentPreviewModal", () => {
+  it("starts as null", () => {
+    expect(store().contentPreviewModal).toBeNull();
+  });
+
+  it("sets diff modal state", () => {
+    store().setContentPreviewModal({
+      title: "Working Tree Diff (~diff)",
+      content: "diff --git a/foo.ts b/foo.ts\n...",
+      language: "diff",
+      ref: "diff",
+    });
+    const modal = store().contentPreviewModal;
+    expect(modal).not.toBeNull();
+    expect(modal?.language).toBe("diff");
+    expect(modal?.title).toBe("Working Tree Diff (~diff)");
+    expect(modal?.ref).toBe("diff");
+  });
+
+  it("sets xml modal state for prior context", () => {
+    store().setContentPreviewModal({
+      title: "$previous — Prior Context",
+      content: "<priorContext>...</priorContext>",
+      language: "xml",
+      ref: "previous",
+    });
+    expect(store().contentPreviewModal?.language).toBe("xml");
+    expect(store().contentPreviewModal?.ref).toBe("previous");
+  });
+
+  it("clears modal when set to null", () => {
+    store().setContentPreviewModal({
+      title: "Staged Changes (~staged)",
+      content: "diff content",
+      language: "diff",
+      ref: "staged",
+    });
+    store().setContentPreviewModal(null);
+    expect(store().contentPreviewModal).toBeNull();
+  });
+});

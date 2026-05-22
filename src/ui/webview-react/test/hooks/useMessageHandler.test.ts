@@ -1327,3 +1327,131 @@ describe("message passthroughs", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// GIT_CHANGE_PREVIEW_RESULT
+// ---------------------------------------------------------------------------
+
+describe("GIT_CHANGE_PREVIEW_RESULT", () => {
+  it("opens the content preview modal with diff language", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.GIT_CHANGE_PREVIEW_RESULT, {
+        ref: "diff",
+        content: "diff --git a/foo.ts b/foo.ts\n...",
+      });
+    });
+
+    const modal = useUiStore.getState().contentPreviewModal;
+    expect(modal).not.toBeNull();
+    expect(modal?.language).toBe("diff");
+    expect(modal?.ref).toBe("diff");
+    expect(modal?.content).toContain("diff --git");
+  });
+
+  it("sets a human-readable title for ~diff", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.GIT_CHANGE_PREVIEW_RESULT, {
+        ref: "diff",
+        content: "",
+      });
+    });
+
+    expect(useUiStore.getState().contentPreviewModal?.title).toContain("diff");
+  });
+
+  it("sets a human-readable title for ~staged", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.GIT_CHANGE_PREVIEW_RESULT, {
+        ref: "staged",
+        content: "",
+      });
+    });
+
+    expect(useUiStore.getState().contentPreviewModal?.title).toContain("staged");
+  });
+
+  it("sets a human-readable title for a stash ref", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.GIT_CHANGE_PREVIEW_RESULT, {
+        ref: "stash:2",
+        content: "",
+      });
+    });
+
+    expect(useUiStore.getState().contentPreviewModal?.title).toContain("2");
+  });
+
+  it("does not warn about unknown message type", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.GIT_CHANGE_PREVIEW_RESULT, {
+        ref: "diff",
+        content: "",
+      });
+    });
+
+    expect(webviewWarnMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("Unknown message type")
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PRIOR_CONTEXT_PREVIEW_RESULT
+// ---------------------------------------------------------------------------
+
+describe("PRIOR_CONTEXT_PREVIEW_RESULT", () => {
+  it("opens the content preview modal with xml language", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT, {
+        ref: "previous",
+        content: "<priorContext><step>...</step></priorContext>",
+      });
+    });
+
+    const modal = useUiStore.getState().contentPreviewModal;
+    expect(modal).not.toBeNull();
+    expect(modal?.language).toBe("xml");
+    expect(modal?.ref).toBe("previous");
+    expect(modal?.content).toContain("<priorContext>");
+  });
+
+  it("includes the ref in the title", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT, {
+        ref: "step:1,3",
+        content: "",
+      });
+    });
+
+    expect(useUiStore.getState().contentPreviewModal?.title).toContain("step:1,3");
+  });
+
+  it("does not warn about unknown message type", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT, {
+        ref: "all",
+        content: "",
+      });
+    });
+
+    expect(webviewWarnMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("Unknown message type")
+    );
+  });
+});
