@@ -14,10 +14,22 @@ const getFileName = (filePath: string): string =>
 
 const getWorkspaceFilePath = (
   workspaceName: string | null,
-  filePath: string
+  filePath: string,
+  workspacePath?: string
 ): string => {
-  const relativePath = filePath.replace(/^[/\\]+/, "").replace(/\\/g, "/");
-  return workspaceName ? `${workspaceName}/${relativePath}` : relativePath;
+  const norm = filePath.replace(/\\/g, "/");
+  let relative = norm;
+  // Strip workspace root prefix with case-insensitive comparison (Windows
+  // drive letters may differ in casing between uri.fsPath and AI output).
+  if (workspacePath) {
+    const root = workspacePath.replace(/\\/g, "/").replace(/\/$/, "");
+    if (norm.toLowerCase().startsWith(root.toLowerCase() + "/")) {
+      relative = norm.slice(root.length + 1);
+    }
+  }
+  // Strip any remaining leading slashes (e.g. Unix absolute paths)
+  relative = relative.replace(/^[/\\]+/, "");
+  return workspaceName ? `${workspaceName}/${relative}` : relative;
 };
 
 export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
@@ -54,7 +66,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       : null;
   const showDirtyDot = explorerFileVisible && fileDirty;
   const subtitle = titleFilePath
-    ? getWorkspaceFilePath(workspaceRootName, titleFilePath)
+    ? getWorkspaceFilePath(workspaceRootName, titleFilePath, workspacePath)
     : workspacePath;
 
   return (
