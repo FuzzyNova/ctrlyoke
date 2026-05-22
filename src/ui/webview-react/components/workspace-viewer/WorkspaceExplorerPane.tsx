@@ -58,6 +58,17 @@ export const WorkspaceExplorerPane: React.FC = () => {
   );
   const setError = useWorkspaceViewerStore((s) => s.setError);
 
+  const pendingNavigation = useWorkspaceViewerStore((s) => s.pendingNavigation);
+  const clearPendingNavigation = useWorkspaceViewerStore(
+    (s) => s.clearPendingNavigation
+  );
+
+  // Holds a line selection to apply once the next file finishes loading
+  const pendingSelectionRef = useRef<{
+    startLine: number;
+    endLine: number;
+  } | null>(null);
+
   const showHiddenFiles = useSettingsStore(
     (s) => s.globalSettings.showHiddenFiles
   );
@@ -105,9 +116,11 @@ export const WorkspaceExplorerPane: React.FC = () => {
     [setExplorerLoading, setExplorerEntries, setExplorerPath, setError]
   );
 
-  // Load root on mount
+  // Load root on mount, unless a pending navigation will handle it
   useEffect(() => {
-    loadDirectory(explorerPath);
+    if (!useWorkspaceViewerStore.getState().pendingNavigation) {
+      loadDirectory(explorerPath);
+    }
     // Intentional: run once on mount; navigation is explicit through loadDirectory calls
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -141,6 +154,32 @@ export const WorkspaceExplorerPane: React.FC = () => {
       setError,
     ]
   );
+
+  // Consume pending navigation set externally (e.g. from CodeMirror link clicks)
+  useEffect(() => {
+    if (!pendingNavigation) return;
+    clearPendingNavigation();
+    if (pendingNavigation.type === "directory") {
+      loadDirectory(pendingNavigation.dirPath);
+    } else {
+      const { filePath, startLine, endLine } = pendingNavigation;
+      if (startLine !== undefined && endLine !== undefined) {
+        pendingSelectionRef.current = { startLine, endLine };
+      }
+      openFile(filePath);
+    }
+  }, [pendingNavigation, clearPendingNavigation, loadDirectory, openFile]);
+
+  // Apply pending line selection once file loading completes
+  useEffect(() => {
+    if (fileLoading) return;
+    const sel = pendingSelectionRef.current;
+    if (!sel) return;
+    pendingSelectionRef.current = null;
+    requestAnimationFrame(() => {
+      editorRef.current?.selectLines(sel.startLine, sel.endLine);
+    });
+  }, [fileLoading]);
 
   const handleBack = useCallback(() => {
     if (parentPath !== null) {

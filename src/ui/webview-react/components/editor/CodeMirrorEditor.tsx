@@ -27,7 +27,8 @@ import {
   type Diagnostic,
 } from "@codemirror/lint";
 import { RangeSetBuilder } from "@codemirror/state";
-import { getVsCodeApi } from "../../hooks/useVsCodeApi";
+import { getVsCodeApi, isStandalone } from "../../hooks/useVsCodeApi";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
   MESSAGE_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
@@ -1693,7 +1694,43 @@ function createClickHandlerExtension(
         const type = target.getAttribute("data-type");
         const path = target.getAttribute("data-path");
 
-        // Handle different link types
+        if (isStandalone) {
+          // In browser mode, open the workspace viewer instead of VS Code commands
+          if (type === "file" || type === "directory") {
+            const store = useWorkspaceViewerStore.getState();
+            if (type === "directory") {
+              store.openToDirectory(path ?? "");
+            } else {
+              store.openToFile(path ?? "");
+            }
+            event.preventDefault();
+            return true;
+          } else if (type === "lineRange") {
+            const lineStart = target.getAttribute("data-line-start");
+            const lineEnd = target.getAttribute("data-line-end");
+            useWorkspaceViewerStore
+              .getState()
+              .openToFile(
+                path ?? "",
+                lineStart ? parseInt(lineStart) : undefined,
+                lineEnd ? parseInt(lineEnd) : undefined
+              );
+            event.preventDefault();
+            return true;
+          } else if (type === "symbol") {
+            const line = target.getAttribute("data-line");
+            const lineNum = line ? parseInt(line) : undefined;
+            useWorkspaceViewerStore
+              .getState()
+              .openToFile(path ?? "", lineNum, lineNum);
+            event.preventDefault();
+            return true;
+          }
+          // git and priorContext: no equivalent browser action yet
+          return false;
+        }
+
+        // VS Code mode — original behavior
         if (type === "file" || type === "directory") {
           // Simple file/directory open (no line numbers)
           vscode.postMessage({

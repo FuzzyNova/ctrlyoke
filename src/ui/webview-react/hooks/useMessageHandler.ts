@@ -43,6 +43,7 @@ import { WebviewLog } from "@utils/logger";
 import { isWorkflowActive } from "../utils/status";
 import { useTerminalStore } from "../store/terminalStore";
 import { useHarnessFileStore } from "../store/useHarnessFileStore";
+import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
 import { rememberUndoRedoRuntime } from "@hooks/useUndoRedoKeyHandler";
@@ -2116,9 +2117,13 @@ export function selectPromptForEdit(index: number): void {
 }
 
 /**
- * Open a file in VS Code editor
+ * Open a file in VS Code editor, or in the workspace viewer when running in browser mode.
  */
 export function openFile(path: string, line?: number): void {
+  if (isStandalone) {
+    useWorkspaceViewerStore.getState().openToFile(path, line, line);
+    return;
+  }
   sendMessage(MESSAGE_TYPES.OPEN_FILE, {
     path,
     lineStart: line,

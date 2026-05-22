@@ -25,6 +25,7 @@ import {
 export interface WorkspaceFileEditorHandle {
   undo: () => void;
   redo: () => void;
+  selectLines: (startLine: number, endLine: number) => void;
 }
 
 interface WorkspaceFileEditorProps {
@@ -71,6 +72,21 @@ export const WorkspaceFileEditor = forwardRef<
       },
       redo: () => {
         if (viewRef.current) redo(viewRef.current);
+      },
+      selectLines: (startLine: number, endLine: number) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const doc = view.state.doc;
+        const lineCount = doc.lines;
+        const clampedStart = Math.max(1, Math.min(startLine, lineCount));
+        const clampedEnd = Math.max(clampedStart, Math.min(endLine, lineCount));
+        const from = doc.line(clampedStart).from;
+        const to = doc.line(clampedEnd).to;
+        view.dispatch({
+          selection: { anchor: from, head: to },
+          scrollIntoView: true,
+        });
+        view.focus();
       },
     }));
 

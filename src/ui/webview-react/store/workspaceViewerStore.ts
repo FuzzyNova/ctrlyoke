@@ -8,6 +8,14 @@ import type {
 } from "@root/types/HostedWorkspaceViewerTypes";
 
 // ============================================================================
+// Types
+// ============================================================================
+
+export type PendingNavigation =
+  | { type: "file"; filePath: string; startLine?: number; endLine?: number }
+  | { type: "directory"; dirPath: string };
+
+// ============================================================================
 // State
 // ============================================================================
 
@@ -58,6 +66,9 @@ interface WorkspaceViewerState {
   pushing: boolean;
   pulling: boolean;
   scmError: string | null;
+
+  // Pending navigation (set externally, consumed by WorkspaceExplorerPane)
+  pendingNavigation: PendingNavigation | null;
 
   // General
   error: string | null;
@@ -113,6 +124,11 @@ interface WorkspaceViewerActions {
   setPulling(v: boolean): void;
   setScmError(err: string | null): void;
   setError(err: string | null): void;
+
+  // Pending navigation
+  openToFile(filePath: string, startLine?: number, endLine?: number): void;
+  openToDirectory(dirPath: string): void;
+  clearPendingNavigation(): void;
 }
 
 // ============================================================================
@@ -155,6 +171,8 @@ const INITIAL_STATE: WorkspaceViewerState = {
   pushing: false,
   pulling: false,
   scmError: null,
+
+  pendingNavigation: null,
 
   error: null,
 };
@@ -421,6 +439,28 @@ export const useWorkspaceViewerStore = create<
 
       setError(err) {
         set({ error: err });
+      },
+
+      // --- Pending navigation ---
+
+      openToFile(filePath, startLine, endLine) {
+        set({
+          isOpen: true,
+          activeTab: "explorer",
+          pendingNavigation: { type: "file", filePath, startLine, endLine },
+        });
+      },
+
+      openToDirectory(dirPath) {
+        set({
+          isOpen: true,
+          activeTab: "explorer",
+          pendingNavigation: { type: "directory", dirPath },
+        });
+      },
+
+      clearPendingNavigation() {
+        set({ pendingNavigation: null });
       },
     }),
     {
