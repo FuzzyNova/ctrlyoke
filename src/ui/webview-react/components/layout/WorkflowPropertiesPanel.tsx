@@ -222,6 +222,15 @@ export const WorkflowPropertiesPanel: React.FC<{
   const effectivePriorContext = getEffectivePriorContext();
   const effectiveAdditionalArgs = getEffectiveAdditionalArgs();
 
+  // Local input state for Additional Args — committed on blur/Enter to avoid
+  // flooding the undo stack with every keystroke.
+  const [additionalArgsInput, setAdditionalArgsInput] = useState(effectiveAdditionalArgs);
+
+  // Sync local state when the effective value changes externally (harness switch, reset all).
+  useEffect(() => {
+    setAdditionalArgsInput(effectiveAdditionalArgs);
+  }, [effectiveAdditionalArgs]);
+
   // Derive the active model namespace from the current harness
   const modelNamespace = modelNamespaceForHarness(effectiveHarness);
 
@@ -1057,8 +1066,12 @@ export const WorkflowPropertiesPanel: React.FC<{
                     type="text"
                     id="settings-append-args"
                     aria-label="Additional arguments"
-                    value={effectiveAdditionalArgs}
-                    onChange={(e) => handleAdditionalArgsChange(e.target.value)}
+                    value={additionalArgsInput}
+                    onChange={(e) => setAdditionalArgsInput(e.target.value)}
+                    onBlur={(e) => handleAdditionalArgsChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
                     placeholder="e.g. --effort high --max-turns 10"
                     className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border font-mono h-7"
                   />
@@ -1126,7 +1139,11 @@ export const WorkflowPropertiesPanel: React.FC<{
                       id="settings-session-id"
                       aria-label="Session ID"
                       value={sessionIdInput}
-                      onChange={(e) => handleSessionIdChange(e.target.value)}
+                      onChange={(e) => setSessionIdInput(e.target.value)}
+                      onBlur={(e) => handleSessionIdChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
                       placeholder="Enter session ID or prompt number"
                       className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
                       title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"

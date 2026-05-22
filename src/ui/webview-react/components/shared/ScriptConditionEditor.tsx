@@ -110,6 +110,11 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
     (v.onPass === CONDITION_ACTIONS.RETRY ||
       v.onFail === CONDITION_ACTIONS.RETRY);
 
+  // Local string state for text fields — committed on blur/Enter to avoid
+  // flooding the undo stack with every keystroke.
+  const [scriptInput, setScriptInput] = useState(v.script ?? "");
+  const [returnsInput, setReturnsInput] = useState(v.returns ?? "");
+
   // Local string state for timeout to prevent auto-reset when clearing.
   // scriptStep: empty string means "inherit from settings" (undefined); others default to 30000.
   const [timeoutInput, setTimeoutInput] = useState(
@@ -118,6 +123,14 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
   const [maxRetriesInput, setMaxRetriesInput] = useState(
     String(v.maxRetries ?? 1)
   );
+
+  useEffect(() => {
+    setScriptInput(v.script ?? "");
+  }, [v.script]);
+
+  useEffect(() => {
+    setReturnsInput(v.returns ?? "");
+  }, [v.returns]);
 
   useEffect(() => {
     setTimeoutInput(
@@ -167,8 +180,12 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
         <input
           type="text"
           id={`${idPrefix}-script`}
-          value={v.script ?? ""}
-          onChange={(e) => update({ script: e.target.value })}
+          value={scriptInput}
+          onChange={(e) => setScriptInput(e.target.value)}
+          onBlur={(e) => update({ script: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
           placeholder="npm test"
           disabled={disabled}
           autoCorrect="off"
@@ -212,8 +229,12 @@ export const ScriptConditionEditor: React.FC<ScriptConditionEditorProps> = ({
           <input
             type="text"
             id={`${idPrefix}-returns`}
-            value={v.returns ?? ""}
-            onChange={(e) => update({ returns: e.target.value })}
+            value={returnsInput}
+            onChange={(e) => setReturnsInput(e.target.value)}
+            onBlur={(e) => update({ returns: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
             placeholder="true"
             disabled={disabled}
             className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
