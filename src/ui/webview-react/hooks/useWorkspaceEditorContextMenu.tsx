@@ -4,9 +4,7 @@ import {
   type StepContextMenuEntry,
   type StepContextMenuState,
 } from "@components/shared/StepContextMenu";
-import {
-  type WorkspaceFileEditorHandle,
-} from "@components/workspace-viewer/WorkspaceFileEditor";
+import { type WorkspaceFileEditorHandle } from "@components/workspace-viewer/WorkspaceFileEditor";
 import { useLongPress } from "@hooks/useLongPress";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useEditorStore } from "@store/editorStore";
@@ -74,7 +72,7 @@ export function useWorkspaceEditorContextMenu({
       const items: StepContextMenuEntry[] = [
         {
           label: "Cut",
-          icon: "codicon-scissors",
+          icon: "codicon-screen-cut",
           disabled: !hasSelection,
           disabledTitle: "No text selected",
           onClick: () => {
@@ -135,7 +133,10 @@ export function useWorkspaceEditorContextMenu({
             icon: "codicon-play",
             disabled: false,
             onClick: () => {
-              vscode.postMessage({ type: MESSAGE_TYPES.LOAD_WORKFLOW, filePath });
+              vscode.postMessage({
+                type: MESSAGE_TYPES.LOAD_WORKFLOW,
+                filePath,
+              });
               vscode.postMessage({ type: MESSAGE_TYPES.RUN });
             },
           },
@@ -144,7 +145,10 @@ export function useWorkspaceEditorContextMenu({
             icon: "codicon-folder-opened",
             disabled: false,
             onClick: () =>
-              vscode.postMessage({ type: MESSAGE_TYPES.LOAD_WORKFLOW, filePath }),
+              vscode.postMessage({
+                type: MESSAGE_TYPES.LOAD_WORKFLOW,
+                filePath,
+              }),
           },
           {
             label: "Queue Workflow",

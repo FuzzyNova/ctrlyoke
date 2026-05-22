@@ -54,7 +54,9 @@ export function useWorkspaceExplorerContextMenu({
 
   const handleAddToFlightPath = useCallback((entry: WorkspaceEntry) => {
     const ref =
-      entry.kind === "directory" ? buildDirRef(entry.path) : buildFileRef(entry.path);
+      entry.kind === "directory"
+        ? buildDirRef(entry.path)
+        : buildFileRef(entry.path);
     const editorStore = useEditorStore.getState();
     editorStore.preparePromptEditorForInsert();
     editorStore.enqueuePromptEditorInsert({
@@ -108,7 +110,7 @@ export function useWorkspaceExplorerContextMenu({
         items: [
           {
             label: "Cut",
-            icon: "codicon-scissors",
+            icon: "codicon-screen-cut",
             disabled: false,
             onClick: () => {
               setClipboard({
@@ -154,7 +156,9 @@ export function useWorkspaceExplorerContextMenu({
             icon: "codicon-trash",
             disabled: entry.path.length === 0,
             disabledTitle:
-              entry.path.length === 0 ? "Cannot delete workspace root" : undefined,
+              entry.path.length === 0
+                ? "Cannot delete workspace root"
+                : undefined,
             onClick: () => {
               if (!entry.path) return;
               void handleDelete(entry.path);
