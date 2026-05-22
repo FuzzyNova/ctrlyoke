@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import {
   EditorView,
   placeholder,
@@ -249,6 +249,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // Flips true once the EditorView is created; used as an effect dependency so
+  // the pending-insert effect re-runs after a fresh mount (the insert effect
+  // fires before the setup effect in definition order, so viewRef is null on
+  // first execution — viewReady causes a second run once the view exists).
+  const [viewReady, setViewReady] = useState(false);
   const typoCheckerRef = useRef<TypoChecker | null>(null);
   const onChangeRef = useRef(onChange);
   const onRunRef = useRef(onRun);
@@ -331,7 +336,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     });
     view.focus();
     onInsertApplied?.(pendingInsertRequest.requestId);
-  }, [mode, onInsertApplied, pendingInsertRequest]);
+  }, [mode, onInsertApplied, pendingInsertRequest, viewReady]);
 
   // Trigger CodeMirror tooltip remeasure when the visual viewport changes
   // (e.g. mobile keyboard opens/closes, or iOS page-scrolls to keep the
@@ -799,6 +804,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     });
 
     viewRef.current = view;
+    setViewReady(true);
 
     // Dispatch ready event
     window.dispatchEvent(new CustomEvent("codemirror-ready"));
@@ -827,6 +833,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     return () => {
       view.destroy();
       viewRef.current = null;
+      setViewReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

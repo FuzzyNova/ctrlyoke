@@ -884,6 +884,13 @@ export const useEditorStore = create<
     if (get().stepType === STEP_TYPES.SCRIPT) {
       get().setStepType(STEP_TYPES.PROMPT);
     }
+
+    // Ensure the editor panel is expanded so CodeMirrorEditor is mounted and
+    // can receive the pending insert request.
+    const uiState = useUiStore.getState();
+    if (uiState.editorCollapsed) {
+      uiState.setEditorCollapsed(false);
+    }
   },
 
   enqueuePromptEditorInsert: (request) =>
