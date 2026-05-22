@@ -11,6 +11,9 @@ import type {
   WorkspacePushResponse,
   WorkspacePullResponse,
   WorkspaceGenerateCommitMessageResponse,
+  WorkspaceDeleteRequest,
+  WorkspaceCopyRequest,
+  WorkspaceMoveRequest,
 } from "@root/types/HostedWorkspaceViewerTypes";
 
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
@@ -152,4 +155,31 @@ export async function workspaceGenerateCommitMessage(
       signal,
     }
   );
+}
+
+export async function workspaceDeleteEntry(
+  req: WorkspaceDeleteRequest
+): Promise<void> {
+  return hostedFetch<void>(
+    `/api/workspace-viewer/entry?path=${encodeURIComponent(req.path)}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function workspaceCopyEntry(
+  req: WorkspaceCopyRequest
+): Promise<void> {
+  return hostedFetch<void>("/api/workspace-viewer/copy", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export async function workspaceMoveEntry(
+  req: WorkspaceMoveRequest
+): Promise<void> {
+  return hostedFetch<void>("/api/workspace-viewer/move", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
 }

@@ -100,3 +100,25 @@ export interface WorkspaceGenerateCommitMessageResponse {
   staged: boolean;
   truncated: boolean;
 }
+
+export interface WorkspaceDeleteRequest {
+  path: string;
+}
+
+export interface WorkspaceCopyRequest {
+  /** Workspace-relative source path */
+  sourcePath: string;
+  /** Workspace-relative destination DIRECTORY path (not the full dest path) */
+  destDir: string;
+  /** Optional new name for the copy; defaults to source basename */
+  newName?: string;
+}
+
+export interface WorkspaceMoveRequest {
+  /** Workspace-relative source path */
+  sourcePath: string;
+  /** Workspace-relative destination DIRECTORY path */
+  destDir: string;
+  /** Optional new name at destination; defaults to source basename */
+  newName?: string;
+}

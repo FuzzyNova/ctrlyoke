@@ -50,7 +50,12 @@ import {
 } from "./WebPushService";
 import { pngIconService } from "./PngIconService";
 import { HostedWorkspaceViewerService } from "./HostedWorkspaceViewerService";
-import type { WorkspaceGenerateCommitMessageResponse } from "../types/HostedWorkspaceViewerTypes";
+import type {
+  WorkspaceDeleteRequest,
+  WorkspaceCopyRequest,
+  WorkspaceMoveRequest,
+  WorkspaceGenerateCommitMessageResponse,
+} from "../types/HostedWorkspaceViewerTypes";
 
 export class FlightPathHostedServer
   implements IDashboardProvider, IDashboardSink
@@ -666,6 +671,80 @@ export class FlightPathHostedServer
             Log.error(`workspace-viewer PUT /file error: ${message}`);
             res.status(500).json({ error: "Internal server error" });
           }
+        }
+      }
+    );
+
+    this.app.delete(
+      "/api/workspace-viewer/entry",
+      requireToken,
+      async (req, res) => {
+        const deleteRequest: WorkspaceDeleteRequest = {
+          path: typeof req.query["path"] === "string" ? req.query["path"] : "",
+        };
+        try {
+          await this.viewerService.deleteEntry(deleteRequest.path);
+          res.status(204).send();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          Log.error(`workspace-viewer DELETE /entry error: ${message}`);
+          res.status(400).json({ error: message });
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/copy",
+      requireToken,
+      async (req, res) => {
+        const body = req.body as Partial<WorkspaceCopyRequest>;
+        if (
+          typeof body.sourcePath !== "string" ||
+          typeof body.destDir !== "string" ||
+          (body.newName !== undefined && typeof body.newName !== "string")
+        ) {
+          res.status(400).json({ error: "sourcePath and destDir are required" });
+          return;
+        }
+        try {
+          await this.viewerService.copyEntry({
+            sourcePath: body.sourcePath,
+            destDir: body.destDir,
+            newName: body.newName,
+          });
+          res.status(204).send();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          Log.error(`workspace-viewer POST /copy error: ${message}`);
+          res.status(400).json({ error: message });
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/move",
+      requireToken,
+      async (req, res) => {
+        const body = req.body as Partial<WorkspaceMoveRequest>;
+        if (
+          typeof body.sourcePath !== "string" ||
+          typeof body.destDir !== "string" ||
+          (body.newName !== undefined && typeof body.newName !== "string")
+        ) {
+          res.status(400).json({ error: "sourcePath and destDir are required" });
+          return;
+        }
+        try {
+          await this.viewerService.moveEntry({
+            sourcePath: body.sourcePath,
+            destDir: body.destDir,
+            newName: body.newName,
+          });
+          res.status(204).send();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          Log.error(`workspace-viewer POST /move error: ${message}`);
+          res.status(400).json({ error: message });
         }
       }
     );

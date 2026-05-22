@@ -26,6 +26,8 @@ export interface WorkspaceFileEditorHandle {
   undo: () => void;
   redo: () => void;
   selectLines: (startLine: number, endLine: number) => void;
+  getSelectionText: () => string;
+  getSelectionRange: () => { startLine: number; endLine: number } | null;
 }
 
 interface WorkspaceFileEditorProps {
@@ -87,6 +89,23 @@ export const WorkspaceFileEditor = forwardRef<
           scrollIntoView: true,
         });
         view.focus();
+      },
+      getSelectionText: () => {
+        const view = viewRef.current;
+        if (!view) return "";
+        const { from, to } = view.state.selection.main;
+        if (from === to) return "";
+        return view.state.sliceDoc(from, to);
+      },
+      getSelectionRange: () => {
+        const view = viewRef.current;
+        if (!view) return null;
+        const { from, to } = view.state.selection.main;
+        if (from === to) return null;
+        const doc = view.state.doc;
+        const startLine = doc.lineAt(from).number;
+        const endLine = doc.lineAt(to).number;
+        return { startLine, endLine };
       },
     }));
 

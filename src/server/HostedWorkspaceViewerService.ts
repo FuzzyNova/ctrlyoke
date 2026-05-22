@@ -16,6 +16,8 @@ import type {
   WorkspaceScmDiffResponse,
   WorkspacePushResponse,
   WorkspacePullResponse,
+  WorkspaceCopyRequest,
+  WorkspaceMoveRequest,
   DiffKind,
 } from "../types/HostedWorkspaceViewerTypes";
 
@@ -323,6 +325,109 @@ export class HostedWorkspaceViewerService {
     const tmpPath = `${resolved}.fp-tmp`;
     await fs.promises.writeFile(tmpPath, content, "utf8");
     await fs.promises.rename(tmpPath, resolved);
+  }
+
+  // ── File operations ──────────────────────────────────────────────────────
+
+  async deleteEntry(requestedPath: string): Promise<void> {
+    const resolved = this.safeResolve(requestedPath);
+    if (!resolved || this.relativePath(resolved) === "") {
+      throw new Error("Path not allowed");
+    }
+
+    await fs.promises.rm(resolved, { recursive: true, force: false });
+  }
+
+  async copyEntry(req: WorkspaceCopyRequest): Promise<void> {
+    const { resolvedSource, destPath } = await this.resolveTransferPaths(
+      req.sourcePath,
+      req.destDir,
+      req.newName
+    );
+    await this.ensureDestinationMissing(destPath);
+    await fs.promises.cp(resolvedSource, destPath, { recursive: true });
+  }
+
+  async moveEntry(req: WorkspaceMoveRequest): Promise<void> {
+    const { resolvedSource, destPath } = await this.resolveTransferPaths(
+      req.sourcePath,
+      req.destDir,
+      req.newName
+    );
+    await this.ensureDestinationMissing(destPath);
+    await fs.promises.rename(resolvedSource, destPath);
+  }
+
+  private async resolveTransferPaths(
+    sourcePath: string,
+    requestedDestDir: string,
+    newName?: string
+  ): Promise<{ resolvedSource: string; destPath: string }> {
+    const resolvedSource = this.safeResolve(sourcePath);
+    if (!resolvedSource || this.relativePath(resolvedSource) === "") {
+      throw new Error("Path not allowed");
+    }
+    await fs.promises.lstat(resolvedSource);
+
+    const destinationName = newName ?? path.basename(resolvedSource);
+    if (
+      !destinationName ||
+      path.basename(destinationName) !== destinationName
+    ) {
+      throw new Error("Path not allowed");
+    }
+
+    const normalizedRoot = path.resolve(this.workspaceRoot);
+    const resolvedDestDir = path.resolve(normalizedRoot, requestedDestDir);
+    if (
+      !resolvedDestDir.startsWith(normalizedRoot + path.sep) &&
+      resolvedDestDir !== normalizedRoot
+    ) {
+      throw new Error("Path not allowed");
+    }
+
+    let existingAncestor = resolvedDestDir;
+    while (!fs.existsSync(existingAncestor)) {
+      const parent = path.dirname(existingAncestor);
+      if (parent === existingAncestor) {
+        break;
+      }
+      existingAncestor = parent;
+    }
+
+    const [realRoot, realAncestor] = await Promise.all([
+      fs.promises.realpath(normalizedRoot),
+      fs.promises.realpath(existingAncestor),
+    ]);
+    if (
+      !realAncestor.startsWith(realRoot + path.sep) &&
+      realAncestor !== realRoot
+    ) {
+      throw new Error("Path not allowed");
+    }
+
+    const destPath = path.resolve(resolvedDestDir, destinationName);
+    if (
+      !destPath.startsWith(normalizedRoot + path.sep) &&
+      destPath !== normalizedRoot
+    ) {
+      throw new Error("Path not allowed");
+    }
+
+    return { resolvedSource, destPath };
+  }
+
+  private async ensureDestinationMissing(destPath: string): Promise<void> {
+    try {
+      await fs.promises.access(destPath);
+      throw new Error("Destination already exists");
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      if (code === "ENOENT") {
+        return;
+      }
+      throw err;
+    }
   }
 
   // ── Git status ───────────────────────────────────────────────────────────

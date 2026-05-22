@@ -7,14 +7,18 @@ import React, {
 } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useSettingsStore } from "@store/settingsStore";
+import { useLongPress } from "@hooks/useLongPress";
+import { useIsMobile } from "@hooks/useMediaQuery";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useWorkspaceEditorContextMenu } from "@hooks/useWorkspaceEditorContextMenu";
+import { useWorkspaceExplorerContextMenu } from "@hooks/useWorkspaceExplorerContextMenu";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
+import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import {
   workspaceTree,
   workspaceFile,
   workspaceSaveFile,
 } from "@utils/hostedApi";
-import { useIsMobile } from "@hooks/useMediaQuery";
 import {
   WorkspaceFileEditor,
   type WorkspaceFileEditorHandle,
@@ -44,6 +48,56 @@ function toWorkspaceRelative(
   // Always return forward-slash normalized path so that selectedFilePath is
   // consistent regardless of whether filePath was absolute or already relative.
   return norm;
+}
+
+interface EntryRowProps {
+  entry: WorkspaceEntry;
+  isSelected: boolean;
+  isCut: boolean;
+  onClick: () => void;
+  openContextMenu: (x: number, y: number, entry: WorkspaceEntry) => void;
+}
+
+function EntryRow({
+  entry,
+  isSelected,
+  isCut,
+  onClick,
+  openContextMenu,
+}: EntryRowProps) {
+  const longPressHandlers = useLongPress((x, y) => openContextMenu(x, y, entry));
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openContextMenu(e.clientX, e.clientY, entry);
+      }}
+      {...longPressHandlers}
+      style={isCut ? { opacity: 0.5 } : undefined}
+      className={`w-full flex items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
+        isSelected
+          ? "bg-list-active-bg text-editor-fg"
+          : "text-editor-fg hover:bg-btn-secondary-hover"
+      }`}
+      title={entry.path}
+    >
+      <i
+        className={`codicon flex-shrink-0 text-sm ${
+          entry.kind === "directory"
+            ? "codicon-folder text-[var(--status-warning)]"
+            : "codicon-file"
+        }`}
+      />
+      <span className="truncate">
+        {entry.name}
+        {entry.kind === "directory" ? "/" : ""}
+      </span>
+    </button>
+  );
 }
 
 export const WorkspaceExplorerPane: React.FC = () => {
@@ -112,6 +166,14 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const editorRef = useRef<WorkspaceFileEditorHandle>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const {
+    openContextMenu: openEditorContextMenu,
+    editorContextMenuPortal,
+    editorLongPressHandlers,
+  } = useWorkspaceEditorContextMenu({
+    editorRef,
+    filePath: selectedFilePath,
+  });
 
   // Nav metadata kept in local state — not needed globally
   const [parentPath, setParentPath] = useState<string | null>(null);
@@ -262,6 +324,13 @@ export const WorkspaceExplorerPane: React.FC = () => {
     const parentDir = lastSep > 0 ? selectedFilePath.slice(0, lastSep) : "";
     loadDirectory(parentDir);
   }, [selectedFilePath, loadDirectory]);
+
+  const { clipboard, openContextMenu, explorerContextMenuPortal } =
+    useWorkspaceExplorerContextMenu({
+      explorerPath,
+      onRefresh: handleRefresh,
+      onOpenFile: openFile,
+    });
 
   const handleMobileBack = useCallback(() => {
     setMobileEditorVisible(false);
@@ -470,9 +539,15 @@ export const WorkspaceExplorerPane: React.FC = () => {
             {visibleEntries.map((entry) => {
               const isSelected =
                 entry.kind === "file" && selectedFilePath === entry.path;
+              const isCut =
+                clipboard?.operation === "cut" && clipboard.path === entry.path;
+
               return (
                 <li key={entry.path}>
-                  <button
+                  <EntryRow
+                    entry={entry}
+                    isSelected={isSelected}
+                    isCut={isCut}
                     onClick={() => {
                       if (entry.kind === "directory") {
                         loadDirectory(entry.path);
@@ -480,25 +555,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
                         openFile(entry.path);
                       }
                     }}
-                    className={`w-full flex items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
-                      isSelected
-                        ? "bg-list-active-bg text-editor-fg"
-                        : "text-editor-fg hover:bg-btn-secondary-hover"
-                    }`}
-                    title={entry.path}
-                  >
-                    <i
-                      className={`codicon flex-shrink-0 text-sm ${
-                        entry.kind === "directory"
-                          ? "codicon-folder text-[var(--status-warning)]"
-                          : "codicon-file"
-                      }`}
-                    />
-                    <span className="truncate">
-                      {entry.name}
-                      {entry.kind === "directory" ? "/" : ""}
-                    </span>
-                  </button>
+                    openContextMenu={openContextMenu}
+                  />
                 </li>
               );
             })}
@@ -629,15 +687,24 @@ export const WorkspaceExplorerPane: React.FC = () => {
               </p>
             </div>
           ) : (
-            <WorkspaceFileEditor
-              ref={editorRef}
-              filePath={selectedFilePath}
-              content={fileContent}
-              onChange={(newContent) => setFileContent(newContent)}
-              onSave={handleSave}
-              saving={fileSaving}
-              onUndoRedoChange={handleUndoRedoChange}
-            />
+            <div
+              className="flex-1 overflow-hidden"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                openEditorContextMenu(e.clientX, e.clientY);
+              }}
+              {...editorLongPressHandlers}
+            >
+              <WorkspaceFileEditor
+                ref={editorRef}
+                filePath={selectedFilePath}
+                content={fileContent}
+                onChange={(newContent) => setFileContent(newContent)}
+                onSave={handleSave}
+                saving={fileSaving}
+                onUndoRedoChange={handleUndoRedoChange}
+              />
+            </div>
           )}
         </div>
       ) : (
@@ -656,6 +723,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {mobileEditorVisible ? fileEditorColumn : directoryListColumn}
+        {explorerContextMenuPortal}
+        {editorContextMenuPortal}
       </div>
     );
   }
@@ -664,6 +733,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
     <div className="flex h-full overflow-hidden">
       {directoryListColumn}
       {fileEditorColumn}
+      {explorerContextMenuPortal}
+      {editorContextMenuPortal}
     </div>
   );
 };
