@@ -8,6 +8,7 @@ import {
   SESSION_KINDS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
+  GIT_CHANGE_KINDS,
   type WebviewLogLevel,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -20,7 +21,13 @@ import {
   getPriorContextCompletions,
 } from "../completions/CompletionHelpers";
 import { resolveSymbol } from "../utils/AttachmentBuilders";
-import { getStashList } from "../utils/GitUtils";
+import {
+  getStashList,
+  getWorkingTreeDiff,
+  getStagedDiff,
+  getStashDiff,
+  getCommitDiff,
+} from "../utils/GitUtils";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import * as fs from "fs";
@@ -545,6 +552,53 @@ export class WebviewMessageRouter {
         message.ref as string,
         (message.stepCount as number) ?? 0
       );
+    });
+
+    table.set(MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW, async (message) => {
+      const workspaceRoot =
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      let content: string;
+      if (!workspaceRoot) {
+        content = "No workspace folder open.";
+      } else {
+        try {
+          content = await this.buildGitChangeContent(
+            workspaceRoot,
+            message.ref as string
+          );
+        } catch (error) {
+          content = `Failed to load git change: ${getErrorMessage(error)}`;
+        }
+      }
+      this.emitMessage({
+        type: MESSAGE_TYPES.GIT_CHANGE_PREVIEW_RESULT,
+        ref: message.ref,
+        content,
+      });
+    });
+
+    table.set(MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW, async (message) => {
+      const content = await this.buildPriorContextContent(
+        message.ref as string,
+        (message.stepCount as number) ?? 0
+      );
+      this.emitMessage({
+        type: MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT,
+        ref: message.ref,
+        content,
+      });
+    });
+
+    table.set(MESSAGE_TYPES.EXPORT_CONTENT_PREVIEW, async (message) => {
+      try {
+        const doc = await vscode.workspace.openTextDocument({
+          content: message.content as string,
+          language: message.language as string,
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      } catch (error) {
+        Log.error("EXPORT_CONTENT_PREVIEW: failed to open document", error);
+      }
     });
 
     table.set(MESSAGE_TYPES.VALIDATE_FILE_REF, async (message) => {
@@ -1956,6 +2010,51 @@ export class WebviewMessageRouter {
       Log.error("Error opening file:", error);
       vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
     }
+  }
+
+  /** Build the text content for a git change reference (diff/staged/stash/commit). */
+  private async buildGitChangeContent(
+    workspaceRoot: string,
+    ref: string
+  ): Promise<string> {
+    const lowerRef = ref.toLowerCase();
+    if (lowerRef === GIT_CHANGE_KINDS.DIFF) {
+      const content = await getWorkingTreeDiff(workspaceRoot);
+      return content.trim() ? content : "No uncommitted changes in working tree.";
+    }
+    if (lowerRef === GIT_CHANGE_KINDS.STAGED) {
+      const content = await getStagedDiff(workspaceRoot);
+      return content.trim() ? content : "No staged changes.";
+    }
+    if (lowerRef.startsWith(`${GIT_CHANGE_KINDS.STASH}:`)) {
+      const index = parseInt(lowerRef.slice(6), 10);
+      return await getStashDiff(workspaceRoot, index);
+    }
+    return await getCommitDiff(workspaceRoot, ref);
+  }
+
+  /** Build the prior-context XML preview without opening it in an editor. */
+  private async buildPriorContextContent(
+    ref: string,
+    stepCount: number
+  ): Promise<string> {
+    if (!ref) return "";
+    const orchestrator = this.getOrchestrator();
+    const workingFilePath = orchestrator?.getQueueState(
+      this.clientId
+    )?.workingFilePath;
+    if (workingFilePath && fs.existsSync(workingFilePath)) {
+      try {
+        const raw = fs.readFileSync(workingFilePath, "utf-8");
+        const workingFile = JSON.parse(raw) as { steps?: unknown[] };
+        const steps = (workingFile.steps ??
+          []) as import("../types/FlightPathTypes").WorkflowStep[];
+        return PriorContextPreviewBuilder.buildPreview(ref, stepCount, steps);
+      } catch {
+        return `<!-- Could not read workflow state for $${ref} -->`;
+      }
+    }
+    return `<!-- No active workflow — $${ref} will be resolved at execution time -->`;
   }
 
   /**

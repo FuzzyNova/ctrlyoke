@@ -135,8 +135,13 @@ export const MESSAGE_TYPES = {
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   OPEN_FILE: "openFile", // Open file from #file: link
-  OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor
-  OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion
+  OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor (legacy)
+  OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)
+  REQUEST_GIT_CHANGE_PREVIEW: "requestGitChangePreview", // Webview -> Extension: request diff content for preview modal
+  GIT_CHANGE_PREVIEW_RESULT: "gitChangePreviewResult", // Extension -> Webview: { ref, content } diff text for modal
+  REQUEST_PRIOR_CONTEXT_PREVIEW: "requestPriorContextPreview", // Webview -> Extension: request prior-context XML for preview modal
+  PRIOR_CONTEXT_PREVIEW_RESULT: "priorContextPreviewResult", // Extension -> Webview: { ref, content } XML for modal
+  EXPORT_CONTENT_PREVIEW: "exportContentPreview", // Webview -> Extension: open preview content in VS Code editor
   VALIDATE_FILE_REF: "validateFileRef", // Webview -> Extension: Check if a file-ref path resolves
   FILE_REF_VALIDATION: "fileRefValidation", // Extension -> Webview: { exists: boolean, filePath: string }
   VALIDATE_CONTEXT_REFS: "validateContextRefs", // Webview -> Extension: Validate inline @/#/~ context references

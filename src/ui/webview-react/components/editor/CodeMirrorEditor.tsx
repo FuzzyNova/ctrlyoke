@@ -1694,8 +1694,29 @@ function createClickHandlerExtension(
         const type = target.getAttribute("data-type");
         const path = target.getAttribute("data-path");
 
+        // git and priorContext: show preview modal in all modes (VS Code + browser)
+        if (type === "git") {
+          const gitRef = target.getAttribute("data-git-ref");
+          vscode.postMessage({
+            type: MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW,
+            ref: gitRef,
+          });
+          event.preventDefault();
+          return true;
+        }
+        if (type === "priorContext") {
+          const ref = target.getAttribute("data-ref");
+          vscode.postMessage({
+            type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
+            ref,
+            stepCount: stepCountRef.current,
+          });
+          event.preventDefault();
+          return true;
+        }
+
         if (isStandalone) {
-          // In browser mode, open the workspace viewer instead of VS Code commands
+          // In browser mode, open the workspace viewer for file/directory/lineRange/symbol
           if (type === "file" || type === "directory") {
             const store = useWorkspaceViewerStore.getState();
             if (type === "directory") {
@@ -1726,19 +1747,16 @@ function createClickHandlerExtension(
             event.preventDefault();
             return true;
           }
-          // git and priorContext: no equivalent browser action yet
           return false;
         }
 
-        // VS Code mode — original behavior
+        // VS Code mode — file / directory / lineRange / symbol open in editor
         if (type === "file" || type === "directory") {
-          // Simple file/directory open (no line numbers)
           vscode.postMessage({
             type: MESSAGE_TYPES.OPEN_FILE,
             path: path,
           });
         } else if (type === "lineRange") {
-          // #selection:path:10-20 (line range)
           const lineStart = target.getAttribute("data-line-start");
           const lineEnd = target.getAttribute("data-line-end");
           vscode.postMessage({
@@ -1748,28 +1766,12 @@ function createClickHandlerExtension(
             lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
           });
         } else if (type === "symbol") {
-          // #sym:path:symbol:42 (single line)
           const line = target.getAttribute("data-line");
           vscode.postMessage({
             type: MESSAGE_TYPES.OPEN_FILE,
             path: path,
             lineStart: line ? parseInt(line) : undefined,
             lineEnd: line ? parseInt(line) : undefined,
-          });
-        } else if (type === "git") {
-          // ~diff, ~staged, ~stash:N, ~<hash>
-          const gitRef = target.getAttribute("data-git-ref");
-          vscode.postMessage({
-            type: MESSAGE_TYPES.OPEN_GIT_CHANGE,
-            ref: gitRef,
-          });
-        } else if (type === "priorContext") {
-          // $previous, $all, $step:N, $finalStep, $allFinalStep
-          const ref = target.getAttribute("data-ref");
-          vscode.postMessage({
-            type: MESSAGE_TYPES.OPEN_PRIOR_CONTEXT,
-            ref,
-            stepCount: stepCountRef.current,
           });
         }
 

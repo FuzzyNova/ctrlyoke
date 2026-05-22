@@ -41,6 +41,7 @@ import {
   StartupOverlay,
 } from "./components/layout";
 import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
+import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
 
 function App() {
   const vscode = useVsCodeApi();
@@ -686,6 +687,9 @@ function App() {
 
         {/* Workspace viewer — fixed fullscreen overlay, standalone mode only */}
         <WorkspaceViewerModal />
+
+        {/* Content preview modal — git diff / prior-context XML */}
+        <ContentPreviewModal />
 
         {/* iOS safe area spacer — lifts all content above the home indicator.
             height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.

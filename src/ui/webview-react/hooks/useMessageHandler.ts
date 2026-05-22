@@ -1522,6 +1522,30 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.CONTEXT_REFS_VALIDATION] = () => {};
 
   // --------------------------------------------------------------------------
+  // GIT_CHANGE_PREVIEW_RESULT / PRIOR_CONTEXT_PREVIEW_RESULT
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.GIT_CHANGE_PREVIEW_RESULT] = (message) => {
+    const ref = message.ref as string;
+    const title = buildGitPreviewTitle(ref);
+    useUiStore.getState().setContentPreviewModal({
+      title,
+      content: message.content as string,
+      language: "diff",
+      ref,
+    });
+  };
+
+  handlers[MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT] = (message) => {
+    const ref = message.ref as string;
+    useUiStore.getState().setContentPreviewModal({
+      title: `$${ref} — Prior Context`,
+      content: message.content as string,
+      language: "xml",
+      ref,
+    });
+  };
+
+  // --------------------------------------------------------------------------
   // ATTACHMENT_TOKEN_COUNTS_RESPONSE - Handled by useAttachmentTokenCount.ts
   // --------------------------------------------------------------------------
   // This message is consumed by a module-level window listener in
@@ -2114,6 +2138,15 @@ export function deletePrompt(index: number): void {
  */
 export function selectPromptForEdit(index: number): void {
   sendMessage(MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT, { promptIndex: index });
+}
+
+/** Build a human-readable modal title for a ~git ref. */
+function buildGitPreviewTitle(ref: string): string {
+  const lower = ref.toLowerCase();
+  if (lower === "diff") return "Working Tree Diff (~diff)";
+  if (lower === "staged") return "Staged Changes (~staged)";
+  if (lower.startsWith("stash:")) return `Stash ${lower.slice(6)} (~${ref})`;
+  return `Commit ${ref.slice(0, 8)} (~${ref.slice(0, 8)})`;
 }
 
 /**

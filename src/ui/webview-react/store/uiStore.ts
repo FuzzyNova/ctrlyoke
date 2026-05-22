@@ -159,6 +159,14 @@ interface UiState {
     visible: boolean;
   } | null;
 
+  // Content preview modal (git diff / prior-context XML) — transient, not persisted
+  contentPreviewModal: {
+    title: string;
+    content: string;
+    language: "diff" | "xml";
+    ref: string;
+  } | null;
+
   // Footer quick picker state (transient, not persisted)
   footerOpenPicker: FooterPicker | null;
 
@@ -284,6 +292,16 @@ interface UiActions {
   ) => void;
   hideToast: () => void;
 
+  // Content preview modal
+  setContentPreviewModal: (
+    modal: {
+      title: string;
+      content: string;
+      language: "diff" | "xml";
+      ref: string;
+    } | null
+  ) => void;
+
   // Terminal tab switching
   setActiveOutputTab: (workflowId: string, tab: "output" | "terminal") => void;
   setTerminalSessionActive: (workflowId: string, active: boolean) => void;
@@ -405,6 +423,7 @@ const initialState: UiState = {
   outputFontSize: 13,
   terminalFontSize: 14,
   toast: null,
+  contentPreviewModal: null,
   activeOutputTabs: {},
   terminalActiveWorkflows: new Set<string>(),
   terminalRailCollapsed: true,
@@ -669,6 +688,8 @@ export const useUiStore = create<UiState & UiActions>()(
         }),
 
       hideToast: () => set({ toast: null }),
+
+      setContentPreviewModal: (modal) => set({ contentPreviewModal: modal }),
 
       // ============================================================================
       // TERMINAL TAB STATE
