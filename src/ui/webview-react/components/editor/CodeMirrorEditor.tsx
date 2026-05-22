@@ -769,18 +769,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             (update.docChanged || update.geometryChanged)
           ) {
             const cause = update.docChanged ? "doc" : "geometry";
-            WebviewLog.debug(
-              `[FP-AE] updateListener fired cause=${cause} docChanged=${update.docChanged} geometryChanged=${update.geometryChanged}`
-            );
             update.view.requestMeasure({
               read(v: EditorView) {
                 // contentHeight is CodeMirror's computed document height — unlike
                 // scrollDOM.scrollHeight it CAN go below clientHeight when content
                 // is deleted, giving us the negative value we need to trigger shrink.
                 const so = v.contentHeight - v.scrollDOM.clientHeight;
-                WebviewLog.debug(
-                  `[FP-AE] requestMeasure.read contentH=${v.contentHeight} clientH=${v.scrollDOM.clientHeight} signedOverflow=${so} lastOverflow=${lastOverflowRef.current}`
-                );
                 return so;
               },
               write(signedOverflow: number) {
@@ -788,9 +782,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
                 const changed =
                   lastOverflowRef.current === null ||
                   Math.abs(signedOverflow - lastOverflowRef.current) >= 1;
-                WebviewLog.debug(
-                  `[FP-AE] requestMeasure.write signedOverflow=${signedOverflow} lastOverflow=${lastOverflowRef.current} changed=${changed} cause=${cause}`
-                );
                 if (changed) {
                   lastOverflowRef.current = signedOverflow;
                   window.dispatchEvent(
@@ -1676,110 +1667,110 @@ function createPriorContextLintExtension(
   );
 }
 
-// Handle Ctrl+Click on links
+// Handle clicks on links. git/priorContext respond to plain clicks (modal preview);
+// file/directory/lineRange/symbol require Ctrl+Click to avoid accidental navigation.
 function createClickHandlerExtension(
   vscode: any,
   stepCountRef: React.RefObject<number>
 ) {
   return EditorView.domEventHandlers({
     click: (event, view) => {
+      const target = event.target as HTMLElement;
+      if (!target.classList.contains("cm-link")) return false;
+
+      const type = target.getAttribute("data-type");
+
+      // git and priorContext: plain click opens preview modal in all modes
+      if (type === "git") {
+        const gitRef = target.getAttribute("data-git-ref");
+        vscode.postMessage({
+          type: MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW,
+          ref: gitRef,
+        });
+        event.preventDefault();
+        return true;
+      }
+      if (type === "priorContext") {
+        const ref = target.getAttribute("data-ref");
+        vscode.postMessage({
+          type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
+          ref,
+          stepCount: stepCountRef.current,
+        });
+        event.preventDefault();
+        return true;
+      }
+
+      // file/directory/lineRange/symbol: require Ctrl+Click to open in editor/viewer
       if (!(event.ctrlKey || event.metaKey)) return false;
 
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
       if (pos === null) return false;
 
-      // Check if we clicked on a link decoration
-      const target = event.target as HTMLElement;
-      if (target.classList.contains("cm-link")) {
-        const type = target.getAttribute("data-type");
-        const path = target.getAttribute("data-path");
+      const path = target.getAttribute("data-path");
 
-        // git and priorContext: show preview modal in all modes (VS Code + browser)
-        if (type === "git") {
-          const gitRef = target.getAttribute("data-git-ref");
-          vscode.postMessage({
-            type: MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW,
-            ref: gitRef,
-          });
-          event.preventDefault();
-          return true;
-        }
-        if (type === "priorContext") {
-          const ref = target.getAttribute("data-ref");
-          vscode.postMessage({
-            type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
-            ref,
-            stepCount: stepCountRef.current,
-          });
-          event.preventDefault();
-          return true;
-        }
-
-        if (isStandalone) {
-          // In browser mode, open the workspace viewer for file/directory/lineRange/symbol
-          if (type === "file" || type === "directory") {
-            const store = useWorkspaceViewerStore.getState();
-            if (type === "directory") {
-              store.openToDirectory(path ?? "");
-            } else {
-              store.openToFile(path ?? "");
-            }
-            event.preventDefault();
-            return true;
-          } else if (type === "lineRange") {
-            const lineStart = target.getAttribute("data-line-start");
-            const lineEnd = target.getAttribute("data-line-end");
-            useWorkspaceViewerStore
-              .getState()
-              .openToFile(
-                path ?? "",
-                lineStart ? parseInt(lineStart) : undefined,
-                lineEnd ? parseInt(lineEnd) : undefined
-              );
-            event.preventDefault();
-            return true;
-          } else if (type === "symbol") {
-            const line = target.getAttribute("data-line");
-            const lineNum = line ? parseInt(line) : undefined;
-            useWorkspaceViewerStore
-              .getState()
-              .openToFile(path ?? "", lineNum, lineNum);
-            event.preventDefault();
-            return true;
-          }
-          return false;
-        }
-
-        // VS Code mode — file / directory / lineRange / symbol open in editor
+      if (isStandalone) {
+        // In browser mode, open the workspace viewer for file/directory/lineRange/symbol
         if (type === "file" || type === "directory") {
-          vscode.postMessage({
-            type: MESSAGE_TYPES.OPEN_FILE,
-            path: path,
-          });
+          const store = useWorkspaceViewerStore.getState();
+          if (type === "directory") {
+            store.openToDirectory(path ?? "");
+          } else {
+            store.openToFile(path ?? "");
+          }
+          event.preventDefault();
+          return true;
         } else if (type === "lineRange") {
           const lineStart = target.getAttribute("data-line-start");
           const lineEnd = target.getAttribute("data-line-end");
-          vscode.postMessage({
-            type: MESSAGE_TYPES.OPEN_FILE,
-            path: path,
-            lineStart: lineStart ? parseInt(lineStart) : undefined,
-            lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
-          });
+          useWorkspaceViewerStore
+            .getState()
+            .openToFile(
+              path ?? "",
+              lineStart ? parseInt(lineStart) : undefined,
+              lineEnd ? parseInt(lineEnd) : undefined
+            );
+          event.preventDefault();
+          return true;
         } else if (type === "symbol") {
           const line = target.getAttribute("data-line");
-          vscode.postMessage({
-            type: MESSAGE_TYPES.OPEN_FILE,
-            path: path,
-            lineStart: line ? parseInt(line) : undefined,
-            lineEnd: line ? parseInt(line) : undefined,
-          });
+          const lineNum = line ? parseInt(line) : undefined;
+          useWorkspaceViewerStore
+            .getState()
+            .openToFile(path ?? "", lineNum, lineNum);
+          event.preventDefault();
+          return true;
         }
-
-        event.preventDefault();
-        return true;
+        return false;
       }
 
-      return false;
+      // VS Code mode — file / directory / lineRange / symbol open in editor
+      if (type === "file" || type === "directory") {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.OPEN_FILE,
+          path: path,
+        });
+      } else if (type === "lineRange") {
+        const lineStart = target.getAttribute("data-line-start");
+        const lineEnd = target.getAttribute("data-line-end");
+        vscode.postMessage({
+          type: MESSAGE_TYPES.OPEN_FILE,
+          path: path,
+          lineStart: lineStart ? parseInt(lineStart) : undefined,
+          lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
+        });
+      } else if (type === "symbol") {
+        const line = target.getAttribute("data-line");
+        vscode.postMessage({
+          type: MESSAGE_TYPES.OPEN_FILE,
+          path: path,
+          lineStart: line ? parseInt(line) : undefined,
+          lineEnd: line ? parseInt(line) : undefined,
+        });
+      }
+
+      event.preventDefault();
+      return true;
     },
   });
 }

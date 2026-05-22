@@ -20,6 +20,25 @@ import {
   type WorkspaceFileEditorHandle,
 } from "./WorkspaceFileEditor";
 
+/**
+ * Strip a workspace root prefix from an absolute path, returning a
+ * workspace-relative path. Returns the original string unchanged when the
+ * path is already relative or when workspaceRoot is not set.
+ * Handles mixed forward-/back-slash separators (Windows paths sent over HTTP).
+ */
+function toWorkspaceRelative(
+  filePath: string,
+  workspaceRoot: string | null | undefined
+): string {
+  if (!workspaceRoot || !filePath) return filePath;
+  const norm = filePath.replace(/\\/g, "/");
+  const root = workspaceRoot.replace(/\\/g, "/").replace(/\/$/, "");
+  if (norm.startsWith(root + "/")) {
+    return norm.slice(root.length + 1);
+  }
+  return filePath;
+}
+
 export const WorkspaceExplorerPane: React.FC = () => {
   const explorerPath = useWorkspaceViewerStore((s) => s.explorerPath);
   const explorerEntries = useWorkspaceViewerStore((s) => s.explorerEntries);
@@ -69,6 +88,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
     endLine: number;
   } | null>(null);
 
+  const workspacePath = useSettingsStore((s) => s.globalSettings.workspaceRoot);
   const showHiddenFiles = useSettingsStore(
     (s) => s.globalSettings.showHiddenFiles
   );
@@ -127,16 +147,17 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
   const openFile = useCallback(
     async (filePath: string) => {
+      const relPath = toWorkspaceRelative(filePath, workspacePath);
       setFileLoading(true);
-      selectFile(filePath);
+      selectFile(relPath);
       if (isMobile) setMobileEditorVisible(true);
       try {
-        const result = await workspaceFile(filePath);
+        const result = await workspaceFile(relPath);
         if (result.readOnly) {
           setFileReadOnly(true, result.reason);
         } else {
           setFileReadOnly(false);
-          setLoadedFileContent(filePath, result.content);
+          setLoadedFileContent(relPath, result.content);
         }
       } catch (err) {
         setError(String(err));
@@ -145,6 +166,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       }
     },
     [
+      workspacePath,
       isMobile,
       selectFile,
       setFileLoading,
@@ -154,6 +176,23 @@ export const WorkspaceExplorerPane: React.FC = () => {
       setError,
     ]
   );
+
+  // Keep the directory listing in sync with the selected file.
+  // Whenever a file is opened by any means (explorer click, CodeMirror link,
+  // future callers), navigate the explorer to its parent directory if not already there.
+  // The directory list already highlights whichever entry matches selectedFilePath,
+  // so loading the parent is all that's needed.
+  useEffect(() => {
+    if (!selectedFilePath) return;
+    const lastSep = Math.max(
+      selectedFilePath.lastIndexOf("/"),
+      selectedFilePath.lastIndexOf("\\")
+    );
+    const parentDir = lastSep > 0 ? selectedFilePath.slice(0, lastSep) : "";
+    if (parentDir !== explorerPath) {
+      loadDirectory(parentDir);
+    }
+  }, [selectedFilePath, explorerPath, loadDirectory]);
 
   // Consume pending navigation set externally (e.g. from CodeMirror link clicks)
   useEffect(() => {

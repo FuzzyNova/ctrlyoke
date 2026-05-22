@@ -13,7 +13,6 @@ import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { clearNotificationBadgeCount } from "@utils/browserNotifications";
 import { centerPanelMountDefaults } from "@utils/panelSync";
-import { WebviewLog } from "@utils/logger";
 import { terminalRegistry } from "./terminalRegistry";
 import { MESSAGE_TYPES } from "@/types/messages";
 // uiStore uses vscode.getState()/setState() as its persist storage (see
@@ -109,18 +108,12 @@ function App() {
 
     const autoExpand =
       useSettingsStore.getState().globalSettings.autoExpandEditorWhenTyping;
-    WebviewLog.debug(
-      `[FP-AE] handler received cause=${cause} signedOverflow=${signedOverflow} autoExpand=${autoExpand} isMobile=${isMobile}`
-    );
     if (autoExpand === false) return;
 
     if (cause === "geometry") {
       if (signedOverflow > 0) {
         prevDocSignedOverflowRef.current = signedOverflow;
       }
-      WebviewLog.debug(
-        `[FP-AE] geometry event — skipping (prevDoc now=${prevDocSignedOverflowRef.current})`
-      );
       return;
     }
 
@@ -130,11 +123,7 @@ function App() {
     prevDocSignedOverflowRef.current = signedOverflow;
 
     const shouldEnter = A === 0 && prevDoc <= 0 && signedOverflow > 0;
-    WebviewLog.debug(
-      `[FP-AE] doc event A=${A} prevDoc=${prevDoc} signedOverflow=${signedOverflow} shouldEnter=${shouldEnter} outputCollapsed=${outputCollapsed} editorCollapsed=${editorCollapsed}`
-    );
     if (!shouldEnter && A === 0) {
-      WebviewLog.debug(`[FP-AE] early exit — not in mode and no entry`);
       return;
     }
 
@@ -179,9 +168,6 @@ function App() {
     } else {
       // ── Desktop ────────────────────────────────────────────────────────────
       if (outputCollapsed || editorCollapsed) {
-        WebviewLog.debug(
-          `[FP-AE] desktop skip — outputCollapsed=${outputCollapsed} editorCollapsed=${editorCollapsed}`
-        );
         return;
       }
       if (
@@ -189,7 +175,6 @@ function App() {
         !desktop.outputRef.current ||
         !desktop.editorRef.current
       ) {
-        WebviewLog.debug(`[FP-AE] desktop skip — refs not ready`);
         return;
       }
 
@@ -197,21 +182,14 @@ function App() {
       const editorPx = desktop.editorRef.current.getSize().inPixels ?? 0;
       const totalPx = outputPx + editorPx;
       if (totalPx <= 0) {
-        WebviewLog.debug(`[FP-AE] desktop skip — totalPx=${totalPx}`);
         return;
       }
 
       const basePx = desktop.lastDesktopSizes.current.editor;
       const maxAutoExpand = Math.max(0, totalPx * 0.6 - basePx);
       const targetA = Math.max(0, Math.min(A + signedOverflow, maxAutoExpand));
-      WebviewLog.debug(
-        `[FP-AE] desktop calc basePx=${basePx} editorPx=${editorPx} totalPx=${totalPx} maxAutoExpand=${maxAutoExpand} targetA=${targetA} currentA=${A}`
-      );
 
       if (Math.abs(targetA - A) < 1) {
-        WebviewLog.debug(
-          `[FP-AE] desktop skip — no meaningful change (targetA=${targetA} A=${A})`
-        );
         return;
       }
 
@@ -219,17 +197,13 @@ function App() {
       const editorPct = Number(((targetEditorPx / totalPx) * 100).toFixed(3));
       const outputPct = Number((100 - editorPct).toFixed(3));
 
-      WebviewLog.debug(
-        `[FP-AE] desktop setLayout editorPct=${editorPct} outputPct=${outputPct} targetEditorPx=${targetEditorPx}`
-      );
       editorAutoExpandPxRef.current = targetA;
       try {
         desktop.verticalGroupRef.current.setLayout({
           "output-panel": outputPct,
           "editor-panel": editorPct,
         });
-      } catch (err) {
-        WebviewLog.debug(`[FP-AE] desktop setLayout error`, err);
+      } catch {
         editorAutoExpandPxRef.current = A; // revert on error
       }
     }
@@ -844,22 +818,12 @@ function App() {
                         const isAutoExpandResize =
                           editorAutoExpandPxRef.current > 0 &&
                           Math.abs(px - autoExpectedPx) < 3;
-                        WebviewLog.debug(
-                          `[FP-AE] onResize px=${px} basePx=${basePx} autoExpectedPx=${autoExpectedPx} editorAutoExpandPx=${editorAutoExpandPxRef.current} isAutoExpandResize=${isAutoExpandResize}`
-                        );
                         if (!isAutoExpandResize) {
                           desktop.lastDesktopSizes.current.editor = px;
                           useUiStore
                             .getState()
                             .setLastDesktopSizes({ editor: px });
                           editorAutoExpandPxRef.current = 0;
-                          WebviewLog.debug(
-                            `[FP-AE] onResize: saved as new base px=${px} reset autoExpand`
-                          );
-                        } else {
-                          WebviewLog.debug(
-                            `[FP-AE] onResize: auto-expand resize detected, skipping base update`
-                          );
                         }
                       }
                     }
@@ -917,6 +881,9 @@ function App() {
 
       {/* Workspace viewer — fixed fullscreen overlay, standalone mode only */}
       <WorkspaceViewerModal />
+
+      {/* Content preview modal — git diff / prior-context XML */}
+      <ContentPreviewModal />
 
       {/* iOS safe area spacer — see mobile layout comment above */}
       <div className="safe-area-spacer" aria-hidden="true" />
