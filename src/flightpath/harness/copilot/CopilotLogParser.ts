@@ -202,18 +202,9 @@ export class CopilotLogParser extends BaseLogParser {
 
       // Extract text content from assistant messages
       if (event.type === "assistant.message" && event.data) {
-        if (event.data.content) {
-          outputEvents.push({
-            type: CLI_EVENT_TYPES.TEXT,
-            timestamp,
-            data: {
-              text: event.data.content,
-            } as TextData,
-          });
-        }
-
         // Extract inline reasoning (new format: reasoningText embedded in assistant.message)
-        // Newer Copilot versions embed reasoning here instead of a separate assistant.reasoning event
+        // Newer Copilot versions embed reasoning here instead of a separate assistant.reasoning event.
+        // Reasoning always appears before the message in the TUI, so emit THINKING first.
         if (event.data.reasoningText) {
           outputEvents.push({
             type: CLI_EVENT_TYPES.THINKING,
@@ -223,6 +214,16 @@ export class CopilotLogParser extends BaseLogParser {
               label: "Reasoning",
               timestamp,
             } as ThinkingBlock,
+          });
+        }
+
+        if (event.data.content) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: {
+              text: event.data.content,
+            } as TextData,
           });
         }
 
@@ -659,13 +660,7 @@ export class CopilotLogParser extends BaseLogParser {
 
     // assistant.message: text content and inline reasoning (new format)
     if (ev.type === "assistant.message") {
-      if (data.content) {
-        results.push({
-          type: CLI_EVENT_TYPES.TEXT,
-          timestamp,
-          data: { text: data.content } as TextData,
-        });
-      }
+      // Reasoning always appears before the message in the TUI, so emit THINKING first.
       if (data.reasoningText) {
         results.push({
           type: CLI_EVENT_TYPES.THINKING,
@@ -675,6 +670,13 @@ export class CopilotLogParser extends BaseLogParser {
             label: "Reasoning",
             timestamp,
           } as ThinkingBlock,
+        });
+      }
+      if (data.content) {
+        results.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp,
+          data: { text: data.content } as TextData,
         });
       }
       return results;

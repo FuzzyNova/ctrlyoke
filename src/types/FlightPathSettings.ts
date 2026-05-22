@@ -268,7 +268,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     mode: "interactive",
     injectMode: false,
     maxPromptTimeout: -1,
-    scriptTimeout: 30,
+    scriptTimeout: 300,
     closeTerminalOnComplete: false,
     autoDeleteTempFiles: true,
   },
@@ -280,7 +280,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     useNativeAttachments: false,
   },
   queue: {
-    maxSize: 10,
+    maxSize: 100,
     maxWorkflowExecutionTime: -1,
     unlimitedMode: false,
     notifyOnExtension: true,
