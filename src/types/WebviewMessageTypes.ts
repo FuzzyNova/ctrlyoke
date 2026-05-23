@@ -1179,45 +1179,69 @@ export interface RegistryMcpEntry {
   }>;
 }
 
-export interface RequestMcpLocalServersMessage {
-  type: typeof MESSAGE_TYPES.REQUEST_MCP_LOCAL_SERVERS;
+export interface ManagedMcpServerLocation {
+  scope: SettingWriteScope;
+  path: string;
 }
 
-export interface McpLocalServersResultMessage {
-  type: typeof MESSAGE_TYPES.MCP_LOCAL_SERVERS_RESULT;
+export interface ManagedMcpServer {
+  id: string;
+  displayName: string;
+  config: McpServerConfig;
+  locations: ManagedMcpServerLocation[];
+}
+
+export interface RequestMcpRegistryServersMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SERVERS;
+}
+
+export interface SaveMcpRegistryServerMessage {
+  type: typeof MESSAGE_TYPES.SAVE_MCP_REGISTRY_SERVER;
+  server: McpServerConfig;
+  scope: SettingWriteScope;
+  previousId?: string;
+}
+
+export interface DeleteMcpRegistryServerMessage {
+  type: typeof MESSAGE_TYPES.DELETE_MCP_REGISTRY_SERVER;
+  id: string;
+  scope: SettingWriteScope;
+}
+
+export interface RequestMcpLocalScanMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_MCP_LOCAL_SCAN;
+}
+
+export interface RequestMcpRegistrySearchMessage {
+  type: typeof MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SEARCH;
+  query: string;
+  cursor?: string;
+  updatedSince?: string;
+}
+
+export interface ExportMcpToHarnessMessage {
+  type: typeof MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS;
+  servers: McpServerConfig[];
+  targetId: AnyTargetId;
+  scope: SettingWriteScope;
+}
+
+export interface McpRegistryServersUpdateMessage {
+  type: typeof MESSAGE_TYPES.MCP_REGISTRY_SERVERS_UPDATE;
+  servers: ManagedMcpServer[];
+}
+
+export interface McpLocalScanResultMessage {
+  type: typeof MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT;
   servers: LocalMcpServerEntry[];
   error?: string;
 }
 
-export interface RequestMcpRegistryMessage {
-  type: typeof MESSAGE_TYPES.REQUEST_MCP_REGISTRY;
-  query?: string;
-  cursor?: string;
-  /** ISO 8601 timestamp — when set, fetches only servers updated since this date */
-  updatedSince?: string;
-}
-
-export interface McpRegistryResultMessage {
-  type: typeof MESSAGE_TYPES.MCP_REGISTRY_RESULT;
+export interface McpRegistrySearchResultMessage {
+  type: typeof MESSAGE_TYPES.MCP_REGISTRY_SEARCH_RESULT;
   servers: RegistryMcpEntry[];
-  error?: string;
-  query?: string;
   nextCursor?: string;
-}
-
-export interface RequestMcpWorkspaceServersMessage {
-  type: typeof MESSAGE_TYPES.REQUEST_MCP_WORKSPACE_SERVERS;
-}
-
-export interface McpWorkspaceServersResultMessage {
-  type: typeof MESSAGE_TYPES.MCP_WORKSPACE_SERVERS_RESULT;
-  servers: McpServerConfig[];
   error?: string;
-}
-
-export interface SaveMcpWorkspaceServersMessage {
-  type: typeof MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS;
-  servers: McpServerConfig[];
 }
 
 // ============================================================================
@@ -1404,9 +1428,9 @@ export type IncomingMessage =
   | StepUndoDataUpdatedMessage
   | UndoPromptResultMessage
   | UndoRecordUpdatedMessage
-  | McpLocalServersResultMessage
-  | McpRegistryResultMessage
-  | McpWorkspaceServersResultMessage
+  | McpRegistryServersUpdateMessage
+  | McpLocalScanResultMessage
+  | McpRegistrySearchResultMessage
   | GlobalSettingsLoadedMessage
   | GlobalSettingUpdatedMessage
   | NotificationEventMessage

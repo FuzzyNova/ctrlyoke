@@ -210,14 +210,16 @@ export const MESSAGE_TYPES = {
   // Recent workflow management — Webview → Extension
   REMOVE_WORKFLOW_HISTORY: "removeWorkflowHistory", // Remove single history entry: { filePath }
 
-  // MCP Discovery — Webview ↔ Extension
-  REQUEST_MCP_LOCAL_SERVERS: "requestMcpLocalServers", // Webview -> Extension: Scan local MCP config files
-  MCP_LOCAL_SERVERS_RESULT: "mcpLocalServersResult", // Extension -> Webview: { servers: LocalMcpServerEntry[], error? }
-  REQUEST_MCP_REGISTRY: "requestMcpRegistry", // Webview -> Extension: Search Anthropic MCP registry
-  MCP_REGISTRY_RESULT: "mcpRegistryResult", // Extension -> Webview: { servers: RegistryMcpEntry[], error?, query? }
-  REQUEST_MCP_WORKSPACE_SERVERS: "requestMcpWorkspaceServers", // Webview -> Extension: Load workspace MCP registry
-  MCP_WORKSPACE_SERVERS_RESULT: "mcpWorkspaceServersResult", // Extension -> Webview: { servers: McpServerConfig[], error? }
-  SAVE_MCP_WORKSPACE_SERVERS: "saveMcpWorkspaceServers", // Webview -> Extension: Save workspace MCP registry { servers: McpServerConfig[] }
+  // MCP Manager — Webview ↔ Extension
+  REQUEST_MCP_REGISTRY_SERVERS: "requestMcpRegistryServers", // Webview -> Extension: Load merged workspace+user FlightPath MCP registry
+  SAVE_MCP_REGISTRY_SERVER: "saveMcpRegistryServer", // Webview -> Extension: Save one MCP registry entry { server, scope }
+  DELETE_MCP_REGISTRY_SERVER: "deleteMcpRegistryServer", // Webview -> Extension: Delete one MCP registry entry { id, scope }
+  REQUEST_MCP_LOCAL_SCAN: "requestMcpLocalScan", // Webview -> Extension: Scan local harness MCP configs for manager import
+  REQUEST_MCP_REGISTRY_SEARCH: "requestMcpRegistrySearch", // Webview -> Extension: Search MCP registry for manager import
+  EXPORT_MCP_TO_HARNESS: "exportMcpToHarness", // Webview -> Extension: Export managed MCP servers to a harness config
+  MCP_REGISTRY_SERVERS_UPDATE: "mcpRegistryServersUpdate", // Extension -> Webview: { servers: ManagedMcpServer[] }
+  MCP_LOCAL_SCAN_RESULT: "mcpLocalScanResult", // Extension -> Webview: { servers: LocalMcpServerEntry[], error? }
+  MCP_REGISTRY_SEARCH_RESULT: "mcpRegistrySearchResult", // Extension -> Webview: { servers: RegistryMcpEntry[], nextCursor?, error? }
 
   // Harness File Manager — Webview ↔ Extension
   REQUEST_HARNESS_FILES: "requestHarnessFiles", // Webview -> Extension: { fileType: "agent" | "skill" }

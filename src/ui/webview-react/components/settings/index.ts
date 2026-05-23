@@ -10,6 +10,7 @@ export { ServerSection } from "./ServerSection";
 export { DeveloperSection } from "./DeveloperSection";
 export { NotificationsSection } from "./NotificationsSection";
 export { AgentSkillsManagerSection } from "./AgentSkillsManagerSection";
+export { McpManagerSection } from "./McpManagerSection";
 export { CommitSection } from "./CommitSection";
 // Defaults sub-pages
 export { DefaultsHarnessPage } from "./defaults/DefaultsHarnessPage";

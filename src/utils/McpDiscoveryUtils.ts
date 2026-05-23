@@ -8,50 +8,21 @@
  */
 
 import * as fs from "fs/promises";
-import * as path from "path";
-import * as os from "os";
 import type {
   LocalMcpServerEntry,
   RegistryMcpEntry,
 } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
+import {
+  getClaudeUserConfigPath,
+  getClaudeWorkspaceMcpConfigPath,
+  getVscodeUserMcpConfigPath,
+  getVscodeWorkspaceMcpConfigPath,
+} from "./McpConfigPaths";
 
 // ============================================================================
 // Local config file discovery
 // ============================================================================
-
-/**
- * Returns the platform-specific path to the VS Code user MCP config file.
- *
- * VS Code uses `servers` as the top-level key (not `mcpServers`).
- */
-function getVscodeUserMcpConfigPath(): string {
-  const home = os.homedir();
-  if (process.platform === "win32") {
-    const appData =
-      process.env.APPDATA ?? path.join(home, "AppData", "Roaming");
-    return path.join(appData, "Code", "User", "mcp.json");
-  } else if (process.platform === "darwin") {
-    return path.join(
-      home,
-      "Library",
-      "Application Support",
-      "Code",
-      "User",
-      "mcp.json"
-    );
-  } else {
-    return path.join(home, ".config", "Code", "User", "mcp.json");
-  }
-}
-
-/**
- * Returns the path to the Claude Code user config file (~/.claude.json).
- * This file stores user-scope MCP servers at the top-level `mcpServers` key.
- */
-function getClaudeUserConfigPath(): string {
-  return path.join(os.homedir(), ".claude.json");
-}
 
 /**
  * Reads a JSON file and returns its parsed content, or null on any error.
@@ -127,7 +98,7 @@ export async function discoverLocalMcpServers(
   };
 
   // 1. .vscode/mcp.json (workspace VS Code config)
-  const vscodeMcpPath = path.join(workspaceRoot, ".vscode", "mcp.json");
+  const vscodeMcpPath = getVscodeWorkspaceMcpConfigPath(workspaceRoot);
   const vscodeWs = await readJsonFile(vscodeMcpPath);
   if (vscodeWs && typeof vscodeWs === "object") {
     const data = vscodeWs as Record<string, unknown>;
@@ -146,7 +117,7 @@ export async function discoverLocalMcpServers(
   }
 
   // 2. .mcp.json (workspace Claude Code project config)
-  const claudeMcpPath = path.join(workspaceRoot, ".mcp.json");
+  const claudeMcpPath = getClaudeWorkspaceMcpConfigPath(workspaceRoot);
   const claudeWs = await readJsonFile(claudeMcpPath);
   if (claudeWs && typeof claudeWs === "object") {
     const data = claudeWs as Record<string, unknown>;

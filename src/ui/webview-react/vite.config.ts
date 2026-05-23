@@ -11,56 +11,69 @@ export default defineConfig(({ mode }) => ({
     viteStaticCopy({
       targets: [
         // Copy dictionaries for Typo.js spell checking
+        // stripBase:2 strips "static/dictionaries/" while preserving the locale subfolder (en_US/).
         {
           src: "static/dictionaries/**/*",
           dest: "dictionaries",
+          rename: { stripBase: 2 },
         },
         // Copy typo.js for spell checking
+        // stripBase:true strips the "static/" prefix so the file lands at the output root.
         {
           src: "static/typo.js",
           dest: ".",
+          rename: { stripBase: true },
         },
         // Copy codicon CSS from @vscode/codicons package
         {
           src: "../../../node_modules/@vscode/codicons/dist/codicon.css",
           dest: "codicons",
+          rename: { stripBase: true },
         },
         // Copy codicon font file
         {
           src: "../../../node_modules/@vscode/codicons/dist/codicon.ttf",
           dest: "codicons",
+          rename: { stripBase: true },
         },
         // Copy generated custom-icons.css (produced by generate-custom-icons script)
         {
           src: "static/custom-icons.css",
           dest: ".",
+          rename: { stripBase: true },
         },
         // Copy extension logo for browser-hosted dashboard background
         {
           src: "../../../images/flightpath-icon.svg",
           dest: ".",
+          rename: { stripBase: true },
         },
         // Copy hosted dashboard favicon/PWA assets
         {
           src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_PNG}`,
           dest: ".",
+          rename: { stripBase: true },
         },
         {
           src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_SVG}`,
           dest: ".",
+          rename: { stripBase: true },
         },
         {
           src: `../../../images/${HOSTED_ICON_FILES.FAVICON_PNG}`,
           dest: ".",
+          rename: { stripBase: true },
         },
         {
           src: `../../../images/${HOSTED_ICON_FILES.FAVICON_SVG}`,
           dest: ".",
+          rename: { stripBase: true },
         },
         // 180x180 PNG served at /apple-touch-icon.png for iOS "Add to Home Screen"
         {
           src: `../../../images/${HOSTED_ICON_FILES.APPLE_TOUCH_ICON_PNG}`,
           dest: ".",
+          rename: { stripBase: true },
         },
       ],
     }),

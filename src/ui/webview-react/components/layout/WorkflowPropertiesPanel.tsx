@@ -9,7 +9,6 @@ import { useUiStore } from "../../store/uiStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { useDrawerTabOverrides } from "../../hooks/useDrawerTabOverrides";
-import { useMcpServerActions } from "../../hooks/useMcpServerActions";
 import {
   MESSAGE_TYPES,
   SESSION_ID_SENTINELS,
@@ -144,14 +143,6 @@ export const WorkflowPropertiesPanel: React.FC<{
     unhideDropdownOption,
     loadedWorkflows,
     activeWorkflowId,
-    mcpLocalServers,
-    mcpLocalServersLoading,
-    mcpLocalServersError,
-    mcpRegistryServers,
-    mcpRegistryLoading,
-    mcpRegistryError,
-    mcpWorkspaceServers,
-    mcpWorkspaceServersLoading,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -173,13 +164,6 @@ export const WorkflowPropertiesPanel: React.FC<{
     getEffectivePriorContext,
     getEffectiveAdditionalArgs,
   } = useSettingsStore();
-  const {
-    handleRequestLocalServers,
-    handleSearchRegistry,
-    handleRequestWorkspaceServers,
-    handleWorkspaceServersChange,
-  } = useMcpServerActions();
-
   // Active drawer page
   const [activePage, setActivePage] = useState<DrawerPage>(
     DRAWER_PAGES.HARNESS
@@ -1313,18 +1297,6 @@ export const WorkflowPropertiesPanel: React.FC<{
                   onChange={handleMcpServersChange}
                   showDefault={false}
                   fillHeight={true}
-                  onRequestLocalServers={handleRequestLocalServers}
-                  onSearchRegistry={handleSearchRegistry}
-                  localServers={mcpLocalServers}
-                  isLoadingLocal={mcpLocalServersLoading}
-                  localServersError={mcpLocalServersError}
-                  registryServers={mcpRegistryServers}
-                  isLoadingRegistry={mcpRegistryLoading}
-                  registryError={mcpRegistryError}
-                  workspaceServers={mcpWorkspaceServers}
-                  isLoadingWorkspaceServers={mcpWorkspaceServersLoading}
-                  onRequestWorkspaceServers={handleRequestWorkspaceServers}
-                  onWorkspaceServersChange={handleWorkspaceServersChange}
                 />
               </FormField>
             </div>

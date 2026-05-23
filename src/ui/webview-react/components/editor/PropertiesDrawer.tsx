@@ -6,7 +6,6 @@ import {
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
-import { useMcpServerActions } from "../../hooks/useMcpServerActions";
 import {
   HARNESS_IDS,
   CONDITION_ACTIONS,
@@ -79,22 +78,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     hiddenDropdownOptions,
     hideDropdownOption,
     unhideDropdownOption,
-    mcpLocalServers,
-    mcpLocalServersLoading,
-    mcpLocalServersError,
-    mcpRegistryServers,
-    mcpRegistryLoading,
-    mcpRegistryError,
-    mcpWorkspaceServers,
-    mcpWorkspaceServersLoading,
   } = useUiStore();
-
-  const {
-    handleRequestLocalServers,
-    handleSearchRegistry,
-    handleRequestWorkspaceServers,
-    handleWorkspaceServersChange,
-  } = useMcpServerActions();
   const handleResetAllToInherit = useCallback(() => {
     setProperty("harness", undefined);
     setProperty("model", undefined);
@@ -806,18 +790,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               onChange={(v) => setProperty("mcpServers", v)}
               defaultLabel={defaultMcpServersLabel}
               inheritedValue={resolvedMcpServers as McpServersValue}
-              onRequestLocalServers={handleRequestLocalServers}
-              onSearchRegistry={handleSearchRegistry}
-              localServers={mcpLocalServers}
-              isLoadingLocal={mcpLocalServersLoading}
-              localServersError={mcpLocalServersError}
-              registryServers={mcpRegistryServers}
-              isLoadingRegistry={mcpRegistryLoading}
-              registryError={mcpRegistryError}
-              workspaceServers={mcpWorkspaceServers}
-              isLoadingWorkspaceServers={mcpWorkspaceServersLoading}
-              onRequestWorkspaceServers={handleRequestWorkspaceServers}
-              onWorkspaceServersChange={handleWorkspaceServersChange}
             />
           </div>
         )}

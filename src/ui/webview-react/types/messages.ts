@@ -141,8 +141,10 @@ export {
   type RedoPromptChangesMessage,
   type LocalMcpServerEntry,
   type RegistryMcpEntry,
-  type McpLocalServersResultMessage,
-  type McpRegistryResultMessage,
+  type ManagedMcpServer,
+  type McpRegistryServersUpdateMessage,
+  type McpLocalScanResultMessage,
+  type McpRegistrySearchResultMessage,
 } from "@root/types/WebviewMessageTypes";
 
 // Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, PreCondition, and helpers from FlightPathTypes

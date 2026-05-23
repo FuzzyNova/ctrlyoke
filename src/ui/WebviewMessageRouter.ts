@@ -38,7 +38,11 @@ import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import type { WebviewSettingsSync, PostMessageFn } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
 import type {
+  DeleteMcpRegistryServerMessage,
+  ExportMcpToHarnessMessage,
   InsertWorkflowStepMessage,
+  RequestMcpRegistrySearchMessage,
+  SaveMcpRegistryServerMessage,
   UndoPromptChangesMessage,
   UndoFileInstruction,
   RedoPromptChangesMessage,
@@ -47,7 +51,6 @@ import type {
   UndoRecord,
   DevDashboardAction,
 } from "../types/WebviewMessageTypes";
-import type { McpServerConfig } from "../types/FlightPathTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import {
   getPtyProcessManager,
@@ -59,6 +62,8 @@ import {
 } from "../utils/McpDiscoveryUtils";
 import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder";
 import { HarnessFileManager } from "../utils/HarnessFileManager";
+import { HarnessMcpExporter } from "../utils/HarnessMcpExporter";
+import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
 
 const execFileAsync = promisify(execFile);
 const GIT_VALIDATION_TIMEOUT_MS = 5000;
@@ -619,46 +624,47 @@ export class WebviewMessageRouter {
       }
     );
 
-    // ── MCP Discovery ────────────────────────────────────────────────────
-    table.set(MESSAGE_TYPES.REQUEST_MCP_LOCAL_SERVERS, async () => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      const workspaceRoot =
-        workspaceFolders && workspaceFolders.length > 0
-          ? workspaceFolders[0].uri.fsPath
-          : "";
+    // ── MCP Manager ─────────────────────────────────────────────────────
+    table.set(MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SERVERS, async () => {
+      try {
+        await this.emitManagedMcpRegistryServers();
+      } catch (error) {
+        const message = `Failed to load MCP registry servers: ${getErrorMessage(error)}`;
+        Log.error(message);
+        void vscode.window.showErrorMessage(message);
+      }
+    });
+
+    table.set(MESSAGE_TYPES.SAVE_MCP_REGISTRY_SERVER, async (message) => {
+      await this.handleSaveMcpRegistryServer(
+        message as SaveMcpRegistryServerMessage
+      );
+    });
+
+    table.set(MESSAGE_TYPES.DELETE_MCP_REGISTRY_SERVER, async (message) => {
+      await this.handleDeleteMcpRegistryServer(
+        message as DeleteMcpRegistryServerMessage
+      );
+    });
+
+    table.set(MESSAGE_TYPES.REQUEST_MCP_LOCAL_SCAN, async () => {
+      const workspaceRoot = this.getWorkspaceRoot();
       const result = await safeDiscoverLocalMcpServers(workspaceRoot);
       this.emitMessage({
-        type: MESSAGE_TYPES.MCP_LOCAL_SERVERS_RESULT,
+        type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
         servers: result.servers,
         ...(result.error ? { error: result.error } : {}),
       });
     });
 
-    table.set(MESSAGE_TYPES.REQUEST_MCP_REGISTRY, async (message) => {
-      const result = await safeFetchMcpRegistry({
-        cursor: message.cursor,
-        search: message.query || undefined,
-        updatedSince: message.updatedSince,
-      });
-      this.emitMessage({
-        type: MESSAGE_TYPES.MCP_REGISTRY_RESULT,
-        servers: result.servers,
-        query: message.query,
-        nextCursor: result.nextCursor,
-        ...(result.error ? { error: result.error } : {}),
-      });
+    table.set(MESSAGE_TYPES.REQUEST_MCP_REGISTRY_SEARCH, async (message) => {
+      await this.handleRequestMcpRegistrySearch(
+        message as RequestMcpRegistrySearchMessage
+      );
     });
 
-    table.set(MESSAGE_TYPES.REQUEST_MCP_WORKSPACE_SERVERS, async () => {
-      const servers = await this.loadMcpWorkspaceServers();
-      this.emitMessage({
-        type: MESSAGE_TYPES.MCP_WORKSPACE_SERVERS_RESULT,
-        servers,
-      });
-    });
-
-    table.set(MESSAGE_TYPES.SAVE_MCP_WORKSPACE_SERVERS, async (message) => {
-      await this.saveMcpWorkspaceServers(message.servers ?? []);
+    table.set(MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS, async (message) => {
+      await this.handleExportMcpToHarness(message as ExportMcpToHarnessMessage);
     });
 
     // ── Harness File Manager ─────────────────────────────────────────────
@@ -2509,45 +2515,92 @@ export class WebviewMessageRouter {
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
   }
 
-  private getMcpWorkspaceServersPath(): string | null {
+  private getMcpRegistryFileManager(): McpRegistryFileManager {
     const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) return null;
-    return path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.MCP_DIR,
-      PATH_CONSTANTS.MCP_SERVERS_FILE
-    );
+    return new McpRegistryFileManager(workspaceRoot || undefined);
   }
 
-  private async loadMcpWorkspaceServers(): Promise<McpServerConfig[]> {
-    const filePath = this.getMcpWorkspaceServersPath();
-    if (!filePath) return [];
+  private getHarnessMcpExporter(): HarnessMcpExporter {
+    const workspaceRoot = this.getWorkspaceRoot();
+    return new HarnessMcpExporter(workspaceRoot || undefined);
+  }
+
+  private async emitManagedMcpRegistryServers(): Promise<void> {
+    const servers = await this.getMcpRegistryFileManager().readAll();
+    this.emitMessage({
+      type: MESSAGE_TYPES.MCP_REGISTRY_SERVERS_UPDATE,
+      servers,
+    });
+  }
+
+  private async handleSaveMcpRegistryServer(
+    message: SaveMcpRegistryServerMessage
+  ): Promise<void> {
     try {
-      const content = await fs.promises.readFile(filePath, "utf-8");
-      const parsed = JSON.parse(content);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
+      const manager = this.getMcpRegistryFileManager();
+      if (message.previousId && message.previousId !== message.server.id) {
+        await manager.remove(message.previousId, message.scope);
+      }
+      await manager.addOrUpdate(message.server, message.scope);
+      await this.emitManagedMcpRegistryServers();
+    } catch (error) {
+      const errorMessage = `Failed to save MCP registry server: ${getErrorMessage(error)}`;
+      Log.error(errorMessage);
+      void vscode.window.showErrorMessage(errorMessage);
     }
   }
 
-  private async saveMcpWorkspaceServers(
-    servers: McpServerConfig[]
+  private async handleDeleteMcpRegistryServer(
+    message: DeleteMcpRegistryServerMessage
   ): Promise<void> {
-    const filePath = this.getMcpWorkspaceServersPath();
-    if (!filePath) return;
     try {
-      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-      await fs.promises.writeFile(
-        filePath,
-        JSON.stringify(servers, null, 2),
-        "utf-8"
+      await this.getMcpRegistryFileManager().remove(message.id, message.scope);
+      await this.emitManagedMcpRegistryServers();
+    } catch (error) {
+      const errorMessage = `Failed to delete MCP registry server: ${getErrorMessage(error)}`;
+      Log.error(errorMessage);
+      void vscode.window.showErrorMessage(errorMessage);
+    }
+  }
+
+  private async handleRequestMcpRegistrySearch(
+    message: RequestMcpRegistrySearchMessage
+  ): Promise<void> {
+    const result = await safeFetchMcpRegistry({
+      cursor: message.cursor,
+      search: message.query || undefined,
+      updatedSince: message.updatedSince,
+    });
+    this.emitMessage({
+      type: MESSAGE_TYPES.MCP_REGISTRY_SEARCH_RESULT,
+      servers: result.servers,
+      nextCursor: result.nextCursor,
+      ...(result.error ? { error: result.error } : {}),
+    });
+  }
+
+  private async handleExportMcpToHarness(
+    message: ExportMcpToHarnessMessage
+  ): Promise<void> {
+    try {
+      const result = await this.getHarnessMcpExporter().export(
+        message.servers ?? [],
+        message.targetId,
+        message.scope
       );
-    } catch (err) {
-      Log.error(
-        `Failed to save workspace MCP servers: ${getErrorMessage(err)}`
+      if (result.exportedCount === 0) {
+        void vscode.window.showWarningMessage(
+          `No stdio MCP servers were exported to ${result.filePath}.`
+        );
+        return;
+      }
+      void vscode.window.showInformationMessage(
+        `Exported ${result.exportedCount} MCP server${result.exportedCount === 1 ? "" : "s"} to ${result.filePath}.`
       );
+    } catch (error) {
+      const errorMessage = `Failed to export MCP servers: ${getErrorMessage(error)}`;
+      Log.error(errorMessage);
+      void vscode.window.showErrorMessage(errorMessage);
     }
   }
 }

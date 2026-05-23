@@ -19,6 +19,13 @@ export {
 export { useSettingsStore } from "./settingsStore";
 export { useTerminalStore } from "./terminalStore";
 export { useWorkspaceViewerStore } from "./workspaceViewerStore";
+export {
+  useMcpManagerStore,
+  MCP_MANAGER_DISCOVERY_TABS,
+  MCP_MANAGER_REMOTE_SORTS,
+  type McpManagerDiscoveryTab,
+  type McpManagerRemoteSort,
+} from "./useMcpManagerStore";
 export type { TerminalSession, SessionKind } from "./terminalStore";
 
 // Types from workflowStore

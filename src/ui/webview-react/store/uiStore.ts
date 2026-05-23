@@ -3,11 +3,6 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
 import type { WorkflowSummary } from "../types/messages";
 import { type FooterPicker } from "../types/messages";
-import type {
-  LocalMcpServerEntry,
-  RegistryMcpEntry,
-} from "@root/types/WebviewMessageTypes";
-import type { McpServerConfig } from "@root/types/FlightPathTypes";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
 /**
@@ -170,27 +165,6 @@ interface UiState {
   // Footer quick picker state (transient, not persisted)
   footerOpenPicker: FooterPicker | null;
 
-  // MCP Discovery state
-  mcpDiscoveryTab: "local" | "registry";
-  mcpLocalServers: LocalMcpServerEntry[];
-  mcpLocalServersLoading: boolean;
-  mcpLocalServersError: string | undefined;
-  mcpRegistryServers: RegistryMcpEntry[] | undefined;
-  mcpRegistryLoading: boolean;
-  mcpRegistryError: string | undefined;
-  mcpRegistryQuery: string;
-  /** Cursor for the next page of registry results (undefined = no more pages) */
-  mcpRegistryNextCursor: string | undefined;
-  /**
-   * History of cursors for each visited page.
-   * Index 0 = page 1 (cursor undefined), index 1 = page 2 (nextCursor from page 1), etc.
-   * Current page = last element. Length = current page number.
-   */
-  mcpRegistryPageCursors: (string | undefined)[];
-  // MCP Workspace registry (undefined = not yet loaded)
-  mcpWorkspaceServers: McpServerConfig[] | undefined;
-  mcpWorkspaceServersLoading: boolean;
-
   // Mobile drawer/overlay state — persisted so user preference survives restarts
   mobileStepsOpen: boolean;
   mobileStepsMode: "sidebar" | "fullwidth";
@@ -338,33 +312,6 @@ interface UiActions {
       | null
   ) => void;
 
-  // MCP discovery
-  setMcpDiscoveryTab: (tab: "local" | "registry") => void;
-  setMcpLocalServersLoading: (loading: boolean) => void;
-  setMcpLocalServersResult: (
-    servers: LocalMcpServerEntry[],
-    error?: string
-  ) => void;
-  setMcpRegistryLoading: (loading: boolean) => void;
-  setMcpRegistryResult: (
-    servers: RegistryMcpEntry[],
-    query?: string,
-    error?: string,
-    nextCursor?: string
-  ) => void;
-  /** Navigate to the next registry page (appends nextCursor to page history) */
-  mcpRegistryGoNextPage: () => string | undefined;
-  /** Navigate to the previous registry page (trims page history, returns cursor to fetch) */
-  mcpRegistryGoPrevPage: () => string | undefined;
-  /** Reset pagination (e.g. on first load) */
-  resetMcpRegistryPages: () => void;
-  setMcpWorkspaceServersLoading: (loading: boolean) => void;
-  setMcpWorkspaceServersResult: (
-    servers: McpServerConfig[],
-    error?: string
-  ) => void;
-  setMcpWorkspaceServers: (servers: McpServerConfig[]) => void;
-
   // Mobile drawer actions
   toggleMobileSteps: () => void;
   setMobileStepsMode: (mode: "sidebar" | "fullwidth") => void;
@@ -434,18 +381,6 @@ const initialState: UiState = {
   runTimestamps: [],
   runStates: [],
   footerOpenPicker: null,
-  mcpDiscoveryTab: "registry",
-  mcpLocalServers: [],
-  mcpLocalServersLoading: false,
-  mcpLocalServersError: undefined,
-  mcpRegistryServers: undefined,
-  mcpRegistryLoading: false,
-  mcpRegistryError: undefined,
-  mcpRegistryQuery: "",
-  mcpRegistryNextCursor: undefined,
-  mcpRegistryPageCursors: [undefined],
-  mcpWorkspaceServers: undefined,
-  mcpWorkspaceServersLoading: false,
   mobileStepsOpen: false,
   mobileStepsMode: "fullwidth",
   mobileWorkflowPropsOpen: false,
@@ -473,7 +408,6 @@ const persistedFields = [
   "terminalFontSize",
   "terminalRailCollapsed",
   "terminalRailSizePx",
-  "mcpDiscoveryTab",
   "globalSettingsActiveTab",
   "activeWorkflowWorkingFilePath",
   "mobileStepsOpen",
@@ -482,7 +416,7 @@ const persistedFields = [
 
 export const useUiStore = create<UiState & UiActions>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       ...initialState,
 
       // ============================================================================
@@ -780,71 +714,6 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       setFooterOpenPicker: (picker) => set({ footerOpenPicker: picker }),
-
-      // ============================================================================
-      // MCP DISCOVERY
-      // ============================================================================
-
-      setMcpDiscoveryTab: (tab) => set({ mcpDiscoveryTab: tab }),
-
-      setMcpLocalServersLoading: (loading) =>
-        set({ mcpLocalServersLoading: loading }),
-
-      setMcpLocalServersResult: (servers, error) =>
-        set({
-          mcpLocalServers: servers,
-          mcpLocalServersLoading: false,
-          mcpLocalServersError: error,
-        }),
-
-      setMcpRegistryLoading: (loading) => set({ mcpRegistryLoading: loading }),
-
-      setMcpRegistryResult: (servers, query, error, nextCursor) =>
-        set({
-          mcpRegistryServers: servers,
-          mcpRegistryLoading: false,
-          mcpRegistryError: error,
-          mcpRegistryQuery: query ?? "",
-          mcpRegistryNextCursor: nextCursor,
-        }),
-
-      mcpRegistryGoNextPage: () => {
-        const state = get();
-        const cursor = state.mcpRegistryNextCursor;
-        if (!cursor) return undefined;
-        set({
-          mcpRegistryPageCursors: [...state.mcpRegistryPageCursors, cursor],
-        });
-        return cursor;
-      },
-
-      mcpRegistryGoPrevPage: () => {
-        const state = get();
-        const pages = state.mcpRegistryPageCursors;
-        if (pages.length <= 1) return undefined;
-        const newPages = pages.slice(0, -1);
-        const prevCursor = newPages[newPages.length - 1];
-        set({ mcpRegistryPageCursors: newPages });
-        return prevCursor;
-      },
-
-      resetMcpRegistryPages: () =>
-        set({
-          mcpRegistryPageCursors: [undefined],
-          mcpRegistryNextCursor: undefined,
-        }),
-
-      setMcpWorkspaceServersLoading: (loading) =>
-        set({ mcpWorkspaceServersLoading: loading }),
-
-      setMcpWorkspaceServersResult: (servers, _error) =>
-        set({
-          mcpWorkspaceServers: servers,
-          mcpWorkspaceServersLoading: false,
-        }),
-
-      setMcpWorkspaceServers: (servers) =>
-        set({ mcpWorkspaceServers: servers }),
 
       // ============================================================================
       // MOBILE DRAWER

@@ -8,8 +8,6 @@ import {
   type McpServersValue,
 } from "../../shared/McpServersEditor";
 import { SettingInputRow } from "../../shared/SettingInputRow";
-import { useUiStore } from "../../../store/uiStore";
-import { useMcpServerActions } from "../../../hooks/useMcpServerActions";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -28,24 +26,6 @@ export function DefaultsMcpPage({
   const mcpServers = settings.settings.defaults.mcpServers as McpServersValue;
   const rowProps = { sources, onReset, activeScope };
 
-  const {
-    mcpLocalServers,
-    mcpLocalServersLoading,
-    mcpLocalServersError,
-    mcpRegistryServers,
-    mcpRegistryLoading,
-    mcpRegistryError,
-    mcpWorkspaceServers,
-    mcpWorkspaceServersLoading,
-  } = useUiStore();
-
-  const {
-    handleRequestLocalServers,
-    handleSearchRegistry,
-    handleRequestWorkspaceServers,
-    handleWorkspaceServersChange,
-  } = useMcpServerActions();
-
   return (
     <div className="space-y-4">
       <SettingInputRow
@@ -58,18 +38,6 @@ export function DefaultsMcpPage({
           value={mcpServers}
           onChange={(value) => onUpdate("defaults.mcpServers", value ?? [])}
           showDefault={false}
-          onRequestLocalServers={handleRequestLocalServers}
-          onSearchRegistry={handleSearchRegistry}
-          localServers={mcpLocalServers}
-          isLoadingLocal={mcpLocalServersLoading}
-          localServersError={mcpLocalServersError}
-          registryServers={mcpRegistryServers}
-          isLoadingRegistry={mcpRegistryLoading}
-          registryError={mcpRegistryError}
-          workspaceServers={mcpWorkspaceServers}
-          isLoadingWorkspaceServers={mcpWorkspaceServersLoading}
-          onRequestWorkspaceServers={handleRequestWorkspaceServers}
-          onWorkspaceServersChange={handleWorkspaceServersChange}
         />
       </SettingInputRow>
     </div>

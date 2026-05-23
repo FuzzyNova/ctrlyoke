@@ -21,6 +21,7 @@ import {
   NotificationsSection,
   DeveloperSection,
   AgentSkillsManagerSection,
+  McpManagerSection,
   CommitSection,
 } from "../settings";
 
@@ -39,6 +40,7 @@ const ALL_TABS = [
     label: "Agent & Skills Manager",
     icon: "codicon-agent",
   },
+  { id: "mcpmanager", label: "MCP Manager", icon: "codicon-plug" },
   { id: "commit", label: "Commit Message", icon: "codicon-git-commit" },
   { id: "developer", label: "Developer", icon: "codicon-tools" },
 ];
@@ -219,6 +221,7 @@ export function GlobalSettingsDrawer() {
               {effectiveActiveTab === "agentskillsmanager" && (
                 <AgentSkillsManagerSection />
               )}
+              {effectiveActiveTab === "mcpmanager" && <McpManagerSection />}
               {fullSettings && effectiveActiveTab === "commit" && (
                 <CommitSection settings={fullSettings} {...sectionProps} />
               )}
@@ -227,7 +230,8 @@ export function GlobalSettingsDrawer() {
               )}
               {!fullSettings &&
                 effectiveActiveTab !== "developer" &&
-                effectiveActiveTab !== "agentskillsmanager" && (
+                effectiveActiveTab !== "agentskillsmanager" &&
+                effectiveActiveTab !== "mcpmanager" && (
                   <div className="text-description-fg text-sm">
                     Loading settings…
                   </div>

@@ -35,6 +35,19 @@ export {
   type McpServersValue,
 } from "./McpServersEditor";
 export {
+  McpServerForm,
+  EMPTY_MCP_SERVER_FORM_STATE,
+  isMcpServerFormValid,
+  mcpEnvObjectToString,
+  mcpEnvStringToObject,
+  mcpServerFormStateToServer,
+  serverToMcpServerFormState,
+  type McpServerFormProps,
+  type McpServerFormState,
+  type McpServerFormTab,
+  type McpServerTransport,
+} from "./McpServerForm";
+export {
   PERMISSION_MODE_OPTIONS,
   getPermissionHarnessSupport,
   buildPermissionsDefaultLabel,

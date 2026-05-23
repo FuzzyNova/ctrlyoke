@@ -43,6 +43,7 @@ import { WebviewLog } from "@utils/logger";
 import { isWorkflowActive } from "../utils/status";
 import { useTerminalStore } from "../store/terminalStore";
 import { useHarnessFileStore } from "../store/useHarnessFileStore";
+import { useMcpManagerStore } from "../store/useMcpManagerStore";
 import { useWorkspaceViewerStore } from "../store/workspaceViewerStore";
 import { terminalRegistry } from "../terminalRegistry";
 import { registerTerminalHandlers } from "./terminalMessageHandlers";
@@ -1346,35 +1347,32 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // MCP_LOCAL_SERVERS_RESULT - Local MCP config file scan results
+  // MCP_REGISTRY_SERVERS_UPDATE - Managed MCP registry list for the manager UI
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.MCP_LOCAL_SERVERS_RESULT] = (message) => {
-    useUiStore
-      .getState()
-      .setMcpLocalServersResult(message.servers ?? [], message.error);
+  handlers[MESSAGE_TYPES.MCP_REGISTRY_SERVERS_UPDATE] = (message) => {
+    useMcpManagerStore.getState().setManagedServers(message.servers ?? []);
   };
 
   // --------------------------------------------------------------------------
-  // MCP_REGISTRY_RESULT - Anthropic MCP registry search results
+  // MCP_LOCAL_SCAN_RESULT - Local MCP scan results for the manager UI
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.MCP_REGISTRY_RESULT] = (message) => {
-    useUiStore
+  handlers[MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT] = (message) => {
+    useMcpManagerStore
       .getState()
-      .setMcpRegistryResult(
+      .setLocalScanResult(message.servers ?? [], message.error);
+  };
+
+  // --------------------------------------------------------------------------
+  // MCP_REGISTRY_SEARCH_RESULT - Registry search results for the manager UI
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.MCP_REGISTRY_SEARCH_RESULT] = (message) => {
+    useMcpManagerStore
+      .getState()
+      .setRemoteSearchResult(
         message.servers ?? [],
-        message.query,
         message.error,
         message.nextCursor
       );
-  };
-
-  // --------------------------------------------------------------------------
-  // MCP_WORKSPACE_SERVERS_RESULT - Workspace MCP server registry
-  // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.MCP_WORKSPACE_SERVERS_RESULT] = (message) => {
-    useUiStore
-      .getState()
-      .setMcpWorkspaceServersResult(message.servers ?? [], message.error);
   };
 
   // --------------------------------------------------------------------------
