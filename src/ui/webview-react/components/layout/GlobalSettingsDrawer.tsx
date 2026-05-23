@@ -40,7 +40,7 @@ const ALL_TABS = [
     label: "Agent & Skills Manager",
     icon: "codicon-agent",
   },
-  { id: "mcpmanager", label: "MCP Manager", icon: "codicon-plug" },
+  { id: "mcpmanager", label: "MCP Manager", icon: "codicon-mcp" },
   { id: "commit", label: "Commit Message", icon: "codicon-git-commit" },
   { id: "developer", label: "Developer", icon: "codicon-tools" },
 ];
