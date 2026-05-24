@@ -262,7 +262,7 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_minmax(0,1fr)_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_minmax(0,1fr)_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls + grouped editing buttons */}
         <div className="header-left flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls />
