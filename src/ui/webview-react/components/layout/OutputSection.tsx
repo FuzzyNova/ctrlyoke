@@ -5,12 +5,13 @@ import React, {
   useCallback,
   useState,
 } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
-import { CliOutput, StatusMessage } from "../output";
+import { OutputRow } from "../output";
 import { Modal } from "../shared";
 import {
   RunSelector,
@@ -18,7 +19,6 @@ import {
   ExpandCollapseAllDiffsButton,
 } from "../shared";
 import { TerminalSessionIcon } from "../output/TerminalSessionIcon";
-import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
 import { generateId } from "@utils/string";
 import {
   generateMarkdownExport,
@@ -26,21 +26,10 @@ import {
 } from "@utils/markdownExport";
 import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 import {
-  getRenderedDiffStats,
-  toRdvFromContent,
-  toRdvHunks,
-} from "@utils/rdvAdapter";
-import {
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
 } from "@utils/outputProjection";
-import type {
-  CliOutput as CliOutputType,
-  CliEvent,
-  FileEditData,
-  FileWriteData,
-  OutputStatusMessage,
-} from "../../types/cliEvents";
+import type { CliOutput as CliOutputType } from "../../types/cliEvents";
 import type {
   WorkspaceSnapshot,
   UndoRecord,
@@ -55,12 +44,10 @@ import {
   STEP_TYPES,
   SETTING_SCOPES,
 } from "../../types/messages";
-import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import {
   OutputMinimap,
   type MinimapStep,
   type MinimapDiffBlock,
-  type DiffRun,
 } from "../output/OutputMinimap";
 import { UndoChangesDialog } from "../output/UndoChangesDialog";
 import type { WorkflowStepEntry } from "../output/UndoChangesDialog";
@@ -78,15 +65,23 @@ const SHELL_WORKFLOW_ID = "_shell";
 import {
   buildUndoDialogInputForPrompt,
   buildUndoCandidatesForOutputs,
+  buildUndoDialogInputForSpecificEvent,
   computePromptUndoActions,
   sameFilePath,
   type UndoDialogInput,
 } from "../../utils/promptUndo";
 import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
-import { buildDiffAnchorPrefix } from "@utils/outputUtils";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
+import {
+  buildOutputRows,
+  estimateOutputRowHeight,
+  type CliHeaderRow,
+  type StructuredEventRow,
+} from "@utils/outputRows";
+import { setActiveOutputNavigationController } from "@utils/outputNavigation";
+import type { OutputRowFileUndoRequest } from "../output/OutputRow";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 
@@ -121,80 +116,6 @@ interface WorkflowDialogState {
   workspacePath: string;
   entries: WorkflowStepEntry[];
   requestId: string;
-}
-
-interface DiffMeasurement {
-  startFraction: number;
-  heightFraction: number;
-  isCollapsed: boolean;
-  addedLines: number;
-  removedLines: number;
-  runs: DiffRun[];
-}
-
-function nearlyEqual(a: number, b: number): boolean {
-  return Math.abs(a - b) < 0.0001;
-}
-
-function diffRunsEqual(a: DiffRun[], b: DiffRun[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (
-      a[i].count !== b[i].count ||
-      a[i].addedLines !== b[i].addedLines ||
-      a[i].removedLines !== b[i].removedLines
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function stepFractionMapsEqual(
-  a: Map<string, number>,
-  b: Map<string, number>
-): boolean {
-  if (a.size !== b.size) return false;
-  for (const [key, value] of a) {
-    const nextValue = b.get(key);
-    if (nextValue === undefined || !nearlyEqual(value, nextValue)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function diffMeasurementMapsEqual(
-  a: Map<string, DiffMeasurement>,
-  b: Map<string, DiffMeasurement>
-): boolean {
-  if (a.size !== b.size) return false;
-  for (const [key, value] of a) {
-    const nextValue = b.get(key);
-    if (!nextValue) return false;
-    if (
-      !nearlyEqual(value.startFraction, nextValue.startFraction) ||
-      !nearlyEqual(value.heightFraction, nextValue.heightFraction) ||
-      value.isCollapsed !== nextValue.isCollapsed ||
-      value.addedLines !== nextValue.addedLines ||
-      value.removedLines !== nextValue.removedLines ||
-      !diffRunsEqual(value.runs, nextValue.runs)
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function outputHasFileOperation(output: CliOutputType): boolean {
-  return (
-    output.structured?.events?.some(
-      (event) =>
-        event.type === CLI_EVENT_TYPES.FILE_EDIT ||
-        event.type === CLI_EVENT_TYPES.FILE_WRITE ||
-        event.type === CLI_EVENT_TYPES.FILE_DELETE
-    ) ?? false
-  );
 }
 
 /**
@@ -249,6 +170,7 @@ export const OutputSection: React.FC = () => {
   const runTimestamps = useUiStore((s) => s.runTimestamps);
   const runStates = useUiStore((s) => s.runStates);
   const diffsCollapsed = useUiStore((s) => s.diffsCollapsed);
+  const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
   const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
   const outputFontSize = useUiStore((s) => s.outputFontSize);
@@ -342,17 +264,12 @@ export const OutputSection: React.FC = () => {
   const sectionRef = useRef<HTMLElement>(null);
   const autoscrollEnabled = useRef(true);
   const isProgrammaticScroll = useRef(false);
-  const measureFrameRef = useRef<number | null>(null);
-
-  // Real pixel fractions for each step anchor (key → offsetTop / scrollHeight)
-  const [stepScrollFractions, setStepScrollFractions] = useState<
-    Map<string, number>
-  >(new Map());
-
-  // DOM measurements for diff anchor elements (anchorId → position + collapse state)
-  const [diffMeasurements, setDiffMeasurements] = useState<
-    Map<string, DiffMeasurement>
-  >(new Map());
+  const measurementCacheRef = useRef<Map<string, number>>(new Map());
+  const previousDiffResetVersion = useRef(diffResetVersion);
+  const [measurementVersion, setMeasurementVersion] = useState(0);
+  const [diffCollapseState, setDiffCollapseState] = useState<Map<string, boolean>>(
+    new Map()
+  );
 
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
@@ -394,27 +311,193 @@ export const OutputSection: React.FC = () => {
     return mapOrderedHistoryEntriesToMessages(liveOrderedEntries);
   }, [isViewingHistory, historyOutputs, liveOrderedEntries]);
 
-  // Unique step targets in first-appearance order (for DOM measurement and undo/redo iteration).
-  const uniqueStepTargets = useMemo(() => {
-    const seen = new Map<string, OutputMessage["target"]>();
-    for (const msg of allMessages) {
-      const key = `${msg.target.kind}:${msg.target.index}`;
-      if (!seen.has(key)) {
-        seen.set(key, msg.target);
-      }
-    }
-    return [...seen.values()];
-  }, [allMessages]);
+  const isExecutionActive =
+    executionState === EXECUTION_STATES.RUNNING ||
+    executionState === EXECUTION_STATES.CANCELLING;
 
-  const hasFileOperationOutput = useMemo(
+  const {
+    rows,
+    uniqueStepTargets,
+    stepOutputsMap,
+    lastCliIndexPerStep,
+    firstRowIndexByTarget,
+  } = useMemo(
     () =>
-      allMessages.some(
-        (msg) =>
-          msg.type === "cli" &&
-          outputHasFileOperation(msg.data as CliOutputType)
-      ),
-    [allMessages]
+      buildOutputRows({
+        allMessages,
+        steps,
+        finalStep,
+        streamingChunks,
+        finalStepStreamingChunks,
+        isExecutionActive,
+        allowUndoActions:
+          isViewingHistory ||
+          !(
+            executionState === EXECUTION_STATES.RUNNING ||
+            executionState === EXECUTION_STATES.CANCELLING
+          ),
+        isViewingHistory,
+        historyOutputs,
+        workspaceSnapshots,
+        finalStepWorkspaceSnapshots,
+        undoRecords,
+        diffCollapseState,
+        defaultDiffCollapsed: diffsCollapsed,
+      }),
+    [
+      allMessages,
+      steps,
+      finalStep,
+      streamingChunks,
+      finalStepStreamingChunks,
+      isExecutionActive,
+      isViewingHistory,
+      historyOutputs,
+      workspaceSnapshots,
+      finalStepWorkspaceSnapshots,
+      undoRecords,
+      diffCollapseState,
+      diffsCollapsed,
+      executionState,
+    ]
   );
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => outputRef.current,
+    estimateSize: (index) => {
+      const row = rows[index];
+      if (!row) return 48;
+      return measurementCacheRef.current.get(row.key) ?? estimateOutputRowHeight(row);
+    },
+    getItemKey: (index) => rows[index]?.key ?? index,
+    overscan: 10,
+  });
+
+  const measureRowElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) return;
+      rowVirtualizer.measureElement(element);
+
+      const index = Number(element.dataset.index ?? -1);
+      const row = rows[index];
+      if (!row) return;
+
+      const nextHeight = element.getBoundingClientRect().height;
+      if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
+
+      const previousHeight = measurementCacheRef.current.get(row.key);
+      if (
+        previousHeight !== undefined &&
+        Math.abs(previousHeight - nextHeight) < 0.5
+      ) {
+        return;
+      }
+
+      measurementCacheRef.current.set(row.key, nextHeight);
+      setMeasurementVersion((version) => version + 1);
+    },
+    [rowVirtualizer, rows]
+  );
+
+  const rowLayout = useMemo(() => {
+    let offset = 0;
+    const rowStartsByIndex: number[] = [];
+    const rowStartsByKey = new Map<string, number>();
+    const rowSizesByKey = new Map<string, number>();
+
+    for (const [index, row] of rows.entries()) {
+      rowStartsByIndex[index] = offset;
+      rowStartsByKey.set(row.key, offset);
+      const size = measurementCacheRef.current.get(row.key) ?? estimateOutputRowHeight(row);
+      rowSizesByKey.set(row.key, size);
+      offset += size;
+    }
+
+    return {
+      totalSize: offset,
+      rowStartsByIndex,
+      rowStartsByKey,
+      rowSizesByKey,
+    };
+  }, [rows, measurementVersion]);
+
+  const stepScrollFractions = useMemo(() => {
+    const fractions = new Map<string, number>();
+    const totalSize = Math.max(1, rowLayout.totalSize);
+
+    for (const target of uniqueStepTargets) {
+      const targetKey = `${target.kind}:${target.index}`;
+      const rowIndex = firstRowIndexByTarget.get(targetKey);
+      if (rowIndex === undefined) continue;
+      fractions.set(targetKey, rowLayout.rowStartsByIndex[rowIndex] / totalSize);
+    }
+
+    return fractions;
+  }, [firstRowIndexByTarget, rowLayout, uniqueStepTargets]);
+
+  const hasDiffRows = useMemo(
+    () =>
+      rows.some(
+        (row) => row.rowKind === "structured-event" && row.diff !== undefined
+      ),
+    [rows]
+  );
+
+  const anyDiffCollapsed = useMemo(
+    () =>
+      hasDiffRows &&
+      rows.some(
+        (row) =>
+          row.rowKind === "structured-event" && row.diff?.isCollapsed === true
+      ),
+    [hasDiffRows, rows]
+  );
+
+  useEffect(() => {
+    const diffKeys = new Set(
+      rows.flatMap((row) =>
+        row.rowKind === "structured-event" && row.diff ? [row.diff.key] : []
+      )
+    );
+
+    setDiffCollapseState((previous) => {
+      let changed = false;
+      const next = new Map(previous);
+
+      for (const key of [...next.keys()]) {
+        if (!diffKeys.has(key)) {
+          next.delete(key);
+          changed = true;
+        }
+      }
+
+      for (const key of diffKeys) {
+        if (!next.has(key)) {
+          next.set(key, diffsCollapsed);
+          changed = true;
+        }
+      }
+
+      return changed ? next : previous;
+    });
+  }, [rows, diffsCollapsed]);
+
+  useEffect(() => {
+    if (previousDiffResetVersion.current === diffResetVersion) {
+      return;
+    }
+    previousDiffResetVersion.current = diffResetVersion;
+
+    setDiffCollapseState((previous) => {
+      if (previous.size === 0) return previous;
+      const next = new Map(previous);
+      for (const key of next.keys()) {
+        next.set(key, diffsCollapsed);
+      }
+      return next;
+    });
+  }, [diffResetVersion, diffsCollapsed]);
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
@@ -428,153 +511,31 @@ export const OutputSection: React.FC = () => {
   }, []);
 
   // Auto-scroll effect.
-  // We watch both allMessages (new output records) and streamingChunks
-  // (tokens arriving for the current streaming item) so the view follows
-  // the growing content in real time without rebuilding allMessages each tick.
   useEffect(() => {
-    if (autoscrollEnabled.current && outputRef.current) {
+    if (autoscrollEnabled.current && outputRef.current && rows.length > 0) {
       isProgrammaticScroll.current = true;
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
-      // Reset flag after the scroll event fires
+      rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
       requestAnimationFrame(() => {
         isProgrammaticScroll.current = false;
       });
     }
-  }, [allMessages, streamingChunks, finalStepStreamingChunks]);
-
-  // Measure real pixel positions of step anchor divs so the minimap can
-  // place markers at their true scroll fractions (not an index fraction).
-  // Re-runs whenever allMessages changes (content height changes) and uses a
-  // ResizeObserver to catch in-progress content growth.
-  useEffect(() => {
-    const container = outputRef.current;
-    if (!container) return;
-
-    const measure = () => {
-      const { scrollHeight } = container;
-      if (scrollHeight === 0) return;
-      const containerTop = container.getBoundingClientRect().top;
-
-      // Measure step anchor positions
-      const fractions = new Map<string, number>();
-      for (const target of uniqueStepTargets) {
-        const kindSlug =
-          target.kind === FINAL_STEP_PHASES.QUEUE ? "queue" : "final";
-        const anchor = document.getElementById(
-          `output-step-${kindSlug}-${target.index}`
-        );
-        if (anchor) {
-          const pixelPos =
-            anchor.getBoundingClientRect().top -
-            containerTop +
-            container.scrollTop;
-          fractions.set(
-            `${target.kind}:${target.index}`,
-            pixelPos / scrollHeight
-          );
-        }
-      }
-      setStepScrollFractions((prev) =>
-        stepFractionMapsEqual(prev, fractions) ? prev : fractions
-      );
-
-      if (!hasFileOperationOutput) {
-        setDiffMeasurements((prev) => (prev.size === 0 ? prev : new Map()));
-        return;
-      }
-
-      // Measure diff anchor elements so the minimap can render colored overlays.
-      // data-diff-anchor divs wrap file-operation events in StructuredOutput and
-      // reflect the actual rendered height (collapsed or expanded).
-      const diffAnchors =
-        container.querySelectorAll<HTMLElement>("[data-diff-anchor]");
-      const newDiffMeasurements = new Map<string, DiffMeasurement>();
-      diffAnchors.forEach((el) => {
-        const pixelTop =
-          el.getBoundingClientRect().top - containerTop + container.scrollTop;
-        // Read actual collapse state set by DiffView's useEffect on the anchor.
-        // Fall back to the global diffsCollapsed default when the attribute isn't
-        // stamped yet (e.g. before DiffView's first effect flush).
-        const attrVal = el.getAttribute("data-diff-collapsed");
-        const isCollapsed =
-          attrVal !== null ? attrVal === "true" : diffsCollapsed;
-        const addedLines = Number(
-          el.getAttribute("data-diff-added-lines") ?? 0
-        );
-        const removedLines = Number(
-          el.getAttribute("data-diff-removed-lines") ?? 0
-        );
-        newDiffMeasurements.set(el.id, {
-          startFraction: pixelTop / scrollHeight,
-          heightFraction: el.offsetHeight / scrollHeight,
-          isCollapsed,
-          addedLines: Number.isFinite(addedLines) ? addedLines : 0,
-          removedLines: Number.isFinite(removedLines) ? removedLines : 0,
-          runs: parseDiffRuns(el.getAttribute("data-diff-runs")),
-        });
-      });
-      setDiffMeasurements((prev) =>
-        diffMeasurementMapsEqual(prev, newDiffMeasurements)
-          ? prev
-          : newDiffMeasurements
-      );
-    };
-
-    const scheduleMeasure = () => {
-      if (measureFrameRef.current !== null) return;
-      measureFrameRef.current = requestAnimationFrame(() => {
-        measureFrameRef.current = null;
-        measure();
-      });
-    };
-
-    measure();
-    // Re-measure on the next frame so remounted DiffView children have time to
-    // reinsert anchors and stamp their minimap metadata before we read the DOM.
-    scheduleMeasure();
-
-    const resizeObserver = new ResizeObserver(scheduleMeasure);
-    resizeObserver.observe(container);
-    // Watch for individual diff expand/collapse — DiffView stamps data-diff-collapsed
-    // on [data-diff-anchor] elements, but the container's clientHeight doesn't change
-    // (it's overflow-y-auto with fixed visual height), so ResizeObserver won't fire.
-    // MutationObserver also watches childList so remounted output content can
-    // repopulate diff anchors even when the scroll container size stays fixed.
-    const mutationObserver = hasFileOperationOutput
-      ? new MutationObserver(scheduleMeasure)
-      : null;
-    mutationObserver?.observe(container, {
-      childList: true,
-      attributes: true,
-      subtree: true,
-      attributeFilter: [
-        "data-diff-collapsed",
-        "data-diff-added-lines",
-        "data-diff-removed-lines",
-        "data-diff-runs",
-      ],
-    });
-    return () => {
-      if (measureFrameRef.current !== null) {
-        cancelAnimationFrame(measureFrameRef.current);
-        measureFrameRef.current = null;
-      }
-      resizeObserver.disconnect();
-      mutationObserver?.disconnect();
-    };
-    // activeOutputTab is included so a re-measure fires when switching back from
-    // the terminal tab — the output div is unmounted while terminal is active, so
-    // its DOM measurements become stale and must be refreshed on re-mount.
-    // outputCollapsed is included for the same reason when the OutputSection stays
-    // mounted as a collapsed bar and later expands in-place.
   }, [
-    allMessages,
-    uniqueStepTargets,
-    hasFileOperationOutput,
-    diffsCollapsed,
-    activeOutputTab,
-    outputCollapsed,
+    rows,
+    streamingChunks,
+    finalStepStreamingChunks,
+    measurementVersion,
+    rowVirtualizer,
   ]);
+
+  useEffect(() => {
+    if (activeOutputTab !== "output" || outputCollapsed) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      rowVirtualizer.measure();
+    });
+  }, [activeOutputTab, outputCollapsed, rowVirtualizer, rows.length]);
 
   // Export: open the options modal
   const handleExport = useCallback(() => {
@@ -678,43 +639,49 @@ export const OutputSection: React.FC = () => {
     totalSteps,
   ]);
 
-  // Map of array index → stepIndex for the first message of each step.
-  // Used to insert step anchor divs so clicking a prompt can scroll to its output.
-  const firstIndexByStep = useMemo(() => {
-    const map = new Map<string, number>();
-    allMessages.forEach((msg, idx) => {
-      const key = `${msg.target.kind}:${msg.target.index}`;
-      if (!map.has(key)) {
-        map.set(key, idx);
-      }
-    });
-    return map;
-  }, [allMessages]);
+  const navigationController = useMemo(
+    () => ({
+      scrollToTarget: (
+        target: OutputMessage["target"],
+        options?: { behavior?: ScrollBehavior; align?: "start" | "end" }
+      ) => {
+        const rowIndex = firstRowIndexByTarget.get(
+          `${target.kind}:${target.index}`
+        );
+        if (rowIndex === undefined || !outputRef.current) {
+          return;
+        }
 
-  // Map step key → all CLI outputs for that step (used for minimap undo actions)
-  const stepOutputsMap = useMemo(() => {
-    const map = new Map<string, CliOutputType[]>();
-    for (const msg of allMessages) {
-      if (msg.type === "cli") {
-        const key = `${msg.target.kind}:${msg.target.index}`;
-        const existing = map.get(key) ?? [];
-        existing.push(msg.data as CliOutputType);
-        map.set(key, existing);
-      }
-    }
-    return map;
-  }, [allMessages]);
+        autoscrollEnabled.current = false;
+        isProgrammaticScroll.current = true;
+        rowVirtualizer.scrollToIndex(rowIndex, {
+          align: options?.align ?? "start",
+          behavior: options?.behavior ?? "auto",
+        });
+        requestAnimationFrame(() => {
+          isProgrammaticScroll.current = false;
+        });
+      },
+      getTargetScrollFraction: (target: OutputMessage["target"]) => {
+        const rowIndex = firstRowIndexByTarget.get(
+          `${target.kind}:${target.index}`
+        );
+        if (rowIndex === undefined || rowLayout.totalSize <= 0) {
+          return null;
+        }
 
-  // Track last CLI message index per step (prompt-level undo button shown only on last attempt)
-  const lastCliIndexPerStep = useMemo(() => {
-    const map = new Map<string, number>();
-    allMessages.forEach((msg, idx) => {
-      if (msg.type === "cli") {
-        map.set(`${msg.target.kind}:${msg.target.index}`, idx);
-      }
-    });
-    return map;
-  }, [allMessages]);
+        return rowLayout.rowStartsByIndex[rowIndex] / rowLayout.totalSize;
+      },
+    }),
+    [firstRowIndexByTarget, rowLayout, rowVirtualizer]
+  );
+
+  useEffect(() => {
+    setActiveOutputNavigationController(navigationController);
+    return () => {
+      setActiveOutputNavigationController(null);
+    };
+  }, [navigationController]);
 
   const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
     allMessages,
@@ -731,20 +698,7 @@ export const OutputSection: React.FC = () => {
   const outputLongPressHandlers = useLongPress(handleOutputLongPress);
 
   // Check if there's any output
-  const hasOutput = allMessages.length > 0;
-
-  // Derive whether any diff is currently collapsed from DOM measurements.
-  // Falls back to the store value before the DOM has been measured.
-  // Used to show the correct "Expand all" vs "Collapse all" button label.
-  const anyDiffCollapsed = !hasFileOperationOutput
-    ? false
-    : diffMeasurements.size === 0
-      ? diffsCollapsed
-      : Array.from(diffMeasurements.values()).some((m) => m.isCollapsed);
-
-  const isExecutionActive =
-    executionState === EXECUTION_STATES.RUNNING ||
-    executionState === EXECUTION_STATES.CANCELLING;
+  const hasOutput = rows.length > 0;
 
   useEffect(() => {
     if (
@@ -869,89 +823,14 @@ export const OutputSection: React.FC = () => {
   const useCompactOutputHeaderLabels =
     isHeaderNarrow || showCompactWorkflowUndoRedoLabels;
 
-  // ── Diff line count helper ─────────────────────────────────────────────────
-
-  function parseDiffRuns(value: string | null): DiffRun[] {
-    if (!value) return [];
-
-    try {
-      const parsed = JSON.parse(value);
-      if (!Array.isArray(parsed)) return [];
-
-      return parsed.flatMap((run) => {
-        if (
-          typeof run?.count !== "number" ||
-          typeof run?.addedLines !== "number" ||
-          typeof run?.removedLines !== "number"
-        ) {
-          return [];
-        }
-
-        return [
-          {
-            count: run.count,
-            addedLines: run.addedLines,
-            removedLines: run.removedLines,
-          },
-        ];
-      });
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Extract diff statistics and run sequence for a single CLI event.
-   * Returns added/removed totals (for collapsed display) plus an ordered
-   * runs array (for expanded VS Code-style minimap strips).
-   * Runs are only populated when structuredPatch hunk data is available.
-   */
-  function computeDiffStats(event: CliEvent): {
-    added: number;
-    removed: number;
-    runs: DiffRun[];
-  } {
-    if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
-      const data = event.data as FileEditData;
-      if (data.structuredPatch && data.structuredPatch.length > 0) {
-        return getRenderedDiffStats(
-          toRdvHunks(data.structuredPatch),
-          "unified"
-        );
-      }
-      if (data.oldContent && data.newContent) {
-        const { hunks } = toRdvFromContent(data.oldContent, data.newContent);
-        return getRenderedDiffStats(hunks, "unified");
-      }
-      return { added: 0, removed: 0, runs: [] };
-    }
-    if (event.type === CLI_EVENT_TYPES.FILE_WRITE) {
-      const data = event.data as FileWriteData;
-      const lines = data.content ? data.content.split("\n").length : 1;
-      return {
-        added: lines,
-        removed: 0,
-        runs: [{ count: lines, addedLines: 1, removedLines: 0 }],
-      };
-    }
-    if (event.type === CLI_EVENT_TYPES.FILE_DELETE) {
-      return {
-        added: 0,
-        removed: 1,
-        runs: [{ count: 1, addedLines: 0, removedLines: 1 }],
-      };
-    }
-    return { added: 0, removed: 0, runs: [] };
-  }
-
   // ── Minimap steps array ────────────────────────────────────────────────────
-  // Built from stepsToRender + firstIndexByStep; includes prompt-level
-  // undo/redo actions so the minimap can show them without needing CliOutput.
   const minimapSteps = useMemo((): MinimapStep[] => {
+    const totalSize = Math.max(1, rowLayout.totalSize);
+
     return uniqueStepTargets.flatMap((msgTarget) => {
       const key = `${msgTarget.kind}:${msgTarget.index}`;
-      const firstIdx = firstIndexByStep.get(key);
-      if (firstIdx === undefined) return [];
+      const firstRowIndex = firstRowIndexByTarget.get(key);
+      if (firstRowIndex === undefined) return [];
 
       const kind = msgTarget.kind;
       const stepIndex = msgTarget.index;
@@ -963,73 +842,44 @@ export const OutputSection: React.FC = () => {
             workflowStep,
             getQueueStepFallbackName(workflowStep, stepIndex)
           );
-
-      // Real pixel fraction — falls back to index fraction until DOM is measured
       const scrollFraction =
         stepScrollFractions.get(key) ??
-        firstIdx / Math.max(1, allMessages.length);
+        rowLayout.rowStartsByIndex[firstRowIndex] / totalSize;
+      const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
+        if (
+          row.rowKind !== "structured-event" ||
+          row.target?.kind !== msgTarget.kind ||
+          row.target?.index !== msgTarget.index ||
+          !row.diff
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            scrollFraction:
+              (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
+            heightFraction:
+              (rowLayout.rowSizesByKey.get(row.key) ?? row.estimateSize) /
+              totalSize,
+            addedLines: row.diff.addedLines,
+            removedLines: row.diff.removedLines,
+            runs: row.diff.runs,
+            isCollapsed: row.diff.isCollapsed,
+          },
+        ];
+      });
 
       const noActions: MinimapStep["undoActions"] = { undo: null, redo: null };
       const stepOutputs = stepOutputsMap.get(key) ?? [];
 
-      // Always build diff blocks so overlays update in real time during execution.
-      const kindSlug = isFinalStep ? "fp" : "q";
-      const diffBlocks: MinimapDiffBlock[] = [];
-      for (const output of stepOutputs) {
-        const attemptIdx = output.attemptIndex ?? 0;
-        const runIdx = output.runIndex ?? 0;
-        const anchorPrefix = buildDiffAnchorPrefix(
-          kindSlug,
-          stepIndex,
-          runIdx,
-          attemptIdx
-        );
-        // Normalize to match the indices StructuredOutput uses for DOM anchor IDs.
-        // normalizeCliEvents can merge/remove events (e.g. collapsing duplicate
-        // fileRead completions), so iterating the original array produces anchor IDs
-        // that don't exist in the DOM.
-        const events = normalizeCliEvents(output.structured?.events ?? []);
-        events.forEach((event, eventIndex) => {
-          if (
-            event.type !== CLI_EVENT_TYPES.FILE_EDIT &&
-            event.type !== CLI_EVENT_TYPES.FILE_WRITE &&
-            event.type !== CLI_EVENT_TYPES.FILE_DELETE
-          )
-            return;
-          const anchorId = `${anchorPrefix}-e${eventIndex}`;
-          const measurement = diffMeasurements.get(anchorId);
-          if (!measurement) return;
-          const stats =
-            measurement.addedLines > 0 ||
-            measurement.removedLines > 0 ||
-            measurement.runs.length > 0
-              ? {
-                  added: measurement.addedLines,
-                  removed: measurement.removedLines,
-                  runs: measurement.runs,
-                }
-              : computeDiffStats(event);
-          if (stats.added + stats.removed === 0) return;
-          diffBlocks.push({
-            scrollFraction: measurement.startFraction,
-            heightFraction: measurement.heightFraction,
-            addedLines: stats.added,
-            removedLines: stats.removed,
-            runs: stats.runs,
-            isCollapsed: measurement.isCollapsed,
-          });
-        });
-      }
-
-      // Skip undo actions while execution is active — scrollbar and diff overlays
-      // are still rendered so the rail is usable during a running prompt.
       if (!allowUndoActions) {
         return [
           {
             key,
             kind,
             stepIndex,
-            firstMessageIndex: firstIdx,
+            firstMessageIndex: firstRowIndex,
             scrollFraction,
             label,
             undoActions: noActions,
@@ -1038,7 +888,6 @@ export const OutputSection: React.FC = () => {
         ];
       }
 
-      // Only the last CLI attempt gets undo/redo actions
       const lastCliIdx = lastCliIndexPerStep.get(key);
       if (lastCliIdx === undefined) {
         return [
@@ -1046,7 +895,7 @@ export const OutputSection: React.FC = () => {
             key,
             kind,
             stepIndex,
-            firstMessageIndex: firstIdx,
+            firstMessageIndex: firstRowIndex,
             scrollFraction,
             label,
             undoActions: noActions,
@@ -1063,7 +912,7 @@ export const OutputSection: React.FC = () => {
             key,
             kind,
             stepIndex,
-            firstMessageIndex: firstIdx,
+            firstMessageIndex: firstRowIndex,
             scrollFraction,
             label,
             undoActions: noActions,
@@ -1072,9 +921,6 @@ export const OutputSection: React.FC = () => {
         ];
       }
 
-      const targetKey = isFinalStep
-        ? `finalStep-${stepIndex}`
-        : `queue-${stepIndex}`;
       const undoTarget: UndoExecutionTarget = isFinalStep
         ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
         : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
@@ -1083,19 +929,19 @@ export const OutputSection: React.FC = () => {
       let effectiveUndoRecord: UndoRecord | undefined;
 
       if (isViewingHistory && historyOutputs) {
-        effectiveSnapshot =
-          kind === FINAL_STEP_PHASES.QUEUE
-            ? historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot
-            : historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot;
-        effectiveUndoRecord =
-          kind === FINAL_STEP_PHASES.QUEUE
-            ? historyOutputs.promptOutputs[stepIndex]?.undoRecord
-            : historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord;
+        effectiveSnapshot = isFinalStep
+          ? historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot
+          : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
+        effectiveUndoRecord = isFinalStep
+          ? historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord
+          : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
       } else {
         effectiveSnapshot = isFinalStep
           ? finalStepWorkspaceSnapshots[stepIndex]
           : workspaceSnapshots[stepIndex];
-        effectiveUndoRecord = undoRecords[targetKey];
+        effectiveUndoRecord = undoRecords[
+          isFinalStep ? `finalStep-${stepIndex}` : `queue-${stepIndex}`
+        ];
       }
 
       const workspacePath = lastOutput.workingDirectory ?? "";
@@ -1114,7 +960,7 @@ export const OutputSection: React.FC = () => {
                   mode: "redo",
                   target: undoTarget,
                   workspacePath,
-                  redoInstructions: effectiveUndoRecord!.redoInstructions,
+                  redoInstructions: effectiveUndoRecord?.redoInstructions,
                   requestId: generateId(),
                 });
               },
@@ -1153,7 +999,7 @@ export const OutputSection: React.FC = () => {
           key,
           kind,
           stepIndex,
-          firstMessageIndex: firstIdx,
+          firstMessageIndex: firstRowIndex,
           scrollFraction,
           label,
           undoActions,
@@ -1162,22 +1008,146 @@ export const OutputSection: React.FC = () => {
       ];
     });
   }, [
-    allowUndoActions,
-    uniqueStepTargets,
-    firstIndexByStep,
-    lastCliIndexPerStep,
     allMessages,
+    allowUndoActions,
+    finalStep,
+    finalStepWorkspaceSnapshots,
+    firstRowIndexByTarget,
+    historyOutputs,
+    isViewingHistory,
+    lastCliIndexPerStep,
+    rowLayout,
+    rows,
     stepOutputsMap,
     stepScrollFractions,
-    diffMeasurements,
-    isViewingHistory,
-    historyOutputs,
-    workspaceSnapshots,
-    finalStepWorkspaceSnapshots,
-    undoRecords,
     steps,
-    finalStep,
+    undoRecords,
+    uniqueStepTargets,
+    workspaceSnapshots,
   ]);
+
+  const handleBackToLive = useCallback(() => {
+    useWorkflowStore.getState().clearHistoryOutputs();
+    useUiStore.getState().clearHistoryView();
+  }, []);
+
+  const handlePromptUndo = useCallback((row: CliHeaderRow) => {
+    if (!row.promptUndo) return;
+    const target: UndoExecutionTarget = row.isFinalStep
+      ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
+      : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
+    const alreadyUndone =
+      row.promptUndo.undoRecord != null &&
+      row.promptUndo.undoRecord.isRedone !== true
+        ? row.promptUndo.undoRecord.redoInstructions
+        : undefined;
+    const input = buildUndoDialogInputForPrompt(
+      target,
+      row.promptUndo.allStepOutputs,
+      row.promptUndo.workspaceSnapshot,
+      row.promptUndo.workspacePath,
+      alreadyUndone
+    );
+    setMinimapDialogState({
+      mode: "undo",
+      target,
+      workspacePath: row.promptUndo.workspacePath,
+      input,
+      requestId: generateId(),
+    });
+  }, []);
+
+  const handlePromptRedo = useCallback((row: CliHeaderRow) => {
+    if (!row.promptUndo?.undoRecord?.redoInstructions?.length) return;
+    const target: UndoExecutionTarget = row.isFinalStep
+      ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
+      : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
+    setMinimapDialogState({
+      mode: "redo",
+      target,
+      workspacePath: row.promptUndo.workspacePath,
+      redoInstructions: row.promptUndo.undoRecord.redoInstructions,
+      requestId: generateId(),
+    });
+  }, []);
+
+  const handleFileUndo = useCallback(
+    (row: StructuredEventRow, request: OutputRowFileUndoRequest) => {
+      const target: UndoExecutionTarget =
+        row.target.kind === FINAL_STEP_PHASES.FINAL_STEP
+          ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.target.index }
+          : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.target.index };
+      const stepOutputs = stepOutputsMap.get(
+        `${row.target.kind}:${row.target.index}`
+      );
+      const workspacePath =
+        stepOutputs && stepOutputs.length > 0
+          ? (stepOutputs[stepOutputs.length - 1]?.workingDirectory ?? "")
+          : "";
+      const showRedo =
+        row.undoRecord != null && row.undoRecord.isRedone !== true;
+
+      if (showRedo) {
+        const fileRedoInstruction = row.undoRecord?.redoInstructions.find((item) =>
+          sameFilePath(item.path, request.path)
+        );
+        if (fileRedoInstruction) {
+          setMinimapDialogState({
+            mode: "redo",
+            target,
+            workspacePath,
+            redoInstructions: [fileRedoInstruction],
+            requestId: generateId(),
+          });
+        }
+        return;
+      }
+
+      const input = buildUndoDialogInputForSpecificEvent(
+        target,
+        request.eventIndex,
+        request.path,
+        request.event,
+        row.workspaceSnapshot,
+        workspacePath,
+        {
+          oldContent: request.oldContent,
+          newContent: request.newContent,
+          structuredPatch: request.structuredPatch,
+        }
+      );
+
+      setMinimapDialogState({
+        mode: "undo",
+        target,
+        workspacePath,
+        input,
+        requestId: generateId(),
+      });
+    },
+    [stepOutputsMap]
+  );
+
+  const handleDiffCollapsedChange = useCallback(
+    (diffKey: string, collapsed: boolean) => {
+      setDiffCollapseState((previous) => {
+        const next = new Map(previous);
+        next.set(diffKey, collapsed);
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleMinimapStepClick = useCallback(
+    (step: MinimapStep) => {
+      navigationController.scrollToTarget(
+        { kind: step.kind, index: step.stepIndex },
+        { behavior: "smooth", align: "start" }
+      );
+    },
+    [navigationController]
+  );
 
   const collapsedHeader = (
     <div
@@ -1593,145 +1563,47 @@ export const OutputSection: React.FC = () => {
             }}
             {...outputLongPressHandlers}
           >
-            {/* History banner: shown when viewing a historical run */}
-            {isViewingHistory && historyOutputs && (
-              <div className="px-3 py-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
-                <span>
-                  Run {historyOutputs.runMetadata.runId} &middot;{" "}
-                  {new Date(
-                    historyOutputs.runMetadata.startedAt
-                  ).toLocaleString()}
-                  {historyOutputs.runMetadata.completedAt
-                    ? " \u2713"
-                    : " (incomplete)"}
-                </span>
-                {executionState === EXECUTION_STATES.RUNNING && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      useWorkflowStore.getState().clearHistoryOutputs();
-                      useUiStore.getState().clearHistoryView();
-                    }}
-                    className="text-link-fg hover:underline focus:outline-none"
-                  >
-                    Back to Live{" "}
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse align-middle" />
-                  </button>
-                )}
-              </div>
-            )}
             {!hasOutput ? (
               <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
                 Output will appear here during execution
               </p>
             ) : (
-              allMessages.map((item, index) => {
-                const isFirstForStep =
-                  firstIndexByStep.get(
-                    `${item.target.kind}:${item.target.index}`
-                  ) === index;
-                if (item.type === "status") {
-                  const statusData = item.data as OutputStatusMessage;
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  position: "relative",
+                  width: "100%",
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const row = rows[virtualRow.index];
+                  if (!row) return null;
+
                   return (
-                    <React.Fragment key={`status-${index}`}>
-                      {isFirstForStep && (
-                        <div
-                          id={`output-step-${item.target.kind === FINAL_STEP_PHASES.QUEUE ? "queue" : "final"}-${item.target.index}`}
-                        />
-                      )}
-                      {isFirstForStep &&
-                        item.target.kind === FINAL_STEP_PHASES.FINAL_STEP && (
-                          <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
-                            Final Step Loop {item.target.index + 1}
-                          </div>
-                        )}
-                      <StatusMessage
-                        message={statusData.message}
-                        severity={statusData.severity}
-                        timestamp={statusData.timestamp}
-                        timestampMs={statusData.timestampMs}
-                      />
-                    </React.Fragment>
-                  );
-                } else {
-                  const cliData = item.data as CliOutputType;
-                  // Pass the streaming chunk for the active streaming step.
-                  // This prop changes on every token, but React.memo on CliOutput
-                  // ensures only the row with a non-empty chunk re-renders.
-                  const streamingChunk =
-                    item.target.kind === FINAL_STEP_PHASES.QUEUE
-                      ? streamingChunks[item.target.index] || ""
-                      : finalStepStreamingChunks[item.target.index] || "";
-                  const stepSnapshot: WorkspaceSnapshot | undefined =
-                    isViewingHistory && historyOutputs
-                      ? item.target.kind === FINAL_STEP_PHASES.QUEUE
-                        ? historyOutputs.promptOutputs[item.target.index]
-                            ?.workspaceSnapshot
-                        : historyOutputs.finalStepOutputs?.[item.target.index]
-                            ?.workspaceSnapshot
-                      : undefined;
-                  const stepUndoRecord: UndoRecord | undefined =
-                    isViewingHistory && historyOutputs
-                      ? item.target.kind === FINAL_STEP_PHASES.QUEUE
-                        ? historyOutputs.promptOutputs[item.target.index]
-                            ?.undoRecord
-                        : historyOutputs.finalStepOutputs?.[item.target.index]
-                            ?.undoRecord
-                      : undefined;
-                  const stepKey = `${item.target.kind}:${item.target.index}`;
-                  const isFinalStepOutput =
-                    item.target.kind === FINAL_STEP_PHASES.FINAL_STEP;
-                  const workflowStep = isFinalStepOutput
-                    ? finalStep
-                    : steps[item.target.index];
-                  return (
-                    <React.Fragment key={`cli-${index}`}>
-                      {isFirstForStep && (
-                        <div
-                          id={`output-step-${item.target.kind === FINAL_STEP_PHASES.QUEUE ? "queue" : "final"}-${item.target.index}`}
-                        />
-                      )}
-                      {isFirstForStep &&
-                        item.target.kind === FINAL_STEP_PHASES.FINAL_STEP && (
-                          <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
-                            Final Step Loop {item.target.index + 1}
-                          </div>
-                        )}
-                      <CliOutput
-                        output={cliData}
-                        stepIndex={item.target.index}
-                        isFinalStep={isFinalStepOutput}
-                        stepLabel={
-                          isFinalStepOutput
-                            ? `Final Step Loop ${item.target.index + 1}`
-                            : `Step ${item.target.index + 1}`
-                        }
-                        stepName={
-                          isFinalStepOutput
-                            ? getStepName(
-                                workflowStep,
-                                `Final Step Loop ${item.target.index + 1}`
-                              )
-                            : workflowStep?.name?.trim() || undefined
-                        }
-                        attemptIndex={item.attemptIndex || 0}
-                        runIndex={item.runIndex ?? cliData.runIndex ?? 0}
-                        streamingChunk={streamingChunk}
+                    <div
+                      key={virtualRow.key}
+                      ref={measureRowElement}
+                      data-index={virtualRow.index}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        transform: `translateY(${virtualRow.start}px)`,
+                        width: "100%",
+                      }}
+                    >
+                      <OutputRow
+                        row={row}
                         isExecutionActive={isExecutionActive}
-                        allowUndoActions={allowUndoActions}
-                        workspaceSnapshot={stepSnapshot}
-                        undoRecord={stepUndoRecord}
-                        allStepOutputs={
-                          lastCliIndexPerStep.get(stepKey) === index &&
-                          allowUndoActions
-                            ? stepOutputsMap.get(stepKey)
-                            : undefined
-                        }
+                        onBackToLive={handleBackToLive}
+                        onPromptUndo={handlePromptUndo}
+                        onPromptRedo={handlePromptRedo}
+                        onFileUndo={handleFileUndo}
+                        onDiffCollapsedChange={handleDiffCollapsedChange}
                       />
-                    </React.Fragment>
+                    </div>
                   );
-                }
-              })
+                })}
+              </div>
             )}
           </div>
 
@@ -1740,6 +1612,7 @@ export const OutputSection: React.FC = () => {
             <OutputMinimap
               steps={minimapSteps}
               scrollContainerRef={outputRef}
+              onStepClick={handleMinimapStepClick}
             />
           )}
         </div>

@@ -767,6 +767,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@resvg/resvg-wasm": "^2.6.2",
+    "@tanstack/react-virtual": "^3.13.25",
     "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/ws": "^8.18.1",

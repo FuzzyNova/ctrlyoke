@@ -83,6 +83,10 @@ interface DiffViewProps {
   localResetVersion?: number;
   /** Optional content rendered inline with the expand/collapse toggle */
   actionSlot?: React.ReactNode;
+  /** Controlled collapsed state used by virtualized output rows. */
+  collapsed?: boolean;
+  /** Called when the user toggles collapse in controlled mode. */
+  onCollapsedChange?: (collapsed: boolean) => void;
   className?: string;
 }
 
@@ -94,18 +98,32 @@ export const DiffView: React.FC<DiffViewProps> = ({
   globallyCollapsed,
   localResetVersion,
   actionSlot,
+  collapsed,
+  onCollapsedChange,
   className = "",
 }) => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
-  const [isExpanded, setIsExpanded] = useState(!globallyCollapsed);
+  const isControlled = collapsed !== undefined;
+  const [uncontrolledExpanded, setUncontrolledExpanded] = useState(
+    !globallyCollapsed
+  );
+  const isExpanded = isControlled ? !collapsed : uncontrolledExpanded;
   const hasExpandableSource = oldContent !== undefined;
 
   // Snap to global state whenever the global flag or either reset version changes.
   useEffect(() => {
-    setIsExpanded(!globallyCollapsed);
-  }, [globallyCollapsed, diffResetVersion, localResetVersion]);
+    if (!isControlled) {
+      setUncontrolledExpanded(!globallyCollapsed);
+    }
+  }, [globallyCollapsed, diffResetVersion, localResetVersion, isControlled]);
 
-  const handleToggle = () => setIsExpanded((prev) => !prev);
+  const handleToggle = useCallback(() => {
+    if (isControlled) {
+      onCollapsedChange?.(isExpanded);
+      return;
+    }
+    setUncontrolledExpanded((prev) => !prev);
+  }, [isControlled, isExpanded, onCollapsedChange]);
 
   // Width tracking for split vs unified layout.
   const [narrowCallbackRef, isNarrow] = useElementNarrow<HTMLDivElement>(

@@ -75,6 +75,8 @@ interface FileEditOutputProps {
   fileUndoMode?: "undo" | "redo";
   /** When true, suppresses the diff display (used when a COMPLETED event for the same file follows) */
   hideDiff?: boolean;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
   className?: string;
 }
 
@@ -97,6 +99,8 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     onUndoFile,
     fileUndoMode = "undo",
     hideDiff = false,
+    collapsed,
+    onCollapsedChange,
     className = "",
   }) => {
     const dotStatus = fileOpDotStatus(status);
@@ -153,6 +157,8 @@ export const FileEditOutput = memo<FileEditOutputProps>(
             language={getLanguageFromPath(path)}
             globallyCollapsed={diffsCollapsed}
             actionSlot={undoButton}
+            collapsed={collapsed}
+            onCollapsedChange={onCollapsedChange}
           />
         ) : (
           undoButton && <div className="ml-6 mt-1">{undoButton}</div>

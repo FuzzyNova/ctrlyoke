@@ -139,6 +139,35 @@ describe("DiffView", () => {
     expect(getByText(/Hide diff/)).toBeTruthy();
   });
 
+  it("supports controlled collapse state for virtualized rows", () => {
+    const onCollapsedChange = vi.fn();
+
+    const { rerender, getByRole } = render(
+      <DiffView
+        oldContent={"const a = 1;\n"}
+        newContent={"const a = 2;\n"}
+        globallyCollapsed={false}
+        collapsed={true}
+        onCollapsedChange={onCollapsedChange}
+      />
+    );
+
+    fireEvent.click(getByRole("button", { name: /show diff/i }));
+    expect(onCollapsedChange).toHaveBeenCalledWith(false);
+
+    rerender(
+      <DiffView
+        oldContent={"const a = 1;\n"}
+        newContent={"const a = 2;\n"}
+        globallyCollapsed={false}
+        collapsed={false}
+        onCollapsedChange={onCollapsedChange}
+      />
+    );
+
+    expect(getByRole("button", { name: /hide diff/i })).toBeTruthy();
+  });
+
   it("renders the actionSlot alongside the toggle", () => {
     const { getByText } = render(
       <DiffView

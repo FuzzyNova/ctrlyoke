@@ -55,6 +55,7 @@ export interface MinimapStep {
 interface OutputMinimapProps {
   steps: MinimapStep[];
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
+  onStepClick?: (step: MinimapStep) => void;
 }
 
 // ============================================================================
@@ -94,6 +95,7 @@ const MIN_THUMB_PX = 24;
 const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   steps,
   scrollContainerRef,
+  onStepClick,
 }) => {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   // pinnedKey: popup opened by tap/click (stays open until tapped away).
@@ -276,6 +278,11 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
 
   const handleMarkerClick = useCallback(
     (step: MinimapStep) => {
+      if (onStepClick) {
+        onStepClick(step);
+        return;
+      }
+
       const el = scrollContainerRef.current;
       if (!el) return;
       el.scrollTo({
@@ -283,7 +290,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         behavior: "smooth",
       });
     },
-    [scrollContainerRef]
+    [onStepClick, scrollContainerRef]
   );
 
   if (steps.length === 0) return null;

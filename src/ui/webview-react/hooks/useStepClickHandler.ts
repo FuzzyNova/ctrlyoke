@@ -3,6 +3,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { OUTPUT_HISTORY_KINDS, FINAL_STEP_PHASES } from "../types/messages";
+import { getActiveOutputNavigationController } from "@utils/outputNavigation";
 
 /**
  * Returns a `handleStepClick(index)` callback that selects the prompt for
@@ -46,16 +47,10 @@ export function useStepClickHandler() {
 
       if (hasOutput) {
         requestAnimationFrame(() => {
-          const anchor = document.getElementById(`output-step-queue-${index}`);
-          const container = document.getElementById("output-content");
-          if (anchor && container) {
-            const anchorTop = anchor.getBoundingClientRect().top;
-            const containerTop = container.getBoundingClientRect().top;
-            container.scrollTo({
-              top: container.scrollTop + (anchorTop - containerTop),
-              behavior: "smooth",
-            });
-          }
+          getActiveOutputNavigationController()?.scrollToTarget(
+            { kind: FINAL_STEP_PHASES.QUEUE, index },
+            { behavior: "smooth", align: "start" }
+          );
         });
       }
     },

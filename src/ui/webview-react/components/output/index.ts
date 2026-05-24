@@ -1,4 +1,5 @@
 export { CliOutput } from "./CliOutput";
+export { OutputRow } from "./OutputRow";
 export { MarkdownText } from "./MarkdownText";
 export {
   ToolCallOutput,
