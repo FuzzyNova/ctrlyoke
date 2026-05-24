@@ -5,12 +5,17 @@
 Two complementary search features:
 
 1. **Global History Search** — search across all workflow runs stored in `.flightpath/.history/`.
-   Surfaces results by workflow → run number → step, lets the user jump directly to the
-   matching output and pre-populates the in-output find bar with the search term.
+   Opens as a dedicated modal triggered from the workflow dropdown. Surfaces results by
+   workflow → run number → step with output snippets, and lets the user jump directly to
+   the matching run with the in-output find bar pre-populated.
 
 2. **In-Output Find Bar** — a Ctrl+F-style text search within the currently-displayed
    `OutputSection`, with highlighted matches and prev/next navigation. Used standalone
    and as the landing target for global history search.
+
+**Design principle:** The workflow dropdown remains a **navigator** (switch to / open a
+workflow, with simple title/path/state filtering). History search is **forensic** — a
+different intent that belongs in its own dedicated surface.
 
 ---
 
@@ -107,54 +112,86 @@ path so the webview can open the workflow. The working file lives in
 `.flightpath/.queue/<workflowId>.flightpath.json`. The service should check for
 `.flightpath.json`, `.flightpath.yaml`, `.flightpath.yml` suffixes.
 
-### UI: WorkflowStatus dropdown integration
+### UI: Dedicated History Search Modal
 
-`WorkflowStatus.tsx` already has a `workflowSearch` state driving local filtering. The
-enhancement adds a global-history search mode that activates when:
+History search lives in a standalone modal — completely separate from the workflow
+dropdown. The dropdown's existing title/path/state filter is **not changed**.
 
-- The workflow title search input gains focus AND the query length ≥ 2 characters, OR
-- A toggle/icon button explicitly switches to "history search" mode.
+**Trigger:**
 
-**Option A — Unified search with automatic mode detection (recommended):**
+A `codicon-search` icon button added to the left tool group in `Header.tsx`, between
+the (standalone-only) Workspace Explorer button and the Settings gear button:
 
-The existing search input searches workflow titles immediately (as it does now).
-Simultaneously, after a 400ms debounce, it sends `SEARCH_HISTORY`. Results arrive
-asynchronously and are shown in a new "History Matches" section below the existing
-recent-workflows list. This keeps the fast title search while adding the slower
-history search as an overlay. No mode toggle needed.
+```
+[WorkflowControls] | Save | Undo/Redo | [Files*] | 🔍 Search | ⚙️ Settings |
+                                          * standalone only
+```
 
-**Option B — Explicit toggle:**
+This keeps `WorkflowStatus` centered and uncluttered. The button is always visible —
+no need to open the workflow dropdown first. Clicking it sets
+`isHistorySearchOpen: true` in `uiStore`, which opens `HistorySearchModal`.
 
-A small `history` icon button next to the search input switches to dedicated history
-search mode. Simpler to implement, but slightly worse UX because the user has to know
-to toggle it.
+A VS Code command (`flightpath.searchHistory`) is also registered so power users can
+bind a keybinding (e.g. `Ctrl+Shift+H`) and open the modal without touching the UI.
+The command posts `MESSAGE_TYPES.OPEN_HISTORY_SEARCH` to the webview.
 
-Proceed with **Option A**.
+**Component:** `src/ui/webview-react/components/search/HistorySearchModal.tsx`
+
+```
+┌─ History Search ─────────────────────────────────[✕]─┐
+│  🔍  [search workflow history...                    ] │
+│                                                        │
+│  ─ 3 results ──────────────────────────────────────── │
+│                                                        │
+│  🕐 my-feature-workflow        Run 3 · Prompt 2       │
+│     response: "...the `src/auth/login.ts` needs to…"  │
+│                                                        │
+│  🕐 refactor-api               Run 1 · Prompt 4       │
+│     file: src/api/routes.ts                           │
+│                                                        │
+│  🕐 my-feature-workflow        Run 1 · Final Step     │
+│     bash: npm run build                               │
+│                                                        │
+│  ── Showing 3 of 50 results ──────────────────────── │
+└────────────────────────────────────────────────────────┘
+```
+
+**Modal layout:**
+
+- `fixed inset-0 z-[200]` overlay with a semi-transparent backdrop
+  (`bg-black/40` or `bg-overlay-bg`)
+- Centered panel: `max-w-[600px] w-full mx-auto mt-24 rounded shadow-lg`
+  using `bg-dropdown-bg border border-dropdown-border`
+- Header row: title ("History Search"), close button (`codicon-close`)
+- Search input: full-width, autofocused on open, `bg-input-bg text-input-fg`
+- Loading indicator: a spinner or pulsing "Searching…" row while `historySearchLoading`
+- Results list: scrollable, max height ~50vh
+- Footer: "Showing N of M results" when `hasMore` is true; empty otherwise
 
 **Result row design:**
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│ 🕐 my-feature-workflow        Run 3 · Prompt 2           │
-│    response: "...the `src/auth/login.ts` file needs..."  │
-└──────────────────────────────────────────────────────────┘
-┌──────────────────────────────────────────────────────────┐
-│ 🕐 refactor-api               Run 1 · Prompt 4           │
-│    file: src/api/routes.ts                               │
-└──────────────────────────────────────────────────────────┘
+🕐  my-feature-workflow          Run 3 · Prompt 2
+    response: "...the `src/auth/login.ts` file needs..."
 ```
 
-- Left icon: a small clock/history codicon
-- Top line: workflow name (bold), run number and step label (muted)
-- Bottom line: matchType label + snippet or file path
-- Hover state: `bg-list-hover-bg`
+- Left icon: `codicon-search` (muted)
+- Top line: workflow name (`font-semibold`), run + step label (`text-description-fg`)
+- Bottom line: `matchType` label in muted text + snippet or file path
+- Hover: `bg-list-hover-bg`
+- The search term within the snippet is **bolded** (simple substring wrap in `<strong>`)
+
+**Keyboard:**
+
+- `Escape` → close modal
+- `Enter` on focused result row → same as click
 
 **Click action:**
 
 1. Send `LOAD_WORKFLOW` with `workflowFilePath`
 2. After the workflow loads, send `LOAD_RUN_HISTORY` with `runIndex`
 3. Store `{ pendingFindQuery: query }` in `uiStore`
-4. Close the dropdown
+4. Close the modal
 
 When `OutputSection` detects `uiStore.pendingFindQuery` is non-null after a history
 load completes (watch `isViewingHistory` + `historyOutputs`), it opens the find bar
@@ -165,11 +202,19 @@ pre-populated with that query and clears `pendingFindQuery`.
 **`uiStore`:**
 
 ```typescript
+isHistorySearchOpen: boolean;      // modal visibility
 historySearchResults: HistorySearchResult[];
 historySearchQuery: string;
 historySearchLoading: boolean;
 pendingFindQuery: string | null;   // populated when jumping from global search
 ```
+
+**`Header.tsx` changes:**
+
+Add a `codicon-search` button to the left `fp-button-group`, inserted between the
+Workspace Explorer divider/button block and the Settings button. Wire it to
+`toggleHistorySearch` from `uiStore`. No changes to `WorkflowDropdownHeader`,
+`WorkflowStatus`, or `RecentWorkflows`.
 
 ---
 
@@ -502,23 +547,32 @@ Deliverable: Extension can respond to a search query with ranked results from hi
 
 ### Phase 3: Global History Search — Webview UI
 
-1. Add `historySearchResults`, `historySearchQuery`, `historySearchLoading` to `uiStore`
+1. Add `isHistorySearchOpen`, `historySearchResults`, `historySearchQuery`,
+   `historySearchLoading` to `uiStore`
 2. Handle `SEARCH_HISTORY_RESULTS` in `useMessageHandler`
-3. Add debounced search dispatch to `WorkflowStatus` search input
-4. Add "History Matches" section to the workflow dropdown
-5. Implement click → load workflow + run → open find bar with query
+3. Create `HistorySearchModal` component
+   (`src/ui/webview-react/components/search/HistorySearchModal.tsx`)
+4. Add `codicon-search` button to `Header.tsx` left tool group (between Files and Settings)
+5. Register `flightpath.searchHistory` VS Code command → posts `OPEN_HISTORY_SEARCH` to webview
+6. Implement click → load workflow + run → open find bar with query
 
-Deliverable: Searching in the workflow dropdown returns history results; clicking jumps
-to the matching run and highlights the term.
+Deliverable: A `codicon-search` button in the left tool group opens a full-screen
+modal search. Results show rich snippets; clicking a result jumps to the matching
+run and pre-populates the in-output find bar.
 
 ---
 
 ## Open Questions / Tradeoffs
 
 **Q: Should global search be synchronous (blocking) or streamed?**  
-Streaming results would show partial results as they arrive (good for large history sets).
-An initial MVP can be a single response after full scan; add streaming via an
-`SEARCH_HISTORY_PROGRESS` message type if needed.
+An initial MVP is a single response after full scan. Add streaming via an
+`SEARCH_HISTORY_PROGRESS` message type if large history sets make the response lag
+noticeably.
+
+**Q: Should the `flightpath.searchHistory` command also be accessible from the command palette?**  
+Yes — register it with a `when` clause of `flightpath.webviewVisible` and add it to
+`package.json` `contributes.commands`. The command sends a `MESSAGE_TYPES.OPEN_HISTORY_SEARCH`
+message to the webview which sets `isHistorySearchOpen: true` in `uiStore`.
 
 **Q: Should file-path matches do any special path normalization?**  
 No. The search input is a plain string and all fields are matched as substrings. File
