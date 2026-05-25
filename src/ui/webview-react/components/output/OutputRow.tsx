@@ -729,6 +729,13 @@ export const OutputRow = memo<OutputRowProps>(
             onDiffCollapsedChange={onDiffCollapsedChange}
           />
         );
+        if (row.diff) {
+          content = (
+            <div id={row.diff.key} data-diff-anchor="true">
+              {content}
+            </div>
+          );
+        }
         break;
       case "stats":
         content = <StatsRowView row={row} />;

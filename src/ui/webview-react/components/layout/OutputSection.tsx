@@ -76,6 +76,7 @@ import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
 import {
   buildOutputRows,
+  estimateOutputDiffBlockHeight,
   estimateOutputRowHeight,
   type CliHeaderRow,
   type StructuredEventRow,
@@ -84,6 +85,7 @@ import { setActiveOutputNavigationController } from "@utils/outputNavigation";
 import type { OutputRowFileUndoRequest } from "../output/OutputRow";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
+const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024;
 
 function getStepName(
   step: WorkflowStep | null | undefined,
@@ -270,6 +272,9 @@ export const OutputSection: React.FC = () => {
   const [diffCollapseState, setDiffCollapseState] = useState<Map<string, boolean>>(
     new Map()
   );
+  const [outputDiffViewType, setOutputDiffViewType] = useState<
+    "split" | "unified"
+  >("split");
 
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
@@ -343,6 +348,8 @@ export const OutputSection: React.FC = () => {
         undoRecords,
         diffCollapseState,
         defaultDiffCollapsed: diffsCollapsed,
+        diffViewType: outputDiffViewType,
+        outputFontSize,
       }),
     [
       allMessages,
@@ -358,6 +365,8 @@ export const OutputSection: React.FC = () => {
       undoRecords,
       diffCollapseState,
       diffsCollapsed,
+      outputDiffViewType,
+      outputFontSize,
       executionState,
     ]
   );
@@ -368,7 +377,10 @@ export const OutputSection: React.FC = () => {
     estimateSize: (index) => {
       const row = rows[index];
       if (!row) return 48;
-      return measurementCacheRef.current.get(row.key) ?? estimateOutputRowHeight(row);
+      return (
+        measurementCacheRef.current.get(row.key) ??
+        estimateOutputRowHeight(row, outputFontSize)
+      );
     },
     getItemKey: (index) => rows[index]?.key ?? index,
     overscan: 10,
@@ -404,13 +416,13 @@ export const OutputSection: React.FC = () => {
     let offset = 0;
     const rowStartsByIndex: number[] = [];
     const rowStartsByKey = new Map<string, number>();
-    const rowSizesByKey = new Map<string, number>();
 
     for (const [index, row] of rows.entries()) {
       rowStartsByIndex[index] = offset;
       rowStartsByKey.set(row.key, offset);
-      const size = measurementCacheRef.current.get(row.key) ?? estimateOutputRowHeight(row);
-      rowSizesByKey.set(row.key, size);
+      const size =
+        measurementCacheRef.current.get(row.key) ??
+        estimateOutputRowHeight(row, outputFontSize);
       offset += size;
     }
 
@@ -418,9 +430,29 @@ export const OutputSection: React.FC = () => {
       totalSize: offset,
       rowStartsByIndex,
       rowStartsByKey,
-      rowSizesByKey,
     };
-  }, [rows, measurementVersion]);
+  }, [rows, measurementVersion, outputFontSize]);
+  const rowLayoutRef = useRef(rowLayout);
+  useEffect(() => {
+    rowLayoutRef.current = rowLayout;
+  }, [rowLayout]);
+
+  useEffect(() => {
+    const el = outputRef.current;
+    if (!el) return;
+
+    const updateDiffViewType = () => {
+      const width = el.getBoundingClientRect().width;
+      setOutputDiffViewType(
+        width >= DIFF_SPLIT_VIEW_MIN_WIDTH ? "split" : "unified"
+      );
+    };
+
+    updateDiffViewType();
+    const observer = new ResizeObserver(updateDiffViewType);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [activeOutputTab, outputCollapsed]);
 
   const stepScrollFractions = useMemo(() => {
     const fractions = new Map<string, number>();
@@ -654,13 +686,57 @@ export const OutputSection: React.FC = () => {
 
         autoscrollEnabled.current = false;
         isProgrammaticScroll.current = true;
-        rowVirtualizer.scrollToIndex(rowIndex, {
-          align: options?.align ?? "start",
-          behavior: options?.behavior ?? "auto",
-        });
-        requestAnimationFrame(() => {
-          isProgrammaticScroll.current = false;
-        });
+        const align = options?.align ?? "start";
+        const targetOffset =
+          rowLayoutRef.current.rowStartsByIndex[rowIndex] ?? 0;
+        const maxScroll = Math.max(
+          0,
+          outputRef.current.scrollHeight - outputRef.current.clientHeight
+        );
+        const scrollOffset =
+          align === "end"
+            ? targetOffset - outputRef.current.clientHeight
+            : targetOffset;
+
+        rowVirtualizer.scrollToOffset(
+          Math.max(0, Math.min(maxScroll, scrollOffset)),
+          { behavior: options?.behavior ?? "auto" }
+        );
+
+        const correctScroll = () => {
+          requestAnimationFrame(() => {
+            const scrollElement = outputRef.current;
+            if (!scrollElement) {
+              isProgrammaticScroll.current = false;
+              return;
+            }
+
+            const correctedOffset =
+              rowLayoutRef.current.rowStartsByIndex[rowIndex] ?? 0;
+            const correctedMaxScroll = Math.max(
+              0,
+              scrollElement.scrollHeight - scrollElement.clientHeight
+            );
+            const correctedScrollOffset =
+              align === "end"
+                ? correctedOffset - scrollElement.clientHeight
+                : correctedOffset;
+            rowVirtualizer.scrollToOffset(
+              Math.max(
+                0,
+                Math.min(correctedMaxScroll, correctedScrollOffset)
+              ),
+              { behavior: "auto" }
+            );
+            isProgrammaticScroll.current = false;
+          });
+        };
+
+        if (options?.behavior === "smooth") {
+          window.setTimeout(correctScroll, 250);
+        } else {
+          correctScroll();
+        }
       },
       getTargetScrollFraction: (target: OutputMessage["target"]) => {
         const rowIndex = firstRowIndexByTarget.get(
@@ -860,8 +936,7 @@ export const OutputSection: React.FC = () => {
             scrollFraction:
               (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
             heightFraction:
-              (rowLayout.rowSizesByKey.get(row.key) ?? row.estimateSize) /
-              totalSize,
+              estimateOutputDiffBlockHeight(row, outputFontSize) / totalSize,
             addedLines: row.diff.addedLines,
             removedLines: row.diff.removedLines,
             runs: row.diff.runs,

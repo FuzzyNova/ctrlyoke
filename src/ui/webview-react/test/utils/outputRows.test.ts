@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowStep } from "@store/workflowStore";
-import { buildOutputRows } from "@utils/outputRows";
+import { buildOutputRows, estimateOutputRowHeight } from "@utils/outputRows";
 import type { OutputMessage } from "@utils/outputProjection";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES } from "@/types/messages";
@@ -142,5 +142,153 @@ describe("outputRows", () => {
     expect(firstDiffRow?.key).toBe(secondDiffRow?.key);
     expect(firstDiffRow?.rowKind).toBe("structured-event");
     expect(secondDiffRow?.rowKind).toBe("structured-event");
+  });
+
+  it("uses split-view diff runs when projecting desktop minimap metadata", () => {
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "Edit file",
+          response: "",
+          elapsed: 0.5,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                data: {
+                  path: "src/example.ts",
+                  status: OPERATION_STATUS.COMPLETED,
+                  structuredPatch: [
+                    {
+                      oldStart: 1,
+                      oldLines: 1,
+                      newStart: 1,
+                      newLines: 1,
+                      lines: ["-const a = 1;", "+const a = 2;"],
+                    },
+                  ],
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+
+    const result = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: true,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      defaultDiffCollapsed: false,
+      diffViewType: "split",
+    });
+
+    const diffRow = result.rows.find(
+      (row) => row.rowKind === "structured-event" && row.diff
+    );
+
+    if (!diffRow || diffRow.rowKind !== "structured-event") {
+      throw new Error("Expected a structured diff row");
+    }
+
+    expect(diffRow.diff?.runs).toEqual([
+      { count: 1, addedLines: 1, removedLines: 1 },
+    ]);
+    expect(estimateOutputRowHeight(diffRow)).toBeGreaterThan(80);
+  });
+
+  it("does not create minimap diff metadata for hidden duplicate edit previews", () => {
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "Edit file",
+          response: "",
+          elapsed: 0.5,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                data: {
+                  path: "src/example.ts",
+                  status: OPERATION_STATUS.INITIATED,
+                  structuredPatch: [
+                    {
+                      oldStart: 1,
+                      oldLines: 1,
+                      newStart: 1,
+                      newLines: 1,
+                      lines: ["-const a = 1;", "+const a = 2;"],
+                    },
+                  ],
+                },
+              },
+              {
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                data: {
+                  path: "src/example.ts",
+                  status: OPERATION_STATUS.COMPLETED,
+                  structuredPatch: [
+                    {
+                      oldStart: 1,
+                      oldLines: 1,
+                      newStart: 1,
+                      newLines: 1,
+                      lines: ["-const a = 1;", "+const a = 2;"],
+                    },
+                  ],
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+
+    const result = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: true,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    const diffRows = result.rows.filter(
+      (row) => row.rowKind === "structured-event" && row.diff
+    );
+
+    expect(diffRows).toHaveLength(1);
   });
 });

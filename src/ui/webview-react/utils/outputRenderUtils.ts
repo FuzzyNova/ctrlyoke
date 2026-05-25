@@ -154,7 +154,8 @@ export function getDisplayStructuredPatch(
 
 export function computeOutputDiffStats(
   event: CliEvent,
-  workspaceSnapshot?: WorkspaceSnapshot
+  workspaceSnapshot?: WorkspaceSnapshot,
+  viewType: "split" | "unified" = "unified"
 ): OutputDiffStats {
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
     const data = event.data as FileEditData;
@@ -166,11 +167,11 @@ export function computeOutputDiffStats(
       : data.oldContent;
 
     if (structuredPatch && structuredPatch.length > 0) {
-      return getRenderedDiffStats(toRdvHunks(structuredPatch), "unified");
+      return getRenderedDiffStats(toRdvHunks(structuredPatch), viewType);
     }
     if (beforeContent !== undefined && data.newContent !== undefined) {
       const { hunks } = toRdvFromContent(beforeContent, data.newContent);
-      return getRenderedDiffStats(hunks, "unified");
+      return getRenderedDiffStats(hunks, viewType);
     }
     return { added: 0, removed: 0, runs: [] };
   }

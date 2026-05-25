@@ -1,5 +1,5 @@
 import type { WorkflowStep } from "@store/workflowStore";
-import { FINAL_STEP_PHASES } from "../types/messages";
+import { CLI_EVENT_TYPES, FINAL_STEP_PHASES } from "../types/messages";
 import type {
   CliOutput as CliOutputType,
   CliEvent,
@@ -178,6 +178,8 @@ export interface BuildOutputRowsInput {
   undoRecords: Record<string, UndoRecord | undefined>;
   diffCollapseState: ReadonlyMap<string, boolean>;
   defaultDiffCollapsed: boolean;
+  diffViewType?: "split" | "unified";
+  outputFontSize?: number;
 }
 
 export interface BuildOutputRowsResult {
@@ -254,7 +256,40 @@ function estimateStructuredEventHeight(event: CliEvent): number {
   }
 }
 
-export function estimateOutputRowHeight(row: OutputRenderRow): number {
+function estimateDiffStructuredEventHeight(
+  row: StructuredEventRow,
+  outputFontSize: number
+): number {
+  if (!row.diff || row.event.type !== CLI_EVENT_TYPES.FILE_EDIT || row.hideDiff) {
+    return estimateStructuredEventHeight(row.event);
+  }
+
+  const toolLineHeight = Math.max(22, outputFontSize * 1.7);
+  const collapsedHeaderHeight = Math.max(24, outputFontSize * 1.9);
+  const diffLineHeight = Math.max(18, (outputFontSize - 1) * 1.55);
+  const verticalChrome = 28;
+
+  if (row.diff.isCollapsed) {
+    return toolLineHeight + collapsedHeaderHeight + verticalChrome;
+  }
+
+  const renderedRows = row.diff.runs.reduce((sum, run) => sum + run.count, 0);
+  if (renderedRows === 0) {
+    return toolLineHeight + collapsedHeaderHeight + verticalChrome;
+  }
+
+  return (
+    toolLineHeight +
+    collapsedHeaderHeight +
+    verticalChrome +
+    renderedRows * diffLineHeight
+  );
+}
+
+export function estimateOutputRowHeight(
+  row: OutputRenderRow,
+  outputFontSize = 13
+): number {
   switch (row.rowKind) {
     case "history-banner":
       return 44;
@@ -277,8 +312,26 @@ export function estimateOutputRowHeight(row: OutputRenderRow): number {
     case "stats":
       return 24;
     case "structured-event":
-      return estimateStructuredEventHeight(row.event);
+      return estimateDiffStructuredEventHeight(row, outputFontSize);
   }
+}
+
+export function estimateOutputDiffBlockHeight(
+  row: StructuredEventRow,
+  outputFontSize = 13
+): number {
+  if (!row.diff || row.event.type !== CLI_EVENT_TYPES.FILE_EDIT || row.hideDiff) {
+    return row.estimateSize;
+  }
+
+  const collapsedHeaderHeight = Math.max(24, outputFontSize * 1.9);
+  if (row.diff.isCollapsed) {
+    return collapsedHeaderHeight;
+  }
+
+  const renderedRows = row.diff.runs.reduce((sum, run) => sum + run.count, 0);
+  const diffLineHeight = Math.max(18, (outputFontSize - 1) * 1.55);
+  return collapsedHeaderHeight + Math.max(1, renderedRows) * diffLineHeight;
 }
 
 export function buildOutputRows(
@@ -452,10 +505,15 @@ export function buildOutputRows(
 
     for (const visibleEvent of visibleEvents) {
       const diffStats =
-        visibleEvent.event.type === "fileEdit" ||
-        visibleEvent.event.type === "fileWrite" ||
-        visibleEvent.event.type === "fileDelete"
-          ? computeOutputDiffStats(visibleEvent.event, workspaceSnapshot)
+        !visibleEvent.hideDiff &&
+        (visibleEvent.event.type === CLI_EVENT_TYPES.FILE_EDIT ||
+          visibleEvent.event.type === CLI_EVENT_TYPES.FILE_WRITE ||
+          visibleEvent.event.type === CLI_EVENT_TYPES.FILE_DELETE)
+          ? computeOutputDiffStats(
+              visibleEvent.event,
+              workspaceSnapshot,
+              input.diffViewType ?? "unified"
+            )
           : null;
       const diffKey =
         diffStats && diffStats.added + diffStats.removed > 0
@@ -547,7 +605,10 @@ export function buildOutputRows(
   }
 
   return {
-    rows: rows.map((row) => ({ ...row, estimateSize: estimateOutputRowHeight(row) })),
+    rows: rows.map((row) => ({
+      ...row,
+      estimateSize: estimateOutputRowHeight(row, input.outputFontSize),
+    })),
     uniqueStepTargets: [...uniqueTargets.values()],
     stepOutputsMap,
     lastCliIndexPerStep,
