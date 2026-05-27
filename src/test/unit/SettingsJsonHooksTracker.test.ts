@@ -430,4 +430,110 @@ suite("SettingsJsonHooksTracker", () => {
     await tracker.unregisterWorkflow("nonexistent", tmpDir);
     assert.strictEqual(tracker.getActiveWorkflowCount(), 0);
   });
+
+  test("should create .gitignore when settings file is created fresh", async () => {
+    // Ensure neither the settings file nor a .gitignore exists
+    await fs.rm(settingsPath, { force: true });
+
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      { Stop: [{ hooks: [{ type: "command", command: "node fp.js" }] }] },
+      {}
+    );
+
+    const gitignorePath = path.join(settingsDir, ".gitignore");
+    const content = await fs.readFile(gitignorePath, "utf-8");
+    assert.ok(content.includes("settings.json"));
+    assert.ok(content.includes(".gitignore"));
+  });
+
+  test("should remove .gitignore when restoring baseline for fresh-created file", async () => {
+    await fs.rm(settingsPath, { force: true });
+
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      { Stop: [{ hooks: [{ type: "command", command: "node fp.js" }] }] },
+      {}
+    );
+
+    await tracker.unregisterWorkflow("wf-1", tmpDir);
+
+    const gitignorePath = path.join(settingsDir, ".gitignore");
+    await assert.rejects(fs.access(gitignorePath), /ENOENT/);
+  });
+
+  test("should not create .gitignore when settings file already existed", async () => {
+    await fs.writeFile(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          Stop: [{ hooks: [{ type: "command", command: "echo user" }] }],
+        },
+      })
+    );
+
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      { Stop: [{ hooks: [{ type: "command", command: "node fp.js" }] }] },
+      {}
+    );
+
+    const gitignorePath = path.join(settingsDir, ".gitignore");
+    await assert.rejects(fs.access(gitignorePath), /ENOENT/);
+  });
+
+  test("should not overwrite an existing .gitignore", async () => {
+    await fs.rm(settingsPath, { force: true });
+    const gitignorePath = path.join(settingsDir, ".gitignore");
+    const existingContent = "# existing user gitignore\n*.log\n";
+    await fs.writeFile(gitignorePath, existingContent, "utf-8");
+
+    const tracker = SettingsJsonHooksTracker.getInstance("qwen");
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      { Stop: [{ hooks: [{ type: "command", command: "node fp.js" }] }] },
+      {}
+    );
+
+    const content = await fs.readFile(gitignorePath, "utf-8");
+    assert.strictEqual(content, existingContent);
+
+    // Cleanup should also leave user-owned .gitignore in place
+    await tracker.unregisterWorkflow("wf-1", tmpDir);
+    const contentAfter = await fs.readFile(gitignorePath, "utf-8");
+    assert.strictEqual(contentAfter, existingContent);
+  });
+
+  test("should create .gitignore for codex when hooks.json is created fresh", async () => {
+    const codexDir = path.join(tmpDir, ".codex");
+    const codexGitignore = path.join(codexDir, ".gitignore");
+    await fs.rm(path.join(codexDir, "hooks.json"), { force: true });
+    await fs.rm(codexGitignore, { force: true });
+
+    const tracker = SettingsJsonHooksTracker.getInstance("codex");
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      {
+        Stop: [
+          { matcher: "", hooks: [{ type: "command", command: "node fp.js" }] },
+        ],
+      },
+      {}
+    );
+
+    const content = await fs.readFile(codexGitignore, "utf-8");
+    assert.ok(content.includes("hooks.json"));
+    assert.ok(content.includes(".gitignore"));
+
+    await tracker.unregisterWorkflow("wf-1", tmpDir);
+    await assert.rejects(fs.access(codexGitignore), /ENOENT/);
+  });
 });

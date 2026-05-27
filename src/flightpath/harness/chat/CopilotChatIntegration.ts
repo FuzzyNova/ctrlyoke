@@ -62,6 +62,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
   // Hook files written to .github/hooks/ for the current prompt (cleaned up after execution)
   private hookFilePaths: string[] = [];
+  /** Path to temporary .gitignore written in .github/hooks/ to hide FlightPath files from git. */
+  private hooksDirGitignorePath: string | undefined;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -1082,6 +1084,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
       }
     }
     this.hookFilePaths = [];
+    if (this.hooksDirGitignorePath) {
+      await fs.unlink(this.hooksDirGitignorePath).catch(() => {});
+      this.hooksDirGitignorePath = undefined;
+    }
   }
 
   /**
@@ -1125,6 +1131,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
     try {
       await fs.mkdir(hookDir, { recursive: true });
+      await this.writeHookDirGitignore(hookDir);
       const hookPath = path.join(hookDir, hookFileName);
       await fs.writeFile(
         hookPath,
@@ -1136,6 +1143,32 @@ export class CopilotChatIntegration extends HarnessIntegration {
     } catch (error) {
       Log.warn(`⚠️ Failed to create hook file: ${error}`);
     }
+  }
+
+  /**
+   * Write a temporary .gitignore to .github/hooks/ to prevent FlightPath hook files
+   * from appearing as untracked in git. The .gitignore hides itself too.
+   * No-op if a .gitignore already exists there (user-owned file).
+   */
+  private async writeHookDirGitignore(hookDir: string): Promise<void> {
+    if (this.hooksDirGitignorePath) {
+      return; // Already written for this session
+    }
+    const gitignorePath = path.join(hookDir, ".gitignore");
+    try {
+      await fs.access(gitignorePath);
+      return; // Existing .gitignore — leave it alone
+    } catch {
+      // File doesn't exist — write it
+    }
+    const content = [
+      "# FlightPath temp files (auto-managed, do not commit)",
+      "flightpath-*.json",
+      ".gitignore",
+      "",
+    ].join("\n");
+    await fs.writeFile(gitignorePath, content, "utf-8").catch(() => {});
+    this.hooksDirGitignorePath = gitignorePath;
   }
 
   /**

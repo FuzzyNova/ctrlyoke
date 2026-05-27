@@ -81,6 +81,8 @@ export class CopilotCliProvider implements ICliProvider {
 
   /** Hook files created for both interactive and headless mode (cleaned up after workflow). */
   private hookFilePaths: string[] = [];
+  /** Path to temporary .gitignore written in .github/hooks/ to hide FlightPath files from git. */
+  private hooksDirGitignorePath: string | undefined;
   private enablePromptModeRepoHooksForHeadlessRun = false;
 
   constructor() {
@@ -416,6 +418,10 @@ export class CopilotCliProvider implements ICliProvider {
    *
    * Includes all per-prompt hook files created during this workflow's
    * interactive and headless sessions, plus the Copilot OTel telemetry file.
+   *
+   * Note: the .gitignore is NOT deleted here. Deletion is deferred to
+   * cleanupWorkspaceArtifacts() so we can check whether concurrent workflows
+   * still have hook files on disk before removing it.
    */
   getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
     return [
@@ -426,6 +432,53 @@ export class CopilotCliProvider implements ICliProvider {
       // Clean it up after each run so it doesn't linger.
       path.join(workspaceRoot, "NUL"),
     ];
+  }
+
+  /**
+   * Delete the temporary .gitignore if no concurrent workflows still have
+   * flightpath hook files on disk. Called after getAdditionalCleanupFilePaths()
+   * has already removed this workflow's own hook files.
+   *
+   * Does not rely on hooksDirGitignorePath being set: even when a concurrent
+   * workflow wrote the gitignore (so this instance never set hooksDirGitignorePath),
+   * we still clean it up if it's ours and the directory is now empty.
+   */
+  async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
+    const hookDir = path.join(workspaceRoot, ".github", "hooks");
+    try {
+      const files = await fs.readdir(hookDir);
+      const hasOtherHookFiles = files.some(
+        (f) => f.startsWith("flightpath-") && f.endsWith(".json")
+      );
+      if (hasOtherHookFiles) {
+        return; // Concurrent workflow still active — leave gitignore in place
+      }
+      // No flightpath hook files remain. Delete the gitignore only if it's ours.
+      if (files.includes(".gitignore")) {
+        const gitignorePath =
+          this.hooksDirGitignorePath ?? path.join(hookDir, ".gitignore");
+        await this.deleteFlightPathGitignore(gitignorePath);
+      }
+      this.hooksDirGitignorePath = undefined;
+    } catch {
+      // Directory doesn't exist — nothing to clean up
+      this.hooksDirGitignorePath = undefined;
+    }
+  }
+
+  /**
+   * Delete a .gitignore only if it was written by FlightPath (identified by
+   * our magic header comment). Leaves user-owned gitignore files untouched.
+   */
+  private async deleteFlightPathGitignore(gitignorePath: string): Promise<void> {
+    try {
+      const content = await fs.readFile(gitignorePath, "utf-8");
+      if (content.startsWith("# FlightPath temp files")) {
+        await fs.unlink(gitignorePath).catch(() => {});
+      }
+    } catch {
+      // File doesn't exist or unreadable — nothing to do
+    }
   }
 
   /**
@@ -450,6 +503,7 @@ export class CopilotCliProvider implements ICliProvider {
       }
 
       await fs.mkdir(hookDir, { recursive: true });
+      await this.writeHookDirGitignore(hookDir);
 
       const hookPath = path.join(hookDir, hookFileName);
       await fs.writeFile(
@@ -463,6 +517,32 @@ export class CopilotCliProvider implements ICliProvider {
     } catch (error) {
       Log.warn(`⚠️ Failed to create hook file: ${error}`);
     }
+  }
+
+  /**
+   * Write a temporary .gitignore to .github/hooks/ to prevent FlightPath hook files
+   * from appearing as untracked in git. The .gitignore hides itself too so git never
+   * sees either file. No-op if a .gitignore already exists there (user-owned file).
+   */
+  private async writeHookDirGitignore(hookDir: string): Promise<void> {
+    if (this.hooksDirGitignorePath) {
+      return; // Already written for this workflow
+    }
+    const gitignorePath = path.join(hookDir, ".gitignore");
+    try {
+      await fs.access(gitignorePath);
+      return; // Existing .gitignore — leave it alone
+    } catch {
+      // File doesn't exist — write it
+    }
+    const content = [
+      "# FlightPath temp files (auto-managed, do not commit)",
+      "flightpath-*.json",
+      ".gitignore",
+      "",
+    ].join("\n");
+    await fs.writeFile(gitignorePath, content, "utf-8").catch(() => {});
+    this.hooksDirGitignorePath = gitignorePath;
   }
 
   /**

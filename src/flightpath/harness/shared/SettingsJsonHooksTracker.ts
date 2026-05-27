@@ -34,6 +34,9 @@ export class SettingsJsonHooksTracker {
   /** Whether the target settings/hooks file existed before FlightPath touched it. */
   private baselineFileExisted: boolean | undefined = undefined;
 
+  /** Path to a temporary .gitignore we wrote to hide newly-created settings files from git. */
+  private gitignorePath: string | undefined;
+
   /** Per-workflow FlightPath hooks + user hooks, keyed by workflowKey. */
   private workflowHooks = new Map<string, WorkflowHookLayers>();
 
@@ -99,6 +102,11 @@ export class SettingsJsonHooksTracker {
 
     // Rebuild and write merged settings
     await this.rebuildAndWriteSettings(settingsPath, workspaceRoot);
+
+    // On first registration: if we just created the settings file fresh, hide it from git.
+    if (this.workflowHooks.size === 1 && this.baselineFileExisted === false) {
+      await this.writeGitignore(workspaceRoot);
+    }
   }
 
   /**
@@ -134,6 +142,33 @@ export class SettingsJsonHooksTracker {
 
   getActiveWorkflowCount(): number {
     return this.workflowHooks.size;
+  }
+
+  /**
+   * Write a temporary .gitignore to hide newly-created settings files from git.
+   * The .gitignore also hides itself, so neither file appears as untracked.
+   * No-op if a .gitignore already exists in the settings directory (user-owned file).
+   */
+  private async writeGitignore(workspaceRoot: string): Promise<void> {
+    const gitignorePath = path.join(
+      workspaceRoot,
+      this.settingsDir,
+      ".gitignore"
+    );
+    try {
+      await fs.access(gitignorePath);
+      return; // Existing .gitignore — leave it alone
+    } catch {
+      // File doesn't exist — write it
+    }
+    const content = [
+      "# FlightPath temp files (auto-managed, do not commit)",
+      this.settingsFile,
+      ".gitignore",
+      "",
+    ].join("\n");
+    await fs.writeFile(gitignorePath, content, "utf-8").catch(() => {});
+    this.gitignorePath = gitignorePath;
   }
 
   private async readBaseline(settingsPath: string): Promise<{
@@ -225,6 +260,10 @@ export class SettingsJsonHooksTracker {
     try {
       if (this.baselineFileExisted === false) {
         await fs.unlink(settingsPath).catch(() => {});
+        if (this.gitignorePath) {
+          await fs.unlink(this.gitignorePath).catch(() => {});
+          this.gitignorePath = undefined;
+        }
         return;
       }
 
