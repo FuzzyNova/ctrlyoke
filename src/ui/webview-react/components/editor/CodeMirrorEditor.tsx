@@ -115,6 +115,9 @@ interface ContextReferenceValidationResult {
   message?: string;
 }
 
+const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
+const LINK_TOUCH_LONG_PRESS_MS = 500;
+
 const RETRY_PROMPT_PLACEHOLDER_METADATA: Record<
   RetryPromptPlaceholder,
   { detail: string; info: string }
@@ -1674,106 +1677,207 @@ function createPriorContextLintExtension(
   );
 }
 
-// Handle clicks on links. git/priorContext respond to plain clicks (modal preview);
-// file/directory/lineRange/symbol require Ctrl+Click to avoid accidental navigation.
+function getLinkElement(target: EventTarget | null): HTMLElement | null {
+  return target instanceof HTMLElement ? target.closest(".cm-link") : null;
+}
+
+function openContextReferenceLink(
+  target: HTMLElement,
+  vscode: any,
+  stepCountRef: React.RefObject<number>
+): boolean {
+  const type = target.getAttribute("data-type");
+
+  if (type === "git") {
+    const gitRef = target.getAttribute("data-git-ref");
+    vscode.postMessage({
+      type: MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW,
+      ref: gitRef,
+    });
+    return true;
+  }
+
+  if (type === "priorContext") {
+    const ref = target.getAttribute("data-ref");
+    vscode.postMessage({
+      type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
+      ref,
+      stepCount: stepCountRef.current,
+    });
+    return true;
+  }
+
+  const path = target.getAttribute("data-path");
+
+  if (isStandalone) {
+    if (type === "file" || type === "directory") {
+      const store = useWorkspaceViewerStore.getState();
+      if (type === "directory") {
+        store.openToDirectory(path ?? "");
+      } else {
+        store.openToFile(path ?? "");
+      }
+      return true;
+    }
+
+    if (type === "lineRange") {
+      const lineStart = target.getAttribute("data-line-start");
+      const lineEnd = target.getAttribute("data-line-end");
+      useWorkspaceViewerStore
+        .getState()
+        .openToFile(
+          path ?? "",
+          lineStart ? parseInt(lineStart) : undefined,
+          lineEnd ? parseInt(lineEnd) : undefined
+        );
+      return true;
+    }
+
+    if (type === "symbol") {
+      const line = target.getAttribute("data-line");
+      const lineNum = line ? parseInt(line) : undefined;
+      useWorkspaceViewerStore
+        .getState()
+        .openToFile(path ?? "", lineNum, lineNum);
+      return true;
+    }
+
+    return false;
+  }
+
+  if (type === "file" || type === "directory") {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.OPEN_FILE,
+      path,
+    });
+    return true;
+  }
+
+  if (type === "lineRange") {
+    const lineStart = target.getAttribute("data-line-start");
+    const lineEnd = target.getAttribute("data-line-end");
+    vscode.postMessage({
+      type: MESSAGE_TYPES.OPEN_FILE,
+      path,
+      lineStart: lineStart ? parseInt(lineStart) : undefined,
+      lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
+    });
+    return true;
+  }
+
+  if (type === "symbol") {
+    const line = target.getAttribute("data-line");
+    vscode.postMessage({
+      type: MESSAGE_TYPES.OPEN_FILE,
+      path,
+      lineStart: line ? parseInt(line) : undefined,
+      lineEnd: line ? parseInt(line) : undefined,
+    });
+    return true;
+  }
+
+  return false;
+}
+
+// Handle clicks/taps on links. git/priorContext respond to plain clicks
+// (modal preview); file/directory/lineRange/symbol require Ctrl+Click on
+// pointer devices, but short touch taps open directly because mobile has no
+// modifier-key equivalent. Long press remains available for native editor
+// positioning/selection behavior.
 function createClickHandlerExtension(
   vscode: any,
   stepCountRef: React.RefObject<number>
 ) {
+  let touchStart: {
+    x: number;
+    y: number;
+    time: number;
+    target: HTMLElement;
+  } | null = null;
+
+  const cancelTouch = () => {
+    touchStart = null;
+  };
+
   return EditorView.domEventHandlers({
+    touchstart: (event) => {
+      if (event.touches.length !== 1) {
+        cancelTouch();
+        return false;
+      }
+
+      const target = getLinkElement(event.target);
+      if (!target) {
+        cancelTouch();
+        return false;
+      }
+
+      const touch = event.touches[0];
+      touchStart = {
+        x: touch.clientX,
+        y: touch.clientY,
+        time: Date.now(),
+        target,
+      };
+      return false;
+    },
+    touchmove: (event) => {
+      if (!touchStart || event.touches.length === 0) return false;
+
+      const touch = event.touches[0];
+      const dx = touch.clientX - touchStart.x;
+      const dy = touch.clientY - touchStart.y;
+      if (Math.sqrt(dx * dx + dy * dy) > LINK_TOUCH_MOVE_THRESHOLD_PX) {
+        cancelTouch();
+      }
+
+      return false;
+    },
+    touchcancel: () => {
+      cancelTouch();
+      return false;
+    },
+    touchend: (event) => {
+      if (!touchStart) return false;
+
+      const start = touchStart;
+      cancelTouch();
+
+      if (Date.now() - start.time >= LINK_TOUCH_LONG_PRESS_MS) {
+        return false;
+      }
+
+      const endTarget = getLinkElement(event.target);
+      if (endTarget !== start.target) {
+        return false;
+      }
+
+      if (!openContextReferenceLink(start.target, vscode, stepCountRef)) {
+        return false;
+      }
+
+      event.preventDefault();
+      return true;
+    },
     click: (event, view) => {
-      const target = event.target as HTMLElement;
-      if (!target.classList.contains("cm-link")) return false;
-
-      const type = target.getAttribute("data-type");
-
-      // git and priorContext: plain click opens preview modal in all modes
-      if (type === "git") {
-        const gitRef = target.getAttribute("data-git-ref");
-        vscode.postMessage({
-          type: MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW,
-          ref: gitRef,
-        });
-        event.preventDefault();
-        return true;
-      }
-      if (type === "priorContext") {
-        const ref = target.getAttribute("data-ref");
-        vscode.postMessage({
-          type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
-          ref,
-          stepCount: stepCountRef.current,
-        });
-        event.preventDefault();
-        return true;
-      }
+      const target = getLinkElement(event.target);
+      if (!target) return false;
 
       // file/directory/lineRange/symbol: require Ctrl+Click to open in editor/viewer
-      if (!(event.ctrlKey || event.metaKey)) return false;
+      const type = target.getAttribute("data-type");
+      if (
+        type !== "git" &&
+        type !== "priorContext" &&
+        !(event.ctrlKey || event.metaKey)
+      ) {
+        return false;
+      }
 
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
       if (pos === null) return false;
 
-      const path = target.getAttribute("data-path");
-
-      if (isStandalone) {
-        // In browser mode, open the workspace viewer for file/directory/lineRange/symbol
-        if (type === "file" || type === "directory") {
-          const store = useWorkspaceViewerStore.getState();
-          if (type === "directory") {
-            store.openToDirectory(path ?? "");
-          } else {
-            store.openToFile(path ?? "");
-          }
-          event.preventDefault();
-          return true;
-        } else if (type === "lineRange") {
-          const lineStart = target.getAttribute("data-line-start");
-          const lineEnd = target.getAttribute("data-line-end");
-          useWorkspaceViewerStore
-            .getState()
-            .openToFile(
-              path ?? "",
-              lineStart ? parseInt(lineStart) : undefined,
-              lineEnd ? parseInt(lineEnd) : undefined
-            );
-          event.preventDefault();
-          return true;
-        } else if (type === "symbol") {
-          const line = target.getAttribute("data-line");
-          const lineNum = line ? parseInt(line) : undefined;
-          useWorkspaceViewerStore
-            .getState()
-            .openToFile(path ?? "", lineNum, lineNum);
-          event.preventDefault();
-          return true;
-        }
+      if (!openContextReferenceLink(target, vscode, stepCountRef)) {
         return false;
-      }
-
-      // VS Code mode — file / directory / lineRange / symbol open in editor
-      if (type === "file" || type === "directory") {
-        vscode.postMessage({
-          type: MESSAGE_TYPES.OPEN_FILE,
-          path: path,
-        });
-      } else if (type === "lineRange") {
-        const lineStart = target.getAttribute("data-line-start");
-        const lineEnd = target.getAttribute("data-line-end");
-        vscode.postMessage({
-          type: MESSAGE_TYPES.OPEN_FILE,
-          path: path,
-          lineStart: lineStart ? parseInt(lineStart) : undefined,
-          lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
-        });
-      } else if (type === "symbol") {
-        const line = target.getAttribute("data-line");
-        vscode.postMessage({
-          type: MESSAGE_TYPES.OPEN_FILE,
-          path: path,
-          lineStart: line ? parseInt(line) : undefined,
-          lineEnd: line ? parseInt(line) : undefined,
-        });
       }
 
       event.preventDefault();
