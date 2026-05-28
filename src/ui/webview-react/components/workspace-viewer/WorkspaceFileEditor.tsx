@@ -6,7 +6,12 @@ import {
   forwardRef,
 } from "react";
 import { EditorView, basicSetup } from "codemirror";
-import { EditorState } from "@codemirror/state";
+import {
+  EditorState,
+  EditorSelection,
+  RangeSetBuilder,
+  type Extension,
+} from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import {
   indentWithTab,
@@ -21,6 +26,8 @@ import {
   getLanguageExtension,
   createWorkspaceEditorHighlightExtension,
 } from "@utils/codemirrorLanguage";
+import { Decoration, ViewPlugin } from "@codemirror/view";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 
 export interface WorkspaceFileEditorHandle {
   undo: () => void;
@@ -38,14 +45,46 @@ interface WorkspaceFileEditorProps {
   onSave: () => void;
   saving?: boolean;
   onUndoRedoChange?: (canUndo: boolean, canRedo: boolean) => void;
+  pendingSelection?: WorkspaceFileEditorPendingSelection | null;
+  onPendingSelectionApplied?: (requestId: number) => void;
 }
+
+type WorkspaceReferenceType = "file" | "directory" | "lineRange" | "symbol";
+
+export interface WorkspaceFileEditorPendingSelection {
+  requestId: number;
+  startLine: number;
+  endLine: number;
+}
+
+interface WorkspaceReferenceMatch {
+  from: number;
+  to: number;
+  type: WorkspaceReferenceType;
+  path: string;
+  lineStart?: string;
+  lineEnd?: string;
+  line?: string;
+}
+
+const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
+const LINK_TOUCH_LONG_PRESS_MS = 500;
 
 export const WorkspaceFileEditor = forwardRef<
   WorkspaceFileEditorHandle,
   WorkspaceFileEditorProps
 >(
   (
-    { filePath, content, readOnly = false, onChange, onSave, onUndoRedoChange },
+    {
+      filePath,
+      content,
+      readOnly = false,
+      onChange,
+      onSave,
+      onUndoRedoChange,
+      pendingSelection,
+      onPendingSelectionApplied,
+    },
     ref
   ) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -53,7 +92,10 @@ export const WorkspaceFileEditor = forwardRef<
     const onSaveRef = useRef(onSave);
     const onChangeRef = useRef(onChange);
     const onUndoRedoChangeRef = useRef(onUndoRedoChange);
+    const onPendingSelectionAppliedRef = useRef(onPendingSelectionApplied);
     const ignoreUpdateRef = useRef(false);
+    const openToFile = useWorkspaceViewerStore((s) => s.openToFile);
+    const openToDirectory = useWorkspaceViewerStore((s) => s.openToDirectory);
 
     // Keep callback refs current without triggering re-creation of the editor
     useEffect(() => {
@@ -68,6 +110,10 @@ export const WorkspaceFileEditor = forwardRef<
       onUndoRedoChangeRef.current = onUndoRedoChange;
     }, [onUndoRedoChange]);
 
+    useEffect(() => {
+      onPendingSelectionAppliedRef.current = onPendingSelectionApplied;
+    }, [onPendingSelectionApplied]);
+
     useImperativeHandle(ref, () => ({
       undo: () => {
         if (viewRef.current) undo(viewRef.current);
@@ -78,17 +124,7 @@ export const WorkspaceFileEditor = forwardRef<
       selectLines: (startLine: number, endLine: number) => {
         const view = viewRef.current;
         if (!view) return;
-        const doc = view.state.doc;
-        const lineCount = doc.lines;
-        const clampedStart = Math.max(1, Math.min(startLine, lineCount));
-        const clampedEnd = Math.max(clampedStart, Math.min(endLine, lineCount));
-        const from = doc.line(clampedStart).from;
-        const to = doc.line(clampedEnd).to;
-        view.dispatch({
-          selection: { anchor: from, head: to },
-          scrollIntoView: true,
-        });
-        view.focus();
+        selectAndScrollToLines(view, startLine, endLine);
       },
       getSelectionText: () => {
         const view = viewRef.current;
@@ -109,12 +145,18 @@ export const WorkspaceFileEditor = forwardRef<
       },
     }));
 
-    const extensions = useMemo(() => {
+    const extensions = useMemo<Extension[]>(() => {
       const langExt = getLanguageExtension(filePath);
       return [
         basicSetup,
         createThemeExtension("editor"),
         createWorkspaceEditorHighlightExtension(),
+        createWorkspaceEditorLinkThemeExtension(),
+        createWorkspaceReferenceDecorationExtension(),
+        createWorkspaceReferenceClickHandlerExtension(
+          openToFile,
+          openToDirectory
+        ),
         ...(langExt ? [langExt] : []),
         keymap.of([
           indentWithTab,
@@ -140,7 +182,7 @@ export const WorkspaceFileEditor = forwardRef<
         }),
         ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       ];
-    }, [filePath, readOnly]);
+    }, [filePath, openToDirectory, openToFile, readOnly]);
 
     // Create / recreate the editor when extensions change (filePath or readOnly changed)
     useEffect(() => {
@@ -182,8 +224,351 @@ export const WorkspaceFileEditor = forwardRef<
       }
     }, [content]);
 
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view || !pendingSelection) return;
+
+      selectAndScrollToLines(
+        view,
+        pendingSelection.startLine,
+        pendingSelection.endLine
+      );
+      onPendingSelectionAppliedRef.current?.(pendingSelection.requestId);
+    }, [content, pendingSelection]);
+
     return <div ref={containerRef} className="h-full w-full overflow-hidden" />;
   }
 );
 
 WorkspaceFileEditor.displayName = "WorkspaceFileEditor";
+
+function selectAndScrollToLines(
+  view: EditorView,
+  startLine: number,
+  endLine: number
+) {
+  const doc = view.state.doc;
+  const lineCount = doc.lines;
+  const clampedStart = Math.max(1, Math.min(startLine, lineCount));
+  const clampedEnd = Math.max(clampedStart, Math.min(endLine, lineCount));
+  const from = doc.line(clampedStart).from;
+  const to = doc.line(clampedEnd).to;
+  const range = EditorSelection.range(from, to);
+  view.dispatch({
+    selection: EditorSelection.create([range]),
+    effects: EditorView.scrollIntoView(range, {
+      y: "center",
+      x: "nearest",
+      yMargin: 24,
+    }),
+    userEvent: "select",
+  });
+  view.focus();
+}
+
+function createWorkspaceEditorLinkThemeExtension() {
+  return EditorView.baseTheme({
+    ".cm-link": {
+      color: "var(--vscode-textLink-foreground)",
+      textDecoration: "underline",
+      cursor: "pointer",
+    },
+    ".cm-link:hover": {
+      color: "var(--vscode-textLink-activeForeground)",
+    },
+  });
+}
+
+function findWorkspaceReferenceMatches(
+  text: string,
+  offset = 0
+): WorkspaceReferenceMatch[] {
+  const patterns = {
+    fullFileQuoted: /@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
+    directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
+    fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?!\/)/g,
+    directory: /@([^\s@#"]+\/)/g,
+    lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
+    lineRange: /#selection:([^\s:"]+):(\d+)-(\d+)/g,
+    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)/g,
+    symbol: /#sym:([^\s:"]+):([^:]+):(\d+)/g,
+  };
+
+  const fileMatches: WorkspaceReferenceMatch[] = [];
+  const directoryMatches: WorkspaceReferenceMatch[] = [];
+  const lineRangeMatches: WorkspaceReferenceMatch[] = [];
+  const symbolMatches: WorkspaceReferenceMatch[] = [];
+  let match: RegExpExecArray | null;
+
+  const collectPathMatches = (
+    pattern: RegExp,
+    type: "file" | "directory",
+    target: WorkspaceReferenceMatch[]
+  ) => {
+    const regex = new RegExp(pattern.source, "g");
+    while ((match = regex.exec(text)) !== null) {
+      target.push({
+        from: offset + match.index,
+        to: offset + match.index + match[0].length,
+        type,
+        path: match[1],
+      });
+    }
+  };
+
+  collectPathMatches(patterns.fullFileQuoted, "file", fileMatches);
+  collectPathMatches(patterns.fullFile, "file", fileMatches);
+  collectPathMatches(patterns.directoryQuoted, "directory", directoryMatches);
+  collectPathMatches(patterns.directory, "directory", directoryMatches);
+
+  const collectLineRangeMatches = (pattern: RegExp) => {
+    const regex = new RegExp(pattern.source, "g");
+    while ((match = regex.exec(text)) !== null) {
+      lineRangeMatches.push({
+        from: offset + match.index,
+        to: offset + match.index + match[0].length,
+        type: "lineRange",
+        path: match[1],
+        lineStart: match[2],
+        lineEnd: match[3],
+      });
+    }
+  };
+
+  collectLineRangeMatches(patterns.lineRangeQuoted);
+  collectLineRangeMatches(patterns.lineRange);
+
+  const collectSymbolMatches = (pattern: RegExp) => {
+    const regex = new RegExp(pattern.source, "g");
+    while ((match = regex.exec(text)) !== null) {
+      symbolMatches.push({
+        from: offset + match.index,
+        to: offset + match.index + match[0].length,
+        type: "symbol",
+        path: match[1],
+        line: match[3],
+      });
+    }
+  };
+
+  collectSymbolMatches(patterns.symbolQuoted);
+  collectSymbolMatches(patterns.symbol);
+
+  const filteredDirectoryMatches = directoryMatches.filter((dirMatch) => {
+    return !fileMatches.some(
+      (fileMatch) =>
+        dirMatch.from >= fileMatch.from && dirMatch.to <= fileMatch.to
+    );
+  });
+
+  return [
+    ...fileMatches,
+    ...filteredDirectoryMatches,
+    ...lineRangeMatches,
+    ...symbolMatches,
+  ].sort((a, b) => a.from - b.from);
+}
+
+function createWorkspaceReferenceDecorationExtension() {
+  return ViewPlugin.fromClass(
+    class {
+      decorations;
+
+      constructor(view: EditorView) {
+        this.decorations = this.buildDecorations(view);
+      }
+
+      update(update: {
+        docChanged: boolean;
+        viewportChanged: boolean;
+        view: EditorView;
+      }) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = this.buildDecorations(update.view);
+        }
+      }
+
+      buildDecorations(view: EditorView) {
+        const builder = new RangeSetBuilder<Decoration>();
+
+        for (const { from, to } of view.visibleRanges) {
+          const text = view.state.doc.sliceString(from, to);
+          const matches = findWorkspaceReferenceMatches(text, from);
+
+          for (const linkMatch of matches) {
+            const attrs: Record<string, string> = {
+              "data-type": linkMatch.type,
+              "data-path": linkMatch.path,
+            };
+
+            if (linkMatch.lineStart) {
+              attrs["data-line-start"] = linkMatch.lineStart;
+            }
+            if (linkMatch.lineEnd) {
+              attrs["data-line-end"] = linkMatch.lineEnd;
+            }
+            if (linkMatch.line) {
+              attrs["data-line"] = linkMatch.line;
+            }
+
+            builder.add(
+              linkMatch.from,
+              linkMatch.to,
+              Decoration.mark({
+                class: "cm-link",
+                attributes: attrs,
+              })
+            );
+          }
+        }
+
+        return builder.finish();
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+    }
+  );
+}
+
+function getLinkElement(target: EventTarget | null): HTMLElement | null {
+  return target instanceof HTMLElement ? target.closest(".cm-link") : null;
+}
+
+function openWorkspaceReferenceLink(
+  target: HTMLElement,
+  openToFile: (filePath: string, startLine?: number, endLine?: number) => void,
+  openToDirectory: (dirPath: string) => void
+): boolean {
+  const type = target.getAttribute("data-type");
+  const path = target.getAttribute("data-path");
+  if (!type || !path) return false;
+
+  if (type === "directory") {
+    openToDirectory(path);
+    return true;
+  }
+
+  if (type === "lineRange") {
+    const lineStart = target.getAttribute("data-line-start");
+    const lineEnd = target.getAttribute("data-line-end");
+    openToFile(
+      path,
+      lineStart ? parseInt(lineStart, 10) : undefined,
+      lineEnd ? parseInt(lineEnd, 10) : undefined
+    );
+    return true;
+  }
+
+  if (type === "symbol") {
+    const line = target.getAttribute("data-line");
+    openToFile(
+      path,
+      line ? parseInt(line, 10) : undefined,
+      line ? parseInt(line, 10) : undefined
+    );
+    return true;
+  }
+
+  if (type === "file") {
+    openToFile(path);
+    return true;
+  }
+
+  return false;
+}
+
+function createWorkspaceReferenceClickHandlerExtension(
+  openToFile: (filePath: string, startLine?: number, endLine?: number) => void,
+  openToDirectory: (dirPath: string) => void
+) {
+  let touchStart: {
+    x: number;
+    y: number;
+    time: number;
+    target: HTMLElement;
+  } | null = null;
+
+  const cancelTouch = () => {
+    touchStart = null;
+  };
+
+  return EditorView.domEventHandlers({
+    touchstart: (event) => {
+      if (event.touches.length !== 1) {
+        cancelTouch();
+        return false;
+      }
+
+      const target = getLinkElement(event.target);
+      if (!target) {
+        cancelTouch();
+        return false;
+      }
+
+      const touch = event.touches[0];
+      touchStart = {
+        x: touch.clientX,
+        y: touch.clientY,
+        time: Date.now(),
+        target,
+      };
+      return false;
+    },
+    touchmove: (event) => {
+      if (!touchStart || event.touches.length === 0) return false;
+
+      const touch = event.touches[0];
+      const dx = touch.clientX - touchStart.x;
+      const dy = touch.clientY - touchStart.y;
+      if (Math.sqrt(dx * dx + dy * dy) > LINK_TOUCH_MOVE_THRESHOLD_PX) {
+        cancelTouch();
+      }
+
+      return false;
+    },
+    touchcancel: () => {
+      cancelTouch();
+      return false;
+    },
+    touchend: (event) => {
+      if (!touchStart) return false;
+
+      const start = touchStart;
+      cancelTouch();
+
+      if (Date.now() - start.time >= LINK_TOUCH_LONG_PRESS_MS) {
+        return false;
+      }
+
+      const endTarget = getLinkElement(event.target);
+      if (endTarget !== start.target) {
+        return false;
+      }
+
+      if (
+        !openWorkspaceReferenceLink(start.target, openToFile, openToDirectory)
+      ) {
+        return false;
+      }
+
+      event.preventDefault();
+      return true;
+    },
+    click: (event, view) => {
+      const target = getLinkElement(event.target);
+      if (!target) return false;
+      if (!(event.ctrlKey || event.metaKey)) return false;
+
+      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+      if (pos === null) return false;
+
+      if (!openWorkspaceReferenceLink(target, openToFile, openToDirectory)) {
+        return false;
+      }
+
+      event.preventDefault();
+      return true;
+    },
+  });
+}

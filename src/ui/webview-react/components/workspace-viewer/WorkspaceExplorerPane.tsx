@@ -22,6 +22,7 @@ import {
 import {
   WorkspaceFileEditor,
   type WorkspaceFileEditorHandle,
+  type WorkspaceFileEditorPendingSelection,
 } from "./WorkspaceFileEditor";
 
 /**
@@ -65,7 +66,9 @@ function EntryRow({
   onClick,
   openContextMenu,
 }: EntryRowProps) {
-  const longPressHandlers = useLongPress((x, y) => openContextMenu(x, y, entry));
+  const longPressHandlers = useLongPress((x, y) =>
+    openContextMenu(x, y, entry)
+  );
 
   return (
     <button
@@ -143,11 +146,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
     (s) => s.clearPendingNavigation
   );
 
-  // Holds a line selection to apply once the next file finishes loading
-  const pendingSelectionRef = useRef<{
-    startLine: number;
-    endLine: number;
-  } | null>(null);
+  const selectionRequestSeqRef = useRef(0);
 
   const workspacePath = useSettingsStore((s) => s.globalSettings.workspaceRoot);
   const showHiddenFiles = useSettingsStore(
@@ -166,6 +165,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const editorRef = useRef<WorkspaceFileEditorHandle>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [pendingEditorSelection, setPendingEditorSelection] =
+    useState<WorkspaceFileEditorPendingSelection | null>(null);
   const {
     openContextMenu: openEditorContextMenu,
     editorContextMenuPortal,
@@ -288,22 +289,23 @@ export const WorkspaceExplorerPane: React.FC = () => {
     } else {
       const { filePath, startLine, endLine } = pendingNavigation;
       if (startLine !== undefined && endLine !== undefined) {
-        pendingSelectionRef.current = { startLine, endLine };
+        setPendingEditorSelection({
+          requestId: ++selectionRequestSeqRef.current,
+          startLine,
+          endLine,
+        });
+      } else {
+        setPendingEditorSelection(null);
       }
       openFile(filePath);
     }
   }, [pendingNavigation, clearPendingNavigation, loadDirectory, openFile]);
 
-  // Apply pending line selection once file loading completes
-  useEffect(() => {
-    if (fileLoading) return;
-    const sel = pendingSelectionRef.current;
-    if (!sel) return;
-    pendingSelectionRef.current = null;
-    requestAnimationFrame(() => {
-      editorRef.current?.selectLines(sel.startLine, sel.endLine);
-    });
-  }, [fileLoading]);
+  const handlePendingSelectionApplied = useCallback((requestId: number) => {
+    setPendingEditorSelection((current) =>
+      current?.requestId === requestId ? null : current
+    );
+  }, []);
 
   const handleBack = useCallback(() => {
     if (parentPath !== null) {
@@ -703,6 +705,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 onSave={handleSave}
                 saving={fileSaving}
                 onUndoRedoChange={handleUndoRedoChange}
+                pendingSelection={pendingEditorSelection}
+                onPendingSelectionApplied={handlePendingSelectionApplied}
               />
             </div>
           )}
