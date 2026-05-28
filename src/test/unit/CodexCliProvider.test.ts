@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { suite, test } from "mocha";
 import { CodexCliProvider } from "../../flightpath/harness/codex/CodexCliProvider";
 
@@ -83,7 +86,13 @@ suite("CodexCliProvider", () => {
     test("combined arg order puts resume after hook args", () => {
       // Simulate the CliIntegration assembly: baseArgs → hookArgs pushed → suffix appended
       const baseArgs = ["--model", "gpt-5.2-codex", "--add-dir", "/workspace"];
-      const hookArgs = ["--enable", "hooks", "-c", "hooks.state={...}"];
+      const hookArgs = [
+        "--enable",
+        "hooks",
+        "--dangerously-bypass-hook-trust",
+        "-c",
+        "hooks.state={...}",
+      ];
       const permissionArgs = ["--approval-policy=auto"];
 
       baseArgs.push(...hookArgs);
@@ -118,6 +127,92 @@ suite("CodexCliProvider", () => {
         "thread_abc123",
         "session ID must immediately follow 'resume'"
       );
+    });
+
+    test("interactive resumed command puts global hook trust before resume and prompt after session ID", () => {
+      const baseArgs = ["--model", "gpt-5.2-codex", "--add-dir", "/workspace"];
+      const hookArgs = [
+        "--enable",
+        "hooks",
+        "--dangerously-bypass-hook-trust",
+        "-c",
+        "hooks.state={...}",
+      ];
+      const permissionArgs = ["--approval-policy=auto"];
+
+      baseArgs.push(...hookArgs);
+      baseArgs.push(...permissionArgs);
+      baseArgs.push(
+        ...provider.buildCliSuffix("thread_abc123", makeWorkflowContext(true))
+      );
+
+      const result = provider.buildInteractiveArgs(baseArgs, "continue work");
+
+      assert.deepStrictEqual(result, [
+        "--model",
+        "gpt-5.2-codex",
+        "--add-dir",
+        "/workspace",
+        "--enable",
+        "hooks",
+        "--dangerously-bypass-hook-trust",
+        "-c",
+        "hooks.state={...}",
+        "--approval-policy=auto",
+        "resume",
+        "thread_abc123",
+        "continue work",
+      ]);
+    });
+
+    test("interactive new-session command puts prompt after global args", () => {
+      const result = provider.buildInteractiveArgs(
+        ["--model", "gpt-5.2-codex", "--enable", "hooks"],
+        "start work"
+      );
+
+      assert.deepStrictEqual(result, [
+        "--model",
+        "gpt-5.2-codex",
+        "--enable",
+        "hooks",
+        "start work",
+      ]);
+    });
+  });
+
+  suite("buildNotificationHookArgs", () => {
+    const provider = new CodexCliProvider();
+
+    test("enables hooks with the Codex automation trust bypass", async () => {
+      const workspaceRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "codex-hook-args-")
+      );
+      const workingFilePath = path.join(workspaceRoot, ".flightpath", "wf.json");
+
+      try {
+        const args = await provider.buildNotificationHookArgs(
+          "/ext",
+          workspaceRoot,
+          0,
+          workingFilePath,
+          undefined,
+          []
+        );
+
+        assert.deepStrictEqual(args.slice(0, 3), [
+          "--enable",
+          "hooks",
+          "--dangerously-bypass-hook-trust",
+        ]);
+        assert.ok(
+          args.includes("-c"),
+          "inline hooks.state trust override should remain for compatibility"
+        );
+      } finally {
+        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath);
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+      }
     });
   });
 });

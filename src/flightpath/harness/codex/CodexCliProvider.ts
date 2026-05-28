@@ -33,6 +33,9 @@ import type {
 } from "../../../types/FlightPathTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
+const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
+const CODEX_BYPASS_HOOK_TRUST_ARG = "--dangerously-bypass-hook-trust";
+
 /**
  * Codex CLI Harness
  *
@@ -224,12 +227,12 @@ export class CodexCliProvider implements ICliProvider {
   }
 
   /**
-   * Append "resume <session-id>" as the final args in the assembled command.
+   * Append "resume <session-id>" after all global args in the assembled command.
    *
    * Codex's "resume" is a CLI subcommand (not a flag), so it must come AFTER all global
-   * flags such as "--enable hooks" and "-c hooks.state=...". Placing it before those flags
-   * causes Codex to parse them as subcommand args rather than global config, which breaks
-   * hook trust-state injection and causes hash validation failures for resume sessions.
+   * flags such as "--enable hooks" and "-c hooks.state=...". buildInteractiveArgs()
+   * then moves the prompt after the session ID so Codex receives:
+   * codex [global flags] resume <session-id> <prompt>.
    */
   buildCliSuffix(
     sessionId: string | undefined,
@@ -255,10 +258,11 @@ export class CodexCliProvider implements ICliProvider {
    * Writes hooks to .codex/hooks.json and enables the Codex hook system.
    *
    * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
-   * Codex tracks trust in hooks.state. New or modified unmanaged hooks need
-   * review before they can run, even when the hooks feature is enabled.
+   * Codex tracks trust in hooks.state. FlightPath still passes inline trusted
+   * hashes for compatibility, but current Codex also requires an explicit
+   * automation bypass for resumed sessions to avoid persisted hook trust prompts.
    *
-   * @returns ["--enable", "hooks"] — required for Codex to activate its hook system
+   * @returns Hook activation args plus trust bypass/config overrides.
    */
   async buildNotificationHookArgs(
     extensionPath: string,
@@ -286,13 +290,18 @@ export class CodexCliProvider implements ICliProvider {
     Log.debug(
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
     );
-    return ["--enable", "hooks", ...trustArgs];
+    return [
+      ...CODEX_HOOK_ARGS,
+      CODEX_BYPASS_HOOK_TRUST_ARG,
+      ...trustArgs,
+    ];
   }
 
   /**
    * Set up user-only hooks for headless execution.
    * No FlightPath notification hooks are included since headless uses process-exit for completion.
-   * Returns ["--enable", "hooks"] so Codex activates its hook system.
+   * Returns hook activation args plus the hook trust bypass/config overrides so
+   * Codex activates its hook system without prompting during automation.
    */
   async buildHeadlessUserHookArgs(
     extensionPath: string,
@@ -343,7 +352,11 @@ export class CodexCliProvider implements ICliProvider {
       );
     });
     Log.debug(`🔔 Configured user hooks for Codex headless mode`);
-    return ["--enable", "hooks", ...trustArgs];
+    return [
+      ...CODEX_HOOK_ARGS,
+      CODEX_BYPASS_HOOK_TRUST_ARG,
+      ...trustArgs,
+    ];
   }
 
   /**
@@ -605,15 +618,30 @@ export class CodexCliProvider implements ICliProvider {
   /**
    * Build CLI arguments for interactive TUI mode
    *
-   * Codex interactive mode: codex "prompt text" [args...] (no exec = interactive)
-   * Note: buildCliArgs() already filtered out headless-only flags when isInteractive=true
+   * Codex interactive mode:
+   * - New session: codex [OPTIONS] [PROMPT]
+   * - Resumed session: codex [OPTIONS] resume <SESSION_ID> [PROMPT]
+   *
+   * Global flags must precede the resume subcommand. In particular, hook trust
+   * overrides (`-c hooks.state=...`) must be parsed before resume starts or Codex
+   * will prompt for hook approval during resumed sessions.
    *
    * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
    * @param promptText The prompt text to include
    * @returns Complete arguments array
    */
   buildInteractiveArgs(baseArgs: string[], promptText: string): string[] {
-    return [promptText, ...baseArgs];
+    const resumeIndex = baseArgs.lastIndexOf("resume");
+    if (resumeIndex >= 0 && resumeIndex === baseArgs.length - 2) {
+      return [
+        ...baseArgs.slice(0, resumeIndex),
+        "resume",
+        baseArgs[resumeIndex + 1],
+        promptText,
+      ];
+    }
+
+    return [...baseArgs, promptText];
   }
 
   /**
