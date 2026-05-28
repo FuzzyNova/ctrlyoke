@@ -34,7 +34,6 @@ import type {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
-const CODEX_BYPASS_HOOK_TRUST_ARG = "--dangerously-bypass-hook-trust";
 
 /**
  * Codex CLI Harness
@@ -258,11 +257,10 @@ export class CodexCliProvider implements ICliProvider {
    * Writes hooks to .codex/hooks.json and enables the Codex hook system.
    *
    * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
-   * Codex tracks trust in hooks.state. FlightPath still passes inline trusted
-   * hashes for compatibility, but current Codex also requires an explicit
-   * automation bypass for resumed sessions to avoid persisted hook trust prompts.
+   * Codex tracks trust in hooks.state. FlightPath passes inline trusted hashes
+   * for the FlightPath-managed hook entries so Codex does not prompt for review.
    *
-   * @returns Hook activation args plus trust bypass/config overrides.
+   * @returns Hook activation args plus trust config overrides.
    */
   async buildNotificationHookArgs(
     extensionPath: string,
@@ -290,18 +288,14 @@ export class CodexCliProvider implements ICliProvider {
     Log.debug(
       `🔔 Configured SessionStart + Stop hooks for Codex completion detection`
     );
-    return [
-      ...CODEX_HOOK_ARGS,
-      CODEX_BYPASS_HOOK_TRUST_ARG,
-      ...trustArgs,
-    ];
+    return [...CODEX_HOOK_ARGS, ...trustArgs];
   }
 
   /**
    * Set up user-only hooks for headless execution.
    * No FlightPath notification hooks are included since headless uses process-exit for completion.
-   * Returns hook activation args plus the hook trust bypass/config overrides so
-   * Codex activates its hook system without prompting during automation.
+   * Returns hook activation args plus trust config overrides so Codex activates
+   * its hook system without prompting during automation.
    */
   async buildHeadlessUserHookArgs(
     extensionPath: string,
@@ -352,11 +346,7 @@ export class CodexCliProvider implements ICliProvider {
       );
     });
     Log.debug(`🔔 Configured user hooks for Codex headless mode`);
-    return [
-      ...CODEX_HOOK_ARGS,
-      CODEX_BYPASS_HOOK_TRUST_ARG,
-      ...trustArgs,
-    ];
+    return [...CODEX_HOOK_ARGS, ...trustArgs];
   }
 
   /**

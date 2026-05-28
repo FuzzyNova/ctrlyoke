@@ -86,13 +86,7 @@ suite("CodexCliProvider", () => {
     test("combined arg order puts resume after hook args", () => {
       // Simulate the CliIntegration assembly: baseArgs → hookArgs pushed → suffix appended
       const baseArgs = ["--model", "gpt-5.2-codex", "--add-dir", "/workspace"];
-      const hookArgs = [
-        "--enable",
-        "hooks",
-        "--dangerously-bypass-hook-trust",
-        "-c",
-        "hooks.state={...}",
-      ];
+      const hookArgs = ["--enable", "hooks", "-c", "hooks.state={...}"];
       const permissionArgs = ["--approval-policy=auto"];
 
       baseArgs.push(...hookArgs);
@@ -131,13 +125,7 @@ suite("CodexCliProvider", () => {
 
     test("interactive resumed command puts global hook trust before resume and prompt after session ID", () => {
       const baseArgs = ["--model", "gpt-5.2-codex", "--add-dir", "/workspace"];
-      const hookArgs = [
-        "--enable",
-        "hooks",
-        "--dangerously-bypass-hook-trust",
-        "-c",
-        "hooks.state={...}",
-      ];
+      const hookArgs = ["--enable", "hooks", "-c", "hooks.state={...}"];
       const permissionArgs = ["--approval-policy=auto"];
 
       baseArgs.push(...hookArgs);
@@ -155,7 +143,6 @@ suite("CodexCliProvider", () => {
         "/workspace",
         "--enable",
         "hooks",
-        "--dangerously-bypass-hook-trust",
         "-c",
         "hooks.state={...}",
         "--approval-policy=auto",
@@ -184,11 +171,15 @@ suite("CodexCliProvider", () => {
   suite("buildNotificationHookArgs", () => {
     const provider = new CodexCliProvider();
 
-    test("enables hooks with the Codex automation trust bypass", async () => {
+    test("enables hooks with inline trust state and no bypass flag", async () => {
       const workspaceRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "codex-hook-args-")
       );
-      const workingFilePath = path.join(workspaceRoot, ".flightpath", "wf.json");
+      const workingFilePath = path.join(
+        workspaceRoot,
+        ".flightpath",
+        "wf.json"
+      );
 
       try {
         const args = await provider.buildNotificationHookArgs(
@@ -200,17 +191,20 @@ suite("CodexCliProvider", () => {
           []
         );
 
-        assert.deepStrictEqual(args.slice(0, 3), [
-          "--enable",
-          "hooks",
-          "--dangerously-bypass-hook-trust",
-        ]);
+        assert.deepStrictEqual(args.slice(0, 2), ["--enable", "hooks"]);
+        assert.ok(
+          !args.includes("--dangerously-bypass-hook-trust"),
+          "hook trust bypass should not be emitted when inline trust state is present"
+        );
         assert.ok(
           args.includes("-c"),
           "inline hooks.state trust override should remain for compatibility"
         );
       } finally {
-        await provider.cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath);
+        await provider.cleanupWorkspaceArtifacts(
+          workspaceRoot,
+          workingFilePath
+        );
         await fs.rm(workspaceRoot, { recursive: true, force: true });
       }
     });

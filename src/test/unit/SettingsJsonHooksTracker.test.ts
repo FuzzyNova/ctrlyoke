@@ -72,6 +72,21 @@ function codexInlineTrustOverride(
     : [];
 }
 
+async function getExpectedCodexPathVariantsAsync(
+  originalPath: string,
+  filePath: string
+): Promise<string[]> {
+  const realPath = await fs.realpath(filePath);
+  const withoutExtendedPrefix = realPath.startsWith("\\\\?\\")
+    ? realPath.slice(4)
+    : realPath;
+  const upperDriveResolvedPath = withoutExtendedPrefix.replace(
+    /^([a-z]):/,
+    (match) => match.toUpperCase()
+  );
+  return Array.from(new Set([originalPath, upperDriveResolvedPath]));
+}
+
 suite("SettingsJsonHooksTracker", () => {
   let tmpDir: string;
   let settingsDir: string;
@@ -270,6 +285,58 @@ suite("SettingsJsonHooksTracker", () => {
           trusted_hash: codexTrustedHash("stop", undefined, "node fp.js", 600),
         },
       })
+    );
+  });
+
+  test("should include Codex trust key path variants before serializing inline state", async function () {
+    if (process.platform !== "win32") {
+      this.skip();
+    }
+
+    const codexHooksPath = path.join(tmpDir, ".codex", "hooks.json");
+    const tracker = SettingsJsonHooksTracker.getInstance("codex");
+
+    await tracker.registerWorkflow(
+      "wf-1",
+      tmpDir,
+      {
+        Stop: [
+          { matcher: "", hooks: [{ type: "command", command: "node fp.js" }] },
+        ],
+      },
+      {}
+    );
+
+    const lowerCaseWorkspaceRoot = tmpDir.toLowerCase();
+    const lowerCaseCodexHooksPath = path.join(
+      lowerCaseWorkspaceRoot,
+      ".codex",
+      "hooks.json"
+    );
+    const codexHookPathVariants = await getExpectedCodexPathVariantsAsync(
+      lowerCaseCodexHooksPath,
+      codexHooksPath
+    );
+
+    assert.deepStrictEqual(
+      SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
+        tracker.getCodexTrustState(lowerCaseWorkspaceRoot)
+      ),
+      codexInlineTrustOverride(
+        Object.fromEntries(
+          codexHookPathVariants.map((variantPath) => [
+            `${variantPath}:stop:0:0`,
+            {
+              trusted_hash: codexTrustedHash(
+                "stop",
+                undefined,
+                "node fp.js",
+                600
+              ),
+            },
+          ])
+        )
+      )
     );
   });
 

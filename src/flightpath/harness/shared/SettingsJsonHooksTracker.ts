@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import * as nodeFs from "fs";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { normalizeCodexHookMatcher } from "./CodexHookUtils";
@@ -377,7 +378,7 @@ export class SettingsJsonHooksTracker {
 
   private addCodexTrustedState(
     mergedState: Record<string, HookStateEntry>,
-    settingsPath: string,
+    settingsPaths: string[],
     event: string,
     groupIndex: number,
     group: unknown
@@ -393,17 +394,19 @@ export class SettingsJsonHooksTracker {
         return;
       }
 
-      mergedState[
-        this.buildCodexHookKey(settingsPath, event, groupIndex, handlerIndex)
-      ] = {
-        trusted_hash: this.computeCodexTrustedHash(
-          event,
-          matcher,
-          commandHook.command,
-          commandHook.timeout,
-          commandHook.statusMessage
-        ),
-      };
+      for (const settingsPath of settingsPaths) {
+        mergedState[
+          this.buildCodexHookKey(settingsPath, event, groupIndex, handlerIndex)
+        ] = {
+          trusted_hash: this.computeCodexTrustedHash(
+            event,
+            matcher,
+            commandHook.command,
+            commandHook.timeout,
+            commandHook.statusMessage
+          ),
+        };
+      }
     });
   }
 
@@ -412,6 +415,8 @@ export class SettingsJsonHooksTracker {
   ): Record<string, HookStateEntry> {
     const { events: baseHooks, state: baseState } = this.getBaselineHooksData();
     const mergedState: Record<string, HookStateEntry> = {};
+    const settingsPathVariants =
+      this.getCodexHookSourcePathVariants(settingsPath);
 
     const allEvents = new Set<string>();
     for (const key of Object.keys(baseHooks)) {
@@ -432,7 +437,7 @@ export class SettingsJsonHooksTracker {
         for (const group of wfHooks.flightpath[event] ?? []) {
           this.addCodexTrustedState(
             mergedState,
-            settingsPath,
+            settingsPathVariants,
             event,
             groupIndex,
             group
@@ -443,7 +448,7 @@ export class SettingsJsonHooksTracker {
         for (const group of wfHooks.userHooks[event] ?? []) {
           this.addCodexTrustedState(
             mergedState,
-            settingsPath,
+            settingsPathVariants,
             event,
             groupIndex,
             group
@@ -457,7 +462,7 @@ export class SettingsJsonHooksTracker {
         this.remapCodexBaselineState(
           mergedState,
           baseState,
-          settingsPath,
+          settingsPathVariants,
           event,
           baselineGroupIndex,
           groupIndex,
@@ -467,13 +472,53 @@ export class SettingsJsonHooksTracker {
       });
     }
 
+    this.logCodexTrustState(settingsPath, settingsPathVariants, mergedState);
     return mergedState;
+  }
+
+  private getCodexHookSourcePathVariants(settingsPath: string): string[] {
+    let resolvedPath: string;
+    try {
+      resolvedPath = nodeFs.realpathSync(settingsPath);
+    } catch {
+      resolvedPath = path.resolve(settingsPath);
+    }
+
+    const withoutExtendedPrefix = resolvedPath.startsWith("\\\\?\\")
+      ? resolvedPath.slice(4)
+      : resolvedPath;
+
+    const upperDriveResolvedPath = withoutExtendedPrefix.replace(
+      /^([a-z]):/,
+      (match) => match.toUpperCase()
+    );
+
+    // Codex appears sensitive to the exact path string used in hook discovery.
+    // Keep the workspace-derived path first because that matched the previously
+    // working Windows command, and add the resolved form as a fallback.
+    return Array.from(new Set([settingsPath, upperDriveResolvedPath]));
+  }
+
+  private logCodexTrustState(
+    originalSettingsPath: string,
+    settingsPathVariants: string[],
+    state: Record<string, HookStateEntry>
+  ): void {
+    const keys = Object.keys(state).sort((left, right) =>
+      left.localeCompare(right)
+    );
+    Log.debug(
+      `[CodexHookTrust] sourcePath=${originalSettingsPath}; sourcePathVariants=${settingsPathVariants.join(" | ")}; trustEntryCount=${keys.length}`
+    );
+    if (keys.length > 0) {
+      Log.trace(`[CodexHookTrust] trustKeys=${keys.join(" | ")}`);
+    }
   }
 
   private remapCodexBaselineState(
     mergedState: Record<string, HookStateEntry>,
     baselineState: Record<string, HookStateEntry>,
-    settingsPath: string,
+    settingsPaths: string[],
     event: string,
     baselineGroupIndex: number,
     mergedGroupIndex: number,
@@ -481,25 +526,33 @@ export class SettingsJsonHooksTracker {
   ): void {
     const handlers = this.getHookHandlers(group);
     handlers.forEach((_, handlerIndex) => {
-      const originalKey = this.buildCodexHookKey(
-        settingsPath,
-        event,
-        baselineGroupIndex,
-        handlerIndex
-      );
-      const originalState = baselineState[originalKey];
+      const originalState = settingsPaths
+        .map(
+          (settingsPath) =>
+            baselineState[
+              this.buildCodexHookKey(
+                settingsPath,
+                event,
+                baselineGroupIndex,
+                handlerIndex
+              )
+            ]
+        )
+        .find((state) => state !== undefined);
       if (!originalState) {
         return;
       }
 
-      mergedState[
-        this.buildCodexHookKey(
-          settingsPath,
-          event,
-          mergedGroupIndex,
-          handlerIndex
-        )
-      ] = { ...originalState };
+      for (const settingsPath of settingsPaths) {
+        mergedState[
+          this.buildCodexHookKey(
+            settingsPath,
+            event,
+            mergedGroupIndex,
+            handlerIndex
+          )
+        ] = { ...originalState };
+      }
     });
   }
 
