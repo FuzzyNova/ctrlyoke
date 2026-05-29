@@ -1481,6 +1481,11 @@ export class WebviewMessageRouter {
       await orchestrator?.handleInitializeWorkspace();
     });
 
+    table.set(MESSAGE_TYPES.PANEL_LAYOUT_PREFERENCE, async (message: any) => {
+      const orchestrator = this.getOrchestrator();
+      await orchestrator?.handleLayoutPreference(message.moveToSidebar === true);
+    });
+
     return table;
   }
 

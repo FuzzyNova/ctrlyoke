@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
@@ -14,6 +14,8 @@ const STARTUP_TIMEOUT_MS = 8000;
  * - Normal startup: shows a spinner until STARTUP_COMPLETE arrives (or 8-second safety timeout).
  * - Uninitialized workspace: shows an "Initialize FlightPath" prompt instead of the spinner.
  *   The safety timeout is suppressed so the init button stays visible indefinitely.
+ * - First install layout preference: after init, shows a panel placement choice (step 2).
+ *   The safety timeout is also suppressed here.
  *
  * The overlay intercepts all pointer events, preventing user interaction with
  * the dashboard during the startup window when the extension hasn't finished
@@ -24,16 +26,20 @@ export const StartupOverlay: React.FC = () => {
   const startupReady = useUiStore((s) => s.startupReady);
   const devRestarting = useUiStore((s) => s.devRestarting);
   const workspaceInitRequired = useUiStore((s) => s.workspaceInitRequired);
+  const showLayoutPreference = useUiStore((s) => s.showLayoutPreference);
   const setStartupReady = useUiStore((s) => s.setStartupReady);
+  const setShowLayoutPreference = useUiStore((s) => s.setShowLayoutPreference);
+
+  const suppressTimeout = workspaceInitRequired || showLayoutPreference;
 
   // Safety timeout: dismiss overlay if STARTUP_COMPLETE never arrives.
-  // Suppressed when workspace initialization is pending — the init button must
-  // stay visible until the user explicitly approves.
+  // Suppressed when workspace initialization or layout preference is pending —
+  // those prompts must stay visible until the user explicitly acts.
   // devRestarting must NOT bypass this — if the DEV panel triggered a reload
   // but the extension host restart left the webview stuck, the timeout is
   // the only recovery path until RECONNECT arrives and clears devRestarting.
   useEffect(() => {
-    if (startupReady || workspaceInitRequired) return;
+    if (startupReady || suppressTimeout) return;
     const id = setTimeout(() => {
       WebviewLog.warn(
         `[startup] Safety timeout (${STARTUP_TIMEOUT_MS}ms) fired — STARTUP_COMPLETE has not arrived yet; dismissing overlay`
@@ -41,10 +47,11 @@ export const StartupOverlay: React.FC = () => {
       setStartupReady(true);
     }, STARTUP_TIMEOUT_MS);
     return () => clearTimeout(id);
-  }, [startupReady, workspaceInitRequired, setStartupReady]);
+  }, [startupReady, suppressTimeout, setStartupReady]);
 
-  // Overlay stays visible if startup hasn't finished OR if init is required
-  if (startupReady && !workspaceInitRequired) return null;
+  // Overlay stays visible if startup hasn't finished OR if either prompt is active
+  if (startupReady && !workspaceInitRequired && !showLayoutPreference)
+    return null;
 
   return (
     <div
@@ -58,7 +65,9 @@ export const StartupOverlay: React.FC = () => {
       aria-label={
         workspaceInitRequired
           ? "Initialize FlightPath in this workspace"
-          : "Loading FlightPath\u2026"
+          : showLayoutPreference
+            ? "Choose where to dock the FlightPath panel"
+            : "Loading FlightPath…"
       }
     >
       {workspaceInitRequired ? (
@@ -97,6 +106,8 @@ export const StartupOverlay: React.FC = () => {
             Initialize FlightPath
           </button>
         </div>
+      ) : showLayoutPreference ? (
+        <LayoutPreferenceStep onChoose={setShowLayoutPreference} />
       ) : (
         <div className="flex flex-col items-center gap-3">
           <div className="w-6 h-6 border-2 border-description-fg border-t-transparent rounded-full animate-spin" />
@@ -107,6 +118,81 @@ export const StartupOverlay: React.FC = () => {
           </span>
         </div>
       )}
+    </div>
+  );
+};
+
+const LayoutPreferenceStep: React.FC<{ onChoose: (show: boolean) => void }> = ({
+  onChoose,
+}) => {
+  const [choosing, setChoosing] = useState(false);
+
+  const choose = (moveToSidebar: boolean) => {
+    setChoosing(true);
+    onChoose(false);
+    getVsCodeApi().postMessage({
+      type: MESSAGE_TYPES.PANEL_LAYOUT_PREFERENCE,
+      moveToSidebar,
+    });
+  };
+
+  if (choosing) {
+    return (
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-6 h-6 border-2 border-description-fg border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs text-description-fg select-none">
+          Loading...
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-4 max-w-sm text-center px-4">
+      <svg
+        width="32"
+        height="32"
+        viewBox="0 0 16 16"
+        fill="currentColor"
+        className="text-description-fg opacity-80"
+        aria-hidden="true"
+      >
+        {/* Layout icon */}
+        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 0v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H5zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2V2z" />
+      </svg>
+      <span className="text-sm font-medium text-foreground select-none">
+        Where should FlightPath open?
+      </span>
+      <span className="text-xs text-description-fg select-none leading-relaxed">
+        On smaller screens the bottom panel can feel cramped. You can move
+        FlightPath to the side panel for more vertical space.
+      </span>
+      <div className="flex gap-2 mt-1">
+        <button
+          className="px-4 py-1.5 text-xs font-medium rounded
+                     bg-btn-bg text-btn-fg border border-btn-border
+                     hover:bg-btn-hover transition-colors
+                     focus:outline-none focus:ring-1 focus:ring-focus-border
+                     cursor-pointer select-none"
+          onClick={() => choose(true)}
+        >
+          Move to side panel
+        </button>
+        <button
+          className="px-4 py-1.5 text-xs font-medium rounded
+                     bg-transparent text-description-fg border border-btn-border
+                     hover:bg-btn-bg transition-colors
+                     focus:outline-none focus:ring-1 focus:ring-focus-border
+                     cursor-pointer select-none"
+          onClick={() => choose(false)}
+        >
+          Keep at bottom
+        </button>
+      </div>
+      <span className="text-xs text-description-fg opacity-70 select-none leading-relaxed">
+        You can always change it later by dragging the FlightPath tab to
+        whichever panel you prefer.
+      </span>
     </div>
   );
 };

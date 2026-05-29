@@ -161,6 +161,8 @@ export class WorkflowOrchestrator {
   private workspaceInitPending: boolean = false;
   /** The workspace root path waiting for FlightPath initialization. */
   private pendingInitWorkspaceRoot: string | undefined;
+  /** Set on first-ever workspace init — blocks startup until the user chooses a panel layout preference. */
+  private layoutPreferencePending: boolean = false;
 
   /** MCP server provider for injecting user-defined MCP servers into VS Code (chat harness only) */
   private mcpServerProvider?: FlightPathMcpServerProvider;
@@ -870,9 +872,9 @@ export class WorkflowOrchestrator {
       return;
     }
 
+    let isNew = false;
     try {
-      const isNew =
-        await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
+      isNew = await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
       // .flightpath/ now exists — start file logging for this session.
       Log.enableWorkspaceFileLogging();
       if (isNew) {
@@ -898,6 +900,21 @@ export class WorkflowOrchestrator {
 
     this.workspaceInitPending = false;
     this.pendingInitWorkspaceRoot = undefined;
+    this.layoutPreferencePending = isNew;
+    await this.triggerStartupAutoLoadIfReady();
+  }
+
+  /**
+   * Called when the user selects a panel layout preference during first-install onboarding.
+   * Optionally moves the panel to the secondary sidebar, then resumes startup.
+   */
+  async handleLayoutPreference(moveToSidebar: boolean): Promise<void> {
+    if (moveToSidebar) {
+      await vscode.commands.executeCommand(
+        "workbench.action.movePanelToSecondarySideBar"
+      );
+    }
+    this.layoutPreferencePending = false;
     await this.triggerStartupAutoLoadIfReady();
   }
 
@@ -969,6 +986,13 @@ export class WorkflowOrchestrator {
     if (this.workspaceInitPending) {
       this.dashboardBroadcastHub.postMessage({
         type: MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED,
+      });
+      return;
+    }
+
+    if (this.layoutPreferencePending) {
+      this.dashboardBroadcastHub.postMessage({
+        type: MESSAGE_TYPES.SHOW_LAYOUT_PREFERENCE,
       });
       return;
     }

@@ -1446,4 +1446,6 @@ export type IncomingMessage =
   | OpenHarnessDirResultMessage
   | { type: typeof MESSAGE_TYPES.STARTUP_COMPLETE }
   | { type: typeof MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED }
-  | { type: typeof MESSAGE_TYPES.INITIALIZE_WORKSPACE };
+  | { type: typeof MESSAGE_TYPES.INITIALIZE_WORKSPACE }
+  | { type: typeof MESSAGE_TYPES.SHOW_LAYOUT_PREFERENCE }
+  | { type: typeof MESSAGE_TYPES.PANEL_LAYOUT_PREFERENCE; moveToSidebar: boolean };

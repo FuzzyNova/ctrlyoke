@@ -1473,6 +1473,16 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // SHOW_LAYOUT_PREFERENCE - first-install step 2: ask where to dock the panel
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SHOW_LAYOUT_PREFERENCE] = () => {
+    WebviewLog.debug("[startup] SHOW_LAYOUT_PREFERENCE received");
+    const store = useUiStore.getState();
+    store.setWorkspaceInitRequired(false);
+    store.setShowLayoutPreference(true);
+  };
+
+  // --------------------------------------------------------------------------
   // WORKFLOW_UNLOADED - Workflow unloaded, disable UI
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_UNLOADED] = () => {

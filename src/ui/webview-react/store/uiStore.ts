@@ -180,6 +180,8 @@ interface UiState {
   devRestarting: boolean;
   /** True when FlightPath has not yet been initialized in this workspace and the user must approve before startup proceeds. */
   workspaceInitRequired: boolean;
+  /** True after workspace init when the user should choose a panel layout preference (first install only). */
+  showLayoutPreference: boolean;
 
   // This client's identity assigned by the extension host on connect.
   // Used to derive isController for terminal sessions.
@@ -328,6 +330,7 @@ interface UiActions {
   setStartupReady: (ready: boolean) => void;
   setDevRestarting: (restarting: boolean) => void;
   setWorkspaceInitRequired: (required: boolean) => void;
+  setShowLayoutPreference: (show: boolean) => void;
 
   // Client identity
   setMyClientId: (clientId: string) => void;
@@ -389,6 +392,7 @@ const initialState: UiState = {
   startupReady: false,
   devRestarting: false,
   workspaceInitRequired: false,
+  showLayoutPreference: false,
   myClientId: "",
 };
 
@@ -752,7 +756,11 @@ export const useUiStore = create<UiState & UiActions>()(
         set({
           startupReady: ready,
           ...(ready
-            ? { devRestarting: false, workspaceInitRequired: false }
+            ? {
+                devRestarting: false,
+                workspaceInitRequired: false,
+                showLayoutPreference: false,
+              }
             : {}),
         }),
       setDevRestarting: (restarting) =>
@@ -760,6 +768,8 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setWorkspaceInitRequired: (required) =>
         set({ workspaceInitRequired: required }),
+
+      setShowLayoutPreference: (show) => set({ showLayoutPreference: show }),
 
       setMyClientId: (clientId) => set({ myClientId: clientId }),
 

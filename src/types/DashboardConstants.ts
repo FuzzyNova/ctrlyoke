@@ -287,6 +287,10 @@ export const MESSAGE_TYPES = {
   // Workspace trust — Webview → Extension
   INITIALIZE_WORKSPACE: "initializeWorkspace", // Webview → Extension: user approved FlightPath initialization
 
+  // First-install layout preference — Extension ↔ Webview
+  SHOW_LAYOUT_PREFERENCE: "showLayoutPreference", // Extension → Webview: ask user where to position the FlightPath panel (first install only)
+  PANEL_LAYOUT_PREFERENCE: "panelLayoutPreference", // Webview → Extension: user's panel location choice { moveToSidebar: boolean }
+
   // Developer dashboard actions — Webview → Extension (dev builds only)
   DEV_BUILD_EXTENSION: "dev:buildExtension",
   DEV_BUILD_WEBVIEW: "dev:buildWebview",

@@ -1,7 +1,7 @@
 # All Available VS Code Commands
 
-**Generated:** 2026-04-14T21:55:43.804Z  
-**Total Commands:** 3865
+**Generated:** 2026-05-29T19:32:19.398Z  
+**Total Commands:** 3891
 
 ---
 
@@ -45,12 +45,15 @@
 - `agentSessions.toggleAgentSessionsSidebar`
 - `agentSessionsViewer.find`
 - `agentSessionsViewer.refresh`
+- `agents.github.copilot.cli.deleteSessions`
 - `aiCustomization.generateDebugReport`
 - `aiCustomization.openManagementEditor`
+- `aiCustomization.openMarketplace`
 - `aiCustomizationManagement.copyPath`
 - `aiCustomizationManagement.delete`
 - `aiCustomizationManagement.disableItem`
 - `aiCustomizationManagement.enableItem`
+- `aiCustomizationManagement.installChatCustomizationExtension`
 - `aiCustomizationManagement.openFile`
 - `aiCustomizationManagement.revealInOS`
 - `aiCustomizationManagement.runPrompt`
@@ -169,10 +172,10 @@
 - `cancelLinkedEditingInput`
 - `cancelRenameInput`
 - `cancelSelection`
-- `changeEditorIndentation15`
+- `changeEditorIndentation2`
 - `chat.action.focus`
 - `chat.configureToolSets`
-- `chat.enablePremiumOverages`
+- `chat.enableAdditionalUsage`
 - `chat.inlineResourceAnchor.addFileToChat`
 - `chat.inlineResourceAnchor.copyResource`
 - `chat.inlineResourceAnchor.openToSide`
@@ -200,7 +203,6 @@
 - `chatEditing.multidiff.explain`
 - `chatEditing.openFileInDiff`
 - `chatEditing.toggleExplanationWidget`
-- `chatEditing.viewAllSessionChanges`
 - `chatEditing.viewChanges`
 - `chatEditing.viewPreviousEdits`
 - `chatEditor.action.accept`
@@ -250,10 +252,12 @@
 - `claude-vscode.openWalkthrough`
 - `claude-vscode.primaryEditor.open`
 - `claude-vscode.rejectProposedDiff`
+- `claude-vscode.reopenClosedSession`
 - `claude-vscode.showLogs`
 - `claude-vscode.sidebar.open`
 - `claude-vscode.terminal.open`
 - `claude-vscode.terminal.open.keyboard`
+- `claude-vscode.toggleDictation`
 - `claude-vscode.window.open`
 - `claudeVSCodeSessionsList.focus`
 - `claudeVSCodeSessionsList.open`
@@ -525,6 +529,7 @@
 - `dotnet.ensureDotnetDependencies`
 - `dotnet.findPath`
 - `dotnet.forceUpdate`
+- `dotnet.getAcquisitionLog`
 - `dotnet.listVersions`
 - `dotnet.recommendedVersion`
 - `dotnet.reportIssue`
@@ -849,7 +854,9 @@
 - `emmet.expandAbbreviation`
 - `env-managers.focus`
 - `env-managers.open`
+- `env-managers.removeView`
 - `env-managers.resetViewLocation`
+- `env-managers.toggleVisibility`
 - `eslint.applyAllFixes`
 - `eslint.applyDisableFile`
 - `eslint.applyDisableLine`
@@ -921,7 +928,14 @@
 - `filesExplorer.openFilePreserveFocus`
 - `filesExplorer.paste`
 - `firstCompressedFolder`
+- `flightpath.addDirectoryToPromptEditor`
+- `flightpath.addFileToPromptEditor`
+- `flightpath.addScmResourcesToPromptEditor`
+- `flightpath.addSelectionToPromptEditor`
+- `flightpath.addSymbolToPromptEditor`
+- `flightpath.addTimelineCommitToPromptEditor`
 - `flightpath.appendFromDashboard`
+- `flightpath.cancelCommitMessageGeneration`
 - `flightpath.clearWorkflow`
 - `flightpath.createDraftPrompt`
 - `flightpath.createEndConditionScript`
@@ -932,12 +946,14 @@
 - `flightpath.dashboard.removeView`
 - `flightpath.dashboard.resetViewLocation`
 - `flightpath.dashboard.toggleVisibility`
+- `flightpath.dev.sendTestNotification`
 - `flightpath.devMenu`
 - `flightpath.disableServer`
 - `flightpath.dumpCssVars`
 - `flightpath.editCurrentPromptFile`
 - `flightpath.enableServer`
 - `flightpath.exportDiscoveredModels`
+- `flightpath.generateCommitMessage`
 - `flightpath.importAgents`
 - `flightpath.importWorkflowTemplates`
 - `flightpath.initWorkspace`
@@ -951,6 +967,7 @@
 - `flightpath.pause`
 - `flightpath.queueFromContext`
 - `flightpath.queueNextFromContext`
+- `flightpath.regenerateServerToken`
 - `flightpath.resume`
 - `flightpath.resumeSession`
 - `flightpath.run`
@@ -1176,7 +1193,6 @@
 - `github.copilot.chat.copilotCLI.rejectDiff`
 - `github.copilot.chat.createDraftPullRequestCopilotCLIAgentSession.createDraftPR`
 - `github.copilot.chat.createPullRequestCopilotCLIAgentSession.createPR`
-- `github.copilot.chat.createPullRequestCopilotCLIAgentSession.updatePR`
 - `github.copilot.chat.debug.exportAllPromptLogsAsJson`
 - `github.copilot.chat.debug.exportLogItem`
 - `github.copilot.chat.debug.exportPromptArchive`
@@ -1204,7 +1220,6 @@
 - `github.copilot.chat.notebook.disableFollowCellExecution`
 - `github.copilot.chat.notebook.enableFollowCellExecution`
 - `github.copilot.chat.openModelPicker`
-- `github.copilot.chat.openPullRequestCopilotCLIAgentSession.openPR`
 - `github.copilot.chat.openPullRequestReroute`
 - `github.copilot.chat.openSuggestionsPanel`
 - `github.copilot.chat.openUserPreferences`
@@ -1235,10 +1250,15 @@
 - `github.copilot.chat.startCopilotDebugCommand`
 - `github.copilot.chat.toggleStatusMenu`
 - `github.copilot.chat.tools.memory.clearMemories`
+- `github.copilot.chat.tools.memory.resolveMemoryFileUri`
 - `github.copilot.chat.tools.memory.showMemories`
 - `github.copilot.chat.triggerPermissiveSignIn`
-- `github.copilot.chat.updateCopilotCLIAgentSessionChanges.update`
+- `github.copilot.chronicle.reindex`
+- `github.copilot.claude.sessions.commit`
+- `github.copilot.claude.sessions.commitAndSync`
+- `github.copilot.claude.sessions.initializeRepository`
 - `github.copilot.claude.sessions.rename`
+- `github.copilot.claude.sessions.sync`
 - `github.copilot.cli.newSession`
 - `github.copilot.cli.newSessionToSide`
 - `github.copilot.cli.openInCopilotCLI`
@@ -1275,7 +1295,6 @@
 - `github.copilot.debug.resetVirtualToolGroups`
 - `github.copilot.debug.showChatLogView`
 - `github.copilot.debug.showContextInspectorView`
-- `github.copilot.debug.showNodeSystemCertificatesErrors`
 - `github.copilot.debug.showOutputChannel`
 - `github.copilot.debug.showOutputChannel.internal`
 - `github.copilot.debug.togglePowerSaveBlocker`
@@ -1283,6 +1302,7 @@
 - `github.copilot.debug.workbenchState`
 - `github.copilot.deleteExternalIngestWorkspaceIndex`
 - `github.copilot.devcontainer.generateDevContainerConfig`
+- `github.copilot.enableExternalIngest`
 - `github.copilot.executeSearch`
 - `github.copilot.generate`
 - `github.copilot.git.generateCommitMessage`
@@ -1307,6 +1327,10 @@
 - `github.copilot.search.feedback`
 - `github.copilot.search.markHelpful`
 - `github.copilot.search.markUnhelpful`
+- `github.copilot.sessionSync.deleteSessionFromCloud`
+- `github.copilot.sessionSync.deleteSessions`
+- `github.copilot.sessionSync.reindex`
+- `github.copilot.sessionSync.suggest`
 - `github.copilot.sessions.commit`
 - `github.copilot.sessions.commitAndSync`
 - `github.copilot.sessions.discardChanges`
@@ -1363,22 +1387,17 @@
 - `inlineChat.dismissEditorAffordance`
 - `inlineChat.fixDiagnostics`
 - `inlineChat.focus`
-- `inlineChat.hideInput`
-- `inlineChat.queueInChat`
-- `inlineChat.resetMoveToPanelChatChoice`
 - `inlineChat.start`
-- `inlineChat.submitInput`
 - `inlineChat2.cancel`
 - `inlineChat2.close`
 - `inlineChat2.continueInChat`
 - `inlineChat2.keep`
 - `inlineChat2.rephrase`
-- `inlineChat2.undo`
+- `inlineChatWidget.statusPlaceholder`
 - `insertBestCompletion`
 - `insertNextSuggestion`
 - `insertPrevSuggestion`
 - `insertSnippet`
-- `interactive.acceptChanges`
 - `interactive.execute`
 - `interactive.history.focus`
 - `interactive.history.next`
@@ -1390,9 +1409,6 @@
 - `interactiveEditor.start`
 - `javascript.goToProjectConfig`
 - `javascript.reloadProjects`
-- `javascript.removeUnusedImports`
-- `javascript.sortImports`
-- `js.projectStatus.command`
 - `jsBrowserBreakpoints.focus`
 - `jsBrowserBreakpoints.open`
 - `jsBrowserBreakpoints.resetViewLocation`
@@ -1479,10 +1495,6 @@
 - `lm.addLanguageModelsProviderGroup`
 - `lm.migrateLanguageModelsProviderGroup`
 - `loadedScripts.collapse`
-- `markdown.api.reloadPlugins`
-- `markdown.api.render`
-- `markdown.editor.insertImageFromWorkspace`
-- `markdown.editor.insertLinkFromWorkspace`
 - `markdown.extension.checkTaskList`
 - `markdown.extension.closePreview`
 - `markdown.extension.editing._wrapBy`
@@ -1515,14 +1527,6 @@
 - `markdown.extension.toc.create`
 - `markdown.extension.toc.removeSecNumbers`
 - `markdown.extension.toc.update`
-- `markdown.findAllFileReferences`
-- `markdown.preview.refresh`
-- `markdown.preview.toggleLock`
-- `markdown.showLockedPreviewToSide`
-- `markdown.showPreview`
-- `markdown.showPreviewSecuritySelector`
-- `markdown.showPreviewToSide`
-- `markdown.showSource`
 - `mcu-debug.debug-tracker-vscode.debugLevel`
 - `mcu-debug.debug-tracker-vscode.start`
 - `mcu-debug.memory-view.addMemoryView`
@@ -1751,7 +1755,6 @@
 - `notifications.toggleDoNotDisturbMode`
 - `notifications.toggleDoNotDisturbModeBySource`
 - `notifications.toggleList`
-- `npm-intellisense.import`
 - `npm.debugScript`
 - `npm.debugScriptFromHover`
 - `npm.focus`
@@ -1792,6 +1795,9 @@
 - `perf.insta.printAsyncCycles`
 - `perf.insta.printTraces`
 - `perfview.show`
+- `planReviewFeedback.action.clearAll`
+- `planReviewFeedback.action.navigateNext`
+- `planReviewFeedback.action.navigatePrevious`
 - `platformio-debug.disassembly.focus`
 - `platformio-debug.disassembly.open`
 - `platformio-debug.disassembly.removeView`
@@ -1838,7 +1844,9 @@
 - `problems.action.showSinglelineMessage`
 - `python-projects.focus`
 - `python-projects.open`
+- `python-projects.removeView`
 - `python-projects.resetViewLocation`
+- `python-projects.toggleVisibility`
 - `quickInput.accept`
 - `quickInput.acceptInBackground`
 - `quickInput.first`
@@ -2098,6 +2106,7 @@
 - `targetsWsl.open`
 - `targetsWsl.resetViewLocation`
 - `terminal.focus`
+- `terminal.integrated.suggest.clearCachedGlobals`
 - `terminal.removeView`
 - `terminal.resetViewContainerLocation`
 - `terminal.resetViewLocation`
@@ -2181,13 +2190,10 @@
 - `testing.viewAsTree`
 - `timeline.focus`
 - `timeline.open`
-- `timeline.refresh`
 - `timeline.removeView`
 - `timeline.resetViewLocation`
-- `timeline.toggleExcludeSource:git-history`
-- `timeline.toggleExcludeSource:timeline.localHistory`
-- `timeline.toggleFollowActiveEditor`
 - `timeline.toggleVisibility`
+- `toggle.chat.titleBar.signIn.enabled`
 - `toggle.chat.unifiedAgentsBar.enabled`
 - `toggle.diff.ignoreTrimWhitespace`
 - `toggle.diff.renderSideBySide`
@@ -2224,15 +2230,11 @@
 - `type`
 - `typescript.experimental.disableTsgo`
 - `typescript.experimental.enableTsgo`
-- `typescript.findAllFileReferences`
 - `typescript.goToProjectConfig`
-- `typescript.goToSourceDefinition`
 - `typescript.openTsServerLog`
 - `typescript.reloadProjects`
-- `typescript.removeUnusedImports`
 - `typescript.restartTsServer`
 - `typescript.selectTypeScriptVersion`
-- `typescript.sortImports`
 - `typescript.tsserverRequest`
 - `undo`
 - `update.check`
@@ -2322,8 +2324,6 @@
 - `vscode.setEditorLayout`
 - `vscode.testing.getControllersWithTests`
 - `vscode.testing.getTestsInFile`
-- `vscodeMarkdownLanguageservice.open`
-- `vscodeMarkdownLanguageservice.rename`
 - `walkthroughs.selectStep`
 - `watch.collapse`
 - `welcome.goBack`
@@ -2353,7 +2353,7 @@
 - `workbench.action.browseColorThemesInMarketplace`
 - `workbench.action.browser.addConsoleLogsToChat`
 - `workbench.action.browser.addElementToChat`
-- `workbench.action.browser.addFocusedElementToChat`
+- `workbench.action.browser.addScreenshotToChat`
 - `workbench.action.browser.clearEphemeralStorage`
 - `workbench.action.browser.clearGlobalStorage`
 - `workbench.action.browser.clearWorkspaceStorage`
@@ -2365,22 +2365,31 @@
 - `workbench.action.browser.goBack`
 - `workbench.action.browser.goForward`
 - `workbench.action.browser.hardReload`
+- `workbench.action.browser.hideEmulationToolbar`
 - `workbench.action.browser.hideFind`
 - `workbench.action.browser.newTab`
 - `workbench.action.browser.open`
 - `workbench.action.browser.openExternal`
+- `workbench.action.browser.openFile`
+- `workbench.action.browser.openOrList`
 - `workbench.action.browser.openSettings`
+- `workbench.action.browser.pickDevicePreset`
 - `workbench.action.browser.quickOpen`
 - `workbench.action.browser.reload`
+- `workbench.action.browser.resetEmulation`
 - `workbench.action.browser.resetZoom`
+- `workbench.action.browser.setUserAgent`
+- `workbench.action.browser.showEmulationToolbar`
 - `workbench.action.browser.showFind`
 - `workbench.action.browser.toggleDevTools`
+- `workbench.action.browser.toggleMobileEmulation`
 - `workbench.action.browser.zoomIn`
 - `workbench.action.browser.zoomOut`
 - `workbench.action.chat.acceptElicitation`
 - `workbench.action.chat.acceptTool`
 - `workbench.action.chat.addDynamicVariable`
 - `workbench.action.chat.addToChatAction`
+- `workbench.action.chat.agentHost.otel.exportAgentTracesDB`
 - `workbench.action.chat.applyCompareEdits`
 - `workbench.action.chat.applyInEditor`
 - `workbench.action.chat.archiveAllAgentSessions`
@@ -2411,20 +2420,24 @@
 - `workbench.action.chat.copyKatexMathSource`
 - `workbench.action.chat.copyLink`
 - `workbench.action.chat.createPlugin`
+- `workbench.action.chat.debugAgentHostInDevTools`
 - `workbench.action.chat.disableTips`
 - `workbench.action.chat.discardCompareEdits`
 - `workbench.action.chat.dismissTip`
 - `workbench.action.chat.dismissTipToolbar`
+- `workbench.action.chat.editPendingRequest`
 - `workbench.action.chat.editRequests`
 - `workbench.action.chat.editToolApproval`
 - `workbench.action.chat.executeHandoff`
 - `workbench.action.chat.export`
 - `workbench.action.chat.exportAgentDebugLog`
+- `workbench.action.chat.exportAgentHostDebugLogs`
 - `workbench.action.chat.exportAsZip`
 - `workbench.action.chat.focusAgentSessionsViewer`
 - `workbench.action.chat.focusConfirmation`
 - `workbench.action.chat.focusInput`
 - `workbench.action.chat.focusQuestionCarousel`
+- `workbench.action.chat.focusQuestionCarouselTerminal`
 - `workbench.action.chat.focusTip`
 - `workbench.action.chat.focusTodosView`
 - `workbench.action.chat.forkConversation`
@@ -2453,8 +2466,8 @@
 - `workbench.action.chat.logChatIndex`
 - `workbench.action.chat.logInputHistory`
 - `workbench.action.chat.manage`
+- `workbench.action.chat.manageAdditionalSpend`
 - `workbench.action.chat.manageLanguageModelAuthentication`
-- `workbench.action.chat.manageOverages`
 - `workbench.action.chat.managePluginMarketplaces`
 - `workbench.action.chat.managePlugins`
 - `workbench.action.chat.manageSettings`
@@ -2475,8 +2488,14 @@
 - `workbench.action.chat.open`
 - `workbench.action.chat.openAgentDebugPanel`
 - `workbench.action.chat.openAgentDebugPanelForSession`
-- `workbench.action.chat.openAsk`
+- `workbench.action.chat.openAgentHostAutoApprovePicker`
+- `workbench.action.chat.openAgentHostBranchPicker`
+- `workbench.action.chat.openAgentHostCustomAgentPicker`
+- `workbench.action.chat.openAgentHostIsolationPicker`
+- `workbench.action.chat.openAgentHostModePicker`
+- `workbench.action.chat.openAgentHostPermissionModePicker`
 - `workbench.action.chat.openCompareBlockInDiffEditor`
+- `workbench.action.chat.openCopilotCliStateFile`
 - `workbench.action.chat.openDelegationPicker`
 - `workbench.action.chat.openFeatureSettings`
 - `workbench.action.chat.openImageInCarousel`
@@ -2485,22 +2504,21 @@
 - `workbench.action.chat.openInSidebar`
 - `workbench.action.chat.openModePicker`
 - `workbench.action.chat.openModelPicker`
-- `workbench.action.chat.openNewChatSessionInPlace.agent-host-copilot`
 - `workbench.action.chat.openNewChatSessionInPlace.claude-code`
 - `workbench.action.chat.openNewChatSessionInPlace.copilot-cloud-agent`
 - `workbench.action.chat.openNewChatSessionInPlace.copilotcli`
 - `workbench.action.chat.openNewChatSessionInPlace.local`
 - `workbench.action.chat.openNewChatSessionInPlace.openai-codex`
+- `workbench.action.chat.openNewSessionEditor.agent-host-copilotcli`
 - `workbench.action.chat.openNewSessionEditor.claude-code`
 - `workbench.action.chat.openNewSessionEditor.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionEditor.copilotcli`
+- `workbench.action.chat.openNewSessionSidebar.agent-host-copilotcli`
 - `workbench.action.chat.openNewSessionSidebar.claude-code`
 - `workbench.action.chat.openNewSessionSidebar.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionSidebar.copilotcli`
 - `workbench.action.chat.openPermissionPicker`
-- `workbench.action.chat.openPlan`
 - `workbench.action.chat.openQuotaExceededDialog`
-- `workbench.action.chat.openSenior Developer`
 - `workbench.action.chat.openSessionInEditorGroup`
 - `workbench.action.chat.openSessionInNewEditorGroup`
 - `workbench.action.chat.openSessionInNewWindow`
@@ -2512,16 +2530,7 @@
 - `workbench.action.chat.openWorkspacePicker`
 - `workbench.action.chat.openagent`
 - `workbench.action.chat.openask`
-- `workbench.action.chat.opencode-reviewer`
-- `workbench.action.chat.opencopilot-beast`
-- `workbench.action.chat.opencopilot-prompt`
-- `workbench.action.chat.opendeep-research`
 - `workbench.action.chat.openedit`
-- `workbench.action.chat.openflightpath-orchestrator`
-- `workbench.action.chat.opentest-agent`
-- `workbench.action.chat.opentest-agent-alpha`
-- `workbench.action.chat.opentest-agent-beta`
-- `workbench.action.chat.opentest-agent-user`
 - `workbench.action.chat.picker.customagents`
 - `workbench.action.chat.picker.customagents.disabled`
 - `workbench.action.chat.previousCodeBlock`
@@ -2539,6 +2548,7 @@
 - `workbench.action.chat.reportIssueForBug`
 - `workbench.action.chat.resetDismissedTips`
 - `workbench.action.chat.resetGrowthSession`
+- `workbench.action.chat.resetPermissionWarningDialogs`
 - `workbench.action.chat.resetTrustedTools`
 - `workbench.action.chat.restoreCheckpoint`
 - `workbench.action.chat.restoreLastCheckpoint`
@@ -2571,6 +2581,7 @@
 - `workbench.action.chat.submitWithCodebase`
 - `workbench.action.chat.submitWithoutDispatching`
 - `workbench.action.chat.switchToNextModel`
+- `workbench.action.chat.switchToNextPinnedModel`
 - `workbench.action.chat.toggle`
 - `workbench.action.chat.toggleAgentMode`
 - `workbench.action.chat.toggleCompareBlockDiffViewMode`
@@ -2785,6 +2796,8 @@
 - `workbench.action.interactivePlayground.arrowUp`
 - `workbench.action.interactivePlayground.pageDown`
 - `workbench.action.interactivePlayground.pageUp`
+- `workbench.action.issueReporter.captureScreenshot`
+- `workbench.action.issueReporter.toggleRecording`
 - `workbench.action.joinAllGroups`
 - `workbench.action.joinEditorInGroup`
 - `workbench.action.joinTwoGroups`
@@ -2915,6 +2928,7 @@
 - `workbench.action.openPrivacyStatementUrl`
 - `workbench.action.openProcessExplorer`
 - `workbench.action.openProfile.Default`
+- `workbench.action.openProfile.Dev`
 - `workbench.action.openQuickChat`
 - `workbench.action.openRawDefaultSettings`
 - `workbench.action.openRecent`
@@ -2932,6 +2946,7 @@
 - `workbench.action.openWorkspace`
 - `workbench.action.openWorkspaceConfigFile`
 - `workbench.action.openWorkspaceFromEditor`
+- `workbench.action.openWorkspaceInAgentsWindow`
 - `workbench.action.openWorkspaceInNewWindow`
 - `workbench.action.openWorkspaceSettings`
 - `workbench.action.openWorkspaceSettingsFile`
@@ -2958,7 +2973,6 @@
 - `workbench.action.output.show.extension-output-nhickster.flightpath-#1-FlightPath`
 - `workbench.action.output.show.extension-output-saoudrizwan.claude-dev-#1-Cline`
 - `workbench.action.output.show.extension-output-streetsidesoftware.code-spell-checker-#1-Code Spell Checker Server`
-- `workbench.action.output.show.extension-output-vscode.markdown-language-features-#1-Markdown Language Server`
 - `workbench.action.output.show.exthost`
 - `workbench.action.output.show.main`
 - `workbench.action.output.show.mcpGateway`
@@ -2971,14 +2985,13 @@
 - `workbench.action.output.show.tasks`
 - `workbench.action.output.show.terminal`
 - `workbench.action.output.show.textModelChanges`
+- `workbench.action.output.show.tunnelHostService`
 - `workbench.action.output.show.userDataSync`
 - `workbench.action.output.show.vscode.git.Git.log`
 - `workbench.action.output.show.vscode.github-authentication.GitHub Authentication.log`
 - `workbench.action.output.show.vscode.github.GitHub.log`
 - `workbench.action.output.show.vscode.json-language-features.JSON Language Server.log`
-- `workbench.action.output.show.vscode.markdown-language-features.Markdown.log`
 - `workbench.action.output.show.vscode.microsoft-authentication.Microsoft Authentication.log`
-- `workbench.action.output.show.vscode.typescript-language-features.TypeScript.log`
 - `workbench.action.output.toggleOutput`
 - `workbench.action.pauseSocketWriting`
 - `workbench.action.pinEditor`
@@ -3099,7 +3112,9 @@
 - `workbench.action.splitEditorUp`
 - `workbench.action.startTracing`
 - `workbench.action.stopTracing`
+- `workbench.action.switchToMainWindow`
 - `workbench.action.switchWindow`
+- `workbench.action.syncAccountPolicy`
 - `workbench.action.tasks.build`
 - `workbench.action.tasks.configureDefaultBuildTask`
 - `workbench.action.tasks.configureDefaultTestTask`
@@ -3131,9 +3146,13 @@
 - `workbench.action.terminal.changeSelectionModePartial`
 - `workbench.action.terminal.chat.addTerminalSelection`
 - `workbench.action.terminal.chat.close`
+- `workbench.action.terminal.chat.continueInBackground`
 - `workbench.action.terminal.chat.disableSessionAutoApproval`
+- `workbench.action.terminal.chat.focusChatInstance`
 - `workbench.action.terminal.chat.focusMostRecentChatTerminal`
 - `workbench.action.terminal.chat.focusMostRecentChatTerminalOutput`
+- `workbench.action.terminal.chat.focusTerminalByExecutionId`
+- `workbench.action.terminal.chat.focusTerminalById`
 - `workbench.action.terminal.chat.insertCommand`
 - `workbench.action.terminal.chat.insertFirstCommand`
 - `workbench.action.terminal.chat.openTerminalSettingsLink`
@@ -3141,6 +3160,7 @@
 - `workbench.action.terminal.chat.runCommand`
 - `workbench.action.terminal.chat.runFirstCommand`
 - `workbench.action.terminal.chat.start`
+- `workbench.action.terminal.chat.toggleChatTerminalOutput`
 - `workbench.action.terminal.chat.viewHiddenChatTerminals`
 - `workbench.action.terminal.chat.viewInChat`
 - `workbench.action.terminal.clear`
@@ -3203,6 +3223,7 @@
 - `workbench.action.terminal.openSettings`
 - `workbench.action.terminal.openUrlLink`
 - `workbench.action.terminal.paste`
+- `workbench.action.terminal.pastePwsh`
 - `workbench.action.terminal.recordSession`
 - `workbench.action.terminal.relaunch`
 - `workbench.action.terminal.rename`
@@ -3310,6 +3331,7 @@
 - `workbench.action.url.openUrl`
 - `workbench.action.webview.openDeveloperTools`
 - `workbench.action.webview.reloadWebviewAction`
+- `workbench.action.welcomeOnboarding2026`
 - `workbench.action.zenHideEditorTabs`
 - `workbench.action.zenShowEditorTab`
 - `workbench.action.zenShowMultipleEditorTabs`
@@ -3355,6 +3377,7 @@
 - `workbench.banner.focusNextAction`
 - `workbench.banner.focusPreviousAction`
 - `workbench.chat.action.focusLastFocused`
+- `workbench.chat.agentHostAgentPicker.configure`
 - `workbench.command.new.agent`
 - `workbench.command.new.instructions`
 - `workbench.command.new.prompt`
@@ -3389,6 +3412,7 @@
 - `workbench.debug.viewlet.action.addDataBreakpointOnAddress`
 - `workbench.debug.viewlet.action.addFunctionBreakpointAction`
 - `workbench.debug.viewlet.action.addWatchExpression`
+- `workbench.debug.viewlet.action.copyAllWatchExpressions`
 - `workbench.debug.viewlet.action.copyValue`
 - `workbench.debug.viewlet.action.copyWorkspaceVariableValue`
 - `workbench.debug.viewlet.action.disableAllBreakpoints`
@@ -3540,6 +3564,7 @@
 - `workbench.mcp.restartServer`
 - `workbench.mcp.serverOptions`
 - `workbench.mcp.serverOptionsInConfirmation`
+- `workbench.mcp.setOAuthClientSecret`
 - `workbench.mcp.showConfiguration`
 - `workbench.mcp.showInstalledServers`
 - `workbench.mcp.showOutput`
@@ -3589,6 +3614,7 @@
 - `workbench.profiles.actions.help`
 - `workbench.profiles.actions.manageProfiles`
 - `workbench.profiles.actions.newWindowWithProfile`
+- `workbench.profiles.actions.profileEntry.56812311`
 - `workbench.profiles.actions.profileEntry.__default__profile__`
 - `workbench.profiles.actions.resetWorkspaces`
 - `workbench.profiles.actions.switchProfile`
@@ -3843,8 +3869,8 @@
 - `workbench.views.mcp.welcomeView.focus`
 - `workbench.views.mcp.welcomeView.open`
 - `workbench.views.mcp.welcomeView.resetViewLocation`
-- `workbench.views.service.panel.0404278d-fb9b-434d-9ed3-0c7020521687.resetViewContainerLocation`
 - `workbench.views.service.panel.1c37f8d8-e2ce-4dd5-85e2-a82f10fe8697.resetViewContainerLocation`
+- `workbench.views.service.panel.2f37f917-0ad9-4f57-9bf9-7788d276fe6c.resetViewContainerLocation`
 - `workbench.views.sync.conflicts.focus`
 - `workbench.views.sync.conflicts.open`
 - `workbench.views.sync.conflicts.resetViewLocation`
