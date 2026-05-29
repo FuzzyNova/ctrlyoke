@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useUiStore } from "@store/uiStore";
 import { WebviewLog } from "@utils/logger";
 import { MESSAGE_TYPES } from "@root/types/DashboardConstants";
@@ -72,17 +72,11 @@ export const StartupOverlay: React.FC = () => {
     >
       {workspaceInitRequired ? (
         <div className="flex flex-col items-center gap-4 max-w-xs text-center px-4">
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            className="text-description-fg opacity-80"
+          <i
+            className="codicon codicon-new-folder text-description-fg opacity-80"
+            style={{ fontSize: 32 }}
             aria-hidden="true"
-          >
-            {/* Folder-plus icon */}
-            <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.764c.414 0 .81.165 1.1.457L8.44 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12V3.5zm7.5 4a.5.5 0 0 0-1 0V9H6a.5.5 0 0 0 0 1h1.5v1.5a.5.5 0 0 0 1 0V10H10a.5.5 0 0 0 0-1H8.5V7.5z" />
-          </svg>
+          />
           <span className="text-sm font-medium text-foreground select-none">
             Initialize FlightPath here?
           </span>
@@ -125,73 +119,39 @@ export const StartupOverlay: React.FC = () => {
 const LayoutPreferenceStep: React.FC<{ onChoose: (show: boolean) => void }> = ({
   onChoose,
 }) => {
-  const [choosing, setChoosing] = useState(false);
-
-  const choose = (moveToSidebar: boolean) => {
-    setChoosing(true);
+  const dismiss = () => {
     onChoose(false);
-    getVsCodeApi().postMessage({
-      type: MESSAGE_TYPES.PANEL_LAYOUT_PREFERENCE,
-      moveToSidebar,
-    });
+    getVsCodeApi().postMessage({ type: MESSAGE_TYPES.LAYOUT_TIP_DISMISSED });
   };
-
-  if (choosing) {
-    return (
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-6 h-6 border-2 border-description-fg border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs text-description-fg select-none">
-          Loading...
-        </span>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col items-center gap-4 max-w-sm text-center px-4">
-      <svg
-        width="32"
-        height="32"
-        viewBox="0 0 16 16"
-        fill="currentColor"
-        className="text-description-fg opacity-80"
+      <i
+        className="codicon codicon-editor-layout text-description-fg opacity-80"
+        style={{ fontSize: 32 }}
         aria-hidden="true"
-      >
-        {/* Layout icon */}
-        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 0v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H5zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2V2z" />
-      </svg>
+      />
       <span className="text-sm font-medium text-foreground select-none">
-        Where should FlightPath open?
+        One quick tip
       </span>
       <span className="text-xs text-description-fg select-none leading-relaxed">
-        On smaller screens the bottom panel can feel cramped. You can move
-        FlightPath to the side panel for more vertical space.
+        FlightPath lives in the bottom panel by default. On smaller screens it
+        can feel cramped — drag the FlightPath tab to the sidebar for more
+        vertical space.
       </span>
-      <div className="flex gap-2 mt-1">
-        <button
-          className="px-4 py-1.5 text-xs font-medium rounded
-                     bg-btn-bg text-btn-fg border border-btn-border
-                     hover:bg-btn-hover transition-colors
-                     focus:outline-none focus:ring-1 focus:ring-focus-border
-                     cursor-pointer select-none"
-          onClick={() => choose(true)}
-        >
-          Move to side panel
-        </button>
-        <button
-          className="px-4 py-1.5 text-xs font-medium rounded
-                     bg-transparent text-description-fg border border-btn-border
-                     hover:bg-btn-bg transition-colors
-                     focus:outline-none focus:ring-1 focus:ring-focus-border
-                     cursor-pointer select-none"
-          onClick={() => choose(false)}
-        >
-          Keep at bottom
-        </button>
-      </div>
+      <button
+        className="mt-1 px-4 py-1.5 text-xs font-medium rounded
+                   bg-btn-bg text-btn-fg border border-btn-border
+                   hover:bg-btn-hover transition-colors
+                   focus:outline-none focus:ring-1 focus:ring-focus-border
+                   cursor-pointer select-none"
+        onClick={dismiss}
+      >
+        Got it
+      </button>
       <span className="text-xs text-description-fg opacity-70 select-none leading-relaxed">
-        You can always change it later by dragging the FlightPath tab to
-        whichever panel you prefer.
+        You can always move it back by dragging the FlightPath tab to whichever
+        panel you prefer.
       </span>
     </div>
   );

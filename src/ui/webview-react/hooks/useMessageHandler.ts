@@ -1473,10 +1473,10 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // SHOW_LAYOUT_PREFERENCE - first-install step 2: ask where to dock the panel
+  // SHOW_LAYOUT_TIP - first-install step 2: panel placement tip
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.SHOW_LAYOUT_PREFERENCE] = () => {
-    WebviewLog.debug("[startup] SHOW_LAYOUT_PREFERENCE received");
+  handlers[MESSAGE_TYPES.SHOW_LAYOUT_TIP] = () => {
+    WebviewLog.debug("[startup] SHOW_LAYOUT_TIP received");
     const store = useUiStore.getState();
     store.setWorkspaceInitRequired(false);
     store.setShowLayoutPreference(true);

@@ -905,15 +905,9 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Called when the user selects a panel layout preference during first-install onboarding.
-   * Optionally moves the panel to the secondary sidebar, then resumes startup.
+   * Called when the user dismisses the first-install layout tip. Resumes startup.
    */
-  async handleLayoutPreference(moveToSidebar: boolean): Promise<void> {
-    if (moveToSidebar) {
-      await vscode.commands.executeCommand(
-        "workbench.action.movePanelToSecondarySideBar"
-      );
-    }
+  async handleLayoutPreference(): Promise<void> {
     this.layoutPreferencePending = false;
     await this.triggerStartupAutoLoadIfReady();
   }
@@ -992,7 +986,7 @@ export class WorkflowOrchestrator {
 
     if (this.layoutPreferencePending) {
       this.dashboardBroadcastHub.postMessage({
-        type: MESSAGE_TYPES.SHOW_LAYOUT_PREFERENCE,
+        type: MESSAGE_TYPES.SHOW_LAYOUT_TIP,
       });
       return;
     }
