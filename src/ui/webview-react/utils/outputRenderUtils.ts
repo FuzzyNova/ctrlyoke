@@ -178,11 +178,14 @@ export function computeOutputDiffStats(
 
   if (event.type === CLI_EVENT_TYPES.FILE_WRITE) {
     const content = (event.data as { content?: string }).content;
-    const lines = content ? content.split("\n").length : 1;
+    if (!content) return { added: 0, removed: 0, runs: [] };
+    // Represent as a single added "row" — the file-write output shows one indicator
+    // line, not a full diff view. Using the raw line count here inflates the run
+    // count without adding any colored area in the minimap.
     return {
-      added: lines,
+      added: 1,
       removed: 0,
-      runs: [{ count: lines, addedLines: 1, removedLines: 0 }],
+      runs: [{ count: 1, addedLines: 1, removedLines: 0 }],
     };
   }
 

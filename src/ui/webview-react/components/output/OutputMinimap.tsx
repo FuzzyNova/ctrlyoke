@@ -429,10 +429,10 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           top: `${viewportPct.top}%`,
           height: `${viewportPct.height}%`,
           background: isDragging
-            ? "var(--vscode-scrollbarSlider-activeBackground, rgba(191,191,191,0.8))"
+            ? "var(--vscode-scrollbarSlider-activeBackground, rgba(191,191,191,0.95))"
             : isThumbHovered
-              ? "var(--vscode-scrollbarSlider-hoverBackground, rgba(100,100,100,0.7))"
-              : "var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.4))",
+              ? "var(--vscode-scrollbarSlider-hoverBackground, rgba(100,100,100,0.85))"
+              : "var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.8))",
           cursor: isDragging ? "grabbing" : canScroll ? "grab" : "default",
           transition: isDragging ? "none" : "background 0.1s",
         }}

@@ -521,6 +521,11 @@ export const OutputSection: React.FC = () => {
     }
     previousDiffResetVersion.current = diffResetVersion;
 
+    // Diff row heights change dramatically between expanded and collapsed states.
+    // Stale measured heights from the previous state would misalign minimap
+    // positions, so flush the cache before the collapse-state change propagates.
+    measurementCacheRef.current.clear();
+
     setDiffCollapseState((previous) => {
       if (previous.size === 0) return previous;
       const next = new Map(previous);
@@ -530,6 +535,26 @@ export const OutputSection: React.FC = () => {
       return next;
     });
   }, [diffResetVersion, diffsCollapsed]);
+
+  // When switching between live output and a history run (including when the
+  // history run index changes), the same row keys can appear with very different
+  // heights — e.g., a row measured as 500 px during a live run where diffs were
+  // expanded will still be in the cache when the same run is opened in history
+  // view with diffs collapsed (74 px estimate).  Flush the cache so rowLayout
+  // re-estimates from scratch for the incoming content.
+  const previousIsViewingHistory = useRef(isViewingHistory);
+  const previousViewingRunIndex = useRef(viewingRunIndex);
+  useEffect(() => {
+    const viewChanged =
+      previousIsViewingHistory.current !== isViewingHistory ||
+      previousViewingRunIndex.current !== viewingRunIndex;
+    previousIsViewingHistory.current = isViewingHistory;
+    previousViewingRunIndex.current = viewingRunIndex;
+    if (!viewChanged) return;
+
+    measurementCacheRef.current.clear();
+    setMeasurementVersion((v) => v + 1);
+  }, [isViewingHistory, viewingRunIndex]);
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
