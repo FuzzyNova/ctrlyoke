@@ -3,15 +3,22 @@
 ## Problem
 
 FlightPath currently has no configurable policy for harness-level execution failures.
-When a harness fails, the workflow generally stops. That creates three gaps:
+When a harness fails, the workflow generally stops. That creates four gaps:
 
 - **No retry policy for transient harness failures**: rate limits, server errors, and
   similar failures cannot be retried automatically.
 - **No continue policy**: there is no supported way to mark a step failed and keep the
   workflow moving.
 - **Interactive harness blind spot**: some CLIs can surface an error in the TUI without
-  exiting the process. In that case FlightPath may keep waiting for completion instead of
-  classifying the step as a harness failure.
+  exiting the process. In that case FlightPath keeps waiting for completion instead of
+  classifying the step as a harness failure. This is the actively-broken case today —
+  Claude `StopFailure` is the most common trigger, but any harness that shows an error in
+  the TUI and keeps running will hang indefinitely.
+- **Process exit routes to cancellation, not error**: `WorkflowExecutor.handlePromptSendFailure()`
+  currently treats process exit (`wasLastFailureProcessExit()`) as a cancel/stop, not a
+  harness failure. This means no step failure is recorded and `errorBehavior` retry/continue
+  logic cannot apply. This affects **all harnesses** equally — process exit is the universal
+  fallback failure signal. Fixing this routing is the primary correctness fix.
 
 This feature adds a new execution property, `errorBehavior`, that controls how FlightPath
 responds when the **harness itself** fails.
@@ -241,17 +248,31 @@ Current state:
 - `flightpath-claude-hook.js` only handles those events
 - there is no current path for `StopFailure`
 
-Recommended change:
+Recommended changes:
 
-- add `StopFailure` notification support
-- write a distinct error notification file
-- surface it as `failureKind: "harnessError"`
+**`flightpath-claude-hook.js`**:
+- add `"StopFailure"` to the `HANDLED_EVENTS` set
+- on `StopFailure`, write `{safeSessionId}-error.json` with the same helper used for stop
+  files: `{ hookEvent: "StopFailure", sessionId, status: "error" }`
+- the payload format for `StopFailure` is identical to `Stop` (`session_id`,
+  `transcript_path`, `hook_event_name: "StopFailure"`, etc.) — handle gracefully if
+  fields differ
+
+**`ClaudeNotificationMonitor`**:
+- add `StopFailure` to the event map / hook config registration so the harness registers
+  the hook at activation time
+- the monitor's polling loop (`monitorForCompletion` in `NotificationMonitorBase`) must
+  also scan for `{sessionId}-error.json` in addition to `{sessionId}-stop.json`
+- surface a found error file as `{ kind: "error", ... }` in `NotificationResult`
+
+Result: surface to executor as `failureKind: "harnessError"`
 
 Research note:
 
-- Claude's official hooks docs define `StopFailure` as the event that runs instead of
-  `Stop` when a turn ends due to an API error
-- this makes `StopFailure` the primary interactive harness-error signal, not a fallback
+- Claude's official hooks docs define `StopFailure` as the event that fires **instead of**
+  `Stop` when a turn ends due to an API error — it is the primary interactive error signal
+- `StopFailure` does not always fire for every unrecoverable state; the log-based fallback
+  remains the safety net for headless mode and any cases `StopFailure` misses
 
 #### Headless/log fallback
 
@@ -280,19 +301,31 @@ Current state:
 - `CopilotNotificationMonitor` maps `agentStop` and `sessionStart`
 - no current support for `errorOccurred`
 
-Recommended change:
+Recommended changes:
 
-- add `errorOccurred` hook handling as a primary harness-error signal
-- write a distinct error notification file
-- surface it as `failureKind: "harnessError"`
+**`flightpath-copilot-hook.js`**:
+- add `errorOccurred` to the `LOGICAL_EVENT_MAP`
+- on `errorOccurred`, write `{safeSessionId}-error.json` using the same helper as stop:
+  `{ hookEvent: "errorOccurred", sessionId, status: "error" }`
+- assume payload shape mirrors `agentStop` (`sessionId`, `timestamp`, `cwd`); extract
+  `sessionId` defensively since field casing may differ — be defensive: fall back to
+  `payload.sessionId || payload.session_id`
+
+**`CopilotNotificationMonitor`**:
+- add `errorOccurred` to the event map / hook config registration so the harness registers
+  the hook in `.github/hooks/*.json` at activation time
+- the polling loop (`monitorForCompletion` in `NotificationMonitorBase`) must also scan
+  for `{sessionId}-error.json`
+- surface a found error file as `{ kind: "error", ... }` in `NotificationResult`
+
+Result: surface to executor as `failureKind: "harnessError"`
 
 Research note:
 
-- GitHub's hook documentation defines an error-occurrence hook for Copilot agent execution
-- this should be treated as the primary interactive error signal for Copilot harnesses,
-  not as a speculative feature
-- user direction for this plan is that the same Copilot hook model also applies to
-  `copilot-chat`, but the initial implementation scope here remains the CLI harness path
+- GitHub's hook documentation defines `errorOccurred` for Copilot agent execution
+- this should be treated as the primary interactive error signal for Copilot harnesses
+- the same Copilot hook model conceptually applies to `copilot-chat`, but the initial
+  implementation scope here remains the CLI harness path
 
 #### Log fallback
 
@@ -324,8 +357,10 @@ Important constraint:
 Recommendation:
 
 - do not assume a generic `{ type: "error" }` session event
-- for now, rely on process exit and timeout
-- only add a session-level fallback after the event shape is verified
+- for now, rely on **process exit and timeout** as the primary detection mechanism
+- these two paths already cover the most common Codex failure mode (process crash)
+- only add a session-level event fallback after the exact event shape is verified in a
+  live session
 
 ### Qwen
 
@@ -341,7 +376,8 @@ Important constraint:
 Recommendation:
 
 - do not implement log-based harness-error detection yet
-- rely on process exit and timeout until a verified session-level signal is found
+- rely on **process exit and timeout** — the universal fallback for all harnesses without
+  a dedicated error hook — until a verified session-level signal is found
 
 ### Gemini
 
@@ -357,7 +393,7 @@ Important constraint:
 Recommendation:
 
 - do not implement generic log-based harness-error detection
-- rely on process exit and timeout until a verified session-level signal is found
+- rely on **process exit and timeout** until a verified session-level signal is found
 
 ### OpenCode
 
@@ -372,20 +408,46 @@ Current state:
 Recommendation:
 
 - treat OpenCode plugin events as the primary interactive error path
-- extend the plugin to listen for `session.error`
-- write a distinct error notification file from the plugin when `session.error` fires
-- surface that as `failureKind: "harnessError"`
+- extend the plugin (`flightpath-opencode-plugin.ts`) to handle `session.error` events:
+  `if (event.type === "session.error")` alongside the existing `session.status` handler
+- write `{sessionId}-error.json` from the plugin: `{ hookEvent: "session.error", sessionId, status: "error" }`
+  using the session ID from `event.properties.sessionID` (or equivalent)
+- the `OpenCodeNotificationMonitor` polling loop must scan for `{sessionId}-error.json`
+  in addition to `{sessionId}-stop.json`
+- surface a found error file as `{ kind: "error", ... }` in `NotificationResult`
+- surface to executor as `failureKind: "harnessError"`
 - keep process exit and timeout as the universal fallback
 
 Research note:
 
 - OpenCode's official plugin docs list `session.error` as a supported session event
-- this means OpenCode does have a first-class interactive error signal available to
-  FlightPath, even though it is provided through the plugin system rather than a hook file
+- this makes OpenCode the third harness with a first-class interactive error signal
+- if `event.properties.sessionID` is missing, fall back to any `sessionId`/`session_id`
+  field in the event payload and log a warning
 
 ---
 
 ## Detection Architecture
+
+### Error notification file convention
+
+All three interactive harnesses (Claude, Copilot, OpenCode) write notification files
+into the same temp directory that stop files land in. The file naming convention is:
+
+```
+{sessionId}-stop.json   ← existing: successful completion
+{sessionId}-error.json  ← new: harness-reported error
+```
+
+Error file payload:
+
+```json
+{ "hookEvent": "<StopFailure|errorOccurred|session.error>", "sessionId": "...", "status": "error" }
+```
+
+The harness-specific hook/plugin value for `hookEvent` is kept verbatim to aid
+debugging. The polling logic in `NotificationMonitorBase` treats any found error file as
+an error result regardless of `hookEvent` value.
 
 ### Notification monitors
 
@@ -393,31 +455,52 @@ Current state:
 
 - `NotificationMonitorBase` assumes start/stop completion files
 - `NotificationResult` only exposes `completed`, `error?`, and `data?`
+- the `error?` field is currently used only for timeout strings, not structured failure kinds
 
 Required changes:
 
-- add a discriminator such as `kind: "completed" | "error"`
-- allow monitors to watch for `{sessionId}-error.json` in addition to stop files
-- map harness-specific error hooks into that structured result
+**`NotificationResult`** — add `kind` discriminator:
+```typescript
+interface NotificationResult {
+  completed: boolean;
+  kind?: "completed" | "error";  // "error" when harness reported a failure
+  error?: string;                 // timeout or internal error message
+  data?: any;
+}
+```
+
+**`NotificationMonitorBase.monitorForCompletion()`** — the polling loop currently only
+checks for `{sessionId}-stop.json`. It must also check for `{sessionId}-error.json`.
+When an error file is found:
+- return `{ completed: false, kind: "error", data: <parsed error file content> }`
+
+When a stop file is found (existing behavior):
+- return `{ completed: true, kind: "completed", data: <parsed stop file content> }`
 
 This applies first to:
 
-- Claude `StopFailure`
-- Copilot `errorOccurred`
-- OpenCode `session.error`
+- Claude: `ClaudeNotificationMonitor`
+- Copilot: `CopilotNotificationMonitor`
+- OpenCode: `OpenCodeNotificationMonitor`
+
+Harnesses without interactive error hooks (Codex, Qwen, Gemini) inherit the base class
+changes at no cost — `monitorForCompletion` never finds an error file for them and behaves
+identically to today.
 
 ### CLI log monitor
 
 Current state:
 
 - `CliLogMonitor` can resolve success, parsed headless output, or `processExited`
-- timeout currently rejects with `"Log monitoring timeout"`
+- `LogMonitorResult` already has `timedOut?: boolean` and `processExited?: { exitCode: number }`
+- **timeout currently throws** (`throw new Error("Log monitoring timeout")`) in
+  `CliExecutionRunner` (line ~634) rather than returning a structured result
 
 Required changes:
 
-- return a structured timeout failure instead of a generic thrown error
-- thread `failureKind` and optional details into the monitor result
-- keep notification-monitor completion authoritative where applicable
+- change `CliExecutionRunner`'s timeout handling to return a structured `failureKind:
+  "timeout"` result instead of throwing — the throw gets swallowed in unexpected ways
+- thread `failureKind` and optional `failureMessage` into the result shape
 
 Recommended `LogMonitorResult` direction:
 
@@ -429,35 +512,74 @@ interface LogMonitorResult {
   cliResult?: CliResult;
   failureKind?: FailureKind;
   failureMessage?: string;
+  timedOut?: boolean;             // keep for backward compat, redundant with failureKind
   processExited?: { exitCode: number };
 }
+```
+
+`CliExecutionRunner` — current code at line ~634:
+```typescript
+if (result.timedOut) { throw new Error("Log monitoring timeout"); }
+```
+Must become:
+```typescript
+if (result.timedOut) { return { ..., failureKind: "timeout", failureMessage: "Log monitoring timeout" }; }
 ```
 
 ### Failure tracker
 
 Current state:
 
-- `CliFailureTracker` only has process-exit-oriented state
+- `CliFailureTracker` has `InteractiveAbortState` with `USER_CANCELLED` and
+  `PROCESS_EXITED` — already a discriminated union
+- `wasLastFailureProcessExit()` returns `true` when `processExitTermination !== null`
+- no field for harness-reported errors (i.e. an error file was found by the notification
+  monitor before the process exited)
 
 Required changes:
 
-- replace or extend the current booleans with structured failure kind tracking
-- preserve the existing user-cancel path
-- capture optional harness error details for runtime messages and logs
+- add a `harnessErrorDetails?: { message: string }` field
+- add `wasLastFailureHarnessError()` alongside `wasLastFailureProcessExit()`
+- add `markHarnessError(message: string)` method — called by `CliExecutionRunner` when
+  `NotificationResult.kind === "error"` is returned from `monitorForCompletion()`
+- add `"HARNESS_ERROR"` to `INTERACTIVE_ABORT_KINDS` in `DashboardConstants.ts` — the
+  existing pattern for `USER_CANCELLED` and `PROCESS_EXITED` must be followed exactly;
+  the new `FailureKind` type should also be defined there as a const map
+
+Preserve the existing user-cancel path; `wasLastFailureUserCancellation()` must remain
+unchanged.
 
 ---
 
 ## Workflow Routing
 
-### Desired behavior
+### Current process-exit routing bug (ALL harnesses)
+
+`WorkflowExecutor.handlePromptSendFailure()` currently has three branches in order:
+
+1. `runtime.stopped` — stopped by user
+2. `wasLastFailureUserCancellation()` — user cancelled
+3. **`wasLastFailureProcessExit()`** — calls `runtime.cancelAttempt()` then
+   `promptQueue.markInFlightPromptCancelled()` then **stops the workflow**
+
+Branch 3 is the bug: process exit is treated as a **cancellation**, not a failure. The
+prompt is marked cancelled, the workflow stops, and no error policy is consulted. This
+affects all seven harnesses — any unexpected crash currently silently looks like a user
+cancel.
+
+### Desired routing after fix
 
 When a prompt attempt fails with `failureKind` in:
 
-- `processExit`
-- `harnessError`
-- `timeout`
+- `processExit` — process exited before completion (currently routed to cancel)
+- `harnessError` — harness wrote an error file (Claude `StopFailure`, Copilot
+  `errorOccurred`, OpenCode `session.error`)
+- `timeout` — log monitor timed out (currently thrown as an error)
 
-then `WorkflowExecutor` should resolve `errorBehavior` and route accordingly.
+…then `WorkflowExecutor` should resolve `errorBehavior` from the resolved prompt
+properties and route accordingly.
+
+`userCancelled` remains on the existing cancellation path — unchanged.
 
 ### `stop`
 
@@ -494,28 +616,27 @@ requires updates in the prompt parser and editor plumbing, not just shared types
 
 Expected touchpoints:
 
-- `src/types/FlightPathTypes.ts`
-- `src/types/DashboardConstants.ts`
-- `src/types/FlightPathSettings.ts`
-- `schemas/prompt-schema.json`
-- `schemas/settings-schema.json`
-- `src/flightpath/PromptFileParser.ts`
-- `src/flightpath/orchestration/PromptFileLoader.ts`
-- `src/flightpath/WorkflowInstance.ts`
-- `src/ui/WorkflowSerializer.ts`
-- `src/completions/PromptPropertyCompletionProvider.ts`
-- `src/ui/WebviewSettingsSync.ts`
-- `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`
-
-Likely supporting updates:
-
-- prompt/workflow property key lists
-- serializer field allowlists
-- settings synchronization
-- prompt property completions
-
-If the workflow-level default is exposed in the UI, the relevant webview state/types will
-need to be updated as well.
+- `src/types/FlightPathTypes.ts` — `ErrorBehavior`, `ErrorBehaviorAction` types, `errorBehavior` on `ExecutionProperties`
+- `src/types/DashboardConstants.ts` — new `FailureKind` const map, add `"HARNESS_ERROR"` to `INTERACTIVE_ABORT_KINDS`
+- `src/types/FlightPathSettings.ts` — `workflow.defaultErrorBehavior` field
+- `schemas/prompt-schema.json` — `errorBehavior` property on prompt items
+- `schemas/settings-schema.json` — `flightpath.workflow.defaultErrorBehavior`
+- `src/flightpath/PromptFileParser.ts` — parse `errorBehavior`
+- `src/flightpath/orchestration/PromptFileLoader.ts` — seed workflow defaults
+- `src/flightpath/harness/shared/CliFailureTracker.ts` — add `harnessErrorDetails`, `markHarnessError()`, `wasLastFailureHarnessError()`
+- `src/flightpath/harness/shared/CliExecutionRunner.ts` — change timeout throw to structured return; call `markHarnessError()` when notification monitor returns `kind: "error"`
+- `src/flightpath/harness/shared/interfaces/INotificationMonitor.ts` — add `kind` to `NotificationResult`
+- `src/flightpath/harness/claude/ClaudeNotificationMonitor.ts` — register `StopFailure` in hook config
+- `src/flightpath/harness/copilot/CopilotNotificationMonitor.ts` — register `errorOccurred` in hook config
+- `src/scripts/flightpath-claude-hook.js` — add `StopFailure` to `HANDLED_EVENTS`, write error file
+- `src/scripts/flightpath-copilot-hook.js` — add `errorOccurred` to `LOGICAL_EVENT_MAP`, write error file
+- `src/scripts/flightpath-opencode-plugin.ts` — handle `session.error` event, write error file
+- `src/flightpath/WorkflowExecutor.ts` — route `processExit`/`harnessError`/`timeout` through `errorBehavior`; move process exit off the cancel path
+- `src/flightpath/WorkflowInstance.ts` — prompt/workflow property key lists, serializer field allowlists
+- `src/ui/WorkflowSerializer.ts` — serializer field allowlists
+- `src/completions/PromptPropertyCompletionProvider.ts` — property key completions
+- `src/ui/WebviewSettingsSync.ts` — settings synchronization
+- `src/ui/webview-react/components/editor/PropertiesDrawer.tsx` — UI editing
 
 ---
 
@@ -603,23 +724,29 @@ classification explicit.
 
 ### Phase 3 - Harness detection
 
-1. Claude: add `StopFailure` notification support
-2. Copilot: add `errorOccurred` notification support
-3. OpenCode: extend the plugin and monitor for `session.error`
-4. Claude: tighten session-level fallback parsing only
-5. Copilot: add `session.error` fallback parsing only
-6. Leave Codex/Qwen/Gemini on process-exit/timeout fallback until verified
+1. `flightpath-claude-hook.js`: add `StopFailure` to `HANDLED_EVENTS`, write error file
+2. `ClaudeNotificationMonitor`: register `StopFailure` in hook config
+3. `flightpath-copilot-hook.js`: add `errorOccurred` to `LOGICAL_EVENT_MAP`, write error file
+4. `CopilotNotificationMonitor`: register `errorOccurred` in hook config
+5. `flightpath-opencode-plugin.ts`: handle `session.error` event, write error file
+6. `OpenCodeNotificationMonitor`: scan for error files alongside stop files
+7. `ClaudeNotificationMonitor`/`CopilotNotificationMonitor`: tighten log fallback to session-level only
+8. Leave Codex/Qwen/Gemini on process-exit/timeout fallback — no changes needed; they
+   inherit Phase 2's structured classification automatically
 
 This is the smallest safe implementation slice that fixes the known blind spots without
 adding broad false-positive log parsing.
 
 ### Phase 4 - WorkflowExecutor routing
 
-1. Route `processExit`, `harnessError`, and `timeout` through `errorBehavior`
-2. Keep `userCancelled` on the existing cancellation path
-3. Implement `retry`
-4. Implement `continue`
-5. Preserve existing stop behavior as the default
+1. Move process exit off the cancel path — change `wasLastFailureProcessExit()` branch to
+   route through `errorBehavior` instead of calling `runtime.cancelAttempt()` + stop
+2. Wire `wasLastFailureHarnessError()` as a new route (same policy lookup)
+3. Wire timeout (`failureKind: "timeout"`) as a new route
+4. Keep `userCancelled` on the existing cancellation path — unchanged
+5. Implement `retry` behavior
+6. Implement `continue` behavior
+7. Preserve existing `stop` behavior as the default when `errorBehavior` is not set
 
 ### Phase 5 - UI
 
@@ -642,17 +769,45 @@ Retries should start a fresh harness attempt, not attempt to recover the broken 
 
 ---
 
-## Open Questions
+## Implementation Guidance (Open Questions Resolved)
 
-1. Does Claude `StopFailure` always fire for the interactive unrecoverable-error case, or
-   are there cases where only transcript/log evidence is available?
-2. What exact payload shape does Copilot `errorOccurred` provide in the CLI versions
-   FlightPath targets, and does FlightPath need to normalize multiple variants?
-3. What exact payload shape does OpenCode `session.error` provide in live sessions, and
-   does it always correspond to a terminal harness failure rather than a recoverable
-   intermediate state?
-4. Should timeout be user-configurable per step in the future, or is routing the existing
-   global timeout through `errorBehavior` sufficient for now?
+### Q1: Does Claude `StopFailure` always fire for interactive errors?
+
+**Assumption**: `StopFailure` fires instead of `Stop` when a turn ends due to an API error.
+It is the primary signal for the hanging-workflow case. It will not catch every failure
+mode (e.g. cases where Claude exits the process rather than showing an error in the TUI).
+The existing process-exit path covers those cases. No log-based fallback is needed for
+the interactive hanging case.
+
+**Implementation decision**: handle `StopFailure`, log-based session error fallback
+remains a separate concern for headless mode only.
+
+### Q2: What exact payload shape does Copilot `errorOccurred` provide?
+
+**Assumption**: payload mirrors `agentStop` — `{ sessionId, timestamp, cwd }`. Extract
+`sessionId` defensively (`payload.sessionId ?? payload.session_id`). Any extra fields
+(e.g., `errorType`, `errorMessage`) should be preserved in the error file for debugging
+but are not required for the core error routing.
+
+**Implementation decision**: write the full raw payload into the error file alongside the
+normalized `{ hookEvent, sessionId, status: "error" }` envelope.
+
+### Q3: What exact payload shape does OpenCode `session.error` provide?
+
+**Assumption**: follows the same pattern as other session events — `event.properties`
+contains session details. Extract `sessionID` from `event.properties.sessionID` with a
+fallback to `event.properties.sessionId`. Log a warning and skip if session ID cannot
+be resolved.
+
+**Implementation decision**: handle gracefully; write error file when session ID is
+resolvable, otherwise log and fall through to the process-exit fallback.
+
+### Q4: Should timeout be user-configurable per step?
+
+**Decision**: routing the existing global `flightpath.scriptTimeout` through
+`errorBehavior` is sufficient for the initial implementation. Per-step timeout override
+is deferred to a future enhancement and can be added as a new `timeout?` field on
+`ExecutionProperties` later without breaking changes.
 
 ---
 
