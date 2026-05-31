@@ -17,10 +17,10 @@ export default defineConfig(({ mode }) => ({
           dest: "dictionaries",
           rename: { stripBase: 2 },
         },
-        // Copy typo.js for spell checking
-        // stripBase:true strips the "static/" prefix so the file lands at the output root.
+        // Copy typo.js for spell checking from npm package (typo-js)
+        // stripBase:true strips the "typo-js/" directory prefix so the file lands at the output root as "typo.js".
         {
-          src: "static/typo.js",
+          src: "../../../node_modules/typo-js/typo.js",
           dest: ".",
           rename: { stripBase: true },
         },

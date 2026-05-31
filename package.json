@@ -699,7 +699,8 @@
     "sync-models:check": "node scripts/sync-models.mjs --check",
     "sync-models:import": "node scripts/sync-models.mjs --import",
     "chores": "node scripts/chores.mjs",
-    "compile:prod": "npm run compile:extension && npm run build:webview"
+    "compile:prod": "npm run compile:extension && npm run build:webview",
+    "knip": "knip"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
@@ -728,6 +729,7 @@
     "eslint-plugin-prettier": "^5.5.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "jsdom": "^26.1.0",
+    "knip": "^6.15.0",
     "mocha": "^11.7.2",
     "npm-run-all": "^4.1.5",
     "postcss": "^8.5.6",

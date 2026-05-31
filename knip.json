@@ -1,0 +1,52 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "src/extension.ts",
+    "src/mcp-server.ts",
+    "src/cli.ts",
+    "esbuild.js",
+    ".vscode-test.mjs",
+    "scripts/**/*.{js,mjs,ts}",
+    "eslint.config.mjs",
+    "src/test/runTest.ts",
+    "src/test/suite/index.ts",
+    "src/test/**/*.test.ts",
+    "src/test/unit/ValidationUtils.ts",
+    "src/ui/webview-react/main.tsx",
+    "src/ui/webview-react/vite.config.ts",
+    "src/ui/webview-react/vitest.config.ts",
+    "src/ui/webview-react/postcss.config.js",
+    "src/ui/webview-react/tailwind.config.js",
+    "src/ui/webview-react/scripts/bootstrapScript.ts",
+    "src/ui/webview-react/scripts/moduleLoaderScript.ts",
+    "src/ui/webview-react/test/**/*.test.{ts,tsx}"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx,js}",
+    "scripts/**/*.{js,mjs,ts}",
+    "esbuild.js",
+    ".vscode-test.mjs",
+    "eslint.config.mjs"
+  ],
+  "ignore": [
+    "src/scripts/**",
+    "src/server/standalone-shim.js",
+    "src/server/flightpath-service-worker.js",
+    "manual-test/**",
+    "src/templates/**",
+    "docs/**",
+    "src/ui/webview-react/static/**",
+    "src/ui/webview-react/vite-env.d.ts"
+  ],
+  "ignoreDependencies": [
+    "@vscode/codicons",
+    "autoprefixer",
+    "tailwindcss",
+    "typo-js"
+  ],
+  "ignoreBinaries": [
+    "vsce",
+    "nyc",
+    "xvfb-run"
+  ]
+}
