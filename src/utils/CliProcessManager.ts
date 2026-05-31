@@ -65,19 +65,9 @@ export class CliProcessManager {
       this.lastSpawnedCommand = `${command} ${args.join(" ")}`;
       this.logger?.(`📤 Spawning: ${this.lastSpawnedCommand}`);
 
-      // When using a shell, concatenate command + args into a single string.
-      // Node.js DEP0190 warns when args is non-empty with shell:true because the
-      // shell concatenates them anyway without escaping.  Doing it explicitly here
-      // produces identical behavior and suppresses the warning.
-      const shellMode = options.shell ?? true;
-      const [resolvedCmd, resolvedArgs] =
-        shellMode && args.length > 0
-          ? [`${command} ${args.join(" ")}`, [] as string[]]
-          : [command, args];
-
-      const child = spawn(resolvedCmd, resolvedArgs, {
+      const child = spawn(command, args, {
         cwd: options.cwd || this.workspaceRoot,
-        shell: shellMode,
+        shell: options.shell ?? false,
         stdio: ["ignore", "pipe", "pipe"],
         env: options.env || { ...process.env },
       });
@@ -146,57 +136,6 @@ export class CliProcessManager {
           }
         }, options.timeout);
       }
-    });
-  }
-
-  /**
-   * Spawn a simple command (e.g., --version checks) with timeout.
-   */
-  async spawnSimple(
-    command: string,
-    args: string[],
-    timeoutMs: number = 5000
-  ): Promise<SpawnResult> {
-    return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
-      let settled = false;
-
-      // Same DEP0190 workaround: concatenate when using shell (see spawn() above).
-      const resolvedSimpleCmd =
-        args.length > 0 ? `${command} ${args.join(" ")}` : command;
-      const child = spawn(resolvedSimpleCmd, [], {
-        cwd: this.workspaceRoot,
-        shell: true,
-        env: { ...process.env },
-      });
-
-      child.stdout?.on("data", (data: Buffer) => (stdout += data.toString()));
-      child.stderr?.on("data", (data: Buffer) => (stderr += data.toString()));
-      child.on("error", (error) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timeoutId);
-        reject(error);
-      });
-      child.on("close", (code: number | null) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timeoutId);
-        resolve({ stdout, stderr, exitCode: code ?? 1 });
-      });
-
-      const timeoutId = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          child.kill();
-          reject(new Error(`Command timeout after ${timeoutMs}ms`));
-        }
-      }, timeoutMs);
     });
   }
 

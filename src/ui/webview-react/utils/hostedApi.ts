@@ -22,7 +22,6 @@ export async function hostedFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const url = `${path}${path.includes("?") ? "&" : "?"}token=${token}`;
   const method = options?.method?.toUpperCase();
   const headers: Record<string, string> = {};
   if (options?.headers) {
@@ -39,11 +38,14 @@ export async function hostedFetch<T>(
       Object.assign(headers, existing);
     }
   }
+  if (token) {
+    headers["x-flightpath-token"] = token;
+  }
   if (method === "PUT" || method === "POST") {
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetch(path, { ...options, headers });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`HTTP ${response.status}: ${text}`);

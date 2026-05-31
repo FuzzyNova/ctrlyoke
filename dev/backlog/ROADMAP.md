@@ -1,7 +1,7 @@
 # FlightPath Extension — Strategic Roadmap
 
-**Last updated:** April 20, 2026  
-**Current version:** 0.1.0 (pre-release)  
+**Last updated:** May 30, 2026  
+**Current version:** 0.1.0 (released May 12, 2026)  
 **Status:** Active development — no backward compatibility constraints
 
 ---
@@ -10,7 +10,9 @@
 
 FlightPath is a VS Code extension that automates AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini) through structured YAML/JSON prompt workflows. The core engine is fully functional: multi-harness CLI/Chat execution, parallel workflow execution, per-prompt session management, dynamic queue extension, React webview dashboard with CodeMirror 6 editor, script-based end conditions, agent injection, a standalone CLI binary, stale-state recovery, an embedded terminal, and mobile-responsive layout are all working.
 
-The project is pre-release. The primary remaining gap before v0.1.0 ships is the CHANGELOG, production build verification, macOS testing, and VS Code Marketplace publisher setup. A dedicated `dev/backlog/RELEASE_PLAN.md` tracks every step. The architecture is clean and SOLID-compliant, making new features straightforward to add.
+**v0.1.0 shipped on May 12, 2026.** Post-release, several Tier 1 quick wins have also shipped: completion notifications (1.1), backtick context suppression (1.2), workflow favorites (1.4), SCM commit message button (1.7), and inline prior context (2.6). The architecture is clean and SOLID-compliant, making new features straightforward to add.
+
+**Recommended next focus:** Fix the active Claude `StopFailure` interactive-hang bug (2.1 Phase 2), then implement Raw Prompt Mode (1.3) and BMAD workflow templates (1.8). See [Tier 1](#tier-1--quick-wins) and [Tier 2](#tier-2--high-value-features) below.
 
 ---
 
@@ -35,9 +37,18 @@ The project is pre-release. The primary remaining gap before v0.1.0 ships is the
 - **Custom CLI args**: `extraArgs?: string[]` on `PromptItem` and `PromptFile`; per-provider pass-through in `buildCommand()`
 - **User-defined hooks**: `ExecutionProperties.hooks` for pre/post execution alongside agent/skills/mcpServers; headless mode support
 - **Script steps**: `type: script` step runs a shell command inline in the workflow, with `onFail` behavior
-- **Side-by-side diff**: Output diff view for comparing AI changes
+- **Side-by-side diff**: Output diff view for comparing AI changes (responsive split/unified)
 - **Live context window**: Tracks token usage and context state during execution
 - **Global settings**: Extension settings panel integrated into the dashboard
+- **Inline prior context (2.6)**: `$previous`, `$all`, `$step:N` prior-context references injected into subsequent steps without requiring `resumeSession`
+- **Completion notifications (1.1)**: VS Code toast on workflow complete/error; `flightpath.notifications.onComplete` setting
+- **Backtick context suppression (1.2)**: Context expansion skips `@path`, `#sym:`, etc. inside triple-backtick fenced blocks
+- **Workflow favorites (1.4)**: Star button persists `isFavorite` in working file; favorites sort to the top of the workflow list
+- **SCM commit message button (1.7)**: VS Code Source Control panel button generates a commit message via staged diff and active harness
+- **MCP registry manager**: Central MCP server management UI with user/workspace merge and registry pagination
+- **Output virtualization**: Virtual row rendering for large outputs via `@tanstack/react-virtual`
+- **Output history search**: Dedicated history search modal with in-output find bar integration
+- **Markdown export**: Customizable workflow output export with command inclusion, metadata, and step range options
 
 ### UI & Developer Experience (shipped)
 
@@ -87,23 +98,23 @@ The project is pre-release. The primary remaining gap before v0.1.0 ships is the
 
 ---
 
-## Tier 0 — v0.1.0 Release Blockers
+## Tier 0 — v0.1.0 Release Blockers ✅ SHIPPED (May 12, 2026)
 
-_Must be completed before publishing to the VS Code Marketplace. See [`RELEASE_PLAN.md`](RELEASE_PLAN.md) for the full checklist with exact commands._
+_All release blockers completed. v0.1.0 is published on the VS Code Marketplace. See [`RELEASE_PLAN.md`](RELEASE_PLAN.md) for the full post-release checklist._
 
 ---
 
-### 0.1 Populate the CHANGELOG
+### 0.1 Populate the CHANGELOG ✅
 
-**Priority: CRITICAL** | **Effort: 2–4 hours**
+**Status: DONE**
 
 `CHANGELOG.md` has only an `[Unreleased]` stub. VS Code Marketplace requires a populated CHANGELOG. Use "Current Version & Completed Milestones" above as source material.
 
 ---
 
-### 0.2 Production Build Verification
+### 0.2 Production Build Verification ✅
 
-**Priority: CRITICAL** | **Effort: 1–2 hours**
+**Status: DONE**
 
 Run `npm run package`, install the VSIX locally via **Extensions: Install from VSIX**, and verify:
 
@@ -114,25 +125,25 @@ Run `npm run package`, install the VSIX locally via **Extensions: Install from V
 
 ---
 
-### 0.3 macOS Testing
+### 0.3 macOS Testing ✅
 
-**Priority: CRITICAL** | **Effort: 2–4 hours**
+**Status: DONE**
 
 FlightPath has only been developed and tested on Windows/WSL. macOS is the primary platform for VS Code users. Key risks: `node-pty` native binaries differ per architecture, Homebrew CLI paths may not be in `PATH`, `chokidar` uses FSEvents on macOS. Test on Apple Silicon (arm64) if possible.
 
 ---
 
-### 0.4 Publisher Setup
+### 0.4 Publisher Setup ✅
 
-**Priority: CRITICAL** | **Effort: 1 hour**
+**Status: DONE**
 
 Create or verify the Azure DevOps publisher account (`nhickster`), generate a PAT, run `vsce login nhickster`, and verify `vsce ls` output shows the correct file inclusion/exclusion.
 
 ---
 
-### 0.5 Marketplace Listing Polish
+### 0.5 Marketplace Listing Polish ✅
 
-**Priority: RECOMMENDED** | **Effort: 2–3 hours**
+**Status: DONE**
 
 - Update `package.json` description to mention all supported harnesses (current description undersells)
 - Add `keywords` field: `["AI", "automation", "copilot", "claude", "codex", "workflow", "prompt", "agent", "LLM"]`
@@ -142,9 +153,9 @@ Create or verify the Azure DevOps publisher account (`nhickster`), generate a PA
 
 ---
 
-### 0.6 CLI npm Package
+### 0.6 CLI npm Package ✅
 
-**Priority: CRITICAL** | **Effort: 2–3 hours**
+**Status: DONE**
 
 The `flightpath` CLI (`out/cli.js`) ships separately from the VSIX. Decide on single vs. separate `package.json` structure, add `files` field, test with `npm pack --dry-run`, publish to npm.
 
@@ -158,23 +169,15 @@ _Under 1 week each. High impact, low risk. Ship in the weeks immediately after v
 
 ---
 
-#### 1.1 Completion Notifications
+#### 1.1 Completion Notifications ✅ SHIPPED
 
-**Priority: HIGH** | **Effort: ~0.5 days** | **Doc: [`COMPLETION_NOTIFICATIONS_PLAN.md`](COMPLETION_NOTIFICATIONS_PLAN.md)**
-
-Show a VS Code toast notification when a workflow finishes (success or failure). Add `flightpath.notifications.onComplete` setting (`always` / `errorsOnly` / `never`). A `NotificationManager` subscribes to `DashboardBroadcastHub` — the infrastructure already exists.
-
-**Why it matters:** Workflows can take 5–30+ minutes in the background. Users have no signal when they finish without staring at the status bar. This is the highest-impact, lowest-effort feature on the list.
+**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/COMPLETION_NOTIFICATIONS_PLAN.md)
 
 ---
 
-#### 1.2 Backtick Context Suppression
+#### 1.2 Backtick Context Suppression ✅ SHIPPED
 
-**Priority: HIGH** | **Effort: ~2 hours** | **Doc: [`BACKTICK_CONTEXT_SUPPRESSION_PLAN.md`](BACKTICK_CONTEXT_SUPPRESSION_PLAN.md)**
-
-Teach `ContextExpander` to skip expanding `@path`, `#sym:`, `#selection:`, `#file:`, and `~git` references inside triple-backtick fenced blocks. One private `maskBacktickBlocks()` method added to `ContextExpander.ts` — no schema or type changes.
-
-**Why it matters:** Users embedding literal output, log data, or debug prompts in fenced blocks currently get their content corrupted by context expansion. Fixes a real, reproducible bug with ~2 hours of effort.
+**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md)
 
 ---
 
@@ -186,15 +189,13 @@ New `rawPromptMode: true` execution property that bypasses the entire context ex
 
 **Why it matters:** Users who manage their own context references, or who are debugging FlightPath sessions (where the debug prompt contains raw FlightPath instruction strings), need a clean passthrough. Also a trust signal for skeptical users.
 
-**Dependencies:** Implement backtick suppression (1.2) first — it covers the inline/per-block case; raw mode is the workflow-level bypass.
+**Dependencies:** ✅ Backtick suppression (1.2) is done — 1.3 is ready to implement now.
 
 ---
 
-#### 1.4 Workflow Favorites
+#### 1.4 Workflow Favorites ✅ SHIPPED
 
-**Priority: MEDIUM** | **Effort: ~0.5 days** | **Doc: [`WORKFLOW_FAVORITES_PLAN.md`](WORKFLOW_FAVORITES_PLAN.md)**
-
-Star button on each workflow row in the Workflows dropdown. Favorites sort to the top and persist as `isFavorite` in the working file. No new storage layer — `WorkflowSerializer` already reads every working file for the recent workflows list.
+**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/WORKFLOW_FAVORITES_PLAN.md)
 
 ---
 
@@ -216,11 +217,9 @@ A **Preview** button on each prompt card in the dashboard shows the fully resolv
 
 ---
 
-#### 1.7 SCM Commit Message Button
+#### 1.7 SCM Commit Message Button ✅ SHIPPED
 
-**Priority: MEDIUM** | **Effort: 1–2 days** | **Doc: [`SCM_COMMIT_MESSAGE_BUTTON.md`](SCM_COMMIT_MESSAGE_BUTTON.md)**
-
-Add a FlightPath button to the VS Code Source Control panel that generates a commit message using the staged diff and the active harness. Zero new workflow concepts — just a single-prompt trigger from SCM context.
+**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/SCM_COMMIT_MESSAGE_BUTTON.md)
 
 ---
 
@@ -306,11 +305,9 @@ End conditions are powerful but steep to learn:
 
 ---
 
-#### 2.6 Inline Prior Context
+#### 2.6 Inline Prior Context ✅ SHIPPED
 
-**Priority: MEDIUM** | **Effort: 1–2 weeks** | **Doc: [`INLINE_PRIOR_CONTEXT_PLAN.md`](INLINE_PRIOR_CONTEXT_PLAN.md)**
-
-Pass AI output from a previous step as injected context into subsequent steps without requiring `resumeSession`. Enables structured multi-step chains where each step builds on the last without sharing a full conversation session.
+**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/INLINE_PRIOR_CONTEXT_PLAN.md)
 
 ---
 
@@ -478,11 +475,11 @@ Actions:
 ## Dependency Graph
 
 ```
-Tier 0 (Release Blockers)
-  └─► 4.3 Marketplace Listing
+Tier 0 (Release Blockers) ✅ SHIPPED May 12, 2026
+  └─► 4.3 Marketplace Listing (done)
 
-1.2 Backtick Context Suppression
-  └─► 1.3 Raw Prompt Mode (backtick covers inline case; raw mode covers workflow-level bypass)
+1.2 Backtick Context Suppression ✅ DONE
+  └─► 1.3 Raw Prompt Mode (ready to implement)
 
 2.1 Error Behavior Phase 2 (Claude StopFailure fix)
   → ships independently as a bug fix, before full schema work
@@ -509,11 +506,11 @@ Tier 0 (Release Blockers)
 
 | Milestone                  | Items                                                                | Target         |
 | -------------------------- | -------------------------------------------------------------------- | -------------- |
-| **v0.1.0 Release**         | Tier 0 blockers                                                      | May 2026       |
-| **v0.1.x Rapid UX**        | 1.1 (notifications), 1.2 (backtick), 1.3 (raw mode), 1.4 (favorites) | May–June 2026  |
-| **v0.2.0 Polish & DX**     | 1.5–1.8, 2.1 (error behavior), 2.2 (telemetry)                       | June–July 2026 |
+| **v0.1.0 Release** ✅      | Tier 0 blockers                                                      | May 12, 2026   |
+| **v0.1.x Rapid UX**        | 1.1 ✅, 1.2 ✅, 1.3 (ready), 1.4 ✅, 1.7 ✅                          | May–June 2026  |
+| **v0.2.0 Polish & DX**     | 1.5, 1.6, 1.8, 2.1 (error behavior), 2.2 (telemetry)                | June–July 2026 |
 | **v0.3.0 Project Context** | 2.3 + 2.4 + 2.5 + 2.8 (docs site)                                    | August 2026    |
-| **v0.4.0 Power Features**  | 2.6 + 3.1 + 3.2 + 3.3                                                | October 2026   |
+| **v0.4.0 Power Features**  | 3.1 + 3.2 + 3.3                                                      | October 2026   |
 | **v0.5.0 Platform & Pro**  | 4.1 + 4.2 + 4.3                                                      | Dec 2026       |
 
 _Timeline is aspirational. Pre-release — prioritize quality over schedule._
@@ -535,20 +532,15 @@ _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 
 | Document                                                                       | Status          | Roadmap Item |
 | ------------------------------------------------------------------------------ | --------------- | ------------ |
-| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                           | 🔄 IN_PROGRESS  | Tier 0       |
-| [`COMPLETION_NOTIFICATIONS_PLAN.md`](COMPLETION_NOTIFICATIONS_PLAN.md)         | NOT_IMPLEMENTED | 1.1          |
-| [`BACKTICK_CONTEXT_SUPPRESSION_PLAN.md`](BACKTICK_CONTEXT_SUPPRESSION_PLAN.md) | NOT_IMPLEMENTED | 1.2          |
+| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                           | ✅ DONE          | Tier 0       |
 | [`RAW_PROMPT_MODE_PLAN.md`](RAW_PROMPT_MODE_PLAN.md)                           | NOT_IMPLEMENTED | 1.3          |
-| [`WORKFLOW_FAVORITES_PLAN.md`](WORKFLOW_FAVORITES_PLAN.md)                     | NOT_IMPLEMENTED | 1.4          |
 | [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](SCRIPT_FIELD_COMPLETIONS_PLAN.md)         | NOT_IMPLEMENTED | 1.5          |
 | [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md)                           | NOT_IMPLEMENTED | 1.6          |
-| [`SCM_COMMIT_MESSAGE_BUTTON.md`](SCM_COMMIT_MESSAGE_BUTTON.md)                 | NOT_IMPLEMENTED | 1.7          |
 | [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                             | NOT_IMPLEMENTED | 1.8          |
 | [`ERROR_BEHAVIOR_PLAN.md`](ERROR_BEHAVIOR_PLAN.md)                             | NOT_IMPLEMENTED | 2.1          |
 | [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md)                                       | NOT_IMPLEMENTED | 2.2          |
 | [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                       | NOT_IMPLEMENTED | 2.3          |
 | [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                           | NOT_IMPLEMENTED | 2.4          |
-| [`INLINE_PRIOR_CONTEXT_PLAN.md`](INLINE_PRIOR_CONTEXT_PLAN.md)                 | NOT_IMPLEMENTED | 2.6          |
 | [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](DROPDOWN_VALIDATION_STYLING_PLAN.md)   | NOT_IMPLEMENTED | 2.7          |
 | [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md)                             | NOT_IMPLEMENTED | 3.1          |
 | [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md)                               | NOT_IMPLEMENTED | 3.2          |
@@ -558,3 +550,13 @@ _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 | [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)                     | NOT_IMPLEMENTED | 3.7          |
 | [`ADDITIONAL_INSTRUCTIONS_PLAN.md`](ADDITIONAL_INSTRUCTIONS_PLAN.md)           | NOT_IMPLEMENTED | 3.8          |
 | [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)                       | NOT_IMPLEMENTED | 3.9          |
+
+### Implemented Since April 2026 (moved to `dev/implemented/`)
+
+| Document                                                                                   | Roadmap Item |
+| ------------------------------------------------------------------------------------------ | ------------ |
+| [`../implemented/COMPLETION_NOTIFICATIONS_PLAN.md`](../implemented/COMPLETION_NOTIFICATIONS_PLAN.md) | 1.1 |
+| [`../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md`](../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md) | 1.2 |
+| [`../implemented/WORKFLOW_FAVORITES_PLAN.md`](../implemented/WORKFLOW_FAVORITES_PLAN.md)   | 1.4          |
+| [`../implemented/SCM_COMMIT_MESSAGE_BUTTON.md`](../implemented/SCM_COMMIT_MESSAGE_BUTTON.md) | 1.7        |
+| [`../implemented/INLINE_PRIOR_CONTEXT_PLAN.md`](../implemented/INLINE_PRIOR_CONTEXT_PLAN.md) | 2.6        |

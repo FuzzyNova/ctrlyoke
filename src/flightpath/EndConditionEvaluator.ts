@@ -488,6 +488,7 @@ export class EndConditionEvaluator {
         timeout,
         env: cleanEnv,
         onStdout: onOutput,
+        shell: false,
       });
 
       return {
