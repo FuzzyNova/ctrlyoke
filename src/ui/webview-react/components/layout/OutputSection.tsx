@@ -413,6 +413,7 @@ export const OutputSection: React.FC = () => {
   );
 
   const rowLayout = useMemo(() => {
+    void measurementVersion;
     let offset = 0;
     const rowStartsByIndex: number[] = [];
     const rowStartsByKey = new Map<string, number>();
@@ -1116,6 +1117,7 @@ export const OutputSection: React.FC = () => {
     historyOutputs,
     isViewingHistory,
     lastCliIndexPerStep,
+    outputFontSize,
     rowLayout,
     rows,
     stepOutputsMap,
@@ -1787,6 +1789,7 @@ export const OutputSection: React.FC = () => {
             <label className="flex items-start gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
+                aria-label="Include CLI command"
                 checked={exportIncludeCommand}
                 onChange={(e) => setExportIncludeCommand(e.target.checked)}
                 className="mt-0.5 accent-btn-bg"
@@ -1806,6 +1809,7 @@ export const OutputSection: React.FC = () => {
             <label className="flex items-start gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
+                aria-label="Include metadata"
                 checked={exportIncludeMetadata}
                 onChange={(e) => setExportIncludeMetadata(e.target.checked)}
                 className="mt-0.5 accent-btn-bg"

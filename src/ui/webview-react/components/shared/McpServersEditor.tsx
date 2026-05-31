@@ -515,8 +515,13 @@ export const McpServersEditor: React.FC<{
   const mode: "default" | "custom" =
     showDefault && value === undefined ? "default" : "custom";
 
-  const currentArray = Array.isArray(value) ? value : [];
-  const inheritedArray = Array.isArray(inheritedValue) ? inheritedValue : [];
+  const currentArray = useMemo(() => (Array.isArray(value) ? value : []), [
+    value,
+  ]);
+  const inheritedArray = useMemo(
+    () => (Array.isArray(inheritedValue) ? inheritedValue : []),
+    [inheritedValue]
+  );
 
   const flightpathEnabled = hasFlightpath(currentArray);
   const flightpathConfig = getFlightpathConfig(currentArray);

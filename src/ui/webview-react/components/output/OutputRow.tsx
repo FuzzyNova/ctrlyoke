@@ -474,10 +474,10 @@ const CliHeaderRowView: React.FC<{
 };
 
 const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
-  if (row.rowKind !== "stats") return null;
-
-  const { output, outputText } = row;
-  const structuredMetadata = output.structured?.metadata;
+  const isStatsRow = row.rowKind === "stats";
+  const output = isStatsRow ? row.output : undefined;
+  const outputText = isStatsRow ? row.outputText : undefined;
+  const structuredMetadata = output?.structured?.metadata;
   const sessionId = structuredMetadata?.sessionId;
   const harnessId = structuredMetadata?.harness;
   const harnessName = harnessId
@@ -503,6 +503,8 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
     setCopiedOutput(true);
     window.setTimeout(() => setCopiedOutput(false), 1200);
   }, [outputText]);
+
+  if (!output) return null;
 
   const parts: React.ReactNode[] = [];
   if (output.tokens) {

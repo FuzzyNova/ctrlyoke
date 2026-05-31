@@ -277,7 +277,6 @@ export const WorkspaceExplorerPane: React.FC = () => {
     if (parentDir !== useWorkspaceViewerStore.getState().explorerPath) {
       loadDirectory(parentDir);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFilePath, loadDirectory]);
 
   // Consume pending navigation set externally (e.g. from CodeMirror link clicks)
@@ -691,6 +690,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
           ) : (
             <div
               className="flex-1 overflow-hidden"
+              role="presentation"
               onContextMenu={(e) => {
                 e.preventDefault();
                 openEditorContextMenu(e.clientX, e.clientY);
