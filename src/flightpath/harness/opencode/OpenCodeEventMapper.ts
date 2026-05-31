@@ -17,7 +17,7 @@ import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
  * Compute structured diff hunks from a full before/after file pair.
  * Returns undefined when either input is unavailable (incomplete tool call).
  */
-export function computeStructuredPatch(
+function computeStructuredPatch(
   filePath: string,
   before: string,
   after: string

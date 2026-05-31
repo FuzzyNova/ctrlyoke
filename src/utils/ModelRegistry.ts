@@ -27,7 +27,6 @@ import { promises as fsPromises } from "fs";
 import {
   COPILOT_CHAT_MODEL_IDS,
   COPILOT_CLI_MODEL_IDS,
-  CLAUDE_CLI_MODELS,
   OPENCODE_CLI_FALLBACK_MODELS,
 } from "./ModelConstants";
 import { Log } from "./Log";
@@ -386,19 +385,6 @@ function useFallbackModels(): void {
 }
 
 /**
- * Get all available models
- * Returns cached models if available, otherwise queries API
- *
- * @returns Array of available Copilot models
- */
-export async function getAvailableModels(): Promise<CopilotModel[]> {
-  if (!isInitialized) {
-    await initializeModelRegistry();
-  }
-  return cachedModels;
-}
-
-/**
  * Get available models synchronously (from cache)
  * Returns empty array if not yet initialized
  * Use getAvailableModels() for guaranteed results
@@ -438,18 +424,6 @@ export function isCliModelSupported(modelId: string): boolean {
   return cachedCopilotCliModelIds.includes(modelId);
 }
 
-/**
- * Check if a model identifier is valid for Claude CLI
- * This includes aliases, generic names, and full names
- *
- * @param modelId The model ID to check
- * @returns true if model can be used with Claude CLI
- */
-export function isClaudeCliModel(modelId: string): boolean {
-  return CLAUDE_CLI_MODELS.includes(
-    modelId as (typeof CLAUDE_CLI_MODELS)[number]
-  );
-}
 
 /**
  * Get OpenCode model IDs synchronously (from cache, populated at startup)
@@ -476,20 +450,6 @@ export function getOpenCodeContextWindowSize(
   modelId: string
 ): number | undefined {
   return cachedOpenCodeContextWindows.get(modelId);
-}
-
-/**
- * Refresh the model cache (force re-query)
- * Call this if you expect model availability to have changed
- */
-export async function refreshModelRegistry(): Promise<void> {
-  isInitialized = false;
-  cachedModels = [];
-  cachedCopilotCliModelIds = [];
-  cachedOpenCodeModelIds = [];
-  cachedQwenModelIds = [];
-  cachedOpenCodeContextWindows.clear();
-  await initializeModelRegistry();
 }
 
 /**

@@ -9,9 +9,6 @@ export const PANEL_COLLAPSED_SIZE_DEFAULT_PX = 30;
 /** Alternative collapsed size for prompts/settings panels (desktop) */
 export const PANEL_COLLAPSED_SIZE_SIDEBAR = "32px";
 
-/** Minimum panel size as percentage for resizable panels */
-export const PANEL_MIN_SIZE_SMALL = "100px";
-
 /** Minimum panel size in pixels for desktop sidebar panels (prompts/settings) */
 export const PANEL_MIN_SIZE_SIDEBAR = "192px";
 

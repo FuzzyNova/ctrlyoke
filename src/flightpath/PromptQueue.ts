@@ -8,12 +8,11 @@ import {
   WorkflowRuntimeState,
   PromptResult,
   EXECUTION_STATES,
-  STEP_STATUS,
   WorkflowStep,
   isScriptStep,
   PromptRuntimeMetadata,
 } from "../types/FlightPathTypes";
-import { PROMPT_TERMINAL_STATUS } from "../types/DashboardConstants";
+import { PROMPT_TERMINAL_STATUS, STEP_STATUS } from "../types/DashboardConstants";
 
 /**
  * Internal state shape: the queue's own topology fields only.

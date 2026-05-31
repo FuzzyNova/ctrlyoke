@@ -12,7 +12,7 @@ import {
 } from "../../types/DashboardConstants";
 
 type NodePtyModule = typeof import("node-pty");
-export const NODE_PTY_UNAVAILABLE_MESSAGE =
+const NODE_PTY_UNAVAILABLE_MESSAGE =
   "Embedded terminal support is unavailable because the node-pty native module could not be loaded. Reinstall FlightPath or switch CLI execution mode to headless.";
 
 // ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ let _unixShell: string | undefined;
  * that can occur with /bin/bash under macOS's hardened runtime/SIP restrictions.
  * Result is cached after first resolution.
  */
-export function resolveUnixShell(): string {
+function resolveUnixShell(): string {
   if (_unixShell !== undefined) {
     return _unixShell;
   }
@@ -119,14 +119,6 @@ function loadNodePty(): NodePtyModule | null {
   }
 
   return _nodePtyModule;
-}
-
-export function isNodePtyAvailable(): boolean {
-  return loadNodePty() !== null;
-}
-
-export function getNodePtyLoadError(): unknown {
-  return _nodePtyLoadError;
 }
 
 function createNodePtyUnavailableError(): Error {

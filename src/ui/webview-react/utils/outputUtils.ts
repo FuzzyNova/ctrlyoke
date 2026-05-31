@@ -3,15 +3,11 @@
  *
  * Focused on tool call display helpers and file path formatting.
  * Diff computation lives in diffUtils.ts; markdown export in markdownExport.ts.
- *
- * Re-exports from diffUtils plus the string/time helpers so existing
- * consumers don't need to update their import paths.
  */
 import { truncate } from "./string";
 import type { CliOutput as CliOutputType, TextData } from "../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../types/cliEvents";
-export { escapeHtml, truncate } from "./string";
-export { formatTime, getTimestamp } from "./time";
+export { formatTime } from "./time";
 export {
   type DiffLine,
   generateDiffLines,

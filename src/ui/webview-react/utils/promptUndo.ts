@@ -511,33 +511,3 @@ export function computePromptUndoActions(
         : null,
   };
 }
-
-/** Build the dialog input for a single-file undo from a diff row. */
-export function buildUndoDialogInputForSingleFile(
-  target: UndoExecutionTarget,
-  attemptIndex: number,
-  path: string,
-  cliOutputs: CliOutput[],
-  snapshot: WorkspaceSnapshot | undefined,
-  workspacePath: string
-): UndoDialogInput {
-  const scope: UndoDialogScope = {
-    mode: "singleFile",
-    target,
-    attemptIndex,
-    path,
-  };
-  const allCandidates = buildUndoCandidatesForOutputs(cliOutputs, snapshot);
-  const fileCandidates = allCandidates.filter((c) => c.path === path);
-  const tier2Paths = new Set(
-    fileCandidates.filter((c) => c.tier === "tier2").map((c) => c.path)
-  );
-  return {
-    scope,
-    eventAttributedFiles: fileCandidates.filter((c) => c.tier === "tier1"),
-    snapshotOnlyFiles: (snapshot?.changedFiles ?? []).filter((s) =>
-      tier2Paths.has(s.path)
-    ),
-    workspacePath,
-  };
-}

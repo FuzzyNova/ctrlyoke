@@ -25,7 +25,7 @@ export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> = {
 
 // ─── Grouping ─────────────────────────────────────────────────────────────────
 
-export const CLI_HARNESSES: HarnessId[] = [
+const CLI_HARNESSES: HarnessId[] = [
   HARNESS_IDS.CLAUDE_CLI,
   HARNESS_IDS.CODEX_CLI,
   HARNESS_IDS.COPILOT_CLI,
@@ -34,7 +34,7 @@ export const CLI_HARNESSES: HarnessId[] = [
   HARNESS_IDS.QWEN_CLI,
 ];
 
-export const CHAT_HARNESSES: HarnessId[] = [HARNESS_IDS.COPILOT_CHAT];
+const CHAT_HARNESSES: HarnessId[] = [HARNESS_IDS.COPILOT_CHAT];
 
 /** Returns the integration category for a harness value, or null for "default". */
 export function harnessCategory(value: string): "cli" | "chat" | null {

@@ -76,7 +76,7 @@ export function getStatusColorClass(status: StepStatus): string {
 /**
  * Human-readable labels for step statuses
  */
-export const STATUS_LABELS: Record<StepStatus, string> = {
+const STATUS_LABELS: Record<StepStatus, string> = {
   [STEP_STATUS.PENDING]: "Pending",
   [STEP_STATUS.SENT]: "Sent",
   [STEP_STATUS.RUNNING]: "Running",
@@ -96,7 +96,7 @@ export function getStatusLabel(status: StepStatus): string {
 /**
  * Execution state icons (for workflow-level status)
  */
-export const EXECUTION_STATE_ICONS: Record<ExecutionState, string> = {
+const EXECUTION_STATE_ICONS: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "codicon-circle-outline",
   [EXECUTION_STATES.RUNNING]: "codicon-play",
   [EXECUTION_STATES.PAUSING]: "codicon-debug-pause",
@@ -119,7 +119,7 @@ export function getExecutionStateIconClass(state: ExecutionState): string {
 /**
  * Execution state colors
  */
-export const EXECUTION_STATE_COLORS: Record<ExecutionState, string> = {
+const EXECUTION_STATE_COLORS: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "text-description-fg",
   [EXECUTION_STATES.RUNNING]: "text-charts-blue",
   [EXECUTION_STATES.PAUSING]: "text-indicator-running",
@@ -143,7 +143,7 @@ export function getExecutionStateColorClass(state: ExecutionState): string {
 /**
  * Human-readable labels for execution states
  */
-export const EXECUTION_STATE_LABELS: Record<ExecutionState, string> = {
+const EXECUTION_STATE_LABELS: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "Ready",
   [EXECUTION_STATES.RUNNING]: "Running",
   [EXECUTION_STATES.PAUSING]: "Pausing...",
@@ -237,7 +237,7 @@ export function canStopExecution(state: ExecutionState): boolean {
  * Execution state badge classes (background + text color)
  * Used for status badges in workflow status and recent workflows
  */
-export const EXECUTION_STATE_BADGE_CLASSES: Record<ExecutionState, string> = {
+const EXECUTION_STATE_BADGE_CLASSES: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "bg-status-idle text-white",
   [EXECUTION_STATES.RUNNING]: "bg-status-running text-white",
   [EXECUTION_STATES.PAUSING]: "bg-status-paused text-white",
@@ -271,7 +271,7 @@ export function getExecutionStateBadgeClass(state: string): string {
 /**
  * Codicon classes for execution state badges (icon-only mode for narrow layouts)
  */
-export const EXECUTION_STATE_BADGE_ICONS: Record<ExecutionState, string> = {
+const EXECUTION_STATE_BADGE_ICONS: Record<ExecutionState, string> = {
   [EXECUTION_STATES.IDLE]: "codicon-circle-large",
   [EXECUTION_STATES.RUNNING]: "codicon-play",
   [EXECUTION_STATES.PAUSING]: "codicon-debug-pause",

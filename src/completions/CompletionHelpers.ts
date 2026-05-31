@@ -328,7 +328,7 @@ export async function getFileCompletions(
  * Get symbol completions for # trigger
  * Shows workspace symbols from all file types
  */
-export async function getSymbolCompletions(
+async function getSymbolCompletions(
   filterText: string,
   maxResults: number = 500
 ): Promise<PlainCompletionItem[]> {
@@ -388,7 +388,7 @@ export async function getSymbolCompletions(
 /**
  * Get completions for all editor selections (from all visible editors)
  */
-export function getSelectionCompletions(): PlainCompletionItem[] {
+function getSelectionCompletions(): PlainCompletionItem[] {
   const items: PlainCompletionItem[] = [];
 
   // Get all visible editors (including split views)

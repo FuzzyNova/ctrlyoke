@@ -53,8 +53,6 @@ export type PriorContextItem = {
   scriptOutput?: ScriptRuntimeOutput;
 };
 
-export { stripAnsiCodes };
-
 export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
   switch (ref.kind) {
     case "previous":
@@ -70,7 +68,7 @@ export function refToPriorContext(ref: InlinePriorContextRef): PriorContext {
   }
 }
 
-export function deduplicatePriorContextItems(
+function deduplicatePriorContextItems(
   items: PriorContextItem[]
 ): PriorContextItem[] {
   const seen = new Set<string>();

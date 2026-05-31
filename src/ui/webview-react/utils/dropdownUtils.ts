@@ -2,7 +2,7 @@
  * Shared utilities for all portal dropdown components.
  */
 
-export const DROPDOWN_VIEWPORT_PADDING = 4;
+const DROPDOWN_VIEWPORT_PADDING = 4;
 
 /** The fixed popup coordinates computed by useDropdownPortalPosition. */
 export interface PopupPosition {

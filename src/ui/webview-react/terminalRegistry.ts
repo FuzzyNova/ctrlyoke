@@ -27,7 +27,7 @@ export type { Terminal, ITheme };
  * Only for ai-cli sessions (not shell sessions).
  * Detects user-typed long-form prompts and emits them for retroactive queue attribution.
  */
-export class InputCapture {
+class InputCapture {
   private buffer = "";
   private readonly threshold: number;
 

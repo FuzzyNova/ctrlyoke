@@ -15,7 +15,6 @@
  */
 import React, {
   useMemo,
-  memo,
   useState,
   useEffect,
   useRef,
@@ -365,5 +364,3 @@ export const DiffView: React.FC<DiffViewProps> = ({
     </div>
   );
 };
-
-export default memo(DiffView);

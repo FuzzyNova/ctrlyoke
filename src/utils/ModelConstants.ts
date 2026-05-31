@@ -180,7 +180,7 @@ export function isKnownCopilotModel(modelId: string): boolean {
  * Context window sizes (in tokens) per Copilot CLI model ID.
  * Falls back to 128k for unknown/unlisted models via getCopilotContextWindowSize().
  */
-export const COPILOT_CLI_CONTEXT_WINDOW_SIZES: Record<string, number> = {
+const COPILOT_CLI_CONTEXT_WINDOW_SIZES: Record<string, number> = {
   // Claude models
   "claude-haiku-4.5": 200_000,
   "claude-sonnet-4": 144_000,
@@ -248,7 +248,7 @@ export const QWEN_CLI_MODELS = ["qwen3.5-plus"] as const;
 /**
  * Qwen CLI model display names (fallback — runtime list is from settings.json)
  */
-export const QWEN_CLI_MODEL_LABELS: Record<string, string> = {
+const QWEN_CLI_MODEL_LABELS: Record<string, string> = {
   "qwen3.5-plus": "Qwen 3.5 Plus",
 } as const;
 

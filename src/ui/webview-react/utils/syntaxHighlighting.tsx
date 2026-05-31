@@ -163,7 +163,7 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   yml: "yaml",
 };
 
-export const SYNTAX_TOKEN_STYLES = `
+const SYNTAX_TOKEN_STYLES = `
 /* FlightPath - VS Code themed refractor tokens */
 .fp-syntax {
   color: var(--vscode-editor-foreground, #d4d4d4);

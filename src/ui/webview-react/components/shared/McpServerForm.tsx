@@ -26,7 +26,7 @@ export const EMPTY_MCP_SERVER_FORM_STATE: McpServerFormState = {
   transport: "streamable-http",
 };
 
-export function mcpEnvObjectToString(
+function mcpEnvObjectToString(
   env: Record<string, string> | undefined
 ): string {
   if (!env) return "";
@@ -35,7 +35,7 @@ export function mcpEnvObjectToString(
     .join("\n");
 }
 
-export function mcpEnvStringToObject(
+function mcpEnvStringToObject(
   raw: string
 ): Record<string, string> | undefined {
   const lines = raw

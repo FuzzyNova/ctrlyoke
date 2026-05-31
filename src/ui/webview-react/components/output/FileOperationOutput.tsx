@@ -31,7 +31,7 @@ export const ToolDot: React.FC<{ status: DotStatus }> = ({ status }) => (
 );
 
 /** Clickable file path that opens the file in VS Code */
-export const FilePath: React.FC<{ path: string }> = ({ path }) => (
+const FilePath: React.FC<{ path: string }> = ({ path }) => (
   <button
     type="button"
     className="text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
@@ -42,7 +42,7 @@ export const FilePath: React.FC<{ path: string }> = ({ path }) => (
   </button>
 );
 
-export function fileOpDotStatus(status?: FileOperationStatus): DotStatus {
+function fileOpDotStatus(status?: FileOperationStatus): DotStatus {
   if (status === OPERATION_STATUS.COMPLETED) return "success";
   if (status === OPERATION_STATUS.FAILED) return "error";
   return "pending"; // INITIATED or undefined

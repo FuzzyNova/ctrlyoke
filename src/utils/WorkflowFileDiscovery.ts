@@ -6,11 +6,6 @@ export interface WorkflowFileEntry {
   relativePath: string;
 }
 
-export const WORKFLOW_FILE_GLOB =
-  "**/*.{flightpath.json,flightpath.yaml,flightpath.yml,prompt.md}";
-
-export const WORKFLOW_FILE_EXCLUDE_GLOB = "**/node_modules/**";
-
 const WORKFLOW_FILE_NAMES = new Set([
   "flightpath.json",
   "flightpath.yaml",
@@ -37,7 +32,7 @@ function toPortablePath(filePath: string): string {
   return filePath.replace(/\\/g, "/");
 }
 
-export function isWorkflowFileName(fileName: string): boolean {
+function isWorkflowFileName(fileName: string): boolean {
   return (
     WORKFLOW_FILE_NAMES.has(fileName) ||
     WORKFLOW_FILE_SUFFIXES.some((suffix) => fileName.endsWith(suffix))

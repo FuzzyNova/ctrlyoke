@@ -1,4 +1,4 @@
-export { Header, ExecutionStateBadge } from "./Header";
+export { Header } from "./Header";
 export { WorkflowStepsPanel } from "./WorkflowStepsPanel";
 export { OutputSection } from "./OutputSection";
 export { EditorSection } from "./EditorSection";

@@ -82,7 +82,7 @@ function normalizeServerMap(
  * Note: local-scope Claude Code servers (`.claude.json` under projects[path]) are
  * deliberately excluded — they may contain secrets the user has not chosen to share.
  */
-export async function discoverLocalMcpServers(
+async function discoverLocalMcpServers(
   workspaceRoot: string
 ): Promise<LocalMcpServerEntry[]> {
   const results: LocalMcpServerEntry[] = [];
@@ -251,7 +251,7 @@ const MCP_REGISTRY_URL =
  * @param options.search   Server-side substring search on server name
  * @param options.updatedSince  Filter to servers updated since this ISO 8601 timestamp
  */
-export async function fetchMcpRegistry(
+async function fetchMcpRegistry(
   options: {
     limit?: number;
     cursor?: string;

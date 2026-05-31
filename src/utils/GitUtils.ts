@@ -185,13 +185,6 @@ export async function searchCommitsBySubject(
 }
 
 /**
- * Returns true if hash looks like a valid git SHA (7-40 hex chars).
- */
-export function isValidCommitHash(hash: string): boolean {
-  return /^[0-9a-f]{7,40}$/i.test(hash);
-}
-
-/**
  * Returns all non-gitignored file paths (relative to repoRoot) using
  * `git ls-files --cached --others --exclude-standard -z`.
  *

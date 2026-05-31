@@ -71,7 +71,7 @@ export function buildSymbolReference(
   return `#${buildSymbolReferenceValue(relativePath, symbolName, line)}`;
 }
 
-export function buildGitReferenceValue(ref: string): string {
+function buildGitReferenceValue(ref: string): string {
   return ref;
 }
 

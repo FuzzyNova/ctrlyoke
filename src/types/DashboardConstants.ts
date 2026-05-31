@@ -11,8 +11,6 @@ import {
   CODEX_CLI_MODEL_LABELS,
   GEMINI_CLI_MODELS as MC_GEMINI_CLI_MODELS,
   GEMINI_CLI_MODEL_LABELS,
-  QWEN_CLI_MODELS as MC_QWEN_CLI_MODELS,
-  QWEN_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 
 // ============================================================================
@@ -421,9 +419,6 @@ export const NOTIFICATION_KINDS = {
 export type NotificationKind =
   (typeof NOTIFICATION_KINDS)[keyof typeof NOTIFICATION_KINDS];
 
-/** Alias — identical to COMPLETION_NOTIFICATION_SEVERITY; use either name. */
-export const NOTIFICATION_SEVERITY = COMPLETION_NOTIFICATION_SEVERITY;
-export type NotificationSeverity = CompletionNotificationSeverity;
 
 // ============================================================================
 // EXECUTION STATES - QueueState.status values
@@ -698,14 +693,6 @@ export const CODEX_CLI_MODELS = [
   })),
 ];
 
-export const QWEN_CLI_MODELS = [
-  { value: MODEL_OPTION_VALUES.NONE, label: "None" },
-  ...MC_QWEN_CLI_MODELS.map((id) => ({
-    value: id,
-    label: QWEN_CLI_MODEL_LABELS[id] ?? id,
-  })),
-];
-
 export const GEMINI_CLI_MODELS = [
   { value: MODEL_OPTION_VALUES.NONE, label: "None" },
   ...MC_GEMINI_CLI_MODELS.map((id) => ({
@@ -721,15 +708,6 @@ export const HARNESS_STATUS_STRINGS = {
   CHECKING: "checking",
   AVAILABLE: "available",
   UNAVAILABLE: "unavailable",
-} as const;
-
-// ============================================================================
-// UI STRINGS - UI text constants used in webview
-// ============================================================================
-export const UI_STRINGS = {
-  LOADING_MODELS: "Loading models...",
-  CHECKING_STATUS: "checking...",
-  UNAVAILABLE: "not available",
 } as const;
 
 // ============================================================================

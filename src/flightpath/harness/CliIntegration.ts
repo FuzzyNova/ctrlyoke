@@ -49,12 +49,12 @@ export type CliExecutionMode = ExecutionMode;
 /**
  * Execution mode constants
  */
-export const CLI_EXECUTION_MODE = EXECUTION_MODES;
+const CLI_EXECUTION_MODE = EXECUTION_MODES;
 
 /**
  * Warning messages
  */
-export const CLI_WARNING_MESSAGES = {
+const CLI_WARNING_MESSAGES = {
   HEADLESS_WITHOUT_PERMISSIONS:
     "Headless mode with limited tool permissions: there is no interactive approval prompt, so tools that are not explicitly allowed will be auto-denied. Workflow may not make progress.",
   DONT_SHOW_AGAIN: "Don't Show Again",

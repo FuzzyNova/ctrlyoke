@@ -1,7 +1,7 @@
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
-  STEP_STATUS,
+  STEP_TYPES,
   WORKFLOW_ATTEMPT_COMMANDS,
   ExecutionState,
   FinalStepPhase,
@@ -9,7 +9,6 @@ import {
   type RunnerId,
   type PromptTerminalStatus,
   type WorkflowAttemptStatus,
-  STEP_TYPES,
   PRIOR_CONTEXT_KEYWORDS,
   type ConditionAction,
   type CompareSource,
@@ -530,4 +529,4 @@ export interface WorkflowRunnerLock {
 }
 
 // Re-export constants for convenience
-export { EXECUTION_STATES, STEP_STATUS, STEP_TYPES };
+export { EXECUTION_STATES };

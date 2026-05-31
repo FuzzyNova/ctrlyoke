@@ -21,7 +21,7 @@ export interface OutputMessage {
   runIndex?: number;
 }
 
-export function sortOutputMessages(
+function sortOutputMessages(
   messages: readonly OutputMessage[]
 ): OutputMessage[] {
   return [...messages].sort(
@@ -73,7 +73,7 @@ export function mapOrderedHistoryEntriesToMessages(
   return sortOutputMessages(messages);
 }
 
-export function toOutputMessageTarget(
+function toOutputMessageTarget(
   target: OutputExecutionTarget
 ): OutputMessageTarget {
   return target.kind === FINAL_STEP_PHASES.QUEUE

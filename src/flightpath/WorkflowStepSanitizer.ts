@@ -339,7 +339,7 @@ export function sanitizeClipboardWorkflowStep(step: unknown): WorkflowStep {
   return promptStep;
 }
 
-export function buildClipboardWorkflowStep(step: WorkflowStep): WorkflowStep {
+function buildClipboardWorkflowStep(step: WorkflowStep): WorkflowStep {
   return sanitizeClipboardWorkflowStep(step);
 }
 

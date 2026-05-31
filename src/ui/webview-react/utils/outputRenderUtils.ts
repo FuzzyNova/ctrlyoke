@@ -113,7 +113,7 @@ export function getVisibleStructuredEvents(
   });
 }
 
-export function getSnapshotStructuredPatch(
+function getSnapshotStructuredPatch(
   path: string,
   workspaceSnapshot?: WorkspaceSnapshot
 ): FileEditData["structuredPatch"] | undefined {

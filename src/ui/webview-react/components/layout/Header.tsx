@@ -20,57 +20,6 @@ import { HEADER_BUTTON_SIZES } from "../../constants";
 /**
  * Execution state badge configuration
  */
-interface StateBadgeConfig {
-  icon: string;
-  text: string;
-  className: string;
-}
-
-const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
-  [EXECUTION_STATES.IDLE]: {
-    icon: "circle-outline",
-    text: "Idle",
-    className: "bg-exec-idle-bg text-exec-idle-fg",
-  },
-  [EXECUTION_STATES.RUNNING]: {
-    icon: "play",
-    text: "Running",
-    className: "bg-exec-running-bg text-[var(--btn-fg)] animate-pulse-custom",
-  },
-  [EXECUTION_STATES.PAUSING]: {
-    icon: "debug-pause",
-    text: "Pausing",
-    className:
-      "bg-[var(--status-warning)] text-[var(--btn-fg)] animate-pulse-cancelling",
-  },
-  [EXECUTION_STATES.PAUSED]: {
-    icon: "debug-pause",
-    text: "Paused",
-    className: "bg-[var(--status-warning)] text-[var(--btn-fg)]",
-  },
-  [EXECUTION_STATES.STOPPED]: {
-    icon: "circle-slash",
-    text: "Stopped",
-    className: "bg-exec-stopped-bg text-[var(--btn-fg)]",
-  },
-  [EXECUTION_STATES.CANCELLING]: {
-    icon: "close",
-    text: "Cancelling",
-    className:
-      "bg-[var(--status-warning)] text-[var(--btn-fg)] animate-pulse-cancelling",
-  },
-  [EXECUTION_STATES.COMPLETED]: {
-    icon: "check",
-    text: "Completed",
-    className: "bg-[var(--status-success)] text-[var(--btn-fg)]",
-  },
-  [EXECUTION_STATES.ERROR]: {
-    icon: "error",
-    text: "Error",
-    className: "bg-[var(--status-error)] text-[var(--btn-fg)]",
-  },
-};
-
 /**
  * Header Component
  *
@@ -506,26 +455,5 @@ export const Header: React.FC<{
         </div>
       )}
     </>
-  );
-};
-
-/**
- * ExecutionStateBadge - Standalone badge component for use elsewhere
- * (Exported for potential reuse in other components)
- */
-export const ExecutionStateBadge: React.FC<{
-  state: string;
-  className?: string;
-}> = ({ state, className = "" }) => {
-  const config =
-    STATE_BADGE_CONFIG[state] || STATE_BADGE_CONFIG[EXECUTION_STATES.IDLE];
-
-  return (
-    <span
-      className={`execution-state-badge inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${config.className} ${className}`}
-    >
-      <i className={`codicon codicon-${config.icon} text-sm`} />
-      <span className="execution-state-text">{config.text}</span>
-    </span>
   );
 };

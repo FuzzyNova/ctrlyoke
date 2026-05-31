@@ -11,7 +11,7 @@ import type { EndCondition, EndConditionCompareSource } from "./prompt";
 export type { EndConditionCompareSource };
 
 /** Property keys for end condition objects */
-export const END_CONDITION_PROPERTIES = {
+const END_CONDITION_PROPERTIES = {
   SCRIPT: "script",
   RETURNS: "returns",
   COMPARE_SOURCE: "compareSource",

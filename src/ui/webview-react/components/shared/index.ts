@@ -6,7 +6,6 @@ export {
   type SplitButtonOption,
   type SplitButtonProps,
 } from "./SplitButton";
-export { Collapsible } from "./Collapsible";
 export { PanelBar } from "./PanelBar";
 export { IconToggleButton } from "./IconToggleButton";
 export { RunSelector, type RunSelectorProps } from "./RunSelector";
@@ -38,8 +37,6 @@ export {
   McpServerForm,
   EMPTY_MCP_SERVER_FORM_STATE,
   isMcpServerFormValid,
-  mcpEnvObjectToString,
-  mcpEnvStringToObject,
   mcpServerFormStateToServer,
   serverToMcpServerFormState,
   type McpServerFormProps,

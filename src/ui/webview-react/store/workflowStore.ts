@@ -1188,7 +1188,6 @@ export type {
   StatusMessage,
 } from "../types/messages";
 // WorkflowStep is exported above as a webview-local union type (PromptStep | ScriptStep)
-export type { WorkflowProperties } from "./settingsStore";
 
 export interface UndoableWorkflowState {
   steps: WorkflowStep[];

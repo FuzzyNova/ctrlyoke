@@ -4,12 +4,9 @@
 
 import {
   STEP_STATUS,
-  PROMPT_PROPERTIES,
   type StepStatus,
   type CompareSource,
 } from "../types/messages";
-
-export { PROMPT_PROPERTIES };
 
 export type EndConditionCompareSource = CompareSource;
 
@@ -28,7 +25,7 @@ export interface EndCondition {
 /**
  * Runtime metadata populated during/after execution
  */
-export interface PromptRuntime {
+interface PromptRuntime {
   harness?: string;
   model?: string;
   sessionId?: string;

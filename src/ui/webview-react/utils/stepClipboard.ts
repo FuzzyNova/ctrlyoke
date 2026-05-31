@@ -30,7 +30,7 @@ export function parseWorkflowStepClipboardText(text: string): WorkflowStep {
   return parseClipboardWorkflowStep(text) as WorkflowStep;
 }
 
-export async function readClipboardText(): Promise<string> {
+async function readClipboardText(): Promise<string> {
   if (navigator.clipboard?.readText) {
     return navigator.clipboard.readText();
   }

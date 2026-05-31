@@ -17,7 +17,7 @@ import type { PromptFile } from "../../../types/FlightPathTypes";
 // ---------------------------------------------------------------------------
 
 /** Path to the compiled CLI binary (resolved relative to the compiled output). */
-export const CLI_PATH = path.resolve(__dirname, "../../../cli.js");
+const CLI_PATH = path.resolve(__dirname, "../../../cli.js");
 
 /**
  * Per-harness wall-clock timeout in ms.
