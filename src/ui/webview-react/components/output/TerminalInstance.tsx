@@ -39,6 +39,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const previousIsControllerRef = useRef<boolean | null>(null);
 
   // Subscribe to controller status and controller cols — re-evaluate on every change
   const sessions = useTerminalStore(
@@ -47,6 +48,20 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   const session = sessions.find((s) => s.id === sessionId);
   const isController = session?.isController ?? true;
   const controllerCols = session?.controllerCols;
+
+  useEffect(() => {
+    const previousIsController = previousIsControllerRef.current;
+    if (previousIsController === null) {
+      WebviewLog.debug(
+        `[TerminalInstance] control state initialized wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} isController=${isController}`
+      );
+    } else if (previousIsController !== isController) {
+      WebviewLog.debug(
+        `[TerminalInstance] control ${isController ? "gained" : "lost"} wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} controllerCols=${controllerCols ?? "none"}`
+      );
+    }
+    previousIsControllerRef.current = isController;
+  }, [controllerCols, isController, workflowId, sessionId]);
 
   // Mount effect: create registry entry, attach to DOM, flush pending output
   useEffect(() => {
@@ -413,6 +428,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     if (!isController) return;
     const entry = terminalRegistry.get(workflowId, sessionId);
     if (!entry || entry.frozen || entry.onDataDisposable) return;
+    WebviewLog.debug(
+      `[TerminalInstance] enabling controller input wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
+    );
     entry.onDataDisposable = entry.term.onData((input) => {
       sendMessage(MESSAGE_TYPES.TERMINAL_INPUT, {
         workflowId,
@@ -454,6 +472,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     if (isController) return;
     const entry = terminalRegistry.get(workflowId, sessionId);
     if (!entry || entry.frozen) return;
+    WebviewLog.debug(
+      `[TerminalInstance] entering view-only mode wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} controllerCols=${entry.controllerCols ?? controllerCols ?? "none"}`
+    );
     entry.onDataDisposable?.dispose();
     entry.onDataDisposable = undefined;
     // Apply controller sizing if we already know it (TERMINAL_SIZE_CHANGED may have
@@ -554,6 +575,9 @@ const ViewOnlyBadge: React.FC<{ workflowId: string; sessionId: string }> = ({
   if (session?.status !== TERMINAL_SESSION_STATUS.RUNNING) return null;
 
   const handleTakeControl = () => {
+    WebviewLog.debug(
+      `[TerminalInstance] manual take control requested wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
+    );
     sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
       workflowId,
       sessionId,

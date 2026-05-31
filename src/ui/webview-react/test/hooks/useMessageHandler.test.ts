@@ -1263,6 +1263,54 @@ describe("TERMINAL_STARTED", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0].id).toBe("script-session-2");
   });
+
+  it("reclaims control when a stale replay arrives after control was already reassigned", () => {
+    const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
+      typeof vi.fn
+    >;
+    postMessageMock.mockClear();
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.CLIENT_ID_ASSIGNED, { clientId: "browser:2" });
+      dispatch(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, {
+        workflowId: "workflow-1",
+      });
+      dispatch(MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        controllerClientId: undefined,
+      });
+      dispatch(MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED, {
+        workflowId: "workflow-1",
+      });
+      dispatch(MESSAGE_TYPES.TERMINAL_CONTROLLER_CHANGED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        controllerClientId: "browser:2",
+      });
+    });
+
+    postMessageMock.mockClear();
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.TERMINAL_STARTED, {
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        stepName: "Step 1",
+        kind: SESSION_KINDS.AI_CLI,
+        promptNumber: 1,
+        controllerClientId: "browser:1",
+      });
+    });
+
+    expect(postMessageMock).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL,
+      workflowId: "workflow-1",
+      sessionId: "session-1",
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

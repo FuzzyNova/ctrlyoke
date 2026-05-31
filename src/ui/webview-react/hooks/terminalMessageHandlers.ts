@@ -21,6 +21,7 @@ import {
   clearFreshPageReadySent,
 } from "./reconnectWatchdog";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
+
 function isScriptPtySession(session: {
   kind?: string;
   harnessId?: string;
@@ -31,6 +32,73 @@ function isScriptPtySession(session: {
     session.harnessId === undefined &&
     session.promptNumber === undefined
   );
+}
+
+const pendingAutoClaims = new Set<string>();
+
+function getPendingAutoClaimKey(workflowId: string, sessionId: string): string {
+  return `${workflowId}::${sessionId}`;
+}
+
+function hasSession(workflowId: string, sessionId: string): boolean {
+  return (useTerminalStore.getState().sessions[workflowId] ?? []).some(
+    (session) => session.id === sessionId
+  );
+}
+
+function queuePendingAutoClaim(
+  workflowId: string,
+  sessionId: string,
+  reason: string
+): void {
+  const key = getPendingAutoClaimKey(workflowId, sessionId);
+  pendingAutoClaims.add(key);
+  WebviewLog.debug(
+    `[terminal-control] queued pending auto-claim wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} reason=${reason}`
+  );
+}
+
+function consumePendingAutoClaim(
+  workflowId: string,
+  sessionId: string,
+  reason: string
+): boolean {
+  const key = getPendingAutoClaimKey(workflowId, sessionId);
+  const queued = pendingAutoClaims.delete(key);
+  if (queued) {
+    WebviewLog.debug(
+      `[terminal-control] consumed pending auto-claim wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} reason=${reason}`
+    );
+  }
+  return queued;
+}
+
+function clearPendingAutoClaim(
+  workflowId: string,
+  sessionId: string,
+  reason: string
+): void {
+  const key = getPendingAutoClaimKey(workflowId, sessionId);
+  if (!pendingAutoClaims.delete(key)) {
+    return;
+  }
+  WebviewLog.debug(
+    `[terminal-control] cleared pending auto-claim wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} reason=${reason}`
+  );
+}
+
+function requestTerminalControlClaim(
+  workflowId: string,
+  sessionId: string,
+  reason: string
+): void {
+  WebviewLog.debug(
+    `[terminal-control] requesting claim wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} reason=${reason}`
+  );
+  sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
+    workflowId,
+    sessionId,
+  });
 }
 
 /**
@@ -95,6 +163,11 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
 
     const uiState = useUiStore.getState();
     const activeWorkflowId = uiState.activeWorkflowId;
+    const queuedAutoClaim = consumePendingAutoClaim(
+      workflowId,
+      sessionId,
+      "terminal started"
+    );
     WebviewLog.debug(
       `[TERMINAL_STARTED] workflowId=inst:${workflowId?.slice(0, 8)} sessionId=${sessionId?.slice(0, 8)} kind=${kind} activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"} match=${workflowId === activeWorkflowId} controllerClientId=${controllerClientId?.slice(0, 12) ?? "none"}`
     );
@@ -119,6 +192,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     const myClientId = uiState.myClientId;
     const isController =
       controllerClientId === undefined || controllerClientId === myClientId;
+    const willAutoClaim = controllerClientId === undefined || queuedAutoClaim;
 
     // Idempotency: if this exact session is already registered (e.g. client switched away
     // and back, or is a new viewer joining a workflow that already sent TERMINAL_STARTED),
@@ -130,6 +204,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     WebviewLog.debug(
       `[TERMINAL_STARTED] idempotency check wf=${workflowId?.slice(0, 8)} sess=${sessionId?.slice(0, 8)} ` +
         `alreadyExists=${alreadyExists} isController=${isController} ` +
+        `queuedAutoClaim=${queuedAutoClaim} willAutoClaim=${willAutoClaim} ` +
         `registryHasEntry=${!!terminalRegistry.get(workflowId, sessionId)} ` +
         `activeWorkflowId=${activeWorkflowId?.slice(0, 8) ?? "null"}`
     );
@@ -143,12 +218,14 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
         status: TERMINAL_SESSION_STATUS.RUNNING,
       });
       termStore.setSessionController(workflowId, sessionId, isController);
-      // Only auto-claim if this client is currently viewing this specific workflow.
-      if (controllerClientId === undefined && activeWorkflowId === workflowId) {
-        sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
+      if (willAutoClaim) {
+        requestTerminalControlClaim(
           workflowId,
           sessionId,
-        });
+          queuedAutoClaim
+            ? "reconciling stale replay for existing session"
+            : "existing session has no controller"
+        );
       }
       return;
     }
@@ -193,12 +270,14 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       autoFocusOutputOnExecution(workflowId, "terminal");
     }
 
-    // Auto-claim if no controller is assigned — the first client to send wins
-    if (controllerClientId === undefined) {
-      sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
+    if (willAutoClaim) {
+      requestTerminalControlClaim(
         workflowId,
         sessionId,
-      });
+        queuedAutoClaim
+          ? "reconciling stale replay for new session"
+          : "new session has no controller"
+      );
     }
   };
 
@@ -209,25 +288,59 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     const { workflowId, sessionId, controllerClientId } = message;
     if (!workflowId || !sessionId) return;
     const myClientId = useUiStore.getState().myClientId;
+    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+    const sessionExists = hasSession(workflowId, sessionId);
     const isController =
       controllerClientId === undefined || controllerClientId === myClientId;
     useTerminalStore
       .getState()
       .setSessionController(workflowId, sessionId, isController);
     WebviewLog.debug(
-      `[TERMINAL_CONTROLLER_CHANGED] sessionId=${sessionId?.slice(0, 8)} controllerClientId=${controllerClientId?.slice(0, 12) ?? "none"} isController=${isController}`
+      `[TERMINAL_CONTROLLER_CHANGED] workflowId=inst:${workflowId?.slice(0, 8)} sessionId=${sessionId?.slice(0, 8)} ` +
+        `controllerClientId=${controllerClientId?.slice(0, 12) ?? "none"} isController=${isController} ` +
+        `activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"} sessionExists=${sessionExists}`
     );
+    if (controllerClientId !== undefined) {
+      if (controllerClientId === myClientId && !sessionExists) {
+        WebviewLog.debug(
+          `[terminal-control] preserving pending auto-claim until replayed start arrives wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
+        );
+        return;
+      }
+      clearPendingAutoClaim(
+        workflowId,
+        sessionId,
+        controllerClientId === myClientId
+          ? "controller assigned after session replay completed"
+          : "controller assigned to another client"
+      );
+      return;
+    }
+
+    if (
+      !sessionExists &&
+      (activeWorkflowId === workflowId || activeWorkflowId === null)
+    ) {
+      queuePendingAutoClaim(
+        workflowId,
+        sessionId,
+        activeWorkflowId === workflowId
+          ? "controller released while active workflow was already selected"
+          : "controller released before active workflow replay completed"
+      );
+    }
+
     // If no controller is assigned and this client is actively viewing the workflow,
     // auto-claim so exactly one client takes ownership. Only claim for the workflow
     // currently in view — do not grab sessions for workflows being viewed on other tabs.
     // All eligible connected clients fire this; only the last one processed by the
     // server's routeQueue wins — an intentional "last writer wins" resolution.
-    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
-    if (controllerClientId === undefined && activeWorkflowId === workflowId) {
-      sendMessage(MESSAGE_TYPES.TERMINAL_CLAIM_CONTROL, {
+    if (activeWorkflowId === workflowId) {
+      requestTerminalControlClaim(
         workflowId,
         sessionId,
-      });
+        "controller released for active workflow"
+      );
     }
   };
 
@@ -264,6 +377,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
 
     const termStore = useTerminalStore.getState();
     termStore.endSession(workflowId, sessionId, exitCode ?? 0);
+    clearPendingAutoClaim(workflowId, sessionId, "terminal ended");
 
     // Freeze ai-cli sessions in the registry so onData is disabled
     if (kind === SESSION_KINDS.AI_CLI) {

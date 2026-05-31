@@ -31,6 +31,7 @@ import type { TerminalSession } from "@store/terminalStore";
 import { SEPARATOR_VERTICAL } from "../../constants";
 import { TerminalSessionIcon } from "./TerminalSessionIcon";
 import { getShellCompactLabel } from "@utils/terminalPresentation";
+import { WebviewLog } from "@utils/logger";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
 const EMPTY_SESSIONS: TerminalSession[] = [];
@@ -171,6 +172,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ workflowId }) => {
   const shellSessions = sessions.filter((s) => s.kind === SESSION_KINDS.SHELL);
   const hasBothKinds = aiCliSessions.length > 0 && shellSessions.length > 0;
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
+
+  useEffect(() => {
+    WebviewLog.debug(
+      `[TerminalView] workflow=${workflowId.slice(0, 8)} sessions=${sessions.length} activeSession=${activeSessionId?.slice(0, 8) ?? "none"} ` +
+        `activeController=${activeSession?.isController ?? "n/a"} activeStatus=${activeSession?.status ?? "none"} ` +
+        `singleSession=${sessions.length === 1}`
+    );
+  }, [
+    workflowId,
+    sessions.length,
+    activeSessionId,
+    activeSession?.isController,
+    activeSession?.status,
+  ]);
 
   const handleCloseSession = useCallback(
     (session: TerminalSession) => {

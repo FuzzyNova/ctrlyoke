@@ -1199,7 +1199,7 @@ export class FlightPathHostedServer
       let sawReady = false;
       const connectedAt = Date.now();
       Log.debug(
-        `[hosted-server] WebSocket connected clientId=${clientTag} ip=${req.socket.remoteAddress ?? ""} ua=${req.headers["user-agent"] ?? ""} origin=${req.headers.origin ?? ""}`
+        `[hosted-server] WebSocket connected clientId=${clientTag} connectedCount=${this.connections.size} ip=${req.socket.remoteAddress ?? ""} ua=${req.headers["user-agent"] ?? ""} origin=${req.headers.origin ?? ""}`
       );
       const send = (reply: unknown): void => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(reply));
@@ -1231,11 +1231,11 @@ export class FlightPathHostedServer
         this.socketLiveness.set(ws, true);
       });
       ws.on("close", (code, reason) => {
-        Log.debug(
-          `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()}`
-        );
         this.connections.delete(ws);
         this.socketLiveness.delete(ws);
+        Log.debug(
+          `[hosted-server] WebSocket closed clientId=${clientTag} ready=${sawReady} lifetimeMs=${Date.now() - connectedAt} code=${code} reason=${reason.toString()} remainingCount=${this.connections.size}`
+        );
         this.webviewProvider.unregisterBrowserClient(clientTag);
       });
       ws.on("error", (error) => {
