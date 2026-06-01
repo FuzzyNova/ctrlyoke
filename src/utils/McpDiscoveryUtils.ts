@@ -16,13 +16,55 @@ import { Log } from "./Log";
 import {
   getClaudeUserConfigPath,
   getClaudeWorkspaceMcpConfigPath,
+  getCodexUserMcpConfigPath,
+  getCodexWorkspaceMcpConfigPath,
+  getCopilotUserMcpConfigPath,
+  getCopilotWorkspaceMcpConfigPaths,
+  getOpenCodeUserMcpConfigPath,
+  getOpenCodeWorkspaceMcpConfigPath,
+  getQwenUserMcpConfigPath,
+  getQwenWorkspaceMcpConfigPath,
   getVscodeUserMcpConfigPath,
   getVscodeWorkspaceMcpConfigPath,
 } from "./McpConfigPaths";
 
-// ============================================================================
-// Local config file discovery
-// ============================================================================
+type LocalSource = LocalMcpServerEntry["source"];
+type JsonRecord = Record<string, unknown>;
+
+interface LocalConfigDescriptor {
+  path: string;
+  source: LocalSource;
+  format:
+    | "vscode-json"
+    | "claude-json"
+    | "copilot-json"
+    | "qwen-json"
+    | "opencode-json"
+    | "codex-toml";
+}
+
+function isPlainObject(value: unknown): value is JsonRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function toStringRecord(value: unknown): Record<string, string> | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const record: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "string") {
+      record[key] = item;
+    }
+  }
+
+  return Object.keys(record).length > 0 ? record : undefined;
+}
 
 /**
  * Reads a JSON file and returns its parsed content, or null on any error.
@@ -36,51 +78,578 @@ async function readJsonFile(filePath: string): Promise<unknown> {
   }
 }
 
-/**
- * Normalizes a server map (id → { command, args?, env? }) into LocalMcpServerEntry[].
- *
- * Handles both VS Code stdio format (with explicit `type: "stdio"`) and Claude Code
- * format (where `type` defaults to stdio when absent). Skips http/sse entries since
- * McpServerConfig only supports stdio today.
- */
-function normalizeServerMap(
-  map: Record<string, unknown>,
-  source: LocalMcpServerEntry["source"]
+async function readTextFile(filePath: string): Promise<string | null> {
+  try {
+    return await fs.readFile(filePath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+function buildLocalEntry(
+  id: string,
+  source: LocalSource,
+  filePath: string,
+  config: {
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    url?: string;
+    transport?: "streamable-http" | "sse";
+    headers?: Record<string, string>;
+  }
+): LocalMcpServerEntry | null {
+  const hasCommand = typeof config.command === "string" && config.command.length > 0;
+  const hasUrl = typeof config.url === "string" && config.url.length > 0;
+  if (!hasCommand && !hasUrl) {
+    return null;
+  }
+
+  return {
+    id,
+    source,
+    path: filePath,
+    ...(hasCommand ? { command: config.command } : {}),
+    ...(config.args?.length ? { args: config.args } : {}),
+    ...(config.env ? { env: config.env } : {}),
+    ...(hasUrl ? { url: config.url } : {}),
+    ...(config.transport ? { transport: config.transport } : {}),
+    ...(config.headers ? { headers: config.headers } : {}),
+  };
+}
+
+function normalizeVscodeServerMap(
+  map: JsonRecord,
+  source: LocalSource,
+  filePath: string
 ): LocalMcpServerEntry[] {
   return Object.entries(map).flatMap(([id, value]) => {
-    if (!value || typeof value !== "object") return [];
-    const v = value as Record<string, unknown>;
-
-    // Skip non-stdio entries (http, sse) — McpServerConfig only supports stdio
-    if (v.type === "http" || v.type === "sse") return [];
-    if (typeof v.command !== "string") return [];
-
-    const entry: LocalMcpServerEntry = { id, command: v.command, source };
-    if (Array.isArray(v.args) && v.args.every((a) => typeof a === "string")) {
-      entry.args = v.args as string[];
+    if (!isPlainObject(value)) {
+      return [];
     }
-    if (v.env && typeof v.env === "object" && !Array.isArray(v.env)) {
-      const env: Record<string, string> = {};
-      for (const [k, val] of Object.entries(v.env as Record<string, unknown>)) {
-        if (typeof val === "string") env[k] = val;
-      }
-      if (Object.keys(env).length > 0) entry.env = env;
-    }
-    return [entry];
+
+    const entryType = value.type;
+    const isRemote = entryType === "http" || entryType === "sse";
+    const entry = buildLocalEntry(id, source, filePath, {
+      command: typeof value.command === "string" ? value.command : undefined,
+      args: isStringArray(value.args) ? value.args : undefined,
+      env: toStringRecord(value.env),
+      url: typeof value.url === "string" ? value.url : undefined,
+      transport: isRemote
+        ? entryType === "sse"
+          ? "sse"
+          : "streamable-http"
+        : undefined,
+      headers: toStringRecord(value.headers),
+    });
+
+    return entry ? [entry] : [];
   });
+}
+
+function normalizeClaudeServerMap(
+  map: JsonRecord,
+  source: LocalSource,
+  filePath: string
+): LocalMcpServerEntry[] {
+  return Object.entries(map).flatMap(([id, value]) => {
+    if (!isPlainObject(value)) {
+      return [];
+    }
+
+    const entryType = value.type;
+    const transport =
+      entryType === "sse"
+        ? "sse"
+        : typeof value.url === "string"
+          ? "streamable-http"
+          : undefined;
+
+    const entry = buildLocalEntry(id, source, filePath, {
+      command: typeof value.command === "string" ? value.command : undefined,
+      args: isStringArray(value.args) ? value.args : undefined,
+      env: toStringRecord(value.env),
+      url: typeof value.url === "string" ? value.url : undefined,
+      transport,
+      headers: toStringRecord(value.headers),
+    });
+
+    return entry ? [entry] : [];
+  });
+}
+
+function normalizeCopilotServerMap(
+  map: JsonRecord,
+  source: LocalSource,
+  filePath: string
+): LocalMcpServerEntry[] {
+  return Object.entries(map).flatMap(([id, value]) => {
+    if (!isPlainObject(value)) {
+      return [];
+    }
+
+    const entryType = value.type;
+    const isLocal = entryType === "local" || entryType === "stdio";
+    const transport =
+      entryType === "sse"
+        ? "sse"
+        : entryType === "http"
+          ? "streamable-http"
+          : undefined;
+
+    const entry = buildLocalEntry(id, source, filePath, {
+      command:
+        isLocal && typeof value.command === "string" ? value.command : undefined,
+      args: isStringArray(value.args) ? value.args : undefined,
+      env: toStringRecord(value.env),
+      url: typeof value.url === "string" ? value.url : undefined,
+      transport,
+      headers: toStringRecord(value.headers),
+    });
+
+    return entry ? [entry] : [];
+  });
+}
+
+function normalizeQwenServerMap(
+  map: JsonRecord,
+  source: LocalSource,
+  filePath: string
+): LocalMcpServerEntry[] {
+  return Object.entries(map).flatMap(([id, value]) => {
+    if (!isPlainObject(value)) {
+      return [];
+    }
+
+    const entry = buildLocalEntry(id, source, filePath, {
+      command: typeof value.command === "string" ? value.command : undefined,
+      args: isStringArray(value.args) ? value.args : undefined,
+      env: toStringRecord(value.env),
+      url:
+        typeof value.httpUrl === "string"
+          ? value.httpUrl
+          : typeof value.url === "string"
+            ? value.url
+            : undefined,
+      transport:
+        typeof value.httpUrl === "string"
+          ? "streamable-http"
+          : typeof value.url === "string"
+            ? "sse"
+            : undefined,
+      headers: toStringRecord(value.headers),
+    });
+
+    return entry ? [entry] : [];
+  });
+}
+
+function normalizeOpenCodeServerMap(
+  map: JsonRecord,
+  source: LocalSource,
+  filePath: string
+): LocalMcpServerEntry[] {
+  return Object.entries(map).flatMap(([id, value]) => {
+    if (!isPlainObject(value)) {
+      return [];
+    }
+
+    const commandValue = value.command;
+    const commandParts = isStringArray(commandValue) ? commandValue : undefined;
+    const entryType = value.type;
+
+    const entry = buildLocalEntry(id, source, filePath, {
+      command: commandParts?.[0],
+      args: commandParts && commandParts.length > 1 ? commandParts.slice(1) : undefined,
+      env: toStringRecord(value.environment),
+      url: typeof value.url === "string" ? value.url : undefined,
+      transport:
+        entryType === "remote" && typeof value.url === "string"
+          ? "streamable-http"
+          : undefined,
+      headers: toStringRecord(value.headers),
+    });
+
+    return entry ? [entry] : [];
+  });
+}
+
+function unquoteTomlString(value: string): string {
+  const quote = value[0];
+  if ((quote !== `"` && quote !== `'`) || value[value.length - 1] !== quote) {
+    return value;
+  }
+
+  const inner = value.slice(1, -1);
+  if (quote === `'`) {
+    return inner;
+  }
+
+  return inner
+    .replace(/\\\\/g, "\\")
+    .replace(/\\"/g, `"`)
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t");
+}
+
+function splitTomlList(text: string): string[] {
+  const items: string[] = [];
+  let current = "";
+  let quote: `"` | `'` | null = null;
+  let depth = 0;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!;
+    const previous = index > 0 ? text[index - 1] : "";
+
+    if (quote) {
+      current += char;
+      if (char === quote && previous !== "\\") {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === `"` || char === `'`) {
+      quote = char;
+      current += char;
+      continue;
+    }
+
+    if (char === "[" || char === "{") {
+      depth += 1;
+      current += char;
+      continue;
+    }
+
+    if (char === "]" || char === "}") {
+      depth = Math.max(0, depth - 1);
+      current += char;
+      continue;
+    }
+
+    if (char === "," && depth === 0) {
+      const trimmed = current.trim();
+      if (trimmed) {
+        items.push(trimmed);
+      }
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  const trimmed = current.trim();
+  if (trimmed) {
+    items.push(trimmed);
+  }
+
+  return items;
+}
+
+function parseTomlInlineTable(value: string): Record<string, string> | undefined {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    return undefined;
+  }
+
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) {
+    return undefined;
+  }
+
+  const entries: Record<string, string> = {};
+  for (const pair of splitTomlList(inner)) {
+    const eqIndex = pair.indexOf("=");
+    if (eqIndex <= 0) {
+      continue;
+    }
+
+    const rawKey = pair.slice(0, eqIndex).trim();
+    const rawValue = pair.slice(eqIndex + 1).trim();
+    const key = unquoteTomlString(rawKey);
+    if (rawValue.startsWith(`"`) || rawValue.startsWith(`'`)) {
+      entries[key] = unquoteTomlString(rawValue);
+    }
+  }
+
+  return Object.keys(entries).length > 0 ? entries : undefined;
+}
+
+function parseTomlStringArray(value: string): string[] | undefined {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+    return undefined;
+  }
+
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) {
+    return [];
+  }
+
+  const items = splitTomlList(inner).flatMap((item) => {
+    if (item.startsWith(`"`) || item.startsWith(`'`)) {
+      return [unquoteTomlString(item)];
+    }
+    return [];
+  });
+
+  return items;
+}
+
+function parseTomlSectionName(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+    return null;
+  }
+  return trimmed.slice(1, -1).trim();
+}
+
+function parseTomlMcpServerKey(sectionName: string): string | null {
+  if (!sectionName.startsWith("mcp_servers.")) {
+    return null;
+  }
+
+  const remainder = sectionName.slice("mcp_servers.".length).trim();
+  if (!remainder) {
+    return null;
+  }
+
+  if (remainder.startsWith(`"`) || remainder.startsWith(`'`)) {
+    return unquoteTomlString(remainder);
+  }
+
+  return remainder;
+}
+
+function normalizeCodexToml(
+  text: string,
+  source: LocalSource,
+  filePath: string
+): LocalMcpServerEntry[] {
+  const results = new Map<string, LocalMcpServerEntry>();
+  const lines = text.split(/\r?\n/);
+  let currentId: string | null = null;
+  let currentConfig: {
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    url?: string;
+    transport?: "streamable-http" | "sse";
+    headers?: Record<string, string>;
+  } | null = null;
+
+  const flushCurrent = () => {
+    if (!currentId || !currentConfig) {
+      return;
+    }
+    const entry = buildLocalEntry(currentId, source, filePath, currentConfig);
+    if (entry) {
+      results.set(currentId, entry);
+    }
+  };
+
+  for (const rawLine of lines) {
+    const sectionName = parseTomlSectionName(rawLine);
+    if (sectionName) {
+      flushCurrent();
+      const nextId = parseTomlMcpServerKey(sectionName);
+      currentId = nextId;
+      currentConfig = nextId ? {} : null;
+      continue;
+    }
+
+    if (!currentId || !currentConfig) {
+      continue;
+    }
+
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const eqIndex = line.indexOf("=");
+    if (eqIndex <= 0) {
+      continue;
+    }
+
+    const key = line.slice(0, eqIndex).trim();
+    const value = line.slice(eqIndex + 1).trim();
+
+    if (key === "command" && (value.startsWith(`"`) || value.startsWith(`'`))) {
+      currentConfig.command = unquoteTomlString(value);
+      continue;
+    }
+
+    if (key === "args") {
+      currentConfig.args = parseTomlStringArray(value);
+      continue;
+    }
+
+    if (key === "url" && (value.startsWith(`"`) || value.startsWith(`'`))) {
+      currentConfig.url = unquoteTomlString(value);
+      continue;
+    }
+
+    if (key === "transport" && (value.startsWith(`"`) || value.startsWith(`'`))) {
+      const transport = unquoteTomlString(value);
+      if (transport === "sse") {
+        currentConfig.transport = "sse";
+      } else if (transport === "streamable-http" || transport === "http") {
+        currentConfig.transport = "streamable-http";
+      }
+      continue;
+    }
+
+    if (key === "env") {
+      currentConfig.env = parseTomlInlineTable(value);
+      continue;
+    }
+
+    if (key === "headers") {
+      currentConfig.headers = parseTomlInlineTable(value);
+      continue;
+    }
+
+    if (key.startsWith("env.")) {
+      const envKey = key.slice(4).trim();
+      if (value.startsWith(`"`) || value.startsWith(`'`)) {
+        currentConfig.env = currentConfig.env ?? {};
+        currentConfig.env[envKey] = unquoteTomlString(value);
+      }
+      continue;
+    }
+
+    if (key.startsWith("headers.")) {
+      const headerKey = key.slice(8).trim();
+      if (value.startsWith(`"`) || value.startsWith(`'`)) {
+        currentConfig.headers = currentConfig.headers ?? {};
+        currentConfig.headers[headerKey] = unquoteTomlString(value);
+      }
+    }
+  }
+
+  flushCurrent();
+  return [...results.values()];
+}
+
+async function discoverFromDescriptor(
+  descriptor: LocalConfigDescriptor
+): Promise<LocalMcpServerEntry[]> {
+  if (descriptor.format === "codex-toml") {
+    const text = await readTextFile(descriptor.path);
+    if (!text) {
+      return [];
+    }
+    return normalizeCodexToml(text, descriptor.source, descriptor.path);
+  }
+
+  const parsed = await readJsonFile(descriptor.path);
+  if (!isPlainObject(parsed)) {
+    return [];
+  }
+
+  if (descriptor.format === "vscode-json" && isPlainObject(parsed.servers)) {
+    return normalizeVscodeServerMap(parsed.servers, descriptor.source, descriptor.path);
+  }
+
+  if (
+    descriptor.format === "claude-json" &&
+    isPlainObject(parsed.mcpServers)
+  ) {
+    return normalizeClaudeServerMap(parsed.mcpServers, descriptor.source, descriptor.path);
+  }
+
+  if (
+    descriptor.format === "copilot-json" &&
+    isPlainObject(parsed.mcpServers)
+  ) {
+    return normalizeCopilotServerMap(parsed.mcpServers, descriptor.source, descriptor.path);
+  }
+
+  if (descriptor.format === "qwen-json" && isPlainObject(parsed.mcpServers)) {
+    return normalizeQwenServerMap(parsed.mcpServers, descriptor.source, descriptor.path);
+  }
+
+  if (descriptor.format === "opencode-json" && isPlainObject(parsed.mcp)) {
+    return normalizeOpenCodeServerMap(parsed.mcp, descriptor.source, descriptor.path);
+  }
+
+  return [];
+}
+
+function getLocalConfigDescriptors(workspaceRoot: string): LocalConfigDescriptor[] {
+  return [
+    {
+      path: getVscodeWorkspaceMcpConfigPath(workspaceRoot),
+      source: "vscode-workspace",
+      format: "vscode-json",
+    },
+    {
+      path: getClaudeWorkspaceMcpConfigPath(workspaceRoot),
+      source: "claude-workspace",
+      format: "claude-json",
+    },
+    ...getCopilotWorkspaceMcpConfigPaths(workspaceRoot).map((filePath) => ({
+      path: filePath,
+      source: "copilot-workspace" as const,
+      format: "copilot-json" as const,
+    })),
+    {
+      path: getCodexWorkspaceMcpConfigPath(workspaceRoot),
+      source: "codex-workspace",
+      format: "codex-toml",
+    },
+    {
+      path: getOpenCodeWorkspaceMcpConfigPath(workspaceRoot),
+      source: "opencode-workspace",
+      format: "opencode-json",
+    },
+    {
+      path: getQwenWorkspaceMcpConfigPath(workspaceRoot),
+      source: "qwen-workspace",
+      format: "qwen-json",
+    },
+    {
+      path: getVscodeUserMcpConfigPath(),
+      source: "vscode-user",
+      format: "vscode-json",
+    },
+    {
+      path: getClaudeUserConfigPath(),
+      source: "claude-user",
+      format: "claude-json",
+    },
+    {
+      path: getCopilotUserMcpConfigPath(),
+      source: "copilot-user",
+      format: "copilot-json",
+    },
+    {
+      path: getCodexUserMcpConfigPath(),
+      source: "codex-user",
+      format: "codex-toml",
+    },
+    {
+      path: getOpenCodeUserMcpConfigPath(),
+      source: "opencode-user",
+      format: "opencode-json",
+    },
+    {
+      path: getQwenUserMcpConfigPath(),
+      source: "qwen-user",
+      format: "qwen-json",
+    },
+  ];
 }
 
 /**
  * Discovers MCP servers from all known local config files.
  *
- * Sources (in priority order, first wins on duplicate id):
- * 1. `.vscode/mcp.json` in the workspace (VS Code workspace config, key: `servers`)
- * 2. `.mcp.json` in the workspace (Claude Code project config, key: `mcpServers`)
- * 3. VS Code user config (platform-specific path, key: `servers`)
- * 4. Claude Code user config `~/.claude.json` (top-level `mcpServers`, user-scope only)
- *
- * Note: local-scope Claude Code servers (`.claude.json` under projects[path]) are
- * deliberately excluded — they may contain secrets the user has not chosen to share.
+ * Sources are ordered from highest-priority workspace config to lower-priority
+ * user config. First discovered entry wins on duplicate server IDs.
  */
 async function discoverLocalMcpServers(
   workspaceRoot: string
@@ -88,88 +657,14 @@ async function discoverLocalMcpServers(
   const results: LocalMcpServerEntry[] = [];
   const seenIds = new Set<string>();
 
-  const addEntries = (entries: LocalMcpServerEntry[]) => {
+  for (const descriptor of getLocalConfigDescriptors(workspaceRoot)) {
+    const entries = await discoverFromDescriptor(descriptor);
     for (const entry of entries) {
-      if (!seenIds.has(entry.id)) {
-        seenIds.add(entry.id);
-        results.push(entry);
+      if (seenIds.has(entry.id)) {
+        continue;
       }
-    }
-  };
-
-  // 1. .vscode/mcp.json (workspace VS Code config)
-  const vscodeMcpPath = getVscodeWorkspaceMcpConfigPath(workspaceRoot);
-  const vscodeWs = await readJsonFile(vscodeMcpPath);
-  if (vscodeWs && typeof vscodeWs === "object") {
-    const data = vscodeWs as Record<string, unknown>;
-    if (
-      data.servers &&
-      typeof data.servers === "object" &&
-      !Array.isArray(data.servers)
-    ) {
-      addEntries(
-        normalizeServerMap(
-          data.servers as Record<string, unknown>,
-          "vscode-workspace"
-        )
-      );
-    }
-  }
-
-  // 2. .mcp.json (workspace Claude Code project config)
-  const claudeMcpPath = getClaudeWorkspaceMcpConfigPath(workspaceRoot);
-  const claudeWs = await readJsonFile(claudeMcpPath);
-  if (claudeWs && typeof claudeWs === "object") {
-    const data = claudeWs as Record<string, unknown>;
-    if (
-      data.mcpServers &&
-      typeof data.mcpServers === "object" &&
-      !Array.isArray(data.mcpServers)
-    ) {
-      addEntries(
-        normalizeServerMap(
-          data.mcpServers as Record<string, unknown>,
-          "claude-workspace"
-        )
-      );
-    }
-  }
-
-  // 3. VS Code user-level MCP config
-  const vscodeUserPath = getVscodeUserMcpConfigPath();
-  const vscodeUser = await readJsonFile(vscodeUserPath);
-  if (vscodeUser && typeof vscodeUser === "object") {
-    const data = vscodeUser as Record<string, unknown>;
-    if (
-      data.servers &&
-      typeof data.servers === "object" &&
-      !Array.isArray(data.servers)
-    ) {
-      addEntries(
-        normalizeServerMap(
-          data.servers as Record<string, unknown>,
-          "vscode-user"
-        )
-      );
-    }
-  }
-
-  // 4. Claude Code user config — top-level mcpServers only (user scope)
-  const claudeUserPath = getClaudeUserConfigPath();
-  const claudeUser = await readJsonFile(claudeUserPath);
-  if (claudeUser && typeof claudeUser === "object") {
-    const data = claudeUser as Record<string, unknown>;
-    if (
-      data.mcpServers &&
-      typeof data.mcpServers === "object" &&
-      !Array.isArray(data.mcpServers)
-    ) {
-      addEntries(
-        normalizeServerMap(
-          data.mcpServers as Record<string, unknown>,
-          "claude-user"
-        )
-      );
+      seenIds.add(entry.id);
+      results.push(entry);
     }
   }
 
@@ -198,20 +693,20 @@ interface McpIoRegistryResponse {
  */
 interface McpIoRegistryItem {
   server?: {
-    name?: string; // qualified name e.g. "agency.lona/trading"
-    title?: string; // display name e.g. "Canva"
+    name?: string;
+    title?: string;
     description?: string;
     version?: string;
     websiteUrl?: string;
     packages?: Array<{
-      registryType?: string; // "npm", "pip", "docker"
-      identifier?: string; // npm package name
-      runtimeHint?: string; // "npx", "uvx", etc.
+      registryType?: string;
+      identifier?: string;
+      runtimeHint?: string;
       runtimeArguments?: string[];
       environmentVariables?: Array<{ name?: string; description?: string }>;
     }>;
     remotes?: Array<{
-      type?: string; // "streamable-http", "sse"
+      type?: string;
       url?: string;
       headers?: Array<{
         name?: string;
@@ -235,22 +730,6 @@ interface McpIoRegistryItem {
 const MCP_REGISTRY_URL =
   "https://registry.modelcontextprotocol.io/v0.1/servers";
 
-/**
- * Fetches MCP servers from the official MCP registry (registry.modelcontextprotocol.io).
- * No authentication required.
- *
- * The registry returns results in alphabetical order by default.
- * Pagination is cursor-based: pass the `nextCursor` from a previous response
- * to fetch the next page.
- *
- * Only entries with `isLatest: true` are included to avoid showing stale
- * duplicate entries for servers that have multiple published versions.
- *
- * @param options.limit    Results per page (default 50, max 100)
- * @param options.cursor   Pagination cursor from a previous response's `nextCursor`
- * @param options.search   Server-side substring search on server name
- * @param options.updatedSince  Filter to servers updated since this ISO 8601 timestamp
- */
 async function fetchMcpRegistry(
   options: {
     limit?: number;
@@ -266,8 +745,6 @@ async function fetchMcpRegistry(
   if (updatedSince) params.set("updated_since", updatedSince);
 
   const url = `${MCP_REGISTRY_URL}?${params}`;
-
-  // fetch() is available in Node 18+; VS Code extension host runs Node 22.
   const response = await fetch(url, {
     headers: { "User-Agent": "FlightPath-VSCode-Extension/1.0" },
     signal: AbortSignal.timeout(10_000),
@@ -287,7 +764,6 @@ async function fetchMcpRegistry(
     const meta = item._meta?.["io.modelcontextprotocol.registry/official"];
     if (!s) return [];
 
-    // Skip stale versions — only show the latest for each server name
     if (meta?.isLatest === false) return [];
 
     const id = s.name ?? "";
@@ -300,16 +776,13 @@ async function fetchMcpRegistry(
       id,
       name,
       description,
-      verified: true, // all entries in the official registry are curated
+      verified: true,
     };
 
     if (meta?.updatedAt) {
       entry.updatedAt = meta.updatedAt;
     }
 
-    // ── Remote transport (streamable-http / SSE) ─────────────────────────────
-    // When a server only exposes a hosted endpoint (no stdio package), extract
-    // the URL, transport type, and any required auth headers.
     const firstRemote = s.remotes?.[0];
     if (firstRemote?.url) {
       entry.remoteUrl = firstRemote.url;
@@ -326,9 +799,6 @@ async function fetchMcpRegistry(
       }
     }
 
-    // ── stdio transport (local package / npm / pip) ──────────────────────────
-    // Only populate installCommand / envVars when the server has a package
-    // definition (i.e. it can be run as a local process).
     const npmPkg = s.packages?.find((p) => p.registryType === "npm");
     const anyPkg = s.packages?.[0];
     const pkg = npmPkg ?? anyPkg;
@@ -336,7 +806,6 @@ async function fetchMcpRegistry(
     if (pkg?.identifier) {
       entry.packageName = pkg.identifier;
       const runtimeHint = pkg.runtimeHint ?? "npx";
-      // Use registry-provided runtimeArguments when present; otherwise add -y for npm/npx.
       const runtimeArgs =
         pkg.runtimeArguments && pkg.runtimeArguments.length > 0
           ? pkg.runtimeArguments
@@ -361,10 +830,6 @@ async function fetchMcpRegistry(
   return { servers: entries, nextCursor: data.metadata?.nextCursor };
 }
 
-/**
- * Safely runs MCP discovery and returns an empty result on error.
- * Logs the error without throwing so callers never crash.
- */
 export async function safeDiscoverLocalMcpServers(
   workspaceRoot: string
 ): Promise<{ servers: LocalMcpServerEntry[]; error?: string }> {
@@ -378,10 +843,6 @@ export async function safeDiscoverLocalMcpServers(
   }
 }
 
-/**
- * Safely fetches the MCP registry and returns an empty result on error.
- * Supports cursor-based pagination, server-side search, and updated_since filtering.
- */
 export async function safeFetchMcpRegistry(
   options: { cursor?: string; search?: string; updatedSince?: string } = {}
 ): Promise<{

@@ -1136,15 +1136,28 @@ export interface RedoWorkflowChangesMessage {
  */
 export interface LocalMcpServerEntry {
   id: string;
-  command: string;
+  command?: string;
   args?: string[];
   env?: Record<string, string>;
+  url?: string;
+  transport?: "streamable-http" | "sse";
+  headers?: Record<string, string>;
+  /** Absolute path to the config file where this entry was discovered */
+  path: string;
   /** Where this entry was discovered from */
   source:
     | "vscode-workspace"
     | "vscode-user"
     | "claude-workspace"
-    | "claude-user";
+    | "claude-user"
+    | "copilot-workspace"
+    | "copilot-user"
+    | "codex-workspace"
+    | "codex-user"
+    | "opencode-workspace"
+    | "opencode-user"
+    | "qwen-workspace"
+    | "qwen-user";
 }
 
 /**

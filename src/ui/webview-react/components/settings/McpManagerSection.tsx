@@ -50,10 +50,34 @@ function formatScopeLabel(scope: SettingWriteScope): string {
 }
 
 function formatLocalSourceLabel(source: LocalMcpServerEntry["source"]): string {
-  return source
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  switch (source) {
+    case "vscode-workspace":
+      return "VS Code Workspace";
+    case "vscode-user":
+      return "VS Code User";
+    case "claude-workspace":
+      return "Claude Code Workspace";
+    case "claude-user":
+      return "Claude Code User";
+    case "copilot-workspace":
+      return "Copilot CLI Workspace";
+    case "copilot-user":
+      return "Copilot CLI User";
+    case "codex-workspace":
+      return "Codex Workspace";
+    case "codex-user":
+      return "Codex User";
+    case "opencode-workspace":
+      return "OpenCode Workspace";
+    case "opencode-user":
+      return "OpenCode User";
+    case "qwen-workspace":
+      return "Qwen Code Workspace";
+    case "qwen-user":
+      return "Qwen Code User";
+  }
+
+  return source;
 }
 
 function formatPathForDisplay(filePath: string): string {
@@ -86,15 +110,22 @@ function removeDefaultServer(
 }
 
 function localEntryToServer(entry: LocalMcpServerEntry): McpServerConfig {
-  const server: McpServerConfig = {
-    id: entry.id,
-    command: entry.command,
-  };
+  const server: McpServerConfig = { id: entry.id };
+  if (entry.command) {
+    server.command = entry.command;
+  }
   if (entry.args?.length) {
     server.args = entry.args;
   }
   if (entry.env && Object.keys(entry.env).length > 0) {
     server.env = entry.env;
+  }
+  if (entry.url) {
+    server.url = entry.url;
+    server.transport = entry.transport ?? "streamable-http";
+  }
+  if (entry.headers && Object.keys(entry.headers).length > 0) {
+    server.headers = entry.headers;
   }
   return server;
 }
@@ -199,8 +230,8 @@ function decodeTarget(encoded: string): {
 
 function getExportTargetLabel(id: AnyTargetId): string {
   if (id === SPECIAL_TARGET_IDS.VSCODE) return "VS Code";
-  if (id === HARNESS_IDS.CLAUDE_CLI) {
-    return HARNESS_INFO[HARNESS_IDS.CLAUDE_CLI].shortName;
+  if (id in HARNESS_INFO) {
+    return HARNESS_INFO[id as keyof typeof HARNESS_INFO].shortName;
   }
   return id;
 }
@@ -214,49 +245,55 @@ function getExportTargetDescription(
       ? ".vscode/mcp.json"
       : "Code/User/mcp.json";
   }
-  return scope === SETTING_SCOPES.WORKSPACE ? ".mcp.json" : "~/.claude.json";
+  if (id === HARNESS_IDS.CLAUDE_CLI) {
+    return scope === SETTING_SCOPES.WORKSPACE ? ".mcp.json" : "~/.claude.json";
+  }
+  if (id === HARNESS_IDS.COPILOT_CLI) {
+    return scope === SETTING_SCOPES.WORKSPACE
+      ? ".mcp.json or .github/mcp.json"
+      : "~/.copilot/mcp-config.json";
+  }
+  if (id === HARNESS_IDS.CODEX_CLI) {
+    return scope === SETTING_SCOPES.WORKSPACE
+      ? ".codex/config.toml"
+      : "~/.codex/config.toml";
+  }
+  if (id === HARNESS_IDS.OPENCODE_CLI) {
+    return scope === SETTING_SCOPES.WORKSPACE
+      ? "opencode.json"
+      : "~/.config/opencode/opencode.json";
+  }
+  if (id === HARNESS_IDS.QWEN_CLI) {
+    return scope === SETTING_SCOPES.WORKSPACE
+      ? ".qwen/settings.json"
+      : "~/.qwen/settings.json";
+  }
+  return scope;
 }
 
 function buildExportGroups(hasWorkspaceRoot: boolean): FlyoutGroup[] {
+  const exportTargets = [
+    SPECIAL_TARGET_IDS.VSCODE,
+    HARNESS_IDS.CLAUDE_CLI,
+    HARNESS_IDS.COPILOT_CLI,
+    HARNESS_IDS.CODEX_CLI,
+    HARNESS_IDS.OPENCODE_CLI,
+    HARNESS_IDS.QWEN_CLI,
+  ] as const;
+
   const workspaceItems: ActionDropdownItem[] = hasWorkspaceRoot
-    ? [
-        {
-          label: getExportTargetLabel(SPECIAL_TARGET_IDS.VSCODE),
-          value: encodeTarget(SPECIAL_TARGET_IDS.VSCODE, SETTING_SCOPES.WORKSPACE),
-          description: getExportTargetDescription(
-            SPECIAL_TARGET_IDS.VSCODE,
-            SETTING_SCOPES.WORKSPACE
-          ),
-        },
-        {
-          label: getExportTargetLabel(HARNESS_IDS.CLAUDE_CLI),
-          value: encodeTarget(HARNESS_IDS.CLAUDE_CLI, SETTING_SCOPES.WORKSPACE),
-          description: getExportTargetDescription(
-            HARNESS_IDS.CLAUDE_CLI,
-            SETTING_SCOPES.WORKSPACE
-          ),
-        },
-      ]
+    ? exportTargets.map((id) => ({
+        label: getExportTargetLabel(id),
+        value: encodeTarget(id, SETTING_SCOPES.WORKSPACE),
+        description: getExportTargetDescription(id, SETTING_SCOPES.WORKSPACE),
+      }))
     : [];
 
-  const userItems: ActionDropdownItem[] = [
-    {
-      label: getExportTargetLabel(SPECIAL_TARGET_IDS.VSCODE),
-      value: encodeTarget(SPECIAL_TARGET_IDS.VSCODE, SETTING_SCOPES.USER),
-      description: getExportTargetDescription(
-        SPECIAL_TARGET_IDS.VSCODE,
-        SETTING_SCOPES.USER
-      ),
-    },
-    {
-      label: getExportTargetLabel(HARNESS_IDS.CLAUDE_CLI),
-      value: encodeTarget(HARNESS_IDS.CLAUDE_CLI, SETTING_SCOPES.USER),
-      description: getExportTargetDescription(
-        HARNESS_IDS.CLAUDE_CLI,
-        SETTING_SCOPES.USER
-      ),
-    },
-  ];
+  const userItems: ActionDropdownItem[] = exportTargets.map((id) => ({
+    label: getExportTargetLabel(id),
+    value: encodeTarget(id, SETTING_SCOPES.USER),
+    description: getExportTargetDescription(id, SETTING_SCOPES.USER),
+  }));
 
   return [
     ...(workspaceItems.length > 0
@@ -430,8 +467,16 @@ export function McpManagerSection() {
     const orderedSources = [
       "vscode-workspace",
       "claude-workspace",
+      "copilot-workspace",
+      "codex-workspace",
+      "opencode-workspace",
+      "qwen-workspace",
       "vscode-user",
       "claude-user",
+      "copilot-user",
+      "codex-user",
+      "opencode-user",
+      "qwen-user",
     ] as LocalMcpServerEntry["source"][];
     const orderedGroups = orderedSources.flatMap((source) => {
       const entries = groups.get(source as LocalMcpServerEntry["source"]);
@@ -450,13 +495,7 @@ export function McpManagerSection() {
   );
 
   const exportableServers = useMemo(
-    () =>
-      (managedServers ?? [])
-        .map((server) => server.config)
-        .filter(
-          (server): server is McpServerConfig =>
-            typeof server.command === "string" && server.command.trim().length > 0
-        ),
+    () => (managedServers ?? []).map((server) => server.config),
     [managedServers]
   );
 
@@ -591,14 +630,7 @@ export function McpManagerSection() {
   };
 
   const exportSubtitle =
-    exportableServers.length === (managedServers?.length ?? 0)
-      ? `Export ${exportableServers.length} managed server${exportableServers.length === 1 ? "" : "s"}`
-      : `Export ${exportableServers.length} stdio server${exportableServers.length === 1 ? "" : "s"} (${(managedServers?.length ?? 0) - exportableServers.length} remote skipped)`;
-
-  const exportSkippedCount = Math.max(
-    0,
-    (managedServers?.length ?? 0) - exportableServers.length
-  );
+    `Export ${exportableServers.length} managed server${exportableServers.length === 1 ? "" : "s"} to another harness config`;
   const pendingExportPath = pendingExportTarget
     ? getExportTargetDescription(
         pendingExportTarget.id,
@@ -619,7 +651,7 @@ export function McpManagerSection() {
         </h3>
         <p className="text-xs text-description-fg">
           Manage the FlightPath MCP registry, import servers from local configs or
-          the MCP registry, and export stdio servers to external harness configs.
+          the MCP registry, and export managed servers to external harness configs.
           The selected scope controls add, edit, import, and default-toggle writes.
         </p>
       </div>
@@ -664,7 +696,7 @@ export function McpManagerSection() {
             <button
               type="button"
               disabled
-              title="No stdio servers available to export"
+              title="No managed servers available to export"
               className="rounded border border-btn-border bg-btn-secondary-bg px-2 py-0.5 text-xs text-disabled-fg"
             >
               Export to Harness
@@ -676,19 +708,13 @@ export function McpManagerSection() {
       {pendingExportTarget && (
         <div className="rounded border border-focus-border bg-editor-bg px-3 py-2">
           <div className="text-xs font-medium text-foreground">
-            Export {exportableServers.length} stdio server
+            Export {exportableServers.length} managed server
             {exportableServers.length === 1 ? "" : "s"} to {pendingExportLabel}
           </div>
           <div className="mt-0.5 text-xxs text-description-fg">
             Destination:{" "}
             <span className="font-mono">{pendingExportPath}</span>
           </div>
-          {exportSkippedCount > 0 && (
-            <div className="mt-1 text-xxs text-description-fg">
-              {exportSkippedCount} remote server
-              {exportSkippedCount === 1 ? "" : "s"} will stay registry-only.
-            </div>
-          )}
           <div className="mt-2 flex gap-2">
             <button
               type="button"
@@ -1008,8 +1034,14 @@ export function McpManagerSection() {
                               {entry.id}
                             </div>
                             <div className="truncate font-mono text-xxs text-description-fg">
-                              {entry.command}
-                              {entry.args?.length ? ` ${entry.args.join(" ")}` : ""}
+                              {entry.url
+                                ? entry.transport === "sse"
+                                  ? `sse: ${entry.url}`
+                                  : entry.url
+                                : `${entry.command ?? ""}${entry.args?.length ? ` ${entry.args.join(" ")}` : ""}`}
+                            </div>
+                            <div className="truncate font-mono text-xxs text-description-fg">
+                              {formatPathForDisplay(entry.path)}
                             </div>
                           </div>
                           <button

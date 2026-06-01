@@ -57,7 +57,7 @@ suite("HarnessMcpExporter", () => {
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
-  test("merges Claude exports and reports skipped remote servers", async () => {
+  test("merges Claude exports and preserves remote entries", async () => {
     const exporter = new HarnessMcpExporter(workspaceRoot);
     const claudeConfigPath = path.join(workspaceRoot, ".mcp.json");
 
@@ -79,7 +79,11 @@ suite("HarnessMcpExporter", () => {
     const result = await exporter.export(
       [
         { id: "stdio-server", command: "npx", args: ["-y", "@scope/pkg"] },
-        { id: "remote-server", url: "https://example.test/mcp" },
+        {
+          id: "remote-server",
+          url: "https://example.test/mcp",
+          headers: { Authorization: "Bearer token" },
+        },
       ],
       HARNESS_IDS.CLAUDE_CLI,
       SETTING_SCOPES.WORKSPACE
@@ -87,8 +91,8 @@ suite("HarnessMcpExporter", () => {
 
     const document = JSON.parse(await fs.readFile(claudeConfigPath, "utf-8"));
     assert.strictEqual(result.filePath, claudeConfigPath);
-    assert.strictEqual(result.exportedCount, 1);
-    assert.deepStrictEqual(result.skippedIds, ["remote-server"]);
+    assert.strictEqual(result.exportedCount, 2);
+    assert.deepStrictEqual(result.skippedIds, []);
     assert.strictEqual(document.theme, "dark");
     assert.deepStrictEqual(document.mcpServers.existing, {
       command: "node",
@@ -98,10 +102,14 @@ suite("HarnessMcpExporter", () => {
       command: "npx",
       args: ["-y", "@scope/pkg"],
     });
-    assert.strictEqual(document.mcpServers["remote-server"], undefined);
+    assert.deepStrictEqual(document.mcpServers["remote-server"], {
+      type: "http",
+      url: "https://example.test/mcp",
+      headers: { Authorization: "Bearer token" },
+    });
   });
 
-  test("merges VS Code exports using stdio entries while preserving unrelated keys", async () => {
+  test("merges VS Code exports while preserving unrelated keys", async () => {
     const exporter = new HarnessMcpExporter(workspaceRoot);
     const vscodeConfigPath = path.join(workspaceRoot, ".vscode", "mcp.json");
 
@@ -129,6 +137,11 @@ suite("HarnessMcpExporter", () => {
           args: ["server.js"],
           env: { API_KEY: "token" },
         },
+        {
+          id: "remote-server",
+          url: "https://example.test/mcp",
+          transport: "sse",
+        },
       ],
       SPECIAL_TARGET_IDS.VSCODE,
       SETTING_SCOPES.WORKSPACE
@@ -136,7 +149,7 @@ suite("HarnessMcpExporter", () => {
 
     const document = JSON.parse(await fs.readFile(vscodeConfigPath, "utf-8"));
     assert.strictEqual(result.filePath, vscodeConfigPath);
-    assert.strictEqual(result.exportedCount, 1);
+    assert.strictEqual(result.exportedCount, 2);
     assert.deepStrictEqual(result.skippedIds, []);
     assert.strictEqual(document.schemaVersion, 1);
     assert.deepStrictEqual(document.servers.existing, {
@@ -150,5 +163,132 @@ suite("HarnessMcpExporter", () => {
       args: ["server.js"],
       env: { API_KEY: "token" },
     });
+    assert.deepStrictEqual(document.servers["remote-server"], {
+      type: "sse",
+      url: "https://example.test/mcp",
+    });
+  });
+
+  test("writes Copilot MCP config using the documented schema", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const result = await exporter.export(
+      [
+        { id: "stdio-server", command: "node", args: ["server.js"] },
+        { id: "remote-server", url: "https://example.test/mcp" },
+      ],
+      HARNESS_IDS.COPILOT_CLI,
+      SETTING_SCOPES.USER
+    );
+
+    const document = JSON.parse(await fs.readFile(result.filePath, "utf-8"));
+    assert.ok(result.filePath.endsWith(path.join(".copilot", "mcp-config.json")));
+    assert.deepStrictEqual(document.mcpServers["stdio-server"], {
+      type: "local",
+      command: "node",
+      args: ["server.js"],
+      tools: ["*"],
+    });
+    assert.deepStrictEqual(document.mcpServers["remote-server"], {
+      type: "http",
+      url: "https://example.test/mcp",
+      tools: ["*"],
+    });
+  });
+
+  test("writes OpenCode MCP config under the mcp key", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const result = await exporter.export(
+      [
+        {
+          id: "stdio-server",
+          command: "uvx",
+          args: ["my-server"],
+          env: { TOKEN: "abc" },
+        },
+        {
+          id: "remote-server",
+          url: "https://example.test/mcp",
+          headers: { Authorization: "Bearer token" },
+        },
+      ],
+      HARNESS_IDS.OPENCODE_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    const document = JSON.parse(await fs.readFile(result.filePath, "utf-8"));
+    assert.strictEqual(result.filePath, path.join(workspaceRoot, "opencode.json"));
+    assert.deepStrictEqual(document.mcp["stdio-server"], {
+      type: "local",
+      command: ["uvx", "my-server"],
+      environment: { TOKEN: "abc" },
+    });
+    assert.deepStrictEqual(document.mcp["remote-server"], {
+      type: "remote",
+      url: "https://example.test/mcp",
+      headers: { Authorization: "Bearer token" },
+    });
+  });
+
+  test("writes Qwen MCP config with httpUrl for streamable-http remotes", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const result = await exporter.export(
+      [
+        { id: "stdio-server", command: "node", args: ["server.js"] },
+        { id: "remote-server", url: "https://example.test/mcp" },
+      ],
+      HARNESS_IDS.QWEN_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    const document = JSON.parse(await fs.readFile(result.filePath, "utf-8"));
+    assert.strictEqual(
+      result.filePath,
+      path.join(workspaceRoot, ".qwen", "settings.json")
+    );
+    assert.deepStrictEqual(document.mcpServers["stdio-server"], {
+      command: "node",
+      args: ["server.js"],
+    });
+    assert.deepStrictEqual(document.mcpServers["remote-server"], {
+      httpUrl: "https://example.test/mcp",
+    });
+  });
+
+  test("writes Codex MCP config in TOML form", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const codexConfigPath = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.mkdir(path.dirname(codexConfigPath), { recursive: true });
+    await fs.writeFile(codexConfigPath, 'model = "gpt-5"\n', "utf-8");
+
+    const result = await exporter.export(
+      [
+        {
+          id: "stdio-server",
+          command: "node",
+          args: ["server.js"],
+          env: { API_KEY: "secret" },
+        },
+        {
+          id: "remote-server",
+          url: "https://example.test/mcp",
+          headers: { Authorization: "Bearer token" },
+        },
+      ],
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    const text = await fs.readFile(result.filePath, "utf-8");
+    assert.strictEqual(result.filePath, codexConfigPath);
+    assert.ok(text.includes('model = "gpt-5"'));
+    assert.ok(text.includes('[mcp_servers."stdio-server"]'));
+    assert.ok(text.includes('command = "node"'));
+    assert.ok(text.includes('args = ["server.js"]'));
+    assert.ok(text.includes('env = { "API_KEY" = "secret" }'));
+    assert.ok(text.includes('[mcp_servers."remote-server"]'));
+    assert.ok(text.includes('url = "https://example.test/mcp"'));
+    assert.ok(
+      text.includes('headers = { "Authorization" = "Bearer token" }')
+    );
   });
 });
