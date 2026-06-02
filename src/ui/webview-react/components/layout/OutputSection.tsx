@@ -81,6 +81,7 @@ import {
   estimateOutputDiffBlockHeight,
   estimateOutputRowHeight,
   type CliHeaderRow,
+  type OutputRenderRow,
   type StructuredEventRow,
 } from "@utils/outputRows";
 import { setActiveOutputNavigationController } from "@utils/outputNavigation";
@@ -94,7 +95,18 @@ import {
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024;
-const MAX_OUTPUT_MINIMAP_DEBUG_BLOCKS = 20;
+const OUTPUT_VIRTUALIZER_OVERSCAN = 16;
+const LARGE_WORKFLOW_ROW_THRESHOLD = 150;
+const MAX_NAV_ALIGNMENT_ATTEMPTS = 8;
+const NAVIGATION_SETTLE_GRACE_MS = 120;
+const MAX_NAVIGATION_STABILIZATION_MS = 1000;
+
+interface RowHeightBucketStats {
+  sampleCount: number;
+  totalMeasured: number;
+  totalEstimated: number;
+  maxAbsDelta: number;
+}
 
 function roundDebugPx(value: number | undefined): number | null {
   if (value === undefined || !Number.isFinite(value)) {
@@ -153,41 +165,6 @@ function getZeroHeightStructuredEventReason(
   }
 }
 
-function getDiffMeasurementDebugInfo(element: ParentNode): {
-  viewType: string | null;
-  wrapperWidth: number | null;
-  estimatedLines: number | null;
-  renderedRows: number | null;
-  addedLines: number | null;
-  removedLines: number | null;
-  collapsed: string | null;
-} | null {
-  const anchor = element.querySelector<HTMLElement>("[data-diff-anchor='true']");
-  if (!anchor) return null;
-
-  const parseOptionalNumber = (value: string | null): number | null => {
-    if (value == null || value.length === 0) return null;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-
-  return {
-    viewType: anchor.getAttribute("data-diff-view-type"),
-    wrapperWidth: parseOptionalNumber(anchor.getAttribute("data-diff-wrapper-width")),
-    estimatedLines: parseOptionalNumber(
-      anchor.getAttribute("data-diff-estimated-lines")
-    ),
-    renderedRows: parseOptionalNumber(
-      anchor.getAttribute("data-diff-rendered-rows")
-    ),
-    addedLines: parseOptionalNumber(anchor.getAttribute("data-diff-added-lines")),
-    removedLines: parseOptionalNumber(
-      anchor.getAttribute("data-diff-removed-lines")
-    ),
-    collapsed: anchor.getAttribute("data-diff-collapsed"),
-  };
-}
-
 function getStepName(
   step: WorkflowStep | null | undefined,
   fallback: string
@@ -205,6 +182,70 @@ function getQueueStepFallbackName(
     : `Prompt ${stepIndex + 1}`;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function findRenderedRowElement(
+  scrollElement: HTMLDivElement,
+  rowIndex: number
+): HTMLDivElement | null {
+  return scrollElement.querySelector<HTMLDivElement>(
+    `[data-index="${rowIndex}"]`
+  );
+}
+
+function alignRowElementToViewport(
+  scrollElement: HTMLDivElement,
+  rowElement: HTMLElement,
+  align: "start" | "end"
+): boolean {
+  const containerRect = scrollElement.getBoundingClientRect();
+  const rowRect = rowElement.getBoundingClientRect();
+  const delta =
+    align === "end"
+      ? rowRect.bottom - containerRect.bottom
+      : rowRect.top - containerRect.top;
+
+  if (Math.abs(delta) < 0.5) {
+    return true;
+  }
+
+  const maxScroll = Math.max(
+    0,
+    scrollElement.scrollHeight - scrollElement.clientHeight
+  );
+  scrollElement.scrollTop = Math.max(
+    0,
+    Math.min(maxScroll, scrollElement.scrollTop + delta)
+  );
+  return false;
+}
+
+function getRowHeightBucket(row: OutputRenderRow): string {
+  switch (row.rowKind) {
+    case "history-banner":
+    case "step-anchor":
+    case "final-step-label":
+    case "status":
+    case "cli-header":
+    case "prompt":
+    case "cli-command":
+    case "error":
+    case "plain-response":
+    case "stats":
+      return row.rowKind;
+    case "structured-event":
+      if (row.diff) {
+        return `structured-event:diff:${row.diff.renderPlan.viewType}:${row.diff.isCollapsed ? "collapsed" : "expanded"}`;
+      }
+      if (row.toolCall) {
+        return "structured-event:tool-call";
+      }
+      return `structured-event:${row.event.type}`;
+  }
+}
+
 interface MinimapDialogState {
   mode: "undo" | "redo";
   target: UndoExecutionTarget;
@@ -219,6 +260,19 @@ interface WorkflowDialogState {
   workspacePath: string;
   entries: WorkflowStepEntry[];
   requestId: string;
+}
+
+interface PendingNavigationState {
+  rowIndex: number;
+  align: "start" | "end";
+  targetKind: OutputMessage["target"]["kind"];
+  targetIndex: number;
+  requestedBehavior: ScrollBehavior;
+  effectiveBehavior: ScrollBehavior;
+  startedAt: number;
+  lastMeasuredVersion: number;
+  lastMeasurementChangeAt: number;
+  attempts: number;
 }
 
 /**
@@ -368,6 +422,9 @@ export const OutputSection: React.FC = () => {
   const autoscrollEnabled = useRef(true);
   const isProgrammaticScroll = useRef(false);
   const measurementCacheRef = useRef<Map<string, number>>(new Map());
+  const rowHeightBucketStatsRef = useRef<Map<string, RowHeightBucketStats>>(
+    new Map()
+  );
   const previousDiffResetVersion = useRef(diffResetVersion);
   const [measurementVersion, setMeasurementVersion] = useState(0);
   const [diffCollapseState, setDiffCollapseState] = useState<Map<string, boolean>>(
@@ -382,6 +439,16 @@ export const OutputSection: React.FC = () => {
   const [outputDiffViewType, setOutputDiffViewType] = useState<
     "split" | "unified"
   >("split");
+  const [outputContentWidth, setOutputContentWidth] = useState(0);
+  const [navigationPendingRowIndex, setNavigationPendingRowIndex] = useState<
+    number | null
+  >(null);
+  const measurementVersionRef = useRef(measurementVersion);
+  useEffect(() => {
+    measurementVersionRef.current = measurementVersion;
+  }, [measurementVersion]);
+  const pendingNavigationRef = useRef<PendingNavigationState | null>(null);
+  const navigationFrameRef = useRef<number | null>(null);
 
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
@@ -459,6 +526,7 @@ export const OutputSection: React.FC = () => {
         defaultDiffCollapsed: diffsCollapsed,
         diffViewType: outputDiffViewType,
         outputFontSize,
+        outputContentWidth,
       }),
     [
       allMessages,
@@ -478,8 +546,33 @@ export const OutputSection: React.FC = () => {
       diffsCollapsed,
       outputDiffViewType,
       outputFontSize,
+      outputContentWidth,
       executionState,
     ]
+  );
+
+  const getEstimatedRowHeight = useCallback(
+    (row: OutputRenderRow): number => {
+      const baseEstimate = estimateOutputRowHeight(
+        row,
+        outputFontSize,
+        outputContentWidth
+      );
+      const bucket = getRowHeightBucket(row);
+      const bucketStats = rowHeightBucketStatsRef.current.get(bucket);
+      if (!bucketStats || bucketStats.sampleCount < 2 || bucketStats.totalEstimated <= 0) {
+        return baseEstimate;
+      }
+
+      const averageScale = bucketStats.totalMeasured / bucketStats.totalEstimated;
+      const clampedScale = clamp(
+        averageScale,
+        0.75,
+        bucket.startsWith("structured-event:diff:") ? 3.5 : 3
+      );
+      return Math.max(baseEstimate, Math.round(baseEstimate * clampedScale * 100) / 100);
+    },
+    [outputContentWidth, outputFontSize]
   );
 
   const rowVirtualizer = useVirtualizer({
@@ -488,13 +581,10 @@ export const OutputSection: React.FC = () => {
     estimateSize: (index) => {
       const row = rows[index];
       if (!row) return 48;
-      return (
-        measurementCacheRef.current.get(row.key) ??
-        estimateOutputRowHeight(row, outputFontSize)
-      );
+      return measurementCacheRef.current.get(row.key) ?? getEstimatedRowHeight(row);
     },
     getItemKey: (index) => rows[index]?.key ?? index,
-    overscan: 10,
+    overscan: OUTPUT_VIRTUALIZER_OVERSCAN,
   });
 
   const measureRowElement = useCallback(
@@ -520,10 +610,8 @@ export const OutputSection: React.FC = () => {
 
       const nextHeight =
         zeroHeightReason != null && measuredHeight <= 0 ? 0 : measuredHeight;
-      const diffMeasurementDebug =
-        row.rowKind === "structured-event" && row.diff
-          ? getDiffMeasurementDebugInfo(element)
-          : null;
+      const rowHeightBucket = getRowHeightBucket(row);
+      const estimatedHeight = getEstimatedRowHeight(row);
 
       const previousHeight = measurementCacheRef.current.get(row.key);
       if (
@@ -534,24 +622,25 @@ export const OutputSection: React.FC = () => {
       }
 
       measurementCacheRef.current.set(row.key, nextHeight);
-      WebviewLog.debug("[OutputMinimapDebug] row measured", {
-        rowKey: row.key,
-        rowKind: row.rowKind,
-        diffKey:
-          row.rowKind === "structured-event" ? (row.diff?.key ?? null) : null,
-        zeroHeightReason,
-        diffMeasurementDebug,
-        previousHeight: roundDebugPx(previousHeight),
-        nextHeight: roundDebugPx(nextHeight),
-        deltaPx:
-          previousHeight === undefined
-            ? null
-            : roundDebugPx(nextHeight - previousHeight),
-        estimatedHeight: roundDebugPx(row.estimateSize),
+      const previousBucketStats =
+        rowHeightBucketStatsRef.current.get(rowHeightBucket) ?? {
+          sampleCount: 0,
+          totalMeasured: 0,
+          totalEstimated: 0,
+          maxAbsDelta: 0,
+        };
+      rowHeightBucketStatsRef.current.set(rowHeightBucket, {
+        sampleCount: previousBucketStats.sampleCount + 1,
+        totalMeasured: previousBucketStats.totalMeasured + nextHeight,
+        totalEstimated: previousBucketStats.totalEstimated + estimatedHeight,
+        maxAbsDelta: Math.max(
+          previousBucketStats.maxAbsDelta,
+          Math.abs(nextHeight - estimatedHeight)
+        ),
       });
       setMeasurementVersion((version) => version + 1);
     },
-    [rowVirtualizer, rows]
+    [getEstimatedRowHeight, rowVirtualizer, rows]
   );
 
   const rowLayout = useMemo(() => {
@@ -571,7 +660,7 @@ export const OutputSection: React.FC = () => {
       const size =
         measurement?.size ??
         measurementCacheRef.current.get(row.key) ??
-        estimateOutputRowHeight(row, outputFontSize);
+        getEstimatedRowHeight(row);
       const start = measurement?.start ?? fallbackOffset;
       rowStartsByIndex[index] = start;
       rowStartsByKey.set(row.key, start);
@@ -583,32 +672,23 @@ export const OutputSection: React.FC = () => {
       rowStartsByIndex,
       rowStartsByKey,
     };
-  }, [rows, measurementVersion, outputFontSize, rowVirtualizer]);
-  const rowLayoutRef = useRef(rowLayout);
-  useEffect(() => {
-    rowLayoutRef.current = rowLayout;
-  }, [rowLayout]);
-  const minimapDebugSnapshotRef = useRef<string | null>(null);
-  const rowsByKey = useMemo(
-    () => new Map(rows.map((row) => [row.key, row])),
-    [rows]
-  );
-
+  }, [getEstimatedRowHeight, rows, measurementVersion, outputContentWidth, outputFontSize, rowVirtualizer]);
   useEffect(() => {
     const el = outputRef.current;
     if (!el) return;
 
     const updateDiffViewType = () => {
       const width = el.getBoundingClientRect().width;
+      setOutputContentWidth((prev) => {
+        if (Math.abs(prev - width) < 0.5) {
+          return prev;
+        }
+        return width;
+      });
       const nextDiffViewType =
         width >= DIFF_SPLIT_VIEW_MIN_WIDTH ? "split" : "unified";
       setOutputDiffViewType((prev) => {
         if (prev === nextDiffViewType) return prev;
-        WebviewLog.debug("[OutputMinimapDebug] diff view type changed", {
-          previousDiffViewType: prev,
-          nextDiffViewType,
-          width: roundDebugPx(width),
-        });
         return nextDiffViewType;
       });
     };
@@ -618,6 +698,16 @@ export const OutputSection: React.FC = () => {
     observer.observe(el);
     return () => observer.disconnect();
   }, [activeOutputTab, outputCollapsed]);
+
+  useEffect(() => {
+    if (outputContentWidth <= 0) {
+      return;
+    }
+    measurementCacheRef.current.clear();
+    rowHeightBucketStatsRef.current.clear();
+    rowVirtualizer.measure();
+    setMeasurementVersion((version) => version + 1);
+  }, [outputContentWidth, outputDiffViewType, outputFontSize, rowVirtualizer]);
 
   const stepScrollFractions = useMemo(() => {
     const fractions = new Map<string, number>();
@@ -766,6 +856,150 @@ export const OutputSection: React.FC = () => {
     autoscrollEnabled.current = atBottom;
   }, []);
 
+  const clearNavigationFrame = useCallback(() => {
+    if (navigationFrameRef.current != null) {
+      cancelAnimationFrame(navigationFrameRef.current);
+      navigationFrameRef.current = null;
+    }
+  }, []);
+
+  const finalizePendingNavigation = useCallback(
+    (
+      reason: "completed" | "missing-scroll-element" | "attempt-limit" | "timeout",
+      details?: Record<string, unknown>
+    ) => {
+      const pending = pendingNavigationRef.current;
+      clearNavigationFrame();
+      pendingNavigationRef.current = null;
+      setNavigationPendingRowIndex(null);
+      isProgrammaticScroll.current = false;
+
+      if (!pending) {
+        return;
+      }
+
+      WebviewLog.debug("[OutputMinimapDebug] navigation completed", {
+        targetKind: pending.targetKind,
+        targetIndex: pending.targetIndex,
+        rowIndex: pending.rowIndex,
+        align: pending.align,
+        requestedBehavior: pending.requestedBehavior,
+        effectiveBehavior: pending.effectiveBehavior,
+        attempts: pending.attempts,
+        elapsedMs: roundDebugPx(performance.now() - pending.startedAt),
+        reason,
+        ...details,
+      });
+    },
+    [clearNavigationFrame]
+  );
+
+  const schedulePendingNavigationStabilization = useCallback(
+    (trigger: "start" | "measurement" | "retry") => {
+      clearNavigationFrame();
+      navigationFrameRef.current = requestAnimationFrame(() => {
+        navigationFrameRef.current = null;
+        const pending = pendingNavigationRef.current;
+        if (!pending) {
+          return;
+        }
+
+        const now = performance.now();
+        const currentMeasurementVersion = measurementVersionRef.current;
+        if (currentMeasurementVersion !== pending.lastMeasuredVersion) {
+          pending.lastMeasuredVersion = currentMeasurementVersion;
+          pending.lastMeasurementChangeAt = now;
+        }
+
+        const scrollElement = outputRef.current;
+        if (!scrollElement) {
+          finalizePendingNavigation("missing-scroll-element");
+          return;
+        }
+
+        const rowElement = findRenderedRowElement(scrollElement, pending.rowIndex);
+        if (!rowElement) {
+          WebviewLog.debug("[OutputMinimapDebug] navigation target pending", {
+            targetKind: pending.targetKind,
+            targetIndex: pending.targetIndex,
+            rowIndex: pending.rowIndex,
+            attempt: pending.attempts,
+            trigger,
+            virtualRowCount: rowVirtualizer.getVirtualItems().length,
+          });
+
+          if (
+            pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
+            now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
+          ) {
+            finalizePendingNavigation(
+              now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
+                ? "timeout"
+                : "attempt-limit",
+              { trigger }
+            );
+            return;
+          }
+
+          pending.attempts += 1;
+          rowVirtualizer.measure();
+          rowVirtualizer.scrollToIndex(pending.rowIndex, {
+            align: pending.align,
+            behavior: "auto",
+          });
+          schedulePendingNavigationStabilization("retry");
+          return;
+        }
+
+        const isAligned = alignRowElementToViewport(
+          scrollElement,
+          rowElement,
+          pending.align
+        );
+        const elapsedSinceMeasurementChange =
+          now - pending.lastMeasurementChangeAt;
+        const hasSettled =
+          isAligned && elapsedSinceMeasurementChange >= NAVIGATION_SETTLE_GRACE_MS;
+        if (hasSettled) {
+          finalizePendingNavigation("completed", {
+            trigger,
+            aligned: true,
+            settledForMs: roundDebugPx(elapsedSinceMeasurementChange),
+          });
+          return;
+        }
+
+        if (
+          pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
+          now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
+        ) {
+          finalizePendingNavigation(
+            now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
+              ? "timeout"
+              : "attempt-limit",
+            {
+              trigger,
+              aligned: isAligned,
+              settledForMs: roundDebugPx(elapsedSinceMeasurementChange),
+            }
+          );
+          return;
+        }
+
+        pending.attempts += 1;
+        if (!isAligned) {
+          rowVirtualizer.measure();
+          rowVirtualizer.scrollToIndex(pending.rowIndex, {
+            align: pending.align,
+            behavior: "auto",
+          });
+        }
+        schedulePendingNavigationStabilization("retry");
+      });
+    },
+    [clearNavigationFrame, finalizePendingNavigation, rowVirtualizer]
+  );
+
   // Auto-scroll effect.
   useEffect(() => {
     if (autoscrollEnabled.current && outputRef.current && rows.length > 0) {
@@ -792,6 +1026,18 @@ export const OutputSection: React.FC = () => {
       rowVirtualizer.measure();
     });
   }, [activeOutputTab, outputCollapsed, rowVirtualizer, rows.length]);
+
+  useEffect(() => {
+    if (navigationPendingRowIndex == null) {
+      return;
+    }
+
+    schedulePendingNavigationStabilization("measurement");
+  }, [
+    measurementVersion,
+    navigationPendingRowIndex,
+    schedulePendingNavigationStabilization,
+  ]);
 
   // Export: open the options modal
   const handleExport = useCallback(() => {
@@ -911,56 +1157,35 @@ export const OutputSection: React.FC = () => {
         autoscrollEnabled.current = false;
         isProgrammaticScroll.current = true;
         const align = options?.align ?? "start";
-        const targetOffset =
-          rowLayoutRef.current.rowStartsByIndex[rowIndex] ?? 0;
-        const maxScroll = Math.max(
-          0,
-          rowLayoutRef.current.totalSize - outputRef.current.clientHeight
-        );
-        const scrollOffset =
-          align === "end"
-            ? targetOffset - outputRef.current.clientHeight
-            : targetOffset;
-
-        rowVirtualizer.scrollToOffset(
-          Math.max(0, Math.min(maxScroll, scrollOffset)),
-          { behavior: options?.behavior ?? "auto" }
-        );
-
-        const correctScroll = () => {
-          requestAnimationFrame(() => {
-            const scrollElement = outputRef.current;
-            if (!scrollElement) {
-              isProgrammaticScroll.current = false;
-              return;
-            }
-
-            const correctedOffset =
-              rowLayoutRef.current.rowStartsByIndex[rowIndex] ?? 0;
-            const correctedMaxScroll = Math.max(
-              0,
-              rowLayoutRef.current.totalSize - scrollElement.clientHeight
-            );
-            const correctedScrollOffset =
-              align === "end"
-                ? correctedOffset - scrollElement.clientHeight
-                : correctedOffset;
-            rowVirtualizer.scrollToOffset(
-              Math.max(
-                0,
-                Math.min(correctedMaxScroll, correctedScrollOffset)
-              ),
-              { behavior: "auto" }
-            );
-            isProgrammaticScroll.current = false;
-          });
+        const requestedBehavior = options?.behavior ?? "auto";
+        const behavior =
+          requestedBehavior === "smooth" ? "auto" : requestedBehavior;
+        const startedAt = performance.now();
+        pendingNavigationRef.current = {
+          rowIndex,
+          align,
+          targetKind: target.kind,
+          targetIndex: target.index,
+          requestedBehavior,
+          effectiveBehavior: behavior,
+          startedAt,
+          lastMeasuredVersion: measurementVersionRef.current,
+          lastMeasurementChangeAt: startedAt,
+          attempts: 0,
         };
+        setNavigationPendingRowIndex(rowIndex);
+        WebviewLog.debug("[OutputMinimapDebug] navigation requested", {
+          targetKind: target.kind,
+          targetIndex: target.index,
+          rowIndex,
+          align,
+          requestedBehavior,
+          effectiveBehavior: behavior,
+        });
 
-        if (options?.behavior === "smooth") {
-          window.setTimeout(correctScroll, 250);
-        } else {
-          correctScroll();
-        }
+        rowVirtualizer.measure();
+        rowVirtualizer.scrollToIndex(rowIndex, { align, behavior });
+        schedulePendingNavigationStabilization("start");
       },
       getTargetScrollFraction: (target: OutputMessage["target"]) => {
         const rowIndex = firstRowIndexByTarget.get(
@@ -973,7 +1198,7 @@ export const OutputSection: React.FC = () => {
         return rowLayout.rowStartsByIndex[rowIndex] / rowLayout.totalSize;
       },
     }),
-    [firstRowIndexByTarget, rowLayout, rowVirtualizer]
+    [firstRowIndexByTarget, rowLayout, rowVirtualizer, schedulePendingNavigationStabilization]
   );
 
   useEffect(() => {
@@ -982,6 +1207,14 @@ export const OutputSection: React.FC = () => {
       setActiveOutputNavigationController(null);
     };
   }, [navigationController]);
+
+  useEffect(
+    () => () => {
+      clearNavigationFrame();
+      pendingNavigationRef.current = null;
+    },
+    [clearNavigationFrame]
+  );
 
   const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
     allMessages,
@@ -999,6 +1232,15 @@ export const OutputSection: React.FC = () => {
 
   // Check if there's any output
   const hasOutput = rows.length > 0;
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const isNavigationTargetVirtualized =
+    navigationPendingRowIndex != null &&
+    virtualRows.some((row) => row.index === navigationPendingRowIndex);
+  const showVirtualizationOverlay =
+    (hasOutput &&
+      rows.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
+      virtualRows.length === 0) ||
+    (navigationPendingRowIndex !== null && !isNavigationTargetVirtualized);
 
   useEffect(() => {
     if (
@@ -1327,50 +1569,6 @@ export const OutputSection: React.FC = () => {
     uniqueStepTargets,
     workspaceSnapshots,
   ]);
-
-  useEffect(() => {
-    const scrollElement = outputRef.current;
-    const diffBlocks = minimapSteps
-      .flatMap((step) =>
-        step.diffBlocks.map((block) => {
-          const row = rowsByKey.get(block.rowKey);
-          const measuredRowHeight = measurementCacheRef.current.get(block.rowKey);
-          return {
-            stepKey: step.key,
-            diffKey: block.key,
-            rowKey: block.rowKey,
-            rowStartPx: roundDebugPx(rowLayout.rowStartsByKey.get(block.rowKey)),
-            topPx: roundDebugPx(block.scrollFraction * rowLayout.totalSize),
-            heightPx: roundDebugPx(block.heightFraction * rowLayout.totalSize),
-            rowHeightPx: roundDebugPx(measuredRowHeight ?? row?.estimateSize),
-            rowHeightSource:
-              measuredRowHeight !== undefined ? "measured" : "estimated",
-            renderedRows: block.runs.reduce((sum, run) => sum + run.count, 0),
-            addedLines: block.addedLines,
-            removedLines: block.removedLines,
-            isCollapsed: block.isCollapsed,
-          };
-        })
-      )
-      .slice(0, MAX_OUTPUT_MINIMAP_DEBUG_BLOCKS);
-
-    const snapshotPayload = {
-      measuredRows: measurementCacheRef.current.size,
-      layoutTotalSize: roundDebugPx(rowLayout.totalSize),
-      virtualizerTotalSize: roundDebugPx(rowVirtualizer.getTotalSize()),
-      scrollTop: roundDebugPx(scrollElement?.scrollTop),
-      scrollHeight: roundDebugPx(scrollElement?.scrollHeight),
-      clientHeight: roundDebugPx(scrollElement?.clientHeight),
-      diffBlocks,
-    };
-    const nextSnapshot = JSON.stringify(snapshotPayload);
-    if (nextSnapshot === minimapDebugSnapshotRef.current) {
-      return;
-    }
-
-    minimapDebugSnapshotRef.current = nextSnapshot;
-    WebviewLog.debug("[OutputMinimapDebug] layout snapshot", snapshotPayload);
-  }, [minimapSteps, rowLayout, rowVirtualizer, rowsByKey]);
 
   const handleBackToLive = useCallback(() => {
     useWorkflowStore.getState().clearHistoryOutputs();
@@ -2008,7 +2206,7 @@ export const OutputSection: React.FC = () => {
                   width: "100%",
                 }}
               >
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                {virtualRows.map((virtualRow) => {
                   const row = rows[virtualRow.index];
                   if (!row) return null;
 
@@ -2041,6 +2239,15 @@ export const OutputSection: React.FC = () => {
               </div>
             )}
           </div>
+
+          {showVirtualizationOverlay && (
+            <div className="pointer-events-none absolute inset-y-0 left-0 right-[14px] flex items-center justify-center">
+              <div className="flex items-center gap-2 rounded border border-widget-border bg-editor-bg/90 px-3 py-1.5 text-xs text-description-fg shadow-sm backdrop-blur-[1px]">
+                <i className="codicon codicon-loading codicon-modifier-spin" />
+                <span>Rendering output…</span>
+              </div>
+            </div>
+          )}
 
           {/* Minimap rail */}
           {hasOutput && (

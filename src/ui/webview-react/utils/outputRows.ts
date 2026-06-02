@@ -200,6 +200,7 @@ export interface BuildOutputRowsInput {
   defaultDiffCollapsed: boolean;
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
+  outputContentWidth?: number;
 }
 
 export interface BuildOutputRowsResult {
@@ -254,34 +255,408 @@ function getStreamingChunk(
     : input.finalStepStreamingChunks[target.index] || "";
 }
 
-function estimateBaseStructuredEventHeight(event: CliEvent): number {
-  switch (event.type) {
-    case "text":
-      return 120;
-    case "thinking":
-      return 140;
-    case "bashCommand":
-      return 110;
-    case "fileEdit":
-      return 180;
-    case "fileWrite":
-    case "fileDelete":
-      return 72;
-    case "fileRead":
-      return 48;
-    case "toolResult":
-      return 44;
+const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;
+const MIN_OUTPUT_CONTENT_WIDTH = 240;
+const OUTPUT_ROW_HORIZONTAL_CHROME = 72;
+const HEADER_HORIZONTAL_CHROME = 140;
+const STATS_HORIZONTAL_CHROME = 96;
+const OUTPUT_BLOCK_VERTICAL_CHROME = 32;
+const TERMINAL_LINE_VERTICAL_CHROME = 12;
+const THINKING_LABEL_HEIGHT = 18;
+const THINKING_CONTENT_VERTICAL_CHROME = 14;
+const THINKING_OUTER_VERTICAL_CHROME = 6;
+const STATUS_ROW_VERTICAL_CHROME = 20;
+const HEADER_VERTICAL_CHROME = 14;
+const STATS_VERTICAL_CHROME = 10;
+const BASH_RESULT_MAX_LINES = 10;
+
+function normalizeTextForLayout(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\t/g, "    ");
+}
+
+function resolveContentWidth(
+  outputContentWidth?: number,
+  chrome = OUTPUT_ROW_HORIZONTAL_CHROME
+): number {
+  const baseWidth =
+    outputContentWidth && outputContentWidth > 0
+      ? outputContentWidth
+      : DEFAULT_OUTPUT_CONTENT_WIDTH;
+  return Math.max(MIN_OUTPUT_CONTENT_WIDTH, baseWidth - chrome);
+}
+
+function estimateWrappedLineCount(
+  text: string,
+  outputContentWidth: number | undefined,
+  outputFontSize: number,
+  options?: {
+    chrome?: number;
+    charWidthMultiplier?: number;
+  }
+): number {
+  const normalized = normalizeTextForLayout(text);
+  if (normalized.length === 0) {
+    return 0;
+  }
+
+  const availableWidth = resolveContentWidth(
+    outputContentWidth,
+    options?.chrome ?? OUTPUT_ROW_HORIZONTAL_CHROME
+  );
+  const charWidth = Math.max(
+    5.5,
+    outputFontSize * (options?.charWidthMultiplier ?? 0.62)
+  );
+  const charsPerLine = Math.max(8, Math.floor(availableWidth / charWidth));
+
+  return normalized.split("\n").reduce((total, rawLine) => {
+    if (rawLine.length === 0) {
+      return total + 1;
+    }
+    return total + Math.max(1, Math.ceil(rawLine.length / charsPerLine));
+  }, 0);
+}
+
+function estimateTextBlockHeight(
+  text: string,
+  outputContentWidth: number | undefined,
+  outputFontSize: number,
+  options?: {
+    chrome?: number;
+    verticalChrome?: number;
+    charWidthMultiplier?: number;
+    lineHeightMultiplier?: number;
+  }
+): number {
+  const lineCount = estimateWrappedLineCount(text, outputContentWidth, outputFontSize, {
+    chrome: options?.chrome,
+    charWidthMultiplier: options?.charWidthMultiplier,
+  });
+  if (lineCount === 0) {
+    return 0;
+  }
+
+  const lineHeight = Math.max(
+    18,
+    outputFontSize * (options?.lineHeightMultiplier ?? 1.55)
+  );
+  return (
+    lineCount * lineHeight + (options?.verticalChrome ?? OUTPUT_BLOCK_VERTICAL_CHROME)
+  );
+}
+
+function estimateMarkdownBlockHeight(
+  text: string,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const baseHeight = estimateTextBlockHeight(
+    text,
+    outputContentWidth,
+    outputFontSize,
+    {
+      charWidthMultiplier: 0.56,
+      lineHeightMultiplier: 1.7,
+      verticalChrome: 28,
+    }
+  );
+  const headingCount = (text.match(/^#{1,6}\s+/gm) ?? []).length;
+  const bulletCount = (text.match(/^\s*(?:[-*+]|\d+\.)\s+/gm) ?? []).length;
+  const codeFenceCount = Math.floor((text.match(/^```/gm) ?? []).length / 2);
+  const blockQuoteCount = (text.match(/^\s*>\s+/gm) ?? []).length;
+
+  return (
+    baseHeight +
+    headingCount * 8 +
+    bulletCount * 2 +
+    codeFenceCount * 14 +
+    blockQuoteCount * 6
+  );
+}
+
+function estimateCliHeaderHeight(
+  row: CliHeaderRow,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const headerText = [
+    row.stepLabel,
+    row.stepName,
+    row.output.structured?.metadata?.harness,
+    row.output.structured?.metadata?.model,
+  ]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join(" ");
+  const lineCount = Math.max(
+    1,
+    estimateWrappedLineCount(headerText, outputContentWidth, outputFontSize, {
+      chrome: HEADER_HORIZONTAL_CHROME,
+      charWidthMultiplier: 0.58,
+    })
+  );
+  const lineHeight = Math.max(19, outputFontSize * 1.5);
+  const actionLines =
+    row.promptUndo && (row.promptUndo.undo || row.promptUndo.redo) ? 1 : 0;
+
+  return (
+    lineCount * lineHeight +
+    actionLines * Math.max(18, outputFontSize * 1.4) +
+    HEADER_VERTICAL_CHROME
+  );
+}
+
+function estimateStatsRowHeight(
+  row: StatsRow,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const parts: string[] = [];
+  if (row.output.tokens) {
+    const { prompt, completion } = row.output.tokens;
+    parts.push(`Tokens: ${prompt} in / ${completion} out`);
+  }
+  if (row.output.structured?.metadata?.sessionId) {
+    parts.push(`Session: ${row.output.structured.metadata.sessionId}`);
+  }
+  if (!row.output.isStreaming && row.output.elapsed !== undefined) {
+    parts.push(`${row.output.elapsed}s`);
+  }
+  if (!row.output.isStreaming && row.outputText) {
+    parts.push("Copy output");
+  }
+  if (parts.length === 0) {
+    return 0;
+  }
+
+  const lineCount = estimateWrappedLineCount(
+    parts.join(" | "),
+    outputContentWidth,
+    Math.max(11, outputFontSize - 1),
+    {
+      chrome: STATS_HORIZONTAL_CHROME,
+      charWidthMultiplier: 0.56,
+    }
+  );
+  return (
+    Math.max(1, lineCount) * Math.max(16, (outputFontSize - 1) * 1.45) +
+    STATS_VERTICAL_CHROME
+  );
+}
+
+function estimateTerminalSummaryHeight(
+  text: string,
+  outputContentWidth: number | undefined,
+  outputFontSize: number,
+  verticalChrome = TERMINAL_LINE_VERTICAL_CHROME
+): number {
+  const lineCount = estimateWrappedLineCount(text, outputContentWidth, outputFontSize, {
+    chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
+    charWidthMultiplier: 0.6,
+  });
+  return (
+    Math.max(1, lineCount) * Math.max(18, outputFontSize * 1.55) + verticalChrome
+  );
+}
+
+function estimateBashOutputHeight(
+  event: CliEvent,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const data = event.data as {
+    command?: string;
+    output?: string;
+    error?: string;
+    status?: string;
+  };
+  let totalHeight = estimateTerminalSummaryHeight(
+    data.command?.trim() || "command unavailable",
+    outputContentWidth,
+    outputFontSize
+  );
+
+  const isCompleted =
+    data.status === undefined ||
+    data.status === "completed" ||
+    data.status === "failed";
+  if (!isCompleted) {
+    return totalHeight;
+  }
+
+  for (const content of [data.output, data.error]) {
+    if (!content) continue;
+    const limitedContent = normalizeTextForLayout(content)
+      .split("\n")
+      .slice(0, BASH_RESULT_MAX_LINES)
+      .join("\n");
+    totalHeight += estimateTextBlockHeight(
+      limitedContent,
+      outputContentWidth,
+      outputFontSize,
+      {
+        charWidthMultiplier: 0.6,
+        lineHeightMultiplier: 1.55,
+        verticalChrome: 10,
+      }
+    );
+  }
+
+  return totalHeight;
+}
+
+function estimateStructuredTextHeight(
+  row: StructuredEventRow,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  switch (row.event.type) {
+    case CLI_EVENT_TYPES.TEXT: {
+      const text = (row.event.data as { text?: string }).text ?? "";
+      return row.rawTextOutput
+        ? estimateTextBlockHeight(text, outputContentWidth, outputFontSize)
+        : estimateMarkdownBlockHeight(text, outputContentWidth, outputFontSize);
+    }
+    case CLI_EVENT_TYPES.THINKING: {
+      const text = (row.event.data as { text?: string }).text ?? "";
+      const contentHeight = estimateTextBlockHeight(
+        text,
+        outputContentWidth,
+        outputFontSize,
+        {
+          chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
+          charWidthMultiplier: 0.56,
+          lineHeightMultiplier: 1.6,
+          verticalChrome: THINKING_CONTENT_VERTICAL_CHROME,
+        }
+      );
+      return (
+        THINKING_LABEL_HEIGHT + contentHeight + THINKING_OUTER_VERTICAL_CHROME
+      );
+    }
+    case CLI_EVENT_TYPES.BASH_COMMAND:
+      return estimateBashOutputHeight(
+        row.event,
+        outputContentWidth,
+        outputFontSize
+      );
+    case CLI_EVENT_TYPES.FILE_EDIT: {
+      const data = row.event.data as { path?: string; error?: string };
+      return estimateTerminalSummaryHeight(
+        `Edited ${data.path ?? "file"} ${data.error ?? ""}`.trim(),
+        outputContentWidth,
+        outputFontSize
+      );
+    }
+    case CLI_EVENT_TYPES.FILE_WRITE: {
+      const data = row.event.data as { path?: string; content?: string; error?: string };
+      return estimateTerminalSummaryHeight(
+        `Wrote ${data.path ?? "file"} ${data.content ? `(${data.content.length} bytes)` : ""} ${data.error ?? ""}`.trim(),
+        outputContentWidth,
+        outputFontSize
+      );
+    }
+    case CLI_EVENT_TYPES.FILE_READ: {
+      const data = row.event.data as { path?: string; error?: string };
+      return estimateTerminalSummaryHeight(
+        `Read ${data.path ?? "file"} ${data.error ?? ""}`.trim(),
+        outputContentWidth,
+        outputFontSize
+      );
+    }
+    case CLI_EVENT_TYPES.FILE_DELETE: {
+      const data = row.event.data as { path?: string; error?: string };
+      return estimateTerminalSummaryHeight(
+        `Delete file ${data.path ?? "file"} ${data.error ?? ""}`.trim(),
+        outputContentWidth,
+        outputFontSize
+      );
+    }
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+      const data = row.event.data as { server?: string; tool?: string };
+      return estimateTerminalSummaryHeight(
+        `MCP ${data.server ?? "server"}.${data.tool ?? "tool"}`,
+        outputContentWidth,
+        outputFontSize
+      );
+    }
+    case CLI_EVENT_TYPES.WEB_SEARCH: {
+      const data = row.event.data as { query?: string; error?: string };
+      return estimateTerminalSummaryHeight(
+        `Web search ${data.query ?? ""} ${data.error ?? ""}`.trim(),
+        outputContentWidth,
+        outputFontSize
+      );
+    }
+    case CLI_EVENT_TYPES.TOOL_RESULT: {
+      const data = row.event.data as {
+        result?: { success: boolean; output?: string; error?: string };
+      };
+      const content =
+        (!data.result?.success && data.result?.error) ||
+        data.result?.output ||
+        (data.result?.success ? "Success" : "Failed") ||
+        "";
+      return estimateTextBlockHeight(
+        content.slice(0, 200),
+        outputContentWidth,
+        outputFontSize,
+        {
+          charWidthMultiplier: 0.6,
+          lineHeightMultiplier: 1.55,
+          verticalChrome: 14,
+        }
+      );
+    }
+    case CLI_EVENT_TYPES.COMPACTION: {
+      const data = row.event.data as {
+        trigger?: string;
+        preTokens?: number;
+        postTokens?: number;
+      };
+      const label = `Conversation compacted (${data.trigger ?? "unknown"}) ${
+        data.preTokens != null && data.postTokens != null
+          ? `${data.preTokens} -> ${data.postTokens} tokens`
+          : ""
+      }`.trim();
+      return estimateTerminalSummaryHeight(
+        label,
+        outputContentWidth,
+        outputFontSize,
+        18
+      );
+    }
     default:
       return 64;
   }
 }
 
+function estimateBaseStructuredEventHeight(
+  row: StructuredEventRow,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  if (row.event.type === CLI_EVENT_TYPES.TOOL_CALL && row.toolCall) {
+    return estimateToolCallStructuredEventHeight(row, outputFontSize);
+  }
+
+  if (row.diff && !row.hideDiff) {
+    return row.diff.renderPlan.totalHeight;
+  }
+
+  return estimateStructuredTextHeight(row, outputContentWidth, outputFontSize);
+}
+
 function estimateDiffStructuredEventHeight(
   row: StructuredEventRow,
-  _outputFontSize: number
+  outputContentWidth: number | undefined,
+  outputFontSize: number
 ): number {
   if (!row.diff || row.hideDiff) {
-    return estimateBaseStructuredEventHeight(row.event);
+    return estimateBaseStructuredEventHeight(
+      row,
+      outputContentWidth,
+      outputFontSize
+    );
   }
   return row.diff.renderPlan.totalHeight;
 }
@@ -291,7 +666,7 @@ function estimateToolCallStructuredEventHeight(
   outputFontSize: number
 ): number {
   if (row.event.type !== CLI_EVENT_TYPES.TOOL_CALL || !row.toolCall) {
-    return estimateBaseStructuredEventHeight(row.event);
+    return 64;
   }
 
   if (row.toolCall.renderPlan) {
@@ -309,7 +684,8 @@ function estimateToolCallStructuredEventHeight(
 
 export function estimateOutputRowHeight(
   row: OutputRenderRow,
-  outputFontSize = 13
+  outputFontSize = 13,
+  outputContentWidth?: number
 ): number {
   switch (row.rowKind) {
     case "history-banner":
@@ -319,23 +695,71 @@ export function estimateOutputRowHeight(
     case "final-step-label":
       return 24;
     case "status":
-      return 36;
+      return estimateTextBlockHeight(
+        row.status.message,
+        outputContentWidth,
+        outputFontSize,
+        {
+          charWidthMultiplier: 0.56,
+          lineHeightMultiplier: 1.45,
+          verticalChrome: STATUS_ROW_VERTICAL_CHROME,
+        }
+      );
     case "cli-header":
-      return 44;
+      return estimateCliHeaderHeight(row, outputContentWidth, outputFontSize);
     case "prompt":
-      return 36;
+      return estimateTextBlockHeight(
+        row.text,
+        outputContentWidth,
+        outputFontSize
+      );
     case "cli-command":
-      return 32;
+      return estimateTextBlockHeight(
+        `${row.workingDirectory || "workspace"}> ${row.command}`,
+        outputContentWidth,
+        outputFontSize,
+        {
+          charWidthMultiplier: 0.62,
+          lineHeightMultiplier: 1.55,
+        }
+      );
     case "error":
-      return 32;
+      return estimateTextBlockHeight(
+        `${row.timestamp ? `[${row.timestamp}] ` : ""}Error: ${row.errorMessage}`,
+        outputContentWidth,
+        outputFontSize,
+        {
+          charWidthMultiplier: 0.58,
+          lineHeightMultiplier: 1.5,
+          verticalChrome: 22,
+        }
+      );
     case "plain-response":
-      return 120;
+      return row.rawTextOutput
+        ? estimateTextBlockHeight(
+            row.text,
+            outputContentWidth,
+            outputFontSize
+          )
+        : estimateMarkdownBlockHeight(
+            row.text,
+            outputContentWidth,
+            outputFontSize
+          );
     case "stats":
-      return 24;
+      return estimateStatsRowHeight(row, outputContentWidth, outputFontSize);
     case "structured-event":
       return row.diff
-        ? estimateDiffStructuredEventHeight(row, outputFontSize)
-        : estimateToolCallStructuredEventHeight(row, outputFontSize);
+        ? estimateDiffStructuredEventHeight(
+            row,
+            outputContentWidth,
+            outputFontSize
+          )
+        : estimateBaseStructuredEventHeight(
+            row,
+            outputContentWidth,
+            outputFontSize
+          );
   }
 }
 
@@ -543,6 +967,7 @@ export function buildOutputRows(
                 collapsed: isDiffCollapsed,
                 expandedGaps: diffExpandedGaps,
                 outputFontSize: input.outputFontSize,
+                outputContentWidth: input.outputContentWidth,
               }
             )
           : null;
@@ -594,7 +1019,7 @@ export function buildOutputRows(
              renderPlan: toolCallRenderPlan,
            }
          : undefined,
-        estimateSize: estimateBaseStructuredEventHeight(visibleEvent.event),
+        estimateSize: 64,
       });
     }
 
@@ -652,7 +1077,11 @@ export function buildOutputRows(
   return {
     rows: rows.map((row) => ({
       ...row,
-      estimateSize: estimateOutputRowHeight(row, input.outputFontSize),
+      estimateSize: estimateOutputRowHeight(
+        row,
+        input.outputFontSize,
+        input.outputContentWidth
+      ),
     })),
     uniqueStepTargets: [...uniqueTargets.values()],
     stepOutputsMap,

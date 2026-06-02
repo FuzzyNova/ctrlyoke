@@ -51,6 +51,7 @@ export interface ComputeOutputDiffStatsOptions {
   collapsed?: boolean;
   expandedGaps?: DiffGapExpansionState;
   outputFontSize?: number;
+  outputContentWidth?: number;
 }
 
 interface AppliedDiffGapExpansionResult {
@@ -64,12 +65,16 @@ function buildOutputDiffStats(
     viewType,
     collapsed,
     outputFontSize,
+    outputContentWidth,
+    hunks,
     gapExpansion,
     layoutMode = "file-edit",
   }: {
     viewType: ViewType;
     collapsed: boolean;
     outputFontSize?: number;
+    outputContentWidth?: number;
+    hunks?: readonly HunkData[];
     gapExpansion?: DiffGapExpansionPlanState;
     layoutMode?: "file-edit" | "standalone";
   }
@@ -80,6 +85,8 @@ function buildOutputDiffStats(
       viewType,
       collapsed,
       outputFontSize,
+      outputContentWidth,
+      hunks,
       layoutMode,
       gapExpansion,
     }),
@@ -207,6 +214,7 @@ export function computeOutputDiffStats(
     collapsed = false,
     expandedGaps,
     outputFontSize,
+    outputContentWidth,
   } = options;
 
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
@@ -228,6 +236,8 @@ export function computeOutputDiffStats(
         viewType,
         collapsed,
         outputFontSize,
+        outputContentWidth,
+        hunks: expandedDiff.hunks,
         gapExpansion: expandedDiff.gapExpansion,
       });
     }
@@ -242,6 +252,8 @@ export function computeOutputDiffStats(
         viewType,
         collapsed,
         outputFontSize,
+        outputContentWidth,
+        hunks: expandedDiff.hunks,
         gapExpansion: expandedDiff.gapExpansion,
       });
     }

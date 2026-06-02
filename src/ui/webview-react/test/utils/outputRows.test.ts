@@ -586,4 +586,242 @@ describe("outputRows", () => {
       estimateOutputRowHeight(baseToolRow)
     );
   });
+
+  it("scales plain-response estimates with available output width", () => {
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "Explain result",
+          response:
+            "This is a long response line intended to wrap multiple times in a narrow panel width and much less in a wide panel width.",
+          elapsed: 0.5,
+          isStreaming: false,
+        },
+      },
+    ];
+
+    const narrow = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      outputContentWidth: 320,
+    });
+    const wide = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      outputContentWidth: 960,
+    });
+
+    const narrowResponse = narrow.rows.find(
+      (row) => row.rowKind === "plain-response"
+    );
+    const wideResponse = wide.rows.find((row) => row.rowKind === "plain-response");
+
+    if (!narrowResponse || !wideResponse) {
+      throw new Error("Expected plain response rows");
+    }
+
+    expect(narrowResponse.estimateSize).toBeGreaterThan(wideResponse.estimateSize);
+  });
+
+  it("scales bash structured-event estimates with content length and width", () => {
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "Run command",
+          response: "",
+          elapsed: 0.5,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.BASH_COMMAND,
+                data: {
+                  command: "npm test -- --runInBand --reporter verbose",
+                  status: OPERATION_STATUS.COMPLETED,
+                  output: Array.from(
+                    { length: 20 },
+                    (_, index) => `log line ${index + 1}`
+                  ).join("\n"),
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+
+    const result = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      outputContentWidth: 360,
+    });
+
+    const bashRow = result.rows.find(
+      (row) =>
+        row.rowKind === "structured-event" &&
+        row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
+    );
+
+    if (!bashRow || bashRow.rowKind !== "structured-event") {
+      throw new Error("Expected bash structured-event row");
+    }
+
+    expect(bashRow.estimateSize).toBeGreaterThan(120);
+  });
+
+  it("scales diff structured-event estimates with wrapped line length and width", () => {
+    const longRemovedLine = `-${"legacyWrappedSegment ".repeat(40)}`;
+    const longAddedLine = `+${"replacementWrappedSegment ".repeat(38)}`;
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "Apply wide diff",
+          response: "",
+          elapsed: 0.5,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                data: {
+                  path: "src/example.ts",
+                  status: OPERATION_STATUS.COMPLETED,
+                  structuredPatch: [
+                    {
+                      oldStart: 1,
+                      oldLines: 2,
+                      newStart: 1,
+                      newLines: 2,
+                      lines: [longRemovedLine, longAddedLine],
+                    },
+                  ],
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+
+    const narrow = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      diffViewType: "unified",
+      outputContentWidth: 320,
+    });
+    const wide = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      diffViewType: "unified",
+      outputContentWidth: 960,
+    });
+
+    const narrowDiff = narrow.rows.find(
+      (row) => row.rowKind === "structured-event" && row.diff
+    );
+    const wideDiff = wide.rows.find(
+      (row) => row.rowKind === "structured-event" && row.diff
+    );
+
+    if (
+      !narrowDiff ||
+      narrowDiff.rowKind !== "structured-event" ||
+      !wideDiff ||
+      wideDiff.rowKind !== "structured-event"
+    ) {
+      throw new Error("Expected diff structured-event rows");
+    }
+
+    expect(narrowDiff.estimateSize).toBeGreaterThan(wideDiff.estimateSize);
+    expect(narrowDiff.diff?.renderPlan.totalHeight).toBe(narrowDiff.estimateSize);
+    expect(wideDiff.diff?.renderPlan.totalHeight).toBe(wideDiff.estimateSize);
+    expect(narrowDiff.diff?.renderPlan.renderedRows).toBe(2);
+  });
 });

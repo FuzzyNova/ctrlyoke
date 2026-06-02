@@ -49,16 +49,118 @@ export interface DiffRenderPlanOptions {
   viewType: ViewType;
   collapsed?: boolean;
   outputFontSize?: number;
+  outputContentWidth?: number;
+  hunks?: readonly HunkData[];
   layoutMode?: "file-edit" | "standalone";
   gapExpansion?: DiffGapExpansionPlanState;
 }
 
 const DEFAULT_OUTPUT_FONT_SIZE = 13;
+const DEFAULT_OUTPUT_CONTENT_WIDTH = 760;
+const MIN_DIFF_CONTENT_WIDTH = 240;
 const DIFF_VERTICAL_CHROME_HEIGHT = 28;
 const STANDALONE_DIFF_HEIGHT = 72;
+const UNIFIED_DIFF_HORIZONTAL_CHROME = 168;
+const SPLIT_DIFF_HORIZONTAL_CHROME = 224;
+const SPLIT_DIFF_COLUMN_GAP = 24;
 
 function getRenderedRows(runs: readonly RenderedDiffRun[]): number {
   return runs.reduce((sum, run) => sum + run.count, 0);
+}
+
+function normalizeDiffLineForLayout(line: string): string {
+  return line.replace(/\r\n/g, "\n").replace(/\t/g, "    ");
+}
+
+function getWrappedVisualLineCount(
+  line: string,
+  charsPerLine: number
+): number {
+  const normalized = normalizeDiffLineForLayout(line);
+  if (normalized.length === 0) {
+    return 1;
+  }
+
+  return normalized.split("\n").reduce((total, segment) => {
+    if (segment.length === 0) {
+      return total + 1;
+    }
+    return total + Math.max(1, Math.ceil(segment.length / charsPerLine));
+  }, 0);
+}
+
+function getApproximateDiffCharsPerLine(
+  viewType: ViewType,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const baseWidth =
+    outputContentWidth && outputContentWidth > 0
+      ? outputContentWidth
+      : DEFAULT_OUTPUT_CONTENT_WIDTH;
+  const availableWidth = Math.max(
+    MIN_DIFF_CONTENT_WIDTH,
+    baseWidth -
+      (viewType === "split"
+        ? SPLIT_DIFF_HORIZONTAL_CHROME
+        : UNIFIED_DIFF_HORIZONTAL_CHROME)
+  );
+  const lineColumnWidth =
+    viewType === "split"
+      ? Math.max(
+          120,
+          Math.floor((availableWidth - SPLIT_DIFF_COLUMN_GAP) / 2)
+        )
+      : availableWidth;
+  const charWidth = Math.max(5.5, outputFontSize * 0.62);
+  return Math.max(8, Math.floor(lineColumnWidth / charWidth));
+}
+
+function estimateRenderedVisualRows(
+  hunks: readonly HunkData[],
+  viewType: ViewType,
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const charsPerLine = getApproximateDiffCharsPerLine(
+    viewType,
+    outputContentWidth,
+    outputFontSize
+  );
+  let visualRows = 0;
+
+  for (const hunk of hunks) {
+    if (viewType === "unified") {
+      for (const change of hunk.changes) {
+        visualRows += getWrappedVisualLineCount(change.content, charsPerLine);
+      }
+      continue;
+    }
+
+    for (let index = 0; index < hunk.changes.length; index++) {
+      const current = hunk.changes[index];
+      if (current.type === "normal") {
+        visualRows += getWrappedVisualLineCount(current.content, charsPerLine);
+        continue;
+      }
+
+      if (current.type === "delete") {
+        const next = hunk.changes[index + 1];
+        if (next?.type === "insert") {
+          visualRows += Math.max(
+            getWrappedVisualLineCount(current.content, charsPerLine),
+            getWrappedVisualLineCount(next.content, charsPerLine)
+          );
+          index++;
+          continue;
+        }
+      }
+
+      visualRows += getWrappedVisualLineCount(current.content, charsPerLine);
+    }
+  }
+
+  return Math.max(0, visualRows);
 }
 
 function getDefaultGapExpansionPlanState(): DiffGapExpansionPlanState {
@@ -235,6 +337,7 @@ export function buildDiffRenderPlanFromStats(
     viewType,
     collapsed = false,
     outputFontSize = DEFAULT_OUTPUT_FONT_SIZE,
+    outputContentWidth,
     layoutMode = "file-edit",
     gapExpansion = getDefaultGapExpansionPlanState(),
   } = options;
@@ -263,9 +366,19 @@ export function buildDiffRenderPlanFromStats(
   const headerHeight = Math.max(24, outputFontSize * 1.9);
   const lineHeight = Math.max(18, (outputFontSize - 1) * 1.55);
   const decorationHeight = DIFF_VERTICAL_CHROME_HEIGHT;
-  const bodyHeight = collapsed ? 0 : renderedRows * lineHeight;
+  const visualRenderedRows =
+    options.hunks && options.hunks.length > 0
+      ? estimateRenderedVisualRows(
+          options.hunks,
+          viewType,
+          outputContentWidth,
+          outputFontSize
+        )
+      : renderedRows;
+  const bodyHeight = collapsed ? 0 : visualRenderedRows * lineHeight;
   const diffBlockHeight =
-    headerHeight + (collapsed ? 0 : Math.max(1, renderedRows) * lineHeight);
+    headerHeight +
+    (collapsed ? 0 : Math.max(1, visualRenderedRows) * lineHeight);
 
   return {
     viewType,
@@ -289,5 +402,8 @@ export function buildDiffRenderPlan(
   hunks: HunkData[],
   options: DiffRenderPlanOptions
 ): DiffRenderPlan {
-  return buildDiffRenderPlanFromStats(getRenderedDiffStats(hunks, options.viewType), options);
+  return buildDiffRenderPlanFromStats(getRenderedDiffStats(hunks, options.viewType), {
+    ...options,
+    hunks,
+  });
 }
