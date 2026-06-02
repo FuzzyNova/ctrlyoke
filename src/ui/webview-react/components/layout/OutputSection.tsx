@@ -37,6 +37,7 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 import {
   MESSAGE_TYPES,
+  CLI_EVENT_TYPES,
   EXECUTION_MODES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
@@ -87,6 +88,9 @@ import type { OutputRowFileUndoRequest } from "../output/OutputRow";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024;
+const EXACT_MINIMAP_MEASURE_DEBOUNCE_MS = 120;
+const EXACT_MINIMAP_MEASURE_MAX_ATTEMPTS = 8;
+const EXACT_MINIMAP_STABLE_FRAME_TARGET = 2;
 const MAX_OUTPUT_MINIMAP_DEBUG_BLOCKS = 20;
 
 function roundDebugPx(value: number | undefined): number | null {
@@ -94,6 +98,91 @@ function roundDebugPx(value: number | undefined): number | null {
     return null;
   }
   return Math.round(value * 100) / 100;
+}
+
+function getMeasuredElementHeight(element: HTMLElement): number {
+  return Math.max(
+    element.getBoundingClientRect().height,
+    element.offsetHeight,
+    element.scrollHeight
+  );
+}
+
+function getZeroHeightStructuredEventReason(
+  row: StructuredEventRow
+): string | null {
+  switch (row.event.type) {
+    case CLI_EVENT_TYPES.TEXT:
+      return (row.event.data as { text?: string }).text ? null : "missing-text";
+    case CLI_EVENT_TYPES.THINKING:
+      return (row.event.data as { text?: string }).text
+        ? null
+        : "missing-thinking-text";
+    case CLI_EVENT_TYPES.FILE_EDIT:
+    case CLI_EVENT_TYPES.FILE_WRITE:
+    case CLI_EVENT_TYPES.FILE_READ:
+    case CLI_EVENT_TYPES.FILE_DELETE:
+      return (row.event.data as { path?: string }).path
+        ? null
+        : "missing-file-path";
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+      const data = row.event.data as { server?: string; tool?: string };
+      if (!data.server) return "missing-mcp-server";
+      return data.tool ? null : "missing-mcp-tool";
+    }
+    case CLI_EVENT_TYPES.WEB_SEARCH:
+      return (row.event.data as { query?: string }).query
+        ? null
+        : "missing-web-search-query";
+    case CLI_EVENT_TYPES.TOOL_CALL:
+      return (row.event.data as { name?: string }).name
+        ? null
+        : "missing-tool-call-name";
+    case CLI_EVENT_TYPES.TOOL_RESULT:
+      return (row.event.data as { result?: unknown }).result
+        ? null
+        : "missing-tool-result";
+    case CLI_EVENT_TYPES.BASH_COMMAND:
+    case CLI_EVENT_TYPES.COMPACTION:
+      return null;
+    default:
+      return "unsupported-structured-event";
+  }
+}
+
+function getDiffMeasurementDebugInfo(element: ParentNode): {
+  viewType: string | null;
+  wrapperWidth: number | null;
+  estimatedLines: number | null;
+  renderedRows: number | null;
+  addedLines: number | null;
+  removedLines: number | null;
+  collapsed: string | null;
+} | null {
+  const anchor = element.querySelector<HTMLElement>("[data-diff-anchor='true']");
+  if (!anchor) return null;
+
+  const parseOptionalNumber = (value: string | null): number | null => {
+    if (value == null || value.length === 0) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  return {
+    viewType: anchor.getAttribute("data-diff-view-type"),
+    wrapperWidth: parseOptionalNumber(anchor.getAttribute("data-diff-wrapper-width")),
+    estimatedLines: parseOptionalNumber(
+      anchor.getAttribute("data-diff-estimated-lines")
+    ),
+    renderedRows: parseOptionalNumber(
+      anchor.getAttribute("data-diff-rendered-rows")
+    ),
+    addedLines: parseOptionalNumber(anchor.getAttribute("data-diff-added-lines")),
+    removedLines: parseOptionalNumber(
+      anchor.getAttribute("data-diff-removed-lines")
+    ),
+    collapsed: anchor.getAttribute("data-diff-collapsed"),
+  };
 }
 
 function getStepName(
@@ -272,10 +361,27 @@ export const OutputSection: React.FC = () => {
   );
 
   const outputRef = useRef<HTMLDivElement>(null);
+  const exactMinimapMeasureRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const autoscrollEnabled = useRef(true);
   const isProgrammaticScroll = useRef(false);
   const measurementCacheRef = useRef<Map<string, number>>(new Map());
+  const exactMinimapMeasureEpochRef = useRef(0);
+  const exactMinimapMeasureTimerRef = useRef<number | null>(null);
+  const lastExactMinimapLayoutKeyRef = useRef<string | null>(null);
+  const pendingExactMinimapLayoutKeyRef = useRef<string | null>(null);
+  const activeExactMinimapLayoutKeyRef = useRef<string | null>(null);
+  const exactMinimapSchedulerStateRef = useRef<{
+    shouldPrecomputeExactMinimapLayout: boolean;
+    isExecutionActive: boolean;
+    isViewingHistory: boolean;
+    outputCollapsed: boolean;
+    hasExactMinimapLayout: boolean;
+    exactMinimapLayoutInputKey: string;
+    pendingExactMinimapLayoutKey: string | null;
+    activeExactMinimapLayoutKey: string | null;
+  } | null>(null);
+  const previousMeasuredOutputWidthRef = useRef(0);
   const previousDiffResetVersion = useRef(diffResetVersion);
   const [measurementVersion, setMeasurementVersion] = useState(0);
   const [diffCollapseState, setDiffCollapseState] = useState<Map<string, boolean>>(
@@ -284,6 +390,10 @@ export const OutputSection: React.FC = () => {
   const [outputDiffViewType, setOutputDiffViewType] = useState<
     "split" | "unified"
   >("split");
+  const [outputContentWidth, setOutputContentWidth] = useState(0);
+  const [activeExactMinimapMeasureEpoch, setActiveExactMinimapMeasureEpoch] =
+    useState(0);
+  const [hasExactMinimapLayout, setHasExactMinimapLayout] = useState(false);
 
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
@@ -404,8 +514,24 @@ export const OutputSection: React.FC = () => {
       const row = rows[index];
       if (!row) return;
 
-      const nextHeight = element.getBoundingClientRect().height;
-      if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
+      const measuredHeight = getMeasuredElementHeight(element);
+      const zeroHeightReason =
+        row.rowKind === "structured-event"
+          ? getZeroHeightStructuredEventReason(row)
+          : null;
+      if (
+        (!Number.isFinite(measuredHeight) || measuredHeight <= 0) &&
+        zeroHeightReason == null
+      ) {
+        return;
+      }
+
+      const nextHeight =
+        zeroHeightReason != null && measuredHeight <= 0 ? 0 : measuredHeight;
+      const diffMeasurementDebug =
+        row.rowKind === "structured-event" && row.diff
+          ? getDiffMeasurementDebugInfo(element)
+          : null;
 
       const previousHeight = measurementCacheRef.current.get(row.key);
       if (
@@ -421,6 +547,8 @@ export const OutputSection: React.FC = () => {
         rowKind: row.rowKind,
         diffKey:
           row.rowKind === "structured-event" ? (row.diff?.key ?? null) : null,
+        zeroHeightReason,
+        diffMeasurementDebug,
         previousHeight: roundDebugPx(previousHeight),
         nextHeight: roundDebugPx(nextHeight),
         deltaPx:
@@ -436,25 +564,34 @@ export const OutputSection: React.FC = () => {
 
   const rowLayout = useMemo(() => {
     void measurementVersion;
-    let offset = 0;
+    let fallbackOffset = 0;
     const rowStartsByIndex: number[] = [];
     const rowStartsByKey = new Map<string, number>();
+    const measurementsByKey = new Map(
+      rowVirtualizer.measurementsCache
+        .filter((item): item is NonNullable<typeof item> => item != null)
+        .map((item) => [String(item.key), item] as const)
+    );
 
     for (const [index, row] of rows.entries()) {
-      rowStartsByIndex[index] = offset;
-      rowStartsByKey.set(row.key, offset);
+      const measurement =
+        measurementsByKey.get(row.key) ?? rowVirtualizer.measurementsCache[index];
       const size =
+        measurement?.size ??
         measurementCacheRef.current.get(row.key) ??
         estimateOutputRowHeight(row, outputFontSize);
-      offset += size;
+      const start = measurement?.start ?? fallbackOffset;
+      rowStartsByIndex[index] = start;
+      rowStartsByKey.set(row.key, start);
+      fallbackOffset = start + size;
     }
 
     return {
-      totalSize: offset,
+      totalSize: Math.max(rowVirtualizer.getTotalSize(), fallbackOffset, 1),
       rowStartsByIndex,
       rowStartsByKey,
     };
-  }, [rows, measurementVersion, outputFontSize]);
+  }, [rows, measurementVersion, outputFontSize, rowVirtualizer]);
   const rowLayoutRef = useRef(rowLayout);
   useEffect(() => {
     rowLayoutRef.current = rowLayout;
@@ -471,9 +608,25 @@ export const OutputSection: React.FC = () => {
 
     const updateDiffViewType = () => {
       const width = el.getBoundingClientRect().width;
-      setOutputDiffViewType(
-        width >= DIFF_SPLIT_VIEW_MIN_WIDTH ? "split" : "unified"
-      );
+      setOutputContentWidth((prev) => {
+        if (Math.abs(prev - width) < 0.5) return prev;
+        WebviewLog.debug("[OutputMinimapDebug] output width changed", {
+          previousWidth: roundDebugPx(prev),
+          nextWidth: roundDebugPx(width),
+        });
+        return width;
+      });
+      const nextDiffViewType =
+        width >= DIFF_SPLIT_VIEW_MIN_WIDTH ? "split" : "unified";
+      setOutputDiffViewType((prev) => {
+        if (prev === nextDiffViewType) return prev;
+        WebviewLog.debug("[OutputMinimapDebug] diff view type changed", {
+          previousDiffViewType: prev,
+          nextDiffViewType,
+          width: roundDebugPx(width),
+        });
+        return nextDiffViewType;
+      });
     };
 
     updateDiffViewType();
@@ -513,6 +666,424 @@ export const OutputSection: React.FC = () => {
       ),
     [hasDiffRows, rows]
   );
+  const shouldPrecomputeExactMinimapLayout =
+    activeOutputTab === "output" &&
+    !outputCollapsed &&
+    rows.length > 0 &&
+    outputContentWidth > 0 &&
+    (!isExecutionActive || isViewingHistory);
+  const exactMinimapLayoutInputKey = useMemo(
+    () =>
+      JSON.stringify({
+        width: Math.round(outputContentWidth * 100) / 100,
+        fontSize: outputFontSize,
+        diffViewType: outputDiffViewType,
+        rows: rows.map((row) => `${row.key}:${row.estimateSize}`),
+      }),
+    [outputContentWidth, outputDiffViewType, outputFontSize, rows]
+  );
+  const exactMinimapLayoutSummary = useMemo(
+    () => ({
+      width: roundDebugPx(outputContentWidth),
+      fontSize: outputFontSize,
+      diffViewType: outputDiffViewType,
+      rowCount: rows.length,
+      firstRowKey: rows[0]?.key ?? null,
+      lastRowKey: rows[rows.length - 1]?.key ?? null,
+      estimateTotalHeight: roundDebugPx(
+        rows.reduce((sum, row) => sum + row.estimateSize, 0)
+      ),
+    }),
+    [outputContentWidth, outputDiffViewType, outputFontSize, rows]
+  );
+
+  useEffect(() => {
+    if (exactMinimapMeasureTimerRef.current !== null) {
+      window.clearTimeout(exactMinimapMeasureTimerRef.current);
+      exactMinimapMeasureTimerRef.current = null;
+      pendingExactMinimapLayoutKeyRef.current = null;
+    }
+
+    const nextSchedulerState = {
+      shouldPrecomputeExactMinimapLayout,
+      isExecutionActive,
+      isViewingHistory,
+      outputCollapsed,
+      hasExactMinimapLayout,
+      exactMinimapLayoutInputKey,
+      pendingExactMinimapLayoutKey: pendingExactMinimapLayoutKeyRef.current,
+      activeExactMinimapLayoutKey: activeExactMinimapLayoutKeyRef.current,
+    };
+    const previousSchedulerState = exactMinimapSchedulerStateRef.current;
+    const changedFields = previousSchedulerState
+      ? Object.entries(nextSchedulerState)
+          .filter(([key, value]) => previousSchedulerState[key as keyof typeof nextSchedulerState] !== value)
+          .map(([key]) => key)
+      : ["initial-run"];
+    exactMinimapSchedulerStateRef.current = nextSchedulerState;
+
+    if (!shouldPrecomputeExactMinimapLayout) {
+      WebviewLog.debug("[OutputMinimapDebug] exact layout scheduler skipped", {
+        reason: "precompute-disabled",
+        changedFields,
+        layout: exactMinimapLayoutSummary,
+        isExecutionActive,
+        isViewingHistory,
+        outputCollapsed,
+      });
+      pendingExactMinimapLayoutKeyRef.current = null;
+      activeExactMinimapLayoutKeyRef.current = null;
+      setActiveExactMinimapMeasureEpoch(0);
+      if (rows.length === 0) {
+        setHasExactMinimapLayout(false);
+      }
+      return;
+    }
+
+    if (
+      hasExactMinimapLayout &&
+      activeExactMinimapMeasureEpoch === 0 &&
+      lastExactMinimapLayoutKeyRef.current === exactMinimapLayoutInputKey
+    ) {
+      WebviewLog.debug("[OutputMinimapDebug] exact layout scheduler skipped", {
+        reason: "layout-already-current",
+        changedFields,
+        layout: exactMinimapLayoutSummary,
+      });
+      return;
+    }
+
+    if (
+      pendingExactMinimapLayoutKeyRef.current === exactMinimapLayoutInputKey ||
+      activeExactMinimapLayoutKeyRef.current === exactMinimapLayoutInputKey
+    ) {
+      WebviewLog.debug("[OutputMinimapDebug] exact layout scheduler skipped", {
+        reason: "layout-pass-already-active",
+        changedFields,
+        layout: exactMinimapLayoutSummary,
+        pendingLayoutKey: pendingExactMinimapLayoutKeyRef.current,
+        activeLayoutKey: activeExactMinimapLayoutKeyRef.current,
+      });
+      return;
+    }
+
+    setHasExactMinimapLayout(false);
+
+    const hadMeasuredWidth = previousMeasuredOutputWidthRef.current > 0;
+    const widthChanged =
+      hadMeasuredWidth &&
+      Math.abs(previousMeasuredOutputWidthRef.current - outputContentWidth) >= 0.5;
+    previousMeasuredOutputWidthRef.current = outputContentWidth;
+
+    const nextEpoch = ++exactMinimapMeasureEpochRef.current;
+    pendingExactMinimapLayoutKeyRef.current = exactMinimapLayoutInputKey;
+    WebviewLog.debug("[OutputMinimapDebug] exact layout scheduler armed", {
+      nextEpoch,
+      changedFields,
+      widthChanged,
+      delayMs: widthChanged ? EXACT_MINIMAP_MEASURE_DEBOUNCE_MS : 0,
+      layout: exactMinimapLayoutSummary,
+      hasExactMinimapLayout,
+      activeExactMinimapMeasureEpoch,
+      lastAppliedKeyMatches:
+        lastExactMinimapLayoutKeyRef.current === exactMinimapLayoutInputKey,
+    });
+    exactMinimapMeasureTimerRef.current = window.setTimeout(
+      () => {
+        WebviewLog.debug("[OutputMinimapDebug] exact layout scheduler firing", {
+          nextEpoch,
+          layout: exactMinimapLayoutSummary,
+        });
+        pendingExactMinimapLayoutKeyRef.current = null;
+        activeExactMinimapLayoutKeyRef.current = exactMinimapLayoutInputKey;
+        setActiveExactMinimapMeasureEpoch(nextEpoch);
+        exactMinimapMeasureTimerRef.current = null;
+      },
+      widthChanged ? EXACT_MINIMAP_MEASURE_DEBOUNCE_MS : 0
+    );
+
+    return () => {
+      if (exactMinimapMeasureTimerRef.current !== null) {
+        window.clearTimeout(exactMinimapMeasureTimerRef.current);
+        exactMinimapMeasureTimerRef.current = null;
+        pendingExactMinimapLayoutKeyRef.current = null;
+      }
+    };
+  }, [
+    isExecutionActive,
+    isViewingHistory,
+    outputCollapsed,
+    exactMinimapLayoutInputKey,
+    hasExactMinimapLayout,
+    shouldPrecomputeExactMinimapLayout,
+  ]);
+
+  useEffect(() => {
+    if (activeExactMinimapMeasureEpoch === 0) return;
+
+    const container = exactMinimapMeasureRef.current;
+    const layoutKey =
+      activeExactMinimapLayoutKeyRef.current ?? exactMinimapLayoutInputKey;
+    if (!container) {
+      activeExactMinimapLayoutKeyRef.current = null;
+      lastExactMinimapLayoutKeyRef.current = layoutKey;
+      setHasExactMinimapLayout(true);
+      setActiveExactMinimapMeasureEpoch(0);
+      return;
+    }
+
+    let cancelled = false;
+    let attemptCount = 0;
+    let frameHandle = 0;
+    let previousAttemptHeights: Map<string, number> | null = null;
+    let stableFrameCount = 0;
+
+    const finishPass = (appliedKey: string) => {
+      activeExactMinimapLayoutKeyRef.current = null;
+      lastExactMinimapLayoutKeyRef.current = appliedKey;
+      setHasExactMinimapLayout(true);
+      setActiveExactMinimapMeasureEpoch(0);
+    };
+
+    const fallbackRowHeight = (row: (typeof rows)[number]): number =>
+      measurementCacheRef.current.get(row.key) ??
+      estimateOutputRowHeight(row, outputFontSize);
+
+    const fallbackToCurrentLayout = (
+      reason: string,
+      details: Record<string, unknown>
+    ) => {
+      WebviewLog.warn("[OutputMinimapDebug] exact layout fallback applied", {
+        epoch: activeExactMinimapMeasureEpoch,
+        reason,
+        layout: exactMinimapLayoutSummary,
+        ...details,
+      });
+      finishPass(layoutKey);
+    };
+
+    const scheduleAttempt = () => {
+      frameHandle = window.requestAnimationFrame(measureExactLayout);
+    };
+
+    WebviewLog.debug("[OutputMinimapDebug] exact layout pass started", {
+      epoch: activeExactMinimapMeasureEpoch,
+      layout: exactMinimapLayoutSummary,
+    });
+
+    const measureExactLayout = () => {
+      if (cancelled) return;
+
+      const nodes = Array.from(
+        container.querySelectorAll<HTMLElement>("[data-exact-measure-key]")
+      );
+      if (nodes.length !== rows.length) {
+        if (attemptCount < EXACT_MINIMAP_MEASURE_MAX_ATTEMPTS) {
+          WebviewLog.debug("[OutputMinimapDebug] exact layout retry scheduled", {
+            epoch: activeExactMinimapMeasureEpoch,
+            attempt: attemptCount + 1,
+            reason: "node-count-mismatch",
+            expectedRows: rows.length,
+            foundNodes: nodes.length,
+          });
+          attemptCount++;
+          scheduleAttempt();
+        } else {
+          fallbackToCurrentLayout("node-count-mismatch", {
+            reason: "node-count-mismatch",
+            expectedRows: rows.length,
+            foundNodes: nodes.length,
+          });
+        }
+        return;
+      }
+
+      const nextHeights = new Map<string, number>();
+      const fallbackKeys: string[] = [];
+      for (const [index, node] of nodes.entries()) {
+        const row = rows[index];
+        const key = node.dataset.exactMeasureKey ?? row?.key;
+        const height = getMeasuredElementHeight(node);
+        const zeroHeightReason =
+          row?.rowKind === "structured-event"
+            ? getZeroHeightStructuredEventReason(row)
+            : null;
+        const diffMeasurementDebug =
+          row?.rowKind === "structured-event" && row.diff
+            ? getDiffMeasurementDebugInfo(node)
+            : null;
+        if (!key || !row) {
+          fallbackToCurrentLayout("missing-row-metadata", {
+            index,
+            key: key ?? null,
+          });
+          return;
+        }
+
+        if (zeroHeightReason != null && height <= 0) {
+          WebviewLog.debug("[OutputMinimapDebug] exact layout zero-height row", {
+            epoch: activeExactMinimapMeasureEpoch,
+            key,
+            rowKind: row.rowKind,
+            reason: zeroHeightReason,
+            diffMeasurementDebug,
+          });
+          nextHeights.set(key, 0);
+          continue;
+        }
+
+        if (!Number.isFinite(height) || height <= 0) {
+          const fallbackHeight = fallbackRowHeight(row);
+          fallbackKeys.push(key);
+          WebviewLog.debug("[OutputMinimapDebug] exact layout row fallback", {
+            epoch: activeExactMinimapMeasureEpoch,
+            key,
+            rowKind: row.rowKind,
+            zeroHeightReason,
+            diffMeasurementDebug,
+            measuredHeight: roundDebugPx(height),
+            fallbackHeight: roundDebugPx(fallbackHeight),
+          });
+          nextHeights.set(key, fallbackHeight);
+          continue;
+        }
+
+        if (row.rowKind === "structured-event" && row.diff) {
+          WebviewLog.debug("[OutputMinimapDebug] exact diff row measured", {
+            epoch: activeExactMinimapMeasureEpoch,
+            key,
+            measuredHeight: roundDebugPx(height),
+            diffMeasurementDebug,
+            diffRuns: row.diff.runs.reduce((sum, run) => sum + run.count, 0),
+            addedLines: row.diff.addedLines,
+            removedLines: row.diff.removedLines,
+            isCollapsed: row.diff.isCollapsed,
+          });
+        }
+
+        nextHeights.set(key, height);
+      }
+
+      if (nextHeights.size !== rows.length) {
+        if (attemptCount < EXACT_MINIMAP_MEASURE_MAX_ATTEMPTS) {
+          WebviewLog.debug("[OutputMinimapDebug] exact layout retry scheduled", {
+            epoch: activeExactMinimapMeasureEpoch,
+            attempt: attemptCount + 1,
+            reason: "height-map-size-mismatch",
+            expectedRows: rows.length,
+            measuredRows: nextHeights.size,
+          });
+          attemptCount++;
+          scheduleAttempt();
+        } else {
+          fallbackToCurrentLayout("height-map-size-mismatch", {
+            reason: "height-map-size-mismatch",
+            expectedRows: rows.length,
+            measuredRows: nextHeights.size,
+          });
+        }
+        return;
+      }
+
+      if (previousAttemptHeights == null) {
+        previousAttemptHeights = new Map(nextHeights);
+        if (attemptCount < EXACT_MINIMAP_MEASURE_MAX_ATTEMPTS) {
+          WebviewLog.debug("[OutputMinimapDebug] exact layout retry scheduled", {
+            epoch: activeExactMinimapMeasureEpoch,
+            attempt: attemptCount + 1,
+            reason: "waiting-for-stable-heights",
+            stableFrameCount: 0,
+            requiredStableFrames: EXACT_MINIMAP_STABLE_FRAME_TARGET,
+          });
+          attemptCount++;
+          scheduleAttempt();
+          return;
+        }
+      } else {
+        const changedKeys = rows
+          .filter((row) => {
+            const previousHeight = previousAttemptHeights?.get(row.key);
+            const nextHeight = nextHeights.get(row.key);
+            if (previousHeight === undefined || nextHeight === undefined) {
+              return previousHeight !== nextHeight;
+            }
+            return Math.abs(previousHeight - nextHeight) >= 0.5;
+          })
+          .map((row) => row.key);
+
+        previousAttemptHeights = new Map(nextHeights);
+
+        if (changedKeys.length > 0) {
+          stableFrameCount = 0;
+          if (attemptCount < EXACT_MINIMAP_MEASURE_MAX_ATTEMPTS) {
+            WebviewLog.debug("[OutputMinimapDebug] exact layout retry scheduled", {
+              epoch: activeExactMinimapMeasureEpoch,
+              attempt: attemptCount + 1,
+              reason: "height-unstable",
+              changedRowCount: changedKeys.length,
+              changedKeys: changedKeys.slice(0, 10),
+            });
+            attemptCount++;
+            scheduleAttempt();
+            return;
+          }
+        } else if (stableFrameCount + 1 < EXACT_MINIMAP_STABLE_FRAME_TARGET) {
+          stableFrameCount += 1;
+          if (attemptCount < EXACT_MINIMAP_MEASURE_MAX_ATTEMPTS) {
+            WebviewLog.debug("[OutputMinimapDebug] exact layout retry scheduled", {
+              epoch: activeExactMinimapMeasureEpoch,
+              attempt: attemptCount + 1,
+              reason: "confirming-stable-heights",
+              stableFrameCount,
+              requiredStableFrames: EXACT_MINIMAP_STABLE_FRAME_TARGET,
+            });
+            attemptCount++;
+            scheduleAttempt();
+            return;
+          }
+        } else {
+          stableFrameCount += 1;
+        }
+      }
+
+      measurementCacheRef.current.clear();
+      rows.forEach((row, index) => {
+        const size =
+          nextHeights.get(row.key) ?? estimateOutputRowHeight(row, outputFontSize);
+        measurementCacheRef.current.set(row.key, size);
+        rowVirtualizer.resizeItem(index, size);
+      });
+      rowVirtualizer.measure();
+
+      WebviewLog.debug("[OutputMinimapDebug] exact layout applied", {
+        epoch: activeExactMinimapMeasureEpoch,
+        rows: rows.length,
+        width: roundDebugPx(outputContentWidth),
+        totalHeight: roundDebugPx(
+          [...nextHeights.values()].reduce((sum, height) => sum + height, 0)
+        ),
+        fallbackRowCount: fallbackKeys.length,
+        fallbackKeys: fallbackKeys.slice(0, 10),
+      });
+
+      setMeasurementVersion((version) => version + 1);
+      finishPass(layoutKey);
+    };
+
+    scheduleAttempt();
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frameHandle);
+    };
+  }, [
+    activeExactMinimapMeasureEpoch,
+    exactMinimapLayoutInputKey,
+    outputContentWidth,
+    outputFontSize,
+    rowVirtualizer,
+    rows,
+  ]);
 
   useEffect(() => {
     const diffKeys = new Set(
@@ -744,7 +1315,7 @@ export const OutputSection: React.FC = () => {
           rowLayoutRef.current.rowStartsByIndex[rowIndex] ?? 0;
         const maxScroll = Math.max(
           0,
-          outputRef.current.scrollHeight - outputRef.current.clientHeight
+          rowLayoutRef.current.totalSize - outputRef.current.clientHeight
         );
         const scrollOffset =
           align === "end"
@@ -768,7 +1339,7 @@ export const OutputSection: React.FC = () => {
               rowLayoutRef.current.rowStartsByIndex[rowIndex] ?? 0;
             const correctedMaxScroll = Math.max(
               0,
-              scrollElement.scrollHeight - scrollElement.clientHeight
+              rowLayoutRef.current.totalSize - scrollElement.clientHeight
             );
             const correctedScrollOffset =
               align === "end"
@@ -1723,7 +2294,7 @@ export const OutputSection: React.FC = () => {
         </div>
       ) : (
         <div
-          className={`${outputCollapsed ? "hidden" : "flex"} flex-row min-h-0 flex-1`}
+          className={`${outputCollapsed ? "hidden" : "flex"} relative flex-row min-h-0 flex-1`}
         >
           {/* Scrollable output */}
           {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
@@ -1742,6 +2313,22 @@ export const OutputSection: React.FC = () => {
               <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
                 Output will appear here during execution
               </p>
+            ) : activeExactMinimapMeasureEpoch > 0 ? (
+              <div ref={exactMinimapMeasureRef} style={{ width: "100%" }}>
+                {rows.map((row) => (
+                  <div key={`exact-measure-${row.key}`} data-exact-measure-key={row.key}>
+                    <OutputRow
+                      row={row}
+                      isExecutionActive={isExecutionActive}
+                      onBackToLive={handleBackToLive}
+                      onPromptUndo={handlePromptUndo}
+                      onPromptRedo={handlePromptRedo}
+                      onFileUndo={handleFileUndo}
+                      onDiffCollapsedChange={handleDiffCollapsedChange}
+                    />
+                  </div>
+                ))}
+              </div>
             ) : (
               <div
                 style={{
@@ -1787,6 +2374,10 @@ export const OutputSection: React.FC = () => {
             <OutputMinimap
               steps={minimapSteps}
               scrollContainerRef={outputRef}
+              contentHeight={rowLayout.totalSize}
+              showDecorations={
+                !shouldPrecomputeExactMinimapLayout || hasExactMinimapLayout
+              }
               onStepClick={handleMinimapStepClick}
             />
           )}

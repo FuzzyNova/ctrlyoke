@@ -240,6 +240,19 @@ export const DiffView: React.FC<DiffViewProps> = ({
     if (!anchor) return;
 
     anchor.setAttribute("data-diff-collapsed", isExpanded ? "false" : "true");
+    anchor.setAttribute("data-diff-view-type", viewType);
+    anchor.setAttribute(
+      "data-diff-wrapper-width",
+      String(Math.round(el.getBoundingClientRect().width * 100) / 100)
+    );
+    anchor.setAttribute(
+      "data-diff-estimated-lines",
+      String(estimatedLineCount)
+    );
+    anchor.setAttribute(
+      "data-diff-rendered-rows",
+      String(minimapStats.runs.reduce((sum, run) => sum + run.count, 0))
+    );
 
     if (expandedHunks.length > 0) {
       anchor.setAttribute("data-diff-added-lines", String(minimapStats.added));
@@ -254,7 +267,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     anchor.removeAttribute("data-diff-added-lines");
     anchor.removeAttribute("data-diff-removed-lines");
     anchor.removeAttribute("data-diff-runs");
-  }, [isExpanded, expandedHunks.length, minimapStats]);
+  }, [estimatedLineCount, isExpanded, expandedHunks.length, minimapStats, viewType]);
 
   if (!hasDiff) return null;
 
