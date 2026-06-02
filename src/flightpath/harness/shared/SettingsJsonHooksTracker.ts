@@ -41,6 +41,9 @@ export class SettingsJsonHooksTracker {
   /** Per-workflow FlightPath hooks + user hooks, keyed by workflowKey. */
   private workflowHooks = new Map<string, WorkflowHookLayers>();
 
+  /** Original-case settingsPath from first registerWorkflow call, used for true-case path resolution. */
+  private registeredSettingsPath: string | undefined;
+
   private readonly toolName: string;
   /** Subdirectory under workspace root (e.g. ".qwen", ".gemini", ".codex") */
   private readonly settingsDir: string;
@@ -88,11 +91,12 @@ export class SettingsJsonHooksTracker {
       this.settingsFile
     );
 
-    // First registration captures the baseline
+    // First registration captures the baseline and records the original-case path
     if (this.workflowHooks.size === 0) {
       const baseline = await this.readBaseline(settingsPath);
       this.baselineHooksSection = baseline.hooks;
       this.baselineFileExisted = baseline.fileExisted;
+      this.registeredSettingsPath = settingsPath;
     }
 
     // Track this workflow's hooks
@@ -477,11 +481,18 @@ export class SettingsJsonHooksTracker {
   }
 
   private getCodexHookSourcePathVariants(settingsPath: string): string[] {
+    // Prefer the original-case path from registration for true filesystem case resolution.
+    // On Windows, realpathSync given a lowercase path may not restore the true case.
+    const pathForRealpath = this.registeredSettingsPath ?? settingsPath;
     let resolvedPath: string;
     try {
-      resolvedPath = nodeFs.realpathSync(settingsPath);
+      resolvedPath = nodeFs.realpathSync(pathForRealpath);
     } catch {
-      resolvedPath = path.resolve(settingsPath);
+      try {
+        resolvedPath = nodeFs.realpathSync(settingsPath);
+      } catch {
+        resolvedPath = path.resolve(settingsPath);
+      }
     }
 
     const withoutExtendedPrefix = resolvedPath.startsWith("\\\\?\\")
