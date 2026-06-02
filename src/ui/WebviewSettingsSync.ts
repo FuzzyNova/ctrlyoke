@@ -523,7 +523,9 @@ export class WebviewSettingsSync {
     value: any,
     harness?: string
   ): Promise<void> {
-    if (property === PROMPT_PROPERTIES.MODEL && harness) {
+    if (property === PROMPT_PROPERTIES.HARNESS) {
+      await ConfigurationUtils.setIntegrationMode(value as HarnessId);
+    } else if (property === PROMPT_PROPERTIES.MODEL && harness) {
       await ConfigurationUtils.setModelForHarness(harness as HarnessId, value);
     } else if (property === PROMPT_PROPERTIES.ADDITIONAL_ARGS && harness) {
       await ConfigurationUtils.setAdditionalArgsForHarness(
@@ -539,6 +541,8 @@ export class WebviewSettingsSync {
         CONFIG_KEYS.DEFAULTS_RESUME_SESSION,
         value
       );
+    } else if (property === PROMPT_PROPERTIES.PRIOR_CONTEXT) {
+      await ConfigurationUtils.setDefaultPriorContext(value ?? "none");
     } else if (property === PROMPT_PROPERTIES.MCP_SERVERS) {
       // null (None mode) → [] so we never write null to an array-typed setting
       await ConfigurationUtils.setDefaultMcpServers(value ?? []);

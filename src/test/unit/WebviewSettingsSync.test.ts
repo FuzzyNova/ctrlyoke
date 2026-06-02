@@ -8,6 +8,9 @@ import { WebviewSettingsSync } from "../../ui/WebviewSettingsSync";
 import { WebviewMessageRouter } from "../../ui/WebviewMessageRouter";
 import {
   MESSAGE_TYPES,
+  HARNESS_IDS,
+  PROMPT_PROPERTIES,
+  PERMISSION_MODES,
   type SettingWriteScope,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/FlightPathConfigService";
@@ -567,8 +570,27 @@ suite("WebviewSettingsSync", () => {
 
   // ─── handleSetAsDefault ─────────────────────────────────────────────────────
 
-  suite("handleSetAsDefault — toolPermissions", () => {
-    test("should write defaults.toolPermissions atomically as one config set call", async () => {
+  suite("handleSetAsDefault", () => {
+    const defaultsPropertyCoverage = new Set([
+      "harness",
+      "models.*",
+      "additionalArgs.*",
+      "agent",
+      "skills",
+      "resumeSession",
+      "priorContext",
+      "mcpServers",
+      "hooks",
+      "toolPermissions",
+      "endCondition",
+      "preCondition",
+    ]);
+
+    async function captureSetAsDefaultWrite(
+      property: string,
+      value: unknown,
+      harness?: string
+    ): Promise<Array<{ key: string; value: unknown; scope: string }>> {
       const originalSet = configService.set.bind(configService);
       const setCalls: Array<{ key: string; value: unknown; scope: string }> =
         [];
@@ -582,11 +604,187 @@ suite("WebviewSettingsSync", () => {
           () => {},
           () => undefined
         );
-        await sync.handleSetAsDefault("toolPermissions", {
-          mode: "custom",
-          allowedTools: ["read", "write"],
-          deniedTools: ["bash"],
-        });
+        await sync.handleSetAsDefault(property, value, harness);
+      } finally {
+        configService.set = originalSet;
+      }
+
+      return setCalls;
+    }
+
+    test("should keep test coverage in sync with defaults from settings-schema", async () => {
+      const schemaPath = path.resolve(
+        __dirname,
+        "../../../schemas/settings-schema.json"
+      );
+      const schema = JSON.parse(await fs.readFile(schemaPath, "utf8")) as {
+        properties?: {
+          defaults?: {
+            properties?: Record<string, unknown>;
+          };
+        };
+      };
+
+      const defaultsProperties = Object.keys(
+        schema.properties?.defaults?.properties ?? {}
+      );
+      const normalizedSchemaCoverage = new Set(
+        defaultsProperties.map((property) => {
+          if (property === "models") return "models.*";
+          if (property === "additionalArgs") return "additionalArgs.*";
+          return property;
+        })
+      );
+
+      assert.deepStrictEqual(
+        [...normalizedSchemaCoverage].sort(),
+        [...defaultsPropertyCoverage].sort(),
+        "Add or update handleSetAsDefault tests when defaults.* changes in settings-schema.json"
+      );
+    });
+
+    test("should write the expected config path for each schema-backed workflow default", async () => {
+      const endCondition = {
+        script: "npm test",
+        returns: "true",
+      };
+      const preCondition = {
+        script: "npm run lint",
+        returns: "0",
+      };
+      const hook = { event: "postToolUse", command: "echo done" };
+
+      const cases: Array<{
+        property: string;
+        value: unknown;
+        harness?: string;
+        expectedKey: string;
+        expectedValue: unknown;
+      }> = [
+        {
+          property: PROMPT_PROPERTIES.HARNESS,
+          value: HARNESS_IDS.CODEX_CLI,
+          expectedKey: CONFIG_KEYS.DEFAULTS_HARNESS,
+          expectedValue: HARNESS_IDS.CODEX_CLI,
+        },
+        {
+          property: PROMPT_PROPERTIES.MODEL,
+          value: "gpt-5.5",
+          harness: HARNESS_IDS.CODEX_CLI,
+          expectedKey: `${CONFIG_KEYS.DEFAULTS_MODELS}.${HARNESS_IDS.CODEX_CLI}`,
+          expectedValue: "gpt-5.5",
+        },
+        {
+          property: PROMPT_PROPERTIES.ADDITIONAL_ARGS,
+          value: "--effort high",
+          harness: HARNESS_IDS.CODEX_CLI,
+          expectedKey: `${CONFIG_KEYS.DEFAULTS_ADDITIONAL_ARGS}.${HARNESS_IDS.CODEX_CLI}`,
+          expectedValue: "--effort high",
+        },
+        {
+          property: PROMPT_PROPERTIES.AGENT,
+          value: "default.agent.md",
+          expectedKey: CONFIG_KEYS.DEFAULTS_AGENT,
+          expectedValue: "default.agent.md",
+        },
+        {
+          property: PROMPT_PROPERTIES.SKILLS,
+          value: ["refactor", "test"],
+          expectedKey: CONFIG_KEYS.DEFAULTS_SKILLS,
+          expectedValue: ["refactor", "test"],
+        },
+        {
+          property: PROMPT_PROPERTIES.RESUME_SESSION,
+          value: true,
+          expectedKey: CONFIG_KEYS.DEFAULTS_RESUME_SESSION,
+          expectedValue: true,
+        },
+        {
+          property: PROMPT_PROPERTIES.PRIOR_CONTEXT,
+          value: "last",
+          expectedKey: CONFIG_KEYS.DEFAULTS_PRIOR_CONTEXT,
+          expectedValue: "last",
+        },
+        {
+          property: PROMPT_PROPERTIES.MCP_SERVERS,
+          value: ["flightpath"],
+          expectedKey: CONFIG_KEYS.DEFAULTS_MCP_SERVERS,
+          expectedValue: ["flightpath"],
+        },
+        {
+          property: PROMPT_PROPERTIES.HOOKS,
+          value: [hook],
+          expectedKey: CONFIG_KEYS.DEFAULTS_HOOKS,
+          expectedValue: [hook],
+        },
+        {
+          property: PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+          value: {
+            mode: PERMISSION_MODES.CUSTOM,
+            allowedTools: ["read", "write"],
+            deniedTools: ["bash"],
+          },
+          expectedKey: CONFIG_KEYS.DEFAULTS_TOOL_PERMISSIONS,
+          expectedValue: {
+            mode: PERMISSION_MODES.CUSTOM,
+            allowedTools: ["read", "write"],
+            deniedTools: ["bash"],
+          },
+        },
+        {
+          property: PROMPT_PROPERTIES.END_CONDITION,
+          value: endCondition,
+          expectedKey: CONFIG_KEYS.DEFAULTS_END_CONDITION,
+          expectedValue: endCondition,
+        },
+        {
+          property: PROMPT_PROPERTIES.PRE_CONDITION,
+          value: preCondition,
+          expectedKey: CONFIG_KEYS.DEFAULTS_PRE_CONDITION,
+          expectedValue: preCondition,
+        },
+      ];
+
+      for (const testCase of cases) {
+        const setCalls = await captureSetAsDefaultWrite(
+          testCase.property,
+          testCase.value,
+          testCase.harness
+        );
+
+        assert.strictEqual(
+          setCalls.length,
+          1,
+          `expected exactly one config write for ${testCase.property}`
+        );
+        assert.strictEqual(
+          setCalls[0].key,
+          testCase.expectedKey,
+          `unexpected config key for ${testCase.property}`
+        );
+        assert.deepStrictEqual(
+          setCalls[0].value,
+          testCase.expectedValue,
+          `unexpected config value for ${testCase.property}`
+        );
+        assert.strictEqual(
+          setCalls[0].scope,
+          "user",
+          `unexpected config scope for ${testCase.property}`
+        );
+      }
+    });
+
+    suite("toolPermissions", () => {
+      test("should write defaults.toolPermissions atomically as one config set call", async () => {
+        const setCalls = await captureSetAsDefaultWrite(
+          PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+          {
+            mode: PERMISSION_MODES.CUSTOM,
+            allowedTools: ["read", "write"],
+            deniedTools: ["bash"],
+          }
+        );
 
         assert.strictEqual(
           setCalls.length,
@@ -598,65 +796,42 @@ suite("WebviewSettingsSync", () => {
           CONFIG_KEYS.DEFAULTS_TOOL_PERMISSIONS
         );
         assert.deepStrictEqual(setCalls[0].value, {
-          mode: "custom",
+          mode: PERMISSION_MODES.CUSTOM,
           allowedTools: ["read", "write"],
           deniedTools: ["bash"],
         });
-      } finally {
-        configService.set = originalSet;
-      }
-    });
+      });
 
-    test("should fall back to allowAll mode when mode is NONE or absent", async () => {
-      const originalSet = configService.set.bind(configService);
-      const setCalls: Array<{ key: string; value: unknown }> = [];
-
-      try {
-        configService.set = (async (key, value, _scope) => {
-          setCalls.push({ key, value });
-        }) as typeof configService.set;
-
-        const sync = new WebviewSettingsSync(
-          () => {},
-          () => undefined
+      test("should fall back to allowAll mode when mode is NONE or absent", async () => {
+        const setCalls = await captureSetAsDefaultWrite(
+          PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+          {
+            mode: "none",
+            allowedTools: [],
+            deniedTools: [],
+          }
         );
-        await sync.handleSetAsDefault("toolPermissions", {
-          mode: "none",
-          allowedTools: [],
-          deniedTools: [],
-        });
 
         assert.strictEqual(setCalls.length, 1);
-        assert.strictEqual((setCalls[0].value as any).mode, "allowAll");
-      } finally {
-        configService.set = originalSet;
-      }
-    });
-
-    test("should write allowAll mode and empty arrays when value is null", async () => {
-      const originalSet = configService.set.bind(configService);
-      const setCalls: Array<{ key: string; value: unknown }> = [];
-
-      try {
-        configService.set = (async (key, value, _scope) => {
-          setCalls.push({ key, value });
-        }) as typeof configService.set;
-
-        const sync = new WebviewSettingsSync(
-          () => {},
-          () => undefined
+        assert.strictEqual(
+          (setCalls[0].value as { mode: string }).mode,
+          PERMISSION_MODES.ALLOW_ALL
         );
-        await sync.handleSetAsDefault("toolPermissions", null);
+      });
+
+      test("should write allowAll mode and empty arrays when value is null", async () => {
+        const setCalls = await captureSetAsDefaultWrite(
+          PROMPT_PROPERTIES.TOOL_PERMISSIONS,
+          null
+        );
 
         assert.strictEqual(setCalls.length, 1);
         assert.deepStrictEqual(setCalls[0].value, {
-          mode: "allowAll",
+          mode: PERMISSION_MODES.ALLOW_ALL,
           allowedTools: [],
           deniedTools: [],
         });
-      } finally {
-        configService.set = originalSet;
-      }
+      });
     });
   });
 });

@@ -14,6 +14,10 @@ export interface DiffRun {
 
 /** A single file-edit diff region to visualize in the minimap rail. */
 export interface MinimapDiffBlock {
+  /** Stable diff identifier shared with the rendered output row. */
+  key: string;
+  /** Source output row key used for debug correlation. */
+  rowKey: string;
   /** 0–1 fraction of the scroll area where this diff starts */
   scrollFraction: number;
   /** 0–1 fraction of the scroll area the diff occupies (DOM-measured) */
@@ -313,7 +317,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       {/* Diff overlays — rendered below thumb and markers */}
       {steps.map((step) => (
         <React.Fragment key={`diffs-${step.key}`}>
-          {step.diffBlocks.map((block, blockIdx) => {
+          {step.diffBlocks.map((block) => {
             const significantLines = block.addedLines + block.removedLines;
             if (significantLines === 0) return null;
 
@@ -323,7 +327,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
               // Collapsed: fixed 2px horizontal line, left portion red, right green
               return (
                 <div
-                  key={blockIdx}
+                  key={block.key}
                   className="absolute left-0 right-0 pointer-events-none"
                   style={{
                     top: `clamp(0px, ${block.scrollFraction * 100}%, calc(100% - 2px))`,
@@ -348,7 +352,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                 let offsetRows = 0;
                 return (
                   <div
-                    key={blockIdx}
+                    key={block.key}
                     className="absolute left-0 right-0 pointer-events-none overflow-hidden"
                     style={{
                       top: `${block.scrollFraction * 100}%`,
@@ -399,7 +403,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
 
             return (
               <div
-                key={blockIdx}
+                key={block.key}
                 className="absolute left-0 right-0 pointer-events-none"
                 style={{
                   top: `${block.scrollFraction * 100}%`,

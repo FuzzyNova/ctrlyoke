@@ -40,6 +40,7 @@ export const CONFIG_KEYS = {
   DEFAULTS_AGENT: "defaults.agent",
   DEFAULTS_SKILLS: "defaults.skills",
   DEFAULTS_RESUME_SESSION: "defaults.resumeSession",
+  DEFAULTS_PRIOR_CONTEXT: "defaults.priorContext",
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
   DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
@@ -785,6 +786,17 @@ export const ConfigurationUtils = {
     await configService.set(
       CONFIG_KEYS.DEFAULTS_RESUME_SESSION,
       enabled,
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  /**
+   * Set the default prior context for new workflows
+   */
+  async setDefaultPriorContext(priorContext: string): Promise<void> {
+    await configService.set(
+      CONFIG_KEYS.DEFAULTS_PRIOR_CONTEXT,
+      priorContext,
       CONFIG_SCOPE.USER
     );
   },

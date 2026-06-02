@@ -74,6 +74,7 @@ import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
+import { WebviewLog } from "@utils/logger";
 import {
   buildOutputRows,
   estimateOutputDiffBlockHeight,
@@ -86,6 +87,14 @@ import type { OutputRowFileUndoRequest } from "../output/OutputRow";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024;
+const MAX_OUTPUT_MINIMAP_DEBUG_BLOCKS = 20;
+
+function roundDebugPx(value: number | undefined): number | null {
+  if (value === undefined || !Number.isFinite(value)) {
+    return null;
+  }
+  return Math.round(value * 100) / 100;
+}
 
 function getStepName(
   step: WorkflowStep | null | undefined,
@@ -407,6 +416,19 @@ export const OutputSection: React.FC = () => {
       }
 
       measurementCacheRef.current.set(row.key, nextHeight);
+      WebviewLog.debug("[OutputMinimapDebug] row measured", {
+        rowKey: row.key,
+        rowKind: row.rowKind,
+        diffKey:
+          row.rowKind === "structured-event" ? (row.diff?.key ?? null) : null,
+        previousHeight: roundDebugPx(previousHeight),
+        nextHeight: roundDebugPx(nextHeight),
+        deltaPx:
+          previousHeight === undefined
+            ? null
+            : roundDebugPx(nextHeight - previousHeight),
+        estimatedHeight: roundDebugPx(row.estimateSize),
+      });
       setMeasurementVersion((version) => version + 1);
     },
     [rowVirtualizer, rows]
@@ -437,6 +459,11 @@ export const OutputSection: React.FC = () => {
   useEffect(() => {
     rowLayoutRef.current = rowLayout;
   }, [rowLayout]);
+  const minimapDebugSnapshotRef = useRef<string | null>(null);
+  const rowsByKey = useMemo(
+    () => new Map(rows.map((row) => [row.key, row])),
+    [rows]
+  );
 
   useEffect(() => {
     const el = outputRef.current;
@@ -959,6 +986,8 @@ export const OutputSection: React.FC = () => {
 
         return [
           {
+            key: row.diff.key,
+            rowKey: row.key,
             scrollFraction:
               (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
             heightFraction:
@@ -1127,6 +1156,50 @@ export const OutputSection: React.FC = () => {
     uniqueStepTargets,
     workspaceSnapshots,
   ]);
+
+  useEffect(() => {
+    const scrollElement = outputRef.current;
+    const diffBlocks = minimapSteps
+      .flatMap((step) =>
+        step.diffBlocks.map((block) => {
+          const row = rowsByKey.get(block.rowKey);
+          const measuredRowHeight = measurementCacheRef.current.get(block.rowKey);
+          return {
+            stepKey: step.key,
+            diffKey: block.key,
+            rowKey: block.rowKey,
+            rowStartPx: roundDebugPx(rowLayout.rowStartsByKey.get(block.rowKey)),
+            topPx: roundDebugPx(block.scrollFraction * rowLayout.totalSize),
+            heightPx: roundDebugPx(block.heightFraction * rowLayout.totalSize),
+            rowHeightPx: roundDebugPx(measuredRowHeight ?? row?.estimateSize),
+            rowHeightSource:
+              measuredRowHeight !== undefined ? "measured" : "estimated",
+            renderedRows: block.runs.reduce((sum, run) => sum + run.count, 0),
+            addedLines: block.addedLines,
+            removedLines: block.removedLines,
+            isCollapsed: block.isCollapsed,
+          };
+        })
+      )
+      .slice(0, MAX_OUTPUT_MINIMAP_DEBUG_BLOCKS);
+
+    const snapshotPayload = {
+      measuredRows: measurementCacheRef.current.size,
+      layoutTotalSize: roundDebugPx(rowLayout.totalSize),
+      virtualizerTotalSize: roundDebugPx(rowVirtualizer.getTotalSize()),
+      scrollTop: roundDebugPx(scrollElement?.scrollTop),
+      scrollHeight: roundDebugPx(scrollElement?.scrollHeight),
+      clientHeight: roundDebugPx(scrollElement?.clientHeight),
+      diffBlocks,
+    };
+    const nextSnapshot = JSON.stringify(snapshotPayload);
+    if (nextSnapshot === minimapDebugSnapshotRef.current) {
+      return;
+    }
+
+    minimapDebugSnapshotRef.current = nextSnapshot;
+    WebviewLog.debug("[OutputMinimapDebug] layout snapshot", snapshotPayload);
+  }, [minimapSteps, rowLayout, rowVirtualizer, rowsByKey]);
 
   const handleBackToLive = useCallback(() => {
     useWorkflowStore.getState().clearHistoryOutputs();
