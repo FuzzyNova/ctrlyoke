@@ -1619,9 +1619,16 @@ function createMessageHandlers(): MessageHandlerMap {
     } else {
       const workflowStore = useWorkflowStore.getState();
       const uiStore = useUiStore.getState();
+      // A run at index 0 is "live" only when both the webview and the history
+      // manifest agree it is still running.  If the manifest was already
+      // finalised as "completed" (which happens before replayOutputHistoryTo
+      // reads it) but SESSION_RESTORED hasn't been processed yet, trusting
+      // only the webview state would silently drop the history — causing the
+      // last step to vanish until the user navigates away and back.
       const isLiveCurrentRun =
         currentRunIndex === 0 &&
-        workflowStore.executionState === EXECUTION_STATES.RUNNING;
+        workflowStore.executionState === EXECUTION_STATES.RUNNING &&
+        history.executionState === EXECUTION_STATES.RUNNING;
 
       if (isLiveCurrentRun) {
         // Workflow replay may send the newest run's history after SESSION_RESTORED.

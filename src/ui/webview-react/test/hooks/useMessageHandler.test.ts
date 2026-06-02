@@ -712,6 +712,35 @@ describe("OUTPUT_HISTORY_LOADED", () => {
     expect(useUiStore.getState().runTimestamps).toEqual([1000]);
     expect(useWorkflowStore.getState().historyOutputs).toBeNull();
   });
+
+  it("loads history when the manifest is completed even if the webview state is still running (race condition fix)", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.OUTPUT_HISTORY_LOADED, {
+        history: {
+          runId: 1,
+          startedAt: 1000,
+          completedAt: 2000,
+          executionState: EXECUTION_STATES.COMPLETED,
+          orderedEntries: [],
+          promptOutputs: {},
+        },
+        availableRuns: 1,
+        currentRunIndex: 0,
+        runTimestamps: [1000],
+        runStates: [EXECUTION_STATES.COMPLETED],
+      });
+    });
+
+    // History must be loaded — the completed manifest overrules the stale webview state
+    expect(useWorkflowStore.getState().historyOutputs).not.toBeNull();
+    expect(useUiStore.getState().isViewingHistory).toBe(true);
+  });
 });
 
 describe("active workflow summaries", () => {
