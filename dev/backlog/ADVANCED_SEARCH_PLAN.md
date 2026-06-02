@@ -5,17 +5,28 @@
 Two complementary search features:
 
 1. **Global History Search** — search across all workflow runs stored in `.flightpath/.history/`.
-   Opens as a dedicated modal triggered from the workflow dropdown. Surfaces results by
-   workflow → run number → step with output snippets, and lets the user jump directly to
-   the matching run with the in-output find bar pre-populated.
+   Opens as a dedicated modal triggered from the header. Surfaces results by
+   workflow → run number → step with output snippets, and lets the user jump directly
+   to the matching run with the in-output find bar pre-populated.
 
-2. **In-Output Find Bar** — a Ctrl+F-style text search within the currently-displayed
-   `OutputSection`, with highlighted matches and prev/next navigation. Used standalone
-   and as the landing target for global history search.
+2. **In-Output Find Bar** — a Ctrl+F-style text search within the currently displayed
+   `OutputSection`, with highlighted matches and prev/next navigation. Used
+   standalone and as the landing target for global history search.
 
-**Design principle:** The workflow dropdown remains a **navigator** (switch to / open a
-workflow, with simple title/path/state filtering). History search is **forensic** — a
-different intent that belongs in its own dedicated surface.
+**Design principle:** The workflow dropdown remains a navigator. History search is
+forensic and deserves its own surface.
+
+**Current codebase reality:** The old plan assumed `OutputSection` was effectively a
+single DOM blob. It is not anymore. The output panel now projects output into
+**virtualized render rows**:
+
+- `OutputSection.tsx` builds `rows` with `buildOutputRows()`
+- those rows render through `OutputRow.tsx`
+- `@tanstack/react-virtual` mounts only the visible subset
+
+That changes the output-find implementation materially. Search must target the
+**row model** and the virtualizer, not arbitrary text nodes under
+`#output-content`.
 
 ---
 
@@ -24,318 +35,369 @@ different intent that belongs in its own dedicated surface.
 ### What can be searched
 
 The history timeline stores rich, structured data per run. Each `events.jsonl` file is
-JSONL — one `WorkflowTimelineEvent` per line. The searchable fields are:
+JSONL, one `WorkflowTimelineEvent` per line. The searchable fields are:
 
-| Event type              | Searchable content                                                                                              |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `cliOutputRecorded`     | `payload.cliOutput.prompt` (prompt text sent to the AI)                                                         |
-| `cliOutputRecorded`     | `payload.cliOutput.response` (full AI response text)                                                            |
-| `cliOutputRecorded`     | `payload.cliOutput.cliCommand` (CLI command string)                                                             |
-| `cliOutputRecorded`     | File paths in `payload.cliOutput.structured.events[]` (FILE_EDIT, FILE_WRITE, FILE_READ, FILE_DELETE data.path) |
-| `cliOutputRecorded`     | Bash command strings (`data.command` in BASH events)                                                            |
-| `statusMessageRecorded` | `payload.statusMessage.message`                                                                                 |
+| Event type              | Searchable content                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `cliOutputRecorded`     | `payload.cliOutput.prompt`                                                                                       |
+| `cliOutputRecorded`     | `payload.cliOutput.response`                                                                                     |
+| `cliOutputRecorded`     | `payload.cliOutput.cliCommand`                                                                                   |
+| `cliOutputRecorded`     | File paths in `payload.cliOutput.structured.events[]`                                                            |
+| `cliOutputRecorded`     | Bash command strings in structured events                                                                        |
+| `cliOutputRecorded`     | Tool names / server names / tool-result text / thinking text / generic text events                              |
+| `cliOutputRecorded`     | Diff hunk lines from `structuredPatch.lines` when present                                                        |
+| `statusMessageRecorded` | `payload.statusMessage.message`                                                                                  |
 
-Everything searchable lives in the history files — no need to read working files for search.
+Everything searchable lives in the history files. No working-file reads are needed
+for match extraction.
 
 The `manifest.json` for each run contains `workflowId`, `runId`, `startedAt`,
-`completedAt`, and `executionState` — all useful for labeling results.
+`completedAt`, and `executionState`, all useful for labeling results.
 
-### Extension-side: HistorySearchService
+### Extension-side: `HistorySearchService`
 
 New file: `src/flightpath/orchestration/HistorySearchService.ts`
 
-**Responsibility:** Stream-search `events.jsonl` files across all workflow runs, return
-ranked `HistorySearchResult[]`.
+**Responsibility:** Stream-search `events.jsonl` files across all workflow runs and
+return ranked `HistorySearchResult[]`.
 
 ```typescript
 export interface HistorySearchResult {
-  workflowId: string; // directory name under .history/
-  workflowName: string; // extracted from workflowId (strip timestamp suffix)
-  runId: number; // 1-based run number from manifest
-  runIndex: number; // 0 = most recent, for LOAD_RUN_HISTORY message
-  startedAt: number; // run timestamp, for display
-  executionState: string; // completed / running / error / cancelled
-  target: OutputExecutionTarget; // { kind, stepIndex } or { kind, loopIndex }
-  matchType: "response" | "file" | "bash" | "status" | "prompt";
-  matchSnippet: string; // ~100-char excerpt with the match centered
-  matchContext: string; // display label: "Prompt 2" / "Final Step Loop 1"
-  filePath?: string; // populated for matchType === "file"
-  workflowFilePath: string; // absolute path for LOAD_WORKFLOW message
+  workflowId: string;
+  workflowName: string;
+  runId: number;
+  runIndex: number; // 0 = most recent, for LOAD_RUN_HISTORY
+  startedAt: number;
+  executionState: string;
+  target: OutputExecutionTarget;
+  matchType:
+    | "response"
+    | "file"
+    | "bash"
+    | "status"
+    | "prompt"
+    | "tool"
+    | "diff";
+  matchSnippet: string;
+  matchContext: string; // "Prompt 2", "Final Step Loop 1", etc.
+  filePath?: string;
+  workflowFilePath: string;
 }
 ```
 
-**Algorithm (streaming, avoids loading whole files):**
+**Algorithm:**
 
+```text
+For each workflow history directory:
+  Read manifest.json
+  Read events.jsonl line by line
+    JSON.parse each line
+    If cliOutputRecorded:
+      search prompt / response / cliCommand
+      search structured events:
+        text / thinking / tool-result
+        bash command / output / error
+        file paths
+        tool names and server names
+        structuredPatch.lines
+    If statusMessageRecorded:
+      search message text
+  map run directories to runIndex (newest = 0)
 ```
-For each workflow-id directory in historyBaseDir:
-  Get manifest.json — skip if unreadable
-  Read events.jsonl line by line (readline interface)
-    For each line:
-      JSON.parse → WorkflowTimelineEvent
-      If CLI_OUTPUT_RECORDED:
-        Search prompt, response, cliCommand
-        Search each structured event for file paths and bash commands
-      If STATUS_MESSAGE_RECORDED:
-        Search message text
-      Collect matches with target (kind + index) and snippet
-  Map run directories → run indices (newest = 0) for LOAD_RUN_HISTORY
-```
 
-**Performance considerations:**
+**Performance constraints:**
 
-- Search is initiated on demand (not indexed), so debounce to 400ms before firing.
-- Cap results at 50 total. Stop scanning events.jsonl files once cap is reached.
-- Scan runs newest-first within each workflow; scan workflows alphabetically.
-- Minimum query length: 2 characters.
-- No persistent index needed for MVP — history directories are small enough that
-  line-by-line JSONL streaming is fast (sub-second for typical history sizes).
-- If performance becomes a concern, a background index (inverted index written to
-  `.flightpath/.history/_search-index.json`) can be added as a separate phase.
+- Search on demand, no persistent index for MVP
+- Debounce webview requests by ~400 ms
+- Minimum query length: 2
+- Cap results at 50
+- Scan runs newest-first within each workflow
+- Stop scanning once result cap is reached
 
 ### Message types
 
 Add to `src/types/DashboardConstants.ts`:
 
 ```typescript
-MESSAGE_TYPES.SEARCH_HISTORY; // webview → extension: { query: string }
-MESSAGE_TYPES.SEARCH_HISTORY_RESULTS; // extension → webview: { query: string, results: HistorySearchResult[], hasMore: boolean }
+MESSAGE_TYPES.SEARCH_HISTORY; // webview -> extension
+MESSAGE_TYPES.SEARCH_HISTORY_RESULTS; // extension -> webview
+MESSAGE_TYPES.OPEN_HISTORY_SEARCH; // extension -> webview
 ```
 
-The extension side handles `SEARCH_HISTORY` in `FlightPathWebviewProvider` (or its
-message handler delegation class), constructs `HistorySearchService`, runs the search,
-and replies with `SEARCH_HISTORY_RESULTS`.
+Suggested payloads:
 
-### Workflow ID → file path resolution
+```typescript
+// SEARCH_HISTORY
+{ query: string }
 
-`HistorySearchService` needs to resolve the workflowId back to an absolute working file
-path so the webview can open the workflow. The working file lives in
-`.flightpath/.queue/<workflowId>.flightpath.json`. The service should check for
-`.flightpath.json`, `.flightpath.yaml`, `.flightpath.yml` suffixes.
+// SEARCH_HISTORY_RESULTS
+{
+  query: string;
+  results: HistorySearchResult[];
+  hasMore: boolean;
+}
+```
+
+### Workflow ID to file path resolution
+
+`HistorySearchService` must resolve `workflowId` back to the workflow file so the
+result can be opened. Use the working file / known workflow resolution path already used
+by the router, not ad hoc string guessing in the webview.
+
+If exact resolution must happen from history metadata alone, check:
+
+- `.flightpath/.queue/<workflowId>.flightpath.json`
+- mapped source workflow path recorded in manifest metadata if available
+
+Do not rely on reconstructing `.yaml` or `.json` filenames from `workflowId` unless no
+better source exists.
 
 ### UI: Dedicated History Search Modal
 
-History search lives in a standalone modal — completely separate from the workflow
-dropdown. The dropdown's existing title/path/state filter is **not changed**.
+History search remains a standalone modal, separate from the workflow dropdown.
 
 **Trigger:**
 
-A `codicon-search` icon button added to the left tool group in `Header.tsx`, between
-the (standalone-only) Workspace Explorer button and the Settings gear button:
+- Add a `codicon-search` button to the left tool group in `Header.tsx`
+- Place it between the standalone-only Files button and the Settings button
+- Register `flightpath.searchHistory` so it can be keybound and opened from the
+  command palette
 
-```
-[WorkflowControls] | Save | Undo/Redo | [Files*] | 🔍 Search | ⚙️ Settings |
-                                          * standalone only
-```
+Current header slot:
 
-This keeps `WorkflowStatus` centered and uncluttered. The button is always visible —
-no need to open the workflow dropdown first. Clicking it sets
-`isHistorySearchOpen: true` in `uiStore`, which opens `HistorySearchModal`.
-
-A VS Code command (`flightpath.searchHistory`) is also registered so power users can
-bind a keybinding (e.g. `Ctrl+Shift+H`) and open the modal without touching the UI.
-The command posts `MESSAGE_TYPES.OPEN_HISTORY_SEARCH` to the webview.
-
-**Component:** `src/ui/webview-react/components/search/HistorySearchModal.tsx`
-
-```
-┌─ History Search ─────────────────────────────────[✕]─┐
-│  🔍  [search workflow history...                    ] │
-│                                                        │
-│  ─ 3 results ──────────────────────────────────────── │
-│                                                        │
-│  🕐 my-feature-workflow        Run 3 · Prompt 2       │
-│     response: "...the `src/auth/login.ts` needs to…"  │
-│                                                        │
-│  🕐 refactor-api               Run 1 · Prompt 4       │
-│     file: src/api/routes.ts                           │
-│                                                        │
-│  🕐 my-feature-workflow        Run 1 · Final Step     │
-│     bash: npm run build                               │
-│                                                        │
-│  ── Showing 3 of 50 results ──────────────────────── │
-└────────────────────────────────────────────────────────┘
+```text
+[WorkflowControls] | Save | Undo/Redo | [Files*] | Search | Settings
 ```
 
-**Modal layout:**
+### Modal component
 
-- `fixed inset-0 z-[200]` overlay with a semi-transparent backdrop
-  (`bg-black/40` or `bg-overlay-bg`)
-- Centered panel: `max-w-[600px] w-full mx-auto mt-24 rounded shadow-lg`
-  using `bg-dropdown-bg border border-dropdown-border`
-- Header row: title ("History Search"), close button (`codicon-close`)
-- Search input: full-width, autofocused on open, `bg-input-bg text-input-fg`
-- Loading indicator: a spinner or pulsing "Searching…" row while `historySearchLoading`
-- Results list: scrollable, max height ~50vh
-- Footer: "Showing N of M results" when `hasMore` is true; empty otherwise
+New file: `src/ui/webview-react/components/search/HistorySearchModal.tsx`
 
-**Result row design:**
+Layout remains the same general concept:
 
+- full-screen backdrop
+- centered panel
+- auto-focused search input
+- results list with snippets
+- loading row while searching
+- footer showing `Showing N of 50` when capped
+
+### Result click flow
+
+The original plan assumed `LOAD_WORKFLOW` and `LOAD_RUN_HISTORY` could be fired back to
+back. That is brittle. Use staged navigation state in the webview instead.
+
+Add to `uiStore`:
+
+```typescript
+pendingHistorySearchNavigation: {
+  runIndex: number;
+  findQuery: string;
+} | null;
 ```
-🕐  my-feature-workflow          Run 3 · Prompt 2
-    response: "...the `src/auth/login.ts` file needs..."
-```
-
-- Left icon: `codicon-search` (muted)
-- Top line: workflow name (`font-semibold`), run + step label (`text-description-fg`)
-- Bottom line: `matchType` label in muted text + snippet or file path
-- Hover: `bg-list-hover-bg`
-- The search term within the snippet is **bolded** (simple substring wrap in `<strong>`)
-
-**Keyboard:**
-
-- `Escape` → close modal
-- `Enter` on focused result row → same as click
 
 **Click action:**
 
 1. Send `LOAD_WORKFLOW` with `workflowFilePath`
-2. After the workflow loads, send `LOAD_RUN_HISTORY` with `runIndex`
-3. Store `{ pendingFindQuery: query }` in `uiStore`
-4. Close the modal
+2. Store `pendingHistorySearchNavigation = { runIndex, findQuery: query }`
+3. Close the modal
+4. When `FILE_SELECTED` or `SESSION_RESTORED` completes for the requested workflow,
+   the webview sends `LOAD_RUN_HISTORY` using the pending `runIndex`
+5. When `OUTPUT_HISTORY_LOADED` arrives, the webview opens the in-output find bar
+   with `findQuery`
+6. Clear the pending navigation state
 
-When `OutputSection` detects `uiStore.pendingFindQuery` is non-null after a history
-load completes (watch `isViewingHistory` + `historyOutputs`), it opens the find bar
-pre-populated with that query and clears `pendingFindQuery`.
+This removes a race between workflow load and history load.
 
-### State additions
+### UI state additions
 
-**`uiStore`:**
+Add to `uiStore`:
 
 ```typescript
-isHistorySearchOpen: boolean;      // modal visibility
+isHistorySearchOpen: boolean;
 historySearchResults: HistorySearchResult[];
 historySearchQuery: string;
 historySearchLoading: boolean;
-pendingFindQuery: string | null;   // populated when jumping from global search
+pendingFindQuery: string | null;
+pendingHistorySearchNavigation: {
+  runIndex: number;
+  findQuery: string;
+} | null;
 ```
 
-**`Header.tsx` changes:**
-
-Add a `codicon-search` button to the left `fp-button-group`, inserted between the
-Workspace Explorer divider/button block and the Settings button. Wire it to
-`toggleHistorySearch` from `uiStore`. No changes to `WorkflowDropdownHeader`,
-`WorkflowStatus`, or `RecentWorkflows`.
+`pendingFindQuery` is still useful for directly opening output find from other flows.
+`pendingHistorySearchNavigation` is specifically for cross-workflow history jumps.
 
 ---
 
 ## Feature 2: In-Output Find Bar
 
+### The implementation change
+
+This is the part of the plan that needs the real update.
+
+The old design relied on:
+
+- scanning the output DOM with `TreeWalker`
+- creating `Range`s
+- applying `CSS.highlights`
+
+That no longer fits the current codebase because the output is virtualized. DOM search
+would only see mounted rows, so:
+
+- match counts would be wrong
+- off-screen matches would be invisible to the searcher
+- navigation would break once output exceeds the viewport
+
+The new design must be **row-indexed and virtualizer-aware**.
+
 ### Component: `OutputFindBar`
 
 New file: `src/ui/webview-react/components/output/OutputFindBar.tsx`
 
-A floating bar that appears inside `OutputSection`, overlaid at the top-right of the
-output scroll area (matching VS Code's native find widget position).
+Same visible behavior:
 
-**State (managed in OutputSection or a `useOutputFind` hook):**
-
-```typescript
-interface OutputFindState {
-  isOpen: boolean;
-  query: string;
-  matchCount: number;
-  currentMatch: number; // 1-based, 0 if no matches
-  caseSensitive: boolean;
-}
-```
-
-**Controls:**
-
-- Text input
-- `N of M` match counter
-- Up/Down arrows (prev/next match)
-- Case-sensitive toggle button (Aa icon)
-- Close button (×)
+- text input
+- `N of M` counter
+- prev / next
+- case-sensitive toggle
+- close button
 
 **Keyboard:**
 
-- `Ctrl+F` / `Cmd+F` → open (key handler added to OutputSection)
-- `Enter` / `F3` → next match
-- `Shift+Enter` / `Shift+F3` → prev match
-- `Escape` → close and remove highlights
+- `Ctrl+F` / `Cmd+F` opens
+- `Enter` / `F3` goes next
+- `Shift+Enter` / `Shift+F3` goes previous
+- `Escape` closes
 
-### DOM highlight strategy
+### Row-model search
 
-The output area (`#output-content`) renders complex React-managed HTML. To avoid
-fighting React's reconciliation, we use **CSS custom highlight API** (`CSS.highlights`)
-where supported, with a `TreeWalker` + `Range` fallback for older browsers.
-
-**Recommended approach (CSS Custom Highlight API — supported in Chrome 105+, Edge 105+, Safari 17.2+):**
+New utility: `src/ui/webview-react/utils/outputFind.ts`
 
 ```typescript
-function applyHighlights(
-  container: HTMLElement,
-  query: string,
-  caseSensitive: boolean
-): Range[] {
-  CSS.highlights.delete("fp-find");
-  if (!query) return [];
-
-  const matches: Range[] = [];
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  const normalQuery = caseSensitive ? query : query.toLowerCase();
-
-  let node: Text | null;
-  while ((node = walker.nextNode() as Text | null)) {
-    const text = caseSensitive
-      ? (node.textContent ?? "")
-      : (node.textContent ?? "").toLowerCase();
-    let idx = 0;
-    while ((idx = text.indexOf(normalQuery, idx)) !== -1) {
-      const range = new Range();
-      range.setStart(node, idx);
-      range.setEnd(node, idx + query.length);
-      matches.push(range);
-      idx += query.length;
-    }
-  }
-
-  if (matches.length > 0) {
-    CSS.highlights.set("fp-find", new Highlight(...matches));
-  }
-  return matches;
+export interface OutputFindMatch {
+  matchId: string;
+  rowKey: string;
+  rowIndex: number;
+  rowKind: OutputRenderRow["rowKind"];
+  target?: OutputMessageTarget;
+  field:
+    | "header"
+    | "prompt"
+    | "command"
+    | "error"
+    | "response"
+    | "status"
+    | "filePath"
+    | "toolLabel"
+    | "toolContent"
+    | "diff";
+  start: number;
+  end: number;
+  preview: string;
 }
 ```
 
-In `globals.css`:
+The search index is built from `rows: OutputRenderRow[]`, not from the DOM.
 
-```css
-::highlight(fp-find) {
-  background-color: var(
-    --vscode-editor-findMatchHighlightBackground,
-    rgba(255, 200, 0, 0.3)
-  );
-  color: inherit;
-}
-::highlight(fp-find-current) {
-  background-color: var(
-    --vscode-editor-findMatchBackground,
-    rgba(255, 150, 0, 0.6)
-  );
-  color: inherit;
+**Searchable row content by row kind:**
+
+- `cli-header`
+  - step label
+  - step name
+  - harness/model label text
+- `prompt`
+  - prompt text
+- `cli-command`
+  - working directory + command
+- `error`
+  - error text
+- `plain-response`
+  - response text
+- `status`
+  - status message text
+- `structured-event`
+  - text / thinking text
+  - bash command / output / error
+  - file paths
+  - tool names / server names
+  - generic tool parameters serialized to display text
+  - tool-result output / error summaries
+  - diff hunk lines from `structuredPatch.lines`
+- `stats`
+  - skip in MVP to avoid noisy matches on token counts and session IDs
+
+### Highlight strategy
+
+Do not mutate the live DOM outside React. Highlighting should be component-driven.
+
+Add a small decoration model:
+
+```typescript
+export interface RowFindDecoration {
+  matches: Array<{
+    start: number;
+    end: number;
+    active: boolean;
+  }>;
 }
 ```
 
-A second `Highlight` named `fp-find-current` tracks the active match and is updated
-as the user navigates with arrow keys / Enter.
+And a helper:
 
-**Fallback (mark element wrapping):** For environments where `CSS.highlights` is not
-available, insert `<mark data-fp-find>` elements via DOM manipulation.
-The marks are inserted with `range.surroundContents()`. On close or query change, they
-are removed with `unwrap()`. This is simple but can break React-rendered content if
-React tries to reconcile on those nodes — mitigate by only removing marks right before
-React would re-render (on close), and rebuilding them after each render cycle.
+```typescript
+export function highlightText(
+  text: string,
+  decorations: RowFindDecoration["matches"]
+): React.ReactNode;
+```
 
-Given the VS Code webview engine (Chromium), CSS Custom Highlight API is the primary
-path. Implement fallback only if testing reveals it's needed.
+Implementation pattern:
+
+1. `useOutputFind` computes all `OutputFindMatch[]`
+2. It derives `Map<string, RowFindDecoration>` keyed by `row.key`
+3. `OutputSection` passes row-level decorations into `OutputRow`
+4. `OutputRow` and leaf output components wrap matching substrings in `<mark>`
+
+### Highlighting scope
+
+**MVP highlighting:**
+
+- prompt rows
+- command rows
+- error rows
+- status rows
+- header labels
+- file path labels
+- bash/tool summary strings
+- plain response rows
+
+**MVP diff behavior:**
+
+- diff text is searchable
+- navigation scrolls to the matching diff row
+- the active diff row is visually emphasized
+- exact inline diff-hunk highlighting inside `DiffView` is optional follow-up
+
+This is the right tradeoff for the current architecture. Searching diff text is useful;
+threading exact highlighted spans through `react-diff-view` can come later.
 
 ### `useOutputFind` hook
 
 New file: `src/ui/webview-react/hooks/useOutputFind.ts`
 
 ```typescript
+export interface OutputFindState {
+  isOpen: boolean;
+  query: string;
+  matchCount: number;
+  currentMatch: number; // 1-based
+  caseSensitive: boolean;
+}
+
 export function useOutputFind(
-  containerRef: RefObject<HTMLElement | null>,
+  rows: OutputRenderRow[],
+  onRevealRow: (rowIndex: number) => void,
   externalQuery?: string | null
 ) {
   const [state, setState] = useState<OutputFindState>({
@@ -346,114 +408,75 @@ export function useOutputFind(
     caseSensitive: false,
   });
 
-  const matchesRef = useRef<Range[]>([]);
+  const matchesRef = useRef<OutputFindMatch[]>([]);
 
-  const open = useCallback((initialQuery?: string) => {
+  const search = useCallback((query: string, caseSensitive: boolean) => {
+    if (!query) {
+      matchesRef.current = [];
+      setState((prev) => ({ ...prev, matchCount: 0, currentMatch: 0 }));
+      return;
+    }
+
+    const matches = findOutputMatches(rows, query, caseSensitive);
+    matchesRef.current = matches;
+
     setState((prev) => ({
       ...prev,
-      isOpen: true,
-      query: initialQuery ?? prev.query,
+      matchCount: matches.length,
+      currentMatch: matches.length > 0 ? 1 : 0,
     }));
-  }, []);
 
-  const close = useCallback(() => {
-    CSS.highlights?.delete("fp-find");
-    CSS.highlights?.delete("fp-find-current");
-    setState((prev) => ({
-      ...prev,
-      isOpen: false,
-      query: "",
-      matchCount: 0,
-      currentMatch: 0,
-    }));
-  }, []);
-
-  // Re-run search when query, caseSensitive, or rendered content changes
-  // (OutputSection passes allMessages.length as a dep to trigger re-search)
-  const search = useCallback(
-    (query: string, caseSensitive: boolean) => {
-      if (!containerRef.current || !query) {
-        CSS.highlights?.delete("fp-find");
-        CSS.highlights?.delete("fp-find-current");
-        matchesRef.current = [];
-        setState((prev) => ({ ...prev, matchCount: 0, currentMatch: 0 }));
-        return;
-      }
-      const matches = applyHighlights(
-        containerRef.current,
-        query,
-        caseSensitive
-      );
-      matchesRef.current = matches;
-      setState((prev) => ({
-        ...prev,
-        matchCount: matches.length,
-        currentMatch: matches.length > 0 ? 1 : 0,
-      }));
-      if (matches[0]) scrollToRange(matches[0]);
-      setCurrentHighlight(0);
-    },
-    [containerRef]
-  );
+    if (matches[0]) {
+      onRevealRow(matches[0].rowIndex);
+    }
+  }, [rows, onRevealRow]);
 
   const navigate = useCallback((direction: 1 | -1) => {
     const matches = matchesRef.current;
     if (matches.length === 0) return;
+
     setState((prev) => {
-      const next =
+      const nextIndex =
         (prev.currentMatch - 1 + direction + matches.length) % matches.length;
-      scrollToRange(matches[next]);
-      setCurrentHighlight(next);
-      return { ...prev, currentMatch: next + 1 };
+      onRevealRow(matches[nextIndex].rowIndex);
+      return { ...prev, currentMatch: nextIndex + 1 };
     });
-  }, []);
+  }, [onRevealRow]);
 
-  // Ctrl+F / Cmd+F keyboard handler (attached to the output section element)
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-        e.preventDefault();
-        open();
-      }
-    },
-    [open]
-  );
-
-  // When externalQuery arrives (from global history search jump), open with it
-  useEffect(() => {
-    if (externalQuery) open(externalQuery);
-  }, [externalQuery, open]);
-
-  return { state, setState, open, close, search, navigate, handleKeyDown };
+  return {
+    state,
+    setState,
+    search,
+    navigate,
+    rowDecorations,
+    activeMatch,
+    open,
+    close,
+    handleKeyDown,
+  };
 }
 ```
 
-`scrollToRange` scrolls the container so the range is visible:
+### Virtualizer-aware navigation
+
+`OutputSection` already owns the row virtualizer, so it should reveal matches by row
+index:
 
 ```typescript
-function scrollToRange(range: Range) {
-  range.startContainer.parentElement?.scrollIntoView({ block: "nearest" });
-}
+rowVirtualizer.scrollToIndex(match.rowIndex, { align: "center" });
 ```
 
-`setCurrentHighlight` updates the `fp-find-current` Highlight:
+If the row needs one paint to mount before an active decoration becomes visible, queue
+the active highlight update with `requestAnimationFrame`.
 
-```typescript
-function setCurrentHighlight(index: number) {
-  CSS.highlights?.delete("fp-find-current");
-  const range = matchesRef.current[index];
-  if (range) CSS.highlights?.set("fp-find-current", new Highlight(range));
-}
-```
+### Integration in `OutputSection`
 
-### Integration in OutputSection
+`OutputSection` already computes `rows`, `rowVirtualizer`, and handles history/live
+mode transitions. That is the correct integration point.
 
-`OutputSection` gets a `useOutputFind` call using `outputRef` as the container:
+Hook usage:
 
 ```tsx
-const pendingFindQuery = useUiStore((s) => s.pendingFindQuery);
-const clearPendingFindQuery = useUiStore((s) => s.clearPendingFindQuery);
-
 const {
   state: findState,
   setState: setFindState,
@@ -462,141 +485,148 @@ const {
   search: runSearch,
   navigate: navigateFind,
   handleKeyDown: handleFindKeyDown,
-} = useOutputFind(outputRef, pendingFindQuery);
+  rowDecorations,
+  activeMatch,
+} = useOutputFind(
+  rows,
+  (rowIndex) => rowVirtualizer.scrollToIndex(rowIndex, { align: "center" }),
+  pendingFindQuery
+);
+```
 
-// Clear the pending query after opening
-useEffect(() => {
-  if (pendingFindQuery) clearPendingFindQuery();
-}, [pendingFindQuery, clearPendingFindQuery]);
+Re-run search when `rows` changes, not when raw DOM changes:
 
-// Re-search when content changes and bar is open
+```tsx
 useEffect(() => {
   if (findState.isOpen && findState.query) {
     runSearch(findState.query, findState.caseSensitive);
   }
-}, [
-  allMessages.length,
-  findState.isOpen,
-  findState.query,
-  findState.caseSensitive,
-]);
-
-// Attach keyboard listener to output container
-useEffect(() => {
-  const el = outputRef.current;
-  if (!el) return;
-  el.addEventListener("keydown", handleFindKeyDown);
-  return () => el.removeEventListener("keydown", handleFindKeyDown);
-}, [handleFindKeyDown]);
+}, [rows, findState.isOpen, findState.query, findState.caseSensitive, runSearch]);
 ```
 
-The find bar renders inside the `OutputSection` return, positioned absolutely over
-the scroll container:
+Pass decorations into `OutputRow`:
 
 ```tsx
-{activeOutputTab === "output" && (
-  <div className="relative flex flex-row min-h-0 flex-1">
-    <div ref={outputRef} id="output-content" className="..." onScroll={handleScroll}>
-      {/* existing content */}
-    </div>
-
-    {findState.isOpen && (
-      <OutputFindBar
-        query={findState.query}
-        matchCount={findState.matchCount}
-        currentMatch={findState.currentMatch}
-        caseSensitive={findState.caseSensitive}
-        onQueryChange={(q) => { setFindState(p => ({...p, query: q})); runSearch(q, findState.caseSensitive); }}
-        onToggleCase={() => setFindState(p => ({...p, caseSensitive: !p.caseSensitive}))}
-        onNext={() => navigateFind(1)}
-        onPrev={() => navigateFind(-1)}
-        onClose={closeFind}
-      />
-    )}
-
-    {hasOutput && <OutputMinimap ... />}
-  </div>
-)}
+<OutputRow
+  row={row}
+  isExecutionActive={isExecutionActive}
+  findDecorations={rowDecorations.get(row.key)}
+  activeFindMatch={activeMatch?.rowKey === row.key ? activeMatch : null}
+  ...
+/>
 ```
 
-`OutputFindBar` is positioned with `absolute top-1 right-2 z-50` (above scroll content,
-right of the output area, left of the minimap).
+### Changes in `OutputRow` and leaf output components
+
+`OutputRow.tsx` needs new props:
+
+```typescript
+findDecorations?: RowFindDecoration;
+activeFindMatch?: OutputFindMatch | null;
+```
+
+Then thread them into the row-specific render paths:
+
+- `prompt` row → highlight prompt text
+- `cli-command` row → highlight command text
+- `error` row → highlight error text
+- `status` row → highlight message text
+- `cli-header` → highlight step name / labels
+- `structured-event`
+  - file operation rows: path labels
+  - bash/tool rows: summary text
+  - text/thinking/tool-result rows: displayed text
+- `plain-response`
+  - highlight directly when the row is rendering raw / plain text
+  - markdown-heavy highlighting can be a follow-up if needed
+
+### Positioning
+
+Render `OutputFindBar` inside the output view container with absolute positioning:
+
+```text
+top-right of the output pane, left of the minimap
+```
+
+No global CSS highlight rules are needed for the MVP because highlighting is done by
+rendered `<mark>` elements and active-row styling.
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: In-Output Find Bar (self-contained, no backend needed)
+### Phase 1: In-Output Find Bar
 
 1. Add `pendingFindQuery` to `uiStore`
-2. Create `useOutputFind` hook
-3. Create `OutputFindBar` component
-4. Integrate into `OutputSection`
-5. Add CSS highlight rules to `globals.css`
+2. Add `outputFind.ts` row-search utilities
+3. Create `useOutputFind`
+4. Create `OutputFindBar`
+5. Thread find decorations through `OutputSection` → `OutputRow`
+6. Add highlighting to the row types that own searchable text
+7. Add tests for row search and navigation behavior
 
-Deliverable: Ctrl+F opens a find bar that highlights matches in the current output view.
+**Deliverable:** `Ctrl+F` searches across the full virtualized output model,
+shows correct match counts, scrolls between matches reliably, and highlights visible
+matches in rendered rows.
 
-### Phase 2: Global History Search — Extension Side
+### Phase 2: Global History Search, extension side
 
-1. Add `HistorySearchResult` type to `src/types/`
-2. Add `SEARCH_HISTORY` / `SEARCH_HISTORY_RESULTS` to `DashboardConstants.ts`
+1. Add `HistorySearchResult` type
+2. Add `SEARCH_HISTORY`, `SEARCH_HISTORY_RESULTS`, `OPEN_HISTORY_SEARCH`
 3. Implement `HistorySearchService`
-4. Wire message handler in `FlightPathWebviewProvider`
+4. Wire message handling in the extension router / webview provider
 
-Deliverable: Extension can respond to a search query with ranked results from history.
+**Deliverable:** the extension can search history and return result sets with stable run
+targets.
 
-### Phase 3: Global History Search — Webview UI
+### Phase 3: Global History Search, webview side
 
-1. Add `isHistorySearchOpen`, `historySearchResults`, `historySearchQuery`,
-   `historySearchLoading` to `uiStore`
-2. Handle `SEARCH_HISTORY_RESULTS` in `useMessageHandler`
-3. Create `HistorySearchModal` component
-   (`src/ui/webview-react/components/search/HistorySearchModal.tsx`)
-4. Add `codicon-search` button to `Header.tsx` left tool group (between Files and Settings)
-5. Register `flightpath.searchHistory` VS Code command → posts `OPEN_HISTORY_SEARCH` to webview
-6. Implement click → load workflow + run → open find bar with query
+1. Add search modal state to `uiStore`
+2. Handle `SEARCH_HISTORY_RESULTS` and `OPEN_HISTORY_SEARCH` in `useMessageHandler`
+3. Create `HistorySearchModal`
+4. Add the header search button
+5. Register `flightpath.searchHistory`
+6. Implement staged navigation: workflow load → run load → output find open
 
-Deliverable: A `codicon-search` button in the left tool group opens a full-screen
-modal search. Results show rich snippets; clicking a result jumps to the matching
-run and pre-populates the in-output find bar.
+**Deliverable:** clicking a history result opens the correct workflow, loads the
+correct historical run, and lands in the output pane with the find bar ready.
+
+### Phase 4: Optional follow-up polish
+
+1. Inline markdown highlighting in `MarkdownText`
+2. Exact diff-hunk highlighting inside `DiffView`
+3. Streaming history-search progress events if large histories need them
+4. Optional persistent history index if search latency becomes noticeable
 
 ---
 
 ## Open Questions / Tradeoffs
 
-**Q: Should global search be synchronous (blocking) or streamed?**  
-An initial MVP is a single response after full scan. Add streaming via an
-`SEARCH_HISTORY_PROGRESS` message type if large history sets make the response lag
-noticeably.
+**Q: Does the plan need updating because the output section now uses virtualized rows?**  
+Yes. This is the main reason for the rewrite. DOM-wide highlight/search is no longer a
+correct model for the current output implementation.
 
-**Q: Should the `flightpath.searchHistory` command also be accessible from the command palette?**  
-Yes — register it with a `when` clause of `flightpath.webviewVisible` and add it to
-`package.json` `contributes.commands`. The command sends a `MESSAGE_TYPES.OPEN_HISTORY_SEARCH`
-message to the webview which sets `isHistorySearchOpen: true` in `uiStore`.
+**Q: Why not keep CSS Custom Highlight API anyway?**  
+Because the browser can only highlight mounted DOM nodes. With virtualization, most rows
+do not exist in the DOM at any given time, so counts and navigation would be wrong.
 
-**Q: Should file-path matches do any special path normalization?**  
-No. The search input is a plain string and all fields are matched as substrings. File
-paths are no different from any other text — if the user types the wrong slashes and
-it doesn't match, that's on them.
+**Q: Should stats rows be searchable?**  
+Not in MVP. Matching on token counts and session IDs is noisy and low-value compared to
+prompt/response/tool/file content.
 
-**Q: What about searching prompt text and CLI commands?**  
-Both are stored directly on `CliOutput` (`prompt: string` and `cliCommand?: string`) and
-are therefore present in every `cliOutputRecorded` event in `events.jsonl`. Include them
-in the initial implementation — no per-harness availability concerns.
+**Q: Should diff hunks be searchable?**  
+Yes. Search the diff text in the row index. For MVP, scrolling to and emphasizing the
+matching diff row is enough. Exact inline hunk highlighting can be added later.
 
-**Q: CSS Custom Highlight API availability?**  
-The VS Code webview runs on Electron's bundled Chromium. Electron 28+ (VS Code 1.87+)
-ships Chromium 120+, which fully supports `CSS.highlights`. A `"CSS" in window &&
-"highlights" in CSS` feature check is all that's needed to guard the fallback path.
+**Q: Should markdown responses be fully inline-highlighted?**  
+Not required for MVP. Start with row-level navigation plus highlighting for plain text
+and non-markdown labels. If users need exact inline markdown match paint, extend
+`MarkdownText` in a follow-up.
 
-**Q: Find bar and re-renders — will React's reconciliation break the DOM highlights?**  
-CSS Custom Highlights operate on `Range` objects tied to live DOM nodes. React's
-reconciliation only replaces DOM nodes that actually change. For streaming output (new
-chunks arrive), only the last `CliOutput` re-renders; existing matches in earlier nodes
-remain valid. The `useEffect` that re-runs `runSearch` when `allMessages.length` changes
-handles new content appearing below the current search position.
+**Q: Will this survive history switching and diff collapse changes?**  
+Yes, if the search re-runs against `rows` whenever `rows` changes. The row projection is
+already the source of truth for virtualization, minimap layout, and history rendering.
 
-**Q: What if the working file for a history result no longer exists?**  
-`HistorySearchService` should check for working file existence before including a result.
-If the file is missing, either omit the result or show it as "archived" with the
-LOAD_WORKFLOW sending a restore-from-history path.
+**Q: Is result click sequencing fragile?**  
+It is if done naively. That is why the webview should stage pending navigation state and
+wait for workflow-load completion before sending `LOAD_RUN_HISTORY`.
