@@ -21,11 +21,12 @@ import React, {
   useCallback,
 } from "react";
 import { Diff, Hunk, Decoration, tokenize, markEdits } from "react-diff-view";
-import {
-  getCollapsedLinesCountBetween,
-  expandFromRawCode,
-} from "react-diff-view";
+import { getCollapsedLinesCountBetween } from "react-diff-view";
 import type { HunkData, DiffType } from "react-diff-view";
+import {
+  applyDiffGapExpansionState,
+  type DiffGapExpansionState,
+} from "@utils/outputRenderUtils";
 import {
   toRdvHunks,
   toRdvFromContent,
@@ -86,6 +87,10 @@ interface DiffViewProps {
   collapsed?: boolean;
   /** Called when the user toggles collapse in controlled mode. */
   onCollapsedChange?: (collapsed: boolean) => void;
+  /** Controlled hidden-gap expansion state keyed by base gap index. */
+  expandedGaps?: DiffGapExpansionState;
+  /** Called when the user expands hidden context in controlled mode. */
+  onExpandGap?: (gapIndex: number, nextExpandedToLine: number) => void;
   className?: string;
 }
 
@@ -99,6 +104,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
   actionSlot,
   collapsed,
   onCollapsedChange,
+  expandedGaps,
+  onExpandGap,
   className = "",
 }) => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
@@ -123,6 +130,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }
     setUncontrolledExpanded((prev) => !prev);
   }, [isControlled, isExpanded, onCollapsedChange]);
+  const [uncontrolledExpandedGaps, setUncontrolledExpandedGaps] =
+    useState<Map<number, number>>(new Map());
+  const activeExpandedGaps = expandedGaps ?? uncontrolledExpandedGaps;
 
   // Width tracking for split vs unified layout.
   const [narrowCallbackRef, isNarrow] = useElementNarrow<HTMLDivElement>(
@@ -174,23 +184,33 @@ export const DiffView: React.FC<DiffViewProps> = ({
     return { baseHunks: [], diffType: "modify" };
   }, [isExpanded, structuredPatch, oldContent, newContent]);
 
-  // Track the currently-displayed hunks (can be expanded by user clicks).
-  const [expandedHunks, setExpandedHunks] = useState<HunkData[]>(baseHunks);
   useEffect(() => {
-    setExpandedHunks(baseHunks);
-  }, [baseHunks]);
+    if (expandedGaps !== undefined) return;
+    setUncontrolledExpandedGaps(new Map());
+  }, [baseHunks, expandedGaps]);
+
+  const expandedHunks = useMemo(
+    () => applyDiffGapExpansionState(baseHunks, oldContent, activeExpandedGaps),
+    [activeExpandedGaps, baseHunks, oldContent]
+  );
 
   // Expand hidden context for the gap between two consecutive hunks.
   const handleExpand = useCallback(
-    (prevHunk: HunkData | null, nextHunk: HunkData, mode: "chunk" | "all") => {
+    (
+      gapIndex: number,
+      prevHunk: HunkData | null,
+      nextHunk: HunkData,
+      mode: "chunk" | "all"
+    ) => {
       if (oldContent === undefined) return;
       const gapStart =
         prevHunk !== null ? prevHunk.oldStart + prevHunk.oldLines : 1;
       const gapEnd = nextHunk.oldStart;
-      const expandEnd =
+      const currentExpandedToLine = activeExpandedGaps.get(gapIndex) ?? gapStart;
+      const nextExpandedToLine =
         mode === "all"
           ? gapEnd
-          : Math.min(gapStart + HIDDEN_CONTEXT_CHUNK_LINES, gapEnd);
+          : Math.min(currentExpandedToLine + HIDDEN_CONTEXT_CHUNK_LINES, gapEnd);
       const oldLineCount = oldContent.split("\n").length;
       if (gapStart > oldLineCount) {
         console.warn(
@@ -199,11 +219,16 @@ export const DiffView: React.FC<DiffViewProps> = ({
         );
         return;
       }
-      setExpandedHunks((prev) =>
-        expandFromRawCode(prev, oldContent, gapStart, expandEnd)
-      );
+      if (expandedGaps === undefined) {
+        setUncontrolledExpandedGaps((previous) => {
+          const next = new Map(previous);
+          next.set(gapIndex, nextExpandedToLine);
+          return next;
+        });
+      }
+      onExpandGap?.(gapIndex, nextExpandedToLine);
     },
-    [oldContent]
+    [activeExpandedGaps, expandedGaps, oldContent, onExpandGap]
   );
 
   // Syntax highlighting + word-level edit marks via refractor (synchronous useMemo).
@@ -329,7 +354,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                           <button
                             type="button"
                             onClick={() =>
-                              handleExpand(prevHunk, hunk, "chunk")
+                              handleExpand(i, prevHunk, hunk, "chunk")
                             }
                             className="cursor-pointer border-none bg-transparent p-0 font-mono text-link-fg hover:text-link-active-fg"
                             title={
@@ -346,7 +371,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                             <button
                               type="button"
                               onClick={() =>
-                                handleExpand(prevHunk, hunk, "all")
+                                handleExpand(i, prevHunk, hunk, "all")
                               }
                               className="cursor-pointer border-none bg-transparent p-0 font-mono text-description-fg hover:text-foreground"
                               title="Expand all hidden lines"

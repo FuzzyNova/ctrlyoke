@@ -1,4 +1,6 @@
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
+import { expandFromRawCode } from "react-diff-view";
+import type { HunkData, ViewType } from "react-diff-view";
 import type {
   CliEvent,
   CliOutput as CliOutputType,
@@ -14,7 +16,11 @@ import {
 import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
 import { sameFilePath } from "./promptUndo";
 import {
+  buildDiffRenderPlanFromStats,
   getRenderedDiffStats,
+  type DiffGapExpansionPlanState,
+  type DiffRenderPlan,
+  type RenderedDiffRun,
   toRdvFromContent,
   toRdvHunks,
 } from "./rdvAdapter";
@@ -34,11 +40,50 @@ export interface VisibleStructuredEvent {
 export interface OutputDiffStats {
   added: number;
   removed: number;
-  runs: Array<{
-    count: number;
-    addedLines: number;
-    removedLines: number;
-  }>;
+  runs: RenderedDiffRun[];
+  renderPlan: DiffRenderPlan;
+}
+
+export type DiffGapExpansionState = ReadonlyMap<number, number>;
+
+export interface ComputeOutputDiffStatsOptions {
+  viewType?: ViewType;
+  collapsed?: boolean;
+  expandedGaps?: DiffGapExpansionState;
+  outputFontSize?: number;
+}
+
+interface AppliedDiffGapExpansionResult {
+  hunks: HunkData[];
+  gapExpansion: DiffGapExpansionPlanState;
+}
+
+function buildOutputDiffStats(
+  renderedStats: { added: number; removed: number; runs: RenderedDiffRun[] },
+  {
+    viewType,
+    collapsed,
+    outputFontSize,
+    gapExpansion,
+    layoutMode = "file-edit",
+  }: {
+    viewType: ViewType;
+    collapsed: boolean;
+    outputFontSize?: number;
+    gapExpansion?: DiffGapExpansionPlanState;
+    layoutMode?: "file-edit" | "standalone";
+  }
+): OutputDiffStats {
+  return {
+    ...renderedStats,
+    renderPlan: buildDiffRenderPlanFromStats(renderedStats, {
+      viewType,
+      collapsed,
+      outputFontSize,
+      layoutMode,
+      gapExpansion,
+    }),
+  };
 }
 
 export function isScriptOutput(output: CliOutputType): boolean {
@@ -155,8 +200,15 @@ export function getDisplayStructuredPatch(
 export function computeOutputDiffStats(
   event: CliEvent,
   workspaceSnapshot?: WorkspaceSnapshot,
-  viewType: "split" | "unified" = "unified"
+  options: ComputeOutputDiffStatsOptions = {}
 ): OutputDiffStats {
+  const {
+    viewType = "unified",
+    collapsed = false,
+    expandedGaps,
+    outputFontSize,
+  } = options;
+
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
     const data = event.data as FileEditData;
     const structuredPatch = data.path
@@ -167,37 +219,74 @@ export function computeOutputDiffStats(
       : data.oldContent;
 
     if (structuredPatch && structuredPatch.length > 0) {
-      return getRenderedDiffStats(toRdvHunks(structuredPatch), viewType);
+      const expandedDiff = applyDiffGapExpansionStateWithStats(
+        toRdvHunks(structuredPatch),
+        beforeContent,
+        expandedGaps
+      );
+      return buildOutputDiffStats(getRenderedDiffStats(expandedDiff.hunks, viewType), {
+        viewType,
+        collapsed,
+        outputFontSize,
+        gapExpansion: expandedDiff.gapExpansion,
+      });
     }
     if (beforeContent !== undefined && data.newContent !== undefined) {
       const { hunks } = toRdvFromContent(beforeContent, data.newContent);
-      return getRenderedDiffStats(hunks, viewType);
+      const expandedDiff = applyDiffGapExpansionStateWithStats(
+        hunks,
+        beforeContent,
+        expandedGaps
+      );
+      return buildOutputDiffStats(getRenderedDiffStats(expandedDiff.hunks, viewType), {
+        viewType,
+        collapsed,
+        outputFontSize,
+        gapExpansion: expandedDiff.gapExpansion,
+      });
     }
-    return { added: 0, removed: 0, runs: [] };
+    return buildOutputDiffStats(
+      { added: 0, removed: 0, runs: [] },
+      { viewType, collapsed, outputFontSize }
+    );
   }
 
   if (event.type === CLI_EVENT_TYPES.FILE_WRITE) {
     const content = (event.data as { content?: string }).content;
-    if (!content) return { added: 0, removed: 0, runs: [] };
+    if (!content) {
+      return buildOutputDiffStats(
+        { added: 0, removed: 0, runs: [] },
+        { viewType, collapsed, outputFontSize, layoutMode: "standalone" }
+      );
+    }
     // Represent as a single added "row" — the file-write output shows one indicator
     // line, not a full diff view. Using the raw line count here inflates the run
     // count without adding any colored area in the minimap.
-    return {
-      added: 1,
-      removed: 0,
-      runs: [{ count: 1, addedLines: 1, removedLines: 0 }],
-    };
+    return buildOutputDiffStats(
+      {
+        added: 1,
+        removed: 0,
+        runs: [{ count: 1, addedLines: 1, removedLines: 0 }],
+      },
+      { viewType, collapsed, outputFontSize, layoutMode: "standalone" }
+    );
   }
 
   if (event.type === CLI_EVENT_TYPES.FILE_DELETE) {
-    return {
-      added: 0,
-      removed: 1,
-      runs: [{ count: 1, addedLines: 0, removedLines: 1 }],
-    };
+    return buildOutputDiffStats(
+      {
+        added: 0,
+        removed: 1,
+        runs: [{ count: 1, addedLines: 0, removedLines: 1 }],
+      },
+      { viewType, collapsed, outputFontSize, layoutMode: "standalone" }
+    );
   }
 
-  return { added: 0, removed: 0, runs: [] };
+  return buildOutputDiffStats(
+    { added: 0, removed: 0, runs: [] },
+    { viewType, collapsed, outputFontSize }
+  );
 }
 
 export function getOutputDiffKey(
@@ -217,6 +306,96 @@ export function getOutputDiffKey(
 
 export function getCliTextForCopy(output: CliOutputType): string | undefined {
   return extractCliOutputText(output);
+}
+
+export function applyDiffGapExpansionState(
+  baseHunks: readonly HunkData[],
+  oldContent: string | undefined,
+  expandedGaps?: DiffGapExpansionState
+): HunkData[] {
+  return applyDiffGapExpansionStateWithStats(baseHunks, oldContent, expandedGaps).hunks;
+}
+
+function applyDiffGapExpansionStateWithStats(
+  baseHunks: readonly HunkData[],
+  oldContent: string | undefined,
+  expandedGaps?: DiffGapExpansionState
+): AppliedDiffGapExpansionResult {
+  const requestedGaps = expandedGaps?.size ?? 0;
+
+  if (baseHunks.length === 0) {
+    return {
+      hunks: [],
+      gapExpansion: {
+        model: requestedGaps > 0 ? "base-only-missing-old-content" : "none",
+        requestedGaps,
+        appliedGaps: 0,
+      },
+    };
+  }
+
+  const initialHunks = [...baseHunks];
+  if (expandedGaps == null || expandedGaps.size === 0) {
+    return {
+      hunks: initialHunks,
+      gapExpansion: {
+        model: "none",
+        requestedGaps: 0,
+        appliedGaps: 0,
+      },
+    };
+  }
+
+  if (oldContent === undefined) {
+    return {
+      hunks: initialHunks,
+      gapExpansion: {
+        model: "base-only-missing-old-content",
+        requestedGaps,
+        appliedGaps: 0,
+      },
+    };
+  }
+
+  const oldLineCount = oldContent.split("\n").length;
+  let appliedGaps = 0;
+
+  const hunks = [...expandedGaps.entries()]
+    .sort(([leftGapIndex], [rightGapIndex]) => leftGapIndex - rightGapIndex)
+    .reduce((expandedHunks, [gapIndex, expandedToLine]) => {
+      if (gapIndex <= 0 || gapIndex >= baseHunks.length) {
+        return expandedHunks;
+      }
+
+      const previousHunk = baseHunks[gapIndex - 1];
+      const nextHunk = baseHunks[gapIndex];
+      if (!previousHunk || !nextHunk) {
+        return expandedHunks;
+      }
+
+      const gapStart = previousHunk.oldStart + previousHunk.oldLines;
+      const gapEnd = nextHunk.oldStart;
+      if (gapStart > oldLineCount || expandedToLine <= gapStart) {
+        return expandedHunks;
+      }
+
+      appliedGaps++;
+      return expandFromRawCode(
+        expandedHunks,
+        oldContent,
+        gapStart,
+        Math.min(expandedToLine, gapEnd)
+      );
+    }, initialHunks);
+
+  return {
+    hunks,
+    gapExpansion: {
+      model: "exact",
+      requestedGaps,
+      appliedGaps,
+    },
+  };
 }
 
 export function buildUndoRecordKey(target: OutputMessageTarget): string {

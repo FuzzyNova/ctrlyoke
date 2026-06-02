@@ -8,8 +8,19 @@
  * Re-exports from FileOperationOutput and DiffView are preserved for
  * backward compatibility with existing consumers.
  */
-import React, { useState, useId } from "react";
+import React, { useId, useState } from "react";
 import { extractKeyParameters } from "@utils/outputUtils";
+import {
+  DEFAULT_TOOL_CALL_EXPANSION_STATE,
+  buildToolCallRenderPlan,
+  getGenericToolCallOutput,
+  getGenericToolCallParamsText,
+  getVisibleToolCallText,
+  type ToolCallExpansionSection,
+  type ToolCallExpansionState,
+  type ToolCallRenderPlan,
+  type ToolCallSectionRenderPlan,
+} from "@utils/toolCallLayout";
 import {
   TOOL_CALL_TERMINAL,
   TOOL_CALL_LINE,
@@ -109,53 +120,68 @@ interface GenericToolCallOutputProps {
   name: string;
   parameters?: Record<string, unknown>;
   result?: ToolResult;
+  expansion?: ToolCallExpansionState;
+  renderPlan?: ToolCallRenderPlan;
+  onExpansionChange?: (
+    section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => void;
   className?: string;
 }
-
-const MAX_RESULT_LINES = 10;
 
 export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   name,
   parameters,
   result,
+  expansion,
+  renderPlan,
+  onExpansionChange,
   className = "",
 }) => {
-  const [paramsExpanded, setParamsExpanded] = useState(false);
-  const [outputExpanded, setOutputExpanded] = useState(false);
-  const [errorExpanded, setErrorExpanded] = useState(false);
+  const [uncontrolledExpansion, setUncontrolledExpansion] =
+    useState<ToolCallExpansionState>(() => ({
+      ...DEFAULT_TOOL_CALL_EXPANSION_STATE,
+    }));
   const containerId = useId();
+  const resolvedExpansion = expansion ?? uncontrolledExpansion;
 
   const params = extractKeyParameters(name, parameters);
-  const hasParams = parameters != null && Object.keys(parameters).length > 0;
+  const fullParamsText = getGenericToolCallParamsText(parameters);
+  const { output: outputStr, error: errorStr } = getGenericToolCallOutput(result);
+  const resolvedRenderPlan =
+    renderPlan ??
+    buildToolCallRenderPlan({
+      parameters,
+      result,
+      expansion: resolvedExpansion,
+    });
 
-  const fullParamsText = hasParams
-    ? Object.entries(parameters!)
-        .map(
-          ([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`
-        )
-        .join("\n")
-    : "";
-
-  const outputStr =
-    typeof result?.output === "string" ? result.output : undefined;
-  const errorStr =
-    result != null && !result.success && typeof result.error === "string"
-      ? result.error
-      : undefined;
+  const updateExpansion = (
+    section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => {
+    if (expansion === undefined) {
+      setUncontrolledExpansion((previous) => {
+        switch (section) {
+          case "params":
+            return { ...previous, paramsExpanded: expanded };
+          case "output":
+            return { ...previous, outputExpanded: expanded };
+          case "error":
+            return { ...previous, errorExpanded: expanded };
+          default:
+            return previous;
+        }
+      });
+    }
+    onExpansionChange?.(section, expanded);
+  };
 
   const renderExpandableSection = (
     content: string,
     type: "output" | "error",
-    isExpanded: boolean,
-    setExpanded: (v: boolean) => void
+    sectionPlan: ToolCallSectionRenderPlan
   ) => {
-    const lines = content.split("\n");
-    const isTruncated = lines.length > MAX_RESULT_LINES;
-    const visible =
-      isTruncated && !isExpanded
-        ? lines.slice(0, MAX_RESULT_LINES).join("\n")
-        : content;
-    const hiddenLines = lines.length - MAX_RESULT_LINES;
     const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
 
     return (
@@ -165,16 +191,16 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           className="min-w-0 flex-1 whitespace-pre-wrap break-words"
           id={`${containerId}-${type}`}
         >
-          {visible}
-          {isTruncated && (
+          {getVisibleToolCallText(content, sectionPlan)}
+          {sectionPlan.canToggle && (
             <button
               type="button"
               className="text-bash-expand-link no-underline text-sm ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
-              onClick={() => setExpanded(!isExpanded)}
+              onClick={() => updateExpansion(type, !sectionPlan.isExpanded)}
             >
-              {isExpanded
+              {sectionPlan.isExpanded
                 ? "[show less]"
-                : `[show ${hiddenLines} more line${hiddenLines !== 1 ? "s" : ""}]`}
+                : `[show ${sectionPlan.hiddenLineCount} more line${sectionPlan.hiddenLineCount !== 1 ? "s" : ""}]`}
             </button>
           )}
         </div>
@@ -188,38 +214,34 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
         <span className="min-w-0 flex-1 break-words">
           <ToolDot status={resultDotStatus(result)} /> {name}({params})
         </span>
-        {hasParams && (
+        {resolvedRenderPlan.params.canToggle && (
           <button
             type="button"
             className="text-bash-expand-link text-sm cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
-            onClick={() => setParamsExpanded(!paramsExpanded)}
-            title={paramsExpanded ? "Hide parameters" : "Show all parameters"}
+            onClick={() =>
+              updateExpansion("params", !resolvedRenderPlan.params.isExpanded)
+            }
+            title={
+              resolvedRenderPlan.params.isExpanded
+                ? "Hide parameters"
+                : "Show all parameters"
+            }
           >
-            {paramsExpanded ? "▲" : "▼"}
+            {resolvedRenderPlan.params.isExpanded ? "▲" : "▼"}
           </button>
         )}
       </div>
 
-      {paramsExpanded && fullParamsText && (
+      {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
         <div className="pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap break-all">
           {fullParamsText}
         </div>
       )}
 
       {outputStr &&
-        renderExpandableSection(
-          outputStr,
-          "output",
-          outputExpanded,
-          setOutputExpanded
-        )}
+        renderExpandableSection(outputStr, "output", resolvedRenderPlan.output)}
       {errorStr &&
-        renderExpandableSection(
-          errorStr,
-          "error",
-          errorExpanded,
-          setErrorExpanded
-        )}
+        renderExpandableSection(errorStr, "error", resolvedRenderPlan.error)}
     </div>
   );
 };
@@ -227,4 +249,3 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
 // ============================================================================
 // ToolCallOutput — Event Router
 // ============================================================================
-

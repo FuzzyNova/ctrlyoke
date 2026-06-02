@@ -20,7 +20,7 @@ export interface MinimapDiffBlock {
   rowKey: string;
   /** 0–1 fraction of the scroll area where this diff starts */
   scrollFraction: number;
-  /** 0–1 fraction of the scroll area the diff occupies (DOM-measured) */
+  /** 0–1 fraction of the scroll area the diff occupies from shared row layout. */
   heightFraction: number;
   /** Total added lines — used for the collapsed 5px line split */
   addedLines: number;
@@ -60,7 +60,6 @@ interface OutputMinimapProps {
   steps: MinimapStep[];
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   contentHeight: number;
-  showDecorations?: boolean;
   onStepClick?: (step: MinimapStep) => void;
 }
 
@@ -103,7 +102,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   steps,
   scrollContainerRef,
   contentHeight,
-  showDecorations = true,
   onStepClick,
 }) => {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
@@ -330,8 +328,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       style={{ cursor: canScroll ? "pointer" : "default", touchAction: "none" }}
     >
       {/* Diff overlays — rendered below thumb and markers */}
-      {showDecorations &&
-        steps.map((step) => (
+      {steps.map((step) => (
           <React.Fragment key={`diffs-${step.key}`}>
             {step.diffBlocks.map((block) => {
               const significantLines = block.addedLines + block.removedLines;
@@ -480,8 +477,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       />
 
       {/* Step markers */}
-      {showDecorations &&
-        steps.map((step) => {
+      {steps.map((step) => {
           const topPct = step.scrollFraction * 100;
           // isHovered: true when mouse-hovering OR popup was pinned open by tap
           const isHovered = hoveredKey === step.key || pinnedKey === step.key;

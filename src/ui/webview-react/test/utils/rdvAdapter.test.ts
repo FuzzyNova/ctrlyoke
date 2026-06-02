@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { tokenize } from "react-diff-view";
-import { getRenderedDiffStats, type RenderedDiffRun } from "@utils/rdvAdapter";
+import {
+  buildDiffRenderPlan,
+  getRenderedDiffStats,
+  type RenderedDiffRun,
+} from "@utils/rdvAdapter";
 import {
   getLanguageFromPath,
   normalizeSyntaxLanguage,
@@ -106,6 +110,77 @@ describe("getRenderedDiffStats", () => {
       { count: 1, addedLines: 0, removedLines: 0 },
       { count: 1, addedLines: 0, removedLines: 1 },
     ]);
+  });
+});
+
+describe("buildDiffRenderPlan", () => {
+  const replaceHunk = [
+    {
+      content: "@@ -1,3 +1,3 @@",
+      oldStart: 1,
+      oldLines: 3,
+      newStart: 1,
+      newLines: 3,
+      changes: [
+        {
+          type: "delete" as const,
+          isDelete: true as const,
+          lineNumber: 1,
+          content: "removed",
+        },
+        {
+          type: "insert" as const,
+          isInsert: true as const,
+          lineNumber: 1,
+          content: "added",
+        },
+        {
+          type: "normal" as const,
+          isNormal: true as const,
+          oldLineNumber: 2,
+          newLineNumber: 2,
+          content: "context",
+        },
+      ],
+    },
+  ];
+
+  it("builds row-sizing pieces from rendered stats", () => {
+    const plan = buildDiffRenderPlan(replaceHunk, {
+      viewType: "unified",
+      outputFontSize: 13,
+    });
+
+    expect(plan.runs).toEqual<RenderedDiffRun[]>([
+      { count: 1, addedLines: 0, removedLines: 1 },
+      { count: 1, addedLines: 1, removedLines: 0 },
+      { count: 1, addedLines: 0, removedLines: 0 },
+    ]);
+    expect(plan.renderedRows).toBe(3);
+    expect(plan.bodyHeight).toBeCloseTo(plan.renderedRows * plan.lineHeight);
+    expect(plan.diffBlockHeight).toBeCloseTo(plan.headerHeight + plan.bodyHeight);
+    expect(plan.totalHeight).toBeCloseTo(
+      plan.toolLineHeight +
+        plan.headerHeight +
+        plan.decorationHeight +
+        plan.bodyHeight
+    );
+  });
+
+  it("models split replacements with fewer rendered rows than unified", () => {
+    const unifiedPlan = buildDiffRenderPlan(replaceHunk, {
+      viewType: "unified",
+      outputFontSize: 13,
+    });
+    const splitPlan = buildDiffRenderPlan(replaceHunk, {
+      viewType: "split",
+      outputFontSize: 13,
+    });
+
+    expect(unifiedPlan.renderedRows).toBe(3);
+    expect(splitPlan.renderedRows).toBe(2);
+    expect(splitPlan.bodyHeight).toBeLessThan(unifiedPlan.bodyHeight);
+    expect(splitPlan.totalHeight).toBeLessThan(unifiedPlan.totalHeight);
   });
 });
 

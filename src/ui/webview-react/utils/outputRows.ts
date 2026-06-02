@@ -4,6 +4,7 @@ import type {
   CliOutput as CliOutputType,
   CliEvent,
   OutputStatusMessage,
+  ToolCall,
 } from "../types/cliEvents";
 import type {
   StepOutput,
@@ -23,6 +24,15 @@ import {
   getVisibleStructuredEvents,
   isScriptOutput,
 } from "./outputRenderUtils";
+import type { DiffGapExpansionState } from "./outputRenderUtils";
+import {
+  DEFAULT_TOOL_CALL_EXPANSION_STATE,
+  buildToolCallRenderPlan,
+  estimateGenericToolCallHeight,
+  type ToolCallRenderPlan,
+  type ToolCallExpansionState,
+} from "./toolCallLayout";
+import type { DiffRenderPlan } from "./rdvAdapter";
 
 export interface OutputRowPromptUndoAction {
   label: string;
@@ -48,6 +58,13 @@ export interface OutputRowDiffMeta {
     removedLines: number;
   }>;
   isCollapsed: boolean;
+  expandedGaps?: DiffGapExpansionState;
+  renderPlan: DiffRenderPlan;
+}
+
+export interface OutputRowToolCallMeta {
+  expansion: ToolCallExpansionState;
+  renderPlan: ToolCallRenderPlan;
 }
 
 interface OutputRowBase {
@@ -124,6 +141,7 @@ export interface StructuredEventRow extends OutputRowBase {
   workspaceSnapshot?: WorkspaceSnapshot;
   undoRecord?: UndoRecord;
   diff?: OutputRowDiffMeta;
+  toolCall?: OutputRowToolCallMeta;
   hideDiff: boolean;
 }
 
@@ -177,6 +195,8 @@ export interface BuildOutputRowsInput {
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot | undefined>;
   undoRecords: Record<string, UndoRecord | undefined>;
   diffCollapseState: ReadonlyMap<string, boolean>;
+  diffExpansionState: ReadonlyMap<string, DiffGapExpansionState>;
+  toolCallExpansionState: ReadonlyMap<string, ToolCallExpansionState>;
   defaultDiffCollapsed: boolean;
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
@@ -234,7 +254,7 @@ function getStreamingChunk(
     : input.finalStepStreamingChunks[target.index] || "";
 }
 
-function estimateStructuredEventHeight(event: CliEvent): number {
+function estimateBaseStructuredEventHeight(event: CliEvent): number {
   switch (event.type) {
     case "text":
       return 120;
@@ -258,31 +278,32 @@ function estimateStructuredEventHeight(event: CliEvent): number {
 
 function estimateDiffStructuredEventHeight(
   row: StructuredEventRow,
+  _outputFontSize: number
+): number {
+  if (!row.diff || row.hideDiff) {
+    return estimateBaseStructuredEventHeight(row.event);
+  }
+  return row.diff.renderPlan.totalHeight;
+}
+
+function estimateToolCallStructuredEventHeight(
+  row: StructuredEventRow,
   outputFontSize: number
 ): number {
-  if (!row.diff || row.event.type !== CLI_EVENT_TYPES.FILE_EDIT || row.hideDiff) {
-    return estimateStructuredEventHeight(row.event);
+  if (row.event.type !== CLI_EVENT_TYPES.TOOL_CALL || !row.toolCall) {
+    return estimateBaseStructuredEventHeight(row.event);
   }
 
-  const toolLineHeight = Math.max(22, outputFontSize * 1.7);
-  const collapsedHeaderHeight = Math.max(24, outputFontSize * 1.9);
-  const diffLineHeight = Math.max(18, (outputFontSize - 1) * 1.55);
-  const verticalChrome = 28;
-
-  if (row.diff.isCollapsed) {
-    return toolLineHeight + collapsedHeaderHeight + verticalChrome;
+  if (row.toolCall.renderPlan) {
+    return row.toolCall.renderPlan.totalHeight;
   }
 
-  const renderedRows = row.diff.runs.reduce((sum, run) => sum + run.count, 0);
-  if (renderedRows === 0) {
-    return toolLineHeight + collapsedHeaderHeight + verticalChrome;
-  }
-
-  return (
-    toolLineHeight +
-    collapsedHeaderHeight +
-    verticalChrome +
-    renderedRows * diffLineHeight
+  const data = row.event.data as ToolCall;
+  return estimateGenericToolCallHeight(
+    data.parameters,
+    data.result,
+    row.toolCall.expansion,
+    outputFontSize
   );
 }
 
@@ -312,26 +333,20 @@ export function estimateOutputRowHeight(
     case "stats":
       return 24;
     case "structured-event":
-      return estimateDiffStructuredEventHeight(row, outputFontSize);
+      return row.diff
+        ? estimateDiffStructuredEventHeight(row, outputFontSize)
+        : estimateToolCallStructuredEventHeight(row, outputFontSize);
   }
 }
 
 export function estimateOutputDiffBlockHeight(
   row: StructuredEventRow,
-  outputFontSize = 13
+  _outputFontSize = 13
 ): number {
-  if (!row.diff || row.event.type !== CLI_EVENT_TYPES.FILE_EDIT || row.hideDiff) {
+  if (!row.diff || row.hideDiff) {
     return row.estimateSize;
   }
-
-  const collapsedHeaderHeight = Math.max(24, outputFontSize * 1.9);
-  if (row.diff.isCollapsed) {
-    return collapsedHeaderHeight;
-  }
-
-  const renderedRows = row.diff.runs.reduce((sum, run) => sum + run.count, 0);
-  const diffLineHeight = Math.max(18, (outputFontSize - 1) * 1.55);
-  return collapsedHeaderHeight + Math.max(1, renderedRows) * diffLineHeight;
+  return row.diff.renderPlan.diffBlockHeight;
 }
 
 export function buildOutputRows(
@@ -504,6 +519,17 @@ export function buildOutputRows(
     }
 
     for (const visibleEvent of visibleEvents) {
+      const rowKey = `${targetKey}:run${runIndex}:attempt${attemptIndex}:event:${visibleEvent.originalIndex}`;
+      const diffKeyBase = getOutputDiffKey(
+        target,
+        target.index,
+        runIndex,
+        attemptIndex,
+        visibleEvent.originalIndex
+      );
+      const diffExpandedGaps = input.diffExpansionState.get(diffKeyBase);
+      const isDiffCollapsed =
+        input.diffCollapseState.get(diffKeyBase) ?? input.defaultDiffCollapsed;
       const diffStats =
         !visibleEvent.hideDiff &&
         (visibleEvent.event.type === CLI_EVENT_TYPES.FILE_EDIT ||
@@ -512,22 +538,35 @@ export function buildOutputRows(
           ? computeOutputDiffStats(
               visibleEvent.event,
               workspaceSnapshot,
-              input.diffViewType ?? "unified"
+              {
+                viewType: input.diffViewType ?? "unified",
+                collapsed: isDiffCollapsed,
+                expandedGaps: diffExpandedGaps,
+                outputFontSize: input.outputFontSize,
+              }
             )
           : null;
       const diffKey =
         diffStats && diffStats.added + diffStats.removed > 0
-          ? getOutputDiffKey(
-              target,
-              target.index,
-              runIndex,
-              attemptIndex,
-              visibleEvent.originalIndex
-            )
+          ? diffKeyBase
           : null;
+      const toolCallExpansion =
+        visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL
+          ? input.toolCallExpansionState.get(rowKey) ??
+            DEFAULT_TOOL_CALL_EXPANSION_STATE
+          : undefined;
+      const toolCallRenderPlan =
+        visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL
+          ? buildToolCallRenderPlan({
+              parameters: (visibleEvent.event.data as ToolCall).parameters,
+              result: (visibleEvent.event.data as ToolCall).result,
+              expansion: toolCallExpansion,
+              outputFontSize: input.outputFontSize,
+            })
+          : undefined;
 
       rows.push({
-        key: `${targetKey}:run${runIndex}:attempt${attemptIndex}:event:${visibleEvent.originalIndex}`,
+        key: rowKey,
         rowKind: "structured-event",
         target,
         event: visibleEvent.event,
@@ -544,12 +583,18 @@ export function buildOutputRows(
                 addedLines: diffStats.added,
                 removedLines: diffStats.removed,
                 runs: diffStats.runs,
-                isCollapsed:
-                  input.diffCollapseState.get(diffKey) ??
-                  input.defaultDiffCollapsed,
+                isCollapsed: isDiffCollapsed,
+                expandedGaps: diffExpandedGaps,
+                renderPlan: diffStats.renderPlan,
               }
             : undefined,
-        estimateSize: estimateStructuredEventHeight(visibleEvent.event),
+        toolCall: toolCallExpansion && toolCallRenderPlan
+         ? {
+             expansion: toolCallExpansion,
+             renderPlan: toolCallRenderPlan,
+           }
+         : undefined,
+        estimateSize: estimateBaseStructuredEventHeight(visibleEvent.event),
       });
     }
 

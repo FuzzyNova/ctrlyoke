@@ -10,6 +10,7 @@ import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE } from "./outputStyles";
 import { openFile } from "@hooks/useMessageHandler";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { useUiStore } from "@store/uiStore";
+import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
 import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
 
@@ -77,6 +78,8 @@ interface FileEditOutputProps {
   hideDiff?: boolean;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  expandedGaps?: DiffGapExpansionState;
+  onExpandGap?: (gapIndex: number, nextExpandedToLine: number) => void;
   className?: string;
 }
 
@@ -101,6 +104,8 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     hideDiff = false,
     collapsed,
     onCollapsedChange,
+    expandedGaps,
+    onExpandGap,
     className = "",
   }) => {
     const dotStatus = fileOpDotStatus(status);
@@ -159,6 +164,8 @@ export const FileEditOutput = memo<FileEditOutputProps>(
             actionSlot={undoButton}
             collapsed={collapsed}
             onCollapsedChange={onCollapsedChange}
+            expandedGaps={expandedGaps}
+            onExpandGap={onExpandGap}
           />
         ) : (
           undoButton && <div className="ml-6 mt-1">{undoButton}</div>

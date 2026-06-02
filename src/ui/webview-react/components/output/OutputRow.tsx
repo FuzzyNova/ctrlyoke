@@ -49,6 +49,7 @@ import {
   getSnapshotBeforeContent,
   isScriptOutput,
 } from "@utils/outputRenderUtils";
+import type { ToolCallExpansionSection } from "@utils/toolCallLayout";
 
 export interface OutputRowFileUndoRequest {
   path: string;
@@ -62,7 +63,22 @@ export interface OutputRowFileUndoRequest {
 interface StructuredEventContentProps {
   row: StructuredEventRow;
   onFileUndo?: (request: OutputRowFileUndoRequest) => void;
-  onDiffCollapsedChange?: (diffKey: string, collapsed: boolean) => void;
+  onDiffCollapsedChange?: (
+    rowKey: string,
+    diffKey: string,
+    collapsed: boolean
+  ) => void;
+  onDiffGapExpand?: (
+    rowKey: string,
+    diffKey: string,
+    gapIndex: number,
+    nextExpandedToLine: number
+  ) => void;
+  onToolCallExpansionChange?: (
+    rowKey: string,
+    section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => void;
 }
 
 interface OutputRowProps {
@@ -75,7 +91,22 @@ interface OutputRowProps {
     row: StructuredEventRow,
     request: OutputRowFileUndoRequest
   ) => void;
-  onDiffCollapsedChange?: (diffKey: string, collapsed: boolean) => void;
+  onDiffCollapsedChange?: (
+    rowKey: string,
+    diffKey: string,
+    collapsed: boolean
+  ) => void;
+  onDiffGapExpand?: (
+    rowKey: string,
+    diffKey: string,
+    gapIndex: number,
+    nextExpandedToLine: number
+  ) => void;
+  onToolCallExpansionChange?: (
+    rowKey: string,
+    section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => void;
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -158,7 +189,7 @@ const ToolResultOutput: React.FC<{
 };
 
 const StructuredEventContent = memo<StructuredEventContentProps>(
-  ({ row, onFileUndo, onDiffCollapsedChange }) => {
+  ({ row, onFileUndo, onDiffCollapsedChange, onDiffGapExpand, onToolCallExpansionChange }) => {
     const { event, rawTextOutput, eventIndex, hideDiff, workspaceSnapshot, diff } =
       row;
 
@@ -225,9 +256,22 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             }
             hideDiff={hideDiff}
             collapsed={diff?.isCollapsed}
+            expandedGaps={diff?.expandedGaps}
             onCollapsedChange={
               diff
-                ? (collapsed) => onDiffCollapsedChange?.(diff.key, collapsed)
+                ? (collapsed) =>
+                    onDiffCollapsedChange?.(row.key, diff.key, collapsed)
+                : undefined
+            }
+            onExpandGap={
+              diff
+                ? (gapIndex, nextExpandedToLine) =>
+                    onDiffGapExpand?.(
+                      row.key,
+                      diff.key,
+                      gapIndex,
+                      nextExpandedToLine
+                    )
                 : undefined
             }
           />
@@ -327,6 +371,11 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             name={data.name}
             parameters={data.parameters}
             result={data.result}
+            expansion={row.toolCall?.expansion}
+            renderPlan={row.toolCall?.renderPlan}
+            onExpansionChange={(section, expanded) =>
+              onToolCallExpansionChange?.(row.key, section, expanded)
+            }
           />
         );
       }
@@ -647,6 +696,8 @@ export const OutputRow = memo<OutputRowProps>(
     onPromptRedo,
     onFileUndo,
     onDiffCollapsedChange,
+    onDiffGapExpand,
+    onToolCallExpansionChange,
   }) => {
     let content: React.ReactNode;
     switch (row.rowKind) {
@@ -729,6 +780,8 @@ export const OutputRow = memo<OutputRowProps>(
               onFileUndo ? (request) => onFileUndo(row, request) : undefined
             }
             onDiffCollapsedChange={onDiffCollapsedChange}
+            onDiffGapExpand={onDiffGapExpand}
+            onToolCallExpansionChange={onToolCallExpansionChange}
           />
         );
         if (row.diff) {

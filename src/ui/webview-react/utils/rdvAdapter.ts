@@ -17,6 +17,58 @@ export interface RenderedDiffRun {
   removedLines: number;
 }
 
+export type DiffGapExpansionModel =
+  | "none"
+  | "exact"
+  | "base-only-missing-old-content";
+
+export interface DiffGapExpansionPlanState {
+  model: DiffGapExpansionModel;
+  requestedGaps: number;
+  appliedGaps: number;
+}
+
+export interface DiffRenderPlan {
+  viewType: ViewType;
+  isCollapsed: boolean;
+  renderedRows: number;
+  addedLines: number;
+  removedLines: number;
+  runs: RenderedDiffRun[];
+  lineHeight: number;
+  toolLineHeight: number;
+  headerHeight: number;
+  decorationHeight: number;
+  bodyHeight: number;
+  diffBlockHeight: number;
+  totalHeight: number;
+  gapExpansion: DiffGapExpansionPlanState;
+}
+
+export interface DiffRenderPlanOptions {
+  viewType: ViewType;
+  collapsed?: boolean;
+  outputFontSize?: number;
+  layoutMode?: "file-edit" | "standalone";
+  gapExpansion?: DiffGapExpansionPlanState;
+}
+
+const DEFAULT_OUTPUT_FONT_SIZE = 13;
+const DIFF_VERTICAL_CHROME_HEIGHT = 28;
+const STANDALONE_DIFF_HEIGHT = 72;
+
+function getRenderedRows(runs: readonly RenderedDiffRun[]): number {
+  return runs.reduce((sum, run) => sum + run.count, 0);
+}
+
+function getDefaultGapExpansionPlanState(): DiffGapExpansionPlanState {
+  return {
+    model: "none",
+    requestedGaps: 0,
+    appliedGaps: 0,
+  };
+}
+
 function isDisplayableLine(line: string): boolean {
   return !(
     line === "\\ No newline at end of file" ||
@@ -173,4 +225,69 @@ export function getRenderedDiffStats(
   }
 
   return { added, removed, runs };
+}
+
+export function buildDiffRenderPlanFromStats(
+  stats: { added: number; removed: number; runs: RenderedDiffRun[] },
+  options: DiffRenderPlanOptions
+): DiffRenderPlan {
+  const {
+    viewType,
+    collapsed = false,
+    outputFontSize = DEFAULT_OUTPUT_FONT_SIZE,
+    layoutMode = "file-edit",
+    gapExpansion = getDefaultGapExpansionPlanState(),
+  } = options;
+  const renderedRows = getRenderedRows(stats.runs);
+
+  if (layoutMode === "standalone") {
+    return {
+      viewType,
+      isCollapsed: collapsed,
+      renderedRows,
+      addedLines: stats.added,
+      removedLines: stats.removed,
+      runs: stats.runs,
+      lineHeight: STANDALONE_DIFF_HEIGHT,
+      toolLineHeight: STANDALONE_DIFF_HEIGHT,
+      headerHeight: 0,
+      decorationHeight: 0,
+      bodyHeight: 0,
+      diffBlockHeight: STANDALONE_DIFF_HEIGHT,
+      totalHeight: STANDALONE_DIFF_HEIGHT,
+      gapExpansion,
+    };
+  }
+
+  const toolLineHeight = Math.max(22, outputFontSize * 1.7);
+  const headerHeight = Math.max(24, outputFontSize * 1.9);
+  const lineHeight = Math.max(18, (outputFontSize - 1) * 1.55);
+  const decorationHeight = DIFF_VERTICAL_CHROME_HEIGHT;
+  const bodyHeight = collapsed ? 0 : renderedRows * lineHeight;
+  const diffBlockHeight =
+    headerHeight + (collapsed ? 0 : Math.max(1, renderedRows) * lineHeight);
+
+  return {
+    viewType,
+    isCollapsed: collapsed,
+    renderedRows,
+    addedLines: stats.added,
+    removedLines: stats.removed,
+    runs: stats.runs,
+    lineHeight,
+    toolLineHeight,
+    headerHeight,
+    decorationHeight,
+    bodyHeight,
+    diffBlockHeight,
+    totalHeight: toolLineHeight + headerHeight + decorationHeight + bodyHeight,
+    gapExpansion,
+  };
+}
+
+export function buildDiffRenderPlan(
+  hunks: HunkData[],
+  options: DiffRenderPlanOptions
+): DiffRenderPlan {
+  return buildDiffRenderPlanFromStats(getRenderedDiffStats(hunks, options.viewType), options);
 }

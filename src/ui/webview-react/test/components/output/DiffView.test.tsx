@@ -335,6 +335,45 @@ describe("DiffView", () => {
     );
   });
 
+  it("emits hidden-gap expansion intent when gap expansion is controlled", () => {
+    const hunk1 = {
+      content: "@@ -1,1 +1,1 @@",
+      oldStart: 1,
+      oldLines: 1,
+      newStart: 1,
+      newLines: 1,
+      changes: [],
+    };
+    const hunk2 = {
+      content: "@@ -6,1 +6,1 @@",
+      oldStart: 6,
+      oldLines: 1,
+      newStart: 6,
+      newLines: 1,
+      changes: [],
+    };
+    mockToRdvFromContent.mockReturnValue({
+      hunks: [hunk1, hunk2],
+      diffType: "modify",
+    });
+    mockGetCollapsedLinesCountBetween.mockReturnValue(4);
+    const onExpandGap = vi.fn();
+
+    const { getByRole } = render(
+      <DiffView
+        oldContent={"a\nb\nc\nd\ne\nf\n"}
+        newContent={"A\nb\nc\nd\ne\nF\n"}
+        globallyCollapsed={false}
+        expandedGaps={new Map()}
+        onExpandGap={onExpandGap}
+      />
+    );
+
+    fireEvent.click(getByRole("button", { name: /show 4 hidden lines/i }));
+
+    expect(onExpandGap).toHaveBeenCalledWith(1, 6);
+  });
+
   it("shows hidden-line summaries as non-expandable when original file content is unavailable", () => {
     // Two hunks with a 4-line inter-hunk gap — no oldContent so expansion is unavailable.
     const hunk1 = {
