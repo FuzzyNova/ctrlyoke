@@ -177,6 +177,22 @@ module.exports = {
         "diff-hidden-bg":
           "var(--vscode-diffEditor-unchangedCodeBackground, rgba(116, 116, 116, 0.16))",
 
+        // ── Output minimap colors ──
+        // Keep diff colors aligned with VS Code's native minimap gutter tokens.
+        "minimap-diff-added":
+          "var(--vscode-minimapGutter-addedBackground, #72c892)",
+        "minimap-diff-removed":
+          "var(--vscode-minimapGutter-deletedBackground, #f28772)",
+        // Reuse the theme's RGB channels but override alpha explicitly so
+        // semi-transparent theme tokens (for example rgba(..., 0.6)) do not
+        // lock the minimap thumb into a weaker opacity than we want.
+        "minimap-thumb":
+          "rgb(from var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.7)) r g b / 0.7)",
+        "minimap-thumb-hover":
+          "rgb(from var(--vscode-scrollbarSlider-hoverBackground, rgba(100,100,100,0.8)) r g b / 0.8)",
+        "minimap-thumb-active":
+          "rgb(from var(--vscode-scrollbarSlider-activeBackground, rgba(191,191,191,0.9)) r g b / 0.9)",
+
         // ── Markdown enrichment colors (VS Code symbol icon palette) ──
         // Used by MarkdownText.tsx for bold, italic, headings, and tables.
         // Fallbacks are Dark+ defaults so the UI looks reasonable on all themes.

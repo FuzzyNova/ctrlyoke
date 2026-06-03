@@ -67,13 +67,6 @@ interface OutputMinimapProps {
 // OutputMinimap
 // ============================================================================
 
-// CSS variable references for diff colors — these match VS Code's minimap gutter
-// diff decorations, so the minimap colors align with the editor's diff theme.
-const DIFF_REMOVED_COLOR =
-  "var(--vscode-minimapGutter-deletedBackground, rgba(214,80,80,0.55))";
-const DIFF_ADDED_COLOR =
-  "var(--vscode-minimapGutter-addedBackground, rgba(100,185,100,0.55))";
-
 /**
  * A narrow rail on the right side of the output panel that doubles as the
  * scrollbar for the output content area.
@@ -321,7 +314,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     // The rail itself is 14px and clips nothing — markers overflow to the left.
     <div
       ref={railRef}
-      className="relative flex-shrink-0 w-[14px] bg-sidebar-bg border-l border-panel-border"
+      className="relative flex-shrink-0 w-[14px] bg-sidebar-bg border-l border-panel-border [--fp-minimap-diff-added:theme(colors.minimap-diff-added)] [--fp-minimap-diff-removed:theme(colors.minimap-diff-removed)]"
       aria-hidden="true"
       onMouseDown={handleRailMouseDown}
       onTouchStart={handleRailTouchStart}
@@ -346,10 +339,10 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                       top: `clamp(0px, ${block.scrollFraction * 100}%, calc(100% - 2px))`,
                       height: "2px",
                       background: `linear-gradient(to right,
-                        ${DIFF_REMOVED_COLOR} 0%,
-                        ${DIFF_REMOVED_COLOR} ${removedFraction * 100}%,
-                        ${DIFF_ADDED_COLOR} ${removedFraction * 100}%,
-                        ${DIFF_ADDED_COLOR} 100%
+                        var(--fp-minimap-diff-removed) 0%,
+                        var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
+                        var(--fp-minimap-diff-added) ${removedFraction * 100}%,
+                        var(--fp-minimap-diff-added) 100%
                       )`,
                     }}
                   />
@@ -387,14 +380,14 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                           background =
                             run.addedLines > 0 && run.removedLines > 0
                               ? `linear-gradient(to right,
-                                  ${DIFF_REMOVED_COLOR} 0%,
-                                  ${DIFF_REMOVED_COLOR} ${removedPct}%,
-                                  ${DIFF_ADDED_COLOR} ${removedPct}%,
-                                  ${DIFF_ADDED_COLOR} 100%
+                                  var(--fp-minimap-diff-removed) 0%,
+                                  var(--fp-minimap-diff-removed) ${removedPct}%,
+                                  var(--fp-minimap-diff-added) ${removedPct}%,
+                                  var(--fp-minimap-diff-added) 100%
                                 )`
                               : run.removedLines > 0
-                                ? DIFF_REMOVED_COLOR
-                                : DIFF_ADDED_COLOR;
+                                ? "var(--fp-minimap-diff-removed)"
+                                : "var(--fp-minimap-diff-added)";
                         }
 
                         return (
@@ -423,10 +416,10 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                     height: `${block.heightFraction * 100}%`,
                     minHeight: "1px",
                     background: `linear-gradient(to bottom,
-                      ${DIFF_REMOVED_COLOR} 0%,
-                      ${DIFF_REMOVED_COLOR} ${removedFraction * 100}%,
-                      ${DIFF_ADDED_COLOR} ${removedFraction * 100}%,
-                      ${DIFF_ADDED_COLOR} 100%
+                      var(--fp-minimap-diff-removed) 0%,
+                      var(--fp-minimap-diff-removed) ${removedFraction * 100}%,
+                      var(--fp-minimap-diff-added) ${removedFraction * 100}%,
+                      var(--fp-minimap-diff-added) 100%
                     )`,
                   }}
                 />
@@ -441,15 +434,16 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         tabIndex={0}
         aria-label="Scroll viewport"
         aria-valuenow={Math.round(viewportPct.top * 100)}
-        className="absolute left-0 right-0 rounded-sm z-10"
+        className={`absolute left-0 right-0 rounded-sm z-10 ${
+          isDragging
+            ? "bg-minimap-thumb-active"
+            : isThumbHovered
+              ? "bg-minimap-thumb-hover"
+              : "bg-minimap-thumb"
+        }`}
         style={{
           top: `${viewportPct.top}%`,
           height: `${viewportPct.height}%`,
-          background: isDragging
-            ? "var(--vscode-scrollbarSlider-activeBackground, rgba(191,191,191,0.95))"
-            : isThumbHovered
-              ? "var(--vscode-scrollbarSlider-hoverBackground, rgba(100,100,100,0.85))"
-              : "var(--vscode-scrollbarSlider-background, rgba(121,121,121,0.8))",
           boxShadow:
             "inset 0 0 0 1px var(--vscode-panel-border, rgba(128,128,128,0.45))",
           cursor: isDragging ? "grabbing" : canScroll ? "grab" : "default",
@@ -485,19 +479,13 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           const hasUndo = undo !== null;
           const hasRedo = redo !== null;
           const isMixed = hasUndo && hasRedo;
-
-          // Dot color:
-          //   mixed  → warning-fg (orange — attention needed)
-          //   redo   → green
-          //   undo   → link-fg (blue)
-          //   plain  → description-fg
-          const dotColor = isMixed
-            ? "var(--vscode-editorWarning-foreground, #d19a66)"
+          const dotColorClass = isMixed
+            ? "text-warning-fg"
             : hasRedo
-              ? "var(--vscode-terminal-ansiGreen, #89d185)"
+              ? "text-terminal-ansiGreen"
               : hasUndo
-                ? "var(--vscode-textLink-foreground, #4ec9b0)"
-                : "var(--vscode-descriptionForeground, #858585)";
+                ? "text-link-fg"
+                : "text-description-fg";
 
           return (
             // Outer row: anchored to the right edge of the rail, grows leftward.
@@ -581,14 +569,13 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
 
                   {/* Tail triangle pointing right toward the dot */}
                   <div
-                    className="self-center flex-shrink-0"
+                    className="self-center flex-shrink-0 text-dropdown-bg"
                     style={{
                       width: 0,
                       height: 0,
                       borderTop: "5px solid transparent",
                       borderBottom: "5px solid transparent",
-                      borderLeft:
-                        "5px solid var(--vscode-dropdown-background, #3c3c3c)",
+                      borderLeft: "5px solid currentColor",
                       filter:
                         "drop-shadow(1px 0 0 var(--vscode-panel-border, rgba(128,128,128,0.35)))",
                     }}
@@ -603,10 +590,9 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
                 title={step.label}
                 aria-label={step.label}
                 tabIndex={0}
-                className="w-[14px] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100"
+                className={`w-[14px] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current ${dotColorClass}`}
                 style={{
                   height: isHovered ? "6px" : "4px",
-                  background: dotColor,
                 }}
               />
             </div>
