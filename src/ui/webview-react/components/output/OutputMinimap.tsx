@@ -1,5 +1,4 @@
 import React, { memo, useState, useCallback, useEffect, useRef } from "react";
-import { WebviewLog } from "@utils/logger";
 import { type FinalStepPhase } from "../../types/messages";
 
 // ============================================================================
@@ -92,17 +91,12 @@ interface OutputMinimapProps {
  */
 const MIN_THUMB_PX = 24;
 
-function roundDebugValue(value: number): number {
-  return Math.round(value * 1000) / 1000;
-}
-
 const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   steps,
   scrollContainerRef,
   contentHeight,
   onStepClick,
 }) => {
-  const renderCountRef = useRef(0);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   // pinnedKey: popup opened by tap/click (stays open until tapped away).
   // Separate from hoveredKey so mouse-hover and touch-tap don't conflict.
@@ -110,9 +104,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isThumbHovered, setIsThumbHovered] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
-  const viewportLogRef = useRef<{ top: number; height: number } | null>(null);
-  const stepSignatureRef = useRef<string>("");
-  renderCountRef.current += 1;
 
   // Dismiss the pinned popup when clicking/tapping anywhere outside it.
   // Uses only 'click' (not 'touchend') to avoid a race where touchend fires
@@ -145,75 +136,18 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   }, [contentHeight, scrollContainerRef]);
 
   useEffect(() => {
-    WebviewLog.debug("[OutputMinimapDebug] minimap render", {
-      renderCount: renderCountRef.current,
-      stepCount: steps.length,
-      contentHeight: roundDebugValue(contentHeight),
-      sharedContentHeight: roundDebugValue(getSharedContentHeight()),
-      scrollTop: roundDebugValue(scrollContainerRef.current?.scrollTop ?? 0),
-      clientHeight: roundDebugValue(
-        scrollContainerRef.current?.clientHeight ?? 0
-      ),
-      hoveredKey,
-      pinnedKey,
-      isDragging,
-    });
-  });
-
-  useEffect(() => {
-    const signature = steps
-      .map(
-        (step) =>
-          `${step.key}:${roundDebugValue(step.scrollFraction)}:${step.diffBlocks.length}`
-      )
-      .join("|");
-    if (signature === stepSignatureRef.current) {
-      return;
-    }
-    stepSignatureRef.current = signature;
-    WebviewLog.debug("[OutputMinimapDebug] minimap steps updated", {
-      stepCount: steps.length,
-      steps: steps.map((step) => ({
-        key: step.key,
-        label: step.label,
-        scrollFraction: roundDebugValue(step.scrollFraction),
-        diffBlockCount: step.diffBlocks.length,
-      })),
-    });
-  }, [steps]);
-
-  useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
 
-    const update = (source: string) => {
+    const update = () => {
       const { clientHeight } = el;
       const railHeight = railRef.current?.clientHeight ?? 0;
       const sharedContentHeight = getSharedContentHeight();
 
       if (sharedContentHeight <= clientHeight || railHeight === 0) {
-        const next = { top: 0, height: 100 };
         setViewportPct((prev) =>
-          prev.top === 0 && prev.height === 100 ? prev : next
+          prev.top === 0 && prev.height === 100 ? prev : { top: 0, height: 100 }
         );
-        const previous = viewportLogRef.current;
-        if (
-          !previous ||
-          Math.abs(previous.top - next.top) >= 0.01 ||
-          Math.abs(previous.height - next.height) >= 0.01
-        ) {
-          viewportLogRef.current = next;
-          WebviewLog.debug("[OutputMinimapDebug] viewport updated", {
-            source,
-            scrollTop: roundDebugValue(el.scrollTop),
-            clientHeight: roundDebugValue(clientHeight),
-            railHeight: roundDebugValue(railHeight),
-            sharedContentHeight: roundDebugValue(sharedContentHeight),
-            thumbTopPct: next.top,
-            thumbHeightPct: next.height,
-            mode: "full-height",
-          });
-        }
         return;
       }
 
@@ -229,27 +163,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         top: (topPx / railHeight) * 100,
         height: (thumbPx / railHeight) * 100,
       };
-      const previous = viewportLogRef.current;
-      if (
-        !previous ||
-        Math.abs(previous.top - next.top) >= 0.01 ||
-        Math.abs(previous.height - next.height) >= 0.01
-      ) {
-        viewportLogRef.current = next;
-        WebviewLog.debug("[OutputMinimapDebug] viewport updated", {
-          source,
-          scrollTop: roundDebugValue(el.scrollTop),
-          clientHeight: roundDebugValue(clientHeight),
-          railHeight: roundDebugValue(railHeight),
-          sharedContentHeight: roundDebugValue(sharedContentHeight),
-          naturalThumbPx: roundDebugValue(naturalPx),
-          thumbPx: roundDebugValue(thumbPx),
-          scrollRange: roundDebugValue(scrollRange),
-          topPx: roundDebugValue(topPx),
-          thumbTopPct: roundDebugValue(next.top),
-          thumbHeightPct: roundDebugValue(next.height),
-        });
-      }
       setViewportPct((prev) =>
         Math.abs(prev.top - next.top) < 0.01 &&
         Math.abs(prev.height - next.height) < 0.01
@@ -258,11 +171,11 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       );
     };
 
-    update("effect-init");
-    const observer = new ResizeObserver(() => update("resize-observer"));
+    update();
+    const observer = new ResizeObserver(() => update());
     observer.observe(el);
     if (railRef.current) observer.observe(railRef.current);
-    const handleScroll = () => update("scroll");
+    const handleScroll = () => update();
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
       observer.disconnect();
@@ -286,13 +199,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       const railHeight = rail.clientHeight;
 
       setIsDragging(true);
-      WebviewLog.debug("[OutputMinimapDebug] thumb drag started", {
-        startY: roundDebugValue(startY),
-        startScrollTop: roundDebugValue(startScrollTop),
-        railHeight: roundDebugValue(railHeight),
-        sharedContentHeight: roundDebugValue(sharedContentHeight),
-        clientHeight: roundDebugValue(el.clientHeight),
-      });
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         const delta = moveEvent.clientY - startY;
@@ -315,9 +221,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       };
 
       const cleanup = () => {
-        WebviewLog.debug("[OutputMinimapDebug] thumb drag ended", {
-          finalScrollTop: roundDebugValue(el.scrollTop),
-        });
         setIsDragging(false);
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", cleanup);
@@ -375,14 +278,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           fraction * sharedContentHeight - el.clientHeight / 2
         )
       );
-      WebviewLog.debug("[OutputMinimapDebug] rail jump", {
-        clientY: roundDebugValue(clientY),
-        fraction: roundDebugValue(fraction),
-        maxScroll: roundDebugValue(maxScroll),
-        nextScrollTop: roundDebugValue(el.scrollTop),
-        sharedContentHeight: roundDebugValue(sharedContentHeight),
-        clientHeight: roundDebugValue(el.clientHeight),
-      });
     },
     [getSharedContentHeight, scrollContainerRef]
   );
@@ -406,12 +301,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   const handleMarkerClick = useCallback(
     (step: MinimapStep) => {
       if (onStepClick) {
-        WebviewLog.debug("[OutputMinimapDebug] marker click", {
-          key: step.key,
-          label: step.label,
-          scrollFraction: roundDebugValue(step.scrollFraction),
-          mode: "delegate",
-        });
         onStepClick(step);
         return;
       }
@@ -419,15 +308,6 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       const el = scrollContainerRef.current;
       if (!el) return;
       const targetTop = step.scrollFraction * getSharedContentHeight();
-      WebviewLog.debug("[OutputMinimapDebug] marker click", {
-        key: step.key,
-        label: step.label,
-        scrollFraction: roundDebugValue(step.scrollFraction),
-        mode: "local-scroll",
-        currentScrollTop: roundDebugValue(el.scrollTop),
-        targetTop: roundDebugValue(targetTop),
-        sharedContentHeight: roundDebugValue(getSharedContentHeight()),
-      });
       el.scrollTo({
         top: targetTop,
         behavior: "smooth",

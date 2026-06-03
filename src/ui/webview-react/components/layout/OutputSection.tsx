@@ -75,7 +75,6 @@ import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
-import { WebviewLog } from "@utils/logger";
 import {
   buildOutputRows,
   estimateOutputDiffBlockHeight,
@@ -105,13 +104,6 @@ interface RowHeightBucketStats {
   totalMeasured: number;
   totalEstimated: number;
   maxAbsDelta: number;
-}
-
-function roundDebugPx(value: number | undefined): number | null {
-  if (value === undefined || !Number.isFinite(value)) {
-    return null;
-  }
-  return Math.round(value * 100) / 100;
 }
 
 function getMeasuredElementHeight(element: HTMLElement): number {
@@ -293,7 +285,6 @@ interface PendingNavigationState {
  *   skip reconciliation when their props haven't changed.
  */
 export const OutputSection: React.FC = () => {
-  const renderCountRef = useRef(0);
   // ── Granular store selectors ───────────────────────────────────────────────
   // Each selector is independent so only the relevant slice of state triggers
   // a re-render of this component.
@@ -454,14 +445,6 @@ export const OutputSection: React.FC = () => {
   // repeatedly trigger corrections that oscillate the scroll position.
   const postNavSettlingRef = useRef(false);
   const postNavSettlingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rowLayoutDebugRef = useRef<{
-    totalSize: number;
-    measurementVersion: number;
-    rowCount: number;
-  } | null>(null);
-  const stepFractionsDebugRef = useRef<string>("");
-  const minimapStepsDebugRef = useRef<string>("");
-  renderCountRef.current += 1;
 
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
@@ -671,16 +654,6 @@ export const OutputSection: React.FC = () => {
         Math.abs(nextHeight - estimatedHeight)
       ),
     });
-    WebviewLog.debug("[OutputMinimapDebug] row measured", {
-      rowKey: row.key,
-      rowKind: row.rowKind,
-      rowIndex: index,
-      measuredHeight: roundDebugPx(nextHeight),
-      previousHeight: roundDebugPx(previousHeight),
-      estimatedHeight: roundDebugPx(estimatedHeight),
-      bucket: rowHeightBucket,
-      zeroHeightReason,
-    });
     setMeasurementVersion((version) => version + 1);
   }, []);
 
@@ -765,12 +738,6 @@ export const OutputSection: React.FC = () => {
     if (outputContentWidth <= 0) {
       return;
     }
-    WebviewLog.debug("[OutputMinimapDebug] measurement cache reset", {
-      reason: "output-dimensions-changed",
-      outputContentWidth: roundDebugPx(outputContentWidth),
-      outputDiffViewType,
-      outputFontSize,
-    });
     measurementCacheRef.current.clear();
     rowHeightBucketStatsRef.current.clear();
     rowVirtualizer.measure();
@@ -790,62 +757,6 @@ export const OutputSection: React.FC = () => {
 
     return fractions;
   }, [firstRowIndexByTarget, rowLayout, uniqueStepTargets]);
-
-  useEffect(() => {
-    WebviewLog.debug("[OutputMinimapDebug] output section render", {
-      renderCount: renderCountRef.current,
-      rowCount: rows.length,
-      measurementVersion,
-      totalSize: roundDebugPx(rowLayout.totalSize),
-      virtualRowCount: rowVirtualizer.getVirtualItems().length,
-      activeOutputTab,
-      outputContentWidth: roundDebugPx(outputContentWidth),
-      outputDiffViewType,
-      navigationPendingRowIndex,
-    });
-  });
-
-  useEffect(() => {
-    const previous = rowLayoutDebugRef.current;
-    if (
-      previous &&
-      Math.abs(previous.totalSize - rowLayout.totalSize) < 0.5 &&
-      previous.measurementVersion === measurementVersion &&
-      previous.rowCount === rows.length
-    ) {
-      return;
-    }
-    rowLayoutDebugRef.current = {
-      totalSize: rowLayout.totalSize,
-      measurementVersion,
-      rowCount: rows.length,
-    };
-    WebviewLog.debug("[OutputMinimapDebug] row layout updated", {
-      rowCount: rows.length,
-      measurementVersion,
-      totalSize: roundDebugPx(rowLayout.totalSize),
-      sampleRowStarts: rowLayout.rowStartsByIndex
-        .slice(0, Math.min(5, rowLayout.rowStartsByIndex.length))
-        .map((value) => roundDebugPx(value)),
-    });
-  }, [measurementVersion, rowLayout, rows.length]);
-
-  useEffect(() => {
-    const signature = [...stepScrollFractions.entries()]
-      .map(([key, value]) => `${key}:${roundDebugPx(value)}`)
-      .join("|");
-    if (signature === stepFractionsDebugRef.current) {
-      return;
-    }
-    stepFractionsDebugRef.current = signature;
-    WebviewLog.debug("[OutputMinimapDebug] step scroll fractions updated", {
-      count: stepScrollFractions.size,
-      fractions: [...stepScrollFractions.entries()].map(([key, value]) => ({
-        key,
-        value: roundDebugPx(value),
-      })),
-    });
-  }, [stepScrollFractions]);
 
   const hasDiffRows = useMemo(
     () =>
@@ -930,11 +841,6 @@ export const OutputSection: React.FC = () => {
       return;
     }
     previousDiffResetVersion.current = diffResetVersion;
-    WebviewLog.debug("[OutputMinimapDebug] measurement cache reset", {
-      reason: "diff-reset-version",
-      diffResetVersion,
-      diffsCollapsed,
-    });
 
     // Diff row heights change dramatically between expanded and collapsed states.
     // Stale measured heights from the previous state would misalign minimap
@@ -970,11 +876,6 @@ export const OutputSection: React.FC = () => {
     previousViewingRunIndex.current = viewingRunIndex;
     if (!viewChanged) return;
 
-    WebviewLog.debug("[OutputMinimapDebug] measurement cache reset", {
-      reason: "history-view-changed",
-      isViewingHistory,
-      viewingRunIndex,
-    });
     measurementCacheRef.current.clear();
     setMeasurementVersion((v) => v + 1);
   }, [isViewingHistory, viewingRunIndex]);
@@ -987,19 +888,6 @@ export const OutputSection: React.FC = () => {
     const atBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight <=
       SCROLL_BOTTOM_THRESHOLD;
-    WebviewLog.debug("[OutputMinimapDebug] user scrolled output", {
-      scrollTop: roundDebugPx(el.scrollTop),
-      scrollHeight: roundDebugPx(el.scrollHeight),
-      clientHeight: roundDebugPx(el.clientHeight),
-      atBottom,
-      pendingNavigation: pendingNavigationRef.current
-        ? {
-            rowIndex: pendingNavigationRef.current.rowIndex,
-            targetKind: pendingNavigationRef.current.targetKind,
-            targetIndex: pendingNavigationRef.current.targetIndex,
-          }
-        : null,
-    });
     autoscrollEnabled.current = atBottom;
   }, []);
 
@@ -1010,12 +898,7 @@ export const OutputSection: React.FC = () => {
     }
   }, []);
 
-  const finalizePendingNavigation = useCallback(
-    (
-      reason: "completed" | "missing-scroll-element" | "attempt-limit" | "timeout",
-      details?: Record<string, unknown>
-    ) => {
-      const pending = pendingNavigationRef.current;
+  const finalizePendingNavigation = useCallback(() => {
       clearNavigationFrame();
       pendingNavigationRef.current = null;
       setNavigationPendingRowIndex(null);
@@ -1045,32 +928,11 @@ export const OutputSection: React.FC = () => {
         postNavSettlingTimerRef.current = null;
       }, 1000);
 
-      if (!pending) {
-        return;
-      }
-
-      WebviewLog.debug("[OutputMinimapDebug] navigation completed", {
-        targetKind: pending.targetKind,
-        targetIndex: pending.targetIndex,
-        rowIndex: pending.rowIndex,
-        align: pending.align,
-        requestedBehavior: pending.requestedBehavior,
-        effectiveBehavior: pending.effectiveBehavior,
-        attempts: pending.attempts,
-        elapsedMs: roundDebugPx(performance.now() - pending.startedAt),
-        reason,
-        measurementVersion: measurementVersionRef.current,
-        finalScrollTop: roundDebugPx(outputRef.current?.scrollTop),
-        finalClientHeight: roundDebugPx(outputRef.current?.clientHeight),
-        finalScrollHeight: roundDebugPx(outputRef.current?.scrollHeight),
-        ...details,
-      });
     },
     [clearNavigationFrame, rowVirtualizer]
   );
 
-  const schedulePendingNavigationStabilization = useCallback(
-    (trigger: "start" | "measurement" | "retry") => {
+  const schedulePendingNavigationStabilization = useCallback(() => {
       clearNavigationFrame();
       navigationFrameRef.current = requestAnimationFrame(() => {
         navigationFrameRef.current = null;
@@ -1082,45 +944,23 @@ export const OutputSection: React.FC = () => {
         const now = performance.now();
         const currentMeasurementVersion = measurementVersionRef.current;
         if (currentMeasurementVersion !== pending.lastMeasuredVersion) {
-          WebviewLog.debug("[OutputMinimapDebug] navigation measurement changed", {
-            targetKind: pending.targetKind,
-            targetIndex: pending.targetIndex,
-            rowIndex: pending.rowIndex,
-            previousMeasurementVersion: pending.lastMeasuredVersion,
-            nextMeasurementVersion: currentMeasurementVersion,
-            trigger,
-          });
           pending.lastMeasuredVersion = currentMeasurementVersion;
           pending.lastMeasurementChangeAt = now;
         }
 
         const scrollElement = outputRef.current;
         if (!scrollElement) {
-          finalizePendingNavigation("missing-scroll-element");
+          finalizePendingNavigation();
           return;
         }
 
         const rowElement = findRenderedRowElement(scrollElement, pending.rowIndex);
         if (!rowElement) {
-          WebviewLog.debug("[OutputMinimapDebug] navigation target pending", {
-            targetKind: pending.targetKind,
-            targetIndex: pending.targetIndex,
-            rowIndex: pending.rowIndex,
-            attempt: pending.attempts,
-            trigger,
-            virtualRowCount: rowVirtualizer.getVirtualItems().length,
-          });
-
           if (
             pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
             now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
           ) {
-            finalizePendingNavigation(
-              now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
-                ? "timeout"
-                : "attempt-limit",
-              { trigger }
-            );
+            finalizePendingNavigation();
             return;
           }
 
@@ -1129,7 +969,7 @@ export const OutputSection: React.FC = () => {
             align: pending.align,
             behavior: "auto",
           });
-          schedulePendingNavigationStabilization("retry");
+          schedulePendingNavigationStabilization();
           return;
         }
 
@@ -1138,49 +978,21 @@ export const OutputSection: React.FC = () => {
           rowElement,
           pending.align
         );
-        WebviewLog.debug("[OutputMinimapDebug] navigation alignment check", {
-          targetKind: pending.targetKind,
-          targetIndex: pending.targetIndex,
-          rowIndex: pending.rowIndex,
-          trigger,
-          aligned: isAligned,
-          scrollTop: roundDebugPx(scrollElement.scrollTop),
-          rowTop: roundDebugPx(rowElement.getBoundingClientRect().top),
-          rowBottom: roundDebugPx(rowElement.getBoundingClientRect().bottom),
-          containerTop: roundDebugPx(scrollElement.getBoundingClientRect().top),
-          containerBottom: roundDebugPx(
-            scrollElement.getBoundingClientRect().bottom
-          ),
-        });
         if (isAligned) {
           // Finalize immediately on first aligned frame. Calling scrollToOffset
           // below clears TanStack's reconcileScroll scrollState, preventing
           // further corrective scrolls. The 1-s postNavSettling window then
           // blocks shouldAdjustScrollPositionOnItemSizeChange so late-arriving
           // measurements cannot shift the viewport away from the target.
-          finalizePendingNavigation("completed", {
-            trigger,
-            aligned: true,
-          });
+          finalizePendingNavigation();
           return;
         }
 
-        const elapsedSinceMeasurementChange =
-          now - pending.lastMeasurementChangeAt;
         if (
           pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
           now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
         ) {
-          finalizePendingNavigation(
-            now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
-              ? "timeout"
-              : "attempt-limit",
-            {
-              trigger,
-              aligned: false,
-              elapsedSinceMeasurementChangeMs: roundDebugPx(elapsedSinceMeasurementChange),
-            }
-          );
+          finalizePendingNavigation();
           return;
         }
 
@@ -1189,7 +1001,7 @@ export const OutputSection: React.FC = () => {
           align: pending.align,
           behavior: "auto",
         });
-        schedulePendingNavigationStabilization("retry");
+        schedulePendingNavigationStabilization();
       });
     },
     [clearNavigationFrame, finalizePendingNavigation, rowVirtualizer]
@@ -1231,7 +1043,7 @@ export const OutputSection: React.FC = () => {
     // continuous measurements perpetually cancel + reschedule the rAF,
     // delaying the alignment check for as long as measurements arrive.
     if (navigationFrameRef.current === null) {
-      schedulePendingNavigationStabilization("measurement");
+      schedulePendingNavigationStabilization();
     }
   }, [
     measurementVersion,
@@ -1374,26 +1186,12 @@ export const OutputSection: React.FC = () => {
           attempts: 0,
         };
         setNavigationPendingRowIndex(rowIndex);
-        WebviewLog.debug("[OutputMinimapDebug] navigation requested", {
-          targetKind: target.kind,
-          targetIndex: target.index,
-          rowIndex,
-          align,
-          requestedBehavior,
-          effectiveBehavior: behavior,
-          targetScrollFraction: roundDebugPx(
-            rowLayout.rowStartsByIndex[rowIndex] / Math.max(1, rowLayout.totalSize)
-          ),
-          scrollTopBefore: roundDebugPx(outputRef.current?.scrollTop),
-          clientHeight: roundDebugPx(outputRef.current?.clientHeight),
-          totalSize: roundDebugPx(rowLayout.totalSize),
-        });
 
         // Do NOT call rowVirtualizer.measure() here. Clearing itemSizeCache
         // forces TanStack to re-estimate all rows from bucket estimates, which
         // destabilizes getOffsetForIndex and prolongs the reconcileScroll loop.
         rowVirtualizer.scrollToIndex(rowIndex, { align, behavior });
-        schedulePendingNavigationStabilization("start");
+        schedulePendingNavigationStabilization();
       },
       getTargetScrollFraction: (target: OutputMessage["target"]) => {
         const rowIndex = firstRowIndexByTarget.get(
@@ -1783,29 +1581,6 @@ export const OutputSection: React.FC = () => {
     workspaceSnapshots,
   ]);
 
-  useEffect(() => {
-    const signature = minimapSteps
-      .map(
-        (step) =>
-          `${step.key}:${roundDebugPx(step.scrollFraction)}:${step.diffBlocks.length}`
-      )
-      .join("|");
-    if (signature === minimapStepsDebugRef.current) {
-      return;
-    }
-    minimapStepsDebugRef.current = signature;
-    WebviewLog.debug("[OutputMinimapDebug] minimap model updated", {
-      stepCount: minimapSteps.length,
-      steps: minimapSteps.map((step) => ({
-        key: step.key,
-        label: step.label,
-        scrollFraction: roundDebugPx(step.scrollFraction),
-        diffBlockCount: step.diffBlocks.length,
-        firstMessageIndex: step.firstMessageIndex,
-      })),
-    });
-  }, [minimapSteps]);
-
   const handleBackToLive = useCallback(() => {
     useWorkflowStore.getState().clearHistoryOutputs();
     useUiStore.getState().clearHistoryView();
@@ -2008,20 +1783,6 @@ export const OutputSection: React.FC = () => {
 
   const handleMinimapStepClick = useCallback(
     (step: MinimapStep) => {
-      WebviewLog.debug("[OutputMinimapDebug] minimap step clicked", {
-        key: step.key,
-        label: step.label,
-        kind: step.kind,
-        stepIndex: step.stepIndex,
-        firstMessageIndex: step.firstMessageIndex,
-        stepScrollFraction: roundDebugPx(step.scrollFraction),
-        controllerFraction: roundDebugPx(
-          navigationController.getTargetScrollFraction({
-            kind: step.kind,
-            index: step.stepIndex,
-          }) ?? -1
-        ),
-      });
       navigationController.scrollToTarget(
         { kind: step.kind, index: step.stepIndex },
         { behavior: "smooth", align: "start" }
