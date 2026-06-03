@@ -783,11 +783,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   return (
     <div
       ref={editorContainerRef}
-      className="prompt-editor flex flex-col flex-1 overflow-hidden"
+      className="prompt-editor flex flex-col flex-1 min-h-0 overflow-hidden"
     >
       {/* CodeMirror Editor + Properties Drawer container (prompt mode only) */}
       {!isScriptMode && (
-        <div className="prompt-editor-wrapper flex flex-col flex-1 overflow-hidden relative isolate">
+        <div className="prompt-editor-wrapper flex flex-col flex-1 min-h-0 overflow-hidden relative isolate">
           <CodeMirrorEditor
             value={promptText}
             onChange={handleTextChange}
@@ -816,7 +816,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
       {/* Script step fields (script mode only) */}
       {isScriptMode && (
-        <div className="flex flex-col flex-1 overflow-auto px-3 py-3 bg-editor-bg">
+        <div className="flex flex-col flex-1 min-h-0 overflow-auto px-3 py-3 bg-editor-bg">
           <ScriptConditionEditor
             variant="scriptStep"
             value={{

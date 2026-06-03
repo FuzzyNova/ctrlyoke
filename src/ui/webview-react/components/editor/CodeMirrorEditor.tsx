@@ -341,19 +341,32 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     onInsertApplied?.(pendingInsertRequest.requestId);
   }, [mode, onInsertApplied, pendingInsertRequest, viewReady]);
 
-  // Trigger CodeMirror tooltip remeasure when the visual viewport changes
-  // (e.g. mobile keyboard opens/closes, or iOS page-scrolls to keep the
-  // focused input in view). The body-mounted tooltip container shifts with
-  // page scroll, so this ensures the position is recalculated on the next RAF.
+  // Remeasure CodeMirror geometry on visual viewport changes (tooltip repositioning
+  // on scroll; caret scroll-into-view on resize when the mobile keyboard opens).
+  // Resize fires once after the keyboard fully opens — safe to dispatch scrollIntoView
+  // synchronously. Scroll fires continuously during native scroll animations so we
+  // only call requestMeasure there (no dispatches that could interfere).
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const handleViewportChange = () => viewRef.current?.requestMeasure();
-    vv.addEventListener("resize", handleViewportChange);
-    vv.addEventListener("scroll", handleViewportChange);
+    const handleScroll = () => viewRef.current?.requestMeasure();
+    const handleResize = () => {
+      const view = viewRef.current;
+      if (!view) return;
+      view.requestMeasure();
+      if (!view.hasFocus) return;
+      view.dispatch({
+        effects: EditorView.scrollIntoView(view.state.selection.main.head, {
+          y: "end",
+          yMargin: 24,
+        }),
+      });
+    };
+    vv.addEventListener("resize", handleResize);
+    vv.addEventListener("scroll", handleScroll);
     return () => {
-      vv.removeEventListener("resize", handleViewportChange);
-      vv.removeEventListener("scroll", handleViewportChange);
+      vv.removeEventListener("resize", handleResize);
+      vv.removeEventListener("scroll", handleScroll);
     };
   }, []);
 

@@ -144,7 +144,7 @@ export const EditorSection: React.FC = () => {
     <section
       ref={sectionRef}
       id="editor-section"
-      className="editor-section flex flex-col h-full bg-editor-bg"
+      className="editor-section flex flex-col h-full min-h-0 bg-editor-bg"
     >
       {/* Section Header */}
       <div className="flex items-center h-[30px] pl-2 pr-1 border-b border-panel-border bg-sidebar-bg">
@@ -305,7 +305,7 @@ export const EditorSection: React.FC = () => {
       </div>
 
       {/* Content area */}
-      <div className="prompt-editor-wrapper flex flex-1 overflow-hidden relative">
+      <div className="prompt-editor-wrapper flex flex-1 min-h-0 overflow-hidden relative">
         <PromptEditor isCLIManaged={isCLIManaged} />
       </div>
     </section>

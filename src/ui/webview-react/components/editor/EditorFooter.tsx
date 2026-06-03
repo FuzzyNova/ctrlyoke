@@ -88,7 +88,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
         footerRef(node);
         footerRefSmall(node);
       }}
-      className="editor-footer flex items-center gap-1 px-3 h-10 border-t border-panel-border bg-sidebar-bg"
+      className="editor-footer shrink-0 flex items-center gap-1 px-3 h-10 border-t border-panel-border bg-sidebar-bg"
     >
       {/* Properties toggle button — hidden in script mode */}
       {!isScriptMode && (

@@ -570,7 +570,15 @@ export const OutputSection: React.FC = () => {
         0.75,
         bucket.startsWith("structured-event:diff:") ? 3.5 : 3
       );
-      return Math.max(baseEstimate, Math.round(baseEstimate * clampedScale * 100) / 100);
+      const rawScaled = Math.round(baseEstimate * clampedScale * 100) / 100;
+      if (bucket.startsWith("structured-event:diff:")) {
+        return Math.max(baseEstimate, rawScaled);
+      }
+      // Cap the bucket correction at +200px for non-diff rows. The scale factor is
+      // derived from a mix of row sizes; small rows with many short paragraphs produce
+      // high scale factors that would wildly overestimate large text-heavy rows if
+      // applied proportionally.
+      return clamp(rawScaled, baseEstimate, baseEstimate + 200);
     },
     [outputContentWidth, outputFontSize]
   );

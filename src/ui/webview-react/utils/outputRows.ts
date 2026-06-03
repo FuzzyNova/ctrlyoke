@@ -356,7 +356,7 @@ function estimateMarkdownBlockHeight(
     outputFontSize,
     {
       charWidthMultiplier: 0.56,
-      lineHeightMultiplier: 1.7,
+      lineHeightMultiplier: 1.6,
       verticalChrome: 28,
     }
   );
