@@ -91,6 +91,13 @@ interface DiffViewProps {
   expandedGaps?: DiffGapExpansionState;
   /** Called when the user expands hidden context in controlled mode. */
   onExpandGap?: (gapIndex: number, nextExpandedToLine: number) => void;
+  /**
+   * When provided, overrides the internal useElementNarrow split/unified
+   * detection. Pass this from the parent that already knows the correct view
+   * type (e.g. OutputSection's outputDiffViewType) to avoid the initial
+   * wrong-viewType render that causes large height changes on first mount.
+   */
+  viewType?: "split" | "unified";
   className?: string;
 }
 
@@ -106,6 +113,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   onCollapsedChange,
   expandedGaps,
   onExpandGap,
+  viewType: viewTypeProp,
   className = "",
 }) => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
@@ -135,20 +143,26 @@ export const DiffView: React.FC<DiffViewProps> = ({
   const activeExpandedGaps = expandedGaps ?? uncontrolledExpandedGaps;
 
   // Width tracking for split vs unified layout.
+  // When viewTypeProp is provided (from a virtualized parent that already knows
+  // the correct type), skip useElementNarrow entirely to avoid the initial
+  // wrong-viewType render that causes large height changes on first mount.
   const [narrowCallbackRef, isNarrow] = useElementNarrow<HTMLDivElement>(
     SIDE_BY_SIDE_THRESHOLD
   );
   const isWide = !isNarrow;
-  const viewType = isWide ? "split" : "unified";
+  const viewType = viewTypeProp ?? (isWide ? "split" : "unified");
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const setWrapperRef = useCallback(
     (node: HTMLDivElement | null) => {
       (wrapperRef as React.MutableRefObject<HTMLDivElement | null>).current =
         node;
-      narrowCallbackRef(node);
+      // Skip the ResizeObserver when viewType is provided externally — the
+      // internal isNarrow state would never affect viewType in that case, so
+      // attaching the observer only causes unnecessary re-renders.
+      if (!viewTypeProp) narrowCallbackRef(node);
     },
-    [narrowCallbackRef]
+    [narrowCallbackRef, viewTypeProp]
   );
 
   // Derive estimated line count for summary badge (cheap, no diff computation).

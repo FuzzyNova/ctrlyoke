@@ -80,6 +80,8 @@ interface FileEditOutputProps {
   onCollapsedChange?: (collapsed: boolean) => void;
   expandedGaps?: DiffGapExpansionState;
   onExpandGap?: (gapIndex: number, nextExpandedToLine: number) => void;
+  /** Forwarded to DiffView to avoid the initial wrong-viewType render. */
+  viewType?: "split" | "unified";
   className?: string;
 }
 
@@ -106,6 +108,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     onCollapsedChange,
     expandedGaps,
     onExpandGap,
+    viewType,
     className = "",
   }) => {
     const dotStatus = fileOpDotStatus(status);
@@ -166,6 +169,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
             onCollapsedChange={onCollapsedChange}
             expandedGaps={expandedGaps}
             onExpandGap={onExpandGap}
+            viewType={viewType}
           />
         ) : (
           undoButton && <div className="ml-6 mt-1">{undoButton}</div>

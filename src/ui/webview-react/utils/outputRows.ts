@@ -292,6 +292,10 @@ function estimateWrappedLineCount(
   options?: {
     chrome?: number;
     charWidthMultiplier?: number;
+    // How much vertical weight to give empty lines (paragraph separators).
+    // Default 1.0 counts them as full lines. Use 0.5 for markdown where \n\n
+    // renders as a compact paragraph margin rather than a blank line.
+    emptyLineWeight?: number;
   }
 ): number {
   const normalized = normalizeTextForLayout(text);
@@ -308,10 +312,11 @@ function estimateWrappedLineCount(
     outputFontSize * (options?.charWidthMultiplier ?? 0.62)
   );
   const charsPerLine = Math.max(8, Math.floor(availableWidth / charWidth));
+  const emptyLineWeight = options?.emptyLineWeight ?? 1.0;
 
   return normalized.split("\n").reduce((total, rawLine) => {
     if (rawLine.length === 0) {
-      return total + 1;
+      return total + emptyLineWeight;
     }
     return total + Math.max(1, Math.ceil(rawLine.length / charsPerLine));
   }, 0);
@@ -326,11 +331,13 @@ function estimateTextBlockHeight(
     verticalChrome?: number;
     charWidthMultiplier?: number;
     lineHeightMultiplier?: number;
+    emptyLineWeight?: number;
   }
 ): number {
   const lineCount = estimateWrappedLineCount(text, outputContentWidth, outputFontSize, {
     chrome: options?.chrome,
     charWidthMultiplier: options?.charWidthMultiplier,
+    emptyLineWeight: options?.emptyLineWeight,
   });
   if (lineCount === 0) {
     return 0;
@@ -350,14 +357,19 @@ function estimateMarkdownBlockHeight(
   outputContentWidth: number | undefined,
   outputFontSize: number
 ): number {
+  // emptyLineWeight: 0.5 — \n\n paragraph breaks render as compact margins
+  // (~half a line height), not as full blank lines. Without this, long AI
+  // responses with many paragraph breaks are consistently over-estimated by
+  // 10-15%, which the bucket correction can't fix (it only scales upward).
   const baseHeight = estimateTextBlockHeight(
     text,
     outputContentWidth,
     outputFontSize,
     {
       charWidthMultiplier: 0.56,
-      lineHeightMultiplier: 1.6,
+      lineHeightMultiplier: 1.5,
       verticalChrome: 28,
+      emptyLineWeight: 0.5,
     }
   );
   const headingCount = (text.match(/^#{1,6}\s+/gm) ?? []).length;
@@ -495,7 +507,7 @@ function estimateBashOutputHeight(
       outputFontSize,
       {
         charWidthMultiplier: 0.6,
-        lineHeightMultiplier: 1.55,
+        lineHeightMultiplier: 1.4,
         verticalChrome: 10,
       }
     );
@@ -708,11 +720,7 @@ export function estimateOutputRowHeight(
     case "cli-header":
       return estimateCliHeaderHeight(row, outputContentWidth, outputFontSize);
     case "prompt":
-      return estimateTextBlockHeight(
-        row.text,
-        outputContentWidth,
-        outputFontSize
-      );
+      return estimateMarkdownBlockHeight(row.text, outputContentWidth, outputFontSize);
     case "cli-command":
       return estimateTextBlockHeight(
         `${row.workingDirectory || "workspace"}> ${row.command}`,

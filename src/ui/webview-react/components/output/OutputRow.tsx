@@ -257,6 +257,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             hideDiff={hideDiff}
             collapsed={diff?.isCollapsed}
             expandedGaps={diff?.expandedGaps}
+            viewType={diff?.renderPlan.viewType}
             onCollapsedChange={
               diff
                 ? (collapsed) =>

@@ -98,7 +98,6 @@ const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024;
 const OUTPUT_VIRTUALIZER_OVERSCAN = 16;
 const LARGE_WORKFLOW_ROW_THRESHOLD = 150;
 const MAX_NAV_ALIGNMENT_ATTEMPTS = 8;
-const NAVIGATION_SETTLE_GRACE_MS = 120;
 const MAX_NAVIGATION_STABILIZATION_MS = 1000;
 
 interface RowHeightBucketStats {
@@ -207,7 +206,7 @@ function alignRowElementToViewport(
       ? rowRect.bottom - containerRect.bottom
       : rowRect.top - containerRect.top;
 
-  if (Math.abs(delta) < 0.5) {
+  if (Math.abs(delta) < 2) {
     return true;
   }
 
@@ -294,6 +293,7 @@ interface PendingNavigationState {
  *   skip reconciliation when their props haven't changed.
  */
 export const OutputSection: React.FC = () => {
+  const renderCountRef = useRef(0);
   // ── Granular store selectors ───────────────────────────────────────────────
   // Each selector is independent so only the relevant slice of state triggers
   // a re-render of this component.
@@ -449,6 +449,19 @@ export const OutputSection: React.FC = () => {
   }, [measurementVersion]);
   const pendingNavigationRef = useRef<PendingNavigationState | null>(null);
   const navigationFrameRef = useRef<number | null>(null);
+  // Suppresses TanStack Virtual's internal scroll corrections for 1 s after navigation
+  // completes. Without this, new rows entering the virtual window post-navigation
+  // repeatedly trigger corrections that oscillate the scroll position.
+  const postNavSettlingRef = useRef(false);
+  const postNavSettlingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rowLayoutDebugRef = useRef<{
+    totalSize: number;
+    measurementVersion: number;
+    rowCount: number;
+  } | null>(null);
+  const stepFractionsDebugRef = useRef<string>("");
+  const minimapStepsDebugRef = useRef<string>("");
+  renderCountRef.current += 1;
 
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
@@ -594,61 +607,102 @@ export const OutputSection: React.FC = () => {
     getItemKey: (index) => rows[index]?.key ?? index,
     overscan: OUTPUT_VIRTUALIZER_OVERSCAN,
   });
+  // shouldAdjustScrollPositionOnItemSizeChange is a writable instance property
+  // (not a constructor option) on Virtualizer. Suppress scroll corrections
+  // during active navigation and for 1 s after to prevent TanStack from
+  // adjusting the scroll for measured rows above the viewport, which amplifies
+  // reconcileScroll oscillations.
+  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
+    pendingNavigationRef.current === null &&
+    !postNavSettlingRef.current &&
+    item.start < (outputRef.current?.scrollTop ?? 0);
 
+  // Keep live refs so updateRowMeasurementCache doesn't need rows / getEstimatedRowHeight
+  // in its own dependency array, preventing ref detach/reattach on every streaming chunk.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const getEstimatedRowHeightRef = useRef(getEstimatedRowHeight);
+  getEstimatedRowHeightRef.current = getEstimatedRowHeight;
+
+  const updateRowMeasurementCache = useCallback((element: HTMLDivElement) => {
+    const index = Number(element.dataset.index ?? -1);
+    const row = rowsRef.current[index];
+    if (!row) return;
+
+    const measuredHeight = getMeasuredElementHeight(element);
+    const zeroHeightReason =
+      row.rowKind === "structured-event"
+        ? getZeroHeightStructuredEventReason(row)
+        : null;
+    if (
+      (!Number.isFinite(measuredHeight) || measuredHeight <= 0) &&
+      zeroHeightReason == null
+    ) {
+      return;
+    }
+
+    const nextHeight =
+      zeroHeightReason != null && measuredHeight <= 0 ? 0 : measuredHeight;
+    const rowHeightBucket = getRowHeightBucket(row);
+    const estimatedHeight = getEstimatedRowHeightRef.current(row);
+
+    const previousHeight = measurementCacheRef.current.get(row.key);
+    if (
+      previousHeight !== undefined &&
+      Math.abs(previousHeight - nextHeight) < 0.5
+    ) {
+      return;
+    }
+
+    measurementCacheRef.current.set(row.key, nextHeight);
+    const previousBucketStats =
+      rowHeightBucketStatsRef.current.get(rowHeightBucket) ?? {
+        sampleCount: 0,
+        totalMeasured: 0,
+        totalEstimated: 0,
+        maxAbsDelta: 0,
+      };
+    rowHeightBucketStatsRef.current.set(rowHeightBucket, {
+      sampleCount: previousBucketStats.sampleCount + 1,
+      totalMeasured: previousBucketStats.totalMeasured + nextHeight,
+      totalEstimated: previousBucketStats.totalEstimated + estimatedHeight,
+      maxAbsDelta: Math.max(
+        previousBucketStats.maxAbsDelta,
+        Math.abs(nextHeight - estimatedHeight)
+      ),
+    });
+    WebviewLog.debug("[OutputMinimapDebug] row measured", {
+      rowKey: row.key,
+      rowKind: row.rowKind,
+      rowIndex: index,
+      measuredHeight: roundDebugPx(nextHeight),
+      previousHeight: roundDebugPx(previousHeight),
+      estimatedHeight: roundDebugPx(estimatedHeight),
+      bucket: rowHeightBucket,
+      zeroHeightReason,
+    });
+    setMeasurementVersion((version) => version + 1);
+  }, []);
+
+  // React 19 ref callbacks can return a cleanup function.
+  // Returns a ResizeObserver cleanup so the cache stays fresh for the entire
+  // lifetime of the mounted element — not just on first attach. Without this,
+  // streaming content and async rendering that grow a row after initial mount
+  // leave a stale cached height; when the row scrolls out and back in,
+  // estimateSize returns the stale value causing overlap or blank space.
   const measureRowElement = useCallback(
-    (element: HTMLDivElement | null) => {
+    (element: HTMLDivElement | null): void | (() => void) => {
       if (!element) return;
       rowVirtualizer.measureElement(element);
+      updateRowMeasurementCache(element);
 
-      const index = Number(element.dataset.index ?? -1);
-      const row = rows[index];
-      if (!row) return;
-
-      const measuredHeight = getMeasuredElementHeight(element);
-      const zeroHeightReason =
-        row.rowKind === "structured-event"
-          ? getZeroHeightStructuredEventReason(row)
-          : null;
-      if (
-        (!Number.isFinite(measuredHeight) || measuredHeight <= 0) &&
-        zeroHeightReason == null
-      ) {
-        return;
-      }
-
-      const nextHeight =
-        zeroHeightReason != null && measuredHeight <= 0 ? 0 : measuredHeight;
-      const rowHeightBucket = getRowHeightBucket(row);
-      const estimatedHeight = getEstimatedRowHeight(row);
-
-      const previousHeight = measurementCacheRef.current.get(row.key);
-      if (
-        previousHeight !== undefined &&
-        Math.abs(previousHeight - nextHeight) < 0.5
-      ) {
-        return;
-      }
-
-      measurementCacheRef.current.set(row.key, nextHeight);
-      const previousBucketStats =
-        rowHeightBucketStatsRef.current.get(rowHeightBucket) ?? {
-          sampleCount: 0,
-          totalMeasured: 0,
-          totalEstimated: 0,
-          maxAbsDelta: 0,
-        };
-      rowHeightBucketStatsRef.current.set(rowHeightBucket, {
-        sampleCount: previousBucketStats.sampleCount + 1,
-        totalMeasured: previousBucketStats.totalMeasured + nextHeight,
-        totalEstimated: previousBucketStats.totalEstimated + estimatedHeight,
-        maxAbsDelta: Math.max(
-          previousBucketStats.maxAbsDelta,
-          Math.abs(nextHeight - estimatedHeight)
-        ),
-      });
-      setMeasurementVersion((version) => version + 1);
+      const observer = new ResizeObserver(() =>
+        updateRowMeasurementCache(element)
+      );
+      observer.observe(element);
+      return () => observer.disconnect();
     },
-    [getEstimatedRowHeight, rowVirtualizer, rows]
+    [rowVirtualizer, updateRowMeasurementCache]
   );
 
   const rowLayout = useMemo(() => {
@@ -711,6 +765,12 @@ export const OutputSection: React.FC = () => {
     if (outputContentWidth <= 0) {
       return;
     }
+    WebviewLog.debug("[OutputMinimapDebug] measurement cache reset", {
+      reason: "output-dimensions-changed",
+      outputContentWidth: roundDebugPx(outputContentWidth),
+      outputDiffViewType,
+      outputFontSize,
+    });
     measurementCacheRef.current.clear();
     rowHeightBucketStatsRef.current.clear();
     rowVirtualizer.measure();
@@ -730,6 +790,62 @@ export const OutputSection: React.FC = () => {
 
     return fractions;
   }, [firstRowIndexByTarget, rowLayout, uniqueStepTargets]);
+
+  useEffect(() => {
+    WebviewLog.debug("[OutputMinimapDebug] output section render", {
+      renderCount: renderCountRef.current,
+      rowCount: rows.length,
+      measurementVersion,
+      totalSize: roundDebugPx(rowLayout.totalSize),
+      virtualRowCount: rowVirtualizer.getVirtualItems().length,
+      activeOutputTab,
+      outputContentWidth: roundDebugPx(outputContentWidth),
+      outputDiffViewType,
+      navigationPendingRowIndex,
+    });
+  });
+
+  useEffect(() => {
+    const previous = rowLayoutDebugRef.current;
+    if (
+      previous &&
+      Math.abs(previous.totalSize - rowLayout.totalSize) < 0.5 &&
+      previous.measurementVersion === measurementVersion &&
+      previous.rowCount === rows.length
+    ) {
+      return;
+    }
+    rowLayoutDebugRef.current = {
+      totalSize: rowLayout.totalSize,
+      measurementVersion,
+      rowCount: rows.length,
+    };
+    WebviewLog.debug("[OutputMinimapDebug] row layout updated", {
+      rowCount: rows.length,
+      measurementVersion,
+      totalSize: roundDebugPx(rowLayout.totalSize),
+      sampleRowStarts: rowLayout.rowStartsByIndex
+        .slice(0, Math.min(5, rowLayout.rowStartsByIndex.length))
+        .map((value) => roundDebugPx(value)),
+    });
+  }, [measurementVersion, rowLayout, rows.length]);
+
+  useEffect(() => {
+    const signature = [...stepScrollFractions.entries()]
+      .map(([key, value]) => `${key}:${roundDebugPx(value)}`)
+      .join("|");
+    if (signature === stepFractionsDebugRef.current) {
+      return;
+    }
+    stepFractionsDebugRef.current = signature;
+    WebviewLog.debug("[OutputMinimapDebug] step scroll fractions updated", {
+      count: stepScrollFractions.size,
+      fractions: [...stepScrollFractions.entries()].map(([key, value]) => ({
+        key,
+        value: roundDebugPx(value),
+      })),
+    });
+  }, [stepScrollFractions]);
 
   const hasDiffRows = useMemo(
     () =>
@@ -814,6 +930,11 @@ export const OutputSection: React.FC = () => {
       return;
     }
     previousDiffResetVersion.current = diffResetVersion;
+    WebviewLog.debug("[OutputMinimapDebug] measurement cache reset", {
+      reason: "diff-reset-version",
+      diffResetVersion,
+      diffsCollapsed,
+    });
 
     // Diff row heights change dramatically between expanded and collapsed states.
     // Stale measured heights from the previous state would misalign minimap
@@ -849,6 +970,11 @@ export const OutputSection: React.FC = () => {
     previousViewingRunIndex.current = viewingRunIndex;
     if (!viewChanged) return;
 
+    WebviewLog.debug("[OutputMinimapDebug] measurement cache reset", {
+      reason: "history-view-changed",
+      isViewingHistory,
+      viewingRunIndex,
+    });
     measurementCacheRef.current.clear();
     setMeasurementVersion((v) => v + 1);
   }, [isViewingHistory, viewingRunIndex]);
@@ -861,6 +987,19 @@ export const OutputSection: React.FC = () => {
     const atBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight <=
       SCROLL_BOTTOM_THRESHOLD;
+    WebviewLog.debug("[OutputMinimapDebug] user scrolled output", {
+      scrollTop: roundDebugPx(el.scrollTop),
+      scrollHeight: roundDebugPx(el.scrollHeight),
+      clientHeight: roundDebugPx(el.clientHeight),
+      atBottom,
+      pendingNavigation: pendingNavigationRef.current
+        ? {
+            rowIndex: pendingNavigationRef.current.rowIndex,
+            targetKind: pendingNavigationRef.current.targetKind,
+            targetIndex: pendingNavigationRef.current.targetIndex,
+          }
+        : null,
+    });
     autoscrollEnabled.current = atBottom;
   }, []);
 
@@ -882,6 +1021,30 @@ export const OutputSection: React.FC = () => {
       setNavigationPendingRowIndex(null);
       isProgrammaticScroll.current = false;
 
+      // Settle TanStack Virtual's internal reconcileScroll loop immediately.
+      // scrollToIndex leaves an active scrollState that keeps re-calculating the
+      // target row position on every animation frame for up to 5 s. By calling
+      // scrollToOffset with the confirmed landing position, we replace the
+      // index-based scrollState with an offset-based one whose targetOffset ≈
+      // scrollOffset, satisfying approxEqual on the next rAF so reconcileScroll
+      // clears scrollState and stops issuing corrective scrolls.
+      const landingScrollTop = outputRef.current?.scrollTop ?? 0;
+      rowVirtualizer.scrollToOffset(landingScrollTop, { behavior: "auto" });
+
+      // Start the post-navigation settling window. During this window
+      // shouldAdjustScrollPositionOnItemSizeChange returns false, preventing
+      // TanStack Virtual from issuing scroll corrections as newly-rendered rows
+      // near the destination get measured. Without this, correction feedback
+      // loops cause the scroll position to oscillate for several seconds.
+      postNavSettlingRef.current = true;
+      if (postNavSettlingTimerRef.current !== null) {
+        clearTimeout(postNavSettlingTimerRef.current);
+      }
+      postNavSettlingTimerRef.current = setTimeout(() => {
+        postNavSettlingRef.current = false;
+        postNavSettlingTimerRef.current = null;
+      }, 1000);
+
       if (!pending) {
         return;
       }
@@ -896,10 +1059,14 @@ export const OutputSection: React.FC = () => {
         attempts: pending.attempts,
         elapsedMs: roundDebugPx(performance.now() - pending.startedAt),
         reason,
+        measurementVersion: measurementVersionRef.current,
+        finalScrollTop: roundDebugPx(outputRef.current?.scrollTop),
+        finalClientHeight: roundDebugPx(outputRef.current?.clientHeight),
+        finalScrollHeight: roundDebugPx(outputRef.current?.scrollHeight),
         ...details,
       });
     },
-    [clearNavigationFrame]
+    [clearNavigationFrame, rowVirtualizer]
   );
 
   const schedulePendingNavigationStabilization = useCallback(
@@ -915,6 +1082,14 @@ export const OutputSection: React.FC = () => {
         const now = performance.now();
         const currentMeasurementVersion = measurementVersionRef.current;
         if (currentMeasurementVersion !== pending.lastMeasuredVersion) {
+          WebviewLog.debug("[OutputMinimapDebug] navigation measurement changed", {
+            targetKind: pending.targetKind,
+            targetIndex: pending.targetIndex,
+            rowIndex: pending.rowIndex,
+            previousMeasurementVersion: pending.lastMeasuredVersion,
+            nextMeasurementVersion: currentMeasurementVersion,
+            trigger,
+          });
           pending.lastMeasuredVersion = currentMeasurementVersion;
           pending.lastMeasurementChangeAt = now;
         }
@@ -950,7 +1125,6 @@ export const OutputSection: React.FC = () => {
           }
 
           pending.attempts += 1;
-          rowVirtualizer.measure();
           rowVirtualizer.scrollToIndex(pending.rowIndex, {
             align: pending.align,
             behavior: "auto",
@@ -964,19 +1138,35 @@ export const OutputSection: React.FC = () => {
           rowElement,
           pending.align
         );
-        const elapsedSinceMeasurementChange =
-          now - pending.lastMeasurementChangeAt;
-        const hasSettled =
-          isAligned && elapsedSinceMeasurementChange >= NAVIGATION_SETTLE_GRACE_MS;
-        if (hasSettled) {
+        WebviewLog.debug("[OutputMinimapDebug] navigation alignment check", {
+          targetKind: pending.targetKind,
+          targetIndex: pending.targetIndex,
+          rowIndex: pending.rowIndex,
+          trigger,
+          aligned: isAligned,
+          scrollTop: roundDebugPx(scrollElement.scrollTop),
+          rowTop: roundDebugPx(rowElement.getBoundingClientRect().top),
+          rowBottom: roundDebugPx(rowElement.getBoundingClientRect().bottom),
+          containerTop: roundDebugPx(scrollElement.getBoundingClientRect().top),
+          containerBottom: roundDebugPx(
+            scrollElement.getBoundingClientRect().bottom
+          ),
+        });
+        if (isAligned) {
+          // Finalize immediately on first aligned frame. Calling scrollToOffset
+          // below clears TanStack's reconcileScroll scrollState, preventing
+          // further corrective scrolls. The 1-s postNavSettling window then
+          // blocks shouldAdjustScrollPositionOnItemSizeChange so late-arriving
+          // measurements cannot shift the viewport away from the target.
           finalizePendingNavigation("completed", {
             trigger,
             aligned: true,
-            settledForMs: roundDebugPx(elapsedSinceMeasurementChange),
           });
           return;
         }
 
+        const elapsedSinceMeasurementChange =
+          now - pending.lastMeasurementChangeAt;
         if (
           pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
           now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
@@ -987,21 +1177,18 @@ export const OutputSection: React.FC = () => {
               : "attempt-limit",
             {
               trigger,
-              aligned: isAligned,
-              settledForMs: roundDebugPx(elapsedSinceMeasurementChange),
+              aligned: false,
+              elapsedSinceMeasurementChangeMs: roundDebugPx(elapsedSinceMeasurementChange),
             }
           );
           return;
         }
 
         pending.attempts += 1;
-        if (!isAligned) {
-          rowVirtualizer.measure();
-          rowVirtualizer.scrollToIndex(pending.rowIndex, {
-            align: pending.align,
-            behavior: "auto",
-          });
-        }
+        rowVirtualizer.scrollToIndex(pending.rowIndex, {
+          align: pending.align,
+          behavior: "auto",
+        });
         schedulePendingNavigationStabilization("retry");
       });
     },
@@ -1039,8 +1226,13 @@ export const OutputSection: React.FC = () => {
     if (navigationPendingRowIndex == null) {
       return;
     }
-
-    schedulePendingNavigationStabilization("measurement");
+    // Only schedule if no frame is already pending. The existing frame will
+    // read the latest measurement state when it fires. Without this guard,
+    // continuous measurements perpetually cancel + reschedule the rAF,
+    // delaying the alignment check for as long as measurements arrive.
+    if (navigationFrameRef.current === null) {
+      schedulePendingNavigationStabilization("measurement");
+    }
   }, [
     measurementVersion,
     navigationPendingRowIndex,
@@ -1189,9 +1381,17 @@ export const OutputSection: React.FC = () => {
           align,
           requestedBehavior,
           effectiveBehavior: behavior,
+          targetScrollFraction: roundDebugPx(
+            rowLayout.rowStartsByIndex[rowIndex] / Math.max(1, rowLayout.totalSize)
+          ),
+          scrollTopBefore: roundDebugPx(outputRef.current?.scrollTop),
+          clientHeight: roundDebugPx(outputRef.current?.clientHeight),
+          totalSize: roundDebugPx(rowLayout.totalSize),
         });
 
-        rowVirtualizer.measure();
+        // Do NOT call rowVirtualizer.measure() here. Clearing itemSizeCache
+        // forces TanStack to re-estimate all rows from bucket estimates, which
+        // destabilizes getOffsetForIndex and prolongs the reconcileScroll loop.
         rowVirtualizer.scrollToIndex(rowIndex, { align, behavior });
         schedulePendingNavigationStabilization("start");
       },
@@ -1199,14 +1399,20 @@ export const OutputSection: React.FC = () => {
         const rowIndex = firstRowIndexByTarget.get(
           `${target.kind}:${target.index}`
         );
-        if (rowIndex === undefined || rowLayout.totalSize <= 0) {
+        const totalSize = Math.max(1, rowLayout.totalSize);
+        if (rowIndex === undefined || totalSize <= 0) {
           return null;
         }
 
-        return rowLayout.rowStartsByIndex[rowIndex] / rowLayout.totalSize;
+        return rowLayout.rowStartsByIndex[rowIndex] / totalSize;
       },
     }),
-    [firstRowIndexByTarget, rowLayout, rowVirtualizer, schedulePendingNavigationStabilization]
+    [
+      firstRowIndexByTarget,
+      rowLayout,
+      rowVirtualizer,
+      schedulePendingNavigationStabilization,
+    ]
   );
 
   useEffect(() => {
@@ -1409,8 +1615,7 @@ export const OutputSection: React.FC = () => {
           {
             key: row.diff.key,
             rowKey: row.key,
-            scrollFraction:
-              (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
+            scrollFraction: (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
             heightFraction:
               estimateOutputDiffBlockHeight(row, outputFontSize) / totalSize,
             addedLines: row.diff.addedLines,
@@ -1577,6 +1782,29 @@ export const OutputSection: React.FC = () => {
     uniqueStepTargets,
     workspaceSnapshots,
   ]);
+
+  useEffect(() => {
+    const signature = minimapSteps
+      .map(
+        (step) =>
+          `${step.key}:${roundDebugPx(step.scrollFraction)}:${step.diffBlocks.length}`
+      )
+      .join("|");
+    if (signature === minimapStepsDebugRef.current) {
+      return;
+    }
+    minimapStepsDebugRef.current = signature;
+    WebviewLog.debug("[OutputMinimapDebug] minimap model updated", {
+      stepCount: minimapSteps.length,
+      steps: minimapSteps.map((step) => ({
+        key: step.key,
+        label: step.label,
+        scrollFraction: roundDebugPx(step.scrollFraction),
+        diffBlockCount: step.diffBlocks.length,
+        firstMessageIndex: step.firstMessageIndex,
+      })),
+    });
+  }, [minimapSteps]);
 
   const handleBackToLive = useCallback(() => {
     useWorkflowStore.getState().clearHistoryOutputs();
@@ -1780,6 +2008,20 @@ export const OutputSection: React.FC = () => {
 
   const handleMinimapStepClick = useCallback(
     (step: MinimapStep) => {
+      WebviewLog.debug("[OutputMinimapDebug] minimap step clicked", {
+        key: step.key,
+        label: step.label,
+        kind: step.kind,
+        stepIndex: step.stepIndex,
+        firstMessageIndex: step.firstMessageIndex,
+        stepScrollFraction: roundDebugPx(step.scrollFraction),
+        controllerFraction: roundDebugPx(
+          navigationController.getTargetScrollFraction({
+            kind: step.kind,
+            index: step.stepIndex,
+          }) ?? -1
+        ),
+      });
       navigationController.scrollToTarget(
         { kind: step.kind, index: step.stepIndex },
         { behavior: "smooth", align: "start" }
@@ -2195,6 +2437,7 @@ export const OutputSection: React.FC = () => {
             ref={outputRef}
             id="output-content"
             className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
+            style={{ overflowAnchor: "none" }}
             onScroll={handleScroll}
             onContextMenu={(e) => {
               e.preventDefault();
@@ -2223,6 +2466,7 @@ export const OutputSection: React.FC = () => {
                       key={virtualRow.key}
                       ref={measureRowElement}
                       data-index={virtualRow.index}
+                      className="flow-root"
                       style={{
                         position: "absolute",
                         top: 0,
