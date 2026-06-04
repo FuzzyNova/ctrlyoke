@@ -14,6 +14,10 @@ import {
   WebSearchOutput,
 } from ".";
 import type {
+  BashOutputExpansionSection,
+  BashOutputExpansionState,
+} from "./BashOutput";
+import type {
   BashCommandData,
   CliEvent,
   CompactionData,
@@ -79,6 +83,12 @@ interface StructuredEventContentProps {
     section: ToolCallExpansionSection,
     expanded: boolean
   ) => void;
+  bashExpansion?: BashOutputExpansionState;
+  onBashExpansionChange?: (
+    rowKey: string,
+    section: BashOutputExpansionSection,
+    expanded: boolean
+  ) => void;
 }
 
 interface OutputRowProps {
@@ -105,6 +115,12 @@ interface OutputRowProps {
   onToolCallExpansionChange?: (
     rowKey: string,
     section: ToolCallExpansionSection,
+    expanded: boolean
+  ) => void;
+  bashExpansion?: BashOutputExpansionState;
+  onBashExpansionChange?: (
+    rowKey: string,
+    section: BashOutputExpansionSection,
     expanded: boolean
   ) => void;
 }
@@ -189,7 +205,15 @@ const ToolResultOutput: React.FC<{
 };
 
 const StructuredEventContent = memo<StructuredEventContentProps>(
-  ({ row, onFileUndo, onDiffCollapsedChange, onDiffGapExpand, onToolCallExpansionChange }) => {
+  ({
+    row,
+    onFileUndo,
+    onDiffCollapsedChange,
+    onDiffGapExpand,
+    onToolCallExpansionChange,
+    bashExpansion,
+    onBashExpansionChange,
+  }) => {
     const { event, rawTextOutput, eventIndex, hideDiff, workspaceSnapshot, diff } =
       row;
 
@@ -213,6 +237,10 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             error={data.error}
             exitCode={data.exitCode}
             status={data.status}
+            expansion={bashExpansion}
+            onExpansionChange={(section, expanded) =>
+              onBashExpansionChange?.(row.key, section, expanded)
+            }
           />
         );
       }
@@ -699,6 +727,8 @@ export const OutputRow = memo<OutputRowProps>(
     onDiffCollapsedChange,
     onDiffGapExpand,
     onToolCallExpansionChange,
+    bashExpansion,
+    onBashExpansionChange,
   }) => {
     let content: React.ReactNode;
     switch (row.rowKind) {
@@ -783,6 +813,8 @@ export const OutputRow = memo<OutputRowProps>(
             onDiffCollapsedChange={onDiffCollapsedChange}
             onDiffGapExpand={onDiffGapExpand}
             onToolCallExpansionChange={onToolCallExpansionChange}
+            bashExpansion={bashExpansion}
+            onBashExpansionChange={onBashExpansionChange}
           />
         );
         if (row.diff) {

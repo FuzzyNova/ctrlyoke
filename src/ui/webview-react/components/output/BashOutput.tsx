@@ -22,7 +22,16 @@ interface BashOutputProps {
   exitCode?: number;
   status?: FileOperationStatus;
   maxLines?: number;
+  expansion?: BashOutputExpansionState;
+  onExpansionChange?: (section: BashOutputExpansionSection, expanded: boolean) => void;
   className?: string;
+}
+
+export type BashOutputExpansionSection = "output" | "error";
+
+export interface BashOutputExpansionState {
+  outputExpanded: boolean;
+  errorExpanded: boolean;
 }
 
 /**
@@ -46,11 +55,29 @@ export const BashOutput = memo<BashOutputProps>(
     exitCode,
     status,
     maxLines = 10,
+    expansion,
+    onExpansionChange,
     className = "",
   }) => {
-    const [outputExpanded, setOutputExpanded] = useState(false);
-    const [errorExpanded, setErrorExpanded] = useState(false);
+    const [uncontrolledExpansion, setUncontrolledExpansion] =
+      useState<BashOutputExpansionState>({
+        outputExpanded: false,
+        errorExpanded: false,
+      });
     const containerId = useId();
+    const resolvedExpansion = expansion ?? uncontrolledExpansion;
+    const updateExpansion = (
+      section: BashOutputExpansionSection,
+      expanded: boolean
+    ) => {
+      if (expansion === undefined) {
+        setUncontrolledExpansion((previous) => ({
+          ...previous,
+          [section === "output" ? "outputExpanded" : "errorExpanded"]: expanded,
+        }));
+      }
+      onExpansionChange?.(section, expanded);
+    };
     const sanitizedCommand = sanitizeTerminalOutput(command).trim();
     const displayCommand = sanitizedCommand || "command unavailable";
     const hasCommandLabel = sanitizedCommand.length > 0;
@@ -76,8 +103,7 @@ export const BashOutput = memo<BashOutputProps>(
     const renderExpandableContent = (
       content: string,
       type: "output" | "error",
-      isExpanded: boolean,
-      setExpanded: (v: boolean) => void
+      isExpanded: boolean
     ) => {
       if (!content) return null;
 
@@ -103,7 +129,10 @@ export const BashOutput = memo<BashOutputProps>(
               <button
                 type="button"
                 className="text-bash-expand-link no-underline text-sm ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
-                onClick={() => setExpanded(!isExpanded)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  updateExpansion(type, !isExpanded);
+                }}
               >
                 {isExpanded
                   ? "[show less]"
@@ -173,14 +202,12 @@ export const BashOutput = memo<BashOutputProps>(
             {renderExpandableContent(
               renderedOutput,
               "output",
-              outputExpanded,
-              setOutputExpanded
+              resolvedExpansion.outputExpanded
             )}
             {renderExpandableContent(
               renderedError,
               "error",
-              errorExpanded,
-              setErrorExpanded
+              resolvedExpansion.errorExpanded
             )}
           </>
         )}

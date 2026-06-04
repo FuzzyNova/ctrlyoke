@@ -92,6 +92,10 @@ import {
   type ToolCallExpansionSection,
   type ToolCallExpansionState,
 } from "@utils/toolCallLayout";
+import type {
+  BashOutputExpansionSection,
+  BashOutputExpansionState,
+} from "../output/BashOutput";
 import {
   getOutputProfilerState,
   isOutputProfilingEnabled,
@@ -111,15 +115,21 @@ const OUTPUT_OVERSCAN_RESTORE_DELAY_MS = 250; // idle time after fast scrolling 
 const OUTPUT_SCROLL_SEEK_CONTINUE_DELTA_PX = 16; // scroll delta that keeps placeholder mode alive once it has started.
 const OUTPUT_SCROLL_SEEK_SLOW_DELTA_PX = 48; // below this delta, treat scrolling as slowing and use the shorter restore delay.
 const OUTPUT_SCROLL_SEEK_SLOW_RESTORE_DELAY_MS = 80; // restore delay while scrolling is slowing, so rows start rendering before a dead stop.
-const OUTPUT_SCROLL_SEEK_MIN_DELTA_PX = 400; // minimum single-event movement that can trigger placeholder mode by velocity.
+const OUTPUT_SCROLL_SEEK_MIN_DELTA_PX = 300; // minimum single-event movement that can trigger placeholder mode by velocity.
 const OUTPUT_SCROLL_SEEK_MIN_VELOCITY_PX_MS = 2; // minimum px/ms velocity for the delta threshold to count as fast scrolling.
-const OUTPUT_SCROLL_SEEK_PAGE_FRACTION = 1.5; // viewport fraction moved in one event that always counts as fast scrolling.
+const OUTPUT_SCROLL_SEEK_PAGE_FRACTION = 0.9; // viewport fraction moved in one event that always counts as fast scrolling.
 const OUTPUT_SCROLL_SEEK_SETTLE_MS = 2000; // time after restore to ignore layout-driven scroll corrections as fast-scroll triggers.
 const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 250; // delay before expanding from restore overscan back to normal overscan.
 const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200; // recent wheel input window that lets real user scrolling bypass settle suppression.
+const OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS = 1200; // text rows shorter than this render directly during scroll seek.
+const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300; // time to ignore virtualizer scroll correction after user expands row content.
 const LARGE_WORKFLOW_ROW_THRESHOLD = 150; // row count where fast-scroll placeholder behavior is enabled.
 const MAX_NAV_ALIGNMENT_ATTEMPTS = 8; // max correction passes when aligning minimap/step navigation.
 const MAX_NAVIGATION_STABILIZATION_MS = 1000; // time limit for navigation alignment before accepting the current position.
+const DEFAULT_BASH_OUTPUT_EXPANSION_STATE: BashOutputExpansionState = {
+  outputExpanded: false,
+  errorExpanded: false,
+};
 
 interface RowHeightBucketStats {
   sampleCount: number;
@@ -224,6 +234,17 @@ function findRenderedRowElement(
   );
 }
 
+function findRenderedRowElementByKey(
+  scrollElement: HTMLDivElement,
+  rowKey: string
+): HTMLDivElement | null {
+  return (
+    Array.from(
+      scrollElement.querySelectorAll<HTMLDivElement>("[data-row-key]")
+    ).find((element) => element.dataset.rowKey === rowKey) ?? null
+  );
+}
+
 function alignRowElementToViewport(
   scrollElement: HTMLDivElement,
   rowElement: HTMLElement,
@@ -310,6 +331,41 @@ function getScrollSeekRowLabel(row: OutputRenderRow): string {
   }
 }
 
+function shouldRenderScrollSeekPlaceholder(row: OutputRenderRow): boolean {
+  switch (row.rowKind) {
+    case "plain-response":
+      return row.text.length >= OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS;
+    case "structured-event":
+      if (row.diff || row.toolCall) {
+        return true;
+      }
+
+      switch (row.event.type) {
+        case CLI_EVENT_TYPES.BASH_COMMAND:
+        case CLI_EVENT_TYPES.FILE_EDIT:
+        case CLI_EVENT_TYPES.FILE_WRITE:
+        case CLI_EVENT_TYPES.FILE_READ:
+        case CLI_EVENT_TYPES.FILE_DELETE:
+        case CLI_EVENT_TYPES.MCP_TOOL_CALL:
+        case CLI_EVENT_TYPES.TOOL_CALL:
+        case CLI_EVENT_TYPES.TOOL_RESULT:
+          return true;
+        case CLI_EVENT_TYPES.TEXT:
+        case CLI_EVENT_TYPES.THINKING: {
+          const data = row.event.data as { text?: string };
+          return (
+            (data.text?.length ?? 0) >=
+            OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS
+          );
+        }
+        default:
+          return false;
+      }
+    default:
+      return false;
+  }
+}
+
 const OutputScrollSeekPlaceholder: React.FC<{
   row: OutputRenderRow;
   height: number;
@@ -322,7 +378,9 @@ const OutputScrollSeekPlaceholder: React.FC<{
     }}
   >
     <div className="h-full min-h-6 rounded border border-panel-border bg-sidebar-bg/40 px-2 py-1 overflow-hidden">
-      <span className="opacity-80">{getScrollSeekRowLabel(row)}</span>
+      <span className="opacity-80">
+        Rendering {getScrollSeekRowLabel(row)}...
+      </span>
     </div>
   </div>
 );
@@ -517,6 +575,9 @@ export const OutputSection: React.FC = () => {
   const [toolCallExpansionState, setToolCallExpansionState] = useState<
     Map<string, ToolCallExpansionState>
   >(new Map());
+  const [bashExpansionState, setBashExpansionState] = useState<
+    Map<string, BashOutputExpansionState>
+  >(new Map());
   const [outputDiffViewType, setOutputDiffViewType] = useState<
     "split" | "unified"
   >("split");
@@ -538,6 +599,7 @@ export const OutputSection: React.FC = () => {
   const scrollSeekStartedAtRef = useRef<number | null>(null);
   const scrollSeekRestoreRequestedAtRef = useRef<number | null>(null);
   const scrollSeekSettlingUntilRef = useRef<number | null>(null);
+  const rowResizeScrollSuppressUntilRef = useRef<number | null>(null);
   const lastUserScrollInputAtRef = useRef<number | null>(null);
   const measurementVersionFrameRef = useRef<number | null>(null);
   const overscanRestoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -931,6 +993,8 @@ export const OutputSection: React.FC = () => {
     !postNavSettlingRef.current &&
     (scrollSeekSettlingUntilRef.current == null ||
       performance.now() >= scrollSeekSettlingUntilRef.current) &&
+    (rowResizeScrollSuppressUntilRef.current == null ||
+      performance.now() >= rowResizeScrollSuppressUntilRef.current) &&
     item.start < (outputRef.current?.scrollTop ?? 0);
 
   // React 19 ref callbacks can return a cleanup function.
@@ -1090,6 +1154,14 @@ export const OutputSection: React.FC = () => {
         row.rowKind === "structured-event" && row.toolCall ? [row.key] : []
       )
     );
+    const bashRowKeys = new Set(
+      rows.flatMap((row) =>
+        row.rowKind === "structured-event" &&
+        row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
+          ? [row.key]
+          : []
+      )
+    );
 
     setDiffCollapseState((previous) => {
       let changed = false;
@@ -1130,6 +1202,19 @@ export const OutputSection: React.FC = () => {
 
       for (const key of [...next.keys()]) {
         if (!toolCallRowKeys.has(key)) {
+          next.delete(key);
+          changed = true;
+        }
+      }
+
+      return changed ? next : previous;
+    });
+    setBashExpansionState((previous) => {
+      let changed = false;
+      const next = new Map(previous);
+
+      for (const key of [...next.keys()]) {
+        if (!bashRowKeys.has(key)) {
           next.delete(key);
           changed = true;
         }
@@ -2235,6 +2320,78 @@ export const OutputSection: React.FC = () => {
     [rowVirtualizer]
   );
 
+  const invalidateMeasuredRowForUserResize = useCallback(
+    (rowKey: string) => {
+      const scrollElement = outputRef.current;
+      const rowElement =
+        scrollElement == null
+          ? null
+          : findRenderedRowElementByKey(scrollElement, rowKey);
+      const previousTop =
+        rowElement == null ? null : rowElement.getBoundingClientRect().top;
+
+      rowResizeScrollSuppressUntilRef.current =
+        performance.now() + OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS;
+      measurementCacheRef.current.delete(rowKey);
+
+      requestAnimationFrame(() => {
+        const nextScrollElement = outputRef.current;
+        if (!nextScrollElement) {
+          setMeasurementVersion((version) => version + 1);
+          return;
+        }
+
+        const nextRowElement = findRenderedRowElementByKey(
+          nextScrollElement,
+          rowKey
+        );
+        if (!nextRowElement) {
+          rowVirtualizer.measure();
+          setMeasurementVersion((version) => version + 1);
+          return;
+        }
+
+        rowVirtualizer.measureElement(nextRowElement);
+        setMeasurementVersion((version) => version + 1);
+
+        requestAnimationFrame(() => {
+          if (previousTop == null) {
+            return;
+          }
+
+          const finalScrollElement = outputRef.current;
+          if (!finalScrollElement) {
+            return;
+          }
+
+          const finalRowElement = findRenderedRowElementByKey(
+            finalScrollElement,
+            rowKey
+          );
+          if (!finalRowElement) {
+            return;
+          }
+
+          const delta = finalRowElement.getBoundingClientRect().top - previousTop;
+          if (Math.abs(delta) < 1) {
+            return;
+          }
+
+          const maxScroll = Math.max(
+            0,
+            finalScrollElement.scrollHeight - finalScrollElement.clientHeight
+          );
+          finalScrollElement.scrollTop = Math.max(
+            0,
+            Math.min(maxScroll, finalScrollElement.scrollTop + delta)
+          );
+          lastScrollTopRef.current = finalScrollElement.scrollTop;
+        });
+      });
+    },
+    [rowVirtualizer]
+  );
+
   const handleDiffCollapsedChange = useCallback(
     (rowKey: string, diffKey: string, collapsed: boolean) => {
       invalidateMeasuredRow(rowKey);
@@ -2281,7 +2438,7 @@ export const OutputSection: React.FC = () => {
 
   const handleToolCallExpansionChange = useCallback(
     (rowKey: string, section: ToolCallExpansionSection, expanded: boolean) => {
-      invalidateMeasuredRow(rowKey);
+      invalidateMeasuredRowForUserResize(rowKey);
       setToolCallExpansionState((previous) => {
         const currentState =
           previous.get(rowKey) ?? DEFAULT_TOOL_CALL_EXPANSION_STATE;
@@ -2317,7 +2474,49 @@ export const OutputSection: React.FC = () => {
         return next;
       });
     },
-    [invalidateMeasuredRow]
+    [invalidateMeasuredRowForUserResize]
+  );
+
+  const handleBashExpansionChange = useCallback(
+    (
+      rowKey: string,
+      section: BashOutputExpansionSection,
+      expanded: boolean
+    ) => {
+      invalidateMeasuredRowForUserResize(rowKey);
+      setBashExpansionState((previous) => {
+        const currentState = previous.get(rowKey) ?? {
+          outputExpanded: false,
+          errorExpanded: false,
+        };
+        const nextState: BashOutputExpansionState = {
+          ...currentState,
+          outputExpanded:
+            section === "output" ? expanded : currentState.outputExpanded,
+          errorExpanded:
+            section === "error" ? expanded : currentState.errorExpanded,
+        };
+
+        const isDefaultState =
+          !nextState.outputExpanded && !nextState.errorExpanded;
+
+        if (
+          currentState.outputExpanded === nextState.outputExpanded &&
+          currentState.errorExpanded === nextState.errorExpanded
+        ) {
+          return previous;
+        }
+
+        const next = new Map(previous);
+        if (isDefaultState) {
+          next.delete(rowKey);
+        } else {
+          next.set(rowKey, nextState);
+        }
+        return next;
+      });
+    },
+    [invalidateMeasuredRowForUserResize]
   );
 
   const handleMinimapStepClick = useCallback(
@@ -2768,7 +2967,9 @@ export const OutputSection: React.FC = () => {
                     const row = rows[virtualRow.index];
                     if (!row) return null;
                     const renderScrollSeekPlaceholder =
-                      isOutputScrollSeeking && !isNavigationTargetVirtualized;
+                      isOutputScrollSeeking &&
+                      !isNavigationTargetVirtualized &&
+                      shouldRenderScrollSeekPlaceholder(row);
 
                     return (
                       <div
@@ -2779,6 +2980,7 @@ export const OutputSection: React.FC = () => {
                             : measureRowElement
                         }
                         data-index={virtualRow.index}
+                        data-row-key={row.key}
                         className="flow-root"
                         style={{
                           position: "absolute",
@@ -2805,6 +3007,11 @@ export const OutputSection: React.FC = () => {
                             onToolCallExpansionChange={
                               handleToolCallExpansionChange
                             }
+                            bashExpansion={
+                              bashExpansionState.get(row.key) ??
+                              DEFAULT_BASH_OUTPUT_EXPANSION_STATE
+                            }
+                            onBashExpansionChange={handleBashExpansionChange}
                           />
                         )}
                       </div>

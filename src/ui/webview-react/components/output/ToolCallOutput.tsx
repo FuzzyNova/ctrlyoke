@@ -196,7 +196,10 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
             <button
               type="button"
               className="text-bash-expand-link no-underline text-sm ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
-              onClick={() => updateExpansion(type, !sectionPlan.isExpanded)}
+              onClick={(event) => {
+                event.preventDefault();
+                updateExpansion(type, !sectionPlan.isExpanded);
+              }}
             >
               {sectionPlan.isExpanded
                 ? "[show less]"
@@ -218,9 +221,10 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           <button
             type="button"
             className="text-bash-expand-link text-sm cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
-            onClick={() =>
-              updateExpansion("params", !resolvedRenderPlan.params.isExpanded)
-            }
+            onClick={(event) => {
+              event.preventDefault();
+              updateExpansion("params", !resolvedRenderPlan.params.isExpanded);
+            }}
             title={
               resolvedRenderPlan.params.isExpanded
                 ? "Hide parameters"
