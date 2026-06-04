@@ -74,6 +74,7 @@ import {
 } from "../../utils/promptUndo";
 import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
+import { WebviewLog } from "@utils/logger";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
 import {
@@ -613,6 +614,9 @@ export const OutputSection: React.FC = () => {
   const lastScrollEventAtRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
   const lastVirtualRangeRef = useRef<string>("");
+  // Tracks the row count at the last auto-scroll so we can distinguish "new
+  // rows arrived" (scroll) from "same rows re-rendered" (don't scroll).
+  const lastAutoScrollRowCountRef = useRef(0);
   // Suppresses TanStack Virtual's internal scroll corrections for 1 s after navigation
   // completes. Without this, new rows entering the virtual window post-navigation
   // repeatedly trigger corrections that oscillate the scroll position.
@@ -1270,9 +1274,34 @@ export const OutputSection: React.FC = () => {
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
-    if (isProgrammaticScroll.current) return;
     const el = outputRef.current;
     if (!el) return;
+    if (isProgrammaticScroll.current) {
+      // Still update autoscrollEnabled so a user wheel mid-programmatic-scroll
+      // correctly disables auto-scroll. Without this, the flag stays true and
+      // the auto-scroll effect fires again on the next measurementVersion bump.
+      const atBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight <=
+        SCROLL_BOTTOM_THRESHOLD;
+      if (autoscrollEnabled.current !== atBottom) {
+        WebviewLog.debug("[FP-SCROLL-DEBUG] autoscrollEnabled updated during programmatic scroll", {
+          from: autoscrollEnabled.current,
+          to: atBottom,
+          scrollTop: el.scrollTop,
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight,
+          t: performance.now().toFixed(1),
+        });
+        autoscrollEnabled.current = atBottom;
+      } else {
+        WebviewLog.debug("[FP-SCROLL-DEBUG] handleScroll suppressed (programmatic) — autoscrollEnabled unchanged", {
+          autoscrollEnabled: autoscrollEnabled.current,
+          scrollTop: el.scrollTop,
+          t: performance.now().toFixed(1),
+        });
+      }
+      return;
+    }
     const startedAt = performance.now();
     const now = startedAt;
     const previousScrollEventAt = lastScrollEventAtRef.current;
@@ -1335,6 +1364,17 @@ export const OutputSection: React.FC = () => {
     const atBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight <=
       SCROLL_BOTTOM_THRESHOLD;
+    if (autoscrollEnabled.current !== atBottom) {
+      WebviewLog.debug("[FP-SCROLL-DEBUG] autoscrollEnabled changed", {
+        from: autoscrollEnabled.current,
+        to: atBottom,
+        scrollTop: el.scrollTop,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+        gap: el.scrollHeight - el.scrollTop - el.clientHeight,
+        t: performance.now().toFixed(1),
+      });
+    }
     autoscrollEnabled.current = atBottom;
     if (previousScrollEventAt != null) {
       const gapMs = scrollGapMs;
@@ -1495,20 +1535,46 @@ export const OutputSection: React.FC = () => {
     });
   }, [clearNavigationFrame, finalizePendingNavigation, rowVirtualizer]);
 
-  // Auto-scroll effect.
+  // Auto-scroll effect — only fires for genuine new AI output, not layout changes.
+  // measurementVersion is intentionally excluded: virtualizer height corrections
+  // are layout-only and must not override the user's scroll position.
   useEffect(() => {
-    if (autoscrollEnabled.current && outputRef.current && rows.length > 0) {
-      isProgrammaticScroll.current = true;
-      rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
-      requestAnimationFrame(() => {
-        isProgrammaticScroll.current = false;
-      });
+    const prevRowCount = lastAutoScrollRowCountRef.current;
+    lastAutoScrollRowCountRef.current = rows.length;
+
+    if (!autoscrollEnabled.current || !outputRef.current || rows.length === 0) {
+      return;
     }
+
+    // When execution is not active, only scroll if rows actually increased
+    // (e.g. initial content load). Layout-only re-renders keep the same count
+    // and must not snap the viewport back to the bottom.
+    if (!isExecutionActive && rows.length <= prevRowCount) {
+      return;
+    }
+
+    WebviewLog.debug("[FP-SCROLL-DEBUG] autoScroll FIRING — scrolling to bottom", {
+      rows: rows.length,
+      prevRowCount,
+      isExecutionActive,
+      autoscrollEnabled: autoscrollEnabled.current,
+      scrollTop: outputRef.current.scrollTop,
+      t: performance.now().toFixed(1),
+    });
+    isProgrammaticScroll.current = true;
+    rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
+    requestAnimationFrame(() => {
+      isProgrammaticScroll.current = false;
+      WebviewLog.debug("[FP-SCROLL-DEBUG] isProgrammaticScroll cleared", {
+        autoscrollEnabled: autoscrollEnabled.current,
+        t: performance.now().toFixed(1),
+      });
+    });
   }, [
     rows,
     streamingChunks,
     finalStepStreamingChunks,
-    measurementVersion,
+    isExecutionActive,
     rowVirtualizer,
   ]);
 
