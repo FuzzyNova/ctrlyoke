@@ -722,6 +722,98 @@ describe("outputRows", () => {
     expect(bashRow.estimateSize).toBeGreaterThan(120);
   });
 
+  it("scales file-operation structured-event estimates with wrapped path width", () => {
+    const longPath = `src/${"deeply-nested-segment/".repeat(10)}example-file-with-a-very-long-name.ts`;
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "Read file",
+          response: "",
+          elapsed: 0.5,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.FILE_READ,
+                data: {
+                  path: longPath,
+                  status: OPERATION_STATUS.COMPLETED,
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+
+    const narrow = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      outputContentWidth: 320,
+    });
+    const wide = buildOutputRows({
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      outputContentWidth: 960,
+    });
+
+    const narrowRow = narrow.rows.find(
+      (row) =>
+        row.rowKind === "structured-event" &&
+        row.event.type === CLI_EVENT_TYPES.FILE_READ
+    );
+    const wideRow = wide.rows.find(
+      (row) =>
+        row.rowKind === "structured-event" &&
+        row.event.type === CLI_EVENT_TYPES.FILE_READ
+    );
+
+    if (
+      !narrowRow ||
+      narrowRow.rowKind !== "structured-event" ||
+      !wideRow ||
+      wideRow.rowKind !== "structured-event"
+    ) {
+      throw new Error("Expected file-read structured-event rows");
+    }
+
+    expect(narrowRow.estimateSize).toBeGreaterThan(wideRow.estimateSize);
+  });
+
   it("scales diff structured-event estimates with wrapped line length and width", () => {
     const longRemovedLine = `-${"legacyWrappedSegment ".repeat(40)}`;
     const longAddedLine = `+${"replacementWrappedSegment ".repeat(38)}`;

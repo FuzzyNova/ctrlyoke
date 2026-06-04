@@ -38,7 +38,7 @@ const FilePath: React.FC<{ path: string; className?: string }> = ({
 }) => (
   <button
     type="button"
-    className={`text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] whitespace-normal break-all text-right max-w-full ${className}`}
+    className={`text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] whitespace-normal break-all max-w-full ${className}`}
     onClick={() => openFile(path)}
     title={`Open ${path}`}
   >
@@ -67,7 +67,7 @@ const FileOperationHeader: React.FC<FileOperationHeaderProps> = ({
     <span className="min-w-0 flex-1 leading-relaxed">
       <FilePath
         path={path}
-        className="inline whitespace-normal break-all text-left align-top"
+        className="inline-block whitespace-normal break-all text-left align-top"
       />
     </span>
     {trailingAction}

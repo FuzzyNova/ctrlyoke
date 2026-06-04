@@ -111,7 +111,8 @@ const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to keep auto-scroll pinned
 const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024; // minimum output width before diffs use split view.
 const OUTPUT_VIRTUALIZER_OVERSCAN = 8; // normal extra rows rendered above/below viewport; higher is smoother but heavier.
 const OUTPUT_ACTIVE_SCROLL_OVERSCAN = 2; // extra rows while fast-scroll placeholders are active; lower reduces work during rapid scroll.
-const OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN = 4; // first real-row overscan after placeholders; lower makes the initial restore cheaper.
+const OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN = 0; // first real-row restore renders only viewport rows; extra rows are staged later.
+const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN = 3; // distinct from active-scroll overscan so staged restore never re-enters placeholder mode.
 const OUTPUT_OVERSCAN_RESTORE_DELAY_MS = 250; // idle time after fast scrolling before placeholders swap back to real rows.
 const OUTPUT_SCROLL_SEEK_CONTINUE_DELTA_PX = 16; // scroll delta that keeps placeholder mode alive once it has started.
 const OUTPUT_SCROLL_SEEK_SLOW_DELTA_PX = 48; // below this delta, treat scrolling as slowing and use the shorter restore delay.
@@ -120,7 +121,8 @@ const OUTPUT_SCROLL_SEEK_MIN_DELTA_PX = 300; // minimum single-event movement th
 const OUTPUT_SCROLL_SEEK_MIN_VELOCITY_PX_MS = 2; // minimum px/ms velocity for the delta threshold to count as fast scrolling.
 const OUTPUT_SCROLL_SEEK_PAGE_FRACTION = 0.9; // viewport fraction moved in one event that always counts as fast scrolling.
 const OUTPUT_SCROLL_SEEK_SETTLE_MS = 2000; // time after restore to ignore layout-driven scroll corrections as fast-scroll triggers.
-const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 250; // delay before expanding from restore overscan back to normal overscan.
+const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS = 600; // delay before adding a small buffer after visible rows mount.
+const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 1800; // delay before expanding from restore overscan back to normal overscan.
 const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200; // recent wheel input window that lets real user scrolling bypass settle suppression.
 const OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS = 1200; // text rows shorter than this render directly during scroll seek.
 const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300; // time to ignore virtualizer scroll correction after user expands row content.
@@ -819,6 +821,10 @@ export const OutputSection: React.FC = () => {
     (delayMs?: number) => {
       if (overscanRestoreTimerRef.current !== null) {
         clearTimeout(overscanRestoreTimerRef.current);
+      }
+      if (fullOverscanRestoreTimerRef.current !== null) {
+        clearTimeout(fullOverscanRestoreTimerRef.current);
+        fullOverscanRestoreTimerRef.current = null;
       }
 
       overscanRestoreTimerRef.current = setTimeout(() => {
@@ -1923,11 +1929,17 @@ export const OutputSection: React.FC = () => {
     }
     if (outputOverscanRef.current === OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN) {
       fullOverscanRestoreTimerRef.current = setTimeout(() => {
-        fullOverscanRestoreTimerRef.current = null;
-        setOutputOverscanMode(OUTPUT_VIRTUALIZER_OVERSCAN, "idle", {
-          phase: "restore-full-overscan",
+        setOutputOverscanMode(OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN, "idle", {
+          phase: "restore-buffer-overscan",
         });
-      }, OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS);
+
+        fullOverscanRestoreTimerRef.current = setTimeout(() => {
+          fullOverscanRestoreTimerRef.current = null;
+          setOutputOverscanMode(OUTPUT_VIRTUALIZER_OVERSCAN, "idle", {
+            phase: "restore-full-overscan",
+          });
+        }, OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS);
+      }, OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS);
     }
     scrollSeekRestoreRequestedAtRef.current = null;
     scrollSeekStartedAtRef.current = null;

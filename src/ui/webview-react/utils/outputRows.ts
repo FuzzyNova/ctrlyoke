@@ -470,6 +470,43 @@ function estimateTerminalSummaryHeight(
   );
 }
 
+function estimateFileOperationHeaderHeight(
+  actionLabel: string,
+  path: string,
+  outputContentWidth: number | undefined,
+  outputFontSize: number,
+  error?: string
+): number {
+  const availableWidth = resolveContentWidth(
+    outputContentWidth,
+    OUTPUT_ROW_HORIZONTAL_CHROME
+  );
+  const charWidth = Math.max(5.5, outputFontSize * 0.6);
+  const lineHeight = Math.max(18, outputFontSize * 1.55);
+  const gapWidth = Math.max(4, outputFontSize * 0.35);
+  const dotWidth = charWidth;
+  const actionWidth = actionLabel.length * charWidth;
+  const prefixWidth = dotWidth + gapWidth + actionWidth + gapWidth;
+  const pathWidth = Math.max(64, availableWidth - prefixWidth);
+  const pathCharsPerLine = Math.max(8, Math.floor(pathWidth / charWidth));
+  const pathLineCount = Math.max(1, Math.ceil(path.length / pathCharsPerLine));
+  const errorLineCount = error
+    ? Math.max(
+        1,
+        estimateWrappedLineCount(error, outputContentWidth, outputFontSize, {
+          chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
+          charWidthMultiplier: 0.6,
+        })
+      )
+    : 0;
+
+  return (
+    pathLineCount * lineHeight +
+    errorLineCount * lineHeight +
+    TERMINAL_LINE_VERTICAL_CHROME
+  );
+}
+
 function estimateBashOutputHeight(
   event: CliEvent,
   outputContentWidth: number | undefined,
@@ -553,34 +590,43 @@ function estimateStructuredTextHeight(
       );
     case CLI_EVENT_TYPES.FILE_EDIT: {
       const data = row.event.data as { path?: string; error?: string };
-      return estimateTerminalSummaryHeight(
-        `Edited ${data.path ?? "file"} ${data.error ?? ""}`.trim(),
+      return estimateFileOperationHeaderHeight(
+        "Edited",
+        data.path ?? "file",
         outputContentWidth,
-        outputFontSize
+        outputFontSize,
+        data.error
       );
     }
     case CLI_EVENT_TYPES.FILE_WRITE: {
       const data = row.event.data as { path?: string; content?: string; error?: string };
-      return estimateTerminalSummaryHeight(
-        `Wrote ${data.path ?? "file"} ${data.content ? `(${data.content.length} bytes)` : ""} ${data.error ?? ""}`.trim(),
+      const sizeInfo = data.content ? ` (${data.content.length} bytes)` : "";
+      return estimateFileOperationHeaderHeight(
+        `Wrote${sizeInfo}`,
+        data.path ?? "file",
         outputContentWidth,
-        outputFontSize
+        outputFontSize,
+        data.error
       );
     }
     case CLI_EVENT_TYPES.FILE_READ: {
       const data = row.event.data as { path?: string; error?: string };
-      return estimateTerminalSummaryHeight(
-        `Read ${data.path ?? "file"} ${data.error ?? ""}`.trim(),
+      return estimateFileOperationHeaderHeight(
+        "Read",
+        data.path ?? "file",
         outputContentWidth,
-        outputFontSize
+        outputFontSize,
+        data.error
       );
     }
     case CLI_EVENT_TYPES.FILE_DELETE: {
       const data = row.event.data as { path?: string; error?: string };
-      return estimateTerminalSummaryHeight(
-        `Delete file ${data.path ?? "file"} ${data.error ?? ""}`.trim(),
+      return estimateFileOperationHeaderHeight(
+        "Delete file:",
+        data.path ?? "file",
         outputContentWidth,
-        outputFontSize
+        outputFontSize,
+        data.error
       );
     }
     case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
