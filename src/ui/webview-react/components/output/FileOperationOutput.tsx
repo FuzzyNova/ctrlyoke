@@ -32,15 +32,46 @@ export const ToolDot: React.FC<{ status: DotStatus }> = ({ status }) => (
 );
 
 /** Clickable file path that opens the file in VS Code */
-const FilePath: React.FC<{ path: string }> = ({ path }) => (
+const FilePath: React.FC<{ path: string; className?: string }> = ({
+  path,
+  className = "",
+}) => (
   <button
     type="button"
-    className="text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
+    className={`text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] whitespace-normal break-all text-right max-w-full ${className}`}
     onClick={() => openFile(path)}
     title={`Open ${path}`}
   >
     {path}
   </button>
+);
+
+interface FileOperationHeaderProps {
+  dotStatus: DotStatus;
+  actionLabel: string;
+  path: string;
+  error?: string;
+  trailingAction?: React.ReactNode;
+}
+
+const FileOperationHeader: React.FC<FileOperationHeaderProps> = ({
+  dotStatus,
+  actionLabel,
+  path,
+  error,
+  trailingAction,
+}) => (
+  <div className={TOOL_CALL_LINE}>
+    <ToolDot status={dotStatus} />
+    <span className="shrink-0">{actionLabel}</span>
+    <span className="min-w-0 flex-1 text-right">
+      <FilePath path={path} className="inline whitespace-normal break-all" />
+    </span>
+    {trailingAction}
+    {error ? (
+      <span className="basis-full pl-5 text-indicator-error">{error}</span>
+    ) : null}
+  </div>
 );
 
 function fileOpDotStatus(status?: FileOperationStatus): DotStatus {
@@ -149,14 +180,12 @@ export const FileEditOutput = memo<FileEditOutputProps>(
 
     return (
       <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-        <div className={TOOL_CALL_LINE}>
-          <ToolDot status={dotStatus} />
-          <span>{getActionLabel()}</span>
-          <FilePath path={path} />
-          {error && status === OPERATION_STATUS.FAILED && (
-            <span className="text-indicator-error">— {error}</span>
-          )}
-        </div>
+        <FileOperationHeader
+          dotStatus={dotStatus}
+          actionLabel={getActionLabel()}
+          path={path}
+          error={status === OPERATION_STATUS.FAILED ? `— ${error}` : undefined}
+        />
         {hasDiffData ? (
           <DiffView
             oldContent={oldContent}
@@ -214,28 +243,28 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
 
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-      <div className={TOOL_CALL_LINE}>
-        <ToolDot status={dotStatus} />
-        <span>{getActionLabel()}</span>
-        <FilePath path={path} />
-        {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-indicator-error">— {error}</span>
-        )}
-        {onUndoFile && status !== OPERATION_STATUS.INITIATED && (
-          <button
-            type="button"
-            className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
-            title={
-              fileUndoMode === "redo"
-                ? `Redo changes to ${path}`
-                : `Undo changes to ${path}`
-            }
-            onClick={onUndoFile}
-          >
-            {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
-          </button>
-        )}
-      </div>
+      <FileOperationHeader
+        dotStatus={dotStatus}
+        actionLabel={getActionLabel()}
+        path={path}
+        error={status === OPERATION_STATUS.FAILED ? `— ${error}` : undefined}
+        trailingAction={
+          onUndoFile && status !== OPERATION_STATUS.INITIATED ? (
+            <button
+              type="button"
+              className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
+              title={
+                fileUndoMode === "redo"
+                  ? `Redo changes to ${path}`
+                  : `Undo changes to ${path}`
+              }
+              onClick={onUndoFile}
+            >
+              {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+            </button>
+          ) : null
+        }
+      />
     </div>
   );
 };
@@ -267,14 +296,12 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
 
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-      <div className={TOOL_CALL_LINE}>
-        <ToolDot status={dotStatus} />
-        <span>{getActionLabel()}</span>
-        <FilePath path={path} />
-        {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-indicator-error">— {error}</span>
-        )}
-      </div>
+      <FileOperationHeader
+        dotStatus={dotStatus}
+        actionLabel={getActionLabel()}
+        path={path}
+        error={status === OPERATION_STATUS.FAILED ? `— ${error}` : undefined}
+      />
     </div>
   );
 };
@@ -304,28 +331,28 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
 
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-      <div className={TOOL_CALL_LINE}>
-        <ToolDot status={dotStatus} />
-        <span>Delete file:</span>
-        <FilePath path={path} />
-        {error && success === false && (
-          <span className="text-indicator-error">— {error}</span>
-        )}
-        {onUndoFile && success !== false && (
-          <button
-            type="button"
-            className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
-            title={
-              fileUndoMode === "redo"
-                ? `Redo deletion of ${path}`
-                : `Undo deletion of ${path}`
-            }
-            onClick={onUndoFile}
-          >
-            {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
-          </button>
-        )}
-      </div>
+      <FileOperationHeader
+        dotStatus={dotStatus}
+        actionLabel="Delete file:"
+        path={path}
+        error={success === false ? `— ${error}` : undefined}
+        trailingAction={
+          onUndoFile && success !== false ? (
+            <button
+              type="button"
+              className="icon-btn py-0 px-1 ml-1 text-[length:var(--fp-output-font-size-xs)]"
+              title={
+                fileUndoMode === "redo"
+                  ? `Redo deletion of ${path}`
+                  : `Undo deletion of ${path}`
+              }
+              onClick={onUndoFile}
+            >
+              {fileUndoMode === "redo" ? "↻ Redo" : "↩ Undo"}
+            </button>
+          ) : null
+        }
+      />
     </div>
   );
 };
