@@ -6,7 +6,8 @@
  * - Narrow panels (< 1024 px): classic unified inline view.
  *
  * Features:
- * - Async-free syntax highlighting via refractor + tokenize() (runs in useMemo).
+ * - Syntax highlighting via refractor + tokenize(); large diffs render plain
+ *   first, then add tokens during browser idle time.
  * - Character-level inline diff marks via the markEdits() enhancer.
  * - GitHub-style "N hidden lines" decorations between hunks with chunked and
  *   full-block expansion controls (only when oldContent is available for
@@ -46,6 +47,21 @@ import { useElementNarrow } from "@hooks/useElementNarrow";
 
 const SIDE_BY_SIDE_THRESHOLD = 1024;
 const HIDDEN_CONTEXT_CHUNK_LINES = 25;
+const DEFER_DIFF_TOKENIZATION_LINE_THRESHOLD = 240;
+const DEFER_DIFF_TOKENIZATION_TIMEOUT_MS = 900;
+
+type IdleCallbackDeadline = {
+  didTimeout: boolean;
+  timeRemaining: () => number;
+};
+
+type WindowWithIdleCallback = Window & {
+  requestIdleCallback?: (
+    callback: (deadline: IdleCallbackDeadline) => void,
+    options?: { timeout?: number }
+  ) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
 
 // Ensure the shared VS Code-themed syntax styles are in <head>.
 injectSyntaxHighlightStyles();
@@ -245,10 +261,61 @@ export const DiffView: React.FC<DiffViewProps> = ({
     [activeExpandedGaps, expandedGaps, oldContent, onExpandGap]
   );
 
+  const shouldDeferTokenization =
+    isExpanded &&
+    estimatedLineCount >= DEFER_DIFF_TOKENIZATION_LINE_THRESHOLD;
+  const [deferredTokenizationReady, setDeferredTokenizationReady] =
+    useState(false);
+
+  useEffect(() => {
+    if (!shouldDeferTokenization) {
+      setDeferredTokenizationReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    const idleWindow = window as WindowWithIdleCallback;
+    const markReady = () => {
+      if (!cancelled) {
+        setDeferredTokenizationReady(true);
+      }
+    };
+
+    setDeferredTokenizationReady(false);
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(markReady, {
+        timeout: DEFER_DIFF_TOKENIZATION_TIMEOUT_MS,
+      });
+      return () => {
+        cancelled = true;
+        idleWindow.cancelIdleCallback?.(handle);
+      };
+    }
+
+    const handle = window.setTimeout(
+      markReady,
+      DEFER_DIFF_TOKENIZATION_TIMEOUT_MS
+    );
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [
+    estimatedLineCount,
+    isExpanded,
+    oldContent,
+    shouldDeferTokenization,
+    structuredPatch,
+    newContent,
+    activeExpandedGaps,
+  ]);
+
   // Syntax highlighting + word-level edit marks via refractor (synchronous useMemo).
   const lang = normalizeSyntaxLanguage(language);
+  const shouldComputeTokens =
+    !shouldDeferTokenization || deferredTokenizationReady;
   const tokens = useMemo(() => {
-    if (!expandedHunks.length) return null;
+    if (!expandedHunks.length || !shouldComputeTokens) return null;
     try {
       const enhancers = [markEdits(expandedHunks)];
       if (lang && refractor.registered(lang)) {
@@ -265,7 +332,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       console.warn("[DiffView] syntax tokenization failed", error);
       return null;
     }
-  }, [expandedHunks, lang, oldContent]);
+  }, [expandedHunks, lang, oldContent, shouldComputeTokens]);
 
   const minimapStats = useMemo(
     () => getRenderedDiffStats(expandedHunks, viewType),

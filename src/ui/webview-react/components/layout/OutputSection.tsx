@@ -109,7 +109,7 @@ import {
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to keep auto-scroll pinned.
 const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024; // minimum output width before diffs use split view.
-const OUTPUT_VIRTUALIZER_OVERSCAN = 8; // normal extra rows rendered above/below viewport; higher is smoother but heavier.
+const OUTPUT_VIRTUALIZER_OVERSCAN = 4; // idle extra rows rendered above/below viewport; balances smoothness with first-scroll cost.
 const OUTPUT_ACTIVE_SCROLL_OVERSCAN = 2; // extra rows while fast-scroll placeholders are active; lower reduces work during rapid scroll.
 const OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN = 0; // first real-row restore renders only viewport rows; extra rows are staged later.
 const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN = 3; // distinct from active-scroll overscan so staged restore never re-enters placeholder mode.
@@ -118,6 +118,8 @@ const OUTPUT_SCROLL_SEEK_CONTINUE_DELTA_PX = 16; // scroll delta that keeps plac
 const OUTPUT_SCROLL_SEEK_SLOW_DELTA_PX = 48; // below this delta, treat scrolling as slowing and use the shorter restore delay.
 const OUTPUT_SCROLL_SEEK_SLOW_RESTORE_DELAY_MS = 80; // restore delay while scrolling is slowing, so rows start rendering before a dead stop.
 const OUTPUT_SCROLL_SEEK_MIN_DELTA_PX = 300; // minimum single-event movement that can trigger placeholder mode by velocity.
+const OUTPUT_SCROLL_SEEK_WHEEL_DELTA_PX = 16; // wheel delta that pre-arms placeholder mode before the browser scrolls.
+const OUTPUT_SCROLL_SEEK_TOUCH_DELTA_PX = 12; // touch movement that pre-arms placeholder mode before mobile scroll settles.
 const OUTPUT_SCROLL_SEEK_MIN_VELOCITY_PX_MS = 2; // minimum px/ms velocity for the delta threshold to count as fast scrolling.
 const OUTPUT_SCROLL_SEEK_PAGE_FRACTION = 0.9; // viewport fraction moved in one event that always counts as fast scrolling.
 const OUTPUT_SCROLL_SEEK_SETTLE_MS = 2000; // time after restore to ignore layout-driven scroll corrections as fast-scroll triggers.
@@ -226,6 +228,17 @@ function getQueueStepFallbackName(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function getWheelDeltaPixels(event: React.WheelEvent<HTMLDivElement>): number {
+  switch (event.deltaMode) {
+    case WheelEvent.DOM_DELTA_LINE:
+      return event.deltaY * 16;
+    case WheelEvent.DOM_DELTA_PAGE:
+      return event.deltaY * event.currentTarget.clientHeight;
+    default:
+      return event.deltaY;
+  }
 }
 
 function findRenderedRowElement(
@@ -604,6 +617,7 @@ export const OutputSection: React.FC = () => {
   const scrollSeekSettlingUntilRef = useRef<number | null>(null);
   const rowResizeScrollSuppressUntilRef = useRef<number | null>(null);
   const lastUserScrollInputAtRef = useRef<number | null>(null);
+  const lastTouchYRef = useRef<number | null>(null);
   const measurementVersionFrameRef = useRef<number | null>(null);
   const overscanRestoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -1433,6 +1447,83 @@ export const OutputSection: React.FC = () => {
     }
   }, [enterFastScrollOverscan, rowVirtualizer, scheduleOverscanRestore]);
 
+  const preArmScrollSeekForInput = useCallback(
+    (
+      scrollElement: HTMLDivElement,
+      inputDeltaPx: number,
+      thresholdPx: number,
+      phase: "wheel-pre-scroll" | "touch-pre-scroll"
+    ) => {
+      const now = performance.now();
+      lastUserScrollInputAtRef.current = now;
+      const absInputDeltaPx = Math.abs(inputDeltaPx);
+
+      if (
+        rowsRef.current.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
+        absInputDeltaPx >= thresholdPx
+      ) {
+        enterFastScrollOverscan({
+          phase,
+          inputDeltaPx,
+          scrollDeltaPx: inputDeltaPx,
+          scrollVelocityPxMs: undefined,
+          scrollGapMs:
+            lastScrollEventAtRef.current == null
+              ? undefined
+              : now - lastScrollEventAtRef.current,
+          pageDeltaThresholdPx:
+            scrollElement.clientHeight * OUTPUT_SCROLL_SEEK_PAGE_FRACTION,
+        });
+      }
+    },
+    [enterFastScrollOverscan]
+  );
+
+  const handleWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      preArmScrollSeekForInput(
+        event.currentTarget,
+        getWheelDeltaPixels(event),
+        OUTPUT_SCROLL_SEEK_WHEEL_DELTA_PX,
+        "wheel-pre-scroll"
+      );
+    },
+    [preArmScrollSeekForInput]
+  );
+
+  const handleTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      lastUserScrollInputAtRef.current = performance.now();
+      lastTouchYRef.current = event.touches[0]?.clientY ?? null;
+    },
+    []
+  );
+
+  const handleTouchMove = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      const currentY = event.touches[0]?.clientY;
+      const previousY = lastTouchYRef.current;
+      lastUserScrollInputAtRef.current = performance.now();
+      if (currentY == null || previousY == null) {
+        lastTouchYRef.current = currentY ?? null;
+        return;
+      }
+
+      lastTouchYRef.current = currentY;
+      preArmScrollSeekForInput(
+        event.currentTarget,
+        previousY - currentY,
+        OUTPUT_SCROLL_SEEK_TOUCH_DELTA_PX,
+        "touch-pre-scroll"
+      );
+    },
+    [preArmScrollSeekForInput]
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    lastTouchYRef.current = null;
+  }, []);
+
   const clearNavigationFrame = useCallback(() => {
     if (navigationFrameRef.current != null) {
       cancelAnimationFrame(navigationFrameRef.current);
@@ -1811,6 +1902,34 @@ export const OutputSection: React.FC = () => {
     [openContextMenu]
   );
   const outputLongPressHandlers = useLongPress(handleOutputLongPress);
+  const handleOutputTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      handleTouchStart(event);
+      outputLongPressHandlers.onTouchStart(event);
+    },
+    [handleTouchStart, outputLongPressHandlers]
+  );
+  const handleOutputTouchMove = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      handleTouchMove(event);
+      outputLongPressHandlers.onTouchMove(event);
+    },
+    [handleTouchMove, outputLongPressHandlers]
+  );
+  const handleOutputTouchEnd = useCallback(
+    (_event: React.TouchEvent<HTMLDivElement>) => {
+      handleTouchEnd();
+      outputLongPressHandlers.onTouchEnd();
+    },
+    [handleTouchEnd, outputLongPressHandlers]
+  );
+  const handleOutputTouchCancel = useCallback(
+    (_event: React.TouchEvent<HTMLDivElement>) => {
+      handleTouchEnd();
+      outputLongPressHandlers.onTouchCancel();
+    },
+    [handleTouchEnd, outputLongPressHandlers]
+  );
 
   // Check if there's any output
   const hasOutput = rows.length > 0;
@@ -3026,14 +3145,15 @@ export const OutputSection: React.FC = () => {
             className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
             style={{ overflowAnchor: "none" }}
             onScroll={handleScroll}
-            onWheel={() => {
-              lastUserScrollInputAtRef.current = performance.now();
-            }}
+            onWheel={handleWheel}
+            onTouchStart={handleOutputTouchStart}
+            onTouchMove={handleOutputTouchMove}
+            onTouchEnd={handleOutputTouchEnd}
+            onTouchCancel={handleOutputTouchCancel}
             onContextMenu={(e) => {
               e.preventDefault();
               openContextMenu(e.clientX, e.clientY, e.currentTarget);
             }}
-            {...outputLongPressHandlers}
           >
             {!hasOutput ? (
               <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
