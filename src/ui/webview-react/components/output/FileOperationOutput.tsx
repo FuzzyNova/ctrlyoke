@@ -6,7 +6,7 @@
  */
 import React, { memo } from "react";
 import { DiffView } from "./DiffView";
-import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE } from "./outputStyles";
+import { TOOL_CALL_TERMINAL } from "./outputStyles";
 import { openFile } from "@hooks/useMessageHandler";
 import { getLanguageFromPath } from "@utils/syntaxHighlighting";
 import { useUiStore } from "@store/uiStore";
@@ -61,11 +61,14 @@ const FileOperationHeader: React.FC<FileOperationHeaderProps> = ({
   error,
   trailingAction,
 }) => (
-  <div className={TOOL_CALL_LINE}>
+  <div className="text-editor-fg text-[length:var(--fp-output-font-size)] flex flex-wrap items-start gap-x-1 gap-y-0">
     <ToolDot status={dotStatus} />
-    <span className="shrink-0">{actionLabel}</span>
-    <span className="min-w-0 flex-1 text-right">
-      <FilePath path={path} className="inline whitespace-normal break-all" />
+    <span className="shrink-0 leading-relaxed">{actionLabel}</span>
+    <span className="min-w-0 flex-1 leading-relaxed">
+      <FilePath
+        path={path}
+        className="inline whitespace-normal break-all text-left align-top"
+      />
     </span>
     {trailingAction}
     {error ? (
