@@ -124,7 +124,7 @@ const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 250; // delay before expanding
 const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200; // recent wheel input window that lets real user scrolling bypass settle suppression.
 const OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS = 1200; // text rows shorter than this render directly during scroll seek.
 const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300; // time to ignore virtualizer scroll correction after user expands row content.
-const LARGE_WORKFLOW_ROW_THRESHOLD = 150; // row count where fast-scroll placeholder behavior is enabled.
+const LARGE_WORKFLOW_ROW_THRESHOLD = 20; // row count where fast-scroll placeholder behavior is enabled.
 const MAX_NAV_ALIGNMENT_ATTEMPTS = 8; // max correction passes when aligning minimap/step navigation.
 const MAX_NAVIGATION_STABILIZATION_MS = 1000; // time limit for navigation alignment before accepting the current position.
 const DEFAULT_BASH_OUTPUT_EXPANSION_STATE: BashOutputExpansionState = {
@@ -1284,21 +1284,27 @@ export const OutputSection: React.FC = () => {
         el.scrollHeight - el.scrollTop - el.clientHeight <=
         SCROLL_BOTTOM_THRESHOLD;
       if (autoscrollEnabled.current !== atBottom) {
-        WebviewLog.debug("[FP-SCROLL-DEBUG] autoscrollEnabled updated during programmatic scroll", {
-          from: autoscrollEnabled.current,
-          to: atBottom,
-          scrollTop: el.scrollTop,
-          scrollHeight: el.scrollHeight,
-          clientHeight: el.clientHeight,
-          t: performance.now().toFixed(1),
-        });
+        WebviewLog.debug(
+          "[FP-SCROLL-DEBUG] autoscrollEnabled updated during programmatic scroll",
+          {
+            from: autoscrollEnabled.current,
+            to: atBottom,
+            scrollTop: el.scrollTop,
+            scrollHeight: el.scrollHeight,
+            clientHeight: el.clientHeight,
+            t: performance.now().toFixed(1),
+          }
+        );
         autoscrollEnabled.current = atBottom;
       } else {
-        WebviewLog.debug("[FP-SCROLL-DEBUG] handleScroll suppressed (programmatic) — autoscrollEnabled unchanged", {
-          autoscrollEnabled: autoscrollEnabled.current,
-          scrollTop: el.scrollTop,
-          t: performance.now().toFixed(1),
-        });
+        WebviewLog.debug(
+          "[FP-SCROLL-DEBUG] handleScroll suppressed (programmatic) — autoscrollEnabled unchanged",
+          {
+            autoscrollEnabled: autoscrollEnabled.current,
+            scrollTop: el.scrollTop,
+            t: performance.now().toFixed(1),
+          }
+        );
       }
       return;
     }
@@ -1553,14 +1559,17 @@ export const OutputSection: React.FC = () => {
       return;
     }
 
-    WebviewLog.debug("[FP-SCROLL-DEBUG] autoScroll FIRING — scrolling to bottom", {
-      rows: rows.length,
-      prevRowCount,
-      isExecutionActive,
-      autoscrollEnabled: autoscrollEnabled.current,
-      scrollTop: outputRef.current.scrollTop,
-      t: performance.now().toFixed(1),
-    });
+    WebviewLog.debug(
+      "[FP-SCROLL-DEBUG] autoScroll FIRING — scrolling to bottom",
+      {
+        rows: rows.length,
+        prevRowCount,
+        isExecutionActive,
+        autoscrollEnabled: autoscrollEnabled.current,
+        scrollTop: outputRef.current.scrollTop,
+        t: performance.now().toFixed(1),
+      }
+    );
     isProgrammaticScroll.current = true;
     rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
     requestAnimationFrame(() => {
@@ -2438,7 +2447,8 @@ export const OutputSection: React.FC = () => {
             return;
           }
 
-          const delta = finalRowElement.getBoundingClientRect().top - previousTop;
+          const delta =
+            finalRowElement.getBoundingClientRect().top - previousTop;
           if (Math.abs(delta) < 1) {
             return;
           }

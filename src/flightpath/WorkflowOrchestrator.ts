@@ -164,6 +164,17 @@ export class WorkflowOrchestrator {
   /** Set on first-ever workspace init — blocks startup until the user chooses a panel layout preference. */
   private layoutPreferencePending: boolean = false;
 
+  /**
+   * WorkflowId of the first workflow successfully replayed to the panel during the current
+   * startup sequence, or null if no startup replay has occurred yet. Used to suppress
+   * redundant replays from subsequent READY messages (BootstrapApp → App.tsx →
+   * CLIENT_ID_ASSIGNED each trigger handleClientReady). Every extra replay sends
+   * SESSION_RESTORED which clears historyOutputs, causing a visible output flash before
+   * OUTPUT_HISTORY_LOADED restores it. After _autoLoadHasSettled, this field is irrelevant
+   * as replays are always allowed (reconnect / webview reload).
+   */
+  private panelStartupReplayedWorkflowId: string | null = null;
+
   /** MCP server provider for injecting user-defined MCP servers into VS Code (chat harness only) */
   private mcpServerProvider?: FlightPathMcpServerProvider;
 
@@ -623,7 +634,17 @@ export class WorkflowOrchestrator {
   async loadWorkflowForClient(
     filePath: string,
     send: (message: unknown) => void,
-    clientId: string
+    clientId: string,
+    options?: {
+      /**
+       * When true, load/register the workflow instance without sending
+       * SESSION_RESTORED / OUTPUT_HISTORY_LOADED to the client.
+       * Used by handleClientReady to suppress duplicate startup replays
+       * — every extra replay sends SESSION_RESTORED which clears historyOutputs
+       * and causes a visible output flash.
+       */
+      skipReplay?: boolean;
+    }
   ): Promise<void> {
     // Parse working file path to get workflowId (used for CLI session lookup)
     const workflowId = path
@@ -633,7 +654,12 @@ export class WorkflowOrchestrator {
     // Check for CLI-managed session first
     const cliEntry = this.cliSessions.get(workflowId);
     if (cliEntry) {
-      await this.replayWorkflowStateTo(workflowId, send, clientId);
+      // setViewedWorkflowId is normally called inside replayWorkflowStateTo; call
+      // it explicitly here so the viewer registry stays consistent when skipping.
+      this.setViewedWorkflowId(clientId, workflowId);
+      if (!options?.skipReplay) {
+        await this.replayWorkflowStateTo(workflowId, send, clientId);
+      }
       return;
     }
 
@@ -643,7 +669,9 @@ export class WorkflowOrchestrator {
     // converts an actively CLI-managed RUNNING file to a VS Code instance.
     if (await this.ensureCliWatchSession(filePath)) {
       this.setViewedWorkflowId(clientId, workflowId);
-      await this.replayWorkflowStateTo(workflowId, send, clientId);
+      if (!options?.skipReplay) {
+        await this.replayWorkflowStateTo(workflowId, send, clientId);
+      }
       return;
     }
 
@@ -653,7 +681,9 @@ export class WorkflowOrchestrator {
     );
     if (existing) {
       this.setViewedWorkflowId(clientId, existing.id);
-      await this.replayWorkflowStateTo(existing.id, send, clientId);
+      if (!options?.skipReplay) {
+        await this.replayWorkflowStateTo(existing.id, send, clientId);
+      }
       return;
     }
 
@@ -664,7 +694,9 @@ export class WorkflowOrchestrator {
     );
     if (existingRetired) {
       this.setViewedWorkflowId(clientId, existingRetired.id);
-      await this.replayWorkflowStateTo(existingRetired.id, send, clientId);
+      if (!options?.skipReplay) {
+        await this.replayWorkflowStateTo(existingRetired.id, send, clientId);
+      }
       return;
     }
 
@@ -680,7 +712,9 @@ export class WorkflowOrchestrator {
     this.instances.set(instance.id, instance);
     this.setViewedWorkflowId(clientId, instance.id);
     await instance.loadWorkingFile(filePath);
-    await this.replayWorkflowStateTo(instance.id, send, clientId);
+    if (!options?.skipReplay) {
+      await this.replayWorkflowStateTo(instance.id, send, clientId);
+    }
   }
 
   /**
@@ -936,12 +970,10 @@ export class WorkflowOrchestrator {
         }
       }
       // If startup is still in progress (!_autoLoadHasSettled), skip the replay
-      // here. Multiple READY messages arrive during startup (BootstrapApp +
-      // App.tsx, doubled in React StrictMode dev builds) and each triggered a
-      // full replay, causing SESSION_RESTORED to clear liveOrderedEntries and
-      // flash the output section. The single replay inside triggerAutoLoad
-      // (just before STARTUP_COMPLETE broadcasts) is the only one the panel
-      // needs — storedPanelSend is up to date so it will reach the right client.
+      // here. The first READY's handleClientReady handles the initial replay;
+      // subsequent READY messages (App.tsx, CLIENT_ID_ASSIGNED) are suppressed by
+      // the panelStartupReplayedWorkflowId guard. triggerAutoLoad skips the replay
+      // when handleClientReady has already sent one for the same workflowId.
     } else {
       // Fallback path when the panel send function is not available (e.g. during tests
       // or before the webview mounts). Re-send run history so any already-connected
@@ -1013,15 +1045,21 @@ export class WorkflowOrchestrator {
             `triggerAutoLoad: keeping panel's persisted workflow "${path.basename(panelWorkingFilePath)}" instead of loading most recent`
           );
           loadedWorkflowId = panelViewedId;
-          // Replay state to the panel now that startup is complete. This is the
-          // only replay for the fresh-startup path (setDashboardReady no longer
-          // replays while _autoLoadHasSettled is false), so the panel needs it
-          // here before STARTUP_COMPLETE broadcasts.
-          if (this.storedPanelSend) {
+          // Replay state to the panel now that startup is complete. Skip the replay
+          // if handleClientReady already sent a successful startup replay for this
+          // same workflow — replaying again would send SESSION_RESTORED which clears
+          // historyOutputs and causes a visible output flash.
+          const alreadyReplayed =
+            this.panelStartupReplayedWorkflowId === panelViewedId;
+          if (!alreadyReplayed && this.storedPanelSend) {
             await this.replayWorkflowStateTo(
               panelViewedId,
               this.storedPanelSend,
               this.PANEL_CLIENT_ID
+            );
+          } else if (alreadyReplayed) {
+            Log.debug(
+              `triggerAutoLoad: skipping panel replay — already replayed during startup for inst:${panelViewedId.slice(0, 8)}`
             );
           }
           if (this.storedPostAutoLoadCallback) {
@@ -1382,14 +1420,36 @@ export class WorkflowOrchestrator {
     }
   ): Promise<void> {
     this.registerClient(clientId);
+
+    // For the panel, suppress duplicate replays after the first one during startup.
+    // Multiple READY messages arrive during startup (BootstrapApp → App.tsx →
+    // CLIENT_ID_ASSIGNED), and each replay sends SESSION_RESTORED which clears
+    // historyOutputs, causing a visible output flash before OUTPUT_HISTORY_LOADED
+    // restores it. After _autoLoadHasSettled, replays are always allowed (reconnect /
+    // webview reload).
+    const skipPanelStartupReplay =
+      clientId === this.PANEL_CLIENT_ID &&
+      !this._autoLoadHasSettled &&
+      this.panelStartupReplayedWorkflowId !== null;
+
     if (options?.preferredWorkingFilePath) {
       try {
         await fs.promises.access(options.preferredWorkingFilePath);
         await this.loadWorkflowForClient(
           options.preferredWorkingFilePath,
           send,
-          clientId
+          clientId,
+          { skipReplay: skipPanelStartupReplay }
         );
+        // Record the replayed workflowId after the first successful panel startup replay.
+        if (
+          !skipPanelStartupReplay &&
+          clientId === this.PANEL_CLIENT_ID &&
+          !this._autoLoadHasSettled
+        ) {
+          const replayedId = this.getViewedWorkflowId(this.PANEL_CLIENT_ID);
+          if (replayedId) this.panelStartupReplayedWorkflowId = replayedId;
+        }
         send({
           type: MESSAGE_TYPES.WORKFLOWS_LIST,
           workflows: this.getWorkflowSummaries(),
@@ -1435,7 +1495,17 @@ export class WorkflowOrchestrator {
     }
 
     if (viewedId) {
-      await this.replayWorkflowStateTo(viewedId, send, clientId, options);
+      if (!skipPanelStartupReplay) {
+        await this.replayWorkflowStateTo(viewedId, send, clientId, options);
+        // Record the replayed workflowId after the first successful panel startup replay.
+        if (clientId === this.PANEL_CLIENT_ID && !this._autoLoadHasSettled) {
+          this.panelStartupReplayedWorkflowId = viewedId;
+        }
+      } else {
+        Log.debug(
+          `handleClientReady: skipping duplicate panel startup replay for inst:${viewedId.slice(0, 8)}`
+        );
+      }
     }
     send({
       type: MESSAGE_TYPES.WORKFLOWS_LIST,

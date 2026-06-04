@@ -458,6 +458,33 @@ Each workflow run creates a subdirectory with:
 
 Useful for: comparing what the AI actually output vs. what an end condition script received, replaying output in the dashboard, diagnosing why a retry loop triggered.
 
+### Logging guidance
+
+When adding diagnostic logging, use the platform-appropriate logger so messages are routed to the correct sink and appear in the expected places (output channel, workspace log files, or the extension session log).
+
+- **Extension / backend code:** use `src/utils/Log.ts` (methods: `Log.trace`, `Log.debug`, `Log.info`, `Log.warn`, `Log.error`).
+
+  Example:
+
+  ```ts
+  import { Log } from "../utils/Log";
+
+  // inside an async function
+  Log.info("Starting workflow run", { workflowId: workflow.id });
+  ```
+
+- **Webview / UI code:** use `src/ui/webview-react/utils/logger.ts`'s `WebviewLog` (methods: `debug`, `info`, `warn`, `error`). This forwards messages to the extension when the VS Code API is available and falls back to console output during early initialization.
+
+  Example:
+
+  ```ts
+  import { WebviewLog } from "@/utils/logger";
+
+  WebviewLog.debug("Editor mounted", { stepCount: steps.length });
+  ```
+
+These helpers ensure logs are captured consistently and avoid bypassing the extension's logging pipeline.
+
 ### Common Failure Patterns
 
 | Symptom                              | Where to look                        | What to check                                                             |
