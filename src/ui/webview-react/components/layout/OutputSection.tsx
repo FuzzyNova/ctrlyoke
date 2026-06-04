@@ -1,4 +1,5 @@
 import React, {
+  Profiler,
   useEffect,
   useRef,
   useMemo,
@@ -91,13 +92,34 @@ import {
   type ToolCallExpansionSection,
   type ToolCallExpansionState,
 } from "@utils/toolCallLayout";
+import {
+  getOutputProfilerState,
+  isOutputProfilingEnabled,
+  logOutputProfilerEvent,
+  measureOutputPhase,
+  shouldLogOutputMeasurement,
+  shouldLogOutputScrollFrame,
+  shouldLogOutputVirtualRange,
+} from "@utils/outputPerformance";
 
-const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
-const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024;
-const OUTPUT_VIRTUALIZER_OVERSCAN = 16;
-const LARGE_WORKFLOW_ROW_THRESHOLD = 150;
-const MAX_NAV_ALIGNMENT_ATTEMPTS = 8;
-const MAX_NAVIGATION_STABILIZATION_MS = 1000;
+const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to keep auto-scroll pinned.
+const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024; // minimum output width before diffs use split view.
+const OUTPUT_VIRTUALIZER_OVERSCAN = 8; // normal extra rows rendered above/below viewport; higher is smoother but heavier.
+const OUTPUT_ACTIVE_SCROLL_OVERSCAN = 2; // extra rows while fast-scroll placeholders are active; lower reduces work during rapid scroll.
+const OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN = 4; // first real-row overscan after placeholders; lower makes the initial restore cheaper.
+const OUTPUT_OVERSCAN_RESTORE_DELAY_MS = 250; // idle time after fast scrolling before placeholders swap back to real rows.
+const OUTPUT_SCROLL_SEEK_CONTINUE_DELTA_PX = 16; // scroll delta that keeps placeholder mode alive once it has started.
+const OUTPUT_SCROLL_SEEK_SLOW_DELTA_PX = 48; // below this delta, treat scrolling as slowing and use the shorter restore delay.
+const OUTPUT_SCROLL_SEEK_SLOW_RESTORE_DELAY_MS = 80; // restore delay while scrolling is slowing, so rows start rendering before a dead stop.
+const OUTPUT_SCROLL_SEEK_MIN_DELTA_PX = 400; // minimum single-event movement that can trigger placeholder mode by velocity.
+const OUTPUT_SCROLL_SEEK_MIN_VELOCITY_PX_MS = 2; // minimum px/ms velocity for the delta threshold to count as fast scrolling.
+const OUTPUT_SCROLL_SEEK_PAGE_FRACTION = 1.5; // viewport fraction moved in one event that always counts as fast scrolling.
+const OUTPUT_SCROLL_SEEK_SETTLE_MS = 2000; // time after restore to ignore layout-driven scroll corrections as fast-scroll triggers.
+const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 250; // delay before expanding from restore overscan back to normal overscan.
+const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200; // recent wheel input window that lets real user scrolling bypass settle suppression.
+const LARGE_WORKFLOW_ROW_THRESHOLD = 150; // row count where fast-scroll placeholder behavior is enabled.
+const MAX_NAV_ALIGNMENT_ATTEMPTS = 8; // max correction passes when aligning minimap/step navigation.
+const MAX_NAVIGATION_STABILIZATION_MS = 1000; // time limit for navigation alignment before accepting the current position.
 
 interface RowHeightBucketStats {
   sampleCount: number;
@@ -112,6 +134,22 @@ function getMeasuredElementHeight(element: HTMLElement): number {
     element.offsetHeight,
     element.scrollHeight
   );
+}
+
+function getResizeObserverEntryHeight(
+  entry: ResizeObserverEntry | undefined
+): number | null {
+  const borderBox = entry?.borderBoxSize?.[0];
+  if (borderBox) {
+    return borderBox.blockSize;
+  }
+
+  const contentBox = entry?.contentBoxSize?.[0];
+  if (contentBox) {
+    return contentBox.blockSize;
+  }
+
+  return entry?.contentRect.height ?? null;
 }
 
 function getZeroHeightStructuredEventReason(
@@ -236,6 +274,58 @@ function getRowHeightBucket(row: OutputRenderRow): string {
       return `structured-event:${row.event.type}`;
   }
 }
+
+function getScrollSeekRowLabel(row: OutputRenderRow): string {
+  switch (row.rowKind) {
+    case "structured-event":
+      if (row.diff) {
+        return row.diff.renderPlan.viewType === "split"
+          ? "Diff"
+          : "Unified diff";
+      }
+      if (row.toolCall) {
+        return "Tool call";
+      }
+      return row.event.type;
+    case "cli-header":
+      return row.stepLabel;
+    case "cli-command":
+      return "Command";
+    case "plain-response":
+      return "Response";
+    case "prompt":
+      return "Prompt";
+    case "status":
+      return "Status";
+    case "stats":
+      return "Stats";
+    case "error":
+      return "Error";
+    case "history-banner":
+      return "History";
+    case "step-anchor":
+      return "Step";
+    case "final-step-label":
+      return row.label;
+  }
+}
+
+const OutputScrollSeekPlaceholder: React.FC<{
+  row: OutputRenderRow;
+  height: number;
+}> = ({ row, height }) => (
+  <div
+    className="px-2 py-1 text-[length:var(--fp-output-font-size-xs)] text-description-fg"
+    style={{
+      height: `${Math.max(1, height)}px`,
+      contain: "layout paint style",
+    }}
+  >
+    <div className="h-full min-h-6 rounded border border-panel-border bg-sidebar-bg/40 px-2 py-1 overflow-hidden">
+      <span className="opacity-80">{getScrollSeekRowLabel(row)}</span>
+    </div>
+  </div>
+);
 
 interface MinimapDialogState {
   mode: "undo" | "redo";
@@ -418,9 +508,9 @@ export const OutputSection: React.FC = () => {
   );
   const previousDiffResetVersion = useRef(diffResetVersion);
   const [measurementVersion, setMeasurementVersion] = useState(0);
-  const [diffCollapseState, setDiffCollapseState] = useState<Map<string, boolean>>(
-    new Map()
-  );
+  const [diffCollapseState, setDiffCollapseState] = useState<
+    Map<string, boolean>
+  >(new Map());
   const [diffExpansionState, setDiffExpansionState] = useState<
     Map<string, DiffGapExpansionState>
   >(new Map());
@@ -434,17 +524,40 @@ export const OutputSection: React.FC = () => {
   const [navigationPendingRowIndex, setNavigationPendingRowIndex] = useState<
     number | null
   >(null);
+  const [outputOverscan, setOutputOverscan] = useState(
+    OUTPUT_VIRTUALIZER_OVERSCAN
+  );
   const measurementVersionRef = useRef(measurementVersion);
   useEffect(() => {
     measurementVersionRef.current = measurementVersion;
   }, [measurementVersion]);
+  const outputOverscanRef = useRef(outputOverscan);
+  useEffect(() => {
+    outputOverscanRef.current = outputOverscan;
+  }, [outputOverscan]);
+  const scrollSeekStartedAtRef = useRef<number | null>(null);
+  const scrollSeekRestoreRequestedAtRef = useRef<number | null>(null);
+  const scrollSeekSettlingUntilRef = useRef<number | null>(null);
+  const lastUserScrollInputAtRef = useRef<number | null>(null);
+  const measurementVersionFrameRef = useRef<number | null>(null);
+  const overscanRestoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const fullOverscanRestoreTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const pendingNavigationRef = useRef<PendingNavigationState | null>(null);
   const navigationFrameRef = useRef<number | null>(null);
+  const lastScrollEventAtRef = useRef<number | null>(null);
+  const lastScrollTopRef = useRef<number | null>(null);
+  const lastVirtualRangeRef = useRef<string>("");
   // Suppresses TanStack Virtual's internal scroll corrections for 1 s after navigation
   // completes. Without this, new rows entering the virtual window post-navigation
   // repeatedly trigger corrections that oscillate the scroll position.
   const postNavSettlingRef = useRef(false);
-  const postNavSettlingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const postNavSettlingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
   const [minimapDialogState, setMinimapDialogState] =
@@ -498,32 +611,43 @@ export const OutputSection: React.FC = () => {
     firstRowIndexByTarget,
   } = useMemo(
     () =>
-      buildOutputRows({
-        allMessages,
-        steps,
-        finalStep,
-        streamingChunks,
-        finalStepStreamingChunks,
-        isExecutionActive,
-        allowUndoActions:
-          isViewingHistory ||
-          !(
-            executionState === EXECUTION_STATES.RUNNING ||
-            executionState === EXECUTION_STATES.CANCELLING
-          ),
-        isViewingHistory,
-        historyOutputs,
-        workspaceSnapshots,
-        finalStepWorkspaceSnapshots,
-        undoRecords,
-        diffCollapseState,
-        diffExpansionState,
-        toolCallExpansionState,
-        defaultDiffCollapsed: diffsCollapsed,
-        diffViewType: outputDiffViewType,
-        outputFontSize,
-        outputContentWidth,
-      }),
+      measureOutputPhase(
+        "buildOutputRows",
+        {
+          messages: allMessages.length,
+          steps: steps.length,
+          history: isViewingHistory,
+          outputContentWidth,
+          outputFontSize,
+        },
+        () =>
+          buildOutputRows({
+            allMessages,
+            steps,
+            finalStep,
+            streamingChunks,
+            finalStepStreamingChunks,
+            isExecutionActive,
+            allowUndoActions:
+              isViewingHistory ||
+              !(
+                executionState === EXECUTION_STATES.RUNNING ||
+                executionState === EXECUTION_STATES.CANCELLING
+              ),
+            isViewingHistory,
+            historyOutputs,
+            workspaceSnapshots,
+            finalStepWorkspaceSnapshots,
+            undoRecords,
+            diffCollapseState,
+            diffExpansionState,
+            toolCallExpansionState,
+            defaultDiffCollapsed: diffsCollapsed,
+            diffViewType: outputDiffViewType,
+            outputFontSize,
+            outputContentWidth,
+          })
+      ),
     [
       allMessages,
       steps,
@@ -556,11 +680,16 @@ export const OutputSection: React.FC = () => {
       );
       const bucket = getRowHeightBucket(row);
       const bucketStats = rowHeightBucketStatsRef.current.get(bucket);
-      if (!bucketStats || bucketStats.sampleCount < 2 || bucketStats.totalEstimated <= 0) {
+      if (
+        !bucketStats ||
+        bucketStats.sampleCount < 2 ||
+        bucketStats.totalEstimated <= 0
+      ) {
         return baseEstimate;
       }
 
-      const averageScale = bucketStats.totalMeasured / bucketStats.totalEstimated;
+      const averageScale =
+        bucketStats.totalMeasured / bucketStats.totalEstimated;
       const clampedScale = clamp(
         averageScale,
         0.75,
@@ -579,16 +708,218 @@ export const OutputSection: React.FC = () => {
     [outputContentWidth, outputFontSize]
   );
 
+  // Keep live refs so updateRowMeasurementCache doesn't need rows / getEstimatedRowHeight
+  // in its own dependency array, preventing ref detach/reattach on every streaming chunk.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const getEstimatedRowHeightRef = useRef(getEstimatedRowHeight);
+  getEstimatedRowHeightRef.current = getEstimatedRowHeight;
+  const setOutputOverscanMode = useCallback(
+    (
+      overscan: number,
+      reason: "fast-scroll" | "idle",
+      details?: Record<string, unknown>
+    ) => {
+      if (outputOverscanRef.current === overscan) {
+        return;
+      }
+
+      const now = performance.now();
+      const wasScrollSeeking =
+        outputOverscanRef.current === OUTPUT_ACTIVE_SCROLL_OVERSCAN;
+      const isScrollSeeking = overscan === OUTPUT_ACTIVE_SCROLL_OVERSCAN;
+      outputOverscanRef.current = overscan;
+      setOutputOverscan(overscan);
+      if (isScrollSeeking && !wasScrollSeeking) {
+        scrollSeekStartedAtRef.current = now;
+        scrollSeekRestoreRequestedAtRef.current = null;
+      } else if (!isScrollSeeking && wasScrollSeeking) {
+        scrollSeekRestoreRequestedAtRef.current = now;
+      }
+      logOutputProfilerEvent("adaptiveOverscan", {
+        overscan,
+        reason,
+        scrollSeekDurationMs:
+          !isScrollSeeking && scrollSeekStartedAtRef.current != null
+            ? now - scrollSeekStartedAtRef.current
+            : undefined,
+        ...details,
+        rows: rowsRef.current.length,
+      });
+    },
+    []
+  );
+  const scheduleOverscanRestore = useCallback(
+    (delayMs?: number) => {
+      if (overscanRestoreTimerRef.current !== null) {
+        clearTimeout(overscanRestoreTimerRef.current);
+      }
+
+      overscanRestoreTimerRef.current = setTimeout(() => {
+        overscanRestoreTimerRef.current = null;
+        setOutputOverscanMode(OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN, "idle", {
+          phase: "restore-visible-rows",
+        });
+      }, delayMs ?? OUTPUT_OVERSCAN_RESTORE_DELAY_MS);
+    },
+    [setOutputOverscanMode]
+  );
+  const enterFastScrollOverscan = useCallback(
+    (details: Record<string, unknown>) => {
+      setOutputOverscanMode(
+        OUTPUT_ACTIVE_SCROLL_OVERSCAN,
+        "fast-scroll",
+        details
+      );
+      scheduleOverscanRestore();
+    },
+    [scheduleOverscanRestore, setOutputOverscanMode]
+  );
+  const scheduleMeasurementVersionBump = useCallback(() => {
+    if (measurementVersionFrameRef.current != null) {
+      return;
+    }
+
+    measurementVersionFrameRef.current = requestAnimationFrame(() => {
+      measurementVersionFrameRef.current = null;
+      setMeasurementVersion((version) => version + 1);
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (measurementVersionFrameRef.current != null) {
+        cancelAnimationFrame(measurementVersionFrameRef.current);
+        measurementVersionFrameRef.current = null;
+      }
+      if (overscanRestoreTimerRef.current !== null) {
+        clearTimeout(overscanRestoreTimerRef.current);
+        overscanRestoreTimerRef.current = null;
+      }
+      if (fullOverscanRestoreTimerRef.current !== null) {
+        clearTimeout(fullOverscanRestoreTimerRef.current);
+        fullOverscanRestoreTimerRef.current = null;
+      }
+    },
+    []
+  );
+
+  const updateRowMeasurementCache = useCallback(
+    (
+      element: HTMLDivElement,
+      measuredHeight: number,
+      source: "dom-read" | "resize-observer"
+    ): number => {
+      const startedAt = isOutputProfilingEnabled() ? performance.now() : 0;
+      const index = Number(element.dataset.index ?? -1);
+      const row = rowsRef.current[index];
+      if (!row) return measuredHeight;
+
+      const zeroHeightReason =
+        row.rowKind === "structured-event"
+          ? getZeroHeightStructuredEventReason(row)
+          : null;
+      if (
+        (!Number.isFinite(measuredHeight) || measuredHeight <= 0) &&
+        zeroHeightReason == null
+      ) {
+        return measuredHeight;
+      }
+
+      const nextHeight =
+        zeroHeightReason != null && measuredHeight <= 0 ? 0 : measuredHeight;
+      const rowHeightBucket = getRowHeightBucket(row);
+      const estimatedHeight = getEstimatedRowHeightRef.current(row);
+
+      const previousHeight = measurementCacheRef.current.get(row.key);
+      if (
+        previousHeight !== undefined &&
+        Math.abs(previousHeight - nextHeight) < 0.5
+      ) {
+        if (startedAt > 0) {
+          const durationMs = performance.now() - startedAt;
+          if (shouldLogOutputMeasurement(durationMs)) {
+            logOutputProfilerEvent("rowMeasurement:unchanged", {
+              index,
+              rowKind: row.rowKind,
+              bucket: rowHeightBucket,
+              measuredHeight: nextHeight,
+              estimatedHeight,
+              source,
+              durationMs,
+            });
+          }
+        }
+        return nextHeight;
+      }
+
+      measurementCacheRef.current.set(row.key, nextHeight);
+      const previousBucketStats = rowHeightBucketStatsRef.current.get(
+        rowHeightBucket
+      ) ?? {
+        sampleCount: 0,
+        totalMeasured: 0,
+        totalEstimated: 0,
+        maxAbsDelta: 0,
+      };
+      rowHeightBucketStatsRef.current.set(rowHeightBucket, {
+        sampleCount: previousBucketStats.sampleCount + 1,
+        totalMeasured: previousBucketStats.totalMeasured + nextHeight,
+        totalEstimated: previousBucketStats.totalEstimated + estimatedHeight,
+        maxAbsDelta: Math.max(
+          previousBucketStats.maxAbsDelta,
+          Math.abs(nextHeight - estimatedHeight)
+        ),
+      });
+      if (startedAt > 0) {
+        const durationMs = performance.now() - startedAt;
+        if (shouldLogOutputMeasurement(durationMs)) {
+          logOutputProfilerEvent("rowMeasurement:updated", {
+            index,
+            rowKind: row.rowKind,
+            bucket: rowHeightBucket,
+            measuredHeight: nextHeight,
+            estimatedHeight,
+            delta: nextHeight - estimatedHeight,
+            previousHeight,
+            source,
+            durationMs,
+          });
+        }
+      }
+      scheduleMeasurementVersionBump();
+      return nextHeight;
+    },
+    [scheduleMeasurementVersionBump]
+  );
+
+  const measureOutputRowElement = useCallback(
+    (element: HTMLDivElement, entry?: ResizeObserverEntry): number => {
+      const observerHeight = getResizeObserverEntryHeight(entry);
+      const measuredHeight =
+        observerHeight ?? getMeasuredElementHeight(element);
+      return updateRowMeasurementCache(
+        element,
+        measuredHeight,
+        observerHeight == null ? "dom-read" : "resize-observer"
+      );
+    },
+    [updateRowMeasurementCache]
+  );
+
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => outputRef.current,
     estimateSize: (index) => {
       const row = rows[index];
       if (!row) return 48;
-      return measurementCacheRef.current.get(row.key) ?? getEstimatedRowHeight(row);
+      return (
+        measurementCacheRef.current.get(row.key) ?? getEstimatedRowHeight(row)
+      );
     },
     getItemKey: (index) => rows[index]?.key ?? index,
-    overscan: OUTPUT_VIRTUALIZER_OVERSCAN,
+    measureElement: measureOutputRowElement,
+    overscan: outputOverscan,
   });
   // shouldAdjustScrollPositionOnItemSizeChange is a writable instance property
   // (not a constructor option) on Virtualizer. Suppress scroll corrections
@@ -598,116 +929,79 @@ export const OutputSection: React.FC = () => {
   rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
     pendingNavigationRef.current === null &&
     !postNavSettlingRef.current &&
+    (scrollSeekSettlingUntilRef.current == null ||
+      performance.now() >= scrollSeekSettlingUntilRef.current) &&
     item.start < (outputRef.current?.scrollTop ?? 0);
 
-  // Keep live refs so updateRowMeasurementCache doesn't need rows / getEstimatedRowHeight
-  // in its own dependency array, preventing ref detach/reattach on every streaming chunk.
-  const rowsRef = useRef(rows);
-  rowsRef.current = rows;
-  const getEstimatedRowHeightRef = useRef(getEstimatedRowHeight);
-  getEstimatedRowHeightRef.current = getEstimatedRowHeight;
-
-  const updateRowMeasurementCache = useCallback((element: HTMLDivElement) => {
-    const index = Number(element.dataset.index ?? -1);
-    const row = rowsRef.current[index];
-    if (!row) return;
-
-    const measuredHeight = getMeasuredElementHeight(element);
-    const zeroHeightReason =
-      row.rowKind === "structured-event"
-        ? getZeroHeightStructuredEventReason(row)
-        : null;
-    if (
-      (!Number.isFinite(measuredHeight) || measuredHeight <= 0) &&
-      zeroHeightReason == null
-    ) {
-      return;
-    }
-
-    const nextHeight =
-      zeroHeightReason != null && measuredHeight <= 0 ? 0 : measuredHeight;
-    const rowHeightBucket = getRowHeightBucket(row);
-    const estimatedHeight = getEstimatedRowHeightRef.current(row);
-
-    const previousHeight = measurementCacheRef.current.get(row.key);
-    if (
-      previousHeight !== undefined &&
-      Math.abs(previousHeight - nextHeight) < 0.5
-    ) {
-      return;
-    }
-
-    measurementCacheRef.current.set(row.key, nextHeight);
-    const previousBucketStats =
-      rowHeightBucketStatsRef.current.get(rowHeightBucket) ?? {
-        sampleCount: 0,
-        totalMeasured: 0,
-        totalEstimated: 0,
-        maxAbsDelta: 0,
-      };
-    rowHeightBucketStatsRef.current.set(rowHeightBucket, {
-      sampleCount: previousBucketStats.sampleCount + 1,
-      totalMeasured: previousBucketStats.totalMeasured + nextHeight,
-      totalEstimated: previousBucketStats.totalEstimated + estimatedHeight,
-      maxAbsDelta: Math.max(
-        previousBucketStats.maxAbsDelta,
-        Math.abs(nextHeight - estimatedHeight)
-      ),
-    });
-    setMeasurementVersion((version) => version + 1);
-  }, []);
-
   // React 19 ref callbacks can return a cleanup function.
-  // Returns a ResizeObserver cleanup so the cache stays fresh for the entire
-  // lifetime of the mounted element — not just on first attach. Without this,
-  // streaming content and async rendering that grow a row after initial mount
-  // leave a stale cached height; when the row scrolls out and back in,
-  // estimateSize returns the stale value causing overlap or blank space.
+  // TanStack Virtual owns the ResizeObserver. Our measureElement override above
+  // consumes its entries, updates FlightPath's measurement cache, and avoids a
+  // second observer plus duplicate DOM layout reads for already-mounted rows.
   const measureRowElement = useCallback(
     (element: HTMLDivElement | null): void | (() => void) => {
       if (!element) return;
       rowVirtualizer.measureElement(element);
-      updateRowMeasurementCache(element);
-
-      const observer = new ResizeObserver(() =>
-        updateRowMeasurementCache(element)
-      );
-      observer.observe(element);
-      return () => observer.disconnect();
+      return () => rowVirtualizer.measureElement(null);
     },
-    [rowVirtualizer, updateRowMeasurementCache]
+    [rowVirtualizer]
   );
 
-  const rowLayout = useMemo(() => {
-    void measurementVersion;
-    let fallbackOffset = 0;
-    const rowStartsByIndex: number[] = [];
-    const rowStartsByKey = new Map<string, number>();
-    const measurementsByKey = new Map(
-      rowVirtualizer.measurementsCache
-        .filter((item): item is NonNullable<typeof item> => item != null)
-        .map((item) => [String(item.key), item] as const)
-    );
+  const rowLayout = useMemo(
+    () =>
+      measureOutputPhase(
+        "rowLayout",
+        {
+          rows: rows.length,
+          measurementVersion,
+          overscan: outputOverscan,
+          virtualizerTotalSize: rowVirtualizer.getTotalSize(),
+        },
+        () => {
+          void measurementVersion;
+          let fallbackOffset = 0;
+          const rowStartsByIndex: number[] = [];
+          const rowStartsByKey = new Map<string, number>();
+          const measurementsByKey = new Map(
+            rowVirtualizer.measurementsCache
+              .filter((item): item is NonNullable<typeof item> => item != null)
+              .map((item) => [String(item.key), item] as const)
+          );
 
-    for (const [index, row] of rows.entries()) {
-      const measurement =
-        measurementsByKey.get(row.key) ?? rowVirtualizer.measurementsCache[index];
-      const size =
-        measurement?.size ??
-        measurementCacheRef.current.get(row.key) ??
-        getEstimatedRowHeight(row);
-      const start = measurement?.start ?? fallbackOffset;
-      rowStartsByIndex[index] = start;
-      rowStartsByKey.set(row.key, start);
-      fallbackOffset = start + size;
-    }
+          for (const [index, row] of rows.entries()) {
+            const measurement =
+              measurementsByKey.get(row.key) ??
+              rowVirtualizer.measurementsCache[index];
+            const size =
+              measurement?.size ??
+              measurementCacheRef.current.get(row.key) ??
+              getEstimatedRowHeight(row);
+            const start = measurement?.start ?? fallbackOffset;
+            rowStartsByIndex[index] = start;
+            rowStartsByKey.set(row.key, start);
+            fallbackOffset = start + size;
+          }
 
-    return {
-      totalSize: Math.max(rowVirtualizer.getTotalSize(), fallbackOffset, 1),
-      rowStartsByIndex,
-      rowStartsByKey,
-    };
-  }, [getEstimatedRowHeight, rows, measurementVersion, outputContentWidth, outputFontSize, rowVirtualizer]);
+          return {
+            totalSize: Math.max(
+              rowVirtualizer.getTotalSize(),
+              fallbackOffset,
+              1
+            ),
+            rowStartsByIndex,
+            rowStartsByKey,
+          };
+        }
+      ),
+    [
+      getEstimatedRowHeight,
+      rows,
+      measurementVersion,
+      outputContentWidth,
+      outputFontSize,
+      outputOverscan,
+      rowVirtualizer,
+    ]
+  );
   useEffect(() => {
     const el = outputRef.current;
     if (!el) return;
@@ -745,18 +1039,27 @@ export const OutputSection: React.FC = () => {
   }, [outputContentWidth, outputDiffViewType, outputFontSize, rowVirtualizer]);
 
   const stepScrollFractions = useMemo(() => {
-    const fractions = new Map<string, number>();
-    const totalSize = Math.max(1, rowLayout.totalSize);
+    return measureOutputPhase(
+      "stepScrollFractions",
+      { targets: uniqueStepTargets.length, rows: rows.length },
+      () => {
+        const fractions = new Map<string, number>();
+        const totalSize = Math.max(1, rowLayout.totalSize);
 
-    for (const target of uniqueStepTargets) {
-      const targetKey = `${target.kind}:${target.index}`;
-      const rowIndex = firstRowIndexByTarget.get(targetKey);
-      if (rowIndex === undefined) continue;
-      fractions.set(targetKey, rowLayout.rowStartsByIndex[rowIndex] / totalSize);
-    }
+        for (const target of uniqueStepTargets) {
+          const targetKey = `${target.kind}:${target.index}`;
+          const rowIndex = firstRowIndexByTarget.get(targetKey);
+          if (rowIndex === undefined) continue;
+          fractions.set(
+            targetKey,
+            rowLayout.rowStartsByIndex[rowIndex] / totalSize
+          );
+        }
 
-    return fractions;
-  }, [firstRowIndexByTarget, rowLayout, uniqueStepTargets]);
+        return fractions;
+      }
+    );
+  }, [firstRowIndexByTarget, rowLayout, rows.length, uniqueStepTargets]);
 
   const hasDiffRows = useMemo(
     () =>
@@ -885,11 +1188,113 @@ export const OutputSection: React.FC = () => {
     if (isProgrammaticScroll.current) return;
     const el = outputRef.current;
     if (!el) return;
+    const startedAt = performance.now();
+    const now = startedAt;
+    const previousScrollEventAt = lastScrollEventAtRef.current;
+    const previousScrollTop = lastScrollTopRef.current;
+    lastScrollEventAtRef.current = now;
+    lastScrollTopRef.current = el.scrollTop;
+    const scrollDeltaPx =
+      previousScrollTop == null ? 0 : el.scrollTop - previousScrollTop;
+    const absScrollDeltaPx = Math.abs(scrollDeltaPx);
+    const scrollGapMs =
+      previousScrollEventAt == null ? 0 : now - previousScrollEventAt;
+    const scrollVelocityPxMs =
+      scrollGapMs > 0 ? absScrollDeltaPx / scrollGapMs : 0;
+    const pageDeltaThresholdPx =
+      el.clientHeight * OUTPUT_SCROLL_SEEK_PAGE_FRACTION;
+    const rawFastScroll =
+      rowsRef.current.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
+      (absScrollDeltaPx >= pageDeltaThresholdPx ||
+        (absScrollDeltaPx >= OUTPUT_SCROLL_SEEK_MIN_DELTA_PX &&
+          scrollVelocityPxMs >= OUTPUT_SCROLL_SEEK_MIN_VELOCITY_PX_MS));
+    const isInScrollSeekSettleWindow =
+      scrollSeekSettlingUntilRef.current != null &&
+      now < scrollSeekSettlingUntilRef.current;
+    const hasRecentUserScrollInput =
+      lastUserScrollInputAtRef.current != null &&
+      now - lastUserScrollInputAtRef.current <=
+        OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+    const suppressedFastScroll =
+      rawFastScroll && isInScrollSeekSettleWindow && !hasRecentUserScrollInput;
+    const isFastScroll = rawFastScroll && !suppressedFastScroll;
+    if (isFastScroll) {
+      enterFastScrollOverscan({
+        scrollDeltaPx,
+        scrollVelocityPxMs,
+        scrollGapMs,
+        pageDeltaThresholdPx,
+      });
+    } else if (suppressedFastScroll) {
+      logOutputProfilerEvent("adaptiveOverscan", {
+        overscan: outputOverscanRef.current,
+        reason: "idle",
+        phase: "suppressed-post-restore-scroll",
+        scrollDeltaPx,
+        scrollVelocityPxMs,
+        scrollGapMs,
+        pageDeltaThresholdPx,
+        settleRemainingMs: (scrollSeekSettlingUntilRef.current ?? now) - now,
+        rows: rowsRef.current.length,
+      });
+    } else if (
+      outputOverscanRef.current === OUTPUT_ACTIVE_SCROLL_OVERSCAN &&
+      absScrollDeltaPx >= OUTPUT_SCROLL_SEEK_CONTINUE_DELTA_PX
+    ) {
+      scheduleOverscanRestore(
+        absScrollDeltaPx <= OUTPUT_SCROLL_SEEK_SLOW_DELTA_PX
+          ? OUTPUT_SCROLL_SEEK_SLOW_RESTORE_DELAY_MS
+          : OUTPUT_OVERSCAN_RESTORE_DELAY_MS
+      );
+    }
     const atBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight <=
       SCROLL_BOTTOM_THRESHOLD;
     autoscrollEnabled.current = atBottom;
-  }, []);
+    if (previousScrollEventAt != null) {
+      const gapMs = scrollGapMs;
+      if (shouldLogOutputScrollFrame(gapMs)) {
+        logOutputProfilerEvent("scroll", {
+          gapMs,
+          scrollDeltaPx,
+          scrollVelocityPxMs,
+          rawFastScroll,
+          isFastScroll,
+          suppressedFastScroll,
+          scrollTop: el.scrollTop,
+          clientHeight: el.clientHeight,
+          scrollHeight: el.scrollHeight,
+          atBottom,
+          virtualRows: rowVirtualizer.getVirtualItems().length,
+          overscan: outputOverscanRef.current,
+          scrollSeekPlaceholder:
+            outputOverscanRef.current === OUTPUT_ACTIVE_SCROLL_OVERSCAN,
+          totalRows: rowsRef.current.length,
+        });
+      }
+    }
+    const durationMs = performance.now() - startedAt;
+    const profilerState = getOutputProfilerState();
+    if (profilerState.enabled && durationMs >= profilerState.slowThresholdMs) {
+      logOutputProfilerEvent("scrollHandler", {
+        durationMs,
+        scrollDeltaPx,
+        scrollVelocityPxMs,
+        rawFastScroll,
+        isFastScroll,
+        suppressedFastScroll,
+        scrollTop: el.scrollTop,
+        clientHeight: el.clientHeight,
+        scrollHeight: el.scrollHeight,
+        atBottom,
+        virtualRows: rowVirtualizer.getVirtualItems().length,
+        overscan: outputOverscanRef.current,
+        scrollSeekPlaceholder:
+          outputOverscanRef.current === OUTPUT_ACTIVE_SCROLL_OVERSCAN,
+        totalRows: rowsRef.current.length,
+      });
+    }
+  }, [enterFastScrollOverscan, rowVirtualizer, scheduleOverscanRestore]);
 
   const clearNavigationFrame = useCallback(() => {
     if (navigationFrameRef.current != null) {
@@ -899,95 +1304,63 @@ export const OutputSection: React.FC = () => {
   }, []);
 
   const finalizePendingNavigation = useCallback(() => {
-      clearNavigationFrame();
-      pendingNavigationRef.current = null;
-      setNavigationPendingRowIndex(null);
-      isProgrammaticScroll.current = false;
+    clearNavigationFrame();
+    pendingNavigationRef.current = null;
+    setNavigationPendingRowIndex(null);
+    isProgrammaticScroll.current = false;
 
-      // Settle TanStack Virtual's internal reconcileScroll loop immediately.
-      // scrollToIndex leaves an active scrollState that keeps re-calculating the
-      // target row position on every animation frame for up to 5 s. By calling
-      // scrollToOffset with the confirmed landing position, we replace the
-      // index-based scrollState with an offset-based one whose targetOffset ≈
-      // scrollOffset, satisfying approxEqual on the next rAF so reconcileScroll
-      // clears scrollState and stops issuing corrective scrolls.
-      const landingScrollTop = outputRef.current?.scrollTop ?? 0;
-      rowVirtualizer.scrollToOffset(landingScrollTop, { behavior: "auto" });
+    // Settle TanStack Virtual's internal reconcileScroll loop immediately.
+    // scrollToIndex leaves an active scrollState that keeps re-calculating the
+    // target row position on every animation frame for up to 5 s. By calling
+    // scrollToOffset with the confirmed landing position, we replace the
+    // index-based scrollState with an offset-based one whose targetOffset ≈
+    // scrollOffset, satisfying approxEqual on the next rAF so reconcileScroll
+    // clears scrollState and stops issuing corrective scrolls.
+    const landingScrollTop = outputRef.current?.scrollTop ?? 0;
+    rowVirtualizer.scrollToOffset(landingScrollTop, { behavior: "auto" });
 
-      // Start the post-navigation settling window. During this window
-      // shouldAdjustScrollPositionOnItemSizeChange returns false, preventing
-      // TanStack Virtual from issuing scroll corrections as newly-rendered rows
-      // near the destination get measured. Without this, correction feedback
-      // loops cause the scroll position to oscillate for several seconds.
-      postNavSettlingRef.current = true;
-      if (postNavSettlingTimerRef.current !== null) {
-        clearTimeout(postNavSettlingTimerRef.current);
-      }
-      postNavSettlingTimerRef.current = setTimeout(() => {
-        postNavSettlingRef.current = false;
-        postNavSettlingTimerRef.current = null;
-      }, 1000);
-
-    },
-    [clearNavigationFrame, rowVirtualizer]
-  );
+    // Start the post-navigation settling window. During this window
+    // shouldAdjustScrollPositionOnItemSizeChange returns false, preventing
+    // TanStack Virtual from issuing scroll corrections as newly-rendered rows
+    // near the destination get measured. Without this, correction feedback
+    // loops cause the scroll position to oscillate for several seconds.
+    postNavSettlingRef.current = true;
+    if (postNavSettlingTimerRef.current !== null) {
+      clearTimeout(postNavSettlingTimerRef.current);
+    }
+    postNavSettlingTimerRef.current = setTimeout(() => {
+      postNavSettlingRef.current = false;
+      postNavSettlingTimerRef.current = null;
+    }, 1000);
+  }, [clearNavigationFrame, rowVirtualizer]);
 
   const schedulePendingNavigationStabilization = useCallback(() => {
-      clearNavigationFrame();
-      navigationFrameRef.current = requestAnimationFrame(() => {
-        navigationFrameRef.current = null;
-        const pending = pendingNavigationRef.current;
-        if (!pending) {
-          return;
-        }
+    clearNavigationFrame();
+    navigationFrameRef.current = requestAnimationFrame(() => {
+      navigationFrameRef.current = null;
+      const pending = pendingNavigationRef.current;
+      if (!pending) {
+        return;
+      }
 
-        const now = performance.now();
-        const currentMeasurementVersion = measurementVersionRef.current;
-        if (currentMeasurementVersion !== pending.lastMeasuredVersion) {
-          pending.lastMeasuredVersion = currentMeasurementVersion;
-          pending.lastMeasurementChangeAt = now;
-        }
+      const now = performance.now();
+      const currentMeasurementVersion = measurementVersionRef.current;
+      if (currentMeasurementVersion !== pending.lastMeasuredVersion) {
+        pending.lastMeasuredVersion = currentMeasurementVersion;
+        pending.lastMeasurementChangeAt = now;
+      }
 
-        const scrollElement = outputRef.current;
-        if (!scrollElement) {
-          finalizePendingNavigation();
-          return;
-        }
+      const scrollElement = outputRef.current;
+      if (!scrollElement) {
+        finalizePendingNavigation();
+        return;
+      }
 
-        const rowElement = findRenderedRowElement(scrollElement, pending.rowIndex);
-        if (!rowElement) {
-          if (
-            pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
-            now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
-          ) {
-            finalizePendingNavigation();
-            return;
-          }
-
-          pending.attempts += 1;
-          rowVirtualizer.scrollToIndex(pending.rowIndex, {
-            align: pending.align,
-            behavior: "auto",
-          });
-          schedulePendingNavigationStabilization();
-          return;
-        }
-
-        const isAligned = alignRowElementToViewport(
-          scrollElement,
-          rowElement,
-          pending.align
-        );
-        if (isAligned) {
-          // Finalize immediately on first aligned frame. Calling scrollToOffset
-          // below clears TanStack's reconcileScroll scrollState, preventing
-          // further corrective scrolls. The 1-s postNavSettling window then
-          // blocks shouldAdjustScrollPositionOnItemSizeChange so late-arriving
-          // measurements cannot shift the viewport away from the target.
-          finalizePendingNavigation();
-          return;
-        }
-
+      const rowElement = findRenderedRowElement(
+        scrollElement,
+        pending.rowIndex
+      );
+      if (!rowElement) {
         if (
           pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
           now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
@@ -1002,10 +1375,40 @@ export const OutputSection: React.FC = () => {
           behavior: "auto",
         });
         schedulePendingNavigationStabilization();
+        return;
+      }
+
+      const isAligned = alignRowElementToViewport(
+        scrollElement,
+        rowElement,
+        pending.align
+      );
+      if (isAligned) {
+        // Finalize immediately on first aligned frame. Calling scrollToOffset
+        // below clears TanStack's reconcileScroll scrollState, preventing
+        // further corrective scrolls. The 1-s postNavSettling window then
+        // blocks shouldAdjustScrollPositionOnItemSizeChange so late-arriving
+        // measurements cannot shift the viewport away from the target.
+        finalizePendingNavigation();
+        return;
+      }
+
+      if (
+        pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
+        now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
+      ) {
+        finalizePendingNavigation();
+        return;
+      }
+
+      pending.attempts += 1;
+      rowVirtualizer.scrollToIndex(pending.rowIndex, {
+        align: pending.align,
+        behavior: "auto",
       });
-    },
-    [clearNavigationFrame, finalizePendingNavigation, rowVirtualizer]
-  );
+      schedulePendingNavigationStabilization();
+    });
+  }, [clearNavigationFrame, finalizePendingNavigation, rowVirtualizer]);
 
   // Auto-scroll effect.
   useEffect(() => {
@@ -1060,7 +1463,8 @@ export const OutputSection: React.FC = () => {
   const totalCliSteps = useMemo(() => {
     const seen = new Set<string>();
     for (const msg of allMessages) {
-      if (msg.type === "cli") seen.add(`${msg.target.kind}:${msg.target.index}`);
+      if (msg.type === "cli")
+        seen.add(`${msg.target.kind}:${msg.target.index}`);
     }
     return seen.size;
   }, [allMessages]);
@@ -1244,15 +1648,138 @@ export const OutputSection: React.FC = () => {
 
   // Check if there's any output
   const hasOutput = rows.length > 0;
+  const isOutputScrollSeeking =
+    outputOverscan === OUTPUT_ACTIVE_SCROLL_OVERSCAN;
   const virtualRows = rowVirtualizer.getVirtualItems();
+  useEffect(() => {
+    if (!shouldLogOutputVirtualRange()) {
+      return;
+    }
+
+    const first = virtualRows[0];
+    const last = virtualRows[virtualRows.length - 1];
+    const signature = `${first?.index ?? -1}:${last?.index ?? -1}:${virtualRows.length}:${rows.length}`;
+    if (signature === lastVirtualRangeRef.current) {
+      return;
+    }
+
+    lastVirtualRangeRef.current = signature;
+    logOutputProfilerEvent("virtualRange", {
+      firstIndex: first?.index ?? null,
+      lastIndex: last?.index ?? null,
+      virtualRows: virtualRows.length,
+      overscan: outputOverscan,
+      scrollSeekPlaceholder: isOutputScrollSeeking,
+      totalRows: rows.length,
+      totalSize: rowVirtualizer.getTotalSize(),
+    });
+  }, [
+    isOutputScrollSeeking,
+    outputOverscan,
+    rowVirtualizer,
+    rows.length,
+    virtualRows,
+  ]);
+
+  const handleOutputProfilerRender = useCallback(
+    (
+      id: string,
+      phase: "mount" | "update" | "nested-update",
+      actualDuration: number,
+      baseDuration: number,
+      startTime: number,
+      commitTime: number
+    ) => {
+      const profilerState = getOutputProfilerState();
+      if (
+        !profilerState.enabled ||
+        actualDuration < profilerState.slowThresholdMs
+      ) {
+        return;
+      }
+
+      logOutputProfilerEvent("reactCommit", {
+        id,
+        phase,
+        actualDuration,
+        baseDuration,
+        renderToCommitGap: commitTime - startTime,
+        virtualRows: virtualRows.length,
+        overscan: outputOverscan,
+        scrollSeekPlaceholder: isOutputScrollSeeking,
+        scrollSeekRestorePendingMs:
+          scrollSeekRestoreRequestedAtRef.current != null
+            ? commitTime - scrollSeekRestoreRequestedAtRef.current
+            : undefined,
+        totalRows: rows.length,
+        measurementVersion,
+      });
+    },
+    [
+      isOutputScrollSeeking,
+      measurementVersion,
+      outputOverscan,
+      rows.length,
+      virtualRows.length,
+    ]
+  );
   const isNavigationTargetVirtualized =
     navigationPendingRowIndex != null &&
     virtualRows.some((row) => row.index === navigationPendingRowIndex);
+  // The overlay is a global navigation/empty-range affordance. Scroll-seek
+  // placeholders are different: they replace expensive row DOM while the user
+  // is actively scrolling, so avoid stacking the global overlay on top of them.
   const showVirtualizationOverlay =
-    (hasOutput &&
+    !isOutputScrollSeeking &&
+    ((hasOutput &&
       rows.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
       virtualRows.length === 0) ||
-    (navigationPendingRowIndex !== null && !isNavigationTargetVirtualized);
+      (navigationPendingRowIndex !== null && !isNavigationTargetVirtualized));
+
+  useEffect(() => {
+    if (isOutputScrollSeeking || !hasOutput) {
+      return;
+    }
+
+    const restoreRequestedAt = scrollSeekRestoreRequestedAtRef.current;
+    const scrollSeekStartedAt = scrollSeekStartedAtRef.current;
+    if (restoreRequestedAt == null) {
+      return;
+    }
+
+    const now = performance.now();
+    logOutputProfilerEvent("scrollSeekRowsVisible", {
+      restoreToVisibleMs: now - restoreRequestedAt,
+      scrollSeekTotalMs:
+        scrollSeekStartedAt != null ? now - scrollSeekStartedAt : undefined,
+      virtualRows: virtualRows.length,
+      overscan: outputOverscan,
+      totalRows: rows.length,
+      measurementVersion,
+    });
+    scrollSeekSettlingUntilRef.current = now + OUTPUT_SCROLL_SEEK_SETTLE_MS;
+    if (fullOverscanRestoreTimerRef.current !== null) {
+      clearTimeout(fullOverscanRestoreTimerRef.current);
+    }
+    if (outputOverscanRef.current === OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN) {
+      fullOverscanRestoreTimerRef.current = setTimeout(() => {
+        fullOverscanRestoreTimerRef.current = null;
+        setOutputOverscanMode(OUTPUT_VIRTUALIZER_OVERSCAN, "idle", {
+          phase: "restore-full-overscan",
+        });
+      }, OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS);
+    }
+    scrollSeekRestoreRequestedAtRef.current = null;
+    scrollSeekStartedAtRef.current = null;
+  }, [
+    hasOutput,
+    isOutputScrollSeeking,
+    measurementVersion,
+    outputOverscan,
+    rows.length,
+    setOutputOverscanMode,
+    virtualRows.length,
+  ]);
 
   useEffect(() => {
     if (
@@ -1379,188 +1906,204 @@ export const OutputSection: React.FC = () => {
 
   // ── Minimap steps array ────────────────────────────────────────────────────
   const minimapSteps = useMemo((): MinimapStep[] => {
-    const totalSize = Math.max(1, rowLayout.totalSize);
+    return measureOutputPhase(
+      "minimapSteps",
+      {
+        targets: uniqueStepTargets.length,
+        rows: rows.length,
+        totalSize: rowLayout.totalSize,
+      },
+      () => {
+        const totalSize = Math.max(1, rowLayout.totalSize);
 
-    return uniqueStepTargets.flatMap((msgTarget) => {
-      const key = `${msgTarget.kind}:${msgTarget.index}`;
-      const firstRowIndex = firstRowIndexByTarget.get(key);
-      if (firstRowIndex === undefined) return [];
+        return uniqueStepTargets.flatMap((msgTarget) => {
+          const key = `${msgTarget.kind}:${msgTarget.index}`;
+          const firstRowIndex = firstRowIndexByTarget.get(key);
+          if (firstRowIndex === undefined) return [];
 
-      const kind = msgTarget.kind;
-      const stepIndex = msgTarget.index;
-      const isFinalStep = kind === FINAL_STEP_PHASES.FINAL_STEP;
-      const workflowStep = isFinalStep ? finalStep : steps[stepIndex];
-      const label = isFinalStep
-        ? getStepName(workflowStep, `Final Step Loop ${stepIndex + 1}`)
-        : getStepName(
-            workflowStep,
-            getQueueStepFallbackName(workflowStep, stepIndex)
+          const kind = msgTarget.kind;
+          const stepIndex = msgTarget.index;
+          const isFinalStep = kind === FINAL_STEP_PHASES.FINAL_STEP;
+          const workflowStep = isFinalStep ? finalStep : steps[stepIndex];
+          const label = isFinalStep
+            ? getStepName(workflowStep, `Final Step Loop ${stepIndex + 1}`)
+            : getStepName(
+                workflowStep,
+                getQueueStepFallbackName(workflowStep, stepIndex)
+              );
+          const scrollFraction =
+            stepScrollFractions.get(key) ??
+            rowLayout.rowStartsByIndex[firstRowIndex] / totalSize;
+          const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
+            if (
+              row.rowKind !== "structured-event" ||
+              row.target?.kind !== msgTarget.kind ||
+              row.target?.index !== msgTarget.index ||
+              !row.diff
+            ) {
+              return [];
+            }
+
+            return [
+              {
+                key: row.diff.key,
+                rowKey: row.key,
+                scrollFraction:
+                  (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
+                heightFraction:
+                  estimateOutputDiffBlockHeight(row, outputFontSize) /
+                  totalSize,
+                addedLines: row.diff.addedLines,
+                removedLines: row.diff.removedLines,
+                runs: row.diff.runs,
+                isCollapsed: row.diff.isCollapsed,
+              },
+            ];
+          });
+
+          const noActions: MinimapStep["undoActions"] = {
+            undo: null,
+            redo: null,
+          };
+          const stepOutputs = stepOutputsMap.get(key) ?? [];
+
+          if (!allowUndoActions) {
+            return [
+              {
+                key,
+                kind,
+                stepIndex,
+                firstMessageIndex: firstRowIndex,
+                scrollFraction,
+                label,
+                undoActions: noActions,
+                diffBlocks,
+              },
+            ];
+          }
+
+          const lastCliIdx = lastCliIndexPerStep.get(key);
+          if (lastCliIdx === undefined) {
+            return [
+              {
+                key,
+                kind,
+                stepIndex,
+                firstMessageIndex: firstRowIndex,
+                scrollFraction,
+                label,
+                undoActions: noActions,
+                diffBlocks,
+              },
+            ];
+          }
+
+          const lastMsg = allMessages[lastCliIdx];
+          const lastOutput = lastMsg?.data as CliOutputType | undefined;
+          if (!lastOutput || lastOutput.isStreaming) {
+            return [
+              {
+                key,
+                kind,
+                stepIndex,
+                firstMessageIndex: firstRowIndex,
+                scrollFraction,
+                label,
+                undoActions: noActions,
+                diffBlocks,
+              },
+            ];
+          }
+
+          const undoTarget: UndoExecutionTarget = isFinalStep
+            ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
+            : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
+
+          let effectiveSnapshot: WorkspaceSnapshot | undefined;
+          let effectiveUndoRecord: UndoRecord | undefined;
+
+          if (isViewingHistory && historyOutputs) {
+            effectiveSnapshot = isFinalStep
+              ? historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot
+              : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
+            effectiveUndoRecord = isFinalStep
+              ? historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord
+              : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
+          } else {
+            effectiveSnapshot = isFinalStep
+              ? finalStepWorkspaceSnapshots[stepIndex]
+              : workspaceSnapshots[stepIndex];
+            effectiveUndoRecord =
+              undoRecords[
+                isFinalStep ? `finalStep-${stepIndex}` : `queue-${stepIndex}`
+              ];
+          }
+
+          const workspacePath = lastOutput.workingDirectory ?? "";
+          const actions = computePromptUndoActions(
+            stepOutputs,
+            effectiveUndoRecord,
+            effectiveSnapshot
           );
-      const scrollFraction =
-        stepScrollFractions.get(key) ??
-        rowLayout.rowStartsByIndex[firstRowIndex] / totalSize;
-      const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
-        if (
-          row.rowKind !== "structured-event" ||
-          row.target?.kind !== msgTarget.kind ||
-          row.target?.index !== msgTarget.index ||
-          !row.diff
-        ) {
-          return [];
-        }
 
-        return [
-          {
-            key: row.diff.key,
-            rowKey: row.key,
-            scrollFraction: (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
-            heightFraction:
-              estimateOutputDiffBlockHeight(row, outputFontSize) / totalSize,
-            addedLines: row.diff.addedLines,
-            removedLines: row.diff.removedLines,
-            runs: row.diff.runs,
-            isCollapsed: row.diff.isCollapsed,
-          },
-        ];
-      });
+          const undoActions: MinimapStep["undoActions"] = {
+            redo: actions.redo
+              ? {
+                  label: actions.redo.label,
+                  onTrigger: () => {
+                    setMinimapDialogState({
+                      mode: "redo",
+                      target: undoTarget,
+                      workspacePath,
+                      redoInstructions: effectiveUndoRecord?.redoInstructions,
+                      requestId: generateId(),
+                    });
+                  },
+                }
+              : null,
+            undo: actions.undo
+              ? {
+                  label: actions.undo.label,
+                  onTrigger: () => {
+                    const alreadyUndone =
+                      effectiveUndoRecord != null &&
+                      effectiveUndoRecord.isRedone !== true
+                        ? effectiveUndoRecord.redoInstructions
+                        : undefined;
+                    const input = buildUndoDialogInputForPrompt(
+                      undoTarget,
+                      stepOutputs,
+                      effectiveSnapshot,
+                      workspacePath,
+                      alreadyUndone
+                    );
+                    setMinimapDialogState({
+                      mode: "undo",
+                      target: undoTarget,
+                      workspacePath,
+                      input,
+                      requestId: generateId(),
+                    });
+                  },
+                }
+              : null,
+          };
 
-      const noActions: MinimapStep["undoActions"] = { undo: null, redo: null };
-      const stepOutputs = stepOutputsMap.get(key) ?? [];
-
-      if (!allowUndoActions) {
-        return [
-          {
-            key,
-            kind,
-            stepIndex,
-            firstMessageIndex: firstRowIndex,
-            scrollFraction,
-            label,
-            undoActions: noActions,
-            diffBlocks,
-          },
-        ];
+          return [
+            {
+              key,
+              kind,
+              stepIndex,
+              firstMessageIndex: firstRowIndex,
+              scrollFraction,
+              label,
+              undoActions,
+              diffBlocks,
+            },
+          ];
+        });
       }
-
-      const lastCliIdx = lastCliIndexPerStep.get(key);
-      if (lastCliIdx === undefined) {
-        return [
-          {
-            key,
-            kind,
-            stepIndex,
-            firstMessageIndex: firstRowIndex,
-            scrollFraction,
-            label,
-            undoActions: noActions,
-            diffBlocks,
-          },
-        ];
-      }
-
-      const lastMsg = allMessages[lastCliIdx];
-      const lastOutput = lastMsg?.data as CliOutputType | undefined;
-      if (!lastOutput || lastOutput.isStreaming) {
-        return [
-          {
-            key,
-            kind,
-            stepIndex,
-            firstMessageIndex: firstRowIndex,
-            scrollFraction,
-            label,
-            undoActions: noActions,
-            diffBlocks,
-          },
-        ];
-      }
-
-      const undoTarget: UndoExecutionTarget = isFinalStep
-        ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
-        : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
-
-      let effectiveSnapshot: WorkspaceSnapshot | undefined;
-      let effectiveUndoRecord: UndoRecord | undefined;
-
-      if (isViewingHistory && historyOutputs) {
-        effectiveSnapshot = isFinalStep
-          ? historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot
-          : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
-        effectiveUndoRecord = isFinalStep
-          ? historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord
-          : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
-      } else {
-        effectiveSnapshot = isFinalStep
-          ? finalStepWorkspaceSnapshots[stepIndex]
-          : workspaceSnapshots[stepIndex];
-        effectiveUndoRecord = undoRecords[
-          isFinalStep ? `finalStep-${stepIndex}` : `queue-${stepIndex}`
-        ];
-      }
-
-      const workspacePath = lastOutput.workingDirectory ?? "";
-      const actions = computePromptUndoActions(
-        stepOutputs,
-        effectiveUndoRecord,
-        effectiveSnapshot
-      );
-
-      const undoActions: MinimapStep["undoActions"] = {
-        redo: actions.redo
-          ? {
-              label: actions.redo.label,
-              onTrigger: () => {
-                setMinimapDialogState({
-                  mode: "redo",
-                  target: undoTarget,
-                  workspacePath,
-                  redoInstructions: effectiveUndoRecord?.redoInstructions,
-                  requestId: generateId(),
-                });
-              },
-            }
-          : null,
-        undo: actions.undo
-          ? {
-              label: actions.undo.label,
-              onTrigger: () => {
-                const alreadyUndone =
-                  effectiveUndoRecord != null &&
-                  effectiveUndoRecord.isRedone !== true
-                    ? effectiveUndoRecord.redoInstructions
-                    : undefined;
-                const input = buildUndoDialogInputForPrompt(
-                  undoTarget,
-                  stepOutputs,
-                  effectiveSnapshot,
-                  workspacePath,
-                  alreadyUndone
-                );
-                setMinimapDialogState({
-                  mode: "undo",
-                  target: undoTarget,
-                  workspacePath,
-                  input,
-                  requestId: generateId(),
-                });
-              },
-            }
-          : null,
-      };
-
-      return [
-        {
-          key,
-          kind,
-          stepIndex,
-          firstMessageIndex: firstRowIndex,
-          scrollFraction,
-          label,
-          undoActions,
-          diffBlocks,
-        },
-      ];
-    });
+    );
   }, [
     allMessages,
     allowUndoActions,
@@ -1643,8 +2186,8 @@ export const OutputSection: React.FC = () => {
         row.undoRecord != null && row.undoRecord.isRedone !== true;
 
       if (showRedo) {
-        const fileRedoInstruction = row.undoRecord?.redoInstructions.find((item) =>
-          sameFilePath(item.path, request.path)
+        const fileRedoInstruction = row.undoRecord?.redoInstructions.find(
+          (item) => sameFilePath(item.path, request.path)
         );
         if (fileRedoInstruction) {
           setMinimapDialogState({
@@ -1737,11 +2280,7 @@ export const OutputSection: React.FC = () => {
   );
 
   const handleToolCallExpansionChange = useCallback(
-    (
-      rowKey: string,
-      section: ToolCallExpansionSection,
-      expanded: boolean
-    ) => {
+    (rowKey: string, section: ToolCallExpansionSection, expanded: boolean) => {
       invalidateMeasuredRow(rowKey);
       setToolCallExpansionState((previous) => {
         const currentState =
@@ -2200,6 +2739,9 @@ export const OutputSection: React.FC = () => {
             className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
             style={{ overflowAnchor: "none" }}
             onScroll={handleScroll}
+            onWheel={() => {
+              lastUserScrollInputAtRef.current = performance.now();
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               openContextMenu(e.clientX, e.clientY, e.currentTarget);
@@ -2211,45 +2753,65 @@ export const OutputSection: React.FC = () => {
                 Output will appear here during execution
               </p>
             ) : (
-              <div
-                style={{
-                  height: `${rowVirtualizer.getTotalSize()}px`,
-                  position: "relative",
-                  width: "100%",
-                }}
+              <Profiler
+                id="OutputVirtualRows"
+                onRender={handleOutputProfilerRender}
               >
-                {virtualRows.map((virtualRow) => {
-                  const row = rows[virtualRow.index];
-                  if (!row) return null;
+                <div
+                  style={{
+                    height: `${rowVirtualizer.getTotalSize()}px`,
+                    position: "relative",
+                    width: "100%",
+                  }}
+                >
+                  {virtualRows.map((virtualRow) => {
+                    const row = rows[virtualRow.index];
+                    if (!row) return null;
+                    const renderScrollSeekPlaceholder =
+                      isOutputScrollSeeking && !isNavigationTargetVirtualized;
 
-                  return (
-                    <div
-                      key={virtualRow.key}
-                      ref={measureRowElement}
-                      data-index={virtualRow.index}
-                      className="flow-root"
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        transform: `translateY(${virtualRow.start}px)`,
-                        width: "100%",
-                      }}
-                    >
-                      <OutputRow
-                        row={row}
-                        isExecutionActive={isExecutionActive}
-                        onBackToLive={handleBackToLive}
-                        onPromptUndo={handlePromptUndo}
-                        onPromptRedo={handlePromptRedo}
-                        onFileUndo={handleFileUndo}
-                        onDiffCollapsedChange={handleDiffCollapsedChange}
-                        onDiffGapExpand={handleDiffGapExpand}
-                        onToolCallExpansionChange={handleToolCallExpansionChange}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        ref={
+                          renderScrollSeekPlaceholder
+                            ? undefined
+                            : measureRowElement
+                        }
+                        data-index={virtualRow.index}
+                        className="flow-root"
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          transform: `translateY(${virtualRow.start}px)`,
+                          width: "100%",
+                        }}
+                      >
+                        {renderScrollSeekPlaceholder ? (
+                          <OutputScrollSeekPlaceholder
+                            row={row}
+                            height={virtualRow.size}
+                          />
+                        ) : (
+                          <OutputRow
+                            row={row}
+                            isExecutionActive={isExecutionActive}
+                            onBackToLive={handleBackToLive}
+                            onPromptUndo={handlePromptUndo}
+                            onPromptRedo={handlePromptRedo}
+                            onFileUndo={handleFileUndo}
+                            onDiffCollapsedChange={handleDiffCollapsedChange}
+                            onDiffGapExpand={handleDiffGapExpand}
+                            onToolCallExpansionChange={
+                              handleToolCallExpansionChange
+                            }
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Profiler>
             )}
           </div>
 
@@ -2264,12 +2826,14 @@ export const OutputSection: React.FC = () => {
 
           {/* Minimap rail */}
           {hasOutput && (
-            <OutputMinimap
-              steps={minimapSteps}
-              scrollContainerRef={outputRef}
-              contentHeight={rowLayout.totalSize}
-              onStepClick={handleMinimapStepClick}
-            />
+            <Profiler id="OutputMinimap" onRender={handleOutputProfilerRender}>
+              <OutputMinimap
+                steps={minimapSteps}
+                scrollContainerRef={outputRef}
+                contentHeight={rowLayout.totalSize}
+                onStepClick={handleMinimapStepClick}
+              />
+            </Profiler>
           )}
         </div>
       )}
@@ -2412,8 +2976,9 @@ export const OutputSection: React.FC = () => {
                 </span>
               )}
               <p className="text-xxs text-description-fg mt-1">
-                Leave blank to export all {totalCliSteps > 0 ? totalCliSteps : ""}{" "}
-                step{totalCliSteps !== 1 ? "s" : ""}.
+                Leave blank to export all{" "}
+                {totalCliSteps > 0 ? totalCliSteps : ""} step
+                {totalCliSteps !== 1 ? "s" : ""}.
               </p>
             </div>
           </div>

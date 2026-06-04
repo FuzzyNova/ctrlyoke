@@ -1,5 +1,9 @@
 import React, { memo, useState, useCallback, useEffect, useRef } from "react";
 import { type FinalStepPhase } from "../../types/messages";
+import {
+  getOutputProfilerState,
+  logOutputProfilerEvent,
+} from "@utils/outputPerformance";
 
 // ============================================================================
 // Types
@@ -104,6 +108,10 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isThumbHovered, setIsThumbHovered] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
+  const stepsRef = useRef(steps);
+  const contentHeightRef = useRef(contentHeight);
+  stepsRef.current = steps;
+  contentHeightRef.current = contentHeight;
 
   // Dismiss the pinned popup when clicking/tapping anywhere outside it.
   // Uses only 'click' (not 'touchend') to avoid a race where touchend fires
@@ -140,14 +148,40 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     if (!el) return;
 
     const update = () => {
+      const startedAt = performance.now();
       const { clientHeight } = el;
       const railHeight = railRef.current?.clientHeight ?? 0;
       const sharedContentHeight = getSharedContentHeight();
+      const logUpdateDuration = () => {
+        const durationMs = performance.now() - startedAt;
+        const profilerState = getOutputProfilerState();
+        if (
+          !profilerState.enabled ||
+          durationMs < profilerState.slowThresholdMs
+        ) {
+          return;
+        }
+
+        logOutputProfilerEvent("minimapViewportUpdate", {
+          durationMs,
+          steps: stepsRef.current.length,
+          diffBlocks: stepsRef.current.reduce(
+            (count, step) => count + step.diffBlocks.length,
+            0
+          ),
+          scrollTop: el.scrollTop,
+          clientHeight,
+          railHeight,
+          sharedContentHeight,
+          contentHeight: contentHeightRef.current,
+        });
+      };
 
       if (sharedContentHeight <= clientHeight || railHeight === 0) {
         setViewportPct((prev) =>
           prev.top === 0 && prev.height === 100 ? prev : { top: 0, height: 100 }
         );
+        logUpdateDuration();
         return;
       }
 
@@ -169,6 +203,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           ? prev
           : next
       );
+      logUpdateDuration();
     };
 
     update();

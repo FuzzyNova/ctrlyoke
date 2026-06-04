@@ -1,9 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { Button } from "@components/shared/Button";
+import { SettingToggleRow } from "@components/shared/SettingToggleRow";
+import {
+  configureOutputProfiler,
+  getOutputProfilerState,
+  setOutputProfilingEnabled,
+} from "@utils/outputPerformance";
 
 const TERMINATION_WARNING =
   "Reload and restart actions terminate active workflows, PTY sessions, and CLI processes.";
@@ -24,6 +30,9 @@ function formatBuildDate(value: string): string {
 
 export function DeveloperSection() {
   const vscode = useVsCodeApi();
+  const [outputProfilerState, setOutputProfilerState] = useState(() =>
+    getOutputProfilerState()
+  );
   const dev = useSettingsStore((state) => state.dev);
   const devBuild = useSettingsStore((state) => state.devBuild);
   const clearDevBuildOutput = useSettingsStore(
@@ -97,6 +106,35 @@ export function DeveloperSection() {
     vscode.postMessage({ type: action.messageType });
   }
 
+  function updateOutputProfilerEnabled(enabled: boolean) {
+    setOutputProfilerState(
+      setOutputProfilingEnabled(
+        enabled,
+        enabled
+          ? {
+              slowThresholdMs: 8,
+              logMeasurements: true,
+              logVirtualRanges: true,
+              logAllScrollFrames: false,
+              logLongFrames: true,
+            }
+          : undefined
+      )
+    );
+    showToast(
+      enabled
+        ? "Output performance profiling enabled."
+        : "Output performance profiling disabled.",
+      "info"
+    );
+  }
+
+  function updateOutputProfilerOptions(
+    options: Parameters<typeof configureOutputProfiler>[0]
+  ) {
+    setOutputProfilerState(configureOutputProfiler(options));
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -159,6 +197,59 @@ export function DeveloperSection() {
         >
           Reset Layout to Defaults
         </Button>
+      </div>
+
+      <div className="border-t border-panel-border pt-3 space-y-2">
+        <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+          Output Profiling
+        </h3>
+        <p className="text-xs text-description-fg">
+          Logs targeted output virtualization timing through the webview logger.
+          Reproduce slow scrolling, then filter logs for{" "}
+          <span className="font-mono">[FlightPath Output Profile]</span>.
+        </p>
+        <SettingToggleRow
+          label="Enable output performance profiling"
+          description={`Logs slow phases at ${outputProfilerState.slowThresholdMs}ms or slower.`}
+          checked={outputProfilerState.enabled}
+          onChange={updateOutputProfilerEnabled}
+        />
+        {outputProfilerState.enabled && (
+          <div className="pl-7 space-y-1">
+            <SettingToggleRow
+              label="Log row measurements"
+              description="Includes mounted row measurement cost and measured-vs-estimated height deltas."
+              checked={outputProfilerState.logMeasurements}
+              onChange={(checked) =>
+                updateOutputProfilerOptions({ logMeasurements: checked })
+              }
+            />
+            <SettingToggleRow
+              label="Log virtual ranges"
+              description="Logs TanStack Virtual window changes while scrolling."
+              checked={outputProfilerState.logVirtualRanges}
+              onChange={(checked) =>
+                updateOutputProfilerOptions({ logVirtualRanges: checked })
+              }
+            />
+            <SettingToggleRow
+              label="Log every scroll frame"
+              description="Verbose; use only for short reproductions."
+              checked={outputProfilerState.logAllScrollFrames}
+              onChange={(checked) =>
+                updateOutputProfilerOptions({ logAllScrollFrames: checked })
+              }
+            />
+            <SettingToggleRow
+              label="Log long frames"
+              description="Captures requestAnimationFrame gaps and browser long-task entries when available."
+              checked={outputProfilerState.logLongFrames}
+              onChange={(checked) =>
+                updateOutputProfilerOptions({ logLongFrames: checked })
+              }
+            />
+          </div>
+        )}
       </div>
 
       <div className="border-t border-panel-border pt-3 space-y-2">
