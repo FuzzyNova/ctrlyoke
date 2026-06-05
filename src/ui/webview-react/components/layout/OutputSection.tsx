@@ -266,6 +266,12 @@ interface ViewportRowAnchor {
   offsetTop: number;
 }
 
+interface ActiveViewportRowAnchor extends ViewportRowAnchor {
+  expiresAt: number;
+  reason: "measurement-flush" | "scroll-seek-restore";
+  restoreCount: number;
+}
+
 function captureViewportRowAnchor(
   scrollElement: HTMLDivElement
 ): ViewportRowAnchor | null {
@@ -732,6 +738,7 @@ export const OutputSection: React.FC = () => {
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
   const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const pendingMeasurementFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewportAnchorGuardRef = useRef<ActiveViewportRowAnchor | null>(null);
   // Set true during flush so TanStack's rAF-deferred scroll corrections don't
   // re-activate the scroll freeze in handleScroll.
   const isMeasurementFlushInProgressRef = useRef(false);
@@ -1219,6 +1226,115 @@ export const OutputSection: React.FC = () => {
     [updateRowMeasurementCache]
   );
 
+  const activateViewportAnchorGuard = useCallback(
+    (
+      anchor: ViewportRowAnchor | null,
+      reason: ActiveViewportRowAnchor["reason"]
+    ) => {
+      if (!anchor) return;
+
+      const expiresAt =
+        performance.now() +
+        OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS +
+        OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS +
+        800;
+      viewportAnchorGuardRef.current = {
+        ...anchor,
+        expiresAt,
+        reason,
+        restoreCount: 0,
+      };
+
+      if (isOutputProfilingEnabled()) {
+        logOutputProfilerEvent("viewportAnchorGuard", {
+          phase: "activate",
+          reason,
+          anchorRowKey: anchor.rowKey,
+          anchorOffsetTop: anchor.offsetTop,
+          ttlMs: Math.round(expiresAt - performance.now()),
+        });
+      }
+    },
+    []
+  );
+
+  const clearViewportAnchorGuard = useCallback((reason: string) => {
+    const guard = viewportAnchorGuardRef.current;
+    if (!guard) return;
+    viewportAnchorGuardRef.current = null;
+    if (isOutputProfilingEnabled()) {
+      logOutputProfilerEvent("viewportAnchorGuard", {
+        phase: "clear",
+        reason,
+        anchorRowKey: guard.rowKey,
+        restoreCount: guard.restoreCount,
+      });
+    }
+  }, []);
+
+  const restoreViewportAnchorGuard = useCallback(
+    (phase: "scroll-correction" | "raf-1" | "raf-2") => {
+      const guard = viewportAnchorGuardRef.current;
+      const scrollElement = outputRef.current;
+      const now = performance.now();
+      if (!guard || !scrollElement) {
+        return { active: false, found: false, appliedDelta: 0 };
+      }
+
+      if (now >= guard.expiresAt) {
+        clearViewportAnchorGuard("expired");
+        return { active: false, found: false, appliedDelta: 0 };
+      }
+
+      const result = restoreViewportRowAnchor(scrollElement, guard);
+      lastScrollTopRef.current = scrollElement.scrollTop;
+      if (result.found) {
+        viewportAnchorGuardRef.current = {
+          ...guard,
+          restoreCount: guard.restoreCount + (Math.abs(result.appliedDelta) >= 1 ? 1 : 0),
+        };
+      } else {
+        const replacement = captureViewportRowAnchor(scrollElement);
+        if (replacement) {
+          viewportAnchorGuardRef.current = {
+            ...replacement,
+            expiresAt: guard.expiresAt,
+            reason: guard.reason,
+            restoreCount: guard.restoreCount,
+          };
+        }
+      }
+
+      if (
+        isOutputProfilingEnabled() &&
+        (Math.abs(result.appliedDelta) >= 1 ||
+          Math.abs(result.residualOffsetDelta) >= 1 ||
+          !result.found)
+      ) {
+        logOutputProfilerEvent("viewportAnchorGuard", {
+          phase,
+          reason: guard.reason,
+          anchorRowKey: guard.rowKey,
+          appliedDelta: result.appliedDelta,
+          residualOffsetDelta: result.residualOffsetDelta,
+          found: result.found,
+          replacementRowKey: !result.found
+            ? viewportAnchorGuardRef.current?.rowKey
+            : undefined,
+          scrollTop: scrollElement.scrollTop,
+          overscan: outputOverscanRef.current,
+        });
+      }
+
+      return {
+        active: true,
+        found: result.found,
+        appliedDelta: result.appliedDelta,
+      };
+    },
+    [clearViewportAnchorGuard]
+  );
+
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => outputRef.current,
@@ -1246,7 +1362,12 @@ export const OutputSection: React.FC = () => {
     const hasRecentScrollEvent =
       lastScrollEventAtRef.current != null &&
       now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+    const guardedRestore =
+      !hasRecentScrollEvent && !isMeasurementFlushInProgressRef.current
+        ? restoreViewportAnchorGuard("scroll-correction")
+        : { active: false, found: false, appliedDelta: 0 };
     const shouldAdjust =
+      !guardedRestore.active &&
       !hasRecentScrollEvent &&
       !isMeasurementFlushInProgressRef.current &&
       pendingNavigationRef.current === null &&
@@ -1272,6 +1393,9 @@ export const OutputSection: React.FC = () => {
         anchorOffsetTop: anchor?.offsetTop,
         scrollSeekPlaceholder: scrollSeekPlaceholderRef.current,
         overscan: outputOverscanRef.current,
+        anchorGuardActive: guardedRestore.active,
+        anchorGuardFound: guardedRestore.found,
+        anchorGuardAppliedDelta: guardedRestore.appliedDelta,
       });
     }
     return shouldAdjust;
@@ -1301,6 +1425,7 @@ export const OutputSection: React.FC = () => {
     const scrollElement = outputRef.current;
     const anchor =
       scrollElement == null ? null : captureViewportRowAnchor(scrollElement);
+    activateViewportAnchorGuard(anchor, "measurement-flush");
     // Block handleScroll from updating lastScrollEventAtRef during this flush so
     // TanStack's rAF-deferred scroll corrections (shouldAdjustScrollPositionOnItemSizeChange)
     // don't re-activate the freeze for subsequent rows in the loop.
@@ -1391,7 +1516,7 @@ export const OutputSection: React.FC = () => {
         });
       });
     });
-  }, [rowVirtualizer]);
+  }, [activateViewportAnchorGuard, rowVirtualizer]);
 
   // Schedules the pending-measurement flush for OUTPUT_USER_SCROLL_INPUT_GRACE_MS+50ms.
   // Called from both updateRowMeasurementCache (via ref) and handleScroll, so the flush
@@ -1840,6 +1965,7 @@ export const OutputSection: React.FC = () => {
     ) => {
       const now = performance.now();
       lastUserScrollInputAtRef.current = now;
+      clearViewportAnchorGuard("user-input");
       const absInputDeltaPx = Math.abs(inputDeltaPx);
 
       if (
@@ -1864,7 +1990,7 @@ export const OutputSection: React.FC = () => {
         scheduleOverscanRestore();
       }
     },
-    [scheduleOverscanRestore, setOutputOverscanMode]
+    [clearViewportAnchorGuard, scheduleOverscanRestore, setOutputOverscanMode]
   );
 
   const handleWheel = useCallback(
@@ -1882,9 +2008,10 @@ export const OutputSection: React.FC = () => {
   const handleTouchStart = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
       lastUserScrollInputAtRef.current = performance.now();
+      clearViewportAnchorGuard("touch-start");
       lastTouchYRef.current = event.touches[0]?.clientY ?? null;
     },
-    []
+    [clearViewportAnchorGuard]
   );
 
   const handleTouchMove = useCallback(
@@ -2430,6 +2557,10 @@ export const OutputSection: React.FC = () => {
       measurementVersion,
     });
     scrollSeekSettlingUntilRef.current = now + OUTPUT_SCROLL_SEEK_SETTLE_MS;
+    activateViewportAnchorGuard(
+      outputRef.current ? captureViewportRowAnchor(outputRef.current) : null,
+      "scroll-seek-restore"
+    );
 
     // Dump per-bucket accuracy stats so it's easy to see which event types
     // have the largest estimate errors. Sort by maxAbsDelta descending.
@@ -2499,6 +2630,7 @@ export const OutputSection: React.FC = () => {
     measurementVersion,
     outputOverscan,
     rows.length,
+    activateViewportAnchorGuard,
     setOutputOverscanMode,
     virtualRows.length,
   ]);
