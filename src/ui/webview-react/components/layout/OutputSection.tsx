@@ -261,6 +261,86 @@ function findRenderedRowElementByKey(
   );
 }
 
+interface ViewportRowAnchor {
+  rowKey: string;
+  offsetTop: number;
+}
+
+function captureViewportRowAnchor(
+  scrollElement: HTMLDivElement
+): ViewportRowAnchor | null {
+  const containerRect = scrollElement.getBoundingClientRect();
+  const viewportCenter = containerRect.top + containerRect.height / 2;
+  let best: { element: HTMLDivElement; distance: number } | null = null;
+
+  for (const element of scrollElement.querySelectorAll<HTMLDivElement>(
+    "[data-row-key]"
+  )) {
+    const rowKey = element.dataset.rowKey;
+    if (!rowKey) continue;
+
+    const rowRect = element.getBoundingClientRect();
+    if (rowRect.bottom <= containerRect.top || rowRect.top >= containerRect.bottom) {
+      continue;
+    }
+
+    const rowCenter = rowRect.top + rowRect.height / 2;
+    const distance = Math.abs(rowCenter - viewportCenter);
+    if (!best || distance < best.distance) {
+      best = { element, distance };
+    }
+  }
+
+  if (!best) {
+    return null;
+  }
+
+  return {
+    rowKey: best.element.dataset.rowKey ?? "",
+    offsetTop: best.element.getBoundingClientRect().top - containerRect.top,
+  };
+}
+
+function restoreViewportRowAnchor(
+  scrollElement: HTMLDivElement,
+  anchor: ViewportRowAnchor
+): {
+  appliedDelta: number;
+  residualOffsetDelta: number;
+  found: boolean;
+} {
+  const rowElement = findRenderedRowElementByKey(scrollElement, anchor.rowKey);
+  if (!rowElement) {
+    return { appliedDelta: 0, residualOffsetDelta: 0, found: false };
+  }
+
+  const containerRect = scrollElement.getBoundingClientRect();
+  const nextOffsetTop = rowElement.getBoundingClientRect().top - containerRect.top;
+  const delta = nextOffsetTop - anchor.offsetTop;
+  if (Math.abs(delta) < 1) {
+    return { appliedDelta: 0, residualOffsetDelta: delta, found: true };
+  }
+
+  const maxScroll = Math.max(
+    0,
+    scrollElement.scrollHeight - scrollElement.clientHeight
+  );
+  const nextScrollTop = Math.max(
+    0,
+    Math.min(maxScroll, scrollElement.scrollTop + delta)
+  );
+  const appliedDelta = nextScrollTop - scrollElement.scrollTop;
+  scrollElement.scrollTop = nextScrollTop;
+  const finalOffsetTop =
+    rowElement.getBoundingClientRect().top -
+    scrollElement.getBoundingClientRect().top;
+  return {
+    appliedDelta,
+    residualOffsetDelta: finalOffsetTop - anchor.offsetTop,
+    found: true,
+  };
+}
+
 function alignRowElementToViewport(
   scrollElement: HTMLDivElement,
   rowElement: HTMLElement,
@@ -752,6 +832,7 @@ export const OutputSection: React.FC = () => {
             diffCollapseState,
             diffExpansionState,
             toolCallExpansionState,
+            bashExpansionState,
             defaultDiffCollapsed: diffsCollapsed,
             diffViewType: outputDiffViewType,
             outputFontSize,
@@ -773,6 +854,7 @@ export const OutputSection: React.FC = () => {
       diffCollapseState,
       diffExpansionState,
       toolCallExpansionState,
+      bashExpansionState,
       diffsCollapsed,
       outputDiffViewType,
       outputFontSize,
@@ -1166,6 +1248,7 @@ export const OutputSection: React.FC = () => {
       now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
     const shouldAdjust =
       !hasRecentScrollEvent &&
+      !isMeasurementFlushInProgressRef.current &&
       pendingNavigationRef.current === null &&
       !postNavSettlingRef.current &&
       (scrollSeekSettlingUntilRef.current == null ||
@@ -1174,14 +1257,21 @@ export const OutputSection: React.FC = () => {
         now >= rowResizeScrollSuppressUntilRef.current) &&
       item.start < (outputRef.current?.scrollTop ?? 0);
     if (isOutputProfilingEnabled() && Math.abs(delta) >= 10) {
+      const scrollElement = outputRef.current;
+      const anchor =
+        scrollElement == null ? null : captureViewportRowAnchor(scrollElement);
       logOutputProfilerEvent("scrollCorrection", {
         itemKey: item.key,
         itemStart: item.start,
-        scrollTop: outputRef.current?.scrollTop ?? 0,
+        scrollTop: scrollElement?.scrollTop ?? 0,
         delta,
         shouldAdjust,
         hasRecentScrollEvent,
         isMeasurementFlush: isMeasurementFlushInProgressRef.current,
+        anchorRowKey: anchor?.rowKey,
+        anchorOffsetTop: anchor?.offsetTop,
+        scrollSeekPlaceholder: scrollSeekPlaceholderRef.current,
+        overscan: outputOverscanRef.current,
       });
     }
     return shouldAdjust;
@@ -1208,6 +1298,9 @@ export const OutputSection: React.FC = () => {
 
   const flushPendingScrollMeasurements = useCallback(() => {
     if (pendingMeasurementCacheRef.current.size === 0) return;
+    const scrollElement = outputRef.current;
+    const anchor =
+      scrollElement == null ? null : captureViewportRowAnchor(scrollElement);
     // Block handleScroll from updating lastScrollEventAtRef during this flush so
     // TanStack's rAF-deferred scroll corrections (shouldAdjustScrollPositionOnItemSizeChange)
     // don't re-activate the freeze for subsequent rows in the loop.
@@ -1216,8 +1309,43 @@ export const OutputSection: React.FC = () => {
       logOutputProfilerEvent("measurementFlush", {
         pendingCount: pendingMeasurementCacheRef.current.size,
         mountedCount: mountedRowElementsRef.current.size,
+        anchorRowKey: anchor?.rowKey,
+        anchorOffsetTop: anchor?.offsetTop,
       });
     }
+    const restoreAnchor = (
+      phase: "sync" | "raf-1" | "raf-2"
+    ): {
+      appliedDelta: number;
+      residualOffsetDelta: number;
+      found: boolean;
+    } => {
+      const currentScrollElement = outputRef.current;
+      if (!anchor || !currentScrollElement) {
+        return { appliedDelta: 0, residualOffsetDelta: 0, found: false };
+      }
+
+      const result = restoreViewportRowAnchor(currentScrollElement, anchor);
+      lastScrollTopRef.current = currentScrollElement.scrollTop;
+      if (
+        isOutputProfilingEnabled() &&
+        (phase === "sync" ||
+          Math.abs(result.appliedDelta) >= 1 ||
+          Math.abs(result.residualOffsetDelta) >= 1 ||
+          !result.found)
+      ) {
+        logOutputProfilerEvent("measurementFlushAnchorRestore", {
+          anchorRowKey: anchor.rowKey,
+          phase,
+          appliedDelta: result.appliedDelta,
+          residualOffsetDelta: result.residualOffsetDelta,
+          found: result.found,
+          scrollTop: currentScrollElement.scrollTop,
+        });
+      }
+      return result;
+    };
+
     for (const [key, height] of pendingMeasurementCacheRef.current) {
       const element = mountedRowElementsRef.current.get(key);
       if (element) {
@@ -1231,12 +1359,36 @@ export const OutputSection: React.FC = () => {
       }
     }
     pendingMeasurementCacheRef.current.clear();
-    // TanStack defers size-change processing to requestAnimationFrame.
-    // Keep the flush flag set through two rAF cycles so handleScroll stays
-    // suppressed while TanStack fires its scroll corrections.
+    // Apply a synchronous anchor restore first. In practice TanStack processes
+    // many measureElement size changes immediately; compensating before the
+    // browser paints avoids the visible one-frame jump. Keep rAF follow-ups for
+    // size-change work that TanStack/ResizeObserver completes later.
+    restoreAnchor("sync");
     requestAnimationFrame(() => {
+      const firstFrameRestore = restoreAnchor("raf-1");
       requestAnimationFrame(() => {
-        isMeasurementFlushInProgressRef.current = false;
+        const secondFrameRestore = restoreAnchor("raf-2");
+
+        requestAnimationFrame(() => {
+          if (
+            isOutputProfilingEnabled() &&
+            anchor &&
+            (Math.abs(firstFrameRestore.residualOffsetDelta) >= 1 ||
+              Math.abs(secondFrameRestore.residualOffsetDelta) >= 1 ||
+              !firstFrameRestore.found ||
+              !secondFrameRestore.found)
+          ) {
+            logOutputProfilerEvent("measurementFlushAnchorSettled", {
+              anchorRowKey: anchor.rowKey,
+              firstFrameResidual: firstFrameRestore.residualOffsetDelta,
+              secondFrameResidual: secondFrameRestore.residualOffsetDelta,
+              firstFrameFound: firstFrameRestore.found,
+              secondFrameFound: secondFrameRestore.found,
+              scrollTop: outputRef.current?.scrollTop,
+            });
+          }
+          isMeasurementFlushInProgressRef.current = false;
+        });
       });
     });
   }, [rowVirtualizer]);

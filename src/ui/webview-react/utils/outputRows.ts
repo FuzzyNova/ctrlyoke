@@ -67,6 +67,11 @@ export interface OutputRowToolCallMeta {
   renderPlan: ToolCallRenderPlan;
 }
 
+export interface OutputRowBashExpansionState {
+  outputExpanded: boolean;
+  errorExpanded: boolean;
+}
+
 interface OutputRowBase {
   key: string;
   target?: OutputMessageTarget;
@@ -142,6 +147,7 @@ export interface StructuredEventRow extends OutputRowBase {
   undoRecord?: UndoRecord;
   diff?: OutputRowDiffMeta;
   toolCall?: OutputRowToolCallMeta;
+  bashExpansion?: OutputRowBashExpansionState;
   hideDiff: boolean;
 }
 
@@ -197,6 +203,7 @@ export interface BuildOutputRowsInput {
   diffCollapseState: ReadonlyMap<string, boolean>;
   diffExpansionState: ReadonlyMap<string, DiffGapExpansionState>;
   toolCallExpansionState: ReadonlyMap<string, ToolCallExpansionState>;
+  bashExpansionState?: ReadonlyMap<string, OutputRowBashExpansionState>;
   defaultDiffCollapsed: boolean;
   diffViewType?: "split" | "unified";
   outputFontSize?: number;
@@ -538,7 +545,8 @@ function estimateFileOperationHeaderHeight(
 function estimateBashOutputHeight(
   event: CliEvent,
   outputContentWidth: number | undefined,
-  outputFontSize: number
+  outputFontSize: number,
+  expansion?: OutputRowBashExpansionState
 ): number {
   const data = event.data as {
     command?: string;
@@ -575,19 +583,30 @@ function estimateBashOutputHeight(
     normalizedOutput.trim().length > 0 &&
     normalizedOutput.trim() === normalizedError.trim();
   const contentsToEstimate = isDuplicate
-    ? [normalizedError]
-    : [normalizedOutput, normalizedError];
+    ? [{ content: normalizedError, expanded: expansion?.errorExpanded ?? false }]
+    : [
+        {
+          content: normalizedOutput,
+          expanded: expansion?.outputExpanded ?? false,
+        },
+        {
+          content: normalizedError,
+          expanded: expansion?.errorExpanded ?? false,
+        },
+      ];
 
-  for (const content of contentsToEstimate) {
+  for (const { content, expanded } of contentsToEstimate) {
     // Skip empty/whitespace-only content — BashOutput sanitizes ANSI codes
     // which often leaves blank-only error streams that don't render.
     if (!content || content.trim().length === 0) continue;
-    const limitedContent = content
-      .split("\n")
-      .slice(0, BASH_RESULT_MAX_LINES)
-      .join("\n");
+    const contentLines = content.split("\n");
+    const isTruncated = contentLines.length > BASH_RESULT_MAX_LINES;
+    const visibleContent =
+      isTruncated && !expanded
+        ? contentLines.slice(0, BASH_RESULT_MAX_LINES).join("\n")
+        : content;
     totalHeight += estimateTextBlockHeight(
-      limitedContent,
+      visibleContent,
       outputContentWidth,
       outputFontSize,
       {
@@ -598,6 +617,9 @@ function estimateBashOutputHeight(
         verticalChrome: 8, // my-2 bottom half (see command chrome above)
       }
     );
+    if (isTruncated) {
+      totalHeight += Math.max(16, outputFontSize * 1.4);
+    }
   }
 
   return totalHeight;
@@ -636,7 +658,8 @@ function estimateStructuredTextHeight(
       return estimateBashOutputHeight(
         row.event,
         outputContentWidth,
-        outputFontSize
+        outputFontSize,
+        row.bashExpansion
       );
     case CLI_EVENT_TYPES.FILE_EDIT: {
       const data = row.event.data as { path?: string; error?: string };
@@ -1121,6 +1144,10 @@ export function buildOutputRows(
         workspaceSnapshot,
         undoRecord,
         hideDiff: visibleEvent.hideDiff,
+        bashExpansion:
+          visibleEvent.event.type === CLI_EVENT_TYPES.BASH_COMMAND
+            ? input.bashExpansionState?.get(rowKey)
+            : undefined,
         diff:
           diffKey && diffStats
             ? {
