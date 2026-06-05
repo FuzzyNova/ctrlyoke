@@ -158,7 +158,9 @@ export function buildToolCallRenderPlan(
   } = input;
 
   const summaryLineHeight = Math.max(24, outputFontSize * 1.8);
-  const sectionLineHeight = Math.max(18, outputFontSize * 1.55);
+  // 1.85 (not 1.55): profiler data shows actual section height is ~21% taller than
+  // the 1.55 estimate (scaleFactor=1.21, n=15). 1.85 gives 24px at font=13 vs prior 20px.
+  const sectionLineHeight = Math.max(22, outputFontSize * 1.85);
   const summaryHeight = summaryLineHeight + TOOL_CALL_SUMMARY_BOTTOM_GAP;
   const paramsText = getGenericToolCallParamsText(parameters);
   const { output, error } = getGenericToolCallOutput(result);

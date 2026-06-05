@@ -117,10 +117,10 @@ const OUTPUT_OVERSCAN_RESTORE_DELAY_MS = 250; // idle time after fast scrolling 
 const OUTPUT_SCROLL_SEEK_CONTINUE_DELTA_PX = 16; // scroll delta that keeps placeholder mode alive once it has started.
 const OUTPUT_SCROLL_SEEK_SLOW_DELTA_PX = 48; // below this delta, treat scrolling as slowing and use the shorter restore delay.
 const OUTPUT_SCROLL_SEEK_SLOW_RESTORE_DELAY_MS = 80; // restore delay while scrolling is slowing, so rows start rendering before a dead stop.
-const OUTPUT_SCROLL_SEEK_MIN_DELTA_PX = 300; // minimum single-event movement that can trigger placeholder mode by velocity.
+const OUTPUT_SCROLL_SEEK_MIN_DELTA_PX = 100; // minimum single-event movement that can trigger placeholder mode by velocity.
 const OUTPUT_SCROLL_SEEK_WHEEL_DELTA_PX = 16; // wheel delta that pre-arms placeholder mode before the browser scrolls.
 const OUTPUT_SCROLL_SEEK_TOUCH_DELTA_PX = 12; // touch movement that pre-arms placeholder mode before mobile scroll settles.
-const OUTPUT_SCROLL_SEEK_MIN_VELOCITY_PX_MS = 2; // minimum px/ms velocity for the delta threshold to count as fast scrolling.
+const OUTPUT_SCROLL_SEEK_MIN_VELOCITY_PX_MS = 0.3; // minimum px/ms velocity for the delta threshold to count as fast scrolling.
 const OUTPUT_SCROLL_SEEK_PAGE_FRACTION = 0.9; // viewport fraction moved in one event that always counts as fast scrolling.
 const OUTPUT_SCROLL_SEEK_SETTLE_MS = 2000; // time after restore to ignore layout-driven scroll corrections as fast-scroll triggers.
 const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS = 600; // delay before adding a small buffer after visible rows mount.
@@ -604,6 +604,8 @@ export const OutputSection: React.FC = () => {
   const [outputOverscan, setOutputOverscan] = useState(
     OUTPUT_VIRTUALIZER_OVERSCAN
   );
+  const [scrollSeekPlaceholderActive, setScrollSeekPlaceholderActiveState] =
+    useState(false);
   const measurementVersionRef = useRef(measurementVersion);
   useEffect(() => {
     measurementVersionRef.current = measurementVersion;
@@ -618,6 +620,18 @@ export const OutputSection: React.FC = () => {
   const rowResizeScrollSuppressUntilRef = useRef<number | null>(null);
   const lastUserScrollInputAtRef = useRef<number | null>(null);
   const lastTouchYRef = useRef<number | null>(null);
+  const scrollSeekPlaceholderRef = useRef(false);
+  // Row indices that were already rendered when fast-scroll placeholder mode
+  // started; these keep their real content instead of swapping to a placeholder.
+  const scrollSeekEntryRenderedIndicesRef = useRef<ReadonlySet<number>>(
+    new Set()
+  );
+  // Stable ref to rowVirtualizer.getVirtualItems(); populated after the
+  // virtualizer is created so enterFastScrollOverscan can read it without
+  // a forward-reference ordering issue.
+  const getVirtualItemsRef = useRef<() => readonly { index: number }[]>(
+    () => []
+  );
   const measurementVersionFrameRef = useRef<number | null>(null);
   const overscanRestoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -625,6 +639,7 @@ export const OutputSection: React.FC = () => {
   const fullOverscanRestoreTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  const overscanRestoreRafRef = useRef<number | null>(null);
   const pendingNavigationRef = useRef<PendingNavigationState | null>(null);
   const navigationFrameRef = useRef<number | null>(null);
   const lastScrollEventAtRef = useRef<number | null>(null);
@@ -774,18 +789,18 @@ export const OutputSection: React.FC = () => {
         bucketStats.totalMeasured / bucketStats.totalEstimated;
       const clampedScale = clamp(
         averageScale,
-        0.75,
+        0.5,
         bucket.startsWith("structured-event:diff:") ? 3.5 : 3
       );
       const rawScaled = Math.round(baseEstimate * clampedScale * 100) / 100;
       if (bucket.startsWith("structured-event:diff:")) {
-        return Math.max(baseEstimate, rawScaled);
+        // Diff heights come from renderPlan which can over- or under-estimate; allow
+        // adaptive correction in both directions. clampedScale [0.5, 3.5] bounds it.
+        return rawScaled;
       }
-      // Cap the bucket correction at +200px for non-diff rows. The scale factor is
-      // derived from a mix of row sizes; small rows with many short paragraphs produce
-      // high scale factors that would wildly overestimate large text-heavy rows if
-      // applied proportionally.
-      return clamp(rawScaled, baseEstimate, baseEstimate + 200);
+      // Allow modest downward correction (to 60% of base) and cap increase at +200px.
+      // The +200px cap prevents overcorrection from mixed-size rows in the same bucket.
+      return clamp(rawScaled, baseEstimate * 0.6, baseEstimate + 200);
     },
     [outputContentWidth, outputFontSize]
   );
@@ -800,29 +815,51 @@ export const OutputSection: React.FC = () => {
     (
       overscan: number,
       reason: "fast-scroll" | "idle",
-      details?: Record<string, unknown>
+      details?: Record<string, unknown>,
+      // true=activate placeholder, false=deactivate, undefined=no change
+      activatePlaceholder?: boolean
     ) => {
-      if (outputOverscanRef.current === overscan) {
+      const overscanChanged = outputOverscanRef.current !== overscan;
+      const newPlaceholder =
+        activatePlaceholder === true
+          ? true
+          : activatePlaceholder === false
+            ? false
+            : scrollSeekPlaceholderRef.current;
+      const placeholderChanged =
+        newPlaceholder !== scrollSeekPlaceholderRef.current;
+
+      if (!overscanChanged && !placeholderChanged) {
         return;
       }
 
       const now = performance.now();
-      const wasScrollSeeking =
-        outputOverscanRef.current === OUTPUT_ACTIVE_SCROLL_OVERSCAN;
-      const isScrollSeeking = overscan === OUTPUT_ACTIVE_SCROLL_OVERSCAN;
-      outputOverscanRef.current = overscan;
-      setOutputOverscan(overscan);
-      if (isScrollSeeking && !wasScrollSeeking) {
-        scrollSeekStartedAtRef.current = now;
-        scrollSeekRestoreRequestedAtRef.current = null;
-      } else if (!isScrollSeeking && wasScrollSeeking) {
-        scrollSeekRestoreRequestedAtRef.current = now;
+      const wasPlaceholderActive = scrollSeekPlaceholderRef.current;
+
+      if (overscanChanged) {
+        outputOverscanRef.current = overscan;
+        setOutputOverscan(overscan);
       }
+
+      if (placeholderChanged) {
+        scrollSeekPlaceholderRef.current = newPlaceholder;
+        setScrollSeekPlaceholderActiveState(newPlaceholder);
+        if (newPlaceholder && !wasPlaceholderActive) {
+          scrollSeekStartedAtRef.current = now;
+          scrollSeekRestoreRequestedAtRef.current = null;
+        } else if (!newPlaceholder && wasPlaceholderActive) {
+          scrollSeekRestoreRequestedAtRef.current = now;
+        }
+      }
+
       logOutputProfilerEvent("adaptiveOverscan", {
-        overscan,
+        overscan: outputOverscanRef.current,
         reason,
+        placeholder: scrollSeekPlaceholderRef.current,
         scrollSeekDurationMs:
-          !isScrollSeeking && scrollSeekStartedAtRef.current != null
+          placeholderChanged &&
+          !newPlaceholder &&
+          scrollSeekStartedAtRef.current != null
             ? now - scrollSeekStartedAtRef.current
             : undefined,
         ...details,
@@ -840,22 +877,49 @@ export const OutputSection: React.FC = () => {
         clearTimeout(fullOverscanRestoreTimerRef.current);
         fullOverscanRestoreTimerRef.current = null;
       }
+      if (overscanRestoreRafRef.current !== null) {
+        cancelAnimationFrame(overscanRestoreRafRef.current);
+        overscanRestoreRafRef.current = null;
+      }
 
       overscanRestoreTimerRef.current = setTimeout(() => {
         overscanRestoreTimerRef.current = null;
-        setOutputOverscanMode(OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN, "idle", {
-          phase: "restore-visible-rows",
-        });
+        scrollSeekEntryRenderedIndicesRef.current = new Set();
+        if (scrollSeekPlaceholderRef.current) {
+          // Placeholder active: set overscan=0 and deactivate placeholder
+          // simultaneously. The restore effect detects !isOutputScrollSeeking
+          // and schedules the 0→intermediate→full overscan chain.
+          setOutputOverscanMode(
+            OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN,
+            "idle",
+            { phase: "restore-visible-rows" },
+            false
+          );
+        } else {
+          // Overscan was pre-armed without placeholder: skip staged restore
+          // and return directly to idle overscan.
+          setOutputOverscanMode(OUTPUT_VIRTUALIZER_OVERSCAN, "idle", {
+            phase: "restore-full-overscan-direct",
+          });
+        }
       }, delayMs ?? OUTPUT_OVERSCAN_RESTORE_DELAY_MS);
     },
     [setOutputOverscanMode]
   );
   const enterFastScrollOverscan = useCallback(
     (details: Record<string, unknown>) => {
+      if (!scrollSeekPlaceholderRef.current) {
+        // Snapshot which rows are currently rendered so they keep their real
+        // content instead of being swapped to placeholders mid-view.
+        scrollSeekEntryRenderedIndicesRef.current = new Set(
+          getVirtualItemsRef.current().map((vr) => vr.index)
+        );
+      }
       setOutputOverscanMode(
         OUTPUT_ACTIVE_SCROLL_OVERSCAN,
         "fast-scroll",
-        details
+        details,
+        true // activate placeholder
       );
       scheduleOverscanRestore();
     },
@@ -885,6 +949,10 @@ export const OutputSection: React.FC = () => {
       if (fullOverscanRestoreTimerRef.current !== null) {
         clearTimeout(fullOverscanRestoreTimerRef.current);
         fullOverscanRestoreTimerRef.current = null;
+      }
+      if (overscanRestoreRafRef.current !== null) {
+        cancelAnimationFrame(overscanRestoreRafRef.current);
+        overscanRestoreRafRef.current = null;
       }
     },
     []
@@ -927,6 +995,7 @@ export const OutputSection: React.FC = () => {
           if (shouldLogOutputMeasurement(durationMs)) {
             logOutputProfilerEvent("rowMeasurement:unchanged", {
               index,
+              rowKey: row.key,
               rowKind: row.rowKind,
               bucket: rowHeightBucket,
               measuredHeight: nextHeight,
@@ -962,6 +1031,7 @@ export const OutputSection: React.FC = () => {
         if (shouldLogOutputMeasurement(durationMs)) {
           logOutputProfilerEvent("rowMeasurement:updated", {
             index,
+            rowKey: row.key,
             rowKind: row.rowKind,
             bucket: rowHeightBucket,
             measuredHeight: nextHeight,
@@ -1007,19 +1077,30 @@ export const OutputSection: React.FC = () => {
     measureElement: measureOutputRowElement,
     overscan: outputOverscan,
   });
+  getVirtualItemsRef.current = () => rowVirtualizer.getVirtualItems();
   // shouldAdjustScrollPositionOnItemSizeChange is a writable instance property
   // (not a constructor option) on Virtualizer. Suppress scroll corrections
   // during active navigation and for 1 s after to prevent TanStack from
   // adjusting the scroll for measured rows above the viewport, which amplifies
   // reconcileScroll oscillations.
-  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) =>
-    pendingNavigationRef.current === null &&
-    !postNavSettlingRef.current &&
-    (scrollSeekSettlingUntilRef.current == null ||
-      performance.now() >= scrollSeekSettlingUntilRef.current) &&
-    (rowResizeScrollSuppressUntilRef.current == null ||
-      performance.now() >= rowResizeScrollSuppressUntilRef.current) &&
-    item.start < (outputRef.current?.scrollTop ?? 0);
+  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
+    const now = performance.now();
+    // Suppress scroll correction while the user is actively scrolling —
+    // mid-scroll position jumps are more jarring than estimate drift.
+    const hasRecentScrollEvent =
+      lastScrollEventAtRef.current != null &&
+      now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+    return (
+      !hasRecentScrollEvent &&
+      pendingNavigationRef.current === null &&
+      !postNavSettlingRef.current &&
+      (scrollSeekSettlingUntilRef.current == null ||
+        now >= scrollSeekSettlingUntilRef.current) &&
+      (rowResizeScrollSuppressUntilRef.current == null ||
+        now >= rowResizeScrollSuppressUntilRef.current) &&
+      item.start < (outputRef.current?.scrollTop ?? 0)
+    );
+  };
 
   // React 19 ref callbacks can return a cleanup function.
   // TanStack Virtual owns the ResizeObserver. Our measureElement override above
@@ -1418,8 +1499,7 @@ export const OutputSection: React.FC = () => {
           atBottom,
           virtualRows: rowVirtualizer.getVirtualItems().length,
           overscan: outputOverscanRef.current,
-          scrollSeekPlaceholder:
-            outputOverscanRef.current === OUTPUT_ACTIVE_SCROLL_OVERSCAN,
+          scrollSeekPlaceholder: scrollSeekPlaceholderRef.current,
           totalRows: rowsRef.current.length,
         });
       }
@@ -1440,8 +1520,7 @@ export const OutputSection: React.FC = () => {
         atBottom,
         virtualRows: rowVirtualizer.getVirtualItems().length,
         overscan: outputOverscanRef.current,
-        scrollSeekPlaceholder:
-          outputOverscanRef.current === OUTPUT_ACTIVE_SCROLL_OVERSCAN,
+        scrollSeekPlaceholder: scrollSeekPlaceholderRef.current,
         totalRows: rowsRef.current.length,
       });
     }
@@ -1462,7 +1541,10 @@ export const OutputSection: React.FC = () => {
         rowsRef.current.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
         absInputDeltaPx >= thresholdPx
       ) {
-        enterFastScrollOverscan({
+        // Lower overscan early so fewer rows are in-flight while the browser
+        // scrolls, but do NOT activate placeholders — those only appear once
+        // handleScroll confirms genuine fast scroll by velocity/delta.
+        setOutputOverscanMode(OUTPUT_ACTIVE_SCROLL_OVERSCAN, "fast-scroll", {
           phase,
           inputDeltaPx,
           scrollDeltaPx: inputDeltaPx,
@@ -1474,9 +1556,10 @@ export const OutputSection: React.FC = () => {
           pageDeltaThresholdPx:
             scrollElement.clientHeight * OUTPUT_SCROLL_SEEK_PAGE_FRACTION,
         });
+        scheduleOverscanRestore();
       }
     },
-    [enterFastScrollOverscan]
+    [scheduleOverscanRestore, setOutputOverscanMode]
   );
 
   const handleWheel = useCallback(
@@ -1933,8 +2016,7 @@ export const OutputSection: React.FC = () => {
 
   // Check if there's any output
   const hasOutput = rows.length > 0;
-  const isOutputScrollSeeking =
-    outputOverscan === OUTPUT_ACTIVE_SCROLL_OVERSCAN;
+  const isOutputScrollSeeking = scrollSeekPlaceholderActive;
   const virtualRows = rowVirtualizer.getVirtualItems();
   useEffect(() => {
     if (!shouldLogOutputVirtualRange()) {
@@ -2043,21 +2125,65 @@ export const OutputSection: React.FC = () => {
       measurementVersion,
     });
     scrollSeekSettlingUntilRef.current = now + OUTPUT_SCROLL_SEEK_SETTLE_MS;
+
+    // Dump per-bucket accuracy stats so it's easy to see which event types
+    // have the largest estimate errors. Sort by maxAbsDelta descending.
+    const bucketStatsList = Array.from(
+      rowHeightBucketStatsRef.current.entries()
+    )
+      .filter(([, s]) => s.sampleCount > 0)
+      .map(([bucket, s]) => ({
+        bucket,
+        n: s.sampleCount,
+        avgMeasured: Math.round(s.totalMeasured / s.sampleCount),
+        avgEstimated: Math.round(s.totalEstimated / s.sampleCount),
+        avgDelta: Math.round(
+          (s.totalMeasured - s.totalEstimated) / s.sampleCount
+        ),
+        maxAbsDelta: Math.round(s.maxAbsDelta),
+        scaleFactor:
+          s.totalEstimated > 0
+            ? Math.round((s.totalMeasured / s.totalEstimated) * 100) / 100
+            : null,
+      }))
+      .sort((a, b) => b.maxAbsDelta - a.maxAbsDelta);
+    logOutputProfilerEvent("rowEstimateStats", { buckets: bucketStatsList });
+
     if (fullOverscanRestoreTimerRef.current !== null) {
       clearTimeout(fullOverscanRestoreTimerRef.current);
     }
+    if (overscanRestoreRafRef.current !== null) {
+      cancelAnimationFrame(overscanRestoreRafRef.current);
+      overscanRestoreRafRef.current = null;
+    }
     if (outputOverscanRef.current === OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN) {
       fullOverscanRestoreTimerRef.current = setTimeout(() => {
-        setOutputOverscanMode(OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN, "idle", {
-          phase: "restore-buffer-overscan",
-        });
-
-        fullOverscanRestoreTimerRef.current = setTimeout(() => {
-          fullOverscanRestoreTimerRef.current = null;
-          setOutputOverscanMode(OUTPUT_VIRTUALIZER_OVERSCAN, "idle", {
-            phase: "restore-full-overscan",
-          });
-        }, OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS);
+        fullOverscanRestoreTimerRef.current = null;
+        // Progressive rAF restore: increment overscan one step at a time so each
+        // frame only mounts 2 additional rows (1 above + 1 below the viewport).
+        // This prevents a batch of large diffs from causing a multi-second freeze
+        // compared to the old approach of jumping 0→3 (6 rows) in one step.
+        let step = 1;
+        const doNextOverscanStep = () => {
+          if (overscanRestoreRafRef.current === null) return;
+          if (step <= OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN) {
+            setOutputOverscanMode(step, "idle", {
+              phase: "restore-buffer-step",
+              step,
+            });
+            step++;
+            overscanRestoreRafRef.current = requestAnimationFrame(doNextOverscanStep);
+          } else {
+            overscanRestoreRafRef.current = null;
+            fullOverscanRestoreTimerRef.current = setTimeout(() => {
+              fullOverscanRestoreTimerRef.current = null;
+              setOutputOverscanMode(OUTPUT_VIRTUALIZER_OVERSCAN, "idle", {
+                phase: "restore-full-overscan",
+              });
+            }, OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS);
+          }
+        };
+        overscanRestoreRafRef.current = requestAnimationFrame(doNextOverscanStep);
       }, OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS);
     }
     scrollSeekRestoreRequestedAtRef.current = null;
@@ -3177,6 +3303,9 @@ export const OutputSection: React.FC = () => {
                     const renderScrollSeekPlaceholder =
                       isOutputScrollSeeking &&
                       !isNavigationTargetVirtualized &&
+                      !scrollSeekEntryRenderedIndicesRef.current.has(
+                        virtualRow.index
+                      ) &&
                       shouldRenderScrollSeekPlaceholder(row);
 
                     return (

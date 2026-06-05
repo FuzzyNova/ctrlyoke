@@ -366,7 +366,10 @@ function estimateMarkdownBlockHeight(
     outputContentWidth,
     outputFontSize,
     {
-      charWidthMultiplier: 0.56,
+      // 0.42 (not 0.56): markdown renders in proportional font where avg char width
+      // at 13px is ~5.5px (near the 5.5px floor), not the 7.28px from 0.56*13.
+      // Using 0.56 estimated ~54 chars/line; actual is ~72. scaleFactor=0.78, n=4.
+      charWidthMultiplier: 0.42,
       lineHeightMultiplier: 1.5,
       verticalChrome: 28,
       emptyLineWeight: 0.5,
