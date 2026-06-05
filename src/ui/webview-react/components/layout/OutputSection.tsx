@@ -308,6 +308,10 @@ function getRowHeightBucket(row: OutputRenderRow): string {
       if (row.toolCall) {
         return "structured-event:tool-call";
       }
+      if (row.event.type === CLI_EVENT_TYPES.TEXT) {
+        const text = (row.event.data as { text?: string }).text ?? "";
+        if (/^\|.+\|/m.test(text)) return "structured-event:text:table";
+      }
       return `structured-event:${row.event.type}`;
   }
 }
@@ -648,6 +652,12 @@ export const OutputSection: React.FC = () => {
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
   const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const pendingMeasurementFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set true during flush so TanStack's rAF-deferred scroll corrections don't
+  // re-activate the scroll freeze in handleScroll.
+  const isMeasurementFlushInProgressRef = useRef(false);
+  // Stable ref to schedulePendingMeasurementFlush — updated each render so
+  // updateRowMeasurementCache can call it without a forward-reference dep cycle.
+  const schedulePendingMeasurementFlushRef = useRef<() => void>(() => {});
   // Tracks the row count at the last auto-scroll so we can distinguish "new
   // rows arrived" (scroll) from "same rows re-rendered" (don't scroll).
   const lastAutoScrollRowCountRef = useRef(0);
@@ -995,7 +1005,7 @@ export const OutputSection: React.FC = () => {
       const previousHeight = measurementCacheRef.current.get(row.key);
       if (
         previousHeight !== undefined &&
-        Math.abs(previousHeight - nextHeight) < 0.5
+        Math.abs(previousHeight - nextHeight) < 1.0
       ) {
         if (startedAt > 0) {
           const durationMs = performance.now() - startedAt;
@@ -1024,6 +1034,11 @@ export const OutputSection: React.FC = () => {
         performance.now() - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
       if (isScrolling) {
         pendingMeasurementCacheRef.current.set(row.key, nextHeight);
+        // Self-schedule the flush so it fires even if no further user scroll
+        // events arrive (e.g., corrections at initial load freeze measurements
+        // but handleScroll never fires again to schedule the flush).
+        // Uses a ref to avoid a circular dep with rowVirtualizer.
+        schedulePendingMeasurementFlushRef.current();
         return previousHeight !== undefined ? previousHeight : estimatedHeight;
       }
 
@@ -1045,6 +1060,46 @@ export const OutputSection: React.FC = () => {
           Math.abs(nextHeight - estimatedHeight)
         ),
       });
+      // Log individual outliers so we can find which specific row structures
+      // cause the biggest estimation errors (e.g. markdown tables, long bash output).
+      if (isOutputProfilingEnabled()) {
+        const absDelta = Math.abs(nextHeight - estimatedHeight);
+        const pctDelta = estimatedHeight > 0 ? absDelta / estimatedHeight : 0;
+        if (absDelta > 40 && pctDelta > 0.10) {
+          const extras: Record<string, unknown> = {};
+          if (row.rowKind === "structured-event" && row.event.type === CLI_EVENT_TYPES.TEXT) {
+            const text = (row.event.data as { text?: string }).text ?? "";
+            extras.textLength = text.length;
+            extras.hasTable = /^\|.+\|/m.test(text);
+            extras.hasCodeBlock = text.includes("```");
+            extras.hasList = /^\s*[-*+]\s/m.test(text);
+            extras.textPreview = text.slice(0, 100).replace(/\n/g, "↵");
+          } else if (row.rowKind === "structured-event" && (row.event.type === CLI_EVENT_TYPES.TOOL_CALL || row.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL)) {
+            const tc = row.event.data as { name?: string; tool?: string; input?: unknown; result?: unknown };
+            extras.toolName = tc.name ?? tc.tool ?? "unknown";
+            extras.inputLength = tc.input != null ? JSON.stringify(tc.input).length : 0;
+            extras.resultLength = tc.result != null ? JSON.stringify(tc.result).length : 0;
+          } else if (row.rowKind === "structured-event" && row.event.type === CLI_EVENT_TYPES.BASH_COMMAND) {
+            const bc = row.event.data as { command?: string; output?: string; error?: string };
+            extras.outputLength = (bc.output ?? "").length;
+            extras.errorLength = (bc.error ?? "").length;
+          } else if (row.rowKind === "cli-command") {
+            const cmd = row as unknown as { command?: string; workingDirectory?: string };
+            const fullText = `${cmd.workingDirectory || "workspace"}> ${cmd.command ?? ""}`;
+            extras.commandLength = fullText.length;
+            extras.commandPreview = fullText.slice(0, 120).replace(/\n/g, "↵");
+          }
+          logOutputProfilerEvent("rowEstimateOutlier", {
+            rowKey: row.key,
+            bucket: rowHeightBucket,
+            measuredHeight: nextHeight,
+            estimatedHeight,
+            delta: nextHeight - estimatedHeight,
+            pctDelta: Math.round(pctDelta * 100),
+            ...extras,
+          });
+        }
+      }
       if (startedAt > 0) {
         const durationMs = performance.now() - startedAt;
         if (shouldLogOutputMeasurement(durationMs)) {
@@ -1102,14 +1157,14 @@ export const OutputSection: React.FC = () => {
   // during active navigation and for 1 s after to prevent TanStack from
   // adjusting the scroll for measured rows above the viewport, which amplifies
   // reconcileScroll oscillations.
-  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item) => {
+  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta) => {
     const now = performance.now();
     // Suppress scroll correction while the user is actively scrolling —
     // mid-scroll position jumps are more jarring than estimate drift.
     const hasRecentScrollEvent =
       lastScrollEventAtRef.current != null &&
       now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
-    return (
+    const shouldAdjust =
       !hasRecentScrollEvent &&
       pendingNavigationRef.current === null &&
       !postNavSettlingRef.current &&
@@ -1117,8 +1172,19 @@ export const OutputSection: React.FC = () => {
         now >= scrollSeekSettlingUntilRef.current) &&
       (rowResizeScrollSuppressUntilRef.current == null ||
         now >= rowResizeScrollSuppressUntilRef.current) &&
-      item.start < (outputRef.current?.scrollTop ?? 0)
-    );
+      item.start < (outputRef.current?.scrollTop ?? 0);
+    if (isOutputProfilingEnabled() && Math.abs(delta) >= 10) {
+      logOutputProfilerEvent("scrollCorrection", {
+        itemKey: item.key,
+        itemStart: item.start,
+        scrollTop: outputRef.current?.scrollTop ?? 0,
+        delta,
+        shouldAdjust,
+        hasRecentScrollEvent,
+        isMeasurementFlush: isMeasurementFlushInProgressRef.current,
+      });
+    }
+    return shouldAdjust;
   };
 
   // React 19 ref callbacks can return a cleanup function.
@@ -1142,15 +1208,55 @@ export const OutputSection: React.FC = () => {
 
   const flushPendingScrollMeasurements = useCallback(() => {
     if (pendingMeasurementCacheRef.current.size === 0) return;
+    // Block handleScroll from updating lastScrollEventAtRef during this flush so
+    // TanStack's rAF-deferred scroll corrections (shouldAdjustScrollPositionOnItemSizeChange)
+    // don't re-activate the freeze for subsequent rows in the loop.
+    isMeasurementFlushInProgressRef.current = true;
+    if (isOutputProfilingEnabled()) {
+      logOutputProfilerEvent("measurementFlush", {
+        pendingCount: pendingMeasurementCacheRef.current.size,
+        mountedCount: mountedRowElementsRef.current.size,
+      });
+    }
     for (const [key, height] of pendingMeasurementCacheRef.current) {
-      measurementCacheRef.current.set(key, height);
       const element = mountedRowElementsRef.current.get(key);
       if (element) {
+        // Re-read from DOM: more accurate than the frozen pending value and
+        // goes through updateRowMeasurementCache for stats / TanStack notification.
         rowVirtualizer.measureElement(element);
+      } else {
+        // Row unmounted — write pending height as best estimate for future
+        // estimateSize calls until the row re-enters the virtualizer range.
+        measurementCacheRef.current.set(key, height);
       }
     }
     pendingMeasurementCacheRef.current.clear();
+    // TanStack defers size-change processing to requestAnimationFrame.
+    // Keep the flush flag set through two rAF cycles so handleScroll stays
+    // suppressed while TanStack fires its scroll corrections.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        isMeasurementFlushInProgressRef.current = false;
+      });
+    });
   }, [rowVirtualizer]);
+
+  // Schedules the pending-measurement flush for OUTPUT_USER_SCROLL_INPUT_GRACE_MS+50ms.
+  // Called from both updateRowMeasurementCache (via ref) and handleScroll, so the flush
+  // fires even when no further user scroll events arrive (e.g., measurements frozen by a
+  // correction scroll event at initial workflow load).
+  const schedulePendingMeasurementFlush = useCallback(() => {
+    if (pendingMeasurementFlushTimerRef.current !== null) {
+      clearTimeout(pendingMeasurementFlushTimerRef.current);
+    }
+    pendingMeasurementFlushTimerRef.current = setTimeout(() => {
+      pendingMeasurementFlushTimerRef.current = null;
+      flushPendingScrollMeasurements();
+    }, OUTPUT_USER_SCROLL_INPUT_GRACE_MS + 50);
+  }, [flushPendingScrollMeasurements]);
+  // Keep the ref up-to-date each render so updateRowMeasurementCache (defined before
+  // flushPendingScrollMeasurements to avoid a circular dep) can call it via ref.
+  schedulePendingMeasurementFlushRef.current = schedulePendingMeasurementFlush;
 
   const rowLayout = useMemo(
     () =>
@@ -1446,6 +1552,10 @@ export const OutputSection: React.FC = () => {
       }
       return;
     }
+    // TanStack's rAF-deferred scroll corrections fire during the flush window.
+    // Suppress scroll-state updates for those so the freeze isn't re-activated,
+    // which would cause partial scroll compensation (only first row compensated).
+    if (isMeasurementFlushInProgressRef.current) return;
     const startedAt = performance.now();
     const now = startedAt;
     const previousScrollEventAt = lastScrollEventAtRef.current;
@@ -1453,15 +1563,10 @@ export const OutputSection: React.FC = () => {
     lastScrollEventAtRef.current = now;
     lastScrollTopRef.current = el.scrollTop;
 
-    // Schedule flush of pending scroll measurements once scroll settles.
+    // Reschedule the pending-measurement flush on every scroll event so the
+    // timer resets to 250ms after the LAST scroll (not the first).
     if (pendingMeasurementCacheRef.current.size > 0) {
-      if (pendingMeasurementFlushTimerRef.current !== null) {
-        clearTimeout(pendingMeasurementFlushTimerRef.current);
-      }
-      pendingMeasurementFlushTimerRef.current = setTimeout(() => {
-        pendingMeasurementFlushTimerRef.current = null;
-        flushPendingScrollMeasurements();
-      }, OUTPUT_USER_SCROLL_INPUT_GRACE_MS + 50);
+      schedulePendingMeasurementFlush();
     }
     const scrollDeltaPx =
       previousScrollTop == null ? 0 : el.scrollTop - previousScrollTop;
@@ -1572,7 +1677,7 @@ export const OutputSection: React.FC = () => {
         totalRows: rowsRef.current.length,
       });
     }
-  }, [enterFastScrollOverscan, flushPendingScrollMeasurements, rowVirtualizer, scheduleOverscanRestore]);
+  }, [enterFastScrollOverscan, rowVirtualizer, scheduleOverscanRestore, schedulePendingMeasurementFlush]);
 
   const preArmScrollSeekForInput = useCallback(
     (

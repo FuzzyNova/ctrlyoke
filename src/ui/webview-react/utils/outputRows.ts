@@ -266,7 +266,7 @@ const THINKING_LABEL_HEIGHT = 18;
 const THINKING_CONTENT_VERTICAL_CHROME = 14;
 const THINKING_OUTER_VERTICAL_CHROME = 6;
 const STATUS_ROW_VERTICAL_CHROME = 20;
-const HEADER_VERTICAL_CHROME = 14;
+const HEADER_VERTICAL_CHROME = 11; // pb-spacing-xs(4) + border-b(1) + mb-spacing-sm(6)
 const STATS_VERTICAL_CHROME = 10;
 const BASH_RESULT_MAX_LINES = 10;
 
@@ -344,7 +344,7 @@ function estimateTextBlockHeight(
   }
 
   const lineHeight = Math.max(
-    18,
+    16,
     outputFontSize * (options?.lineHeightMultiplier ?? 1.55)
   );
   return (
@@ -366,11 +366,10 @@ function estimateMarkdownBlockHeight(
     outputContentWidth,
     outputFontSize,
     {
-      // 0.42 (not 0.56): markdown renders in proportional font where avg char width
-      // at 13px is ~5.5px (near the 5.5px floor), not the 7.28px from 0.56*13.
-      // Using 0.56 estimated ~54 chars/line; actual is ~72. scaleFactor=0.78, n=4.
-      charWidthMultiplier: 0.42,
-      lineHeightMultiplier: 1.5,
+      // 0.47: calibrated from scaleFactor data — 0.42 underestimated (1.12×),
+      // 0.56 overestimated (0.78×). Linear interpolation targets scaleFactor=1.0.
+      charWidthMultiplier: 0.47,
+      lineHeightMultiplier: 1.6,
       verticalChrome: 28,
       emptyLineWeight: 0.5,
     }
@@ -380,12 +379,30 @@ function estimateMarkdownBlockHeight(
   const codeFenceCount = Math.floor((text.match(/^```/gm) ?? []).length / 2);
   const blockQuoteCount = (text.match(/^\s*>\s+/gm) ?? []).length;
 
+  // Markdown tables: th/td render with py-1.5 (12px padding) + 1px border,
+  // making each visible row taller than a plain text line. Separator rows
+  // (|---|) count as full text lines in the base estimate but render as 0px.
+  const tableRowMatches = text.match(/^\|.+\|/gm) ?? [];
+  const tableSeparatorCount = tableRowMatches.filter(r => /^\|\s*[-: |]+$/.test(r)).length;
+  const tableVisibleRowCount = tableRowMatches.length - tableSeparatorCount;
+  // lineHeight matches the markdown base estimate (1.6 multiplier) so that
+  // the separator row subtraction cancels exactly what baseHeight counted.
+  const tableLineHeight = Math.max(16, outputFontSize * 1.6);
+  // Base correction (24) was calibrated at FS=13. Scale up for larger fonts
+  // since table content in narrow columns wraps more at higher font sizes.
+  const tableRowCorrection = 24 + Math.max(0, Math.round((outputFontSize - 13) * 2.0));
+  const tableCorrection =
+    tableVisibleRowCount > 0
+      ? tableVisibleRowCount * tableRowCorrection + 16 - tableSeparatorCount * tableLineHeight
+      : 0;
+
   return (
     baseHeight +
     headingCount * 8 +
     bulletCount * 2 +
     codeFenceCount * 14 +
-    blockQuoteCount * 6
+    blockQuoteCount * 6 +
+    tableCorrection
   );
 }
 
@@ -394,7 +411,14 @@ function estimateCliHeaderHeight(
   outputContentWidth: number | undefined,
   outputFontSize: number
 ): number {
+  // Include timestamp so flex-wrap behavior matches actual rendering.
+  // Use sm font size (FS-1) with body line-height (1.4) to match the header's
+  // text-[fp-output-font-size-sm] class and inherited body line-height.
+  const timestamp = row.output.timestampMs
+    ? `[${new Date(row.output.timestampMs).toLocaleTimeString()}]`
+    : "";
   const headerText = [
+    timestamp,
     row.stepLabel,
     row.stepName,
     row.output.structured?.metadata?.harness,
@@ -402,14 +426,15 @@ function estimateCliHeaderHeight(
   ]
     .filter((value): value is string => Boolean(value && value.trim()))
     .join(" ");
+  const smFontSize = Math.max(11, outputFontSize - 1);
   const lineCount = Math.max(
     1,
-    estimateWrappedLineCount(headerText, outputContentWidth, outputFontSize, {
+    estimateWrappedLineCount(headerText, outputContentWidth, smFontSize, {
       chrome: HEADER_HORIZONTAL_CHROME,
       charWidthMultiplier: 0.58,
     })
   );
-  const lineHeight = Math.max(19, outputFontSize * 1.5);
+  const lineHeight = Math.max(16, smFontSize * 1.4);
   const actionLines =
     row.promptUndo && (row.promptUndo.undo || row.promptUndo.redo) ? 1 : 0;
 
@@ -521,10 +546,17 @@ function estimateBashOutputHeight(
     error?: string;
     status?: string;
   };
+  // TOOL_CALL_LINE has no whitespace-pre-wrap, so \n in the command string
+  // collapses to a space in rendering. Flatten before estimating to avoid
+  // counting each embedded newline as a separate visual line.
+  const commandText = (data.command?.trim() || "command unavailable").replace(/\n/g, " ");
+  // TOOL_CALL_TERMINAL has my-2=16px total vertical margin (captured via
+  // flow-root). Split as 8px for command + 8px for result = 16px total.
   let totalHeight = estimateTerminalSummaryHeight(
-    data.command?.trim() || "command unavailable",
+    commandText,
     outputContentWidth,
-    outputFontSize
+    outputFontSize,
+    8
   );
 
   const isCompleted =
@@ -535,9 +567,22 @@ function estimateBashOutputHeight(
     return totalHeight;
   }
 
-  for (const content of [data.output, data.error]) {
-    if (!content) continue;
-    const limitedContent = normalizeTextForLayout(content)
+  // Match BashOutput.tsx duplicate detection: when output and error are
+  // identical after stripping whitespace, only the error section renders.
+  const normalizedOutput = normalizeTextForLayout(data.output ?? "");
+  const normalizedError = normalizeTextForLayout(data.error ?? "");
+  const isDuplicate =
+    normalizedOutput.trim().length > 0 &&
+    normalizedOutput.trim() === normalizedError.trim();
+  const contentsToEstimate = isDuplicate
+    ? [normalizedError]
+    : [normalizedOutput, normalizedError];
+
+  for (const content of contentsToEstimate) {
+    // Skip empty/whitespace-only content — BashOutput sanitizes ANSI codes
+    // which often leaves blank-only error streams that don't render.
+    if (!content || content.trim().length === 0) continue;
+    const limitedContent = content
       .split("\n")
       .slice(0, BASH_RESULT_MAX_LINES)
       .join("\n");
@@ -547,8 +592,10 @@ function estimateBashOutputHeight(
       outputFontSize,
       {
         charWidthMultiplier: 0.6,
-        lineHeightMultiplier: 1.4,
-        verticalChrome: 10,
+        // TOOL_RESULT_LINE uses sm font (FS-1) with leading-relaxed (1.625).
+        // 1.55 × FS approximates max(16, (FS-1) × 1.625) for the valid FS range.
+        lineHeightMultiplier: 1.55,
+        verticalChrome: 8, // my-2 bottom half (see command chrome above)
       }
     );
   }
@@ -774,19 +821,26 @@ export function estimateOutputRowHeight(
     case "cli-header":
       return estimateCliHeaderHeight(row, outputContentWidth, outputFontSize);
     case "prompt":
-      return estimateMarkdownBlockHeight(row.text, outputContentWidth, outputFontSize);
+      // OUTPUT_BLOCK_BASE: font-mono sm font, body line-height:1.4, py-sm+my-sm=24px chrome.
+      // chrome:32 matches actual horizontal padding (px-md outer + px-sm inner + border-l-3).
+      return estimateTextBlockHeight(row.text, outputContentWidth, outputFontSize - 1, {
+        charWidthMultiplier: 0.6,
+        lineHeightMultiplier: 1.4,
+        verticalChrome: 24,
+        chrome: 32,
+      });
     case "cli-command":
+      // OUTPUT_BLOCK_BASE: font-mono sm font, body line-height:1.4, py-sm+my-sm=24px chrome.
+      // chrome:32 matches actual horizontal padding (px-md outer + px-sm inner + border-l-3).
       return estimateTextBlockHeight(
         `${row.workingDirectory || "workspace"}> ${row.command}`,
         outputContentWidth,
-        outputFontSize,
+        outputFontSize - 1,
         {
-          // OUTPUT_BLOCK_BASE renders at fp-output-font-size-sm (fontSize-1, typically 12px)
-          // with font-mono. At 12px mono: charWidth≈7.2px, lineHeight≈18px (line-height:1.5).
-          // Using raw outputFontSize (13) overestimates both by ~12%, compounding to ~30% total.
-          // 0.55 → 13*0.55=7.15≈7.2; 1.35 → max(18, 13*1.35)=18px matches actual.
-          charWidthMultiplier: 0.55,
-          lineHeightMultiplier: 1.35,
+          charWidthMultiplier: 0.6,
+          lineHeightMultiplier: 1.4,
+          verticalChrome: 24,
+          chrome: 32,
         }
       );
     case "error":

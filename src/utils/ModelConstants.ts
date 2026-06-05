@@ -283,9 +283,6 @@ export function getClaudeContextWindowSize(modelId: string): number {
   ) {
     return 1_000_000;
   }
-  if (modelId.includes("sonnet")) {
-    return 400_000;
-  }
   return 200_000;
 }
 

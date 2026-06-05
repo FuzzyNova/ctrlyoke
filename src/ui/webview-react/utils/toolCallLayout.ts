@@ -182,10 +182,11 @@ export function buildToolCallRenderPlan(
     outputContentWidth,
   } = input;
 
-  const summaryLineHeight = Math.max(24, outputFontSize * 1.8);
-  // 1.85 (not 1.55): profiler data shows actual section height is ~21% taller than
-  // the 1.55 estimate (scaleFactor=1.21, n=15). 1.85 gives 24px at font=13 vs prior 20px.
-  const sectionLineHeight = Math.max(22, outputFontSize * 1.85);
+  // FS*1.625 = leading-relaxed line height; clamped to 24 for small font sizes.
+  const summaryLineHeight = Math.max(24, outputFontSize * 1.625);
+  // (FS-1)*1.625 ≈ FS*1.55 — matches sm-font leading-relaxed line height at FS≥15.
+  // Clamped to 22 for very small font sizes (clamp fires at FS≤14).
+  const sectionLineHeight = Math.max(22, outputFontSize * 1.55);
   const summaryHeight = summaryLineHeight + TOOL_CALL_SUMMARY_BOTTOM_GAP;
   const paramsText = getGenericToolCallParamsText(parameters);
   const { output, error } = getGenericToolCallOutput(result);
