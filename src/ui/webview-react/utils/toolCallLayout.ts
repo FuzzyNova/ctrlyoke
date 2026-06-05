@@ -21,6 +21,10 @@ const DEFAULT_OUTPUT_FONT_SIZE = 13;
 const TOOL_CALL_SUMMARY_BOTTOM_GAP = 10;
 const TOOL_CALL_PARAMS_BOTTOM_GAP = 8;
 const TOOL_CALL_RESULT_BOTTOM_GAP = 10;
+// outputRow(72) + pl-4(16) + ml-2(8): total horizontal chrome for tool result text
+const TOOL_RESULT_HORIZONTAL_CHROME = 96;
+// Consolas/Monaco at (fontSize-1): ~0.60 char-width ratio
+const TOOL_RESULT_SM_FONT_CHAR_RATIO = 0.60;
 
 export interface ToolCallSectionRenderPlan {
   hasContent: boolean;
@@ -38,6 +42,7 @@ export interface ToolCallRenderPlanInput {
   result?: ToolResult;
   expansion?: ToolCallExpansionState;
   outputFontSize?: number;
+  outputContentWidth?: number;
 }
 
 export interface ToolCallRenderPlan {
@@ -116,11 +121,30 @@ function buildHiddenSectionRenderPlan(text: string): ToolCallSectionRenderPlan {
 function buildResultSectionRenderPlan(
   text: string,
   expanded: boolean,
-  sectionLineHeight: number
+  sectionLineHeight: number,
+  outputContentWidth?: number,
+  outputFontSize = DEFAULT_OUTPUT_FONT_SIZE
 ): ToolCallSectionRenderPlan {
   const lineCount = countLines(text);
   const visibleLineCount = getVisibleResultLineCount(text, expanded);
   const isTruncated = lineCount > GENERIC_TOOL_CALL_MAX_RESULT_LINES;
+
+  // Count visual lines (with wrapping) when content width is known.
+  // Raw countLines() misses wrap-induced lines — output text uses whitespace-pre-wrap
+  // with a smaller font (fp-output-font-size-sm = fontSize-1), causing severe underestimates
+  // on long-output tool calls (observed: 10 raw lines → 72 visual lines, 1468px delta).
+  let visualLineCount = visibleLineCount;
+  if (outputContentWidth != null && outputContentWidth > 0) {
+    const smFontSize = Math.max(10, outputFontSize - 1);
+    const charWidth = Math.max(5.5, smFontSize * TOOL_RESULT_SM_FONT_CHAR_RATIO);
+    const availableWidth = Math.max(80, outputContentWidth - TOOL_RESULT_HORIZONTAL_CHROME);
+    const charsPerLine = Math.max(8, Math.floor(availableWidth / charWidth));
+    const visibleRawLines = text.split("\n").slice(0, visibleLineCount);
+    visualLineCount = visibleRawLines.reduce((total, line) => {
+      if (line.length === 0) return total + 1;
+      return total + Math.max(1, Math.ceil(line.length / charsPerLine));
+    }, 0);
+  }
 
   return {
     hasContent: true,
@@ -128,9 +152,9 @@ function buildResultSectionRenderPlan(
     isExpanded: expanded,
     isTruncated,
     lineCount,
-    visibleLineCount,
+    visibleLineCount, // raw lines — used by getVisibleToolCallText for slicing
     hiddenLineCount: Math.max(0, lineCount - visibleLineCount),
-    height: visibleLineCount * sectionLineHeight + TOOL_CALL_RESULT_BOTTOM_GAP,
+    height: visualLineCount * sectionLineHeight + TOOL_CALL_RESULT_BOTTOM_GAP,
   };
 }
 
@@ -155,6 +179,7 @@ export function buildToolCallRenderPlan(
     result,
     expansion = DEFAULT_TOOL_CALL_EXPANSION_STATE,
     outputFontSize = DEFAULT_OUTPUT_FONT_SIZE,
+    outputContentWidth,
   } = input;
 
   const summaryLineHeight = Math.max(24, outputFontSize * 1.8);
@@ -185,11 +210,19 @@ export function buildToolCallRenderPlan(
     ? buildResultSectionRenderPlan(
         output,
         expansion.outputExpanded,
-        sectionLineHeight
+        sectionLineHeight,
+        outputContentWidth,
+        outputFontSize
       )
     : getEmptySectionRenderPlan();
   const errorPlan = error
-    ? buildResultSectionRenderPlan(error, expansion.errorExpanded, sectionLineHeight)
+    ? buildResultSectionRenderPlan(
+        error,
+        expansion.errorExpanded,
+        sectionLineHeight,
+        outputContentWidth,
+        outputFontSize
+      )
     : getEmptySectionRenderPlan();
 
   return {
@@ -226,12 +259,14 @@ export function estimateGenericToolCallHeight(
   parameters: Record<string, unknown> | undefined,
   result: ToolResult | undefined,
   expansion: ToolCallExpansionState,
-  outputFontSize: number
+  outputFontSize: number,
+  outputContentWidth?: number
 ): number {
   return buildToolCallRenderPlan({
     parameters,
     result,
     expansion,
     outputFontSize,
+    outputContentWidth,
   }).totalHeight;
 }

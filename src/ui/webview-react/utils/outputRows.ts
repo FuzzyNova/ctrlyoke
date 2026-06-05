@@ -697,7 +697,7 @@ function estimateBaseStructuredEventHeight(
   outputFontSize: number
 ): number {
   if (row.event.type === CLI_EVENT_TYPES.TOOL_CALL && row.toolCall) {
-    return estimateToolCallStructuredEventHeight(row, outputFontSize);
+    return estimateToolCallStructuredEventHeight(row, outputFontSize, outputContentWidth);
   }
 
   if (row.diff && !row.hideDiff) {
@@ -724,13 +724,17 @@ function estimateDiffStructuredEventHeight(
 
 function estimateToolCallStructuredEventHeight(
   row: StructuredEventRow,
-  outputFontSize: number
+  outputFontSize: number,
+  outputContentWidth?: number
 ): number {
   if (row.event.type !== CLI_EVENT_TYPES.TOOL_CALL || !row.toolCall) {
     return 64;
   }
 
-  if (row.toolCall.renderPlan) {
+  // When content width is known, recompute with wrapping-aware estimation —
+  // renderPlan.totalHeight was built without content width and underestimates
+  // heavily for tool calls with long output lines (whitespace-pre-wrap).
+  if (row.toolCall.renderPlan && outputContentWidth == null) {
     return row.toolCall.renderPlan.totalHeight;
   }
 
@@ -739,7 +743,8 @@ function estimateToolCallStructuredEventHeight(
     data.parameters,
     data.result,
     row.toolCall.expansion,
-    outputFontSize
+    outputFontSize,
+    outputContentWidth
   );
 }
 
@@ -776,8 +781,12 @@ export function estimateOutputRowHeight(
         outputContentWidth,
         outputFontSize,
         {
-          charWidthMultiplier: 0.62,
-          lineHeightMultiplier: 1.55,
+          // OUTPUT_BLOCK_BASE renders at fp-output-font-size-sm (fontSize-1, typically 12px)
+          // with font-mono. At 12px mono: charWidth≈7.2px, lineHeight≈18px (line-height:1.5).
+          // Using raw outputFontSize (13) overestimates both by ~12%, compounding to ~30% total.
+          // 0.55 → 13*0.55=7.15≈7.2; 1.35 → max(18, 13*1.35)=18px matches actual.
+          charWidthMultiplier: 0.55,
+          lineHeightMultiplier: 1.35,
         }
       );
     case "error":

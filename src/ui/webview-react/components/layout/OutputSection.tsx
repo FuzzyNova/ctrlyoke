@@ -109,7 +109,7 @@ import {
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to keep auto-scroll pinned.
 const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024; // minimum output width before diffs use split view.
-const OUTPUT_VIRTUALIZER_OVERSCAN = 4; // idle extra rows rendered above/below viewport; balances smoothness with first-scroll cost.
+const OUTPUT_VIRTUALIZER_OVERSCAN = 6; // idle extra rows above/below viewport; 6 gives more pre-render buffer to reduce slow-scroll blank-edge flashes.
 const OUTPUT_ACTIVE_SCROLL_OVERSCAN = 2; // extra rows while fast-scroll placeholders are active; lower reduces work during rapid scroll.
 const OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN = 0; // first real-row restore renders only viewport rows; extra rows are staged later.
 const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN = 3; // distinct from active-scroll overscan so staged restore never re-enters placeholder mode.
