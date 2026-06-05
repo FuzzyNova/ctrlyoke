@@ -645,6 +645,9 @@ export const OutputSection: React.FC = () => {
   const lastScrollEventAtRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
   const lastVirtualRangeRef = useRef<string>("");
+  const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
+  const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const pendingMeasurementFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks the row count at the last auto-scroll so we can distinguish "new
   // rows arrived" (scroll) from "same rows re-rendered" (don't scroll).
   const lastAutoScrollRowCountRef = useRef(0);
@@ -954,6 +957,10 @@ export const OutputSection: React.FC = () => {
         cancelAnimationFrame(overscanRestoreRafRef.current);
         overscanRestoreRafRef.current = null;
       }
+      if (pendingMeasurementFlushTimerRef.current !== null) {
+        clearTimeout(pendingMeasurementFlushTimerRef.current);
+        pendingMeasurementFlushTimerRef.current = null;
+      }
     },
     []
   );
@@ -1006,6 +1013,18 @@ export const OutputSection: React.FC = () => {
           }
         }
         return nextHeight;
+      }
+
+      // Freeze layout updates while user is scrolling: store the new height in a
+      // pending cache and return the stale height to TanStack so it sees no change
+      // (no notify → no re-render → no mid-scroll position jump). handleScroll's
+      // idle timer flushes pending into the main cache for one clean layout pass.
+      const isScrolling =
+        lastScrollEventAtRef.current != null &&
+        performance.now() - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+      if (isScrolling) {
+        pendingMeasurementCacheRef.current.set(row.key, nextHeight);
+        return previousHeight !== undefined ? previousHeight : estimatedHeight;
       }
 
       measurementCacheRef.current.set(row.key, nextHeight);
@@ -1109,11 +1128,29 @@ export const OutputSection: React.FC = () => {
   const measureRowElement = useCallback(
     (element: HTMLDivElement | null): void | (() => void) => {
       if (!element) return;
+      const index = Number(element.dataset.index ?? -1);
+      const row = rowsRef.current[index];
+      if (row) mountedRowElementsRef.current.set(row.key, element);
       rowVirtualizer.measureElement(element);
-      return () => rowVirtualizer.measureElement(null);
+      return () => {
+        if (row) mountedRowElementsRef.current.delete(row.key);
+        rowVirtualizer.measureElement(null);
+      };
     },
     [rowVirtualizer]
   );
+
+  const flushPendingScrollMeasurements = useCallback(() => {
+    if (pendingMeasurementCacheRef.current.size === 0) return;
+    for (const [key, height] of pendingMeasurementCacheRef.current) {
+      measurementCacheRef.current.set(key, height);
+      const element = mountedRowElementsRef.current.get(key);
+      if (element) {
+        rowVirtualizer.measureElement(element);
+      }
+    }
+    pendingMeasurementCacheRef.current.clear();
+  }, [rowVirtualizer]);
 
   const rowLayout = useMemo(
     () =>
@@ -1415,6 +1452,17 @@ export const OutputSection: React.FC = () => {
     const previousScrollTop = lastScrollTopRef.current;
     lastScrollEventAtRef.current = now;
     lastScrollTopRef.current = el.scrollTop;
+
+    // Schedule flush of pending scroll measurements once scroll settles.
+    if (pendingMeasurementCacheRef.current.size > 0) {
+      if (pendingMeasurementFlushTimerRef.current !== null) {
+        clearTimeout(pendingMeasurementFlushTimerRef.current);
+      }
+      pendingMeasurementFlushTimerRef.current = setTimeout(() => {
+        pendingMeasurementFlushTimerRef.current = null;
+        flushPendingScrollMeasurements();
+      }, OUTPUT_USER_SCROLL_INPUT_GRACE_MS + 50);
+    }
     const scrollDeltaPx =
       previousScrollTop == null ? 0 : el.scrollTop - previousScrollTop;
     const absScrollDeltaPx = Math.abs(scrollDeltaPx);
@@ -1524,7 +1572,7 @@ export const OutputSection: React.FC = () => {
         totalRows: rowsRef.current.length,
       });
     }
-  }, [enterFastScrollOverscan, rowVirtualizer, scheduleOverscanRestore]);
+  }, [enterFastScrollOverscan, flushPendingScrollMeasurements, rowVirtualizer, scheduleOverscanRestore]);
 
   const preArmScrollSeekForInput = useCallback(
     (
