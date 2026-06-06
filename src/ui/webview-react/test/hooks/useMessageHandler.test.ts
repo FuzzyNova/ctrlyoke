@@ -874,6 +874,83 @@ describe("STEP_STATUS_CHANGED", () => {
 });
 
 // ---------------------------------------------------------------------------
+// CONTEXT_WINDOW_UPDATE
+// ---------------------------------------------------------------------------
+
+describe("CONTEXT_WINDOW_UPDATE", () => {
+  it("stores live context for the currently running step", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Step 0"), makePrompt("Step 1")],
+      });
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+      useWorkflowStore.getState().setCurrentStep(1);
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE, {
+        stepIndex: 1,
+        used: 152797,
+        size: 200000,
+      });
+    });
+
+    expect(useWorkflowStore.getState().liveContextWindow[1]).toEqual({
+      used: 152797,
+      size: 200000,
+    });
+  });
+
+  it("ignores late live context for a completed step", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "wf.yaml",
+        steps: [makePrompt("Step 0"), makePrompt("Step 1")],
+      });
+      useWorkflowStore.getState().setExecutionState(EXECUTION_STATES.RUNNING);
+      useWorkflowStore.getState().setCurrentStep(1);
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE, {
+        stepIndex: 1,
+        used: 66000,
+        size: 200000,
+      });
+      dispatch(MESSAGE_TYPES.STEP_STATUS_CHANGED, {
+        stepIndex: 1,
+        status: STEP_STATUS.COMPLETED,
+      });
+      dispatch(MESSAGE_TYPES.CLI_OUTPUT, {
+        stepIndex: 1,
+        output: {
+          response: "done",
+          tokens: {
+            contextWindowUsed: 152797,
+            contextWindowSize: 200000,
+          },
+        },
+      });
+      dispatch(MESSAGE_TYPES.CONTEXT_WINDOW_UPDATE, {
+        stepIndex: 1,
+        used: 66000,
+        size: 200000,
+      });
+    });
+
+    const store = useWorkflowStore.getState();
+    expect(store.liveContextWindow[1]).toBeUndefined();
+    expect(store.steps[1]._runtime?.contextWindowUsed).toBe(152797);
+    expect(store.steps[1]._runtime?.contextWindowSize).toBe(200000);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // RETRY_ATTEMPT_CHANGED
 // ---------------------------------------------------------------------------
 

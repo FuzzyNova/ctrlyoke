@@ -141,10 +141,11 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const longPressHandlers = useLongPress(onContextMenu);
 
-  // Derive context window percentage from live data (running step) or completed output
-  const ctx =
-    liveContextWindow ??
-    (latestOutput?.tokens?.contextWindowSize
+  // Derive context window percentage from live data only while this row is the
+  // running step. After completion, the CLI output/runtime metadata is durable
+  // and must win over any late live telemetry.
+  const completedContext =
+    latestOutput?.tokens?.contextWindowSize
       ? {
           used: latestOutput.tokens.contextWindowUsed ?? 0,
           size: latestOutput.tokens.contextWindowSize,
@@ -154,7 +155,11 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
             used: runtimeMeta.contextWindowUsed ?? 0,
             size: runtimeMeta.contextWindowSize,
           }
-        : undefined);
+        : undefined;
+  const ctx =
+    isCurrent && liveContextWindow
+      ? liveContextWindow
+      : (completedContext ?? liveContextWindow);
   const contextPct = ctx?.size
     ? Math.round((ctx.used / ctx.size) * 100)
     : undefined;

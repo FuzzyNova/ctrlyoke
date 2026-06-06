@@ -39,7 +39,7 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 import type { TerminalSettings } from "@root/types/WebviewMessageTypes";
 import { WebviewLog } from "@utils/logger";
-import { isWorkflowActive } from "../utils/status";
+import { isWorkflowActive, isWorkflowRunning } from "../utils/status";
 import { useTerminalStore } from "../store/terminalStore";
 import { useHarnessFileStore } from "../store/useHarnessFileStore";
 import { useMcpManagerStore } from "../store/useMcpManagerStore";
@@ -1137,9 +1137,26 @@ function createMessageHandlers(): MessageHandlerMap {
         return;
       }
     }
-    useWorkflowStore
-      .getState()
-      .updateLiveContextWindow(message.stepIndex, message.used, message.size);
+    const workflowStore = useWorkflowStore.getState();
+    const step = workflowStore.steps[message.stepIndex];
+    const stepStatus = step ? (step as { status?: StepStatus }).status : null;
+
+    // Context updates are live telemetry for the currently executing step.
+    // A late update from a just-finished prompt must not overwrite the completed
+    // CLI output token metadata, which is the durable source used by history.
+    if (
+      !isWorkflowRunning(workflowStore.executionState) ||
+      workflowStore.currentStep !== message.stepIndex ||
+      isTerminalStepStatus(stepStatus)
+    ) {
+      return;
+    }
+
+    workflowStore.updateLiveContextWindow(
+      message.stepIndex,
+      message.used,
+      message.size
+    );
   };
 
   // --------------------------------------------------------------------------
