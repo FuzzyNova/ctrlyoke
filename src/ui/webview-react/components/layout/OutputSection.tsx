@@ -1,6 +1,7 @@
 import React, {
   Profiler,
   useEffect,
+  useLayoutEffect,
   useRef,
   useMemo,
   useCallback,
@@ -1273,7 +1274,7 @@ export const OutputSection: React.FC = () => {
   }, []);
 
   const restoreViewportAnchorGuard = useCallback(
-    (phase: "scroll-correction" | "raf-1" | "raf-2") => {
+    (phase: "layout-effect" | "scroll-correction" | "raf-1" | "raf-2") => {
       const guard = viewportAnchorGuardRef.current;
       const scrollElement = outputRef.current;
       const now = performance.now();
@@ -1334,6 +1335,24 @@ export const OutputSection: React.FC = () => {
     },
     [clearViewportAnchorGuard]
   );
+
+  useLayoutEffect(() => {
+    const hasRecentUserScrollInput =
+      lastUserScrollInputAtRef.current != null &&
+      performance.now() - lastUserScrollInputAtRef.current <
+        OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+    if (hasRecentUserScrollInput) {
+      return;
+    }
+
+    restoreViewportAnchorGuard("layout-effect");
+  }, [
+    measurementVersion,
+    outputOverscan,
+    restoreViewportAnchorGuard,
+    rows.length,
+    scrollSeekPlaceholderActive,
+  ]);
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
