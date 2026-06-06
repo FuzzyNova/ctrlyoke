@@ -1336,6 +1336,11 @@ export const OutputSection: React.FC = () => {
     [clearViewportAnchorGuard]
   );
 
+  // Restore before paint when React commits a virtualizer range transition
+  // (notably staged overscan restore). Measurement-version commits already
+  // have TanStack's size-change callback plus flush rAF restores; running this
+  // on every measurement bump can over-correct after a row above the anchor
+  // measures during idle overscan expansion.
   useLayoutEffect(() => {
     const hasRecentUserScrollInput =
       lastUserScrollInputAtRef.current != null &&
@@ -1347,7 +1352,6 @@ export const OutputSection: React.FC = () => {
 
     restoreViewportAnchorGuard("layout-effect");
   }, [
-    measurementVersion,
     outputOverscan,
     restoreViewportAnchorGuard,
     rows.length,
