@@ -62,11 +62,26 @@ export function buildCollapsedOutputPreview(
   const visibleEnd = Math.min(lineLimitEnd, charLimitEnd);
   const visibleText = text.slice(0, visibleEnd).replace(/\n+$/g, "");
   const visibleLineCount = countLines(visibleText);
+  const hiddenLineCount = Math.max(0, fullLineCount - visibleLineCount);
+
+  // If only 1 line would be hidden and the full text is within the char budget,
+  // the toggle link takes as much space as the hidden line — show everything.
+  // The char-budget guard is critical: a single logical line can contain millions
+  // of characters that wrap to many visual lines, so we must not bypass maxChars.
+  if (hiddenLineCount <= 1 && text.length <= maxChars) {
+    return {
+      fullLineCount,
+      visibleLineCount: fullLineCount,
+      hiddenLineCount: 0,
+      visibleText: text,
+      isTruncated: false,
+    };
+  }
 
   return {
     fullLineCount,
     visibleLineCount,
-    hiddenLineCount: Math.max(0, fullLineCount - visibleLineCount),
+    hiddenLineCount,
     visibleText,
     isTruncated: visibleEnd < text.length,
   };

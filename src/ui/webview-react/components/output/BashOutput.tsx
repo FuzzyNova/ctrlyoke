@@ -120,8 +120,7 @@ export const BashOutput = memo<BashOutputProps>(
         maxLines,
         maxChars: maxCharacters,
       });
-      const canToggle =
-        preview.fullLineCount > maxLines || content.length > maxCharacters;
+      const canToggle = isExpanded || preview.isTruncated;
 
       const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
 

@@ -127,14 +127,15 @@ function buildResultSectionRenderPlan(
   outputFontSize = DEFAULT_OUTPUT_FONT_SIZE
 ): ToolCallSectionRenderPlan {
   const lineCount = countLines(text);
-  const canToggle =
-    lineCount > GENERIC_TOOL_CALL_MAX_RESULT_LINES ||
-    text.length > GENERIC_TOOL_CALL_MAX_RESULT_CHARS;
   const preview = buildCollapsedOutputPreview(text, {
     expanded,
     maxLines: GENERIC_TOOL_CALL_MAX_RESULT_LINES,
     maxChars: GENERIC_TOOL_CALL_MAX_RESULT_CHARS,
   });
+  // When only 1 line would be hidden, buildCollapsedOutputPreview returns the
+  // full text (isTruncated=false). Use expanded || isTruncated so the
+  // "[show less]" button is still available when the section is expanded.
+  const canToggle = expanded || preview.isTruncated;
 
   // Count visual lines (with wrapping) when content width is known.
   // Raw countLines() misses wrap-induced lines — output text uses whitespace-pre-wrap
@@ -156,7 +157,7 @@ function buildResultSectionRenderPlan(
     hasContent: true,
     canToggle,
     isExpanded: expanded,
-    isTruncated: canToggle,
+    isTruncated: preview.isTruncated,
     lineCount,
     visibleLineCount: preview.visibleLineCount,
     hiddenLineCount: preview.hiddenLineCount,

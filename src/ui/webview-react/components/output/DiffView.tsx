@@ -219,9 +219,25 @@ export const DiffView: React.FC<DiffViewProps> = ({
     setUncontrolledExpandedGaps(new Map());
   }, [baseHunks, expandedGaps]);
 
+  // Auto-expand single-line gaps: a "show 1 hidden line" control takes as much
+  // vertical space as the line itself, so just show it unconditionally.
+  const effectiveExpandedGaps = useMemo((): DiffGapExpansionState => {
+    if (!oldContent || baseHunks.length === 0) return activeExpandedGaps;
+    let modified = false;
+    const next = new Map(activeExpandedGaps);
+    for (let i = 1; i < baseHunks.length; i++) {
+      const hidden = getCollapsedLinesCountBetween(baseHunks[i - 1], baseHunks[i]);
+      if (hidden === 1 && !next.has(i)) {
+        next.set(i, baseHunks[i].oldStart);
+        modified = true;
+      }
+    }
+    return modified ? next : activeExpandedGaps;
+  }, [activeExpandedGaps, baseHunks, oldContent]);
+
   const expandedHunks = useMemo(
-    () => applyDiffGapExpansionState(baseHunks, oldContent, activeExpandedGaps),
-    [activeExpandedGaps, baseHunks, oldContent]
+    () => applyDiffGapExpansionState(baseHunks, oldContent, effectiveExpandedGaps),
+    [effectiveExpandedGaps, baseHunks, oldContent]
   );
 
   // Expand hidden context for the gap between two consecutive hunks.
