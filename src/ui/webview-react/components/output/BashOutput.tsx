@@ -1,6 +1,12 @@
 import { useState, useId, memo } from "react";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
+  DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
+  DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+  buildCollapsedOutputPreview,
+  formatCollapsedOutputToggleLabel,
+} from "@utils/outputTruncation";
+import {
   TOOL_CALL_TERMINAL,
   TOOL_CALL_LINE,
   TOOL_RESULT_LINE,
@@ -22,6 +28,7 @@ interface BashOutputProps {
   exitCode?: number;
   status?: FileOperationStatus;
   maxLines?: number;
+  maxCharacters?: number;
   expansion?: BashOutputExpansionState;
   onExpansionChange?: (section: BashOutputExpansionSection, expanded: boolean) => void;
   className?: string;
@@ -54,7 +61,8 @@ export const BashOutput = memo<BashOutputProps>(
     error,
     exitCode,
     status,
-    maxLines = 10,
+    maxLines = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+    maxCharacters = DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
     expansion,
     onExpansionChange,
     className = "",
@@ -107,13 +115,13 @@ export const BashOutput = memo<BashOutputProps>(
     ) => {
       if (!content) return null;
 
-      const lines = content.split("\n");
-      const isTruncated = lines.length > maxLines;
-      const visibleContent =
-        isTruncated && !isExpanded
-          ? lines.slice(0, maxLines).join("\n")
-          : content;
-      const hiddenLines = lines.length - maxLines;
+      const preview = buildCollapsedOutputPreview(content, {
+        expanded: isExpanded,
+        maxLines,
+        maxChars: maxCharacters,
+      });
+      const canToggle =
+        preview.fullLineCount > maxLines || content.length > maxCharacters;
 
       const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
 
@@ -124,8 +132,8 @@ export const BashOutput = memo<BashOutputProps>(
             className="min-w-0 flex-1 whitespace-pre-wrap break-words"
             id={`${containerId}-${type}`}
           >
-            {visibleContent}
-            {isTruncated && (
+            {preview.visibleText}
+            {canToggle && (
               <button
                 type="button"
                 className="text-bash-expand-link no-underline text-sm ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
@@ -134,9 +142,7 @@ export const BashOutput = memo<BashOutputProps>(
                   updateExpansion(type, !isExpanded);
                 }}
               >
-                {isExpanded
-                  ? "[show less]"
-                  : `[show ${hiddenLines} more line${hiddenLines !== 1 ? "s" : ""}]`}
+                {formatCollapsedOutputToggleLabel(preview, isExpanded)}
               </button>
             )}
           </div>

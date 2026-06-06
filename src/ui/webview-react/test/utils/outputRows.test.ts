@@ -722,6 +722,149 @@ describe("outputRows", () => {
     expect(bashRow.estimateSize).toBeGreaterThan(120);
   });
 
+  it("uses collapsed character-limited bash previews in row estimates", () => {
+    const rowKey = "queue:0:run0:attempt0:event:0";
+    const allMessages: OutputMessage[] = [
+      {
+        type: "cli",
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        runIndex: 0,
+        data: {
+          prompt: "Run command",
+          response: "",
+          elapsed: 0.5,
+          isStreaming: false,
+          structured: {
+            events: [
+              {
+                type: CLI_EVENT_TYPES.BASH_COMMAND,
+                data: {
+                  command: "node script.js",
+                  status: OPERATION_STATUS.COMPLETED,
+                  output: "x".repeat(5000),
+                },
+              },
+            ],
+            metadata: {},
+          },
+        },
+      },
+    ];
+    const baseInput = {
+      allMessages,
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+      outputContentWidth: 360,
+    };
+
+    const collapsed = buildOutputRows(baseInput);
+    const expanded = buildOutputRows({
+      ...baseInput,
+      bashExpansionState: new Map([
+        [
+          rowKey,
+          {
+            outputExpanded: true,
+            errorExpanded: false,
+          },
+        ],
+      ]),
+    });
+
+    const collapsedRow = collapsed.rows.find((row) => row.key === rowKey);
+    const expandedRow = expanded.rows.find((row) => row.key === rowKey);
+
+    if (!collapsedRow || !expandedRow) {
+      throw new Error("Expected bash rows");
+    }
+
+    expect(collapsedRow.estimateSize).toBeLessThan(expandedRow.estimateSize);
+  });
+
+  it("estimates bash rows from sanitized terminal output", () => {
+    const cleanLine = "ok";
+    const noisyLine = `\u001b[32m${cleanLine}\u001b[0m\u0007`;
+    const buildWithOutput = (output: string) =>
+      buildOutputRows({
+        allMessages: [
+          {
+            type: "cli",
+            target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+            timestamp: 1000,
+            attemptIndex: 0,
+            runIndex: 0,
+            data: {
+              prompt: "Run command",
+              response: "",
+              elapsed: 0.5,
+              isStreaming: false,
+              structured: {
+                events: [
+                  {
+                    type: CLI_EVENT_TYPES.BASH_COMMAND,
+                    data: {
+                      command: "printf",
+                      status: OPERATION_STATUS.COMPLETED,
+                      output,
+                    },
+                  },
+                ],
+                metadata: {},
+              },
+            },
+          },
+        ],
+        steps,
+        finalStep: null,
+        streamingChunks: {},
+        finalStepStreamingChunks: {},
+        isExecutionActive: false,
+        allowUndoActions: false,
+        isViewingHistory: false,
+        historyOutputs: null,
+        workspaceSnapshots: {},
+        finalStepWorkspaceSnapshots: {},
+        undoRecords: {},
+        diffCollapseState: new Map(),
+        diffExpansionState: new Map(),
+        toolCallExpansionState: new Map(),
+        defaultDiffCollapsed: false,
+        outputContentWidth: 360,
+      });
+
+    const cleanRow = buildWithOutput(cleanLine).rows.find(
+      (row) =>
+        row.rowKind === "structured-event" &&
+        row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
+    );
+    const noisyRow = buildWithOutput(noisyLine).rows.find(
+      (row) =>
+        row.rowKind === "structured-event" &&
+        row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
+    );
+
+    if (!cleanRow || !noisyRow) {
+      throw new Error("Expected bash rows");
+    }
+
+    expect(noisyRow.estimateSize).toBe(cleanRow.estimateSize);
+  });
+
   it("scales file-operation structured-event estimates with wrapped path width", () => {
     const longPath = `src/${"deeply-nested-segment/".repeat(10)}example-file-with-a-very-long-name.ts`;
     const allMessages: OutputMessage[] = [

@@ -12,6 +12,7 @@ import type {
   WorkspaceSnapshot,
   WorkflowOutputHistory,
 } from "@root/types/OutputHistoryTypes";
+import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
 import { getTargetKey } from "./outputProjection";
 import { computePromptUndoActions } from "./promptUndo";
@@ -32,6 +33,11 @@ import {
   type ToolCallRenderPlan,
   type ToolCallExpansionState,
 } from "./toolCallLayout";
+import {
+  DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
+  DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+  buildCollapsedOutputPreview,
+} from "./outputTruncation";
 import type { DiffRenderPlan } from "./rdvAdapter";
 
 export interface OutputRowPromptUndoAction {
@@ -275,7 +281,8 @@ const THINKING_OUTER_VERTICAL_CHROME = 6;
 const STATUS_ROW_VERTICAL_CHROME = 20;
 const HEADER_VERTICAL_CHROME = 11; // pb-spacing-xs(4) + border-b(1) + mb-spacing-sm(6)
 const STATS_VERTICAL_CHROME = 10;
-const BASH_RESULT_MAX_LINES = 10;
+const BASH_RESULT_MAX_LINES = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
+const BASH_RESULT_MAX_CHARS = DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS;
 
 function normalizeTextForLayout(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\t/g, "    ");
@@ -557,7 +564,9 @@ function estimateBashOutputHeight(
   // TOOL_CALL_LINE has no whitespace-pre-wrap, so \n in the command string
   // collapses to a space in rendering. Flatten before estimating to avoid
   // counting each embedded newline as a separate visual line.
-  const commandText = (data.command?.trim() || "command unavailable").replace(/\n/g, " ");
+  const commandText = (
+    sanitizeTerminalOutput(data.command ?? "").trim() || "command unavailable"
+  ).replace(/\n/g, " ");
   // TOOL_CALL_TERMINAL has my-2=16px total vertical margin (captured via
   // flow-root). Split as 8px for command + 8px for result = 16px total.
   let totalHeight = estimateTerminalSummaryHeight(
@@ -577,8 +586,12 @@ function estimateBashOutputHeight(
 
   // Match BashOutput.tsx duplicate detection: when output and error are
   // identical after stripping whitespace, only the error section renders.
-  const normalizedOutput = normalizeTextForLayout(data.output ?? "");
-  const normalizedError = normalizeTextForLayout(data.error ?? "");
+  const normalizedOutput = normalizeTextForLayout(
+    sanitizeTerminalOutput(data.output ?? "")
+  );
+  const normalizedError = normalizeTextForLayout(
+    sanitizeTerminalOutput(data.error ?? "")
+  );
   const isDuplicate =
     normalizedOutput.trim().length > 0 &&
     normalizedOutput.trim() === normalizedError.trim();
@@ -599,14 +612,13 @@ function estimateBashOutputHeight(
     // Skip empty/whitespace-only content — BashOutput sanitizes ANSI codes
     // which often leaves blank-only error streams that don't render.
     if (!content || content.trim().length === 0) continue;
-    const contentLines = content.split("\n");
-    const isTruncated = contentLines.length > BASH_RESULT_MAX_LINES;
-    const visibleContent =
-      isTruncated && !expanded
-        ? contentLines.slice(0, BASH_RESULT_MAX_LINES).join("\n")
-        : content;
+    const preview = buildCollapsedOutputPreview(content, {
+      expanded,
+      maxLines: BASH_RESULT_MAX_LINES,
+      maxChars: BASH_RESULT_MAX_CHARS,
+    });
     totalHeight += estimateTextBlockHeight(
-      visibleContent,
+      preview.visibleText,
       outputContentWidth,
       outputFontSize,
       {
@@ -617,7 +629,7 @@ function estimateBashOutputHeight(
         verticalChrome: 8, // my-2 bottom half (see command chrome above)
       }
     );
-    if (isTruncated) {
+    if (preview.isTruncated) {
       totalHeight += Math.max(16, outputFontSize * 1.4);
     }
   }
@@ -1130,6 +1142,7 @@ export function buildOutputRows(
               result: (visibleEvent.event.data as ToolCall).result,
               expansion: toolCallExpansion,
               outputFontSize: input.outputFontSize,
+              outputContentWidth: input.outputContentWidth,
             })
           : undefined;
 

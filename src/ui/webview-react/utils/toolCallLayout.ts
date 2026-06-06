@@ -1,4 +1,9 @@
 import type { ToolResult } from "../types/cliEvents";
+import {
+  DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
+  DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+  buildCollapsedOutputPreview,
+} from "./outputTruncation";
 
 export interface ToolCallExpansionState {
   paramsExpanded: boolean;
@@ -15,7 +20,10 @@ export const DEFAULT_TOOL_CALL_EXPANSION_STATE: Readonly<ToolCallExpansionState>
     errorExpanded: false,
   });
 
-export const GENERIC_TOOL_CALL_MAX_RESULT_LINES = 10;
+export const GENERIC_TOOL_CALL_MAX_RESULT_LINES =
+  DEFAULT_COLLAPSED_OUTPUT_MAX_LINES;
+export const GENERIC_TOOL_CALL_MAX_RESULT_CHARS =
+  DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS;
 
 const DEFAULT_OUTPUT_FONT_SIZE = 13;
 const TOOL_CALL_SUMMARY_BOTTOM_GAP = 10;
@@ -34,6 +42,7 @@ export interface ToolCallSectionRenderPlan {
   lineCount: number;
   visibleLineCount: number;
   hiddenLineCount: number;
+  visibleText: string;
   height: number;
 }
 
@@ -95,15 +104,6 @@ function countLines(text: string): number {
   return text.split("\n").length;
 }
 
-function getVisibleResultLineCount(text: string, expanded: boolean): number {
-  const lineCount = countLines(text);
-  if (expanded) {
-    return lineCount;
-  }
-
-  return Math.min(lineCount, GENERIC_TOOL_CALL_MAX_RESULT_LINES);
-}
-
 function buildHiddenSectionRenderPlan(text: string): ToolCallSectionRenderPlan {
   const lineCount = countLines(text);
   return {
@@ -114,6 +114,7 @@ function buildHiddenSectionRenderPlan(text: string): ToolCallSectionRenderPlan {
     lineCount,
     visibleLineCount: 0,
     hiddenLineCount: lineCount,
+    visibleText: "",
     height: 0,
   };
 }
@@ -126,21 +127,26 @@ function buildResultSectionRenderPlan(
   outputFontSize = DEFAULT_OUTPUT_FONT_SIZE
 ): ToolCallSectionRenderPlan {
   const lineCount = countLines(text);
-  const visibleLineCount = getVisibleResultLineCount(text, expanded);
-  const isTruncated = lineCount > GENERIC_TOOL_CALL_MAX_RESULT_LINES;
+  const canToggle =
+    lineCount > GENERIC_TOOL_CALL_MAX_RESULT_LINES ||
+    text.length > GENERIC_TOOL_CALL_MAX_RESULT_CHARS;
+  const preview = buildCollapsedOutputPreview(text, {
+    expanded,
+    maxLines: GENERIC_TOOL_CALL_MAX_RESULT_LINES,
+    maxChars: GENERIC_TOOL_CALL_MAX_RESULT_CHARS,
+  });
 
   // Count visual lines (with wrapping) when content width is known.
   // Raw countLines() misses wrap-induced lines — output text uses whitespace-pre-wrap
   // with a smaller font (fp-output-font-size-sm = fontSize-1), causing severe underestimates
   // on long-output tool calls (observed: 10 raw lines → 72 visual lines, 1468px delta).
-  let visualLineCount = visibleLineCount;
+  let visualLineCount = preview.visibleLineCount;
   if (outputContentWidth != null && outputContentWidth > 0) {
     const smFontSize = Math.max(10, outputFontSize - 1);
     const charWidth = Math.max(5.5, smFontSize * TOOL_RESULT_SM_FONT_CHAR_RATIO);
     const availableWidth = Math.max(80, outputContentWidth - TOOL_RESULT_HORIZONTAL_CHROME);
     const charsPerLine = Math.max(8, Math.floor(availableWidth / charWidth));
-    const visibleRawLines = text.split("\n").slice(0, visibleLineCount);
-    visualLineCount = visibleRawLines.reduce((total, line) => {
+    visualLineCount = preview.visibleText.split("\n").reduce((total, line) => {
       if (line.length === 0) return total + 1;
       return total + Math.max(1, Math.ceil(line.length / charsPerLine));
     }, 0);
@@ -148,12 +154,13 @@ function buildResultSectionRenderPlan(
 
   return {
     hasContent: true,
-    canToggle: isTruncated,
+    canToggle,
     isExpanded: expanded,
-    isTruncated,
+    isTruncated: canToggle,
     lineCount,
-    visibleLineCount, // raw lines — used by getVisibleToolCallText for slicing
-    hiddenLineCount: Math.max(0, lineCount - visibleLineCount),
+    visibleLineCount: preview.visibleLineCount,
+    hiddenLineCount: preview.hiddenLineCount,
+    visibleText: preview.visibleText,
     height: visualLineCount * sectionLineHeight + TOOL_CALL_RESULT_BOTTOM_GAP,
   };
 }
@@ -167,6 +174,7 @@ function getEmptySectionRenderPlan(): ToolCallSectionRenderPlan {
     lineCount: 0,
     visibleLineCount: 0,
     hiddenLineCount: 0,
+    visibleText: "",
     height: 0,
   };
 }
@@ -201,6 +209,7 @@ export function buildToolCallRenderPlan(
           lineCount: countLines(paramsText),
           visibleLineCount: countLines(paramsText),
           hiddenLineCount: 0,
+          visibleText: paramsText,
           height:
             countLines(paramsText) * sectionLineHeight + TOOL_CALL_PARAMS_BOTTOM_GAP,
         }
@@ -247,8 +256,12 @@ export function buildToolCallRenderPlan(
 
 export function getVisibleToolCallText(
   text: string,
-  section: Pick<ToolCallSectionRenderPlan, "visibleLineCount">
+  section: Pick<ToolCallSectionRenderPlan, "visibleLineCount" | "visibleText">
 ): string {
+  if (section.visibleText) {
+    return section.visibleText;
+  }
+
   if (section.visibleLineCount <= 0) {
     return "";
   }

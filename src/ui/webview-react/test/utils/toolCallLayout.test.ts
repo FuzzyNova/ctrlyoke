@@ -97,4 +97,27 @@ describe("toolCallLayout", () => {
     expect(getVisibleToolCallText(error, expanded.error)).toContain("error 11");
     expect(expanded.totalHeight).toBeGreaterThan(collapsed.totalHeight);
   });
+
+  it("caps collapsed result preview by character count for long single lines", () => {
+    const longOutput = "x".repeat(1600);
+    const renderPlan = buildToolCallRenderPlan({
+      result: {
+        success: true,
+        output: longOutput,
+      },
+      expansion: {
+        paramsExpanded: false,
+        outputExpanded: false,
+        errorExpanded: false,
+      },
+      outputFontSize: 13,
+    });
+
+    expect(renderPlan.output.visibleText).toHaveLength(1200);
+    expect(renderPlan.output.visibleLineCount).toBe(1);
+    expect(renderPlan.output.hiddenLineCount).toBe(0);
+    expect(getVisibleToolCallText(longOutput, renderPlan.output)).toHaveLength(
+      1200
+    );
+  });
 });

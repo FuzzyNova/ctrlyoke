@@ -90,4 +90,21 @@ describe("GenericToolCallOutput", () => {
     expect(screen.queryByText("subject: output-layout")).not.toBeInTheDocument();
     expect(collapsedError?.textContent).not.toContain("error 11");
   });
+
+  it("uses a neutral toggle label for character-truncated single-line output", () => {
+    const longOutput = "x".repeat(1600);
+    render(
+      <GenericToolCallOutput
+        name="Glob"
+        result={{
+          success: true,
+          output: longOutput,
+        }}
+      />
+    );
+
+    const collapsedOutput = screen.getByText("[show more output]").parentElement;
+
+    expect(collapsedOutput?.textContent).not.toContain("x".repeat(1300));
+  });
 });

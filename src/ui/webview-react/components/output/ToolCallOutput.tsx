@@ -10,6 +10,7 @@
  */
 import React, { useId, useState } from "react";
 import { extractKeyParameters } from "@utils/outputUtils";
+import { formatCollapsedOutputToggleLabel } from "@utils/outputTruncation";
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
   buildToolCallRenderPlan,
@@ -203,7 +204,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
             >
               {sectionPlan.isExpanded
                 ? "[show less]"
-                : `[show ${sectionPlan.hiddenLineCount} more line${sectionPlan.hiddenLineCount !== 1 ? "s" : ""}]`}
+                : formatCollapsedOutputToggleLabel(sectionPlan, false)}
             </button>
           )}
         </div>

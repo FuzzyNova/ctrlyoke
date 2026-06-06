@@ -99,6 +99,21 @@ describe("BashOutput", () => {
     expect(screen.getByText(/show .* more line/i)).toBeInTheDocument();
   });
 
+  it("truncates long single-line output by character count", () => {
+    const longLine = "x".repeat(1600);
+    const { container } = render(
+      <BashOutput
+        command="cat"
+        output={longLine}
+        status={OPERATION_STATUS.COMPLETED}
+        maxCharacters={1200}
+      />
+    );
+
+    expect(screen.getByText("[show more output]")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("x".repeat(1300));
+  });
+
   it("expands output when 'show more' link clicked", async () => {
     const user = userEvent.setup();
     const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
