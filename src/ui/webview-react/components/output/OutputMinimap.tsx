@@ -1,5 +1,6 @@
 import React, { memo, useState, useCallback, useEffect, useRef } from "react";
 import { type FinalStepPhase } from "../../types/messages";
+import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import {
   getOutputProfilerState,
   logOutputProfilerEvent,
@@ -207,13 +208,14 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     };
 
     update();
-    const observer = new ResizeObserver(() => update());
+    const { observer, disconnect } =
+      createAnimationFrameResizeObserver(() => update());
     observer.observe(el);
     if (railRef.current) observer.observe(railRef.current);
     const handleScroll = () => update();
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
-      observer.disconnect();
+      disconnect();
       el.removeEventListener("scroll", handleScroll);
     };
   }, [getSharedContentHeight, scrollContainerRef]);

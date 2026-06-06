@@ -26,6 +26,7 @@ import {
   generateMarkdownExport,
   type ExportOptions,
 } from "@utils/markdownExport";
+import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 import {
   mapOrderedHistoryEntriesToMessages,
@@ -777,7 +778,7 @@ export const OutputSection: React.FC = () => {
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => {
+    const { observer, disconnect } = createAnimationFrameResizeObserver(() => {
       const headerH = 30; // matches the h-[30px] header
       const available = el.clientHeight - headerH - 8; // 8px breathing room
       el.style.setProperty(
@@ -786,7 +787,7 @@ export const OutputSection: React.FC = () => {
       );
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    return disconnect;
   }, []);
 
   // Build chronologically sorted list of all messages from the single ordered entries array.
@@ -1635,9 +1636,10 @@ export const OutputSection: React.FC = () => {
     };
 
     updateDiffViewType();
-    const observer = new ResizeObserver(updateDiffViewType);
+    const { observer, disconnect } =
+      createAnimationFrameResizeObserver(updateDiffViewType);
     observer.observe(el);
-    return () => observer.disconnect();
+    return disconnect;
   }, [activeOutputTab, outputCollapsed]);
 
   useEffect(() => {

@@ -9,6 +9,7 @@ import {
   SESSION_KINDS,
 } from "../../types/messages";
 import "@xterm/xterm/css/xterm.css";
+import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { WebviewLog } from "@/utils/logger";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` in useSyncExternalStore.
@@ -39,6 +40,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const resizeObserverDisconnectRef = useRef<(() => void) | null>(null);
   const previousIsControllerRef = useRef<boolean | null>(null);
 
   // Subscribe to controller status and controller cols — re-evaluate on every change
@@ -360,7 +362,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
       // ResizeObserver: fit xterm to container; only the controller notifies the PTY.
       // Viewers keep cols locked to the controller's value to prevent double line-wrap.
-      const observer = new ResizeObserver(() => {
+      const { observer, disconnect } = createAnimationFrameResizeObserver(() => {
         if (!entry.term.element) return;
         try {
           const sessNow = useTerminalStore
@@ -393,6 +395,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         observer.observe(containerRef.current);
       }
       resizeObserverRef.current = observer;
+      resizeObserverDisconnectRef.current = disconnect;
     }
 
     mount();
@@ -411,7 +414,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       }
       // Detach xterm DOM element from this container (xterm survives in registry)
       terminalRegistry.detach(workflowId, sessionId);
-      resizeObserverRef.current?.disconnect();
+      resizeObserverDisconnectRef.current?.();
+      resizeObserverDisconnectRef.current = null;
       resizeObserverRef.current = null;
       // Remove touch-scroll listeners and cancel any in-flight inertia animation
       stopInertia();

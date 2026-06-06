@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, type RefCallback } from "react";
+import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 
 /**
  * Default width threshold (in px) below which an element is considered "narrow".
@@ -29,14 +30,14 @@ export function useElementNarrow<T extends HTMLElement = HTMLDivElement>(
   threshold: number = DEFAULT_THRESHOLD
 ): [RefCallback<T>, boolean] {
   const [isNarrow, setIsNarrow] = useState(false);
-  const observerRef = useRef<ResizeObserver | null>(null);
+  const disconnectRef = useRef<(() => void) | null>(null);
 
   const callbackRef = useCallback(
     (node: T | null) => {
       // Disconnect the previous observer whenever the node changes.
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-        observerRef.current = null;
+      if (disconnectRef.current) {
+        disconnectRef.current();
+        disconnectRef.current = null;
       }
 
       if (node) {
@@ -44,13 +45,15 @@ export function useElementNarrow<T extends HTMLElement = HTMLDivElement>(
         // correct before the first ResizeObserver callback fires.
         setIsNarrow(node.getBoundingClientRect().width < threshold);
 
-        const observer = new ResizeObserver((entries) => {
+        const { observer, disconnect } = createAnimationFrameResizeObserver(
+          (entries) => {
           for (const entry of entries) {
             setIsNarrow(entry.contentRect.width < threshold);
           }
-        });
+          }
+        );
         observer.observe(node);
-        observerRef.current = observer;
+        disconnectRef.current = disconnect;
       }
     },
     [threshold]

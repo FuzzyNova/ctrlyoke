@@ -81,12 +81,16 @@ export default defineConfig(({ mode }) => ({
 
   root: path.resolve(__dirname),
 
-  // `vite build` forces process.env.NODE_ENV='production' in the bundle regardless of --mode,
-  // which makes React use its minified build (no full error messages). When building with
-  // --mode react-debug, override this so React uses its development build with full errors.
-  ...(mode === "react-debug"
-    ? { define: { "process.env.NODE_ENV": '"development"' } }
-    : {}),
+  // Explicit build-time flags so dead-code elimination works correctly.
+  // import.meta.env.DEV is unreliable in Vite 8 build mode — use these instead.
+  define: {
+    __WEBVIEW_DEV_MODE__: mode !== "production" ? "true" : "false",
+    // `vite build` forces process.env.NODE_ENV='production' regardless of --mode,
+    // making React use its minified build (no full error messages). Override for react-debug.
+    ...(mode === "react-debug"
+      ? { "process.env.NODE_ENV": '"development"' }
+      : {}),
+  },
 
   build: {
     outDir: path.resolve(__dirname, "../../../out/ui/webview-react"),
