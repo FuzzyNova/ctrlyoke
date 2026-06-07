@@ -41,6 +41,7 @@ import {
   AnimatedSection,
 } from "../shared";
 import { HooksEditor } from "./HooksEditor";
+import { EDITOR_FOOTER_HEIGHT_REM } from "./EditorFooter";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 
 interface PropertiesDrawerProps {
@@ -322,8 +323,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     <div
       ref={drawerRef}
       className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-[100] h-full flex flex-col overflow-hidden ${
-        isOpen ? "translate-y-0" : "translate-y-full"
+        isOpen ? "translate-y-0" : ""
       }`}
+      style={{
+        transform: isOpen
+          ? "translateY(0)"
+          : `translateY(calc(100% + ${EDITOR_FOOTER_HEIGHT_REM}rem + 2px))`,
+      }}
       {...(!isOpen && { inert: true })}
     >
       {/* Header */}

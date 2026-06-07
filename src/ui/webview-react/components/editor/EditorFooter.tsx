@@ -13,6 +13,8 @@ import type { TabIconOverride } from "../shared/tabBadgeUtils";
 import { useEditorStore } from "../../store/editorStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 
+export const EDITOR_FOOTER_HEIGHT_REM = 2.5;
+
 interface EditorFooterProps {
   isEditMode: boolean;
   isFinalStepMode?: boolean;
@@ -89,6 +91,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
         footerRefSmall(node);
       }}
       className="editor-footer shrink-0 flex items-center gap-1 px-3 h-10 border-t border-panel-border bg-sidebar-bg"
+      style={{ height: `${EDITOR_FOOTER_HEIGHT_REM}rem` }}
     >
       {/* Properties toggle button — hidden in script mode */}
       {!isScriptMode && (
