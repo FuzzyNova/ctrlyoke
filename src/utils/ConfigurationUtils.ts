@@ -58,6 +58,8 @@ export const CONFIG_KEYS = {
   UI_CONFIRM_RESET_OPERATIONS: "ui.confirmResetOperations",
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
+  UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD:
+    "ui.outputVirtualizationRowThreshold",
   EXTENSION_NAMESPACE: "flightpath.",
 } as const;
 
@@ -293,6 +295,10 @@ export const ConfigurationUtils = {
 
   shouldAutoExpandEditorWhenTyping(): boolean {
     return configService.get(CONFIG_KEYS.UI).autoExpandEditorWhenTyping;
+  },
+
+  getOutputVirtualizationRowThreshold(): number {
+    return configService.get(CONFIG_KEYS.UI).outputVirtualizationRowThreshold;
   },
 
   /**

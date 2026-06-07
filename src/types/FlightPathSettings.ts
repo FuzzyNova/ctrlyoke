@@ -112,6 +112,11 @@ export interface FlightPathGlobalSettings {
     openPromptsInSecondGroup: boolean;
     respectGitignoreForCompletions: boolean;
     autoExpandEditorWhenTyping: boolean;
+    /**
+     * Minimum projected output row count required before TanStack virtualization
+     * is used. 0 = always virtualize, -1 = never virtualize.
+     */
+    outputVirtualizationRowThreshold: number;
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;
     showHiddenFiles: boolean;
@@ -311,6 +316,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     openPromptsInSecondGroup: false,
     respectGitignoreForCompletions: true,
     autoExpandEditorWhenTyping: true,
+    outputVirtualizationRowThreshold: 200,
     confirmDeleteOperations: true,
     confirmResetOperations: true,
     showHiddenFiles: true,

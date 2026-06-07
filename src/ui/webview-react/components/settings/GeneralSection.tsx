@@ -147,6 +147,25 @@ export function GeneralSection({
           path="ui.autoExpandEditorWhenTyping"
           {...rowProps}
         />
+        <SettingInputRow
+          label="Output virtualization row threshold"
+          description="Minimum output rows before virtualization is enabled. Use 0 to always virtualize, -1 to never virtualize."
+          id="ui-output-virtualization-row-threshold"
+          path="ui.outputVirtualizationRowThreshold"
+          {...rowProps}
+        >
+          <LocalNumberInput
+            id="ui-output-virtualization-row-threshold"
+            min={-1}
+            value={ui.outputVirtualizationRowThreshold}
+            onCommit={(v) => onUpdate("ui.outputVirtualizationRowThreshold", v)}
+            parse={(v) => {
+              const parsed = parseInt(v, 10);
+              return Number.isFinite(parsed) ? Math.max(-1, parsed) : 200;
+            }}
+            className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
+          />
+        </SettingInputRow>
         <SettingToggleRow
           label="Confirm delete operations"
           description="Show a confirmation dialog before delete operations like removing prompts, deleting workflow history, or discarding untracked files."

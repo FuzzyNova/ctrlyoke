@@ -84,6 +84,19 @@ Implemented behavior:
 - virtual row measurement wired through the output scroll container
 - metadata-derived target offsets for step navigation and minimap markers
 
+### Configurable non-virtual fallback
+
+Output rows now use the same flattened row projection in both render modes.
+`ui.outputVirtualizationRowThreshold` controls when TanStack Virtual is used:
+
+- `200` default: virtualize when projected output rows reach 200
+- `0`: always virtualize
+- `-1`: never virtualize
+
+Below the threshold, `OutputSection` renders all rows in normal document flow.
+This preserves native browser scroll and resize behavior for smaller outputs
+without resurrecting the old nested `CliOutput` rendering path.
+
 ### Persistent diff collapse state
 
 Expanded/collapsed diff state is now preserved outside individual diff row DOM
@@ -153,7 +166,8 @@ The focused regression coverage added for this work lives in:
 
 ## Design Decisions Kept
 
-- **Always-on virtualization**: no threshold-based dual rendering path was added.
+- **Single row model**: both virtualized and non-virtualized rendering consume
+  the same flattened `OutputRenderRow` projection.
 - **Row model in `utils/`**: the row projection remains a pure utility and the
   rendering remains under `components/output/`.
 - **Estimated offscreen minimap placement**: offscreen rows use estimated or

@@ -683,6 +683,9 @@ const OutputSectionInner: React.FC = () => {
     terminalSessions.find((s) => s.id === activeTerminalSessionId) ??
     terminalSessions[0] ??
     null;
+  const outputVirtualizationRowThreshold = useSettingsStore(
+    (s) => s.globalSettings.outputVirtualizationRowThreshold
+  );
 
   const [headerRef, isHeaderNarrow] = useElementNarrow(650);
   const [veryNarrowRef, isHeaderVeryNarrow] = useElementNarrow(400);
@@ -944,6 +947,15 @@ const OutputSectionInner: React.FC = () => {
       executionState,
     ]
   );
+  const effectiveVirtualizationRowThreshold = Math.trunc(
+    Number.isFinite(outputVirtualizationRowThreshold)
+      ? outputVirtualizationRowThreshold
+      : 200
+  );
+  const isOutputVirtualized =
+    effectiveVirtualizationRowThreshold >= 0 &&
+    (effectiveVirtualizationRowThreshold === 0 ||
+      rows.length >= effectiveVirtualizationRowThreshold);
 
   const getEstimatedRowHeight = useCallback(
     (row: OutputRenderRow): number => {
@@ -1679,6 +1691,37 @@ const OutputSectionInner: React.FC = () => {
     [rowVirtualizer]
   );
 
+  const measureStaticRowElement = useCallback(
+    (element: HTMLDivElement | null): void | (() => void) => {
+      if (!element) return;
+      const index = Number(element.dataset.index ?? -1);
+      const row = rowsRef.current[index];
+      if (row) mountedRowElementsRef.current.set(row.key, element);
+
+      const measure = (entry?: ResizeObserverEntry) => {
+        const measuredHeight =
+          getResizeObserverEntryHeight(entry) ?? getMeasuredElementHeight(element);
+        updateRowMeasurementCache(
+          element,
+          measuredHeight,
+          entry == null ? "dom-read" : "resize-observer"
+        );
+      };
+
+      measure();
+      const resizeObserver = createAnimationFrameResizeObserver((entries) => {
+        measure(entries[0]);
+      });
+      resizeObserver.observer.observe(element);
+
+      return () => {
+        if (row) mountedRowElementsRef.current.delete(row.key);
+        resizeObserver.disconnect();
+      };
+    },
+    [updateRowMeasurementCache]
+  );
+
   const flushPendingScrollMeasurements = useCallback(() => {
     if (pendingMeasurementCacheRef.current.size === 0) return;
     const scrollElement = outputRef.current;
@@ -1806,6 +1849,26 @@ const OutputSectionInner: React.FC = () => {
         },
         () => {
           void measurementVersion;
+          if (!isOutputVirtualized) {
+            let offset = 0;
+            const rowStartsByIndex: number[] = [];
+            const rowStartsByKey = new Map<string, number>();
+
+            for (const [index, row] of rows.entries()) {
+              rowStartsByIndex[index] = offset;
+              rowStartsByKey.set(row.key, offset);
+              offset +=
+                measurementCacheRef.current.get(row.key) ??
+                getEstimatedRowHeight(row);
+            }
+
+            return {
+              totalSize: Math.max(offset, 1),
+              rowStartsByIndex,
+              rowStartsByKey,
+            };
+          }
+
           let fallbackOffset = 0;
           const rowStartsByIndex: number[] = [];
           const rowStartsByKey = new Map<string, number>();
@@ -1842,6 +1905,7 @@ const OutputSectionInner: React.FC = () => {
       ),
     [
       getEstimatedRowHeight,
+      isOutputVirtualized,
       rows,
       measurementVersion,
       outputContentWidth,
@@ -2083,6 +2147,7 @@ const OutputSectionInner: React.FC = () => {
   // re-estimates from scratch for the incoming content.
   const previousIsViewingHistory = useRef(isViewingHistory);
   const previousViewingRunIndex = useRef(viewingRunIndex);
+  const previousIsOutputVirtualized = useRef(isOutputVirtualized);
   useEffect(() => {
     const viewChanged =
       previousIsViewingHistory.current !== isViewingHistory ||
@@ -2094,6 +2159,19 @@ const OutputSectionInner: React.FC = () => {
     measurementCacheRef.current.clear();
     setMeasurementVersion((v) => v + 1);
   }, [isViewingHistory, viewingRunIndex]);
+
+  useEffect(() => {
+    if (previousIsOutputVirtualized.current === isOutputVirtualized) {
+      return;
+    }
+    previousIsOutputVirtualized.current = isOutputVirtualized;
+    pendingMeasurementCacheRef.current.clear();
+    measurementCacheRef.current.clear();
+    setMeasurementVersion((v) => v + 1);
+    if (isOutputVirtualized) {
+      rowVirtualizer.measure();
+    }
+  }, [isOutputVirtualized, rowVirtualizer]);
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
@@ -2187,6 +2265,7 @@ const OutputSectionInner: React.FC = () => {
     const pageDeltaThresholdPx =
       el.clientHeight * OUTPUT_SCROLL_SEEK_PAGE_FRACTION;
     const rawFastScroll =
+      isOutputVirtualized &&
       rowsRef.current.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
       (absScrollDeltaPx >= pageDeltaThresholdPx ||
         (absScrollDeltaPx >= OUTPUT_SCROLL_SEEK_MIN_DELTA_PX &&
@@ -2288,6 +2367,7 @@ const OutputSectionInner: React.FC = () => {
     }
   }, [
     enterFastScrollOverscan,
+    isOutputVirtualized,
     rowVirtualizer,
     scheduleOverscanRestore,
     schedulePendingMeasurementFlush,
@@ -2306,6 +2386,7 @@ const OutputSectionInner: React.FC = () => {
       const absInputDeltaPx = Math.abs(inputDeltaPx);
 
       if (
+        isOutputVirtualized &&
         rowsRef.current.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
         absInputDeltaPx >= thresholdPx
       ) {
@@ -2327,7 +2408,12 @@ const OutputSectionInner: React.FC = () => {
         scheduleOverscanRestore();
       }
     },
-    [clearViewportAnchorGuard, scheduleOverscanRestore, setOutputOverscanMode]
+    [
+      clearViewportAnchorGuard,
+      isOutputVirtualized,
+      scheduleOverscanRestore,
+      setOutputOverscanMode,
+    ]
   );
 
   const handleWheel = useCallback(
@@ -2520,7 +2606,11 @@ const OutputSectionInner: React.FC = () => {
       }
     );
     isProgrammaticScroll.current = true;
-    rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
+    if (isOutputVirtualized) {
+      rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
+    } else {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+    }
     requestAnimationFrame(() => {
       isProgrammaticScroll.current = false;
       WebviewLog.debug("[FP-SCROLL-DEBUG] isProgrammaticScroll cleared", {
@@ -2533,18 +2623,25 @@ const OutputSectionInner: React.FC = () => {
     streamingChunks,
     finalStepStreamingChunks,
     isExecutionActive,
+    isOutputVirtualized,
     rowVirtualizer,
   ]);
 
   useEffect(() => {
-    if (activeOutputTab !== "output" || outputCollapsed) {
+    if (activeOutputTab !== "output" || outputCollapsed || !isOutputVirtualized) {
       return;
     }
 
     requestAnimationFrame(() => {
       rowVirtualizer.measure();
     });
-  }, [activeOutputTab, outputCollapsed, rowVirtualizer, rows.length]);
+  }, [
+    activeOutputTab,
+    isOutputVirtualized,
+    outputCollapsed,
+    rowVirtualizer,
+    rows.length,
+  ]);
 
   useEffect(() => {
     if (navigationPendingRowIndex == null) {
@@ -2700,6 +2797,24 @@ const OutputSectionInner: React.FC = () => {
         };
         setNavigationPendingRowIndex(rowIndex);
 
+        if (!isOutputVirtualized) {
+          const rowElement = findRenderedRowElement(
+            outputRef.current,
+            rowIndex
+          );
+          if (rowElement) {
+            rowElement.scrollIntoView({
+              block: align === "end" ? "end" : "start",
+              behavior: requestedBehavior,
+            });
+          } else {
+            const top = rowLayout.rowStartsByIndex[rowIndex] ?? 0;
+            outputRef.current.scrollTo({ top, behavior: requestedBehavior });
+          }
+          finalizePendingNavigation();
+          return;
+        }
+
         // Do NOT call rowVirtualizer.measure() here. Clearing itemSizeCache
         // forces TanStack to re-estimate all rows from bucket estimates, which
         // destabilizes getOffsetForIndex and prolongs the reconcileScroll loop.
@@ -2720,6 +2835,8 @@ const OutputSectionInner: React.FC = () => {
     }),
     [
       firstRowIndexByTarget,
+      finalizePendingNavigation,
+      isOutputVirtualized,
       rowLayout,
       rowVirtualizer,
       schedulePendingNavigationStabilization,
@@ -2785,10 +2902,13 @@ const OutputSectionInner: React.FC = () => {
 
   // Check if there's any output
   const hasOutput = rows.length > 0;
-  const isOutputScrollSeeking = scrollSeekPlaceholderActive;
-  const virtualRows = rowVirtualizer.getVirtualItems();
+  const isOutputScrollSeeking =
+    isOutputVirtualized && scrollSeekPlaceholderActive;
+  const virtualRows = isOutputVirtualized
+    ? rowVirtualizer.getVirtualItems()
+    : [];
   useEffect(() => {
-    if (!shouldLogOutputVirtualRange()) {
+    if (!isOutputVirtualized || !shouldLogOutputVirtualRange()) {
       return;
     }
 
@@ -2811,6 +2931,7 @@ const OutputSectionInner: React.FC = () => {
     });
   }, [
     isOutputScrollSeeking,
+    isOutputVirtualized,
     outputOverscan,
     rowVirtualizer,
     rows.length,
@@ -2860,6 +2981,7 @@ const OutputSectionInner: React.FC = () => {
     ]
   );
   const isNavigationTargetVirtualized =
+    isOutputVirtualized &&
     navigationPendingRowIndex != null &&
     virtualRows.some((row) => row.index === navigationPendingRowIndex);
   // The overlay is a global navigation/empty-range affordance. Scroll-seek
@@ -2867,6 +2989,7 @@ const OutputSectionInner: React.FC = () => {
   // is actively scrolling, so avoid stacking the global overlay on top of them.
   const showVirtualizationOverlay =
     !isOutputScrollSeeking &&
+    isOutputVirtualized &&
     ((hasOutput &&
       rows.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
       virtualRows.length === 0) ||
@@ -4061,74 +4184,111 @@ const OutputSectionInner: React.FC = () => {
               </p>
             ) : (
               <Profiler
-                id="OutputVirtualRows"
+                id={
+                  isOutputVirtualized
+                    ? "OutputVirtualRows"
+                    : "OutputRows"
+                }
                 onRender={handleOutputProfilerRender}
               >
-                <div
-                  style={{
-                    height: `${rowVirtualizer.getTotalSize()}px`,
-                    position: "relative",
-                    width: "100%",
-                  }}
-                >
-                  {virtualRows.map((virtualRow) => {
-                    const row = rows[virtualRow.index];
-                    if (!row) return null;
-                    const renderScrollSeekPlaceholder =
-                      isOutputScrollSeeking &&
-                      !isNavigationTargetVirtualized &&
-                      !scrollSeekEntryRenderedIndicesRef.current.has(
-                        virtualRow.index
-                      ) &&
-                      shouldRenderScrollSeekPlaceholder(row);
+                {isOutputVirtualized ? (
+                  <div
+                    style={{
+                      height: `${rowVirtualizer.getTotalSize()}px`,
+                      position: "relative",
+                      width: "100%",
+                    }}
+                  >
+                    {virtualRows.map((virtualRow) => {
+                      const row = rows[virtualRow.index];
+                      if (!row) return null;
+                      const renderScrollSeekPlaceholder =
+                        isOutputScrollSeeking &&
+                        !isNavigationTargetVirtualized &&
+                        !scrollSeekEntryRenderedIndicesRef.current.has(
+                          virtualRow.index
+                        ) &&
+                        shouldRenderScrollSeekPlaceholder(row);
 
-                    return (
+                      return (
+                        <div
+                          key={virtualRow.key}
+                          ref={
+                            renderScrollSeekPlaceholder
+                              ? undefined
+                              : measureRowElement
+                          }
+                          data-index={virtualRow.index}
+                          data-row-key={row.key}
+                          className="flow-root"
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            transform: `translateY(${virtualRow.start}px)`,
+                            width: "100%",
+                          }}
+                        >
+                          {renderScrollSeekPlaceholder ? (
+                            <OutputScrollSeekPlaceholder
+                              row={row}
+                              height={virtualRow.size}
+                            />
+                          ) : (
+                            <OutputRow
+                              row={row}
+                              isExecutionActive={isExecutionActive}
+                              onBackToLive={handleBackToLive}
+                              onPromptUndo={handlePromptUndo}
+                              onPromptRedo={handlePromptRedo}
+                              onFileUndo={handleFileUndo}
+                              onDiffCollapsedChange={handleDiffCollapsedChange}
+                              onDiffGapExpand={handleDiffGapExpand}
+                              onToolCallExpansionChange={
+                                handleToolCallExpansionChange
+                              }
+                              bashExpansion={
+                                bashExpansionState.get(row.key) ??
+                                DEFAULT_BASH_OUTPUT_EXPANSION_STATE
+                              }
+                              onBashExpansionChange={handleBashExpansionChange}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div>
+                    {rows.map((row, rowIndex) => (
                       <div
-                        key={virtualRow.key}
-                        ref={
-                          renderScrollSeekPlaceholder
-                            ? undefined
-                            : measureRowElement
-                        }
-                        data-index={virtualRow.index}
+                        key={row.key}
+                        ref={measureStaticRowElement}
+                        data-index={rowIndex}
                         data-row-key={row.key}
                         className="flow-root"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          transform: `translateY(${virtualRow.start}px)`,
-                          width: "100%",
-                        }}
                       >
-                        {renderScrollSeekPlaceholder ? (
-                          <OutputScrollSeekPlaceholder
-                            row={row}
-                            height={virtualRow.size}
-                          />
-                        ) : (
-                          <OutputRow
-                            row={row}
-                            isExecutionActive={isExecutionActive}
-                            onBackToLive={handleBackToLive}
-                            onPromptUndo={handlePromptUndo}
-                            onPromptRedo={handlePromptRedo}
-                            onFileUndo={handleFileUndo}
-                            onDiffCollapsedChange={handleDiffCollapsedChange}
-                            onDiffGapExpand={handleDiffGapExpand}
-                            onToolCallExpansionChange={
-                              handleToolCallExpansionChange
-                            }
-                            bashExpansion={
-                              bashExpansionState.get(row.key) ??
-                              DEFAULT_BASH_OUTPUT_EXPANSION_STATE
-                            }
-                            onBashExpansionChange={handleBashExpansionChange}
-                          />
-                        )}
+                        <OutputRow
+                          row={row}
+                          isExecutionActive={isExecutionActive}
+                          onBackToLive={handleBackToLive}
+                          onPromptUndo={handlePromptUndo}
+                          onPromptRedo={handlePromptRedo}
+                          onFileUndo={handleFileUndo}
+                          onDiffCollapsedChange={handleDiffCollapsedChange}
+                          onDiffGapExpand={handleDiffGapExpand}
+                          onToolCallExpansionChange={
+                            handleToolCallExpansionChange
+                          }
+                          bashExpansion={
+                            bashExpansionState.get(row.key) ??
+                            DEFAULT_BASH_OUTPUT_EXPANSION_STATE
+                          }
+                          onBashExpansionChange={handleBashExpansionChange}
+                        />
                       </div>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
               </Profiler>
             )}
           </div>

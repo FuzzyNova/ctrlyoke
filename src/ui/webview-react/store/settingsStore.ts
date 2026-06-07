@@ -97,6 +97,7 @@ export interface GlobalSettings {
   };
   respectGitignore: boolean;
   autoExpandEditorWhenTyping: boolean;
+  outputVirtualizationRowThreshold: number;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
   showHiddenFiles: boolean;
@@ -291,6 +292,7 @@ const initialGlobalSettings: GlobalSettings = {
   },
   respectGitignore: true,
   autoExpandEditorWhenTyping: true,
+  outputVirtualizationRowThreshold: 200,
   confirmDeleteOperations: true,
   confirmResetOperations: true,
   showHiddenFiles: true,

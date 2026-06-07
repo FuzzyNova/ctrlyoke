@@ -734,6 +734,8 @@ export class WebviewSettingsSync {
       respectGitignore,
       autoExpandEditorWhenTyping:
         ConfigurationUtils.shouldAutoExpandEditorWhenTyping(),
+      outputVirtualizationRowThreshold:
+        ConfigurationUtils.getOutputVirtualizationRowThreshold(),
       confirmDeleteOperations:
         ConfigurationUtils.shouldConfirmDeleteOperations(),
       confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations(),

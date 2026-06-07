@@ -331,6 +331,7 @@ export interface InitMessageData {
     autoFocusOutputOnExecution?: boolean;
     respectGitignore?: boolean;
     autoExpandEditorWhenTyping?: boolean;
+    outputVirtualizationRowThreshold?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     showHiddenFiles?: boolean;
@@ -829,6 +830,7 @@ export interface GlobalSettingsUpdatedMessage {
     autoFocusOutputOnExecution?: boolean;
     respectGitignore?: boolean;
     autoExpandEditorWhenTyping?: boolean;
+    outputVirtualizationRowThreshold?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
     showHiddenFiles?: boolean;
