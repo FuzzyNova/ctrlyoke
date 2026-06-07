@@ -132,6 +132,9 @@ const OUTPUT_HORIZONTAL_RESIZE_SETTLE_MS = 700; // time after pointer release wh
 const OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS = 1200; // text rows shorter than this render directly during scroll seek.
 const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300; // time to ignore virtualizer scroll correction after user expands row content.
 const LARGE_WORKFLOW_ROW_THRESHOLD = 20; // row count where fast-scroll placeholder behavior is enabled.
+const NON_VIRTUAL_STAGING_ROW_THRESHOLD = 60; // row count where non-virtual rows mount progressively.
+const NON_VIRTUAL_INITIAL_RENDER_ROWS = 24;
+const NON_VIRTUAL_RENDER_CHUNK_ROWS = 24;
 const MAX_NAV_ALIGNMENT_ATTEMPTS = 8; // max correction passes when aligning minimap/step navigation.
 const MAX_NAVIGATION_STABILIZATION_MS = 1000; // time limit for navigation alignment before accepting the current position.
 const DEFAULT_BASH_OUTPUT_EXPANSION_STATE: BashOutputExpansionState = {
@@ -401,6 +404,41 @@ function alignRowElementToViewport(
     Math.min(maxScroll, scrollElement.scrollTop + delta)
   );
   return false;
+}
+
+function getRowScopedScrollTop(
+  scrollElement: HTMLDivElement,
+  rowElement: HTMLElement,
+  align: "start" | "end"
+): number {
+  const containerRect = scrollElement.getBoundingClientRect();
+  const rowRect = rowElement.getBoundingClientRect();
+  const delta =
+    align === "end"
+      ? rowRect.bottom - containerRect.bottom
+      : rowRect.top - containerRect.top;
+  const maxScroll = Math.max(
+    0,
+    scrollElement.scrollHeight - scrollElement.clientHeight
+  );
+  return Math.max(0, Math.min(maxScroll, scrollElement.scrollTop + delta));
+}
+
+function getEstimatedRowScopedScrollTop(
+  scrollElement: HTMLDivElement,
+  rowStart: number,
+  rowSize: number | undefined,
+  align: "start" | "end"
+): number {
+  const target =
+    align === "end"
+      ? rowStart + (rowSize ?? 0) - scrollElement.clientHeight
+      : rowStart;
+  const maxScroll = Math.max(
+    0,
+    scrollElement.scrollHeight - scrollElement.clientHeight
+  );
+  return Math.max(0, Math.min(maxScroll, target));
 }
 
 function getRowHeightBucket(row: OutputRenderRow): string {
@@ -729,6 +767,8 @@ const OutputSectionInner: React.FC = () => {
   const [outputOverscan, setOutputOverscan] = useState(
     OUTPUT_VIRTUALIZER_OVERSCAN
   );
+  const [nonVirtualRenderedRowCount, setNonVirtualRenderedRowCount] =
+    useState<number>(Number.MAX_SAFE_INTEGER);
   const [scrollSeekPlaceholderActive, setScrollSeekPlaceholderActiveState] =
     useState(false);
   const measurementVersionRef = useRef(measurementVersion);
@@ -767,6 +807,11 @@ const OutputSectionInner: React.FC = () => {
   const overscanRestoreRafRef = useRef<number | null>(null);
   const pendingNavigationRef = useRef<PendingNavigationState | null>(null);
   const navigationFrameRef = useRef<number | null>(null);
+  const nonVirtualRenderFrameRef = useRef<number | null>(null);
+  const nonVirtualRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const nonVirtualRenderIdentityRef = useRef<string | null>(null);
   const lastScrollEventAtRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
   const lastVirtualRangeRef = useRef<string>("");
@@ -956,6 +1001,9 @@ const OutputSectionInner: React.FC = () => {
     effectiveVirtualizationRowThreshold >= 0 &&
     (effectiveVirtualizationRowThreshold === 0 ||
       rows.length >= effectiveVirtualizationRowThreshold);
+  const rowRenderIdentity = `${fileName ?? ""}:${
+    isViewingHistory ? viewingRunIndex : "live"
+  }`;
 
   const getEstimatedRowHeight = useCallback(
     (row: OutputRenderRow): number => {
@@ -1146,6 +1194,14 @@ const OutputSectionInner: React.FC = () => {
       if (pendingMeasurementFlushTimerRef.current !== null) {
         clearTimeout(pendingMeasurementFlushTimerRef.current);
         pendingMeasurementFlushTimerRef.current = null;
+      }
+      if (nonVirtualRenderFrameRef.current !== null) {
+        cancelAnimationFrame(nonVirtualRenderFrameRef.current);
+        nonVirtualRenderFrameRef.current = null;
+      }
+      if (nonVirtualRenderTimerRef.current !== null) {
+        clearTimeout(nonVirtualRenderTimerRef.current);
+        nonVirtualRenderTimerRef.current = null;
       }
     },
     []
@@ -1853,25 +1909,30 @@ const OutputSectionInner: React.FC = () => {
             let offset = 0;
             const rowStartsByIndex: number[] = [];
             const rowStartsByKey = new Map<string, number>();
+            const rowSizesByKey = new Map<string, number>();
 
             for (const [index, row] of rows.entries()) {
-              rowStartsByIndex[index] = offset;
-              rowStartsByKey.set(row.key, offset);
-              offset +=
+              const size =
                 measurementCacheRef.current.get(row.key) ??
                 getEstimatedRowHeight(row);
+              rowStartsByIndex[index] = offset;
+              rowStartsByKey.set(row.key, offset);
+              rowSizesByKey.set(row.key, size);
+              offset += size;
             }
 
             return {
               totalSize: Math.max(offset, 1),
               rowStartsByIndex,
               rowStartsByKey,
+              rowSizesByKey,
             };
           }
 
           let fallbackOffset = 0;
           const rowStartsByIndex: number[] = [];
           const rowStartsByKey = new Map<string, number>();
+          const rowSizesByKey = new Map<string, number>();
           const measurementsByKey = new Map(
             rowVirtualizer.measurementsCache
               .filter((item): item is NonNullable<typeof item> => item != null)
@@ -1889,6 +1950,7 @@ const OutputSectionInner: React.FC = () => {
             const start = measurement?.start ?? fallbackOffset;
             rowStartsByIndex[index] = start;
             rowStartsByKey.set(row.key, start);
+            rowSizesByKey.set(row.key, size);
             fallbackOffset = start + size;
           }
 
@@ -1900,6 +1962,7 @@ const OutputSectionInner: React.FC = () => {
             ),
             rowStartsByIndex,
             rowStartsByKey,
+            rowSizesByKey,
           };
         }
       ),
@@ -2172,6 +2235,71 @@ const OutputSectionInner: React.FC = () => {
       rowVirtualizer.measure();
     }
   }, [isOutputVirtualized, rowVirtualizer]);
+
+  useEffect(() => {
+    if (nonVirtualRenderFrameRef.current !== null) {
+      cancelAnimationFrame(nonVirtualRenderFrameRef.current);
+      nonVirtualRenderFrameRef.current = null;
+    }
+    if (nonVirtualRenderTimerRef.current !== null) {
+      clearTimeout(nonVirtualRenderTimerRef.current);
+      nonVirtualRenderTimerRef.current = null;
+    }
+
+    const shouldStageRows =
+      !isOutputVirtualized &&
+      activeOutputTab === "output" &&
+      !outputCollapsed &&
+      rows.length >= NON_VIRTUAL_STAGING_ROW_THRESHOLD;
+
+    if (!shouldStageRows) {
+      setNonVirtualRenderedRowCount(Number.MAX_SAFE_INTEGER);
+      return;
+    }
+
+    const previousIdentity = nonVirtualRenderIdentityRef.current;
+    const identityChanged = previousIdentity !== rowRenderIdentity;
+    nonVirtualRenderIdentityRef.current = rowRenderIdentity;
+
+    setNonVirtualRenderedRowCount((previous) =>
+      Math.min(
+        rows.length,
+        identityChanged
+          ? NON_VIRTUAL_INITIAL_RENDER_ROWS
+          : Math.max(previous, NON_VIRTUAL_INITIAL_RENDER_ROWS)
+      )
+    );
+
+    // Let the output tab/workflow switch paint before mounting the expensive
+    // remainder. This is the key difference from a plain overlay: the browser
+    // gets a frame to show it before React starts rendering every diff row.
+    nonVirtualRenderTimerRef.current = setTimeout(() => {
+      nonVirtualRenderTimerRef.current = null;
+      const renderNextChunk = () => {
+        setNonVirtualRenderedRowCount((previous) => {
+          const next = Math.min(
+            rows.length,
+            previous + NON_VIRTUAL_RENDER_CHUNK_ROWS
+          );
+          if (next < rows.length) {
+            nonVirtualRenderFrameRef.current =
+              requestAnimationFrame(renderNextChunk);
+          } else {
+            nonVirtualRenderFrameRef.current = null;
+          }
+          return next;
+        });
+      };
+
+      nonVirtualRenderFrameRef.current = requestAnimationFrame(renderNextChunk);
+    }, 0);
+  }, [
+    activeOutputTab,
+    isOutputVirtualized,
+    outputCollapsed,
+    rowRenderIdentity,
+    rows.length,
+  ]);
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
@@ -2802,14 +2930,18 @@ const OutputSectionInner: React.FC = () => {
             outputRef.current,
             rowIndex
           );
+          const top =
+            rowElement != null
+              ? getRowScopedScrollTop(outputRef.current, rowElement, align)
+              : getEstimatedRowScopedScrollTop(
+                  outputRef.current,
+                  rowLayout.rowStartsByIndex[rowIndex] ?? 0,
+                  rowLayout.rowSizesByKey.get(rows[rowIndex]?.key ?? ""),
+                  align
+                );
+          outputRef.current.scrollTo({ top, behavior: requestedBehavior });
           if (rowElement) {
-            rowElement.scrollIntoView({
-              block: align === "end" ? "end" : "start",
-              behavior: requestedBehavior,
-            });
-          } else {
-            const top = rowLayout.rowStartsByIndex[rowIndex] ?? 0;
-            outputRef.current.scrollTo({ top, behavior: requestedBehavior });
+            lastScrollTopRef.current = top;
           }
           finalizePendingNavigation();
           return;
@@ -2902,6 +3034,24 @@ const OutputSectionInner: React.FC = () => {
 
   // Check if there's any output
   const hasOutput = rows.length > 0;
+  const nonVirtualVisibleRowCount = isOutputVirtualized
+    ? rows.length
+    : Math.min(rows.length, nonVirtualRenderedRowCount);
+  const nonVirtualRows = isOutputVirtualized
+    ? rows
+    : rows.slice(0, nonVirtualVisibleRowCount);
+  const lastNonVirtualRow = nonVirtualRows[nonVirtualRows.length - 1];
+  const nonVirtualRenderedHeight = lastNonVirtualRow
+    ? (rowLayout.rowStartsByKey.get(lastNonVirtualRow.key) ?? 0) +
+      (rowLayout.rowSizesByKey.get(lastNonVirtualRow.key) ??
+        getEstimatedRowHeight(lastNonVirtualRow))
+    : 0;
+  const nonVirtualSpacerHeight = Math.max(
+    0,
+    rowLayout.totalSize - nonVirtualRenderedHeight
+  );
+  const isNonVirtualOutputStaging =
+    !isOutputVirtualized && hasOutput && nonVirtualVisibleRowCount < rows.length;
   const isOutputScrollSeeking =
     isOutputVirtualized && scrollSeekPlaceholderActive;
   const virtualRows = isOutputVirtualized
@@ -2989,11 +3139,13 @@ const OutputSectionInner: React.FC = () => {
   // is actively scrolling, so avoid stacking the global overlay on top of them.
   const showVirtualizationOverlay =
     !isOutputScrollSeeking &&
-    isOutputVirtualized &&
-    ((hasOutput &&
-      rows.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
-      virtualRows.length === 0) ||
-      (navigationPendingRowIndex !== null && !isNavigationTargetVirtualized));
+    (isNonVirtualOutputStaging ||
+      (isOutputVirtualized &&
+        ((hasOutput &&
+          rows.length >= LARGE_WORKFLOW_ROW_THRESHOLD &&
+          virtualRows.length === 0) ||
+          (navigationPendingRowIndex !== null &&
+            !isNavigationTargetVirtualized))));
 
   useEffect(() => {
     if (isOutputScrollSeeking || !hasOutput) {
@@ -4259,7 +4411,7 @@ const OutputSectionInner: React.FC = () => {
                   </div>
                 ) : (
                   <div>
-                    {rows.map((row, rowIndex) => (
+                    {nonVirtualRows.map((row, rowIndex) => (
                       <div
                         key={row.key}
                         ref={measureStaticRowElement}
@@ -4287,6 +4439,12 @@ const OutputSectionInner: React.FC = () => {
                         />
                       </div>
                     ))}
+                    {nonVirtualSpacerHeight > 0 && (
+                      <div
+                        aria-hidden="true"
+                        style={{ height: `${nonVirtualSpacerHeight}px` }}
+                      />
+                    )}
                   </div>
                 )}
               </Profiler>
