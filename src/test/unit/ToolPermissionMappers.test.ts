@@ -181,6 +181,16 @@ suite("ToolPermissionMappers", () => {
         );
       });
 
+      test("allowAll with spaced deny pattern → raw arg without embedded quotes", () => {
+        const args = mapper.buildArgs(
+          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell(git checkout:*)"])
+        );
+        const idx = args.indexOf("--disallowedTools");
+        assert.ok(idx !== -1);
+        assert.strictEqual(args[idx + 1], "Bash(git checkout:*)");
+        assert.ok(!args[idx + 1].includes('"'));
+      });
+
       test("custom with allowed tools → --allowedTools entries", () => {
         const args = mapper.buildArgs(
           cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], [])
@@ -196,6 +206,16 @@ suite("ToolPermissionMappers", () => {
           after.some((a) => a.includes("Bash")),
           "shell → Bash"
         );
+      });
+
+      test("custom with spaced allow pattern → raw arg without embedded quotes", () => {
+        const args = mapper.buildArgs(
+          cfg(PERMISSION_MODES.CUSTOM, ["shell(git checkout:*)"], [])
+        );
+        const idx = args.indexOf("--allowedTools");
+        assert.ok(idx !== -1);
+        assert.strictEqual(args[idx + 1], "Bash(git checkout:*)");
+        assert.ok(!args[idx + 1].includes('"'));
       });
 
       test("custom with no allowed or denied tools → only --permission-mode bypassPermissions", () => {

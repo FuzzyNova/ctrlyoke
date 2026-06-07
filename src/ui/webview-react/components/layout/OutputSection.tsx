@@ -771,6 +771,21 @@ const OutputSectionInner: React.FC = () => {
     horizontalPanelResizeActive
   );
   const horizontalResizeSettleUntilRef = useRef<number | null>(null);
+  // True while a horizontal panel drag is in progress, plus a short settle
+  // window after release where width-driven row remeasurements are still
+  // landing. Used to keep exactly one anchor-correction mechanism active:
+  // the delta-anchor path in shouldAdjustScrollPositionOnItemSizeChange
+  // (robust to TanStack's pre-layout timing gap). The DOM-rect-based
+  // restoreViewportAnchorGuard must stay out of the way during this window —
+  // running both concurrently means each reads a partially-migrated DOM left
+  // by the other's just-applied correction, producing runaway oscillation.
+  const isHorizontalResizeCompensationActive = useCallback((): boolean => {
+    if (horizontalPanelResizeActive) {
+      return true;
+    }
+    const settleUntil = horizontalResizeSettleUntilRef.current;
+    return settleUntil != null && performance.now() < settleUntil;
+  }, [horizontalPanelResizeActive]);
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
   const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const pendingMeasurementFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1486,8 +1501,23 @@ const OutputSectionInner: React.FC = () => {
       return;
     }
 
+    // While a horizontal drag is settling, the delta-anchor path in
+    // shouldAdjustScrollPositionOnItemSizeChange is the sole corrector for a
+    // width-change anchor — see isHorizontalResizeCompensationActive. Letting
+    // this DOM-rect restore run concurrently means it reads DOM positions
+    // mid-migration (rows are resizing in a burst) and applies its own
+    // correction on top of the delta-anchor one, and the two chase each
+    // other's perturbations into a visible jump/oscillation loop.
+    if (
+      guard?.reason === "width-change" &&
+      isHorizontalResizeCompensationActive()
+    ) {
+      return;
+    }
+
     restoreViewportAnchorGuard("layout-effect");
   }, [
+    isHorizontalResizeCompensationActive,
     outputOverscan,
     restoreViewportAnchorGuard,
     rows.length,
@@ -1521,11 +1551,6 @@ const OutputSectionInner: React.FC = () => {
     const hasRecentScrollEvent =
       lastScrollEventAtRef.current != null &&
       now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
-    const horizontalResizeCompensationActive =
-      horizontalPanelResizeActive ||
-      (horizontalResizeSettleUntilRef.current != null &&
-        now < horizontalResizeSettleUntilRef.current);
-
     // When the anchor guard is active, use TanStack's exact delta instead of
     // reading DOM positions. This callback fires before the browser re-lays out
     // the new CSS transforms (shouldAdjustScrollPositionOnItemSizeChange runs
@@ -1534,17 +1559,17 @@ const OutputSectionInner: React.FC = () => {
     // guard always sees appliedDelta=0. Using `delta` directly bypasses this
     // timing gap: if the changed item sits above the anchor row, shift scrollTop
     // by the exact amount the anchor will move in the upcoming layout pass.
+    //
+    // This matters most precisely during an active horizontal-panel drag
+    // (reason "width-change" + isHorizontalResizeCompensationActive): a burst
+    // of rows resize in the same TanStack measurement batch, so DOM rects are
+    // only partially migrated and a getBoundingClientRect()-based correction
+    // reads inconsistent in-between positions instead of a clean pre-update
+    // snapshot — see the layout-effect guard above that defers to this path
+    // for that exact window.
     if (!hasRecentScrollEvent && !isMeasurementFlushInProgressRef.current) {
       const guard = viewportAnchorGuardRef.current;
       if (guard && now < guard.expiresAt) {
-        if (
-          guard.reason === "width-change" &&
-          horizontalResizeCompensationActive
-        ) {
-          restoreViewportAnchorGuard("scroll-correction");
-          return false;
-        }
-
         const scrollEl = outputRef.current;
         // Use TanStack's measurementsCache for the anchor's start: it's in the
         // same coordinate system as item.start (both reflect TanStack's current
@@ -1844,7 +1869,17 @@ const OutputSectionInner: React.FC = () => {
             activateViewportAnchorGuard(anchor, "width-change");
           }
         }
-        restoreViewportAnchorGuard("layout-effect");
+        // Keep the anchor alive (refresh/activate above) but defer the actual
+        // DOM-rect-based correction to the delta-anchor path in
+        // shouldAdjustScrollPositionOnItemSizeChange while a drag is active or
+        // settling — see isHorizontalResizeCompensationActive. This callback
+        // fires on every ResizeObserver tick during a drag, so letting its
+        // getBoundingClientRect()-based restore run concurrently with the
+        // delta-anchor corrections is the same racing-correctors problem that
+        // produced the oscillation/jump loop.
+        if (!isHorizontalResizeCompensationActive()) {
+          restoreViewportAnchorGuard("layout-effect");
+        }
       }
       setOutputContentWidth((prev) => {
         if (Math.abs(prev - width) < 0.5) return prev;
@@ -1866,6 +1901,7 @@ const OutputSectionInner: React.FC = () => {
   }, [
     activeOutputTab,
     activateViewportAnchorGuard,
+    isHorizontalResizeCompensationActive,
     outputCollapsed,
     outputContentWidth,
     refreshViewportAnchorGuard,

@@ -257,6 +257,18 @@ suite("HarnessToolPermissionMappers", () => {
         );
       });
 
+      test("deny patterns with spaces are passed as single raw args without embedded quotes", () => {
+        const args = mapper.buildArgs(
+          cfg(PERMISSION_MODES.ALLOW_ALL, [], ["shell(git checkout:*)"])
+        );
+        const disallowedValues = argsAfterFlag(args, "--disallowedTools");
+        assert.deepStrictEqual(disallowedValues, ["Bash(git checkout:*)"]);
+        assert.ok(
+          !disallowedValues[0].includes('"'),
+          "tool arg should not contain literal quote characters"
+        );
+      });
+
       test("custom mode with allowed tools converts Copilot names to Claude names", () => {
         const args = mapper.buildArgs(
           cfg(PERMISSION_MODES.CUSTOM, ["shell", "write", "edit", "glob"], [])
@@ -318,6 +330,18 @@ suite("HarnessToolPermissionMappers", () => {
         assert.ok(args.includes("--disallowedTools"));
         const allowedValues = argsAfterFlag(args, "--allowedTools");
         assert.ok(allowedValues.some((v) => v.includes("Write")));
+      });
+
+      test("allowed patterns with spaces are passed as single raw args without embedded quotes", () => {
+        const args = mapper.buildArgs(
+          cfg(PERMISSION_MODES.CUSTOM, ["shell(git checkout:*)"], [])
+        );
+        const allowedValues = argsAfterFlag(args, "--allowedTools");
+        assert.deepStrictEqual(allowedValues, ["Bash(git checkout:*)"]);
+        assert.ok(
+          !allowedValues[0].includes('"'),
+          "tool arg should not contain literal quote characters"
+        );
       });
     });
 
