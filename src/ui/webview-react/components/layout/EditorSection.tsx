@@ -27,7 +27,7 @@ import { triggerPanelAnimation } from "@utils/panelAnimation";
  * - Contains PromptEditor component
  * - Handles section collapse state persistence
  */
-export const EditorSection: React.FC = () => {
+const EditorSectionInner: React.FC = () => {
   const {
     selectionTarget,
     promptName,
@@ -311,3 +311,7 @@ export const EditorSection: React.FC = () => {
     </section>
   );
 };
+
+EditorSectionInner.displayName = "EditorSection";
+
+export const EditorSection = React.memo(EditorSectionInner);

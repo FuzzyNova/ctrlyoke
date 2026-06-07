@@ -145,7 +145,7 @@ function SortableWorkflowStepWrapper({
  * - Empty state when no steps loaded
  * - Retry and end condition result display
  */
-export const WorkflowStepsPanel: React.FC<{
+const WorkflowStepsPanelInner: React.FC<{
   onRequestSidebar?: () => void;
   onRequestClose?: () => void;
 }> = ({ onRequestSidebar, onRequestClose }) => {
@@ -1028,3 +1028,7 @@ export const WorkflowStepsPanel: React.FC<{
     </div>
   );
 };
+
+WorkflowStepsPanelInner.displayName = "WorkflowStepsPanel";
+
+export const WorkflowStepsPanel = React.memo(WorkflowStepsPanelInner);

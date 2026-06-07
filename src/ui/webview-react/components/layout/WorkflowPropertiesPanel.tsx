@@ -130,7 +130,7 @@ const FormField: React.FC<{
  * - End condition configuration
  * - Quick access to VS Code settings
  */
-export const WorkflowPropertiesPanel: React.FC<{
+const WorkflowPropertiesPanelInner: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
   onRequestClose?: () => void;
 }> = ({ panelBarOrientation = "vertical", onRequestClose }) => {
@@ -143,6 +143,7 @@ export const WorkflowPropertiesPanel: React.FC<{
     unhideDropdownOption,
     loadedWorkflows,
     activeWorkflowId,
+    horizontalPanelResizeActive,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -194,7 +195,8 @@ export const WorkflowPropertiesPanel: React.FC<{
 
   // Single breakpoint for all three layout zones (body rows, tab labels, footer toggles)
   const [drawerRef, isNarrow] = useElementNarrow<HTMLDivElement>(
-    SETTINGS_DRAWER_BREAKPOINT
+    SETTINGS_DRAWER_BREAKPOINT,
+    horizontalPanelResizeActive
   );
 
   // Get current effective values
@@ -1501,3 +1503,7 @@ export const WorkflowPropertiesPanel: React.FC<{
     </div>
   );
 };
+
+WorkflowPropertiesPanelInner.displayName = "WorkflowPropertiesPanel";
+
+export const WorkflowPropertiesPanel = React.memo(WorkflowPropertiesPanelInner);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import {
   useMessageHandler,
@@ -58,6 +58,9 @@ function App() {
   const setOutputCollapsed = useUiStore((s) => s.setOutputCollapsed);
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
+  const setHorizontalPanelResizeActive = useUiStore(
+    (s) => s.setHorizontalPanelResizeActive
+  );
 
   // Mobile drawer state
   const mobileStepsOpen = useUiStore((s) => s.mobileStepsOpen);
@@ -81,6 +84,53 @@ function App() {
     outputCollapsed,
     editorCollapsed,
   });
+
+  const horizontalResizeSettleTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const horizontalResizePointerActiveRef = useRef(false);
+
+  const clearHorizontalResizeSettleTimer = useCallback(() => {
+    if (horizontalResizeSettleTimerRef.current != null) {
+      clearTimeout(horizontalResizeSettleTimerRef.current);
+      horizontalResizeSettleTimerRef.current = null;
+    }
+  }, []);
+
+  const finishHorizontalResizeDrag = useCallback(() => {
+    if (!horizontalResizePointerActiveRef.current) {
+      return;
+    }
+    horizontalResizePointerActiveRef.current = false;
+    clearHorizontalResizeSettleTimer();
+    horizontalResizeSettleTimerRef.current = setTimeout(() => {
+      horizontalResizeSettleTimerRef.current = null;
+      setHorizontalPanelResizeActive(false);
+    }, 120);
+  }, [clearHorizontalResizeSettleTimer, setHorizontalPanelResizeActive]);
+
+  const startHorizontalResizeDrag = useCallback(() => {
+    clearHorizontalResizeSettleTimer();
+    horizontalResizePointerActiveRef.current = true;
+    setHorizontalPanelResizeActive(true);
+  }, [clearHorizontalResizeSettleTimer, setHorizontalPanelResizeActive]);
+
+  useEffect(() => {
+    window.addEventListener("pointerup", finishHorizontalResizeDrag);
+    window.addEventListener("pointercancel", finishHorizontalResizeDrag);
+    window.addEventListener("blur", finishHorizontalResizeDrag);
+    return () => {
+      window.removeEventListener("pointerup", finishHorizontalResizeDrag);
+      window.removeEventListener("pointercancel", finishHorizontalResizeDrag);
+      window.removeEventListener("blur", finishHorizontalResizeDrag);
+      clearHorizontalResizeSettleTimer();
+      setHorizontalPanelResizeActive(false);
+    };
+  }, [
+    clearHorizontalResizeSettleTimer,
+    finishHorizontalResizeDrag,
+    setHorizontalPanelResizeActive,
+  ]);
 
   const mobile = useMobileLayout({
     isMobile,
@@ -691,6 +741,15 @@ function App() {
           orientation="horizontal"
           className="flex-1"
           id="flightpath-main-layout"
+          onLayoutChange={() => {
+            if (!desktop.horizontalInitializedRef.current || !uiLayoutReady) {
+              return;
+            }
+            startHorizontalResizeDrag();
+          }}
+          onLayoutChanged={() => {
+            finishHorizontalResizeDrag();
+          }}
         >
           {/* Prompts Panel (Left - collapsible) */}
           <Panel
@@ -708,11 +767,13 @@ function App() {
               const isCollapsed =
                 desktop.stepsRef.current?.isCollapsed() ?? false;
               if (!isCollapsed) {
-                const size = desktop.stepsRef.current?.getSize().inPixels;
-                if (size != null) {
-                  const px = Math.round(size);
-                  desktop.lastDesktopSizes.current.steps = px;
-                  useUiStore.getState().setLastDesktopSizes({ steps: px });
+                const sizePx = desktop.stepsRef.current?.getSize().inPixels;
+                if (sizePx != null) {
+                  const px = Math.round(sizePx);
+                  if (desktop.lastDesktopSizes.current.steps !== px) {
+                    desktop.lastDesktopSizes.current.steps = px;
+                    useUiStore.getState().setLastDesktopSizes({ steps: px });
+                  }
                 }
               }
               if (isCollapsed !== promptsCollapsed) {
@@ -723,7 +784,10 @@ function App() {
             <WorkflowStepsPanel />
           </Panel>
 
-          <Separator className={SEPARATOR_VERTICAL} />
+          <Separator
+            className={SEPARATOR_VERTICAL}
+            onPointerDown={startHorizontalResizeDrag}
+          />
 
           {/* Center content — Output (top) / Editor (bottom), both independently
             collapsible.  When both are collapsed the vertical Group unmounts and
@@ -767,14 +831,19 @@ function App() {
                     ) {
                       const sizePct =
                         desktop.outputRef.current?.getSize().asPercentage;
-                      if (sizePct != null) {
+                      if (
+                        sizePct != null &&
+                        Math.abs(
+                          desktop.lastDesktopSizes.current.output - sizePct
+                        ) >= 0.001
+                      ) {
                         desktop.lastDesktopSizes.current.output = sizePct;
                         useUiStore
                           .getState()
                           .setLastDesktopSizes({ output: sizePct });
                       }
                     }
-                    if (!isRemountUnstable) {
+                    if (!isRemountUnstable && isOutputCollapsed !== outputCollapsed) {
                       setOutputCollapsed(isOutputCollapsed);
                     }
                   }}
@@ -818,7 +887,10 @@ function App() {
                         const isAutoExpandResize =
                           editorAutoExpandPxRef.current > 0 &&
                           Math.abs(px - autoExpectedPx) < 3;
-                        if (!isAutoExpandResize) {
+                        if (
+                          !isAutoExpandResize &&
+                          desktop.lastDesktopSizes.current.editor !== px
+                        ) {
                           desktop.lastDesktopSizes.current.editor = px;
                           useUiStore
                             .getState()
@@ -827,7 +899,7 @@ function App() {
                         }
                       }
                     }
-                    if (!isRemountUnstable) {
+                    if (!isRemountUnstable && isEditorCollapsed !== editorCollapsed) {
                       setEditorCollapsed(isEditorCollapsed);
                     }
                   }}
@@ -838,7 +910,10 @@ function App() {
             )}
           </Panel>
 
-          <Separator className={SEPARATOR_VERTICAL} />
+          <Separator
+            className={SEPARATOR_VERTICAL}
+            onPointerDown={startHorizontalResizeDrag}
+          />
 
           {/* Settings Panel (Right - collapsible) */}
           <Panel
@@ -856,11 +931,15 @@ function App() {
               const isCollapsed =
                 desktop.settingsRef.current?.isCollapsed() ?? false;
               if (!isCollapsed) {
-                const size = desktop.settingsRef.current?.getSize().inPixels;
-                if (size != null) {
-                  const px = Math.round(size);
-                  desktop.lastDesktopSizes.current.settings = px;
-                  useUiStore.getState().setLastDesktopSizes({ settings: px });
+                const sizePx = desktop.settingsRef.current?.getSize().inPixels;
+                if (sizePx != null) {
+                  const px = Math.round(sizePx);
+                  if (desktop.lastDesktopSizes.current.settings !== px) {
+                    desktop.lastDesktopSizes.current.settings = px;
+                    useUiStore.getState().setLastDesktopSizes({
+                      settings: px,
+                    });
+                  }
                 }
               }
               if (isCollapsed !== settingsCollapsed) {

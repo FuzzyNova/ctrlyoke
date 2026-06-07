@@ -169,6 +169,7 @@ interface UiState {
   mobileStepsOpen: boolean;
   mobileStepsMode: "sidebar" | "fullwidth";
   mobileWorkflowPropsOpen: boolean;
+  horizontalPanelResizeActive: boolean;
 
   // Global settings drawer state
   globalSettingsOpen: boolean;
@@ -320,6 +321,7 @@ interface UiActions {
   toggleMobileWorkflowProps: () => void;
   closeMobileSteps: () => void;
   closeMobileWorkflowProps: () => void;
+  setHorizontalPanelResizeActive: (active: boolean) => void;
 
   // Global settings drawer actions
   toggleGlobalSettings: () => void;
@@ -387,6 +389,7 @@ const initialState: UiState = {
   mobileStepsOpen: false,
   mobileStepsMode: "fullwidth",
   mobileWorkflowPropsOpen: false,
+  horizontalPanelResizeActive: false,
   globalSettingsOpen: false,
   globalSettingsActiveTab: "general",
   startupReady: false,
@@ -475,14 +478,30 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       setLastDesktopSizes: (sizes) =>
-        set((state) => ({
-          lastDesktopSizes: { ...state.lastDesktopSizes, ...sizes },
-        })),
+        set((state) => {
+          const next = { ...state.lastDesktopSizes, ...sizes };
+          if (
+            next.steps === state.lastDesktopSizes.steps &&
+            next.output === state.lastDesktopSizes.output &&
+            next.editor === state.lastDesktopSizes.editor &&
+            next.settings === state.lastDesktopSizes.settings
+          ) {
+            return state;
+          }
+          return { lastDesktopSizes: next };
+        }),
 
       setLastMobileSizes: (sizes) =>
-        set((state) => ({
-          lastMobileSizes: { ...state.lastMobileSizes, ...sizes },
-        })),
+        set((state) => {
+          const next = { ...state.lastMobileSizes, ...sizes };
+          if (
+            next.output === state.lastMobileSizes.output &&
+            next.editor === state.lastMobileSizes.editor
+          ) {
+            return state;
+          }
+          return { lastMobileSizes: next };
+        }),
 
       // ============================================================================
       // DRAWER TOGGLES
@@ -737,6 +756,13 @@ export const useUiStore = create<UiState & UiActions>()(
 
       closeMobileWorkflowProps: () => set({ mobileWorkflowPropsOpen: false }),
 
+      setHorizontalPanelResizeActive: (active) =>
+        set((state) =>
+          state.horizontalPanelResizeActive === active
+            ? state
+            : { horizontalPanelResizeActive: active }
+        ),
+
       // ============================================================================
       // GLOBAL SETTINGS DRAWER
       // ============================================================================
@@ -793,6 +819,7 @@ export const useUiStore = create<UiState & UiActions>()(
           loadingMessage: null,
           toast: null,
           footerOpenPicker: null,
+          horizontalPanelResizeActive: false,
         }),
 
       resetLayoutState: () => {

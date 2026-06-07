@@ -97,7 +97,7 @@ function log(label: string, details?: Record<string, unknown>): void {
   }
 
   WebviewLog.debug(
-    `[FlightPath Output Profile] ${label}`,
+    `[FP-out] ${label}`,
     normalizeDetails(details)
   );
 }

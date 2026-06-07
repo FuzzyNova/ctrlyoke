@@ -96,6 +96,22 @@ interface OutputMinimapProps {
  */
 const MIN_THUMB_PX = 24;
 
+function getResizeObserverEntryHeight(
+  entry: ResizeObserverEntry | undefined
+): number | null {
+  const borderBox = entry?.borderBoxSize?.[0];
+  if (borderBox) {
+    return borderBox.blockSize;
+  }
+
+  const contentBox = entry?.contentBoxSize?.[0];
+  if (contentBox) {
+    return contentBox.blockSize;
+  }
+
+  return entry?.contentRect.height ?? null;
+}
+
 const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   steps,
   scrollContainerRef,
@@ -111,6 +127,8 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
   const railRef = useRef<HTMLDivElement>(null);
   const stepsRef = useRef(steps);
   const contentHeightRef = useRef(contentHeight);
+  const lastObservedScrollHeightRef = useRef<number | null>(null);
+  const lastObservedRailHeightRef = useRef<number | null>(null);
   stepsRef.current = steps;
   contentHeightRef.current = contentHeight;
 
@@ -208,10 +226,37 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     };
 
     update();
-    const { observer, disconnect } =
-      createAnimationFrameResizeObserver(() => update());
+    const { observer, disconnect } = createAnimationFrameResizeObserver(
+      (entries) => {
+        const containerHeight = entries[0]
+          ? getResizeObserverEntryHeight(entries[0])
+          : null;
+        const railHeight = railRef.current?.clientHeight ?? null;
+
+        const heightUnchanged =
+          containerHeight != null &&
+          railHeight != null &&
+          lastObservedScrollHeightRef.current != null &&
+          lastObservedRailHeightRef.current != null &&
+          Math.abs(lastObservedScrollHeightRef.current - containerHeight) <
+            0.5 &&
+          Math.abs(lastObservedRailHeightRef.current - railHeight) < 0.5;
+
+        if (heightUnchanged) {
+          return;
+        }
+
+        if (containerHeight != null) {
+          lastObservedScrollHeightRef.current = containerHeight;
+        }
+        if (railHeight != null) {
+          lastObservedRailHeightRef.current = railHeight;
+        }
+
+        update();
+      }
+    );
     observer.observe(el);
-    if (railRef.current) observer.observe(railRef.current);
     const handleScroll = () => update();
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
