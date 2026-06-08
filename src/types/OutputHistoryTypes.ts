@@ -78,6 +78,11 @@ export interface WorkflowOutputHistory {
   orderedEntries: OrderedHistoryEntry[];
 }
 
+export type WorkflowRunMetadata = Pick<
+  WorkflowOutputHistory,
+  "runId" | "startedAt" | "completedAt" | "executionState"
+>;
+
 /**
  * Output data for a single workflow step.
  * Only stores workspace/undo metadata — CLI outputs and status messages

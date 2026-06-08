@@ -11,6 +11,7 @@ import type {
   UndoRecord,
   WorkspaceSnapshot,
   WorkflowOutputHistory,
+  WorkflowRunMetadata,
 } from "@root/types/OutputHistoryTypes";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import type { OutputMessage, OutputMessageTarget } from "./outputProjection";
@@ -198,10 +199,7 @@ export interface BuildOutputRowsInput {
     orderedEntries: WorkflowOutputHistory["orderedEntries"];
     promptOutputs: Record<number, StepOutput>;
     finalStepOutputs?: Record<number, StepOutput>;
-    runMetadata: Pick<
-      WorkflowOutputHistory,
-      "runId" | "startedAt" | "completedAt" | "executionState"
-    >;
+    runMetadata: WorkflowRunMetadata;
   } | null;
   workspaceSnapshots: Record<number, WorkspaceSnapshot | undefined>;
   finalStepWorkspaceSnapshots: Record<number, WorkspaceSnapshot | undefined>;

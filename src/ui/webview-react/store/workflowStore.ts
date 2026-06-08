@@ -33,6 +33,7 @@ import type {
   OrderedCliHistoryEntry,
   OutputExecutionTarget,
   WorkflowOutputHistory,
+  WorkflowRunMetadata,
   StepOutput,
   WorkspaceSnapshot,
   UndoExecutionTarget,
@@ -112,10 +113,7 @@ interface WorkflowState {
     orderedEntries: OrderedHistoryEntry[];
     promptOutputs: Record<number, StepOutput>;
     finalStepOutputs?: Record<number, StepOutput>;
-    runMetadata: Pick<
-      WorkflowOutputHistory,
-      "runId" | "startedAt" | "completedAt" | "executionState"
-    >;
+    runMetadata: WorkflowRunMetadata;
   } | null;
   /** Live workspace snapshots keyed by stepIndex (queue) */
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;

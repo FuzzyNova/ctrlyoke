@@ -170,16 +170,23 @@ Completed:
 
 Expected risk: low to medium because the header has many small controls but limited scroll behavior.
 
-### Prompt 3: extract export and undo hooks — Next
+### Prompt 3: extract export and undo hooks — Done
 
 - Move export state and handlers to `useOutputExport`.
 - Move workflow/prompt/file undo state and handlers to `useOutputUndoActions`.
 - If minimap undo action construction remains coupled to minimap data, leave it in the minimap hook planned later instead of forcing an awkward split.
 - Add focused tests for range parsing/export helper behavior if a pure seam appears.
 
+Completed:
+
+- Added `hooks/useOutputExport.ts` for export modal state, step range parsing, markdown generation, VS Code export messaging, and standalone download handling.
+- Added `hooks/useOutputUndoActions.ts` for prompt/file undo handlers, workflow-level undo/redo aggregation, workflow dialog opening, and undo dialog state.
+- Kept minimap undo action construction in `OutputSection` because it remains coupled to `minimapSteps`; it should move with Prompt 6's minimap model extraction.
+- Verified with `npm run build:webview`.
+
 Expected risk: medium. These paths post messages and build undo payloads, but they are localized.
 
-### Prompt 4: extract row model and row expansion state
+### Prompt 4: extract row model and row expansion state — Next
 
 - Move `allMessages` derivation and `buildOutputRows` orchestration into `useOutputRowsModel`.
 - Move diff/tool/bash expansion maps only with the row model if the hook can expose row invalidation callbacks cleanly.

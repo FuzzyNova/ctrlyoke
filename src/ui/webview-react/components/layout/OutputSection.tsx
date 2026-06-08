@@ -11,16 +11,13 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { useUiStore, type OutputScrollTarget } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
-import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
+import { useOutputExport } from "@hooks/useOutputExport";
+import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { OutputRow } from "../output";
 import { generateId } from "@utils/string";
-import {
-  generateMarkdownExport,
-  type ExportOptions,
-} from "@utils/markdownExport";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
-import { parseRangeNotation } from "@root/utils/RangeNotationParser";
 import {
   mapOrderedHistoryEntriesToMessages,
   type OutputMessage,
@@ -46,7 +43,6 @@ import {
   type MinimapStep,
   type MinimapDiffBlock,
 } from "../output/OutputMinimap";
-import type { WorkflowStepEntry } from "../output/UndoChangesDialog";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
@@ -58,18 +54,11 @@ import {
   getWheelDeltaPixels,
   shouldRenderScrollSeekPlaceholder,
 } from "./output-section/OutputScrollSeekPlaceholder";
-import {
-  OutputUndoDialogs,
-  type MinimapDialogState,
-  type WorkflowDialogState,
-} from "./output-section/OutputUndoDialogs";
+import { OutputUndoDialogs } from "./output-section/OutputUndoDialogs";
 
 import {
-  buildUndoDialogInputForPrompt,
-  buildUndoCandidatesForOutputs,
-  buildUndoDialogInputForSpecificEvent,
   computePromptUndoActions,
-  sameFilePath,
+  buildUndoDialogInputForPrompt,
 } from "../../utils/promptUndo";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { WebviewLog } from "@utils/logger";
@@ -79,12 +68,10 @@ import {
   buildOutputRows,
   estimateOutputDiffBlockHeight,
   estimateOutputRowHeight,
-  type CliHeaderRow,
   type OutputRenderRow,
   type StructuredEventRow,
 } from "@utils/outputRows";
 import { setActiveOutputNavigationController } from "@utils/outputNavigation";
-import type { OutputRowFileUndoRequest } from "../output/OutputRow";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
 import {
   DEFAULT_TOOL_CALL_EXPANSION_STATE,
@@ -532,20 +519,6 @@ const OutputSectionInner: React.FC = () => {
     null
   );
 
-  // Shared prompt-level undo/redo dialog (owned here, triggered from minimap)
-  const [minimapDialogState, setMinimapDialogState] =
-    useState<MinimapDialogState | null>(null);
-
-  // Workflow-level undo/redo dialog (aggregates all prompt-level changes)
-  const [workflowDialogState, setWorkflowDialogState] =
-    useState<WorkflowDialogState | null>(null);
-
-  // Export modal state
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportIncludeCommand, setExportIncludeCommand] = useState(true);
-  const [exportIncludeMetadata, setExportIncludeMetadata] = useState(true);
-  const [exportStepRange, setExportStepRange] = useState("");
-  const [exportStepRangeError, setExportStepRangeError] = useState(false);
   const lastRunSelectorObserverHeightRef = useRef<number | null>(null);
   const lastRunSelectorMaxHeightRef = useRef<number | null>(null);
 
@@ -595,6 +568,18 @@ const OutputSectionInner: React.FC = () => {
     }
     return mapOrderedHistoryEntriesToMessages(liveOrderedEntries);
   }, [isViewingHistory, historyOutputs, liveOrderedEntries]);
+
+  const outputExport = useOutputExport({
+    allMessages,
+    currentStep,
+    executionState,
+    fileName,
+    finalStep,
+    historyOrderedEntries: historyOutputs?.orderedEntries,
+    isViewingHistory,
+    steps,
+    totalSteps,
+  });
 
   const isExecutionActive =
     executionState === EXECUTION_STATES.RUNNING ||
@@ -2329,109 +2314,6 @@ const OutputSectionInner: React.FC = () => {
     schedulePendingNavigationStabilization,
   ]);
 
-  // Export: open the options modal
-  const handleExport = useCallback(() => {
-    setExportModalOpen(true);
-  }, []);
-
-  // Count unique CLI steps for use in the export modal range hint
-  const totalCliSteps = useMemo(() => {
-    const seen = new Set<string>();
-    for (const msg of allMessages) {
-      if (msg.type === "cli")
-        seen.add(`${msg.target.kind}:${msg.target.index}`);
-    }
-    return seen.size;
-  }, [allMessages]);
-
-  // Build the export messages array (shared between preview and confirm)
-  const buildExportMessages = useCallback(
-    () =>
-      allMessages.map((msg) => ({
-        type: msg.type,
-        target: msg.target,
-        timestamp: msg.timestamp,
-        sequence: msg.sequence,
-        data: msg.data,
-        attemptIndex: msg.attemptIndex,
-        runIndex: msg.runIndex,
-        stepName:
-          msg.type === "cli"
-            ? msg.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-              ? finalStep?.name?.trim() || undefined
-              : steps[msg.target.index]?.name?.trim() || undefined
-            : undefined,
-      })),
-    [allMessages, finalStep?.name, steps]
-  );
-
-  // Export confirm: generate markdown with current options and trigger save/download
-  const handleExportConfirm = useCallback(() => {
-    let parsedRange: number[] | undefined;
-    if (exportStepRange.trim()) {
-      const parsed = parseRangeNotation(exportStepRange);
-      if (!parsed) {
-        setExportStepRangeError(true);
-        return;
-      }
-      parsedRange = parsed;
-    }
-
-    const exportOptions: ExportOptions = {
-      includeCommand: exportIncludeCommand,
-      includeMetadata: exportIncludeMetadata,
-      stepRange: parsedRange,
-    };
-
-    const markdownContent = generateMarkdownExport(
-      buildExportMessages(),
-      {
-        fileName: fileName || "Unknown",
-        executionState,
-        currentStep,
-        totalSteps,
-      },
-      {
-        orderedEntries:
-          isViewingHistory && historyOutputs?.orderedEntries?.length
-            ? historyOutputs.orderedEntries
-            : undefined,
-        exportOptions,
-      }
-    );
-
-    setExportModalOpen(false);
-
-    if (isStandalone) {
-      const blob = new Blob([markdownContent], { type: "text/markdown" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${fileName ?? "output"}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
-      return;
-    }
-
-    const vscode = getVsCodeApi();
-    vscode.postMessage({
-      type: MESSAGE_TYPES.EXPORT_OUTPUT,
-      content: markdownContent,
-      fileName,
-    });
-  }, [
-    buildExportMessages,
-    currentStep,
-    executionState,
-    exportIncludeCommand,
-    exportIncludeMetadata,
-    exportStepRange,
-    fileName,
-    historyOutputs,
-    isViewingHistory,
-    totalSteps,
-  ]);
-
   const navigationController = useMemo(
     () => ({
       scrollToTarget: (
@@ -2835,100 +2717,32 @@ const OutputSectionInner: React.FC = () => {
   // currently active elsewhere; otherwise historical per-diff undo buttons disappear.
   const allowUndoActions = isViewingHistory || !isExecutionActive;
 
-  // ── Workflow-level undo/redo aggregation ───────────────────────────────────
-  // Iterates all steps to collect entries for the workflow undo/redo dialog.
-  const workflowUndoRedoData = useMemo(() => {
-    if (!allowUndoActions)
-      return { undoEntries: [], redoEntries: [], workspacePath: "" };
-
-    const undoEntries: WorkflowStepEntry[] = [];
-    const redoEntries: WorkflowStepEntry[] = [];
-    let workspacePath = "";
-
-    for (const msgTarget of uniqueStepTargets) {
-      const key = `${msgTarget.kind}:${msgTarget.index}`;
-      const lastCliIdx = lastCliIndexPerStep.get(key);
-      if (lastCliIdx === undefined) continue;
-
-      const lastMsg = allMessages[lastCliIdx];
-      const lastOutput = lastMsg?.data as CliOutputType | undefined;
-      if (!lastOutput || lastOutput.isStreaming) continue;
-
-      if (lastOutput.workingDirectory)
-        workspacePath = lastOutput.workingDirectory;
-
-      const isFinalStep = msgTarget.kind === FINAL_STEP_PHASES.FINAL_STEP;
-      const stepIndex = msgTarget.index;
-
-      let effectiveSnapshot: WorkspaceSnapshot | undefined;
-      let effectiveUndoRecord: UndoRecord | undefined;
-
-      if (isViewingHistory && historyOutputs) {
-        effectiveSnapshot = isFinalStep
-          ? historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot
-          : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
-        effectiveUndoRecord = isFinalStep
-          ? historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord
-          : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
-      } else {
-        const targetKey = isFinalStep
-          ? `finalStep-${stepIndex}`
-          : `queue-${stepIndex}`;
-        effectiveSnapshot = isFinalStep
-          ? finalStepWorkspaceSnapshots[stepIndex]
-          : workspaceSnapshots[stepIndex];
-        effectiveUndoRecord = undoRecords[targetKey];
-      }
-
-      const stepOutputs = (stepOutputsMap.get(key) ?? []) as CliOutputType[];
-      const undoTarget: UndoExecutionTarget = isFinalStep
-        ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
-        : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
-      const label = isFinalStep
-        ? `Final Step Loop ${stepIndex + 1}`
-        : `Prompt ${stepIndex + 1}`;
-
-      const redoInstructions =
-        effectiveUndoRecord != null && effectiveUndoRecord.isRedone !== true
-          ? (effectiveUndoRecord.redoInstructions ?? [])
-          : [];
-
-      // Redo entry: files previously undone that can be re-applied
-      if (redoInstructions.length > 0) {
-        redoEntries.push({ target: undoTarget, label, redoInstructions });
-      }
-
-      // Undo entry: undoable candidates excluding already-undone files
-      const allCandidates = buildUndoCandidatesForOutputs(
-        stepOutputs,
-        effectiveSnapshot
-      );
-      const candidates =
-        redoInstructions.length > 0
-          ? allCandidates.filter(
-              (c) =>
-                !redoInstructions.some((ri) => sameFilePath(c.path, ri.path))
-            )
-          : allCandidates;
-      const undoCandidates = candidates.filter((c) => c.instruction !== null);
-      if (undoCandidates.length > 0) {
-        undoEntries.push({ target: undoTarget, label, undoCandidates });
-      }
-    }
-
-    return { undoEntries, redoEntries, workspacePath };
-  }, [
-    allowUndoActions,
-    uniqueStepTargets,
-    lastCliIndexPerStep,
+  const outputUndo = useOutputUndoActions({
     allMessages,
-    stepOutputsMap,
-    isViewingHistory,
-    historyOutputs,
-    workspaceSnapshots,
+    allowUndoActions,
     finalStepWorkspaceSnapshots,
+    historyOutputs,
+    isViewingHistory,
+    lastCliIndexPerStep,
+    stepOutputsMap,
     undoRecords,
-  ]);
+    uniqueStepTargets,
+    workspaceSnapshots,
+  });
+  const {
+    closeMinimapDialog,
+    closeWorkflowDialog,
+    handleFileUndo,
+    handlePromptRedo,
+    handlePromptUndo,
+    handleWorkflowRedo,
+    handleWorkflowUndo,
+    minimapDialogState,
+    setMinimapDialogState,
+    workflowDialogState,
+    workflowUndoRedoData,
+  } = outputUndo;
+
   const showCompactWorkflowUndoRedoLabels =
     workflowUndoRedoData.undoEntries.length > 0 &&
     workflowUndoRedoData.redoEntries.length > 0;
@@ -3159,103 +2973,6 @@ const OutputSectionInner: React.FC = () => {
     useWorkflowStore.getState().clearHistoryOutputs();
     useUiStore.getState().clearHistoryView();
   }, []);
-
-  const handlePromptUndo = useCallback((row: CliHeaderRow) => {
-    if (!row.promptUndo) return;
-    const target: UndoExecutionTarget = row.isFinalStep
-      ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
-      : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
-    const alreadyUndone =
-      row.promptUndo.undoRecord != null &&
-      row.promptUndo.undoRecord.isRedone !== true
-        ? row.promptUndo.undoRecord.redoInstructions
-        : undefined;
-    const input = buildUndoDialogInputForPrompt(
-      target,
-      row.promptUndo.allStepOutputs,
-      row.promptUndo.workspaceSnapshot,
-      row.promptUndo.workspacePath,
-      alreadyUndone
-    );
-    setMinimapDialogState({
-      mode: "undo",
-      target,
-      workspacePath: row.promptUndo.workspacePath,
-      input,
-      requestId: generateId(),
-    });
-  }, []);
-
-  const handlePromptRedo = useCallback((row: CliHeaderRow) => {
-    if (!row.promptUndo?.undoRecord?.redoInstructions?.length) return;
-    const target: UndoExecutionTarget = row.isFinalStep
-      ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
-      : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
-    setMinimapDialogState({
-      mode: "redo",
-      target,
-      workspacePath: row.promptUndo.workspacePath,
-      redoInstructions: row.promptUndo.undoRecord.redoInstructions,
-      requestId: generateId(),
-    });
-  }, []);
-
-  const handleFileUndo = useCallback(
-    (row: StructuredEventRow, request: OutputRowFileUndoRequest) => {
-      const target: UndoExecutionTarget =
-        row.target.kind === FINAL_STEP_PHASES.FINAL_STEP
-          ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.target.index }
-          : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.target.index };
-      const stepOutputs = stepOutputsMap.get(
-        `${row.target.kind}:${row.target.index}`
-      );
-      const workspacePath =
-        stepOutputs && stepOutputs.length > 0
-          ? (stepOutputs[stepOutputs.length - 1]?.workingDirectory ?? "")
-          : "";
-      const showRedo =
-        row.undoRecord != null && row.undoRecord.isRedone !== true;
-
-      if (showRedo) {
-        const fileRedoInstruction = row.undoRecord?.redoInstructions.find(
-          (item) => sameFilePath(item.path, request.path)
-        );
-        if (fileRedoInstruction) {
-          setMinimapDialogState({
-            mode: "redo",
-            target,
-            workspacePath,
-            redoInstructions: [fileRedoInstruction],
-            requestId: generateId(),
-          });
-        }
-        return;
-      }
-
-      const input = buildUndoDialogInputForSpecificEvent(
-        target,
-        request.eventIndex,
-        request.path,
-        request.event,
-        row.workspaceSnapshot,
-        workspacePath,
-        {
-          oldContent: request.oldContent,
-          newContent: request.newContent,
-          structuredPatch: request.structuredPatch,
-        }
-      );
-
-      setMinimapDialogState({
-        mode: "undo",
-        target,
-        workspacePath,
-        input,
-        requestId: generateId(),
-      });
-    },
-    [stepOutputsMap]
-  );
 
   const invalidateMeasuredRow = useCallback(
     (rowKey: string) => {
@@ -3514,24 +3231,6 @@ const OutputSectionInner: React.FC = () => {
     });
   }, []);
 
-  const handleWorkflowUndo = useCallback(() => {
-    setWorkflowDialogState({
-      mode: "undo",
-      workspacePath: workflowUndoRedoData.workspacePath,
-      entries: workflowUndoRedoData.undoEntries,
-      requestId: generateId(),
-    });
-  }, [workflowUndoRedoData]);
-
-  const handleWorkflowRedo = useCallback(() => {
-    setWorkflowDialogState({
-      mode: "redo",
-      workspacePath: workflowUndoRedoData.workspacePath,
-      entries: workflowUndoRedoData.redoEntries,
-      requestId: generateId(),
-    });
-  }, [workflowUndoRedoData]);
-
   const collapsedHeader = (
     <div
       ref={mergedHeaderRef}
@@ -3599,7 +3298,7 @@ const OutputSectionInner: React.FC = () => {
           onCollapseAllDiffs={collapseAllDiffs}
           onExecutionModeToggle={handleExecutionModeChange}
           onExpandAllDiffs={expandAllDiffs}
-          onExport={handleExport}
+          onExport={outputExport.openModal}
           onNewTerminal={handleSpawnTerminal}
           onOutputFontSizeChange={setOutputFontSize}
           onRunSelect={handleSelectRun}
@@ -3797,30 +3496,27 @@ const OutputSectionInner: React.FC = () => {
       <OutputUndoDialogs
         minimapDialogState={minimapDialogState}
         workflowDialogState={workflowDialogState}
-        onCloseMinimapDialog={() => setMinimapDialogState(null)}
-        onCloseWorkflowDialog={() => setWorkflowDialogState(null)}
+        onCloseMinimapDialog={closeMinimapDialog}
+        onCloseWorkflowDialog={closeWorkflowDialog}
       />
 
       {/* Output tab right-click context menu */}
       {outputContextMenuPortal}
 
       {/* Export options modal — used by both VS Code and hosted web server */}
-      {exportModalOpen && (
+      {outputExport.modalOpen && (
         <ExportOutputModal
-          includeCommand={exportIncludeCommand}
-          includeMetadata={exportIncludeMetadata}
-          isStandaloneMode={isStandalone}
-          stepRange={exportStepRange}
-          stepRangeError={exportStepRangeError}
-          totalCliSteps={totalCliSteps}
-          onClose={() => setExportModalOpen(false)}
-          onConfirm={handleExportConfirm}
-          onIncludeCommandChange={setExportIncludeCommand}
-          onIncludeMetadataChange={setExportIncludeMetadata}
-          onStepRangeChange={(value) => {
-            setExportStepRange(value);
-            setExportStepRangeError(false);
-          }}
+          includeCommand={outputExport.includeCommand}
+          includeMetadata={outputExport.includeMetadata}
+          isStandaloneMode={outputExport.isStandaloneMode}
+          stepRange={outputExport.stepRange}
+          stepRangeError={outputExport.stepRangeError}
+          totalCliSteps={outputExport.totalCliSteps}
+          onClose={outputExport.closeModal}
+          onConfirm={outputExport.confirmExport}
+          onIncludeCommandChange={outputExport.setIncludeCommand}
+          onIncludeMetadataChange={outputExport.setIncludeMetadata}
+          onStepRangeChange={outputExport.updateStepRange}
         />
       )}
     </section>
