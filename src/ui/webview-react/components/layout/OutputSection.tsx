@@ -14,7 +14,6 @@ import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { OutputRow } from "../output";
-import { Modal } from "../shared";
 import {
   RunSelector,
   IconToggleButton,
@@ -53,28 +52,30 @@ import {
   type MinimapStep,
   type MinimapDiffBlock,
 } from "../output/OutputMinimap";
-import { UndoChangesDialog } from "../output/UndoChangesDialog";
 import type { WorkflowStepEntry } from "../output/UndoChangesDialog";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../../terminalRegistry";
+import { ExportOutputModal } from "./output-section/ExportOutputModal";
+import {
+  OutputScrollSeekPlaceholder,
+  getWheelDeltaPixels,
+  shouldRenderScrollSeekPlaceholder,
+} from "./output-section/OutputScrollSeekPlaceholder";
+import {
+  OutputUndoDialogs,
+  type MinimapDialogState,
+  type WorkflowDialogState,
+} from "./output-section/OutputUndoDialogs";
 
-// Stable empty fallback — avoids infinite re-render from `?? []` returning a new
-// array reference on every useSyncExternalStore snapshot call.
-const EMPTY_TERMINAL_SESSIONS: TerminalSession[] = [];
-
-// Stable workflowId used for standalone user shell sessions (no active workflow).
-const SHELL_WORKFLOW_ID = "_shell";
 import {
   buildUndoDialogInputForPrompt,
   buildUndoCandidatesForOutputs,
   buildUndoDialogInputForSpecificEvent,
   computePromptUndoActions,
   sameFilePath,
-  type UndoDialogInput,
 } from "../../utils/promptUndo";
-import type { UndoFileInstruction } from "../../types/messages";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { WebviewLog } from "@utils/logger";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
@@ -108,6 +109,23 @@ import {
   shouldLogOutputScrollFrame,
   shouldLogOutputVirtualRange,
 } from "@utils/outputPerformance";
+import {
+  alignRowElementToViewport,
+  captureViewportRowAnchor,
+  findRenderedRowElement,
+  findRenderedRowElementByKey,
+  getEstimatedRowScopedScrollTop,
+  getMeasuredElementHeight,
+  getResizeObserverEntryHeight,
+  getRowScopedScrollTop,
+} from "@utils/outputDom";
+
+// Stable empty fallback — avoids infinite re-render from `?? []` returning a new
+// array reference on every useSyncExternalStore snapshot call.
+const EMPTY_TERMINAL_SESSIONS: TerminalSession[] = [];
+
+// Stable workflowId used for standalone user shell sessions (no active workflow).
+const SHELL_WORKFLOW_ID = "_shell";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to keep auto-scroll pinned.
 const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024; // minimum output width before diffs use split view.
@@ -129,7 +147,6 @@ const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS = 600; // delay before a
 const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 1800; // delay before expanding from restore overscan back to normal overscan.
 const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200; // recent wheel input window that lets real user scrolling bypass settle suppression.
 const OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES = 5; // animation-frame retries for capturing a viewport anchor when rows are mid-transition (e.g. scroll-seek placeholder swap).
-const OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS = 1200; // text rows shorter than this render directly during scroll seek.
 const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300; // time to ignore virtualizer scroll correction after user expands row content.
 const LARGE_WORKFLOW_ROW_THRESHOLD = 20; // row count where fast-scroll placeholder behavior is enabled.
 const NON_VIRTUAL_STAGING_ROW_THRESHOLD = 60; // row count where non-virtual rows mount progressively.
@@ -148,30 +165,6 @@ interface RowHeightBucketStats {
   totalMeasured: number;
   totalEstimated: number;
   maxAbsDelta: number;
-}
-
-function getMeasuredElementHeight(element: HTMLElement): number {
-  return Math.max(
-    element.getBoundingClientRect().height,
-    element.offsetHeight,
-    element.scrollHeight
-  );
-}
-
-function getResizeObserverEntryHeight(
-  entry: ResizeObserverEntry | undefined
-): number | null {
-  const borderBox = entry?.borderBoxSize?.[0];
-  if (borderBox) {
-    return borderBox.blockSize;
-  }
-
-  const contentBox = entry?.contentBoxSize?.[0];
-  if (contentBox) {
-    return contentBox.blockSize;
-  }
-
-  return entry?.contentRect.height ?? null;
 }
 
 function getZeroHeightStructuredEventReason(
@@ -237,162 +230,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function getWheelDeltaPixels(event: React.WheelEvent<HTMLDivElement>): number {
-  switch (event.deltaMode) {
-    case WheelEvent.DOM_DELTA_LINE:
-      return event.deltaY * 16;
-    case WheelEvent.DOM_DELTA_PAGE:
-      return event.deltaY * event.currentTarget.clientHeight;
-    default:
-      return event.deltaY;
-  }
-}
-
-function findRenderedRowElement(
-  scrollElement: HTMLDivElement,
-  rowIndex: number
-): HTMLDivElement | null {
-  return scrollElement.querySelector<HTMLDivElement>(
-    `[data-index="${rowIndex}"]`
-  );
-}
-
-function findRenderedRowElementByKey(
-  scrollElement: HTMLDivElement,
-  rowKey: string
-): HTMLDivElement | null {
-  return (
-    Array.from(
-      scrollElement.querySelectorAll<HTMLDivElement>("[data-row-key]")
-    ).find((element) => element.dataset.rowKey === rowKey) ?? null
-  );
-}
-
-interface ViewportRowAnchor {
-  rowKey: string;
-  offsetTop: number;
-  rowOffsetPx: number;
-  viewportOffsetTop: number;
-}
-
-function captureViewportRowAnchor(
-  scrollElement: HTMLDivElement,
-  mode: "center-point" | "visible-top" = "visible-top"
-): ViewportRowAnchor | null {
-  const containerRect = scrollElement.getBoundingClientRect();
-  const viewportCenter = containerRect.top + containerRect.height / 2;
-  let best: { element: HTMLDivElement; distance: number } | null = null;
-  let bestVisibleTop: { element: HTMLDivElement; distance: number } | null =
-    null;
-
-  for (const element of scrollElement.querySelectorAll<HTMLDivElement>(
-    "[data-row-key]"
-  )) {
-    const rowKey = element.dataset.rowKey;
-    if (!rowKey) continue;
-
-    const rowRect = element.getBoundingClientRect();
-    if (rowRect.bottom <= containerRect.top || rowRect.top >= containerRect.bottom) {
-      continue;
-    }
-
-    const rowCenter = rowRect.top + rowRect.height / 2;
-    const distance = Math.abs(rowCenter - viewportCenter);
-    if (rowRect.top >= containerRect.top) {
-      const topDistance = Math.abs(rowRect.top - viewportCenter);
-      if (!bestVisibleTop || topDistance < bestVisibleTop.distance) {
-        bestVisibleTop = { element, distance: topDistance };
-      }
-    }
-    if (!best || distance < best.distance) {
-      best = { element, distance };
-    }
-  }
-
-  const anchorElement =
-    mode === "center-point"
-      ? best?.element ?? bestVisibleTop?.element ?? null
-      : bestVisibleTop?.element ?? best?.element ?? null;
-  if (!anchorElement) {
-    return null;
-  }
-
-  const anchorRect = anchorElement.getBoundingClientRect();
-  const anchorPoint =
-    mode === "center-point"
-      ? Math.min(Math.max(viewportCenter, anchorRect.top), anchorRect.bottom)
-      : anchorRect.top;
-
-  return {
-    rowKey: anchorElement.dataset.rowKey ?? "",
-    offsetTop: anchorRect.top - containerRect.top,
-    rowOffsetPx: anchorPoint - anchorRect.top,
-    viewportOffsetTop: anchorPoint - containerRect.top,
-  };
-}
-
-function alignRowElementToViewport(
-  scrollElement: HTMLDivElement,
-  rowElement: HTMLElement,
-  align: "start" | "end"
-): boolean {
-  const containerRect = scrollElement.getBoundingClientRect();
-  const rowRect = rowElement.getBoundingClientRect();
-  const delta =
-    align === "end"
-      ? rowRect.bottom - containerRect.bottom
-      : rowRect.top - containerRect.top;
-
-  if (Math.abs(delta) < 2) {
-    return true;
-  }
-
-  const maxScroll = Math.max(
-    0,
-    scrollElement.scrollHeight - scrollElement.clientHeight
-  );
-  scrollElement.scrollTop = Math.max(
-    0,
-    Math.min(maxScroll, scrollElement.scrollTop + delta)
-  );
-  return false;
-}
-
-function getRowScopedScrollTop(
-  scrollElement: HTMLDivElement,
-  rowElement: HTMLElement,
-  align: "start" | "end"
-): number {
-  const containerRect = scrollElement.getBoundingClientRect();
-  const rowRect = rowElement.getBoundingClientRect();
-  const delta =
-    align === "end"
-      ? rowRect.bottom - containerRect.bottom
-      : rowRect.top - containerRect.top;
-  const maxScroll = Math.max(
-    0,
-    scrollElement.scrollHeight - scrollElement.clientHeight
-  );
-  return Math.max(0, Math.min(maxScroll, scrollElement.scrollTop + delta));
-}
-
-function getEstimatedRowScopedScrollTop(
-  scrollElement: HTMLDivElement,
-  rowStart: number,
-  rowSize: number | undefined,
-  align: "start" | "end"
-): number {
-  const target =
-    align === "end"
-      ? rowStart + (rowSize ?? 0) - scrollElement.clientHeight
-      : rowStart;
-  const maxScroll = Math.max(
-    0,
-    scrollElement.scrollHeight - scrollElement.clientHeight
-  );
-  return Math.max(0, Math.min(maxScroll, target));
-}
-
 function getRowHeightBucket(row: OutputRenderRow): string {
   switch (row.rowKind) {
     case "history-banner":
@@ -419,111 +256,6 @@ function getRowHeightBucket(row: OutputRenderRow): string {
       }
       return `structured-event:${row.event.type}`;
   }
-}
-
-function getScrollSeekRowLabel(row: OutputRenderRow): string {
-  switch (row.rowKind) {
-    case "structured-event":
-      if (row.diff) {
-        return row.diff.renderPlan.viewType === "split"
-          ? "Diff"
-          : "Unified diff";
-      }
-      if (row.toolCall) {
-        return "Tool call";
-      }
-      return row.event.type;
-    case "cli-header":
-      return row.stepLabel;
-    case "cli-command":
-      return "Command";
-    case "plain-response":
-      return "Response";
-    case "prompt":
-      return "Prompt";
-    case "status":
-      return "Status";
-    case "stats":
-      return "Stats";
-    case "error":
-      return "Error";
-    case "history-banner":
-      return "History";
-    case "step-anchor":
-      return "Step";
-    case "final-step-label":
-      return row.label;
-  }
-}
-
-function shouldRenderScrollSeekPlaceholder(row: OutputRenderRow): boolean {
-  switch (row.rowKind) {
-    case "plain-response":
-      return row.text.length >= OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS;
-    case "structured-event":
-      if (row.diff || row.toolCall) {
-        return true;
-      }
-
-      switch (row.event.type) {
-        case CLI_EVENT_TYPES.BASH_COMMAND:
-        case CLI_EVENT_TYPES.FILE_EDIT:
-        case CLI_EVENT_TYPES.FILE_WRITE:
-        case CLI_EVENT_TYPES.FILE_READ:
-        case CLI_EVENT_TYPES.FILE_DELETE:
-        case CLI_EVENT_TYPES.MCP_TOOL_CALL:
-        case CLI_EVENT_TYPES.TOOL_CALL:
-        case CLI_EVENT_TYPES.TOOL_RESULT:
-          return true;
-        case CLI_EVENT_TYPES.TEXT:
-        case CLI_EVENT_TYPES.THINKING: {
-          const data = row.event.data as { text?: string };
-          return (
-            (data.text?.length ?? 0) >=
-            OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS
-          );
-        }
-        default:
-          return false;
-      }
-    default:
-      return false;
-  }
-}
-
-const OutputScrollSeekPlaceholder: React.FC<{
-  row: OutputRenderRow;
-  height: number;
-}> = ({ row, height }) => (
-  <div
-    className="px-2 py-1 text-[length:var(--fp-output-font-size-xs)] text-description-fg"
-    style={{
-      height: `${Math.max(1, height)}px`,
-      contain: "layout paint style",
-    }}
-  >
-    <div className="h-full min-h-6 rounded border border-panel-border bg-sidebar-bg/40 px-2 py-1 overflow-hidden">
-      <span className="opacity-80">
-        Rendering {getScrollSeekRowLabel(row)}...
-      </span>
-    </div>
-  </div>
-);
-
-interface MinimapDialogState {
-  mode: "undo" | "redo";
-  target: UndoExecutionTarget;
-  workspacePath: string;
-  input?: UndoDialogInput;
-  redoInstructions?: UndoFileInstruction[];
-  requestId: string;
-}
-
-interface WorkflowDialogState {
-  mode: "undo" | "redo";
-  workspacePath: string;
-  entries: WorkflowStepEntry[];
-  requestId: string;
 }
 
 interface PendingNavigationState {
@@ -4280,151 +4012,34 @@ const OutputSectionInner: React.FC = () => {
         </div>
       </>
 
-      {/* Shared prompt-level undo/redo dialog — triggered from minimap */}
-      {minimapDialogState && (
-        <UndoChangesDialog
-          mode={minimapDialogState.mode}
-          target={minimapDialogState.target}
-          workspacePath={minimapDialogState.workspacePath}
-          input={minimapDialogState.input}
-          redoInstructions={minimapDialogState.redoInstructions}
-          requestId={minimapDialogState.requestId}
-          onClose={() => setMinimapDialogState(null)}
-        />
-      )}
-
-      {/* Workflow-level undo/redo dialog — triggered from header buttons */}
-      {workflowDialogState && (
-        <UndoChangesDialog
-          mode={workflowDialogState.mode}
-          target={workflowDialogState.entries[0].target}
-          workspacePath={workflowDialogState.workspacePath}
-          requestId={workflowDialogState.requestId}
-          workflowEntries={workflowDialogState.entries}
-          onClose={() => setWorkflowDialogState(null)}
-        />
-      )}
+      <OutputUndoDialogs
+        minimapDialogState={minimapDialogState}
+        workflowDialogState={workflowDialogState}
+        onCloseMinimapDialog={() => setMinimapDialogState(null)}
+        onCloseWorkflowDialog={() => setWorkflowDialogState(null)}
+      />
 
       {/* Output tab right-click context menu */}
       {outputContextMenuPortal}
 
       {/* Export options modal — used by both VS Code and hosted web server */}
       {exportModalOpen && (
-        <Modal
-          isOpen
-          title="Export Output"
+        <ExportOutputModal
+          includeCommand={exportIncludeCommand}
+          includeMetadata={exportIncludeMetadata}
+          isStandaloneMode={isStandalone}
+          stepRange={exportStepRange}
+          stepRangeError={exportStepRangeError}
+          totalCliSteps={totalCliSteps}
           onClose={() => setExportModalOpen(false)}
-          size="sm"
-          footer={
-            <>
-              <button
-                type="button"
-                className="px-4 py-2 text-sm text-description-fg hover:text-foreground transition-colors"
-                onClick={() => setExportModalOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="px-4 py-2 text-sm bg-btn-bg text-btn-fg hover:bg-btn-hover rounded transition-colors"
-                onClick={handleExportConfirm}
-              >
-                {isStandalone ? (
-                  <>
-                    <i className="codicon codicon-cloud-download mr-1" />
-                    Download
-                  </>
-                ) : (
-                  <>
-                    <i className="codicon codicon-share mr-1" />
-                    Export
-                  </>
-                )}
-              </button>
-            </>
-          }
-        >
-          <div className="flex flex-col gap-4 py-1">
-            {/* Include command checkbox */}
-            <label className="flex items-start gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                aria-label="Include CLI command"
-                checked={exportIncludeCommand}
-                onChange={(e) => setExportIncludeCommand(e.target.checked)}
-                className="mt-0.5 accent-btn-bg"
-              />
-              <span className="text-sm">
-                <span className="text-foreground font-medium">
-                  Include CLI command
-                </span>
-                <span className="block text-xs text-description-fg mt-0.5">
-                  When unchecked, the command run for each prompt step is
-                  omitted from the export.
-                </span>
-              </span>
-            </label>
-
-            {/* Include metadata checkbox */}
-            <label className="flex items-start gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                aria-label="Include metadata"
-                checked={exportIncludeMetadata}
-                onChange={(e) => setExportIncludeMetadata(e.target.checked)}
-                className="mt-0.5 accent-btn-bg"
-              />
-              <span className="text-sm">
-                <span className="text-foreground font-medium">
-                  Include metadata
-                </span>
-                <span className="block text-xs text-description-fg mt-0.5">
-                  When unchecked, step headings, token stats, session IDs, and
-                  separators are omitted — giving a clean conversation history.
-                </span>
-              </span>
-            </label>
-
-            {/* Step range input */}
-            <div>
-              <label className="block text-sm text-foreground font-medium mb-1">
-                Step range{" "}
-                <span className="text-description-fg font-normal">
-                  (optional)
-                </span>
-              </label>
-              <input
-                type="text"
-                value={exportStepRange}
-                onChange={(e) => {
-                  setExportStepRange(e.target.value);
-                  setExportStepRangeError(false);
-                }}
-                placeholder={
-                  totalCliSteps > 1
-                    ? `e.g. 1-${totalCliSteps}`
-                    : "e.g. 1,2,4-10"
-                }
-                aria-label="Step range (e.g. 1,2,4-10)"
-                className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${
-                  exportStepRangeError
-                    ? "border-input-error-border"
-                    : "border-input-border"
-                }`}
-              />
-              {exportStepRangeError && (
-                <span className="text-xxs text-error-fg mt-0.5 block">
-                  Use numbers, commas, and ranges (e.g. 1,3,5-10)
-                </span>
-              )}
-              <p className="text-xxs text-description-fg mt-1">
-                Leave blank to export all{" "}
-                {totalCliSteps > 0 ? totalCliSteps : ""} step
-                {totalCliSteps !== 1 ? "s" : ""}.
-              </p>
-            </div>
-          </div>
-        </Modal>
+          onConfirm={handleExportConfirm}
+          onIncludeCommandChange={setExportIncludeCommand}
+          onIncludeMetadataChange={setExportIncludeMetadata}
+          onStepRangeChange={(value) => {
+            setExportStepRange(value);
+            setExportStepRangeError(false);
+          }}
+        />
       )}
     </section>
   );
