@@ -11,13 +11,13 @@ import {
   getResizeObserverEntryHeight,
 } from "@utils/outputDom";
 import {
-  getOutputProfilerState,
-  isOutputProfilingEnabled,
-  logOutputProfilerEvent,
-  measureOutputPhase,
-  shouldLogOutputMeasurement,
-  shouldLogOutputVirtualRange,
-} from "@utils/outputPerformance";
+  getProfilerState,
+  isProfilingEnabled,
+  logProfilerEvent,
+  measurePhase,
+  shouldLogMeasurement,
+  shouldLogVirtualRange,
+} from "@utils/performanceProfiler";
 import { OUTPUT_USER_SCROLL_INPUT_GRACE_MS } from "@utils/outputScrollConstants";
 import {
   estimateOutputRowHeight,
@@ -260,7 +260,7 @@ export function useOutputVirtualization({
       measuredHeight: number,
       source: "dom-read" | "resize-observer"
     ): number => {
-      const startedAt = isOutputProfilingEnabled() ? performance.now() : 0;
+      const startedAt = isProfilingEnabled() ? performance.now() : 0;
       const index = Number(element.dataset.index ?? -1);
       const row = rowsRef.current[index];
       if (!row) return measuredHeight;
@@ -288,8 +288,8 @@ export function useOutputVirtualization({
       ) {
         if (startedAt > 0) {
           const durationMs = performance.now() - startedAt;
-          if (shouldLogOutputMeasurement(durationMs)) {
-            logOutputProfilerEvent("rowMeasurement:unchanged", {
+          if (shouldLogMeasurement(durationMs)) {
+            logProfilerEvent("rowMeasurement:unchanged", {
               index,
               rowKey: row.key,
               rowKind: row.rowKind,
@@ -333,7 +333,7 @@ export function useOutputVirtualization({
         ),
       });
 
-      if (isOutputProfilingEnabled()) {
+      if (isProfilingEnabled()) {
         const absDelta = Math.abs(nextHeight - estimatedHeight);
         const pctDelta = estimatedHeight > 0 ? absDelta / estimatedHeight : 0;
         if (absDelta > 40 && pctDelta > 0.1) {
@@ -384,7 +384,7 @@ export function useOutputVirtualization({
             extras.commandLength = fullText.length;
             extras.commandPreview = fullText.slice(0, 120).replace(/\n/g, "↵");
           }
-          logOutputProfilerEvent("rowEstimateOutlier", {
+          logProfilerEvent("rowEstimateOutlier", {
             rowKey: row.key,
             bucket: rowHeightBucket,
             measuredHeight: nextHeight,
@@ -398,8 +398,8 @@ export function useOutputVirtualization({
 
       if (startedAt > 0) {
         const durationMs = performance.now() - startedAt;
-        if (shouldLogOutputMeasurement(durationMs)) {
-          logOutputProfilerEvent("rowMeasurement:updated", {
+        if (shouldLogMeasurement(durationMs)) {
+          logProfilerEvent("rowMeasurement:updated", {
             index,
             rowKey: row.key,
             rowKind: row.rowKind,
@@ -472,9 +472,9 @@ export function useOutputVirtualization({
       (rowResizeScrollSuppressUntilRef.current == null ||
         now >= rowResizeScrollSuppressUntilRef.current) &&
       item.start < (outputRef.current?.scrollTop ?? 0);
-    if (isOutputProfilingEnabled() && Math.abs(delta) >= 40) {
+    if (isProfilingEnabled() && Math.abs(delta) >= 40) {
       const scrollElement = outputRef.current;
-      logOutputProfilerEvent("scrollCorrection", {
+      logProfilerEvent("scrollCorrection", {
         itemKey: item.key,
         delta,
         scrollTop: scrollElement?.scrollTop ?? 0,
@@ -536,8 +536,8 @@ export function useOutputVirtualization({
   const flushPendingScrollMeasurements = useCallback(() => {
     if (pendingMeasurementCacheRef.current.size === 0) return;
     isMeasurementFlushInProgressRef.current = true;
-    if (isOutputProfilingEnabled()) {
-      logOutputProfilerEvent("measurementFlush", {
+    if (isProfilingEnabled()) {
+      logProfilerEvent("measurementFlush", {
         pendingCount: pendingMeasurementCacheRef.current.size,
         mountedCount: mountedRowElementsRef.current.size,
         targetKind: scrollTargetRef.current.kind,
@@ -567,13 +567,13 @@ export function useOutputVirtualization({
 
         requestAnimationFrame(() => {
           if (
-            isOutputProfilingEnabled() &&
+            isProfilingEnabled() &&
             (!firstFrameRestore.resolved ||
               !secondFrameRestore.resolved ||
               Math.abs(firstFrameRestore.appliedDelta) >= 1 ||
               Math.abs(secondFrameRestore.appliedDelta) >= 1)
           ) {
-            logOutputProfilerEvent("measurementFlushTargetSettled", {
+            logProfilerEvent("measurementFlushTargetSettled", {
               target: scrollTargetRef.current,
               firstFrameApplied: firstFrameRestore.appliedDelta,
               secondFrameApplied: secondFrameRestore.appliedDelta,
@@ -607,7 +607,7 @@ export function useOutputVirtualization({
 
   const rowLayout: OutputRowLayoutModel = useMemo(
     () =>
-      measureOutputPhase(
+      measurePhase(
         "rowLayout",
         {
           rows: rows.length,
@@ -800,7 +800,7 @@ export function useOutputVirtualization({
     : [];
 
   useEffect(() => {
-    if (!isOutputVirtualized || !shouldLogOutputVirtualRange()) {
+    if (!isOutputVirtualized || !shouldLogVirtualRange()) {
       return;
     }
 
@@ -812,7 +812,7 @@ export function useOutputVirtualization({
     }
 
     lastVirtualRangeRef.current = signature;
-    logOutputProfilerEvent("virtualRange", {
+    logProfilerEvent("virtualRange", {
       firstIndex: first?.index ?? null,
       lastIndex: last?.index ?? null,
       virtualRows: virtualRows.length,
@@ -839,7 +839,7 @@ export function useOutputVirtualization({
       startTime: number,
       commitTime: number
     ) => {
-      const profilerState = getOutputProfilerState();
+      const profilerState = getProfilerState();
       if (
         !profilerState.enabled ||
         actualDuration < profilerState.slowThresholdMs
@@ -847,7 +847,7 @@ export function useOutputVirtualization({
         return;
       }
 
-      logOutputProfilerEvent("reactCommit", {
+      logProfilerEvent("reactCommit", {
         id,
         phase,
         actualDuration,

@@ -39,14 +39,13 @@ import { OutputPane } from "./output-section/OutputPane";
 import { OutputUndoDialogs } from "./output-section/OutputUndoDialogs";
 
 import { triggerPanelAnimation } from "@utils/panelAnimation";
-import { WebviewLog } from "@utils/logger";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
 import {
-  getOutputProfilerState,
-  logOutputProfilerEvent,
-  shouldLogOutputScrollFrame,
-} from "@utils/outputPerformance";
+  getProfilerState,
+  logProfilerEvent,
+  shouldLogScrollFrame,
+} from "@utils/performanceProfiler";
 import { getResizeObserverEntryHeight } from "@utils/outputDom";
 import {
   LARGE_WORKFLOW_ROW_THRESHOLD,
@@ -581,29 +580,7 @@ const OutputSectionInner: React.FC = () => {
       const atBottom =
         el.scrollHeight - el.scrollTop - el.clientHeight <=
         SCROLL_BOTTOM_THRESHOLD;
-      if (autoscrollEnabled.current !== atBottom) {
-        WebviewLog.debug(
-          "[FP-SCROLL-DEBUG] autoscrollEnabled updated during programmatic scroll",
-          {
-            from: autoscrollEnabled.current,
-            to: atBottom,
-            scrollTop: el.scrollTop,
-            scrollHeight: el.scrollHeight,
-            clientHeight: el.clientHeight,
-            t: performance.now().toFixed(1),
-          }
-        );
-        autoscrollEnabled.current = atBottom;
-      } else {
-        WebviewLog.debug(
-          "[FP-SCROLL-DEBUG] handleScroll suppressed (programmatic) — autoscrollEnabled unchanged",
-          {
-            autoscrollEnabled: autoscrollEnabled.current,
-            scrollTop: el.scrollTop,
-            t: performance.now().toFixed(1),
-          }
-        );
-      }
+      autoscrollEnabled.current = atBottom;
       return;
     }
     // TanStack's rAF-deferred scroll corrections fire during the flush window.
@@ -638,23 +615,12 @@ const OutputSectionInner: React.FC = () => {
     const atBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight <=
       SCROLL_BOTTOM_THRESHOLD;
-    if (autoscrollEnabled.current !== atBottom) {
-      WebviewLog.debug("[FP-SCROLL-DEBUG] autoscrollEnabled changed", {
-        from: autoscrollEnabled.current,
-        to: atBottom,
-        scrollTop: el.scrollTop,
-        scrollHeight: el.scrollHeight,
-        clientHeight: el.clientHeight,
-        gap: el.scrollHeight - el.scrollTop - el.clientHeight,
-        t: performance.now().toFixed(1),
-      });
-    }
     autoscrollEnabled.current = atBottom;
     scheduleScrollTargetCommit("user-scroll-settled");
     if (previousScrollEventAt != null) {
       const gapMs = scrollGapMs;
-      if (shouldLogOutputScrollFrame(gapMs)) {
-        logOutputProfilerEvent("scroll", {
+      if (shouldLogScrollFrame(gapMs)) {
+        logProfilerEvent("scroll", {
           gapMs,
           scrollDeltaPx,
           scrollVelocityPxMs,
@@ -673,9 +639,9 @@ const OutputSectionInner: React.FC = () => {
       }
     }
     const durationMs = performance.now() - startedAt;
-    const profilerState = getOutputProfilerState();
+    const profilerState = getProfilerState();
     if (profilerState.enabled && durationMs >= profilerState.slowThresholdMs) {
-      logOutputProfilerEvent("scrollHandler", {
+      logProfilerEvent("scrollHandler", {
         durationMs,
         scrollDeltaPx,
         scrollVelocityPxMs,
@@ -741,17 +707,6 @@ const OutputSectionInner: React.FC = () => {
       return;
     }
 
-    WebviewLog.debug(
-      "[FP-SCROLL-DEBUG] autoScroll FIRING — scrolling to bottom",
-      {
-        rows: rows.length,
-        prevRowCount,
-        isExecutionActive,
-        autoscrollEnabled: autoscrollEnabled.current,
-        scrollTop: outputRef.current.scrollTop,
-        t: performance.now().toFixed(1),
-      }
-    );
     setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, "auto-scroll");
     isProgrammaticScroll.current = true;
     if (isOutputVirtualized) {
@@ -761,10 +716,6 @@ const OutputSectionInner: React.FC = () => {
     }
     requestAnimationFrame(() => {
       isProgrammaticScroll.current = false;
-      WebviewLog.debug("[FP-SCROLL-DEBUG] isProgrammaticScroll cleared", {
-        autoscrollEnabled: autoscrollEnabled.current,
-        t: performance.now().toFixed(1),
-      });
     });
   }, [
     rows,

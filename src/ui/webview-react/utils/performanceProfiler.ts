@@ -1,6 +1,7 @@
+import type { ProfilerOnRenderCallback } from "react";
 import { WebviewLog } from "@utils/logger";
 
-type OutputProfilerOptions = {
+type PerformanceProfilerOptions = {
   slowThresholdMs?: number;
   logAllScrollFrames?: boolean;
   logLongFrames?: boolean;
@@ -8,25 +9,26 @@ type OutputProfilerOptions = {
   logVirtualRanges?: boolean;
 };
 
-type OutputProfilerState = Required<OutputProfilerOptions> & {
+type PerformanceProfilerState = Required<PerformanceProfilerOptions> & {
   enabled: boolean;
 };
 
-export interface OutputPerformanceProfiler {
-  enable: (options?: OutputProfilerOptions) => void;
+export interface PerformanceProfiler {
+  enable: (options?: PerformanceProfilerOptions) => void;
   disable: () => void;
-  configure: (options: OutputProfilerOptions) => void;
-  snapshot: () => OutputProfilerState;
+  configure: (options: PerformanceProfilerOptions) => void;
+  snapshot: () => PerformanceProfilerState;
 }
 
 declare global {
   interface Window {
-    flightpathOutputProfiler?: OutputPerformanceProfiler;
+    flightpathProfiler?: PerformanceProfiler;
   }
 }
 
-const STORAGE_KEY = "flightpath.outputProfiler.enabled";
-const DEFAULT_STATE: OutputProfilerState = {
+const LOG_PREFIX = "[FP-perf]";
+const STORAGE_KEY = "flightpath.profiler.enabled";
+const DEFAULT_STATE: PerformanceProfilerState = {
   enabled: false,
   slowThresholdMs: 16,
   logAllScrollFrames: false,
@@ -35,7 +37,7 @@ const DEFAULT_STATE: OutputProfilerState = {
   logVirtualRanges: false,
 };
 
-const state: OutputProfilerState = {
+const state: PerformanceProfilerState = {
   ...DEFAULT_STATE,
   enabled: readEnabledFlag(),
 };
@@ -96,13 +98,10 @@ function log(label: string, details?: Record<string, unknown>): void {
     return;
   }
 
-  WebviewLog.debug(
-    `[FP-out] ${label}`,
-    normalizeDetails(details)
-  );
+  WebviewLog.debug(`${LOG_PREFIX} ${label}`, normalizeDetails(details));
 }
 
-function applyOptions(options: OutputProfilerOptions): void {
+function applyOptions(options: PerformanceProfilerOptions): void {
   if (options.slowThresholdMs != null) {
     state.slowThresholdMs = Math.max(0, options.slowThresholdMs);
   }
@@ -190,18 +189,18 @@ function syncLongFrameMonitor(): void {
   }
 }
 
-export function isOutputProfilingEnabled(): boolean {
+export function isProfilingEnabled(): boolean {
   return state.enabled;
 }
 
-export function getOutputProfilerState(): OutputProfilerState {
+export function getProfilerState(): PerformanceProfilerState {
   return { ...state };
 }
 
-export function setOutputProfilingEnabled(
+export function setProfilingEnabled(
   enabled: boolean,
-  options?: OutputProfilerOptions
-): OutputProfilerState {
+  options?: PerformanceProfilerOptions
+): PerformanceProfilerState {
   state.enabled = enabled;
   applyOptions(options ?? {});
   writeEnabledFlag(enabled);
@@ -210,16 +209,21 @@ export function setOutputProfilingEnabled(
   return { ...state };
 }
 
-export function configureOutputProfiler(
-  options: OutputProfilerOptions
-): OutputProfilerState {
+export function configureProfiler(
+  options: PerformanceProfilerOptions
+): PerformanceProfilerState {
   applyOptions(options);
   syncLongFrameMonitor();
   log("configured", state);
   return { ...state };
 }
 
-export function measureOutputPhase<T>(
+/**
+ * Times an arbitrary unit of work and logs it when it crosses the slow
+ * threshold. Usable from any part of the webview — the `label` and `details`
+ * identify the scope (e.g. "output:rowLayout", "editor:tokenize").
+ */
+export function measurePhase<T>(
   label: string,
   details: Record<string, unknown>,
   fn: () => T
@@ -237,45 +241,71 @@ export function measureOutputPhase<T>(
   return result;
 }
 
-export function logOutputProfilerEvent(
+export function logProfilerEvent(
   label: string,
   details?: Record<string, unknown>
 ): void {
   log(label, details);
 }
 
-export function shouldLogOutputMeasurement(durationMs: number): boolean {
+export function shouldLogMeasurement(durationMs: number): boolean {
   return (
     state.enabled &&
     (state.logMeasurements || durationMs >= state.slowThresholdMs)
   );
 }
 
-export function shouldLogOutputVirtualRange(): boolean {
+export function shouldLogVirtualRange(): boolean {
   return state.enabled && state.logVirtualRanges;
 }
 
-export function shouldLogOutputScrollFrame(gapMs: number): boolean {
+export function shouldLogScrollFrame(gapMs: number): boolean {
   return (
     state.enabled &&
     (state.logAllScrollFrames || gapMs >= state.slowThresholdMs)
   );
 }
 
-export function installOutputPerformanceProfiler(): void {
-  if (typeof window === "undefined" || window.flightpathOutputProfiler) {
+/**
+ * Builds a React `Profiler.onRender` callback that reports slow commits for
+ * the wrapped subtree through the same gated channel as the rest of the
+ * profiler. `getDetails` can supply scope-specific context (e.g. row counts,
+ * overscan) that's resolved at render time.
+ */
+export function createProfilerRenderHandler(
+  scopeId: string,
+  getDetails?: () => Record<string, unknown>
+): ProfilerOnRenderCallback {
+  return (id, phase, actualDuration, baseDuration, startTime, commitTime) => {
+    if (!state.enabled || actualDuration < state.slowThresholdMs) {
+      return;
+    }
+
+    logProfilerEvent(scopeId, {
+      id,
+      phase,
+      actualDuration,
+      baseDuration,
+      renderToCommitGap: commitTime - startTime,
+      ...(getDetails ? getDetails() : {}),
+    });
+  };
+}
+
+export function installPerformanceProfiler(): void {
+  if (typeof window === "undefined" || window.flightpathProfiler) {
     return;
   }
 
-  window.flightpathOutputProfiler = {
+  window.flightpathProfiler = {
     enable: (options) => {
-      setOutputProfilingEnabled(true, options);
+      setProfilingEnabled(true, options);
     },
     disable: () => {
-      setOutputProfilingEnabled(false);
+      setProfilingEnabled(false);
     },
     configure: (options) => {
-      configureOutputProfiler(options);
+      configureProfiler(options);
     },
     snapshot: () => ({ ...state }),
   };

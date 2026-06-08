@@ -4,7 +4,7 @@ import {
   type OutputMessage,
 } from "@utils/outputProjection";
 import { buildOutputRows, type OutputRenderRow } from "@utils/outputRows";
-import { measureOutputPhase } from "@utils/outputPerformance";
+import { measurePhase } from "@utils/performanceProfiler";
 import { CLI_EVENT_TYPES } from "@/types/messages";
 import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
 import {
@@ -115,7 +115,7 @@ export function useOutputRowsModel({
     firstRowIndexByTarget,
   } = useMemo(
     () =>
-      measureOutputPhase(
+      measurePhase(
         "buildOutputRows",
         {
           messages: allMessages.length,

@@ -6,12 +6,12 @@ import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 import { WebviewLog } from "@utils/logger";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { installOutputPerformanceProfiler } from "@utils/outputPerformance";
+import { installPerformanceProfiler } from "@utils/performanceProfiler";
 import "./styles/globals.css";
 
 const root = document.getElementById("root");
 window.__flightpathReactMounted = true;
-installOutputPerformanceProfiler();
+installPerformanceProfiler();
 if (!root) {
   WebviewLog.error("[main] root element not found");
 } else {

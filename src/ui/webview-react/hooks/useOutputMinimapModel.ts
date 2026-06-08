@@ -9,7 +9,7 @@ import {
   estimateOutputDiffBlockHeight,
   type OutputRenderRow,
 } from "@utils/outputRows";
-import { measureOutputPhase } from "@utils/outputPerformance";
+import { measurePhase } from "@utils/performanceProfiler";
 import {
   buildUndoDialogInputForPrompt,
   computePromptUndoActions,
@@ -86,7 +86,7 @@ function getStepScrollFractions(
   rowLayout: OutputRowLayoutModel,
   rowCount: number
 ): Map<string, number> {
-  return measureOutputPhase(
+  return measurePhase(
     "stepScrollFractions",
     { targets: uniqueStepTargets.length, rows: rowCount },
     () => {
@@ -140,7 +140,7 @@ export function useOutputMinimapModel({
   );
 
   const minimapSteps = useMemo((): MinimapStep[] => {
-    return measureOutputPhase(
+    return measurePhase(
       "minimapSteps",
       {
         targets: uniqueStepTargets.length,

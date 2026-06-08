@@ -2,9 +2,9 @@ import React, { memo, useState, useCallback, useEffect, useRef } from "react";
 import { type FinalStepPhase } from "../../types/messages";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import {
-  getOutputProfilerState,
-  logOutputProfilerEvent,
-} from "@utils/outputPerformance";
+  getProfilerState,
+  logProfilerEvent,
+} from "@utils/performanceProfiler";
 
 // ============================================================================
 // Types
@@ -173,7 +173,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
       const sharedContentHeight = getSharedContentHeight();
       const logUpdateDuration = () => {
         const durationMs = performance.now() - startedAt;
-        const profilerState = getOutputProfilerState();
+        const profilerState = getProfilerState();
         if (
           !profilerState.enabled ||
           durationMs < profilerState.slowThresholdMs
@@ -181,7 +181,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
           return;
         }
 
-        logOutputProfilerEvent("minimapViewportUpdate", {
+        logProfilerEvent("minimapViewportUpdate", {
           durationMs,
           steps: stepsRef.current.length,
           diffBlocks: stepsRef.current.reduce(

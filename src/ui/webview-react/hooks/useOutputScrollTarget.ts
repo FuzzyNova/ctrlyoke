@@ -4,9 +4,9 @@ import type { OutputScrollTarget } from "@store/uiStore";
 import { captureViewportRowAnchor } from "@utils/outputDom";
 import { clamp } from "@utils/number";
 import {
-  isOutputProfilingEnabled,
-  logOutputProfilerEvent,
-} from "@utils/outputPerformance";
+  isProfilingEnabled,
+  logProfilerEvent,
+} from "@utils/performanceProfiler";
 
 interface OutputRowLayoutModel {
   rowStartsByKey: Map<string, number>;
@@ -91,8 +91,8 @@ export function useOutputScrollTarget({
       autoscrollEnabledRef.current = target.kind === "bottom";
       setOutputScrollTarget(workflowScrollTargetId, target);
 
-      if (isOutputProfilingEnabled()) {
-        logOutputProfilerEvent("scrollTarget", {
+      if (isProfilingEnabled()) {
+        logProfilerEvent("scrollTarget", {
           phase: "set",
           reason,
           target,
@@ -254,10 +254,10 @@ export function useOutputScrollTarget({
       }
 
       if (
-        isOutputProfilingEnabled() &&
+        isProfilingEnabled() &&
         (Math.abs(appliedDelta) >= 1 || !resolved.resolved)
       ) {
-        logOutputProfilerEvent("scrollTarget", {
+        logProfilerEvent("scrollTarget", {
           phase: "apply",
           reason: phase,
           target,

@@ -6,10 +6,10 @@ import { MESSAGE_TYPES } from "@/types/messages";
 import { Button } from "@components/shared/Button";
 import { SettingToggleRow } from "@components/shared/SettingToggleRow";
 import {
-  configureOutputProfiler,
-  getOutputProfilerState,
-  setOutputProfilingEnabled,
-} from "@utils/outputPerformance";
+  configureProfiler,
+  getProfilerState,
+  setProfilingEnabled,
+} from "@utils/performanceProfiler";
 
 const TERMINATION_WARNING =
   "Reload and restart actions terminate active workflows, PTY sessions, and CLI processes.";
@@ -30,9 +30,7 @@ function formatBuildDate(value: string): string {
 
 export function DeveloperSection() {
   const vscode = useVsCodeApi();
-  const [outputProfilerState, setOutputProfilerState] = useState(() =>
-    getOutputProfilerState()
-  );
+  const [profilerState, setProfilerState] = useState(() => getProfilerState());
   const dev = useSettingsStore((state) => state.dev);
   const devBuild = useSettingsStore((state) => state.devBuild);
   const clearDevBuildOutput = useSettingsStore(
@@ -106,9 +104,9 @@ export function DeveloperSection() {
     vscode.postMessage({ type: action.messageType });
   }
 
-  function updateOutputProfilerEnabled(enabled: boolean) {
-    setOutputProfilerState(
-      setOutputProfilingEnabled(
+  function updateProfilerEnabled(enabled: boolean) {
+    setProfilerState(
+      setProfilingEnabled(
         enabled,
         enabled
           ? {
@@ -123,16 +121,16 @@ export function DeveloperSection() {
     );
     showToast(
       enabled
-        ? "Output performance profiling enabled."
-        : "Output performance profiling disabled.",
+        ? "Performance profiling enabled."
+        : "Performance profiling disabled.",
       "info"
     );
   }
 
-  function updateOutputProfilerOptions(
-    options: Parameters<typeof configureOutputProfiler>[0]
+  function updateProfilerOptions(
+    options: Parameters<typeof configureProfiler>[0]
   ) {
-    setOutputProfilerState(configureOutputProfiler(options));
+    setProfilerState(configureProfiler(options));
   }
 
   return (
@@ -201,53 +199,63 @@ export function DeveloperSection() {
 
       <div className="border-t border-panel-border pt-3 space-y-2">
         <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
-          Output Profiling
+          Performance Profiling
         </h3>
         <p className="text-xs text-description-fg">
-          Logs targeted output virtualization timing through the webview logger.
-          Reproduce slow scrolling, then filter logs for{" "}
-          <span className="font-mono">[FlightPath Output Profile]</span>.
+          Logs gated performance measurements through the webview logger.
+          Reproduce the slowdown, then filter logs for{" "}
+          <span className="font-mono">[FP-perf]</span>.
         </p>
         <SettingToggleRow
-          label="Enable output performance profiling"
-          description={`Logs slow phases at ${outputProfilerState.slowThresholdMs}ms or slower.`}
-          checked={outputProfilerState.enabled}
-          onChange={updateOutputProfilerEnabled}
+          label="Enable performance profiling"
+          description={`Logs slow phases at ${profilerState.slowThresholdMs}ms or slower.`}
+          checked={profilerState.enabled}
+          onChange={updateProfilerEnabled}
         />
-        {outputProfilerState.enabled && (
-          <div className="pl-7 space-y-1">
-            <SettingToggleRow
-              label="Log row measurements"
-              description="Includes mounted row measurement cost and measured-vs-estimated height deltas."
-              checked={outputProfilerState.logMeasurements}
-              onChange={(checked) =>
-                updateOutputProfilerOptions({ logMeasurements: checked })
-              }
-            />
-            <SettingToggleRow
-              label="Log virtual ranges"
-              description="Logs TanStack Virtual window changes while scrolling."
-              checked={outputProfilerState.logVirtualRanges}
-              onChange={(checked) =>
-                updateOutputProfilerOptions({ logVirtualRanges: checked })
-              }
-            />
-            <SettingToggleRow
-              label="Log every scroll frame"
-              description="Verbose; use only for short reproductions."
-              checked={outputProfilerState.logAllScrollFrames}
-              onChange={(checked) =>
-                updateOutputProfilerOptions({ logAllScrollFrames: checked })
-              }
-            />
-            <SettingToggleRow
-              label="Log long frames"
-              description="Captures requestAnimationFrame gaps and browser long-task entries when available."
-              checked={outputProfilerState.logLongFrames}
-              onChange={(checked) =>
-                updateOutputProfilerOptions({ logLongFrames: checked })
-              }
-            />
+        {profilerState.enabled && (
+          <div className="pl-7 space-y-3">
+            <div className="space-y-1">
+              <h4 className="text-xs font-semibold text-description-fg">
+                General (whole UI)
+              </h4>
+              <SettingToggleRow
+                label="Log long frames"
+                description="Captures requestAnimationFrame gaps and browser long-task entries across the entire webview — use to find render hotspots anywhere in the UI."
+                checked={profilerState.logLongFrames}
+                onChange={(checked) =>
+                  updateProfilerOptions({ logLongFrames: checked })
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-xs font-semibold text-description-fg">
+                Output section
+              </h4>
+              <SettingToggleRow
+                label="Log row measurements"
+                description="Includes mounted row measurement cost and measured-vs-estimated height deltas."
+                checked={profilerState.logMeasurements}
+                onChange={(checked) =>
+                  updateProfilerOptions({ logMeasurements: checked })
+                }
+              />
+              <SettingToggleRow
+                label="Log virtual ranges"
+                description="Logs TanStack Virtual window changes while scrolling."
+                checked={profilerState.logVirtualRanges}
+                onChange={(checked) =>
+                  updateProfilerOptions({ logVirtualRanges: checked })
+                }
+              />
+              <SettingToggleRow
+                label="Log every scroll frame"
+                description="Verbose; use only for short reproductions."
+                checked={profilerState.logAllScrollFrames}
+                onChange={(checked) =>
+                  updateProfilerOptions({ logAllScrollFrames: checked })
+                }
+              />
+            </div>
           </div>
         )}
       </div>

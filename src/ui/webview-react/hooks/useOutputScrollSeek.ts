@@ -3,9 +3,7 @@ import type { RefObject } from "react";
 import {
   getWheelDeltaPixels,
 } from "@components/layout/output-section/OutputScrollSeekPlaceholder";
-import {
-  logOutputProfilerEvent,
-} from "@utils/outputPerformance";
+import { logProfilerEvent } from "@utils/performanceProfiler";
 import {
   LARGE_WORKFLOW_ROW_THRESHOLD,
   OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
@@ -138,7 +136,7 @@ export function useOutputScrollSeek({
         }
       }
 
-      logOutputProfilerEvent("adaptiveOverscan", {
+      logProfilerEvent("adaptiveOverscan", {
         overscan: outputOverscanRef.current,
         reason,
         placeholder: scrollSeekPlaceholderRef.current,
@@ -247,7 +245,7 @@ export function useOutputScrollSeek({
           pageDeltaThresholdPx,
         });
       } else if (suppressedFastScroll) {
-        logOutputProfilerEvent("adaptiveOverscan", {
+        logProfilerEvent("adaptiveOverscan", {
           overscan: outputOverscanRef.current,
           reason: "idle",
           phase: "suppressed-post-restore-scroll",
@@ -387,7 +385,7 @@ export function useOutputScrollSeek({
     }
 
     const now = performance.now();
-    logOutputProfilerEvent("scrollSeekRowsVisible", {
+    logProfilerEvent("scrollSeekRowsVisible", {
       restoreToVisibleMs: now - restoreRequestedAt,
       scrollSeekTotalMs:
         scrollSeekStartedAt != null ? now - scrollSeekStartedAt : undefined,
@@ -400,7 +398,7 @@ export function useOutputScrollSeek({
     commitScrollTargetFromViewportRef.current("scroll-seek-restore-commit");
     applyScrollTargetRef.current("scroll-seek-restore", { force: true });
 
-    logOutputProfilerEvent("rowEstimateStats", {
+    logProfilerEvent("rowEstimateStats", {
       buckets: getRowEstimateStats(),
     });
 
