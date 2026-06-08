@@ -2248,8 +2248,6 @@ const OutputSectionInner: React.FC = () => {
 
     const shouldStageRows =
       !isOutputVirtualized &&
-      activeOutputTab === "output" &&
-      !outputCollapsed &&
       rows.length >= NON_VIRTUAL_STAGING_ROW_THRESHOLD;
 
     if (!shouldStageRows) {
@@ -2294,9 +2292,7 @@ const OutputSectionInner: React.FC = () => {
       nonVirtualRenderFrameRef.current = requestAnimationFrame(renderNextChunk);
     }, 0);
   }, [
-    activeOutputTab,
     isOutputVirtualized,
-    outputCollapsed,
     rowRenderIdentity,
     rows.length,
   ]);
@@ -4301,16 +4297,23 @@ const OutputSectionInner: React.FC = () => {
         </div>
       )}
 
-      {/* Output Content: toggle between Output view and Terminal view */}
-      {activeOutputTab === "terminal" ? (
+      {/* Output Content: keep both panes mounted so tab switches preserve DOM-heavy output. */}
+      <>
         <div
-          className={`${outputCollapsed ? "hidden" : "flex"} flex-row min-h-0 flex-1`}
+          aria-hidden={activeOutputTab !== "terminal" || outputCollapsed}
+          className={`${
+            !outputCollapsed && activeOutputTab === "terminal"
+              ? "flex"
+              : "hidden"
+          } flex-row min-h-0 flex-1`}
         >
           <TerminalView workflowId={terminalWorkflowId} />
         </div>
-      ) : (
         <div
-          className={`${outputCollapsed ? "hidden" : "flex"} relative flex-row min-h-0 flex-1`}
+          aria-hidden={activeOutputTab !== "output" || outputCollapsed}
+          className={`${
+            !outputCollapsed && activeOutputTab === "output" ? "flex" : "hidden"
+          } relative flex-row min-h-0 flex-1`}
         >
           {/* Scrollable output */}
           {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
@@ -4472,7 +4475,7 @@ const OutputSectionInner: React.FC = () => {
             </Profiler>
           )}
         </div>
-      )}
+      </>
 
       {/* Shared prompt-level undo/redo dialog — triggered from minimap */}
       {minimapDialogState && (
