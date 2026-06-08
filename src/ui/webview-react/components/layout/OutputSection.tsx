@@ -1,6 +1,5 @@
 import React, {
   useEffect,
-  useLayoutEffect,
   useRef,
   useMemo,
   useCallback,
@@ -14,10 +13,14 @@ import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useOutputExport } from "@hooks/useOutputExport";
 import { useOutputMinimapModel } from "@hooks/useOutputMinimapModel";
+import {
+  useOutputNavigation,
+  type PendingNavigationState,
+} from "@hooks/useOutputNavigation";
 import { useOutputRowsModel } from "@hooks/useOutputRowsModel";
+import { useOutputScrollTarget } from "@hooks/useOutputScrollTarget";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
-import { type OutputMessage } from "@utils/outputProjection";
 import {
   MESSAGE_TYPES,
   CLI_EVENT_TYPES,
@@ -46,7 +49,6 @@ import {
   type OutputRenderRow,
   type StructuredEventRow,
 } from "@utils/outputRows";
-import { setActiveOutputNavigationController } from "@utils/outputNavigation";
 import {
   getOutputProfilerState,
   isOutputProfilingEnabled,
@@ -57,14 +59,9 @@ import {
   shouldLogOutputVirtualRange,
 } from "@utils/outputPerformance";
 import {
-  alignRowElementToViewport,
-  captureViewportRowAnchor,
-  findRenderedRowElement,
   findRenderedRowElementByKey,
-  getEstimatedRowScopedScrollTop,
   getMeasuredElementHeight,
   getResizeObserverEntryHeight,
-  getRowScopedScrollTop,
 } from "@utils/outputDom";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
@@ -182,19 +179,6 @@ function getRowHeightBucket(row: OutputRenderRow): string {
       }
       return `structured-event:${row.event.type}`;
   }
-}
-
-interface PendingNavigationState {
-  rowIndex: number;
-  align: "start" | "end";
-  targetKind: OutputMessage["target"]["kind"];
-  targetIndex: number;
-  requestedBehavior: ScrollBehavior;
-  effectiveBehavior: ScrollBehavior;
-  startedAt: number;
-  lastMeasuredVersion: number;
-  lastMeasurementChangeAt: number;
-  attempts: number;
 }
 
 /**
@@ -360,9 +344,6 @@ const OutputSectionInner: React.FC = () => {
     "split" | "unified"
   >("split");
   const [outputContentWidth, setOutputContentWidth] = useState(0);
-  const [navigationPendingRowIndex, setNavigationPendingRowIndex] = useState<
-    number | null
-  >(null);
   const [outputOverscan, setOutputOverscan] = useState(
     OUTPUT_VIRTUALIZER_OVERSCAN
   );
@@ -420,13 +401,9 @@ const OutputSectionInner: React.FC = () => {
       appliedDelta: number;
     }
   >(() => ({ resolved: false, appliedDelta: 0 }));
-  const scrollTargetCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
   const commitScrollTargetFromViewportRef = useRef<(reason: string) => void>(
     () => {}
   );
-  const scrollTargetCommitRetryCountRef = useRef(0);
   const lastScrollEventAtRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
   const lastVirtualRangeRef = useRef<string>("");
@@ -1225,257 +1202,36 @@ const OutputSectionInner: React.FC = () => {
     ]
   );
 
-  const setCurrentScrollTarget = useCallback(
-    (target: OutputScrollTarget, reason: string) => {
-      scrollTargetRef.current = target;
-      autoscrollEnabled.current = target.kind === "bottom";
-      setOutputScrollTarget(workflowScrollTargetId, target);
-
-      if (isOutputProfilingEnabled()) {
-        logOutputProfilerEvent("scrollTarget", {
-          phase: "set",
-          reason,
-          target,
-          workflowId: workflowScrollTargetId,
-        });
-      }
-    },
-    [setOutputScrollTarget, workflowScrollTargetId]
-  );
-
-  const resolveScrollTopForTarget = useCallback(
-    (target: OutputScrollTarget): { top: number; resolved: boolean } | null => {
-      const scrollElement = outputRef.current;
-      if (!scrollElement) {
-        return null;
-      }
-
-      const maxScroll = Math.max(
-        0,
-        Math.max(rowLayout.totalSize, scrollElement.scrollHeight) -
-          scrollElement.clientHeight
-      );
-      if (target.kind === "bottom") {
-        return { top: maxScroll, resolved: true };
-      }
-
-      let rowStart: number | undefined;
-      for (const measurement of rowVirtualizer.measurementsCache) {
-        if (measurement != null && String(measurement.key) === target.rowKey) {
-          rowStart = measurement.start;
-          break;
-        }
-      }
-      rowStart ??= rowLayout.rowStartsByKey.get(target.rowKey);
-      if (rowStart == null) {
-        return { top: maxScroll, resolved: false };
-      }
-
-      return {
-        top: clamp(rowStart - target.viewportOffsetPx, 0, maxScroll),
-        resolved: true,
-      };
-    },
-    [rowLayout, rowVirtualizer]
-  );
-
-  const applyScrollTarget = useCallback(
-    (
-      phase: string,
-      options?: { force?: boolean }
-    ): { resolved: boolean; appliedDelta: number } => {
-      const scrollElement = outputRef.current;
-      if (!scrollElement || rowsRef.current.length === 0) {
-        return { resolved: false, appliedDelta: 0 };
-      }
-
-      const now = performance.now();
-      const hasRecentUserScrollInput =
-        (lastUserScrollInputAtRef.current != null &&
-          now - lastUserScrollInputAtRef.current <=
-            OUTPUT_USER_SCROLL_INPUT_GRACE_MS) ||
-        // Momentum/inertial scrolling keeps moving scrollTop well after the
-        // last discrete wheel/touch gesture event, and the scroll-target
-        // commit is debounced off the same continuous scroll activity — so
-        // neither signal alone covers the gap. Treat genuine ongoing scroll
-        // events (handleScroll, which ignores programmatic scrolls) as user
-        // input too, otherwise we forcibly snap back to a stale target
-        // (e.g. {kind: "bottom"}) mid-scroll.
-        (lastScrollEventAtRef.current != null &&
-          now - lastScrollEventAtRef.current <=
-            OUTPUT_USER_SCROLL_INPUT_GRACE_MS);
-      if (
-        !options?.force &&
-        (hasRecentUserScrollInput || pendingNavigationRef.current !== null)
-      ) {
-        return { resolved: false, appliedDelta: 0 };
-      }
-
-      // The user-input grace window just elapsed (or this apply is forced),
-      // but a scroll-target commit may still be pending from that same scroll
-      // gesture (debounced off the identical grace window via a setTimeout —
-      // there's no ordering guarantee between the two). Flush it now so
-      // scrollTargetRef reflects where the user actually ended up, not a
-      // stale pre-scroll target (e.g. a snap-back to a row/position the user
-      // scrolled away from minutes ago).
-      if (scrollTargetCommitTimerRef.current !== null) {
-        clearTimeout(scrollTargetCommitTimerRef.current);
-        scrollTargetCommitTimerRef.current = null;
-        commitScrollTargetFromViewportRef.current(`${phase}-pending-commit-flush`);
-      }
-
-      // `{kind: "bottom"}` should always track `autoscrollEnabled` (both are
-      // driven by the same `atBottom` check in handleScroll/commit). If they've
-      // diverged — target says "follow the tail" but the last observed scroll
-      // position was away from the bottom — the target is stale: the viewport
-      // recommit that should have superseded it hasn't landed yet (e.g. it
-      // silently failed to anchor mid scroll-seek-restore transition). Refresh
-      // it from the live viewport now rather than forcing a jump back to a
-      // position the user deliberately scrolled away from.
-      if (scrollTargetRef.current.kind === "bottom" && !autoscrollEnabled.current) {
-        commitScrollTargetFromViewportRef.current(`${phase}-stale-bottom-refresh`);
-      }
-
-      const target = scrollTargetRef.current;
-      const resolved = resolveScrollTopForTarget(target);
-      if (!resolved) {
-        return { resolved: false, appliedDelta: 0 };
-      }
-
-      if (!resolved.resolved && target.kind === "row") {
-        setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, "target-missing");
-      }
-
-      const previous = scrollElement.scrollTop;
-      const appliedDelta = resolved.top - previous;
-      if (Math.abs(appliedDelta) >= 1) {
-        isProgrammaticScroll.current = true;
-        scrollElement.scrollTop = resolved.top;
-        lastScrollTopRef.current = scrollElement.scrollTop;
-        requestAnimationFrame(() => {
-          isProgrammaticScroll.current = false;
-        });
-      }
-
-      if (
-        isOutputProfilingEnabled() &&
-        (Math.abs(appliedDelta) >= 1 || !resolved.resolved)
-      ) {
-        logOutputProfilerEvent("scrollTarget", {
-          phase: "apply",
-          reason: phase,
-          target,
-          resolved: resolved.resolved,
-          appliedDelta,
-          scrollTop: scrollElement.scrollTop,
-          overscan: outputOverscanRef.current,
-        });
-      }
-
-      return { resolved: resolved.resolved, appliedDelta };
-    },
-    [resolveScrollTopForTarget, setCurrentScrollTarget]
-  );
-
-  applyScrollTargetRef.current = applyScrollTarget;
-
-  const commitScrollTargetFromViewport = useCallback(
-    (reason: string) => {
-      const scrollElement = outputRef.current;
-      if (!scrollElement || rowsRef.current.length === 0) {
-        return;
-      }
-
-      const atBottom =
-        scrollElement.scrollHeight -
-          scrollElement.scrollTop -
-          scrollElement.clientHeight <=
-        SCROLL_BOTTOM_THRESHOLD;
-      if (atBottom) {
-        scrollTargetCommitRetryCountRef.current = 0;
-        setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, reason);
-        return;
-      }
-
-      const anchor = captureViewportRowAnchor(scrollElement, "visible-top");
-      if (!anchor) {
-        // Rows can be mid-transition (e.g. scroll-seek placeholders swapping
-        // back to real rows) when this fires, leaving no row element within
-        // the viewport bounds to anchor on yet. Silently giving up here is
-        // what causes snap-back bugs: the existing target stays stale and a
-        // later forced apply (layout-effect / scroll-seek-restore) re-applies
-        // it instead of the position the user actually scrolled to. Retry on
-        // the next frame so the commit lands once layout has settled.
-        if (
-          scrollTargetCommitRetryCountRef.current <
-          OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES
-        ) {
-          scrollTargetCommitRetryCountRef.current += 1;
-          requestAnimationFrame(() =>
-            commitScrollTargetFromViewportRef.current(reason)
-          );
-        } else {
-          scrollTargetCommitRetryCountRef.current = 0;
-        }
-        return;
-      }
-      scrollTargetCommitRetryCountRef.current = 0;
-
-      setCurrentScrollTarget(
-        {
-          kind: "row",
-          rowKey: anchor.rowKey,
-          viewportOffsetPx: anchor.offsetTop,
-        },
-        reason
-      );
-    },
-    [setCurrentScrollTarget]
-  );
-
-  commitScrollTargetFromViewportRef.current = commitScrollTargetFromViewport;
-
-  const scheduleScrollTargetCommit = useCallback(
-    (reason: string) => {
-      if (scrollTargetCommitTimerRef.current !== null) {
-        clearTimeout(scrollTargetCommitTimerRef.current);
-      }
-      scrollTargetCommitTimerRef.current = setTimeout(() => {
-        scrollTargetCommitTimerRef.current = null;
-        commitScrollTargetFromViewport(reason);
-      }, OUTPUT_USER_SCROLL_INPUT_GRACE_MS);
-    },
-    [commitScrollTargetFromViewport]
-  );
-
-  useLayoutEffect(() => {
-    applyScrollTarget("layout-effect");
-  }, [
+  const {
     applyScrollTarget,
-    measurementVersion,
-    outputOverscan,
-    rows.length,
-    scrollSeekPlaceholderActive,
-  ]);
-
-  useEffect(() => {
-    const nextTarget = savedOutputScrollTarget ?? DEFAULT_OUTPUT_SCROLL_TARGET;
-    scrollTargetRef.current = nextTarget;
-    autoscrollEnabled.current = nextTarget.kind === "bottom";
-    requestAnimationFrame(() => {
-      applyScrollTargetRef.current("workflow-target-restore", { force: true });
-    });
-  }, [rowRenderIdentity, savedOutputScrollTarget, workflowScrollTargetId]);
-
-  useEffect(
-    () => () => {
-      if (scrollTargetCommitTimerRef.current !== null) {
-        clearTimeout(scrollTargetCommitTimerRef.current);
-        scrollTargetCommitTimerRef.current = null;
-      }
-    },
-    []
-  );
+    commitScrollTargetFromViewport,
+    scheduleScrollTargetCommit,
+    setCurrentScrollTarget,
+  } = useOutputScrollTarget({
+    applyScrollTargetRef,
+    autoscrollEnabledRef: autoscrollEnabled,
+    bottomThresholdPx: SCROLL_BOTTOM_THRESHOLD,
+    commitMaxRetries: OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES,
+    commitScrollTargetFromViewportRef,
+    defaultTarget: DEFAULT_OUTPUT_SCROLL_TARGET,
+    isProgrammaticScrollRef: isProgrammaticScroll,
+    lastScrollEventAtRef,
+    lastScrollTopRef,
+    lastUserScrollInputAtRef,
+    layoutApplyTrigger: `${measurementVersion}:${outputOverscan}:${rows.length}:${scrollSeekPlaceholderActive}`,
+    outputOverscanRef,
+    outputRef,
+    pendingNavigationRef,
+    rowLayout,
+    rowVirtualizer,
+    rowsRef,
+    restoreTrigger: rowRenderIdentity,
+    savedOutputScrollTarget,
+    scrollTargetRef,
+    setOutputScrollTarget,
+    userScrollInputGraceMs: OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
+    workflowScrollTargetId,
+  });
 
   useEffect(() => {
     const el = outputRef.current;
@@ -1884,119 +1640,28 @@ const OutputSectionInner: React.FC = () => {
     lastTouchYRef.current = null;
   }, []);
 
-  const clearNavigationFrame = useCallback(() => {
-    if (navigationFrameRef.current != null) {
-      cancelAnimationFrame(navigationFrameRef.current);
-      navigationFrameRef.current = null;
-    }
-  }, []);
-
-  const finalizePendingNavigation = useCallback(() => {
-    clearNavigationFrame();
-    pendingNavigationRef.current = null;
-    setNavigationPendingRowIndex(null);
-    isProgrammaticScroll.current = false;
-
-    // Settle TanStack Virtual's internal reconcileScroll loop immediately.
-    // scrollToIndex leaves an active scrollState that keeps re-calculating the
-    // target row position on every animation frame for up to 5 s. By calling
-    // scrollToOffset with the confirmed landing position, we replace the
-    // index-based scrollState with an offset-based one whose targetOffset ≈
-    // scrollOffset, satisfying approxEqual on the next rAF so reconcileScroll
-    // clears scrollState and stops issuing corrective scrolls.
-    const landingScrollTop = outputRef.current?.scrollTop ?? 0;
-    rowVirtualizer.scrollToOffset(landingScrollTop, { behavior: "auto" });
-
-    // Start the post-navigation settling window. During this window
-    // shouldAdjustScrollPositionOnItemSizeChange returns false, preventing
-    // TanStack Virtual from issuing scroll corrections as newly-rendered rows
-    // near the destination get measured. Without this, correction feedback
-    // loops cause the scroll position to oscillate for several seconds.
-    postNavSettlingRef.current = true;
-    if (postNavSettlingTimerRef.current !== null) {
-      clearTimeout(postNavSettlingTimerRef.current);
-    }
-    postNavSettlingTimerRef.current = setTimeout(() => {
-      postNavSettlingRef.current = false;
-      postNavSettlingTimerRef.current = null;
-    }, 1000);
-  }, [clearNavigationFrame, rowVirtualizer]);
-
-  const schedulePendingNavigationStabilization = useCallback(() => {
-    clearNavigationFrame();
-    navigationFrameRef.current = requestAnimationFrame(() => {
-      navigationFrameRef.current = null;
-      const pending = pendingNavigationRef.current;
-      if (!pending) {
-        return;
-      }
-
-      const now = performance.now();
-      const currentMeasurementVersion = measurementVersionRef.current;
-      if (currentMeasurementVersion !== pending.lastMeasuredVersion) {
-        pending.lastMeasuredVersion = currentMeasurementVersion;
-        pending.lastMeasurementChangeAt = now;
-      }
-
-      const scrollElement = outputRef.current;
-      if (!scrollElement) {
-        finalizePendingNavigation();
-        return;
-      }
-
-      const rowElement = findRenderedRowElement(
-        scrollElement,
-        pending.rowIndex
-      );
-      if (!rowElement) {
-        if (
-          pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
-          now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
-        ) {
-          finalizePendingNavigation();
-          return;
-        }
-
-        pending.attempts += 1;
-        rowVirtualizer.scrollToIndex(pending.rowIndex, {
-          align: pending.align,
-          behavior: "auto",
-        });
-        schedulePendingNavigationStabilization();
-        return;
-      }
-
-      const isAligned = alignRowElementToViewport(
-        scrollElement,
-        rowElement,
-        pending.align
-      );
-      if (isAligned) {
-        // Finalize immediately on first aligned frame. Calling scrollToOffset
-        // below clears TanStack's reconcileScroll scrollState, preventing
-        // further corrective scrolls. The 1-s postNavSettling window then
-        // blocks shouldAdjustScrollPositionOnItemSizeChange so late-arriving
-        // measurements cannot shift the viewport away from the target.
-        finalizePendingNavigation();
-        return;
-      }
-
-      if (
-        pending.attempts >= MAX_NAV_ALIGNMENT_ATTEMPTS ||
-        now - pending.startedAt >= MAX_NAVIGATION_STABILIZATION_MS
-      ) {
-        finalizePendingNavigation();
-        return;
-      }
-
-      pending.attempts += 1;
-      rowVirtualizer.scrollToIndex(pending.rowIndex, {
-        align: pending.align,
-        behavior: "auto",
-      });
-      schedulePendingNavigationStabilization();
+  const { navigationController, navigationPendingRowIndex } =
+    useOutputNavigation({
+      autoscrollEnabledRef: autoscrollEnabled,
+      finalizeSettlingDelayMs: 1000,
+      firstRowIndexByTarget,
+      isOutputVirtualized,
+      isProgrammaticScrollRef: isProgrammaticScroll,
+      lastScrollTopRef,
+      maxAlignmentAttempts: MAX_NAV_ALIGNMENT_ATTEMPTS,
+      maxStabilizationMs: MAX_NAVIGATION_STABILIZATION_MS,
+      measurementVersion,
+      measurementVersionRef,
+      navigationFrameRef,
+      outputRef,
+      pendingNavigationRef,
+      postNavSettlingRef,
+      postNavSettlingTimerRef,
+      rowLayout,
+      rowVirtualizer,
+      rows,
+      setCurrentScrollTarget,
     });
-  }, [clearNavigationFrame, finalizePendingNavigation, rowVirtualizer]);
 
   // Auto-scroll effect — only fires for genuine new AI output, not layout changes.
   // measurementVersion is intentionally excluded: virtualizer height corrections
@@ -2066,141 +1731,6 @@ const OutputSectionInner: React.FC = () => {
     rowVirtualizer,
     rows.length,
   ]);
-
-  useEffect(() => {
-    if (navigationPendingRowIndex == null) {
-      return;
-    }
-    // Only schedule if no frame is already pending. The existing frame will
-    // read the latest measurement state when it fires. Without this guard,
-    // continuous measurements perpetually cancel + reschedule the rAF,
-    // delaying the alignment check for as long as measurements arrive.
-    if (navigationFrameRef.current === null) {
-      schedulePendingNavigationStabilization();
-    }
-  }, [
-    measurementVersion,
-    navigationPendingRowIndex,
-    schedulePendingNavigationStabilization,
-  ]);
-
-  const navigationController = useMemo(
-    () => ({
-      scrollToTarget: (
-        target: OutputMessage["target"],
-        options?: { behavior?: ScrollBehavior; align?: "start" | "end" }
-      ) => {
-        const rowIndex = firstRowIndexByTarget.get(
-          `${target.kind}:${target.index}`
-        );
-        if (rowIndex === undefined || !outputRef.current) {
-          return;
-        }
-
-        const align = options?.align ?? "start";
-        const requestedBehavior = options?.behavior ?? "auto";
-        const behavior =
-          requestedBehavior === "smooth" ? "auto" : requestedBehavior;
-        const row = rows[rowIndex];
-        if (row) {
-          const rowSize = rowLayout.rowSizesByKey.get(row.key);
-          const viewportOffsetPx =
-            align === "end"
-              ? Math.max(0, outputRef.current.clientHeight - (rowSize ?? 0))
-              : 0;
-          setCurrentScrollTarget(
-            {
-              kind: "row",
-              rowKey: row.key,
-              viewportOffsetPx,
-            },
-            "navigation"
-          );
-        } else {
-          autoscrollEnabled.current = false;
-        }
-        isProgrammaticScroll.current = true;
-        const startedAt = performance.now();
-        pendingNavigationRef.current = {
-          rowIndex,
-          align,
-          targetKind: target.kind,
-          targetIndex: target.index,
-          requestedBehavior,
-          effectiveBehavior: behavior,
-          startedAt,
-          lastMeasuredVersion: measurementVersionRef.current,
-          lastMeasurementChangeAt: startedAt,
-          attempts: 0,
-        };
-        setNavigationPendingRowIndex(rowIndex);
-
-        if (!isOutputVirtualized) {
-          const rowElement = findRenderedRowElement(
-            outputRef.current,
-            rowIndex
-          );
-          const top =
-            rowElement != null
-              ? getRowScopedScrollTop(outputRef.current, rowElement, align)
-              : getEstimatedRowScopedScrollTop(
-                  outputRef.current,
-                  rowLayout.rowStartsByIndex[rowIndex] ?? 0,
-                  rowLayout.rowSizesByKey.get(rows[rowIndex]?.key ?? ""),
-                  align
-                );
-          outputRef.current.scrollTo({ top, behavior: requestedBehavior });
-          if (rowElement) {
-            lastScrollTopRef.current = top;
-          }
-          finalizePendingNavigation();
-          return;
-        }
-
-        // Do NOT call rowVirtualizer.measure() here. Clearing itemSizeCache
-        // forces TanStack to re-estimate all rows from bucket estimates, which
-        // destabilizes getOffsetForIndex and prolongs the reconcileScroll loop.
-        rowVirtualizer.scrollToIndex(rowIndex, { align, behavior });
-        schedulePendingNavigationStabilization();
-      },
-      getTargetScrollFraction: (target: OutputMessage["target"]) => {
-        const rowIndex = firstRowIndexByTarget.get(
-          `${target.kind}:${target.index}`
-        );
-        const totalSize = Math.max(1, rowLayout.totalSize);
-        if (rowIndex === undefined || totalSize <= 0) {
-          return null;
-        }
-
-        return rowLayout.rowStartsByIndex[rowIndex] / totalSize;
-      },
-    }),
-    [
-      firstRowIndexByTarget,
-      finalizePendingNavigation,
-      isOutputVirtualized,
-      rowLayout,
-      rowVirtualizer,
-      rows,
-      schedulePendingNavigationStabilization,
-      setCurrentScrollTarget,
-    ]
-  );
-
-  useEffect(() => {
-    setActiveOutputNavigationController(navigationController);
-    return () => {
-      setActiveOutputNavigationController(null);
-    };
-  }, [navigationController]);
-
-  useEffect(
-    () => () => {
-      clearNavigationFrame();
-      pendingNavigationRef.current = null;
-    },
-    [clearNavigationFrame]
-  );
 
   // Check if there's any output
   const hasOutput = rows.length > 0;
