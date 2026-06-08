@@ -41,6 +41,12 @@ export interface BashOutputExpansionState {
   errorExpanded: boolean;
 }
 
+export const DEFAULT_BASH_OUTPUT_EXPANSION_STATE: Readonly<BashOutputExpansionState> =
+  {
+    outputExpanded: false,
+    errorExpanded: false,
+  };
+
 /**
  * BashOutput Component
  *

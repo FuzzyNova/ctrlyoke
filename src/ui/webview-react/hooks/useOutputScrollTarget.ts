@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { RefObject } from "react";
 import type { OutputScrollTarget } from "@store/uiStore";
 import { captureViewportRowAnchor } from "@utils/outputDom";
+import { clamp } from "@utils/number";
 import {
   isOutputProfilingEnabled,
   logOutputProfilerEvent,
@@ -53,10 +54,6 @@ interface UseOutputScrollTargetInput {
   commitMaxRetries: number;
   layoutApplyTrigger: string;
   userScrollInputGraceMs: number;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 export function useOutputScrollTarget({

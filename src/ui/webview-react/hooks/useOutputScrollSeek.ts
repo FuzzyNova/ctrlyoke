@@ -6,6 +6,10 @@ import {
 import {
   logOutputProfilerEvent,
 } from "@utils/outputPerformance";
+import {
+  LARGE_WORKFLOW_ROW_THRESHOLD,
+  OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
+} from "@utils/outputScrollConstants";
 import type { OutputRenderRow } from "@utils/outputRows";
 
 const OUTPUT_VIRTUALIZER_OVERSCAN = 6;
@@ -24,8 +28,6 @@ const OUTPUT_SCROLL_SEEK_PAGE_FRACTION = 0.9;
 const OUTPUT_SCROLL_SEEK_SETTLE_MS = 2000;
 const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS = 600;
 const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 1800;
-const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200;
-const LARGE_WORKFLOW_ROW_THRESHOLD = 20;
 
 interface UseOutputScrollSeekInput {
   applyScrollTargetRef: RefObject<(

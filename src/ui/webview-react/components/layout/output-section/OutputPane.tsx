@@ -1,9 +1,10 @@
 import React, { memo, Profiler } from "react";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { OutputRow } from "@components/output";
-import type {
-  BashOutputExpansionSection,
-  BashOutputExpansionState,
+import {
+  DEFAULT_BASH_OUTPUT_EXPANSION_STATE,
+  type BashOutputExpansionSection,
+  type BashOutputExpansionState,
 } from "@components/output/BashOutput";
 import type { OutputRowFileUndoRequest } from "@components/output/OutputRow";
 import {
@@ -20,11 +21,6 @@ import {
   OutputScrollSeekPlaceholder,
   shouldRenderScrollSeekPlaceholder,
 } from "./OutputScrollSeekPlaceholder";
-
-const DEFAULT_BASH_OUTPUT_EXPANSION_STATE: BashOutputExpansionState = {
-  outputExpanded: false,
-  errorExpanded: false,
-};
 
 interface OutputPaneProps {
   activeOutputTab: "output" | "terminal";

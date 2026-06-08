@@ -12,9 +12,10 @@ import {
   type ToolCallExpansionSection,
   type ToolCallExpansionState,
 } from "@utils/toolCallLayout";
-import type {
-  BashOutputExpansionSection,
-  BashOutputExpansionState,
+import {
+  DEFAULT_BASH_OUTPUT_EXPANSION_STATE,
+  type BashOutputExpansionSection,
+  type BashOutputExpansionState,
 } from "@components/output/BashOutput";
 import type { WorkflowStep } from "@store/workflowStore";
 import type {
@@ -389,10 +390,8 @@ export function useOutputRowsModel({
     ) => {
       invalidateMeasuredRowForUserResize(rowKey);
       setBashExpansionState((previous) => {
-        const currentState = previous.get(rowKey) ?? {
-          outputExpanded: false,
-          errorExpanded: false,
-        };
+        const currentState =
+          previous.get(rowKey) ?? DEFAULT_BASH_OUTPUT_EXPANSION_STATE;
         const nextState: BashOutputExpansionState = {
           ...currentState,
           outputExpanded:

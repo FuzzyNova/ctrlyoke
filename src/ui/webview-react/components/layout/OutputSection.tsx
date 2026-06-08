@@ -48,6 +48,10 @@ import {
   shouldLogOutputScrollFrame,
 } from "@utils/outputPerformance";
 import { getResizeObserverEntryHeight } from "@utils/outputDom";
+import {
+  LARGE_WORKFLOW_ROW_THRESHOLD,
+  OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
+} from "@utils/outputScrollConstants";
 
 // Stable empty fallback — avoids infinite re-render from `?? []` returning a new
 // array reference on every useSyncExternalStore snapshot call.
@@ -58,9 +62,7 @@ const SHELL_WORKFLOW_ID = "_shell";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to keep auto-scroll pinned.
 const DIFF_SPLIT_VIEW_MIN_WIDTH = 1024; // minimum output width before diffs use split view.
-const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200; // recent wheel input window that lets real user scrolling bypass settle suppression.
 const OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES = 5; // animation-frame retries for capturing a viewport anchor when rows are mid-transition (e.g. scroll-seek placeholder swap).
-const LARGE_WORKFLOW_ROW_THRESHOLD = 20; // row count where fast-scroll placeholder behavior is enabled.
 const MAX_NAV_ALIGNMENT_ATTEMPTS = 8; // max correction passes when aligning minimap/step navigation.
 const MAX_NAVIGATION_STABILIZATION_MS = 1000; // time limit for navigation alignment before accepting the current position.
 const DEFAULT_OUTPUT_SCROLL_TARGET: OutputScrollTarget = { kind: "bottom" };

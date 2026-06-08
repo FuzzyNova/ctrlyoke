@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { CLI_EVENT_TYPES } from "@/types/messages";
+import { clamp } from "@utils/number";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import {
   findRenderedRowElementByKey,
@@ -17,13 +18,13 @@ import {
   shouldLogOutputMeasurement,
   shouldLogOutputVirtualRange,
 } from "@utils/outputPerformance";
+import { OUTPUT_USER_SCROLL_INPUT_GRACE_MS } from "@utils/outputScrollConstants";
 import {
   estimateOutputRowHeight,
   type OutputRenderRow,
   type StructuredEventRow,
 } from "@utils/outputRows";
 
-const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200;
 const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300;
 const NON_VIRTUAL_STAGING_ROW_THRESHOLD = 60;
 const NON_VIRTUAL_INITIAL_RENDER_ROWS = 24;
@@ -74,10 +75,6 @@ interface UseOutputVirtualizationInput {
   scrollSeekRestoreRequestedAtRef: RefObject<number | null>;
   scrollSeekSettlingUntilRef: RefObject<number | null>;
   scrollTargetRef: RefObject<{ kind: string; rowKey?: string }>;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 function getZeroHeightStructuredEventReason(

@@ -15,6 +15,7 @@ import type { TerminalShortcut } from "@root/types/FlightPathSettings";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
+import { clamp } from "@utils/number";
 
 interface Props {
   settings: FullGlobalSettings;
@@ -57,10 +58,6 @@ function detectPlatform(): "windows" | "mac" | "linux" {
     return "mac";
   }
   return "linux";
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 function NumberField({
@@ -127,7 +124,7 @@ function NumberField({
           focused.current = false;
           const next = Number(e.target.value);
           if (Number.isFinite(next)) {
-            onChange(clampNumber(next, min, max));
+            onChange(clamp(next, min, max));
           }
         }}
         className={`w-full bg-input-bg border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border ${
@@ -161,7 +158,7 @@ function FontStepper({
 }) {
   const min = 8;
   const max = 24;
-  const setSize = (next: number) => onChange(clampNumber(next, min, max));
+  const setSize = (next: number) => onChange(clamp(next, min, max));
 
   return (
     <SettingInputRow
