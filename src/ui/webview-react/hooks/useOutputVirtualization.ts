@@ -1,0 +1,1001 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import type { VirtualItem } from "@tanstack/react-virtual";
+import { CLI_EVENT_TYPES } from "@/types/messages";
+import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
+import {
+  findRenderedRowElementByKey,
+  getMeasuredElementHeight,
+  getResizeObserverEntryHeight,
+} from "@utils/outputDom";
+import {
+  getOutputProfilerState,
+  isOutputProfilingEnabled,
+  logOutputProfilerEvent,
+  measureOutputPhase,
+  shouldLogOutputMeasurement,
+  shouldLogOutputVirtualRange,
+} from "@utils/outputPerformance";
+import {
+  estimateOutputRowHeight,
+  type OutputRenderRow,
+  type StructuredEventRow,
+} from "@utils/outputRows";
+
+const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200;
+const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300;
+const NON_VIRTUAL_STAGING_ROW_THRESHOLD = 60;
+const NON_VIRTUAL_INITIAL_RENDER_ROWS = 24;
+const NON_VIRTUAL_RENDER_CHUNK_ROWS = 24;
+
+interface RowHeightBucketStats {
+  sampleCount: number;
+  totalMeasured: number;
+  totalEstimated: number;
+  maxAbsDelta: number;
+}
+
+export interface OutputRowLayoutModel {
+  rowStartsByIndex: number[];
+  rowStartsByKey: Map<string, number>;
+  rowSizesByKey: Map<string, number>;
+  totalSize: number;
+}
+
+interface PendingNavigationStateLike {
+  rowIndex: number;
+}
+
+interface UseOutputVirtualizationInput {
+  activeOutputTab: "output" | "terminal";
+  applyScrollTargetRef: RefObject<
+    (phase: string, options?: { force?: boolean }) => {
+      resolved: boolean;
+      appliedDelta: number;
+    }
+  >;
+  getVirtualItemsRef: RefObject<() => readonly { index: number }[]>;
+  isMeasurementFlushInProgressRef: RefObject<boolean>;
+  lastScrollEventAtRef: RefObject<number | null>;
+  outputCollapsed: boolean;
+  outputContentWidth: number;
+  outputFontSize: number;
+  outputOverscan: number;
+  outputOverscanRef: RefObject<number>;
+  outputRef: RefObject<HTMLDivElement | null>;
+  outputVirtualizationRowThreshold: number;
+  pendingNavigationRef: RefObject<PendingNavigationStateLike | null>;
+  postNavSettlingRef: RefObject<boolean>;
+  rowRenderIdentity: string;
+  rowResizeScrollSuppressUntilRef: RefObject<number | null>;
+  rows: OutputRenderRow[];
+  scrollSeekPlaceholderActive: boolean;
+  scrollSeekRestoreRequestedAtRef: RefObject<number | null>;
+  scrollSeekSettlingUntilRef: RefObject<number | null>;
+  scrollTargetRef: RefObject<{ kind: string; rowKey?: string }>;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getZeroHeightStructuredEventReason(
+  row: StructuredEventRow
+): string | null {
+  switch (row.event.type) {
+    case CLI_EVENT_TYPES.TEXT:
+      return (row.event.data as { text?: string }).text ? null : "missing-text";
+    case CLI_EVENT_TYPES.THINKING:
+      return (row.event.data as { text?: string }).text
+        ? null
+        : "missing-thinking-text";
+    case CLI_EVENT_TYPES.FILE_EDIT:
+    case CLI_EVENT_TYPES.FILE_WRITE:
+    case CLI_EVENT_TYPES.FILE_READ:
+    case CLI_EVENT_TYPES.FILE_DELETE:
+      return (row.event.data as { path?: string }).path
+        ? null
+        : "missing-file-path";
+    case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+      const data = row.event.data as { server?: string; tool?: string };
+      if (!data.server) return "missing-mcp-server";
+      return data.tool ? null : "missing-mcp-tool";
+    }
+    case CLI_EVENT_TYPES.WEB_SEARCH:
+      return (row.event.data as { query?: string }).query
+        ? null
+        : "missing-web-search-query";
+    case CLI_EVENT_TYPES.TOOL_CALL:
+      return (row.event.data as { name?: string }).name
+        ? null
+        : "missing-tool-call-name";
+    case CLI_EVENT_TYPES.TOOL_RESULT:
+      return (row.event.data as { result?: unknown }).result
+        ? null
+        : "missing-tool-result";
+    case CLI_EVENT_TYPES.BASH_COMMAND:
+    case CLI_EVENT_TYPES.COMPACTION:
+      return null;
+    default:
+      return "unsupported-structured-event";
+  }
+}
+
+function getRowHeightBucket(row: OutputRenderRow): string {
+  switch (row.rowKind) {
+    case "history-banner":
+    case "step-anchor":
+    case "final-step-label":
+    case "status":
+    case "cli-header":
+    case "prompt":
+    case "cli-command":
+    case "error":
+    case "plain-response":
+    case "stats":
+      return row.rowKind;
+    case "structured-event":
+      if (row.diff) {
+        return `structured-event:diff:${row.diff.renderPlan.viewType}:${row.diff.isCollapsed ? "collapsed" : "expanded"}`;
+      }
+      if (row.toolCall) {
+        return "structured-event:tool-call";
+      }
+      if (row.event.type === CLI_EVENT_TYPES.TEXT) {
+        const text = (row.event.data as { text?: string }).text ?? "";
+        if (/^\|.+\|/m.test(text)) return "structured-event:text:table";
+      }
+      return `structured-event:${row.event.type}`;
+  }
+}
+
+export function useOutputVirtualization({
+  activeOutputTab,
+  applyScrollTargetRef,
+  getVirtualItemsRef,
+  isMeasurementFlushInProgressRef,
+  lastScrollEventAtRef,
+  outputCollapsed,
+  outputContentWidth,
+  outputFontSize,
+  outputOverscan,
+  outputOverscanRef,
+  outputRef,
+  outputVirtualizationRowThreshold,
+  pendingNavigationRef,
+  postNavSettlingRef,
+  rowRenderIdentity,
+  rowResizeScrollSuppressUntilRef,
+  rows,
+  scrollSeekPlaceholderActive,
+  scrollSeekRestoreRequestedAtRef,
+  scrollSeekSettlingUntilRef,
+  scrollTargetRef,
+}: UseOutputVirtualizationInput) {
+  const measurementCacheRef = useRef<Map<string, number>>(new Map());
+  const rowHeightBucketStatsRef = useRef<Map<string, RowHeightBucketStats>>(
+    new Map()
+  );
+  const [measurementVersion, setMeasurementVersion] = useState(0);
+  const measurementVersionRef = useRef(measurementVersion);
+  const measurementVersionFrameRef = useRef<number | null>(null);
+  const [nonVirtualRenderedRowCount, setNonVirtualRenderedRowCount] =
+    useState<number>(Number.MAX_SAFE_INTEGER);
+  const nonVirtualRenderFrameRef = useRef<number | null>(null);
+  const nonVirtualRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const nonVirtualRenderIdentityRef = useRef<string | null>(null);
+  const lastVirtualRangeRef = useRef<string>("");
+  const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
+  const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const pendingMeasurementFlushTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
+  const schedulePendingMeasurementFlushRef = useRef<() => void>(() => {});
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+
+  useEffect(() => {
+    measurementVersionRef.current = measurementVersion;
+  }, [measurementVersion]);
+
+  const effectiveVirtualizationRowThreshold = Math.trunc(
+    Number.isFinite(outputVirtualizationRowThreshold)
+      ? outputVirtualizationRowThreshold
+      : 200
+  );
+  const isOutputVirtualized =
+    effectiveVirtualizationRowThreshold >= 0 &&
+    (effectiveVirtualizationRowThreshold === 0 ||
+      rows.length >= effectiveVirtualizationRowThreshold);
+
+  const getEstimatedRowHeight = useCallback(
+    (row: OutputRenderRow): number => {
+      const baseEstimate = estimateOutputRowHeight(
+        row,
+        outputFontSize,
+        outputContentWidth
+      );
+      const bucket = getRowHeightBucket(row);
+      const bucketStats = rowHeightBucketStatsRef.current.get(bucket);
+      if (
+        !bucketStats ||
+        bucketStats.sampleCount < 2 ||
+        bucketStats.totalEstimated <= 0
+      ) {
+        return baseEstimate;
+      }
+
+      const averageScale =
+        bucketStats.totalMeasured / bucketStats.totalEstimated;
+      const clampedScale = clamp(
+        averageScale,
+        0.5,
+        bucket.startsWith("structured-event:diff:") ? 3.5 : 3
+      );
+      const rawScaled = Math.round(baseEstimate * clampedScale * 100) / 100;
+      if (bucket.startsWith("structured-event:diff:")) {
+        return rawScaled;
+      }
+      return clamp(rawScaled, baseEstimate * 0.6, baseEstimate + 200);
+    },
+    [outputContentWidth, outputFontSize]
+  );
+
+  const getEstimatedRowHeightRef = useRef(getEstimatedRowHeight);
+  getEstimatedRowHeightRef.current = getEstimatedRowHeight;
+
+  const scheduleMeasurementVersionBump = useCallback(() => {
+    if (measurementVersionFrameRef.current != null) {
+      return;
+    }
+
+    measurementVersionFrameRef.current = requestAnimationFrame(() => {
+      measurementVersionFrameRef.current = null;
+      setMeasurementVersion((version) => version + 1);
+    });
+  }, []);
+
+  const updateRowMeasurementCache = useCallback(
+    (
+      element: HTMLDivElement,
+      measuredHeight: number,
+      source: "dom-read" | "resize-observer"
+    ): number => {
+      const startedAt = isOutputProfilingEnabled() ? performance.now() : 0;
+      const index = Number(element.dataset.index ?? -1);
+      const row = rowsRef.current[index];
+      if (!row) return measuredHeight;
+
+      const zeroHeightReason =
+        row.rowKind === "structured-event"
+          ? getZeroHeightStructuredEventReason(row)
+          : null;
+      if (
+        (!Number.isFinite(measuredHeight) || measuredHeight <= 0) &&
+        zeroHeightReason == null
+      ) {
+        return measuredHeight;
+      }
+
+      const nextHeight =
+        zeroHeightReason != null && measuredHeight <= 0 ? 0 : measuredHeight;
+      const rowHeightBucket = getRowHeightBucket(row);
+      const estimatedHeight = getEstimatedRowHeightRef.current(row);
+
+      const previousHeight = measurementCacheRef.current.get(row.key);
+      if (
+        previousHeight !== undefined &&
+        Math.abs(previousHeight - nextHeight) < 1.0
+      ) {
+        if (startedAt > 0) {
+          const durationMs = performance.now() - startedAt;
+          if (shouldLogOutputMeasurement(durationMs)) {
+            logOutputProfilerEvent("rowMeasurement:unchanged", {
+              index,
+              rowKey: row.key,
+              rowKind: row.rowKind,
+              bucket: rowHeightBucket,
+              measuredHeight: nextHeight,
+              estimatedHeight,
+              source,
+              durationMs,
+            });
+          }
+        }
+        return nextHeight;
+      }
+
+      const isScrolling =
+        lastScrollEventAtRef.current != null &&
+        performance.now() - lastScrollEventAtRef.current <
+          OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+      if (isScrolling) {
+        pendingMeasurementCacheRef.current.set(row.key, nextHeight);
+        schedulePendingMeasurementFlushRef.current();
+        return previousHeight !== undefined ? previousHeight : estimatedHeight;
+      }
+
+      measurementCacheRef.current.set(row.key, nextHeight);
+      const previousBucketStats = rowHeightBucketStatsRef.current.get(
+        rowHeightBucket
+      ) ?? {
+        sampleCount: 0,
+        totalMeasured: 0,
+        totalEstimated: 0,
+        maxAbsDelta: 0,
+      };
+      rowHeightBucketStatsRef.current.set(rowHeightBucket, {
+        sampleCount: previousBucketStats.sampleCount + 1,
+        totalMeasured: previousBucketStats.totalMeasured + nextHeight,
+        totalEstimated: previousBucketStats.totalEstimated + estimatedHeight,
+        maxAbsDelta: Math.max(
+          previousBucketStats.maxAbsDelta,
+          Math.abs(nextHeight - estimatedHeight)
+        ),
+      });
+
+      if (isOutputProfilingEnabled()) {
+        const absDelta = Math.abs(nextHeight - estimatedHeight);
+        const pctDelta = estimatedHeight > 0 ? absDelta / estimatedHeight : 0;
+        if (absDelta > 40 && pctDelta > 0.1) {
+          const extras: Record<string, unknown> = {};
+          if (
+            row.rowKind === "structured-event" &&
+            row.event.type === CLI_EVENT_TYPES.TEXT
+          ) {
+            const text = (row.event.data as { text?: string }).text ?? "";
+            extras.textLength = text.length;
+            extras.hasTable = /^\|.+\|/m.test(text);
+            extras.hasCodeBlock = text.includes("```");
+            extras.hasList = /^\s*[-*+]\s/m.test(text);
+            extras.textPreview = text.slice(0, 100).replace(/\n/g, "↵");
+          } else if (
+            row.rowKind === "structured-event" &&
+            (row.event.type === CLI_EVENT_TYPES.TOOL_CALL ||
+              row.event.type === CLI_EVENT_TYPES.MCP_TOOL_CALL)
+          ) {
+            const tc = row.event.data as {
+              input?: unknown;
+              name?: string;
+              result?: unknown;
+              tool?: string;
+            };
+            extras.toolName = tc.name ?? tc.tool ?? "unknown";
+            extras.inputLength =
+              tc.input != null ? JSON.stringify(tc.input).length : 0;
+            extras.resultLength =
+              tc.result != null ? JSON.stringify(tc.result).length : 0;
+          } else if (
+            row.rowKind === "structured-event" &&
+            row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
+          ) {
+            const bc = row.event.data as {
+              command?: string;
+              error?: string;
+              output?: string;
+            };
+            extras.outputLength = (bc.output ?? "").length;
+            extras.errorLength = (bc.error ?? "").length;
+          } else if (row.rowKind === "cli-command") {
+            const cmd = row as unknown as {
+              command?: string;
+              workingDirectory?: string;
+            };
+            const fullText = `${cmd.workingDirectory || "workspace"}> ${cmd.command ?? ""}`;
+            extras.commandLength = fullText.length;
+            extras.commandPreview = fullText.slice(0, 120).replace(/\n/g, "↵");
+          }
+          logOutputProfilerEvent("rowEstimateOutlier", {
+            rowKey: row.key,
+            bucket: rowHeightBucket,
+            measuredHeight: nextHeight,
+            estimatedHeight,
+            delta: nextHeight - estimatedHeight,
+            pctDelta: Math.round(pctDelta * 100),
+            ...extras,
+          });
+        }
+      }
+
+      if (startedAt > 0) {
+        const durationMs = performance.now() - startedAt;
+        if (shouldLogOutputMeasurement(durationMs)) {
+          logOutputProfilerEvent("rowMeasurement:updated", {
+            index,
+            rowKey: row.key,
+            rowKind: row.rowKind,
+            bucket: rowHeightBucket,
+            measuredHeight: nextHeight,
+            estimatedHeight,
+            delta: nextHeight - estimatedHeight,
+            previousHeight,
+            source,
+            durationMs,
+          });
+        }
+      }
+      scheduleMeasurementVersionBump();
+      return nextHeight;
+    },
+    [lastScrollEventAtRef, scheduleMeasurementVersionBump]
+  );
+
+  const measureOutputRowElement = useCallback(
+    (element: HTMLDivElement, entry?: ResizeObserverEntry): number => {
+      const observerHeight = getResizeObserverEntryHeight(entry);
+      const measuredHeight =
+        observerHeight ?? getMeasuredElementHeight(element);
+      return updateRowMeasurementCache(
+        element,
+        measuredHeight,
+        observerHeight == null ? "dom-read" : "resize-observer"
+      );
+    },
+    [updateRowMeasurementCache]
+  );
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => outputRef.current,
+    estimateSize: (index) => {
+      const row = rows[index];
+      if (!row) return 48;
+      return (
+        measurementCacheRef.current.get(row.key) ?? getEstimatedRowHeight(row)
+      );
+    },
+    getItemKey: (index) => rows[index]?.key ?? index,
+    measureElement: measureOutputRowElement,
+    overscan: outputOverscan,
+  });
+  getVirtualItemsRef.current = () => rowVirtualizer.getVirtualItems();
+
+  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta) => {
+    const now = performance.now();
+    const hasRecentScrollEvent =
+      lastScrollEventAtRef.current != null &&
+      now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+    const targetRestore =
+      !hasRecentScrollEvent &&
+      !isMeasurementFlushInProgressRef.current &&
+      pendingNavigationRef.current === null &&
+      !postNavSettlingRef.current
+        ? applyScrollTargetRef.current("scroll-correction")
+        : { resolved: false, appliedDelta: 0 };
+    const shouldAdjust =
+      !targetRestore.resolved &&
+      !hasRecentScrollEvent &&
+      !isMeasurementFlushInProgressRef.current &&
+      pendingNavigationRef.current === null &&
+      !postNavSettlingRef.current &&
+      (scrollSeekSettlingUntilRef.current == null ||
+        now >= scrollSeekSettlingUntilRef.current) &&
+      (rowResizeScrollSuppressUntilRef.current == null ||
+        now >= rowResizeScrollSuppressUntilRef.current) &&
+      item.start < (outputRef.current?.scrollTop ?? 0);
+    if (isOutputProfilingEnabled() && Math.abs(delta) >= 40) {
+      const scrollElement = outputRef.current;
+      logOutputProfilerEvent("scrollCorrection", {
+        itemKey: item.key,
+        delta,
+        scrollTop: scrollElement?.scrollTop ?? 0,
+        overscan: outputOverscanRef.current,
+        targetResolved: targetRestore.resolved,
+        targetApplied: targetRestore.appliedDelta,
+        shouldAdjust,
+      });
+    }
+    return shouldAdjust;
+  };
+
+  const measureRowElement = useCallback(
+    (element: HTMLDivElement | null): void | (() => void) => {
+      if (!element) return;
+      const index = Number(element.dataset.index ?? -1);
+      const row = rowsRef.current[index];
+      if (row) mountedRowElementsRef.current.set(row.key, element);
+      rowVirtualizer.measureElement(element);
+      return () => {
+        if (row) mountedRowElementsRef.current.delete(row.key);
+        rowVirtualizer.measureElement(null);
+      };
+    },
+    [rowVirtualizer]
+  );
+
+  const measureStaticRowElement = useCallback(
+    (element: HTMLDivElement | null): void | (() => void) => {
+      if (!element) return;
+      const index = Number(element.dataset.index ?? -1);
+      const row = rowsRef.current[index];
+      if (row) mountedRowElementsRef.current.set(row.key, element);
+
+      const measure = (entry?: ResizeObserverEntry) => {
+        const measuredHeight =
+          getResizeObserverEntryHeight(entry) ?? getMeasuredElementHeight(element);
+        updateRowMeasurementCache(
+          element,
+          measuredHeight,
+          entry == null ? "dom-read" : "resize-observer"
+        );
+      };
+
+      measure();
+      const resizeObserver = createAnimationFrameResizeObserver((entries) => {
+        measure(entries[0]);
+      });
+      resizeObserver.observer.observe(element);
+
+      return () => {
+        if (row) mountedRowElementsRef.current.delete(row.key);
+        resizeObserver.disconnect();
+      };
+    },
+    [updateRowMeasurementCache]
+  );
+
+  const flushPendingScrollMeasurements = useCallback(() => {
+    if (pendingMeasurementCacheRef.current.size === 0) return;
+    isMeasurementFlushInProgressRef.current = true;
+    if (isOutputProfilingEnabled()) {
+      logOutputProfilerEvent("measurementFlush", {
+        pendingCount: pendingMeasurementCacheRef.current.size,
+        mountedCount: mountedRowElementsRef.current.size,
+        targetKind: scrollTargetRef.current.kind,
+        targetRowKey:
+          scrollTargetRef.current.kind === "row"
+            ? scrollTargetRef.current.rowKey
+            : undefined,
+      });
+    }
+
+    for (const [key, height] of pendingMeasurementCacheRef.current) {
+      const element = mountedRowElementsRef.current.get(key);
+      if (element) {
+        rowVirtualizer.measureElement(element);
+      } else {
+        measurementCacheRef.current.set(key, height);
+      }
+    }
+    pendingMeasurementCacheRef.current.clear();
+    applyScrollTargetRef.current("measurement-flush-sync");
+    requestAnimationFrame(() => {
+      const firstFrameRestore =
+        applyScrollTargetRef.current("measurement-flush-raf-1");
+      requestAnimationFrame(() => {
+        const secondFrameRestore =
+          applyScrollTargetRef.current("measurement-flush-raf-2");
+
+        requestAnimationFrame(() => {
+          if (
+            isOutputProfilingEnabled() &&
+            (!firstFrameRestore.resolved ||
+              !secondFrameRestore.resolved ||
+              Math.abs(firstFrameRestore.appliedDelta) >= 1 ||
+              Math.abs(secondFrameRestore.appliedDelta) >= 1)
+          ) {
+            logOutputProfilerEvent("measurementFlushTargetSettled", {
+              target: scrollTargetRef.current,
+              firstFrameApplied: firstFrameRestore.appliedDelta,
+              secondFrameApplied: secondFrameRestore.appliedDelta,
+              firstFrameResolved: firstFrameRestore.resolved,
+              secondFrameResolved: secondFrameRestore.resolved,
+              scrollTop: outputRef.current?.scrollTop,
+            });
+          }
+          isMeasurementFlushInProgressRef.current = false;
+        });
+      });
+    });
+  }, [
+    applyScrollTargetRef,
+    isMeasurementFlushInProgressRef,
+    outputRef,
+    rowVirtualizer,
+    scrollTargetRef,
+  ]);
+
+  const schedulePendingMeasurementFlush = useCallback(() => {
+    if (pendingMeasurementFlushTimerRef.current !== null) {
+      clearTimeout(pendingMeasurementFlushTimerRef.current);
+    }
+    pendingMeasurementFlushTimerRef.current = setTimeout(() => {
+      pendingMeasurementFlushTimerRef.current = null;
+      flushPendingScrollMeasurements();
+    }, OUTPUT_USER_SCROLL_INPUT_GRACE_MS + 50);
+  }, [flushPendingScrollMeasurements]);
+  schedulePendingMeasurementFlushRef.current = schedulePendingMeasurementFlush;
+
+  const rowLayout: OutputRowLayoutModel = useMemo(
+    () =>
+      measureOutputPhase(
+        "rowLayout",
+        {
+          rows: rows.length,
+          measurementVersion,
+          overscan: outputOverscan,
+          virtualizerTotalSize: rowVirtualizer.getTotalSize(),
+        },
+        () => {
+          void measurementVersion;
+          if (!isOutputVirtualized) {
+            let offset = 0;
+            const rowStartsByIndex: number[] = [];
+            const rowStartsByKey = new Map<string, number>();
+            const rowSizesByKey = new Map<string, number>();
+
+            for (const [index, row] of rows.entries()) {
+              const size =
+                measurementCacheRef.current.get(row.key) ??
+                getEstimatedRowHeight(row);
+              rowStartsByIndex[index] = offset;
+              rowStartsByKey.set(row.key, offset);
+              rowSizesByKey.set(row.key, size);
+              offset += size;
+            }
+
+            return {
+              totalSize: Math.max(offset, 1),
+              rowStartsByIndex,
+              rowStartsByKey,
+              rowSizesByKey,
+            };
+          }
+
+          let fallbackOffset = 0;
+          const rowStartsByIndex: number[] = [];
+          const rowStartsByKey = new Map<string, number>();
+          const rowSizesByKey = new Map<string, number>();
+          const measurementsByKey = new Map(
+            rowVirtualizer.measurementsCache
+              .filter((item): item is NonNullable<typeof item> => item != null)
+              .map((item) => [String(item.key), item] as const)
+          );
+
+          for (const [index, row] of rows.entries()) {
+            const measurement =
+              measurementsByKey.get(row.key) ??
+              rowVirtualizer.measurementsCache[index];
+            const size =
+              measurement?.size ??
+              measurementCacheRef.current.get(row.key) ??
+              getEstimatedRowHeight(row);
+            const start = measurement?.start ?? fallbackOffset;
+            rowStartsByIndex[index] = start;
+            rowStartsByKey.set(row.key, start);
+            rowSizesByKey.set(row.key, size);
+            fallbackOffset = start + size;
+          }
+
+          return {
+            totalSize: Math.max(
+              rowVirtualizer.getTotalSize(),
+              fallbackOffset,
+              1
+            ),
+            rowStartsByIndex,
+            rowStartsByKey,
+            rowSizesByKey,
+          };
+        }
+      ),
+    [
+      getEstimatedRowHeight,
+      isOutputVirtualized,
+      rows,
+      measurementVersion,
+      outputContentWidth,
+      outputFontSize,
+      outputOverscan,
+      rowVirtualizer,
+    ]
+  );
+
+  const previousIsOutputVirtualized = useRef(isOutputVirtualized);
+  useEffect(() => {
+    if (previousIsOutputVirtualized.current === isOutputVirtualized) {
+      return;
+    }
+    previousIsOutputVirtualized.current = isOutputVirtualized;
+    pendingMeasurementCacheRef.current.clear();
+    measurementCacheRef.current.clear();
+    setMeasurementVersion((v) => v + 1);
+    if (isOutputVirtualized) {
+      rowVirtualizer.measure();
+    }
+  }, [isOutputVirtualized, rowVirtualizer]);
+
+  useEffect(() => {
+    if (nonVirtualRenderFrameRef.current !== null) {
+      cancelAnimationFrame(nonVirtualRenderFrameRef.current);
+      nonVirtualRenderFrameRef.current = null;
+    }
+    if (nonVirtualRenderTimerRef.current !== null) {
+      clearTimeout(nonVirtualRenderTimerRef.current);
+      nonVirtualRenderTimerRef.current = null;
+    }
+
+    const shouldStageRows =
+      !isOutputVirtualized &&
+      rows.length >= NON_VIRTUAL_STAGING_ROW_THRESHOLD;
+
+    if (!shouldStageRows) {
+      setNonVirtualRenderedRowCount(Number.MAX_SAFE_INTEGER);
+      return;
+    }
+
+    const previousIdentity = nonVirtualRenderIdentityRef.current;
+    const identityChanged = previousIdentity !== rowRenderIdentity;
+    nonVirtualRenderIdentityRef.current = rowRenderIdentity;
+
+    setNonVirtualRenderedRowCount((previous) =>
+      Math.min(
+        rows.length,
+        identityChanged
+          ? NON_VIRTUAL_INITIAL_RENDER_ROWS
+          : Math.max(previous, NON_VIRTUAL_INITIAL_RENDER_ROWS)
+      )
+    );
+
+    nonVirtualRenderTimerRef.current = setTimeout(() => {
+      nonVirtualRenderTimerRef.current = null;
+      const renderNextChunk = () => {
+        setNonVirtualRenderedRowCount((previous) => {
+          const next = Math.min(
+            rows.length,
+            previous + NON_VIRTUAL_RENDER_CHUNK_ROWS
+          );
+          if (next < rows.length) {
+            nonVirtualRenderFrameRef.current =
+              requestAnimationFrame(renderNextChunk);
+          } else {
+            nonVirtualRenderFrameRef.current = null;
+          }
+          return next;
+        });
+      };
+
+      nonVirtualRenderFrameRef.current = requestAnimationFrame(renderNextChunk);
+    }, 0);
+  }, [isOutputVirtualized, rowRenderIdentity, rows.length]);
+
+  useEffect(() => {
+    if (activeOutputTab !== "output" || outputCollapsed || !isOutputVirtualized) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      rowVirtualizer.measure();
+    });
+  }, [
+    activeOutputTab,
+    isOutputVirtualized,
+    outputCollapsed,
+    rowVirtualizer,
+    rows.length,
+  ]);
+
+  const hasOutput = rows.length > 0;
+  const nonVirtualVisibleRowCount = isOutputVirtualized
+    ? rows.length
+    : Math.min(rows.length, nonVirtualRenderedRowCount);
+  const nonVirtualRows = isOutputVirtualized
+    ? rows
+    : rows.slice(0, nonVirtualVisibleRowCount);
+  const lastNonVirtualRow = nonVirtualRows[nonVirtualRows.length - 1];
+  const nonVirtualRenderedHeight = lastNonVirtualRow
+    ? (rowLayout.rowStartsByKey.get(lastNonVirtualRow.key) ?? 0) +
+      (rowLayout.rowSizesByKey.get(lastNonVirtualRow.key) ??
+        getEstimatedRowHeight(lastNonVirtualRow))
+    : 0;
+  const nonVirtualSpacerHeight = Math.max(
+    0,
+    rowLayout.totalSize - nonVirtualRenderedHeight
+  );
+  const isNonVirtualOutputStaging =
+    !isOutputVirtualized && hasOutput && nonVirtualVisibleRowCount < rows.length;
+  const isOutputScrollSeeking =
+    isOutputVirtualized && scrollSeekPlaceholderActive;
+  const virtualRows: VirtualItem[] = isOutputVirtualized
+    ? rowVirtualizer.getVirtualItems()
+    : [];
+
+  useEffect(() => {
+    if (!isOutputVirtualized || !shouldLogOutputVirtualRange()) {
+      return;
+    }
+
+    const first = virtualRows[0];
+    const last = virtualRows[virtualRows.length - 1];
+    const signature = `${first?.index ?? -1}:${last?.index ?? -1}:${virtualRows.length}:${rows.length}`;
+    if (signature === lastVirtualRangeRef.current) {
+      return;
+    }
+
+    lastVirtualRangeRef.current = signature;
+    logOutputProfilerEvent("virtualRange", {
+      firstIndex: first?.index ?? null,
+      lastIndex: last?.index ?? null,
+      virtualRows: virtualRows.length,
+      overscan: outputOverscan,
+      scrollSeekPlaceholder: isOutputScrollSeeking,
+      totalRows: rows.length,
+      totalSize: rowVirtualizer.getTotalSize(),
+    });
+  }, [
+    isOutputScrollSeeking,
+    isOutputVirtualized,
+    outputOverscan,
+    rowVirtualizer,
+    rows.length,
+    virtualRows,
+  ]);
+
+  const handleOutputProfilerRender = useCallback(
+    (
+      id: string,
+      phase: "mount" | "update" | "nested-update",
+      actualDuration: number,
+      baseDuration: number,
+      startTime: number,
+      commitTime: number
+    ) => {
+      const profilerState = getOutputProfilerState();
+      if (
+        !profilerState.enabled ||
+        actualDuration < profilerState.slowThresholdMs
+      ) {
+        return;
+      }
+
+      logOutputProfilerEvent("reactCommit", {
+        id,
+        phase,
+        actualDuration,
+        baseDuration,
+        renderToCommitGap: commitTime - startTime,
+        virtualRows: virtualRows.length,
+        overscan: outputOverscan,
+        scrollSeekPlaceholder: isOutputScrollSeeking,
+        scrollSeekRestorePendingMs:
+          scrollSeekRestoreRequestedAtRef.current != null
+            ? commitTime - scrollSeekRestoreRequestedAtRef.current
+            : undefined,
+        totalRows: rows.length,
+        measurementVersion,
+      });
+    },
+    [
+      isOutputScrollSeeking,
+      measurementVersion,
+      outputOverscan,
+      rows.length,
+      scrollSeekRestoreRequestedAtRef,
+      virtualRows.length,
+    ]
+  );
+
+  const getRowEstimateStats = useCallback(() => {
+    return Array.from(rowHeightBucketStatsRef.current.entries())
+      .filter(([, s]) => s.sampleCount > 0)
+      .map(([bucket, s]) => ({
+        bucket,
+        n: s.sampleCount,
+        avgMeasured: Math.round(s.totalMeasured / s.sampleCount),
+        avgEstimated: Math.round(s.totalEstimated / s.sampleCount),
+        avgDelta: Math.round(
+          (s.totalMeasured - s.totalEstimated) / s.sampleCount
+        ),
+        maxAbsDelta: Math.round(s.maxAbsDelta),
+        scaleFactor:
+          s.totalEstimated > 0
+            ? Math.round((s.totalMeasured / s.totalEstimated) * 100) / 100
+            : null,
+      }))
+      .sort((a, b) => b.maxAbsDelta - a.maxAbsDelta);
+  }, []);
+
+  const clearMeasurements = useCallback(() => {
+    pendingMeasurementCacheRef.current.clear();
+    measurementCacheRef.current.clear();
+    setMeasurementVersion((v) => v + 1);
+  }, []);
+
+  const hasPendingMeasurements = useCallback(
+    () => pendingMeasurementCacheRef.current.size > 0,
+    []
+  );
+
+  const invalidateMeasuredRow = useCallback(
+    (rowKey: string) => {
+      measurementCacheRef.current.delete(rowKey);
+      rowVirtualizer.measure();
+      setMeasurementVersion((version) => version + 1);
+    },
+    [rowVirtualizer]
+  );
+
+  const invalidateMeasuredRowForUserResize = useCallback(
+    (rowKey: string) => {
+      rowResizeScrollSuppressUntilRef.current =
+        performance.now() + OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS;
+      measurementCacheRef.current.delete(rowKey);
+
+      requestAnimationFrame(() => {
+        const nextScrollElement = outputRef.current;
+        if (!nextScrollElement) {
+          setMeasurementVersion((version) => version + 1);
+          return;
+        }
+
+        const nextRowElement = findRenderedRowElementByKey(
+          nextScrollElement,
+          rowKey
+        );
+        if (!nextRowElement) {
+          rowVirtualizer.measure();
+          setMeasurementVersion((version) => version + 1);
+          return;
+        }
+
+        rowVirtualizer.measureElement(nextRowElement);
+        setMeasurementVersion((version) => version + 1);
+
+        requestAnimationFrame(() => {
+          applyScrollTargetRef.current("row-resize", { force: true });
+        });
+      });
+    },
+    [applyScrollTargetRef, outputRef, rowResizeScrollSuppressUntilRef, rowVirtualizer]
+  );
+
+  useEffect(
+    () => () => {
+      if (measurementVersionFrameRef.current != null) {
+        cancelAnimationFrame(measurementVersionFrameRef.current);
+        measurementVersionFrameRef.current = null;
+      }
+      if (pendingMeasurementFlushTimerRef.current !== null) {
+        clearTimeout(pendingMeasurementFlushTimerRef.current);
+        pendingMeasurementFlushTimerRef.current = null;
+      }
+      if (nonVirtualRenderFrameRef.current !== null) {
+        cancelAnimationFrame(nonVirtualRenderFrameRef.current);
+        nonVirtualRenderFrameRef.current = null;
+      }
+      if (nonVirtualRenderTimerRef.current !== null) {
+        clearTimeout(nonVirtualRenderTimerRef.current);
+        nonVirtualRenderTimerRef.current = null;
+      }
+    },
+    []
+  );
+
+  return {
+    clearMeasurements,
+    flushPendingScrollMeasurements,
+    getEstimatedRowHeight,
+    getRowEstimateStats,
+    hasPendingMeasurements,
+    handleOutputProfilerRender,
+    isNonVirtualOutputStaging,
+    isOutputScrollSeeking,
+    isOutputVirtualized,
+    measureRowElement,
+    measureStaticRowElement,
+    measurementVersion,
+    measurementVersionRef,
+    nonVirtualRows,
+    nonVirtualSpacerHeight,
+    rowLayout,
+    rowVirtualizer,
+    rowsRef,
+    schedulePendingMeasurementFlush,
+    setMeasurementVersion,
+    virtualRows,
+    invalidateMeasuredRow,
+    invalidateMeasuredRowForUserResize,
+  };
+}

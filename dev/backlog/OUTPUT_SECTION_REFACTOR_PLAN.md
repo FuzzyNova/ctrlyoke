@@ -289,12 +289,27 @@ Expected risk: medium. The minimap combines row layout, step metadata, diff bloc
 
 Expected risk: high. This is where most subtle output-position regressions can happen.
 
-### Prompt 8: extract virtualization and scroll-seek behavior
+### Prompt 8: extract virtualization and scroll-seek behavior — Done
 
 - Move measurement caches, adaptive row estimates, pending measurement flush, and `useVirtualizer` setup into `useOutputVirtualization`.
 - Move fast-scroll overscan and placeholder timers into `useOutputScrollSeek`.
 - Keep performance logging behavior unchanged.
 - Add focused tests around pure helpers, but rely on manual/browser verification for scroll and virtualizer behavior.
+
+Completed:
+
+- Added `hooks/useOutputVirtualization.ts` to own row measurement caches,
+  adaptive height estimates, pending measurement flushes, row layout
+  construction, virtualizer setup, virtual range logging, non-virtual staged
+  rendering, measurement invalidation, and profiler render metadata.
+- Added `hooks/useOutputScrollSeek.ts` to own fast-scroll overscan transitions,
+  placeholder activation, wheel/touch pre-arm handling, staged overscan
+  restore, scroll-seek restore logging, and post-restore settle timing.
+- `OutputSection` now keeps only the composition wiring for scroll refs,
+  scroll-target/navigation hooks, row-model invalidation forwarding, and
+  presentation booleans passed to `OutputPane`.
+- Verified with `npm run build:webview`, `npm run compile`, and
+  `npm run test:ui -- test/components/output` (48/48 passing).
 
 Expected risk: high. Virtualizer timing, ResizeObserver behavior, and scroll correction suppression are fragile.
 
