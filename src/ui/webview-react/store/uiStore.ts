@@ -62,6 +62,10 @@ export interface MobilePanelSizes {
   editor: number;
 }
 
+export type OutputScrollTarget =
+  | { kind: "row"; rowKey: string; viewportOffsetPx: number }
+  | { kind: "bottom" };
+
 /**
  * UI state - Layout, visibility, and modal states
  */
@@ -99,6 +103,7 @@ interface UiState {
 
   // Output panel state
   selectedOutputStep: number | null; // Which step's output to show (null = current)
+  outputScrollTargets: Record<string, OutputScrollTarget>; // transient per-workflow output scroll memory
 
   // Run history display state
   isViewingHistory: boolean; // true when showing a historical run (not live)
@@ -223,6 +228,10 @@ interface UiActions {
 
   // Output panel
   selectOutputStep: (stepIndex: number | null) => void;
+  setOutputScrollTarget: (
+    workflowId: string,
+    target: OutputScrollTarget
+  ) => void;
 
   // Save workflow dialog
   openSaveWorkflowDialog: (data: SaveWorkflowDialogData) => void;
@@ -359,6 +368,7 @@ const initialState: UiState = {
   propertiesDrawerOpen: false,
   settingsCollapsed: false,
   selectedOutputStep: null,
+  outputScrollTargets: {},
   newWorkflowModalOpen: false,
   templates: [],
   currentTemplate: null,
@@ -529,6 +539,28 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       selectOutputStep: (stepIndex) => set({ selectedOutputStep: stepIndex }),
+
+      setOutputScrollTarget: (workflowId, target) =>
+        set((state) => {
+          const previous = state.outputScrollTargets[workflowId];
+          if (
+            previous?.kind === target.kind &&
+            (target.kind === "bottom" ||
+              (previous.kind === "row" &&
+                previous.rowKey === target.rowKey &&
+                Math.abs(previous.viewportOffsetPx - target.viewportOffsetPx) <
+                  0.5))
+          ) {
+            return state;
+          }
+
+          return {
+            outputScrollTargets: {
+              ...state.outputScrollTargets,
+              [workflowId]: target,
+            },
+          };
+        }),
 
       // ============================================================================
       // SAVE WORKFLOW DIALOG
@@ -817,6 +849,7 @@ export const useUiStore = create<UiState & UiActions>()(
           recentWorkflowsDropdownOpen: false,
           isLoading: false,
           loadingMessage: null,
+          outputScrollTargets: {},
           toast: null,
           footerOpenPicker: null,
           horizontalPanelResizeActive: false,

@@ -9,7 +9,7 @@ import React, {
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
-import { useUiStore } from "@store/uiStore";
+import { useUiStore, type OutputScrollTarget } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
@@ -128,7 +128,6 @@ const OUTPUT_SCROLL_SEEK_SETTLE_MS = 2000; // time after restore to ignore layou
 const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS = 600; // delay before adding a small buffer after visible rows mount.
 const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 1800; // delay before expanding from restore overscan back to normal overscan.
 const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200; // recent wheel input window that lets real user scrolling bypass settle suppression.
-const OUTPUT_HORIZONTAL_RESIZE_SETTLE_MS = 700; // time after pointer release where width-change measurements are still settling.
 const OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS = 1200; // text rows shorter than this render directly during scroll seek.
 const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300; // time to ignore virtualizer scroll correction after user expands row content.
 const LARGE_WORKFLOW_ROW_THRESHOLD = 20; // row count where fast-scroll placeholder behavior is enabled.
@@ -141,6 +140,7 @@ const DEFAULT_BASH_OUTPUT_EXPANSION_STATE: BashOutputExpansionState = {
   outputExpanded: false,
   errorExpanded: false,
 };
+const DEFAULT_OUTPUT_SCROLL_TARGET: OutputScrollTarget = { kind: "bottom" };
 
 interface RowHeightBucketStats {
   sampleCount: number;
@@ -274,12 +274,6 @@ interface ViewportRowAnchor {
   viewportOffsetTop: number;
 }
 
-interface ActiveViewportRowAnchor extends ViewportRowAnchor {
-  expiresAt: number;
-  reason: "measurement-flush" | "scroll-seek-restore" | "width-change";
-  restoreCount: number;
-}
-
 function captureViewportRowAnchor(
   scrollElement: HTMLDivElement,
   mode: "center-point" | "visible-top" = "visible-top"
@@ -333,49 +327,6 @@ function captureViewportRowAnchor(
     offsetTop: anchorRect.top - containerRect.top,
     rowOffsetPx: anchorPoint - anchorRect.top,
     viewportOffsetTop: anchorPoint - containerRect.top,
-  };
-}
-
-function restoreViewportRowAnchor(
-  scrollElement: HTMLDivElement,
-  anchor: ViewportRowAnchor
-): {
-  appliedDelta: number;
-  residualOffsetDelta: number;
-  found: boolean;
-} {
-  const rowElement = findRenderedRowElementByKey(scrollElement, anchor.rowKey);
-  if (!rowElement) {
-    return { appliedDelta: 0, residualOffsetDelta: 0, found: false };
-  }
-
-  const containerRect = scrollElement.getBoundingClientRect();
-  const rowRect = rowElement.getBoundingClientRect();
-  const nextOffsetTop = rowRect.top - containerRect.top;
-  const nextAnchorPointOffsetTop = nextOffsetTop + anchor.rowOffsetPx;
-  const delta = nextAnchorPointOffsetTop - anchor.viewportOffsetTop;
-  if (Math.abs(delta) < 1) {
-    return { appliedDelta: 0, residualOffsetDelta: delta, found: true };
-  }
-
-  const maxScroll = Math.max(
-    0,
-    scrollElement.scrollHeight - scrollElement.clientHeight
-  );
-  const nextScrollTop = Math.max(
-    0,
-    Math.min(maxScroll, scrollElement.scrollTop + delta)
-  );
-  const appliedDelta = nextScrollTop - scrollElement.scrollTop;
-  scrollElement.scrollTop = nextScrollTop;
-  const finalOffsetTop =
-    rowElement.getBoundingClientRect().top -
-    scrollElement.getBoundingClientRect().top;
-  return {
-    appliedDelta,
-    residualOffsetDelta:
-      finalOffsetTop + anchor.rowOffsetPx - anchor.viewportOffsetTop,
-    found: true,
   };
 }
 
@@ -642,9 +593,6 @@ const OutputSectionInner: React.FC = () => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const expandAllDiffs = useUiStore((s) => s.expandAllDiffs);
   const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
-  const horizontalPanelResizeActive = useUiStore(
-    (s) => s.horizontalPanelResizeActive
-  );
   const outputFontSize = useUiStore((s) => s.outputFontSize);
   const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
@@ -695,6 +643,11 @@ const OutputSectionInner: React.FC = () => {
   const activeWorkflowId = useUiStore((s) => s.activeWorkflowId);
   // Use a stable fallback key so standalone shells work even with no active workflow.
   const terminalWorkflowId = activeWorkflowId ?? SHELL_WORKFLOW_ID;
+  const workflowScrollTargetId = activeWorkflowId ?? SHELL_WORKFLOW_ID;
+  const savedOutputScrollTarget = useUiStore(
+    (s) => s.outputScrollTargets[workflowScrollTargetId]
+  );
+  const setOutputScrollTarget = useUiStore((s) => s.setOutputScrollTarget);
   const activeOutputTab = useUiStore(
     (s) => s.activeOutputTabs[terminalWorkflowId] ?? "output"
   );
@@ -812,32 +765,24 @@ const OutputSectionInner: React.FC = () => {
     null
   );
   const nonVirtualRenderIdentityRef = useRef<string | null>(null);
+  const scrollTargetRef = useRef<OutputScrollTarget>(
+    savedOutputScrollTarget ?? DEFAULT_OUTPUT_SCROLL_TARGET
+  );
+  const applyScrollTargetRef = useRef<
+    (phase: string, options?: { force?: boolean }) => {
+      resolved: boolean;
+      appliedDelta: number;
+    }
+  >(() => ({ resolved: false, appliedDelta: 0 }));
+  const scrollTargetCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const lastScrollEventAtRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
   const lastVirtualRangeRef = useRef<string>("");
-  const previousHorizontalPanelResizeActiveRef = useRef(
-    horizontalPanelResizeActive
-  );
-  const horizontalResizeSettleUntilRef = useRef<number | null>(null);
-  // True while a horizontal panel drag is in progress, plus a short settle
-  // window after release where width-driven row remeasurements are still
-  // landing. Used to keep exactly one anchor-correction mechanism active:
-  // the delta-anchor path in shouldAdjustScrollPositionOnItemSizeChange
-  // (robust to TanStack's pre-layout timing gap). The DOM-rect-based
-  // restoreViewportAnchorGuard must stay out of the way during this window —
-  // running both concurrently means each reads a partially-migrated DOM left
-  // by the other's just-applied correction, producing runaway oscillation.
-  const isHorizontalResizeCompensationActive = useCallback((): boolean => {
-    if (horizontalPanelResizeActive) {
-      return true;
-    }
-    const settleUntil = horizontalResizeSettleUntilRef.current;
-    return settleUntil != null && performance.now() < settleUntil;
-  }, [horizontalPanelResizeActive]);
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
   const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const pendingMeasurementFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const viewportAnchorGuardRef = useRef<ActiveViewportRowAnchor | null>(null);
   // Set true during flush so TanStack's rAF-deferred scroll corrections don't
   // re-activate the scroll freeze in handleScroll.
   const isMeasurementFlushInProgressRef = useRef(false);
@@ -1369,229 +1314,6 @@ const OutputSectionInner: React.FC = () => {
     [updateRowMeasurementCache]
   );
 
-  const activateViewportAnchorGuard = useCallback(
-    (
-      anchor: ViewportRowAnchor | null,
-      reason: ActiveViewportRowAnchor["reason"]
-    ) => {
-      if (!anchor) return;
-
-      const expiresAt =
-        performance.now() +
-        OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS +
-        OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS +
-        800;
-      viewportAnchorGuardRef.current = {
-        ...anchor,
-        expiresAt,
-        reason,
-        restoreCount: 0,
-      };
-
-      if (isOutputProfilingEnabled()) {
-        logOutputProfilerEvent("viewportAnchorGuard", {
-          phase: "activate",
-          reason,
-          anchorRowKey: anchor.rowKey,
-          anchorOffsetTop: anchor.offsetTop,
-          anchorRowOffsetPx: anchor.rowOffsetPx,
-          anchorViewportOffsetTop: anchor.viewportOffsetTop,
-          ttlMs: Math.round(expiresAt - performance.now()),
-        });
-      }
-    },
-    []
-  );
-
-  const refreshViewportAnchorGuard = useCallback((): boolean => {
-    const guard = viewportAnchorGuardRef.current;
-    if (!guard || guard.reason !== "width-change") {
-      return false;
-    }
-
-    const now = performance.now();
-    if (now >= guard.expiresAt) {
-      return false;
-    }
-
-    const expiresAt =
-      now +
-      OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS +
-      OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS +
-      800;
-    viewportAnchorGuardRef.current = {
-      ...guard,
-      expiresAt,
-    };
-
-    if (isOutputProfilingEnabled()) {
-      logOutputProfilerEvent("viewportAnchorGuard", {
-        phase: "refresh",
-        reason: guard.reason,
-        anchorRowKey: guard.rowKey,
-        anchorOffsetTop: guard.offsetTop,
-        anchorRowOffsetPx: guard.rowOffsetPx,
-        anchorViewportOffsetTop: guard.viewportOffsetTop,
-        ttlMs: Math.round(expiresAt - now),
-      });
-    }
-
-    return true;
-  }, []);
-
-  const clearViewportAnchorGuard = useCallback((reason: string) => {
-    const guard = viewportAnchorGuardRef.current;
-    if (!guard) return;
-    viewportAnchorGuardRef.current = null;
-    if (isOutputProfilingEnabled()) {
-      logOutputProfilerEvent("viewportAnchorGuard", {
-        phase: "clear",
-        reason,
-        anchorRowKey: guard.rowKey,
-        restoreCount: guard.restoreCount,
-      });
-    }
-  }, []);
-
-  const restoreViewportAnchorGuard = useCallback(
-    (phase: "layout-effect" | "scroll-correction" | "raf-1" | "raf-2") => {
-      const guard = viewportAnchorGuardRef.current;
-      const scrollElement = outputRef.current;
-      const now = performance.now();
-      if (!guard || !scrollElement) {
-        return { active: false, found: false, appliedDelta: 0 };
-      }
-
-      if (now >= guard.expiresAt) {
-        clearViewportAnchorGuard("expired");
-        return { active: false, found: false, appliedDelta: 0 };
-      }
-
-      const result = restoreViewportRowAnchor(scrollElement, guard);
-      lastScrollTopRef.current = scrollElement.scrollTop;
-      if (result.found) {
-        viewportAnchorGuardRef.current = {
-          ...guard,
-          restoreCount: guard.restoreCount + (Math.abs(result.appliedDelta) >= 1 ? 1 : 0),
-        };
-      } else {
-        const replacement = captureViewportRowAnchor(
-          scrollElement,
-          guard.reason === "width-change" ? "center-point" : "visible-top"
-        );
-        if (replacement) {
-          viewportAnchorGuardRef.current = {
-            ...replacement,
-            expiresAt: guard.expiresAt,
-            reason: guard.reason,
-            restoreCount: guard.restoreCount,
-          };
-        }
-      }
-
-      if (
-        isOutputProfilingEnabled() &&
-        (Math.abs(result.appliedDelta) >= 1 ||
-          Math.abs(result.residualOffsetDelta) >= 1 ||
-          !result.found)
-      ) {
-        logOutputProfilerEvent("viewportAnchorGuard", {
-          phase,
-          reason: guard.reason,
-          anchorRowKey: guard.rowKey,
-          appliedDelta: result.appliedDelta,
-          residualOffsetDelta: result.residualOffsetDelta,
-          found: result.found,
-          replacementRowKey: !result.found
-            ? viewportAnchorGuardRef.current?.rowKey
-            : undefined,
-          scrollTop: scrollElement.scrollTop,
-          overscan: outputOverscanRef.current,
-        });
-      }
-
-      return {
-        active: true,
-        found: result.found,
-        appliedDelta: result.appliedDelta,
-      };
-    },
-    [clearViewportAnchorGuard]
-  );
-
-  useLayoutEffect(() => {
-    const wasActive = previousHorizontalPanelResizeActiveRef.current;
-    previousHorizontalPanelResizeActiveRef.current = horizontalPanelResizeActive;
-    if (wasActive === horizontalPanelResizeActive) {
-      return;
-    }
-
-    if (!horizontalPanelResizeActive) {
-      horizontalResizeSettleUntilRef.current =
-        performance.now() + OUTPUT_HORIZONTAL_RESIZE_SETTLE_MS;
-      return;
-    }
-
-    horizontalResizeSettleUntilRef.current = null;
-    const scrollElement = outputRef.current;
-    if (!scrollElement) return;
-
-    const anchor = captureViewportRowAnchor(scrollElement, "center-point");
-    activateViewportAnchorGuard(anchor, "width-change");
-  }, [activateViewportAnchorGuard, horizontalPanelResizeActive]);
-
-  // Restore before paint when React commits a virtualizer range transition
-  // (notably staged overscan restore). Measurement-version commits already
-  // have TanStack's size-change callback plus flush rAF restores; running this
-  // on every measurement bump can over-correct after a row above the anchor
-  // measures during idle overscan expansion.
-  useLayoutEffect(() => {
-    const hasRecentUserScrollInput =
-      lastUserScrollInputAtRef.current != null &&
-      performance.now() - lastUserScrollInputAtRef.current <
-        OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
-    if (hasRecentUserScrollInput) {
-      return;
-    }
-
-    // When the width-resize effect drops overscan to 0, rows haven't been
-    // remeasured at the new width yet — DOM positions are stale pre-new-width
-    // values. Applying a DOM-based correction here produces a large incorrect
-    // jump that cascades into scroll-seek and autoscroll-to-bottom.
-    // Skip it: delta corrections in shouldAdjustScrollPositionOnItemSizeChange
-    // handle real-time pinning, and the layout-effect at overscan→full is the
-    // DOM-based safety net once the DOM has settled at the new width.
-    const guard = viewportAnchorGuardRef.current;
-    if (
-      guard?.reason === "width-change" &&
-      outputOverscan === OUTPUT_SCROLL_SEEK_RESTORE_OVERSCAN
-    ) {
-      return;
-    }
-
-    // While a horizontal drag is settling, the delta-anchor path in
-    // shouldAdjustScrollPositionOnItemSizeChange is the sole corrector for a
-    // width-change anchor — see isHorizontalResizeCompensationActive. Letting
-    // this DOM-rect restore run concurrently means it reads DOM positions
-    // mid-migration (rows are resizing in a burst) and applies its own
-    // correction on top of the delta-anchor one, and the two chase each
-    // other's perturbations into a visible jump/oscillation loop.
-    if (
-      guard?.reason === "width-change" &&
-      isHorizontalResizeCompensationActive()
-    ) {
-      return;
-    }
-
-    restoreViewportAnchorGuard("layout-effect");
-  }, [
-    isHorizontalResizeCompensationActive,
-    outputOverscan,
-    restoreViewportAnchorGuard,
-    rows.length,
-    scrollSeekPlaceholderActive,
-  ]);
-
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => outputRef.current,
@@ -1619,90 +1341,15 @@ const OutputSectionInner: React.FC = () => {
     const hasRecentScrollEvent =
       lastScrollEventAtRef.current != null &&
       now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
-    // When the anchor guard is active, use TanStack's exact delta instead of
-    // reading DOM positions. This callback fires before the browser re-lays out
-    // the new CSS transforms (shouldAdjustScrollPositionOnItemSizeChange runs
-    // during TanStack's internal state update, before the next React render), so
-    // getBoundingClientRect() returns the pre-update position and the DOM-based
-    // guard always sees appliedDelta=0. Using `delta` directly bypasses this
-    // timing gap: if the changed item sits above the anchor row, shift scrollTop
-    // by the exact amount the anchor will move in the upcoming layout pass.
-    //
-    // This matters most precisely during an active horizontal-panel drag
-    // (reason "width-change" + isHorizontalResizeCompensationActive): a burst
-    // of rows resize in the same TanStack measurement batch, so DOM rects are
-    // only partially migrated and a getBoundingClientRect()-based correction
-    // reads inconsistent in-between positions instead of a clean pre-update
-    // snapshot — see the layout-effect guard above that defers to this path
-    // for that exact window.
-    if (!hasRecentScrollEvent && !isMeasurementFlushInProgressRef.current) {
-      const guard = viewportAnchorGuardRef.current;
-      if (guard && now < guard.expiresAt) {
-        const scrollEl = outputRef.current;
-        // Use TanStack's measurementsCache for the anchor's start: it's in the
-        // same coordinate system as item.start (both reflect TanStack's current
-        // internal layout after the latest measureElement call). rowLayout is a
-        // derived useMemo that re-runs on the NEXT render, so it can be one
-        // ResizeObserver batch behind during rapid resize sequences.
-        let measuredAnchorStart: number | undefined;
-        for (const m of rowVirtualizer.measurementsCache) {
-          if (m != null && String(m.key) === guard.rowKey) {
-            measuredAnchorStart = m.start;
-            break;
-          }
-        }
-        measuredAnchorStart ??= rowLayout.rowStartsByKey.get(guard.rowKey);
-        const measuredAnchorPointStart =
-          measuredAnchorStart == null
-            ? undefined
-            : measuredAnchorStart + guard.rowOffsetPx;
-        const expectedAnchorStart =
-          scrollEl == null
-            ? undefined
-            : scrollEl.scrollTop + guard.viewportOffsetTop;
-        if (!scrollEl) {
-          return false;
-        }
-        const anchorStart =
-          measuredAnchorPointStart != null &&
-          expectedAnchorStart != null &&
-          Math.abs(measuredAnchorPointStart - expectedAnchorStart) <=
-            scrollEl.clientHeight
-            ? measuredAnchorPointStart
-            : expectedAnchorStart;
-        if (anchorStart != null && item.start < anchorStart && delta !== 0) {
-          scrollEl.scrollTop += delta;
-          lastScrollTopRef.current = scrollEl.scrollTop;
-          if (isOutputProfilingEnabled()) {
-            logOutputProfilerEvent("scrollCorrection", {
-              itemKey: item.key,
-              delta,
-              scrollTop: scrollEl.scrollTop,
-              anchorKey: guard.rowKey,
-              anchorStart,
-              measuredAnchorStart,
-              measuredAnchorPointStart,
-              expectedAnchorStart,
-              itemStart: item.start,
-              anchorRowOffsetPx: guard.rowOffsetPx,
-              anchorViewportOffsetTop: guard.viewportOffsetTop,
-              mode: "delta-anchor",
-            });
-          }
-        }
-        return false;
-      }
-    }
-
-    // No active anchor guard: fall through to the DOM-based guard restore
-    // (handles layout-effect triggers) and TanStack's own item-above-viewport
-    // correction.
-    const guardedRestore =
-      !hasRecentScrollEvent && !isMeasurementFlushInProgressRef.current
-        ? restoreViewportAnchorGuard("scroll-correction")
-        : { active: false, found: false, appliedDelta: 0 };
+    const targetRestore =
+      !hasRecentScrollEvent &&
+      !isMeasurementFlushInProgressRef.current &&
+      pendingNavigationRef.current === null &&
+      !postNavSettlingRef.current
+        ? applyScrollTargetRef.current("scroll-correction")
+        : { resolved: false, appliedDelta: 0 };
     const shouldAdjust =
-      !guardedRestore.active &&
+      !targetRestore.resolved &&
       !hasRecentScrollEvent &&
       !isMeasurementFlushInProgressRef.current &&
       pendingNavigationRef.current === null &&
@@ -1719,9 +1366,8 @@ const OutputSectionInner: React.FC = () => {
         delta,
         scrollTop: scrollElement?.scrollTop ?? 0,
         overscan: outputOverscanRef.current,
-        guardActive: guardedRestore.active,
-        guardFound: guardedRestore.found,
-        guardApplied: guardedRestore.appliedDelta,
+        targetResolved: targetRestore.resolved,
+        targetApplied: targetRestore.appliedDelta,
         shouldAdjust,
       });
     }
@@ -1780,10 +1426,6 @@ const OutputSectionInner: React.FC = () => {
 
   const flushPendingScrollMeasurements = useCallback(() => {
     if (pendingMeasurementCacheRef.current.size === 0) return;
-    const scrollElement = outputRef.current;
-    const anchor =
-      scrollElement == null ? null : captureViewportRowAnchor(scrollElement);
-    activateViewportAnchorGuard(anchor, "measurement-flush");
     // Block handleScroll from updating lastScrollEventAtRef during this flush so
     // TanStack's rAF-deferred scroll corrections (shouldAdjustScrollPositionOnItemSizeChange)
     // don't re-activate the freeze for subsequent rows in the loop.
@@ -1792,42 +1434,13 @@ const OutputSectionInner: React.FC = () => {
       logOutputProfilerEvent("measurementFlush", {
         pendingCount: pendingMeasurementCacheRef.current.size,
         mountedCount: mountedRowElementsRef.current.size,
-        anchorRowKey: anchor?.rowKey,
-        anchorOffsetTop: anchor?.offsetTop,
+        targetKind: scrollTargetRef.current.kind,
+        targetRowKey:
+          scrollTargetRef.current.kind === "row"
+            ? scrollTargetRef.current.rowKey
+            : undefined,
       });
     }
-    const restoreAnchor = (
-      phase: "sync" | "raf-1" | "raf-2"
-    ): {
-      appliedDelta: number;
-      residualOffsetDelta: number;
-      found: boolean;
-    } => {
-      const currentScrollElement = outputRef.current;
-      if (!anchor || !currentScrollElement) {
-        return { appliedDelta: 0, residualOffsetDelta: 0, found: false };
-      }
-
-      const result = restoreViewportRowAnchor(currentScrollElement, anchor);
-      lastScrollTopRef.current = currentScrollElement.scrollTop;
-      if (
-        isOutputProfilingEnabled() &&
-        (phase === "sync" ||
-          Math.abs(result.appliedDelta) >= 1 ||
-          Math.abs(result.residualOffsetDelta) >= 1 ||
-          !result.found)
-      ) {
-        logOutputProfilerEvent("measurementFlushAnchorRestore", {
-          anchorRowKey: anchor.rowKey,
-          phase,
-          appliedDelta: result.appliedDelta,
-          residualOffsetDelta: result.residualOffsetDelta,
-          found: result.found,
-          scrollTop: currentScrollElement.scrollTop,
-        });
-      }
-      return result;
-    };
 
     for (const [key, height] of pendingMeasurementCacheRef.current) {
       const element = mountedRowElementsRef.current.get(key);
@@ -1842,31 +1455,32 @@ const OutputSectionInner: React.FC = () => {
       }
     }
     pendingMeasurementCacheRef.current.clear();
-    // Apply a synchronous anchor restore first. In practice TanStack processes
+    // Apply a synchronous target restore first. In practice TanStack processes
     // many measureElement size changes immediately; compensating before the
     // browser paints avoids the visible one-frame jump. Keep rAF follow-ups for
     // size-change work that TanStack/ResizeObserver completes later.
-    restoreAnchor("sync");
+    applyScrollTargetRef.current("measurement-flush-sync");
     requestAnimationFrame(() => {
-      const firstFrameRestore = restoreAnchor("raf-1");
+      const firstFrameRestore =
+        applyScrollTargetRef.current("measurement-flush-raf-1");
       requestAnimationFrame(() => {
-        const secondFrameRestore = restoreAnchor("raf-2");
+        const secondFrameRestore =
+          applyScrollTargetRef.current("measurement-flush-raf-2");
 
         requestAnimationFrame(() => {
           if (
             isOutputProfilingEnabled() &&
-            anchor &&
-            (Math.abs(firstFrameRestore.residualOffsetDelta) >= 1 ||
-              Math.abs(secondFrameRestore.residualOffsetDelta) >= 1 ||
-              !firstFrameRestore.found ||
-              !secondFrameRestore.found)
+            (!firstFrameRestore.resolved ||
+              !secondFrameRestore.resolved ||
+              Math.abs(firstFrameRestore.appliedDelta) >= 1 ||
+              Math.abs(secondFrameRestore.appliedDelta) >= 1)
           ) {
-            logOutputProfilerEvent("measurementFlushAnchorSettled", {
-              anchorRowKey: anchor.rowKey,
-              firstFrameResidual: firstFrameRestore.residualOffsetDelta,
-              secondFrameResidual: secondFrameRestore.residualOffsetDelta,
-              firstFrameFound: firstFrameRestore.found,
-              secondFrameFound: secondFrameRestore.found,
+            logOutputProfilerEvent("measurementFlushTargetSettled", {
+              target: scrollTargetRef.current,
+              firstFrameApplied: firstFrameRestore.appliedDelta,
+              secondFrameApplied: secondFrameRestore.appliedDelta,
+              firstFrameResolved: firstFrameRestore.resolved,
+              secondFrameResolved: secondFrameRestore.resolved,
               scrollTop: outputRef.current?.scrollTop,
             });
           }
@@ -1874,7 +1488,7 @@ const OutputSectionInner: React.FC = () => {
         });
       });
     });
-  }, [activateViewportAnchorGuard, rowVirtualizer]);
+  }, [rowVirtualizer]);
 
   // Schedules the pending-measurement flush for OUTPUT_USER_SCROLL_INPUT_GRACE_MS+50ms.
   // Called from both updateRowMeasurementCache (via ref) and handleScroll, so the flush
@@ -1977,6 +1591,202 @@ const OutputSectionInner: React.FC = () => {
       rowVirtualizer,
     ]
   );
+
+  const setCurrentScrollTarget = useCallback(
+    (target: OutputScrollTarget, reason: string) => {
+      scrollTargetRef.current = target;
+      autoscrollEnabled.current = target.kind === "bottom";
+      setOutputScrollTarget(workflowScrollTargetId, target);
+
+      if (isOutputProfilingEnabled()) {
+        logOutputProfilerEvent("scrollTarget", {
+          phase: "set",
+          reason,
+          target,
+          workflowId: workflowScrollTargetId,
+        });
+      }
+    },
+    [setOutputScrollTarget, workflowScrollTargetId]
+  );
+
+  const resolveScrollTopForTarget = useCallback(
+    (target: OutputScrollTarget): { top: number; resolved: boolean } | null => {
+      const scrollElement = outputRef.current;
+      if (!scrollElement) {
+        return null;
+      }
+
+      const maxScroll = Math.max(
+        0,
+        Math.max(rowLayout.totalSize, scrollElement.scrollHeight) -
+          scrollElement.clientHeight
+      );
+      if (target.kind === "bottom") {
+        return { top: maxScroll, resolved: true };
+      }
+
+      let rowStart: number | undefined;
+      for (const measurement of rowVirtualizer.measurementsCache) {
+        if (measurement != null && String(measurement.key) === target.rowKey) {
+          rowStart = measurement.start;
+          break;
+        }
+      }
+      rowStart ??= rowLayout.rowStartsByKey.get(target.rowKey);
+      if (rowStart == null) {
+        return { top: maxScroll, resolved: false };
+      }
+
+      return {
+        top: clamp(rowStart - target.viewportOffsetPx, 0, maxScroll),
+        resolved: true,
+      };
+    },
+    [rowLayout, rowVirtualizer]
+  );
+
+  const applyScrollTarget = useCallback(
+    (
+      phase: string,
+      options?: { force?: boolean }
+    ): { resolved: boolean; appliedDelta: number } => {
+      const scrollElement = outputRef.current;
+      if (!scrollElement || rowsRef.current.length === 0) {
+        return { resolved: false, appliedDelta: 0 };
+      }
+
+      const now = performance.now();
+      const hasRecentUserScrollInput =
+        lastUserScrollInputAtRef.current != null &&
+        now - lastUserScrollInputAtRef.current <=
+          OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+      if (
+        !options?.force &&
+        (hasRecentUserScrollInput || pendingNavigationRef.current !== null)
+      ) {
+        return { resolved: false, appliedDelta: 0 };
+      }
+
+      const target = scrollTargetRef.current;
+      const resolved = resolveScrollTopForTarget(target);
+      if (!resolved) {
+        return { resolved: false, appliedDelta: 0 };
+      }
+
+      if (!resolved.resolved && target.kind === "row") {
+        setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, "target-missing");
+      }
+
+      const previous = scrollElement.scrollTop;
+      const appliedDelta = resolved.top - previous;
+      if (Math.abs(appliedDelta) >= 1) {
+        isProgrammaticScroll.current = true;
+        scrollElement.scrollTop = resolved.top;
+        lastScrollTopRef.current = scrollElement.scrollTop;
+        requestAnimationFrame(() => {
+          isProgrammaticScroll.current = false;
+        });
+      }
+
+      if (
+        isOutputProfilingEnabled() &&
+        (Math.abs(appliedDelta) >= 1 || !resolved.resolved)
+      ) {
+        logOutputProfilerEvent("scrollTarget", {
+          phase: "apply",
+          reason: phase,
+          target,
+          resolved: resolved.resolved,
+          appliedDelta,
+          scrollTop: scrollElement.scrollTop,
+          overscan: outputOverscanRef.current,
+        });
+      }
+
+      return { resolved: resolved.resolved, appliedDelta };
+    },
+    [resolveScrollTopForTarget, setCurrentScrollTarget]
+  );
+
+  applyScrollTargetRef.current = applyScrollTarget;
+
+  const commitScrollTargetFromViewport = useCallback(
+    (reason: string) => {
+      const scrollElement = outputRef.current;
+      if (!scrollElement || rowsRef.current.length === 0) {
+        return;
+      }
+
+      const atBottom =
+        scrollElement.scrollHeight -
+          scrollElement.scrollTop -
+          scrollElement.clientHeight <=
+        SCROLL_BOTTOM_THRESHOLD;
+      if (atBottom) {
+        setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, reason);
+        return;
+      }
+
+      const anchor = captureViewportRowAnchor(scrollElement, "visible-top");
+      if (!anchor) {
+        return;
+      }
+
+      setCurrentScrollTarget(
+        {
+          kind: "row",
+          rowKey: anchor.rowKey,
+          viewportOffsetPx: anchor.offsetTop,
+        },
+        reason
+      );
+    },
+    [setCurrentScrollTarget]
+  );
+
+  const scheduleScrollTargetCommit = useCallback(
+    (reason: string) => {
+      if (scrollTargetCommitTimerRef.current !== null) {
+        clearTimeout(scrollTargetCommitTimerRef.current);
+      }
+      scrollTargetCommitTimerRef.current = setTimeout(() => {
+        scrollTargetCommitTimerRef.current = null;
+        commitScrollTargetFromViewport(reason);
+      }, OUTPUT_USER_SCROLL_INPUT_GRACE_MS);
+    },
+    [commitScrollTargetFromViewport]
+  );
+
+  useLayoutEffect(() => {
+    applyScrollTarget("layout-effect");
+  }, [
+    applyScrollTarget,
+    measurementVersion,
+    outputOverscan,
+    rows.length,
+    scrollSeekPlaceholderActive,
+  ]);
+
+  useEffect(() => {
+    const nextTarget = savedOutputScrollTarget ?? DEFAULT_OUTPUT_SCROLL_TARGET;
+    scrollTargetRef.current = nextTarget;
+    autoscrollEnabled.current = nextTarget.kind === "bottom";
+    requestAnimationFrame(() => {
+      applyScrollTargetRef.current("workflow-target-restore", { force: true });
+    });
+  }, [rowRenderIdentity, savedOutputScrollTarget, workflowScrollTargetId]);
+
+  useEffect(
+    () => () => {
+      if (scrollTargetCommitTimerRef.current !== null) {
+        clearTimeout(scrollTargetCommitTimerRef.current);
+        scrollTargetCommitTimerRef.current = null;
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     const el = outputRef.current;
     if (!el) return;
@@ -1986,27 +1796,7 @@ const OutputSectionInner: React.FC = () => {
       const widthChanged =
         outputContentWidth > 0 && Math.abs(outputContentWidth - width) >= 0.5;
       if (widthChanged) {
-        // ResizeObserver runs after the browser has applied the new width, but
-        // before our follow-up React state has committed. Use the existing
-        // drag-start anchor when available, then restore it in this same
-        // callback so fast horizontal drags don't wait for row measurements.
-        if (!refreshViewportAnchorGuard()) {
-          const anchor = captureViewportRowAnchor(el, "center-point");
-          if (anchor) {
-            activateViewportAnchorGuard(anchor, "width-change");
-          }
-        }
-        // Keep the anchor alive (refresh/activate above) but defer the actual
-        // DOM-rect-based correction to the delta-anchor path in
-        // shouldAdjustScrollPositionOnItemSizeChange while a drag is active or
-        // settling — see isHorizontalResizeCompensationActive. This callback
-        // fires on every ResizeObserver tick during a drag, so letting its
-        // getBoundingClientRect()-based restore run concurrently with the
-        // delta-anchor corrections is the same racing-correctors problem that
-        // produced the oscillation/jump loop.
-        if (!isHorizontalResizeCompensationActive()) {
-          restoreViewportAnchorGuard("layout-effect");
-        }
+        applyScrollTarget("width-change");
       }
       setOutputContentWidth((prev) => {
         if (Math.abs(prev - width) < 0.5) return prev;
@@ -2027,19 +1817,15 @@ const OutputSectionInner: React.FC = () => {
     return disconnect;
   }, [
     activeOutputTab,
-    activateViewportAnchorGuard,
-    isHorizontalResizeCompensationActive,
+    applyScrollTarget,
     outputCollapsed,
     outputContentWidth,
-    refreshViewportAnchorGuard,
-    restoreViewportAnchorGuard,
   ]);
 
   useEffect(() => {
     if (outputContentWidth <= 0) {
       return;
     }
-    refreshViewportAnchorGuard();
     // Keep a small live buffer during width resize so expanding the pane can
     // reveal nearby rows above/below the pinned row without rendering the full
     // idle range on every pointer move.
@@ -2051,7 +1837,6 @@ const OutputSectionInner: React.FC = () => {
     outputContentWidth,
     outputDiffViewType,
     outputFontSize,
-    refreshViewportAnchorGuard,
     scheduleOverscanRestore,
     setOutputOverscanMode,
   ]);
@@ -2339,36 +2124,6 @@ const OutputSectionInner: React.FC = () => {
     if (isMeasurementFlushInProgressRef.current) return;
     const startedAt = performance.now();
     const now = startedAt;
-    const activeGuard = viewportAnchorGuardRef.current;
-    const hasRecentUserScrollInputForGuard =
-      lastUserScrollInputAtRef.current != null &&
-      now - lastUserScrollInputAtRef.current <=
-        OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
-    if (
-      activeGuard?.reason === "width-change" &&
-      now < activeGuard.expiresAt &&
-      !hasRecentUserScrollInputForGuard
-    ) {
-      const scrollDeltaPx =
-        lastScrollTopRef.current == null
-          ? 0
-          : el.scrollTop - lastScrollTopRef.current;
-      lastScrollTopRef.current = el.scrollTop;
-      if (
-        isOutputProfilingEnabled() &&
-        Math.abs(scrollDeltaPx) >= OUTPUT_SCROLL_SEEK_CONTINUE_DELTA_PX
-      ) {
-        logOutputProfilerEvent("scroll", {
-          phase: "suppress-width-change",
-          scrollDeltaPx,
-          scrollTop: el.scrollTop,
-          clientHeight: el.clientHeight,
-          scrollHeight: el.scrollHeight,
-          anchorKey: activeGuard.rowKey,
-        });
-      }
-      return;
-    }
     const previousScrollEventAt = lastScrollEventAtRef.current;
     const previousScrollTop = lastScrollTopRef.current;
     lastScrollEventAtRef.current = now;
@@ -2448,6 +2203,7 @@ const OutputSectionInner: React.FC = () => {
       });
     }
     autoscrollEnabled.current = atBottom;
+    scheduleScrollTargetCommit("user-scroll-settled");
     if (previousScrollEventAt != null) {
       const gapMs = scrollGapMs;
       if (shouldLogOutputScrollFrame(gapMs)) {
@@ -2495,6 +2251,7 @@ const OutputSectionInner: React.FC = () => {
     rowVirtualizer,
     scheduleOverscanRestore,
     schedulePendingMeasurementFlush,
+    scheduleScrollTargetCommit,
   ]);
 
   const preArmScrollSeekForInput = useCallback(
@@ -2506,7 +2263,6 @@ const OutputSectionInner: React.FC = () => {
     ) => {
       const now = performance.now();
       lastUserScrollInputAtRef.current = now;
-      clearViewportAnchorGuard("user-input");
       const absInputDeltaPx = Math.abs(inputDeltaPx);
 
       if (
@@ -2533,7 +2289,6 @@ const OutputSectionInner: React.FC = () => {
       }
     },
     [
-      clearViewportAnchorGuard,
       isOutputVirtualized,
       scheduleOverscanRestore,
       setOutputOverscanMode,
@@ -2555,10 +2310,9 @@ const OutputSectionInner: React.FC = () => {
   const handleTouchStart = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
       lastUserScrollInputAtRef.current = performance.now();
-      clearViewportAnchorGuard("touch-start");
       lastTouchYRef.current = event.touches[0]?.clientY ?? null;
     },
-    [clearViewportAnchorGuard]
+    []
   );
 
   const handleTouchMove = useCallback(
@@ -2729,6 +2483,7 @@ const OutputSectionInner: React.FC = () => {
         t: performance.now().toFixed(1),
       }
     );
+    setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, "auto-scroll");
     isProgrammaticScroll.current = true;
     if (isOutputVirtualized) {
       rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
@@ -2749,6 +2504,7 @@ const OutputSectionInner: React.FC = () => {
     isExecutionActive,
     isOutputVirtualized,
     rowVirtualizer,
+    setCurrentScrollTarget,
   ]);
 
   useEffect(() => {
@@ -2900,12 +2656,29 @@ const OutputSectionInner: React.FC = () => {
           return;
         }
 
-        autoscrollEnabled.current = false;
-        isProgrammaticScroll.current = true;
         const align = options?.align ?? "start";
         const requestedBehavior = options?.behavior ?? "auto";
         const behavior =
           requestedBehavior === "smooth" ? "auto" : requestedBehavior;
+        const row = rows[rowIndex];
+        if (row) {
+          const rowSize = rowLayout.rowSizesByKey.get(row.key);
+          const viewportOffsetPx =
+            align === "end"
+              ? Math.max(0, outputRef.current.clientHeight - (rowSize ?? 0))
+              : 0;
+          setCurrentScrollTarget(
+            {
+              kind: "row",
+              rowKey: row.key,
+              viewportOffsetPx,
+            },
+            "navigation"
+          );
+        } else {
+          autoscrollEnabled.current = false;
+        }
+        isProgrammaticScroll.current = true;
         const startedAt = performance.now();
         pendingNavigationRef.current = {
           rowIndex,
@@ -2967,7 +2740,9 @@ const OutputSectionInner: React.FC = () => {
       isOutputVirtualized,
       rowLayout,
       rowVirtualizer,
+      rows,
       schedulePendingNavigationStabilization,
+      setCurrentScrollTarget,
     ]
   );
 
@@ -3165,10 +2940,7 @@ const OutputSectionInner: React.FC = () => {
       measurementVersion,
     });
     scrollSeekSettlingUntilRef.current = now + OUTPUT_SCROLL_SEEK_SETTLE_MS;
-    activateViewportAnchorGuard(
-      outputRef.current ? captureViewportRowAnchor(outputRef.current) : null,
-      "scroll-seek-restore"
-    );
+    applyScrollTarget("scroll-seek-restore", { force: true });
 
     // Dump per-bucket accuracy stats so it's easy to see which event types
     // have the largest estimate errors. Sort by maxAbsDelta descending.
@@ -3238,7 +3010,7 @@ const OutputSectionInner: React.FC = () => {
     measurementVersion,
     outputOverscan,
     rows.length,
-    activateViewportAnchorGuard,
+    applyScrollTarget,
     setOutputOverscanMode,
     virtualRows.length,
   ]);
@@ -3699,14 +3471,6 @@ const OutputSectionInner: React.FC = () => {
 
   const invalidateMeasuredRowForUserResize = useCallback(
     (rowKey: string) => {
-      const scrollElement = outputRef.current;
-      const rowElement =
-        scrollElement == null
-          ? null
-          : findRenderedRowElementByKey(scrollElement, rowKey);
-      const previousTop =
-        rowElement == null ? null : rowElement.getBoundingClientRect().top;
-
       rowResizeScrollSuppressUntilRef.current =
         performance.now() + OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS;
       measurementCacheRef.current.delete(rowKey);
@@ -3732,38 +3496,7 @@ const OutputSectionInner: React.FC = () => {
         setMeasurementVersion((version) => version + 1);
 
         requestAnimationFrame(() => {
-          if (previousTop == null) {
-            return;
-          }
-
-          const finalScrollElement = outputRef.current;
-          if (!finalScrollElement) {
-            return;
-          }
-
-          const finalRowElement = findRenderedRowElementByKey(
-            finalScrollElement,
-            rowKey
-          );
-          if (!finalRowElement) {
-            return;
-          }
-
-          const delta =
-            finalRowElement.getBoundingClientRect().top - previousTop;
-          if (Math.abs(delta) < 1) {
-            return;
-          }
-
-          const maxScroll = Math.max(
-            0,
-            finalScrollElement.scrollHeight - finalScrollElement.clientHeight
-          );
-          finalScrollElement.scrollTop = Math.max(
-            0,
-            Math.min(maxScroll, finalScrollElement.scrollTop + delta)
-          );
-          lastScrollTopRef.current = finalScrollElement.scrollTop;
+          applyScrollTargetRef.current("row-resize", { force: true });
         });
       });
     },
