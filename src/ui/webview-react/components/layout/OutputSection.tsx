@@ -128,6 +128,7 @@ const OUTPUT_SCROLL_SEEK_SETTLE_MS = 2000; // time after restore to ignore layou
 const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS = 600; // delay before adding a small buffer after visible rows mount.
 const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 1800; // delay before expanding from restore overscan back to normal overscan.
 const OUTPUT_USER_SCROLL_INPUT_GRACE_MS = 200; // recent wheel input window that lets real user scrolling bypass settle suppression.
+const OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES = 5; // animation-frame retries for capturing a viewport anchor when rows are mid-transition (e.g. scroll-seek placeholder swap).
 const OUTPUT_SCROLL_SEEK_TEXT_PLACEHOLDER_MIN_CHARS = 1200; // text rows shorter than this render directly during scroll seek.
 const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300; // time to ignore virtualizer scroll correction after user expands row content.
 const LARGE_WORKFLOW_ROW_THRESHOLD = 20; // row count where fast-scroll placeholder behavior is enabled.
@@ -777,6 +778,10 @@ const OutputSectionInner: React.FC = () => {
   const scrollTargetCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const commitScrollTargetFromViewportRef = useRef<(reason: string) => void>(
+    () => {}
+  );
+  const scrollTargetCommitRetryCountRef = useRef(0);
   const lastScrollEventAtRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
   const lastVirtualRangeRef = useRef<string>("");
@@ -1678,6 +1683,31 @@ const OutputSectionInner: React.FC = () => {
         return { resolved: false, appliedDelta: 0 };
       }
 
+      // The user-input grace window just elapsed (or this apply is forced),
+      // but a scroll-target commit may still be pending from that same scroll
+      // gesture (debounced off the identical grace window via a setTimeout —
+      // there's no ordering guarantee between the two). Flush it now so
+      // scrollTargetRef reflects where the user actually ended up, not a
+      // stale pre-scroll target (e.g. a snap-back to a row/position the user
+      // scrolled away from minutes ago).
+      if (scrollTargetCommitTimerRef.current !== null) {
+        clearTimeout(scrollTargetCommitTimerRef.current);
+        scrollTargetCommitTimerRef.current = null;
+        commitScrollTargetFromViewportRef.current(`${phase}-pending-commit-flush`);
+      }
+
+      // `{kind: "bottom"}` should always track `autoscrollEnabled` (both are
+      // driven by the same `atBottom` check in handleScroll/commit). If they've
+      // diverged — target says "follow the tail" but the last observed scroll
+      // position was away from the bottom — the target is stale: the viewport
+      // recommit that should have superseded it hasn't landed yet (e.g. it
+      // silently failed to anchor mid scroll-seek-restore transition). Refresh
+      // it from the live viewport now rather than forcing a jump back to a
+      // position the user deliberately scrolled away from.
+      if (scrollTargetRef.current.kind === "bottom" && !autoscrollEnabled.current) {
+        commitScrollTargetFromViewportRef.current(`${phase}-stale-bottom-refresh`);
+      }
+
       const target = scrollTargetRef.current;
       const resolved = resolveScrollTopForTarget(target);
       if (!resolved) {
@@ -1734,14 +1764,34 @@ const OutputSectionInner: React.FC = () => {
           scrollElement.clientHeight <=
         SCROLL_BOTTOM_THRESHOLD;
       if (atBottom) {
+        scrollTargetCommitRetryCountRef.current = 0;
         setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, reason);
         return;
       }
 
       const anchor = captureViewportRowAnchor(scrollElement, "visible-top");
       if (!anchor) {
+        // Rows can be mid-transition (e.g. scroll-seek placeholders swapping
+        // back to real rows) when this fires, leaving no row element within
+        // the viewport bounds to anchor on yet. Silently giving up here is
+        // what causes snap-back bugs: the existing target stays stale and a
+        // later forced apply (layout-effect / scroll-seek-restore) re-applies
+        // it instead of the position the user actually scrolled to. Retry on
+        // the next frame so the commit lands once layout has settled.
+        if (
+          scrollTargetCommitRetryCountRef.current <
+          OUTPUT_SCROLL_TARGET_COMMIT_MAX_RETRIES
+        ) {
+          scrollTargetCommitRetryCountRef.current += 1;
+          requestAnimationFrame(() =>
+            commitScrollTargetFromViewportRef.current(reason)
+          );
+        } else {
+          scrollTargetCommitRetryCountRef.current = 0;
+        }
         return;
       }
+      scrollTargetCommitRetryCountRef.current = 0;
 
       setCurrentScrollTarget(
         {
@@ -1754,6 +1804,8 @@ const OutputSectionInner: React.FC = () => {
     },
     [setCurrentScrollTarget]
   );
+
+  commitScrollTargetFromViewportRef.current = commitScrollTargetFromViewport;
 
   const scheduleScrollTargetCommit = useCallback(
     (reason: string) => {
