@@ -186,12 +186,43 @@ Completed:
 
 Expected risk: medium. These paths post messages and build undo payloads, but they are localized.
 
-### Prompt 4: extract row model and row expansion state — Next
+### Prompt 4: extract row model and row expansion state — Done
 
 - Move `allMessages` derivation and `buildOutputRows` orchestration into `useOutputRowsModel`.
 - Move diff/tool/bash expansion maps only with the row model if the hook can expose row invalidation callbacks cleanly.
 - Keep measurement and scroll hooks in `OutputSection` until row keys and invalidation behavior are stable after extraction.
 - Verify diff collapse/expand-all, per-diff collapse, diff gap expansion, tool call expansion, bash expansion, live output streaming, and history browsing.
+
+Completed:
+
+- Added `hooks/useOutputRowsModel.ts`: owns `allMessages` projection, the
+  `buildOutputRows` orchestration (`rows`, `uniqueStepTargets`,
+  `stepOutputsMap`, `lastCliIndexPerStep`, `firstRowIndexByTarget`), the
+  `hasDiffRows`/`anyDiffCollapsed` derivations, the diff/tool-call/bash
+  expansion-state maps and their row-pruning effect, the diff-reset-version
+  effect, and the four expansion change handlers
+  (`handleDiffCollapsedChange`, `handleDiffGapExpand`,
+  `handleToolCallExpansionChange`, `handleBashExpansionChange`).
+- `OutputSection` still owns measurement (`measurementCacheRef`,
+  `rowVirtualizer`, `setMeasurementVersion`) and the real
+  `invalidateMeasuredRow` / `invalidateMeasuredRowForUserResize`
+  implementations (they depend on `rowVirtualizer`, which itself depends on
+  `rows`). The hook receives stable forwarding callbacks
+  (`invalidateMeasuredRowForRowModel` /
+  `invalidateMeasuredRowForUserResizeForRowModel`) that read through forward
+  refs — the same forward-reference pattern already used for
+  `applyScrollTargetRef` — so the hook can be called before the measurement
+  code that backs those callbacks is defined. A small `onDiffViewReset`
+  callback lets the hook ask the parent to flush the measurement cache when
+  the diff-reset version changes.
+- `bashExpansionState` is exposed read-only from the hook (still looked up
+  per-row when rendering `OutputRow`); `diffCollapseState`,
+  `diffExpansionState`, and `toolCallExpansionState` are now fully internal
+  to the hook.
+- Verified with `npm run build:webview`, `npm run compile`, and the output
+  component test suite (`BashOutput`, `CliOutput`, `DiffView`,
+  `FileOperationOutput`, `ToolCallOutput`, `UndoChangesDialog`, `outputRows`,
+  `outputProjection` — 50/50 passing).
 
 Expected risk: medium. Row keys and expansion maps are shared with measurement invalidation.
 

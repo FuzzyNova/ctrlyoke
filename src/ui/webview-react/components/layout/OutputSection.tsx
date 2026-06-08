@@ -14,14 +14,12 @@ import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useOutputExport } from "@hooks/useOutputExport";
+import { useOutputRowsModel } from "@hooks/useOutputRowsModel";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { OutputRow } from "../output";
 import { generateId } from "@utils/string";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
-import {
-  mapOrderedHistoryEntriesToMessages,
-  type OutputMessage,
-} from "@utils/outputProjection";
+import { type OutputMessage } from "@utils/outputProjection";
 import type { CliOutput as CliOutputType } from "../../types/cliEvents";
 import type {
   WorkspaceSnapshot,
@@ -65,23 +63,13 @@ import { WebviewLog } from "@utils/logger";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
 import {
-  buildOutputRows,
   estimateOutputDiffBlockHeight,
   estimateOutputRowHeight,
   type OutputRenderRow,
   type StructuredEventRow,
 } from "@utils/outputRows";
 import { setActiveOutputNavigationController } from "@utils/outputNavigation";
-import type { DiffGapExpansionState } from "@utils/outputRenderUtils";
-import {
-  DEFAULT_TOOL_CALL_EXPANSION_STATE,
-  type ToolCallExpansionSection,
-  type ToolCallExpansionState,
-} from "@utils/toolCallLayout";
-import type {
-  BashOutputExpansionSection,
-  BashOutputExpansionState,
-} from "../output/BashOutput";
+import type { BashOutputExpansionState } from "../output/BashOutput";
 import {
   getOutputProfilerState,
   isOutputProfilingEnabled,
@@ -411,20 +399,7 @@ const OutputSectionInner: React.FC = () => {
   const rowHeightBucketStatsRef = useRef<Map<string, RowHeightBucketStats>>(
     new Map()
   );
-  const previousDiffResetVersion = useRef(diffResetVersion);
   const [measurementVersion, setMeasurementVersion] = useState(0);
-  const [diffCollapseState, setDiffCollapseState] = useState<
-    Map<string, boolean>
-  >(new Map());
-  const [diffExpansionState, setDiffExpansionState] = useState<
-    Map<string, DiffGapExpansionState>
-  >(new Map());
-  const [toolCallExpansionState, setToolCallExpansionState] = useState<
-    Map<string, ToolCallExpansionState>
-  >(new Map());
-  const [bashExpansionState, setBashExpansionState] = useState<
-    Map<string, BashOutputExpansionState>
-  >(new Map());
   const [outputDiffViewType, setOutputDiffViewType] = useState<
     "split" | "unified"
   >("split");
@@ -562,12 +537,70 @@ const OutputSectionInner: React.FC = () => {
   }, []);
 
   // Build chronologically sorted list of all messages from the single ordered entries array.
-  const allMessages = useMemo((): OutputMessage[] => {
-    if (isViewingHistory && historyOutputs) {
-      return mapOrderedHistoryEntriesToMessages(historyOutputs.orderedEntries);
-    }
-    return mapOrderedHistoryEntriesToMessages(liveOrderedEntries);
-  }, [isViewingHistory, historyOutputs, liveOrderedEntries]);
+  const isExecutionActive =
+    executionState === EXECUTION_STATES.RUNNING ||
+    executionState === EXECUTION_STATES.CANCELLING;
+
+  // Forward refs let useOutputRowsModel call the real invalidation/measurement
+  // logic even though that logic is defined later (it depends on rowVirtualizer,
+  // which itself depends on `rows`). Same forward-reference pattern as
+  // applyScrollTargetRef / commitScrollTargetFromViewportRef below.
+  const invalidateMeasuredRowImplRef = useRef<(rowKey: string) => void>(
+    () => {}
+  );
+  const invalidateMeasuredRowForUserResizeImplRef = useRef<
+    (rowKey: string) => void
+  >(() => {});
+  const invalidateMeasuredRowForRowModel = useCallback(
+    (rowKey: string) => invalidateMeasuredRowImplRef.current(rowKey),
+    []
+  );
+  const invalidateMeasuredRowForUserResizeForRowModel = useCallback(
+    (rowKey: string) => invalidateMeasuredRowForUserResizeImplRef.current(rowKey),
+    []
+  );
+  const handleDiffViewReset = useCallback(() => {
+    // Diff row heights change dramatically between expanded and collapsed
+    // states; flush stale measured heights before the collapse-state change
+    // propagates so minimap positions don't misalign.
+    measurementCacheRef.current.clear();
+  }, []);
+
+  const {
+    allMessages,
+    rows,
+    uniqueStepTargets,
+    stepOutputsMap,
+    lastCliIndexPerStep,
+    firstRowIndexByTarget,
+    anyDiffCollapsed,
+    bashExpansionState,
+    handleDiffCollapsedChange,
+    handleDiffGapExpand,
+    handleToolCallExpansionChange,
+    handleBashExpansionChange,
+  } = useOutputRowsModel({
+    isViewingHistory,
+    historyOutputs,
+    liveOrderedEntries,
+    steps,
+    finalStep,
+    streamingChunks,
+    finalStepStreamingChunks,
+    isExecutionActive,
+    workspaceSnapshots,
+    finalStepWorkspaceSnapshots,
+    undoRecords,
+    diffsCollapsed,
+    diffResetVersion,
+    outputDiffViewType,
+    outputFontSize,
+    outputContentWidth,
+    invalidateMeasuredRow: invalidateMeasuredRowForRowModel,
+    invalidateMeasuredRowForUserResize:
+      invalidateMeasuredRowForUserResizeForRowModel,
+    onDiffViewReset: handleDiffViewReset,
+  });
 
   const outputExport = useOutputExport({
     allMessages,
@@ -581,79 +614,6 @@ const OutputSectionInner: React.FC = () => {
     totalSteps,
   });
 
-  const isExecutionActive =
-    executionState === EXECUTION_STATES.RUNNING ||
-    executionState === EXECUTION_STATES.CANCELLING;
-
-  const {
-    rows,
-    uniqueStepTargets,
-    stepOutputsMap,
-    lastCliIndexPerStep,
-    firstRowIndexByTarget,
-  } = useMemo(
-    () =>
-      measureOutputPhase(
-        "buildOutputRows",
-        {
-          messages: allMessages.length,
-          steps: steps.length,
-          history: isViewingHistory,
-          outputContentWidth,
-          outputFontSize,
-        },
-        () =>
-          buildOutputRows({
-            allMessages,
-            steps,
-            finalStep,
-            streamingChunks,
-            finalStepStreamingChunks,
-            isExecutionActive,
-            allowUndoActions:
-              isViewingHistory ||
-              !(
-                executionState === EXECUTION_STATES.RUNNING ||
-                executionState === EXECUTION_STATES.CANCELLING
-              ),
-            isViewingHistory,
-            historyOutputs,
-            workspaceSnapshots,
-            finalStepWorkspaceSnapshots,
-            undoRecords,
-            diffCollapseState,
-            diffExpansionState,
-            toolCallExpansionState,
-            bashExpansionState,
-            defaultDiffCollapsed: diffsCollapsed,
-            diffViewType: outputDiffViewType,
-            outputFontSize,
-            outputContentWidth,
-          })
-      ),
-    [
-      allMessages,
-      steps,
-      finalStep,
-      streamingChunks,
-      finalStepStreamingChunks,
-      isExecutionActive,
-      isViewingHistory,
-      historyOutputs,
-      workspaceSnapshots,
-      finalStepWorkspaceSnapshots,
-      undoRecords,
-      diffCollapseState,
-      diffExpansionState,
-      toolCallExpansionState,
-      bashExpansionState,
-      diffsCollapsed,
-      outputDiffViewType,
-      outputFontSize,
-      outputContentWidth,
-      executionState,
-    ]
-  );
   const effectiveVirtualizationRowThreshold = Math.trunc(
     Number.isFinite(outputVirtualizationRowThreshold)
       ? outputVirtualizationRowThreshold
@@ -1637,129 +1597,6 @@ const OutputSectionInner: React.FC = () => {
       }
     );
   }, [firstRowIndexByTarget, rowLayout, rows.length, uniqueStepTargets]);
-
-  const hasDiffRows = useMemo(
-    () =>
-      rows.some(
-        (row) => row.rowKind === "structured-event" && row.diff !== undefined
-      ),
-    [rows]
-  );
-
-  const anyDiffCollapsed = useMemo(
-    () =>
-      hasDiffRows &&
-      rows.some(
-        (row) =>
-          row.rowKind === "structured-event" && row.diff?.isCollapsed === true
-      ),
-    [hasDiffRows, rows]
-  );
-
-  useEffect(() => {
-    const diffKeys = new Set(
-      rows.flatMap((row) =>
-        row.rowKind === "structured-event" && row.diff ? [row.diff.key] : []
-      )
-    );
-    const toolCallRowKeys = new Set(
-      rows.flatMap((row) =>
-        row.rowKind === "structured-event" && row.toolCall ? [row.key] : []
-      )
-    );
-    const bashRowKeys = new Set(
-      rows.flatMap((row) =>
-        row.rowKind === "structured-event" &&
-        row.event.type === CLI_EVENT_TYPES.BASH_COMMAND
-          ? [row.key]
-          : []
-      )
-    );
-
-    setDiffCollapseState((previous) => {
-      let changed = false;
-      const next = new Map(previous);
-
-      for (const key of [...next.keys()]) {
-        if (!diffKeys.has(key)) {
-          next.delete(key);
-          changed = true;
-        }
-      }
-
-      for (const key of diffKeys) {
-        if (!next.has(key)) {
-          next.set(key, diffsCollapsed);
-          changed = true;
-        }
-      }
-
-      return changed ? next : previous;
-    });
-    setDiffExpansionState((previous) => {
-      let changed = false;
-      const next = new Map(previous);
-
-      for (const key of [...next.keys()]) {
-        if (!diffKeys.has(key)) {
-          next.delete(key);
-          changed = true;
-        }
-      }
-
-      return changed ? next : previous;
-    });
-    setToolCallExpansionState((previous) => {
-      let changed = false;
-      const next = new Map(previous);
-
-      for (const key of [...next.keys()]) {
-        if (!toolCallRowKeys.has(key)) {
-          next.delete(key);
-          changed = true;
-        }
-      }
-
-      return changed ? next : previous;
-    });
-    setBashExpansionState((previous) => {
-      let changed = false;
-      const next = new Map(previous);
-
-      for (const key of [...next.keys()]) {
-        if (!bashRowKeys.has(key)) {
-          next.delete(key);
-          changed = true;
-        }
-      }
-
-      return changed ? next : previous;
-    });
-  }, [rows, diffsCollapsed]);
-
-  useEffect(() => {
-    if (previousDiffResetVersion.current === diffResetVersion) {
-      return;
-    }
-    previousDiffResetVersion.current = diffResetVersion;
-
-    // Diff row heights change dramatically between expanded and collapsed states.
-    // Stale measured heights from the previous state would misalign minimap
-    // positions, so flush the cache before the collapse-state change propagates.
-    measurementCacheRef.current.clear();
-    setDiffExpansionState((previous) =>
-      previous.size === 0 ? previous : new Map()
-    );
-
-    setDiffCollapseState((previous) => {
-      if (previous.size === 0) return previous;
-      const next = new Map(previous);
-      for (const key of next.keys()) {
-        next.set(key, diffsCollapsed);
-      }
-      return next;
-    });
-  }, [diffResetVersion, diffsCollapsed]);
 
   // When switching between live output and a history run (including when the
   // history run index changes), the same row keys can appear with very different
@@ -2982,6 +2819,7 @@ const OutputSectionInner: React.FC = () => {
     },
     [rowVirtualizer]
   );
+  invalidateMeasuredRowImplRef.current = invalidateMeasuredRow;
 
   const invalidateMeasuredRowForUserResize = useCallback(
     (rowKey: string) => {
@@ -3016,133 +2854,8 @@ const OutputSectionInner: React.FC = () => {
     },
     [rowVirtualizer]
   );
-
-  const handleDiffCollapsedChange = useCallback(
-    (rowKey: string, diffKey: string, collapsed: boolean) => {
-      invalidateMeasuredRow(rowKey);
-      if (collapsed) {
-        setDiffExpansionState((previous) => {
-          if (!previous.has(diffKey)) return previous;
-          const next = new Map(previous);
-          next.delete(diffKey);
-          return next;
-        });
-      }
-      setDiffCollapseState((previous) => {
-        const next = new Map(previous);
-        next.set(diffKey, collapsed);
-        return next;
-      });
-    },
-    [invalidateMeasuredRow]
-  );
-
-  const handleDiffGapExpand = useCallback(
-    (
-      rowKey: string,
-      diffKey: string,
-      gapIndex: number,
-      nextExpandedToLine: number
-    ) => {
-      invalidateMeasuredRow(rowKey);
-      setDiffExpansionState((previous) => {
-        const currentDiffState = previous.get(diffKey);
-        if (currentDiffState?.get(gapIndex) === nextExpandedToLine) {
-          return previous;
-        }
-
-        const next = new Map(previous);
-        const nextDiffState = new Map(currentDiffState ?? []);
-        nextDiffState.set(gapIndex, nextExpandedToLine);
-        next.set(diffKey, nextDiffState);
-        return next;
-      });
-    },
-    [invalidateMeasuredRow]
-  );
-
-  const handleToolCallExpansionChange = useCallback(
-    (rowKey: string, section: ToolCallExpansionSection, expanded: boolean) => {
-      invalidateMeasuredRowForUserResize(rowKey);
-      setToolCallExpansionState((previous) => {
-        const currentState =
-          previous.get(rowKey) ?? DEFAULT_TOOL_CALL_EXPANSION_STATE;
-        const nextState: ToolCallExpansionState = {
-          ...currentState,
-          paramsExpanded:
-            section === "params" ? expanded : currentState.paramsExpanded,
-          outputExpanded:
-            section === "output" ? expanded : currentState.outputExpanded,
-          errorExpanded:
-            section === "error" ? expanded : currentState.errorExpanded,
-        };
-
-        const isDefaultState =
-          !nextState.paramsExpanded &&
-          !nextState.outputExpanded &&
-          !nextState.errorExpanded;
-
-        if (
-          currentState.paramsExpanded === nextState.paramsExpanded &&
-          currentState.outputExpanded === nextState.outputExpanded &&
-          currentState.errorExpanded === nextState.errorExpanded
-        ) {
-          return previous;
-        }
-
-        const next = new Map(previous);
-        if (isDefaultState) {
-          next.delete(rowKey);
-        } else {
-          next.set(rowKey, nextState);
-        }
-        return next;
-      });
-    },
-    [invalidateMeasuredRowForUserResize]
-  );
-
-  const handleBashExpansionChange = useCallback(
-    (
-      rowKey: string,
-      section: BashOutputExpansionSection,
-      expanded: boolean
-    ) => {
-      invalidateMeasuredRowForUserResize(rowKey);
-      setBashExpansionState((previous) => {
-        const currentState = previous.get(rowKey) ?? {
-          outputExpanded: false,
-          errorExpanded: false,
-        };
-        const nextState: BashOutputExpansionState = {
-          ...currentState,
-          outputExpanded:
-            section === "output" ? expanded : currentState.outputExpanded,
-          errorExpanded:
-            section === "error" ? expanded : currentState.errorExpanded,
-        };
-
-        const isDefaultState =
-          !nextState.outputExpanded && !nextState.errorExpanded;
-
-        if (
-          currentState.outputExpanded === nextState.outputExpanded &&
-          currentState.errorExpanded === nextState.errorExpanded
-        ) {
-          return previous;
-        }
-
-        const next = new Map(previous);
-        if (isDefaultState) {
-          next.delete(rowKey);
-        } else {
-          next.set(rowKey, nextState);
-        }
-        return next;
-      });
-    },
-    [invalidateMeasuredRowForUserResize]
-  );
+  invalidateMeasuredRowForUserResizeImplRef.current =
+    invalidateMeasuredRowForUserResize;
 
   const handleMinimapStepClick = useCallback(
     (step: MinimapStep) => {
