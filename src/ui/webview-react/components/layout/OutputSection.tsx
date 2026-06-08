@@ -1658,9 +1658,19 @@ const OutputSectionInner: React.FC = () => {
 
       const now = performance.now();
       const hasRecentUserScrollInput =
-        lastUserScrollInputAtRef.current != null &&
-        now - lastUserScrollInputAtRef.current <=
-          OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+        (lastUserScrollInputAtRef.current != null &&
+          now - lastUserScrollInputAtRef.current <=
+            OUTPUT_USER_SCROLL_INPUT_GRACE_MS) ||
+        // Momentum/inertial scrolling keeps moving scrollTop well after the
+        // last discrete wheel/touch gesture event, and the scroll-target
+        // commit is debounced off the same continuous scroll activity — so
+        // neither signal alone covers the gap. Treat genuine ongoing scroll
+        // events (handleScroll, which ignores programmatic scrolls) as user
+        // input too, otherwise we forcibly snap back to a stale target
+        // (e.g. {kind: "bottom"}) mid-scroll.
+        (lastScrollEventAtRef.current != null &&
+          now - lastScrollEventAtRef.current <=
+            OUTPUT_USER_SCROLL_INPUT_GRACE_MS);
       if (
         !options?.force &&
         (hasRecentUserScrollInput || pendingNavigationRef.current !== null)
@@ -2940,6 +2950,13 @@ const OutputSectionInner: React.FC = () => {
       measurementVersion,
     });
     scrollSeekSettlingUntilRef.current = now + OUTPUT_SCROLL_SEEK_SETTLE_MS;
+    // Refresh the target from the current viewport before forcing the
+    // restore — scrollTargetRef.current may still hold a stale {kind:
+    // "bottom"} snapshot from before the user scrolled away (the commit is
+    // debounced off scroll activity and may not have fired yet during
+    // continuous scrolling). Forcing a stale "bottom" target here is what
+    // produces the visible snap-back-to-bottom.
+    commitScrollTargetFromViewport("scroll-seek-restore-commit");
     applyScrollTarget("scroll-seek-restore", { force: true });
 
     // Dump per-bucket accuracy stats so it's easy to see which event types
@@ -3011,6 +3028,7 @@ const OutputSectionInner: React.FC = () => {
     outputOverscan,
     rows.length,
     applyScrollTarget,
+    commitScrollTargetFromViewport,
     setOutputOverscanMode,
     virtualRows.length,
   ]);
