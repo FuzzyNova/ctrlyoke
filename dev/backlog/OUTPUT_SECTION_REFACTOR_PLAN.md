@@ -132,7 +132,7 @@ create a generic dumping-ground utility file.
 
 ## Work Breakdown
 
-### Prompt 1: extract pure helpers and small presentation components
+### Prompt 1: extract pure helpers and small presentation components — Done
 
 - Move DOM helper functions into `@utils/outputDom`.
 - Move scroll-seek placeholder labeling/rendering into a small component.
@@ -141,9 +141,18 @@ create a generic dumping-ground utility file.
 - Keep state and handlers in `OutputSection` for this pass.
 - Run `npm run build:webview` and targeted webview tests if imports touch tested code.
 
+Completed:
+
+- Added `src/ui/webview-react/utils/outputDom.ts`.
+- Added `components/layout/output-section/OutputScrollSeekPlaceholder.tsx`.
+- Added `components/layout/output-section/ExportOutputModal.tsx`.
+- Added `components/layout/output-section/OutputUndoDialogs.tsx`.
+- Left all state/behavior ownership in `OutputSection`.
+- Verified with `npm run build:webview`.
+
 Expected risk: low. This reduces file size without changing ownership of behavior.
 
-### Prompt 2: extract the header
+### Prompt 2: extract the header — Done
 
 - Create `OutputSectionHeader`.
 - Pass explicit props rather than letting the header read stores directly.
@@ -151,9 +160,17 @@ Expected risk: low. This reduces file size without changing ownership of behavio
 - Preserve narrow/very-narrow behavior from `useElementNarrow`.
 - Verify output/terminal tab switching, font size controls, execution mode toggle, run selector, workflow undo/redo buttons, export button, and diff expand/collapse button.
 
+Completed:
+
+- Added `components/layout/output-section/OutputSectionHeader.tsx`.
+- Replaced the expanded inline header in `OutputSection` with `OutputSectionHeader`.
+- Kept terminal spawn/close, run-history messaging, workflow undo/redo dialog opening, collapse animation, font-size updates, tab selection, and execution-mode updates as parent-owned callbacks.
+- Left the collapsed header inline in `OutputSection` for now because it is tiny and tied to the top-level early return.
+- Verified with `npm run build:webview`.
+
 Expected risk: low to medium because the header has many small controls but limited scroll behavior.
 
-### Prompt 3: extract export and undo hooks
+### Prompt 3: extract export and undo hooks — Next
 
 - Move export state and handlers to `useOutputExport`.
 - Move workflow/prompt/file undo state and handlers to `useOutputUndoActions`.

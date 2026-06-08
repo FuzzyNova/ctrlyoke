@@ -14,12 +14,6 @@ import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { OutputRow } from "../output";
-import {
-  RunSelector,
-  IconToggleButton,
-  ExpandCollapseAllDiffsButton,
-} from "../shared";
-import { TerminalSessionIcon } from "../output/TerminalSessionIcon";
 import { generateId } from "@utils/string";
 import {
   generateMarkdownExport,
@@ -58,6 +52,7 @@ import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../../terminalRegistry";
 import { ExportOutputModal } from "./output-section/ExportOutputModal";
+import { OutputSectionHeader } from "./output-section/OutputSectionHeader";
 import {
   OutputScrollSeekPlaceholder,
   getWheelDeltaPixels,
@@ -3442,19 +3437,111 @@ const OutputSectionInner: React.FC = () => {
     [navigationController]
   );
 
+  const handleToggleOutputCollapse = useCallback(() => {
+    triggerPanelAnimation();
+    toggleOutputCollapse();
+  }, [toggleOutputCollapse]);
+
+  const handleSelectOutputTab = useCallback(() => {
+    setActiveOutputTab(terminalWorkflowId, "output");
+  }, [setActiveOutputTab, terminalWorkflowId]);
+
+  const handleSpawnTerminal = useCallback(() => {
+    getVsCodeApi()?.postMessage({
+      type: MESSAGE_TYPES.TERMINAL_SPAWN_SHELL,
+      workflowId: terminalWorkflowId,
+      cwd: workspaceRoot || "",
+    });
+  }, [terminalWorkflowId, workspaceRoot]);
+
+  const handleSelectTerminalTab = useCallback(() => {
+    setActiveOutputTab(terminalWorkflowId, "terminal");
+    if (terminalSessions.length === 0) {
+      handleSpawnTerminal();
+    }
+  }, [
+    handleSpawnTerminal,
+    setActiveOutputTab,
+    terminalSessions.length,
+    terminalWorkflowId,
+  ]);
+
+  const terminalCanCloseActiveSession =
+    activeTerminalSession?.kind === SESSION_KINDS.SHELL ||
+    (activeTerminalSession?.kind === SESSION_KINDS.AI_CLI &&
+      !isExecutionActive);
+
+  const handleCloseActiveTerminalSession = useCallback(() => {
+    if (!activeTerminalSession) return;
+
+    const vscode = getVsCodeApi();
+    if (activeTerminalSession.kind === SESSION_KINDS.SHELL) {
+      vscode?.postMessage({
+        type: MESSAGE_TYPES.TERMINAL_CLOSE_SHELL,
+        workflowId: terminalWorkflowId,
+        sessionId: activeTerminalSession.id,
+      });
+    } else {
+      vscode?.postMessage({
+        type: MESSAGE_TYPES.TERMINAL_CLOSE_AI_CLI,
+        workflowId: terminalWorkflowId,
+        sessionId: activeTerminalSession.id,
+      });
+    }
+
+    terminalRegistry.clearSession(terminalWorkflowId, activeTerminalSession.id);
+    useTerminalStore
+      .getState()
+      .removeSession(terminalWorkflowId, activeTerminalSession.id);
+
+    const remaining =
+      useTerminalStore.getState().sessions[terminalWorkflowId] ?? [];
+    if (remaining.length === 0) {
+      setActiveOutputTab(terminalWorkflowId, "output");
+    }
+  }, [activeTerminalSession, setActiveOutputTab, terminalWorkflowId]);
+
+  const handleSelectRun = useCallback((runIndex: number) => {
+    getVsCodeApi()?.postMessage({
+      type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
+      runIndex,
+    });
+  }, []);
+
+  const handleClearHistory = useCallback(() => {
+    getVsCodeApi()?.postMessage({
+      type: MESSAGE_TYPES.CLEAR_RUN_HISTORY,
+    });
+  }, []);
+
+  const handleWorkflowUndo = useCallback(() => {
+    setWorkflowDialogState({
+      mode: "undo",
+      workspacePath: workflowUndoRedoData.workspacePath,
+      entries: workflowUndoRedoData.undoEntries,
+      requestId: generateId(),
+    });
+  }, [workflowUndoRedoData]);
+
+  const handleWorkflowRedo = useCallback(() => {
+    setWorkflowDialogState({
+      mode: "redo",
+      workspacePath: workflowUndoRedoData.workspacePath,
+      entries: workflowUndoRedoData.redoEntries,
+      requestId: generateId(),
+    });
+  }, [workflowUndoRedoData]);
+
   const collapsedHeader = (
     <div
       ref={mergedHeaderRef}
       className="flex flex-row items-center w-full h-[30px] px-2 gap-1 border-b border-panel-border bg-sidebar-bg cursor-pointer select-none text-description-fg hover:text-foreground transition-colors flex-shrink-0"
-      onClick={() => {
-        triggerPanelAnimation();
-        toggleOutputCollapse();
-      }}
+      onClick={handleToggleOutputCollapse}
       role="button"
       aria-label="Expand output"
       tabIndex={0}
       onKeyDown={(e) =>
-        e.key === "Enter" && (triggerPanelAnimation(), toggleOutputCollapse())
+        e.key === "Enter" && handleToggleOutputCollapse()
       }
     >
       <i className="codicon codicon-chevron-right text-xs" />
@@ -3484,352 +3571,47 @@ const OutputSectionInner: React.FC = () => {
       {outputCollapsed ? (
         collapsedHeader
       ) : (
-        <div
-          ref={mergedHeaderRef}
-          className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] pl-2 pr-1 border-b border-panel-border flex-shrink-0 bg-sidebar-bg"
-        >
-          {/* Left: clickable collapse area + tab buttons + font size controls + execution mode */}
-          <div className="flex items-center gap-1">
-            {/* Collapse affordance — chevron + icon only (narrower click target) */}
-            <div
-              className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
-              onClick={() => {
-                triggerPanelAnimation();
-                toggleOutputCollapse();
-              }}
-              role="button"
-              aria-label="Collapse output"
-              tabIndex={0}
-              onKeyDown={(e) =>
-                e.key === "Enter" &&
-                (triggerPanelAnimation(), toggleOutputCollapse())
-              }
-            >
-              <i className="codicon codicon-chevron-right text-xs rotate-90 transition-transform duration-150" />
-            </div>
-
-            {/* Output / Terminal tab buttons */}
-            {showTerminalTab ? (
-              <div className="flex items-center ml-1">
-                <button
-                  className={`fp-tab ${activeOutputTab === "output" ? "fp-tab-active" : "fp-tab-inactive"}`}
-                  onClick={() =>
-                    setActiveOutputTab(terminalWorkflowId, "output")
-                  }
-                >
-                  <i
-                    className={`codicon codicon-output codicon-sm ${isHeaderNarrow ? "px-1" : ""}`}
-                  />
-                  {!isHeaderNarrow && <span>Output</span>}
-                </button>
-                <button
-                  className={`fp-tab ${activeOutputTab === "terminal" ? "fp-tab-active" : "fp-tab-inactive"}`}
-                  onClick={() => {
-                    setActiveOutputTab(terminalWorkflowId, "terminal");
-                    if (terminalSessions.length === 0) {
-                      const vscode = getVsCodeApi();
-                      vscode?.postMessage({
-                        type: MESSAGE_TYPES.TERMINAL_SPAWN_SHELL,
-                        workflowId: terminalWorkflowId,
-                        cwd: workspaceRoot || "",
-                      });
-                    }
-                  }}
-                >
-                  <i
-                    className={`codicon codicon-terminal codicon-sm ${isHeaderNarrow ? "px-1" : ""}`}
-                  />
-                  {!isHeaderNarrow && <span>Terminal</span>}
-                  {terminalSessionActive && (
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse" />
-                  )}
-                </button>
-              </div>
-            ) : (
-              <span className="text-xs font-semibold uppercase tracking-wide text-description-fg ml-1 flex items-center gap-1">
-                <i className="codicon codicon-output text-sm" />
-                Output
-              </span>
-            )}
-
-            {/* Font size stepper — switches between output and terminal font sizes */}
-            {activeOutputTab === "output" ? (
-              <div className="flex items-center ml-2">
-                <button
-                  className="icon-btn py-0 px-0.5"
-                  title="Decrease font size"
-                  aria-label="Decrease font size"
-                  onClick={() => setOutputFontSize(outputFontSize - 1)}
-                  disabled={outputFontSize <= 10}
-                >
-                  <i className="codicon codicon-sm codicon-remove" />
-                </button>
-                {!isHeaderNarrow && (
-                  <span className="text-xxs text-description-fg tabular-nums w-[20px] text-center select-none">
-                    {outputFontSize}
-                  </span>
-                )}
-                <button
-                  className="icon-btn py-0 px-0.5"
-                  title="Increase font size"
-                  aria-label="Increase font size"
-                  onClick={() => setOutputFontSize(outputFontSize + 1)}
-                  disabled={outputFontSize >= 24}
-                >
-                  <i className="codicon codicon-sm codicon-add" />
-                </button>
-              </div>
-            ) : activeOutputTab === "terminal" ? (
-              <div className="flex items-center ml-2">
-                <button
-                  className="icon-btn py-0 px-0.5"
-                  title="Decrease terminal font size"
-                  aria-label="Decrease terminal font size"
-                  onClick={() => updateTerminalFontSize(terminalFontSize - 1)}
-                  disabled={terminalFontSize <= 8}
-                >
-                  <i className="codicon codicon-sm codicon-remove" />
-                </button>
-                {!isHeaderNarrow && (
-                  <span className="text-xxs text-description-fg tabular-nums w-[20px] text-center select-none">
-                    {terminalFontSize}
-                  </span>
-                )}
-                <button
-                  className="icon-btn py-0 px-0.5"
-                  title="Increase terminal font size"
-                  aria-label="Increase terminal font size"
-                  onClick={() => updateTerminalFontSize(terminalFontSize + 1)}
-                  disabled={terminalFontSize >= 24}
-                >
-                  <i className="codicon codicon-sm codicon-add" />
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          {/* Right: controls */}
-          <div
-            className={`ml-auto flex items-center ${isHeaderNarrow ? "gap-1" : "gap-2"}`}
-          >
-            {activeOutputTab === "terminal" && (
-              <>
-                {/* Active session icon + title — only shown when rail is collapsed */}
-                {isTerminalCompact && activeTerminalSession && (
-                  <div className="flex items-center gap-1.5 min-w-0 mr-1">
-                    <TerminalSessionIcon session={activeTerminalSession} />
-                    <span className="text-xs text-foreground truncate max-w-[120px]">
-                      {activeTerminalSession.stepName}
-                    </span>
-                  </div>
-                )}
-
-                {/* New Terminal button */}
-                <button
-                  className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-description-fg hover:text-foreground transition-colors"
-                  title="New Terminal"
-                  onClick={() => {
-                    const vscode = getVsCodeApi();
-                    vscode?.postMessage({
-                      type: MESSAGE_TYPES.TERMINAL_SPAWN_SHELL,
-                      workflowId: terminalWorkflowId,
-                      cwd: workspaceRoot || "",
-                    });
-                  }}
-                >
-                  <i className="codicon codicon-add text-xs" />
-                  {!isTerminalCompact && <span>New Terminal</span>}
-                </button>
-
-                {/* Trash button — compact mode: shell sessions always, AI CLI sessions when workflow is not executing */}
-                {isTerminalCompact &&
-                  activeTerminalSession &&
-                  (activeTerminalSession.kind === SESSION_KINDS.SHELL ||
-                    (activeTerminalSession.kind === SESSION_KINDS.AI_CLI &&
-                      !isExecutionActive)) && (
-                    <button
-                      className="icon-btn py-0 px-1"
-                      title="Close terminal"
-                      aria-label="Close terminal"
-                      onClick={() => {
-                        if (!activeTerminalSession) return;
-                        const vscode = getVsCodeApi();
-                        if (
-                          activeTerminalSession.kind === SESSION_KINDS.SHELL
-                        ) {
-                          vscode?.postMessage({
-                            type: MESSAGE_TYPES.TERMINAL_CLOSE_SHELL,
-                            workflowId: terminalWorkflowId,
-                            sessionId: activeTerminalSession.id,
-                          });
-                        } else {
-                          vscode?.postMessage({
-                            type: MESSAGE_TYPES.TERMINAL_CLOSE_AI_CLI,
-                            workflowId: terminalWorkflowId,
-                            sessionId: activeTerminalSession.id,
-                          });
-                        }
-                        terminalRegistry.clearSession(
-                          terminalWorkflowId,
-                          activeTerminalSession.id
-                        );
-                        useTerminalStore
-                          .getState()
-                          .removeSession(
-                            terminalWorkflowId,
-                            activeTerminalSession.id
-                          );
-                        // If this was the last session, switch back to output tab
-                        const remaining =
-                          useTerminalStore.getState().sessions[
-                            terminalWorkflowId
-                          ] ?? [];
-                        if (remaining.length === 0) {
-                          setActiveOutputTab(terminalWorkflowId, "output");
-                        }
-                      }}
-                    >
-                      <i className="codicon codicon-trash text-xs" />
-                    </button>
-                  )}
-              </>
-            )}
-            {activeOutputTab === "output" && (
-              <>
-                {/* Workflow-level undo button */}
-                {workflowUndoRedoData.undoEntries.length > 0 &&
-                  (() => {
-                    const count = workflowUndoRedoData.undoEntries.reduce(
-                      (n, e) => n + (e.undoCandidates?.length ?? 0),
-                      0
-                    );
-                    return (
-                      <button
-                        type="button"
-                        className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-link-fg hover:text-link-active-fg transition-colors min-w-0"
-                        style={{ touchAction: "manipulation" }}
-                        title={`Undo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
-                        onClick={() =>
-                          setWorkflowDialogState({
-                            mode: "undo",
-                            workspacePath: workflowUndoRedoData.workspacePath,
-                            entries: workflowUndoRedoData.undoEntries,
-                            requestId: generateId(),
-                          })
-                        }
-                      >
-                        <i className="codicon codicon-discard text-xs flex-shrink-0" />
-                        {!isHeaderVeryNarrow && (
-                          <span className="text-nowrap">
-                            {useCompactOutputHeaderLabels
-                              ? "Undo"
-                              : `Undo ${count} change${count !== 1 ? "s" : ""}`}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })()}
-                {/* Workflow-level redo button */}
-                {workflowUndoRedoData.redoEntries.length > 0 &&
-                  (() => {
-                    const count = workflowUndoRedoData.redoEntries.reduce(
-                      (n, e) => n + (e.redoInstructions?.length ?? 0),
-                      0
-                    );
-                    return (
-                      <button
-                        type="button"
-                        className="flex items-center gap-0.5 px-1 py-0.5 text-xs text-terminal-ansiGreen hover:opacity-80 transition-opacity min-w-0"
-                        style={{ touchAction: "manipulation" }}
-                        title={`Redo workflow changes (${count} file${count !== 1 ? "s" : ""})`}
-                        onClick={() =>
-                          setWorkflowDialogState({
-                            mode: "redo",
-                            workspacePath: workflowUndoRedoData.workspacePath,
-                            entries: workflowUndoRedoData.redoEntries,
-                            requestId: generateId(),
-                          })
-                        }
-                      >
-                        <i className="codicon codicon-redo text-xs flex-shrink-0" />
-                        {!isHeaderVeryNarrow && (
-                          <span>
-                            {useCompactOutputHeaderLabels
-                              ? "Redo"
-                              : `Redo ${count} change${count !== 1 ? "s" : ""}`}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })()}
-                {availableRuns > 0 && (
-                  <RunSelector
-                    availableRuns={availableRuns}
-                    currentRunIndex={viewingRunIndex}
-                    isViewingHistory={isViewingHistory}
-                    isLiveRunActive={
-                      executionState === EXECUTION_STATES.RUNNING
-                    }
-                    narrow={useCompactOutputHeaderLabels}
-                    veryNarrow={isHeaderVeryNarrow}
-                    runTimestamps={runTimestamps}
-                    runStates={runStates}
-                    onSelectRun={(runIndex) => {
-                      const vscode = getVsCodeApi();
-                      if (vscode) {
-                        vscode.postMessage({
-                          type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
-                          runIndex,
-                        });
-                      }
-                    }}
-                    onBackToLive={() => {
-                      useWorkflowStore.getState().clearHistoryOutputs();
-                      useUiStore.getState().clearHistoryView();
-                    }}
-                    onClearHistory={() => {
-                      const vscode = getVsCodeApi();
-                      if (vscode) {
-                        vscode.postMessage({
-                          type: MESSAGE_TYPES.CLEAR_RUN_HISTORY,
-                        });
-                      }
-                    }}
-                  />
-                )}
-                {hasOutput && (
-                  <ExpandCollapseAllDiffsButton
-                    anyDiffCollapsed={anyDiffCollapsed}
-                    onExpand={expandAllDiffs}
-                    onCollapse={collapseAllDiffs}
-                  />
-                )}
-                <button
-                  className="icon-btn py-1 px-1"
-                  id="export-btn"
-                  title="Export output to markdown"
-                  aria-label="Export output to markdown"
-                  onClick={handleExport}
-                  disabled={!hasOutput}
-                >
-                  <i className="codicon codicon-sm codicon-share" />
-                </button>
-              </>
-            )}
-            <IconToggleButton
-              active={executionMode === EXECUTION_MODES.INTERACTIVE}
-              onToggle={handleExecutionModeChange}
-              activeIcon="debug-console"
-              inactiveIcon="terminal"
-              activeTooltip="Interactive mode: terminal visible, steer execution and interact with harness"
-              inactiveTooltip="Headless mode: runs in background, output shown in Output panel"
-              activeLabel="Interactive"
-              inactiveLabel="Headless"
-              narrow={isHeaderNarrow}
-              labelPosition="left"
-            />
-          </div>
-        </div>
+        <OutputSectionHeader
+          activeOutputTab={activeOutputTab}
+          activeTerminalSession={activeTerminalSession}
+          anyDiffCollapsed={anyDiffCollapsed}
+          availableRuns={availableRuns}
+          currentRunIndex={viewingRunIndex}
+          executionModeInteractive={executionMode === EXECUTION_MODES.INTERACTIVE}
+          hasOutput={hasOutput}
+          isExecutionActive={isExecutionActive}
+          isHeaderNarrow={isHeaderNarrow}
+          isHeaderVeryNarrow={isHeaderVeryNarrow}
+          isTerminalCompact={isTerminalCompact}
+          refCallback={mergedHeaderRef}
+          runStates={runStates}
+          runTimestamps={runTimestamps}
+          showTerminalTab={showTerminalTab}
+          terminalCanCloseActiveSession={terminalCanCloseActiveSession}
+          terminalFontSize={terminalFontSize}
+          terminalSessionActive={terminalSessionActive}
+          useCompactLabels={useCompactOutputHeaderLabels}
+          viewingHistory={isViewingHistory}
+          workflowRedoEntries={workflowUndoRedoData.redoEntries}
+          workflowUndoEntries={workflowUndoRedoData.undoEntries}
+          onBackToLive={handleBackToLive}
+          onClearHistory={handleClearHistory}
+          onCollapseAllDiffs={collapseAllDiffs}
+          onExecutionModeToggle={handleExecutionModeChange}
+          onExpandAllDiffs={expandAllDiffs}
+          onExport={handleExport}
+          onNewTerminal={handleSpawnTerminal}
+          onOutputFontSizeChange={setOutputFontSize}
+          onRunSelect={handleSelectRun}
+          onSelectOutputTab={handleSelectOutputTab}
+          onSelectTerminalTab={handleSelectTerminalTab}
+          onTerminalFontSizeChange={updateTerminalFontSize}
+          onTerminalSessionClose={handleCloseActiveTerminalSession}
+          onToggleCollapse={handleToggleOutputCollapse}
+          onWorkflowRedo={handleWorkflowRedo}
+          onWorkflowUndo={handleWorkflowUndo}
+          outputFontSize={outputFontSize}
+        />
       )}
 
       {/* Output Content: keep both panes mounted so tab switches preserve DOM-heavy output. */}
