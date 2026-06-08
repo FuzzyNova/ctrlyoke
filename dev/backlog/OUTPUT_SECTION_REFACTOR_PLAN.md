@@ -226,20 +226,51 @@ Completed:
 
 Expected risk: medium. Row keys and expansion maps are shared with measurement invalidation.
 
-### Prompt 5: extract virtualized rendering into `OutputPane`
+### Prompt 5: extract virtualized rendering into `OutputPane` — Done
 
 - Move the JSX that renders virtual and non-virtual rows into `OutputPane`.
 - Keep virtualizer creation and scroll handlers in `OutputSection` initially.
 - Pass `rows`, `virtualRows`, measurement refs, row handlers, expansion maps, and minimap props.
 - This should make the parent easier to read before moving the behavior-heavy hooks.
 
+Completed:
+
+- Added `components/layout/output-section/OutputPane.tsx`.
+- Moved the output tab wrapper, scroll container, empty state, output row `Profiler`,
+  virtualized row branch, non-virtual staged rendering branch, virtualization
+  overlay, and minimap `Profiler`/rail into `OutputPane`.
+- Kept virtualizer creation, virtual range derivation, scroll/touch/wheel
+  handlers, measurement refs, scroll-seek state, navigation state, minimap
+  model construction, undo/export state, and row expansion state in
+  `OutputSection`.
+- `OutputSection` now passes explicit props for `rows`, `virtualRows`,
+  `nonVirtualRows`, measurement callbacks, row action callbacks,
+  `bashExpansionState`, scroll-seek rendered indices, and minimap props.
+- Verified with `npm run build:webview`, `npm run compile`, and
+  `npm run test:ui -- test/components/output` (48/48 passing).
+
 Expected risk: medium. The rendering path is large but mostly mechanical.
 
-### Prompt 6: extract minimap model
+### Prompt 6: extract minimap model — Done
 
 - Move `stepScrollFractions` and `minimapSteps` construction into `useOutputMinimapModel`.
 - Keep dialog state and navigation callbacks outside the hook unless the hook can expose a small, testable API.
 - Add unit tests for label selection and diff block mapping if practical.
+
+Completed:
+
+- Added `hooks/useOutputMinimapModel.ts`.
+- Moved `stepScrollFractions`, minimap step label selection, diff block
+  mapping, scroll fraction calculation, and minimap undo/redo action
+  construction into the hook.
+- Kept minimap navigation in `OutputSection`.
+- Kept undo dialog state in `useOutputUndoActions`; added small
+  `openMinimapUndoDialog` / `openMinimapRedoDialog` callbacks so the minimap
+  hook can request dialogs without owning dialog state.
+- `OutputSection` now consumes `{ minimapSteps, stepScrollFractions }` from the
+  hook and uses `stepScrollFractions` for the existing output context menu.
+- Verified with `npm run build:webview`, `npm run compile`, and
+  `npm run test:ui -- test/components/output` (48/48 passing).
 
 Expected risk: medium. The minimap combines row layout, step metadata, diff blocks, and undo affordances.
 

@@ -1,5 +1,4 @@
 import React, {
-  Profiler,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -8,68 +7,46 @@ import React, {
   useState,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
+import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore, type OutputScrollTarget } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 import { useOutputExport } from "@hooks/useOutputExport";
+import { useOutputMinimapModel } from "@hooks/useOutputMinimapModel";
 import { useOutputRowsModel } from "@hooks/useOutputRowsModel";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
-import { OutputRow } from "../output";
-import { generateId } from "@utils/string";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import { type OutputMessage } from "@utils/outputProjection";
-import type { CliOutput as CliOutputType } from "../../types/cliEvents";
-import type {
-  WorkspaceSnapshot,
-  UndoRecord,
-  UndoExecutionTarget,
-} from "@root/types/OutputHistoryTypes";
 import {
   MESSAGE_TYPES,
   CLI_EVENT_TYPES,
   EXECUTION_MODES,
   EXECUTION_STATES,
-  FINAL_STEP_PHASES,
   SESSION_KINDS,
-  STEP_TYPES,
   SETTING_SCOPES,
 } from "../../types/messages";
-import {
-  OutputMinimap,
-  type MinimapStep,
-  type MinimapDiffBlock,
-} from "../output/OutputMinimap";
+import { type MinimapStep } from "../output/OutputMinimap";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
 import { terminalRegistry } from "../../terminalRegistry";
 import { ExportOutputModal } from "./output-section/ExportOutputModal";
 import { OutputSectionHeader } from "./output-section/OutputSectionHeader";
-import {
-  OutputScrollSeekPlaceholder,
-  getWheelDeltaPixels,
-  shouldRenderScrollSeekPlaceholder,
-} from "./output-section/OutputScrollSeekPlaceholder";
+import { OutputPane } from "./output-section/OutputPane";
+import { getWheelDeltaPixels } from "./output-section/OutputScrollSeekPlaceholder";
 import { OutputUndoDialogs } from "./output-section/OutputUndoDialogs";
 
-import {
-  computePromptUndoActions,
-  buildUndoDialogInputForPrompt,
-} from "../../utils/promptUndo";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { WebviewLog } from "@utils/logger";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
 import {
-  estimateOutputDiffBlockHeight,
   estimateOutputRowHeight,
   type OutputRenderRow,
   type StructuredEventRow,
 } from "@utils/outputRows";
 import { setActiveOutputNavigationController } from "@utils/outputNavigation";
-import type { BashOutputExpansionState } from "../output/BashOutput";
 import {
   getOutputProfilerState,
   isOutputProfilingEnabled,
@@ -124,10 +101,6 @@ const NON_VIRTUAL_INITIAL_RENDER_ROWS = 24;
 const NON_VIRTUAL_RENDER_CHUNK_ROWS = 24;
 const MAX_NAV_ALIGNMENT_ATTEMPTS = 8; // max correction passes when aligning minimap/step navigation.
 const MAX_NAVIGATION_STABILIZATION_MS = 1000; // time limit for navigation alignment before accepting the current position.
-const DEFAULT_BASH_OUTPUT_EXPANSION_STATE: BashOutputExpansionState = {
-  outputExpanded: false,
-  errorExpanded: false,
-};
 const DEFAULT_OUTPUT_SCROLL_TARGET: OutputScrollTarget = { kind: "bottom" };
 
 interface RowHeightBucketStats {
@@ -177,23 +150,6 @@ function getZeroHeightStructuredEventReason(
     default:
       return "unsupported-structured-event";
   }
-}
-
-function getStepName(
-  step: WorkflowStep | null | undefined,
-  fallback: string
-): string {
-  const name = step?.name?.trim();
-  return name || fallback;
-}
-
-function getQueueStepFallbackName(
-  step: WorkflowStep | null | undefined,
-  stepIndex: number
-): string {
-  return step?.type === STEP_TYPES.SCRIPT
-    ? `Script ${stepIndex + 1}`
-    : `Prompt ${stepIndex + 1}`;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -1575,29 +1531,6 @@ const OutputSectionInner: React.FC = () => {
     setOutputOverscanMode,
   ]);
 
-  const stepScrollFractions = useMemo(() => {
-    return measureOutputPhase(
-      "stepScrollFractions",
-      { targets: uniqueStepTargets.length, rows: rows.length },
-      () => {
-        const fractions = new Map<string, number>();
-        const totalSize = Math.max(1, rowLayout.totalSize);
-
-        for (const target of uniqueStepTargets) {
-          const targetKey = `${target.kind}:${target.index}`;
-          const rowIndex = firstRowIndexByTarget.get(targetKey);
-          if (rowIndex === undefined) continue;
-          fractions.set(
-            targetKey,
-            rowLayout.rowStartsByIndex[rowIndex] / totalSize
-          );
-        }
-
-        return fractions;
-      }
-    );
-  }, [firstRowIndexByTarget, rowLayout, rows.length, uniqueStepTargets]);
-
   // When switching between live output and a history run (including when the
   // history run index changes), the same row keys can appear with very different
   // heights — e.g., a row measured as 500 px during a live run where diffs were
@@ -2269,48 +2202,6 @@ const OutputSectionInner: React.FC = () => {
     [clearNavigationFrame]
   );
 
-  const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
-    allMessages,
-    stepScrollFractions,
-    lastCliIndexPerStep,
-  });
-
-  const handleOutputLongPress = useCallback(
-    (x: number, y: number) => {
-      if (outputRef.current) openContextMenu(x, y, outputRef.current);
-    },
-    [openContextMenu]
-  );
-  const outputLongPressHandlers = useLongPress(handleOutputLongPress);
-  const handleOutputTouchStart = useCallback(
-    (event: React.TouchEvent<HTMLDivElement>) => {
-      handleTouchStart(event);
-      outputLongPressHandlers.onTouchStart(event);
-    },
-    [handleTouchStart, outputLongPressHandlers]
-  );
-  const handleOutputTouchMove = useCallback(
-    (event: React.TouchEvent<HTMLDivElement>) => {
-      handleTouchMove(event);
-      outputLongPressHandlers.onTouchMove(event);
-    },
-    [handleTouchMove, outputLongPressHandlers]
-  );
-  const handleOutputTouchEnd = useCallback(
-    (_event: React.TouchEvent<HTMLDivElement>) => {
-      handleTouchEnd();
-      outputLongPressHandlers.onTouchEnd();
-    },
-    [handleTouchEnd, outputLongPressHandlers]
-  );
-  const handleOutputTouchCancel = useCallback(
-    (_event: React.TouchEvent<HTMLDivElement>) => {
-      handleTouchEnd();
-      outputLongPressHandlers.onTouchCancel();
-    },
-    [handleTouchEnd, outputLongPressHandlers]
-  );
-
   // Check if there's any output
   const hasOutput = rows.length > 0;
   const nonVirtualVisibleRowCount = isOutputVirtualized
@@ -2575,7 +2466,8 @@ const OutputSectionInner: React.FC = () => {
     handleWorkflowRedo,
     handleWorkflowUndo,
     minimapDialogState,
-    setMinimapDialogState,
+    openMinimapRedoDialog,
+    openMinimapUndoDialog,
     workflowDialogState,
     workflowUndoRedoData,
   } = outputUndo;
@@ -2586,207 +2478,7 @@ const OutputSectionInner: React.FC = () => {
   const useCompactOutputHeaderLabels =
     isHeaderNarrow || showCompactWorkflowUndoRedoLabels;
 
-  // ── Minimap steps array ────────────────────────────────────────────────────
-  const minimapSteps = useMemo((): MinimapStep[] => {
-    return measureOutputPhase(
-      "minimapSteps",
-      {
-        targets: uniqueStepTargets.length,
-        rows: rows.length,
-        totalSize: rowLayout.totalSize,
-      },
-      () => {
-        const totalSize = Math.max(1, rowLayout.totalSize);
-
-        return uniqueStepTargets.flatMap((msgTarget) => {
-          const key = `${msgTarget.kind}:${msgTarget.index}`;
-          const firstRowIndex = firstRowIndexByTarget.get(key);
-          if (firstRowIndex === undefined) return [];
-
-          const kind = msgTarget.kind;
-          const stepIndex = msgTarget.index;
-          const isFinalStep = kind === FINAL_STEP_PHASES.FINAL_STEP;
-          const workflowStep = isFinalStep ? finalStep : steps[stepIndex];
-          const label = isFinalStep
-            ? getStepName(workflowStep, `Final Step Loop ${stepIndex + 1}`)
-            : getStepName(
-                workflowStep,
-                getQueueStepFallbackName(workflowStep, stepIndex)
-              );
-          const scrollFraction =
-            stepScrollFractions.get(key) ??
-            rowLayout.rowStartsByIndex[firstRowIndex] / totalSize;
-          const diffBlocks: MinimapDiffBlock[] = rows.flatMap((row) => {
-            if (
-              row.rowKind !== "structured-event" ||
-              row.target?.kind !== msgTarget.kind ||
-              row.target?.index !== msgTarget.index ||
-              !row.diff
-            ) {
-              return [];
-            }
-
-            return [
-              {
-                key: row.diff.key,
-                rowKey: row.key,
-                scrollFraction:
-                  (rowLayout.rowStartsByKey.get(row.key) ?? 0) / totalSize,
-                heightFraction:
-                  estimateOutputDiffBlockHeight(row, outputFontSize) /
-                  totalSize,
-                addedLines: row.diff.addedLines,
-                removedLines: row.diff.removedLines,
-                runs: row.diff.runs,
-                isCollapsed: row.diff.isCollapsed,
-              },
-            ];
-          });
-
-          const noActions: MinimapStep["undoActions"] = {
-            undo: null,
-            redo: null,
-          };
-          const stepOutputs = stepOutputsMap.get(key) ?? [];
-
-          if (!allowUndoActions) {
-            return [
-              {
-                key,
-                kind,
-                stepIndex,
-                firstMessageIndex: firstRowIndex,
-                scrollFraction,
-                label,
-                undoActions: noActions,
-                diffBlocks,
-              },
-            ];
-          }
-
-          const lastCliIdx = lastCliIndexPerStep.get(key);
-          if (lastCliIdx === undefined) {
-            return [
-              {
-                key,
-                kind,
-                stepIndex,
-                firstMessageIndex: firstRowIndex,
-                scrollFraction,
-                label,
-                undoActions: noActions,
-                diffBlocks,
-              },
-            ];
-          }
-
-          const lastMsg = allMessages[lastCliIdx];
-          const lastOutput = lastMsg?.data as CliOutputType | undefined;
-          if (!lastOutput || lastOutput.isStreaming) {
-            return [
-              {
-                key,
-                kind,
-                stepIndex,
-                firstMessageIndex: firstRowIndex,
-                scrollFraction,
-                label,
-                undoActions: noActions,
-                diffBlocks,
-              },
-            ];
-          }
-
-          const undoTarget: UndoExecutionTarget = isFinalStep
-            ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: stepIndex }
-            : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex };
-
-          let effectiveSnapshot: WorkspaceSnapshot | undefined;
-          let effectiveUndoRecord: UndoRecord | undefined;
-
-          if (isViewingHistory && historyOutputs) {
-            effectiveSnapshot = isFinalStep
-              ? historyOutputs.finalStepOutputs?.[stepIndex]?.workspaceSnapshot
-              : historyOutputs.promptOutputs[stepIndex]?.workspaceSnapshot;
-            effectiveUndoRecord = isFinalStep
-              ? historyOutputs.finalStepOutputs?.[stepIndex]?.undoRecord
-              : historyOutputs.promptOutputs[stepIndex]?.undoRecord;
-          } else {
-            effectiveSnapshot = isFinalStep
-              ? finalStepWorkspaceSnapshots[stepIndex]
-              : workspaceSnapshots[stepIndex];
-            effectiveUndoRecord =
-              undoRecords[
-                isFinalStep ? `finalStep-${stepIndex}` : `queue-${stepIndex}`
-              ];
-          }
-
-          const workspacePath = lastOutput.workingDirectory ?? "";
-          const actions = computePromptUndoActions(
-            stepOutputs,
-            effectiveUndoRecord,
-            effectiveSnapshot
-          );
-
-          const undoActions: MinimapStep["undoActions"] = {
-            redo: actions.redo
-              ? {
-                  label: actions.redo.label,
-                  onTrigger: () => {
-                    setMinimapDialogState({
-                      mode: "redo",
-                      target: undoTarget,
-                      workspacePath,
-                      redoInstructions: effectiveUndoRecord?.redoInstructions,
-                      requestId: generateId(),
-                    });
-                  },
-                }
-              : null,
-            undo: actions.undo
-              ? {
-                  label: actions.undo.label,
-                  onTrigger: () => {
-                    const alreadyUndone =
-                      effectiveUndoRecord != null &&
-                      effectiveUndoRecord.isRedone !== true
-                        ? effectiveUndoRecord.redoInstructions
-                        : undefined;
-                    const input = buildUndoDialogInputForPrompt(
-                      undoTarget,
-                      stepOutputs,
-                      effectiveSnapshot,
-                      workspacePath,
-                      alreadyUndone
-                    );
-                    setMinimapDialogState({
-                      mode: "undo",
-                      target: undoTarget,
-                      workspacePath,
-                      input,
-                      requestId: generateId(),
-                    });
-                  },
-                }
-              : null,
-          };
-
-          return [
-            {
-              key,
-              kind,
-              stepIndex,
-              firstMessageIndex: firstRowIndex,
-              scrollFraction,
-              label,
-              undoActions,
-              diffBlocks,
-            },
-          ];
-        });
-      }
-    );
-  }, [
+  const { minimapSteps, stepScrollFractions } = useOutputMinimapModel({
     allMessages,
     allowUndoActions,
     finalStep,
@@ -2795,16 +2487,59 @@ const OutputSectionInner: React.FC = () => {
     historyOutputs,
     isViewingHistory,
     lastCliIndexPerStep,
+    onOpenMinimapRedoDialog: openMinimapRedoDialog,
+    onOpenMinimapUndoDialog: openMinimapUndoDialog,
     outputFontSize,
     rowLayout,
     rows,
     stepOutputsMap,
-    stepScrollFractions,
     steps,
     undoRecords,
     uniqueStepTargets,
     workspaceSnapshots,
-  ]);
+  });
+
+  const { openContextMenu, outputContextMenuPortal } = useOutputContextMenu({
+    allMessages,
+    stepScrollFractions,
+    lastCliIndexPerStep,
+  });
+
+  const handleOutputLongPress = useCallback(
+    (x: number, y: number) => {
+      if (outputRef.current) openContextMenu(x, y, outputRef.current);
+    },
+    [openContextMenu]
+  );
+  const outputLongPressHandlers = useLongPress(handleOutputLongPress);
+  const handleOutputTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      handleTouchStart(event);
+      outputLongPressHandlers.onTouchStart(event);
+    },
+    [handleTouchStart, outputLongPressHandlers]
+  );
+  const handleOutputTouchMove = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      handleTouchMove(event);
+      outputLongPressHandlers.onTouchMove(event);
+    },
+    [handleTouchMove, outputLongPressHandlers]
+  );
+  const handleOutputTouchEnd = useCallback(
+    (_event: React.TouchEvent<HTMLDivElement>) => {
+      handleTouchEnd();
+      outputLongPressHandlers.onTouchEnd();
+    },
+    [handleTouchEnd, outputLongPressHandlers]
+  );
+  const handleOutputTouchCancel = useCallback(
+    (_event: React.TouchEvent<HTMLDivElement>) => {
+      handleTouchEnd();
+      outputLongPressHandlers.onTouchCancel();
+    },
+    [handleTouchEnd, outputLongPressHandlers]
+  );
 
   const handleBackToLive = useCallback(() => {
     useWorkflowStore.getState().clearHistoryOutputs();
@@ -3038,172 +2773,45 @@ const OutputSectionInner: React.FC = () => {
         >
           <TerminalView workflowId={terminalWorkflowId} />
         </div>
-        <div
-          aria-hidden={activeOutputTab !== "output" || outputCollapsed}
-          className={`${
-            !outputCollapsed && activeOutputTab === "output" ? "flex" : "hidden"
-          } relative flex-row min-h-0 flex-1`}
-        >
-          {/* Scrollable output */}
-          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-          <div
-            ref={outputRef}
-            id="output-content"
-            className="font-mono text-[length:var(--fp-output-font-size-sm)] min-h-0 p-0 flex-1 overflow-y-auto scrollbar-hide"
-            style={{ overflowAnchor: "none" }}
-            onScroll={handleScroll}
-            onWheel={handleWheel}
-            onTouchStart={handleOutputTouchStart}
-            onTouchMove={handleOutputTouchMove}
-            onTouchEnd={handleOutputTouchEnd}
-            onTouchCancel={handleOutputTouchCancel}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              openContextMenu(e.clientX, e.clientY, e.currentTarget);
-            }}
-          >
-            {!hasOutput ? (
-              <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
-                Output will appear here during execution
-              </p>
-            ) : (
-              <Profiler
-                id={
-                  isOutputVirtualized
-                    ? "OutputVirtualRows"
-                    : "OutputRows"
-                }
-                onRender={handleOutputProfilerRender}
-              >
-                {isOutputVirtualized ? (
-                  <div
-                    style={{
-                      height: `${rowVirtualizer.getTotalSize()}px`,
-                      position: "relative",
-                      width: "100%",
-                    }}
-                  >
-                    {virtualRows.map((virtualRow) => {
-                      const row = rows[virtualRow.index];
-                      if (!row) return null;
-                      const renderScrollSeekPlaceholder =
-                        isOutputScrollSeeking &&
-                        !isNavigationTargetVirtualized &&
-                        !scrollSeekEntryRenderedIndicesRef.current.has(
-                          virtualRow.index
-                        ) &&
-                        shouldRenderScrollSeekPlaceholder(row);
-
-                      return (
-                        <div
-                          key={virtualRow.key}
-                          ref={
-                            renderScrollSeekPlaceholder
-                              ? undefined
-                              : measureRowElement
-                          }
-                          data-index={virtualRow.index}
-                          data-row-key={row.key}
-                          className="flow-root"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            transform: `translateY(${virtualRow.start}px)`,
-                            width: "100%",
-                          }}
-                        >
-                          {renderScrollSeekPlaceholder ? (
-                            <OutputScrollSeekPlaceholder
-                              row={row}
-                              height={virtualRow.size}
-                            />
-                          ) : (
-                            <OutputRow
-                              row={row}
-                              isExecutionActive={isExecutionActive}
-                              onBackToLive={handleBackToLive}
-                              onPromptUndo={handlePromptUndo}
-                              onPromptRedo={handlePromptRedo}
-                              onFileUndo={handleFileUndo}
-                              onDiffCollapsedChange={handleDiffCollapsedChange}
-                              onDiffGapExpand={handleDiffGapExpand}
-                              onToolCallExpansionChange={
-                                handleToolCallExpansionChange
-                              }
-                              bashExpansion={
-                                bashExpansionState.get(row.key) ??
-                                DEFAULT_BASH_OUTPUT_EXPANSION_STATE
-                              }
-                              onBashExpansionChange={handleBashExpansionChange}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div>
-                    {nonVirtualRows.map((row, rowIndex) => (
-                      <div
-                        key={row.key}
-                        ref={measureStaticRowElement}
-                        data-index={rowIndex}
-                        data-row-key={row.key}
-                        className="flow-root"
-                      >
-                        <OutputRow
-                          row={row}
-                          isExecutionActive={isExecutionActive}
-                          onBackToLive={handleBackToLive}
-                          onPromptUndo={handlePromptUndo}
-                          onPromptRedo={handlePromptRedo}
-                          onFileUndo={handleFileUndo}
-                          onDiffCollapsedChange={handleDiffCollapsedChange}
-                          onDiffGapExpand={handleDiffGapExpand}
-                          onToolCallExpansionChange={
-                            handleToolCallExpansionChange
-                          }
-                          bashExpansion={
-                            bashExpansionState.get(row.key) ??
-                            DEFAULT_BASH_OUTPUT_EXPANSION_STATE
-                          }
-                          onBashExpansionChange={handleBashExpansionChange}
-                        />
-                      </div>
-                    ))}
-                    {nonVirtualSpacerHeight > 0 && (
-                      <div
-                        aria-hidden="true"
-                        style={{ height: `${nonVirtualSpacerHeight}px` }}
-                      />
-                    )}
-                  </div>
-                )}
-              </Profiler>
-            )}
-          </div>
-
-          {showVirtualizationOverlay && (
-            <div className="pointer-events-none absolute inset-y-0 left-0 right-[14px] flex items-center justify-center">
-              <div className="flex items-center gap-2 rounded border border-widget-border bg-editor-bg/90 px-3 py-1.5 text-xs text-description-fg shadow-sm backdrop-blur-[1px]">
-                <i className="codicon codicon-loading codicon-modifier-spin" />
-                <span>Rendering output…</span>
-              </div>
-            </div>
-          )}
-
-          {/* Minimap rail */}
-          {hasOutput && (
-            <Profiler id="OutputMinimap" onRender={handleOutputProfilerRender}>
-              <OutputMinimap
-                steps={minimapSteps}
-                scrollContainerRef={outputRef}
-                contentHeight={rowLayout.totalSize}
-                onStepClick={handleMinimapStepClick}
-              />
-            </Profiler>
-          )}
-        </div>
+        <OutputPane
+          activeOutputTab={activeOutputTab}
+          bashExpansionState={bashExpansionState}
+          contentHeight={rowLayout.totalSize}
+          hasOutput={hasOutput}
+          isExecutionActive={isExecutionActive}
+          isNavigationTargetVirtualized={isNavigationTargetVirtualized}
+          isOutputCollapsed={outputCollapsed}
+          isOutputScrollSeeking={isOutputScrollSeeking}
+          isOutputVirtualized={isOutputVirtualized}
+          minimapSteps={minimapSteps}
+          nonVirtualRows={nonVirtualRows}
+          nonVirtualSpacerHeight={nonVirtualSpacerHeight}
+          outputRef={outputRef}
+          renderedScrollSeekIndices={scrollSeekEntryRenderedIndicesRef.current}
+          rows={rows}
+          showVirtualizationOverlay={showVirtualizationOverlay}
+          virtualRows={virtualRows}
+          virtualizedTotalSize={rowVirtualizer.getTotalSize()}
+          measureRowElement={measureRowElement}
+          measureStaticRowElement={measureStaticRowElement}
+          onBackToLive={handleBackToLive}
+          onBashExpansionChange={handleBashExpansionChange}
+          onContextMenuOpen={openContextMenu}
+          onDiffCollapsedChange={handleDiffCollapsedChange}
+          onDiffGapExpand={handleDiffGapExpand}
+          onFileUndo={handleFileUndo}
+          onMinimapStepClick={handleMinimapStepClick}
+          onOutputProfilerRender={handleOutputProfilerRender}
+          onPromptRedo={handlePromptRedo}
+          onPromptUndo={handlePromptUndo}
+          onScroll={handleScroll}
+          onToolCallExpansionChange={handleToolCallExpansionChange}
+          onTouchCancel={handleOutputTouchCancel}
+          onTouchEnd={handleOutputTouchEnd}
+          onTouchMove={handleOutputTouchMove}
+          onTouchStart={handleOutputTouchStart}
+          onWheel={handleWheel}
+        />
       </>
 
       <OutputUndoDialogs

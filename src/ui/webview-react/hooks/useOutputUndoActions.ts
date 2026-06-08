@@ -48,6 +48,18 @@ interface UseOutputUndoActionsInput {
   workspaceSnapshots: Record<number, WorkspaceSnapshot>;
 }
 
+export interface OpenMinimapUndoDialogInput {
+  target: UndoExecutionTarget;
+  workspacePath: string;
+  input: MinimapDialogState["input"];
+}
+
+export interface OpenMinimapRedoDialogInput {
+  target: UndoExecutionTarget;
+  workspacePath: string;
+  redoInstructions: MinimapDialogState["redoInstructions"];
+}
+
 export function useOutputUndoActions({
   allMessages,
   allowUndoActions,
@@ -162,6 +174,36 @@ export function useOutputUndoActions({
     workspaceSnapshots,
   ]);
 
+  const openMinimapUndoDialog = useCallback(
+    ({ target, workspacePath, input }: OpenMinimapUndoDialogInput) => {
+      setMinimapDialogState({
+        mode: "undo",
+        target,
+        workspacePath,
+        input,
+        requestId: generateId(),
+      });
+    },
+    []
+  );
+
+  const openMinimapRedoDialog = useCallback(
+    ({
+      target,
+      workspacePath,
+      redoInstructions,
+    }: OpenMinimapRedoDialogInput) => {
+      setMinimapDialogState({
+        mode: "redo",
+        target,
+        workspacePath,
+        redoInstructions,
+        requestId: generateId(),
+      });
+    },
+    []
+  );
+
   const handlePromptUndo = useCallback((row: CliHeaderRow) => {
     if (!row.promptUndo) return;
     const target: UndoExecutionTarget = row.isFinalStep
@@ -179,28 +221,24 @@ export function useOutputUndoActions({
       row.promptUndo.workspacePath,
       alreadyUndone
     );
-    setMinimapDialogState({
-      mode: "undo",
+    openMinimapUndoDialog({
       target,
       workspacePath: row.promptUndo.workspacePath,
       input,
-      requestId: generateId(),
     });
-  }, []);
+  }, [openMinimapUndoDialog]);
 
   const handlePromptRedo = useCallback((row: CliHeaderRow) => {
     if (!row.promptUndo?.undoRecord?.redoInstructions?.length) return;
     const target: UndoExecutionTarget = row.isFinalStep
       ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
       : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
-    setMinimapDialogState({
-      mode: "redo",
+    openMinimapRedoDialog({
       target,
       workspacePath: row.promptUndo.workspacePath,
       redoInstructions: row.promptUndo.undoRecord.redoInstructions,
-      requestId: generateId(),
     });
-  }, []);
+  }, [openMinimapRedoDialog]);
 
   const handleFileUndo = useCallback(
     (row: StructuredEventRow, request: OutputRowFileUndoRequest) => {
@@ -223,12 +261,10 @@ export function useOutputUndoActions({
           (item) => sameFilePath(item.path, request.path)
         );
         if (fileRedoInstruction) {
-          setMinimapDialogState({
-            mode: "redo",
+          openMinimapRedoDialog({
             target,
             workspacePath,
             redoInstructions: [fileRedoInstruction],
-            requestId: generateId(),
           });
         }
         return;
@@ -248,15 +284,13 @@ export function useOutputUndoActions({
         }
       );
 
-      setMinimapDialogState({
-        mode: "undo",
+      openMinimapUndoDialog({
         target,
         workspacePath,
         input,
-        requestId: generateId(),
       });
     },
-    [stepOutputsMap]
+    [openMinimapRedoDialog, openMinimapUndoDialog, stepOutputsMap]
   );
 
   const handleWorkflowUndo = useCallback(() => {
@@ -294,7 +328,8 @@ export function useOutputUndoActions({
     handleWorkflowRedo,
     handleWorkflowUndo,
     minimapDialogState,
-    setMinimapDialogState,
+    openMinimapRedoDialog,
+    openMinimapUndoDialog,
     workflowDialogState,
     workflowUndoRedoData,
   };
