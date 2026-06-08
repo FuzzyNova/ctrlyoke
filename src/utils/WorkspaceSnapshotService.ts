@@ -356,6 +356,168 @@ export class WorkspaceSnapshotService {
     }
   }
 
+  /** Read a file's content at a specific commit, skipping binary/oversized blobs. */
+  private async readGitBlob(
+    workspacePath: string,
+    commit: string,
+    filePath: string
+  ): Promise<string | undefined> {
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["show", `${commit}:${filePath}`],
+        { cwd: workspacePath, maxBuffer: MAX_CONTENT_SIZE * 4 }
+      );
+      if (Buffer.byteLength(stdout, "utf8") > MAX_CONTENT_SIZE) {
+        return undefined;
+      }
+      return stdout;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * True when a path's committed-after content is byte-identical to content
+   * that was already dirty/untracked before the prompt ran. That means the
+   * commit only persisted pre-existing work (e.g. the AI ran `git commit` on
+   * changes a human made earlier) rather than content the prompt produced, so
+   * it should not be attributed to this prompt's undo history.
+   */
+  private matchesPreExistingDirtyContent(
+    before: RawWorkspaceState,
+    filePath: string,
+    afterHash: string | undefined
+  ): boolean {
+    if (afterHash === undefined) {
+      return false;
+    }
+    const dirtyBefore = before.files.get(filePath);
+    return dirtyBefore !== undefined && dirtyBefore.contentHash === afterHash;
+  }
+
+  /**
+   * Diff the file trees between two commits to surface changes that were made
+   * AND committed within a single prompt — the dirty-worktree comparison in
+   * `computeSnapshotChanges` cannot see these because `git status --porcelain`
+   * is clean both before and after the prompt runs.
+   *
+   * `skipPaths` excludes paths already represented in the dirty-file diff so a
+   * file touched both as a leftover dirty edit and as part of a commit isn't
+   * recorded twice.
+   */
+  private async getCommitRangeChanges(
+    before: RawWorkspaceState,
+    afterCommit: string,
+    workspacePath: string,
+    skipPaths: Set<string>
+  ): Promise<SnapshotFileChange[]> {
+    const beforeCommit = before.git?.headCommit;
+    if (!beforeCommit) {
+      return [];
+    }
+    const changes: SnapshotFileChange[] = [];
+    let stdout: string;
+    try {
+      const result = await execFileAsync(
+        "git",
+        [
+          "diff",
+          "--name-status",
+          "--no-renames",
+          `${beforeCommit}..${afterCommit}`,
+        ],
+        { cwd: workspacePath }
+      );
+      stdout = result.stdout;
+    } catch (err) {
+      Log.warn(
+        `WorkspaceSnapshotService: git diff for commit range failed: ${err}`
+      );
+      return changes;
+    }
+
+    for (const line of stdout.split("\n")) {
+      if (!line.trim()) continue;
+      const [status, ...pathParts] = line.split("\t");
+      const filePath = pathParts.join("\t").replace(/\\/g, "/");
+      if (!filePath || skipPaths.has(filePath)) continue;
+
+      const statusChar = status?.[0];
+      if (statusChar === "A") {
+        const afterContent = await this.readGitBlob(
+          workspacePath,
+          afterCommit,
+          filePath
+        );
+        const afterHash =
+          afterContent !== undefined ? computeHash(afterContent) : undefined;
+        if (this.matchesPreExistingDirtyContent(before, filePath, afterHash)) {
+          continue;
+        }
+        changes.push({
+          path: filePath,
+          changeType: "created",
+          afterHash,
+        });
+      } else if (statusChar === "D") {
+        const beforeContent = await this.readGitBlob(
+          workspacePath,
+          beforeCommit,
+          filePath
+        );
+        const change: SnapshotFileChange = {
+          path: filePath,
+          changeType: "deleted",
+        };
+        if (beforeContent !== undefined) {
+          change.contentToRestore = beforeContent;
+        } else {
+          change.contentCaptureSkipped = true;
+        }
+        changes.push(change);
+      } else if (statusChar === "M" || statusChar === "T") {
+        const [beforeContent, afterContent] = await Promise.all([
+          this.readGitBlob(workspacePath, beforeCommit, filePath),
+          this.readGitBlob(workspacePath, afterCommit, filePath),
+        ]);
+        const afterHash =
+          afterContent !== undefined ? computeHash(afterContent) : undefined;
+        if (this.matchesPreExistingDirtyContent(before, filePath, afterHash)) {
+          continue;
+        }
+        const change: SnapshotFileChange = {
+          path: filePath,
+          changeType: "modified",
+          baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
+          afterHash,
+        };
+        if (beforeContent !== undefined && afterContent !== undefined) {
+          change.beforeContent = beforeContent;
+          const patchResult = Diff.structuredPatch(
+            "",
+            "",
+            normalizeLf(beforeContent),
+            normalizeLf(afterContent)
+          );
+          if (patchResult.hunks.length > 0) {
+            change.structuredPatch = patchResult.hunks as UnifiedDiffHunk[];
+          }
+          if (beforeContent.includes("\r\n")) {
+            change.lineEnding = "crlf";
+          }
+        } else {
+          change.contentCaptureSkipped = true;
+        }
+        changes.push(change);
+      }
+      // Other statuses (copies, type changes outside M/T) are rare for AI-driven
+      // edits and are intentionally left to the existing dirty-file diff, if any.
+    }
+
+    return changes;
+  }
+
   async selectStrategy(workspacePath: string): Promise<SnapshotStrategy> {
     try {
       await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], {
@@ -575,6 +737,26 @@ export class WorkspaceSnapshotService {
         }
         changes.push(change);
       }
+    }
+
+    // The dirty-worktree comparison above only sees files that were uncommitted
+    // at the start or end of the prompt. If the prompt committed its own work
+    // (e.g. via a commit skill), the tree can be clean on both sides while the
+    // commit history still moved — diff the commit range to catch those changes.
+    if (
+      strategy === SNAPSHOT_STRATEGIES.GIT &&
+      before.git?.headCommit &&
+      after.git?.headCommit &&
+      before.git.headCommit !== after.git.headCommit
+    ) {
+      const seenPaths = new Set(changes.map((change) => change.path));
+      const commitRangeChanges = await this.getCommitRangeChanges(
+        before,
+        after.git.headCommit,
+        workspacePath,
+        seenPaths
+      );
+      changes.push(...commitRangeChanges);
     }
 
     return changes;

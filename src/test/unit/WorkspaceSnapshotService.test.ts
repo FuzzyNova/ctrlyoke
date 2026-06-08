@@ -101,4 +101,71 @@ suite("WorkspaceSnapshotService", () => {
     assert.strictEqual(changes[0]?.beforeContent, "dirty before prompt\n");
     assert.ok((changes[0]?.structuredPatch?.length ?? 0) > 0);
   });
+
+  test("detects edits and new files that were committed mid-prompt leaving a clean tree on both sides", async () => {
+    const beforeState = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    assert.strictEqual(beforeState.files.size, 0);
+
+    await writeWorkspaceFile("tracked.txt", "edited by prompt\n");
+    await writeWorkspaceFile("created.txt", "brand new file\n");
+    await fs.rm(path.join(workspaceRoot, "tracked.txt")).catch(() => {});
+    await writeWorkspaceFile("tracked.txt", "edited by prompt\n");
+    runGit(["add", "-A"]);
+    runGit(["commit", "-m", "Prompt commits its own work"]);
+
+    const afterState = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    assert.strictEqual(afterState.files.size, 0);
+    assert.notStrictEqual(beforeState.git?.headCommit, afterState.git?.headCommit);
+
+    const changes = await snapshotService.computeSnapshotChanges(
+      beforeState,
+      afterState,
+      workspaceRoot
+    );
+
+    const byPath = new Map(changes.map((change) => [change.path, change]));
+
+    const trackedChange = byPath.get("tracked.txt");
+    assert.strictEqual(trackedChange?.changeType, "modified");
+    assert.strictEqual(trackedChange?.beforeContent, "base\n");
+    assert.ok((trackedChange?.structuredPatch?.length ?? 0) > 0);
+
+    const createdChange = byPath.get("created.txt");
+    assert.strictEqual(createdChange?.changeType, "created");
+    assert.ok(createdChange?.afterHash);
+  });
+
+  test("detects files deleted and committed mid-prompt leaving a clean tree on both sides", async () => {
+    const beforeState = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+
+    await fs.rm(path.join(workspaceRoot, "tracked.txt"));
+    runGit(["add", "-A"]);
+    runGit(["commit", "-m", "Prompt deletes and commits a file"]);
+
+    const afterState = await snapshotService.captureWorkspaceState(
+      workspaceRoot,
+      SNAPSHOT_STRATEGIES.GIT
+    );
+    assert.strictEqual(afterState.files.size, 0);
+
+    const changes = await snapshotService.computeSnapshotChanges(
+      beforeState,
+      afterState,
+      workspaceRoot
+    );
+
+    assert.strictEqual(changes.length, 1);
+    assert.strictEqual(changes[0]?.path, "tracked.txt");
+    assert.strictEqual(changes[0]?.changeType, "deleted");
+    assert.strictEqual(changes[0]?.contentToRestore, "base\n");
+  });
 });
