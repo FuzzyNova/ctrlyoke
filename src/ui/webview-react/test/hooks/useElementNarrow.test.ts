@@ -31,15 +31,30 @@ const MockResizeObserver = vi.fn(function (cb: ResizeObserverCallback) {
 // ---------------------------------------------------------------------------
 
 let originalResizeObserver: typeof window.ResizeObserver;
+let originalRaf: typeof window.requestAnimationFrame;
+let originalCaf: typeof window.cancelAnimationFrame;
 
 beforeEach(() => {
   originalResizeObserver = window.ResizeObserver;
   window.ResizeObserver = MockResizeObserver as any;
   MockResizeObserver.mockClear();
+
+  // The hook batches ResizeObserver callbacks into an animation frame
+  // (createAnimationFrameResizeObserver). Run rAF synchronously so a resize
+  // trigger applies its state update within the surrounding act().
+  originalRaf = window.requestAnimationFrame;
+  originalCaf = window.cancelAnimationFrame;
+  window.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+    cb(0);
+    return 0;
+  }) as typeof window.requestAnimationFrame;
+  window.cancelAnimationFrame = (() => {}) as typeof window.cancelAnimationFrame;
 });
 
 afterEach(() => {
   window.ResizeObserver = originalResizeObserver;
+  window.requestAnimationFrame = originalRaf;
+  window.cancelAnimationFrame = originalCaf;
 });
 
 // ---------------------------------------------------------------------------

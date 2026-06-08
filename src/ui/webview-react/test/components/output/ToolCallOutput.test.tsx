@@ -52,8 +52,10 @@ describe("GenericToolCallOutput", () => {
       outputExpanded: false,
       errorExpanded: false,
     } as const;
+    // 12 lines so 2 remain hidden when collapsed — a single hidden line is
+    // shown in full (no toggle), which would not exercise the toggle path.
     const error = Array.from(
-      { length: 11 },
+      { length: 12 },
       (_, index) => `error ${index + 1}`
     ).join("\n");
 
@@ -75,13 +77,13 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    const collapsedError = screen.getByText(/\[show 1 more line\]/i).parentElement;
+    const collapsedError = screen.getByText(/\[show 2 more lines\]/i).parentElement;
 
     expect(collapsedError?.textContent).toContain("error 10");
     expect(collapsedError?.textContent).not.toContain("error 11");
 
     await user.click(screen.getByTitle("Show all parameters"));
-    await user.click(screen.getByText(/\[show 1 more line\]/i));
+    await user.click(screen.getByText(/\[show 2 more lines\]/i));
 
     expect(onExpansionChange).toHaveBeenNthCalledWith(1, "params", true);
     expect(onExpansionChange).toHaveBeenNthCalledWith(2, "error", true);

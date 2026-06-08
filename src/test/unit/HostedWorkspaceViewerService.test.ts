@@ -46,7 +46,18 @@ suite("HostedWorkspaceViewerService", () => {
 
   teardown(() => {
     for (const workspaceRoot of tempRoots.splice(0)) {
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      // Windows can hold transient locks on git pack files (which are also
+      // read-only), causing EPERM. maxRetries makes rmSync retry on EPERM.
+      try {
+        fs.rmSync(workspaceRoot, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 50,
+        });
+      } catch {
+        // Best-effort cleanup of OS temp dirs; ignore residual lock failures.
+      }
     }
   });
 

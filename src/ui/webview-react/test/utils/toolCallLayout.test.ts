@@ -44,9 +44,12 @@ describe("toolCallLayout", () => {
     expect(renderPlan.output.hiddenLineCount).toBe(2);
     expect(renderPlan.isOutputTruncated).toBe(true);
     expect(renderPlan.errorLineCount).toBe(11);
-    expect(renderPlan.error.visibleLineCount).toBe(10);
-    expect(renderPlan.error.hiddenLineCount).toBe(1);
-    expect(renderPlan.isErrorTruncated).toBe(true);
+    // Single hidden line: the collapsed preview shows the full text rather than
+    // adding a toggle control that wastes as much vertical space as the one line
+    // it would hide (see buildCollapsedOutputPreview's single-line passthrough).
+    expect(renderPlan.error.visibleLineCount).toBe(11);
+    expect(renderPlan.error.hiddenLineCount).toBe(0);
+    expect(renderPlan.isErrorTruncated).toBe(false);
     expect(getVisibleToolCallText(output, renderPlan.output)).toContain("line 10");
     expect(getVisibleToolCallText(output, renderPlan.output)).not.toContain("line 11");
     expect(renderPlan.totalHeight).toBe(

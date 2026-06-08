@@ -572,7 +572,8 @@ describe("outputRows", () => {
     expect(toolRow.toolCall.renderPlan.outputLineCount).toBe(12);
     expect(toolRow.toolCall.renderPlan.params.visibleLineCount).toBe(2);
     expect(toolRow.toolCall.renderPlan.output.visibleLineCount).toBe(12);
-    expect(toolRow.toolCall.renderPlan.isOutputTruncated).toBe(true);
+    // Expanded output shows every line, so the preview reports it as untruncated.
+    expect(toolRow.toolCall.renderPlan.isOutputTruncated).toBe(false);
     expect(toolRow.toolCall.renderPlan.totalHeight).toBe(
       estimateOutputRowHeight(toolRow)
     );
