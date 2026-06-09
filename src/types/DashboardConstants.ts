@@ -89,6 +89,7 @@ export const MESSAGE_TYPES = {
   CHANGE_MCP_SERVERS: "changeMcpServers",
   CHANGE_RESUME_SESSION: "changeResumeSession",
   OPEN_SETTINGS: "openSettings", // Open VS Code settings for FlightPath
+  OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser", // Webview -> Extension: Open VS Code's native MCP server browser
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
@@ -419,7 +420,6 @@ export const NOTIFICATION_KINDS = {
 
 export type NotificationKind =
   (typeof NOTIFICATION_KINDS)[keyof typeof NOTIFICATION_KINDS];
-
 
 // ============================================================================
 // EXECUTION STATES - QueueState.status values

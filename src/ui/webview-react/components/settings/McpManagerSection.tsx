@@ -23,6 +23,7 @@ import {
   serverToMcpServerFormState,
 } from "@components/shared/McpServerForm";
 import { MESSAGE_TYPES } from "@/types/messages";
+import { isStandalone } from "@hooks/useVsCodeApi";
 import {
   HARNESS_IDS,
   HARNESS_INFO,
@@ -362,27 +363,48 @@ function getTargetForLocalSource(
 ): { targetId: AnyTargetId; scope: SettingWriteScope } | null {
   switch (source) {
     case "vscode-workspace":
-      return { targetId: SPECIAL_TARGET_IDS.VSCODE, scope: SETTING_SCOPES.WORKSPACE };
+      return {
+        targetId: SPECIAL_TARGET_IDS.VSCODE,
+        scope: SETTING_SCOPES.WORKSPACE,
+      };
     case "vscode-user":
-      return { targetId: SPECIAL_TARGET_IDS.VSCODE, scope: SETTING_SCOPES.USER };
+      return {
+        targetId: SPECIAL_TARGET_IDS.VSCODE,
+        scope: SETTING_SCOPES.USER,
+      };
     case "claude-workspace":
-      return { targetId: HARNESS_IDS.CLAUDE_CLI, scope: SETTING_SCOPES.WORKSPACE };
+      return {
+        targetId: HARNESS_IDS.CLAUDE_CLI,
+        scope: SETTING_SCOPES.WORKSPACE,
+      };
     case "claude-user":
       return { targetId: HARNESS_IDS.CLAUDE_CLI, scope: SETTING_SCOPES.USER };
     case "copilot-workspace":
-      return { targetId: HARNESS_IDS.COPILOT_CLI, scope: SETTING_SCOPES.WORKSPACE };
+      return {
+        targetId: HARNESS_IDS.COPILOT_CLI,
+        scope: SETTING_SCOPES.WORKSPACE,
+      };
     case "copilot-user":
       return { targetId: HARNESS_IDS.COPILOT_CLI, scope: SETTING_SCOPES.USER };
     case "codex-workspace":
-      return { targetId: HARNESS_IDS.CODEX_CLI, scope: SETTING_SCOPES.WORKSPACE };
+      return {
+        targetId: HARNESS_IDS.CODEX_CLI,
+        scope: SETTING_SCOPES.WORKSPACE,
+      };
     case "codex-user":
       return { targetId: HARNESS_IDS.CODEX_CLI, scope: SETTING_SCOPES.USER };
     case "opencode-workspace":
-      return { targetId: HARNESS_IDS.OPENCODE_CLI, scope: SETTING_SCOPES.WORKSPACE };
+      return {
+        targetId: HARNESS_IDS.OPENCODE_CLI,
+        scope: SETTING_SCOPES.WORKSPACE,
+      };
     case "opencode-user":
       return { targetId: HARNESS_IDS.OPENCODE_CLI, scope: SETTING_SCOPES.USER };
     case "qwen-workspace":
-      return { targetId: HARNESS_IDS.QWEN_CLI, scope: SETTING_SCOPES.WORKSPACE };
+      return {
+        targetId: HARNESS_IDS.QWEN_CLI,
+        scope: SETTING_SCOPES.WORKSPACE,
+      };
     case "qwen-user":
       return { targetId: HARNESS_IDS.QWEN_CLI, scope: SETTING_SCOPES.USER };
   }
@@ -425,11 +447,7 @@ function sortResolvedLocations(
   });
 }
 
-function ScopeBadge({
-  label,
-}: {
-  label: string;
-}) {
+function ScopeBadge({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center rounded border border-panel-border bg-list-hover-bg px-1.5 py-0.5 text-xxs font-medium leading-none text-foreground">
       {label}
@@ -472,7 +490,7 @@ function ServerDetails({
       value:
         typeof config.autoApprove === "boolean"
           ? String(config.autoApprove)
-          : config.autoApprove?.join(", ") ?? null,
+          : (config.autoApprove?.join(", ") ?? null),
     },
     {
       label: "defaults",
@@ -522,12 +540,16 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
     (state) => state.isLoadingRegistry
   );
   const requestServers = useMcpManagerStore((state) => state.requestServers);
-  const addOrUpdateServer = useMcpManagerStore((state) => state.addOrUpdateServer);
+  const addOrUpdateServer = useMcpManagerStore(
+    (state) => state.addOrUpdateServer
+  );
   const deleteServer = useMcpManagerStore((state) => state.deleteServer);
   const deleteFromHarness = useMcpManagerStore(
     (state) => state.deleteFromHarness
   );
-  const requestLocalScan = useMcpManagerStore((state) => state.requestLocalScan);
+  const requestLocalScan = useMcpManagerStore(
+    (state) => state.requestLocalScan
+  );
   const localServers = useMcpManagerStore((state) => state.localServers);
   const isLoadingLocal = useMcpManagerStore((state) => state.isLoadingLocal);
   const localError = useMcpManagerStore((state) => state.localError);
@@ -536,8 +558,12 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   const remoteServers = useMcpManagerStore((state) => state.remoteServers);
   const isLoadingRemote = useMcpManagerStore((state) => state.isLoadingRemote);
   const remoteError = useMcpManagerStore((state) => state.remoteError);
-  const remoteNextCursor = useMcpManagerStore((state) => state.remoteNextCursor);
-  const remotePageCursors = useMcpManagerStore((state) => state.remotePageCursors);
+  const remoteNextCursor = useMcpManagerStore(
+    (state) => state.remoteNextCursor
+  );
+  const remotePageCursors = useMcpManagerStore(
+    (state) => state.remotePageCursors
+  );
   const remoteQuery = useMcpManagerStore((state) => state.remoteQuery);
   const remoteSort = useMcpManagerStore((state) => state.remoteSort);
   const setRemoteSort = useMcpManagerStore((state) => state.setRemoteSort);
@@ -551,7 +577,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   const exportToHarness = useMcpManagerStore((state) => state.exportToHarness);
 
   const globalSettings = useSettingsStore((state) => state.globalSettings);
-  const fullGlobalSettings = useSettingsStore((state) => state.fullGlobalSettings);
+  const fullGlobalSettings = useSettingsStore(
+    (state) => state.fullGlobalSettings
+  );
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -614,7 +642,10 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   );
 
   const groupedLocalServers = useMemo(() => {
-    const groups = new Map<LocalMcpServerEntry["source"], LocalMcpServerEntry[]>();
+    const groups = new Map<
+      LocalMcpServerEntry["source"],
+      LocalMcpServerEntry[]
+    >();
     for (const entry of localServers) {
       const current = groups.get(entry.source) ?? [];
       current.push(entry);
@@ -651,7 +682,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   );
 
   const bulkDeleteItems = useMemo<ActionDropdownItem[]>(() => {
-    const managedIds = new Set((managedServers ?? []).map((server) => server.id));
+    const managedIds = new Set(
+      (managedServers ?? []).map((server) => server.id)
+    );
     const grouped = new Map<
       string,
       { targetId: AnyTargetId; scope: SettingWriteScope; count: number }
@@ -685,7 +718,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             ? "Delete one exported managed server copy"
             : `Delete ${target.count} exported managed server copies`,
       }))
-      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+      .sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+      );
   }, [localServers, managedServers]);
 
   useEffect(() => {
@@ -721,7 +756,10 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   const isServerDefault = (id: string): boolean =>
     defaultsServers.some((entry) => isDefaultServerEntry(entry, id));
 
-  const hasServerInRegistryScope = (id: string, scope: SettingWriteScope): boolean =>
+  const hasServerInRegistryScope = (
+    id: string,
+    scope: SettingWriteScope
+  ): boolean =>
     managedServersById
       .get(id)
       ?.locations.some(
@@ -916,15 +954,14 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           {managedServers?.map((server) => {
             const isEditing = editingId === server.id;
             const defaultsEnabled = isServerDefault(server.id);
-            const registryLocations: ResolvedServerLocation[] = server.locations.map(
-              (location) => ({
+            const registryLocations: ResolvedServerLocation[] =
+              server.locations.map((location) => ({
                 kind: "registry",
                 targetId: location.targetId,
                 scope: location.scope,
                 path: location.path,
                 sourceLabel: "FlightPath Registry",
-              })
-            );
+              }));
             const harnessLocations = localLocationsById.get(server.id) ?? [];
             const allLocations = sortResolvedLocations([
               ...registryLocations,
@@ -940,13 +977,15 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
               hasWorkspaceRoot,
               exportPresentKeys
             );
-            const deleteItems: ActionDropdownItem[] = allLocations.map((location) => ({
-              label: `${getExportTargetLabel(location.targetId)} (${formatScopeLabel(
-                location.scope
-              )})`,
-              value: encodeLocationValue(location),
-              description: formatPathForDisplay(location.path),
-            }));
+            const deleteItems: ActionDropdownItem[] = allLocations.map(
+              (location) => ({
+                label: `${getExportTargetLabel(location.targetId)} (${formatScopeLabel(
+                  location.scope
+                )})`,
+                value: encodeLocationValue(location),
+                description: formatPathForDisplay(location.path),
+              })
+            );
 
             return (
               <div
@@ -972,7 +1011,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       <button
                         type="button"
                         onClick={() =>
-                          setExpandedId(expandedId === server.id ? null : server.id)
+                          setExpandedId(
+                            expandedId === server.id ? null : server.id
+                          )
                         }
                         className="mt-0.5 flex h-4 w-4 items-center justify-center text-description-fg hover:text-foreground"
                         aria-label={
@@ -991,7 +1032,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       <button
                         type="button"
                         onClick={() =>
-                          setExpandedId(expandedId === server.id ? null : server.id)
+                          setExpandedId(
+                            expandedId === server.id ? null : server.id
+                          )
                         }
                         className="min-w-0 flex-1 text-left"
                       >
@@ -1120,7 +1163,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           Discover &amp; import
         </div>
 
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <button
             type="button"
             onClick={() => setDiscoveryTab(MCP_MANAGER_DISCOVERY_TABS.LOCAL)}
@@ -1145,6 +1188,17 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             <i className="codicon codicon-globe text-xxs" />
             Registry
           </button>
+          {!isStandalone && (
+            <button
+              type="button"
+              onClick={() => sendMessage(MESSAGE_TYPES.OPEN_VSCODE_MCP_BROWSER)}
+              title="Open VS Code's MCP Servers Panel. Browse and install MCPs from Microsoft's curated list of MCP servers, then return here and click 'Scan again' to import them"
+              className="flex items-center gap-1 rounded border border-panel-border px-2 py-1 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+            >
+              <i className="codicon codicon-extensions text-xxs" />
+              VS Code MCP
+            </button>
+          )}
         </div>
 
         {discoveryTab === MCP_MANAGER_DISCOVERY_TABS.LOCAL && (
@@ -1152,7 +1206,10 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-xs text-description-fg">
                 Import local MCP entries into the {activeScope} FlightPath
-                registry.
+                registry. After installing a server via VS Code or another tool,
+                click{" "}
+                <span className="font-medium text-foreground">Scan again</span>{" "}
+                to pick up the changes.
               </div>
               <button
                 type="button"
@@ -1325,7 +1382,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                               ? entry.installCommand
                               : entry.remoteUrl
                                 ? `${entry.remoteTransport ?? "streamable-http"}: ${entry.remoteUrl}`
-                                : entry.packageName ?? entry.id}
+                                : (entry.packageName ?? entry.id)}
                           </div>
                           {entry.description && (
                             <div className="line-clamp-2 text-xxs text-description-fg">
@@ -1335,11 +1392,14 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           {entry.envVars?.length ? (
                             <div className="text-xxs text-description-fg">
                               Requires env:{" "}
-                              {entry.envVars.map((envVar) => envVar.name).join(", ")}
+                              {entry.envVars
+                                .map((envVar) => envVar.name)
+                                .join(", ")}
                             </div>
                           ) : null}
-                          {entry.remoteHeaders?.filter((header) => header.isRequired)
-                            .length ? (
+                          {entry.remoteHeaders?.filter(
+                            (header) => header.isRequired
+                          ).length ? (
                             <div className="text-xxs text-description-fg">
                               Requires header:{" "}
                               {entry.remoteHeaders
@@ -1367,12 +1427,15 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                   })}
                 </div>
 
-                {(remotePageCursors.length > 1 || Boolean(remoteNextCursor)) && (
+                {(remotePageCursors.length > 1 ||
+                  Boolean(remoteNextCursor)) && (
                   <div className="flex items-center justify-between">
                     <button
                       type="button"
                       onClick={goPrevPage}
-                      disabled={remotePageCursors.length <= 1 || isLoadingRemote}
+                      disabled={
+                        remotePageCursors.length <= 1 || isLoadingRemote
+                      }
                       className="flex items-center gap-1 rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <i className="codicon codicon-chevron-left text-xxs" />
@@ -1497,7 +1560,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             <p className="mb-4 text-xs text-description-fg">
               Remove {deleteTargetState.ids.length} managed MCP server
               {deleteTargetState.ids.length === 1 ? "" : "s"} from{" "}
-              <strong>{getExportTargetLabel(deleteTargetState.targetId)}</strong>{" "}
+              <strong>
+                {getExportTargetLabel(deleteTargetState.targetId)}
+              </strong>{" "}
               ({deleteTargetState.scope})?
             </p>
             <div className="flex justify-end gap-2">

@@ -59,7 +59,9 @@ function hasFlightpath(arr: McpServerEntry[]): boolean {
 }
 
 /** Return the FlightPath entry as an McpServerConfig object, or undefined if not present. */
-function getFlightpathConfig(arr: McpServerEntry[]): McpServerConfig | undefined {
+function getFlightpathConfig(
+  arr: McpServerEntry[]
+): McpServerConfig | undefined {
   return arr.find(
     (entry): entry is McpServerConfig =>
       typeof entry === "object" && entry !== null && entry.id === "flightpath"
@@ -148,11 +150,7 @@ function ScopeBadge({ scope }: { scope: SettingWriteScope }) {
   );
 }
 
-function ServerDetails({
-  server,
-}: {
-  server: ListedServer;
-}) {
+function ServerDetails({ server }: { server: ListedServer }) {
   const detailRows: Array<{ label: string; value: string | null }> = [
     { label: "id", value: server.config.id },
     { label: "command", value: server.config.command ?? null },
@@ -167,7 +165,9 @@ function ServerDetails({
     },
     {
       label: "env",
-      value: server.config.env ? Object.keys(server.config.env).join(", ") : null,
+      value: server.config.env
+        ? Object.keys(server.config.env).join(", ")
+        : null,
     },
     {
       label: "headers",
@@ -180,12 +180,14 @@ function ServerDetails({
       value:
         typeof server.config.autoApprove === "boolean"
           ? String(server.config.autoApprove)
-          : server.config.autoApprove?.join(", ") ?? null,
+          : (server.config.autoApprove?.join(", ") ?? null),
     },
   ];
 
   const uniqueScopes = [
-    ...new Set(server.managed?.locations.map((location) => location.scope) ?? []),
+    ...new Set(
+      server.managed?.locations.map((location) => location.scope) ?? []
+    ),
   ];
 
   return (
@@ -214,7 +216,8 @@ function ServerDetails({
         </div>
       ) : (
         <div className="text-xs text-description-fg">
-          This server is currently configured but is not installed in MCP Manager.
+          This server is currently configured but is not installed in MCP
+          Manager.
         </div>
       )}
     </div>
@@ -254,10 +257,13 @@ function McpServersPanel({
 }) {
   const arr = Array.isArray(value) ? value : [];
   const hasLegacyRows = rows.some((row) => row.isLegacy);
-  const showEmptyHint = rows.length === 0 && (managedServers?.length ?? 0) === 0;
+  const showEmptyHint =
+    rows.length === 0 && (managedServers?.length ?? 0) === 0;
 
   return (
-    <div className={`flex flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}>
+    <div
+      className={`flex flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}
+    >
       <div className="flex flex-col gap-1">
         <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
           Built-in
@@ -310,7 +316,11 @@ function McpServersPanel({
                   <button
                     key={tool.id}
                     type="button"
-                    onClick={readOnly ? undefined : () => onToggleFlightpathTool?.(tool.id)}
+                    onClick={
+                      readOnly
+                        ? undefined
+                        : () => onToggleFlightpathTool?.(tool.id)
+                    }
                     disabled={readOnly}
                     title={tool.description}
                     className={`flex items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors ${
@@ -338,7 +348,9 @@ function McpServersPanel({
         </div>
       </div>
 
-      <div className={`flex flex-col gap-1${fillHeight ? " flex-1 min-h-0" : ""}`}>
+      <div
+        className={`flex flex-col gap-1${fillHeight ? " flex-1 min-h-0" : ""}`}
+      >
         <div className="text-xxs font-semibold uppercase text-description-fg tracking-wide">
           Installed Servers
         </div>
@@ -366,7 +378,8 @@ function McpServersPanel({
                 server.managed?.displayName?.trim() || server.config.id;
               const uniqueScopes = [
                 ...new Set(
-                  server.managed?.locations.map((location) => location.scope) ?? []
+                  server.managed?.locations.map((location) => location.scope) ??
+                    []
                 ),
               ];
 
@@ -388,10 +401,14 @@ function McpServersPanel({
                       disabled={readOnly}
                       className="flex flex-shrink-0 items-center"
                       aria-label={
-                        server.enabled ? `Disable ${server.id}` : `Enable ${server.id}`
+                        server.enabled
+                          ? `Disable ${server.id}`
+                          : `Enable ${server.id}`
                       }
                       title={
-                        server.enabled ? `Disable ${server.id}` : `Enable ${server.id}`
+                        server.enabled
+                          ? `Disable ${server.id}`
+                          : `Enable ${server.id}`
                       }
                     >
                       <input
@@ -450,20 +467,23 @@ function McpServersPanel({
 
         {hasLegacyRows && (
           <div className="px-1 text-xxs text-description-fg">
-            Legacy selections remain enabled until you remove them. Install them in
-            MCP Manager to manage them here again.
+            Legacy selections remain enabled until you remove them. Install them
+            in MCP Manager to manage them here again.
           </div>
         )}
 
         {arr.length === 0 && !showEmptyHint && rows.length === 0 && (
-          <div className="px-1 text-xs text-description-fg italic">None added</div>
+          <div className="px-1 text-xs text-description-fg italic">
+            None added
+          </div>
         )}
 
         {onManageServers && (
           <button
             type="button"
             onClick={onManageServers}
-            className="flex items-center justify-center gap-1 px-1 text-xs text-link-fg hover:text-link-active-fg transition-colors"
+            className="mb-1 flex items-center justify-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover transition-colors"
+            title="Open MCP Manager in Settings to add, edit, or remove MCP servers"
           >
             <i className="codicon codicon-settings-gear text-xxs" />
             Manage MCP Servers
@@ -519,8 +539,12 @@ export const McpServersEditor: React.FC<{
   const requestServers = useMcpManagerStore((state) => state.requestServers);
 
   const globalSettingsOpen = useUiStore((state) => state.globalSettingsOpen);
-  const toggleGlobalSettings = useUiStore((state) => state.toggleGlobalSettings);
-  const setGlobalSettingsTab = useUiStore((state) => state.setGlobalSettingsTab);
+  const toggleGlobalSettings = useUiStore(
+    (state) => state.toggleGlobalSettings
+  );
+  const setGlobalSettingsTab = useUiStore(
+    (state) => state.setGlobalSettingsTab
+  );
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -533,9 +557,10 @@ export const McpServersEditor: React.FC<{
   const mode: "default" | "custom" =
     showDefault && value === undefined ? "default" : "custom";
 
-  const currentArray = useMemo(() => (Array.isArray(value) ? value : []), [
-    value,
-  ]);
+  const currentArray = useMemo(
+    () => (Array.isArray(value) ? value : []),
+    [value]
+  );
   const inheritedArray = useMemo(
     () => (Array.isArray(inheritedValue) ? inheritedValue : []),
     [inheritedValue]
@@ -601,7 +626,9 @@ export const McpServersEditor: React.FC<{
         buildArray(
           flightpathEnabled,
           flightpathDeniedTools,
-          serverEntries.filter((entry) => !isMatchingServerEntry(entry, serverId))
+          serverEntries.filter(
+            (entry) => !isMatchingServerEntry(entry, serverId)
+          )
         )
       );
       return;
@@ -612,7 +639,9 @@ export const McpServersEditor: React.FC<{
 
     onChange(
       buildArray(flightpathEnabled, flightpathDeniedTools, [
-        ...serverEntries.filter((entry) => !isMatchingServerEntry(entry, serverId)),
+        ...serverEntries.filter(
+          (entry) => !isMatchingServerEntry(entry, serverId)
+        ),
         managedServer.config,
       ])
     );
@@ -626,7 +655,9 @@ export const McpServersEditor: React.FC<{
   };
 
   return (
-    <div className={`flex flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}>
+    <div
+      className={`flex flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}
+    >
       {showDefault && (
         <div className="flex gap-1">
           {(["default", "custom"] as const).map((option) => (
@@ -687,9 +718,7 @@ export const McpServersEditor: React.FC<{
 };
 
 /** Build a human-readable inherit label for an mcpServers array from workflow/global settings */
-export function buildMcpDefaultLabel(
-  servers: McpServersValue
-): string {
+export function buildMcpDefaultLabel(servers: McpServersValue): string {
   const entries = Array.isArray(servers) ? servers : [];
   if (entries.length === 0) return "Inherit (None)";
 

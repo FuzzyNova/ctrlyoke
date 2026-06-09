@@ -561,8 +561,7 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW, async (message) => {
-      const workspaceRoot =
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       let content: string;
       if (!workspaceRoot) {
         content = "No workspace folder open.";
@@ -664,13 +663,15 @@ export class WebviewMessageRouter {
       );
     });
 
-      table.set(MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS, async (message) => {
-        await this.handleExportMcpToHarness(message as ExportMcpToHarnessMessage);
-      });
+    table.set(MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS, async (message) => {
+      await this.handleExportMcpToHarness(message as ExportMcpToHarnessMessage);
+    });
 
-      table.set(MESSAGE_TYPES.DELETE_MCP_FROM_HARNESS, async (message) => {
-        await this.handleDeleteMcpFromHarness(message as DeleteMcpFromHarnessMessage);
-      });
+    table.set(MESSAGE_TYPES.DELETE_MCP_FROM_HARNESS, async (message) => {
+      await this.handleDeleteMcpFromHarness(
+        message as DeleteMcpFromHarnessMessage
+      );
+    });
 
     // ── Harness File Manager ─────────────────────────────────────────────
     table.set(MESSAGE_TYPES.REQUEST_HARNESS_FILES, async (message) => {
@@ -1049,6 +1050,10 @@ export class WebviewMessageRouter {
 
     table.set(MESSAGE_TYPES.OPEN_SETTINGS, () => {
       this.settingsSync.handleOpenSettings();
+    });
+
+    table.set(MESSAGE_TYPES.OPEN_VSCODE_MCP_BROWSER, () => {
+      vscode.commands.executeCommand("workbench.mcp.browseServers");
     });
 
     table.set(MESSAGE_TYPES.GLOBAL_SETTINGS_LOAD_REQUEST, () => {
@@ -2036,7 +2041,9 @@ export class WebviewMessageRouter {
     const lowerRef = ref.toLowerCase();
     if (lowerRef === GIT_CHANGE_KINDS.DIFF) {
       const content = await getWorkingTreeDiff(workspaceRoot);
-      return content.trim() ? content : "No uncommitted changes in working tree.";
+      return content.trim()
+        ? content
+        : "No uncommitted changes in working tree.";
     }
     if (lowerRef === GIT_CHANGE_KINDS.STAGED) {
       const content = await getStagedDiff(workspaceRoot);
