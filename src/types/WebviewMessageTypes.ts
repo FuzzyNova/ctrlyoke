@@ -1195,6 +1195,7 @@ export interface RegistryMcpEntry {
 }
 
 export interface ManagedMcpServerLocation {
+  targetId: AnyTargetId;
   scope: SettingWriteScope;
   path: string;
 }
@@ -1239,6 +1240,14 @@ export interface ExportMcpToHarnessMessage {
   servers: McpServerConfig[];
   targetId: AnyTargetId;
   scope: SettingWriteScope;
+}
+
+export interface DeleteMcpFromHarnessMessage {
+  type: typeof MESSAGE_TYPES.DELETE_MCP_FROM_HARNESS;
+  ids: string[];
+  targetId: AnyTargetId;
+  scope: SettingWriteScope;
+  filePath?: string;
 }
 
 export interface McpRegistryServersUpdateMessage {

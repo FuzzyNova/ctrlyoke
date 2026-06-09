@@ -35,15 +35,43 @@ import type { McpServerConfig } from "@root/types/FlightPathTypes";
 import type {
   LocalMcpServerEntry,
   ManagedMcpServer,
-  ManagedMcpServerLocation,
   RegistryMcpEntry,
 } from "@root/types/WebviewMessageTypes";
 
 type DefaultMcpServerValue = (string | McpServerConfig)[];
-type PendingExportTarget = {
-  id: AnyTargetId;
+
+type McpManagerSectionProps = {
+  activeScope: SettingWriteScope;
+};
+
+type ResolvedServerLocation = {
+  kind: "registry" | "harness";
+  targetId: AnyTargetId;
+  scope: SettingWriteScope;
+  path: string;
+  sourceLabel: string;
+};
+
+type DeleteLocationState = {
+  serverId: string;
+  displayName: string;
+  location: ResolvedServerLocation;
+};
+
+type DeleteTargetState = {
+  ids: string[];
+  targetId: AnyTargetId;
   scope: SettingWriteScope;
 };
+
+const EXPORT_TARGET_IDS = [
+  SPECIAL_TARGET_IDS.VSCODE,
+  HARNESS_IDS.CLAUDE_CLI,
+  HARNESS_IDS.COPILOT_CLI,
+  HARNESS_IDS.CODEX_CLI,
+  HARNESS_IDS.OPENCODE_CLI,
+  HARNESS_IDS.QWEN_CLI,
+] as const;
 
 function formatScopeLabel(scope: SettingWriteScope): string {
   return scope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User";
@@ -90,7 +118,10 @@ function getServerSummary(server: McpServerConfig): string {
     : `${server.command ?? ""}${server.args ? ` ${server.args.join(" ")}` : ""}`;
 }
 
-function isDefaultServerEntry(entry: string | McpServerConfig, id: string): boolean {
+function isDefaultServerEntry(
+  entry: string | McpServerConfig,
+  id: string
+): boolean {
   return typeof entry === "string" ? entry === id : entry.id === id;
 }
 
@@ -98,7 +129,9 @@ function upsertDefaultServer(
   current: DefaultMcpServerValue,
   server: McpServerConfig
 ): DefaultMcpServerValue {
-  const remaining = current.filter((entry) => !isDefaultServerEntry(entry, server.id));
+  const remaining = current.filter(
+    (entry) => !isDefaultServerEntry(entry, server.id)
+  );
   return [...remaining, server];
 }
 
@@ -154,7 +187,9 @@ function registryEntryToServer(entry: RegistryMcpEntry): McpServerConfig {
       url: entry.remoteUrl,
       transport: entry.remoteTransport ?? "streamable-http",
     };
-    const requiredHeaders = entry.remoteHeaders?.filter((header) => header.isRequired);
+    const requiredHeaders = entry.remoteHeaders?.filter(
+      (header) => header.isRequired
+    );
     if (requiredHeaders?.length) {
       server.headers = Object.fromEntries(
         requiredHeaders.map((header) => [header.name, ""])
@@ -173,7 +208,9 @@ function registryEntryToServer(entry: RegistryMcpEntry): McpServerConfig {
       server.args = parts.slice(1);
     }
     if (entry.envVars?.length) {
-      server.env = Object.fromEntries(entry.envVars.map((envVar) => [envVar.name, ""]));
+      server.env = Object.fromEntries(
+        entry.envVars.map((envVar) => [envVar.name, ""])
+      );
     }
     return server;
   }
@@ -183,7 +220,9 @@ function registryEntryToServer(entry: RegistryMcpEntry): McpServerConfig {
     : { id, command: "npx" };
 
   if (entry.envVars?.length) {
-    server.env = Object.fromEntries(entry.envVars.map((envVar) => [envVar.name, ""]));
+    server.env = Object.fromEntries(
+      entry.envVars.map((envVar) => [envVar.name, ""])
+    );
   }
 
   return server;
@@ -197,14 +236,17 @@ function sortRegistryServers(
 
   if (sort === MCP_MANAGER_REMOTE_SORTS.Z_TO_A) {
     return [...servers].sort((a, b) =>
-      getRegistryEntryDisplayName(b).localeCompare(getRegistryEntryDisplayName(a))
+      getRegistryEntryDisplayName(b).localeCompare(
+        getRegistryEntryDisplayName(a)
+      )
     );
   }
 
   if (sort === MCP_MANAGER_REMOTE_SORTS.RECENTLY_UPDATED) {
     return [...servers].sort(
       (a, b) =>
-        new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
+        new Date(b.updatedAt ?? 0).getTime() -
+        new Date(a.updatedAt ?? 0).getTime()
     );
   }
 
@@ -229,6 +271,7 @@ function decodeTarget(encoded: string): {
 }
 
 function getExportTargetLabel(id: AnyTargetId): string {
+  if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) return "FlightPath";
   if (id === SPECIAL_TARGET_IDS.VSCODE) return "VS Code";
   if (id in HARNESS_INFO) {
     return HARNESS_INFO[id as keyof typeof HARNESS_INFO].shortName;
@@ -240,6 +283,11 @@ function getExportTargetDescription(
   id: AnyTargetId,
   scope: SettingWriteScope
 ): string {
+  if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+    return scope === SETTING_SCOPES.WORKSPACE
+      ? ".flightpath/mcp/servers.json"
+      : "~/.flightpath/mcp/servers.json";
+  }
   if (id === SPECIAL_TARGET_IDS.VSCODE) {
     return scope === SETTING_SCOPES.WORKSPACE
       ? ".vscode/mcp.json"
@@ -271,29 +319,35 @@ function getExportTargetDescription(
   return scope;
 }
 
-function buildExportGroups(hasWorkspaceRoot: boolean): FlyoutGroup[] {
-  const exportTargets = [
-    SPECIAL_TARGET_IDS.VSCODE,
-    HARNESS_IDS.CLAUDE_CLI,
-    HARNESS_IDS.COPILOT_CLI,
-    HARNESS_IDS.CODEX_CLI,
-    HARNESS_IDS.OPENCODE_CLI,
-    HARNESS_IDS.QWEN_CLI,
-  ] as const;
-
+function buildExportGroups(
+  hasWorkspaceRoot: boolean,
+  presentKeys?: Set<string>
+): FlyoutGroup[] {
   const workspaceItems: ActionDropdownItem[] = hasWorkspaceRoot
-    ? exportTargets.map((id) => ({
-        label: getExportTargetLabel(id),
-        value: encodeTarget(id, SETTING_SCOPES.WORKSPACE),
-        description: getExportTargetDescription(id, SETTING_SCOPES.WORKSPACE),
-      }))
+    ? EXPORT_TARGET_IDS.map((id) => {
+        const encoded = encodeTarget(id, SETTING_SCOPES.WORKSPACE);
+        const alreadyPresent = presentKeys?.has(encoded) ?? false;
+        return {
+          label: getExportTargetLabel(id),
+          value: encoded,
+          description: getExportTargetDescription(id, SETTING_SCOPES.WORKSPACE),
+          disabled: alreadyPresent,
+          title: alreadyPresent ? "Already exported" : undefined,
+        };
+      })
     : [];
 
-  const userItems: ActionDropdownItem[] = exportTargets.map((id) => ({
-    label: getExportTargetLabel(id),
-    value: encodeTarget(id, SETTING_SCOPES.USER),
-    description: getExportTargetDescription(id, SETTING_SCOPES.USER),
-  }));
+  const userItems: ActionDropdownItem[] = EXPORT_TARGET_IDS.map((id) => {
+    const encoded = encodeTarget(id, SETTING_SCOPES.USER);
+    const alreadyPresent = presentKeys?.has(encoded) ?? false;
+    return {
+      label: getExportTargetLabel(id),
+      value: encoded,
+      description: getExportTargetDescription(id, SETTING_SCOPES.USER),
+      disabled: alreadyPresent,
+      title: alreadyPresent ? "Already exported" : undefined,
+    };
+  });
 
   return [
     ...(workspaceItems.length > 0
@@ -303,10 +357,82 @@ function buildExportGroups(hasWorkspaceRoot: boolean): FlyoutGroup[] {
   ];
 }
 
-function ScopeBadge({ scope }: { scope: SettingWriteScope }) {
+function getTargetForLocalSource(
+  source: LocalMcpServerEntry["source"]
+): { targetId: AnyTargetId; scope: SettingWriteScope } | null {
+  switch (source) {
+    case "vscode-workspace":
+      return { targetId: SPECIAL_TARGET_IDS.VSCODE, scope: SETTING_SCOPES.WORKSPACE };
+    case "vscode-user":
+      return { targetId: SPECIAL_TARGET_IDS.VSCODE, scope: SETTING_SCOPES.USER };
+    case "claude-workspace":
+      return { targetId: HARNESS_IDS.CLAUDE_CLI, scope: SETTING_SCOPES.WORKSPACE };
+    case "claude-user":
+      return { targetId: HARNESS_IDS.CLAUDE_CLI, scope: SETTING_SCOPES.USER };
+    case "copilot-workspace":
+      return { targetId: HARNESS_IDS.COPILOT_CLI, scope: SETTING_SCOPES.WORKSPACE };
+    case "copilot-user":
+      return { targetId: HARNESS_IDS.COPILOT_CLI, scope: SETTING_SCOPES.USER };
+    case "codex-workspace":
+      return { targetId: HARNESS_IDS.CODEX_CLI, scope: SETTING_SCOPES.WORKSPACE };
+    case "codex-user":
+      return { targetId: HARNESS_IDS.CODEX_CLI, scope: SETTING_SCOPES.USER };
+    case "opencode-workspace":
+      return { targetId: HARNESS_IDS.OPENCODE_CLI, scope: SETTING_SCOPES.WORKSPACE };
+    case "opencode-user":
+      return { targetId: HARNESS_IDS.OPENCODE_CLI, scope: SETTING_SCOPES.USER };
+    case "qwen-workspace":
+      return { targetId: HARNESS_IDS.QWEN_CLI, scope: SETTING_SCOPES.WORKSPACE };
+    case "qwen-user":
+      return { targetId: HARNESS_IDS.QWEN_CLI, scope: SETTING_SCOPES.USER };
+  }
+
+  return null;
+}
+
+function encodeLocationValue(location: ResolvedServerLocation): string {
+  return JSON.stringify(location);
+}
+
+function decodeLocationValue(value: string): ResolvedServerLocation {
+  return JSON.parse(value) as ResolvedServerLocation;
+}
+
+function sortResolvedLocations(
+  locations: ResolvedServerLocation[]
+): ResolvedServerLocation[] {
+  return [...locations].sort((a, b) => {
+    if (a.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+      return b.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH
+        ? a.scope.localeCompare(b.scope)
+        : -1;
+    }
+    if (b.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+      return 1;
+    }
+    const labelCompare = getExportTargetLabel(a.targetId).localeCompare(
+      getExportTargetLabel(b.targetId),
+      undefined,
+      { sensitivity: "base" }
+    );
+    if (labelCompare !== 0) {
+      return labelCompare;
+    }
+    if (a.scope !== b.scope) {
+      return a.scope === SETTING_SCOPES.WORKSPACE ? -1 : 1;
+    }
+    return a.path.localeCompare(b.path, undefined, { sensitivity: "base" });
+  });
+}
+
+function ScopeBadge({
+  label,
+}: {
+  label: string;
+}) {
   return (
     <span className="inline-flex items-center rounded border border-panel-border bg-list-hover-bg px-1.5 py-0.5 text-xxs font-medium leading-none text-foreground">
-      {formatScopeLabel(scope)}
+      {label}
     </span>
   );
 }
@@ -314,9 +440,11 @@ function ScopeBadge({ scope }: { scope: SettingWriteScope }) {
 function ServerDetails({
   server,
   defaultsEnabled,
+  locations,
 }: {
   server: ManagedMcpServer;
   defaultsEnabled: boolean;
+  locations: ResolvedServerLocation[];
 }) {
   const config = server.config;
   const detailRows: Array<{ label: string; value: string | null }> = [
@@ -326,9 +454,10 @@ function ServerDetails({
     { label: "url", value: config.url ?? null },
     {
       label: "transport",
-      value: config.transport && config.transport !== "streamable-http"
-        ? config.transport
-        : null,
+      value:
+        config.transport && config.transport !== "streamable-http"
+          ? config.transport
+          : null,
     },
     {
       label: "env",
@@ -365,14 +494,18 @@ function ServerDetails({
       </div>
       <div className="space-y-1">
         <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-          Registry locations
+          Locations
         </div>
-        {server.locations.map((location) => (
+        {locations.map((location) => (
           <div
-            key={`${location.scope}:${location.path}`}
+            key={`${location.kind}:${location.targetId}:${location.scope}:${location.path}`}
             className="flex items-center gap-2 text-xs text-description-fg"
           >
-            <ScopeBadge scope={location.scope} />
+            <ScopeBadge
+              label={`${getExportTargetLabel(location.targetId)} · ${formatScopeLabel(
+                location.scope
+              )}`}
+            />
             <span className="truncate font-mono">
               {formatPathForDisplay(location.path)}
             </span>
@@ -383,16 +516,17 @@ function ServerDetails({
   );
 }
 
-export function McpManagerSection() {
+export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   const managedServers = useMcpManagerStore((state) => state.managedServers);
   const isLoadingManagedServers = useMcpManagerStore(
     (state) => state.isLoadingRegistry
   );
-  const activeScope = useMcpManagerStore((state) => state.activeScope);
-  const setActiveScope = useMcpManagerStore((state) => state.setActiveScope);
   const requestServers = useMcpManagerStore((state) => state.requestServers);
   const addOrUpdateServer = useMcpManagerStore((state) => state.addOrUpdateServer);
   const deleteServer = useMcpManagerStore((state) => state.deleteServer);
+  const deleteFromHarness = useMcpManagerStore(
+    (state) => state.deleteFromHarness
+  );
   const requestLocalScan = useMcpManagerStore((state) => state.requestLocalScan);
   const localServers = useMcpManagerStore((state) => state.localServers);
   const isLoadingLocal = useMcpManagerStore((state) => state.isLoadingLocal);
@@ -428,10 +562,11 @@ export function McpManagerSection() {
   const [addForm, setAddForm] = useState<McpServerFormState>(
     EMPTY_MCP_SERVER_FORM_STATE
   );
-  const [pendingExportTarget, setPendingExportTarget] =
-    useState<PendingExportTarget | null>(null);
+  const [deleteLocationState, setDeleteLocationState] =
+    useState<DeleteLocationState | null>(null);
+  const [deleteTargetState, setDeleteTargetState] =
+    useState<DeleteTargetState | null>(null);
 
-  const didAutoScanLocal = useRef(false);
   const hasLoadedRemoteRegistry = useRef(false);
 
   const defaultsServers = useMemo<DefaultMcpServerValue>(() => {
@@ -451,6 +586,27 @@ export function McpManagerSection() {
     () => new Map((managedServers ?? []).map((server) => [server.id, server])),
     [managedServers]
   );
+
+  const localLocationsById = useMemo(() => {
+    const byId = new Map<string, ResolvedServerLocation[]>();
+    for (const entry of localServers) {
+      const target = getTargetForLocalSource(entry.source);
+      if (!target) {
+        continue;
+      }
+      const location: ResolvedServerLocation = {
+        kind: "harness",
+        targetId: target.targetId,
+        scope: target.scope,
+        path: entry.path,
+        sourceLabel: formatLocalSourceLabel(entry.source),
+      };
+      const current = byId.get(entry.id) ?? [];
+      current.push(location);
+      byId.set(entry.id, current);
+    }
+    return byId;
+  }, [localServers]);
 
   const sortedRemoteServers = useMemo(
     () => sortRegistryServers(remoteServers, remoteSort),
@@ -479,7 +635,7 @@ export function McpManagerSection() {
       "qwen-user",
     ] as LocalMcpServerEntry["source"][];
     const orderedGroups = orderedSources.flatMap((source) => {
-      const entries = groups.get(source as LocalMcpServerEntry["source"]);
+      const entries = groups.get(source);
       return entries ? [{ source, entries }] : [];
     });
     const extraGroups = [...groups.entries()]
@@ -489,34 +645,53 @@ export function McpManagerSection() {
     return [...orderedGroups, ...extraGroups];
   }, [localServers]);
 
-  const exportGroups = useMemo(
-    () => buildExportGroups(hasWorkspaceRoot),
-    [hasWorkspaceRoot]
-  );
-
   const exportableServers = useMemo(
     () => (managedServers ?? []).map((server) => server.config),
     [managedServers]
   );
 
-  useEffect(() => {
-    requestServers();
-  }, [requestServers]);
+  const bulkDeleteItems = useMemo<ActionDropdownItem[]>(() => {
+    const managedIds = new Set((managedServers ?? []).map((server) => server.id));
+    const grouped = new Map<
+      string,
+      { targetId: AnyTargetId; scope: SettingWriteScope; count: number }
+    >();
 
-  useEffect(() => {
-    if (
-      discoveryTab !== MCP_MANAGER_DISCOVERY_TABS.LOCAL ||
-      didAutoScanLocal.current ||
-      isLoadingLocal ||
-      localError ||
-      localServers.length > 0
-    ) {
-      return;
+    for (const entry of localServers) {
+      if (!managedIds.has(entry.id)) {
+        continue;
+      }
+      const target = getTargetForLocalSource(entry.source);
+      if (!target) {
+        continue;
+      }
+      const key = encodeTarget(target.targetId, target.scope);
+      const current = grouped.get(key);
+      grouped.set(key, {
+        targetId: target.targetId,
+        scope: target.scope,
+        count: (current?.count ?? 0) + 1,
+      });
     }
 
-    didAutoScanLocal.current = true;
+    return [...grouped.entries()]
+      .map(([value, target]) => ({
+        label: `${getExportTargetLabel(target.targetId)} (${formatScopeLabel(
+          target.scope
+        )})`,
+        value,
+        description:
+          target.count === 1
+            ? "Delete one exported managed server copy"
+            : `Delete ${target.count} exported managed server copies`,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [localServers, managedServers]);
+
+  useEffect(() => {
+    requestServers();
     requestLocalScan();
-  }, [discoveryTab, isLoadingLocal, localError, localServers.length, requestLocalScan]);
+  }, [requestServers, requestLocalScan]);
 
   useEffect(() => {
     if (discoveryTab !== MCP_MANAGER_DISCOVERY_TABS.REGISTRY) {
@@ -546,10 +721,14 @@ export function McpManagerSection() {
   const isServerDefault = (id: string): boolean =>
     defaultsServers.some((entry) => isDefaultServerEntry(entry, id));
 
-  const hasServerInScope = (id: string, scope: SettingWriteScope): boolean =>
+  const hasServerInRegistryScope = (id: string, scope: SettingWriteScope): boolean =>
     managedServersById
       .get(id)
-      ?.locations.some((location) => location.scope === scope) ?? false;
+      ?.locations.some(
+        (location) =>
+          location.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+          location.scope === scope
+      ) ?? false;
 
   const handleDefaultToggle = (server: ManagedMcpServer) => {
     const nextDefaults = isServerDefault(server.id)
@@ -564,15 +743,6 @@ export function McpManagerSection() {
   };
 
   const handleStartEdit = (server: ManagedMcpServer) => {
-    const preferredScope =
-      server.locations.find((location) => location.scope === activeScope)?.scope ??
-      server.locations[0]?.scope ??
-      activeScope;
-
-    if (preferredScope !== activeScope) {
-      setActiveScope(preferredScope);
-    }
-
     setEditingId(server.id);
     setEditForm(serverToMcpServerFormState(server.config));
     setExpandedId(server.id);
@@ -619,29 +789,31 @@ export function McpManagerSection() {
     addOrUpdateServer(registryEntryToServer(entry), activeScope);
   };
 
-  const handleConfirmExport = () => {
-    if (!pendingExportTarget) return;
-    exportToHarness(
-      exportableServers,
-      pendingExportTarget.id,
-      pendingExportTarget.scope
-    );
-    setPendingExportTarget(null);
+  const handleConfirmDeleteLocation = () => {
+    if (!deleteLocationState) return;
+    const { serverId, location } = deleteLocationState;
+    if (location.kind === "registry") {
+      deleteServer(serverId, location.scope);
+    } else {
+      deleteFromHarness(
+        [serverId],
+        location.targetId,
+        location.scope,
+        location.path
+      );
+    }
+    setDeleteLocationState(null);
   };
 
-  const exportSubtitle =
-    `Export ${exportableServers.length} managed server${exportableServers.length === 1 ? "" : "s"} to another harness config`;
-  const pendingExportPath = pendingExportTarget
-    ? getExportTargetDescription(
-        pendingExportTarget.id,
-        pendingExportTarget.scope
-      )
-    : "";
-  const pendingExportLabel = pendingExportTarget
-    ? `${formatScopeLabel(pendingExportTarget.scope)} ${getExportTargetLabel(
-        pendingExportTarget.id
-      )}`
-    : "";
+  const handleConfirmDeleteTarget = () => {
+    if (!deleteTargetState || deleteTargetState.ids.length === 0) return;
+    deleteFromHarness(
+      deleteTargetState.ids,
+      deleteTargetState.targetId,
+      deleteTargetState.scope
+    );
+    setDeleteTargetState(null);
+  };
 
   return (
     <div className="space-y-4">
@@ -650,47 +822,26 @@ export function McpManagerSection() {
           MCP Manager
         </h3>
         <p className="text-xs text-description-fg">
-          Manage the FlightPath MCP registry, import servers from local configs or
-          the MCP registry, and export managed servers to external harness configs.
-          The selected scope controls add, edit, import, and default-toggle writes.
+          Manage the FlightPath MCP registry in the active {activeScope} scope,
+          import servers from local configs or the MCP registry, and push or
+          remove individual exported copies in external harness configs.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="fp-mode-switch" role="group" aria-label="MCP manager scope">
-          <button
-            type="button"
-            onClick={() => setActiveScope(SETTING_SCOPES.WORKSPACE)}
-            className={`fp-mode-switch-btn ${activeScope === SETTING_SCOPES.WORKSPACE ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-            title="Save, import, and write defaults to workspace scope"
-          >
-            <i className="codicon codicon-project" />
-            Workspace
-          </button>
-          <div className="fp-mode-switch-divider">
-            <div className="h-full w-px bg-current opacity-40" />
-          </div>
-          <button
-            type="button"
-            onClick={() => setActiveScope(SETTING_SCOPES.USER)}
-            className={`fp-mode-switch-btn ${activeScope === SETTING_SCOPES.USER ? "fp-mode-switch-btn-active" : "fp-mode-switch-btn-inactive"}`}
-            title="Save, import, and write defaults to user scope"
-          >
-            <i className="codicon codicon-person" />
-            User
-          </button>
-        </div>
-
         <span className="text-xxs text-description-fg">
-          Active scope: {formatScopeLabel(activeScope)}
+          Using top-level scope: {formatScopeLabel(activeScope)}
         </span>
 
-        <div className="ml-auto">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {exportableServers.length > 0 ? (
             <FlyoutActionDropdown
-              label="Export to Harness"
-              groups={exportGroups}
-              onSelect={(encoded) => setPendingExportTarget(decodeTarget(encoded))}
+              label="Save All"
+              groups={buildExportGroups(hasWorkspaceRoot)}
+              onSelect={(encoded) => {
+                const { id, scope } = decodeTarget(encoded);
+                exportToHarness(exportableServers, id, scope);
+              }}
             />
           ) : (
             <button
@@ -699,51 +850,50 @@ export function McpManagerSection() {
               title="No managed servers available to export"
               className="rounded border border-btn-border bg-btn-secondary-bg px-2 py-0.5 text-xs text-disabled-fg"
             >
-              Export to Harness
+              Save All
+            </button>
+          )}
+
+          {bulkDeleteItems.length > 0 ? (
+            <ActionDropdown
+              label="Delete Exported…"
+              items={bulkDeleteItems}
+              onSelect={(encoded) => {
+                const { id, scope } = decodeTarget(encoded);
+                const ids = localServers
+                  .filter((entry) => {
+                    const target = getTargetForLocalSource(entry.source);
+                    return (
+                      target?.targetId === id &&
+                      target.scope === scope &&
+                      managedServersById.has(entry.id)
+                    );
+                  })
+                  .map((entry) => entry.id);
+                setDeleteTargetState({ ids, targetId: id, scope });
+              }}
+              className="text-error-fg"
+            />
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="No exported harness copies available to delete"
+              className="rounded border border-btn-border bg-btn-secondary-bg px-2 py-0.5 text-xs text-disabled-fg"
+            >
+              Delete Exported…
             </button>
           )}
         </div>
       </div>
 
-      {pendingExportTarget && (
-        <div className="rounded border border-focus-border bg-editor-bg px-3 py-2">
-          <div className="text-xs font-medium text-foreground">
-            Export {exportableServers.length} managed server
-            {exportableServers.length === 1 ? "" : "s"} to {pendingExportLabel}
-          </div>
-          <div className="mt-0.5 text-xxs text-description-fg">
-            Destination:{" "}
-            <span className="font-mono">{pendingExportPath}</span>
-          </div>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={handleConfirmExport}
-              className="rounded border border-btn-bg bg-btn-bg px-2 py-0.5 text-xs text-btn-fg transition-colors hover:bg-btn-hover"
-            >
-              Confirm export
-            </button>
-            <button
-              type="button"
-              onClick={() => setPendingExportTarget(null)}
-              className="rounded border border-panel-border px-2 py-0.5 text-xs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-            Installed servers
+            Managed servers
           </div>
           <span className="text-xxs text-description-fg">
             {managedServers?.length ?? 0} total
-          </span>
-          <span className="ml-auto text-xxs text-description-fg">
-            {exportSubtitle}
           </span>
         </div>
 
@@ -766,22 +916,37 @@ export function McpManagerSection() {
           {managedServers?.map((server) => {
             const isEditing = editingId === server.id;
             const defaultsEnabled = isServerDefault(server.id);
-            const removeItems: ActionDropdownItem[] = [
-              ...server.locations.map((location: ManagedMcpServerLocation) => ({
-                label: `Remove ${formatScopeLabel(location.scope)} copy`,
-                value: location.scope,
-                description: formatPathForDisplay(location.path),
-              })),
-              ...(server.locations.length > 1
-                ? [
-                    {
-                      label: "Remove both copies",
-                      value: "both",
-                      description: "Delete the workspace and user registry entries",
-                    },
-                  ]
-                : []),
-            ];
+            const registryLocations: ResolvedServerLocation[] = server.locations.map(
+              (location) => ({
+                kind: "registry",
+                targetId: location.targetId,
+                scope: location.scope,
+                path: location.path,
+                sourceLabel: "FlightPath Registry",
+              })
+            );
+            const harnessLocations = localLocationsById.get(server.id) ?? [];
+            const allLocations = sortResolvedLocations([
+              ...registryLocations,
+              ...harnessLocations,
+            ]);
+
+            const exportPresentKeys = new Set(
+              harnessLocations.map((location) =>
+                encodeTarget(location.targetId, location.scope)
+              )
+            );
+            const exportGroups = buildExportGroups(
+              hasWorkspaceRoot,
+              exportPresentKeys
+            );
+            const deleteItems: ActionDropdownItem[] = allLocations.map((location) => ({
+              label: `${getExportTargetLabel(location.targetId)} (${formatScopeLabel(
+                location.scope
+              )})`,
+              value: encodeLocationValue(location),
+              description: formatPathForDisplay(location.path),
+            }));
 
             return (
               <div
@@ -797,7 +962,7 @@ export function McpManagerSection() {
                       onCancel={handleCancelEdit}
                       submitLabel={`Save to ${formatScopeLabel(activeScope)}`}
                       title={`Edit ${server.displayName}`}
-                      subtitle={`Saving to the ${activeScope} MCP registry`}
+                      subtitle={`Saving to the ${activeScope} FlightPath registry`}
                       autoFocus
                     />
                   </div>
@@ -817,7 +982,9 @@ export function McpManagerSection() {
                         }
                       >
                         <i
-                          className={`codicon codicon-chevron-${expandedId === server.id ? "down" : "right"} text-xxs`}
+                          className={`codicon codicon-chevron-${
+                            expandedId === server.id ? "down" : "right"
+                          } text-xxs`}
                         />
                       </button>
 
@@ -837,10 +1004,12 @@ export function McpManagerSection() {
                               {server.id}
                             </span>
                           )}
-                          {server.locations.map((location) => (
+                          {allLocations.map((location) => (
                             <ScopeBadge
-                              key={`${server.id}:${location.scope}:${location.path}`}
-                              scope={location.scope}
+                              key={`${server.id}:${location.kind}:${location.targetId}:${location.scope}:${location.path}`}
+                              label={`${getExportTargetLabel(
+                                location.targetId
+                              )}${location.scope === SETTING_SCOPES.USER ? " ·user" : ""}`}
                             />
                           ))}
                         </div>
@@ -872,41 +1041,32 @@ export function McpManagerSection() {
                           onClick={() => handleStartEdit(server)}
                           className="flex h-5 w-5 items-center justify-center rounded text-description-fg hover:bg-toolbar-hover-bg hover:text-foreground"
                           aria-label={`Edit ${server.id}`}
-                          title={`Edit ${server.id}`}
+                          title={`Edit ${server.id} in ${activeScope}`}
                         >
                           <i className="codicon codicon-edit text-xxs" />
                         </button>
 
-                        {removeItems.length === 1 ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              deleteServer(server.id, server.locations[0].scope)
-                            }
-                            className="flex h-5 w-5 items-center justify-center rounded text-description-fg hover:bg-toolbar-hover-bg hover:text-error-fg"
-                            aria-label={`Remove ${server.id}`}
-                            title={`Remove ${server.id} from ${formatScopeLabel(
-                              server.locations[0].scope
-                            )}`}
-                          >
-                            <i className="codicon codicon-close text-xxs" />
-                          </button>
-                        ) : (
-                          <ActionDropdown
-                            label="Remove…"
-                            items={removeItems}
-                            onSelect={(scope) => {
-                              if (scope === "both") {
-                                server.locations.forEach((location) =>
-                                  deleteServer(server.id, location.scope)
-                                );
-                                return;
-                              }
-                              deleteServer(server.id, scope as SettingWriteScope);
-                            }}
-                            className="shrink-0"
-                          />
-                        )}
+                        <FlyoutActionDropdown
+                          label="Save"
+                          groups={exportGroups}
+                          onSelect={(encoded) => {
+                            const { id, scope } = decodeTarget(encoded);
+                            exportToHarness([server.config], id, scope);
+                          }}
+                        />
+
+                        <ActionDropdown
+                          label="Delete…"
+                          items={deleteItems}
+                          onSelect={(value) =>
+                            setDeleteLocationState({
+                              serverId: server.id,
+                              displayName: server.displayName,
+                              location: decodeLocationValue(value),
+                            })
+                          }
+                          className="shrink-0 text-error-fg"
+                        />
                       </div>
                     </div>
 
@@ -914,6 +1074,7 @@ export function McpManagerSection() {
                       <ServerDetails
                         server={server}
                         defaultsEnabled={defaultsEnabled}
+                        locations={allLocations}
                       />
                     )}
                   </>
@@ -934,7 +1095,7 @@ export function McpManagerSection() {
                 }}
                 submitLabel={`Add to ${formatScopeLabel(activeScope)}`}
                 title="Add MCP server"
-                subtitle={`Save to the ${activeScope} MCP registry`}
+                subtitle={`Save to the ${activeScope} FlightPath registry`}
                 autoFocus
               />
             ) : (
@@ -990,7 +1151,8 @@ export function McpManagerSection() {
           <div className="space-y-2 rounded border border-panel-border bg-editor-bg p-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-xs text-description-fg">
-                Import local MCP entries into the {activeScope} registry.
+                Import local MCP entries into the {activeScope} FlightPath
+                registry.
               </div>
               <button
                 type="button"
@@ -1018,15 +1180,16 @@ export function McpManagerSection() {
                 {groupedLocalServers.map((group) => (
                   <div key={group.source} className="space-y-1.5">
                     <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
-                      {formatLocalSourceLabel(
-                        group.source as LocalMcpServerEntry["source"]
-                      )}
+                      {formatLocalSourceLabel(group.source)}
                     </div>
                     {group.entries.map((entry) => {
-                      const alreadyAdded = hasServerInScope(entry.id, activeScope);
+                      const alreadyAdded = hasServerInRegistryScope(
+                        entry.id,
+                        activeScope
+                      );
                       return (
                         <div
-                          key={`${entry.source}:${entry.id}`}
+                          key={`${entry.source}:${entry.path}:${entry.id}`}
                           className="flex items-center justify-between gap-2 rounded border border-panel-border px-2 py-1.5"
                         >
                           <div className="min-w-0">
@@ -1038,7 +1201,11 @@ export function McpManagerSection() {
                                 ? entry.transport === "sse"
                                   ? `sse: ${entry.url}`
                                   : entry.url
-                                : `${entry.command ?? ""}${entry.args?.length ? ` ${entry.args.join(" ")}` : ""}`}
+                                : `${entry.command ?? ""}${
+                                    entry.args?.length
+                                      ? ` ${entry.args.join(" ")}`
+                                      : ""
+                                  }`}
                             </div>
                             <div className="truncate font-mono text-xxs text-description-fg">
                               {formatPathForDisplay(entry.path)}
@@ -1132,7 +1299,10 @@ export function McpManagerSection() {
                 <div className="space-y-2">
                   {sortedRemoteServers.map((entry) => {
                     const importId = registryEntryToSlug(entry);
-                    const alreadyAdded = hasServerInScope(importId, activeScope);
+                    const alreadyAdded = hasServerInRegistryScope(
+                      importId,
+                      activeScope
+                    );
                     return (
                       <div
                         key={entry.id}
@@ -1231,6 +1401,124 @@ export function McpManagerSection() {
           </div>
         )}
       </div>
+
+      {deleteLocationState && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          role="button"
+          tabIndex={0}
+          aria-label="Close delete MCP location dialog"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setDeleteLocationState(null);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              (event.key === "Enter" ||
+                event.key === " " ||
+                event.key === "Escape")
+            ) {
+              event.preventDefault();
+              setDeleteLocationState(null);
+            }
+          }}
+        >
+          <div
+            className="mx-4 w-full max-w-sm rounded border border-panel-border bg-editor-bg p-4 shadow-lg"
+            role="dialog"
+            aria-modal="true"
+          >
+            <p className="mb-1 text-sm font-semibold text-foreground">
+              Delete MCP location?
+            </p>
+            <p className="mb-4 text-xs text-description-fg">
+              Remove <strong>{deleteLocationState.displayName}</strong> from{" "}
+              <strong>
+                {getExportTargetLabel(deleteLocationState.location.targetId)}
+              </strong>{" "}
+              ({deleteLocationState.location.scope})?
+            </p>
+            <div className="mb-4 truncate font-mono text-xxs text-description-fg">
+              {formatPathForDisplay(deleteLocationState.location.path)}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteLocationState(null)}
+                className="rounded border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteLocation}
+                className="rounded bg-btn-bg px-3 py-1 text-xs text-btn-fg hover:bg-btn-hover"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTargetState && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          role="button"
+          tabIndex={0}
+          aria-label="Close delete exported MCP copies dialog"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setDeleteTargetState(null);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              (event.key === "Enter" ||
+                event.key === " " ||
+                event.key === "Escape")
+            ) {
+              event.preventDefault();
+              setDeleteTargetState(null);
+            }
+          }}
+        >
+          <div
+            className="mx-4 w-full max-w-sm rounded border border-panel-border bg-editor-bg p-4 shadow-lg"
+            role="dialog"
+            aria-modal="true"
+          >
+            <p className="mb-1 text-sm font-semibold text-foreground">
+              Delete exported MCP copies?
+            </p>
+            <p className="mb-4 text-xs text-description-fg">
+              Remove {deleteTargetState.ids.length} managed MCP server
+              {deleteTargetState.ids.length === 1 ? "" : "s"} from{" "}
+              <strong>{getExportTargetLabel(deleteTargetState.targetId)}</strong>{" "}
+              ({deleteTargetState.scope})?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetState(null)}
+                className="rounded border border-btn-border bg-btn-secondary-bg px-3 py-1 text-xs text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTarget}
+                className="rounded bg-btn-bg px-3 py-1 text-xs text-btn-fg hover:bg-btn-hover"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

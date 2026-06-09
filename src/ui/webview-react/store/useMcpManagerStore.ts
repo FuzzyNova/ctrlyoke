@@ -68,6 +68,12 @@ export interface McpManagerState {
     previousId?: string
   ) => void;
   deleteServer: (id: string, scope: SettingWriteScope) => void;
+  deleteFromHarness: (
+    ids: string[],
+    targetId: AnyTargetId,
+    scope: SettingWriteScope,
+    filePath?: string
+  ) => void;
   requestLocalScan: () => void;
   searchRemoteRegistry: (
     query: string,
@@ -161,6 +167,15 @@ export const useMcpManagerStore = create<McpManagerState>((set, get) => ({
   deleteServer: (id, scope) => {
     set({ isLoadingRegistry: true });
     sendMessage(MESSAGE_TYPES.DELETE_MCP_REGISTRY_SERVER, { id, scope });
+  },
+
+  deleteFromHarness: (ids, targetId, scope, filePath) => {
+    sendMessage(MESSAGE_TYPES.DELETE_MCP_FROM_HARNESS, {
+      ids,
+      targetId,
+      scope,
+      ...(filePath ? { filePath } : {}),
+    });
   },
 
   requestLocalScan: () => {

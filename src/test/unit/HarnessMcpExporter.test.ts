@@ -291,4 +291,80 @@ suite("HarnessMcpExporter", () => {
       text.includes('headers = { "Authorization" = "Bearer token" }')
     );
   });
+
+  test("removes a single exported OpenCode MCP server", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const openCodeConfigPath = path.join(workspaceRoot, "opencode.json");
+
+    await fs.writeFile(
+      openCodeConfigPath,
+      JSON.stringify(
+        {
+          mcp: {
+            existing: {
+              type: "local",
+              command: ["node", "existing.js"],
+            },
+            removable: {
+              type: "local",
+              command: ["node", "remove-me.js"],
+            },
+          },
+        },
+        null,
+        2
+      ),
+      "utf-8"
+    );
+
+    const result = await exporter.remove(
+      ["removable"],
+      HARNESS_IDS.OPENCODE_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    const document = JSON.parse(await fs.readFile(openCodeConfigPath, "utf-8"));
+    assert.strictEqual(result.filePath, openCodeConfigPath);
+    assert.strictEqual(result.removedCount, 1);
+    assert.deepStrictEqual(document.mcp.existing, {
+      type: "local",
+      command: ["node", "existing.js"],
+    });
+    assert.strictEqual(document.mcp.removable, undefined);
+  });
+
+  test("removes a Codex MCP server section without touching other config", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const codexConfigPath = path.join(workspaceRoot, ".codex", "config.toml");
+    await fs.mkdir(path.dirname(codexConfigPath), { recursive: true });
+    await fs.writeFile(
+      codexConfigPath,
+      [
+        'model = "gpt-5"',
+        "",
+        '[mcp_servers."keep-me"]',
+        'command = "node"',
+        'args = ["keep.js"]',
+        "",
+        '[mcp_servers."remove-me"]',
+        'command = "node"',
+        'args = ["remove.js"]',
+        "",
+      ].join("\n"),
+      "utf-8"
+    );
+
+    const result = await exporter.remove(
+      ["remove-me"],
+      HARNESS_IDS.CODEX_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    const text = await fs.readFile(codexConfigPath, "utf-8");
+    assert.strictEqual(result.filePath, codexConfigPath);
+    assert.strictEqual(result.removedCount, 1);
+    assert.ok(text.includes('model = "gpt-5"'));
+    assert.ok(text.includes('[mcp_servers."keep-me"]'));
+    assert.ok(!text.includes('[mcp_servers."remove-me"]'));
+  });
 });

@@ -36,6 +36,11 @@ export interface HarnessMcpExportResult {
   skippedIds: string[];
 }
 
+export interface HarnessMcpDeleteResult {
+  filePath: string;
+  removedCount: number;
+}
+
 function isPlainObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -289,6 +294,31 @@ async function writeJsonServerMap(
   return { filePath, exportedCount, skippedIds };
 }
 
+async function removeJsonServerMapEntries(
+  filePath: string,
+  key: string,
+  ids: string[]
+): Promise<HarnessMcpDeleteResult> {
+  const document = await readJsonObject(filePath);
+  const existingServers = isPlainObject(document[key]) ? { ...document[key] } : {};
+  let removedCount = 0;
+
+  for (const id of ids) {
+    if (!(id in existingServers)) {
+      continue;
+    }
+    delete existingServers[id];
+    removedCount += 1;
+  }
+
+  await writeJsonFileAtomic(filePath, {
+    ...document,
+    [key]: existingServers,
+  });
+
+  return { filePath, removedCount };
+}
+
 async function writeCodexTomlFile(
   filePath: string,
   servers: McpServerConfig[]
@@ -361,6 +391,62 @@ async function writeCodexTomlFile(
   };
 }
 
+async function removeCodexTomlServers(
+  filePath: string,
+  ids: string[]
+): Promise<HarnessMcpDeleteResult> {
+  const existingText = await readTextFile(filePath);
+  const targetIds = new Set(ids);
+  const lines = existingText.split(/\r?\n/);
+  const sectionStartIndices: number[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index]!.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      sectionStartIndices.push(index);
+    }
+  }
+
+  const keptSegments: string[] = [];
+  let cursor = 0;
+  let removedCount = 0;
+
+  for (let index = 0; index < sectionStartIndices.length; index += 1) {
+    const start = sectionStartIndices[index]!;
+    const end =
+      index + 1 < sectionStartIndices.length
+        ? sectionStartIndices[index + 1]!
+        : lines.length;
+
+    if (start > cursor) {
+      keptSegments.push(lines.slice(cursor, start).join("\n"));
+    }
+
+    const blockLines = lines.slice(start, end);
+    const blockId = parseTomlTargetSectionId(blockLines[0] ?? "");
+    if (blockId && targetIds.has(blockId)) {
+      removedCount += 1;
+    } else {
+      keptSegments.push(blockLines.join("\n"));
+    }
+
+    cursor = end;
+  }
+
+  if (cursor < lines.length) {
+    keptSegments.push(lines.slice(cursor).join("\n"));
+  }
+
+  const nextText = keptSegments.join("\n").trimEnd();
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.writeFile(
+    filePath,
+    nextText.length > 0 ? `${nextText}\n` : "",
+    "utf-8"
+  );
+
+  return { filePath, removedCount };
+}
+
 export class HarnessMcpExporter {
   constructor(private readonly workspaceRoot?: string) {}
 
@@ -393,6 +479,41 @@ export class HarnessMcpExporter {
 
     if (targetId === HARNESS_IDS.CODEX_CLI) {
       return writeCodexTomlFile(filePath, servers);
+    }
+
+    throw new Error(`Unsupported MCP export target: ${targetId}`);
+  }
+
+  async remove(
+    ids: string[],
+    targetId: AnyTargetId,
+    scope: SettingWriteScope,
+    filePathOverride?: string
+  ): Promise<HarnessMcpDeleteResult> {
+    const filePath = filePathOverride ?? this.resolveTargetPath(targetId, scope);
+
+    if (targetId === SPECIAL_TARGET_IDS.VSCODE) {
+      return removeJsonServerMapEntries(filePath, "servers", ids);
+    }
+
+    if (targetId === HARNESS_IDS.CLAUDE_CLI) {
+      return removeJsonServerMapEntries(filePath, "mcpServers", ids);
+    }
+
+    if (targetId === HARNESS_IDS.COPILOT_CLI) {
+      return removeJsonServerMapEntries(filePath, "mcpServers", ids);
+    }
+
+    if (targetId === HARNESS_IDS.QWEN_CLI) {
+      return removeJsonServerMapEntries(filePath, "mcpServers", ids);
+    }
+
+    if (targetId === HARNESS_IDS.OPENCODE_CLI) {
+      return removeJsonServerMapEntries(filePath, "mcp", ids);
+    }
+
+    if (targetId === HARNESS_IDS.CODEX_CLI) {
+      return removeCodexTomlServers(filePath, ids);
     }
 
     throw new Error(`Unsupported MCP export target: ${targetId}`);

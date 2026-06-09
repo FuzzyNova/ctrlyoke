@@ -655,15 +655,16 @@ async function discoverLocalMcpServers(
   workspaceRoot: string
 ): Promise<LocalMcpServerEntry[]> {
   const results: LocalMcpServerEntry[] = [];
-  const seenIds = new Set<string>();
+  const seenEntries = new Set<string>();
 
   for (const descriptor of getLocalConfigDescriptors(workspaceRoot)) {
     const entries = await discoverFromDescriptor(descriptor);
     for (const entry of entries) {
-      if (seenIds.has(entry.id)) {
+      const entryKey = `${entry.source}:${entry.path}:${entry.id}`;
+      if (seenEntries.has(entryKey)) {
         continue;
       }
-      seenIds.add(entry.id);
+      seenEntries.add(entryKey);
       results.push(entry);
     }
   }

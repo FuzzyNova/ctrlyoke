@@ -1,7 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { SettingWriteScope } from "../types/DashboardConstants";
-import { SETTING_SCOPES } from "../types/DashboardConstants";
+import {
+  SETTING_SCOPES,
+  SPECIAL_TARGET_IDS,
+} from "../types/DashboardConstants";
 import type { McpServerConfig } from "../types/FlightPathTypes";
 import type { ManagedMcpServer } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
@@ -119,14 +122,18 @@ export class McpRegistryFileManager {
     ) => {
       if (!registryPath) return;
       for (const server of servers) {
-        const location = { scope, path: registryPath };
+        const managedLocation = {
+          targetId: SPECIAL_TARGET_IDS.FLIGHTPATH,
+          scope,
+          path: registryPath,
+        };
         const existing = byId.get(server.id);
         if (!existing) {
           byId.set(server.id, {
             id: server.id,
             displayName: getManagedDisplayName(server),
             config: server,
-            locations: [location],
+            locations: [managedLocation],
           });
           continue;
         }
@@ -135,9 +142,11 @@ export class McpRegistryFileManager {
           ...existing.locations,
           ...(!existing.locations.some(
             (current) =>
-              current.scope === location.scope && current.path === location.path
+              current.targetId === managedLocation.targetId &&
+              current.scope === managedLocation.scope &&
+              current.path === managedLocation.path
           )
-            ? [location]
+            ? [managedLocation]
             : []),
         ]);
 

@@ -38,6 +38,7 @@ import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import type { WebviewSettingsSync, PostMessageFn } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
 import type {
+  DeleteMcpFromHarnessMessage,
   DeleteMcpRegistryServerMessage,
   ExportMcpToHarnessMessage,
   InsertWorkflowStepMessage,
@@ -663,9 +664,13 @@ export class WebviewMessageRouter {
       );
     });
 
-    table.set(MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS, async (message) => {
-      await this.handleExportMcpToHarness(message as ExportMcpToHarnessMessage);
-    });
+      table.set(MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS, async (message) => {
+        await this.handleExportMcpToHarness(message as ExportMcpToHarnessMessage);
+      });
+
+      table.set(MESSAGE_TYPES.DELETE_MCP_FROM_HARNESS, async (message) => {
+        await this.handleDeleteMcpFromHarness(message as DeleteMcpFromHarnessMessage);
+      });
 
     // ── Harness File Manager ─────────────────────────────────────────────
     table.set(MESSAGE_TYPES.REQUEST_HARNESS_FILES, async (message) => {
@@ -2602,8 +2607,46 @@ export class WebviewMessageRouter {
       void vscode.window.showInformationMessage(
         `Exported ${result.exportedCount} MCP server${result.exportedCount === 1 ? "" : "s"} to ${result.filePath}.`
       );
+      const localScanResult = await safeDiscoverLocalMcpServers(
+        this.getWorkspaceRoot()
+      );
+      this.emitMessage({
+        type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
+        servers: localScanResult.servers,
+        ...(localScanResult.error ? { error: localScanResult.error } : {}),
+      });
     } catch (error) {
       const errorMessage = `Failed to export MCP servers: ${getErrorMessage(error)}`;
+      Log.error(errorMessage);
+      void vscode.window.showErrorMessage(errorMessage);
+    }
+  }
+
+  private async handleDeleteMcpFromHarness(
+    message: DeleteMcpFromHarnessMessage
+  ): Promise<void> {
+    try {
+      const result = await this.getHarnessMcpExporter().remove(
+        message.ids ?? [],
+        message.targetId,
+        message.scope,
+        message.filePath
+      );
+      void vscode.window.showInformationMessage(
+        result.removedCount > 0
+          ? `Removed ${result.removedCount} MCP server${result.removedCount === 1 ? "" : "s"} from ${result.filePath}.`
+          : `No matching MCP servers were found in ${result.filePath}.`
+      );
+      const localScanResult = await safeDiscoverLocalMcpServers(
+        this.getWorkspaceRoot()
+      );
+      this.emitMessage({
+        type: MESSAGE_TYPES.MCP_LOCAL_SCAN_RESULT,
+        servers: localScanResult.servers,
+        ...(localScanResult.error ? { error: localScanResult.error } : {}),
+      });
+    } catch (error) {
+      const errorMessage = `Failed to delete MCP servers from harness config: ${getErrorMessage(error)}`;
       Log.error(errorMessage);
       void vscode.window.showErrorMessage(errorMessage);
     }

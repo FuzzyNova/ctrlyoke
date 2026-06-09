@@ -215,6 +215,7 @@ export const MESSAGE_TYPES = {
   REQUEST_MCP_LOCAL_SCAN: "requestMcpLocalScan", // Webview -> Extension: Scan local harness MCP configs for manager import
   REQUEST_MCP_REGISTRY_SEARCH: "requestMcpRegistrySearch", // Webview -> Extension: Search MCP registry for manager import
   EXPORT_MCP_TO_HARNESS: "exportMcpToHarness", // Webview -> Extension: Export managed MCP servers to a harness config
+  DELETE_MCP_FROM_HARNESS: "deleteMcpFromHarness", // Webview -> Extension: Remove one or more MCP servers from a harness config
   MCP_REGISTRY_SERVERS_UPDATE: "mcpRegistryServersUpdate", // Extension -> Webview: { servers: ManagedMcpServer[] }
   MCP_LOCAL_SCAN_RESULT: "mcpLocalScanResult", // Extension -> Webview: { servers: LocalMcpServerEntry[], error? }
   MCP_REGISTRY_SEARCH_RESULT: "mcpRegistrySearchResult", // Extension -> Webview: { servers: RegistryMcpEntry[], nextCursor?, error? }
