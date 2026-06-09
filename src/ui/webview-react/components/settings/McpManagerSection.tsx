@@ -298,7 +298,7 @@ function getExportTargetDescription(
   }
   if (id === HARNESS_IDS.COPILOT_CLI) {
     return scope === SETTING_SCOPES.WORKSPACE
-      ? ".mcp.json or .github/mcp.json"
+      ? ".github/mcp.json"
       : "~/.copilot/mcp-config.json";
   }
   if (id === HARNESS_IDS.CODEX_CLI) {

@@ -62,17 +62,13 @@ export function getClaudeUserConfigPath(): string {
 }
 
 /**
- * Returns the Copilot CLI workspace MCP config candidates.
+ * Returns the Copilot CLI workspace MCP config path.
  *
- * GitHub documents both `.mcp.json` and `.github/mcp.json` as valid project
- * config locations; when exporting we prefer an existing file, otherwise create
- * the canonical `.mcp.json`.
+ * GitHub Copilot's canonical project-level MCP location is `.github/mcp.json`.
+ * Returned as an array for compatibility with discovery callers.
  */
 export function getCopilotWorkspaceMcpConfigPaths(workspaceRoot: string): string[] {
-  return [
-    path.join(workspaceRoot, ".mcp.json"),
-    path.join(workspaceRoot, ".github", "mcp.json"),
-  ];
+  return [path.join(workspaceRoot, ".github", "mcp.json")];
 }
 
 export function getPreferredCopilotWorkspaceMcpConfigPath(
