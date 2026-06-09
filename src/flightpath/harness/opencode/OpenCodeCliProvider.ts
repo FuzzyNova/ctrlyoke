@@ -3,7 +3,6 @@ import * as fs from "fs";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { HARNESS_IDS } from "../../../types/DashboardConstants";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
-import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
 import { OpenCodeResponseParser } from "./OpenCodeResponseParser";
 import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
@@ -75,16 +74,12 @@ export class OpenCodeCliProvider implements ICliProvider {
   readonly responseParser: IResponseParser = new OpenCodeResponseParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
-  readonly notificationMonitor: INotificationMonitor =
-    new OpenCodeNotificationMonitor();
+  readonly notificationMonitor = new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new OpenCodeToolPermissionMapper();
   readonly logParser = new OpenCodeLogParser(() =>
     getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
-
-  /** Path of the plugin file written for the current interactive execution (for cleanup) */
-  private pluginFilePath: string | undefined;
 
   /**
    * Build complete CLI arguments array for OpenCode CLI execution
@@ -383,18 +378,31 @@ export class OpenCodeCliProvider implements ICliProvider {
    * Used by CliIntegration.cleanupWorkflowArtifacts() to delete the plugin file.
    */
   getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
-    if (this.pluginFilePath) {
-      return [this.pluginFilePath];
+    return this.notificationMonitor.getManagedPluginArtifactPaths(
+      workspaceRoot
+    );
+  }
+
+  async cleanupWorkspaceArtifacts(workspaceRoot: string): Promise<void> {
+    const managedArtifacts =
+      this.notificationMonitor.getManagedPluginArtifactPaths(workspaceRoot);
+    for (const artifactPath of managedArtifacts) {
+      await fs.promises.unlink(artifactPath).catch(() => {});
     }
-    // Also include the default plugin path in case it was written by a previous run
-    return [
-      path.join(
-        workspaceRoot,
-        ".opencode",
-        "plugin",
-        "flightpath-completion-hook.ts"
-      ),
-    ];
+
+    const gitignorePath =
+      this.notificationMonitor.getPluginGitignorePath(workspaceRoot);
+    const hasRemainingManagedArtifacts = await Promise.all(
+      managedArtifacts.map((artifactPath) =>
+        fs.promises
+          .access(artifactPath)
+          .then(() => true)
+          .catch(() => false)
+      )
+    ).then((results) => results.some(Boolean));
+    if (!hasRemainingManagedArtifacts) {
+      await this.deleteFlightPathGitignore(gitignorePath);
+    }
   }
 
   /**
@@ -468,18 +476,25 @@ export class OpenCodeCliProvider implements ICliProvider {
     userHooks?: UserHookConfig[]
   ): Promise<void> {
     try {
-      const pluginDir = path.join(workspaceRoot, ".opencode", "plugin");
+      const pluginDir = this.notificationMonitor.getPluginDirectory(
+        workspaceRoot
+      );
       // OpenCode only loads .ts plugins — .js files are silently ignored.
-      const pluginPath = path.join(pluginDir, "flightpath-completion-hook.ts");
+      const pluginPath = this.notificationMonitor.getPluginFilePath(
+        workspaceRoot
+      );
       const sourcePath = path.join(
         extensionPath,
         "out",
         "scripts",
         "flightpath-opencode-plugin.ts"
       );
-      const sidecarPath = path.join(pluginDir, "flightpath-hooks.json");
+      const sidecarPath = this.notificationMonitor.getPluginHooksFilePath(
+        workspaceRoot
+      );
 
       await fs.promises.mkdir(pluginDir, { recursive: true });
+      await this.writePluginDirGitignore(workspaceRoot);
 
       // Always copy the static plugin (type-checked, no code generation).
       await fs.promises.copyFile(sourcePath, pluginPath);
@@ -500,11 +515,41 @@ export class OpenCodeCliProvider implements ICliProvider {
         await fs.promises.unlink(sidecarPath).catch(() => {});
       }
 
-      this.pluginFilePath = pluginPath;
       Log.debug(`🔌 OpenCode completion plugin deployed to: ${pluginPath}`);
     } catch (error) {
       // Non-fatal: interactive mode will still work, just won't auto-detect completion
       Log.warn(`Failed to deploy OpenCode completion plugin: ${error}`);
+    }
+  }
+
+  private async writePluginDirGitignore(workspaceRoot: string): Promise<void> {
+    const gitignorePath =
+      this.notificationMonitor.getPluginGitignorePath(workspaceRoot);
+    try {
+      await fs.promises.access(gitignorePath);
+      return;
+    } catch {
+      // File doesn't exist — write it
+    }
+
+    const content = [
+      "# FlightPath temp files (auto-managed, do not commit)",
+      "flightpath-completion-hook.ts",
+      "flightpath-hooks.json",
+      ".gitignore",
+      "",
+    ].join("\n");
+    await fs.promises.writeFile(gitignorePath, content, "utf-8").catch(() => {});
+  }
+
+  private async deleteFlightPathGitignore(gitignorePath: string): Promise<void> {
+    try {
+      const content = await fs.promises.readFile(gitignorePath, "utf-8");
+      if (content.startsWith("# FlightPath temp files")) {
+        await fs.promises.unlink(gitignorePath).catch(() => {});
+      }
+    } catch {
+      // File doesn't exist or unreadable — nothing to do
     }
   }
 }

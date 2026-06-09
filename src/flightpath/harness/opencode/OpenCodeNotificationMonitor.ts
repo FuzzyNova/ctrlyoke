@@ -3,6 +3,7 @@ import {
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
+import * as path from "path";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
 
@@ -31,6 +32,35 @@ export class OpenCodeNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
+  getPluginDirectory(workspaceRoot: string): string {
+    return path.join(workspaceRoot, ".opencode", "plugin");
+  }
+
+  getPluginFilePath(workspaceRoot: string): string {
+    return path.join(
+      this.getPluginDirectory(workspaceRoot),
+      "flightpath-completion-hook.ts"
+    );
+  }
+
+  getPluginHooksFilePath(workspaceRoot: string): string {
+    return path.join(
+      this.getPluginDirectory(workspaceRoot),
+      "flightpath-hooks.json"
+    );
+  }
+
+  getPluginGitignorePath(workspaceRoot: string): string {
+    return path.join(this.getPluginDirectory(workspaceRoot), ".gitignore");
+  }
+
+  getManagedPluginArtifactPaths(workspaceRoot: string): string[] {
+    return [
+      this.getPluginFilePath(workspaceRoot),
+      this.getPluginHooksFilePath(workspaceRoot),
+    ];
+  }
+
   /**
    * Build hook configuration.
    *
