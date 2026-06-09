@@ -515,8 +515,7 @@ describe("outputRows", () => {
     });
 
     const diffRow = result.rows.find(
-      (row) =>
-        row.rowKind === "structured-event" && row.diff?.key === diffKey
+      (row) => row.rowKind === "structured-event" && row.diff?.key === diffKey
     );
     const toolRow = result.rows.find(
       (row) => row.rowKind === "structured-event" && row.key === toolRowKey
@@ -525,14 +524,17 @@ describe("outputRows", () => {
       (row) => row.rowKind === "structured-event" && row.key === toolRowKey
     );
     const baseDiffRow = baseResult.rows.find(
-      (row) =>
-        row.rowKind === "structured-event" && row.diff?.key === diffKey
+      (row) => row.rowKind === "structured-event" && row.diff?.key === diffKey
     );
 
     if (!diffRow || diffRow.rowKind !== "structured-event" || !diffRow.diff) {
       throw new Error("Expected diff row");
     }
-    if (!toolRow || toolRow.rowKind !== "structured-event" || !toolRow.toolCall) {
+    if (
+      !toolRow ||
+      toolRow.rowKind !== "structured-event" ||
+      !toolRow.toolCall
+    ) {
       throw new Error("Expected tool-call row");
     }
     if (
@@ -648,13 +650,17 @@ describe("outputRows", () => {
     const narrowResponse = narrow.rows.find(
       (row) => row.rowKind === "plain-response"
     );
-    const wideResponse = wide.rows.find((row) => row.rowKind === "plain-response");
+    const wideResponse = wide.rows.find(
+      (row) => row.rowKind === "plain-response"
+    );
 
     if (!narrowResponse || !wideResponse) {
       throw new Error("Expected plain response rows");
     }
 
-    expect(narrowResponse.estimateSize).toBeGreaterThan(wideResponse.estimateSize);
+    expect(narrowResponse.estimateSize).toBeGreaterThan(
+      wideResponse.estimateSize
+    );
   });
 
   it("scales bash structured-event estimates with content length and width", () => {
@@ -1056,7 +1062,9 @@ describe("outputRows", () => {
     }
 
     expect(narrowDiff.estimateSize).toBeGreaterThan(wideDiff.estimateSize);
-    expect(narrowDiff.diff?.renderPlan.totalHeight).toBe(narrowDiff.estimateSize);
+    expect(narrowDiff.diff?.renderPlan.totalHeight).toBe(
+      narrowDiff.estimateSize
+    );
     expect(wideDiff.diff?.renderPlan.totalHeight).toBe(wideDiff.estimateSize);
     expect(narrowDiff.diff?.renderPlan.renderedRows).toBe(2);
   });

@@ -346,11 +346,16 @@ function estimateTextBlockHeight(
     emptyLineWeight?: number;
   }
 ): number {
-  const lineCount = estimateWrappedLineCount(text, outputContentWidth, outputFontSize, {
-    chrome: options?.chrome,
-    charWidthMultiplier: options?.charWidthMultiplier,
-    emptyLineWeight: options?.emptyLineWeight,
-  });
+  const lineCount = estimateWrappedLineCount(
+    text,
+    outputContentWidth,
+    outputFontSize,
+    {
+      chrome: options?.chrome,
+      charWidthMultiplier: options?.charWidthMultiplier,
+      emptyLineWeight: options?.emptyLineWeight,
+    }
+  );
   if (lineCount === 0) {
     return 0;
   }
@@ -360,7 +365,8 @@ function estimateTextBlockHeight(
     outputFontSize * (options?.lineHeightMultiplier ?? 1.55)
   );
   return (
-    lineCount * lineHeight + (options?.verticalChrome ?? OUTPUT_BLOCK_VERTICAL_CHROME)
+    lineCount * lineHeight +
+    (options?.verticalChrome ?? OUTPUT_BLOCK_VERTICAL_CHROME)
   );
 }
 
@@ -395,17 +401,22 @@ function estimateMarkdownBlockHeight(
   // making each visible row taller than a plain text line. Separator rows
   // (|---|) count as full text lines in the base estimate but render as 0px.
   const tableRowMatches = text.match(/^\|.+\|/gm) ?? [];
-  const tableSeparatorCount = tableRowMatches.filter(r => /^\|\s*[-: |]+$/.test(r)).length;
+  const tableSeparatorCount = tableRowMatches.filter((r) =>
+    /^\|\s*[-: |]+$/.test(r)
+  ).length;
   const tableVisibleRowCount = tableRowMatches.length - tableSeparatorCount;
   // lineHeight matches the markdown base estimate (1.6 multiplier) so that
   // the separator row subtraction cancels exactly what baseHeight counted.
   const tableLineHeight = Math.max(16, outputFontSize * 1.6);
   // Base correction (24) was calibrated at FS=13. Scale up for larger fonts
   // since table content in narrow columns wraps more at higher font sizes.
-  const tableRowCorrection = 24 + Math.max(0, Math.round((outputFontSize - 13) * 2.0));
+  const tableRowCorrection =
+    24 + Math.max(0, Math.round((outputFontSize - 13) * 2.0));
   const tableCorrection =
     tableVisibleRowCount > 0
-      ? tableVisibleRowCount * tableRowCorrection + 16 - tableSeparatorCount * tableLineHeight
+      ? tableVisibleRowCount * tableRowCorrection +
+        16 -
+        tableSeparatorCount * tableLineHeight
       : 0;
 
   return (
@@ -501,12 +512,18 @@ function estimateTerminalSummaryHeight(
   outputFontSize: number,
   verticalChrome = TERMINAL_LINE_VERTICAL_CHROME
 ): number {
-  const lineCount = estimateWrappedLineCount(text, outputContentWidth, outputFontSize, {
-    chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
-    charWidthMultiplier: 0.6,
-  });
+  const lineCount = estimateWrappedLineCount(
+    text,
+    outputContentWidth,
+    outputFontSize,
+    {
+      chrome: OUTPUT_ROW_HORIZONTAL_CHROME,
+      charWidthMultiplier: 0.6,
+    }
+  );
   return (
-    Math.max(1, lineCount) * Math.max(18, outputFontSize * 1.55) + verticalChrome
+    Math.max(1, lineCount) * Math.max(18, outputFontSize * 1.55) +
+    verticalChrome
   );
 }
 
@@ -594,7 +611,12 @@ function estimateBashOutputHeight(
     normalizedOutput.trim().length > 0 &&
     normalizedOutput.trim() === normalizedError.trim();
   const contentsToEstimate = isDuplicate
-    ? [{ content: normalizedError, expanded: expansion?.errorExpanded ?? false }]
+    ? [
+        {
+          content: normalizedError,
+          expanded: expansion?.errorExpanded ?? false,
+        },
+      ]
     : [
         {
           content: normalizedOutput,
@@ -682,7 +704,11 @@ function estimateStructuredTextHeight(
       );
     }
     case CLI_EVENT_TYPES.FILE_WRITE: {
-      const data = row.event.data as { path?: string; content?: string; error?: string };
+      const data = row.event.data as {
+        path?: string;
+        content?: string;
+        error?: string;
+      };
       const sizeInfo = data.content ? ` (${data.content.length} bytes)` : "";
       return estimateFileOperationHeaderHeight(
         `Wrote${sizeInfo}`,
@@ -777,7 +803,11 @@ function estimateBaseStructuredEventHeight(
   outputFontSize: number
 ): number {
   if (row.event.type === CLI_EVENT_TYPES.TOOL_CALL && row.toolCall) {
-    return estimateToolCallStructuredEventHeight(row, outputFontSize, outputContentWidth);
+    return estimateToolCallStructuredEventHeight(
+      row,
+      outputFontSize,
+      outputContentWidth
+    );
   }
 
   if (row.diff && !row.hideDiff) {
@@ -856,12 +886,17 @@ export function estimateOutputRowHeight(
     case "prompt":
       // OUTPUT_BLOCK_BASE: font-mono sm font, body line-height:1.4, py-sm+my-sm=24px chrome.
       // chrome:32 matches actual horizontal padding (px-md outer + px-sm inner + border-l-3).
-      return estimateTextBlockHeight(row.text, outputContentWidth, outputFontSize - 1, {
-        charWidthMultiplier: 0.6,
-        lineHeightMultiplier: 1.4,
-        verticalChrome: 24,
-        chrome: 32,
-      });
+      return estimateTextBlockHeight(
+        row.text,
+        outputContentWidth,
+        outputFontSize - 1,
+        {
+          charWidthMultiplier: 0.6,
+          lineHeightMultiplier: 1.4,
+          verticalChrome: 24,
+          chrome: 32,
+        }
+      );
     case "cli-command":
       // OUTPUT_BLOCK_BASE: font-mono sm font, body line-height:1.4, py-sm+my-sm=24px chrome.
       // chrome:32 matches actual horizontal padding (px-md outer + px-sm inner + border-l-3).
@@ -889,11 +924,7 @@ export function estimateOutputRowHeight(
       );
     case "plain-response":
       return row.rawTextOutput
-        ? estimateTextBlockHeight(
-            row.text,
-            outputContentWidth,
-            outputFontSize
-          )
+        ? estimateTextBlockHeight(row.text, outputContentWidth, outputFontSize)
         : estimateMarkdownBlockHeight(
             row.text,
             outputContentWidth,
@@ -996,7 +1027,9 @@ export function buildOutputRows(
     const output = message.data as CliOutputType;
     const groupStartIndex = rows.length;
     const isFinalStep = target.kind === FINAL_STEP_PHASES.FINAL_STEP;
-    const workflowStep = isFinalStep ? input.finalStep : input.steps[target.index];
+    const workflowStep = isFinalStep
+      ? input.finalStep
+      : input.steps[target.index];
     const stepName = isFinalStep
       ? getStepName(workflowStep, `Final Step Loop ${target.index + 1}`)
       : workflowStep?.name?.trim() || undefined;
@@ -1006,12 +1039,20 @@ export function buildOutputRows(
     const attemptIndex = message.attemptIndex ?? 0;
     const runIndex = message.runIndex ?? output.runIndex ?? 0;
     const outputText = getCliTextForCopy(output);
-    const { workspaceSnapshot, undoRecord } = getStepOutputArtifacts(input, target);
+    const { workspaceSnapshot, undoRecord } = getStepOutputArtifacts(
+      input,
+      target
+    );
     const allStepOutputs = stepOutputsMap.get(targetKey) ?? [];
-    const isLastCliForStep = lastCliIndexPerStep.get(targetKey) === messageIndex;
+    const isLastCliForStep =
+      lastCliIndexPerStep.get(targetKey) === messageIndex;
     const promptUndoActions =
       input.allowUndoActions && isLastCliForStep && !output.isStreaming
-        ? computePromptUndoActions(allStepOutputs, undoRecord, workspaceSnapshot)
+        ? computePromptUndoActions(
+            allStepOutputs,
+            undoRecord,
+            workspaceSnapshot
+          )
         : { undo: null, redo: null };
 
     rows.push({
@@ -1112,17 +1153,13 @@ export function buildOutputRows(
         (visibleEvent.event.type === CLI_EVENT_TYPES.FILE_EDIT ||
           visibleEvent.event.type === CLI_EVENT_TYPES.FILE_WRITE ||
           visibleEvent.event.type === CLI_EVENT_TYPES.FILE_DELETE)
-          ? computeOutputDiffStats(
-              visibleEvent.event,
-              workspaceSnapshot,
-              {
-                viewType: input.diffViewType ?? "unified",
-                collapsed: isDiffCollapsed,
-                expandedGaps: diffExpandedGaps,
-                outputFontSize: input.outputFontSize,
-                outputContentWidth: input.outputContentWidth,
-              }
-            )
+          ? computeOutputDiffStats(visibleEvent.event, workspaceSnapshot, {
+              viewType: input.diffViewType ?? "unified",
+              collapsed: isDiffCollapsed,
+              expandedGaps: diffExpandedGaps,
+              outputFontSize: input.outputFontSize,
+              outputContentWidth: input.outputContentWidth,
+            })
           : null;
       const diffKey =
         diffStats && diffStats.added + diffStats.removed > 0
@@ -1130,8 +1167,8 @@ export function buildOutputRows(
           : null;
       const toolCallExpansion =
         visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL
-          ? input.toolCallExpansionState.get(rowKey) ??
-            DEFAULT_TOOL_CALL_EXPANSION_STATE
+          ? (input.toolCallExpansionState.get(rowKey) ??
+            DEFAULT_TOOL_CALL_EXPANSION_STATE)
           : undefined;
       const toolCallRenderPlan =
         visibleEvent.event.type === CLI_EVENT_TYPES.TOOL_CALL
@@ -1171,12 +1208,13 @@ export function buildOutputRows(
                 renderPlan: diffStats.renderPlan,
               }
             : undefined,
-        toolCall: toolCallExpansion && toolCallRenderPlan
-         ? {
-             expansion: toolCallExpansion,
-             renderPlan: toolCallRenderPlan,
-           }
-         : undefined,
+        toolCall:
+          toolCallExpansion && toolCallRenderPlan
+            ? {
+                expansion: toolCallExpansion,
+                renderPlan: toolCallRenderPlan,
+              }
+            : undefined,
         estimateSize: 64,
       });
     }

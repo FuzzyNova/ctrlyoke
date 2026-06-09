@@ -470,7 +470,9 @@ export class CopilotCliProvider implements ICliProvider {
    * Delete a .gitignore only if it was written by FlightPath (identified by
    * our magic header comment). Leaves user-owned gitignore files untouched.
    */
-  private async deleteFlightPathGitignore(gitignorePath: string): Promise<void> {
+  private async deleteFlightPathGitignore(
+    gitignorePath: string
+  ): Promise<void> {
     try {
       const content = await fs.readFile(gitignorePath, "utf-8");
       if (content.startsWith("# FlightPath temp files")) {

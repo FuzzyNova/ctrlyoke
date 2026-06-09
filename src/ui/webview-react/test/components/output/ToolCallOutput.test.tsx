@@ -15,7 +15,10 @@ describe("GenericToolCallOutput", () => {
     render(
       <GenericToolCallOutput
         name="write_memory"
-        parameters={{ subject: "output-layout", detail: "lift expansion state" }}
+        parameters={{
+          subject: "output-layout",
+          detail: "lift expansion state",
+        }}
         result={{
           success: true,
           output,
@@ -23,17 +26,23 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    const collapsedOutput = screen.getByText(/\[show 2 more lines\]/i).parentElement;
+    const collapsedOutput = screen.getByText(
+      /\[show 2 more lines\]/i
+    ).parentElement;
 
-    expect(screen.queryByText("detail: lift expansion state")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("detail: lift expansion state")
+    ).not.toBeInTheDocument();
     expect(collapsedOutput?.textContent).toContain("line 10");
     expect(collapsedOutput?.textContent).not.toContain("line 11");
 
     await user.click(screen.getByTitle("Show all parameters"));
     expect(screen.getByTitle("Hide parameters")).toBeInTheDocument();
     expect(
-      screen.getAllByText((_, element) =>
-        element?.textContent?.includes("detail: lift expansion state") ?? false
+      screen.getAllByText(
+        (_, element) =>
+          element?.textContent?.includes("detail: lift expansion state") ??
+          false
       ).length
     ).toBeGreaterThan(0);
 
@@ -77,7 +86,9 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    const collapsedError = screen.getByText(/\[show 2 more lines\]/i).parentElement;
+    const collapsedError = screen.getByText(
+      /\[show 2 more lines\]/i
+    ).parentElement;
 
     expect(collapsedError?.textContent).toContain("error 10");
     expect(collapsedError?.textContent).not.toContain("error 11");
@@ -89,7 +100,9 @@ describe("GenericToolCallOutput", () => {
     expect(onExpansionChange).toHaveBeenNthCalledWith(2, "error", true);
     expect(screen.getByTitle("Show all parameters")).toBeInTheDocument();
     expect(screen.queryByText(/\[show less\]/i)).not.toBeInTheDocument();
-    expect(screen.queryByText("subject: output-layout")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("subject: output-layout")
+    ).not.toBeInTheDocument();
     expect(collapsedError?.textContent).not.toContain("error 11");
   });
 
@@ -105,7 +118,8 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
-    const collapsedOutput = screen.getByText("[show more output]").parentElement;
+    const collapsedOutput =
+      screen.getByText("[show more output]").parentElement;
 
     expect(collapsedOutput?.textContent).not.toContain("x".repeat(1300));
   });

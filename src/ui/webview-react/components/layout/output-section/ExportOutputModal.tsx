@@ -109,9 +109,7 @@ export const ExportOutputModal: React.FC<ExportOutputModalProps> = ({
           value={stepRange}
           onChange={(event) => onStepRangeChange(event.target.value)}
           placeholder={
-            totalCliSteps > 1
-              ? `e.g. 1-${totalCliSteps}`
-              : "e.g. 1,2,4-10"
+            totalCliSteps > 1 ? `e.g. 1-${totalCliSteps}` : "e.g. 1,2,4-10"
           }
           aria-label="Step range (e.g. 1,2,4-10)"
           className={`w-full px-2 text-xs bg-input-bg text-input-fg border rounded focus:outline-none focus:border-focus-border h-7 ${

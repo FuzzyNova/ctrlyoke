@@ -26,20 +26,20 @@ Move discovery + registry browsing + harness export to the new `McpManagerSectio
 
 FlightPath maintains its own MCP server registry in JSON files, parallel to how agents and skills work:
 
-| Scope | File | Availability |
-|---|---|---|
-| **Workspace** | `.flightpath/mcp/servers.json` | Current project only |
-| **User** | `~/.flightpath/mcp/servers.json` | All projects for this user |
+| Scope         | File                             | Availability               |
+| ------------- | -------------------------------- | -------------------------- |
+| **Workspace** | `.flightpath/mcp/servers.json`   | Current project only       |
+| **User**      | `~/.flightpath/mcp/servers.json` | All projects for this user |
 
 These files store `McpServerConfig[]` — the same type already used throughout the codebase. The registry is the **library of known servers**. It is entirely separate from which servers are **enabled by default** on new workflows.
 
 ### Registry vs. Global Default — The Distinction
 
-| Concept | Storage | Meaning |
-|---|---|---|
-| **Installed** | `.flightpath/mcp/servers.json` (workspace or user) | "I know about this server and can enable it" |
-| **Enabled by default** | `flightpath.mcpServers` VS Code setting | "New workflows start with these servers active" |
-| **Prompt/workflow override** | `mcpServers` in the YAML/working file | "This specific context uses exactly these servers" |
+| Concept                      | Storage                                            | Meaning                                            |
+| ---------------------------- | -------------------------------------------------- | -------------------------------------------------- |
+| **Installed**                | `.flightpath/mcp/servers.json` (workspace or user) | "I know about this server and can enable it"       |
+| **Enabled by default**       | `flightpath.mcpServers` VS Code setting            | "New workflows start with these servers active"    |
+| **Prompt/workflow override** | `mcpServers` in the YAML/working file              | "This specific context uses exactly these servers" |
 
 The MCP Manager manages the **installed registry**. The **global default** (`flightpath.mcpServers`) is already editable in `WorkflowDefaultsSection` via the stripped `McpServersEditor`. The MCP Manager tab shows installed servers and lets you toggle "enabled by default" as a convenience.
 
@@ -143,6 +143,7 @@ interface ManagedMcpServer {
 Extract `getVscodeUserMcpConfigPath()` and `getClaudeUserConfigPath()` into a shared utility so both `McpDiscoveryUtils` and `HarnessMcpExporter` import from the same source.
 
 Add FlightPath-specific paths:
+
 ```typescript
 function getFlightpathWorkspaceMcpRegistryPath(workspaceRoot: string): string {
   return path.join(workspaceRoot, ".flightpath", "mcp", "servers.json");
@@ -159,10 +160,13 @@ function getFlightpathUserMcpRegistryPath(): string {
 export class McpRegistryFileManager {
   constructor(private workspaceRoot: string) {}
 
-  async readAll(): Promise<ManagedMcpServer[]>
-  async addOrUpdate(server: McpServerConfig, scope: "workspace" | "user"): Promise<void>
-  async remove(id: string, scope: "workspace" | "user"): Promise<void>
-  async readScope(scope: "workspace" | "user"): Promise<McpServerConfig[]>
+  async readAll(): Promise<ManagedMcpServer[]>;
+  async addOrUpdate(
+    server: McpServerConfig,
+    scope: "workspace" | "user"
+  ): Promise<void>;
+  async remove(id: string, scope: "workspace" | "user"): Promise<void>;
+  async readScope(scope: "workspace" | "user"): Promise<McpServerConfig[]>;
 }
 ```
 
@@ -172,12 +176,12 @@ Uses atomic JSON write (read → merge → write) to avoid clobbering concurrent
 
 Writes servers to harness-specific config files. Export targets parallel `McpDiscoveryUtils`'s discovery sources:
 
-| Target ID | File | Top-level key | Entry format |
-|---|---|---|---|
-| `claude` / workspace | `.mcp.json` | `mcpServers` | `{ command, args?, env? }` |
-| `claude` / user | `~/.claude.json` | `mcpServers` | same |
-| `vscode` / workspace | `.vscode/mcp.json` | `servers` | `{ type: "stdio", command, args?, env? }` |
-| `vscode` / user | platform user mcp.json | `servers` | same |
+| Target ID            | File                   | Top-level key | Entry format                              |
+| -------------------- | ---------------------- | ------------- | ----------------------------------------- |
+| `claude` / workspace | `.mcp.json`            | `mcpServers`  | `{ command, args?, env? }`                |
+| `claude` / user      | `~/.claude.json`       | `mcpServers`  | same                                      |
+| `vscode` / workspace | `.vscode/mcp.json`     | `servers`     | `{ type: "stdio", command, args?, env? }` |
+| `vscode` / user      | platform user mcp.json | `servers`     | same                                      |
 
 Remote (http/sse) servers are skipped for all targets (log a warning). The export merges into the existing file rather than overwriting: existing entries with the same id are updated, new entries are appended. Creates parent directories if absent.
 
@@ -213,6 +217,7 @@ McpRegistrySearchResultMessage:  { servers: RegistryMcpEntry[]; nextCursor?: str
 ### FlightPathWebviewProvider.ts
 
 Add message handlers:
+
 - `REQUEST_MCP_REGISTRY_SERVERS` → `McpRegistryFileManager.readAll()` → broadcast `MCP_REGISTRY_SERVERS_UPDATE`
 - `SAVE_MCP_REGISTRY_SERVER` → `McpRegistryFileManager.addOrUpdate()` → re-broadcast updated list
 - `DELETE_MCP_REGISTRY_SERVER` → `McpRegistryFileManager.remove()` → re-broadcast
@@ -277,6 +282,7 @@ The active scope drives where new servers are saved and which registry file is s
 ### Server list item
 
 Each `ManagedMcpServer` row shows:
+
 - Scope badge(s) — `workspace` or `user` or both, styled like `HarnessBadge`
 - "default" badge — if the server id appears in `globalSettings.mcpServers`
 - Expand chevron → read-only detail panel (command/url, args, env keys, transport)
@@ -312,6 +318,7 @@ Tab bar: "Local configs" | "Browse registry"
 ### McpServerForm.tsx (new shared component)
 
 Extract the add/edit form (~150 lines of JSX) from `McpServersEditor` into `src/ui/webview-react/components/shared/McpServerForm.tsx`. Props:
+
 ```typescript
 interface McpServerFormProps {
   value: AddServerForm;
@@ -329,6 +336,7 @@ Both `McpManagerSection` and the stripped `McpServersEditor` import this.
 ## Phase 4 — Strip McpServersEditor
 
 **Remove from McpServersEditor:**
+
 - All discovery props (`onRequestLocalServers`, `onSearchRegistry`, `localServers`, `isLoadingLocal`, `localServersError`, `registryServers`, `isLoadingRegistry`, `registryError`, `fillHeight`)
 - All workspace registry props (`onRequestWorkspaceServers`, `onWorkspaceServersChange`, `workspaceServers`, `isLoadingWorkspaceServers`)
 - The entire Discovery section JSX (~350 lines): tabs, local results panel, registry results panel, pagination
@@ -337,6 +345,7 @@ Both `McpManagerSection` and the stripped `McpServersEditor` import this.
 **McpServersEditor now reads from `useMcpManagerStore`** for the server checklist instead of taking `workspaceServers` as a prop. It shows the merged `managedServers` list — same data the MCP Manager shows, just as checkboxes not an editable list.
 
 **What stays in McpServersEditor (~400 lines):**
+
 - Mode selector buttons (Default / Custom) when `showDefault=true`
 - Default mode: grayed read-only view of inherited value
 - Custom mode:
@@ -347,6 +356,7 @@ Both `McpManagerSection` and the stripped `McpServersEditor` import this.
   - Empty state: "No servers installed. Add servers in Settings → MCP Manager."
 
 **Call sites to update:**
+
 - `WorkflowPropertiesPanel.tsx` — remove all discovery prop passing
 - `PropertiesDrawer.tsx` — remove all discovery prop passing
 - (`McpHooksSection` no longer exists — no action needed)
@@ -366,7 +376,9 @@ Add tab to `ALL_TABS` in `GlobalSettingsDrawer.tsx`, **after** `agentskillsmanag
 Add the render branch in the drawer body (same pattern as `agentskillsmanager` — no `fullSettings` required):
 
 ```tsx
-{effectiveActiveTab === "mcpmanager" && <McpManagerSection />}
+{
+  effectiveActiveTab === "mcpmanager" && <McpManagerSection />;
+}
 ```
 
 Update the `!fullSettings` loading guard to also exclude `"mcpmanager"` (alongside `"agentskillsmanager"` and `"developer"`).
@@ -379,30 +391,30 @@ Add `McpManagerSection` to the barrel export in `components/settings/index.ts`.
 
 ### New files
 
-| File | Purpose |
-|---|---|
-| `src/utils/McpConfigPaths.ts` | Shared path helpers extracted from McpDiscoveryUtils |
-| `src/utils/McpRegistryFileManager.ts` | Read/write `.flightpath/mcp/servers.json` (workspace + user) |
-| `src/utils/HarnessMcpExporter.ts` | Merge-write McpServerConfig[] into harness config files |
-| `src/ui/webview-react/store/useMcpManagerStore.ts` | Zustand store for all MCP Manager state |
-| `src/ui/webview-react/components/shared/McpServerForm.tsx` | Extracted add/edit server form (stdio + remote tabs) |
-| `src/ui/webview-react/components/settings/McpManagerSection.tsx` | Main MCP Manager settings tab |
+| File                                                             | Purpose                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------ |
+| `src/utils/McpConfigPaths.ts`                                    | Shared path helpers extracted from McpDiscoveryUtils         |
+| `src/utils/McpRegistryFileManager.ts`                            | Read/write `.flightpath/mcp/servers.json` (workspace + user) |
+| `src/utils/HarnessMcpExporter.ts`                                | Merge-write McpServerConfig[] into harness config files      |
+| `src/ui/webview-react/store/useMcpManagerStore.ts`               | Zustand store for all MCP Manager state                      |
+| `src/ui/webview-react/components/shared/McpServerForm.tsx`       | Extracted add/edit server form (stdio + remote tabs)         |
+| `src/ui/webview-react/components/settings/McpManagerSection.tsx` | Main MCP Manager settings tab                                |
 
 ### Modified files
 
-| File | Change |
-|---|---|
-| `src/types/DashboardConstants.ts` | Add 9 new MCP_* message type constants |
-| `src/types/WebviewMessageTypes.ts` | Add `ManagedMcpServer` type + 7 new payload interfaces |
-| `src/utils/McpDiscoveryUtils.ts` | Import path helpers from McpConfigPaths.ts (DRY cleanup) |
-| `src/ui/FlightPathWebviewProvider.ts` | Wire 6 new message handlers; instantiate McpRegistryFileManager |
-| `src/ui/webview-react/store/uiStore.ts` | Remove mcp* fields (moved to useMcpManagerStore) |
-| `src/ui/webview-react/hooks/useMessageHandler.ts` | Add handlers for 3 new extension→webview messages |
-| `src/ui/webview-react/components/shared/McpServersEditor.tsx` | Remove discovery; read registry from useMcpManagerStore |
-| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Remove discovery prop wiring |
-| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx` | Remove discovery prop wiring |
-| `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx` | Add mcpmanager tab + render branch |
-| `src/ui/webview-react/components/settings/index.ts` | Export McpManagerSection |
+| File                                                                 | Change                                                          |
+| -------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `src/types/DashboardConstants.ts`                                    | Add 9 new MCP\_\* message type constants                        |
+| `src/types/WebviewMessageTypes.ts`                                   | Add `ManagedMcpServer` type + 7 new payload interfaces          |
+| `src/utils/McpDiscoveryUtils.ts`                                     | Import path helpers from McpConfigPaths.ts (DRY cleanup)        |
+| `src/ui/FlightPathWebviewProvider.ts`                                | Wire 6 new message handlers; instantiate McpRegistryFileManager |
+| `src/ui/webview-react/store/uiStore.ts`                              | Remove mcp\* fields (moved to useMcpManagerStore)               |
+| `src/ui/webview-react/hooks/useMessageHandler.ts`                    | Add handlers for 3 new extension→webview messages               |
+| `src/ui/webview-react/components/shared/McpServersEditor.tsx`        | Remove discovery; read registry from useMcpManagerStore         |
+| `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx` | Remove discovery prop wiring                                    |
+| `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`        | Remove discovery prop wiring                                    |
+| `src/ui/webview-react/components/layout/GlobalSettingsDrawer.tsx`    | Add mcpmanager tab + render branch                              |
+| `src/ui/webview-react/components/settings/index.ts`                  | Export McpManagerSection                                        |
 
 ---
 
@@ -419,6 +431,7 @@ Add `McpManagerSection` to the barrel export in `components/settings/index.ts`.
 ## What the Property Panels Look Like After
 
 **PropertiesDrawer MCP tab** and **WorkflowPropertiesPanel**:
+
 - FlightPath built-in toggle + per-tool checkboxes
 - Merged installed server checklist (workspace + user, with scope badges)
 - "Install servers in Settings → MCP Manager" hint when list is empty

@@ -26,18 +26,14 @@ export const EMPTY_MCP_SERVER_FORM_STATE: McpServerFormState = {
   transport: "streamable-http",
 };
 
-function mcpEnvObjectToString(
-  env: Record<string, string> | undefined
-): string {
+function mcpEnvObjectToString(env: Record<string, string> | undefined): string {
   if (!env) return "";
   return Object.entries(env)
     .map(([key, value]) => `${key}=${value}`)
     .join("\n");
 }
 
-function mcpEnvStringToObject(
-  raw: string
-): Record<string, string> | undefined {
+function mcpEnvStringToObject(raw: string): Record<string, string> | undefined {
   const lines = raw
     .split("\n")
     .map((line) => line.trim())
@@ -204,7 +200,9 @@ export function McpServerForm({
             placeholder="args (space-separated)"
             aria-label="Arguments"
             value={value.args}
-            onChange={(event) => onChange({ ...value, args: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...value, args: event.target.value })
+            }
             className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
           />
           <div className="flex flex-col gap-0.5">
@@ -230,7 +228,9 @@ export function McpServerForm({
             placeholder="url (e.g. https://mcp.example.com)"
             aria-label="Server URL"
             value={value.url}
-            onChange={(event) => onChange({ ...value, url: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...value, url: event.target.value })
+            }
             className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
           />
           <select

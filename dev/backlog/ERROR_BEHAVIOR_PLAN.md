@@ -287,6 +287,7 @@ Current state:
 Recommended changes:
 
 **`flightpath-claude-hook.js`**:
+
 - add `"StopFailure"` to the `HANDLED_EVENTS` set
 - on `StopFailure`, write `{safeSessionId}-error.json` with the same helper used for stop
   files: `{ hookEvent: "StopFailure", sessionId, status: "error" }`
@@ -295,6 +296,7 @@ Recommended changes:
   fields differ
 
 **`ClaudeNotificationMonitor`**:
+
 - add `StopFailure` to the event map / hook config registration so the harness registers
   the hook at activation time
 - the monitor's polling loop (`monitorForCompletion` in `NotificationMonitorBase`) must
@@ -340,6 +342,7 @@ Current state:
 Recommended changes:
 
 **`flightpath-copilot-hook.js`**:
+
 - add `errorOccurred` to the `LOGICAL_EVENT_MAP`
 - on `errorOccurred`, write `{safeSessionId}-error.json` using the same helper as stop:
   `{ hookEvent: "errorOccurred", sessionId, status: "error" }`
@@ -348,6 +351,7 @@ Recommended changes:
   `payload.sessionId || payload.session_id`
 
 **`CopilotNotificationMonitor`**:
+
 - add `errorOccurred` to the event map / hook config registration so the harness registers
   the hook in `.github/hooks/*.json` at activation time
 - the polling loop (`monitorForCompletion` in `NotificationMonitorBase`) must also scan
@@ -478,7 +482,11 @@ into the same temp directory that stop files land in. The file naming convention
 Error file payload:
 
 ```json
-{ "hookEvent": "<StopFailure|errorOccurred|session.error>", "sessionId": "...", "status": "error" }
+{
+  "hookEvent": "<StopFailure|errorOccurred|session.error>",
+  "sessionId": "...",
+  "status": "error"
+}
 ```
 
 The harness-specific hook/plugin value for `hookEvent` is kept verbatim to aid
@@ -496,11 +504,12 @@ Current state:
 Required changes:
 
 **`NotificationResult`** — add `kind` discriminator:
+
 ```typescript
 interface NotificationResult {
   completed: boolean;
-  kind?: "completed" | "error";  // "error" when harness reported a failure
-  error?: string;                 // timeout or internal error message
+  kind?: "completed" | "error"; // "error" when harness reported a failure
+  error?: string; // timeout or internal error message
   data?: any;
 }
 ```
@@ -508,9 +517,11 @@ interface NotificationResult {
 **`NotificationMonitorBase.monitorForCompletion()`** — the polling loop currently only
 checks for `{sessionId}-stop.json`. It must also check for `{sessionId}-error.json`.
 When an error file is found:
+
 - return `{ completed: false, kind: "error", data: <parsed error file content> }`
 
 When a stop file is found (existing behavior):
+
 - return `{ completed: true, kind: "completed", data: <parsed stop file content> }`
 
 This applies first to:
@@ -625,16 +636,21 @@ interface LogMonitorResult {
   cliResult?: CliResult;
   failureKind?: FailureKind;
   failureMessage?: string;
-  timedOut?: boolean;             // keep for backward compat, redundant with failureKind
+  timedOut?: boolean; // keep for backward compat, redundant with failureKind
   processExited?: { exitCode: number };
 }
 ```
 
 `CliExecutionRunner` — current code at line ~634:
+
 ```typescript
-if (result.timedOut) { throw new Error("Log monitoring timeout"); }
+if (result.timedOut) {
+  throw new Error("Log monitoring timeout");
+}
 ```
+
 Must become:
+
 ```typescript
 if (result.timedOut) {
   this.deps.failureTracker.markTimeout("Log monitoring timeout");

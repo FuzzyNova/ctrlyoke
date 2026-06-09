@@ -51,10 +51,7 @@ export interface McpManagerState {
   discoveryTab: McpManagerDiscoveryTab;
 
   setManagedServers: (servers: ManagedMcpServer[]) => void;
-  setLocalScanResult: (
-    servers: LocalMcpServerEntry[],
-    error?: string
-  ) => void;
+  setLocalScanResult: (servers: LocalMcpServerEntry[], error?: string) => void;
   setRemoteSearchResult: (
     servers: RegistryMcpEntry[],
     error?: string,

@@ -277,7 +277,9 @@ suite("HarnessMcpExporter", () => {
     );
 
     const document = JSON.parse(await fs.readFile(result.filePath, "utf-8"));
-    assert.ok(result.filePath.endsWith(path.join(".copilot", "mcp-config.json")));
+    assert.ok(
+      result.filePath.endsWith(path.join(".copilot", "mcp-config.json"))
+    );
     assert.deepStrictEqual(document.mcpServers["stdio-server"], {
       type: "local",
       command: "node",
@@ -312,7 +314,10 @@ suite("HarnessMcpExporter", () => {
     );
 
     const document = JSON.parse(await fs.readFile(result.filePath, "utf-8"));
-    assert.strictEqual(result.filePath, path.join(workspaceRoot, "opencode.json"));
+    assert.strictEqual(
+      result.filePath,
+      path.join(workspaceRoot, "opencode.json")
+    );
     assert.deepStrictEqual(document.mcp["stdio-server"], {
       type: "local",
       command: ["uvx", "my-server"],
@@ -383,9 +388,7 @@ suite("HarnessMcpExporter", () => {
     assert.ok(text.includes('env = { "API_KEY" = "secret" }'));
     assert.ok(text.includes('[mcp_servers."remote-server"]'));
     assert.ok(text.includes('url = "https://example.test/mcp"'));
-    assert.ok(
-      text.includes('headers = { "Authorization" = "Bearer token" }')
-    );
+    assert.ok(text.includes('headers = { "Authorization" = "Bearer token" }'));
   });
 
   test("removes a single exported OpenCode MCP server", async () => {

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import {
-  getWheelDeltaPixels,
-} from "@components/layout/output-section/OutputScrollSeekPlaceholder";
+import { getWheelDeltaPixels } from "@components/layout/output-section/OutputScrollSeekPlaceholder";
 import { logProfilerEvent } from "@utils/performanceProfiler";
 import {
   LARGE_WORKFLOW_ROW_THRESHOLD,
@@ -28,10 +26,12 @@ const OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS = 600;
 const OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS = 1800;
 
 interface UseOutputScrollSeekInput {
-  applyScrollTargetRef: RefObject<(
-    phase: string,
-    options?: { force?: boolean }
-  ) => { resolved: boolean; appliedDelta: number }>;
+  applyScrollTargetRef: RefObject<
+    (
+      phase: string,
+      options?: { force?: boolean }
+    ) => { resolved: boolean; appliedDelta: number }
+  >;
   commitScrollTargetFromViewportRef: RefObject<(reason: string) => void>;
   getRowEstimateStats: () => unknown[];
   getVirtualItemsRef: RefObject<() => readonly { index: number }[]>;
@@ -213,7 +213,9 @@ export function useOutputScrollSeek({
       now: number
     ): OutputScrollSeekScrollMetrics => {
       const scrollDeltaPx =
-        previousScrollTop == null ? 0 : scrollElement.scrollTop - previousScrollTop;
+        previousScrollTop == null
+          ? 0
+          : scrollElement.scrollTop - previousScrollTop;
       const absScrollDeltaPx = Math.abs(scrollDeltaPx);
       const scrollGapMs =
         previousScrollEventAt == null ? 0 : now - previousScrollEventAt;
@@ -235,7 +237,9 @@ export function useOutputScrollSeek({
         now - lastUserScrollInputAtRef.current <=
           OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
       const suppressedFastScroll =
-        rawFastScroll && isInScrollSeekSettleWindow && !hasRecentUserScrollInput;
+        rawFastScroll &&
+        isInScrollSeekSettleWindow &&
+        !hasRecentUserScrollInput;
       const isFastScroll = rawFastScroll && !suppressedFastScroll;
       if (isFastScroll) {
         enterFastScrollOverscan({
@@ -421,7 +425,8 @@ export function useOutputScrollSeek({
               step,
             });
             step++;
-            overscanRestoreRafRef.current = requestAnimationFrame(doNextOverscanStep);
+            overscanRestoreRafRef.current =
+              requestAnimationFrame(doNextOverscanStep);
           } else {
             overscanRestoreRafRef.current = null;
             fullOverscanRestoreTimerRef.current = setTimeout(() => {
@@ -432,7 +437,8 @@ export function useOutputScrollSeek({
             }, OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS);
           }
         };
-        overscanRestoreRafRef.current = requestAnimationFrame(doNextOverscanStep);
+        overscanRestoreRafRef.current =
+          requestAnimationFrame(doNextOverscanStep);
       }, OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS);
     }
     scrollSeekRestoreRequestedAtRef.current = null;

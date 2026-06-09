@@ -121,7 +121,10 @@ suite("WorkspaceSnapshotService", () => {
       SNAPSHOT_STRATEGIES.GIT
     );
     assert.strictEqual(afterState.files.size, 0);
-    assert.notStrictEqual(beforeState.git?.headCommit, afterState.git?.headCommit);
+    assert.notStrictEqual(
+      beforeState.git?.headCommit,
+      afterState.git?.headCommit
+    );
 
     const changes = await snapshotService.computeSnapshotChanges(
       beforeState,

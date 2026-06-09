@@ -1,6 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
-import { modify, applyEdits, parse, type FormattingOptions } from "jsonc-parser";
+import {
+  modify,
+  applyEdits,
+  parse,
+  type FormattingOptions,
+} from "jsonc-parser";
 import type {
   AnyTargetId,
   SettingWriteScope,
@@ -97,7 +102,10 @@ function toVsCodeEntry(server: McpServerConfig): JsonObject | null {
     };
   }
 
-  if (typeof server.command !== "string" || server.command.trim().length === 0) {
+  if (
+    typeof server.command !== "string" ||
+    server.command.trim().length === 0
+  ) {
     Log.warn(
       `[HarnessMcpExporter] Skipping unsupported MCP server "${server.id}" for VS Code export.`
     );
@@ -121,7 +129,10 @@ function toClaudeEntry(server: McpServerConfig): JsonObject | null {
     };
   }
 
-  if (typeof server.command !== "string" || server.command.trim().length === 0) {
+  if (
+    typeof server.command !== "string" ||
+    server.command.trim().length === 0
+  ) {
     Log.warn(
       `[HarnessMcpExporter] Skipping unsupported MCP server "${server.id}" for Claude export.`
     );
@@ -145,7 +156,10 @@ function toCopilotEntry(server: McpServerConfig): JsonObject | null {
     };
   }
 
-  if (typeof server.command !== "string" || server.command.trim().length === 0) {
+  if (
+    typeof server.command !== "string" ||
+    server.command.trim().length === 0
+  ) {
     Log.warn(
       `[HarnessMcpExporter] Skipping unsupported MCP server "${server.id}" for Copilot export.`
     );
@@ -171,7 +185,10 @@ function toQwenEntry(server: McpServerConfig): JsonObject | null {
     };
   }
 
-  if (typeof server.command !== "string" || server.command.trim().length === 0) {
+  if (
+    typeof server.command !== "string" ||
+    server.command.trim().length === 0
+  ) {
     Log.warn(
       `[HarnessMcpExporter] Skipping unsupported MCP server "${server.id}" for Qwen export.`
     );
@@ -194,7 +211,10 @@ function toOpenCodeEntry(server: McpServerConfig): JsonObject | null {
     };
   }
 
-  if (typeof server.command !== "string" || server.command.trim().length === 0) {
+  if (
+    typeof server.command !== "string" ||
+    server.command.trim().length === 0
+  ) {
     Log.warn(
       `[HarnessMcpExporter] Skipping unsupported MCP server "${server.id}" for OpenCode export.`
     );
@@ -489,7 +509,12 @@ export class HarnessMcpExporter {
     }
 
     if (targetId === HARNESS_IDS.COPILOT_CLI) {
-      return writeJsonServerMap(filePath, "mcpServers", servers, toCopilotEntry);
+      return writeJsonServerMap(
+        filePath,
+        "mcpServers",
+        servers,
+        toCopilotEntry
+      );
     }
 
     if (targetId === HARNESS_IDS.QWEN_CLI) {
@@ -513,7 +538,8 @@ export class HarnessMcpExporter {
     scope: SettingWriteScope,
     filePathOverride?: string
   ): Promise<HarnessMcpDeleteResult> {
-    const filePath = filePathOverride ?? this.resolveTargetPath(targetId, scope);
+    const filePath =
+      filePathOverride ?? this.resolveTargetPath(targetId, scope);
 
     if (targetId === SPECIAL_TARGET_IDS.VSCODE) {
       return removeJsonServerMapEntries(filePath, "servers", ids);

@@ -150,11 +150,7 @@ function logLongFrame(now: number): void {
 
 function startLongFrameMonitor(): void {
   stopLongFrameMonitor();
-  if (
-    typeof window === "undefined" ||
-    !state.enabled ||
-    !state.logLongFrames
-  ) {
+  if (typeof window === "undefined" || !state.enabled || !state.logLongFrames) {
     return;
   }
 

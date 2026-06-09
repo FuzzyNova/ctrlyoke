@@ -14,10 +14,7 @@ import {
   buildUndoDialogInputForSpecificEvent,
   sameFilePath,
 } from "@utils/promptUndo";
-import type {
-  CliHeaderRow,
-  StructuredEventRow,
-} from "@utils/outputRows";
+import type { CliHeaderRow, StructuredEventRow } from "@utils/outputRows";
 import type {
   OrderedHistoryEntry,
   StepOutput,
@@ -204,41 +201,47 @@ export function useOutputUndoActions({
     []
   );
 
-  const handlePromptUndo = useCallback((row: CliHeaderRow) => {
-    if (!row.promptUndo) return;
-    const target: UndoExecutionTarget = row.isFinalStep
-      ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
-      : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
-    const alreadyUndone =
-      row.promptUndo.undoRecord != null &&
-      row.promptUndo.undoRecord.isRedone !== true
-        ? row.promptUndo.undoRecord.redoInstructions
-        : undefined;
-    const input = buildUndoDialogInputForPrompt(
-      target,
-      row.promptUndo.allStepOutputs,
-      row.promptUndo.workspaceSnapshot,
-      row.promptUndo.workspacePath,
-      alreadyUndone
-    );
-    openMinimapUndoDialog({
-      target,
-      workspacePath: row.promptUndo.workspacePath,
-      input,
-    });
-  }, [openMinimapUndoDialog]);
+  const handlePromptUndo = useCallback(
+    (row: CliHeaderRow) => {
+      if (!row.promptUndo) return;
+      const target: UndoExecutionTarget = row.isFinalStep
+        ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
+        : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
+      const alreadyUndone =
+        row.promptUndo.undoRecord != null &&
+        row.promptUndo.undoRecord.isRedone !== true
+          ? row.promptUndo.undoRecord.redoInstructions
+          : undefined;
+      const input = buildUndoDialogInputForPrompt(
+        target,
+        row.promptUndo.allStepOutputs,
+        row.promptUndo.workspaceSnapshot,
+        row.promptUndo.workspacePath,
+        alreadyUndone
+      );
+      openMinimapUndoDialog({
+        target,
+        workspacePath: row.promptUndo.workspacePath,
+        input,
+      });
+    },
+    [openMinimapUndoDialog]
+  );
 
-  const handlePromptRedo = useCallback((row: CliHeaderRow) => {
-    if (!row.promptUndo?.undoRecord?.redoInstructions?.length) return;
-    const target: UndoExecutionTarget = row.isFinalStep
-      ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
-      : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
-    openMinimapRedoDialog({
-      target,
-      workspacePath: row.promptUndo.workspacePath,
-      redoInstructions: row.promptUndo.undoRecord.redoInstructions,
-    });
-  }, [openMinimapRedoDialog]);
+  const handlePromptRedo = useCallback(
+    (row: CliHeaderRow) => {
+      if (!row.promptUndo?.undoRecord?.redoInstructions?.length) return;
+      const target: UndoExecutionTarget = row.isFinalStep
+        ? { kind: FINAL_STEP_PHASES.FINAL_STEP, loopIndex: row.stepIndex }
+        : { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: row.stepIndex };
+      openMinimapRedoDialog({
+        target,
+        workspacePath: row.promptUndo.workspacePath,
+        redoInstructions: row.promptUndo.undoRecord.redoInstructions,
+      });
+    },
+    [openMinimapRedoDialog]
+  );
 
   const handleFileUndo = useCallback(
     (row: StructuredEventRow, request: OutputRowFileUndoRequest) => {

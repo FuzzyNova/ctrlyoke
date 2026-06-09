@@ -1,9 +1,4 @@
-import React, {
-  useEffect,
-  useRef,
-  useCallback,
-  useState,
-} from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore, type OutputScrollTarget } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
@@ -238,7 +233,10 @@ const OutputSectionInner: React.FC = () => {
     savedOutputScrollTarget ?? DEFAULT_OUTPUT_SCROLL_TARGET
   );
   const applyScrollTargetRef = useRef<
-    (phase: string, options?: { force?: boolean }) => {
+    (
+      phase: string,
+      options?: { force?: boolean }
+    ) => {
       resolved: boolean;
       appliedDelta: number;
     }
@@ -328,7 +326,8 @@ const OutputSectionInner: React.FC = () => {
     []
   );
   const invalidateMeasuredRowForUserResizeForRowModel = useCallback(
-    (rowKey: string) => invalidateMeasuredRowForUserResizeImplRef.current(rowKey),
+    (rowKey: string) =>
+      invalidateMeasuredRowForUserResizeImplRef.current(rowKey),
     []
   );
   const handleDiffViewReset = useCallback(() => {
@@ -531,12 +530,7 @@ const OutputSectionInner: React.FC = () => {
       createAnimationFrameResizeObserver(updateDiffViewType);
     observer.observe(el);
     return disconnect;
-  }, [
-    activeOutputTab,
-    applyScrollTarget,
-    outputCollapsed,
-    outputContentWidth,
-  ]);
+  }, [activeOutputTab, applyScrollTarget, outputCollapsed, outputContentWidth]);
 
   useEffect(() => {
     if (outputContentWidth <= 0) {
@@ -982,9 +976,7 @@ const OutputSectionInner: React.FC = () => {
       role="button"
       aria-label="Expand output"
       tabIndex={0}
-      onKeyDown={(e) =>
-        e.key === "Enter" && handleToggleOutputCollapse()
-      }
+      onKeyDown={(e) => e.key === "Enter" && handleToggleOutputCollapse()}
     >
       <i className="codicon codicon-chevron-right text-xs" />
       <i className="codicon codicon-output text-sm" />
@@ -1019,7 +1011,9 @@ const OutputSectionInner: React.FC = () => {
           anyDiffCollapsed={anyDiffCollapsed}
           availableRuns={availableRuns}
           currentRunIndex={viewingRunIndex}
-          executionModeInteractive={executionMode === EXECUTION_MODES.INTERACTIVE}
+          executionModeInteractive={
+            executionMode === EXECUTION_MODES.INTERACTIVE
+          }
           hasOutput={hasOutput}
           isExecutionActive={isExecutionActive}
           isHeaderNarrow={isHeaderNarrow}

@@ -49,10 +49,7 @@ export async function resolveCliCommand(
   };
 }
 
-function formatCommandForDisplay(
-  command: string,
-  args: string[]
-): string {
+function formatCommandForDisplay(command: string, args: string[]): string {
   return [command, ...args].map(formatDisplayArg).join(" ");
 }
 

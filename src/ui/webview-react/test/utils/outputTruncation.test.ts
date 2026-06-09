@@ -6,9 +6,10 @@ import {
 
 describe("outputTruncation", () => {
   it("truncates by raw line count and reports hidden lines", () => {
-    const text = Array.from({ length: 12 }, (_, index) => `line ${index + 1}`).join(
-      "\n"
-    );
+    const text = Array.from(
+      { length: 12 },
+      (_, index) => `line ${index + 1}`
+    ).join("\n");
 
     const preview = buildCollapsedOutputPreview(text, {
       expanded: false,

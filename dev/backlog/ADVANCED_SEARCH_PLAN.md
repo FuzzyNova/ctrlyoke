@@ -37,16 +37,16 @@ That changes the output-find implementation materially. Search must target the
 The history timeline stores rich, structured data per run. Each `events.jsonl` file is
 JSONL, one `WorkflowTimelineEvent` per line. The searchable fields are:
 
-| Event type              | Searchable content                                                                                               |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `cliOutputRecorded`     | `payload.cliOutput.prompt`                                                                                       |
-| `cliOutputRecorded`     | `payload.cliOutput.response`                                                                                     |
-| `cliOutputRecorded`     | `payload.cliOutput.cliCommand`                                                                                   |
-| `cliOutputRecorded`     | File paths in `payload.cliOutput.structured.events[]`                                                            |
-| `cliOutputRecorded`     | Bash command strings in structured events                                                                        |
-| `cliOutputRecorded`     | Tool names / server names / tool-result text / thinking text / generic text events                              |
-| `cliOutputRecorded`     | Diff hunk lines from `structuredPatch.lines` when present                                                        |
-| `statusMessageRecorded` | `payload.statusMessage.message`                                                                                  |
+| Event type              | Searchable content                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| `cliOutputRecorded`     | `payload.cliOutput.prompt`                                                         |
+| `cliOutputRecorded`     | `payload.cliOutput.response`                                                       |
+| `cliOutputRecorded`     | `payload.cliOutput.cliCommand`                                                     |
+| `cliOutputRecorded`     | File paths in `payload.cliOutput.structured.events[]`                              |
+| `cliOutputRecorded`     | Bash command strings in structured events                                          |
+| `cliOutputRecorded`     | Tool names / server names / tool-result text / thinking text / generic text events |
+| `cliOutputRecorded`     | Diff hunk lines from `structuredPatch.lines` when present                          |
+| `statusMessageRecorded` | `payload.statusMessage.message`                                                    |
 
 Everything searchable lives in the history files. No working-file reads are needed
 for match extraction.
@@ -410,38 +410,44 @@ export function useOutputFind(
 
   const matchesRef = useRef<OutputFindMatch[]>([]);
 
-  const search = useCallback((query: string, caseSensitive: boolean) => {
-    if (!query) {
-      matchesRef.current = [];
-      setState((prev) => ({ ...prev, matchCount: 0, currentMatch: 0 }));
-      return;
-    }
+  const search = useCallback(
+    (query: string, caseSensitive: boolean) => {
+      if (!query) {
+        matchesRef.current = [];
+        setState((prev) => ({ ...prev, matchCount: 0, currentMatch: 0 }));
+        return;
+      }
 
-    const matches = findOutputMatches(rows, query, caseSensitive);
-    matchesRef.current = matches;
+      const matches = findOutputMatches(rows, query, caseSensitive);
+      matchesRef.current = matches;
 
-    setState((prev) => ({
-      ...prev,
-      matchCount: matches.length,
-      currentMatch: matches.length > 0 ? 1 : 0,
-    }));
+      setState((prev) => ({
+        ...prev,
+        matchCount: matches.length,
+        currentMatch: matches.length > 0 ? 1 : 0,
+      }));
 
-    if (matches[0]) {
-      onRevealRow(matches[0].rowIndex);
-    }
-  }, [rows, onRevealRow]);
+      if (matches[0]) {
+        onRevealRow(matches[0].rowIndex);
+      }
+    },
+    [rows, onRevealRow]
+  );
 
-  const navigate = useCallback((direction: 1 | -1) => {
-    const matches = matchesRef.current;
-    if (matches.length === 0) return;
+  const navigate = useCallback(
+    (direction: 1 | -1) => {
+      const matches = matchesRef.current;
+      if (matches.length === 0) return;
 
-    setState((prev) => {
-      const nextIndex =
-        (prev.currentMatch - 1 + direction + matches.length) % matches.length;
-      onRevealRow(matches[nextIndex].rowIndex);
-      return { ...prev, currentMatch: nextIndex + 1 };
-    });
-  }, [onRevealRow]);
+      setState((prev) => {
+        const nextIndex =
+          (prev.currentMatch - 1 + direction + matches.length) % matches.length;
+        onRevealRow(matches[nextIndex].rowIndex);
+        return { ...prev, currentMatch: nextIndex + 1 };
+      });
+    },
+    [onRevealRow]
+  );
 
   return {
     state,
@@ -501,7 +507,13 @@ useEffect(() => {
   if (findState.isOpen && findState.query) {
     runSearch(findState.query, findState.caseSensitive);
   }
-}, [rows, findState.isOpen, findState.query, findState.caseSensitive, runSearch]);
+}, [
+  rows,
+  findState.isOpen,
+  findState.query,
+  findState.caseSensitive,
+  runSearch,
+]);
 ```
 
 Pass decorations into `OutputRow`:

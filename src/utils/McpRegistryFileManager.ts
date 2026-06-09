@@ -14,7 +14,9 @@ import {
 } from "./McpConfigPaths";
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+  );
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
@@ -30,9 +32,7 @@ function isBooleanOrStringArray(
   value: unknown
 ): value is boolean | string[] | undefined {
   return (
-    value === undefined ||
-    typeof value === "boolean" ||
-    isStringArray(value)
+    value === undefined || typeof value === "boolean" || isStringArray(value)
   );
 }
 
@@ -64,7 +64,10 @@ function isMcpServerConfig(value: unknown): value is McpServerConfig {
 
 function getManagedDisplayName(server: McpServerConfig): string {
   const raw = server as unknown as Record<string, unknown>;
-  if (typeof raw.displayName === "string" && raw.displayName.trim().length > 0) {
+  if (
+    typeof raw.displayName === "string" &&
+    raw.displayName.trim().length > 0
+  ) {
     return raw.displayName;
   }
   if (typeof raw.name === "string" && raw.name.trim().length > 0) {
@@ -158,12 +161,7 @@ export class McpRegistryFileManager {
     };
 
     addServers(userServers, SETTING_SCOPES.USER, userPath, false);
-    addServers(
-      workspaceServers,
-      SETTING_SCOPES.WORKSPACE,
-      workspacePath,
-      true
-    );
+    addServers(workspaceServers, SETTING_SCOPES.WORKSPACE, workspacePath, true);
 
     return Array.from(byId.values()).sort((a, b) =>
       a.displayName.localeCompare(b.displayName, undefined, {

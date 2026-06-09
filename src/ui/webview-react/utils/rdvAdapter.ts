@@ -72,10 +72,7 @@ function normalizeDiffLineForLayout(line: string): string {
   return line.replace(/\r\n/g, "\n").replace(/\t/g, "    ");
 }
 
-function getWrappedVisualLineCount(
-  line: string,
-  charsPerLine: number
-): number {
+function getWrappedVisualLineCount(line: string, charsPerLine: number): number {
   const normalized = normalizeDiffLineForLayout(line);
   if (normalized.length === 0) {
     return 1;
@@ -107,15 +104,12 @@ function getApproximateDiffCharsPerLine(
   );
   const lineColumnWidth =
     viewType === "split"
-      ? Math.max(
-          120,
-          Math.floor((availableWidth - SPLIT_DIFF_COLUMN_GAP) / 2)
-        )
+      ? Math.max(120, Math.floor((availableWidth - SPLIT_DIFF_COLUMN_GAP) / 2))
       : availableWidth;
   // 0.50 (not 0.62): diff viewers render at ~6.5px/char at 13px font, giving ~46 chars/line
   // on a 301px content area. Using 0.62 estimated only 37 chars/line, causing ~24% row overcount
   // (confirmed by scaleFactor=0.82 across n=13 samples in profiler data).
-  const charWidth = Math.max(5.5, outputFontSize * 0.50);
+  const charWidth = Math.max(5.5, outputFontSize * 0.5);
   return Math.max(8, Math.floor(lineColumnWidth / charWidth));
 }
 
@@ -405,8 +399,11 @@ export function buildDiffRenderPlan(
   hunks: HunkData[],
   options: DiffRenderPlanOptions
 ): DiffRenderPlan {
-  return buildDiffRenderPlanFromStats(getRenderedDiffStats(hunks, options.viewType), {
-    ...options,
-    hunks,
-  });
+  return buildDiffRenderPlanFromStats(
+    getRenderedDiffStats(hunks, options.viewType),
+    {
+      ...options,
+      hunks,
+    }
+  );
 }

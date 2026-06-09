@@ -75,11 +75,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties,
     getModelsForHarness,
   } = useSettingsStore();
-  const {
-    hiddenDropdownOptions,
-    hideDropdownOption,
-    unhideDropdownOption,
-  } = useUiStore();
+  const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
+    useUiStore();
   const handleResetAllToInherit = useCallback(() => {
     setProperty("harness", undefined);
     setProperty("model", undefined);

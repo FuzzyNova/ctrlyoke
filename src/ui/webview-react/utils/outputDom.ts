@@ -88,8 +88,8 @@ export function captureViewportRowAnchor(
 
   const anchorElement =
     mode === "center-point"
-      ? best?.element ?? bestVisibleTop?.element ?? null
-      : bestVisibleTop?.element ?? best?.element ?? null;
+      ? (best?.element ?? bestVisibleTop?.element ?? null)
+      : (bestVisibleTop?.element ?? best?.element ?? null);
   if (!anchorElement) {
     return null;
   }

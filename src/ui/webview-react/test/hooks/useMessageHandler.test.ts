@@ -1527,7 +1527,9 @@ describe("GIT_CHANGE_PREVIEW_RESULT", () => {
       });
     });
 
-    expect(useUiStore.getState().contentPreviewModal?.title).toContain("staged");
+    expect(useUiStore.getState().contentPreviewModal?.title).toContain(
+      "staged"
+    );
   });
 
   it("sets a human-readable title for a stash ref", () => {
@@ -1591,7 +1593,9 @@ describe("PRIOR_CONTEXT_PREVIEW_RESULT", () => {
       });
     });
 
-    expect(useUiStore.getState().contentPreviewModal?.title).toContain("step:1,3");
+    expect(useUiStore.getState().contentPreviewModal?.title).toContain(
+      "step:1,3"
+    );
   });
 
   it("does not warn about unknown message type", () => {

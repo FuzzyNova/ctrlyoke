@@ -362,34 +362,36 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
       // ResizeObserver: fit xterm to container; only the controller notifies the PTY.
       // Viewers keep cols locked to the controller's value to prevent double line-wrap.
-      const { observer, disconnect } = createAnimationFrameResizeObserver(() => {
-        if (!entry.term.element) return;
-        try {
-          const sessNow = useTerminalStore
-            .getState()
-            .sessions[workflowId]?.find((s) => s.id === sessionId);
-          const isCtrl = sessNow?.isController;
-          if (isCtrl !== false) {
-            // Controller: fit to container, then report new dimensions to PTY
-            entry.fitAddon.fit();
-            const { cols, rows } = entry.term;
-            sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
-              workflowId,
-              sessionId,
-              cols,
-              rows,
-            });
-          } else if (entry.controllerCols != null) {
-            // Viewer: keep cols fixed at controller's width, let rows adapt to
-            // the local container height so the terminal fills vertically.
-            const dims = entry.fitAddon.proposeDimensions();
-            const rows = Math.max(1, dims?.rows ?? entry.term.rows);
-            entry.term.resize(entry.controllerCols, rows);
+      const { observer, disconnect } = createAnimationFrameResizeObserver(
+        () => {
+          if (!entry.term.element) return;
+          try {
+            const sessNow = useTerminalStore
+              .getState()
+              .sessions[workflowId]?.find((s) => s.id === sessionId);
+            const isCtrl = sessNow?.isController;
+            if (isCtrl !== false) {
+              // Controller: fit to container, then report new dimensions to PTY
+              entry.fitAddon.fit();
+              const { cols, rows } = entry.term;
+              sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
+                workflowId,
+                sessionId,
+                cols,
+                rows,
+              });
+            } else if (entry.controllerCols != null) {
+              // Viewer: keep cols fixed at controller's width, let rows adapt to
+              // the local container height so the terminal fills vertically.
+              const dims = entry.fitAddon.proposeDimensions();
+              const rows = Math.max(1, dims?.rows ?? entry.term.rows);
+              entry.term.resize(entry.controllerCols, rows);
+            }
+          } catch {
+            // Ignore — may fire before terminal is fully initialized
           }
-        } catch {
-          // Ignore — may fire before terminal is fully initialized
         }
-      });
+      );
 
       if (containerRef.current) {
         observer.observe(containerRef.current);

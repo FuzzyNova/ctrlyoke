@@ -32,7 +32,7 @@ const TOOL_CALL_RESULT_BOTTOM_GAP = 10;
 // outputRow(72) + pl-4(16) + ml-2(8): total horizontal chrome for tool result text
 const TOOL_RESULT_HORIZONTAL_CHROME = 96;
 // Consolas/Monaco at (fontSize-1): ~0.60 char-width ratio
-const TOOL_RESULT_SM_FONT_CHAR_RATIO = 0.60;
+const TOOL_RESULT_SM_FONT_CHAR_RATIO = 0.6;
 
 export interface ToolCallSectionRenderPlan {
   hasContent: boolean;
@@ -76,8 +76,7 @@ export function getGenericToolCallOutput(result?: ToolResult): {
   output?: string;
   error?: string;
 } {
-  const output =
-    typeof result?.output === "string" ? result.output : undefined;
+  const output = typeof result?.output === "string" ? result.output : undefined;
   const error =
     result != null && !result.success && typeof result.error === "string"
       ? result.error
@@ -94,8 +93,9 @@ export function getGenericToolCallParamsText(
   }
 
   return Object.entries(parameters)
-    .map(([key, value]) =>
-      `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`
+    .map(
+      ([key, value]) =>
+        `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`
     )
     .join("\n");
 }
@@ -144,8 +144,14 @@ function buildResultSectionRenderPlan(
   let visualLineCount = preview.visibleLineCount;
   if (outputContentWidth != null && outputContentWidth > 0) {
     const smFontSize = Math.max(10, outputFontSize - 1);
-    const charWidth = Math.max(5.5, smFontSize * TOOL_RESULT_SM_FONT_CHAR_RATIO);
-    const availableWidth = Math.max(80, outputContentWidth - TOOL_RESULT_HORIZONTAL_CHROME);
+    const charWidth = Math.max(
+      5.5,
+      smFontSize * TOOL_RESULT_SM_FONT_CHAR_RATIO
+    );
+    const availableWidth = Math.max(
+      80,
+      outputContentWidth - TOOL_RESULT_HORIZONTAL_CHROME
+    );
     const charsPerLine = Math.max(8, Math.floor(availableWidth / charWidth));
     visualLineCount = preview.visibleText.split("\n").reduce((total, line) => {
       if (line.length === 0) return total + 1;
@@ -212,7 +218,8 @@ export function buildToolCallRenderPlan(
           hiddenLineCount: 0,
           visibleText: paramsText,
           height:
-            countLines(paramsText) * sectionLineHeight + TOOL_CALL_PARAMS_BOTTOM_GAP,
+            countLines(paramsText) * sectionLineHeight +
+            TOOL_CALL_PARAMS_BOTTOM_GAP,
         }
       : buildHiddenSectionRenderPlan(paramsText)
     : getEmptySectionRenderPlan();
@@ -246,7 +253,8 @@ export function buildToolCallRenderPlan(
     paramsHeight: params.height,
     outputHeight: outputPlan.height,
     errorHeight: errorPlan.height,
-    totalHeight: summaryHeight + params.height + outputPlan.height + errorPlan.height,
+    totalHeight:
+      summaryHeight + params.height + outputPlan.height + errorPlan.height,
     paramsLineCount: params.lineCount,
     outputLineCount: outputPlan.lineCount,
     errorLineCount: errorPlan.lineCount,

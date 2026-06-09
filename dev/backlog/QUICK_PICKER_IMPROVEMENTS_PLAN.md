@@ -83,15 +83,15 @@ If a future dropdown opens downward, the placement should still remain at the bo
 
 ## Affected Components
 
-| Component | Planned role |
-| --- | --- |
-| `FooterQuickPicker.tsx` | Own popup title bar, target segmented control, and optional title actions. |
-| `HarnessQuickPicker.tsx` | Support prompt/workflow targets and remove `Inherit` in workflow mode. |
-| `ModelQuickPicker.tsx` | Same target behavior; model list depends on the effective harness for that target. |
-| `AgentQuickPicker.tsx` | Same target behavior; keep explicit `None`. |
-| `SkillsQuickPicker.tsx` | Same target behavior; keep explicit `None`/empty selection semantics. |
-| `CustomSelect.tsx` | Move inline `Show hidden` bar to bottom and avoid special top-bar behavior. |
-| `SkillsSelect.tsx` | Match title/footer popup layout if it has inline hidden controls of its own. |
+| Component                     | Planned role                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `FooterQuickPicker.tsx`       | Own popup title bar, target segmented control, and optional title actions.                    |
+| `HarnessQuickPicker.tsx`      | Support prompt/workflow targets and remove `Inherit` in workflow mode.                        |
+| `ModelQuickPicker.tsx`        | Same target behavior; model list depends on the effective harness for that target.            |
+| `AgentQuickPicker.tsx`        | Same target behavior; keep explicit `None`.                                                   |
+| `SkillsQuickPicker.tsx`       | Same target behavior; keep explicit `None`/empty selection semantics.                         |
+| `CustomSelect.tsx`            | Move inline `Show hidden` bar to bottom and avoid special top-bar behavior.                   |
+| `SkillsSelect.tsx`            | Match title/footer popup layout if it has inline hidden controls of its own.                  |
 | `WorkflowPropertiesPanel.tsx` | Extract reusable workflow-property update helper so quick pickers can preserve undo behavior. |
 
 ## Data and Undo Requirements
@@ -108,7 +108,7 @@ Workflow target writes must use the same workflow-property update behavior as `W
 Avoid duplicating the workflow update algorithm inside every quick picker. Extract a small shared hook, for example:
 
 ```typescript
-useWorkflowPropertyUpdater()
+useWorkflowPropertyUpdater();
 ```
 
 It should expose targeted helpers like:

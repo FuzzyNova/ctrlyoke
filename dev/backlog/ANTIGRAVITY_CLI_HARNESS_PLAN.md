@@ -29,6 +29,7 @@ Subcommands: changelog, help, install, plugin/plugins, update
 ```
 
 This is structurally near-identical to Claude CLI:
+
 - `--print` ≈ Claude's `--print`
 - `--continue` / `--conversation <id>` ≈ Claude's `-c` / `-r <thread-id>`
 - `--dangerously-skip-permissions` ≈ Claude's same flag
@@ -64,6 +65,7 @@ Create `src/flightpath/harness/antigravity/` with these files:
 #### [NEW] `AntigravityCliProvider.ts`
 
 Main provider. Model on `ClaudeCliProvider.ts`. Key differences:
+
 - `config.name = "antigravity"`
 - `config.harnessId = HARNESS_IDS.ANTIGRAVITY_CLI`
 - `config.displayName = "Antigravity CLI"`
@@ -78,11 +80,13 @@ Main provider. Model on `ClaudeCliProvider.ts`. Key differences:
 #### [NEW] `AntigravityResponseParser.ts`
 
 Implements `IResponseParser`. Strategy depends on output format (see Open Questions):
+
 - If JSON streaming → clone `ClaudeResponseParser` and adapt field names
 - If plain text → clone `GeminiResponseParser`
 - If JSONL → clone `CodexResponseParser`
 
 Must implement:
+
 - `parse(stdout, stderr, exitCode)` → `CopilotCliResult & { sessionId? }`
 - `extractSessionId(output)` → extract conversation ID
 - `processStreamingChunk(chunk, streamState)` → real-time streaming (if applicable)
@@ -91,22 +95,24 @@ Must implement:
 #### [NEW] `AntigravityNotificationMonitor.ts`
 
 Implements `INotificationMonitor`. Completion detection strategy (TBD — see Open Questions):
+
 - **If hooks supported**: Use hook-based detection writing to `.flightpath/temp/antigravity-notifications/`; hook config passed via `--settings <path>` (like Claude) or written to `.antigravity/settings.json` (like Gemini)
 - **If no hooks**: Fall back to log-based or process-exit detection
 
 Hook event mapping (TBD):
 
 | FlightPath logical | Antigravity native |
-|--------------------|-------------------|
-| `stop`             | TBD               |
-| `sessionStart`     | TBD               |
-| `preToolUse`       | TBD               |
-| `postToolUse`      | TBD               |
-| `userPromptSubmit` | TBD               |
+| ------------------ | ------------------ |
+| `stop`             | TBD                |
+| `sessionStart`     | TBD                |
+| `preToolUse`       | TBD                |
+| `postToolUse`      | TBD                |
+| `userPromptSubmit` | TBD                |
 
 #### [NEW] `AntigravityToolPermissionMapper.ts`
 
 Implements `IToolPermissionMapper`. Maps FlightPath's three permission modes:
+
 - `dangerouslyAllowAll` → `--dangerously-skip-permissions`
 - `allowAll` → TBD (investigate `agy` flags)
 - `custom` → TBD allow/deny flags
@@ -114,6 +120,7 @@ Implements `IToolPermissionMapper`. Maps FlightPath's three permission modes:
 #### [NEW] `AntigravityLogParser.ts`
 
 Extends `BaseLogParser`. Key config:
+
 - `getLogDirectory()` → path to `agy` log files (TBD — likely `~/.agy/logs/` or `~/.antigravity/tmp/`)
 - `getLogFilePattern()` → regex matching log file names
 - `parseLogLine(line)` → parse JSON or text log lines
@@ -157,6 +164,7 @@ export const ANTIGRAVITY_CLI_MODELS = [
 #### [MODIFY] `src/types/FlightPathTypes.ts`
 
 Add to the `Harness` enum (verify it exists as an enum, or follow DashboardConstants pattern):
+
 ```typescript
 AntigravityCli = "antigravity-cli",
 ```
@@ -192,6 +200,7 @@ Six additions (search for `geminiCli` pattern and mirror for `antigravityCli`):
 6. `this.antigravityCliIntegration.setWorkflowName(name);` in `setWorkflowName()`
 
 Also add display label:
+
 ```typescript
 [Harness.AntigravityCli]: "Antigravity CLI",
 ```
@@ -239,7 +248,9 @@ export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> = {
 
 export type AntigravityCliModel = (typeof ANTIGRAVITY_CLI_MODELS)[number];
 
-export function isAntigravityCliModel(model: string): model is AntigravityCliModel {
+export function isAntigravityCliModel(
+  model: string
+): model is AntigravityCliModel {
   return ANTIGRAVITY_CLI_MODELS.includes(model as AntigravityCliModel);
 }
 ```
@@ -275,6 +286,7 @@ Three additions under `contributes.configuration.properties`:
 #### [MODIFY] `src/ui/WebviewSettingsSync.ts`
 
 Following the `GEMINI_CLI` pattern:
+
 1. Import `ANTIGRAVITY_CLI_MODEL_LABELS` from `ModelConstants`
 2. Add `[HARNESS_IDS.ANTIGRAVITY_CLI]: { available: false, status: HARNESS_STATUS_STRINGS.CHECKING }` to initial availability
 3. Add `HARNESS_IDS.ANTIGRAVITY_CLI` to `VALID_CLI_HARNESSES`
@@ -315,15 +327,18 @@ Add `"antigravity-cli"` to the `harness` enum array.
 #### [MODIFY] `schemas/settings-schema.json`
 
 Four additions mirroring `gemini-cli`:
+
 1. Add `"antigravity-cli"` to the `defaults.harness` enum
 2. Add `"antigravity-cli": { "type": "string" }` to `models` object properties
 3. Add `"antigravity-cli": { "type": "string" }` to `additionalArgs` object properties
 4. Add `"antigravity-cli"` to any other harness enum arrays
 
 After editing JSON schema, run:
+
 ```
 npm run generate-schema
 ```
+
 to regenerate `schemas/prompt-schema.yaml`.
 
 ---
@@ -389,6 +404,7 @@ Add entry to the hook/notify debug logs table:
 #### [MODIFY] `src/test/harness/hooks.harness.test.ts`
 
 Add `"antigravity-cli"` to:
+
 - Harness union type
 - Active harnesses array
 - Default model map
@@ -415,6 +431,7 @@ Only needed if Antigravity hooks write a settings file to the workspace (like `.
 ## Complete Checklist
 
 ### Pre-implementation research
+
 - [ ] Run `agy --print "hello"` and capture full stdout/stderr — confirm output format
 - [ ] Confirm session/conversation ID location in output
 - [ ] Run `agy help`, `agy changelog`, `agy plugin list` for all flags and hook support
@@ -422,6 +439,7 @@ Only needed if Antigravity hooks write a settings file to the workspace (like `.
 - [ ] Identify `--model` flag and available model names
 
 ### Harness directory (`src/flightpath/harness/antigravity/`)
+
 - [ ] `AntigravityCliProvider.ts` implementing `ICliProvider`
 - [ ] `AntigravityResponseParser.ts` implementing `IResponseParser`
 - [ ] `AntigravityNotificationMonitor.ts` implementing `INotificationMonitor`
@@ -429,17 +447,21 @@ Only needed if Antigravity hooks write a settings file to the workspace (like `.
 - [ ] `AntigravityLogParser.ts` extending `BaseLogParser`
 
 ### Hook script (if hook-based)
+
 - [ ] `src/scripts/flightpath-antigravity-hook.js`
 
 ### Type layer
+
 - [ ] `src/types/DashboardConstants.ts` — `HARNESS_IDS`, `HARNESS_INFO`, model list constant, hook event table comment
 - [ ] `src/types/FlightPathTypes.ts` — `Harness` enum value (if applicable)
 
 ### Wiring layer
+
 - [ ] `src/flightpath/IntegrationFactory.ts` — import, factory method, switch case
 - [ ] `src/flightpath/WorkflowOrchestrator.ts` — field, construction, registration, initialization, harness resolution, workflow name propagation, display label
 
 ### Settings layer
+
 - [ ] `src/utils/ConfigurationUtils.ts` — model key, additional args key, harness normalizer, model getter, `getModelForHarness` case
 - [ ] `src/utils/ModelConstants.ts` — model array, label map, type, guard function, `getModelDisplayName` case
 - [ ] `src/types/FlightPathSettings.ts` — add `"antigravity-cli"` to `FLIGHTPATH_SETTINGS_DEFAULTS.defaults.models`
@@ -447,24 +469,29 @@ Only needed if Antigravity hooks write a settings file to the workspace (like `.
 - [ ] `package.json` — harness enum value + description, model setting, additional args setting
 
 ### UI layer
+
 - [ ] `src/ui/WebviewSettingsSync.ts` — import, initial status, valid harnesses, model/args mappings, model options
 - [ ] `src/ui/webview-react/components/shared/HarnessDropdown.tsx` — display name, `CLI_HARNESSES` group
 - [ ] `src/ui/webview-react/store/settingsStore.ts` — import, model array, initial availability, `modelsByHarness`
 
 ### Schemas
+
 - [ ] `schemas/prompt-schema.json` — harness enum
 - [ ] `schemas/settings-schema.json` — harness enum, models, additionalArgs
 - [ ] Run `npm run generate-schema` to regenerate `schemas/prompt-schema.yaml`
 
 ### Docs / debug
+
 - [ ] `.github/copilot-instructions.md` — add to harness table and debug log table
 
 ### Tests
+
 - [ ] `src/test/harness/helpers/harnessRunner.ts` — union type + default model
 - [ ] `src/test/harness/hooks.harness.test.ts` — union type, active harnesses, models, hook events
 - [ ] `src/test/unit/AntigravityResponseParser.test.ts` — unit tests (recommended)
 
 ### Optional (if applicable)
+
 - [ ] `cleanupWorkspaceArtifacts` in `AntigravityCliProvider` (if workspace config files are written for hooks)
 - [ ] New tool name entries in `src/flightpath/harness/shared/CliEventMapper.ts`
 
@@ -473,11 +500,13 @@ Only needed if Antigravity hooks write a settings file to the workspace (like `.
 ## Verification Plan
 
 ### Automated
+
 - `npm run compile` — zero TypeScript errors
 - `npm test` — all existing tests pass; new parser unit tests pass
 - `npm run generate-schema` — schema regeneration succeeds
 
 ### Manual (requires `agy` installed)
+
 1. Set `flightpath.harness` to `antigravity-cli` in VS Code settings
 2. Verify harness shows "Available" in the FlightPath dashboard
 3. Run a single-step workflow in interactive mode — confirm terminal opens, prompt sent, completion detected
@@ -494,6 +523,7 @@ Only needed if Antigravity hooks write a settings file to the workspace (like `.
 **4–8 hours** for a complete, tested integration (per `ADDING_NEW_CLI_HARNESS.md` estimate).
 
 Most time will be spent on:
+
 1. Pre-implementation research (output format, session ID, hooks) — **do this first**
 2. `AntigravityResponseParser.ts` — depends heavily on output format
 3. `AntigravityNotificationMonitor.ts` — depends on hook availability

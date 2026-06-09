@@ -7,10 +7,7 @@ function getHomeDir(): string {
   return os.homedir();
 }
 
-function pickExistingPath(
-  candidates: string[],
-  fallback: string
-): string {
+function pickExistingPath(candidates: string[], fallback: string): string {
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? fallback;
 }
 
@@ -67,7 +64,9 @@ export function getClaudeUserConfigPath(): string {
  * GitHub Copilot's canonical project-level MCP location is `.github/mcp.json`.
  * Returned as an array for compatibility with discovery callers.
  */
-export function getCopilotWorkspaceMcpConfigPaths(workspaceRoot: string): string[] {
+export function getCopilotWorkspaceMcpConfigPaths(
+  workspaceRoot: string
+): string[] {
   return [path.join(workspaceRoot, ".github", "mcp.json")];
 }
 
@@ -119,7 +118,9 @@ export function getCodexUserMcpConfigPath(): string {
 /**
  * Returns the OpenCode workspace MCP config path (`opencode.json`).
  */
-export function getOpenCodeWorkspaceMcpConfigPath(workspaceRoot: string): string {
+export function getOpenCodeWorkspaceMcpConfigPath(
+  workspaceRoot: string
+): string {
   return path.join(workspaceRoot, "opencode.json");
 }
 

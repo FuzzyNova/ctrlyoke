@@ -50,8 +50,12 @@ describe("toolCallLayout", () => {
     expect(renderPlan.error.visibleLineCount).toBe(11);
     expect(renderPlan.error.hiddenLineCount).toBe(0);
     expect(renderPlan.isErrorTruncated).toBe(false);
-    expect(getVisibleToolCallText(output, renderPlan.output)).toContain("line 10");
-    expect(getVisibleToolCallText(output, renderPlan.output)).not.toContain("line 11");
+    expect(getVisibleToolCallText(output, renderPlan.output)).toContain(
+      "line 10"
+    );
+    expect(getVisibleToolCallText(output, renderPlan.output)).not.toContain(
+      "line 11"
+    );
     expect(renderPlan.totalHeight).toBe(
       renderPlan.summaryHeight +
         renderPlan.paramsHeight +

@@ -38,10 +38,7 @@ import {
   formatTime,
   getFirstWords,
 } from "@utils/outputUtils";
-import {
-  OUTPUT_BLOCK_BASE,
-  TOOL_RESULT_LINE,
-} from "./outputStyles";
+import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
 import type {
   CliHeaderRow,
   HistoryBannerRow,
@@ -214,8 +211,14 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     bashExpansion,
     onBashExpansionChange,
   }) => {
-    const { event, rawTextOutput, eventIndex, hideDiff, workspaceSnapshot, diff } =
-      row;
+    const {
+      event,
+      rawTextOutput,
+      eventIndex,
+      hideDiff,
+      workspaceSnapshot,
+      diff,
+    } = row;
 
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
@@ -254,8 +257,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         );
         const displayOldContent = displayStructuredPatch
           ? getSnapshotBeforeContent(data.path, workspaceSnapshot)
-          : data.oldContent ??
-            getSnapshotBeforeContent(data.path, workspaceSnapshot);
+          : (data.oldContent ??
+            getSnapshotBeforeContent(data.path, workspaceSnapshot));
         const handleUndo =
           onFileUndo == null
             ? undefined
@@ -428,8 +431,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-panel-border bg-editor-bg whitespace-nowrap">
               <i className="codicon codicon-fold text-xxs" />
               <span>
-                Conversation compacted ({trigger})
-                {tokenInfo}
+                Conversation compacted ({trigger}){tokenInfo}
               </span>
             </span>
             <div className="flex-1 h-px bg-panel-border" />
@@ -607,8 +609,8 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
         count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
       parts.push(
         <span key="context" title={tokenDetails.join(" | ")}>
-          Context: {formatCount(contextWindowUsed!)}/{formatCount(contextWindowSize!)} (
-          {pct}%)
+          Context: {formatCount(contextWindowUsed!)}/
+          {formatCount(contextWindowSize!)} ({pct}%)
         </span>
       );
     } else {
@@ -639,12 +641,18 @@ const StatsRowView: React.FC<{ row: OutputRenderRow }> = ({ row }) => {
     parts.push(<span key="elapsed">{output.elapsed}s</span>);
   }
 
-  if (isScriptOutput(output) && !output.isStreaming && output.exitCode !== undefined) {
+  if (
+    isScriptOutput(output) &&
+    !output.isStreaming &&
+    output.exitCode !== undefined
+  ) {
     parts.push(
       <span
         key="exit"
         className={
-          output.exitCode === 0 ? "text-indicator-success" : "text-indicator-error"
+          output.exitCode === 0
+            ? "text-indicator-success"
+            : "text-indicator-error"
         }
       >
         Exit code: {output.exitCode}
@@ -733,7 +741,9 @@ export const OutputRow = memo<OutputRowProps>(
     let content: React.ReactNode;
     switch (row.rowKind) {
       case "history-banner":
-        content = <HistoryBannerRowView row={row} onBackToLive={onBackToLive} />;
+        content = (
+          <HistoryBannerRowView row={row} onBackToLive={onBackToLive} />
+        );
         break;
       case "step-anchor":
         content = <div className="h-px" aria-hidden="true" />;
@@ -789,7 +799,9 @@ export const OutputRow = memo<OutputRowProps>(
           <div
             className={`${OUTPUT_BLOCK_BASE} border-l-severity-error text-error-fg`}
           >
-            {row.timestamp && <span className="opacity-70">[{row.timestamp}] </span>}
+            {row.timestamp && (
+              <span className="opacity-70">[{row.timestamp}] </span>
+            )}
             Error: {row.errorMessage}
           </div>
         );

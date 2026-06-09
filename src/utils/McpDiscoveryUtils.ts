@@ -49,7 +49,9 @@ function isPlainObject(value: unknown): value is JsonRecord {
 }
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+  );
 }
 
 function toStringRecord(value: unknown): Record<string, string> | undefined {
@@ -101,7 +103,8 @@ function buildLocalEntry(
     headers?: Record<string, string>;
   }
 ): LocalMcpServerEntry | null {
-  const hasCommand = typeof config.command === "string" && config.command.length > 0;
+  const hasCommand =
+    typeof config.command === "string" && config.command.length > 0;
   const hasUrl = typeof config.url === "string" && config.url.length > 0;
   if (!hasCommand && !hasUrl) {
     return null;
@@ -201,7 +204,9 @@ function normalizeCopilotServerMap(
 
     const entry = buildLocalEntry(id, source, filePath, {
       command:
-        isLocal && typeof value.command === "string" ? value.command : undefined,
+        isLocal && typeof value.command === "string"
+          ? value.command
+          : undefined,
       args: isStringArray(value.args) ? value.args : undefined,
       env: toStringRecord(value.env),
       url: typeof value.url === "string" ? value.url : undefined,
@@ -262,7 +267,10 @@ function normalizeOpenCodeServerMap(
 
     const entry = buildLocalEntry(id, source, filePath, {
       command: commandParts?.[0],
-      args: commandParts && commandParts.length > 1 ? commandParts.slice(1) : undefined,
+      args:
+        commandParts && commandParts.length > 1
+          ? commandParts.slice(1)
+          : undefined,
       env: toStringRecord(value.environment),
       url: typeof value.url === "string" ? value.url : undefined,
       transport:
@@ -351,7 +359,9 @@ function splitTomlList(text: string): string[] {
   return items;
 }
 
-function parseTomlInlineTable(value: string): Record<string, string> | undefined {
+function parseTomlInlineTable(
+  value: string
+): Record<string, string> | undefined {
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
     return undefined;
@@ -495,7 +505,10 @@ function normalizeCodexToml(
       continue;
     }
 
-    if (key === "transport" && (value.startsWith(`"`) || value.startsWith(`'`))) {
+    if (
+      key === "transport" &&
+      (value.startsWith(`"`) || value.startsWith(`'`))
+    ) {
       const transport = unquoteTomlString(value);
       if (transport === "sse") {
         currentConfig.transport = "sse";
@@ -554,35 +567,54 @@ async function discoverFromDescriptor(
   }
 
   if (descriptor.format === "vscode-json" && isPlainObject(parsed.servers)) {
-    return normalizeVscodeServerMap(parsed.servers, descriptor.source, descriptor.path);
+    return normalizeVscodeServerMap(
+      parsed.servers,
+      descriptor.source,
+      descriptor.path
+    );
   }
 
-  if (
-    descriptor.format === "claude-json" &&
-    isPlainObject(parsed.mcpServers)
-  ) {
-    return normalizeClaudeServerMap(parsed.mcpServers, descriptor.source, descriptor.path);
+  if (descriptor.format === "claude-json" && isPlainObject(parsed.mcpServers)) {
+    return normalizeClaudeServerMap(
+      parsed.mcpServers,
+      descriptor.source,
+      descriptor.path
+    );
   }
 
   if (
     descriptor.format === "copilot-json" &&
     isPlainObject(parsed.mcpServers)
   ) {
-    return normalizeCopilotServerMap(parsed.mcpServers, descriptor.source, descriptor.path);
+    return normalizeCopilotServerMap(
+      parsed.mcpServers,
+      descriptor.source,
+      descriptor.path
+    );
   }
 
   if (descriptor.format === "qwen-json" && isPlainObject(parsed.mcpServers)) {
-    return normalizeQwenServerMap(parsed.mcpServers, descriptor.source, descriptor.path);
+    return normalizeQwenServerMap(
+      parsed.mcpServers,
+      descriptor.source,
+      descriptor.path
+    );
   }
 
   if (descriptor.format === "opencode-json" && isPlainObject(parsed.mcp)) {
-    return normalizeOpenCodeServerMap(parsed.mcp, descriptor.source, descriptor.path);
+    return normalizeOpenCodeServerMap(
+      parsed.mcp,
+      descriptor.source,
+      descriptor.path
+    );
   }
 
   return [];
 }
 
-function getLocalConfigDescriptors(workspaceRoot: string): LocalConfigDescriptor[] {
+function getLocalConfigDescriptors(
+  workspaceRoot: string
+): LocalConfigDescriptor[] {
   return [
     {
       path: getVscodeWorkspaceMcpConfigPath(workspaceRoot),

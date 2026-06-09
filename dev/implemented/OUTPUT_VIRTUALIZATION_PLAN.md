@@ -134,17 +134,17 @@ requiring a separate non-virtualized renderer.
 
 ## Key Files
 
-| File | Role |
-| --- | --- |
-| `src/ui/webview-react/components/layout/OutputSection.tsx` | Virtualized output orchestration, measurement cache, navigation controller registration, minimap metadata |
-| `src/ui/webview-react/utils/outputRows.ts` | Row projection, row metadata, row height estimates |
-| `src/ui/webview-react/utils/outputRenderUtils.ts` | Shared event/diff/render helpers |
-| `src/ui/webview-react/utils/outputNavigation.ts` | Active output navigation controller |
-| `src/ui/webview-react/components/output/OutputRow.tsx` | Row-level renderer |
-| `src/ui/webview-react/components/output/OutputMinimap.tsx` | Marker-click navigation through the shared controller |
-| `src/ui/webview-react/hooks/useStepClickHandler.ts` | Step-click navigation through the shared controller |
-| `src/ui/webview-react/components/output/DiffView.tsx` | Controlled diff collapse support |
-| `src/ui/webview-react/components/output/FileOperationOutput.tsx` | Pass-through controlled diff collapse wiring |
+| File                                                             | Role                                                                                                      |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `src/ui/webview-react/components/layout/OutputSection.tsx`       | Virtualized output orchestration, measurement cache, navigation controller registration, minimap metadata |
+| `src/ui/webview-react/utils/outputRows.ts`                       | Row projection, row metadata, row height estimates                                                        |
+| `src/ui/webview-react/utils/outputRenderUtils.ts`                | Shared event/diff/render helpers                                                                          |
+| `src/ui/webview-react/utils/outputNavigation.ts`                 | Active output navigation controller                                                                       |
+| `src/ui/webview-react/components/output/OutputRow.tsx`           | Row-level renderer                                                                                        |
+| `src/ui/webview-react/components/output/OutputMinimap.tsx`       | Marker-click navigation through the shared controller                                                     |
+| `src/ui/webview-react/hooks/useStepClickHandler.ts`              | Step-click navigation through the shared controller                                                       |
+| `src/ui/webview-react/components/output/DiffView.tsx`            | Controlled diff collapse support                                                                          |
+| `src/ui/webview-react/components/output/FileOperationOutput.tsx` | Pass-through controlled diff collapse wiring                                                              |
 
 ---
 

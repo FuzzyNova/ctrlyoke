@@ -439,13 +439,15 @@ suite("PromptFileSplitter Tests", () => {
       });
 
       // Para A: tiny preamble well under minChunkSize
-      const preamble = "git diff summary\n2 files changed, 38 insertions, 0 deletions";
+      const preamble =
+        "git diff summary\n2 files changed, 38 insertions, 0 deletions";
 
       // Para B: a very long paragraph far exceeding maxTokensPerFile.
       // Use "word " repeats (each ~1 token) rather than repeated single chars
       // — gpt-tokenizer compresses long same-char runs into very few tokens,
       // making it unreliable for these threshold tests.
-      const oversizedLine = "diff --git a/styles.css b/styles.css\n" + "word ".repeat(3000);
+      const oversizedLine =
+        "diff --git a/styles.css b/styles.css\n" + "word ".repeat(3000);
 
       const content = preamble + "\n\n" + oversizedLine;
       const result = splitter.split(content);
@@ -487,7 +489,9 @@ suite("PromptFileSplitter Tests", () => {
         `Working tree changes\n\n` +
         `2 files changed\n\n` +
         `diff --git a/icons.css b/icons.css\n` +
-        "base64_svg_data: " + "word ".repeat(3000) + "\n" +
+        "base64_svg_data: " +
+        "word ".repeat(3000) +
+        "\n" +
         `</attachment>`;
 
       const result = splitter.split(attachment);

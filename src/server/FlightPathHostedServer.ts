@@ -703,7 +703,9 @@ export class FlightPathHostedServer
           typeof body.destDir !== "string" ||
           (body.newName !== undefined && typeof body.newName !== "string")
         ) {
-          res.status(400).json({ error: "sourcePath and destDir are required" });
+          res
+            .status(400)
+            .json({ error: "sourcePath and destDir are required" });
           return;
         }
         try {
@@ -731,7 +733,9 @@ export class FlightPathHostedServer
           typeof body.destDir !== "string" ||
           (body.newName !== undefined && typeof body.newName !== "string")
         ) {
-          res.status(400).json({ error: "sourcePath and destDir are required" });
+          res
+            .status(400)
+            .json({ error: "sourcePath and destDir are required" });
           return;
         }
         try {
@@ -915,11 +919,9 @@ export class FlightPathHostedServer
           const result =
             await this.viewerService.generateCommitMessage(instructions);
           if (!result) {
-            res
-              .status(422)
-              .json({
-                error: "No changes detected. Stage or modify files first.",
-              });
+            res.status(422).json({
+              error: "No changes detected. Stage or modify files first.",
+            });
             return;
           }
           res.json({

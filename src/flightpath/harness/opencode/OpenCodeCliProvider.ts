@@ -476,22 +476,19 @@ export class OpenCodeCliProvider implements ICliProvider {
     userHooks?: UserHookConfig[]
   ): Promise<void> {
     try {
-      const pluginDir = this.notificationMonitor.getPluginDirectory(
-        workspaceRoot
-      );
+      const pluginDir =
+        this.notificationMonitor.getPluginDirectory(workspaceRoot);
       // OpenCode only loads .ts plugins — .js files are silently ignored.
-      const pluginPath = this.notificationMonitor.getPluginFilePath(
-        workspaceRoot
-      );
+      const pluginPath =
+        this.notificationMonitor.getPluginFilePath(workspaceRoot);
       const sourcePath = path.join(
         extensionPath,
         "out",
         "scripts",
         "flightpath-opencode-plugin.ts"
       );
-      const sidecarPath = this.notificationMonitor.getPluginHooksFilePath(
-        workspaceRoot
-      );
+      const sidecarPath =
+        this.notificationMonitor.getPluginHooksFilePath(workspaceRoot);
 
       await fs.promises.mkdir(pluginDir, { recursive: true });
       await this.writePluginDirGitignore(workspaceRoot);
@@ -539,10 +536,14 @@ export class OpenCodeCliProvider implements ICliProvider {
       ".gitignore",
       "",
     ].join("\n");
-    await fs.promises.writeFile(gitignorePath, content, "utf-8").catch(() => {});
+    await fs.promises
+      .writeFile(gitignorePath, content, "utf-8")
+      .catch(() => {});
   }
 
-  private async deleteFlightPathGitignore(gitignorePath: string): Promise<void> {
+  private async deleteFlightPathGitignore(
+    gitignorePath: string
+  ): Promise<void> {
     try {
       const content = await fs.promises.readFile(gitignorePath, "utf-8");
       if (content.startsWith("# FlightPath temp files")) {

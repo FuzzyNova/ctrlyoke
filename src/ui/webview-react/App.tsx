@@ -843,7 +843,10 @@ function App() {
                           .setLastDesktopSizes({ output: sizePct });
                       }
                     }
-                    if (!isRemountUnstable && isOutputCollapsed !== outputCollapsed) {
+                    if (
+                      !isRemountUnstable &&
+                      isOutputCollapsed !== outputCollapsed
+                    ) {
                       setOutputCollapsed(isOutputCollapsed);
                     }
                   }}
@@ -899,7 +902,10 @@ function App() {
                         }
                       }
                     }
-                    if (!isRemountUnstable && isEditorCollapsed !== editorCollapsed) {
+                    if (
+                      !isRemountUnstable &&
+                      isEditorCollapsed !== editorCollapsed
+                    ) {
                       setEditorCollapsed(isEditorCollapsed);
                     }
                   }}

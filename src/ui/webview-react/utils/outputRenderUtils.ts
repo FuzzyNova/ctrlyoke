@@ -220,10 +220,15 @@ export function computeOutputDiffStats(
   if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
     const data = event.data as FileEditData;
     const structuredPatch = data.path
-      ? getDisplayStructuredPatch(data.path, data.structuredPatch, workspaceSnapshot)
+      ? getDisplayStructuredPatch(
+          data.path,
+          data.structuredPatch,
+          workspaceSnapshot
+        )
       : data.structuredPatch;
     const beforeContent = data.path
-      ? getSnapshotBeforeContent(data.path, workspaceSnapshot) ?? data.oldContent
+      ? (getSnapshotBeforeContent(data.path, workspaceSnapshot) ??
+        data.oldContent)
       : data.oldContent;
 
     if (structuredPatch && structuredPatch.length > 0) {
@@ -232,14 +237,17 @@ export function computeOutputDiffStats(
         beforeContent,
         expandedGaps
       );
-      return buildOutputDiffStats(getRenderedDiffStats(expandedDiff.hunks, viewType), {
-        viewType,
-        collapsed,
-        outputFontSize,
-        outputContentWidth,
-        hunks: expandedDiff.hunks,
-        gapExpansion: expandedDiff.gapExpansion,
-      });
+      return buildOutputDiffStats(
+        getRenderedDiffStats(expandedDiff.hunks, viewType),
+        {
+          viewType,
+          collapsed,
+          outputFontSize,
+          outputContentWidth,
+          hunks: expandedDiff.hunks,
+          gapExpansion: expandedDiff.gapExpansion,
+        }
+      );
     }
     if (beforeContent !== undefined && data.newContent !== undefined) {
       const { hunks } = toRdvFromContent(beforeContent, data.newContent);
@@ -248,14 +256,17 @@ export function computeOutputDiffStats(
         beforeContent,
         expandedGaps
       );
-      return buildOutputDiffStats(getRenderedDiffStats(expandedDiff.hunks, viewType), {
-        viewType,
-        collapsed,
-        outputFontSize,
-        outputContentWidth,
-        hunks: expandedDiff.hunks,
-        gapExpansion: expandedDiff.gapExpansion,
-      });
+      return buildOutputDiffStats(
+        getRenderedDiffStats(expandedDiff.hunks, viewType),
+        {
+          viewType,
+          collapsed,
+          outputFontSize,
+          outputContentWidth,
+          hunks: expandedDiff.hunks,
+          gapExpansion: expandedDiff.gapExpansion,
+        }
+      );
     }
     return buildOutputDiffStats(
       { added: 0, removed: 0, runs: [] },
@@ -325,7 +336,11 @@ export function applyDiffGapExpansionState(
   oldContent: string | undefined,
   expandedGaps?: DiffGapExpansionState
 ): HunkData[] {
-  return applyDiffGapExpansionStateWithStats(baseHunks, oldContent, expandedGaps).hunks;
+  return applyDiffGapExpansionStateWithStats(
+    baseHunks,
+    oldContent,
+    expandedGaps
+  ).hunks;
 }
 
 function applyDiffGapExpansionStateWithStats(

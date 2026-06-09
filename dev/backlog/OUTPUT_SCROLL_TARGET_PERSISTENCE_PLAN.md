@@ -7,8 +7,8 @@ the user's view stable across layout perturbations — horizontal panel drags, r
 remeasurement bursts, scroll-seek restores — using an ephemeral **viewport anchor
 guard** (`viewportAnchorGuardRef`: activate → refresh → expire/clear → restore). This
 plan proposes replacing that reactive, perturbation-specific machinery with a single
-**persistent scroll target**: a small piece of state describing *what the user is
-looking at*, which only changes on explicit triggers (user scroll, new-output
+**persistent scroll target**: a small piece of state describing _what the user is
+looking at_, which only changes on explicit triggers (user scroll, new-output
 autoscroll, programmatic step navigation) and is otherwise just continuously
 re-resolved to a `scrollTop` as layout shifts underneath it.
 
@@ -23,12 +23,12 @@ giving us "remember my scroll position when I switch away and back" for free.
 `OutputSection` tracks an `ActiveViewportRowAnchor` in `viewportAnchorGuardRef`:
 
 - **`activateViewportAnchorGuard`** captures `{ rowKey, offsetTop, rowOffsetPx,
-  viewportOffsetTop, reason, expiresAt }` from the current DOM via
+viewportOffsetTop, reason, expiresAt }` from the current DOM via
   `captureViewportRowAnchor()` (line ~280) whenever a disruptive event starts
   (width-change, measurement-flush, scroll-seek-restore — see the `reason` union).
 - **`refreshViewportAnchorGuard`** extends the TTL (`expiresAt`, currently
   `OUTPUT_SCROLL_SEEK_INTERMEDIATE_OVERSCAN_DELAY_MS + OUTPUT_SCROLL_SEEK_FULL_OVERSCAN_DELAY_MS
-  + 800` ≈ 3200ms) on the *same* anchor while the disruption continues.
+  - 800` ≈ 3200ms) on the _same_ anchor while the disruption continues.
 - **`restoreViewportAnchorGuard`** (3 call sites: `shouldAdjustScrollPositionOnItemSizeChange`,
   a `useLayoutEffect`, and the `updateDiffViewType` ResizeObserver callback) tries to
   pin `scrollTop` so the anchor row stays at `viewportOffsetTop`, using either
@@ -47,8 +47,8 @@ just fixed in this session:
 2. **TTL-expiry re-anchor**: if the user pauses mid-drag for >3.2s, the guard expires,
    `refreshViewportAnchorGuard` returns `false`, and a **brand new anchor on a
    different row** gets captured (`updateDiffViewType` line ~1866-1871) — discontinuous
-   with what the user was actually tracking, producing a jump *in the middle of a
-   continuous interaction*.
+   with what the user was actually tracking, producing a jump _in the middle of a
+   continuous interaction_.
 3. **No persistence**: `OutputSection` is not keyed/remounted per workflow (rendered
    at `App.tsx:519/593/851`), so switching the viewed workflow just re-renders with a
    different `rows` array — there is no concept of "where was I in workflow A" to
@@ -57,7 +57,7 @@ just fixed in this session:
    `react-resizable-panels` drag events (`Group.onLayoutChange`/`onLayoutChanged`,
    `Separator.onPointerDown` — `App.tsx:744-752,789,915`). An OS/window-level resize
    reaches `OutputSection` only via the `ResizeObserver` in `updateDiffViewType` and is
-   *not* covered by `isHorizontalResizeCompensationActive()` — so window resizes can
+   _not_ covered by `isHorizontalResizeCompensationActive()` — so window resizes can
    still hit the racing-correctors problem via a different path.
 
 The root issue: the anchor is modeled as a **rescue mechanism that must be
@@ -94,13 +94,13 @@ type OutputScrollTarget =
 3. **Programmatic navigation** — clicking a step in the minimap
    (`handleMinimapStepClick` → `onStepClick`, line ~3629/4152) or any other
    "jump to X" action sets `{ kind: "row", rowKey: <first row of step X>,
-   viewportOffsetPx: <some sensible default, e.g. near top> }`.
+viewportOffsetPx: <some sensible default, e.g. near top> }`.
 
 **Everything else — width changes, row remeasurement, scroll-seek
 mount/unmount cycles, overscan changes — does NOT touch the target.** It only
-triggers a *recomputation* of `scrollTop` from the existing target against the
-current layout. This is the key inversion: today, disruptions *create and chase*
-anchors; in the new model, disruptions *read* a stable target and adjust `scrollTop`
+triggers a _recomputation_ of `scrollTop` from the existing target against the
+current layout. This is the key inversion: today, disruptions _create and chase_
+anchors; in the new model, disruptions _read_ a stable target and adjust `scrollTop`
 to match it — there is nothing to race against because there is exactly one
 function that ever writes `scrollTop` for "stay where I was" purposes.
 
@@ -113,8 +113,8 @@ function that ever writes `scrollTop` for "stay where I was" purposes.
 ```typescript
 function resolveScrollTopForTarget(
   target: OutputScrollTarget,
-  ctx: { rowLayout, measurementsCache, scrollElement, rows }
-): number | null
+  ctx: { rowLayout; measurementsCache; scrollElement; rows }
+): number | null;
 ```
 
 For `{ kind: "row" }`: look up the row's current `start` (prefer
@@ -155,7 +155,7 @@ small epsilon. Because there's one function and one target, there is no
 
 - Add a slice to `uiStore` (or a `Map<workflowId, OutputScrollTarget>` ref scoped to
   `OutputSection`, if we want to avoid global store churn): `outputScrollTargets:
-  Record<workflowId, OutputScrollTarget>`.
+Record<workflowId, OutputScrollTarget>`.
 - On target change, write `outputScrollTargets[currentWorkflowId] = target`.
 - On `activeWorkflowId`/viewed-workflow change (the value read at `App.tsx` /
   `setViewedWorkflowId` per the session log's `[setViewedWorkflowId]` entries),
@@ -181,11 +181,11 @@ that exist solely to bound the guard's lifetime.
 
 ## Affected Components
 
-| File | Change |
-| --- | --- |
-| `src/ui/webview-react/components/layout/OutputSection.tsx` | Major rewrite of the scroll-stability subsystem (anchor guard → target resolver) |
-| `src/ui/webview-react/store/uiStore.ts` | New `outputScrollTargets` state slice + setter |
-| `src/ui/webview-react/App.tsx` | Possibly: hook target restore into `setViewedWorkflowId`/workflow-switch flow if not handled inside `OutputSection` |
+| File                                                       | Change                                                                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `src/ui/webview-react/components/layout/OutputSection.tsx` | Major rewrite of the scroll-stability subsystem (anchor guard → target resolver)                                    |
+| `src/ui/webview-react/store/uiStore.ts`                    | New `outputScrollTargets` state slice + setter                                                                      |
+| `src/ui/webview-react/App.tsx`                             | Possibly: hook target restore into `setViewedWorkflowId`/workflow-switch flow if not handled inside `OutputSection` |
 
 ---
 

@@ -49,20 +49,32 @@ function buildRows() {
     .sort();
 
   return files.flatMap((file) => {
-    const { applyTo, exclude } = parseFrontmatter(resolve(INSTRUCTIONS_DIR, file));
+    const { applyTo, exclude } = parseFrontmatter(
+      resolve(INSTRUCTIONS_DIR, file)
+    );
     if (!applyTo) return [];
-    const pattern = exclude ? `\`${applyTo}\` (excl. \`${exclude}\`)` : `\`${applyTo}\``;
+    const pattern = exclude
+      ? `\`${applyTo}\` (excl. \`${exclude}\`)`
+      : `\`${applyTo}\``;
     return [{ pattern, file }];
   });
 }
 
 function buildTable(rows) {
-  const col1 = Math.max(...rows.map((r) => r.pattern.length), "File Pattern".length);
-  const col2 = Math.max(...rows.map((r) => r.file.length), "Instruction File".length);
+  const col1 = Math.max(
+    ...rows.map((r) => r.pattern.length),
+    "File Pattern".length
+  );
+  const col2 = Math.max(
+    ...rows.map((r) => r.file.length),
+    "Instruction File".length
+  );
   const pad = (s, n) => s.padEnd(n);
   const divider = `| ${"-".repeat(col1)} | ${"-".repeat(col2)} |`;
   const header = `| ${pad("File Pattern", col1)} | ${pad("Instruction File", col2)} |`;
-  const dataRows = rows.map(({ pattern, file }) => `| ${pad(pattern, col1)} | ${pad(file, col2)} |`);
+  const dataRows = rows.map(
+    ({ pattern, file }) => `| ${pad(pattern, col1)} | ${pad(file, col2)} |`
+  );
   return [header, divider, ...dataRows].join("\n");
 }
 
@@ -70,7 +82,8 @@ function buildTable(rows) {
 // File templates
 // ---------------------------------------------------------------------------
 
-const HEADER = "<!-- AUTO-GENERATED — run `npm run generate-agent-files` to update -->";
+const HEADER =
+  "<!-- AUTO-GENERATED — run `npm run generate-agent-files` to update -->";
 
 function generateContent(table) {
   return `${HEADER}

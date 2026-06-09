@@ -287,18 +287,18 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 
 ## Files to Modify
 
-| File | Action | Purpose |
-| --- | --- | --- |
-| `src/utils/SkillDiscovery.ts` | Modify | Add harness-aware skill resolution helpers for `&skill:` |
-| `src/utils/HarnessDirectoryUtils.ts` | Maybe modify | Extend or reuse directory helpers as single source of truth |
-| `src/completions/CompletionHelpers.ts` | Modify or extract helper | Add skill-token completion generation |
-| `src/completions/PromptCompletionProvider.ts` | Modify | Add `&` trigger support for prompt-file completions if desired in VS Code editors |
-| `src/completions/PromptLinkProvider.ts` | Modify | Add `&skill:<skill>` document links |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Modify | Add `&skill:` completions and link decoration/click handling |
-| `src/flightpath/harness/shared/CliPromptPreparer.ts` | Modify | Treat `&skill:` as attachable skill syntax and rewrite it before send |
-| `src/flightpath/HarnessIntegration.ts` | Maybe modify | Shared parser/helper hooks if prompt assembly should own `&skill:` extraction |
-| `src/types/DashboardConstants.ts` | Maybe modify | Add message constants or skill-token metadata constants |
-| `src/types/WebviewMessageTypes.ts` | Maybe modify | Add or extend completion/open-skill message payload types |
+| File                                                          | Action                   | Purpose                                                                           |
+| ------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
+| `src/utils/SkillDiscovery.ts`                                 | Modify                   | Add harness-aware skill resolution helpers for `&skill:`                          |
+| `src/utils/HarnessDirectoryUtils.ts`                          | Maybe modify             | Extend or reuse directory helpers as single source of truth                       |
+| `src/completions/CompletionHelpers.ts`                        | Modify or extract helper | Add skill-token completion generation                                             |
+| `src/completions/PromptCompletionProvider.ts`                 | Modify                   | Add `&` trigger support for prompt-file completions if desired in VS Code editors |
+| `src/completions/PromptLinkProvider.ts`                       | Modify                   | Add `&skill:<skill>` document links                                               |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Modify                   | Add `&skill:` completions and link decoration/click handling                      |
+| `src/flightpath/harness/shared/CliPromptPreparer.ts`          | Modify                   | Treat `&skill:` as attachable skill syntax and rewrite it before send             |
+| `src/flightpath/HarnessIntegration.ts`                        | Maybe modify             | Shared parser/helper hooks if prompt assembly should own `&skill:` extraction     |
+| `src/types/DashboardConstants.ts`                             | Maybe modify             | Add message constants or skill-token metadata constants                           |
+| `src/types/WebviewMessageTypes.ts`                            | Maybe modify             | Add or extend completion/open-skill message payload types                         |
 
 ---
 

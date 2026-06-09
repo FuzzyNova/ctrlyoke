@@ -1,5 +1,7 @@
 import React from "react";
-import whyDidYouRender, { type UpdateInfo } from "@welldone-software/why-did-you-render";
+import whyDidYouRender, {
+  type UpdateInfo,
+} from "@welldone-software/why-did-you-render";
 import { WebviewLog } from "@utils/logger";
 
 // Vite replaces import.meta.env.DEV with false in production builds,

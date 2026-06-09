@@ -51,7 +51,10 @@ interface PendingNavigationStateLike {
 interface UseOutputVirtualizationInput {
   activeOutputTab: "output" | "terminal";
   applyScrollTargetRef: RefObject<
-    (phase: string, options?: { force?: boolean }) => {
+    (
+      phase: string,
+      options?: { force?: boolean }
+    ) => {
       resolved: boolean;
       appliedDelta: number;
     }
@@ -187,8 +190,9 @@ export function useOutputVirtualization({
   const lastVirtualRangeRef = useRef<string>("");
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
   const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
-  const pendingMeasurementFlushTimerRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingMeasurementFlushTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const schedulePendingMeasurementFlushRef = useRef<() => void>(() => {});
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
@@ -511,7 +515,8 @@ export function useOutputVirtualization({
 
       const measure = (entry?: ResizeObserverEntry) => {
         const measuredHeight =
-          getResizeObserverEntryHeight(entry) ?? getMeasuredElementHeight(element);
+          getResizeObserverEntryHeight(entry) ??
+          getMeasuredElementHeight(element);
         updateRowMeasurementCache(
           element,
           measuredHeight,
@@ -559,11 +564,13 @@ export function useOutputVirtualization({
     pendingMeasurementCacheRef.current.clear();
     applyScrollTargetRef.current("measurement-flush-sync");
     requestAnimationFrame(() => {
-      const firstFrameRestore =
-        applyScrollTargetRef.current("measurement-flush-raf-1");
+      const firstFrameRestore = applyScrollTargetRef.current(
+        "measurement-flush-raf-1"
+      );
       requestAnimationFrame(() => {
-        const secondFrameRestore =
-          applyScrollTargetRef.current("measurement-flush-raf-2");
+        const secondFrameRestore = applyScrollTargetRef.current(
+          "measurement-flush-raf-2"
+        );
 
         requestAnimationFrame(() => {
           if (
@@ -715,8 +722,7 @@ export function useOutputVirtualization({
     }
 
     const shouldStageRows =
-      !isOutputVirtualized &&
-      rows.length >= NON_VIRTUAL_STAGING_ROW_THRESHOLD;
+      !isOutputVirtualized && rows.length >= NON_VIRTUAL_STAGING_ROW_THRESHOLD;
 
     if (!shouldStageRows) {
       setNonVirtualRenderedRowCount(Number.MAX_SAFE_INTEGER);
@@ -759,7 +765,11 @@ export function useOutputVirtualization({
   }, [isOutputVirtualized, rowRenderIdentity, rows.length]);
 
   useEffect(() => {
-    if (activeOutputTab !== "output" || outputCollapsed || !isOutputVirtualized) {
+    if (
+      activeOutputTab !== "output" ||
+      outputCollapsed ||
+      !isOutputVirtualized
+    ) {
       return;
     }
 
@@ -792,7 +802,9 @@ export function useOutputVirtualization({
     rowLayout.totalSize - nonVirtualRenderedHeight
   );
   const isNonVirtualOutputStaging =
-    !isOutputVirtualized && hasOutput && nonVirtualVisibleRowCount < rows.length;
+    !isOutputVirtualized &&
+    hasOutput &&
+    nonVirtualVisibleRowCount < rows.length;
   const isOutputScrollSeeking =
     isOutputVirtualized && scrollSeekPlaceholderActive;
   const virtualRows: VirtualItem[] = isOutputVirtualized
@@ -945,7 +957,12 @@ export function useOutputVirtualization({
         });
       });
     },
-    [applyScrollTargetRef, outputRef, rowResizeScrollSuppressUntilRef, rowVirtualizer]
+    [
+      applyScrollTargetRef,
+      outputRef,
+      rowResizeScrollSuppressUntilRef,
+      rowVirtualizer,
+    ]
   );
 
   useEffect(

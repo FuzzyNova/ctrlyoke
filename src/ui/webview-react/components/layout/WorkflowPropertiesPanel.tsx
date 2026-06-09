@@ -210,7 +210,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
   // Local input state for Additional Args — committed on blur/Enter to avoid
   // flooding the undo stack with every keystroke.
-  const [additionalArgsInput, setAdditionalArgsInput] = useState(effectiveAdditionalArgs);
+  const [additionalArgsInput, setAdditionalArgsInput] = useState(
+    effectiveAdditionalArgs
+  );
 
   // Sync local state when the effective value changes externally (harness switch, reset all).
   useEffect(() => {

@@ -50,10 +50,7 @@
     "src/utils/HarnessFileManager.ts",
     "src/utils/ModelConstants.ts"
   ],
-  "project": [
-    "src/**/*.{ts,tsx,js}",
-    "scripts/**/*.{js,mjs,ts}"
-  ],
+  "project": ["src/**/*.{ts,tsx,js}", "scripts/**/*.{js,mjs,ts}"],
   "ignore": [
     "src/scripts/**",
     "src/server/standalone-shim.js",
@@ -81,8 +78,5 @@
     "tailwindcss",
     "typo-js"
   ],
-  "ignoreBinaries": [
-    "vsce",
-    "nyc"
-  ]
+  "ignoreBinaries": ["vsce", "nyc"]
 }

@@ -68,7 +68,9 @@ suite("McpRegistryFileManager", () => {
       [SETTING_SCOPES.WORKSPACE, SETTING_SCOPES.USER]
     );
 
-    const workspaceOnly = servers.find((server) => server.id === "workspace-only");
+    const workspaceOnly = servers.find(
+      (server) => server.id === "workspace-only"
+    );
     assert.ok(workspaceOnly, "expected workspace-only server");
     assert.deepStrictEqual(
       workspaceOnly?.locations.map((location) => location.scope),

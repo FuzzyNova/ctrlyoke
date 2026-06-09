@@ -125,7 +125,7 @@ suite("McpDiscoveryUtils", () => {
     await fs.writeFile(
       path.join(userHome, ".codex", "config.toml"),
       [
-        '[mcp_servers.cclsp]',
+        "[mcp_servers.cclsp]",
         'command = "node"',
         'args = ["codex-server.js"]',
         "",

@@ -144,18 +144,17 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
   // Derive context window percentage from live data only while this row is the
   // running step. After completion, the CLI output/runtime metadata is durable
   // and must win over any late live telemetry.
-  const completedContext =
-    latestOutput?.tokens?.contextWindowSize
+  const completedContext = latestOutput?.tokens?.contextWindowSize
+    ? {
+        used: latestOutput.tokens.contextWindowUsed ?? 0,
+        size: latestOutput.tokens.contextWindowSize,
+      }
+    : runtimeMeta?.contextWindowSize
       ? {
-          used: latestOutput.tokens.contextWindowUsed ?? 0,
-          size: latestOutput.tokens.contextWindowSize,
+          used: runtimeMeta.contextWindowUsed ?? 0,
+          size: runtimeMeta.contextWindowSize,
         }
-      : runtimeMeta?.contextWindowSize
-        ? {
-            used: runtimeMeta.contextWindowUsed ?? 0,
-            size: runtimeMeta.contextWindowSize,
-          }
-        : undefined;
+      : undefined;
   const ctx =
     isCurrent && liveContextWindow
       ? liveContextWindow

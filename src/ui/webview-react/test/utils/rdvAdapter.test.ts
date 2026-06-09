@@ -158,7 +158,9 @@ describe("buildDiffRenderPlan", () => {
     ]);
     expect(plan.renderedRows).toBe(3);
     expect(plan.bodyHeight).toBeCloseTo(plan.renderedRows * plan.lineHeight);
-    expect(plan.diffBlockHeight).toBeCloseTo(plan.headerHeight + plan.bodyHeight);
+    expect(plan.diffBlockHeight).toBeCloseTo(
+      plan.headerHeight + plan.bodyHeight
+    );
     expect(plan.totalHeight).toBeCloseTo(
       plan.toolLineHeight +
         plan.headerHeight +

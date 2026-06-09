@@ -615,32 +615,32 @@ runtime step type that the TypeScript model deliberately does not have. Update o
 
 ## Files Changed
 
-| File                                                             | Change                                                                                                                                                                                     |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schemas/prompt-schema.json`                                     | Add `parallelGroup` to new `workflowStepsItem` definition used in `steps` array only (not `finalStep`)                                                                                     |
-| `src/types/FlightPathTypes.ts`                                   | Add `ParallelGroupRange` interface; add `groups?` to `PromptFile` and `QueueState`; `WorkflowStep` and `PromptFile.steps` type **unchanged**                                               |
-| `src/types/DashboardConstants.ts`                                | Add `PARALLEL_GROUP_STATUS` and, if needed, a property-key constant for `parallel`; do **not** add `STEP_TYPES.PARALLEL`                                                                   |
-| `src/types/WebviewMessageTypes.ts`                               | Add `groups` to file/session/steps messages and optional terminal metadata (`stepIndex`, `parallelGroupId` or `isParallelStep`)                                                            |
-| `src/flightpath/PromptFileParser.ts`                             | Parse `parallel:` groups directly into flat `steps` + `groups`; validate inherited/effective constraint collisions                                                                         |
-| `src/flightpath/PromptQueue.ts`                                  | Store and persist `groups`; add `getGroupForStep()` / `isGroupStart()` helpers; add index-specific completion/skip/send APIs for concurrent group execution                                |
-| `src/flightpath/WorkflowExecutor.ts`                             | Phase 1 sequential group drain, then Phase 2 fan-out after indexed queue APIs and response parking are parallel-safe                                                                       |
-| `src/flightpath/WorkflowInstance.ts`                             | Add parallel-only integration acquisition/cleanup keyed by execution target instead of harness ID                                                                                          |
-| `src/flightpath/IntegrationFactory.ts`                           | No factory interface changes expected — `createForExecution(harness)` already creates isolated instances when called                                                                       |
-| `src/flightpath/harness/PtyProcessManager.ts`                    | Tag parallel step sessions with their flat step index as `promptNumber` and expose enough metadata for replay/debugging (`stepIndex`, group ID if added)                                   |
-| `src/types/IDashboardSink.ts` / `src/ui/PostMessageDashboardSink.ts` | Thread `groups` through file selected, session restored, steps extended, reset, start-position, and reorder messages                                                                       |
-| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`  | Use `groups` from `QueueState` to render parallel group wrappers                                                                                                                           |
-| `src/ui/webview-react/components/prompts/ParallelGroupPanel.tsx` | **New component**: parallel group wrapper with header, failFast toggle, drag-and-drop                                                                                                      |
-| `src/ui/webview-react/components/layout/OutputSection.tsx`       | Group header dividers, parallel output routing                                                                                                                                             |
-| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`          | Update `TERMINAL_STARTED` reconciliation so same-harness parallel siblings are preserved as distinct session tabs; keep same-harness replacement only for non-parallel sequential restarts |
-| `src/ui/webview-react/components/output/TerminalView.tsx`        | Already supports multi-tab — no structural changes expected; may display group-aware labels if added                                                                                       |
-| `src/ui/webview-react/components/output/TerminalInstance.tsx`    | Already supports multi-session — no changes needed                                                                                                                                         |
-| `src/ui/DashboardBroadcastHub.ts`                                | Broadcast output tagged with flat step index (already works — no structural changes)                                                                                                       |
-| `src/ui/webview-react/components/prompts/PromptsPanel.tsx`       | Indented cluster in prompt list (if used separately)                                                                                                                                       |
-| `src/ui/webview-react/store/workflowStore.ts`                    | Store `groups` alongside flat `steps`; include it in undo/redo snapshots; handle step reordering across group boundaries                                                                   |
-| `src/ui/webview-react/store/terminalStore.ts`                    | Already supports multi-session; add optional `stepIndex` / `parallelGroupId` fields if terminal messages expose them                                                                       |
-| `src/test/unit/PromptFileParser.test.ts`                         | Parallel group parsing and validation tests                                                                                                                                                |
-| `src/test/unit/WorkflowExecutor.test.ts`                         | Sequential fallback, parallel execution, and failure handling tests                                                                                                                        |
-| `src/ui/webview-react/test/components/layout/WorkflowStepsPanel.test.tsx` | Group rendering and drag/drop boundaries                                                                                                                                                   |
+| File                                                                                       | Change                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `schemas/prompt-schema.json`                                                               | Add `parallelGroup` to new `workflowStepsItem` definition used in `steps` array only (not `finalStep`)                                                                                     |
+| `src/types/FlightPathTypes.ts`                                                             | Add `ParallelGroupRange` interface; add `groups?` to `PromptFile` and `QueueState`; `WorkflowStep` and `PromptFile.steps` type **unchanged**                                               |
+| `src/types/DashboardConstants.ts`                                                          | Add `PARALLEL_GROUP_STATUS` and, if needed, a property-key constant for `parallel`; do **not** add `STEP_TYPES.PARALLEL`                                                                   |
+| `src/types/WebviewMessageTypes.ts`                                                         | Add `groups` to file/session/steps messages and optional terminal metadata (`stepIndex`, `parallelGroupId` or `isParallelStep`)                                                            |
+| `src/flightpath/PromptFileParser.ts`                                                       | Parse `parallel:` groups directly into flat `steps` + `groups`; validate inherited/effective constraint collisions                                                                         |
+| `src/flightpath/PromptQueue.ts`                                                            | Store and persist `groups`; add `getGroupForStep()` / `isGroupStart()` helpers; add index-specific completion/skip/send APIs for concurrent group execution                                |
+| `src/flightpath/WorkflowExecutor.ts`                                                       | Phase 1 sequential group drain, then Phase 2 fan-out after indexed queue APIs and response parking are parallel-safe                                                                       |
+| `src/flightpath/WorkflowInstance.ts`                                                       | Add parallel-only integration acquisition/cleanup keyed by execution target instead of harness ID                                                                                          |
+| `src/flightpath/IntegrationFactory.ts`                                                     | No factory interface changes expected — `createForExecution(harness)` already creates isolated instances when called                                                                       |
+| `src/flightpath/harness/PtyProcessManager.ts`                                              | Tag parallel step sessions with their flat step index as `promptNumber` and expose enough metadata for replay/debugging (`stepIndex`, group ID if added)                                   |
+| `src/types/IDashboardSink.ts` / `src/ui/PostMessageDashboardSink.ts`                       | Thread `groups` through file selected, session restored, steps extended, reset, start-position, and reorder messages                                                                       |
+| `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`                            | Use `groups` from `QueueState` to render parallel group wrappers                                                                                                                           |
+| `src/ui/webview-react/components/prompts/ParallelGroupPanel.tsx`                           | **New component**: parallel group wrapper with header, failFast toggle, drag-and-drop                                                                                                      |
+| `src/ui/webview-react/components/layout/OutputSection.tsx`                                 | Group header dividers, parallel output routing                                                                                                                                             |
+| `src/ui/webview-react/hooks/terminalMessageHandlers.ts`                                    | Update `TERMINAL_STARTED` reconciliation so same-harness parallel siblings are preserved as distinct session tabs; keep same-harness replacement only for non-parallel sequential restarts |
+| `src/ui/webview-react/components/output/TerminalView.tsx`                                  | Already supports multi-tab — no structural changes expected; may display group-aware labels if added                                                                                       |
+| `src/ui/webview-react/components/output/TerminalInstance.tsx`                              | Already supports multi-session — no changes needed                                                                                                                                         |
+| `src/ui/DashboardBroadcastHub.ts`                                                          | Broadcast output tagged with flat step index (already works — no structural changes)                                                                                                       |
+| `src/ui/webview-react/components/prompts/PromptsPanel.tsx`                                 | Indented cluster in prompt list (if used separately)                                                                                                                                       |
+| `src/ui/webview-react/store/workflowStore.ts`                                              | Store `groups` alongside flat `steps`; include it in undo/redo snapshots; handle step reordering across group boundaries                                                                   |
+| `src/ui/webview-react/store/terminalStore.ts`                                              | Already supports multi-session; add optional `stepIndex` / `parallelGroupId` fields if terminal messages expose them                                                                       |
+| `src/test/unit/PromptFileParser.test.ts`                                                   | Parallel group parsing and validation tests                                                                                                                                                |
+| `src/test/unit/WorkflowExecutor.test.ts`                                                   | Sequential fallback, parallel execution, and failure handling tests                                                                                                                        |
+| `src/ui/webview-react/test/components/layout/WorkflowStepsPanel.test.tsx`                  | Group rendering and drag/drop boundaries                                                                                                                                                   |
 | `src/ui/webview-react/test/store/workflowStore.test.ts` / `workflowStore.temporal.test.ts` | `groups` state updates and undo/redo snapshot behavior                                                                                                                                     |
 
 ---
@@ -762,37 +762,41 @@ runtime step type that the TypeScript model deliberately does not have. Update o
      group settles. Do not overwrite `activeIntegration` for parallel siblings.
 
 10. **Add a parallelism limit guard**
-   - Add a global setting/config field for maximum parallel group size (default: 6 is a
-     conservative starting point for AI CLI processes).
-   - Validate at parse/load time where possible and re-check at execution time so dynamically
-     edited working files cannot bypass it.
-   - Error clearly when a group exceeds the limit, with the configured limit and group size
-     in the message. Users can raise the setting if their machine and harnesses can handle it.
+
+- Add a global setting/config field for maximum parallel group size (default: 6 is a
+  conservative starting point for AI CLI processes).
+- Validate at parse/load time where possible and re-check at execution time so dynamically
+  edited working files cannot bypass it.
+- Error clearly when a group exceeds the limit, with the configured limit and group size
+  in the message. Users can raise the setting if their machine and harnesses can handle it.
 
 11. **`WorkflowExecutor` fans out with `Promise.allSettled`**
-   - When `isGroupStart(state.currentIndex)` is true, enter parallel fan-out mode
-   - Get the group range: all steps from `startIndex` to `endIndex`
-   - For each prompt step in the group: request an isolated integration using the new
-     execution-identity path. Script steps need no harness instance.
-   - Run each step through an indexed execution path. Reuse `executeSinglePrompt()` only after
-     it no longer mutates current-index queue state or singleton response state.
-   - Fan out with `Promise.allSettled(groupSteps.map(step => executeSinglePrompt(...)))`
-   - After settling: advance `currentIndex` past `endIndex`, merge results, persist group
-     status, and update dashboard progress once
-   - Capture output via existing `captureOutputInit(stepIndex, ...)` callbacks — each step uses
-     its own flat `stepIndex`, so the output infrastructure needs no changes
+
+- When `isGroupStart(state.currentIndex)` is true, enter parallel fan-out mode
+- Get the group range: all steps from `startIndex` to `endIndex`
+- For each prompt step in the group: request an isolated integration using the new
+  execution-identity path. Script steps need no harness instance.
+- Run each step through an indexed execution path. Reuse `executeSinglePrompt()` only after
+  it no longer mutates current-index queue state or singleton response state.
+- Fan out with `Promise.allSettled(groupSteps.map(step => executeSinglePrompt(...)))`
+- After settling: advance `currentIndex` past `endIndex`, merge results, persist group
+  status, and update dashboard progress once
+- Capture output via existing `captureOutputInit(stepIndex, ...)` callbacks — each step uses
+  its own flat `stepIndex`, so the output infrastructure needs no changes
 
 12. **`failFast` cancellation logic**
-   - Monitor step failures during parallel execution
-   - When `failFast: true` and a step fails: cancel remaining running steps through their
-     owned integrations / script processes and mark them `cancelled`
-   - When `failFast: false`: let all steps run to completion
-   - Update group status and propagate to dashboard
+
+- Monitor step failures during parallel execution
+- When `failFast: true` and a step fails: cancel remaining running steps through their
+  owned integrations / script processes and mark them `cancelled`
+- When `failFast: false`: let all steps run to completion
+- Update group status and propagate to dashboard
 
 13. **Concurrent output display + streaming**
-   - Route parallel step output by flat step index via `DashboardBroadcastHub`
-   - Update `OutputSection.tsx` to show concurrent output clearly
-   - Handle streaming chunks from multiple sources simultaneously
+
+- Route parallel step output by flat step index via `DashboardBroadcastHub`
+- Update `OutputSection.tsx` to show concurrent output clearly
+- Handle streaming chunks from multiple sources simultaneously
 
 14. **Terminal integration for parallel steps**
     - Tag PTY sessions with each step's sequential integer (`promptNumber`) and name

@@ -424,7 +424,6 @@ export function isCliModelSupported(modelId: string): boolean {
   return cachedCopilotCliModelIds.includes(modelId);
 }
 
-
 /**
  * Get OpenCode model IDs synchronously (from cache, populated at startup)
  */

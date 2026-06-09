@@ -30,7 +30,10 @@ interface BashOutputProps {
   maxLines?: number;
   maxCharacters?: number;
   expansion?: BashOutputExpansionState;
-  onExpansionChange?: (section: BashOutputExpansionSection, expanded: boolean) => void;
+  onExpansionChange?: (
+    section: BashOutputExpansionSection,
+    expanded: boolean
+  ) => void;
   className?: string;
 }
 

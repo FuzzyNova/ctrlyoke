@@ -24,4 +24,3 @@ export function setActiveOutputNavigationController(
 export function getActiveOutputNavigationController(): OutputNavigationController | null {
   return activeOutputNavigationController;
 }
-

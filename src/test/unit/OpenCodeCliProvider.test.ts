@@ -20,7 +20,12 @@ suite("OpenCodeCliProvider", () => {
         recursive: true,
       });
       await fs.writeFile(
-        path.join(extensionPath, "out", "scripts", "flightpath-opencode-plugin.ts"),
+        path.join(
+          extensionPath,
+          "out",
+          "scripts",
+          "flightpath-opencode-plugin.ts"
+        ),
         "export default {};\n",
         "utf-8"
       );
@@ -86,7 +91,12 @@ suite("OpenCodeCliProvider", () => {
         recursive: true,
       });
       await fs.writeFile(
-        path.join(extensionPath, "out", "scripts", "flightpath-opencode-plugin.ts"),
+        path.join(
+          extensionPath,
+          "out",
+          "scripts",
+          "flightpath-opencode-plugin.ts"
+        ),
         "export default {};\n",
         "utf-8"
       );
@@ -113,7 +123,10 @@ suite("OpenCodeCliProvider", () => {
       }
       await provider.cleanupWorkspaceArtifacts(workspaceRoot);
 
-      assert.strictEqual(await fs.readFile(gitignorePath, "utf-8"), userGitignore);
+      assert.strictEqual(
+        await fs.readFile(gitignorePath, "utf-8"),
+        userGitignore
+      );
     } finally {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
       await fs.rm(extensionPath, { recursive: true, force: true });

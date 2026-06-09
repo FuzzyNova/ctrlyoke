@@ -88,11 +88,7 @@ export const ContentPreviewModal: React.FC = () => {
             type="button"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-btn-bg text-btn-fg hover:bg-btn-hover rounded transition-colors"
             onClick={handleExport}
-            title={
-              isStandalone
-                ? "Download as file"
-                : "Open in VS Code editor"
-            }
+            title={isStandalone ? "Download as file" : "Open in VS Code editor"}
           >
             {isStandalone ? (
               <>

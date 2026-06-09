@@ -24,7 +24,10 @@ interface RowVirtualizerLike {
 
 interface UseOutputScrollTargetInput {
   applyScrollTargetRef: RefObject<
-    (phase: string, options?: { force?: boolean }) => {
+    (
+      phase: string,
+      options?: { force?: boolean }
+    ) => {
       resolved: boolean;
       appliedDelta: number;
     }
@@ -81,8 +84,9 @@ export function useOutputScrollTarget({
   layoutApplyTrigger,
   userScrollInputGraceMs,
 }: UseOutputScrollTargetInput) {
-  const scrollTargetCommitTimerRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollTargetCommitTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const scrollTargetCommitRetryCountRef = useRef(0);
 
   const setCurrentScrollTarget = useCallback(
@@ -222,14 +226,18 @@ export function useOutputScrollTarget({
       if (scrollTargetCommitTimerRef.current !== null) {
         clearTimeout(scrollTargetCommitTimerRef.current);
         scrollTargetCommitTimerRef.current = null;
-        commitScrollTargetFromViewportRef.current(`${phase}-pending-commit-flush`);
+        commitScrollTargetFromViewportRef.current(
+          `${phase}-pending-commit-flush`
+        );
       }
 
       if (
         scrollTargetRef.current.kind === "bottom" &&
         !autoscrollEnabledRef.current
       ) {
-        commitScrollTargetFromViewportRef.current(`${phase}-stale-bottom-refresh`);
+        commitScrollTargetFromViewportRef.current(
+          `${phase}-stale-bottom-refresh`
+        );
       }
 
       const target = scrollTargetRef.current;

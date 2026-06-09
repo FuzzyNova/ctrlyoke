@@ -48,7 +48,8 @@ beforeEach(() => {
     cb(0);
     return 0;
   }) as typeof window.requestAnimationFrame;
-  window.cancelAnimationFrame = (() => {}) as typeof window.cancelAnimationFrame;
+  window.cancelAnimationFrame =
+    (() => {}) as typeof window.cancelAnimationFrame;
 });
 
 afterEach(() => {

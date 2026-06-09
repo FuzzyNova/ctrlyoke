@@ -148,7 +148,8 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
 
   const params = extractKeyParameters(name, parameters);
   const fullParamsText = getGenericToolCallParamsText(parameters);
-  const { output: outputStr, error: errorStr } = getGenericToolCallOutput(result);
+  const { output: outputStr, error: errorStr } =
+    getGenericToolCallOutput(result);
   const resolvedRenderPlan =
     renderPlan ??
     buildToolCallRenderPlan({

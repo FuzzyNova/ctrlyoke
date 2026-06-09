@@ -504,14 +504,14 @@ Tier 0 (Release Blockers) ✅ SHIPPED May 12, 2026
 
 ## Estimated Timeline
 
-| Milestone                  | Items                                                                | Target         |
-| -------------------------- | -------------------------------------------------------------------- | -------------- |
-| **v0.1.0 Release** ✅      | Tier 0 blockers                                                      | May 12, 2026   |
-| **v0.1.x Rapid UX**        | 1.1 ✅, 1.2 ✅, 1.3 (ready), 1.4 ✅, 1.7 ✅                          | May–June 2026  |
-| **v0.2.0 Polish & DX**     | 1.5, 1.6, 1.8, 2.1 (error behavior), 2.2 (telemetry)                | June–July 2026 |
-| **v0.3.0 Project Context** | 2.3 + 2.4 + 2.5 + 2.8 (docs site)                                    | August 2026    |
-| **v0.4.0 Power Features**  | 3.1 + 3.2 + 3.3                                                      | October 2026   |
-| **v0.5.0 Platform & Pro**  | 4.1 + 4.2 + 4.3                                                      | Dec 2026       |
+| Milestone                  | Items                                                | Target         |
+| -------------------------- | ---------------------------------------------------- | -------------- |
+| **v0.1.0 Release** ✅      | Tier 0 blockers                                      | May 12, 2026   |
+| **v0.1.x Rapid UX**        | 1.1 ✅, 1.2 ✅, 1.3 (ready), 1.4 ✅, 1.7 ✅          | May–June 2026  |
+| **v0.2.0 Polish & DX**     | 1.5, 1.6, 1.8, 2.1 (error behavior), 2.2 (telemetry) | June–July 2026 |
+| **v0.3.0 Project Context** | 2.3 + 2.4 + 2.5 + 2.8 (docs site)                    | August 2026    |
+| **v0.4.0 Power Features**  | 3.1 + 3.2 + 3.3                                      | October 2026   |
+| **v0.5.0 Platform & Pro**  | 4.1 + 4.2 + 4.3                                      | Dec 2026       |
 
 _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 
@@ -530,33 +530,33 @@ _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 
 ### Backlog (not yet started)
 
-| Document                                                                       | Status          | Roadmap Item |
-| ------------------------------------------------------------------------------ | --------------- | ------------ |
-| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                           | ✅ DONE          | Tier 0       |
-| [`RAW_PROMPT_MODE_PLAN.md`](RAW_PROMPT_MODE_PLAN.md)                           | NOT_IMPLEMENTED | 1.3          |
-| [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](SCRIPT_FIELD_COMPLETIONS_PLAN.md)         | NOT_IMPLEMENTED | 1.5          |
-| [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md)                           | NOT_IMPLEMENTED | 1.6          |
-| [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                             | NOT_IMPLEMENTED | 1.8          |
-| [`ERROR_BEHAVIOR_PLAN.md`](ERROR_BEHAVIOR_PLAN.md)                             | NOT_IMPLEMENTED | 2.1          |
-| [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md)                                       | NOT_IMPLEMENTED | 2.2          |
-| [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                       | NOT_IMPLEMENTED | 2.3          |
-| [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                           | NOT_IMPLEMENTED | 2.4          |
-| [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](DROPDOWN_VALIDATION_STYLING_PLAN.md)   | NOT_IMPLEMENTED | 2.7          |
-| [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md)                             | NOT_IMPLEMENTED | 3.1          |
-| [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md)                               | NOT_IMPLEMENTED | 3.2          |
-| [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)                       | NOT_IMPLEMENTED | 3.4          |
-| [`VSCODE_LM_API_FEATURES.md`](VSCODE_LM_API_FEATURES.md)                       | NOT_IMPLEMENTED | 3.5          |
-| [`TERMINAL_FOLLOWUP_TRACKING_PLAN.md`](TERMINAL_FOLLOWUP_TRACKING_PLAN.md)     | NOT_IMPLEMENTED | 3.6          |
-| [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)                     | NOT_IMPLEMENTED | 3.7          |
-| [`ADDITIONAL_INSTRUCTIONS_PLAN.md`](ADDITIONAL_INSTRUCTIONS_PLAN.md)           | NOT_IMPLEMENTED | 3.8          |
-| [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)                       | NOT_IMPLEMENTED | 3.9          |
+| Document                                                                     | Status          | Roadmap Item |
+| ---------------------------------------------------------------------------- | --------------- | ------------ |
+| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                         | ✅ DONE         | Tier 0       |
+| [`RAW_PROMPT_MODE_PLAN.md`](RAW_PROMPT_MODE_PLAN.md)                         | NOT_IMPLEMENTED | 1.3          |
+| [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](SCRIPT_FIELD_COMPLETIONS_PLAN.md)       | NOT_IMPLEMENTED | 1.5          |
+| [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md)                         | NOT_IMPLEMENTED | 1.6          |
+| [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                           | NOT_IMPLEMENTED | 1.8          |
+| [`ERROR_BEHAVIOR_PLAN.md`](ERROR_BEHAVIOR_PLAN.md)                           | NOT_IMPLEMENTED | 2.1          |
+| [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md)                                     | NOT_IMPLEMENTED | 2.2          |
+| [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                     | NOT_IMPLEMENTED | 2.3          |
+| [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                         | NOT_IMPLEMENTED | 2.4          |
+| [`DROPDOWN_VALIDATION_STYLING_PLAN.md`](DROPDOWN_VALIDATION_STYLING_PLAN.md) | NOT_IMPLEMENTED | 2.7          |
+| [`PARALLEL_STEPS_PLAN.md`](PARALLEL_STEPS_PLAN.md)                           | NOT_IMPLEMENTED | 3.1          |
+| [`WORKFLOW_STEP_PLAN.md`](WORKFLOW_STEP_PLAN.md)                             | NOT_IMPLEMENTED | 3.2          |
+| [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)                     | NOT_IMPLEMENTED | 3.4          |
+| [`VSCODE_LM_API_FEATURES.md`](VSCODE_LM_API_FEATURES.md)                     | NOT_IMPLEMENTED | 3.5          |
+| [`TERMINAL_FOLLOWUP_TRACKING_PLAN.md`](TERMINAL_FOLLOWUP_TRACKING_PLAN.md)   | NOT_IMPLEMENTED | 3.6          |
+| [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)                   | NOT_IMPLEMENTED | 3.7          |
+| [`ADDITIONAL_INSTRUCTIONS_PLAN.md`](ADDITIONAL_INSTRUCTIONS_PLAN.md)         | NOT_IMPLEMENTED | 3.8          |
+| [`VSCODE_TESTING_E2E_MCP.md`](VSCODE_TESTING_E2E_MCP.md)                     | NOT_IMPLEMENTED | 3.9          |
 
 ### Implemented Since April 2026 (moved to `dev/implemented/`)
 
-| Document                                                                                   | Roadmap Item |
-| ------------------------------------------------------------------------------------------ | ------------ |
-| [`../implemented/COMPLETION_NOTIFICATIONS_PLAN.md`](../implemented/COMPLETION_NOTIFICATIONS_PLAN.md) | 1.1 |
-| [`../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md`](../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md) | 1.2 |
-| [`../implemented/WORKFLOW_FAVORITES_PLAN.md`](../implemented/WORKFLOW_FAVORITES_PLAN.md)   | 1.4          |
-| [`../implemented/SCM_COMMIT_MESSAGE_BUTTON.md`](../implemented/SCM_COMMIT_MESSAGE_BUTTON.md) | 1.7        |
-| [`../implemented/INLINE_PRIOR_CONTEXT_PLAN.md`](../implemented/INLINE_PRIOR_CONTEXT_PLAN.md) | 2.6        |
+| Document                                                                                                     | Roadmap Item |
+| ------------------------------------------------------------------------------------------------------------ | ------------ |
+| [`../implemented/COMPLETION_NOTIFICATIONS_PLAN.md`](../implemented/COMPLETION_NOTIFICATIONS_PLAN.md)         | 1.1          |
+| [`../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md`](../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md) | 1.2          |
+| [`../implemented/WORKFLOW_FAVORITES_PLAN.md`](../implemented/WORKFLOW_FAVORITES_PLAN.md)                     | 1.4          |
+| [`../implemented/SCM_COMMIT_MESSAGE_BUTTON.md`](../implemented/SCM_COMMIT_MESSAGE_BUTTON.md)                 | 1.7          |
+| [`../implemented/INLINE_PRIOR_CONTEXT_PLAN.md`](../implemented/INLINE_PRIOR_CONTEXT_PLAN.md)                 | 2.6          |

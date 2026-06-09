@@ -134,9 +134,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
 }) => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const isControlled = collapsed !== undefined;
-  const [uncontrolledExpanded, setUncontrolledExpanded] = useState(
-    !globallyCollapsed
-  );
+  const [uncontrolledExpanded, setUncontrolledExpanded] =
+    useState(!globallyCollapsed);
   const isExpanded = isControlled ? !collapsed : uncontrolledExpanded;
   const hasExpandableSource = oldContent !== undefined;
 
@@ -154,8 +153,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }
     setUncontrolledExpanded((prev) => !prev);
   }, [isControlled, isExpanded, onCollapsedChange]);
-  const [uncontrolledExpandedGaps, setUncontrolledExpandedGaps] =
-    useState<Map<number, number>>(new Map());
+  const [uncontrolledExpandedGaps, setUncontrolledExpandedGaps] = useState<
+    Map<number, number>
+  >(new Map());
   const activeExpandedGaps = expandedGaps ?? uncontrolledExpandedGaps;
 
   // Width tracking for split vs unified layout.
@@ -226,7 +226,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
     let modified = false;
     const next = new Map(activeExpandedGaps);
     for (let i = 1; i < baseHunks.length; i++) {
-      const hidden = getCollapsedLinesCountBetween(baseHunks[i - 1], baseHunks[i]);
+      const hidden = getCollapsedLinesCountBetween(
+        baseHunks[i - 1],
+        baseHunks[i]
+      );
       if (hidden === 1 && !next.has(i)) {
         next.set(i, baseHunks[i].oldStart);
         modified = true;
@@ -236,7 +239,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
   }, [activeExpandedGaps, baseHunks, oldContent]);
 
   const expandedHunks = useMemo(
-    () => applyDiffGapExpansionState(baseHunks, oldContent, effectiveExpandedGaps),
+    () =>
+      applyDiffGapExpansionState(baseHunks, oldContent, effectiveExpandedGaps),
     [effectiveExpandedGaps, baseHunks, oldContent]
   );
 
@@ -252,11 +256,15 @@ export const DiffView: React.FC<DiffViewProps> = ({
       const gapStart =
         prevHunk !== null ? prevHunk.oldStart + prevHunk.oldLines : 1;
       const gapEnd = nextHunk.oldStart;
-      const currentExpandedToLine = activeExpandedGaps.get(gapIndex) ?? gapStart;
+      const currentExpandedToLine =
+        activeExpandedGaps.get(gapIndex) ?? gapStart;
       const nextExpandedToLine =
         mode === "all"
           ? gapEnd
-          : Math.min(currentExpandedToLine + HIDDEN_CONTEXT_CHUNK_LINES, gapEnd);
+          : Math.min(
+              currentExpandedToLine + HIDDEN_CONTEXT_CHUNK_LINES,
+              gapEnd
+            );
       const oldLineCount = oldContent.split("\n").length;
       if (gapStart > oldLineCount) {
         console.warn(
@@ -278,8 +286,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   );
 
   const shouldDeferTokenization =
-    isExpanded &&
-    estimatedLineCount >= DEFER_DIFF_TOKENIZATION_LINE_THRESHOLD;
+    isExpanded && estimatedLineCount >= DEFER_DIFF_TOKENIZATION_LINE_THRESHOLD;
   const [deferredTokenizationReady, setDeferredTokenizationReady] =
     useState(false);
 
@@ -389,7 +396,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
     anchor.removeAttribute("data-diff-added-lines");
     anchor.removeAttribute("data-diff-removed-lines");
     anchor.removeAttribute("data-diff-runs");
-  }, [estimatedLineCount, isExpanded, expandedHunks.length, minimapStats, viewType]);
+  }, [
+    estimatedLineCount,
+    isExpanded,
+    expandedHunks.length,
+    minimapStats,
+    viewType,
+  ]);
 
   if (!hasDiff) return null;
 
