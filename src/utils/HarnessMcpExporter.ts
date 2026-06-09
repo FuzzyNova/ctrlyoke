@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { modify, applyEdits, parse, type FormattingOptions } from "jsonc-parser";
 import type {
   AnyTargetId,
   SettingWriteScope,
@@ -11,7 +12,6 @@ import {
 } from "../types/DashboardConstants";
 import type { McpServerConfig } from "../types/FlightPathTypes";
 import { Log } from "./Log";
-import { stripJsonComments } from "./JsoncUtils";
 import {
   getClaudeUserConfigPath,
   getClaudeWorkspaceMcpConfigPath,
@@ -26,9 +26,7 @@ import {
   getVscodeUserMcpConfigPath,
   getVscodeWorkspaceMcpConfigPath,
 } from "./McpConfigPaths";
-import { writeJsonFileAtomic } from "./McpRegistryFileManager";
 
-interface JsonDocument extends Record<string, unknown> {}
 type JsonObject = Record<string, unknown>;
 
 export interface HarnessMcpExportResult {
@@ -46,13 +44,11 @@ function isPlainObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-async function readJsonObject(filePath: string): Promise<JsonDocument> {
+async function readTextForEdit(filePath: string): Promise<string> {
   try {
-    const content = await fs.promises.readFile(filePath, "utf-8");
-    const parsed = JSON.parse(stripJsonComments(content));
-    return isPlainObject(parsed) ? parsed : {};
+    return await fs.promises.readFile(filePath, "utf-8");
   } catch {
-    return {};
+    return "{}";
   }
 }
 
@@ -61,6 +57,34 @@ async function readTextFile(filePath: string): Promise<string> {
     return await fs.promises.readFile(filePath, "utf-8");
   } catch {
     return "";
+  }
+}
+
+function detectFormattingOptions(text: string): FormattingOptions {
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const firstIndentMatch = text.match(/\n([ \t]+)/);
+  if (firstIndentMatch) {
+    const indent = firstIndentMatch[1]!;
+    if (indent[0] === "\t") {
+      return { insertSpaces: false, tabSize: 4, eol };
+    }
+    return { insertSpaces: true, tabSize: indent.length, eol };
+  }
+  return { insertSpaces: false, tabSize: 4, eol };
+}
+
+async function writeTextFileAtomic(
+  filePath: string,
+  text: string
+): Promise<void> {
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.${process.pid}.tmp`;
+  try {
+    await fs.promises.writeFile(tempPath, text, "utf-8");
+    await fs.promises.rename(tempPath, filePath);
+  } catch (error) {
+    await fs.promises.unlink(tempPath).catch(() => undefined);
+    throw error;
   }
 }
 
@@ -272,8 +296,8 @@ async function writeJsonServerMap(
   servers: McpServerConfig[],
   mapper: (server: McpServerConfig) => JsonObject | null
 ): Promise<HarnessMcpExportResult> {
-  const document = await readJsonObject(filePath);
-  const existingServers = isPlainObject(document[key]) ? { ...document[key] } : {};
+  let text = await readTextForEdit(filePath);
+  const formattingOptions = detectFormattingOptions(text);
   const skippedIds: string[] = [];
   let exportedCount = 0;
 
@@ -283,15 +307,12 @@ async function writeJsonServerMap(
       skippedIds.push(server.id);
       continue;
     }
-    existingServers[server.id] = entry;
+    const edits = modify(text, [key, server.id], entry, { formattingOptions });
+    text = applyEdits(text, edits);
     exportedCount += 1;
   }
 
-  await writeJsonFileAtomic(filePath, {
-    ...document,
-    [key]: existingServers,
-  });
-
+  await writeTextFileAtomic(filePath, text);
   return { filePath, exportedCount, skippedIds };
 }
 
@@ -300,23 +321,24 @@ async function removeJsonServerMapEntries(
   key: string,
   ids: string[]
 ): Promise<HarnessMcpDeleteResult> {
-  const document = await readJsonObject(filePath);
-  const existingServers = isPlainObject(document[key]) ? { ...document[key] } : {};
+  let text = await readTextForEdit(filePath);
+  const formattingOptions = detectFormattingOptions(text);
+  const parsed = parse(text) as Record<string, unknown>;
+  const existingSection = isPlainObject(parsed[key])
+    ? (parsed[key] as Record<string, unknown>)
+    : {};
   let removedCount = 0;
 
   for (const id of ids) {
-    if (!(id in existingServers)) {
+    if (!(id in existingSection)) {
       continue;
     }
-    delete existingServers[id];
+    const edits = modify(text, [key, id], undefined, { formattingOptions });
+    text = applyEdits(text, edits);
     removedCount += 1;
   }
 
-  await writeJsonFileAtomic(filePath, {
-    ...document,
-    [key]: existingServers,
-  });
-
+  await writeTextFileAtomic(filePath, text);
   return { filePath, removedCount };
 }
 

@@ -169,29 +169,32 @@ suite("HarnessMcpExporter", () => {
     });
   });
 
-  test("merges VS Code exports into a JSONC file with comments", async () => {
+  const jsoncFixture = `{
+\t// VS Code MCP config (JSONC with comments)
+\t"servers": {
+\t\t/* commented-out server:
+\t\t"disabled": { "type": "stdio", "command": "node" },
+\t\t*/
+\t\t"context7": {
+\t\t\t"type": "stdio",
+\t\t\t"command": "npx",
+\t\t\t"args": ["-y", "@upstash/context7-mcp@latest"],
+\t\t\t"gallery": true // gallery flag used by VS Code MCP browser
+\t\t},
+\t\t"playwright": {
+\t\t\t"type": "stdio",
+\t\t\t"command": "npx",
+\t\t\t"args": ["@playwright/mcp@latest"]
+\t\t}
+\t}
+}`;
+
+  test("export into JSONC file preserves comments and existing servers", async () => {
     const exporter = new HarnessMcpExporter(workspaceRoot);
     const vscodeConfigPath = path.join(workspaceRoot, ".vscode", "mcp.json");
 
     await fs.mkdir(path.dirname(vscodeConfigPath), { recursive: true });
-    await fs.writeFile(
-      vscodeConfigPath,
-      `{
-  // VS Code MCP config (JSONC with comments)
-  "servers": {
-    /* commented-out server:
-    "disabled": { "type": "stdio", "command": "node" },
-    */
-    "context7": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"],
-      "gallery": true // gallery flag used by VS Code MCP browser
-    }
-  }
-}`,
-      "utf-8"
-    );
+    await fs.writeFile(vscodeConfigPath, jsoncFixture, "utf-8");
 
     const result = await exporter.export(
       [{ id: "new-server", command: "node", args: ["server.js"] }],
@@ -199,9 +202,24 @@ suite("HarnessMcpExporter", () => {
       SETTING_SCOPES.WORKSPACE
     );
 
-    const document = JSON.parse(await fs.readFile(result.filePath, "utf-8"));
+    const rawText = await fs.readFile(result.filePath, "utf-8");
     assert.strictEqual(result.exportedCount, 1);
     assert.deepStrictEqual(result.skippedIds, []);
+    assert.ok(
+      rawText.includes("// VS Code MCP config (JSONC with comments)"),
+      "top-level comment preserved"
+    );
+    assert.ok(
+      rawText.includes("/* commented-out server:"),
+      "block comment preserved"
+    );
+    assert.ok(
+      rawText.includes("// gallery flag used by VS Code MCP browser"),
+      "inline comment preserved"
+    );
+    const document = JSON.parse(
+      rawText.replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "")
+    );
     assert.deepStrictEqual(document.servers["context7"], {
       type: "stdio",
       command: "npx",
@@ -213,6 +231,38 @@ suite("HarnessMcpExporter", () => {
       command: "node",
       args: ["server.js"],
     });
+  });
+
+  test("delete from JSONC file preserves comments on remaining servers", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const vscodeConfigPath = path.join(workspaceRoot, ".vscode", "mcp.json");
+
+    await fs.mkdir(path.dirname(vscodeConfigPath), { recursive: true });
+    await fs.writeFile(vscodeConfigPath, jsoncFixture, "utf-8");
+
+    const result = await exporter.remove(
+      ["playwright"],
+      SPECIAL_TARGET_IDS.VSCODE,
+      SETTING_SCOPES.WORKSPACE,
+      vscodeConfigPath
+    );
+
+    const rawText = await fs.readFile(result.filePath, "utf-8");
+    assert.strictEqual(result.removedCount, 1);
+    assert.ok(
+      rawText.includes("// VS Code MCP config (JSONC with comments)"),
+      "top-level comment preserved after delete"
+    );
+    assert.ok(
+      rawText.includes("/* commented-out server:"),
+      "block comment preserved after delete"
+    );
+    assert.ok(
+      rawText.includes("// gallery flag used by VS Code MCP browser"),
+      "inline comment preserved after delete"
+    );
+    assert.ok(!rawText.includes('"playwright"'), "deleted server is gone");
+    assert.ok(rawText.includes('"context7"'), "other server still present");
   });
 
   test("writes Copilot MCP config using the documented schema", async () => {
