@@ -62,6 +62,17 @@ suite("FileReferenceParser", () => {
       assert.strictEqual(refs[0].path, "src/file.ts");
     });
 
+    test("strips trailing mixed punctuation from unquoted path (paren + period)", () => {
+      const refs = parseAtReferences(
+        "See @src/ui/webview-react/components/editor/CodeMirrorEditor.tsx)."
+      );
+      assert.strictEqual(refs.length, 1);
+      assert.strictEqual(
+        refs[0].path,
+        "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx"
+      );
+    });
+
     test("strips trailing backticks from inline-code @path references", () => {
       const refs = parseAtReferences("Check `@src/file.ts` in the prompt");
       assert.strictEqual(refs.length, 1);

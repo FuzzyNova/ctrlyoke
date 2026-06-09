@@ -71,22 +71,12 @@ export function parseAtReferences(prompt: string): FileReference[] {
     const [, quotedPath, unquotedPath] = match;
     let filePath = quotedPath || unquotedPath;
 
-    // Strip trailing punctuation from unquoted paths
-    // But preserve file extensions and multi-dot filenames (e.g., .ts, .flightpath.json, config.test.ts)
+    // Strip trailing characters that cannot end a valid file path.
+    // Valid paths end with alphanumeric (file extension or plain filename)
+    // or / or \ (directory). Everything else is prose punctuation.
+    // Handles mixed sequences like `).` that the old two-step approach missed.
     if (!quotedPath && filePath) {
-      // Strategy: File paths end with alphanumeric or dot+alphanumeric (extensions)
-      // Sentence punctuation (?!,;)]}") appears after the last alphanumeric
-
-      // Strip common sentence-ending punctuation: ?!,;)]}`
-      // But NOT periods yet (they might be part of extensions or relative paths)
-      filePath = filePath.replace(/[?!,;)\]}`"]+$/, "");
-
-      // For trailing periods: only strip if they come AFTER the extension/filename
-      // i.e., the path already has alphanumeric at the end before the period(s)
-      // Example: "file.ts." → strip the last period (sentence ending)
-      // Example: "file.ts" → keep as-is (extension)
-      // Example: "../file" → keep as-is (relative path)
-      filePath = filePath.replace(/(\w)\.+$/, "$1");
+      filePath = filePath.replace(/[^a-zA-Z0-9/\\]+$/, "");
     }
 
     // Skip if path is empty or looks like a mention (@workspace, @user, etc.)

@@ -46,7 +46,10 @@ import {
   logProfilerEvent,
   shouldLogScrollFrame,
 } from "@utils/performanceProfiler";
-import { getResizeObserverEntryHeight } from "@utils/outputDom";
+import {
+  captureViewportRowAnchor,
+  getResizeObserverEntryHeight,
+} from "@utils/outputDom";
 import {
   LARGE_WORKFLOW_ROW_THRESHOLD,
   OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
@@ -616,6 +619,24 @@ const OutputSectionInner: React.FC = () => {
       el.scrollHeight - el.scrollTop - el.clientHeight <=
       SCROLL_BOTTOM_THRESHOLD;
     autoscrollEnabled.current = atBottom;
+
+    // Immediately track the live scroll position so layout effects always apply
+    // the current position, not a stale pre-scroll target. This covers momentum
+    // scroll where the debounced commit hasn't fired yet. We only update the ref
+    // here; the store write is still deferred via scheduleScrollTargetCommit.
+    if (atBottom) {
+      scrollTargetRef.current = DEFAULT_OUTPUT_SCROLL_TARGET;
+    } else {
+      const anchor = captureViewportRowAnchor(el, "visible-top");
+      if (anchor) {
+        scrollTargetRef.current = {
+          kind: "row",
+          rowKey: anchor.rowKey,
+          viewportOffsetPx: anchor.offsetTop,
+        };
+      }
+    }
+
     scheduleScrollTargetCommit("user-scroll-settled");
     if (previousScrollEventAt != null) {
       const gapMs = scrollGapMs;
