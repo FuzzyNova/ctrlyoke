@@ -3,6 +3,7 @@ import type { McpServerConfig } from "@root/types/FlightPathTypes";
 import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
 import { SETTING_SCOPES, type SettingWriteScope } from "@/types/messages";
 import { useMcpManagerStore } from "../../store/useMcpManagerStore";
+import { useUiStore } from "@store/uiStore";
 
 type McpServerEntry = string | McpServerConfig;
 
@@ -234,6 +235,7 @@ function McpServersPanel({
   fillHeight,
   isLoadingManagedServers,
   managedServers,
+  onManageServers,
 }: {
   value: McpServersValue;
   rows: ListedServer[];
@@ -248,6 +250,7 @@ function McpServersPanel({
   fillHeight: boolean;
   isLoadingManagedServers: boolean;
   managedServers: ManagedMcpServer[] | undefined;
+  onManageServers?: () => void;
 }) {
   const arr = Array.isArray(value) ? value : [];
   const hasLegacyRows = rows.some((row) => row.isLegacy);
@@ -455,6 +458,17 @@ function McpServersPanel({
         {arr.length === 0 && !showEmptyHint && rows.length === 0 && (
           <div className="px-1 text-xs text-description-fg italic">None added</div>
         )}
+
+        {onManageServers && (
+          <button
+            type="button"
+            onClick={onManageServers}
+            className="flex items-center justify-center gap-1 px-1 text-xs text-link-fg hover:text-link-active-fg transition-colors"
+          >
+            <i className="codicon codicon-settings-gear text-xxs" />
+            Manage MCP Servers
+          </button>
+        )}
       </div>
     </div>
   );
@@ -503,6 +517,10 @@ export const McpServersEditor: React.FC<{
     (state) => state.isLoadingRegistry
   );
   const requestServers = useMcpManagerStore((state) => state.requestServers);
+
+  const globalSettingsOpen = useUiStore((state) => state.globalSettingsOpen);
+  const toggleGlobalSettings = useUiStore((state) => state.toggleGlobalSettings);
+  const setGlobalSettingsTab = useUiStore((state) => state.setGlobalSettingsTab);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -600,6 +618,13 @@ export const McpServersEditor: React.FC<{
     );
   };
 
+  const handleManageServers = () => {
+    setGlobalSettingsTab("mcpmanager");
+    if (!globalSettingsOpen) {
+      toggleGlobalSettings();
+    }
+  };
+
   return (
     <div className={`flex flex-col gap-2${fillHeight ? " flex-1 min-h-0" : ""}`}>
       {showDefault && (
@@ -636,6 +661,7 @@ export const McpServersEditor: React.FC<{
             fillHeight={fillHeight}
             isLoadingManagedServers={isLoadingManagedServers}
             managedServers={managedServers}
+            onManageServers={handleManageServers}
           />
         </div>
       ) : (
@@ -653,6 +679,7 @@ export const McpServersEditor: React.FC<{
           fillHeight={fillHeight}
           isLoadingManagedServers={isLoadingManagedServers}
           managedServers={managedServers}
+          onManageServers={handleManageServers}
         />
       )}
     </div>

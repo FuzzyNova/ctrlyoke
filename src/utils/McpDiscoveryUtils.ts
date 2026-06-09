@@ -13,6 +13,7 @@ import type {
   RegistryMcpEntry,
 } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
+import { stripJsonComments } from "./JsoncUtils";
 import {
   getClaudeUserConfigPath,
   getClaudeWorkspaceMcpConfigPath,
@@ -67,12 +68,13 @@ function toStringRecord(value: unknown): Record<string, string> | undefined {
 }
 
 /**
- * Reads a JSON file and returns its parsed content, or null on any error.
+ * Reads a JSON/JSONC file and returns its parsed content, or null on any error.
+ * Strips comments before parsing — VS Code config files use JSONC format.
  */
 async function readJsonFile(filePath: string): Promise<unknown> {
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(content);
+    return JSON.parse(stripJsonComments(content));
   } catch {
     return null;
   }

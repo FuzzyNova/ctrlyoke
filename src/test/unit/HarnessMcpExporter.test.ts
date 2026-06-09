@@ -169,6 +169,52 @@ suite("HarnessMcpExporter", () => {
     });
   });
 
+  test("merges VS Code exports into a JSONC file with comments", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const vscodeConfigPath = path.join(workspaceRoot, ".vscode", "mcp.json");
+
+    await fs.mkdir(path.dirname(vscodeConfigPath), { recursive: true });
+    await fs.writeFile(
+      vscodeConfigPath,
+      `{
+  // VS Code MCP config (JSONC with comments)
+  "servers": {
+    /* commented-out server:
+    "disabled": { "type": "stdio", "command": "node" },
+    */
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "gallery": true // gallery flag used by VS Code MCP browser
+    }
+  }
+}`,
+      "utf-8"
+    );
+
+    const result = await exporter.export(
+      [{ id: "new-server", command: "node", args: ["server.js"] }],
+      SPECIAL_TARGET_IDS.VSCODE,
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    const document = JSON.parse(await fs.readFile(result.filePath, "utf-8"));
+    assert.strictEqual(result.exportedCount, 1);
+    assert.deepStrictEqual(result.skippedIds, []);
+    assert.deepStrictEqual(document.servers["context7"], {
+      type: "stdio",
+      command: "npx",
+      args: ["-y", "@upstash/context7-mcp@latest"],
+      gallery: true,
+    });
+    assert.deepStrictEqual(document.servers["new-server"], {
+      type: "stdio",
+      command: "node",
+      args: ["server.js"],
+    });
+  });
+
   test("writes Copilot MCP config using the documented schema", async () => {
     const exporter = new HarnessMcpExporter(workspaceRoot);
     const result = await exporter.export(

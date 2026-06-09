@@ -11,6 +11,7 @@ import {
 } from "../types/DashboardConstants";
 import type { McpServerConfig } from "../types/FlightPathTypes";
 import { Log } from "./Log";
+import { stripJsonComments } from "./JsoncUtils";
 import {
   getClaudeUserConfigPath,
   getClaudeWorkspaceMcpConfigPath,
@@ -48,7 +49,7 @@ function isPlainObject(value: unknown): value is JsonObject {
 async function readJsonObject(filePath: string): Promise<JsonDocument> {
   try {
     const content = await fs.promises.readFile(filePath, "utf-8");
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(stripJsonComments(content));
     return isPlainObject(parsed) ? parsed : {};
   } catch {
     return {};
