@@ -250,6 +250,12 @@ async function main() {
     logLevel: "error",
   });
 
+  // Prefer the ESM entry point for packages that expose both ESM and UMD/CJS.
+  // Packages like jsonc-parser use a UMD factory that passes `require` as a parameter,
+  // which defeats esbuild's static analysis and leaves relative requires unbundled.
+  // The ESM version uses static imports that esbuild always bundles correctly.
+  const mainFields = ["module", "main"];
+
   // Build main extension
   const ctx = await esbuild.context({
     entryPoints: ["src/extension.ts"],
@@ -259,6 +265,7 @@ async function main() {
     sourcemap: !production,
     sourcesContent: false,
     platform: "node",
+    mainFields,
     outfile: "out/extension.js",
     external: ["vscode", "node-pty"],
     logLevel: "silent",
@@ -283,6 +290,7 @@ async function main() {
     sourcemap: !production,
     sourcesContent: false,
     platform: "node",
+    mainFields,
     outfile: "out/mcp-server.js",
     logLevel: "silent",
   });
@@ -300,6 +308,7 @@ async function main() {
     sourcesContent: false,
     platform: "node",
     target: "node22",
+    mainFields,
     outfile: "out/cli.js",
     // vscode is intentionally NOT in externals — the shim below satisfies all vscode imports
     // with no-op stubs so the CLI binary can run in plain Node.js without VS Code present.
