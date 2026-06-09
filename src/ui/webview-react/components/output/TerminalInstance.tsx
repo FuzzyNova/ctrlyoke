@@ -470,7 +470,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         }
       });
     }
-  }, [isController, workflowId, sessionId]);
+  }, [controllerCols, isController, workflowId, sessionId]);
 
   // When isController changes from true→false (control claimed by another client),
   // dispose onData and apply the controller's known column width.
@@ -492,7 +492,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         entry.controllerCols
       );
     }
-  }, [isController, workflowId, sessionId]);
+  }, [controllerCols, isController, workflowId, sessionId]);
 
   // When controllerCols changes while already a viewer, reapply the new size.
   // This handles the case where TERMINAL_SIZE_CHANGED arrives after isController

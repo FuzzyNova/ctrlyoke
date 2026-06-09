@@ -675,9 +675,12 @@ const OutputSectionInner: React.FC = () => {
     }
   }, [
     hasPendingMeasurements,
+    outputOverscanRef,
     rowVirtualizer,
+    rowsRef,
     schedulePendingMeasurementFlush,
     scheduleScrollTargetCommit,
+    scrollSeekPlaceholderRef,
     updateScrollSeekForScroll,
   ]);
 
