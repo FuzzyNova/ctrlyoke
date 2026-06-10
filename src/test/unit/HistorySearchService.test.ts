@@ -82,7 +82,12 @@ suite("HistorySearchService", () => {
     assert.strictEqual(results[0]?.workflowName, "Demo Workflow");
     assert.strictEqual(
       results[0]?.workflowFilePath,
-      "C:\\dev\\FlightPath\\demo.flightpath.yaml"
+      path.join(
+        workspaceRoot,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.QUEUE_DIR,
+        `${workflowId}.flightpath.json`
+      )
     );
     assert.strictEqual(results[0]?.matchType, "status");
     assert.strictEqual(results[0]?.matchContext, "Prompt 2");

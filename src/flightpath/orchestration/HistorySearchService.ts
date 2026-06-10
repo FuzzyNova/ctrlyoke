@@ -198,10 +198,11 @@ export class HistorySearchService {
           workingFile.workflowName.trim().length > 0
             ? workingFile.workflowName
             : this.deriveWorkflowName(workflowId),
-        workflowFilePath:
-          typeof workingFile.originalFile === "string"
-            ? workingFile.originalFile
-            : "",
+        // LOAD_WORKFLOW expects the working/queue file path, not the original
+        // source file. The queue file is what we just read, so it's known to
+        // exist regardless of whether originalFile is set (e.g. dashboard-
+        // created workflows have no original prompt file).
+        workflowFilePath: queueFilePath,
       };
     } catch {
       return {

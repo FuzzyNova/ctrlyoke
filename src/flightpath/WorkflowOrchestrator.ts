@@ -701,17 +701,42 @@ export class WorkflowOrchestrator {
     }
 
     // Not in registry — load file without touching the panel's viewed workflow.
-    // Set viewedId BEFORE loadWorkingFile so retireWorkflow (triggered by terminal
-    // state during load) sees isViewed=true and keeps the instance in retiredInstances
-    // instead of disposing it immediately.
     Log.debug(
       `[loadWorkflowForClient] inst not found in live/retired/CLI for ` +
         `"${path.basename(filePath)}" — creating fresh instance (clientId=${clientId.slice(0, 12)})`
     );
+    await this.loadFreshInstanceAndReplay(filePath, clientId, send, options);
+  }
+
+  /**
+   * Create a fresh WorkflowInstance, load it from a working file, and replay its
+   * state to the client.
+   *
+   * Set viewedId BEFORE loadWorkingFile so retireWorkflow (triggered by terminal
+   * state during load) sees isViewed=true and keeps the instance in retiredInstances
+   * instead of disposing it immediately. If loadWorkingFile throws (e.g. the
+   * working file path is missing/invalid), discard the broken instance and roll
+   * the viewer registry back to whatever was viewed before — otherwise the viewer
+   * is left pointing at an empty instance while the webview keeps showing the
+   * previously-loaded workflow, and subsequent prompts get sent to the wrong place.
+   */
+  private async loadFreshInstanceAndReplay(
+    filePath: string,
+    clientId: string,
+    send: (message: unknown) => void,
+    options?: { skipReplay?: boolean }
+  ): Promise<void> {
+    const previousViewedId = this.getViewedWorkflowId(clientId);
     const instance = this.buildWorkflowInstance();
     this.instances.set(instance.id, instance);
     this.setViewedWorkflowId(clientId, instance.id);
-    await instance.loadWorkingFile(filePath);
+    try {
+      await instance.loadWorkingFile(filePath);
+    } catch (error) {
+      this.instances.delete(instance.id);
+      this.setViewedWorkflowId(clientId, previousViewedId);
+      throw error;
+    }
     if (!options?.skipReplay) {
       await this.replayWorkflowStateTo(instance.id, send, clientId);
     }
@@ -1580,10 +1605,6 @@ export class WorkflowOrchestrator {
     // with actual step state. DashboardBroadcastHub.updateSessionRestored() is a no-op,
     // so SESSION_RESTORED is only deliverable via a direct PostMessageDashboardSink
     // (inside replayWorkflowStateTo). Without it, all step status icons show as idle/pending.
-    //
-    // Set viewedId BEFORE loadWorkingFile so retireWorkflow (triggered by terminal
-    // state during load) sees isViewed=true and keeps the instance in retiredInstances
-    // instead of disposing it — otherwise replayWorkflowStateTo can't find it.
     const panelSend = this.storedPanelSend ?? ((_: unknown) => {});
 
     // Reuse an existing retired instance for this file if one exists.
@@ -1604,14 +1625,10 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    const instance = this.buildWorkflowInstance();
-    this.instances.set(instance.id, instance);
-    this.setViewedWorkflowId(this.PANEL_CLIENT_ID, instance.id);
-    await instance.loadWorkingFile(filePath);
-    await this.replayWorkflowStateTo(
-      instance.id,
-      panelSend,
-      this.PANEL_CLIENT_ID
+    await this.loadFreshInstanceAndReplay(
+      filePath,
+      this.PANEL_CLIENT_ID,
+      panelSend
     );
   }
 
