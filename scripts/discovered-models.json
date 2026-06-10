@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-04-26T18:19:44.736Z",
+  "exportedAt": "2026-06-10T01:57:42.159Z",
   "source": "vscode.lm.selectChatModels({ vendor: 'copilot' })",
   "chatModels": [
     {
@@ -12,11 +12,11 @@
       "id": "gemini-3.1-pro-preview",
       "family": "gemini-3.1-pro-preview",
       "vendor": "copilot",
-      "cliSupported": false
+      "cliSupported": true
     },
     {
-      "id": "gpt-5.2-codex",
-      "family": "gpt-5.2-codex",
+      "id": "gemini-3.5-flash",
+      "family": "gemini-3.5-flash",
       "vendor": "copilot",
       "cliSupported": true
     },
@@ -39,6 +39,12 @@
       "cliSupported": true
     },
     {
+      "id": "mai-code-1-flash-picker",
+      "family": "oswe-vscode-modelD",
+      "vendor": "copilot",
+      "cliSupported": false
+    },
+    {
       "id": "gpt-5-mini",
       "family": "gpt-5-mini",
       "vendor": "copilot",
@@ -49,30 +55,6 @@
       "family": "gpt-4o-mini",
       "vendor": "copilot",
       "cliSupported": false
-    },
-    {
-      "id": "copilot-fast",
-      "family": "copilot-fast",
-      "vendor": "copilot",
-      "cliSupported": false
-    },
-    {
-      "id": "gpt-4o",
-      "family": "gpt-4o",
-      "vendor": "copilot",
-      "cliSupported": false
-    },
-    {
-      "id": "grok-code-fast-1",
-      "family": "grok-code",
-      "vendor": "copilot",
-      "cliSupported": false
-    },
-    {
-      "id": "claude-sonnet-4",
-      "family": "claude-sonnet-4",
-      "vendor": "copilot",
-      "cliSupported": true
     },
     {
       "id": "claude-sonnet-4.5",
@@ -99,26 +81,26 @@
       "cliSupported": false
     },
     {
-      "id": "gpt-4.1",
-      "family": "gpt-4.1",
-      "vendor": "copilot",
-      "cliSupported": true
-    },
-    {
       "id": "oswe-vscode-prime",
       "family": "oswe-vscode",
       "vendor": "copilot",
       "cliSupported": false
     },
     {
-      "id": "gpt-5.2",
-      "family": "gpt-5.2",
-      "vendor": "copilot",
-      "cliSupported": true
-    },
-    {
       "id": "auto",
       "family": "gpt-5.3-codex",
+      "vendor": "copilot",
+      "cliSupported": false
+    },
+    {
+      "id": "copilot-utility-small",
+      "family": "copilot-utility-small",
+      "vendor": "copilot",
+      "cliSupported": false
+    },
+    {
+      "id": "copilot-utility",
+      "family": "copilot-utility",
       "vendor": "copilot",
       "cliSupported": false
     }
@@ -127,41 +109,39 @@
     "claude-sonnet-4.6",
     "claude-sonnet-4.5",
     "claude-haiku-4.5",
+    "claude-fable-5",
+    "claude-opus-4.8",
     "claude-opus-4.7",
     "claude-opus-4.6",
     "claude-opus-4.6-fast",
     "claude-opus-4.5",
-    "claude-sonnet-4",
-    "gpt-5.4",
     "gpt-5.5",
+    "gpt-5.4",
     "gpt-5.3-codex",
     "gpt-5.2-codex",
     "gpt-5.2",
-    "gpt-5.1",
     "gpt-5.4-mini",
     "gpt-5-mini",
-    "gpt-4.1"
+    "gemini-3.1-pro-preview",
+    "gemini-3.5-flash"
   ],
   "chatModelIds": [
     "claude-sonnet-4.6",
     "gemini-3.1-pro-preview",
-    "gpt-5.2-codex",
+    "gemini-3.5-flash",
     "gpt-5.3-codex",
     "gpt-5.4-mini",
     "gpt-5.4",
+    "mai-code-1-flash-picker",
     "gpt-5-mini",
     "gpt-4o-mini",
-    "copilot-fast",
-    "gpt-4o",
-    "grok-code-fast-1",
-    "claude-sonnet-4",
     "claude-sonnet-4.5",
     "claude-haiku-4.5",
     "gemini-3-flash-preview",
     "gemini-2.5-pro",
-    "gpt-4.1",
     "oswe-vscode-prime",
-    "gpt-5.2",
-    "auto"
+    "auto",
+    "copilot-utility-small",
+    "copilot-utility"
   ]
 }
