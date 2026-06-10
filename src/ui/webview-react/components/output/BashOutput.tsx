@@ -152,7 +152,7 @@ export const BashOutput = memo<BashOutputProps>(
         <div className={`${cssClass} flex items-start gap-1`}>
           <span className="shrink-0">⎿</span>
           <div
-            className="min-w-0 flex-1 whitespace-pre-wrap break-words"
+            className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
             id={`${containerId}-${type}`}
           >
             {highlightText(preview.visibleText, findMatches ?? [])}
@@ -210,13 +210,13 @@ export const BashOutput = memo<BashOutputProps>(
     return (
       <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
         <div className={TOOL_CALL_LINE}>
-          <span className="min-w-0 break-words">
+          <span className="min-w-0 [overflow-wrap:anywhere]">
             <span className={dotColorClass}>●</span>{" "}
             <span
               className={
                 hasCommandLabel
-                  ? "text-editor-fg"
-                  : "text-description-fg italic"
+                  ? "text-editor-fg [overflow-wrap:anywhere]"
+                  : "text-description-fg italic [overflow-wrap:anywhere]"
               }
             >
               {commandContent ?? displayCommand}

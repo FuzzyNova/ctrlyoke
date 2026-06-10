@@ -256,7 +256,7 @@ const ToolResultOutput: React.FC<{
       className={`${result.success ? TOOL_RESULT_LINE : "text-indicator-error pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)]"} flex items-start gap-1`}
     >
       <span className="shrink-0">⎿</span>
-      <span className="whitespace-pre-wrap break-words min-w-0">
+      <span className="whitespace-pre-wrap min-w-0 [overflow-wrap:anywhere]">
         {content ?? contentText}
       </span>
     </div>
@@ -1071,7 +1071,7 @@ function OutputRowComponent({
       case "cli-command":
         content = (
           <div
-            className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] break-all`}
+            className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] whitespace-pre-wrap [overflow-wrap:anywhere]`}
           >
             {highlightText(
               `${row.workingDirectory || "workspace"}> ${row.command}`,
