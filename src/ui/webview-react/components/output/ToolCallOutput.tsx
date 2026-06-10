@@ -56,6 +56,7 @@ interface McpToolCallOutputProps {
   server: string;
   tool: string;
   result?: ToolResult;
+  labelContent?: React.ReactNode;
   className?: string;
 }
 
@@ -63,12 +64,14 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   server,
   tool,
   result,
+  labelContent,
   className = "",
 }) => (
   <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
     <div className={TOOL_CALL_LINE}>
       <span className="min-w-0 break-words">
-        <ToolDot status={resultDotStatus(result)} /> MCP: {server}.{tool}
+        <ToolDot status={resultDotStatus(result)} />{" "}
+        {labelContent ?? `MCP: ${server}.${tool}`}
       </span>
     </div>
   </div>
@@ -82,6 +85,8 @@ interface WebSearchOutputProps {
   query: string;
   success?: boolean;
   error?: string;
+  queryContent?: React.ReactNode;
+  errorContent?: React.ReactNode;
   className?: string;
 }
 
@@ -89,6 +94,8 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
   query,
   success,
   error,
+  queryContent,
+  errorContent,
   className = "",
 }) => (
   <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
@@ -99,14 +106,18 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
             success === undefined ? "pending" : success ? "success" : "error"
           }
         />{" "}
-        Web search: &ldquo;{query}&rdquo;
+        {queryContent ?? (
+          <>
+            Web search: &ldquo;{query}&rdquo;
+          </>
+        )}
       </span>
     </div>
     {error && (
       <div className={`${TOOL_ERROR_LINE} flex items-start gap-1`}>
         <span className="shrink-0">⎿</span>
         <div className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-          {error}
+          {errorContent ?? error}
         </div>
       </div>
     )}
@@ -121,6 +132,9 @@ interface GenericToolCallOutputProps {
   name: string;
   parameters?: Record<string, unknown>;
   result?: ToolResult;
+  nameContent?: React.ReactNode;
+  outputContent?: React.ReactNode;
+  errorContent?: React.ReactNode;
   expansion?: ToolCallExpansionState;
   renderPlan?: ToolCallRenderPlan;
   onExpansionChange?: (
@@ -134,6 +148,9 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   name,
   parameters,
   result,
+  nameContent,
+  outputContent,
+  errorContent,
   expansion,
   renderPlan,
   onExpansionChange,
@@ -182,7 +199,8 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   const renderExpandableSection = (
     content: string,
     type: "output" | "error",
-    sectionPlan: ToolCallSectionRenderPlan
+    sectionPlan: ToolCallSectionRenderPlan,
+    contentNode?: React.ReactNode
   ) => {
     const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
 
@@ -193,7 +211,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           className="min-w-0 flex-1 whitespace-pre-wrap break-words"
           id={`${containerId}-${type}`}
         >
-          {getVisibleToolCallText(content, sectionPlan)}
+          {contentNode ?? getVisibleToolCallText(content, sectionPlan)}
           {sectionPlan.canToggle && (
             <button
               type="button"
@@ -217,7 +235,8 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
         <span className="min-w-0 flex-1 break-words">
-          <ToolDot status={resultDotStatus(result)} /> {name}({params})
+          <ToolDot status={resultDotStatus(result)} />{" "}
+          {nameContent ?? `${name}(${params})`}
         </span>
         {resolvedRenderPlan.params.canToggle && (
           <button
@@ -245,9 +264,19 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       )}
 
       {outputStr &&
-        renderExpandableSection(outputStr, "output", resolvedRenderPlan.output)}
+        renderExpandableSection(
+          outputStr,
+          "output",
+          resolvedRenderPlan.output,
+          outputContent
+        )}
       {errorStr &&
-        renderExpandableSection(errorStr, "error", resolvedRenderPlan.error)}
+        renderExpandableSection(
+          errorStr,
+          "error",
+          resolvedRenderPlan.error,
+          errorContent
+        )}
     </div>
   );
 };

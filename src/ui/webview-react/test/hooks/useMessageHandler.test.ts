@@ -179,6 +179,33 @@ describe("FILE_SELECTED", () => {
     });
   });
 
+  it("requests the pending history run after the workflow loads", () => {
+    const postMessageMock = (window as any).vscodeApi.postMessage as ReturnType<
+      typeof vi.fn
+    >;
+    postMessageMock.mockClear();
+    useUiStore.getState().setPendingHistorySearchNavigation({
+      workflowId: "wf-1",
+      workflowFilePath: "C:\\history.flightpath.yaml",
+      runIndex: 2,
+      findQuery: "needle",
+    });
+
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.FILE_SELECTED, {
+        fileName: "history.flightpath.yaml",
+        steps: [makePrompt("Step 1")],
+      });
+    });
+
+    expect(postMessageMock).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
+      runIndex: 2,
+    });
+  });
+
   it("clears cached edit drafts for the previous workflow while preserving the new-prompt draft", () => {
     renderHook(() => useMessageHandler());
 
@@ -740,6 +767,109 @@ describe("OUTPUT_HISTORY_LOADED", () => {
     // History must be loaded — the completed manifest overrules the stale webview state
     expect(useWorkflowStore.getState().historyOutputs).not.toBeNull();
     expect(useUiStore.getState().isViewingHistory).toBe(true);
+  });
+
+  it("opens output find with the pending history query and clears staged navigation", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      useUiStore.getState().setPendingHistorySearchNavigation({
+        workflowId: "wf-1",
+        workflowFilePath: "C:\\history.flightpath.yaml",
+        runIndex: 1,
+        findQuery: "needle",
+      });
+    });
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.OUTPUT_HISTORY_LOADED, {
+        history: {
+          runId: 2,
+          startedAt: 1000,
+          completedAt: 2000,
+          executionState: EXECUTION_STATES.COMPLETED,
+          orderedEntries: [],
+          promptOutputs: {},
+        },
+        availableRuns: 2,
+        currentRunIndex: 1,
+        runTimestamps: [1500, 1000],
+        runStates: [EXECUTION_STATES.RUNNING, EXECUTION_STATES.COMPLETED],
+      });
+    });
+
+    expect(useUiStore.getState().pendingFindQuery).toBe("needle");
+    expect(useUiStore.getState().pendingHistorySearchNavigation).toBeNull();
+  });
+});
+
+describe("history search messages", () => {
+  it("opens the history search modal when requested", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      dispatch(MESSAGE_TYPES.OPEN_HISTORY_SEARCH);
+    });
+
+    expect(useUiStore.getState().isHistorySearchOpen).toBe(true);
+  });
+
+  it("applies matching search results and ignores stale queries", () => {
+    renderHook(() => useMessageHandler());
+
+    act(() => {
+      useUiStore.getState().setHistorySearchQuery("needle");
+      useUiStore.getState().setHistorySearchResults([], true);
+      dispatch(MESSAGE_TYPES.SEARCH_HISTORY_RESULTS, {
+        query: "needle",
+        results: [
+          {
+            workflowId: "wf-1",
+            workflowName: "Search Workflow",
+            runId: 3,
+            runIndex: 0,
+            startedAt: 1000,
+            executionState: EXECUTION_STATES.COMPLETED,
+            target: { kind: "queue", stepIndex: 0 },
+            matchType: "response",
+            matchSnippet: "needle found here",
+            matchContext: "Prompt 1",
+            workflowFilePath: "C:\\history.flightpath.yaml",
+          },
+        ],
+        hasMore: false,
+      });
+    });
+
+    expect(useUiStore.getState().historySearchResults).toHaveLength(1);
+    expect(useUiStore.getState().historySearchLoading).toBe(false);
+
+    act(() => {
+      useUiStore.getState().setHistorySearchQuery("fresh");
+      useUiStore.getState().setHistorySearchResults([], true);
+      dispatch(MESSAGE_TYPES.SEARCH_HISTORY_RESULTS, {
+        query: "stale",
+        results: [
+          {
+            workflowId: "wf-2",
+            workflowName: "Stale Workflow",
+            runId: 4,
+            runIndex: 0,
+            startedAt: 2000,
+            executionState: EXECUTION_STATES.COMPLETED,
+            target: { kind: "queue", stepIndex: 1 },
+            matchType: "prompt",
+            matchSnippet: "stale result",
+            matchContext: "Prompt 2",
+            workflowFilePath: "C:\\stale.flightpath.yaml",
+          },
+        ],
+        hasMore: false,
+      });
+    });
+
+    expect(useUiStore.getState().historySearchResults).toEqual([]);
+    expect(useUiStore.getState().historySearchLoading).toBe(true);
   });
 });
 

@@ -155,6 +155,9 @@ export const MESSAGE_TYPES = {
   // Output history messages
   OUTPUT_HISTORY_LOADED: "outputHistoryLoaded", // Extension -> Webview: Load history for display
   LOAD_RUN_HISTORY: "loadRunHistory", // Webview -> Extension: Request specific run
+  SEARCH_HISTORY: "searchHistory", // Webview -> Extension: Search global run history
+  SEARCH_HISTORY_RESULTS: "searchHistoryResults", // Extension -> Webview: Return global history matches
+  OPEN_HISTORY_SEARCH: "openHistorySearch", // Extension -> Webview: Open global history search UI
   CLEAR_RUN_HISTORY: "clearRunHistory", // Webview -> Extension: Delete run history
   RUN_HISTORY_UPDATED: "runHistoryUpdated", // Extension -> Webview: Available run count changed (new run started)
 
@@ -1293,6 +1296,7 @@ export const VSCODE_COMMANDS = {
   ENABLE_SERVER: "flightpath.enableServer",
   DISABLE_SERVER: "flightpath.disableServer",
   REGENERATE_SERVER_TOKEN: "flightpath.regenerateServerToken",
+  SEARCH_HISTORY: "flightpath.searchHistory",
   GENERATE_COMMIT_MESSAGE: "flightpath.generateCommitMessage",
   CANCEL_COMMIT_MESSAGE_GENERATION: "flightpath.cancelCommitMessageGeneration",
 } as const;

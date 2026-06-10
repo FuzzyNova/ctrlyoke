@@ -16,17 +16,30 @@ Two complementary search features:
 **Design principle:** The workflow dropdown remains a navigator. History search is
 forensic and deserves its own surface.
 
-**Current codebase reality:** The old plan assumed `OutputSection` was effectively a
-single DOM blob. It is not anymore. The output panel now projects output into
-**virtualized render rows**:
+**Current codebase reality:** Output virtualization has shipped
+(`dev/implemented/OUTPUT_VIRTUALIZATION_PLAN.md`). The output panel virtualizes output
+into **flattened render rows**:
 
-- `OutputSection.tsx` builds `rows` with `buildOutputRows()`
-- those rows render through `OutputRow.tsx`
+- `OutputSection.tsx` builds `rows` via `useOutputRowsModel()` and virtualizes them
+  via `useOutputVirtualization()` (TanStack Virtual under the hood)
+- Those rows render through `OutputRow.tsx`
 - `@tanstack/react-virtual` mounts only the visible subset
 
-That changes the output-find implementation materially. Search must target the
-**row model** and the virtualizer, not arbitrary text nodes under
-`#output-content`.
+Search must target the **row model** and the virtualizer, not arbitrary text nodes
+under `#output-content`.
+
+**Codebase notes for implementors:**
+
+- Stores live in `src/ui/webview-react/store/` (singular), not `stores/`
+- `WorkflowRunManifest` (in `src/types/WorkflowTimelineTypes.ts`) has: `workflowId`,
+  `runId`, `startedAt`, `completedAt?`, `executionState`, `runStepCount`, `eventCount`,
+  `nextSequence`, `lastUpdatedAt` — it does **not** have `workflowName` or
+  `workflowFilePath`
+- `workflowName` and `workflowFilePath` must be resolved by reading the queue file at
+  `.flightpath/.queue/<workflowId>.flightpath.json` (`WorkingFile.workflowName` +
+  `WorkingFile.originalFile`). See resolution section below.
+- Virtualizer scroll: `rowVirtualizer.scrollToIndex(rowIndex, { align: "center" })`
+  where `rowVirtualizer` is returned by `useOutputVirtualization()`
 
 ---
 
@@ -64,7 +77,7 @@ return ranked `HistorySearchResult[]`.
 ```typescript
 export interface HistorySearchResult {
   workflowId: string;
-  workflowName: string;
+  workflowName: string;   // from WorkingFile.workflowName in queue file
   runId: number;
   runIndex: number; // 0 = most recent, for LOAD_RUN_HISTORY
   startedAt: number;
@@ -81,15 +94,17 @@ export interface HistorySearchResult {
   matchSnippet: string;
   matchContext: string; // "Prompt 2", "Final Step Loop 1", etc.
   filePath?: string;
-  workflowFilePath: string;
+  workflowFilePath: string; // resolved from WorkingFile.originalFile
 }
 ```
 
 **Algorithm:**
 
 ```text
-For each workflow history directory:
+For each workflow history directory under .flightpath/.history/:
+  workflowId = directory name
   Read manifest.json
+  Resolve workflowName + workflowFilePath from queue file (see below)
   Read events.jsonl line by line
     JSON.parse each line
     If cliOutputRecorded:
@@ -114,14 +129,33 @@ For each workflow history directory:
 - Scan runs newest-first within each workflow
 - Stop scanning once result cap is reached
 
+### Workflow ID to file path resolution
+
+`HistorySearchService` must resolve `workflowId` back to the workflow file so the
+result can be opened. **The manifest does not store this** — resolve it from the queue
+file instead.
+
+**Resolution order:**
+
+1. Read `.flightpath/.queue/<workflowId>.flightpath.json` (a `WorkingFile`)
+   - `workingFile.workflowName` → display name for results
+   - `workingFile.originalFile` → source workflow path for `LOAD_WORKFLOW`
+2. If the queue file does not exist (workflow deleted or ephemeral), fall back to
+   deriving a display name from `workflowId` (strip timestamp suffix) and set
+   `workflowFilePath` to an empty string; the result will still open correctly if
+   the webview falls back to loading by workflowId rather than file path.
+
+Do not reconstruct `.yaml` or `.json` filenames from `workflowId` by guessing — use
+the queue file as the authoritative source.
+
 ### Message types
 
 Add to `src/types/DashboardConstants.ts`:
 
 ```typescript
-MESSAGE_TYPES.SEARCH_HISTORY; // webview -> extension
+MESSAGE_TYPES.SEARCH_HISTORY;        // webview -> extension
 MESSAGE_TYPES.SEARCH_HISTORY_RESULTS; // extension -> webview
-MESSAGE_TYPES.OPEN_HISTORY_SEARCH; // extension -> webview
+MESSAGE_TYPES.OPEN_HISTORY_SEARCH;   // extension -> webview
 ```
 
 Suggested payloads:
@@ -138,20 +172,6 @@ Suggested payloads:
 }
 ```
 
-### Workflow ID to file path resolution
-
-`HistorySearchService` must resolve `workflowId` back to the workflow file so the
-result can be opened. Use the working file / known workflow resolution path already used
-by the router, not ad hoc string guessing in the webview.
-
-If exact resolution must happen from history metadata alone, check:
-
-- `.flightpath/.queue/<workflowId>.flightpath.json`
-- mapped source workflow path recorded in manifest metadata if available
-
-Do not rely on reconstructing `.yaml` or `.json` filenames from `workflowId` unless no
-better source exists.
-
 ### UI: Dedicated History Search Modal
 
 History search remains a standalone modal, separate from the workflow dropdown.
@@ -163,7 +183,7 @@ History search remains a standalone modal, separate from the workflow dropdown.
 - Register `flightpath.searchHistory` so it can be keybound and opened from the
   command palette
 
-Current header slot:
+Current header slot (confirmed against current `Header.tsx`):
 
 ```text
 [WorkflowControls] | Save | Undo/Redo | [Files*] | Search | Settings
@@ -173,7 +193,7 @@ Current header slot:
 
 New file: `src/ui/webview-react/components/search/HistorySearchModal.tsx`
 
-Layout remains the same general concept:
+Layout:
 
 - full-screen backdrop
 - centered panel
@@ -184,10 +204,10 @@ Layout remains the same general concept:
 
 ### Result click flow
 
-The original plan assumed `LOAD_WORKFLOW` and `LOAD_RUN_HISTORY` could be fired back to
-back. That is brittle. Use staged navigation state in the webview instead.
+Use staged navigation state in the webview to avoid a race between workflow load and
+history load.
 
-Add to `uiStore`:
+Add to `uiStore` (in `src/ui/webview-react/store/uiStore.ts`):
 
 ```typescript
 pendingHistorySearchNavigation: {
@@ -211,7 +231,7 @@ This removes a race between workflow load and history load.
 
 ### UI state additions
 
-Add to `uiStore`:
+Add to `uiStore` (in `src/ui/webview-react/store/uiStore.ts`):
 
 ```typescript
 isHistorySearchOpen: boolean;
@@ -233,8 +253,6 @@ pendingHistorySearchNavigation: {
 ## Feature 2: In-Output Find Bar
 
 ### The implementation change
-
-This is the part of the plan that needs the real update.
 
 The old design relied on:
 
@@ -300,7 +318,8 @@ export interface OutputFindMatch {
 
 The search index is built from `rows: OutputRenderRow[]`, not from the DOM.
 
-**Searchable row content by row kind:**
+**Searchable row content by row kind** (all 11 types confirmed against current
+`outputRows.ts`):
 
 - `cli-header`
   - step label
@@ -326,6 +345,8 @@ The search index is built from `rows: OutputRenderRow[]`, not from the DOM.
   - diff hunk lines from `structuredPatch.lines`
 - `stats`
   - skip in MVP to avoid noisy matches on token counts and session IDs
+- `history-banner`, `step-anchor`, `final-step-label`
+  - skip (navigation-only rows, not content)
 
 ### Highlight strategy
 
@@ -465,8 +486,8 @@ export function useOutputFind(
 
 ### Virtualizer-aware navigation
 
-`OutputSection` already owns the row virtualizer, so it should reveal matches by row
-index:
+`OutputSection` already owns the row virtualizer via `useOutputVirtualization()`, so
+it should reveal matches by row index:
 
 ```typescript
 rowVirtualizer.scrollToIndex(match.rowIndex, { align: "center" });
@@ -477,8 +498,9 @@ the active highlight update with `requestAnimationFrame`.
 
 ### Integration in `OutputSection`
 
-`OutputSection` already computes `rows`, `rowVirtualizer`, and handles history/live
-mode transitions. That is the correct integration point.
+`OutputSection` already computes `rows` (via `useOutputRowsModel()`) and
+`rowVirtualizer` (via `useOutputVirtualization()`), and handles history/live mode
+transitions. That is the correct integration point.
 
 Hook usage:
 
@@ -569,7 +591,7 @@ rendered `<mark>` elements and active-row styling.
 
 ### Phase 1: In-Output Find Bar
 
-1. Add `pendingFindQuery` to `uiStore`
+1. Add `pendingFindQuery` to `uiStore` (`src/ui/webview-react/store/uiStore.ts`)
 2. Add `outputFind.ts` row-search utilities
 3. Create `useOutputFind`
 4. Create `OutputFindBar`
@@ -583,9 +605,11 @@ matches in rendered rows.
 
 ### Phase 2: Global History Search, extension side
 
-1. Add `HistorySearchResult` type
-2. Add `SEARCH_HISTORY`, `SEARCH_HISTORY_RESULTS`, `OPEN_HISTORY_SEARCH`
-3. Implement `HistorySearchService`
+1. Add `HistorySearchResult` type to `src/types/WorkflowTimelineTypes.ts` (or a new
+   `src/types/HistorySearchTypes.ts`)
+2. Add `SEARCH_HISTORY`, `SEARCH_HISTORY_RESULTS`, `OPEN_HISTORY_SEARCH` to
+   `DashboardConstants.ts`
+3. Implement `HistorySearchService` (read queue file for workflowName/workflowFilePath)
 4. Wire message handling in the extension router / webview provider
 
 **Deliverable:** the extension can search history and return result sets with stable run
@@ -593,7 +617,7 @@ targets.
 
 ### Phase 3: Global History Search, webview side
 
-1. Add search modal state to `uiStore`
+1. Add search modal state to `uiStore` (`store/uiStore.ts`)
 2. Handle `SEARCH_HISTORY_RESULTS` and `OPEN_HISTORY_SEARCH` in `useMessageHandler`
 3. Create `HistorySearchModal`
 4. Add the header search button
@@ -614,31 +638,39 @@ correct historical run, and lands in the output pane with the find bar ready.
 
 ## Open Questions / Tradeoffs
 
-**Q: Does the plan need updating because the output section now uses virtualized rows?**  
-Yes. This is the main reason for the rewrite. DOM-wide highlight/search is no longer a
-correct model for the current output implementation.
+**Q: Does the plan need updating because the output section now uses virtualized rows?**
+The plan already accounts for this — DOM-wide highlight/search is explicitly rejected
+in favor of row-indexed search. The concrete hook names (`useOutputRowsModel`,
+`useOutputVirtualization`) are confirmed against the shipped implementation.
 
-**Q: Why not keep CSS Custom Highlight API anyway?**  
+**Q: Why not keep CSS Custom Highlight API anyway?**
 Because the browser can only highlight mounted DOM nodes. With virtualization, most rows
 do not exist in the DOM at any given time, so counts and navigation would be wrong.
 
-**Q: Should stats rows be searchable?**  
+**Q: Should stats rows be searchable?**
 Not in MVP. Matching on token counts and session IDs is noisy and low-value compared to
 prompt/response/tool/file content.
 
-**Q: Should diff hunks be searchable?**  
+**Q: Should diff hunks be searchable?**
 Yes. Search the diff text in the row index. For MVP, scrolling to and emphasizing the
 matching diff row is enough. Exact inline hunk highlighting can be added later.
 
-**Q: Should markdown responses be fully inline-highlighted?**  
+**Q: Should markdown responses be fully inline-highlighted?**
 Not required for MVP. Start with row-level navigation plus highlighting for plain text
 and non-markdown labels. If users need exact inline markdown match paint, extend
 `MarkdownText` in a follow-up.
 
-**Q: Will this survive history switching and diff collapse changes?**  
+**Q: Will this survive history switching and diff collapse changes?**
 Yes, if the search re-runs against `rows` whenever `rows` changes. The row projection is
 already the source of truth for virtualization, minimap layout, and history rendering.
 
-**Q: Is result click sequencing fragile?**  
+**Q: Is result click sequencing fragile?**
 It is if done naively. That is why the webview should stage pending navigation state and
 wait for workflow-load completion before sending `LOAD_RUN_HISTORY`.
+
+**Q: How does `HistorySearchService` get `workflowName` and `workflowFilePath`?**
+The `WorkflowRunManifest` stored in `manifest.json` does not include these fields.
+`HistorySearchService` reads `.flightpath/.queue/<workflowId>.flightpath.json`
+(a `WorkingFile`) to get `workingFile.workflowName` and `workingFile.originalFile`.
+If the queue file is missing (ephemeral/deleted workflow), the service falls back to
+a name derived from `workflowId` and sets `workflowFilePath = ""`.

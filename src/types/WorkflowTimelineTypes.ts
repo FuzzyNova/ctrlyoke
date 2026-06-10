@@ -50,6 +50,21 @@ export interface WorkflowRunManifest {
   lastUpdatedAt: number;
 }
 
+export interface HistorySearchResult {
+  workflowId: string;
+  workflowName: string;
+  runId: number;
+  runIndex: number;
+  startedAt: number;
+  executionState: string;
+  target: OutputExecutionTarget;
+  matchType: "response" | "file" | "bash" | "status" | "prompt" | "tool" | "diff";
+  matchSnippet: string;
+  matchContext: string;
+  filePath?: string;
+  workflowFilePath: string;
+}
+
 interface TargetedTimelineEventDraftBase {
   timestampMs: number;
   target: OutputExecutionTarget;

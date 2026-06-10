@@ -484,6 +484,7 @@ suite("WebviewSettingsSync", () => {
         mockSettingsSync,
         {} as any,
         () => mockOrchestrator,
+        {} as any,
         { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
       );
 
@@ -518,6 +519,7 @@ suite("WebviewSettingsSync", () => {
         mockSettingsSync,
         mockSerializer,
         () => undefined, // no orchestrator
+        {} as any,
         { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
       );
 
@@ -552,6 +554,7 @@ suite("WebviewSettingsSync", () => {
         mockSettingsSync,
         {} as any,
         () => undefined,
+        {} as any,
         { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
       );
 

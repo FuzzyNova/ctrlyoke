@@ -3,7 +3,7 @@ import { formatTime } from "@utils/outputUtils";
 import type { StatusMessageSeverity } from "../../types/messages";
 
 interface StatusMessageProps {
-  message: string;
+  message: React.ReactNode;
   severity?: StatusMessageSeverity;
   timestamp?: string;
   timestampMs?: number;

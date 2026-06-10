@@ -65,6 +65,7 @@ import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder"
 import { HarnessFileManager } from "../utils/HarnessFileManager";
 import { HarnessMcpExporter } from "../utils/HarnessMcpExporter";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
+import { HistorySearchService } from "../flightpath/orchestration/HistorySearchService";
 
 const execFileAsync = promisify(execFile);
 const GIT_VALIDATION_TIMEOUT_MS = 5000;
@@ -94,6 +95,7 @@ export class WebviewMessageRouter {
     private readonly settingsSync: WebviewSettingsSync,
     private readonly serializer: WorkflowSerializer,
     private readonly getOrchestrator: () => WorkflowOrchestrator | undefined,
+    private readonly historySearchService: HistorySearchService,
     private readonly callbacks: WebviewRouterCallbacks
   ) {
     this.scopedPostMessage = defaultPostMessage;
@@ -895,6 +897,29 @@ export class WebviewMessageRouter {
         this.getCurrentPostMessage(),
         this.clientId
       );
+    });
+
+    table.set(MESSAGE_TYPES.SEARCH_HISTORY, async (message) => {
+      const query =
+        typeof message.query === "string" ? message.query.trim() : "";
+      const workspacePath = this.getWorkspaceRoot();
+      if (!workspacePath) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
+          query,
+          results: [],
+          hasMore: false,
+        });
+        return;
+      }
+
+      const results = await this.historySearchService.search(query, workspacePath);
+      this.emitMessage({
+        type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
+        query,
+        results,
+        hasMore: results.length >= 50,
+      });
     });
 
     table.set(MESSAGE_TYPES.CLEAR_RUN_HISTORY, async () => {

@@ -98,6 +98,65 @@ describe("selectOutputStep", () => {
   });
 });
 
+describe("setPendingFindQuery", () => {
+  it("stores and clears the pending output find query", () => {
+    store().setPendingFindQuery("needle");
+    expect(store().pendingFindQuery).toBe("needle");
+
+    store().setPendingFindQuery(null);
+    expect(store().pendingFindQuery).toBeNull();
+  });
+});
+
+describe("history search state", () => {
+  it("opens, updates, and closes the history search modal", () => {
+    expect(store().isHistorySearchOpen).toBe(false);
+
+    store().openHistorySearch();
+    store().setHistorySearchQuery("needle");
+    store().setHistorySearchResults(
+      [
+        {
+          workflowId: "wf-1",
+          workflowName: "Search Workflow",
+          runId: 3,
+          runIndex: 1,
+          startedAt: 1234,
+          executionState: "completed",
+          target: { kind: "queue", stepIndex: 0 },
+          matchType: "response",
+          matchSnippet: "needle found here",
+          matchContext: "Prompt 1",
+          workflowFilePath: "C:\\workflow.flightpath.yaml",
+        },
+      ],
+      true
+    );
+    store().setPendingHistorySearchNavigation({
+      workflowId: "wf-1",
+      workflowFilePath: "C:\\workflow.flightpath.yaml",
+      runIndex: 1,
+      findQuery: "needle",
+    });
+
+    expect(store().isHistorySearchOpen).toBe(true);
+    expect(store().historySearchQuery).toBe("needle");
+    expect(store().historySearchResults).toHaveLength(1);
+    expect(store().historySearchLoading).toBe(true);
+    expect(store().pendingHistorySearchNavigation).toEqual({
+      workflowId: "wf-1",
+      workflowFilePath: "C:\\workflow.flightpath.yaml",
+      runIndex: 1,
+      findQuery: "needle",
+    });
+
+    store().closeHistorySearch();
+
+    expect(store().isHistorySearchOpen).toBe(false);
+    expect(store().historySearchLoading).toBe(false);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Save workflow dialog
 // ---------------------------------------------------------------------------

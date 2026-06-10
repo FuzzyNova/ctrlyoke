@@ -32,17 +32,18 @@ export const ToolDot: React.FC<{ status: DotStatus }> = ({ status }) => (
 );
 
 /** Clickable file path that opens the file in VS Code */
-const FilePath: React.FC<{ path: string; className?: string }> = ({
-  path,
-  className = "",
-}) => (
+const FilePath: React.FC<{
+  path: string;
+  className?: string;
+  children?: React.ReactNode;
+}> = ({ path, className = "", children }) => (
   <button
     type="button"
     className={`text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] whitespace-normal break-all max-w-full ${className}`}
     onClick={() => openFile(path)}
     title={`Open ${path}`}
   >
-    {path}
+    {children ?? path}
   </button>
 );
 
@@ -50,6 +51,7 @@ interface FileOperationHeaderProps {
   dotStatus: DotStatus;
   actionLabel: string;
   path: string;
+  pathContent?: React.ReactNode;
   error?: string;
   trailingAction?: React.ReactNode;
 }
@@ -58,6 +60,7 @@ const FileOperationHeader: React.FC<FileOperationHeaderProps> = ({
   dotStatus,
   actionLabel,
   path,
+  pathContent,
   error,
   trailingAction,
 }) => (
@@ -68,7 +71,9 @@ const FileOperationHeader: React.FC<FileOperationHeaderProps> = ({
       <FilePath
         path={path}
         className="inline-block whitespace-normal break-all text-left align-top"
-      />
+      >
+        {pathContent}
+      </FilePath>
     </span>
     {trailingAction}
     {error ? (
@@ -95,6 +100,7 @@ function boolDotStatus(success?: boolean): DotStatus {
 
 interface FileEditOutputProps {
   path: string;
+  pathContent?: React.ReactNode;
   status?: FileOperationStatus;
   oldContent?: string;
   newContent?: string;
@@ -130,6 +136,7 @@ interface FileEditOutputProps {
 export const FileEditOutput = memo<FileEditOutputProps>(
   ({
     path,
+    pathContent,
     status,
     oldContent,
     newContent,
@@ -187,6 +194,7 @@ export const FileEditOutput = memo<FileEditOutputProps>(
           dotStatus={dotStatus}
           actionLabel={getActionLabel()}
           path={path}
+          pathContent={pathContent}
           error={status === OPERATION_STATUS.FAILED ? `— ${error}` : undefined}
         />
         {hasDiffData ? (
@@ -218,6 +226,7 @@ FileEditOutput.displayName = "FileEditOutput";
 
 interface FileWriteOutputProps {
   path: string;
+  pathContent?: React.ReactNode;
   status?: FileOperationStatus;
   content?: string;
   error?: string;
@@ -228,6 +237,7 @@ interface FileWriteOutputProps {
 
 export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   path,
+  pathContent,
   status,
   content,
   error,
@@ -250,6 +260,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
         dotStatus={dotStatus}
         actionLabel={getActionLabel()}
         path={path}
+        pathContent={pathContent}
         error={status === OPERATION_STATUS.FAILED ? `— ${error}` : undefined}
         trailingAction={
           onUndoFile && status !== OPERATION_STATUS.INITIATED ? (
@@ -278,6 +289,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
 
 interface FileReadOutputProps {
   path: string;
+  pathContent?: React.ReactNode;
   status?: FileOperationStatus;
   error?: string;
   className?: string;
@@ -285,6 +297,7 @@ interface FileReadOutputProps {
 
 export const FileReadOutput: React.FC<FileReadOutputProps> = ({
   path,
+  pathContent,
   status,
   error,
   className = "",
@@ -303,6 +316,7 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
         dotStatus={dotStatus}
         actionLabel={getActionLabel()}
         path={path}
+        pathContent={pathContent}
         error={status === OPERATION_STATUS.FAILED ? `— ${error}` : undefined}
       />
     </div>
@@ -315,6 +329,7 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
 
 interface FileDeleteOutputProps {
   path: string;
+  pathContent?: React.ReactNode;
   success?: boolean;
   error?: string;
   onUndoFile?: () => void;
@@ -324,6 +339,7 @@ interface FileDeleteOutputProps {
 
 export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
   path,
+  pathContent,
   success,
   error,
   onUndoFile,
@@ -338,6 +354,7 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
         dotStatus={dotStatus}
         actionLabel="Delete file:"
         path={path}
+        pathContent={pathContent}
         error={success === false ? `— ${error}` : undefined}
         trailingAction={
           onUndoFile && success !== false ? (

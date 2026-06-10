@@ -54,6 +54,7 @@ export const Header: React.FC<{
     mobileWorkflowPropsOpen,
     globalSettingsOpen,
     toggleGlobalSettings,
+    openHistorySearch,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -269,6 +270,17 @@ export const Header: React.FC<{
                 <div className="fp-button-group-divider" />
               </>
             )}
+
+            <button
+              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
+              onClick={openHistorySearch}
+              title="Search History (Ctrl+Shift+F)"
+              aria-label="Search history"
+            >
+              <i className={`codicon codicon-search ${btnSize.icon}`} />
+            </button>
+
+            <div className="fp-button-group-divider" />
 
             {/* Settings button */}
             <button

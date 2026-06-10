@@ -31,7 +31,6 @@ export default defineConfig({
     globals: true,
 
     include: ["./test/**/*.test.{ts,tsx}"],
-
     coverage: {
       provider: "v8",
       include: ["store/**", "hooks/**", "utils/**", "components/**"],

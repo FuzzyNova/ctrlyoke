@@ -47,6 +47,7 @@ import { configService } from "../config/FlightPathConfigService";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
 import { WebviewMessageRouter } from "./WebviewMessageRouter";
+import { HistorySearchService } from "../flightpath/orchestration/HistorySearchService";
 import type { IDashboardProvider } from "./IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { PostMessageFn } from "./WebviewSettingsSync";
@@ -95,6 +96,7 @@ export class FlightPathWebviewProvider
   private readonly settingsSync: WebviewSettingsSync;
   private readonly serializer: WorkflowSerializer;
   private readonly router: WebviewMessageRouter;
+  private readonly historySearchService = new HistorySearchService();
   // IDashboardSink message shapes are single-sourced here. Pure sink methods
   // delegate to it; methods with extra VS Code logic call it then do more work.
   private readonly sink = new PostMessageDashboardSink((msg) =>
@@ -138,6 +140,7 @@ export class FlightPathWebviewProvider
       this.settingsSync,
       this.serializer,
       getOrchestrator,
+      this.historySearchService,
       {
         handleClearWorkflow: () => this.handleClearWorkflow(),
         updateWorkflowName: (name: string) => this.updateWorkflowName(name),

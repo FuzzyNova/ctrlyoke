@@ -31,6 +31,7 @@ import {
   type StepStatus,
   type WorkflowSummary,
   type UndoRecordUpdatedMessage,
+  type HistorySearchResult,
 } from "../types/messages";
 import type {
   OrderedCliHistoryEntry,
@@ -492,6 +493,14 @@ function createMessageHandlers(): MessageHandlerMap {
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
     applyWorkflowPropertiesFromMessage(message);
+    const pendingNavigation =
+      useUiStore.getState().pendingHistorySearchNavigation;
+    if (pendingNavigation) {
+      getVsCodeApi().postMessage({
+        type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
+        runIndex: pendingNavigation.runIndex,
+      });
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -519,6 +528,14 @@ function createMessageHandlers(): MessageHandlerMap {
     persistViewedWorkingFilePath(message.workingFilePath);
     applyWorkflowChange();
     applyWorkflowPropertiesFromMessage(message);
+    const pendingNavigation =
+      useUiStore.getState().pendingHistorySearchNavigation;
+    if (pendingNavigation) {
+      getVsCodeApi().postMessage({
+        type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
+        runIndex: pendingNavigation.runIndex,
+      });
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -1656,6 +1673,11 @@ function createMessageHandlers(): MessageHandlerMap {
         uiStore.setRunTimestamps(runTimestamps ?? []);
         uiStore.setRunStates(runStates ?? []);
         useUiStore.setState({ availableRuns });
+        const pendingNavigation = uiStore.pendingHistorySearchNavigation;
+        if (pendingNavigation?.findQuery) {
+          uiStore.setPendingFindQuery(pendingNavigation.findQuery);
+          uiStore.setPendingHistorySearchNavigation(null);
+        }
         return;
       }
 
@@ -1670,6 +1692,36 @@ function createMessageHandlers(): MessageHandlerMap {
         uiStore.setRunStates(runStates);
       }
     }
+
+    const uiStore = useUiStore.getState();
+    const pendingNavigation = uiStore.pendingHistorySearchNavigation;
+    if (pendingNavigation?.findQuery) {
+      uiStore.setPendingFindQuery(pendingNavigation.findQuery);
+      uiStore.setPendingHistorySearchNavigation(null);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // SEARCH_HISTORY_RESULTS - Global history search matches
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SEARCH_HISTORY_RESULTS] = (message) => {
+    const { results, query } = message as {
+      results: HistorySearchResult[];
+      query: string;
+      hasMore: boolean;
+    };
+    const uiStore = useUiStore.getState();
+    if (uiStore.historySearchQuery !== query) {
+      return;
+    }
+    uiStore.setHistorySearchResults(results, false);
+  };
+
+  // --------------------------------------------------------------------------
+  // OPEN_HISTORY_SEARCH - Open global history search modal
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.OPEN_HISTORY_SEARCH] = () => {
+    useUiStore.getState().openHistorySearch();
   };
 
   // --------------------------------------------------------------------------

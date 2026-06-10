@@ -15,6 +15,7 @@ import { useOutputScrollSeek } from "@hooks/useOutputScrollSeek";
 import { useOutputScrollTarget } from "@hooks/useOutputScrollTarget";
 import { useOutputUndoActions } from "@hooks/useOutputUndoActions";
 import { useOutputVirtualization } from "@hooks/useOutputVirtualization";
+import { useOutputFind } from "@hooks/useOutputFind";
 import { createAnimationFrameResizeObserver } from "@utils/createAnimationFrameResizeObserver";
 import {
   MESSAGE_TYPES,
@@ -24,6 +25,7 @@ import {
   SETTING_SCOPES,
 } from "../../types/messages";
 import { type MinimapStep } from "../output/OutputMinimap";
+import { OutputFindBar } from "../output";
 import { TerminalView } from "../output/TerminalView";
 import { useTerminalStore } from "@store/terminalStore";
 import type { TerminalSession } from "@store/terminalStore";
@@ -121,6 +123,8 @@ const OutputSectionInner: React.FC = () => {
   const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
   const outputFontSize = useUiStore((s) => s.outputFontSize);
   const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
+  const pendingFindQuery = useUiStore((s) => s.pendingFindQuery);
+  const setPendingFindQuery = useUiStore((s) => s.setPendingFindQuery);
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
   const terminalFontSizeScope = useSettingsStore((s) =>
@@ -471,6 +475,43 @@ const OutputSectionInner: React.FC = () => {
   invalidateMeasuredRowImplRef.current = invalidateMeasuredRow;
   invalidateMeasuredRowForUserResizeImplRef.current =
     invalidateMeasuredRowForUserResize;
+
+  const {
+    state: findState,
+    setState: setFindState,
+    open: openFind,
+    close: closeFind,
+    search: runSearch,
+    navigate: navigateFind,
+    handleKeyDown: handleFindKeyDown,
+    rowDecorations,
+    activeMatch,
+  } = useOutputFind(
+    rows,
+    (rowIndex) => rowVirtualizer.scrollToIndex(rowIndex, { align: "center" }),
+    pendingFindQuery
+  );
+
+  useEffect(() => {
+    if (pendingFindQuery !== null) {
+      setPendingFindQuery(null);
+    }
+  }, [pendingFindQuery, setPendingFindQuery]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        if (activeOutputTab !== "output") {
+          setActiveOutputTab(terminalWorkflowId, "output");
+        }
+        openFind();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeOutputTab, openFind, setActiveOutputTab, terminalWorkflowId]);
 
   const {
     applyScrollTarget,
@@ -971,6 +1012,31 @@ const OutputSectionInner: React.FC = () => {
     });
   }, []);
 
+  const handleFindQueryChange = useCallback(
+    (query: string) => {
+      runSearch(query);
+    },
+    [runSearch]
+  );
+
+  const handleFindCaseSensitiveToggle = useCallback(() => {
+    setFindState((previous) => ({
+      ...previous,
+      caseSensitive: !previous.caseSensitive,
+    }));
+  }, [setFindState]);
+
+  const findBar = findState.isOpen ? (
+    <OutputFindBar
+      state={findState}
+      onQueryChange={handleFindQueryChange}
+      onNavigate={navigateFind}
+      onToggleCaseSensitive={handleFindCaseSensitiveToggle}
+      onClose={closeFind}
+      onKeyDown={handleFindKeyDown}
+    />
+  ) : null;
+
   const collapsedHeader = (
     <div
       ref={mergedHeaderRef}
@@ -1067,8 +1133,11 @@ const OutputSectionInner: React.FC = () => {
         </div>
         <OutputPane
           activeOutputTab={activeOutputTab}
+          activeMatch={activeMatch}
           bashExpansionState={bashExpansionState}
           contentHeight={rowLayout.totalSize}
+          findBar={findBar}
+          findDecorations={rowDecorations}
           hasOutput={hasOutput}
           isExecutionActive={isExecutionActive}
           isNavigationTargetVirtualized={isNavigationTargetVirtualized}

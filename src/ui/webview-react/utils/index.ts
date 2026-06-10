@@ -76,6 +76,15 @@ export {
   type DiffLine,
 } from "./outputUtils";
 export { generateMarkdownExport } from "./markdownExport";
+export {
+  findOutputMatches,
+  getOutputRowSearchSegments,
+  highlightText,
+  sliceDecorationMatches,
+  type OutputFindMatch,
+  type OutputRowSearchSegment,
+  type RowFindDecoration,
+} from "./outputFind";
 
 // Tokenizer utilities
 export { countTokens } from "./tokenizer";

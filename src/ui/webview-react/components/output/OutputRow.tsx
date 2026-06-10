@@ -38,6 +38,13 @@ import {
   formatTime,
   getFirstWords,
 } from "@utils/outputUtils";
+import {
+  getOutputRowSearchSegments,
+  highlightText,
+  sliceDecorationMatches,
+  type OutputFindMatch,
+  type RowFindDecoration,
+} from "@utils/outputFind";
 import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
 import type {
   CliHeaderRow,
@@ -63,6 +70,7 @@ export interface OutputRowFileUndoRequest {
 
 interface StructuredEventContentProps {
   row: StructuredEventRow;
+  findDecorations?: RowFindDecoration;
   onFileUndo?: (request: OutputRowFileUndoRequest) => void;
   onDiffCollapsedChange?: (
     rowKey: string,
@@ -90,6 +98,8 @@ interface StructuredEventContentProps {
 
 interface OutputRowProps {
   row: OutputRenderRow;
+  findDecorations?: RowFindDecoration;
+  activeFindMatch?: OutputFindMatch | null;
   isExecutionActive: boolean;
   onBackToLive?: () => void;
   onPromptUndo?: (row: CliHeaderRow) => void;
@@ -147,10 +157,12 @@ const TextOutput: React.FC<{
   text: string;
   raw?: boolean;
   animated?: boolean;
-}> = ({ text, raw = false, animated = false }) => (
-  <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
+  content?: React.ReactNode;
+  className?: string;
+}> = ({ text, raw = false, animated = false, content, className = "" }) => (
+  <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent ${className}`}>
     {raw ? (
-      <div className="whitespace-pre-wrap">{text}</div>
+      <div className="whitespace-pre-wrap">{content ?? text}</div>
     ) : animated ? (
       <MarkdownText animated={true}>{text}</MarkdownText>
     ) : (
@@ -178,7 +190,8 @@ const ThinkingOutput: React.FC<{ text: string; label?: string }> = ({
 
 const ToolResultOutput: React.FC<{
   result: { success: boolean; output?: string; error?: string };
-}> = ({ result }) => {
+  content?: React.ReactNode;
+}> = ({ result, content }) => {
   let contentText: string;
 
   if (!result.success && result.error) {
@@ -195,7 +208,7 @@ const ToolResultOutput: React.FC<{
     >
       <span className="shrink-0">⎿</span>
       <span className="whitespace-pre-wrap break-words min-w-0">
-        {contentText}
+        {content ?? contentText}
       </span>
     </div>
   );
@@ -204,6 +217,7 @@ const ToolResultOutput: React.FC<{
 const StructuredEventContent = memo<StructuredEventContentProps>(
   ({
     row,
+    findDecorations,
     onFileUndo,
     onDiffCollapsedChange,
     onDiffGapExpand,
@@ -211,6 +225,15 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     bashExpansion,
     onBashExpansionChange,
   }) => {
+    const searchSegments = getOutputRowSearchSegments(row);
+    const getFieldMatches = (field: string, occurrence = 0) => {
+      const segment = searchSegments.filter((entry) => entry.field === field)[
+        occurrence
+      ];
+      return segment
+        ? sliceDecorationMatches(findDecorations, segment.start, segment.end)
+        : [];
+    };
     const {
       event,
       rawTextOutput,
@@ -224,7 +247,17 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       case CLI_EVENT_TYPES.TEXT: {
         const data = event.data as TextData;
         if (!data.text) return null;
-        return <TextOutput text={data.text} raw={rawTextOutput} />;
+        return (
+          <TextOutput
+            text={data.text}
+            raw={rawTextOutput}
+            content={
+              rawTextOutput
+                ? highlightText(data.text, getFieldMatches("response"))
+                : undefined
+            }
+          />
+        );
       }
       case CLI_EVENT_TYPES.THINKING: {
         const data = event.data as ThinkingBlock;
@@ -238,6 +271,10 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             command={data.command}
             output={data.output}
             error={data.error}
+            commandContent={highlightText(
+              data.command,
+              getFieldMatches("command")
+            )}
             exitCode={data.exitCode}
             status={data.status}
             expansion={bashExpansion}
@@ -274,6 +311,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         return (
           <FileEditOutput
             path={data.path}
+            pathContent={highlightText(data.path, getFieldMatches("filePath"))}
             status={data.status}
             oldContent={displayOldContent}
             newContent={data.newContent}
@@ -315,6 +353,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         return (
           <FileWriteOutput
             path={data.path}
+            pathContent={highlightText(data.path, getFieldMatches("filePath"))}
             status={data.status}
             content={data.content}
             error={data.error}
@@ -342,6 +381,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         return (
           <FileReadOutput
             path={data.path}
+            pathContent={highlightText(data.path, getFieldMatches("filePath"))}
             status={data.status}
             error={data.error}
           />
@@ -353,6 +393,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
         return (
           <FileDeleteOutput
             path={data.path}
+            pathContent={highlightText(data.path, getFieldMatches("filePath"))}
             success={data.success}
             error={data.error}
             onUndoFile={
@@ -381,6 +422,10 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             server={data.server}
             tool={data.tool}
             result={data.result}
+            labelContent={highlightText(
+              `MCP: ${data.server}.${data.tool}`,
+              getFieldMatches("toolLabel")
+            )}
           />
         );
       }
@@ -392,6 +437,18 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             query={data.query}
             success={data.success}
             error={data.error}
+            queryContent={
+              <>
+                Web search: &ldquo;
+                {highlightText(data.query, getFieldMatches("response"))}
+                &rdquo;
+              </>
+            }
+            errorContent={
+              data.error
+                ? highlightText(data.error, getFieldMatches("error"))
+                : undefined
+            }
           />
         );
       }
@@ -414,7 +471,17 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       case CLI_EVENT_TYPES.TOOL_RESULT: {
         const data = event.data as ToolResultData;
         if (!data.result) return null;
-        return <ToolResultOutput result={data.result} />;
+        return (
+          <ToolResultOutput
+            result={data.result}
+            content={highlightText(
+              !data.result.success && data.result.error
+                ? data.result.error
+                : data.result.output || (data.result.success ? "Success" : "Failed"),
+              getFieldMatches("toolContent")
+            )}
+          />
+        );
       }
       case CLI_EVENT_TYPES.COMPACTION: {
         const data = event.data as CompactionData;
@@ -449,9 +516,18 @@ StructuredEventContent.displayName = "StructuredEventContent";
 const CliHeaderRowView: React.FC<{
   row: CliHeaderRow;
   isExecutionActive: boolean;
+  stepLabelContent?: React.ReactNode;
+  stepNameContent?: React.ReactNode;
   onPromptUndo?: (row: CliHeaderRow) => void;
   onPromptRedo?: (row: CliHeaderRow) => void;
-}> = ({ row, isExecutionActive, onPromptUndo, onPromptRedo }) => {
+}> = ({
+  row,
+  isExecutionActive,
+  stepLabelContent,
+  stepNameContent,
+  onPromptUndo,
+  onPromptRedo,
+}) => {
   const { output } = row;
   const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
   const executionBadge = formatExecutionBadge(row.runIndex, row.attemptIndex);
@@ -483,13 +559,15 @@ const CliHeaderRowView: React.FC<{
           <span className="inline-flex items-center gap-1">
             <span>[</span>
             <i className="codicon codicon-terminal-powershell text-xs" />
-            <span>{row.stepLabel}]</span>
+            <span>{stepLabelContent ?? row.stepLabel}]</span>
           </span>
           {(() => {
             const scriptTitle =
               row.stepName?.trim() || getFirstWords(output.cliCommand, 3);
             return scriptTitle ? (
-              <span className="ml-1 text-foreground">{scriptTitle}</span>
+              <span className="ml-1 text-foreground">
+                {stepNameContent ?? scriptTitle}
+              </span>
             ) : null;
           })()}
           {executionBadge && (
@@ -508,10 +586,12 @@ const CliHeaderRowView: React.FC<{
         <span className="inline-flex items-center gap-1">
           <span>[</span>
           <i className="codicon codicon-comment text-xs" />
-          <span>{row.stepLabel}]</span>
+          <span>{stepLabelContent ?? row.stepLabel}]</span>
         </span>
         {stepDisplayName && (
-          <span className="ml-1 text-foreground">{stepDisplayName}</span>
+          <span className="ml-1 text-foreground">
+            {stepNameContent ?? stepDisplayName}
+          </span>
         )}
         {(harnessShortName || modelLabel) && (
           <span className="text-description-fg font-normal text-[length:var(--fp-output-font-size-xs)]">
@@ -724,20 +804,31 @@ function HistoryBannerRowView({
   );
 }
 
-export const OutputRow = memo<OutputRowProps>(
-  ({
-    row,
-    isExecutionActive,
-    onBackToLive,
-    onPromptUndo,
-    onPromptRedo,
-    onFileUndo,
-    onDiffCollapsedChange,
-    onDiffGapExpand,
-    onToolCallExpansionChange,
-    bashExpansion,
-    onBashExpansionChange,
-  }) => {
+function OutputRowComponent({
+  row,
+  findDecorations,
+  activeFindMatch,
+  isExecutionActive,
+  onBackToLive,
+  onPromptUndo,
+  onPromptRedo,
+  onFileUndo,
+  onDiffCollapsedChange,
+  onDiffGapExpand,
+  onToolCallExpansionChange,
+  bashExpansion,
+  onBashExpansionChange,
+}: OutputRowProps) {
+    const rowSearchSegments = getOutputRowSearchSegments(row);
+    const getFieldMatches = (field: string, occurrence = 0) => {
+      const segment = rowSearchSegments.filter((entry) => entry.field === field)[
+        occurrence
+      ];
+      return segment
+        ? sliceDecorationMatches(findDecorations, segment.start, segment.end)
+        : [];
+    };
+    const isActiveRow = activeFindMatch?.rowKey === row.key;
     let content: React.ReactNode;
     switch (row.rowKind) {
       case "history-banner":
@@ -758,7 +849,7 @@ export const OutputRow = memo<OutputRowProps>(
       case "status":
         content = (
           <StatusMessage
-            message={row.status.message}
+            message={highlightText(row.status.message, getFieldMatches("status"))}
             severity={row.status.severity}
             timestamp={row.status.timestamp}
             timestampMs={row.status.timestampMs}
@@ -770,6 +861,15 @@ export const OutputRow = memo<OutputRowProps>(
           <CliHeaderRowView
             row={row}
             isExecutionActive={isExecutionActive}
+            stepLabelContent={highlightText(
+              row.stepLabel,
+              getFieldMatches("header", 0)
+            )}
+            stepNameContent={
+              row.stepName
+                ? highlightText(row.stepName, getFieldMatches("header", 1))
+                : undefined
+            }
             onPromptUndo={onPromptUndo}
             onPromptRedo={onPromptRedo}
           />
@@ -780,7 +880,7 @@ export const OutputRow = memo<OutputRowProps>(
           <div
             className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-[var(--fg-primary)]`}
           >
-            {row.text}
+            {highlightText(row.text, getFieldMatches("prompt"))}
           </div>
         );
         break;
@@ -789,8 +889,10 @@ export const OutputRow = memo<OutputRowProps>(
           <div
             className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] break-all`}
           >
-            {row.workingDirectory || "workspace"}
-            {">"} {row.command}
+            {highlightText(
+              `${row.workingDirectory || "workspace"}> ${row.command}`,
+              getFieldMatches("command")
+            )}
           </div>
         );
         break;
@@ -802,7 +904,7 @@ export const OutputRow = memo<OutputRowProps>(
             {row.timestamp && (
               <span className="opacity-70">[{row.timestamp}] </span>
             )}
-            Error: {row.errorMessage}
+            Error: {highlightText(row.errorMessage, getFieldMatches("error"))}
           </div>
         );
         break;
@@ -812,6 +914,11 @@ export const OutputRow = memo<OutputRowProps>(
             text={row.text}
             raw={row.rawTextOutput}
             animated={row.animated}
+            content={
+              row.rawTextOutput
+                ? highlightText(row.text, getFieldMatches("response"))
+                : undefined
+            }
           />
         );
         break;
@@ -819,6 +926,7 @@ export const OutputRow = memo<OutputRowProps>(
         content = (
           <StructuredEventContent
             row={row}
+            findDecorations={findDecorations}
             onFileUndo={
               onFileUndo ? (request) => onFileUndo(row, request) : undefined
             }
@@ -852,13 +960,17 @@ export const OutputRow = memo<OutputRowProps>(
       row.rowKind === "stats";
 
     if (!isCliGroupRow) {
-      return <>{content}</>;
+      if (!isActiveRow) {
+        return <>{content}</>;
+      }
+      return <div className="rounded-sm ring-1 ring-focus-border">{content}</div>;
     }
 
     return (
       <div
         className={[
           "bg-[var(--bg-primary)] px-[var(--spacing-md)] overflow-x-hidden",
+          isActiveRow ? "rounded-sm ring-1 ring-focus-border" : "",
           row.groupStart ? "pt-[var(--spacing-sm)]" : "",
           row.groupEnd
             ? "pb-[var(--spacing-sm)] border-b border-[var(--border-color)]"
@@ -870,7 +982,8 @@ export const OutputRow = memo<OutputRowProps>(
         {content}
       </div>
     );
-  }
-);
+}
+
+export const OutputRow = memo(OutputRowComponent);
 
 OutputRow.displayName = "OutputRow";

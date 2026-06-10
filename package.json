@@ -225,6 +225,12 @@
         "category": "FlightPath"
       },
       {
+        "command": "flightpath.searchHistory",
+        "title": "Search FlightPath History",
+        "category": "FlightPath",
+        "icon": "$(search)"
+      },
+      {
         "command": "flightpath.generateCommitMessage",
         "title": "Generate Commit Message with FlightPath",
         "category": "FlightPath",

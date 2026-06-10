@@ -945,6 +945,16 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
     );
 
+  const searchHistoryCommand = vscode.commands.registerCommand(
+    VSCODE_COMMANDS.SEARCH_HISTORY,
+    async () => {
+      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+      webviewProvider.postMessage({
+        type: MESSAGE_TYPES.OPEN_HISTORY_SEARCH,
+      });
+    }
+  );
+
   // Generate Commit Message command (SCM panel button)
   const scmCommitCommand = new ScmCommitCommand();
   const generateCommitMessageCommand = vscode.commands.registerCommand(
@@ -1100,6 +1110,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     addSymbolToPromptEditorCommand,
     addScmResourcesToPromptEditorCommand,
     addTimelineCommitToPromptEditorCommand,
+    searchHistoryCommand,
     initWorkspaceCommand,
     enableServerCommand,
     disableServerCommand,

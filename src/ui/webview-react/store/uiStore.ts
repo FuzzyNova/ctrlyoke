@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
 import type { WorkflowSummary } from "../types/messages";
 import { type FooterPicker } from "../types/messages";
+import type { HistorySearchResult } from "@root/types/WorkflowTimelineTypes";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
 /**
@@ -104,6 +105,19 @@ interface UiState {
   // Output panel state
   selectedOutputStep: number | null; // Which step's output to show (null = current)
   outputScrollTargets: Record<string, OutputScrollTarget>; // transient per-workflow output scroll memory
+  pendingFindQuery: string | null;
+
+  // History search modal state (transient, not persisted)
+  isHistorySearchOpen: boolean;
+  historySearchResults: HistorySearchResult[];
+  historySearchQuery: string;
+  historySearchLoading: boolean;
+  pendingHistorySearchNavigation: {
+    workflowId: string;
+    workflowFilePath: string;
+    runIndex: number;
+    findQuery: string;
+  } | null;
 
   // Run history display state
   isViewingHistory: boolean; // true when showing a historical run (not live)
@@ -231,6 +245,22 @@ interface UiActions {
   setOutputScrollTarget: (
     workflowId: string,
     target: OutputScrollTarget
+  ) => void;
+  setPendingFindQuery: (query: string | null) => void;
+  openHistorySearch: () => void;
+  closeHistorySearch: () => void;
+  setHistorySearchQuery: (query: string) => void;
+  setHistorySearchResults: (
+    results: HistorySearchResult[],
+    loading: boolean
+  ) => void;
+  setPendingHistorySearchNavigation: (
+    nav: {
+      workflowId: string;
+      workflowFilePath: string;
+      runIndex: number;
+      findQuery: string;
+    } | null
   ) => void;
 
   // Save workflow dialog
@@ -369,6 +399,12 @@ const initialState: UiState = {
   settingsCollapsed: false,
   selectedOutputStep: null,
   outputScrollTargets: {},
+  pendingFindQuery: null,
+  isHistorySearchOpen: false,
+  historySearchResults: [],
+  historySearchQuery: "",
+  historySearchLoading: false,
+  pendingHistorySearchNavigation: null,
   newWorkflowModalOpen: false,
   templates: [],
   currentTemplate: null,
@@ -561,6 +597,21 @@ export const useUiStore = create<UiState & UiActions>()(
             },
           };
         }),
+
+      setPendingFindQuery: (query) => set({ pendingFindQuery: query }),
+
+      openHistorySearch: () => set({ isHistorySearchOpen: true }),
+
+      closeHistorySearch: () =>
+        set({ isHistorySearchOpen: false, historySearchLoading: false }),
+
+      setHistorySearchQuery: (query) => set({ historySearchQuery: query }),
+
+      setHistorySearchResults: (results, loading) =>
+        set({ historySearchResults: results, historySearchLoading: loading }),
+
+      setPendingHistorySearchNavigation: (nav) =>
+        set({ pendingHistorySearchNavigation: nav }),
 
       // ============================================================================
       // SAVE WORKFLOW DIALOG
@@ -845,6 +896,11 @@ export const useUiStore = create<UiState & UiActions>()(
           newWorkflowModalOpen: false,
           templates: [],
           currentTemplate: null,
+          isHistorySearchOpen: false,
+          historySearchResults: [],
+          historySearchQuery: "",
+          historySearchLoading: false,
+          pendingHistorySearchNavigation: null,
           recentWorkflows: [],
           recentWorkflowsDropdownOpen: false,
           isLoading: false,

@@ -1,4 +1,4 @@
-import { useState, useId, memo } from "react";
+import React, { useState, useId, memo } from "react";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
@@ -25,6 +25,9 @@ interface BashOutputProps {
   command: string;
   output?: string;
   error?: string;
+  commandContent?: React.ReactNode;
+  outputContent?: React.ReactNode;
+  errorContent?: React.ReactNode;
   exitCode?: number;
   status?: FileOperationStatus;
   maxLines?: number;
@@ -68,6 +71,9 @@ export const BashOutput = memo<BashOutputProps>(
     command,
     output,
     error,
+    commandContent,
+    outputContent,
+    errorContent,
     exitCode,
     status,
     maxLines = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
@@ -120,7 +126,8 @@ export const BashOutput = memo<BashOutputProps>(
     const renderExpandableContent = (
       content: string,
       type: "output" | "error",
-      isExpanded: boolean
+      isExpanded: boolean,
+      contentNode?: React.ReactNode
     ) => {
       if (!content) return null;
 
@@ -140,7 +147,7 @@ export const BashOutput = memo<BashOutputProps>(
             className="min-w-0 flex-1 whitespace-pre-wrap break-words"
             id={`${containerId}-${type}`}
           >
-            {preview.visibleText}
+            {contentNode ?? preview.visibleText}
             {canToggle && (
               <button
                 type="button"
@@ -204,7 +211,7 @@ export const BashOutput = memo<BashOutputProps>(
                   : "text-description-fg italic"
               }
             >
-              {displayCommand}
+              {commandContent ?? displayCommand}
             </span>
             {renderStatusBadge()}
           </span>
@@ -216,12 +223,14 @@ export const BashOutput = memo<BashOutputProps>(
             {renderExpandableContent(
               renderedOutput,
               "output",
-              resolvedExpansion.outputExpanded
+              resolvedExpansion.outputExpanded,
+              outputContent
             )}
             {renderExpandableContent(
               renderedError,
               "error",
-              resolvedExpansion.errorExpanded
+              resolvedExpansion.errorExpanded,
+              errorContent
             )}
           </>
         )}

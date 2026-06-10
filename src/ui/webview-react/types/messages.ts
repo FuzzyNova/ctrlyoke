@@ -157,3 +157,4 @@ export type {
   ToolPermissionMode,
 } from "@root/types/FlightPathTypes";
 export { workflowDisplayStep } from "@root/types/FlightPathTypes";
+export type { HistorySearchResult } from "@root/types/WorkflowTimelineTypes";

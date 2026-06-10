@@ -16,6 +16,10 @@ import type {
   OutputRenderRow,
   StructuredEventRow,
 } from "@utils/outputRows";
+import type {
+  OutputFindMatch,
+  RowFindDecoration,
+} from "@utils/outputFind";
 import type { ToolCallExpansionSection } from "@utils/toolCallLayout";
 import {
   OutputScrollSeekPlaceholder,
@@ -32,6 +36,8 @@ interface OutputPaneProps {
   isOutputCollapsed: boolean;
   isOutputScrollSeeking: boolean;
   isOutputVirtualized: boolean;
+  findBar?: React.ReactNode;
+  findDecorations?: Map<string, RowFindDecoration>;
   minimapSteps: MinimapStep[];
   nonVirtualRows: OutputRenderRow[];
   nonVirtualSpacerHeight: number;
@@ -84,6 +90,7 @@ interface OutputPaneProps {
     expanded: boolean
   ) => void;
   onWheel: React.WheelEventHandler<HTMLDivElement>;
+  activeMatch?: OutputFindMatch | null;
 }
 
 function renderOutputRow(
@@ -91,6 +98,7 @@ function renderOutputRow(
   props: Pick<
     OutputPaneProps,
     | "bashExpansionState"
+    | "findDecorations"
     | "isExecutionActive"
     | "onBackToLive"
     | "onBashExpansionChange"
@@ -100,11 +108,14 @@ function renderOutputRow(
     | "onPromptRedo"
     | "onPromptUndo"
     | "onToolCallExpansionChange"
+    | "activeMatch"
   >
 ): React.ReactNode {
   return (
     <OutputRow
       row={row}
+      findDecorations={props.findDecorations?.get(row.key)}
+      activeFindMatch={props.activeMatch?.rowKey === row.key ? props.activeMatch : null}
       isExecutionActive={props.isExecutionActive}
       onBackToLive={props.onBackToLive}
       onPromptUndo={props.onPromptUndo}
@@ -131,6 +142,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
     isOutputCollapsed,
     isOutputScrollSeeking,
     isOutputVirtualized,
+    findBar,
     minimapSteps,
     nonVirtualRows,
     nonVirtualSpacerHeight,
@@ -160,6 +172,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
         !isOutputCollapsed && activeOutputTab === "output" ? "flex" : "hidden"
       } relative flex-row min-h-0 flex-1`}
     >
+      {findBar}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={outputRef}
