@@ -46,7 +46,7 @@ function buildToolCallRow(
     rowKind: "structured-event",
     event: {
       type: CLI_EVENT_TYPES.TOOL_CALL,
-      data: { name, result },
+      data: { name, parameters: {}, result },
     },
     eventIndex: 0,
     rawTextOutput: false,
