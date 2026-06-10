@@ -71,6 +71,8 @@ export interface OutputRowFileUndoRequest {
 interface StructuredEventContentProps {
   row: StructuredEventRow;
   findDecorations?: RowFindDecoration;
+  findQuery?: string;
+  findCaseSensitive?: boolean;
   onFileUndo?: (request: OutputRowFileUndoRequest) => void;
   onDiffCollapsedChange?: (
     rowKey: string,
@@ -99,6 +101,8 @@ interface StructuredEventContentProps {
 interface OutputRowProps {
   row: OutputRenderRow;
   findDecorations?: RowFindDecoration;
+  findQuery?: string;
+  findCaseSensitive?: boolean;
   activeFindMatch?: OutputFindMatch | null;
   isExecutionActive: boolean;
   onBackToLive?: () => void;
@@ -159,21 +163,47 @@ const TextOutput: React.FC<{
   animated?: boolean;
   content?: React.ReactNode;
   className?: string;
-}> = ({ text, raw = false, animated = false, content, className = "" }) => (
+  findQuery?: string;
+  findCaseSensitive?: boolean;
+  highlightActiveIndex?: number;
+}> = ({
+  text,
+  raw = false,
+  animated = false,
+  content,
+  className = "",
+  findQuery,
+  findCaseSensitive,
+  highlightActiveIndex,
+}) => (
   <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent ${className}`}>
     {raw ? (
       <div className="whitespace-pre-wrap">{content ?? text}</div>
-    ) : animated ? (
-      <MarkdownText animated={true}>{text}</MarkdownText>
     ) : (
-      <MarkdownText>{text}</MarkdownText>
+      <MarkdownText
+        animated={animated}
+        highlightQuery={findQuery}
+        highlightCaseSensitive={findCaseSensitive}
+        highlightActiveIndex={highlightActiveIndex}
+      >
+        {text}
+      </MarkdownText>
     )}
   </div>
 );
 
-const ThinkingOutput: React.FC<{ text: string; label?: string }> = ({
+const ThinkingOutput: React.FC<{
+  text: string;
+  label?: string;
+  findQuery?: string;
+  findCaseSensitive?: boolean;
+  highlightActiveIndex?: number;
+}> = ({
   text,
   label = "Thinking",
+  findQuery,
+  findCaseSensitive,
+  highlightActiveIndex,
 }) => {
   const displayLabel = label && label !== "Thinking" ? label : "Thinking";
   return (
@@ -182,7 +212,13 @@ const ThinkingOutput: React.FC<{ text: string; label?: string }> = ({
         ● {displayLabel}
       </div>
       <div className="text-description-fg pl-3 border-l border-panel-border">
-        <MarkdownText>{text}</MarkdownText>
+        <MarkdownText
+          highlightQuery={findQuery}
+          highlightCaseSensitive={findCaseSensitive}
+          highlightActiveIndex={highlightActiveIndex}
+        >
+          {text}
+        </MarkdownText>
       </div>
     </div>
   );
@@ -218,6 +254,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
   ({
     row,
     findDecorations,
+    findQuery,
+    findCaseSensitive,
     onFileUndo,
     onDiffCollapsedChange,
     onDiffGapExpand,
@@ -233,6 +271,11 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       return segment
         ? sliceDecorationMatches(findDecorations, segment.start, segment.end)
         : [];
+    };
+    const getActiveMatchIndex = (field: string, occurrence = 0) => {
+      const matches = getFieldMatches(field, occurrence);
+      const activeIndex = matches.findIndex((match) => match.active);
+      return activeIndex;
     };
     const {
       event,
@@ -256,13 +299,24 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
                 ? highlightText(data.text, getFieldMatches("response"))
                 : undefined
             }
+            findQuery={rawTextOutput ? undefined : findQuery}
+            findCaseSensitive={findCaseSensitive}
+            highlightActiveIndex={getActiveMatchIndex("response")}
           />
         );
       }
       case CLI_EVENT_TYPES.THINKING: {
         const data = event.data as ThinkingBlock;
         if (!data.text) return null;
-        return <ThinkingOutput text={data.text} label={data.label} />;
+        return (
+          <ThinkingOutput
+            text={data.text}
+            label={data.label}
+            findQuery={findQuery}
+            findCaseSensitive={findCaseSensitive}
+            highlightActiveIndex={getActiveMatchIndex("response")}
+          />
+        );
       }
       case CLI_EVENT_TYPES.BASH_COMMAND: {
         const data = event.data as BashCommandData;
@@ -807,6 +861,8 @@ function HistoryBannerRowView({
 function OutputRowComponent({
   row,
   findDecorations,
+  findQuery,
+  findCaseSensitive,
   activeFindMatch,
   isExecutionActive,
   onBackToLive,
@@ -908,7 +964,8 @@ function OutputRowComponent({
           </div>
         );
         break;
-      case "plain-response":
+      case "plain-response": {
+        const responseMatches = getFieldMatches("response");
         content = (
           <TextOutput
             text={row.text}
@@ -916,17 +973,25 @@ function OutputRowComponent({
             animated={row.animated}
             content={
               row.rawTextOutput
-                ? highlightText(row.text, getFieldMatches("response"))
+                ? highlightText(row.text, responseMatches)
                 : undefined
             }
+            findQuery={row.rawTextOutput ? undefined : findQuery}
+            findCaseSensitive={findCaseSensitive}
+            highlightActiveIndex={responseMatches.findIndex(
+              (match) => match.active
+            )}
           />
         );
         break;
+      }
       case "structured-event":
         content = (
           <StructuredEventContent
             row={row}
             findDecorations={findDecorations}
+            findQuery={findQuery}
+            findCaseSensitive={findCaseSensitive}
             onFileUndo={
               onFileUndo ? (request) => onFileUndo(row, request) : undefined
             }

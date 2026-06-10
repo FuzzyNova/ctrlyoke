@@ -8,6 +8,7 @@ import type { WorkspaceSnapshot } from "@root/types/OutputHistoryTypes";
 
 vi.mock("@utils/syntaxHighlighting", () => ({
   injectSyntaxHighlightStyles: vi.fn(),
+  injectFindHighlightStyles: vi.fn(),
   getLanguageFromPath: vi.fn(() => "typescript"),
   normalizeSyntaxLanguage: vi.fn((lang) => lang),
   renderHighlightedCode: vi.fn((code: string) => code),

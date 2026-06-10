@@ -38,6 +38,8 @@ interface OutputPaneProps {
   isOutputVirtualized: boolean;
   findBar?: React.ReactNode;
   findDecorations?: Map<string, RowFindDecoration>;
+  findQuery?: string;
+  findCaseSensitive?: boolean;
   minimapSteps: MinimapStep[];
   nonVirtualRows: OutputRenderRow[];
   nonVirtualSpacerHeight: number;
@@ -99,6 +101,8 @@ function renderOutputRow(
     OutputPaneProps,
     | "bashExpansionState"
     | "findDecorations"
+    | "findQuery"
+    | "findCaseSensitive"
     | "isExecutionActive"
     | "onBackToLive"
     | "onBashExpansionChange"
@@ -115,6 +119,8 @@ function renderOutputRow(
     <OutputRow
       row={row}
       findDecorations={props.findDecorations?.get(row.key)}
+      findQuery={props.findQuery}
+      findCaseSensitive={props.findCaseSensitive}
       activeFindMatch={props.activeMatch?.rowKey === row.key ? props.activeMatch : null}
       isExecutionActive={props.isExecutionActive}
       onBackToLive={props.onBackToLive}

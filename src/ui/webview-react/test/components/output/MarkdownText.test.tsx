@@ -100,4 +100,69 @@ describe("MarkdownText", () => {
     // Streamdown wraps in a div — look for the markdown-text class anywhere
     expect(container.querySelector(".markdown-text")).toBeTruthy();
   });
+
+  it("highlights all occurrences of the find query", () => {
+    const { container } = render(
+      <MarkdownText highlightQuery="alpha">
+        alpha beta alpha gamma
+      </MarkdownText>
+    );
+
+    const marks = container.querySelectorAll("mark");
+    expect(marks).toHaveLength(2);
+    expect(marks[0].textContent).toBe("alpha");
+    expect(marks[1].textContent).toBe("alpha");
+  });
+
+  it("marks the active match with data-find-active", () => {
+    const { container } = render(
+      <MarkdownText highlightQuery="alpha" highlightActiveIndex={1}>
+        alpha beta alpha gamma
+      </MarkdownText>
+    );
+
+    const marks = container.querySelectorAll("mark");
+    expect(marks[0]).not.toHaveAttribute("data-find-active");
+    expect(marks[1]).toHaveAttribute("data-find-active", "true");
+  });
+
+  it("highlights matches inside bold text without breaking the markup", async () => {
+    const { container } = render(
+      <MarkdownText highlightQuery="bold">**bold text**</MarkdownText>
+    );
+
+    const mark = container.querySelector("mark");
+    expect(mark?.textContent).toBe("bold");
+    const strong = await screen.findByText((_, element) => {
+      return (
+        element?.tagName === "STRONG" &&
+        element.textContent === "bold text"
+      );
+    });
+    expect(strong).toBeInTheDocument();
+  });
+
+  it("does not highlight inside fenced code blocks", () => {
+    const { container } = render(
+      <MarkdownText highlightQuery="value">
+        {"```ts\nconst value = 1;\n```"}
+      </MarkdownText>
+    );
+
+    expect(container.querySelector("code mark")).toBeNull();
+  });
+
+  it("is case-insensitive by default and case-sensitive when requested", () => {
+    const insensitive = render(
+      <MarkdownText highlightQuery="Alpha">alpha ALPHA Alpha</MarkdownText>
+    );
+    expect(insensitive.container.querySelectorAll("mark")).toHaveLength(3);
+
+    const sensitive = render(
+      <MarkdownText highlightQuery="Alpha" highlightCaseSensitive>
+        alpha ALPHA Alpha
+      </MarkdownText>
+    );
+    expect(sensitive.container.querySelectorAll("mark")).toHaveLength(1);
+  });
 });

@@ -1119,15 +1119,18 @@ const OutputSectionInner: React.FC = () => {
         />
       )}
 
-      {/* Output Content: keep both panes mounted so tab switches preserve DOM-heavy output. */}
-      <>
+      {/* Output Content: keep both panes mounted so tab switches preserve DOM-heavy output.
+          Both panes are absolutely positioned to fill this wrapper so the inactive pane
+          stays at its real size (visibility:hidden) instead of collapsing to 0×0 (display:none),
+          which would break xterm's column fit and force a manual resize on tab switch. */}
+      <div className="relative flex-row min-h-0 flex-1 flex">
         <div
           aria-hidden={activeOutputTab !== "terminal" || outputCollapsed}
-          className={`${
+          className={`absolute inset-0 flex flex-row min-h-0 ${
             !outputCollapsed && activeOutputTab === "terminal"
-              ? "flex"
-              : "hidden"
-          } flex-row min-h-0 flex-1`}
+              ? ""
+              : "invisible pointer-events-none"
+          }`}
         >
           <TerminalView workflowId={terminalWorkflowId} />
         </div>
@@ -1138,6 +1141,8 @@ const OutputSectionInner: React.FC = () => {
           contentHeight={rowLayout.totalSize}
           findBar={findBar}
           findDecorations={rowDecorations}
+          findQuery={findState.isOpen ? findState.query : undefined}
+          findCaseSensitive={findState.caseSensitive}
           hasOutput={hasOutput}
           isExecutionActive={isExecutionActive}
           isNavigationTargetVirtualized={isNavigationTargetVirtualized}
@@ -1173,7 +1178,7 @@ const OutputSectionInner: React.FC = () => {
           onTouchStart={handleOutputTouchStart}
           onWheel={handleWheel}
         />
-      </>
+      </div>
 
       <OutputUndoDialogs
         minimapDialogState={minimapDialogState}

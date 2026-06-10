@@ -6,12 +6,14 @@ import { toString as mdastToString } from "mdast-util-to-string";
 import type { Root } from "mdast";
 import { openFile } from "@hooks/useMessageHandler";
 import {
+  injectFindHighlightStyles,
   injectSyntaxHighlightStyles,
   renderHighlightedCode,
 } from "@utils/syntaxHighlighting";
 
-// Ensure the shared VS Code-themed syntax styles are in <head>.
+// Ensure the shared VS Code-themed syntax/find-highlight styles are in <head>.
 injectSyntaxHighlightStyles();
+injectFindHighlightStyles();
 
 // ── File-link detection ────────────────────────────────────────────────────
 
@@ -60,6 +62,11 @@ const FILE_PATH_SOURCE =
 /** Escapes HTML special characters for use in raw HTML node text content. */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Escapes regex special characters so a search query can be used as a literal pattern. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function getNodeText(node: React.ReactNode): string {
@@ -216,6 +223,57 @@ function remarkLocalLinks() {
   };
 }
 
+/**
+ * Remark plugin that wraps occurrences of `query` in MDAST text nodes with
+ * raw `<mark>` HTML nodes, mirroring the "find in output" highlight applied
+ * to plain-text rows via `highlightText()`. Operating on parsed text nodes
+ * (rather than the raw markdown source) avoids fragile offset math against
+ * Streamdown's incomplete-markdown healing.
+ *
+ * `activeIndex` marks the currently-focused match (0-based, across the whole
+ * tree) with `data-find-active="true"` so it can be styled distinctly via
+ * `injectFindHighlightStyles()`.
+ */
+function remarkHighlightMatches(
+  query: string,
+  caseSensitive: boolean,
+  activeIndex: number
+) {
+  // Returns a unified attacher (called with no args by `.use()`), which in
+  // turn returns the actual tree transformer.
+  const attacher = () =>
+    (tree: Root): undefined => {
+      if (!query) return;
+
+      let occurrence = -1;
+      findAndReplace(tree, [
+        [
+          new RegExp(escapeRegExp(query), caseSensitive ? "g" : "gi"),
+          (match: string) => {
+            occurrence += 1;
+            const activeAttr =
+              occurrence === activeIndex ? ' data-find-active="true"' : "";
+            return {
+              type: "html",
+              value: `<mark${activeAttr}>${escapeHtml(match)}</mark>`,
+            };
+          },
+        ],
+      ]);
+    };
+
+  // Streamdown caches its unified processor keyed on each plugin function's
+  // `.name`. Since this attacher is recreated on every call with different
+  // captured `query`/`caseSensitive`/`activeIndex`, give it a name that
+  // encodes those params so different highlight states get distinct cache
+  // entries instead of reusing a stale processor.
+  Object.defineProperty(attacher, "name", {
+    value: `remarkHighlightMatches(${JSON.stringify(query)},${caseSensitive},${activeIndex})`,
+  });
+
+  return attacher;
+}
+
 // Module-level stable array so Streamdown's memo doesn't see a new reference.
 // Spread streamdown's defaults (remarkGfm) first, then add our file-link plugins.
 const REMARK_PLUGINS = [
@@ -224,9 +282,13 @@ const REMARK_PLUGINS = [
   remarkFileLinks,
 ];
 
-// Extends rehype-sanitize's allowlist so it keeps <file-ref path="…"> nodes
-// produced by remarkFileLinks. Only "path" is needed as an allowed attribute.
-const FILE_REF_ALLOWED_TAGS = { "file-ref": ["path"] };
+// Extends rehype-sanitize's allowlist so it keeps <file-ref path="…"> and
+// <mark data-find-active="…"> nodes produced by remarkFileLinks /
+// remarkHighlightMatches.
+const FILE_REF_ALLOWED_TAGS = {
+  "file-ref": ["path"],
+  mark: ["dataFindActive"],
+};
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -237,6 +299,12 @@ interface MarkdownTextProps {
   animated?: boolean;
   /** Optional additional CSS class on the container */
   className?: string;
+  /** "Find in output" query to highlight within the rendered markdown */
+  highlightQuery?: string;
+  /** Whether `highlightQuery` matching is case-sensitive */
+  highlightCaseSensitive?: boolean;
+  /** 0-based index (across the whole text) of the currently-active match */
+  highlightActiveIndex?: number;
 }
 
 /**
@@ -256,6 +324,9 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   children,
   animated = false,
   className,
+  highlightQuery,
+  highlightCaseSensitive = false,
+  highlightActiveIndex = -1,
 }) => {
   // Memoize components to avoid re-creating on every streaming chunk
   const components = useMemo(
@@ -439,12 +510,29 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
     []
   );
 
+  // Only append the highlight plugin when there's an active query, so the
+  // common case keeps Streamdown's stable REMARK_PLUGINS reference.
+  const remarkPlugins = useMemo(
+    () =>
+      highlightQuery
+        ? [
+            ...REMARK_PLUGINS,
+            remarkHighlightMatches(
+              highlightQuery,
+              highlightCaseSensitive,
+              highlightActiveIndex
+            ),
+          ]
+        : REMARK_PLUGINS,
+    [highlightQuery, highlightCaseSensitive, highlightActiveIndex]
+  );
+
   return (
     <Streamdown
       animated={animated}
       className={`markdown-text ${className ?? ""}`}
       components={components}
-      remarkPlugins={REMARK_PLUGINS}
+      remarkPlugins={remarkPlugins}
       allowedTags={FILE_REF_ALLOWED_TAGS}
       // No plugins prop: omitting avoids Shiki WASM CSP issues in VS Code webview
     >

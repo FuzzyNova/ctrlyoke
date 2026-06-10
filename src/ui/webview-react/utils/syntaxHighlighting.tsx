@@ -288,6 +288,20 @@ const SYNTAX_TOKEN_STYLES = `
 }
 `;
 
+const FIND_HIGHLIGHT_STYLES = `
+.markdown-text mark {
+  background-color: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33));
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.markdown-text mark[data-find-active="true"] {
+  background-color: var(--vscode-editor-findMatchBackground, rgba(246, 185, 77, 0.7));
+  outline: 1px solid var(--vscode-editor-findMatchBorder, var(--vscode-focusBorder, #007fd4));
+}
+`;
+
 function injectStyle(id: string, cssText: string): void {
   if (typeof document === "undefined") return;
   if (document.getElementById(id)) return;
@@ -299,6 +313,10 @@ function injectStyle(id: string, cssText: string): void {
 
 export function injectSyntaxHighlightStyles(): void {
   injectStyle("fp-syntax-theme", SYNTAX_TOKEN_STYLES);
+}
+
+export function injectFindHighlightStyles(): void {
+  injectStyle("fp-find-highlight", FIND_HIGHLIGHT_STYLES);
 }
 
 export function normalizeSyntaxLanguage(
