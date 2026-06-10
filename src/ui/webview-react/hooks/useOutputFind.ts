@@ -35,7 +35,6 @@ export function useOutputFind(
   externalQuery?: string | null
 ) {
   const [state, setState] = useState<OutputFindState>(INITIAL_STATE);
-  const matchesRef = useRef<OutputFindMatch[]>([]);
   const stateRef = useRef<OutputFindState>(INITIAL_STATE);
 
   useEffect(() => {
@@ -55,19 +54,52 @@ export function useOutputFind(
     [onRevealRow]
   );
 
+  const matches = useMemo(
+    () => findOutputMatches(rows, state.query, state.caseSensitive),
+    [rows, state.query, state.caseSensitive]
+  );
+
+  // Keep matchCount/currentMatch in sync as rows/query/caseSensitive change,
+  // preserving the current position when it's still valid. This must never
+  // reveal a row - jumping the viewport only happens in response to an
+  // explicit search/open/navigate so the user can scroll freely otherwise.
+  useEffect(() => {
+    setState((previous) => {
+      const nextMatchCount = matches.length;
+      let nextCurrentMatch = previous.currentMatch;
+      if (nextMatchCount === 0) {
+        nextCurrentMatch = 0;
+      } else if (nextCurrentMatch < 1 || nextCurrentMatch > nextMatchCount) {
+        nextCurrentMatch = 1;
+      }
+
+      if (
+        previous.matchCount === nextMatchCount &&
+        previous.currentMatch === nextCurrentMatch
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        matchCount: nextMatchCount,
+        currentMatch: nextCurrentMatch,
+      };
+    });
+  }, [matches]);
+
   const search = useCallback(
     (query: string, caseSensitive = stateRef.current.caseSensitive) => {
-      const matches = findOutputMatches(rows, query, caseSensitive);
-      matchesRef.current = matches;
+      const nextMatches = findOutputMatches(rows, query, caseSensitive);
       setState((previous) => ({
         ...previous,
         query,
-        matchCount: matches.length,
-        currentMatch: matches.length > 0 ? 1 : 0,
+        matchCount: nextMatches.length,
+        currentMatch: nextMatches.length > 0 ? 1 : 0,
         caseSensitive,
       }));
-      revealMatch(matches[0]);
-      return matches;
+      revealMatch(nextMatches[0]);
+      return nextMatches;
     },
     [revealMatch, rows]
   );
@@ -88,30 +120,27 @@ export function useOutputFind(
   );
 
   const close = useCallback(() => {
-    matchesRef.current = [];
     setState(INITIAL_STATE);
   }, []);
 
   const navigate = useCallback(
     (direction: 1 | -1) => {
-      const matches = matchesRef.current;
       if (matches.length === 0) {
         return;
       }
 
-      setState((previous) => {
-        const currentZeroBased =
-          previous.currentMatch > 0 ? previous.currentMatch - 1 : 0;
-        const nextIndex =
-          (currentZeroBased + direction + matches.length) % matches.length;
-        revealMatch(matches[nextIndex]);
-        return {
-          ...previous,
-          currentMatch: nextIndex + 1,
-        };
-      });
+      const current = stateRef.current.currentMatch;
+      const currentZeroBased = current > 0 ? current - 1 : 0;
+      const nextIndex =
+        (currentZeroBased + direction + matches.length) % matches.length;
+
+      revealMatch(matches[nextIndex]);
+      setState((previous) => ({
+        ...previous,
+        currentMatch: nextIndex + 1,
+      }));
     },
-    [revealMatch]
+    [matches, revealMatch]
   );
 
   const handleKeyDown = useCallback(
@@ -138,7 +167,7 @@ export function useOutputFind(
 
   const rowDecorations = useMemo(() => {
     const decorations = new Map<string, RowFindDecoration>();
-    matchesRef.current.forEach((match, index) => {
+    matches.forEach((match, index) => {
       const decoration = decorations.get(match.rowKey) ?? { matches: [] };
       decoration.matches.push({
         start: match.start,
@@ -148,49 +177,10 @@ export function useOutputFind(
       decorations.set(match.rowKey, decoration);
     });
     return decorations;
-  }, [state.currentMatch, state.matchCount]);
+  }, [matches, state.currentMatch]);
 
   const activeMatch =
-    state.currentMatch > 0
-      ? matchesRef.current[state.currentMatch - 1] ?? null
-      : null;
-
-  useEffect(() => {
-    if (state.isOpen && state.query) {
-      const matches = findOutputMatches(rows, state.query, state.caseSensitive);
-      matchesRef.current = matches;
-      const nextMatchCount = matches.length;
-      const nextCurrentMatch = matches.length > 0 ? 1 : 0;
-      setState((previous) => {
-        if (
-          previous.matchCount === nextMatchCount &&
-          previous.currentMatch === nextCurrentMatch
-        ) {
-          return previous;
-        }
-        return {
-          ...previous,
-          matchCount: nextMatchCount,
-          currentMatch: nextCurrentMatch,
-        };
-      });
-      revealMatch(matches[0]);
-      return;
-    }
-
-    if (!state.query) {
-      matchesRef.current = [];
-      setState((previous) =>
-        previous.matchCount === 0 && previous.currentMatch === 0
-          ? previous
-          : {
-              ...previous,
-              matchCount: 0,
-              currentMatch: 0,
-            }
-      );
-    }
-  }, [revealMatch, rows, state.caseSensitive, state.isOpen, state.query]);
+    state.currentMatch > 0 ? matches[state.currentMatch - 1] ?? null : null;
 
   useEffect(() => {
     if (externalQuery && externalQuery.trim()) {
