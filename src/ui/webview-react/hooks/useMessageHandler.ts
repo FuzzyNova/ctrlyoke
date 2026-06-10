@@ -902,8 +902,10 @@ function createMessageHandlers(): MessageHandlerMap {
       useWorkflowStore.temporal.getState().resume();
     }
 
-    // Clear live context window when a step reaches a terminal status so the
-    // context bar falls back to the completed step's tokens from latestOutput.
+    // Do not clear live context on terminal status alone. Step handoff can
+    // advance currentStep before the durable CLI token payload arrives, and
+    // clearing here makes the just-finished row lose its context bar. Live
+    // telemetry is cleared once CLI output persists token metadata.
     const terminalStatuses = [
       STEP_STATUS.COMPLETED,
       STEP_STATUS.FAILED,
@@ -911,7 +913,7 @@ function createMessageHandlers(): MessageHandlerMap {
     ];
     const resolvedStatus = status?.state || status;
     if (terminalStatuses.includes(resolvedStatus)) {
-      workflowStore.clearLiveContextWindow(stepIndex);
+      return;
     }
   };
 
@@ -1105,6 +1107,10 @@ function createMessageHandlers(): MessageHandlerMap {
       });
       useWorkflowStore.temporal.getState().resume();
     }
+
+    if (message.output.tokens?.contextWindowSize) {
+      store.clearLiveContextWindow(message.stepIndex);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -1216,6 +1222,10 @@ function createMessageHandlers(): MessageHandlerMap {
         },
       });
       useWorkflowStore.temporal.getState().resume();
+    }
+
+    if (message.output.tokens?.contextWindowSize) {
+      store.clearLiveContextWindow(message.stepIndex);
     }
   };
 
