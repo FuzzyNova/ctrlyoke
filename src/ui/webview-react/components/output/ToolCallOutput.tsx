@@ -221,7 +221,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           {sectionPlan.canToggle && (
             <button
               type="button"
-              className="text-bash-expand-link no-underline text-sm ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+              className="text-bash-expand-link no-underline text-[length:var(--fp-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
               onClick={(event) => {
                 event.preventDefault();
                 updateExpansion(type, !sectionPlan.isExpanded);
@@ -253,7 +253,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
         {resolvedRenderPlan.params.canToggle && (
           <button
             type="button"
-            className="text-bash-expand-link text-sm cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
+            className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
             onClick={(event) => {
               event.preventDefault();
               updateExpansion("params", !resolvedRenderPlan.params.isExpanded);

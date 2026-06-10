@@ -159,7 +159,7 @@ export const BashOutput = memo<BashOutputProps>(
             {canToggle && (
               <button
                 type="button"
-                className="text-bash-expand-link no-underline text-sm ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
+                className="text-bash-expand-link no-underline text-[length:var(--fp-output-font-size-sm)] ml-1 cursor-pointer hover:underline bg-transparent border-0 p-0 font-inherit"
                 onClick={(event) => {
                   event.preventDefault();
                   updateExpansion(type, !isExpanded);
