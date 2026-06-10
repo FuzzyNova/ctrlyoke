@@ -14,8 +14,11 @@ import {
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
+import { ApplyPatchParser } from "../shared/ApplyPatchParser";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { BaseToolBuilder } from "../shared/BaseToolBuilder";
+
+type CopilotToolArgs = Record<string, unknown> | string;
 
 /**
  * Builds CliEvents from Copilot CLI tool call payloads.
@@ -47,18 +50,54 @@ export class CopilotToolBuilder {
    * @param timestamp - Event timestamp in milliseconds
    * @returns A single CliEvent to push onto the event stream
    */
+  static buildInitiatedEvents(
+    toolName: string,
+    args: CopilotToolArgs,
+    toolCallId: string | undefined,
+    timestamp: number
+  ): CliEvent[] {
+    if (toolName === "apply_patch" && typeof args === "string") {
+      const fileEdits = ApplyPatchParser.parseFileEdits(args);
+      if (fileEdits.length > 0) {
+        return fileEdits.map((fileEdit) => ({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp,
+          data: {
+            path: fileEdit.path,
+            structuredPatch: fileEdit.structuredPatch,
+            status: OPERATION_STATUS.INITIATED,
+          } as FileEditData,
+        }));
+      }
+
+      return [
+        {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp,
+          data: {
+            path: ApplyPatchParser.extractFirstPath(args) ?? "unknown",
+            structuredPatch: ApplyPatchParser.parse(args),
+            status: OPERATION_STATUS.INITIATED,
+          } as FileEditData,
+        },
+      ];
+    }
+
+    return BaseToolBuilder.buildInitiatedEvents(
+      toolName,
+      typeof args === "string" ? {} : args,
+      toolCallId,
+      timestamp
+    ) as CliEvent[];
+  }
+
   static buildInitiatedEvent(
     toolName: string,
-    args: Record<string, unknown>,
+    args: CopilotToolArgs,
     toolCallId: string | undefined,
     timestamp: number
   ): CliEvent {
-    return BaseToolBuilder.buildInitiatedEvents(
-      toolName,
-      args,
-      toolCallId,
-      timestamp
-    )[0] as CliEvent;
+    return this.buildInitiatedEvents(toolName, args, toolCallId, timestamp)[0];
   }
 
   /**
@@ -71,7 +110,7 @@ export class CopilotToolBuilder {
    */
   static buildCompletedEvents(
     toolName: string,
-    args: Record<string, unknown>,
+    args: CopilotToolArgs,
     completionData: {
       success?: boolean;
       result?: { content?: string; detailedContent?: string };
@@ -86,14 +125,72 @@ export class CopilotToolBuilder {
       completionData?.result?.content ||
       completionData?.result?.detailedContent;
 
-    const path = (args.path ?? args.file_path) as string | undefined;
-    const oldStr = (args.old_str ?? args.old_string) as string | undefined;
-    const newStr = (args.new_str ?? args.new_string) as string | undefined;
-    const content = (args.content ?? args.file_text) as string | undefined;
-    const command = (args.command ?? args.cmd ?? args.script) as
+    if (classifiedType === CLI_EVENT_TYPES.FILE_EDIT && toolName === "apply_patch") {
+      const patchText =
+        completionData?.result?.detailedContent ||
+        completionData?.result?.content ||
+        (typeof args === "string" ? args : "");
+      const fileEdits = patchText
+        ? ApplyPatchParser.parseFileEdits(patchText)
+        : [];
+      if (fileEdits.length > 0) {
+        return fileEdits.map((fileEdit) => ({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: Date.now(),
+          data: {
+            path: fileEdit.path,
+            structuredPatch: fileEdit.structuredPatch,
+            status: success
+              ? OPERATION_STATUS.COMPLETED
+              : OPERATION_STATUS.FAILED,
+            success,
+            error: errorMsg,
+          } as FileEditData,
+        }));
+      }
+
+      const fallbackPatch =
+        typeof args === "string" ? ApplyPatchParser.parse(args) : undefined;
+      const fallbackPath =
+        typeof args === "string"
+          ? ApplyPatchParser.extractFirstPath(args)
+          : undefined;
+      return [
+        {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: Date.now(),
+          data: {
+            path: fallbackPath || "unknown",
+            structuredPatch: fallbackPatch,
+            status: success
+              ? OPERATION_STATUS.COMPLETED
+              : OPERATION_STATUS.FAILED,
+            success,
+            error: errorMsg,
+          } as FileEditData,
+        },
+      ];
+    }
+
+    const normalizedArgs = typeof args === "string" ? {} : args;
+    const path = (normalizedArgs.path ?? normalizedArgs.file_path) as
       | string
       | undefined;
-    const query = args.query as string | undefined;
+    const oldStr = (normalizedArgs.old_str ?? normalizedArgs.old_string) as
+      | string
+      | undefined;
+    const newStr = (normalizedArgs.new_str ?? normalizedArgs.new_string) as
+      | string
+      | undefined;
+    const content = (normalizedArgs.content ?? normalizedArgs.file_text) as
+      | string
+      | undefined;
+    const command = (normalizedArgs.command ??
+      normalizedArgs.cmd ??
+      normalizedArgs.script) as
+      | string
+      | undefined;
+    const query = normalizedArgs.query as string | undefined;
 
     if (classifiedType === CLI_EVENT_TYPES.FILE_EDIT) {
       const structuredPatch = completionData?.result?.detailedContent

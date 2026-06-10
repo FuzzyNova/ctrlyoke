@@ -80,7 +80,7 @@ export class CopilotResponseParser
     // Populated from assistant.message.data.toolRequests; consumed on tool.execution_complete.
     const pendingToolCalls = new Map<
       string,
-      { name: string; args: Record<string, unknown> }
+      { name: string; args: Record<string, unknown> | string }
     >();
 
     for (const json of objects) {
@@ -139,7 +139,7 @@ export class CopilotResponseParser
           if (Array.isArray(data.toolRequests)) {
             for (const toolReq of data.toolRequests) {
               events.push(
-                CopilotToolBuilder.buildInitiatedEvent(
+                ...CopilotToolBuilder.buildInitiatedEvents(
                   toolReq.name,
                   toolReq.arguments || {},
                   toolReq.toolCallId,
@@ -292,7 +292,7 @@ export class CopilotResponseParser
    */
   private buildToolCompletionEvents(
     completionData: any,
-    pending: { name: string; args: Record<string, unknown> }
+    pending: { name: string; args: Record<string, unknown> | string }
   ): CliEvent[] {
     return CopilotToolBuilder.buildCompletedEvents(
       pending.name,
@@ -363,7 +363,7 @@ export class CopilotResponseParser
           // Emit tool start event for real-time tool visualization
           if (json.data?.toolName && json.data?.arguments) {
             events.push(
-              CopilotToolBuilder.buildInitiatedEvent(
+              ...CopilotToolBuilder.buildInitiatedEvents(
                 json.data.toolName,
                 json.data.arguments || {},
                 json.data.toolCallId,
@@ -375,7 +375,7 @@ export class CopilotResponseParser
               const pendingCalls =
                 (streamState.get("pendingToolCalls") as Map<
                   string,
-                  { name: string; args: Record<string, unknown> }
+                  { name: string; args: Record<string, unknown> | string }
                 >) ?? new Map();
               pendingCalls.set(json.data.toolCallId, {
                 name: json.data.toolName,
@@ -392,6 +392,10 @@ export class CopilotResponseParser
           if (toolCallId) {
             const pendingCalls = streamState.get("pendingToolCalls") as
               | Map<string, { name: string; args: Record<string, unknown> }>
+              | Map<
+                  string,
+                  { name: string; args: Record<string, unknown> | string }
+                >
               | undefined;
             const pending = pendingCalls?.get(toolCallId);
             if (pending) {

@@ -735,6 +735,57 @@ suite("CopilotLogParser", () => {
       );
     });
 
+    test("should extract file paths from apply_patch tool events", () => {
+      const patch = [
+        "*** Begin Patch",
+        "*** Update File: src/first.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** Update File: src/second.ts",
+        "@@",
+        "-before",
+        "+after",
+        "*** End Patch",
+      ].join("\n");
+
+      const events = [
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: "tool-1",
+            toolName: "apply_patch",
+            arguments: patch,
+          },
+          timestamp: "2026-01-17T10:00:01Z",
+        },
+        {
+          type: "tool.execution_complete",
+          data: {
+            toolCallId: "tool-1",
+            success: true,
+            result: {
+              detailedContent: patch,
+            },
+          },
+          timestamp: "2026-01-17T10:00:02Z",
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+      const fileEditEvents = response.events.filter(
+        (event) => event.type === CLI_EVENT_TYPES.FILE_EDIT
+      );
+
+      assert.strictEqual(fileEditEvents.length, 4);
+      assert.deepStrictEqual(
+        fileEditEvents.map((event) => (event.data as any).path),
+        ["src/first.ts", "src/second.ts", "src/first.ts", "src/second.ts"]
+      );
+    });
+
     test("should extract session metadata from session.start event", () => {
       const events = [
         {

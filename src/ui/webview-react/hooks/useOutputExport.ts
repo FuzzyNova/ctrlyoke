@@ -9,6 +9,7 @@ import type { OutputMessage } from "@utils/outputProjection";
 import type { WorkflowStep } from "@store/workflowStore";
 import type { OrderedHistoryEntry } from "@root/types/OutputHistoryTypes";
 import { FINAL_STEP_PHASES, MESSAGE_TYPES } from "@/types/messages";
+import { WebviewLog } from "@/utils/logger";
 
 interface UseOutputExportInput {
   allMessages: OutputMessage[];
@@ -99,22 +100,28 @@ export function useOutputExport({
       stepRange: parsedRange,
     };
 
-    const markdownContent = generateMarkdownExport(
-      buildExportMessages(),
-      {
-        fileName: fileName || "Unknown",
-        executionState,
-        currentStep,
-        totalSteps,
-      },
-      {
-        orderedEntries:
-          isViewingHistory && historyOrderedEntries?.length
-            ? historyOrderedEntries
-            : undefined,
-        exportOptions,
-      }
-    );
+    let markdownContent: string;
+    try {
+      markdownContent = generateMarkdownExport(
+        buildExportMessages(),
+        {
+          fileName: fileName || "Unknown",
+          executionState,
+          currentStep,
+          totalSteps,
+        },
+        {
+          orderedEntries:
+            isViewingHistory && historyOrderedEntries?.length
+              ? historyOrderedEntries
+              : undefined,
+          exportOptions,
+        }
+      );
+    } catch (error) {
+      WebviewLog.error("Failed to generate markdown export", error);
+      return;
+    }
 
     setModalOpen(false);
 

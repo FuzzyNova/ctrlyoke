@@ -294,40 +294,54 @@ export class WorkflowSerializer {
   // ============================================================================
 
   async handleExportOutput(content: string, fileName?: string): Promise<void> {
-    let baseName = fileName || "flightpath-output";
-    baseName = baseName
-      .replace(/\.flightpath\.(ya?ml|json)$/i, "")
-      .replace(/\.prompt\.md$/i, "");
-    if (!baseName.endsWith(".md")) {
-      baseName += ".md";
-    }
+    try {
+      let baseName = fileName || "flightpath-output";
+      baseName = baseName
+        .replace(/\.flightpath\.(ya?ml|json)$/i, "")
+        .replace(/\.prompt\.md$/i, "");
+      if (!baseName.endsWith(".md")) {
+        baseName += ".md";
+      }
 
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    let defaultUri: vscode.Uri;
-    if (workspaceRoot) {
-      const outputDir = path.join(
-        workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
-        "output"
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      let defaultUri: vscode.Uri;
+      if (workspaceRoot) {
+        const outputDir = path.join(
+          workspaceRoot,
+          PATH_CONSTANTS.FLIGHTPATH_DIR,
+          "output"
+        );
+        await fs.mkdir(outputDir, { recursive: true });
+        defaultUri = vscode.Uri.file(path.join(outputDir, baseName));
+      } else {
+        defaultUri = vscode.Uri.file(baseName);
+      }
+
+      Log.debug(
+        `handleExportOutput: showing save dialog, defaultUri=${defaultUri.fsPath}, contentLength=${content.length}`
       );
-      await fs.mkdir(outputDir, { recursive: true });
-      defaultUri = vscode.Uri.file(path.join(outputDir, baseName));
-    } else {
-      defaultUri = vscode.Uri.file(baseName);
-    }
 
-    const uri = await vscode.window.showSaveDialog({
-      defaultUri,
-      filters: {
-        "Markdown Files": ["md"],
-        "Text Files": ["txt"],
-        "All Files": ["*"],
-      },
-    });
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri,
+        filters: {
+          "Markdown Files": ["md"],
+          "Text Files": ["txt"],
+          "All Files": ["*"],
+        },
+      });
 
-    if (uri) {
-      await fs.writeFile(uri.fsPath, content, "utf-8");
-      vscode.window.showInformationMessage(`Output exported to ${uri.fsPath}`);
+      if (uri) {
+        await fs.writeFile(uri.fsPath, content, "utf-8");
+        vscode.window.showInformationMessage(
+          `Output exported to ${uri.fsPath}`
+        );
+      } else {
+        Log.debug("handleExportOutput: save dialog cancelled by user");
+      }
+    } catch (error) {
+      const msg = getErrorMessage(error);
+      Log.error("Failed to export output:", error);
+      vscode.window.showErrorMessage(`Failed to export output: ${msg}`);
     }
   }
 

@@ -83,6 +83,12 @@ interface CopilotProviderEvent extends BaseCliEvent {
   data?: Record<string, any>;
 }
 
+type CopilotPendingTool = {
+  toolName: string;
+  args: Record<string, unknown> | string;
+  timestamp: number;
+};
+
 export class CopilotLogParser extends BaseLogParser {
   /**
    * Event buffer for multi-event responses
@@ -93,7 +99,7 @@ export class CopilotLogParser extends BaseLogParser {
   /** Tracks in-flight tool calls across streaming events for extractStructuredEventsFromEvent. */
   private pendingStreamingTools = new Map<
     string,
-    { toolName: string; args: Record<string, unknown>; timestamp: number }
+    CopilotPendingTool
   >();
 
   /**
@@ -140,7 +146,7 @@ export class CopilotLogParser extends BaseLogParser {
     // Track pending tool calls to associate execution_start with execution_complete
     const pendingTools = new Map<
       string,
-      { toolName: string; args: Record<string, unknown>; timestamp: number }
+      CopilotPendingTool
     >();
 
     for (const event of events as CopilotProviderEvent[]) {
@@ -260,7 +266,7 @@ export class CopilotLogParser extends BaseLogParser {
 
         // Emit semantic events for all tools immediately (for real-time feedback)
         outputEvents.push(
-          CopilotToolBuilder.buildInitiatedEvent(
+          ...CopilotToolBuilder.buildInitiatedEvents(
             event.data.toolName,
             event.data.arguments || {},
             event.data.toolCallId,
@@ -716,7 +722,7 @@ export class CopilotLogParser extends BaseLogParser {
         timestamp,
       });
       results.push(
-        CopilotToolBuilder.buildInitiatedEvent(
+        ...CopilotToolBuilder.buildInitiatedEvents(
           data.toolName,
           data.arguments || {},
           data.toolCallId,

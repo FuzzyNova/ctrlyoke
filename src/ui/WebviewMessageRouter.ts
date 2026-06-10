@@ -444,8 +444,8 @@ export class WebviewMessageRouter {
       vscode.commands.executeCommand("flightpath.showOutputPanel");
     });
 
-    table.set(MESSAGE_TYPES.EXPORT_OUTPUT, (message) => {
-      this.serializer.handleExportOutput(message.content, message.fileName);
+    table.set(MESSAGE_TYPES.EXPORT_OUTPUT, async (message) => {
+      await this.serializer.handleExportOutput(message.content, message.fileName);
     });
 
     // ── Dashboard — Prompt Editor ────────────────────────────────────────
