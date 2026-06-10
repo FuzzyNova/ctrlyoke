@@ -19,7 +19,11 @@ import {
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { history, historyKeymap, insertTab } from "@codemirror/commands";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import {
+  searchKeymap,
+  highlightSelectionMatches,
+  openSearchPanel,
+} from "@codemirror/search";
 import {
   linter,
   lintKeymap,
@@ -695,6 +699,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       doc: value,
       extensions: [
         minimalSetup,
+        createFindKeyHandlerExtension(),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnlyRef.current),
         history(),
@@ -908,6 +913,30 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   return <div id={id} ref={editorRef} className={editorClassName} />;
 };
+
+// Intercept Ctrl/Cmd+F before it can bubble to the page — without this, the
+// keystroke would also reach OutputSection's window-level "open find" listener.
+// We open CodeMirror's own search panel directly so searchKeymap's Mod-f
+// binding never needs to fire, and stop the event outright so it can't
+// trigger anything else listening on ancestor elements or window.
+function createFindKeyHandlerExtension() {
+  return EditorView.domEventHandlers({
+    keydown: (event, view) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        event.key.toLowerCase() === "f"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        openSearchPanel(view);
+        return true;
+      }
+      return false;
+    },
+  });
+}
 
 // Prompt-editor-specific decoration styles (link, file-ref, fenced-block, prior-context).
 // Generic base theme (colours, gutter, cursor, autocomplete) lives in codemirrorTheme.ts.

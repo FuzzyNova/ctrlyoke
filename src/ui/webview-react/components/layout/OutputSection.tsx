@@ -498,20 +498,39 @@ const OutputSectionInner: React.FC = () => {
     }
   }, [pendingFindQuery, setPendingFindQuery]);
 
+  const handleOpenFind = useCallback(() => {
+    if (activeOutputTab !== "output") {
+      setActiveOutputTab(terminalWorkflowId, "output");
+    }
+    openFind();
+  }, [activeOutputTab, openFind, setActiveOutputTab, terminalWorkflowId]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        if (activeOutputTab !== "output") {
-          setActiveOutputTab(terminalWorkflowId, "output");
-        }
-        openFind();
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        event.altKey ||
+        event.key.toLowerCase() !== "f"
+      ) {
+        return;
       }
+      // Let CodeMirror handle its own find when a prompt editor is focused —
+      // its capture-phase handler runs first and opens the search panel.
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".cm-editor")) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      handleOpenFind();
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeOutputTab, openFind, setActiveOutputTab, terminalWorkflowId]);
+    // Capture phase: run before VS Code's webview keydown forwarding and
+    // before bubbling reaches anything else, so Ctrl+F is scoped to this view.
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [handleOpenFind]);
 
   const {
     applyScrollTarget,
@@ -882,6 +901,7 @@ const OutputSectionInner: React.FC = () => {
     allMessages,
     stepScrollFractions,
     lastCliIndexPerStep,
+    onOpenFind: handleOpenFind,
   });
 
   const handleOutputLongPress = useCallback(

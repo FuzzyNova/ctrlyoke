@@ -230,7 +230,7 @@ src/ui/webview-react/
 
 - `useStepContextMenu()` builds the shared queue-step context menu used by both `WorkflowStepsPanel` and `PromptChipRail`. Menu items include **Copy Step**, **Copy Prompt/Script**, **Copy Output**, **Paste Step**, **Set Start Position**, **Enable/Disable**, and **Delete**. `usePasteToEndContextMenu()` is the blank-background companion that always pastes after the last queue step.
 - `useFinalStepContextMenu()` exposes the final-step enable/disable menu used by both the expanded footer and collapsed chip rail.
-- `useOutputContextMenu()` powers the output-pane right-click / long-press menu. It derives the hovered step from `stepScrollFractions` + `lastCliIndexPerStep` and offers **Copy**, **Copy All**, and **Copy Step Output**.
+- `useOutputContextMenu()` powers the output-pane right-click / long-press menu. It derives the hovered step from `stepScrollFractions` + `lastCliIndexPerStep` and offers **Copy**, **Copy All**, **Copy Step Output**, and (at the bottom) **Find in Output**. `onOpenFind` (passed in by `OutputSection`) opens `OutputFindBar`, switching to the Output tab first if needed.
 - `useLongPress()` converts touch press-and-hold into `(x, y)` coordinates for context menus, cancels when the finger moves beyond a threshold, and supports `requireSelf=true` for blank-background containers.
 - `useLatestStepOutput()` returns a history-aware getter shared by step UIs. When `uiStore.isViewingHistory=true`, it reads from `historyOutputs.orderedEntries`; otherwise it reads from `liveOrderedEntries`.
 
@@ -791,7 +791,13 @@ xterm.js instances live **outside React** in `terminalRegistry.ts`:
 
 The header left side shows Output/Terminal tab buttons (when a terminal session exists), and font size steppers for both output text and terminal.
 
-The scrollable output container itself attaches `useOutputContextMenu()` + `useLongPress()`. Right-click / long-press opens a shared menu with **Copy**, **Copy All**, and **Copy Step Output**; the hook maps the click position back to the hovered queue/final-step output via `stepScrollFractions` + `lastCliIndexPerStep`. Individual `CliOutput` cards also expose copy actions for session IDs and extracted plain-text output.
+The scrollable output container itself attaches `useOutputContextMenu()` + `useLongPress()`. Right-click / long-press opens a shared menu with **Copy**, **Copy All**, **Copy Step Output**, and **Find in Output** (last item, for reaching the find bar without a keyboard); the hook maps the click position back to the hovered queue/final-step output via `stepScrollFractions` + `lastCliIndexPerStep`. Individual `CliOutput` cards also expose copy actions for session IDs and extracted plain-text output.
+
+### Ctrl+F / Find Scoping
+
+`OutputSection` registers a capture-phase `window` keydown listener for Ctrl/Cmd+F (`{ capture: true }`) that opens `OutputFindBar` (switching to the Output tab if needed via `handleOpenFind`). It bails out early — leaving the event untouched — when `event.target` is inside `.cm-editor`, so a focused prompt editor isn't interrupted. `CodeMirrorEditor` registers an `EditorView.domEventHandlers` keydown handler (`createFindKeyHandlerExtension`) that intercepts Ctrl/Cmd+F on its own `contentDOM`: it calls `openSearchPanel` directly, then `preventDefault()` + `stopPropagation()` + `stopImmediatePropagation()`. Together this keeps Ctrl+F scoped to whichever view has focus — CodeMirror's own search panel when editing a prompt, `OutputFindBar` everywhere else in the dashboard.
+
+> **VS Code limitation:** VS Code's webview host forwards every keydown to its own keybinding dispatcher independent of the page's event handling, so `ctrl+f` can still trigger VS Code's built-in webview "Find" overlay (bound to the `webviewFocus` context) on top of our in-page handling. There is no supported way for the extension to suppress that default keybinding from webview content — affected users can remove/rebind it via `keybindings.json` (`"key": "ctrl+f", "command": "-workbench.action.webview.find", "when": "webviewFocus"`, adjusting the command id to whatever the Keyboard Shortcuts editor shows for "Find" under `webviewFocus`).
 
 ### Step Context Menus and Paste-to-End
 

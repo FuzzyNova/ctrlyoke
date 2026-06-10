@@ -55,12 +55,14 @@ interface UseOutputContextMenuOptions {
   allMessages: OutputMessage[];
   stepScrollFractions: Map<string, number>;
   lastCliIndexPerStep: Map<string, number>;
+  onOpenFind: () => void;
 }
 
 export function useOutputContextMenu({
   allMessages,
   stepScrollFractions,
   lastCliIndexPerStep,
+  onOpenFind,
 }: UseOutputContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<StepContextMenuState | null>(
     null
@@ -134,10 +136,19 @@ export function useOutputContextMenu({
               void writeClipboardText(hoveredOutputText);
             },
           },
+          { type: "divider" },
+          {
+            label: "Find in Output",
+            icon: "codicon-search",
+            disabled: false,
+            onClick: () => {
+              onOpenFind();
+            },
+          },
         ],
       });
     },
-    [allMessages, stepScrollFractions, lastCliIndexPerStep]
+    [allMessages, stepScrollFractions, lastCliIndexPerStep, onOpenFind]
   );
 
   const outputContextMenuPortal = contextMenu ? (
