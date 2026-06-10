@@ -4,6 +4,7 @@ import { findAndReplace } from "mdast-util-find-and-replace";
 import { visit } from "unist-util-visit";
 import { toString as mdastToString } from "mdast-util-to-string";
 import type { Root } from "mdast";
+import type { PluginTuple } from "unified";
 import { openFile } from "@hooks/useMessageHandler";
 import {
   injectFindHighlightStyles,
@@ -223,6 +224,16 @@ function remarkLocalLinks() {
   };
 }
 
+/** Options for {@link remarkHighlightMatches}, passed via the standard remark `[plugin, options]` tuple form. */
+interface HighlightMatchesOptions {
+  /** "Find in output" query to wrap in `<mark>`. Falsy/whitespace-only disables highlighting. */
+  query: string;
+  /** Whether `query` matching is case-sensitive. */
+  caseSensitive: boolean;
+  /** 0-based index (across the whole tree) of the currently-active match. */
+  activeIndex: number;
+}
+
 /**
  * Remark plugin that wraps occurrences of `query` in MDAST text nodes with
  * raw `<mark>` HTML nodes, mirroring the "find in output" highlight applied
@@ -233,45 +244,54 @@ function remarkLocalLinks() {
  * `activeIndex` marks the currently-focused match (0-based, across the whole
  * tree) with `data-find-active="true"` so it can be styled distinctly via
  * `injectFindHighlightStyles()`.
+ *
+ * Requires the tree passed to this plugin to represent the *entire* markdown
+ * document in one pass (see the `mode="static"` override below) — `occurrence`
+ * resets to 0 for every separate tree this transformer runs against, so if
+ * Streamdown's streaming mode split the document into multiple independently
+ * transformed blocks, `activeIndex` (a document-global index) would line up
+ * with occurrence 0 in *every* block instead of a single occurrence overall.
+ *
+ * Takes its parameters via the `[plugin, options]` tuple form (see
+ * `remarkPlugins` below) rather than a per-render factory function. Streamdown
+ * caches its unified processor keyed on `${plugin.name}:${JSON.stringify(options)}`
+ * for tuple entries, so this stable, module-level function reference keeps
+ * the cache key's plugin-identity portion constant across renders — only the
+ * serialized `options` change — instead of minting a brand-new function (and
+ * processor-cache entry) on every keystroke or match navigation.
+ *
+ * Known limitation: `findAndReplace` only visits parsed `text` mdast nodes,
+ * so a query that spans an inline-formatting boundary (e.g. searching "foo"
+ * when the source is `**fo**o`) won't produce a `<mark>` here, even though
+ * the plain-text "find in output" pass (`outputFind.ts`, which searches the
+ * raw markdown source) counts it as a match. When that happens `activeIndex`
+ * may not line up with any `<mark>` in this tree — the active-match outline
+ * simply won't render for that occurrence.
  */
-function remarkHighlightMatches(
-  query: string,
-  caseSensitive: boolean,
-  activeIndex: number
-) {
-  // Returns a unified attacher (called with no args by `.use()`), which in
-  // turn returns the actual tree transformer.
-  const attacher = () =>
-    (tree: Root): undefined => {
-      if (!query) return;
+function remarkHighlightMatches({
+  query,
+  caseSensitive,
+  activeIndex,
+}: HighlightMatchesOptions) {
+  return (tree: Root): undefined => {
+    if (!query) return;
 
-      let occurrence = -1;
-      findAndReplace(tree, [
-        [
-          new RegExp(escapeRegExp(query), caseSensitive ? "g" : "gi"),
-          (match: string) => {
-            occurrence += 1;
-            const activeAttr =
-              occurrence === activeIndex ? ' data-find-active="true"' : "";
-            return {
-              type: "html",
-              value: `<mark${activeAttr}>${escapeHtml(match)}</mark>`,
-            };
-          },
-        ],
-      ]);
-    };
-
-  // Streamdown caches its unified processor keyed on each plugin function's
-  // `.name`. Since this attacher is recreated on every call with different
-  // captured `query`/`caseSensitive`/`activeIndex`, give it a name that
-  // encodes those params so different highlight states get distinct cache
-  // entries instead of reusing a stale processor.
-  Object.defineProperty(attacher, "name", {
-    value: `remarkHighlightMatches(${JSON.stringify(query)},${caseSensitive},${activeIndex})`,
-  });
-
-  return attacher;
+    let occurrence = -1;
+    findAndReplace(tree, [
+      [
+        new RegExp(escapeRegExp(query), caseSensitive ? "g" : "gi"),
+        (match: string) => {
+          occurrence += 1;
+          const activeAttr =
+            occurrence === activeIndex ? ' data-find-active="true"' : "";
+          return {
+            type: "html",
+            value: `<mark${activeAttr}>${escapeHtml(match)}</mark>`,
+          };
+        },
+      ],
+    ]);
+  };
 }
 
 // Module-level stable array so Streamdown's memo doesn't see a new reference.
@@ -510,26 +530,50 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
     []
   );
 
-  // Only append the highlight plugin when there's an active query, so the
-  // common case keeps Streamdown's stable REMARK_PLUGINS reference.
-  const remarkPlugins = useMemo(
-    () =>
-      highlightQuery
-        ? [
-            ...REMARK_PLUGINS,
-            remarkHighlightMatches(
-              highlightQuery,
-              highlightCaseSensitive,
-              highlightActiveIndex
-            ),
-          ]
-        : REMARK_PLUGINS,
-    [highlightQuery, highlightCaseSensitive, highlightActiveIndex]
-  );
+  // Only append the highlight plugin when there's a non-whitespace query, so
+  // the common case keeps Streamdown's stable REMARK_PLUGINS reference (and a
+  // query of all spaces doesn't wrap every space character in <mark>).
+  const remarkPlugins = useMemo(() => {
+    if (!highlightQuery?.trim()) return REMARK_PLUGINS;
 
+    const highlightPlugin: PluginTuple<[HighlightMatchesOptions], Root, Root> = [
+      remarkHighlightMatches,
+      {
+        query: highlightQuery,
+        caseSensitive: highlightCaseSensitive,
+        activeIndex: highlightActiveIndex,
+      },
+    ];
+
+    return [...REMARK_PLUGINS, highlightPlugin];
+  }, [highlightQuery, highlightCaseSensitive, highlightActiveIndex]);
+
+  // Streamdown's <Streamdown> is wrapped in React.memo with a custom comparator
+  // that never compares `remarkPlugins`/`rehypePlugins`/`allowedTags` — only
+  // `children`, `className`, `mode`, `dir`, and a handful of other props. So a
+  // `remarkPlugins` reference change alone (e.g. the active match moving to the
+  // next occurrence) is silently dropped: Streamdown keeps rendering the
+  // previously-cached <mark> output even though our plugin's options changed.
+  // Keying on the highlight state forces React to remount Streamdown whenever
+  // it changes, guaranteeing the new highlight options take effect. The key is
+  // a constant when there's no active query, so the common case never remounts.
+  const isHighlighting = !!highlightQuery?.trim();
+  const streamdownKey = isHighlighting
+    ? `find:${JSON.stringify([highlightQuery, highlightCaseSensitive, highlightActiveIndex])}`
+    : "no-find";
+
+  // Streamdown's default "streaming" mode splits markdown into independently
+  // transformed top-level blocks (paragraphs, headings, etc.), each running
+  // `remarkHighlightMatches` against its own subtree with `occurrence` reset
+  // to 0. That breaks the document-global `activeIndex` numbering — see the
+  // comment on `remarkHighlightMatches`. "static" mode runs the whole
+  // document through a single transform, restoring global occurrence order,
+  // at the cost of skipping incomplete-markdown healing while highlighting.
   return (
     <Streamdown
+      key={streamdownKey}
       animated={animated}
+      mode={isHighlighting ? "static" : "streaming"}
       className={`markdown-text ${className ?? ""}`}
       components={components}
       remarkPlugins={remarkPlugins}

@@ -165,4 +165,74 @@ describe("MarkdownText", () => {
     );
     expect(sensitive.container.querySelectorAll("mark")).toHaveLength(1);
   });
+
+  it("does not highlight for a whitespace-only query", () => {
+    const { container } = render(
+      <MarkdownText highlightQuery="   ">alpha beta gamma</MarkdownText>
+    );
+    expect(container.querySelectorAll("mark")).toHaveLength(0);
+  });
+
+  it("treats regex special characters in the query as literal text", () => {
+    const { container } = render(
+      <MarkdownText highlightQuery="a.b (c)">
+        a.b (c) and axb (c) too
+      </MarkdownText>
+    );
+
+    const marks = container.querySelectorAll("mark");
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe("a.b (c)");
+  });
+
+  it("re-highlights with updated query/activeIndex without leaking marks across renders", () => {
+    const { container, rerender } = render(
+      <MarkdownText highlightQuery="alpha" highlightActiveIndex={0}>
+        alpha beta alpha
+      </MarkdownText>
+    );
+    expect(container.querySelectorAll("mark")).toHaveLength(2);
+    expect(container.querySelectorAll("mark")[0]).toHaveAttribute(
+      "data-find-active",
+      "true"
+    );
+
+    rerender(
+      <MarkdownText highlightQuery="beta" highlightActiveIndex={0}>
+        alpha beta alpha
+      </MarkdownText>
+    );
+    const marks = container.querySelectorAll("mark");
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe("beta");
+    expect(marks[0]).toHaveAttribute("data-find-active", "true");
+  });
+
+  it("marks only the document-globally active occurrence across multiple paragraphs", () => {
+    // Streamdown's default streaming mode transforms each paragraph as a
+    // separate block, resetting remarkHighlightMatches' occurrence counter
+    // per block. Without forcing static mode while highlighting, activeIndex
+    // 0 would match occurrence 0 in *every* block.
+    const md = "alpha in paragraph one.\n\nalpha in paragraph two.";
+
+    const first = render(
+      <MarkdownText highlightQuery="alpha" highlightActiveIndex={0}>
+        {md}
+      </MarkdownText>
+    );
+    let marks = first.container.querySelectorAll("mark");
+    expect(marks).toHaveLength(2);
+    expect(marks[0]).toHaveAttribute("data-find-active", "true");
+    expect(marks[1]).not.toHaveAttribute("data-find-active");
+
+    const second = render(
+      <MarkdownText highlightQuery="alpha" highlightActiveIndex={1}>
+        {md}
+      </MarkdownText>
+    );
+    marks = second.container.querySelectorAll("mark");
+    expect(marks).toHaveLength(2);
+    expect(marks[0]).not.toHaveAttribute("data-find-active");
+    expect(marks[1]).toHaveAttribute("data-find-active", "true");
+  });
 });

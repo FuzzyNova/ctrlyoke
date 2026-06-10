@@ -288,17 +288,21 @@ const SYNTAX_TOKEN_STYLES = `
 }
 `;
 
+// Mirrors the "all other finds" / "current find" styling that highlightText()
+// applies to plain-text rows (bg-badge-bg/70 vs. bg-badge-bg + ring-focus-border)
+// so markdown <mark> highlights match plain-text highlights instead of using
+// the unrelated --vscode-editor-findMatch* (orange/yellow) palette.
 const FIND_HIGHLIGHT_STYLES = `
 .markdown-text mark {
-  background-color: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33));
-  color: inherit;
+  background-color: color-mix(in srgb, var(--vscode-badge-background, #4d4d4d) 70%, transparent);
+  color: var(--vscode-foreground, inherit);
   border-radius: 2px;
   padding: 0 1px;
 }
 
 .markdown-text mark[data-find-active="true"] {
-  background-color: var(--vscode-editor-findMatchBackground, rgba(246, 185, 77, 0.7));
-  outline: 1px solid var(--vscode-editor-findMatchBorder, var(--vscode-focusBorder, #007fd4));
+  background-color: var(--vscode-badge-background, #4d4d4d);
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
 }
 `;
 
