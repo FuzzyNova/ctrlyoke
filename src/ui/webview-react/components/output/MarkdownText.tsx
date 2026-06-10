@@ -520,9 +520,10 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       },
 
       // ── Code block wrapper ─────────────────────────────────────────────
-      // Removes whitespace-pre-wrap so token spans preserve exact formatting.
+      // Preserve indentation while still allowing long code lines to wrap
+      // inside narrow output panes instead of forcing horizontal overflow.
       pre: ({ children: preChildren }: React.HTMLAttributes<HTMLElement>) => (
-        <pre className="bg-editor-bg border border-panel-border rounded p-3 overflow-x-auto my-2 font-mono whitespace-pre">
+        <pre className="bg-editor-bg border border-panel-border rounded p-3 my-2 font-mono whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
           {preChildren}
         </pre>
       ),

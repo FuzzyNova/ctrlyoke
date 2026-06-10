@@ -718,26 +718,28 @@ const CliHeaderRowView: React.FC<{
       : modelId;
   const streamingIndicator =
     output.isStreaming && isExecutionActive ? (
-      <span className="text-output-streaming font-normal animate-pulse-streaming">
+      <span className="min-w-0 text-output-streaming font-normal animate-pulse-streaming">
         ⬤ Streaming...
       </span>
     ) : null;
 
   if (isScriptOutput(output)) {
     return (
-      <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
-        <span className="inline-flex items-center">
+      <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
+        <span className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-[2px]">
           {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex min-w-0 items-center gap-1">
             <span>[</span>
             <i className="codicon codicon-terminal-powershell text-xs" />
-            <span>{stepLabelContent ?? row.stepLabel}]</span>
+            <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+              {stepLabelContent ?? row.stepLabel}]
+            </span>
           </span>
           {(() => {
             const scriptTitle =
               row.stepName?.trim() || getFirstWords(output.cliCommand, 3);
             return scriptTitle ? (
-              <span className="ml-1 text-foreground">
+              <span className="ml-1 min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
                 {stepNameContent ?? scriptTitle}
               </span>
             ) : null;
@@ -752,21 +754,23 @@ const CliHeaderRowView: React.FC<{
   }
 
   return (
-    <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex items-center gap-[var(--spacing-sm)]">
-      <span className="inline-flex items-center flex-wrap gap-x-1">
+    <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[length:var(--fp-output-font-size-sm)] flex min-w-0 flex-wrap items-start gap-x-[var(--spacing-sm)] gap-y-[var(--spacing-xs)]">
+      <span className="inline-flex min-w-0 flex-1 items-center flex-wrap gap-x-1 gap-y-[2px]">
         {timestamp && <span className="output-timestamp">[{timestamp}]</span>}
-        <span className="inline-flex items-center gap-1">
+        <span className="inline-flex min-w-0 items-center gap-1">
           <span>[</span>
           <i className="codicon codicon-comment text-xs" />
-          <span>{stepLabelContent ?? row.stepLabel}]</span>
+          <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+            {stepLabelContent ?? row.stepLabel}]
+          </span>
         </span>
         {stepDisplayName && (
-          <span className="ml-1 text-foreground">
+          <span className="ml-1 min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
             {stepNameContent ?? stepDisplayName}
           </span>
         )}
         {(harnessShortName || modelLabel) && (
-          <span className="text-description-fg font-normal text-[length:var(--fp-output-font-size-xs)]">
+          <span className="min-w-0 break-words text-description-fg font-normal text-[length:var(--fp-output-font-size-xs)] [overflow-wrap:anywhere]">
             {[harnessShortName, modelLabel].filter(Boolean).join(" · ")}
           </span>
         )}
@@ -776,16 +780,19 @@ const CliHeaderRowView: React.FC<{
       </span>
       {streamingIndicator}
       {row.promptUndo && (row.promptUndo.undo || row.promptUndo.redo) && (
-        <div className="ml-auto flex items-center gap-2 flex-shrink-0 font-normal">
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 font-normal">
           {row.promptUndo.undo && (
             <button
               type="button"
               onClick={() => onPromptUndo?.(row)}
               style={{ touchAction: "manipulation" }}
-              className="text-link-fg hover:text-link-active-fg transition-colors"
+              title={row.promptUndo.undo.label}
+              className="inline-flex min-w-0 max-w-full items-center gap-1 text-link-fg hover:text-link-active-fg transition-colors"
             >
-              <i className="codicon codicon-discard mr-1" />
-              {row.promptUndo.undo.label}
+              <i className="codicon codicon-discard shrink-0" />
+              <span className="min-w-0 truncate">
+                {row.promptUndo.undo.label}
+              </span>
             </button>
           )}
           {row.promptUndo.redo && (
@@ -793,10 +800,13 @@ const CliHeaderRowView: React.FC<{
               type="button"
               onClick={() => onPromptRedo?.(row)}
               style={{ touchAction: "manipulation" }}
-              className="text-terminal-ansiGreen hover:opacity-80 transition-opacity"
+              title={row.promptUndo.redo.label}
+              className="inline-flex min-w-0 max-w-full items-center gap-1 text-terminal-ansiGreen hover:opacity-80 transition-opacity"
             >
-              <i className="codicon codicon-redo mr-1" />
-              {row.promptUndo.redo.label}
+              <i className="codicon codicon-redo shrink-0" />
+              <span className="min-w-0 truncate">
+                {row.promptUndo.redo.label}
+              </span>
             </button>
           )}
         </div>
