@@ -191,7 +191,9 @@ const TextOutput: React.FC<{
 }) => (
   <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent ${className}`}>
     {raw ? (
-      <div className="whitespace-pre-wrap">{content ?? text}</div>
+      <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+        {content ?? text}
+      </div>
     ) : (
       <MarkdownText
         animated={animated}

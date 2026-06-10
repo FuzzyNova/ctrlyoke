@@ -195,7 +195,7 @@ const FileRowItem: React.FC<FileRowItemProps> = ({
 
         {/* File path */}
         <span
-          className={`flex-1 font-mono text-xs break-all ${isDisabled ? "text-description-fg" : "text-foreground"}`}
+          className={`flex-1 font-mono text-xs [overflow-wrap:anywhere] ${isDisabled ? "text-description-fg" : "text-foreground"}`}
         >
           {row.path}
         </span>
@@ -672,7 +672,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                                 aria-label={`Select ${row.path}`}
                                 className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
                               />
-                              <span className="flex-1 font-mono text-xs break-all text-foreground">
+                              <span className="flex-1 font-mono text-xs [overflow-wrap:anywhere] text-foreground">
                                 {row.path}
                               </span>
                               <span
@@ -747,7 +747,7 @@ export const UndoChangesDialog: React.FC<UndoChangesDialogProps> = ({
                         aria-label={`Select ${row.path}`}
                         className="mt-0.5 w-3.5 h-3.5 accent-btn-bg cursor-pointer shrink-0"
                       />
-                      <span className="flex-1 font-mono text-xs break-all text-foreground">
+                      <span className="flex-1 font-mono text-xs [overflow-wrap:anywhere] text-foreground">
                         {row.path}
                       </span>
                       <span
@@ -866,7 +866,10 @@ const ResultBanner: React.FC<ResultBannerProps> = ({
             {undoResult?.failedFiles.length ?? 0} failed.
           </div>
           {undoResult?.failedFiles.map((f) => (
-            <div key={f.path} className="mt-0.5 font-mono break-all">
+            <div
+              key={f.path}
+              className="mt-0.5 font-mono [overflow-wrap:anywhere]"
+            >
               {f.path}: {f.error}
             </div>
           ))}
@@ -881,7 +884,10 @@ const ResultBanner: React.FC<ResultBannerProps> = ({
       <div>
         <div>{failVerb} failed.</div>
         {undoResult?.failedFiles.map((f) => (
-          <div key={f.path} className="mt-0.5 font-mono break-all">
+          <div
+            key={f.path}
+            className="mt-0.5 font-mono [overflow-wrap:anywhere]"
+          >
             {f.path}: {f.error}
           </div>
         ))}

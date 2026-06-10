@@ -70,7 +70,7 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
 }) => (
   <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
     <div className={TOOL_CALL_LINE}>
-      <span className="min-w-0 break-words">
+      <span className="min-w-0 [overflow-wrap:anywhere]">
         <ToolDot status={resultDotStatus(result)} />{" "}
         {labelContent ?? `MCP: ${server}.${tool}`}
       </span>
@@ -101,7 +101,7 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
 }) => (
   <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
     <div className={TOOL_CALL_LINE}>
-      <span className="min-w-0 break-words">
+      <span className="min-w-0 [overflow-wrap:anywhere]">
         <ToolDot
           status={
             success === undefined ? "pending" : success ? "success" : "error"
@@ -117,7 +117,7 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
     {error && (
       <div className={`${TOOL_ERROR_LINE} flex items-start gap-1`}>
         <span className="shrink-0">⎿</span>
-        <div className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+        <div className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
           {errorContent ?? error}
         </div>
       </div>
@@ -214,7 +214,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       <div className={`${cssClass} flex items-start gap-1`}>
         <span className="shrink-0">⎿</span>
         <div
-          className="min-w-0 flex-1 whitespace-pre-wrap break-words"
+          className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]"
           id={`${containerId}-${type}`}
         >
           {highlightText(visibleText, findMatches ?? [])}
@@ -240,7 +240,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
-        <span className="min-w-0 flex-1 break-words">
+        <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
           <ToolDot status={resultDotStatus(result)} />{" "}
           {nameFindMatches?.length ? (
             <>
@@ -270,7 +270,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       </div>
 
       {resolvedRenderPlan.params.visibleLineCount > 0 && fullParamsText && (
-        <div className="pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap break-all">
+        <div className="pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)] text-description-fg whitespace-pre-wrap [overflow-wrap:anywhere]">
           {fullParamsText}
         </div>
       )}

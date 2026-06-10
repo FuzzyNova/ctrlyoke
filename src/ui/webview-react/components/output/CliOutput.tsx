@@ -81,7 +81,9 @@ const TextOutput: React.FC<TextOutputProps> = ({
   return (
     <div className={`my-2 ${className}`}>
       {raw ? (
-        <div className="whitespace-pre-wrap">{text}</div>
+        <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {text}
+        </div>
       ) : (
         <MarkdownText>{text}</MarkdownText>
       )}
@@ -165,7 +167,7 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
       className={`${result.success ? TOOL_RESULT_LINE : "text-indicator-error pl-4 ml-2 text-[length:var(--fp-output-font-size-sm)]"} flex items-start gap-1 ${className}`}
     >
       <span className="shrink-0">⎿</span>
-      <span className="whitespace-pre-wrap break-words min-w-0">
+      <span className="whitespace-pre-wrap min-w-0 [overflow-wrap:anywhere]">
         {contentText}
       </span>
     </div>
@@ -897,7 +899,9 @@ export const CliOutput = memo<CliOutputProps>(
           <>
             <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
               {rawTextOutput ? (
-                <div className="whitespace-pre-wrap">{streamingChunk}</div>
+                <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+                  {streamingChunk}
+                </div>
               ) : (
                 <MarkdownText animated={true}>{streamingChunk}</MarkdownText>
               )}
@@ -933,7 +937,9 @@ export const CliOutput = memo<CliOutputProps>(
         return (
           <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
             {rawTextOutput ? (
-              <div className="whitespace-pre-wrap">{streamingChunk}</div>
+              <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+                {streamingChunk}
+              </div>
             ) : (
               <MarkdownText animated={true}>{streamingChunk}</MarkdownText>
             )}
@@ -951,7 +957,7 @@ export const CliOutput = memo<CliOutputProps>(
         return (
           <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
             {rawTextOutput ? (
-              <div className="whitespace-pre-wrap">
+              <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
                 {output.response as string}
               </div>
             ) : (
@@ -1188,7 +1194,7 @@ export const CliOutput = memo<CliOutputProps>(
           {/* CLI command */}
           {output.cliCommand && (
             <div
-              className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] break-all`}
+              className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)]`}
             >
               {output.workingDirectory || "workspace"}
               {">"} {output.cliCommand}
@@ -1209,7 +1215,7 @@ export const CliOutput = memo<CliOutputProps>(
             ? streamingChunk
             : output.response) && (
             <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
-              <div className="whitespace-pre-wrap text-[var(--fg-primary)]">
+              <div className="whitespace-pre-wrap [overflow-wrap:anywhere] text-[var(--fg-primary)]">
                 {output.isStreaming && streamingChunk
                   ? streamingChunk
                   : output.response}
@@ -1348,7 +1354,7 @@ export const CliOutput = memo<CliOutputProps>(
         {/* CLI command */}
         {output.cliCommand && (
           <div
-            className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] break-all`}
+            className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)]`}
           >
             {output.workingDirectory || "workspace"}
             {">"} {output.cliCommand}
