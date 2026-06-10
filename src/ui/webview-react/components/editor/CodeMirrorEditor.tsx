@@ -370,6 +370,20 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     };
   }, []);
 
+  // Re-measure when an ancestor panel is resized programmatically (e.g. the
+  // editor auto-expand setLayout() calls in App.tsx). CM's own ResizeObserver
+  // usually catches this, but a synchronous flex-grow change can land in the
+  // same frame and leave cached scroller/cursor-layer geometry stale.
+  useEffect(() => {
+    const handleRemeasure = () => viewRef.current?.requestMeasure();
+    window.addEventListener("fp-request-editor-remeasure", handleRemeasure);
+    return () =>
+      window.removeEventListener(
+        "fp-request-editor-remeasure",
+        handleRemeasure
+      );
+  }, []);
+
   // Initialize Typo.js spell checker
   useEffect(() => {
     const initTypoChecker = async () => {
@@ -884,7 +898,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const editorClassName = [
     surface === "input"
       ? "w-full codemirror-editor"
-      : "h-full w-full codemirror-editor",
+      : "h-full w-full flex-1 min-h-0 codemirror-editor",
     minHeightClassName,
     maxHeightClassName,
     className,

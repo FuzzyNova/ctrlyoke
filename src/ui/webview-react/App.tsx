@@ -213,6 +213,7 @@ function App() {
           "mobile-output-panel": outputPct,
           "mobile-editor-panel": editorPct,
         });
+        window.dispatchEvent(new CustomEvent("fp-request-editor-remeasure"));
       } catch {
         // ignore setLayout errors during unstable states
       }
@@ -254,6 +255,7 @@ function App() {
           "output-panel": outputPct,
           "editor-panel": editorPct,
         });
+        window.dispatchEvent(new CustomEvent("fp-request-editor-remeasure"));
       } catch {
         editorAutoExpandPxRef.current = A; // revert on error
       }
