@@ -353,6 +353,10 @@ module.exports = {
         xs: "380px",
       },
 
+      borderRadius: {
+        button: "4px",
+      },
+
       fontSize: {
         xxs: ["0.625rem", { lineHeight: "1rem" }],
       },

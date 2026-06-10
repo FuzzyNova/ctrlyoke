@@ -487,7 +487,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     : HEADER_BUTTON_SIZES.default;
   const btnBase = `inline-flex items-center justify-center h-full min-w-[calc(var(--fp-touch-target)-2px)] px-2 text-sm transition-colors focus:outline-none focus-visible:ring-1`;
   const btnBaseDesktop =
-    "inline-flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-1";
+    "inline-flex h-full self-stretch items-center justify-center min-w-[28px] px-2 py-1.5 text-sm transition-colors focus:outline-none focus-visible:ring-1";
   const resolvedBtnBase = isMobile ? btnBase : btnBaseDesktop;
   const activeClass =
     "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
@@ -495,7 +495,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed";
   const separatorClass = `bg-btn-secondary-bg text-btn-secondary-fg ${btnSizes.separatorPy} flex-shrink-0`;
   const containerClass = embedded
-    ? `relative inline-flex overflow-hidden flex-shrink-0 ${btnSizes.groupContainer}`
+    ? `relative inline-flex h-full self-stretch overflow-hidden flex-shrink-0 ${btnSizes.groupContainer}`
     : `fp-button-group ${btnSizes.groupContainer}`;
 
   const undoDisabled = !canUndo || editingDisabled;

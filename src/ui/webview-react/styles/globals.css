@@ -497,7 +497,9 @@ button .codicon {
 
   /* Generic full-height segmented button group used in header actions. */
   .fp-button-group {
-    @apply relative inline-flex rounded border border-btn-border overflow-hidden flex-shrink-0;
+    /* The outer group owns the corner radius. Inner buttons stay square so
+       anti-aliased child corners cannot reveal the parent background. */
+    @apply relative inline-flex rounded-button border border-btn-border overflow-hidden flex-shrink-0;
   }
   .fp-button-group-divider {
     @apply w-px self-stretch bg-btn-separator opacity-40;
@@ -524,7 +526,7 @@ button .codicon {
      Include a divider element between buttons:
        <div class="fp-mode-switch-divider"><div class="w-px h-full bg-current opacity-40" /></div> */
   .fp-mode-switch {
-    @apply relative inline-flex rounded border border-btn-border overflow-hidden flex-shrink-0;
+    @apply relative inline-flex rounded-button border border-btn-border overflow-hidden flex-shrink-0;
   }
   .fp-mode-switch-btn {
     @apply inline-flex items-center justify-center gap-1 px-2 py-0.5

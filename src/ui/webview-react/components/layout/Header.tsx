@@ -224,7 +224,7 @@ export const Header: React.FC<{
           >
             {/* Save button */}
             <button
-              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 canSave
                   ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                   : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
@@ -259,7 +259,7 @@ export const Header: React.FC<{
             {isStandalone && (
               <>
                 <button
-                  className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
+                  className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
                   onClick={openWorkspaceViewer}
                   title="Explore files and changes"
                   aria-label="Explore files and changes"
@@ -272,7 +272,7 @@ export const Header: React.FC<{
             )}
 
             <button
-              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
+              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
               onClick={openHistorySearch}
               title="Search History (Ctrl+Shift+F)"
               aria-label="Search history"
@@ -284,7 +284,7 @@ export const Header: React.FC<{
 
             {/* Settings button */}
             <button
-              className={`control-button flex items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 globalSettingsOpen ? "fp-contrast-active " : ""
               }${
                 globalSettingsOpen
@@ -314,7 +314,7 @@ export const Header: React.FC<{
         <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full flex items-center justify-center min-w-0 gap-1">
           {isMobile && (
             <button
-              className={`control-button flex items-center justify-center mr-2 gap-0.5 pl-3.5 pr-2 ${btnSize.mobileToggleButton} rounded-r border-y border-r border-btn-border transition-colors ${
+              className={`control-button flex items-center justify-center mr-2 gap-0.5 pl-3.5 pr-2 ${btnSize.mobileToggleButton} rounded-r-button border-y border-r border-btn-border transition-colors ${
                 mobileStepsOpen ? "fp-contrast-active " : ""
               }${
                 mobileStepsOpen
@@ -332,7 +332,7 @@ export const Header: React.FC<{
           <WorkflowStatus className="flex-1 sm:max-w-[500px]" />
           {isMobile && (
             <button
-              className={`control-button flex items-center justify-center ml-2 gap-0.5 pl-2 pr-3.5 ${btnSize.mobileToggleButton} rounded-l border-y border-l border-btn-border transition-colors ${
+              className={`control-button flex items-center justify-center ml-2 gap-0.5 pl-2 pr-3.5 ${btnSize.mobileToggleButton} rounded-l-button border-y border-l border-btn-border transition-colors ${
                 mobileWorkflowPropsOpen ? "fp-contrast-active " : ""
               }${
                 mobileWorkflowPropsOpen
@@ -358,7 +358,7 @@ export const Header: React.FC<{
           >
             {/* Run/Restart Button (icon-only) */}
             <button
-              className={`control-button items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+              className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 isRerun ? "font-bold" : ""
               } ${
                 canRun && !isCLIManaged
@@ -389,7 +389,7 @@ export const Header: React.FC<{
 
             {/* Pause/Resume Button */}
             <button
-              className={`control-button items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+              className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 (canPause || canCancelPause || canResume) && !isCLIManaged
                   ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                   : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
@@ -438,7 +438,7 @@ export const Header: React.FC<{
 
             {/* Stop Button */}
             <button
-              className={`control-button items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+              className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
                 canStop || isCLIManaged
                   ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                   : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"

@@ -228,7 +228,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         onClick={mainAction}
         disabled={disabled || mainDisabled}
         title={mainTitle}
-        className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonMain} font-medium rounded-l rounded-r-none ${
+        className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonMain} font-medium rounded-none ${
           disabled || mainDisabled ? disabledClass : ""
         }`}
       >
@@ -254,7 +254,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         aria-label={dropdownAriaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonDropdown} rounded-r rounded-l-none ${
+        className={`${baseButtonClass} ${variantClass} ${btnSizes.splitButtonDropdown} rounded-none ${
           disabled || dropdownDisabled ? disabledClass : ""
         } ${isOpen ? "bg-btn-secondary-hover" : ""}`}
       >
