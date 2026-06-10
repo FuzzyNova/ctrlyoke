@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useState } from "react";
+import React, { memo, useCallback, useEffect, useState } from "react";
 import { calcContextPct } from "@utils/tokenUtils";
 import { getHarnessModelDisplayName } from "@root/utils/ModelConstants";
 import {
@@ -13,9 +13,10 @@ import {
   StatusMessage,
   WebSearchOutput,
 } from ".";
-import type {
-  BashOutputExpansionSection,
-  BashOutputExpansionState,
+import {
+  DEFAULT_BASH_OUTPUT_EXPANSION_STATE,
+  type BashOutputExpansionSection,
+  type BashOutputExpansionState,
 } from "./BashOutput";
 import type {
   BashCommandData,
@@ -40,6 +41,7 @@ import {
 } from "@utils/outputUtils";
 import {
   getOutputRowSearchSegments,
+  getToolResultText,
   highlightText,
   sliceDecorationMatches,
   type OutputFindMatch,
@@ -57,7 +59,17 @@ import {
   getSnapshotBeforeContent,
   isScriptOutput,
 } from "@utils/outputRenderUtils";
-import type { ToolCallExpansionSection } from "@utils/toolCallLayout";
+import {
+  DEFAULT_TOOL_CALL_EXPANSION_STATE,
+  GENERIC_TOOL_CALL_MAX_RESULT_CHARS,
+  GENERIC_TOOL_CALL_MAX_RESULT_LINES,
+  type ToolCallExpansionSection,
+} from "@utils/toolCallLayout";
+import {
+  DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
+  DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+  buildCollapsedOutputPreview,
+} from "@utils/outputTruncation";
 
 export interface OutputRowFileUndoRequest {
   path: string;
@@ -73,6 +85,7 @@ interface StructuredEventContentProps {
   findDecorations?: RowFindDecoration;
   findQuery?: string;
   findCaseSensitive?: boolean;
+  activeFindMatch?: OutputFindMatch | null;
   onFileUndo?: (request: OutputRowFileUndoRequest) => void;
   onDiffCollapsedChange?: (
     rowKey: string,
@@ -250,12 +263,34 @@ const ToolResultOutput: React.FC<{
   );
 };
 
+// True when the active find match for a field falls outside the visible
+// (collapsed) portion of its text — i.e. it's hidden behind a "[show more]"
+// toggle and needs that section auto-expanded to be revealed.
+function isActiveMatchHidden(
+  text: string,
+  matches: RowFindDecoration["matches"],
+  expanded: boolean,
+  maxLines: number,
+  maxChars: number
+): boolean {
+  if (expanded || !text) return false;
+  const active = matches.find((match) => match.active);
+  if (!active) return false;
+  const preview = buildCollapsedOutputPreview(text, {
+    expanded: false,
+    maxLines,
+    maxChars,
+  });
+  return active.end > preview.visibleText.length;
+}
+
 const StructuredEventContent = memo<StructuredEventContentProps>(
   ({
     row,
     findDecorations,
     findQuery,
     findCaseSensitive,
+    activeFindMatch,
     onFileUndo,
     onDiffCollapsedChange,
     onDiffGapExpand,
@@ -285,6 +320,73 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       workspaceSnapshot,
       diff,
     } = row;
+
+    const isActiveRow = activeFindMatch?.rowKey === row.key;
+
+    let pendingBashExpand: BashOutputExpansionSection | null = null;
+    if (isActiveRow && event.type === CLI_EVENT_TYPES.BASH_COMMAND) {
+      const data = event.data as BashCommandData;
+      const expansion = bashExpansion ?? DEFAULT_BASH_OUTPUT_EXPANSION_STATE;
+      if (
+        activeFindMatch?.field === "response" &&
+        isActiveMatchHidden(
+          data.output ?? "",
+          getFieldMatches("response"),
+          expansion.outputExpanded,
+          DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+          DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
+        )
+      ) {
+        pendingBashExpand = "output";
+      } else if (
+        activeFindMatch?.field === "error" &&
+        isActiveMatchHidden(
+          data.error ?? "",
+          getFieldMatches("error"),
+          expansion.errorExpanded,
+          DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+          DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS
+        )
+      ) {
+        pendingBashExpand = "error";
+      }
+    }
+
+    let pendingToolCallExpand: ToolCallExpansionSection | null = null;
+    if (isActiveRow && event.type === CLI_EVENT_TYPES.TOOL_CALL) {
+      const data = event.data as ToolCall;
+      const toolContentIsError =
+        !data.result?.success && typeof data.result?.error === "string";
+      const expansion =
+        row.toolCall?.expansion ?? DEFAULT_TOOL_CALL_EXPANSION_STATE;
+      const sectionExpanded = toolContentIsError
+        ? expansion.errorExpanded
+        : expansion.outputExpanded;
+      if (
+        activeFindMatch?.field === "toolContent" &&
+        isActiveMatchHidden(
+          getToolResultText(data.result),
+          getFieldMatches("toolContent"),
+          sectionExpanded,
+          GENERIC_TOOL_CALL_MAX_RESULT_LINES,
+          GENERIC_TOOL_CALL_MAX_RESULT_CHARS
+        )
+      ) {
+        pendingToolCallExpand = toolContentIsError ? "error" : "output";
+      }
+    }
+
+    useEffect(() => {
+      if (pendingBashExpand) {
+        onBashExpansionChange?.(row.key, pendingBashExpand, true);
+      }
+    }, [pendingBashExpand, row.key, onBashExpansionChange]);
+
+    useEffect(() => {
+      if (pendingToolCallExpand) {
+        onToolCallExpansionChange?.(row.key, pendingToolCallExpand, true);
+      }
+    }, [pendingToolCallExpand, row.key, onToolCallExpansionChange]);
 
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
@@ -1008,6 +1110,7 @@ function OutputRowComponent({
             findDecorations={findDecorations}
             findQuery={findQuery}
             findCaseSensitive={findCaseSensitive}
+            activeFindMatch={activeFindMatch}
             onFileUndo={
               onFileUndo ? (request) => onFileUndo(row, request) : undefined
             }

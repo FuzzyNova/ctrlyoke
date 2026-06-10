@@ -72,7 +72,7 @@ function coerceSearchText(value: unknown): string {
   }
 }
 
-function getToolResultText(result: ToolResult | undefined): string {
+export function getToolResultText(result: ToolResult | undefined): string {
   if (!result) {
     return "";
   }
