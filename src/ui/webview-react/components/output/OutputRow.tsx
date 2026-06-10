@@ -329,6 +329,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
               data.command,
               getFieldMatches("command")
             )}
+            outputFindMatches={getFieldMatches("response")}
+            errorFindMatches={getFieldMatches("error")}
             exitCode={data.exitCode}
             status={data.status}
             expansion={bashExpansion}
@@ -509,11 +511,25 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
       case CLI_EVENT_TYPES.TOOL_CALL: {
         const data = event.data as ToolCall;
         if (!data.name) return null;
+        // getOutputRowSearchSegments derives "toolContent" from
+        // getToolResultText, which prefers result.error over result.output —
+        // mirror that branching so highlights land on whichever text the
+        // match offsets were actually computed against.
+        const toolContentMatches = getFieldMatches("toolContent");
+        const toolContentIsError =
+          !data.result?.success && typeof data.result?.error === "string";
         return (
           <GenericToolCallOutput
             name={data.name}
             parameters={data.parameters}
             result={data.result}
+            nameFindMatches={getFieldMatches("toolLabel")}
+            outputFindMatches={
+              toolContentIsError ? undefined : toolContentMatches
+            }
+            errorFindMatches={
+              toolContentIsError ? toolContentMatches : undefined
+            }
             expansion={row.toolCall?.expansion}
             renderPlan={row.toolCall?.renderPlan}
             onExpansionChange={(section, expanded) =>

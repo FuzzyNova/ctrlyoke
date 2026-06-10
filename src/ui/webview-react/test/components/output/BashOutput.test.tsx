@@ -170,6 +170,49 @@ describe("BashOutput", () => {
     expect(container.firstChild).toHaveClass("my-class");
   });
 
+  it("highlights find matches in output and error", () => {
+    const { container } = render(
+      <BashOutput
+        command="ls"
+        output="alpha beta"
+        error="alpha gamma"
+        status={OPERATION_STATUS.FAILED}
+        outputFindMatches={[{ start: 0, end: 5, active: false }]}
+        errorFindMatches={[{ start: 0, end: 5, active: true }]}
+      />
+    );
+
+    const marks = container.querySelectorAll("mark");
+    expect(marks).toHaveLength(2);
+    expect(marks[0]).not.toHaveAttribute("data-find-active");
+    expect(marks[0].textContent).toBe("alpha");
+    expect(marks[1]).toHaveAttribute("data-find-active", "true");
+    expect(marks[1].textContent).toBe("alpha");
+  });
+
+  it("does not render a mark for a find match hidden behind 'show more'", () => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n");
+    const hiddenMatchStart = lines.indexOf("line 19");
+    const { container } = render(
+      <BashOutput
+        command="cat"
+        output={lines}
+        status={OPERATION_STATUS.COMPLETED}
+        maxLines={10}
+        outputFindMatches={[
+          {
+            start: hiddenMatchStart,
+            end: hiddenMatchStart + "line 19".length,
+            active: true,
+          },
+        ]}
+      />
+    );
+
+    expect(container.querySelector("mark")).toBeNull();
+    expect(screen.getByText(/show .* more line/i)).toBeInTheDocument();
+  });
+
   it("strips ANSI and control characters from command output", () => {
     const { container } = render(
       <BashOutput

@@ -22,6 +22,7 @@ import {
   type ToolCallRenderPlan,
   type ToolCallSectionRenderPlan,
 } from "@utils/toolCallLayout";
+import { highlightText, type RowFindDecoration } from "@utils/outputFind";
 import {
   TOOL_CALL_TERMINAL,
   TOOL_CALL_LINE,
@@ -132,9 +133,9 @@ interface GenericToolCallOutputProps {
   name: string;
   parameters?: Record<string, unknown>;
   result?: ToolResult;
-  nameContent?: React.ReactNode;
-  outputContent?: React.ReactNode;
-  errorContent?: React.ReactNode;
+  nameFindMatches?: RowFindDecoration["matches"];
+  outputFindMatches?: RowFindDecoration["matches"];
+  errorFindMatches?: RowFindDecoration["matches"];
   expansion?: ToolCallExpansionState;
   renderPlan?: ToolCallRenderPlan;
   onExpansionChange?: (
@@ -148,9 +149,9 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   name,
   parameters,
   result,
-  nameContent,
-  outputContent,
-  errorContent,
+  nameFindMatches,
+  outputFindMatches,
+  errorFindMatches,
   expansion,
   renderPlan,
   onExpansionChange,
@@ -200,10 +201,15 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
     content: string,
     type: "output" | "error",
     sectionPlan: ToolCallSectionRenderPlan,
-    contentNode?: React.ReactNode
+    findMatches?: RowFindDecoration["matches"]
   ) => {
     const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
+    const visibleText = getVisibleToolCallText(content, sectionPlan);
 
+    // Highlight only the visible (possibly truncated) slice — find match
+    // offsets are computed against the full text, but highlightText's
+    // normalizeMatches clips/drops any matches outside [0, visibleText.length],
+    // so matches hidden behind "[show more]" simply don't render a <mark>.
     return (
       <div className={`${cssClass} flex items-start gap-1`}>
         <span className="shrink-0">⎿</span>
@@ -211,7 +217,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           className="min-w-0 flex-1 whitespace-pre-wrap break-words"
           id={`${containerId}-${type}`}
         >
-          {contentNode ?? getVisibleToolCallText(content, sectionPlan)}
+          {highlightText(visibleText, findMatches ?? [])}
           {sectionPlan.canToggle && (
             <button
               type="button"
@@ -236,7 +242,13 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       <div className={TOOL_CALL_LINE}>
         <span className="min-w-0 flex-1 break-words">
           <ToolDot status={resultDotStatus(result)} />{" "}
-          {nameContent ?? `${name}(${params})`}
+          {nameFindMatches?.length ? (
+            <>
+              {highlightText(name, nameFindMatches)}({params})
+            </>
+          ) : (
+            `${name}(${params})`
+          )}
         </span>
         {resolvedRenderPlan.params.canToggle && (
           <button
@@ -268,14 +280,14 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           outputStr,
           "output",
           resolvedRenderPlan.output,
-          outputContent
+          outputFindMatches
         )}
       {errorStr &&
         renderExpandableSection(
           errorStr,
           "error",
           resolvedRenderPlan.error,
-          errorContent
+          errorFindMatches
         )}
     </div>
   );

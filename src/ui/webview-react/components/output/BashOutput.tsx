@@ -7,6 +7,10 @@ import {
   formatCollapsedOutputToggleLabel,
 } from "@utils/outputTruncation";
 import {
+  highlightText,
+  type RowFindDecoration,
+} from "@utils/outputFind";
+import {
   TOOL_CALL_TERMINAL,
   TOOL_CALL_LINE,
   TOOL_RESULT_LINE,
@@ -26,8 +30,8 @@ interface BashOutputProps {
   output?: string;
   error?: string;
   commandContent?: React.ReactNode;
-  outputContent?: React.ReactNode;
-  errorContent?: React.ReactNode;
+  outputFindMatches?: RowFindDecoration["matches"];
+  errorFindMatches?: RowFindDecoration["matches"];
   exitCode?: number;
   status?: FileOperationStatus;
   maxLines?: number;
@@ -72,8 +76,8 @@ export const BashOutput = memo<BashOutputProps>(
     output,
     error,
     commandContent,
-    outputContent,
-    errorContent,
+    outputFindMatches,
+    errorFindMatches,
     exitCode,
     status,
     maxLines = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
@@ -127,7 +131,7 @@ export const BashOutput = memo<BashOutputProps>(
       content: string,
       type: "output" | "error",
       isExpanded: boolean,
-      contentNode?: React.ReactNode
+      findMatches?: RowFindDecoration["matches"]
     ) => {
       if (!content) return null;
 
@@ -140,6 +144,10 @@ export const BashOutput = memo<BashOutputProps>(
 
       const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
 
+      // Highlight only the visible (possibly truncated) slice — find match
+      // offsets are computed against the full text, but highlightText's
+      // normalizeMatches clips/drops any matches outside [0, visibleText.length],
+      // so matches hidden behind "[show more]" simply don't render a <mark>.
       return (
         <div className={`${cssClass} flex items-start gap-1`}>
           <span className="shrink-0">⎿</span>
@@ -147,7 +155,7 @@ export const BashOutput = memo<BashOutputProps>(
             className="min-w-0 flex-1 whitespace-pre-wrap break-words"
             id={`${containerId}-${type}`}
           >
-            {contentNode ?? preview.visibleText}
+            {highlightText(preview.visibleText, findMatches ?? [])}
             {canToggle && (
               <button
                 type="button"
@@ -224,13 +232,13 @@ export const BashOutput = memo<BashOutputProps>(
               renderedOutput,
               "output",
               resolvedExpansion.outputExpanded,
-              outputContent
+              outputFindMatches
             )}
             {renderExpandableContent(
               renderedError,
               "error",
               resolvedExpansion.errorExpanded,
-              errorContent
+              errorFindMatches
             )}
           </>
         )}

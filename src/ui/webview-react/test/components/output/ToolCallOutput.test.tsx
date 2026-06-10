@@ -123,4 +123,36 @@ describe("GenericToolCallOutput", () => {
 
     expect(collapsedOutput?.textContent).not.toContain("x".repeat(1300));
   });
+
+  it("highlights find matches in the tool name and output", () => {
+    const { container } = render(
+      <GenericToolCallOutput
+        name="write_memory"
+        result={{ success: true, output: "alpha beta" }}
+        nameFindMatches={[{ start: 0, end: 5, active: true }]}
+        outputFindMatches={[{ start: 0, end: 5, active: false }]}
+      />
+    );
+
+    const marks = container.querySelectorAll("mark");
+    expect(marks).toHaveLength(2);
+    expect(marks[0]).toHaveAttribute("data-find-active", "true");
+    expect(marks[0].textContent).toBe("write");
+    expect(marks[1]).not.toHaveAttribute("data-find-active");
+    expect(marks[1].textContent).toBe("alpha");
+  });
+
+  it("highlights find matches in the tool error", () => {
+    const { container } = render(
+      <GenericToolCallOutput
+        name="run_command"
+        result={{ success: false, error: "alpha failed" }}
+        errorFindMatches={[{ start: 0, end: 5, active: true }]}
+      />
+    );
+
+    const mark = container.querySelector("mark");
+    expect(mark).toHaveAttribute("data-find-active", "true");
+    expect(mark?.textContent).toBe("alpha");
+  });
 });
