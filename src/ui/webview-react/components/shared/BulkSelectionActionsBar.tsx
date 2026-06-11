@@ -132,6 +132,8 @@ export function BulkSelectionActionsBar({
         </span>
       </label>
 
+      <div className="flex flex-wrap items-center gap-2 lg:ml-auto lg:flex-nowrap">
+        <span className="text-xs text-description-fg">Bulk action:</span>
         <ActionDropdown
           label={getActionLabel(action)}
           items={actionItems}
@@ -139,65 +141,66 @@ export function BulkSelectionActionsBar({
           className="shrink-0 max-w-full"
         />
 
-      {shouldShowLocationControls ? (
-        <>
-          <span className="shrink-0 text-xs text-description-fg">
-            {action === "save" ? "to:" : "from:"}
+        {shouldShowLocationControls ? (
+          <>
+            <span className="shrink-0 text-xs text-description-fg">
+              {action === "save" ? "to:" : "from:"}
+            </span>
+
+            <select
+              value={scope}
+              onChange={(event) =>
+                handleScopeChange(event.target.value as SettingWriteScope)
+              }
+              className="h-6 shrink-0 rounded border border-input-border bg-input-bg px-2 text-xs text-foreground focus:border-focus-border focus:outline-none"
+            >
+              <option value={SETTING_SCOPES.WORKSPACE}>Workspace</option>
+              <option value={SETTING_SCOPES.USER}>User</option>
+            </select>
+
+            {scopeTargets.length > 0 ? (
+              <ActionDropdown
+                label={getTargetLabel(targetId)}
+                items={targetItems}
+                onSelect={(value) => setTargetId(value as AnyTargetId)}
+                className="shrink-0 max-w-full"
+              />
+            ) : (
+              <div className="shrink-0 max-w-full rounded border border-panel-border bg-list-hover-bg px-2 py-1 text-xs text-description-fg">
+                No targets available for {scope}
+              </div>
+            )}
+          </>
+        ) : (
+          <span className="text-xs text-description-fg">
+            defaults (
+            {activeScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"})
           </span>
+        )}
 
-          <select
-            value={scope}
-            onChange={(event) =>
-              handleScopeChange(event.target.value as SettingWriteScope)
+        <button
+          type="button"
+          disabled={isSubmitDisabled}
+          onClick={() => {
+            if (action === "save") {
+              onSave(targetId, scope);
+              return;
             }
-            className="h-6 shrink-0 rounded border border-input-border bg-input-bg px-2 text-xs text-foreground focus:border-focus-border focus:outline-none"
-          >
-            <option value={SETTING_SCOPES.WORKSPACE}>Workspace</option>
-            <option value={SETTING_SCOPES.USER}>User</option>
-          </select>
-
-          {scopeTargets.length > 0 ? (
-            <ActionDropdown
-              label={getTargetLabel(targetId)}
-              items={targetItems}
-              onSelect={(value) => setTargetId(value as AnyTargetId)}
-              className="shrink-0 max-w-full"
-            />
-          ) : (
-            <div className="shrink-0 max-w-full rounded border border-panel-border bg-list-hover-bg px-2 py-1 text-xs text-description-fg">
-              No targets available for {scope}
-            </div>
-          )}
-        </>
-      ) : (
-        <span className="text-xs text-description-fg">
-          defaults (
-          {activeScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"})
-        </span>
-      )}
-
-      <button
-        type="button"
-        disabled={isSubmitDisabled}
-        onClick={() => {
-          if (action === "save") {
-            onSave(targetId, scope);
-            return;
-          }
-          if (action === "delete") {
-            onDelete(targetId, scope);
-            return;
-          }
-          onSetDefault();
-        }}
-        className={`h-6 shrink-0 rounded px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
-          action === "delete"
-            ? "border border-btn-border bg-btn-secondary-bg text-error-fg hover:bg-btn-secondary-hover"
-            : "bg-btn-bg text-btn-fg hover:bg-btn-hover"
-        }`}
-      >
-        {getSubmitLabel(action)}
-      </button>
+            if (action === "delete") {
+              onDelete(targetId, scope);
+              return;
+            }
+            onSetDefault();
+          }}
+          className={`h-6 shrink-0 rounded px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
+            action === "delete"
+              ? "border border-btn-border bg-btn-secondary-bg text-error-fg hover:bg-btn-secondary-hover"
+              : "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+          }`}
+        >
+          {getSubmitLabel(action)}
+        </button>
+      </div>
     </div>
   );
 }

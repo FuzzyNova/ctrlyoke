@@ -853,7 +853,11 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
       }
       return;
     }
-    exportToHarness(selectedServers.map((server) => server.config), id, scope);
+    exportToHarness(
+      selectedServers.map((server) => server.config),
+      id,
+      scope
+    );
   };
 
   const handleDeleteAllRequest = (
@@ -906,7 +910,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   };
 
   const handleSetDefault = () => {
-    const visibleIds = new Set((managedServers ?? []).map((server) => server.id));
+    const visibleIds = new Set(
+      (managedServers ?? []).map((server) => server.id)
+    );
     const preservedDefaults = defaultsServers.filter((entry) => {
       const id = typeof entry === "string" ? entry : entry.id;
       return !visibleIds.has(id);
@@ -947,25 +953,6 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
         </span>
       </div>
 
-      <div className="rounded border border-panel-border bg-editor-bg px-3 py-2">
-        <BulkSelectionActionsBar
-          totalCount={managedServers?.length ?? 0}
-          selectedCount={selectedServers.length}
-          selectAllState={selectAllState}
-          onToggleSelectAll={handleToggleSelectAll}
-          availableActions={["save", "delete", "setDefault"]}
-          getTargetsForScope={getMcpTargetsForScope}
-          getTargetLabel={getExportTargetLabel}
-          getTargetDescription={getExportTargetDescription}
-          defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
-          defaultScope={activeScope}
-          activeScope={activeScope}
-          onSave={handleSaveAll}
-          onDelete={handleDeleteAllRequest}
-          onSetDefault={handleSetDefault}
-        />
-      </div>
-
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
@@ -974,6 +961,25 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           <span className="text-xxs text-description-fg">
             {managedServers?.length ?? 0} total
           </span>
+        </div>
+
+        <div className="rounded border border-panel-border bg-editor-bg px-3 py-2">
+          <BulkSelectionActionsBar
+            totalCount={managedServers?.length ?? 0}
+            selectedCount={selectedServers.length}
+            selectAllState={selectAllState}
+            onToggleSelectAll={handleToggleSelectAll}
+            availableActions={["save", "delete", "setDefault"]}
+            getTargetsForScope={getMcpTargetsForScope}
+            getTargetLabel={getExportTargetLabel}
+            getTargetDescription={getExportTargetDescription}
+            defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
+            defaultScope={activeScope}
+            activeScope={activeScope}
+            onSave={handleSaveAll}
+            onDelete={handleDeleteAllRequest}
+            onSetDefault={handleSetDefault}
+          />
         </div>
 
         <div className="overflow-hidden rounded border border-panel-border">
