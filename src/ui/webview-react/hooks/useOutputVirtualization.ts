@@ -776,13 +776,15 @@ export function useOutputVirtualization({
     requestAnimationFrame(() => {
       rowVirtualizer.measure();
     });
-  }, [
-    activeOutputTab,
-    isOutputVirtualized,
-    outputCollapsed,
-    rowVirtualizer,
-    rows.length,
-  ]);
+    // rows.length is intentionally excluded. rowVirtualizer.measure() clears
+    // itemSizeCache and re-estimates every row from bucket estimates; doing
+    // that on every appended row can momentarily mismatch dozens of
+    // already-rendered rows at once (each producing its own virtualizer
+    // notify), which during a cold/long session can cascade past React's
+    // nested-update limit (error #185). New rows are measured individually
+    // as they mount, so a full re-measure is only needed when the output
+    // pane transitions from hidden/collapsed back into view.
+  }, [activeOutputTab, isOutputVirtualized, outputCollapsed, rowVirtualizer]);
 
   const hasOutput = rows.length > 0;
   const nonVirtualVisibleRowCount = isOutputVirtualized
