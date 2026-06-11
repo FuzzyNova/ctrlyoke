@@ -1007,46 +1007,85 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-start gap-2 px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedId(
-                            expandedId === server.id ? null : server.id
-                          )
-                        }
-                        className="mt-0.5 flex h-4 w-4 items-center justify-center text-description-fg hover:text-foreground"
-                        aria-label={
-                          expandedId === server.id
-                            ? `Collapse ${server.id}`
-                            : `Expand ${server.id}`
-                        }
-                      >
-                        <i
-                          className={`codicon codicon-chevron-${
-                            expandedId === server.id ? "down" : "right"
-                          } text-xxs`}
-                        />
-                      </button>
+                    <div className="px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedId(
+                              expandedId === server.id ? null : server.id
+                            )
+                          }
+                          className="flex h-4 w-4 shrink-0 items-center justify-center text-description-fg hover:text-foreground"
+                          aria-label={
+                            expandedId === server.id
+                              ? `Collapse ${server.id}`
+                              : `Expand ${server.id}`
+                          }
+                        >
+                          <i
+                            className={`codicon codicon-chevron-${
+                              expandedId === server.id ? "down" : "right"
+                            } text-xxs`}
+                          />
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedId(
-                            expandedId === server.id ? null : server.id
-                          )
-                        }
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedId(
+                              expandedId === server.id ? null : server.id
+                            )
+                          }
+                          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                        >
                           <span className="truncate text-xs font-medium text-foreground">
                             {server.displayName}
                           </span>
                           {server.displayName !== server.id && (
-                            <span className="rounded bg-list-hover-bg px-1 py-0.5 font-mono text-xxs text-description-fg">
+                            <span className="shrink-0 rounded bg-list-hover-bg px-1 py-0.5 font-mono text-xxs text-description-fg">
                               {server.id}
                             </span>
                           )}
+                        </button>
+
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(server)}
+                            className="flex items-center gap-1 rounded border border-panel-border px-1.5 py-0.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+                            title={`Edit ${server.id} in ${activeScope}`}
+                          >
+                            <i className="codicon codicon-edit text-xxs" />
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDefaultToggle(server)}
+                            className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-xxs transition-colors ${
+                              defaultsEnabled
+                                ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                                : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
+                            }`}
+                            title={
+                              defaultsEnabled
+                                ? `Remove from default MCP servers (${activeScope})`
+                                : `Add to default MCP servers (${activeScope})`
+                            }
+                          >
+                            <i className="codicon codicon-globe text-xxs" />
+                            {defaultsEnabled ? "Default" : "Set default"}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-1 truncate font-mono text-xxs text-description-fg">
+                        {getServerSummary(server.config)}
+                      </div>
+
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1">
                           {allLocations.map((location) => (
                             <ScopeBadge
                               key={`${server.id}:${location.kind}:${location.targetId}:${location.scope}:${location.path}`}
@@ -1056,60 +1095,32 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                             />
                           ))}
                         </div>
-                        <div className="mt-0.5 truncate font-mono text-xxs text-description-fg">
-                          {getServerSummary(server.config)}
+
+                        <div className="flex items-center gap-1.5 ml-auto">
+                          <FlyoutActionDropdown
+                            label="Save"
+                            icon="save"
+                            groups={exportGroups}
+                            onSelect={(encoded) => {
+                              const { id, scope } = decodeTarget(encoded);
+                              exportToHarness([server.config], id, scope);
+                            }}
+                          />
+
+                          <ActionDropdown
+                            label="Delete…"
+                            icon="trash"
+                            items={deleteItems}
+                            onSelect={(value) =>
+                              setDeleteLocationState({
+                                serverId: server.id,
+                                displayName: server.displayName,
+                                location: decodeLocationValue(value),
+                              })
+                            }
+                            className="shrink-0 text-error-fg"
+                          />
                         </div>
-                      </button>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleDefaultToggle(server)}
-                          className={`rounded border px-1.5 py-0.5 text-xxs transition-colors ${
-                            defaultsEnabled
-                              ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                              : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
-                          }`}
-                          title={
-                            defaultsEnabled
-                              ? `Remove from default MCP servers (${activeScope})`
-                              : `Add to default MCP servers (${activeScope})`
-                          }
-                        >
-                          {defaultsEnabled ? "Default" : "Set default"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleStartEdit(server)}
-                          className="flex h-5 w-5 items-center justify-center rounded text-description-fg hover:bg-toolbar-hover-bg hover:text-foreground"
-                          aria-label={`Edit ${server.id}`}
-                          title={`Edit ${server.id} in ${activeScope}`}
-                        >
-                          <i className="codicon codicon-edit text-xxs" />
-                        </button>
-
-                        <FlyoutActionDropdown
-                          label="Save"
-                          groups={exportGroups}
-                          onSelect={(encoded) => {
-                            const { id, scope } = decodeTarget(encoded);
-                            exportToHarness([server.config], id, scope);
-                          }}
-                        />
-
-                        <ActionDropdown
-                          label="Delete…"
-                          items={deleteItems}
-                          onSelect={(value) =>
-                            setDeleteLocationState({
-                              serverId: server.id,
-                              displayName: server.displayName,
-                              location: decodeLocationValue(value),
-                            })
-                          }
-                          className="shrink-0 text-error-fg"
-                        />
                       </div>
                     </div>
 

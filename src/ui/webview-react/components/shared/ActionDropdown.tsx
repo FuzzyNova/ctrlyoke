@@ -16,6 +16,8 @@ export interface ActionDropdownItem {
 
 export interface ActionDropdownProps {
   label: string;
+  /** Optional codicon name (without the `codicon-` prefix) shown before the label */
+  icon?: string;
   items: ActionDropdownItem[];
   onSelect: (value: string) => void;
   className?: string;
@@ -49,6 +51,7 @@ export function ActionDropdownItemContent({
  */
 export function ActionDropdown({
   label,
+  icon,
   items,
   onSelect,
   className = "",
@@ -88,7 +91,10 @@ export function ActionDropdown({
         onClick={() => setOpen((p) => !p)}
         className="flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
       >
-        <span className="truncate">{label}</span>
+        <span className="flex min-w-0 items-center gap-1 truncate">
+          {icon && <i className={`codicon codicon-${icon} text-xxs`} />}
+          <span className="truncate">{label}</span>
+        </span>
         <i
           className={`codicon codicon-chevron-${open ? "up" : "down"} text-[10px]`}
         />

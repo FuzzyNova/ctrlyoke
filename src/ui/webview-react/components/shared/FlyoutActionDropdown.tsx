@@ -20,6 +20,8 @@ export interface FlyoutGroup {
 
 export interface FlyoutActionDropdownProps {
   label: string;
+  /** Optional codicon name (without the `codicon-` prefix) shown before the label */
+  icon?: string;
   groups: FlyoutGroup[];
   onSelect: (value: string) => void;
   className?: string;
@@ -41,6 +43,7 @@ const LEVEL_TWO_MIN_WIDTH = 240;
  */
 export function FlyoutActionDropdown({
   label,
+  icon,
   groups,
   onSelect,
   className = "",
@@ -187,7 +190,10 @@ export function FlyoutActionDropdown({
         onClick={handleTrigger}
         className="flex w-full items-center justify-between gap-1 px-2 py-0.5 text-xs rounded bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border hover:bg-btn-secondary-hover"
       >
-        <span className="truncate">{label}</span>
+        <span className="flex min-w-0 items-center gap-1 truncate">
+          {icon && <i className={`codicon codicon-${icon} text-xxs`} />}
+          <span className="truncate">{label}</span>
+        </span>
         <i
           className={`codicon codicon-chevron-${isLevelOneOpen ? "up" : "down"} text-[10px]`}
         />
