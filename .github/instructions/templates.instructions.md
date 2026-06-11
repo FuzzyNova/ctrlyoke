@@ -3,127 +3,39 @@ applyTo: "src/templates/**"
 ---
 
 <purpose>
-Templates for end condition scripts, custom agents, and workflow files.
-Copied to `out/templates/` during build.
+Bundled source assets for workflow templates, importable agents, and starter end-condition scripts.
+Runtime code reads the built copies from `out/templates/`, never `src/templates/` directly.
 </purpose>
 
-<directory>
-`agents/` - Custom agents with manifest
-`workflows/` - Workflow templates (YAML) with manifest
-`check_condition.*` - End condition script templates (5 types: `.py`, `.js`, `.sh`, `.bat`, `.ps1`)
-</directory>
+<entryPoints>
+- `src/flightpath/TemplateManager.ts` owns built-in workflow IDs, `_templateMeta` parsing, placeholder extraction/replacement, and workflow creation.
+- `src/flightpath/orchestration/TemplateImporter.ts` uses `agents/manifest.json` and `workflows/manifest.json` to populate the import UI and copy files into a workspace.
+</entryPoints>
 
-<bundledAssets>
-**Current bundled agents:** `flightpath-orchestrator.agent.md`, `spec-orchestrator.agent.md`
-
-**Current bundled workflow templates:** `simple-feature.flightpath.yaml`, `fix-tests.flightpath.yaml`, `full-feature.flightpath.yaml`, `spec-driven-loop.flightpath.yaml`
-
-These inventories are mirrored in `agents/manifest.json` and `workflows/manifest.json`; keep manifests and physical files in sync.
-</bundledAssets>
-
-<endConditionScripts>
-**Contract:** stdout = expected value, exit 0 = success. Include shebang. Use `subprocess`/`spawn` (not `eval`). Default to returning `"true"`.
-</endConditionScripts>
-
-<agentFormat>
-`.agent.md` files with YAML frontmatter (`name`, `description`, optional: `tools`, `model`).
-
-Two structural styles in use:
-
-- **XML structure** (`spec-orchestrator`): `<purpose>`, `<guidelines>`, `<criticalRules>` tags
-- **Markdown headings** (`flightpath-orchestrator`): standard `##` sections
-
-Both styles are valid. XML structure is preferred for agents that need strict behavioral rules.
-</agentFormat>
-
-<manifestFiles>
-`agents/manifest.json` and `workflows/manifest.json` share the same schema:
-```json
-{ "id", "label", "description", "file", "tags": [], "icon": "$(codicon)" }
-```
-Loaded by TemplateImporter for import commands. Must be valid JSON.
-</manifestFiles>
+<workflowTemplates>
+- Built-in workflow files here are YAML; `TemplateManager` treats them as the source of truth for built-ins (`simple-feature`, `fix-tests`, `full-feature`, `spec-driven-loop`). `blank` is special-cased in code and has no file here.
+- Workspace custom templates are discovered separately from `.flightpath/templates/*.flightpath.json` as `custom:<name>` IDs. Do not assume files under `src/templates/workflows/` cover all available templates.
+- `_templateMeta` is authoring-only metadata for the picker UI; `createWorkflow()` strips it before writing the real workflow file.
+- `spec-driven-loop` is the canonical example of `finalStep` orchestration: it relies on `agent`, `mcpServers: [flightpath]`, and `priorContext: all` together.
+</workflowTemplates>
 
 <templateVariables>
-Templates support `{variableName}` placeholder substitution:
+- Supported placeholders are `{name}`, `{text:name}`, and `{file:name}`. Extraction is regex-based, so keep names simple (`[a-z][a-zA-Z0-9]*`).
+- File variables belong in prompt text as `@{file:name}` — the `@` stays outside the braces so substitution still produces a valid attachment reference.
+- `_templateMeta.variables` can enrich extracted variables with `type`, `fileFilter`, and `autoFillFilename`; only the first variable marked `autoFillFilename: true` wins.
+- Retry placeholders like `{stdout}`, `{stderr}`, `{expected}`, `{actual}`, `{exitCode}`, and `{compareSource}` are reserved runtime values, not template-input variables.
+</templateVariables>
 
-**Built-in workflow templates** (`BUILT_IN_TEMPLATE_IDS` in TemplateManager):
+<manifests>
+- Keep each manifest in sync with the actual files it exposes; `TemplateImporter` trusts `file` names from the manifest when copying.
+- Manifest entries are the curated import surface. Adding a file here is not enough for built-in workflow creation; adding/removing a built-in workflow also requires updating `TemplateManager.BUILT_IN_TEMPLATE_IDS`.
+</manifests>
 
-- `blank` — generated (no file), empty 2-prompt workflow
-- `simple-feature` — `{featureDescription}`
-- `fix-tests` — `{testCommand}`
-- `full-feature` — `{featureDescription}`, `{planDocument}`
-- `spec-driven-loop` — `{file:specFile}` (file type with `fileFilter` + `autoFillFilename`)
-
-**Reserved variables** (injected at runtime into `retryPrompt`, do NOT use as template placeholders):
-
-- `{stdout}` — stdout from the endCondition script
-- `{stderr}` — stderr from the endCondition script
-- `{expected}` — expected return value
-- `{actual}` — actual return value (same as stdout)
-- `{exitCode}` — script exit code
-- `{compareSource}` — compare mode (`auto`, `stdout`, `stderr`)
-
-**Variable extraction pattern:** `/\{(?:(file|text):)?([a-z][a-zA-Z0-9]*)\}/g`
-
-**Typed placeholder syntax:**
-
-| Syntax           | Type            | Modal UI                                                    |
-| ---------------- | --------------- | ----------------------------------------------------------- |
-| `{varName}`      | text (default)  | plain text input                                            |
-| `{text:varName}` | text (explicit) | plain text input                                            |
-| `{file:varName}` | file            | text input + Browse button (workspace-relative file picker) |
-
-`extractVariables()` parses the type prefix. `replaceVariables()` substitutes all three forms.
-
-**`_templateMeta` block** — declare in any template (built-in YAML or custom JSON) to enrich variables with UI metadata:
-
-```yaml
-_templateMeta:
-  name: My Template
-  description: What this does
-  variables:
-    specFile:
-      type: file
-      fileFilter: ["**/*.md", "**/*.txt"]
-      autoFillFilename: true # auto-fills workflow filename from selected file's basename
-```
-
-- `fileFilter` — glob patterns for the file picker
-- `autoFillFilename: true` — only the first variable with this wins; others are ignored with a warning
-- `_templateMeta` is stripped from the workflow file on creation (it's authoring metadata only)
-  </templateVariables>
-
-<workflowFields>
-Built-in templates use YAML (`.flightpath.yaml`). Custom templates use JSON (`.flightpath.json`).
-
-Key workflow-level fields used in templates:
-
-- `steps[]` — main execution sequence
-- `finalStep` — single prompt run after all `steps` complete; used with `agent` + `mcpServers: ["flightpath"]` + `priorContext: all` for orchestration loops (see `spec-driven-loop`)
-- `resumeSession: true` on a prompt — continues in the same session as the previous prompt
-
-The `_templateMeta` top-level key is template-only; never appears in executed workflow files.
-</workflowFields>
-
-<contextSyntax>
-**Full file / directory attachment:** `@path/to/file.ts`, `@path/to/dir/`
-**Line range:** `#selection:path:startLine-endLine`
-**Template file variable:** `@{file:varName}` — substituted before parsing
-
-Use `@path` for attaching whole files in templates — portable across all harnesses.
-`@{file:varName}` is the correct syntax for file-type template variables (note: `@` prefix outside the braces).
-</contextSyntax>
-
-<integration>
-**TemplateManager**: Loads/extracts/substitutes variables, discovers custom templates.
-- Built-in paths: `out/templates/workflows/` (YAML files)
-- Custom paths: `.flightpath/templates/` (JSON files, IDs prefixed with `custom:`)
-- `getAvailableTemplates()` reads `_templateMeta` from each YAML/JSON file for name, description, and variable enrichment
-
-**TemplateImporter**: Copies agents/workflows, loads manifests, handles import commands
-</integration>
+<agentsAndScripts>
+- `.agent.md` files are copied verbatim into `.github/agents/`; frontmatter and body style are consumed by downstream agent tooling, not normalized during import.
+- `check_condition.*` files are starter examples for `endCondition.script`. Keep them portable, simple, and aligned with the runtime contract: compare output deterministically and return `"true"` on success.
+</agentsAndScripts>
 
 <build>
-Source: `src/templates/` → Output: `out/templates/` (never edit `out/`). Access via `context.extensionPath`. Manifests must be valid JSON.
+Edit `src/templates/**`, not `out/templates/**`.
 </build>

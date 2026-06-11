@@ -3,146 +3,84 @@ applyTo: "src/extension.ts, src/mcp-server.ts"
 ---
 
 <purpose>
-VS Code extension entry point (`extension.ts`) and standalone MCP server binary (`mcp-server.ts`). `extension.ts` wires every subsystem together at activation time. `mcp-server.ts` is a separate stdio process — it never imports `vscode` and is compiled independently.
+These two files are process entry points, not general-purpose dumping grounds.
+
+- `src/extension.ts` wires the VS Code-side control plane at activation time.
+- `src/mcp-server.ts` is a separate stdio binary used by AI harnesses and commit-message generation; it must stay usable without `vscode`.
+
+Keep them focused on startup/shutdown wiring, cross-subsystem handoff, and process-boundary contracts. Push feature logic into the owning subsystem instead of growing either entry point.
 </purpose>
 
-<activationOrder>
-`activate()` runs these steps in strict order. Do not reorder them.
+<extensionActivation>
+`activate()` has a meaningful order. Preserve these dependencies when editing startup:
 
-1. `configService.setUserBackend / setWorkspaceBackend` — must happen before `Log.initialize(context)` so diagnostic logging reads the correct startup config.
-2. `Log.initialize(context)` — creates the output channel early so all subsequent logging works.
-3. `initializeModelRegistry()` — fire-and-forget; unblocks IntelliSense immediately.
-4. Workspace bootstrap — if the first workspace is already initialized, call `WorkspaceInitializer.initializeIfNeeded()` and `TempFileManager.cleanupOrphanedFiles()` fire-and-forget; otherwise remember `pendingInitWorkspaceRoot` so startup can be gated behind the dashboard init prompt after orchestrator creation.
-5. `new FlightPathWebviewProvider(context)` + `registerWebviewViewProvider` — panel must exist before orchestrator is created.
-6. `initPtyProcessManager(webviewProvider.postMessagePublic)` — PTY must be initialized after the webview but before the orchestrator.
-7. `new WorkflowOrchestrator(context, webviewProvider)` — creates all seven harness integrations.
-8. `workflowOrchestrator.setWorkspaceInitPending(pendingInitWorkspaceRoot)` — only when bootstrap detected an uninitialized workspace; must run before `initialize()`.
-9. `webviewProvider.setWorkflowOrchestrator / setHub` — cross-reference wiring after both objects exist.
-10. `setPtyPostMessage(hub.postMessage)` — upgrades PTY to broadcast through the hub (replaces the panel-only reference from step 6).
-11. `new NotificationManager(() => workflowOrchestrator)` + `hub.addClient(notificationManager)` — registers notification manager as a dashboard sink for VS Code toast notifications.
-12. `webviewProvider.setOutputHistoryManager` — shares the single OutputHistoryManager instance with the webview provider.
-13. `vscode.lm.registerMcpServerDefinitionProvider` — guarded by `typeof … === "function"` for API availability.
-14. `workflowOrchestrator.initialize()` — fire-and-forget; lets `resolveWebviewView()` run immediately.
-15. `onDidChangeActiveColorTheme` subscription — theme change listener.
-16. Completion providers (`PromptCompletionProvider` with `@`, `#`, `~`, `$` triggers; `PromptPropertyCompletionProvider`; `PromptLinkProvider`) and `initializeCompletionHelpers`.
-17. `registerLanguageModelTools(context)` — four LM tools.
-18. `registerCommands(context)` — registers workflow/dashboard commands, SCM commit-message commands, auto-starts the hosted server if `configService.get("server")?.enabled`, then dev commands (`registerDevCommands`) only when `IS_DEV_MODE`.
-    </activationOrder>
+1. Configure `configService` backends **before** `Log.initialize(context)` so startup logging sees the real file-backed settings.
+2. Kick off `initializeModelRegistry()` early, but do not block activation on it.
+3. Workspace bootstrap happens before orchestrator creation:
+   - initialized workspace: fire-and-forget `WorkspaceInitializer.initializeIfNeeded()` and `TempFileManager.cleanupOrphanedFiles()`
+   - uninitialized workspace: capture `pendingInitWorkspaceRoot` only
+4. Create/register `FlightPathWebviewProvider` **before** PTY/orchestrator setup.
+5. Initialize `PtyProcessManager` with the panel postMessage first, then create `WorkflowOrchestrator`.
+6. If workspace init is pending, call `workflowOrchestrator.setWorkspaceInitPending(...)` **before** `initialize()`.
+7. After both objects exist, wire cross-references:
+   - `webviewProvider.setWorkflowOrchestrator(...)`
+   - `webviewProvider.setHub(...)`
+   - `setPtyPostMessage(hub.postMessage)` to upgrade PTY fan-out from panel-only to all dashboard clients
+8. Register `NotificationManager` as a hub client and share the orchestrator's `OutputHistoryManager` with the webview provider.
+9. Register `FlightPathMcpServerProvider` only when `vscode.lm.registerMcpServerDefinitionProvider` exists. This provider is only for user-defined MCP servers in `copilot-chat`; it does **not** represent the built-in `flightpath` tools.
+10. Call `workflowOrchestrator.initialize()` fire-and-forget. The webview is allowed to resolve before harness detection finishes.
+11. Only after core wiring: theme listener, completion/link providers, `initializeCompletionHelpers(context)`, LM tools, then command registration.
 
-<disposableRegistration>
-**Rule:** Every disposable that VS Code should clean up on deactivation must be pushed to `context.subscriptions`.
+Current activation assumes the **first workspace folder** is the workspace root for config backend setup, initialization, workflow discovery, and several commands. If multi-root behavior changes, update those paths together.
+</extensionActivation>
 
-- Webview provider, PTY manager, MCP provider, theme-change listener, all completion providers, all LM tools — pushed individually or in one `push(...)` call.
-- Commands are collected into locals then pushed in a **single batched** `context.subscriptions.push(cmd1, cmd2, …)` at the end of `registerCommands()`.
-- Detector integrations (created inside `WorkflowOrchestrator`) are registered via the `context` passed to the orchestrator constructor — not directly in `activate()`.
-- `notificationManager` is NOT in subscriptions; it is registered as a hub client via `hub.addClient()` and is disposed when the orchestrator (and hub) are disposed.
-- `hostedServer` (module-level `let`) is NOT in subscriptions; it is disposed manually in both `deactivate()` and `disableServer` command handler.
-- Dev commands are pushed inside `registerDevCommands()` using the same `context` reference.
-  </disposableRegistration>
+<extensionPatterns>
+Important `extension.ts` conventions:
 
-<commandRegistration>
-All production commands live in `registerCommands(context: vscode.ExtensionContext)`, called from `activate()`.
-
-**Pattern for each command:**
-
-```typescript
-const myCommand = vscode.commands.registerCommand(
-  "flightpath.myCommand",
-  async () => {
-    await workflowOrchestrator.myMethod();
-  }
-);
-```
-
-- Commands that need a `uri` argument (context menu) receive it as the first parameter: `async (uri: vscode.Uri) => { … }`.
-- Context-menu commands always call `saveIfDirty(uri.fsPath)` before executing.
-- Commands that open the dashboard panel call `vscode.commands.executeCommand("flightpath.dashboard.focus")`.
-- SCM commit-message integration uses a single `const scmCommitCommand = new ScmCommitCommand();` local inside `registerCommands()`.
-- `VSCODE_COMMANDS.GENERATE_COMMIT_MESSAGE` registers `flightpath.generateCommitMessage` and delegates to `scmCommitCommand.execute(context)`; `VSCODE_COMMANDS.CANCEL_COMMIT_MESSAGE_GENERATION` delegates to `scmCommitCommand.cancel()`.
-- `ScmCommitCommand` (in `src/scm/ScmCommitCommand.ts`) owns the Source Control progress UI and toggles `VSCODE_CONTEXT_KEYS.GENERATING_COMMIT_MESSAGE` via `setContext`. When a VS Code command ID or context key is shared across files or `package.json` `when` clauses, define it in `src/types/DashboardConstants.ts` (`VSCODE_COMMANDS` / `VSCODE_CONTEXT_KEYS`) instead of duplicating string literals.
-- Server commands (`enableServer`, `disableServer`) access the module-level `hostedServer` variable directly.
-- All registered `Disposable` instances are pushed in a single batch at the end of the function.
-- Dev commands are conditionally registered **after** the batch push, inside `if (IS_DEV_MODE)`.
-  </commandRegistration>
-
-<languageModelTools>
-Four LM tools registered via `registerLanguageModelTools(context)`. Each tool is wrapped in try/catch — failure is non-fatal (logged as warning).
-
-| Tool ID                   | Operation                                              |
-| ------------------------- | ------------------------------------------------------ |
-| `flightpath_queue_status` | Read active queue state                                |
-| `flightpath_append_queue` | Append steps; resumes execution if queue was completed |
-| `flightpath_capabilities` | Return available harnesses and models                  |
-| `flightpath_read_output`  | Read AI response text from completed prompts           |
-
-All four are pushed to `context.subscriptions` as a single batch. Both `flightpath_queue_status` and `flightpath_append_queue` require `workflowOrchestrator.getActivePromptQueue()` to be non-null; return a structured error string when it is null rather than throwing.
-</languageModelTools>
-
-<moduleScope>
-Four module-level variables in `extension.ts`:
-
-```typescript
-let workflowOrchestrator: WorkflowOrchestrator; // set in activate(), used in commands
-let webviewProvider: FlightPathWebviewProvider; // set in activate(), used in commands
-let hostedServer: FlightPathHostedServer | undefined; // managed by enableServer/disableServer commands
-let notificationManager: NotificationManager | undefined; // registered as hub client, not in subscriptions
-```
-
-These are intentionally module-scoped (not passed as parameters) because commands are registered as closures that capture them. Never extract them into a separate module.
-</moduleScope>
+- `workflowOrchestrator`, `webviewProvider`, `hostedServer`, and `notificationManager` are intentionally module-scoped so registered commands can close over them. Do not move them into a separate service locator.
+- Everything VS Code should auto-dispose belongs in `context.subscriptions`. The notable exceptions are:
+  - `hostedServer`, disposed manually by `disableServer` and `deactivate()`
+  - `notificationManager`, owned through `DashboardBroadcastHub.addClient(...)`
+- `registerLanguageModelTools(context)` always registers the same four LM tools: queue status, append queue, capabilities, and read output. Their MCP twins live in `mcp-server.ts`; keep semantics aligned.
+- `registerCommands(context)` is the single production command-wiring point. Keep it orchestration-only:
+  - context-menu commands save dirty files before delegating
+  - the hosted server auto-start check runs **after** command registration
+  - dev commands are last and stay behind `IS_DEV_MODE`
+- Shared command IDs, context keys, queue positions, execution states, and message types belong in `src/types/DashboardConstants.ts`, not as new literals here.
+- `ScmCommitCommand` is instantiated once inside `registerCommands()` and owns SCM-specific UX; `extension.ts` should only register/delegate to it.
+</extensionPatterns>
 
 <deactivation>
-`deactivate()` is **async** (`export async function deactivate(): Promise<void>`).
+`deactivate()` is intentionally small:
 
-1. `getPtyProcessManager()?.gracefulShutdownAllAiCliSessions()` — sends Ctrl+C twice to all active AI CLI PTY sessions and waits 500ms, preventing "improper shutdown" warnings from AI CLIs on next launch.
-2. `hostedServer?.dispose()` then set to `undefined`.
-3. `workflowOrchestrator.dispose()` — tears down all seven detector integrations, active workflow instances, and settings hooks trackers.
+1. ask `PtyProcessManager` to gracefully stop AI CLI sessions first
+2. dispose the hosted server and clear the module-scoped reference
+3. dispose the orchestrator
 
-After `deactivate()` resolves, VS Code disposes `context.subscriptions` — this triggers `PtyProcessManager.dispose()` as the hard-kill fallback for any sessions not yet dead. Do not repeat those disposals here.
+Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-kill fallback and other disposables run there after deactivation returns.
 </deactivation>
 
 <mcpServer>
-`mcp-server.ts` is compiled as a **standalone CJS binary** (`flightpath-mcp`). It never imports `vscode`.
+`mcp-server.ts` is a standalone CJS/stdin-stdout process. Treat it as an external contract.
 
-**Entry point:**
-
-```typescript
-const server = new FlightPathMCPServer();
-server.start().catch(() => process.exit(1));
-```
-
-**Environment variables consumed:**
-
-| Variable                     | Default         | Purpose                                                   |
-| ---------------------------- | --------------- | --------------------------------------------------------- |
-| `FLIGHTPATH_WORKSPACE`       | `process.cwd()` | Workspace root for `.flightpath/.queue/` discovery        |
-| `FLIGHTPATH_WORKING_FILE`    | scan queue dir  | Explicit working file path                                |
-| `FLIGHTPATH_MAX_QUEUE_SIZE`  | `100`           | Max queue entries (0 = unlimited)                         |
-| `FLIGHTPATH_UNLIMITED_MODE`  | `false`         | Bypass size limit entirely                                |
-| `FLIGHTPATH_COMMIT_OUTPUT`   | unset           | Output file written by `flightpath_submit_commit_message` |
-| `FLIGHTPATH_DIAGNOSTIC_LOGS` | `false`         | Write to `.flightpath/logs/flightpath-mcp-<ts>.log`       |
-| `NODE_ENV`                   | —               | `development` also enables diagnostic logging             |
-
-**Transport:** `StdioServerTransport` (stdin/stdout). The TUI captures stderr, so all internal logging writes to the log file — never to stderr or stdout.
-
-**Concurrency:** `operationQueue` (a chained `Promise`) serializes all `flightpath_append_queue` calls to prevent race conditions on the working file. The gate promise always resolves (never rejects) so a failed operation does not block subsequent ones.
-
-**Tools exposed by `mcp-server.ts` (six tools):**
-
-| Tool ID                            | Operation                                                                                                |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `flightpath_queue_status`          | Read active queue state                                                                                  |
-| `flightpath_append_queue`          | Append steps; resumes execution if queue was completed                                                   |
-| `flightpath_capabilities`          | Return available harnesses and models                                                                    |
-| `flightpath_read_output`           | Read AI response text from completed prompts                                                             |
-| `flightpath_global_status`         | Read status of ALL workflows in the workspace queue (MCP-only — not a LM tool in `extension.ts`)         |
-| `flightpath_submit_commit_message` | Persist a generated commit message to `FLIGHTPATH_COMMIT_OUTPUT` for `CommitMessageGenerator` (MCP-only) |
-
-The first four share the same tool IDs as the LM tools registered in `extension.ts`. `flightpath_global_status` and `flightpath_submit_commit_message` are MCP-only; neither is registered as a VS Code LM tool. `CommitMessageGenerator` uses the submit tool as the primary capture path so the AI returns the commit message as a structured tool argument instead of prose text.
-
-**Path constants** in `mcp-server.ts` are redefined as local `const` strings (no import from `ConfigurationUtils`) — the server cannot depend on VS Code extension utilities. Keep them in sync with `ConfigurationUtils.PATH_CONSTANTS`.
+- Never import `vscode` or extension-only helpers here.
+- Keep the local path constants in sync with `ConfigurationUtils.PATH_CONSTANTS`; they are duplicated on purpose to avoid a VS Code dependency.
+- Use file logging only (`FLIGHTPATH_DIAGNOSTIC_LOGS=true` or `NODE_ENV=development`). Do not write operational logs to stdout/stderr because stdout is the MCP transport and many TUIs capture stderr.
+- The first four tools mirror the LM tools from `extension.ts`; `flightpath_global_status` and `flightpath_submit_commit_message` are MCP-only.
+- Active working file resolution is a two-step contract:
+  1. prefer `FLIGHTPATH_WORKING_FILE` so a harness session targets its exact workflow
+  2. otherwise scan `.flightpath/.queue/` and prefer running / recent files as a fallback
+- Queue appends are protected twice on purpose:
+  - `operationQueue` serializes append requests within this process
+  - `withFileLock(...)` protects the working file across processes
+- Append validation is best-effort against `.flightpath/capabilities.json`; that file is produced by the VS Code-side settings sync and may be absent early in workspace setup.
+- `flightpath_submit_commit_message` writes to `FLIGHTPATH_COMMIT_OUTPUT` when present; this is the structured capture path used by commit-message generation.
 </mcpServer>
 
-<devMode>
-`IS_DEV_MODE` (from `src/utils/BuildConfig.ts`) is replaced at build time by esbuild. Dev commands are registered only when `IS_DEV_MODE === true` and are never declared in `package.json`. They are stripped entirely in production builds via `scripts/strip-dev-commands.mjs`.
-</devMode>
+<relatedFiles>
+- `src/ui/FlightPathWebviewProvider.ts` — panel shell and outbound UI transport
+- `src/ui/FlightPathMcpServerProvider.ts` — dynamic MCP definitions for `copilot-chat`
+- `src/flightpath/WorkflowOrchestrator.ts` — main lifecycle owner created by `activate()`
+- `src/flightpath/QueueOperations.ts` — shared queue/read/append logic mirrored by LM tools
+- `src/scm/ScmCommitCommand.ts` — SCM command implementation registered from `extension.ts`
+</relatedFiles>

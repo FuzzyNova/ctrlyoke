@@ -3,76 +3,53 @@ applyTo: "src/dev/**"
 ---
 
 <purpose>
-Development-only commands and diagnostics registered exclusively when `IS_DEV_MODE = true`. The `src/dev/` directory contains a single module (`DevCommands.ts`) that provides tooling for investigating VS Code APIs, discovering Copilot models, debugging chat/CLI integrations, generating reference artifacts, and dashboard-triggered builds. In production builds, esbuild's dead code elimination strips this code entirely — it is never shipped.
+Development-only tooling only. `src/dev/` is currently a single module (`DevCommands.ts`) for diagnostics, VS Code API probes, model export, and dashboard-triggered build/test actions. Production builds must not import or ship this code.
 </purpose>
 
 <architecture>
-**Conditional registration** in `src/extension.ts`:
+Two entry points load this module, both behind `IS_DEV_MODE`:
 
-```typescript
-import { IS_DEV_MODE } from "./utils/BuildConfig";
+- `src/extension.ts` calls `registerDevCommands(...)` during activation.
+- `src/ui/FlightPathWebviewProvider.ts` lazily imports `handleDevDashboardAction(...)` for the dashboard dev panel.
 
-if (IS_DEV_MODE) {
-  const { registerDevCommands } = require("./dev/DevCommands");
-  registerDevCommands(context);
-}
-```
+Keep those two surfaces aligned. If you add or rename a dashboard action, update:
 
-**IS_DEV_MODE** (`src/utils/BuildConfig.ts`): A build-time boolean replaced by esbuild via the `define` option.
+- `src/dev/DevCommands.ts`
+- `src/types/WebviewMessageTypes.ts` (`DevDashboardAction`)
+- any related `MESSAGE_TYPES` handling in the webview/provider path
 
-- `npm run compile` → `__DEV_MODE__ = true` (dev build)
-- `npm run build:prod` → `__DEV_MODE__ = false` (production build, dead code eliminated)
-- Defaults to `true` if `__DEV_MODE__` is somehow undefined at runtime (safe for F5 debugging).
+`flightpath.devMenu` is the only dev command contributed in `package.json`, gated by the `flightpath.devMode` context key set inside `registerDevCommands()`. Every other dev command stays runtime-only and should be pushed into `context.subscriptions`.
 
-**Single palette entry point**: `flightpath.devMenu` is the only dev command declared in `package.json` (with `"when": "flightpath.devMode"`). It shows a QuickPick that dispatches to all other dev commands. Individual commands are registered programmatically at runtime only.
+`IS_DEV_MODE` comes from `src/utils/BuildConfig.ts` and is replaced at build time by esbuild. Dev builds keep this module reachable; production builds dead-strip it.
 
-**`flightpath.devMode` context key** is set via `setContext` inside `registerDevCommands`, which makes the `devMenu` command visible in the palette.
-
-**All commands** are registered with `context.subscriptions.push(...)` so they are properly disposed when the extension deactivates.
-
-**Dashboard build integration**: `DevCommands.ts` exports `handleDevDashboardAction` (and the types `DevDashboardAction`, `DevDashboardActionOptions`, `DevCommandHandlers`) for use by the webview dashboard. `DevBuildResult` is a private interface (not exported). This function handles in-process builds/tests (`compile:extension`, `compile:webview`, `compile`, `test`) plus VS Code reload/restart commands triggered from the dashboard dev panel. It streams build stdout/stderr back to the webview via `postMessage` using `MESSAGE_TYPES.DEV_BUILD_STARTED`, `DEV_BUILD_OUTPUT`, `DEV_BUILD_COMPLETED`, `DEV_RESTARTING`, and `DEV_COMMAND_UNAVAILABLE` message types.
-
-**`DevDashboardAction`** union type: `"buildExtension" | "buildWebview" | "buildAll" | "reloadWindow" | "restartExtensionHost" | "buildExtensionAndReload" | "buildWebviewAndReload" | "buildAllAndReload" | "runTests" | "sendTestNotification"`.
-
-**`DevCommandHandlers`** interface: `{ sendTestNotification?: () => Promise<void> }` — passed to `registerDevCommands` to optionally wire up a test notification handler. When provided, registers the `flightpath.dev.sendTestNotification` command and adds it to the devMenu.
+Dashboard build actions are intentionally in-process and serialized by the module-level `isBuilding` flag. `runNpmBuild()` always runs from the extension root, uses `npm.cmd` with `shell: true` on Windows, and only supports the existing scripts: `compile:extension`, `compile:webview`, `compile`, and `test`.
 </architecture>
 
-<devCommands>
-| Command ID | Palette Visible | Purpose |
-|---|---|---|
-| `flightpath.devMenu` | ✅ (when `flightpath.devMode`) | QuickPick hub dispatching to all other dev tools. The only dev command in `package.json`. |
-| `flightpath.test.copilotAutomation` | via devMenu | Legacy POC: opens Copilot Chat and sends a test message via `workbench.action.chat.submit` to verify chat automation feasibility. |
-| `flightpath.test.fileAttachment` | via devMenu | Tests `github.copilot.chat.attachFile` and `github.copilot.chat.attachSelection` commands step-by-step, logging results to the Output channel. |
-| `flightpath.test.chatModelSelection` | via devMenu | Iterates over known model IDs and calls `workbench.action.chat.changeModel` for each, logging success/failure to confirm which models can be switched programmatically. |
-| `flightpath.test.chatAgentSelection` | via devMenu | Tests various agent-selection commands (`workbench.action.chat.openagent`, `workbench.action.chat.assignSelectedAgent`, etc.) with different parameter formats to determine programmability. |
-| `flightpath.listChatCommands` | via devMenu | Filters all registered VS Code commands to those containing `copilot`, `copilot-chat`, `workbench.action.chat`, or `github.copilot`; saves the result to `dev/reference/CHAT_COMMANDS.md`. |
-| `flightpath.listAllCommands` | via devMenu | Dumps all registered VS Code commands to `dev/reference/VSCODE_COMMANDS.md`. |
-| `flightpath.showLanguageId` | via devMenu | Displays the language ID and file name of the active editor document in a modal — useful for debugging language detection in completions. |
-| `flightpath.exportDiscoveredModels` | via devMenu | Queries `ModelRegistry` for all discovered Copilot models and writes `scripts/discovered-models.json`. Used in the model-update workflow before running `npm run sync-models`. |
-| `flightpath.dumpCssVars` | via devMenu | Opens a temporary WebviewPanel, reads all `--vscode-*` CSS custom properties from `getComputedStyle`, and writes them to `dev/reference/vscode-css-vars.json` — useful for theming and webview styling work. |
-| `flightpath.dev.sendTestNotification` | via devMenu (conditional) | Conditionally registered when `handlers.sendTestNotification` is provided to `registerDevCommands`. Triggers a browser/push + VS Code notification test event. |
-</devCommands>
+<highValueCommands>
+Keep the command surface focused on a few categories:
+
+- **VS Code API probes**: the `flightpath.test.*` commands are exploratory/diagnostic helpers, not production features.
+- **Reference artifact generation**: command dumps go to `dev/reference/`; discovered models go to `scripts/discovered-models.json`.
+- **Dashboard dev actions**: build/test/restart actions stream `DEV_BUILD_*` / `DEV_RESTARTING` / `DEV_COMMAND_UNAVAILABLE` messages back to the UI.
+- **Optional notification testing**: `flightpath.dev.sendTestNotification` only exists when a handler is injected from `extension.ts`; keep server/notification dependencies out of `DevCommands.ts` itself.
+</highValueCommands>
 
 <modelUpdateWorkflow>
-The `flightpath.exportDiscoveredModels` command is part of a repeatable workflow for keeping model lists in sync:
+`flightpath.exportDiscoveredModels` is the front door for refreshing checked-in model lists:
 
 1. Run extension (`F5`)
 2. Run command: **FlightPath: Export Discovered Models** → writes `scripts/discovered-models.json`
 3. `npm run sync-models -- --import` → updates `src/utils/ModelConstants.ts`
-4. `npm run sync-models` → syncs `package.json` enums AND `schemas/prompt-schema.json` examples
+4. `npm run sync-models` → syncs `package.json` enums and `schemas/prompt-schema.json`
 5. `npm run generate-schema` → regenerates YAML schema from JSON
 6. Commit all updated files
-
-This flow ensures `ModelConstants.ts`, `package.json`, and `prompt-schema.json` remain a consistent single source of truth.
 </modelUpdateWorkflow>
 
 <conventions>
-- **No production registration**: Never register dev commands outside the `IS_DEV_MODE` guard. They must not appear in the production command palette.
-- **Only `devMenu` in package.json**: `flightpath.devMenu` is the sole dev command declared under `contributes.commands`. All other dev commands are registered at runtime only and never appear directly in the palette.
-- **Output channel for results**: Use `Log.info()` / `Log.error()` for all diagnostic output so results appear in the FlightPath Output channel.
-- **context.subscriptions**: Always push disposables to `context.subscriptions` in `registerDevCommands`.
-- **Dynamic imports for test utilities**: Test-only modules are imported dynamically inside command handlers to avoid pulling them into the main bundle even when `IS_DEV_MODE = true`.
-- **Self-contained file**: All dev command logic lives in `DevCommands.ts`. Do not split dev commands across multiple files or import dev utilities from production code paths.
-- **Dashboard build actions**: `handleDevDashboardAction` is exported (not registered as a VS Code command) and called directly by the webview message handler. `buildExtension` uses `compile:extension`; `buildWebview` uses `compile:webview`; `buildAll` uses `compile`; `runTests` uses `test`. Build/test results are streamed to the webview via `postMessage`. `DevBuildResult` is a private interface — do not export it.
-- **Optional handlers**: Pass `DevCommandHandlers` to `registerDevCommands` to wire up optional runtime-provided handlers (e.g., `sendTestNotification`). This avoids hard-coding server-layer dependencies in `DevCommands.ts`.
+- Never register dev commands outside the `IS_DEV_MODE` guard.
+- Keep `flightpath.devMenu` as the only manifest-declared dev command.
+- Use `Log` for diagnostic output; these commands are meant to leave a useful trace in the FlightPath output/log pipeline.
+- Prefer optional handler injection (`DevCommandHandlers`) over importing higher-level runtime services into `DevCommands.ts`.
+- Keep `DevBuildResult` private; the public contract here is message-based, not a reused shared type.
+- If you touch restart/build messaging, preserve the current distinction between `reloadWindow` and `restartExtensionHost`; browser clients depend on the explicit `DEV_RESTARTING` signal.
 </conventions>

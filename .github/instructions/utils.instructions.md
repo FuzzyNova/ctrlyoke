@@ -2,132 +2,33 @@
 applyTo: "src/utils/**"
 ---
 
-<purpose>
-Shared utilities for file system operations, logging, validation, CLI process management, context expansion, model management, configuration, session management, agent/skill discovery, workspace snapshots, process coordination, MCP server discovery, git operations, caching, and error handling.
-</purpose>
+<scope>
+`src/utils/` is the shared helper layer used by core workflow execution, harness integrations, the VS Code shell, the standalone CLI, and a few webview-safe helpers. Keep utilities here focused on reusable behavior or single-source-of-truth constants/helpers, not feature-specific orchestration.
+</scope>
 
-<keyUtilities>
-**FileSystemUtils:** Safe file operations, directory creation, chokidar file watching, pattern discovery. Returns safe values (null/false), never throws.
+<architecture>
+This folder has a few important seams:
 
-**Log:** Centralized logging with levels (DEBUG/INFO/WARN/ERROR), Output channel, timestamps, stack traces. Methods: `appendLine()`, `append()`, `getOutputChannel()`.
+- **Config and runtime boundaries:** `ConfigurationUtils` is the compatibility facade over `FlightPathConfigService`; `CONFIG_KEYS`, `CONFIG_SCOPE`, and `PATH_CONSTANTS` are the canonical constants consumed across the app. Core code should read settings through these helpers, not through ad hoc VS Code config access.
+- **Execution-property resolution pipeline:** `PropertyResolver` resolves prompt/workflow/settings precedence, `VarSubstitutor` applies `{{var}}` expansion after resolution, and `SessionResolver` decides whether a step reuses a session. These files define workflow inheritance semantics, so changes here ripple widely.
+- **Prompt/context expansion pipeline:** `FileReferenceParser` parses `@`, `#selection`, `#sym`, `~`, and inline `$...` refs; `AttachmentBuilders` and `ContextExpander` turn the non-native ones into XML/context payloads; `PriorContextPreviewBuilder` must stay aligned with the live injection format by using the same builder path as runtime execution.
+- **Discovery and file-management helpers:** `HarnessDirectoryUtils` is the single source of truth for where harness/user/workspace agent and skill files live. `AgentDiscovery`, `SkillDiscovery`, and `HarnessFileManager` should build on it rather than re-encoding paths or extensions.
+- **MCP config stack:** `McpConfigPaths` knows where each harness stores MCP config, `McpDiscoveryUtils` reads external configs plus the public registry, `McpRegistryFileManager` manages FlightPath's own registry files, and `HarnessMcpExporter` projects the same server definition into each harness's native file format. Keep those responsibilities separate.
+</architecture>
 
-**ValidationUtils:** Runtime AJV validation with TypeScript generics, schema compilation/caching, error formatting.
+<criticalPatterns>
+- Preserve **`null` vs `undefined` inheritance semantics** in resolver-style utilities. In this codebase, `null` usually means “explicitly disable inherited value” while `undefined` means “keep inheriting/fall back”.
+- `SessionResolver` is intentionally strict about **same-harness-only** session reuse. Numeric `sessionId` references are 1-based prompt numbers, and the `"finalStep"` sentinel is a distinct resume path; do not loosen these rules casually.
+- Keep shared runtime helpers truly shared. Files like `promptPathUtils`, `RangeNotationParser`, `ErrorUtils`, and `TypedEmitter` are safe to use outside the VS Code extension host; avoid introducing `vscode` or heavyweight Node-only dependencies into utilities that are consumed by the CLI or webview-safe code paths.
+- `WorkflowLockManager` and `FileLockUtils` solve different problems: workflow runner ownership uses `.runner.json` heartbeat files, while `FileLockUtils` is a generic `.lock` wrapper for cross-process file mutation. `FileLockUtils` intentionally uses `console.warn` instead of `Log` because it is used by the MCP server too.
+- `WorkspaceSnapshotService` is deliberately conservative: prefer git-backed snapshots when possible, exclude artifact directories (including `.flightpath`), and avoid loading large/binary files fully into memory. Keep undo/redo semantics stable when changing snapshot behavior.
+- `PromptFileSplitter` and `TempFileManager` are coupled to harness limitations. Splitting prefers whole `<attachment>` blocks, and temp files in `.flightpath/temp/` use category-specific names because downstream debugging and cleanup rely on those conventions.
+- FlightPath-owned agent/skill directories under `.flightpath/` are intentionally **exclusive** to FlightPath so harness-native scrapers do not duplicate the same instructions/context. Discovery helpers dedupe overlapping directories on purpose; preserve that behavior.
+</criticalPatterns>
 
-**ConfigurationUtils:** Centralized `configService` access via named getters/setters plus `getConfigValue<T>()` / `updateSetting()`. Exposes `CONFIG_KEYS`, `CONFIG_SCOPE`, and `PATH_CONSTANTS`; covers defaults, execution, chat, UI, history, hooks/MCP, and commit-message settings, including `getCommitHarness(): HarnessId | ""`, `getCommitModel()`, and `getCommitPrompt()` for `flightpath.commit.*`.
-
-**CliProcessManager:** Spawn CLI processes (headless/interactive), VS Code terminals, shell integration, graceful shutdown (SIGTERM → SIGKILL), coordinated cancellation.
-
-**ContextExpander:** Expands `#file:` references to attachment XML, handles line ranges, workspace paths, content loading for CLI modes.
-
-**FileReferenceParser:** Single source of truth for parsing file references: `@path` (CLI-native), `@path/dir/` (directories), `#file:path:line-line` (FlightPath XML), `#sym:symbolName` (symbol resolution).
-
-**AttachmentBuilders:** XML attachment building for file/directory/symbol references. Resolves symbols to file locations with line ranges.
-
-**PromptFileSplitter:** Intelligently splits large prompts into chunks respecting token limits (10K default — Claude Code CLI per-file limit) and line limits (1800 for Claude's 2K limit). Two split methods: `split()` — splits on `</attachment>` boundaries first, then paragraphs/lines; `splitContextContent()` — splits prior-context XML on `<step>` boundaries, keeping XML valid (never tears mid-element), appending `<criticalInstruction>` only to the last chunk.
-
-**ModelRegistry:** Queries Copilot models via `vscode.lm.selectChatModels()`, filters CLI-supported models, emits events on load.
-
-**ModelConstants:** Single source of truth for model lists (COPILOT_MODELS, COPILOT_CLI_MODEL_IDS, CLAUDE_CLI_MODELS, CODEX_CLI_MODELS), display names, CLI support flags. Run `npm run sync-models` to sync with package.json AND prompt-schema.json.
-
-**PropertyResolver:** Three-tier property resolution: Prompt-level → Workflow-level → VS Code settings. Ensures all execution properties (harness, model, agent, resumeSession, mcpServers, sessionId, endCondition) are resolved with proper defaults.
-
-**SessionResolver:** Per-prompt session tracking with three resolution strategies: prompt number reference (`sessionId: 1`), exact session ID (UUID), auto-resume (no sessionId). Validates cross-harness compatibility and respects workflow-level properties.
-
-**SessionValidator:** Validates session ID formats for each harness. Copilot/Claude require strict UUID v4, Codex accepts any non-empty string (thread_xxx). Prevents CLI errors with graceful fallback.
-
-**AgentDiscovery:** Discovers custom agent files from: user prompts directory (%APPDATA%), workspace `.github/agents/`, `.claude/agents/`, `.flightpath/agents/`. All harnesses supported via prompt prepending (`AgentExpander`); `supportsCopilotCli` and `supportsClaudeCli` flags are always true.
-
-**DiscoveryUtils:** Shared helpers for agent and skill discovery. Contains: `formatDisplayName()` (kebab/snake_case to Title Case), `isAccessibleDirectory()` (safe async directory check), `resolveWorkspaceFolder()` (finds VS Code WorkspaceFolder from optional path). Used by AgentDiscovery, SkillDiscovery.
-
-**AgentExpander:** Reads and expands agent file content for prompt prepending. Uses AgentDiscovery to locate agents by name, returns raw file content with frontmatter stripped.
-
-**SkillDiscovery:** Discovers skill files from multiple locations following AgentSkills.io open standard. Sources: `~/.claude/skills/`, `~/.copilot/skills/`, `~/.agents/skills/`, workspace `.flightpath/skills/`, `.claude/skills/`, `.github/skills/`, `.agents/skills/`, `../.agents/skills/`, git-root `/.agents/skills/`. Returns `SkillInfo[]` with name, displayName, path, description, source.
-
-**SkillExpander:** Expands skill names to concise prompt blocks for injection. Progressive disclosure: only name, path, description included (~10-20 tokens per skill). Full SKILL.md body NOT included. Output wrapped in `<skillInstructions>` tags.
-
-**TempFileManager:** Manages temp files in `.flightpath/temp/`. Creates unique prompt files with debugging-friendly names, cleanup after execution, orphaned file cleanup on activation. Supports **categorized file creation** for prompt splitting: `createCategoryFile(content, category, ...)` creates a single typed file; `createCategorySplitFiles(chunks, category, ...)` creates multiple split parts. Categories: `agent` (`.agent.prompt.md`), `skills` (`.skills.prompt.md`), `context` (`.context.prompt.md`), `excerpts` (`.excerpts.prompt.md`), `prompt` (`.prompt.md`). Split parts are numbered `.1.prompt.md`, `.2.prompt.md`, etc.; single-part files omit the number.
-
-**RetryUtils:** Retry with exponential backoff for transient failures. Supports fixed/custom delays, PermanentFailureError for immediate abort, common for file polling and CLI log discovery.
-
-**FileLockUtils:** File-based locking with stale lock detection (30s), EEXIST retry logic, process ID tracking. Used for safe concurrent access to shared resources (e.g., queue files).
-
-**WorkflowLockManager:** Atomic lock file CRUD for workflow process coordination. Lock files live at `{queueDir}/{workflowId}.runner.json`. Writes are atomic (write to `.tmp`, then rename). Tracks PID + heartbeat (30s staleness threshold). `checkLock()` returns `"none" | "stale" | "active-vscode" | "active-cli"`. `normalizeStaleLocks()` called on extension startup to reset orphaned `running` states.
-
-**WorkspaceSnapshotService:** Captures workspace file state before/after prompt execution for undo/redo support. Two strategies: `git` (uses `git status --porcelain` — dirty files only) or `filesystem` (full directory walk with gitignore filtering). `computeSnapshotChanges()` produces `SnapshotFileChange[]` with structured unified diffs. `undoFiles()` applies reverse patches, restores deleted files, or deletes created files; returns redo instructions. Max file size: 512 KB.
-
-**PromptIdentity:** SHA-256 content hashing, whitespace normalization, duplicate detection, instruction injection logic for dynamic queue extension.
-
-**TypedEmitter:** Typed event emitter wrapping Node.js `EventEmitter`. Matches `vscode.EventEmitter<T>` API (`fire()`, `event`, `dispose()`). Use in modules that must work in both VS Code and CLI contexts (avoid `vscode.EventEmitter` in shared code).
-
-**RuntimeMode:** Module-level flag tracking whether the process is the VS Code extension or standalone CLI binary. `isCli()` returns true when CLI; `setRuntimeMode('cli')` called once in `cli.ts` startup. Default is `'vscode'`.
-
-**BuildConfig:** Build-time constants replaced by esbuild `define`. `IS_DEV_MODE` (true in dev builds, false in prod) enables dead-code elimination for dev-only features. `BUILD_DATE` for version debugging.
-
-**CliArgParser:** `parseArgString(input)` — parses shell-style argument strings to `string[]`. Supports whitespace separation, double/single-quoted strings, and `\"` escapes within double quotes. No bash substitution or env expansion (intentional — inputs are static YAML strings).
-
-**promptPathUtils:** Pure functions with no Node.js or `vscode` imports — safe for both extension backend and React webview. `looksLikeFilePath(value)` detects lone file-path references (relative `./`, `../`, absolute `/`, Windows drive letter). `PROMPT_FILE_EXTENSIONS` constant.
-
-**McpDiscoveryUtils:** Discovers MCP servers from local config files and the Anthropic public registry. Local sources (priority order, first wins on duplicate id): `.vscode/mcp.json` (key: `servers`), `.mcp.json` (key: `mcpServers`), VS Code user config, `~/.claude.json` (top-level `mcpServers` only). Registry: cursor-based pagination, server-side search via `fetchMcpRegistry()`. Safe wrappers (`safeDiscoverLocalMcpServers`, `safeFetchMcpRegistry`) never throw — return empty results with error string on failure.
-
-**GitUtils:** Git operations via `execFile` with 10s timeout. Functions: `getRecentCommits()` (NUL-delimited log parsing), `getCommitDiff()` (stat + full diff), `getWorkingTreeDiff()` (unstaged changes + untracked file summary), `getStagedDiff()` (cached diff), `getStashList()`, `getStashDiff()`, `searchCommitsBySubject()` (case-insensitive `--grep`), `isValidCommitHash()` (7-40 hex char validation). Returns `CommitInfo` / `StashInfo` interfaces.
-
-**TtlCache:** Generic TTL-based cache for async discovery results. `get(fn)` returns cached items if fresh, otherwise calls `fn` to refresh. `invalidate()` forces refresh on next call. Used by agent/skill discovery to avoid re-scanning filesystem on every request.
-
-**ErrorUtils:** `getErrorMessage(error: unknown): string` — centralizes the `error instanceof Error ? error.message : String(error)` pattern to eliminate duplication across the codebase.
-
-**VarSubstitutor:** Handles `{{varName}}` substitution for CLI variable injection. Variables flow from CLI `--var key=value` flags (merged into `PromptFile.vars`) and workflow-level `vars:` defaults. Applies substitution to: prompt text, resolved model, resolved additionalArgs, hook commands, and endCondition script path + retryPrompt. `substitute(text, vars)` throws a clear error for unresolved placeholders. `hasPlaceholders(text)` detects if text contains any `{{key}}`. `applyToPromptText()` and `applyToResolvedProperties()` are the primary call sites.
-
-**WorkflowFileDiscovery:** Synchronous workspace scan for workflow files. `findWorkflowFilesInWorkspace(root)` recursively walks the workspace, skipping `.git`, `node_modules`, `out`, `dist`, `coverage`, and returns sorted `WorkflowFileEntry[]` (absolute + relative paths). `isWorkflowFileName(name)` checks a filename against workflow suffixes/names. Exports `WORKFLOW_FILE_GLOB` and `WORKFLOW_FILE_EXCLUDE_GLOB` for VS Code watchers.
-
-**CliEventNormalizer:** `normalizeCliEvents(events)` — merges split INITIATED/COMPLETED event pairs and TOOL_RESULT events into single unified `CliEvent` objects. Handles bash, file read/write/edit/delete, tool calls, MCP tool calls, and web search. Prevents duplicate events when harnesses emit the same operation in separate streaming batches. Key-based matching (path, command, tool id) with adjacency fallback.
-
-**HarnessDirectoryUtils:** Single source of truth for per-harness agent and skill directory paths. Exports `getHarnessAgentDirs()`, `getHarnessUserAgentDirs()`, `getHarnessSkillDirs()`, `getHarnessUserSkillDirs()`, `getFlightPathAgentDir()`, `getFlightPathSkillDir()`, `getAllHarnessIds()`, and `HARNESS_AGENT_EXTENSION` map (`.md` for Claude/Gemini, `.agent.md` for all others). Used by `AgentDiscovery`, `SkillDiscovery`, and `HarnessFileManager`.
-
-**HarnessFileManager:** Class for CRUD management of agent/skill files across all harness workspace directories. `resolveAllLocations()` enumerates every copy of an agent/skill; `exportToHarness()` / `importToFlightPath()` copy with correct extension conversion; `syncToHarnesses()` bulk-copies to multiple targets; `deleteFromHarness()` / `deleteAllFromHarness()` remove entries; `getTargetDir()` returns the primary directory for a harness+type. Depends on `HarnessDirectoryUtils`.
-
-**PriorContextPreviewBuilder:** Builds `<priorContext>` XML previews for `$prior-context` inline refs (`$previous`, `$step:N,M`, `$all`, etc.). Uses the same `buildPriorContextXmlFromItems` as live harness injection so the editor preview exactly matches what gets injected. Returns a comment string when context is not yet available or the ref is out of range.
-
-**RangeNotationParser:** `parseRangeNotation(text)` — parses comma-separated range notation like `"1,2,4-10"` into a sorted, deduplicated `number[]`. Returns `null` on invalid or empty input. Used for `$step:N` ref parsing.
-
-**TerminalOutputSanitizer:** `stripAnsiCodes(text)` removes ANSI escape sequences. `sanitizeTerminalOutput(text)` additionally strips carriage returns and non-printable control bytes (preserving `\n` and `\t`). Used to clean CLI output for logs and dashboard rendering.
-</keyUtilities>
-
-<terminology>
-**Harness** (not "provider"): Execution framework/integration layer (CopilotCli, CopilotChat, ClaudeCli, CodexCli, OpenCodeCli, QwenCli, GeminiCli). All code uses "harness" terminology consistently.
-</terminology>
-
-<relatedComponents>
-- WorkflowOrchestrator: Uses PropertyResolver, SessionResolver, ConfigurationUtils, WorkflowLockManager, WorkspaceSnapshotService
-- CopilotIntegration subclasses: Use CliProcessManager, ContextExpander, FileReferenceParser, AttachmentBuilders, TempFileManager, PromptFileSplitter
-- PromptFileParser: Uses ValidationUtils for schema validation, promptPathUtils for file-path detection
-- PromptQueue: Uses PromptIdentity for deduplication, SessionResolver for session tracking
-- FlightPathWebviewProvider: Uses ModelRegistry, Log, ConfigurationUtils
-- WebviewMessageRouter: Uses McpDiscoveryUtils for MCP server discovery
-- PromptCompletionProvider: Uses ModelRegistry, AgentDiscovery for IntelliSense
-- ContextExpander, CompletionHelpers: Use GitUtils for commit/stash context
-- AgentExpander, SkillExpander: Use TtlCache for discovery result caching
-- extension.ts / cli.ts: Sets RuntimeMode; CLI uses BuildConfig for feature flags
-- ErrorUtils: Used across codebase (Log, WorkflowOrchestrator, CliIntegration, parsers, etc.)
-</relatedComponents>
-
-<pathConstants>
-ConfigurationUtils.PATH_CONSTANTS provides single source of truth for directory names:
-- FLIGHTPATH_DIR: ".flightpath"
-- QUEUE_DIR: ".queue"
-- SCRIPTS_DIR: "scripts"
-- PROMPTS_DIR: "prompts"
-- TEMPLATES_DIR: "templates"
-- WORKFLOWS_DIR: "workflows"
-- TEMP_DIR: "temp"
-- LOGS_DIR: "logs"
-- HISTORY_DIR: ".history"
-- AGENTS_DIR: "agents"
-- SKILLS_DIR: "skills"
-- CERTS_DIR: "certs"
-- NOTIFICATIONS_DIR: "notifications"
-- CAPABILITIES_FILE: "capabilities.json"
-- PUSH_SUBSCRIPTIONS_FILE: "push-subscriptions.json"
-- VAPID_KEYS_FILE: "vapid-keys.json"
-- MCP_DIR: "mcp"
-- MCP_SERVERS_FILE: "servers.json"
-</pathConstants>
+<relatedFiles>
+- `src/config/FlightPathConfigService.ts` — backing config service that `ConfigurationUtils` wraps
+- `src/flightpath/HarnessIntegration.ts` — shared prior-context XML builder used by `PriorContextPreviewBuilder`
+- `src/ui/WebviewSettingsSync.ts` and `src/ui/WebviewMessageRouter.ts` — heavy consumers of MCP/config/discovery utils
+- `src/completions/CompletionHelpers.ts` and `src/completions/ContextReferenceBuilder.ts` — editor-side consumers of parsing/discovery/model helpers
+</relatedFiles>

@@ -19,11 +19,13 @@ The `.github/instructions/` directory contains detailed implementation guideline
 | `src/dev/**`                                  | dev.instructions.md                      |
 | `src/extension.ts, src/mcp-server.ts`         | extension.instructions.md                |
 | `src/flightpath/harness/chat/**`              | flightpath-chat.instructions.md          |
+| `src/flightpath/harness/CliIntegration.ts`, `src/flightpath/harness/CliLogMonitor.ts`, `src/flightpath/harness/PtyProcessManager.ts` | harness-integrations.instructions.md |
+| `src/flightpath/harness/shared/**`            | harness-shared.instructions.md           |
+| `src/flightpath/harness/{copilot,claude,codex,opencode,qwen,gemini}/**` | harness-cli-providers.instructions.md |
 | `src/cli.ts,src/cli/**`                       | flightpath-cli-binary.instructions.md    |
 | `src/flightpath/*.ts`                         | flightpath-core.instructions.md          |
 | `src/flightpath/orchestration/**`             | flightpath-orchestration.instructions.md |
 | `src/git/**`                                  | git.instructions.md                      |
-| `src/flightpath/harness/**`                   | harness-integrations.instructions.md     |
 | `src/platform/**`                             | platform.instructions.md                 |
 | `src/scm/**`                                  | scm.instructions.md                      |
 | `src/scripts/**`                              | scripts.instructions.md                  |
@@ -31,6 +33,9 @@ The `.github/instructions/` directory contains detailed implementation guideline
 | `src/templates/**`                            | templates.instructions.md                |
 | `src/test/**`                                 | test.instructions.md                     |
 | `src/types/**`                                | types.instructions.md                    |
+| `src/types/{DashboardConstants.ts,FlightPathTypes.ts,WorkflowContextTypes.ts,FlightPathSettings.ts,CliOutputTypes.ts,IDashboardSink.ts}` | types-core.instructions.md |
+| `src/types/{WebviewMessageTypes.ts,OutputHistoryTypes.ts,WorkflowTimelineTypes.ts}` | types-webview-history.instructions.md |
+| `src/types/{HostedWorkspaceViewerTypes.ts,IconColorDefaults.ts}` | types-hosted.instructions.md |
 | `src/ui/**` (excl. `src/ui/webview-react/**`) | ui.instructions.md                       |
 | `src/utils/**`                                | utils.instructions.md                    |
 | `src/ui/webview-react/**`                     | webview-react.instructions.md            |
@@ -51,6 +56,9 @@ Working on src/flightpath/WorkflowOrchestrator.ts?
 
 Working on src/flightpath/harness/CliIntegration.ts?
 → Read: .github/instructions/harness-integrations.instructions.md
+
+Working on src/flightpath/harness/qwen/QwenCliProvider.ts?
+→ Read: .github/instructions/harness-cli-providers.instructions.md
 ```
 
 ## Project Status

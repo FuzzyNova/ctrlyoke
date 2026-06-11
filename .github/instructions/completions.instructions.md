@@ -1,353 +1,76 @@
-﻿````instructions
 ---
 applyTo: "src/completions/**"
 ---
 
+<purpose>
+Prompt-file completion and navigation layer. This directory owns VS Code completions/links plus the shared reference-formatting helpers that the dashboard webview also reuses.
+</purpose>
+
 <architecture>
-Six-file system providing context-aware IntelliSense and navigation for FlightPath prompt files:
+**Single shared engine:** `CompletionHelpers.ts` is not VS Code-only glue. `PromptCompletionProvider` uses it for editor IntelliSense, and `src/ui/WebviewMessageRouter.ts` uses the same helpers for CodeMirror completions in the dashboard. Keep trigger behavior, labels, and `insertText` framework-agnostic here.
 
-1. **PromptCompletionProvider** - IntelliSense for file references, symbols, git changes, model selection, and prior-context references
-2. **PromptPropertyCompletionProvider** - YAML property key completions for `.flightpath.yaml` workflow files
-3. **PromptLinkProvider** - Ctrl+Click navigation from prompts to source code
-4. **CompletionHelpers** - Shared logic and framework-agnostic completion items
-5. **ContextReferenceBuilder** - Pure utility functions for constructing reference strings (`@file`, `#selection:`, `#sym:`, `~git`)
-6. **ContextMenuReferenceCommands** - VS Code context menu commands for inserting references into the webview prompt editor
+**Single reference syntax source:** `ContextReferenceBuilder.ts` is the source of truth for emitted `@`, `#selection:`, `#sym:`, and `~` references. Do not hand-roll quoting, slashes, or trailing-slash behavior anywhere else.
 
-Note: "Provider" in class names follows VS Code API naming (CompletionItemProvider, DocumentLinkProvider), unrelated to execution harness selection.
-
-`PromptCompletionProvider` and `PromptLinkProvider` registered for: `*.{prompt,flightpath}.json`, `*.flightpath.{yaml,yml}`, `*.prompt.md`, and `prompt` language.
-`PromptPropertyCompletionProvider` registered for: `*.flightpath.{yaml,yml}` only.
+**Two navigation entry points:** `PromptLinkProvider.ts` resolves references already typed into prompt files; `ContextMenuReferenceCommands.ts` creates those same references from Explorer/SCM/timeline actions and inserts them through the webview prompt editor.
 </architecture>
 
-<sourceInventory>
-Current source inventory in `src/completions/`:
-- `CompletionHelpers.ts`
-- `ContextMenuReferenceCommands.ts`
-- `ContextReferenceBuilder.ts`
-- `PromptCompletionProvider.ts`
-- `PromptLinkProvider.ts`
-- `PromptPropertyCompletionProvider.ts`
-
-There are currently no extra helper/provider files in this directory beyond this six-file set.
-</sourceInventory>
-
-<completionProvider>
-**PromptCompletionProvider** provides five types of completions:
-
-1. **File references** (`@` trigger) - Full file and directory attachments
-2. **Symbol references** (`#` trigger) - Line ranges, selections, and workspace symbols
-3. **Git change context** (`~` trigger) - Diff, staged, stash, and commit references
-4. **Prior-context references** (`$` trigger) - References to prior step outputs
-5. **Model selection** (JSON/JSONC only) - Inside "model" string values
-
-**Trigger behavior:**
-
-- `@` trigger: File and directory completions (CLI-native syntax)
-- `#` trigger: Selections + workspace symbols (FlightPath-specific)
-- `~` trigger: Git change references (`~diff`, `~staged`, `~stash:N`, commit hashes)
-- `$` trigger: Prior step context keywords (`$previous`, `$all`, `$finalStep`, `$allFinalStep`, `$step:N`)
-- Model field: Auto-triggers inside "model" string values (JSON only)
-
-**Context detection:**
-
-- **JSON/JSONC**: Only inside "prompt" or "model" string values
-- **YAML/YML**: Only inside prompt values (supports multi-line blocks with `|` or `>`)
-- **Markdown/Prompt**: Anywhere in document
-
-**YAML prompt detection logic:**
-
-- Searches backwards up to 50 lines for `prompt:` key
-- Supports inline values: `prompt: "text"`, `prompt: 'text'`, `prompt: text`
-- Supports block scalars: `prompt: |` and `prompt: >` with proper indentation checking
-- Empty lines stay in block; stops only at dedented non-empty content (out of block)
-- Handles list items: `- prompt:` syntax
-
-**Trigger character detection:**
-
-- Uses `lastIndexOf('@')`, `lastIndexOf('#')`, `lastIndexOf('~')`, and `lastIndexOf('$')` to find most recent trigger
-- Routes to the trigger with the highest index (closest to cursor)
-- Stops if space found after trigger UNLESS inside a quoted path (`@"path with spaces/..."`)
-- `$` trigger: only continues if text after `$` matches `[a-zA-Z0-9:,\-]*`
-
-**YAML compatibility:**
-
-- `calculateCompletionRange()` provides explicit range from trigger to cursor
-- Required for YAML extension to show completions
-- Prevents VS Code from suppressing completion dropdown
-</completionProvider>
-
-<completionHelpers>
-**CompletionHelpers** contains shared logic and caching. Reference strings are built using helpers from `ContextReferenceBuilder` (not inline):
-
-**PlainCompletionItem interface:**
-
-- Framework-agnostic completion representation
-- Can be used by both extension and webview
-- Converted to `vscode.CompletionItem` via `toVSCodeCompletionItem()`
-
-**File completions** (`getFileCompletions()`):
-
-- Returns both file AND directory completions
-- Directories have trailing slash: `@src/ui/`
-- Files use full path: `@src/extension.ts`
-- Paths containing spaces are automatically quoted: `@"path with spaces/file.ts"`
-- Max 500 items total (450 files + directories); directories sorted first
-- 5-second cache (`CACHE_DURATION_MS`)
-
-**Gitignore filtering:**
-
-- Controlled by `flightpath.respectGitignoreForCompletions` setting
-- OFF (default): Uses `vscode.workspace.findFiles("**/*", "**/.git/**")` — returns everything VS Code indexes (does NOT respect .gitignore, known VS Code limitation)
-- ON: Runs `git ls-files --cached --others --exclude-standard` per workspace folder; falls back to `findFiles` for non-git folders
-- Cache invalidated automatically when setting changes
-
-**Symbol completions** (`getSymbolCompletions()`):
-
-- Uses `getWorkspaceSymbols()` from AttachmentBuilders
-- Maps `vscode.SymbolKind` to `vscode.CompletionItemKind` for proper icons
-- Insert format: `sym:path/to/file.ts:SymbolName:42` (paths with spaces quoted: `sym:"path with spaces/file.ts":Name:42`)
-- Max 500 results
-
-**Selection completions** (`getSelectionCompletions()`):
-
-- Scans ALL visible editors (including split views)
-- Insert format: `selection:path:startLine-endLine` (1-based; paths with spaces quoted)
-- Label: `selection: filename (lines X-Y)` for multi-editor, `selection: Current Selection` for single
-- Deduplicates same file/range across multiple editors
-- `sortText: !000_selection_NNN` (sorts before alphabetic entries)
-- Shows preview (first 100 chars) in documentation
-
-**Hash completions** (`getHashCompletions()`):
-
-- Combines selections + symbols
-- Selections prefixed with `0_` (sorted first), symbols with `1_` (sorted second)
-
-**Git change completions** (`getGitChangeCompletions()`):
-
-- Called by `PromptCompletionProvider` for `~` trigger and by the webview
-- Always-present items: `~diff` (working tree changes) and `~staged` (index)
-- Stash items: `~stash:N` for each stash entry
-- Commit items: recent 50 commits by default; switches to `git --grep` full-history search when `filterText` is non-empty (up to 200 results)
-- 10-second cache (`GIT_CACHE_DURATION_MS`) for base commits/stashes; separate search cache keyed by query string
-- Insert text is just the ref (e.g., `diff`, `staged`, `stash:0`, full commit hash)
-
-**Prior-context completions** (`getPriorContextCompletions()`):
-
-- Called by `PromptCompletionProvider` for `$` trigger and by the webview
-- Keywords: `previous` (prior step output), `all` (all prior outputs), `finalStep` (prior finalStep output), `allFinalStep` (all finalStep outputs), `step:` (specific steps, e.g. `$step:1,3-5`)
-- Prefix-filtered against the text after `$`
-
-**Prompt file completions** (`getPromptFileCompletions()`):
-
-- Returns `.prompt.md`, `.md`, `.txt` files only
-- Insert text uses `./relative/path` format
-- Max 200 results
-- Used by the webview prompt editor (not the VS Code completion provider)
-
-**Initialization:**
-
-- `initializeCompletionHelpers(context)` called during extension activation
-- Subscribes to `configService` for cache invalidation on any config change
-- Watcher registered in `context.subscriptions` (disposed automatically)
-
-**Performance:**
-
-- File cache: 5 seconds, shared across all completions
-- Git cache: 10 seconds for commits/stashes; per-query cache for search results
-- Symbol queries: Fresh on each request (required for filtering)
-- `isIncomplete: true` on CompletionList ensures live updates as user types
-- Gitignore filtering uses `git ls-files` which handles all .gitignore rules correctly</completionHelpers>
-
-<contextReferenceBuilder>
-**ContextReferenceBuilder** is a pure utility module (no class, no state) exporting functions that construct reference strings. Both `CompletionHelpers` and `ContextMenuReferenceCommands` depend on it.
-
-**Path utilities:**
-- `toWorkspaceRelativeReferencePath(uri)` — returns workspace-relative path with forward slashes, or `null` if outside workspace
-- `quoteReferencePath(path)` — wraps path in double quotes if it contains spaces
-- (internal) `normalizeReferencePath(path)` — converts backslashes to forward slashes
-
-**Reference builders** (each has a `build*Value` variant that returns only the argument portion without the trigger prefix):
-- `buildFileReference(relativePath)` → `@path/to/file.ts` or `@"path with spaces/file.ts"`
-- `buildDirectoryReference(relativePath)` → `@path/to/dir/` (always trailing slash, quotes if spaces)
-- `buildSelectionReference(relativePath, startLine, endLine)` → `#selection:path:1-10`
-- `buildSymbolReference(relativePath, symbolName, line)` → `#sym:path:SymbolName:42`
-- `buildGitReference(ref)` → `~<ref>` (pass hash, `diff`, `staged`, or `stash:N`)
-</contextReferenceBuilder>
-
-<contextMenuReferenceCommands>
-**ContextMenuReferenceCommands** handles VS Code context menu actions that insert references into the webview prompt editor. Instantiated once in `extension.ts` with a reference to `FlightPathWebviewProvider`.
-
-**Commands registered in `extension.ts`:**
-- `flightpath.addFileToPromptEditor` — inserts `@relativePath` for a file URI
-- `flightpath.addDirectoryToPromptEditor` — inserts `@relativePath/` for a directory URI
-- `flightpath.addSelectionToPromptEditor` — inserts `#selection:path:startLine-endLine`; uses active editor selection if the URI matches, otherwise defaults to line 1
-- `flightpath.addSymbolToPromptEditor` — resolves the innermost symbol at the cursor line via `vscode.executeDocumentSymbolProvider`; falls back to a selection reference if no symbol found
-- `flightpath.addScmResourcesToPromptEditor` — accepts `...args` (VS Code SCM multi-selection); extracts `resourceUri` from `SourceControlResourceState` objects and inserts one `@file` reference per resource
-- `flightpath.addTimelineCommitToPromptEditor` — extracts the longest hex hash from a `TimelineItem`'s `id`/`label`/`description`/`detail`/`tooltip`/`contextValue` fields; inserts `~<hash>`
-
-**Insertion mechanism:**
-- All commands call private `insertReferences(references: string[])` which calls `webviewProvider.enqueuePromptEditorInsert()` with a `PromptEditorInsertRequest` (mode: `INSERT`)
-- Request ID uses `context-menu-<timestamp>-<random>` format
-</contextMenuReferenceCommands>
-
-<modelCompletions>
-**Model field completions** (JSON/JSONC only):
-
-- Triggers inside `"model": "..."` string values
-- Uses `getAvailableModelsSync()` from ModelRegistry
-- Shows CLI support indicator: "CLI & Chat" vs "Chat only"
-- CLI-supported models sorted first (`0_*` vs `1_*`)
-- Replaces entire value inside quotes (calculates range from opening to closing quote)
-- Falls back to "No models available" message if registry not initialized
-
-**Documentation shows:**
-
-- Model ID (e.g., `claude-sonnet-4.5`)
-- Vendor (Copilot, Claude, Codex)
-- Family (Sonnet, Haiku, Opus, GPT)
-- CLI support status (✅ Yes / ❌ No)
-</modelCompletions>
-
-<linkProvider>
-**PromptLinkProvider** enables Ctrl+Click navigation from prompt files to source code.
-
-**Supported link types:**
-
-1. `@path/to/file.ts` or `@"path with spaces/file.ts"` → Opens file
-2. `@path/to/dir/` or `@"path with spaces/dir/"` → Reveals directory in File Explorer
-3. `#selection:path:10-20` or `#selection:"path with spaces/file":10-20` → Opens file with lines 10-20 selected
-4. `#sym:path:symbol:42` or `#sym:"path with spaces/file":symbol:42` → Opens file at symbol line
-5. `~diff`, `~staged`, `~stash:N`, `~<hash>` → Opens live git diff in a new untitled editor
-
-**Implementation details:**
-
-- Uses VS Code `DocumentLinkProvider` API
-- Patterns stored as class fields; fresh `RegExp` instances created per helper method call (prevents state issues with global `/g` flag)
-- Each link type has a quoted and unquoted regex variant; quoted variants matched first
-- Custom command `flightpath.openFileWithSelection` for line selections
-- Workspace-relative path resolution only (no absolute paths)
-
-**Activation conditions** (`isPromptFile()`):
-
-- File name ends with `.flightpath.json`, `.flightpath.yaml`, `.flightpath.yml`, `.prompt.md`
-- OR `document.languageId` is `prompt`, `markdown`, `yaml`, or `yml`
-
-**Pattern detection regex (class field `patterns`):**
-
-- `fullFileQuoted`: `/@"([^"]+\.[a-zA-Z0-9]+)"/g`
-- `fullFile`: `/@([^\s@#"]+\.[a-zA-Z0-9]+)/g`
-- `directoryQuoted`: `/@"([^"]+\/)"/g`
-- `directory`: `/@([^\s@#"]+\/)/g`
-- `lineRangeQuoted`: `/#selection:"([^"]+)":(\d+)-(\d+)/g`
-- `lineRange`: `/#selection:([^\s:]+):(\d+)-(\d+)/g`
-- `symbolQuoted`: `/#sym:"([^"]+)":([^:]+):(\d+)/g`
-- `symbol`: `/#sym:([^\s:]+):([^:]+):(\d+)/g`
-
-**Command integration:**
-
-- Directory links: `command:revealInExplorer?{uri}` (built-in VS Code command)
-- Line selections: `command:flightpath.openFileWithSelection?{uri,startLine,endLine}` (custom command)
-- Git change links: `command:flightpath.openGitChange?{ref}` (custom command)
-- Custom commands registered in `extension.ts` via `registerCommands()`
-
-**Relationship to PromptCompletionProvider:**
-
-- Completion = Insert references (write operation)
-- Link = Navigate to sources (read operation)
-- Both share syntax (`@` for files, `#` for snippets)
-- Both use workspace-relative paths
-</linkProvider>
-
 <registration>
-**Extension registration** (in `extension.ts`):
+`src/extension.ts` registers the same `PromptCompletionProvider` four times for `@`, `#`, `~`, and `$` on prompt files (`*.{prompt,flightpath}.json`, `*.flightpath.{yaml,yml}`, `*.prompt.md`, and `prompt` language). `PromptLinkProvider` uses the same selector set.
 
-`PromptCompletionProvider` and `PromptLinkProvider` share these patterns:
-
-```typescript
-const promptFilePatterns = [
-  { pattern: "**/*.{prompt,flightpath}.json" },
-  { pattern: "**/*.flightpath.{yaml,yml}" },
-  { pattern: "**/*.prompt.md" },
-  { language: "prompt" }, // VS Code's prompt language
-];
-```
-
-**Completion provider:**
-
-- Registered four times with different trigger characters: `@`, `#`, `~`, and `$`
-- `@` → file and directory references
-- `#` → selections and workspace symbols
-- `~` → git change context (diff, staged, stash, commits)
-- `$` → prior step context references
-
-**Property key completion provider:**
-
-- `PromptPropertyCompletionProvider` registered for `*.flightpath.{yaml,yml}` only
-- No trigger character — VS Code invokes on Ctrl+Space or natural typing
-- Context-aware: detects `type: script` vs AI prompt step within the item block
-
-**Link provider:**
-
-- Single registration: `vscode.languages.registerDocumentLinkProvider(promptFilePatterns, provider)`
-
-**Custom commands:**
-
-- `flightpath.openFileWithSelection` - Opens file with line range selected
-- `flightpath.openGitChange` - Opens live git diff in a new untitled editor
-- Both registered via `vscode.commands.registerCommand()` in extension.ts
-
-**Initialization:**
-
-- `initializeCompletionHelpers(context)` called during activation
-- Sets up config subscription and cache management
+If you add a new trigger or reference form, update all of these together:
+- `extension.ts` registration
+- `PromptCompletionProvider` trigger routing/context checks
+- `CompletionHelpers` / `ContextReferenceBuilder`
+- `PromptLinkProvider`
+- `src/ui/WebviewMessageRouter.ts` if the dashboard should support it too
 </registration>
 
-<promptPropertyCompletionProvider>
-**PromptPropertyCompletionProvider** provides context-aware YAML property key completions for `steps:` list items in `.flightpath.yaml` workflow files.
+<promptCompletionProvider>
+`PromptCompletionProvider` is intentionally context-gated:
+- JSON/JSONC: only inside `"prompt"` strings, plus model completions inside `"model"` strings
+- YAML/YML: only inside `prompt:` values, including block scalars
+- Markdown / `prompt` language: anywhere
 
-**Step type detection:**
+For YAML, explicit replacement ranges are required; without `calculateCompletionRange()` the YAML extension suppresses completions. Keep `CompletionList(..., true)` for trigger-based completions even though VS Code may visually duplicate entries; `false` breaks live refresh for symbol filtering.
 
-- Searches the current item block (bounded by list-item `-`) for `type: script`
-- Searches backwards up to 100 lines for the item start, then up to 50 more lines for `steps:` key
-- `isInsidePromptStep: false` returned if cursor is outside a `steps:` list item
+Model completions are JSON/JSONC-only and replace the entire quoted model value via `getAvailableModelsSync()`.
+</promptCompletionProvider>
 
-**Property groups:**
+<completionHelpers>
+`CompletionHelpers.ts` owns the expensive discovery/caching logic:
+- workspace file cache: 5s
+- git refs cache: 10s
+- cache invalidation comes from `initializeCompletionHelpers(context)` subscribing to `configService`
 
-- `COMMON_PROPERTIES` — offered for all step types: `type`, `name`
-- `AI_PROMPT_PROPERTIES` — offered when step is an AI prompt (no `type: script`): `prompt`, `harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `mcpServers`, `hooks`, `endCondition`, `preCondition`, `allowDynamicExtension`
-- `SCRIPT_ONLY_PROPERTIES` — offered when `type: script`: `script`, `timeout`, `compareSource`, `returns`, `onPass`, `onFail`
+`flightpath.respectGitignoreForCompletions=true` switches file discovery to `git ls-files --cached --others --exclude-standard`; do not try to emulate gitignore with `findFiles()`.
 
-**Position detection (`isAtPropertyKeyPosition()`):**
+`getPromptFileCompletions()` is webview-only for lone prompt-file paths like `./foo.prompt.md`; VS Code `@/#/~/$` completion does not use it.
+</completionHelpers>
 
-- True when text before cursor is only whitespace + optional `- ` + partial identifier (no `: `)
-- Also true when cursor is on `type: <value>` for enum value completions
+<yamlWorkflowKeys>
+`PromptPropertyCompletionProvider` is narrowly scoped to YAML workflow editing:
+- only activates in `.flightpath.yaml` / `.flightpath.yml`
+- only offers keys inside `steps:` list items
+- branches on whether the current item contains `type: script`
+- also owns `type: prompt | script` enum-value completions
 
-**Type value completions:**
+Its property lists are hand-maintained, not schema-derived. If workflow step fields change in `DashboardConstants` or the schema, this provider must be updated explicitly.
+</yamlWorkflowKeys>
 
-- When cursor is after `type: `, offers `prompt` (sorted first) and `script` (sorted second) as enum members
+<referenceContracts>
+All emitted references must stay workspace-relative and use forward slashes. Paths with spaces are quoted; directory refs always keep a trailing slash because that is how FlightPath distinguishes structure-only attachment from file attachment.
 
-**Key property constants** mostly sourced from `PROMPT_PROPERTIES` and `STEP_TYPES` in `src/types/DashboardConstants.ts`. Exception: `"name"`, `"timeout"`, and `"allowDynamicExtension"` are inline strings (constants exist in `PROMPT_PROPERTIES` but aren't used there).
-</promptPropertyCompletionProvider>
+Quoted-path support must remain symmetric across:
+- `ContextReferenceBuilder`
+- `PromptLinkProvider` regexes
+- `ContextMenuReferenceCommands`
+- any parser/expander consuming the references
 
-<knownIssues>
-**VS Code completion list bug:**
+`PromptLinkProvider` recreates regexes per call because the patterns use `/g`; reusing the same regex instances will produce `lastIndex` bugs.
+</referenceContracts>
 
-- Setting `isIncomplete: true` sometimes shows duplicate entries in UI
-- This is a VS Code bug with how it handles completion list updates
-- Only affects visual display, NOT the data we return
-- Changing to `false` is worse: duplicates still occur AND list doesn't refresh as user types
-- **Solution:** Keep `isIncomplete: true` for live filtering (critical for symbol search)
+<contextMenuCommands>
+`ContextMenuReferenceCommands` never edits text directly. It always calls `webviewProvider.enqueuePromptEditorInsert()` with a `PromptEditorInsertRequest` and `PROMPT_EDITOR_INSERT_MODES.INSERT`. Keep that flow aligned with `WebviewMessageTypes.ts`.
 
-**YAML extension suppression:**
-
-- VS Code YAML extension suppresses completions without explicit range
-- **Solution:** `calculateCompletionRange()` calculates range from trigger to cursor
-- Required for YAML/YML files to show completion dropdown
-
-**`findFiles` does not respect .gitignore:**
-
-- `vscode.workspace.findFiles()` ignores .gitignore regardless of exclude patterns (VS Code limitation)
-- When `flightpath.respectGitignoreForCompletions` is OFF (default), all files including node_modules are included
-- When ON, `git ls-files` is used instead, which is correct by definition
-</knownIssues>
-````
+Commands should fail gracefully for non-workspace URIs rather than emitting absolute paths. `addSymbolToPromptEditor()` intentionally falls back to a single-line `#selection:` ref if symbol lookup fails.
+</contextMenuCommands>

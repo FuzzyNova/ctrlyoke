@@ -3,151 +3,54 @@ applyTo: "src/cli.ts,src/cli/**"
 ---
 
 <purpose>
-The standalone FlightPath CLI binary. Invoked as `flightpath run <file>`, `flightpath run --prompt <text>`, or `flightpath validate <file>` from the terminal. This is a separate Node.js executable built by esbuild, distinct from the VS Code extension. It uses the same core engine (WorkflowInstance, PromptQueue, harness integrations) but bridges them through a CLI adapter instead of the VS Code API.
+Standalone `flightpath` CLI entrypoint plus terminal-only formatting. `src/cli.ts` owns the `run`, `validate`, and `commit` commands; `src/cli/CliTerminalFormatter.ts` only renders headless streaming output.
 </purpose>
 
 <architecture>
 
-## Key Relationships
+## Command boundaries
 
-```
-src/cli.ts (Commander entry point)
-    → src/platform/CliAdapter.ts           (PlatformAdapter for CLI — maps CLI flags to settings)
-    → src/platform/vscode-shim.ts          (stubs VS Code API to null/no-op for CLI context)
-    → src/flightpath/IntegrationFactory.ts (creates harness integrations — same as extension)
-    → src/flightpath/WorkflowInstance.ts   (runs execution engine — same as extension)
-    → src/cli/CliTerminalFormatter.ts      (chalk-based terminal output — CLI-only)
-    → src/utils/WorkflowLockManager.ts     (file-based process lock with heartbeat)
-```
+- `run` reuses the shared workflow engine. CLI-specific code is limited to runtime bootstrap, config/backends/overlay setup, adapter+shim wiring, terminal subscriptions, workflow locking, and exit-code mapping.
+- `validate` is intentionally lightweight: parse-only, no harness startup or `WorkflowInstance` execution.
+- `commit` is a separate path. It delegates to `src/git/CommitMessageGenerator` and `GitCommitter`, so queue execution, streaming subscriptions, and workflow lock changes usually should not affect `flightpath commit`.
 
-The FlightPath CLI adds only: argument parsing (Commander.js), TTY detection, `CliTerminalFormatter` rendering, lock management, and structured exit codes. All workflow logic is shared with the VS Code extension.
+## Config flow
 
-## Component Roles
+1. `setRuntimeMode(RUNNER_IDS.CLI)` must stay at module top level before shared code initializes.
+2. `configService` is seeded with user/workspace file backends, then `setCliOverlay()` is applied with only explicitly provided flags.
+3. `CliAdapter` plus `registerCliAdapter()` is what makes shared `ConfigurationUtils` / `workspace.getConfiguration()` reads see CLI values inside the bundled Node process.
+4. In `CliAdapter.getConfig()`, add explicit key mappings for shared settings that CLI paths depend on. Do **not** fall back to `this.config[key]`; CLI option names and persisted setting keys intentionally do not match.
 
-**`src/cli.ts`** — Entry point. Calls `setRuntimeMode(RUNNER_IDS.CLI)` immediately on load, then defines Commander commands (`run`, `validate`). Orchestrates the execution flow:
+## `run` data flow gotchas
 
-1. Parses CLI flags into `ResolvedCliConfig`
-2. Initialises `configService` with file-based backends: `setUserBackend(createUserConfigBackend())`, `setWorkspaceBackend(createWorkspaceConfigBackend(cwd))`, then `setCliOverlay(overlay)` for any explicitly-provided flags
-3. Instantiates `CliAdapter` + registers it via `registerCliAdapter()`
-4. Creates `IntegrationFactory(platform)` + `WorkflowInstance`. Harness is cast directly from `config.harness` as `HarnessId` and passed to `factory.createForExecution(harness)`. The `--harness` option help text lists three common harnesses but any valid `HarnessId` is accepted.
-5. In headless mode, subscribes: `onPromptStart`, `onStreamingEvents`, `onStreamingChunk`, `onWorkflowStatusMessage`, `onPromptComplete`. `onStreamingChunk` writes raw text chunks directly to `process.stdout`; the others render via `CliTerminalFormatter`.
-6. Calls `instance.loadPromptFile()` or `instance.loadPromptString()` (for `--prompt`), acquires `WorkflowLockManager` lock with 5s heartbeat
-7. Merges `--var` flags into `workflowFile.vars` (CLI vars override workflow-level defaults)
-8. Applies `--resume` / `--new-session` overrides to the first prompt's `sessionId`
-9. Calls `instance.executeLoadedPromptFile(harness)`
-10. Maps final state to an exit code via `getExitCode()`, releases lock
-
-**`src/platform/CliAdapter.ts`** — Implements `PlatformAdapter`. Maps CLI flags to config keys that `ConfigurationUtils.get()` reads inside harness providers. Key mappings:
-
-| Config key                                             | Source                                                                    |
-| ------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `cliToolPermissions`                                   | `"dangerouslyAllowAll"` / `"custom"` / `"allowAll"` from allow/deny flags |
-| `cliAllowedTools`                                      | `--allow-tool` flag values                                                |
-| `cliDeniedTools`                                       | `--deny-tool` flag values                                                 |
-| `copilotCliAllowedDirs`                                | `--add-dir` flag values                                                   |
-| `cliExecutionMode`                                     | `"interactive"` or `"headless"` (TTY-detected or forced)                  |
-| `copilotCliModel` / `claudeCliModel` / `codexCliModel` | `--model` flag                                                            |
-| `scriptTimeout` / `maxPromptExecutionTime`             | `--script-timeout` / `--timeout` (converted back to seconds)              |
-| `vars`                                                 | `--var key=value` flags (merged over workflow-level `vars:` defaults)     |
-
-For any key not explicitly mapped above, `getConfig()` falls back to: (1) a direct property on `ResolvedCliConfig` with the same name, then (2) `configService.getNested(key)` (reads from user/workspace config files).
-
-VS Code-only features (`focusDashboard`) are not implemented.
-
-**`src/platform/vscode-shim.ts`** — Stubs the `vscode` module for the CLI bundle (unavailable outside the extension host). `registerCliAdapter(platform)` stores the adapter so shim functions can delegate to it.
-
-**`src/cli/CliTerminalFormatter.ts`** — Chalk-based renderer. **Not used by the extension or harness code.** Static methods:
-
-- `renderEvent(event)` / `renderEvents(events)` — renders a single or array of `CliEvent` to stdout with chalk formatting; handles TEXT, THINKING, BASH_COMMAND, FILE_EDIT (with diff), FILE_WRITE, FILE_READ, FILE_DELETE, MCP_TOOL_CALL, WEB_SEARCH, TOOL_CALL, TOOL_RESULT
-- `renderPromptHeader(data)` — prints step divider + step N/M + prompt preview (5 lines); called twice per attempt (without `cliCommand`, then with it)
-- `renderStatusMessage(message, severity)` — severity-coloured left-border message (error=red, warning=yellow, info=cyan)
-- `renderStats(data)` — token usage, context window %, session ID, elapsed time
-- `flushStreamingBuffer()` — closes the current live-streaming TEXT or THINKING block; must be called before any non-text event or on prompt complete
-
-TEXT and THINKING events use a live-streaming pattern: `_streaming` static state tracks the current block type to write each chunk directly to stdout (typewriter effect) and print the THINKING header only once per block.
-
-File diff rendering uses the `diff` library. Prefers `structuredPatch` (pre-computed unified diff hunks) over `oldContent`/`newContent`. Truncates to 60 lines with a "… N more" indicator.
+- `WorkflowInstance` is created without a dashboard sink. Headless output must subscribe on the instance, not the detector integration, because the real execution integration is created later by the factory.
+- Prompt loading happens before lock acquisition so `workingFilePath` exists; the CLI then maintains its own `WorkflowLockManager` heartbeat and must release it on success, error, SIGINT/SIGTERM, and process exit.
+- `--var` overrides are merged into `workflowFile.vars` **after** loading so workflow defaults are present first.
+- Session overrides mutate `promptQueue.getState().steps` directly. That getter is only a shallow copy, so step-object mutations intentionally write through into queue state.
 
 </architecture>
 
-<executionModes>
+<output>
 
-## Interactive vs Headless Mode
+## Interactive vs headless
 
-Execution mode is determined by `getExecutionMode()`:
+- Interactive mode is a passthrough for the underlying AI CLI TUI with only minimal FlightPath framing.
+- Headless mode renders prompt boundaries/status via `CliTerminalFormatter`, but raw streaming chunks still go straight to `stdout`.
+- `--quiet` and `--json` must suppress decorative output. Diagnostics should go through `Log.initializeCli()` so logs land in `.flightpath/logs/` instead of contaminating terminal/JSON output.
 
-```
-1. --headless flag  → always headless
-2. --interactive flag → always interactive
-3. Both stdout AND stdin are a TTY → interactive (default for terminal users)
-4. Otherwise → headless (CI/CD, pipes, redirects)
-```
+## `CliTerminalFormatter` rules
 
-**Interactive**: Opens a terminal window for the AI CLI TUI. The AI CLI's stdout passes through directly to the user's terminal. No streaming subscription needed.
+- `_streaming` is shared static state for live TEXT / THINKING blocks. Always `flushStreamingBuffer()` before non-text events and on prompt completion or blocks will run together.
+- Diff output prefers precomputed `structuredPatch` hunks, falls back to `oldContent` / `newContent`, and truncates long diffs. Keep this formatter CLI-only even if logic resembles webview rendering.
 
-**Headless**: Spawns the AI CLI as a background process. `onPromptStart`, `onStreamingEvents`, `onWorkflowStatusMessage`, and `onPromptComplete` callbacks render output to the terminal in real time via `CliTerminalFormatter`. `onStreamingChunk` writes raw text chunks directly to `process.stdout` (typewriter effect for non-event-based streaming).
+</output>
 
-In headless mode, `allowAllTools` is automatically set to `true` unless the user specified custom allow/deny lists — this prevents interactive tool approval prompts from blocking automation.
+<constraints>
 
-</executionModes>
+## Constraints
 
-<exitCodes>
+- Never depend on the real `vscode` module from CLI code. The CLI bundle aliases it to `src/platform/vscode-shim.ts`.
+- CLI builds produce `out/cli.js` with a shebang and `IS_DEV_MODE=false`; keep code Node-safe and independent of extension-host services.
+- Preserve structured exit semantics when adding failure paths: `0` success, `1` workflow failure, `2` usage/parse/unexpected error, `3` harness/tool availability issues, `4` timeout, `5` interrupted.
 
-## Structured Exit Codes
-
-| Code | Meaning                                                             |
-| ---- | ------------------------------------------------------------------- |
-| 0    | Success — all prompts completed                                     |
-| 1    | Failure — prompt(s) failed or general error                         |
-| 2    | Hard error — file not found, parse error, unexpected exception      |
-| 3    | Provider error — CLI not installed, auth failure, command not found |
-| 4    | Timeout exceeded                                                    |
-| 5    | Interrupted — user pressed Ctrl+C                                   |
-
-Exit codes 3 and 4 are inferred by scanning the error message of the first failed result for keywords (`"timeout"` / `"timed out"` / `"time limit"` → 4; `"not installed"` / `"not found"` / `"enoent"` → 3). They only fire when `state.status === EXECUTION_STATES.ERROR`; a normal prompt failure returns 1.
-
-</exitCodes>
-
-<buildConfig>
-
-## Build Configuration
-
-The CLI binary is built by `esbuild.js` as a separate bundle (`cliCtx`):
-
-- Entry: `src/cli.ts`
-- Output: `out/cli.js`
-- `vscode` module aliased to `src/platform/vscode-shim.ts`
-- `node-pty` marked external (native module, not needed by CLI)
-- `VERSION` string injected via `define`
-- `IS_DEV_MODE` always `false` for CLI builds (no dev commands)
-- Platform: `node`, Format: `cjs`
-
-</buildConfig>
-
-<keyConstraints>
-
-## Key Constraints for CLI Code
-
-1. **Never import `vscode` directly** — the CLI bundle does not have access to the VS Code extension host. Use `CliAdapter` methods or `ConfigurationUtils.get()` (which delegates to the shim).
-2. **Call `setRuntimeMode(RUNNER_IDS.CLI)` first** — must be called before any other module initialisation so runtime checks inside shared code behave correctly.
-3. **No dashboard sink** — `WorkflowInstance` is created without a `DashboardSink`. Output goes to terminal via streaming event callbacks.
-4. **No status bar** — Status bar callbacks are no-ops in CLI context.
-5. **`--quiet` and `--json` flags** suppress all non-essential output — always check these before writing to stdout.
-6. **Log output is redirected** — `Log.initializeCli()` redirects all `Log.*` calls to a log file, never to the terminal. This prevents diagnostic noise from polluting structured output.
-7. **`CliTerminalFormatter` is CLI-only** — Do not import it from extension code or harness integration code. It depends on `chalk` for terminal colors.
-8. **Lock acquisition happens after `loadPromptFile()`** — `WorkflowLockManager.acquireLock()` is called with a `WorkflowRunnerLock` (runner, pid, startedAt, instanceId, workflowId) and kept alive by a 5s `setInterval` heartbeat. Always release in all exit paths (success, error, SIGINT, SIGTERM, `process.on("exit")`).
-
-</keyConstraints>
-
-<addingCliCommands>
-
-## Adding New CLI Commands
-
-1. Add a new `.command()` block to `src/cli.ts` (Commander pattern)
-2. Add options with `.option()` — use `collectRepeatable` helper for repeatable flags
-3. Add the option type to the appropriate options interface
-4. If the command needs new settings the harness providers don't already read, add a mapping in `CliAdapter.ts`
-5. For terminal output, use `CliTerminalFormatter` or write directly to `process.stdout`
-6. Always handle `--quiet` and `--json` before printing anything
-
-</addingCliCommands>
+</constraints>
