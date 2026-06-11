@@ -155,7 +155,12 @@ Submit button disabled when `selectedCount === 0`.
 Same operations as today, but scoped to `items.filter(i => selectedIds.has(key(i)))`:
 
 - AgentSkills "Save (to)" → `syncAll(selectedFiles, targetId, activeType, scope)`.
-- AgentSkills "Delete (from)" → existing delete-all flow, restricted to selected.
+- AgentSkills "Delete (from)" → **not** the existing `deleteAll` flow.
+  Current plumbing only supports deleting an entire target directory for a
+  given file type, so partial delete must use one of these implementations:
+  - call the existing per-file delete path once per selected file, or
+  - add a new explicit bulk-selected delete message/handler for agents/skills.
+  Do not reuse `deleteAll` for partial selection; that would over-delete.
 - MCP "Save (to)" → `exportToHarness(selectedConfigs, targetId, scope)`, or for
   FlightPath target, `addOrUpdateServer` per selected server.
 - MCP "Delete (from)" → existing delete-all flow (harness or FlightPath),
@@ -174,7 +179,11 @@ Same operations as today, but scoped to `items.filter(i => selectedIds.has(key(i
    - Wire `availableActions` = `activeType === "agent" ? ["save", "delete"] : ["save", "delete", "setDefault"]`.
    - Implement bulk `setDefault` handler (skills only — replace `defaults.skills`
      with checked skill names).
-   - Update `handleSaveAll`/`handleDeleteAllRequest` to filter by `selectedIds`.
+   - Update `handleSaveAll` to filter by `selectedIds`.
+   - Replace the current bulk delete implementation for partial selection:
+     either loop over selected files via the existing per-file delete path, or
+     add a dedicated selected-delete message/handler. Do not route through the
+     current `deleteAll(harnessId, fileType, scope)` plumbing.
 3. `McpManagerSection.tsx`:
    - Same selection state + row checkboxes.
    - `availableActions = ["save", "delete", "setDefault"]` always (MCP has no
@@ -183,19 +192,33 @@ Same operations as today, but scoped to `items.filter(i => selectedIds.has(key(i
      checked servers' configs.
    - Update `handleSaveAll`/`handleDeleteAllRequest` (including the FlightPath
      branches added above) to filter by `selectedIds`.
-4. Remove `BulkLocationActionsBar.tsx` once both sections are migrated.
-5. Manual verification (per `/verify`): toggle individual rows, select-all/none,
+4. Add/update UI tests:
+   - `BulkSelectionActionsBar` tri-state select-all behavior.
+   - Agent/skill selected-only save dispatch.
+   - Agent/skill selected-only delete dispatch.
+   - Skills show bulk `Set Default`; agents do not.
+   - MCP selected-only save/delete dispatch, including FlightPath target.
+   - MCP/skills bulk `Set Default` preserves existing default entries for items
+     outside the currently visible managed list.
+5. Remove `BulkLocationActionsBar.tsx` once both sections are migrated.
+6. Manual verification (per `/verify`): toggle individual rows, select-all/none,
    run Save/Delete/Set Default in both scopes, confirm partial selections only
-   affect checked rows, confirm agents never show "Set Default" in the bulk bar.
+   affect checked rows, confirm agents never show "Set Default" in the bulk bar,
+   and confirm MCP selection survives `activeScope` switch because the visible
+   managed-server list itself does not change.
 
 ---
 
 ## Open Questions
 
 - Should `selectedIds` reset when switching the AgentSkills `activeType`
-  (agent ↔ skill) or the MCP `activeScope`? Recommendation: yes — selection is
-  per-type/per-view, reset to "all selected" on switch, since the row sets are
-  completely different.
+  (agent ↔ skill)? Recommendation: yes — those views show different row sets,
+  so reset to "all selected" on type switch.
+- Should MCP `selectedIds` reset when switching `activeScope`? Recommendation:
+  no — the managed MCP list is a merged cross-scope view, so changing the
+  top-level write scope does not change the visible row set. Preserve selection
+  across scope switches and let the normal reconciliation logic react only when
+  the actual server list changes.
 - Bulk "Set Default" replaces the defaults array wholesale (for the visible
   set) rather than offering separate "add selected to defaults" / "remove
   selected from defaults" actions. If that proves confusing in practice, a

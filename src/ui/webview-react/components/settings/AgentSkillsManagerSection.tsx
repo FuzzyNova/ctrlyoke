@@ -24,7 +24,10 @@ import { ActionDropdown } from "@components/shared/ActionDropdown";
 import type { ActionDropdownItem } from "@components/shared/ActionDropdown";
 import { FlyoutActionDropdown } from "@components/shared/FlyoutActionDropdown";
 import type { FlyoutGroup } from "@components/shared/FlyoutActionDropdown";
-import { BulkLocationActionsBar } from "@components/shared/BulkLocationActionsBar";
+import {
+  BulkSelectionActionsBar,
+  type BulkAction,
+} from "@components/shared/BulkSelectionActionsBar";
 import { isStandalone } from "@hooks/useVsCodeApi";
 
 // ============================================================================
@@ -248,6 +251,8 @@ interface FileRowProps {
   availableIds: Set<HarnessId>;
   targetDirectories: ManagedTargetDirectory[];
   isDefault: boolean;
+  selected: boolean;
+  onToggleSelected: (name: string) => void;
   onSave: (
     sourcePath: string,
     id: AnyTargetId,
@@ -263,6 +268,8 @@ function FileRow({
   availableIds,
   targetDirectories,
   isDefault,
+  selected,
+  onToggleSelected,
   onSave,
   onDelete,
   onToggleDefault,
@@ -294,6 +301,14 @@ function FileRow({
   return (
     <div className="py-2 px-3 border-b border-panel-border last:border-0">
       <div className="flex items-center gap-1.5">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelected(file.name)}
+          aria-label={`Select ${file.displayName}`}
+          className="h-3.5 w-3.5 shrink-0 rounded border-input-border bg-input-bg"
+        />
+
         <div className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
           {file.displayName}
         </div>
@@ -390,7 +405,6 @@ export function AgentSkillsManagerSection({
   const exportFile = useHarnessFileStore((s) => s.exportFile);
   const deleteFile = useHarnessFileStore((s) => s.deleteFile);
   const syncAll = useHarnessFileStore((s) => s.syncAll);
-  const deleteAll = useHarnessFileStore((s) => s.deleteAll);
   const openHarnessDir = useHarnessFileStore((s) => s.openHarnessDir);
 
   const harnessStatusMap = useSettingsStore((s) => s.harnessStatus);
@@ -452,13 +466,59 @@ export function AgentSkillsManagerSection({
   } | null>(null);
 
   const [confirmDeleteAll, setConfirmDeleteAll] = useState<{
+    names: string[];
     id: AnyTargetId;
     scope: SettingWriteScope;
   } | null>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     requestFiles();
   }, [requestFiles]);
+
+  useEffect(() => {
+    setSelectedIds(new Set(managedFiles.map((file) => file.name)));
+  }, [activeType]);
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const next = new Set(
+        managedFiles
+          .filter((file) => current.has(file.name))
+          .map((file) => file.name)
+      );
+      for (const file of managedFiles) {
+        next.add(file.name);
+      }
+      if (
+        next.size === current.size &&
+        [...next].every((name) => current.has(name))
+      ) {
+        return current;
+      }
+      return next;
+    });
+  }, [managedFiles]);
+
+  const selectedFiles = useMemo(
+    () => managedFiles.filter((file) => selectedIds.has(file.name)),
+    [managedFiles, selectedIds]
+  );
+
+  const selectAllState =
+    managedFiles.length === 0
+      ? "none"
+      : selectedIds.size === 0
+        ? "none"
+        : selectedIds.size === managedFiles.length
+          ? "all"
+          : "some";
+
+  const availableBulkActions: BulkAction[] =
+    activeType === HARNESS_FILE_TYPES.AGENT
+      ? ["save", "delete"]
+      : ["save", "delete", "setDefault"];
 
   const handleSave = useCallback(
     (sourcePath: string, id: AnyTargetId, scope: SettingWriteScope) => {
@@ -487,27 +547,71 @@ export function AgentSkillsManagerSection({
 
   const handleSaveAll = useCallback(
     (id: AnyTargetId, scope: SettingWriteScope) => {
-      const files = managedFiles.map((f) => ({
+      const files = selectedFiles.map((f) => ({
         sourcePath: getPrimaryLocation(f).path,
         name: f.name,
       }));
       syncAll(files, id, activeType, scope);
     },
-    [managedFiles, syncAll, activeType]
+    [selectedFiles, syncAll, activeType]
   );
 
   const handleDeleteAllRequest = useCallback(
     (id: AnyTargetId, scope: SettingWriteScope) => {
-      setConfirmDeleteAll({ id, scope });
+      const names = selectedFiles
+        .filter((file) =>
+          file.locations.some(
+            (location) => location.harnessId === id && location.scope === scope
+          )
+        )
+        .map((file) => file.name);
+      setConfirmDeleteAll({ names, id, scope });
     },
-    []
+    [selectedFiles]
   );
 
   const handleDeleteAllConfirm = useCallback(() => {
     if (!confirmDeleteAll) return;
-    deleteAll(confirmDeleteAll.id, activeType, confirmDeleteAll.scope);
+    for (const name of confirmDeleteAll.names) {
+      deleteFile(name, confirmDeleteAll.id, activeType, confirmDeleteAll.scope);
+    }
     setConfirmDeleteAll(null);
-  }, [confirmDeleteAll, deleteAll, activeType]);
+  }, [confirmDeleteAll, deleteFile, activeType]);
+
+  const handleToggleSelected = useCallback((name: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    setSelectedIds((current) =>
+      current.size === managedFiles.length
+        ? new Set()
+        : new Set(managedFiles.map((file) => file.name))
+    );
+  }, [managedFiles]);
+
+  const handleSetDefault = useCallback(() => {
+    if (activeType !== HARNESS_FILE_TYPES.SKILL) {
+      return;
+    }
+    const visibleNames = new Set(managedFiles.map((file) => file.name));
+    const preservedDefaults = defaultSkills.filter(
+      (name) => !visibleNames.has(name)
+    );
+    sendMessage(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, {
+      path: "defaults.skills",
+      value: [...preservedDefaults, ...selectedFiles.map((file) => file.name)],
+      scope: activeScope,
+    });
+  }, [activeScope, activeType, defaultSkills, managedFiles, selectedFiles]);
 
   return (
     <div className="space-y-4">
@@ -591,6 +695,8 @@ export function AgentSkillsManagerSection({
               availableIds={availableIds}
               targetDirectories={targetDirectories}
               isDefault={isFileDefault(file)}
+              selected={selectedIds.has(file.name)}
+              onToggleSelected={handleToggleSelected}
               onSave={handleSave}
               onDelete={handleDeleteRequest}
               onToggleDefault={handleToggleDefault}
@@ -600,8 +706,12 @@ export function AgentSkillsManagerSection({
       </div>
 
       {/* Bulk actions */}
-      <BulkLocationActionsBar
-        itemCount={managedFiles.length}
+      <BulkSelectionActionsBar
+        totalCount={managedFiles.length}
+        selectedCount={selectedFiles.length}
+        selectAllState={selectAllState}
+        onToggleSelectAll={handleToggleSelectAll}
+        availableActions={availableBulkActions}
         getTargetsForScope={(scope) =>
           scope === SETTING_SCOPES.WORKSPACE
             ? getWorkspaceTargets(availableIds)
@@ -614,8 +724,11 @@ export function AgentSkillsManagerSection({
           )
         }
         defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
-        onSaveAll={handleSaveAll}
-        onDeleteAll={handleDeleteAllRequest}
+        defaultScope={activeScope}
+        activeScope={activeScope}
+        onSave={handleSaveAll}
+        onDelete={handleDeleteAllRequest}
+        onSetDefault={handleSetDefault}
       />
 
       {/* Delete confirmation modal */}
@@ -676,13 +789,13 @@ export function AgentSkillsManagerSection({
         </div>
       )}
 
-      {/* Delete All confirmation modal */}
+      {/* Bulk delete confirmation modal */}
       {confirmDeleteAll && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
           role="button"
           tabIndex={0}
-          aria-label={`Close delete all ${activeType} dialog`}
+          aria-label={`Close delete selected ${activeType} dialog`}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setConfirmDeleteAll(null);
@@ -706,10 +819,11 @@ export function AgentSkillsManagerSection({
             aria-modal="true"
           >
             <p className="text-sm text-foreground mb-1 font-semibold">
-              Delete all {activeType}s?
+              Delete selected {activeType}s?
             </p>
             <p className="text-xs text-description-fg mb-4">
-              Remove every discovered {activeType} from{" "}
+              Remove {confirmDeleteAll.names.length} selected {activeType}
+              {confirmDeleteAll.names.length === 1 ? "" : "s"} from{" "}
               <strong>{getTargetLabel(confirmDeleteAll.id)}</strong> (
               {confirmDeleteAll.scope}). Copies in other directories are not
               affected.
@@ -727,7 +841,7 @@ export function AgentSkillsManagerSection({
                 onClick={handleDeleteAllConfirm}
                 className="px-3 py-1 text-xs rounded bg-btn-bg text-btn-fg hover:bg-btn-hover"
               >
-                Delete All
+                Delete
               </button>
             </div>
           </div>

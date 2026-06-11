@@ -14,7 +14,7 @@ import {
   FlyoutActionDropdown,
   type FlyoutGroup,
 } from "@components/shared/FlyoutActionDropdown";
-import { BulkLocationActionsBar } from "@components/shared/BulkLocationActionsBar";
+import { BulkSelectionActionsBar } from "@components/shared/BulkSelectionActionsBar";
 import {
   EMPTY_MCP_SERVER_FORM_STATE,
   McpServerForm,
@@ -596,6 +596,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
     useState<DeleteLocationState | null>(null);
   const [deleteTargetState, setDeleteTargetState] =
     useState<DeleteTargetState | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const hasLoadedRemoteRegistry = useRef(false);
 
@@ -678,11 +679,6 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
     return [...orderedGroups, ...extraGroups];
   }, [localServers]);
 
-  const exportableServers = useMemo(
-    () => (managedServers ?? []).map((server) => server.config),
-    [managedServers]
-  );
-
   useEffect(() => {
     requestServers();
     requestLocalScan();
@@ -713,8 +709,39 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
     }
   }, [editingId, expandedId, managedServersById]);
 
+  useEffect(() => {
+    const serverIds = (managedServers ?? []).map((server) => server.id);
+    setSelectedIds((current) => {
+      const next = new Set(serverIds.filter((id) => current.has(id)));
+      for (const id of serverIds) {
+        next.add(id);
+      }
+      if (
+        next.size === current.size &&
+        [...next].every((id) => current.has(id))
+      ) {
+        return current;
+      }
+      return next;
+    });
+  }, [managedServers]);
+
   const isServerDefault = (id: string): boolean =>
     defaultsServers.some((entry) => isDefaultServerEntry(entry, id));
+
+  const selectedServers = useMemo(
+    () => (managedServers ?? []).filter((server) => selectedIds.has(server.id)),
+    [managedServers, selectedIds]
+  );
+
+  const selectAllState =
+    !managedServers || managedServers.length === 0
+      ? "none"
+      : selectedIds.size === 0
+        ? "none"
+        : selectedIds.size === managedServers.length
+          ? "all"
+          : "some";
 
   const hasServerInRegistryScope = (
     id: string,
@@ -821,12 +848,12 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
   const handleSaveAll = (id: AnyTargetId, scope: SettingWriteScope) => {
     if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) {
-      for (const server of managedServers ?? []) {
+      for (const server of selectedServers) {
         addOrUpdateServer(server.config, scope);
       }
       return;
     }
-    exportToHarness(exportableServers, id, scope);
+    exportToHarness(selectedServers.map((server) => server.config), id, scope);
   };
 
   const handleDeleteAllRequest = (
@@ -834,7 +861,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
     scope: SettingWriteScope
   ) => {
     if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) {
-      const ids = (managedServers ?? [])
+      const ids = selectedServers
         .filter((server) =>
           server.locations.some(
             (location) =>
@@ -849,10 +876,49 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
     const ids = localServers
       .filter((entry) => {
         const target = getTargetForLocalSource(entry.source);
-        return target?.targetId === id && target.scope === scope;
+        return (
+          selectedIds.has(entry.id) &&
+          target?.targetId === id &&
+          target.scope === scope
+        );
       })
       .map((entry) => entry.id);
     setDeleteTargetState({ ids, targetId: id, scope });
+  };
+
+  const handleToggleSelected = (id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    const serverIds = (managedServers ?? []).map((server) => server.id);
+    setSelectedIds((current) =>
+      current.size === serverIds.length ? new Set() : new Set(serverIds)
+    );
+  };
+
+  const handleSetDefault = () => {
+    const visibleIds = new Set((managedServers ?? []).map((server) => server.id));
+    const preservedDefaults = defaultsServers.filter((entry) => {
+      const id = typeof entry === "string" ? entry : entry.id;
+      return !visibleIds.has(id);
+    });
+    sendMessage(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, {
+      path: "defaults.mcpServers",
+      value: [
+        ...preservedDefaults,
+        ...selectedServers.map((server) => server.config),
+      ],
+      scope: activeScope,
+    });
   };
 
   const getMcpTargetsForScope = (scope: SettingWriteScope): AnyTargetId[] =>
@@ -965,6 +1031,14 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                   <>
                     <div className="px-3 py-2">
                       <div className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(server.id)}
+                          onChange={() => handleToggleSelected(server.id)}
+                          aria-label={`Select ${server.displayName}`}
+                          className="h-3.5 w-3.5 shrink-0 rounded border-input-border bg-input-bg"
+                        />
+
                         <button
                           type="button"
                           onClick={() =>
@@ -1125,14 +1199,21 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
         </div>
       </div>
 
-      <BulkLocationActionsBar
-        itemCount={managedServers?.length ?? 0}
+      <BulkSelectionActionsBar
+        totalCount={managedServers?.length ?? 0}
+        selectedCount={selectedServers.length}
+        selectAllState={selectAllState}
+        onToggleSelectAll={handleToggleSelectAll}
+        availableActions={["save", "delete", "setDefault"]}
         getTargetsForScope={getMcpTargetsForScope}
         getTargetLabel={getExportTargetLabel}
         getTargetDescription={getExportTargetDescription}
         defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
-        onSaveAll={handleSaveAll}
-        onDeleteAll={handleDeleteAllRequest}
+        defaultScope={activeScope}
+        activeScope={activeScope}
+        onSave={handleSaveAll}
+        onDelete={handleDeleteAllRequest}
+        onSetDefault={handleSetDefault}
       />
 
       <div className="space-y-2">
@@ -1508,7 +1589,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
           role="button"
           tabIndex={0}
-          aria-label="Close delete all MCP servers dialog"
+          aria-label="Close delete selected MCP servers dialog"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setDeleteTargetState(null);
@@ -1532,10 +1613,10 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             aria-modal="true"
           >
             <p className="mb-1 text-sm font-semibold text-foreground">
-              Delete all MCP servers?
+              Delete selected MCP servers?
             </p>
             <p className="mb-4 text-xs text-description-fg">
-              Remove all {deleteTargetState.ids.length} MCP server
+              Remove {deleteTargetState.ids.length} selected MCP server
               {deleteTargetState.ids.length === 1 ? "" : "s"} configured in{" "}
               <strong>
                 {getExportTargetLabel(deleteTargetState.targetId)}
