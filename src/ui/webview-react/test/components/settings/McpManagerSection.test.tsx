@@ -110,7 +110,7 @@ describe("McpManagerSection", () => {
   it("saves only selected servers to the FlightPath registry", async () => {
     const user = userEvent.setup();
     renderSection([createManagedServer("server-a"), createManagedServer("server-b")]);
-    const bulkBar = screen.getByText(/Select all \(2\/2 selected\)/).closest("div")!;
+    const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
 
     sendMessageMock.mockClear();
 
@@ -136,7 +136,7 @@ describe("McpManagerSection", () => {
   it("deletes only selected servers from the FlightPath registry", async () => {
     const user = userEvent.setup();
     renderSection([createManagedServer("server-a"), createManagedServer("server-b")]);
-    const bulkBar = screen.getByText(/Select all \(2\/2 selected\)/).closest("div")!;
+    const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
 
     sendMessageMock.mockClear();
 
@@ -166,7 +166,7 @@ describe("McpManagerSection", () => {
       { id: "server-b", command: "npx", args: ["server-b"] },
     ]);
     renderSection([createManagedServer("server-a"), createManagedServer("server-b")]);
-    const bulkBar = screen.getByText(/Select all \(2\/2 selected\)/).closest("div")!;
+    const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
 
     sendMessageMock.mockClear();
 

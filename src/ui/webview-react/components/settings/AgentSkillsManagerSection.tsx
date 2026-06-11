@@ -306,7 +306,7 @@ function FileRow({
           checked={selected}
           onChange={() => onToggleSelected(file.name)}
           aria-label={`Select ${file.displayName}`}
-          className="h-3.5 w-3.5 shrink-0 rounded border-input-border bg-input-bg"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-focus-border cursor-pointer"
         />
 
         <div className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
@@ -669,6 +669,34 @@ export function AgentSkillsManagerSection({
         )}
       </div>
 
+      {/* Bulk actions */}
+      <div className="rounded border border-panel-border bg-editor-bg px-3 py-2">
+        <BulkSelectionActionsBar
+          totalCount={managedFiles.length}
+          selectedCount={selectedFiles.length}
+          selectAllState={selectAllState}
+          onToggleSelectAll={handleToggleSelectAll}
+          availableActions={availableBulkActions}
+          getTargetsForScope={(scope) =>
+            scope === SETTING_SCOPES.WORKSPACE
+              ? getWorkspaceTargets(availableIds)
+              : getUserTargets(availableIds)
+          }
+          getTargetLabel={getTargetLabel}
+          getTargetDescription={(id, scope) =>
+            formatPathForDisplay(
+              getTargetDirectoryPath(targetDirectories, id, scope) ?? ""
+            )
+          }
+          defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
+          defaultScope={activeScope}
+          activeScope={activeScope}
+          onSave={handleSaveAll}
+          onDelete={handleDeleteAllRequest}
+          onSetDefault={handleSetDefault}
+        />
+      </div>
+
       {/* File list */}
       <div className="border border-panel-border rounded overflow-hidden">
         {loading && (
@@ -704,32 +732,6 @@ export function AgentSkillsManagerSection({
             />
           ))}
       </div>
-
-      {/* Bulk actions */}
-      <BulkSelectionActionsBar
-        totalCount={managedFiles.length}
-        selectedCount={selectedFiles.length}
-        selectAllState={selectAllState}
-        onToggleSelectAll={handleToggleSelectAll}
-        availableActions={availableBulkActions}
-        getTargetsForScope={(scope) =>
-          scope === SETTING_SCOPES.WORKSPACE
-            ? getWorkspaceTargets(availableIds)
-            : getUserTargets(availableIds)
-        }
-        getTargetLabel={getTargetLabel}
-        getTargetDescription={(id, scope) =>
-          formatPathForDisplay(
-            getTargetDirectoryPath(targetDirectories, id, scope) ?? ""
-          )
-        }
-        defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
-        defaultScope={activeScope}
-        activeScope={activeScope}
-        onSave={handleSaveAll}
-        onDelete={handleDeleteAllRequest}
-        onSetDefault={handleSetDefault}
-      />
 
       {/* Delete confirmation modal */}
       {confirmDelete && (

@@ -947,6 +947,25 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
         </span>
       </div>
 
+      <div className="rounded border border-panel-border bg-editor-bg px-3 py-2">
+        <BulkSelectionActionsBar
+          totalCount={managedServers?.length ?? 0}
+          selectedCount={selectedServers.length}
+          selectAllState={selectAllState}
+          onToggleSelectAll={handleToggleSelectAll}
+          availableActions={["save", "delete", "setDefault"]}
+          getTargetsForScope={getMcpTargetsForScope}
+          getTargetLabel={getExportTargetLabel}
+          getTargetDescription={getExportTargetDescription}
+          defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
+          defaultScope={activeScope}
+          activeScope={activeScope}
+          onSave={handleSaveAll}
+          onDelete={handleDeleteAllRequest}
+          onSetDefault={handleSetDefault}
+        />
+      </div>
+
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
@@ -1036,7 +1055,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                           checked={selectedIds.has(server.id)}
                           onChange={() => handleToggleSelected(server.id)}
                           aria-label={`Select ${server.displayName}`}
-                          className="h-3.5 w-3.5 shrink-0 rounded border-input-border bg-input-bg"
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-focus-border cursor-pointer"
                         />
 
                         <button
@@ -1198,23 +1217,6 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           </div>
         </div>
       </div>
-
-      <BulkSelectionActionsBar
-        totalCount={managedServers?.length ?? 0}
-        selectedCount={selectedServers.length}
-        selectAllState={selectAllState}
-        onToggleSelectAll={handleToggleSelectAll}
-        availableActions={["save", "delete", "setDefault"]}
-        getTargetsForScope={getMcpTargetsForScope}
-        getTargetLabel={getExportTargetLabel}
-        getTargetDescription={getExportTargetDescription}
-        defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
-        defaultScope={activeScope}
-        activeScope={activeScope}
-        onSave={handleSaveAll}
-        onDelete={handleDeleteAllRequest}
-        onSetDefault={handleSetDefault}
-      />
 
       <div className="space-y-2">
         <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">

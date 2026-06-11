@@ -97,7 +97,7 @@ describe("AgentSkillsManagerSection", () => {
       createManagedFile("skill-a"),
       createManagedFile("skill-b"),
     ]);
-    const bulkBar = screen.getByText(/Select all \(2\/2 selected\)/).closest("div")!;
+    const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
 
     sendMessageMock.mockClear();
 
@@ -127,7 +127,7 @@ describe("AgentSkillsManagerSection", () => {
       createManagedFile("skill-a"),
       createManagedFile("skill-b"),
     ]);
-    const bulkBar = screen.getByText(/Select all \(2\/2 selected\)/).closest("div")!;
+    const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
 
     sendMessageMock.mockClear();
 
@@ -167,7 +167,7 @@ describe("AgentSkillsManagerSection", () => {
       createManagedFile("skill-a"),
       createManagedFile("skill-b"),
     ]);
-    const bulkBar = screen.getByText(/Select all \(2\/2 selected\)/).closest("div")!;
+    const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
 
     sendMessageMock.mockClear();
 
@@ -212,7 +212,7 @@ describe("AgentSkillsManagerSection", () => {
     render(
       <AgentSkillsManagerSection activeScope={SETTING_SCOPES.USER} />
     );
-    const bulkBar = screen.getByText(/Select all \(1\/1 selected\)/).closest("div")!;
+    const bulkBar = screen.getByText(/Select all \(1\/1\)/).closest("div")!;
 
     await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[0]);
     expect(screen.queryByRole("button", { name: "Set Default" })).toBeNull();

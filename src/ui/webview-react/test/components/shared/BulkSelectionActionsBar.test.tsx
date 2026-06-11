@@ -47,7 +47,7 @@ describe("BulkSelectionActionsBar", () => {
     }) as HTMLInputElement;
     expect(checkbox.checked).toBe(false);
     expect(checkbox.indeterminate).toBe(true);
-    expect(screen.getByText("Select all (2/3 selected)")).toBeInTheDocument();
+    expect(screen.getByText("Select all (2/3)")).toBeInTheDocument();
   });
 
   it("hides scope and target controls for set-default actions", async () => {

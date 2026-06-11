@@ -63,7 +63,9 @@ export function BulkSelectionActionsBar({
   onDelete,
   onSetDefault,
 }: BulkSelectionActionsBarProps) {
-  const [action, setAction] = useState<BulkAction>(availableActions[0] ?? "save");
+  const [action, setAction] = useState<BulkAction>(
+    availableActions[0] ?? "save"
+  );
   const [scope, setScope] = useState<SettingWriteScope>(defaultScope);
   const [targetId, setTargetId] = useState<AnyTargetId>(defaultTargetId);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -115,27 +117,27 @@ export function BulkSelectionActionsBar({
     (shouldShowLocationControls && scopeTargets.length === 0);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-panel-border pt-3">
-      <label className="mr-2 flex min-w-[170px] items-center gap-2 text-xs text-foreground">
+    <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+      <label className="mr-2 flex items-center gap-2 text-xs text-foreground shrink-0">
         <input
           ref={selectAllRef}
           type="checkbox"
           checked={selectAllState === "all"}
           onChange={onToggleSelectAll}
           aria-label="Select all rows"
-          className="h-3.5 w-3.5 rounded border-input-border bg-input-bg"
+          className="mt-0.5 h-4 w-4 shrink-0 accent-focus-border cursor-pointer"
         />
         <span className="truncate">
-          Select all ({selectedCount}/{totalCount} selected)
+          Select all ({selectedCount}/{totalCount})
         </span>
       </label>
 
-      <ActionDropdown
-        label={getActionLabel(action)}
-        items={actionItems}
-        onSelect={(value) => setAction(value as BulkAction)}
-        className="min-w-[120px]"
-      />
+        <ActionDropdown
+          label={getActionLabel(action)}
+          items={actionItems}
+          onSelect={(value) => setAction(value as BulkAction)}
+          className="shrink-0 max-w-full"
+        />
 
       {shouldShowLocationControls ? (
         <>
@@ -159,17 +161,18 @@ export function BulkSelectionActionsBar({
               label={getTargetLabel(targetId)}
               items={targetItems}
               onSelect={(value) => setTargetId(value as AnyTargetId)}
-              className="min-w-[220px] flex-1"
+              className="shrink-0 max-w-full"
             />
           ) : (
-            <div className="min-w-[220px] flex-1 rounded border border-panel-border bg-list-hover-bg px-2 py-1 text-xs text-description-fg">
+            <div className="shrink-0 max-w-full rounded border border-panel-border bg-list-hover-bg px-2 py-1 text-xs text-description-fg">
               No targets available for {scope}
             </div>
           )}
         </>
       ) : (
         <span className="text-xs text-description-fg">
-          defaults ({activeScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"})
+          defaults (
+          {activeScope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"})
         </span>
       )}
 
