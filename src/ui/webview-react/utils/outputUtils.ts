@@ -124,7 +124,7 @@ export function extractKeyParameters(
   const lowerName = toolName.toLowerCase();
 
   if (lowerName === "bash" || lowerName === "shell") {
-    return truncate(parameters.command as string, 80);
+    return truncate((parameters.command as string) || "", 80);
   }
 
   if (lowerName === "write" || lowerName === "edit" || lowerName === "read") {
