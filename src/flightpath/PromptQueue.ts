@@ -36,60 +36,40 @@ import type { IWorkingFileQueueAccess } from "./WorkingFileManager";
 import { WorkflowStateMachine } from "./WorkflowStateMachine";
 import { stripViewOnlyWorkflowStepFields } from "./WorkflowStepSanitizer";
 
+/** Effective retry settings resolved from an end condition, including smart defaults. */
+interface RetrySettings {
+  maxRetries: number;
+  retryPrompt: string | undefined;
+}
+
 /**
- * Get effective maxRetries value with smart defaults
+ * Resolve effective maxRetries/retryPrompt from an end condition, applying
+ * smart defaults when only one of the two is specified.
  */
-function getEffectiveMaxRetries(
+function resolveRetrySettings(
   endCondition?: PromptStep["endCondition"]
-): number {
+): RetrySettings {
   if (!endCondition) {
-    return 0;
+    return { maxRetries: 0, retryPrompt: undefined };
   }
 
   const hasRetryPrompt = !!endCondition.retryPrompt;
   const hasMaxRetries = endCondition.maxRetries !== undefined;
+  const hasNonZeroMaxRetries = hasMaxRetries && endCondition.maxRetries !== 0;
 
-  // Case 1: Both specified - use explicit maxRetries
-  if (hasMaxRetries) {
-    return endCondition.maxRetries!;
-  }
+  const maxRetries = hasMaxRetries
+    ? endCondition.maxRetries!
+    : hasRetryPrompt
+      ? ConfigurationUtils.getDefaultMaxRetries()
+      : 0;
 
-  // Case 2: Only retryPrompt specified - use default from settings
-  if (hasRetryPrompt) {
-    return ConfigurationUtils.getDefaultMaxRetries();
-  }
+  const retryPrompt = hasRetryPrompt
+    ? endCondition.retryPrompt
+    : hasNonZeroMaxRetries
+      ? ConfigurationUtils.getDefaultRetryPrompt() || undefined
+      : undefined;
 
-  // Case 3: Neither specified - no retries
-  return 0;
-}
-
-/**
- * Get effective retry prompt with smart defaults
- */
-function getEffectiveRetryPrompt(
-  endCondition?: PromptStep["endCondition"]
-): string | undefined {
-  if (!endCondition) {
-    return undefined;
-  }
-
-  const hasRetryPrompt = !!endCondition.retryPrompt;
-  const hasMaxRetries =
-    endCondition.maxRetries !== undefined && endCondition.maxRetries !== 0;
-
-  // Case 1: Explicit retryPrompt - use it
-  if (hasRetryPrompt) {
-    return endCondition.retryPrompt;
-  }
-
-  // Case 2: Only maxRetries specified - use default from settings
-  if (hasMaxRetries) {
-    const defaultPrompt = ConfigurationUtils.getDefaultRetryPrompt();
-    return defaultPrompt || undefined;
-  }
-
-  // Case 3: Neither specified - no retry prompt
-  return undefined;
+  return { maxRetries, retryPrompt };
 }
 
 export class PromptQueue {
@@ -742,12 +722,12 @@ export class PromptQueue {
    * Check if current prompt can be retried
    */
   canRetry(prompt: PromptStep): boolean {
-    const retryPrompt = getEffectiveRetryPrompt(prompt.endCondition);
+    const { maxRetries, retryPrompt } = resolveRetrySettings(
+      prompt.endCondition
+    );
     if (!retryPrompt) {
       return false;
     }
-
-    const maxRetries = getEffectiveMaxRetries(prompt.endCondition);
 
     // -1 means unlimited retries
     if (maxRetries === -1) {
@@ -761,14 +741,14 @@ export class PromptQueue {
    * Get effective maxRetries for current prompt (including defaults)
    */
   getEffectiveMaxRetries(prompt: PromptStep): number {
-    return getEffectiveMaxRetries(prompt.endCondition);
+    return resolveRetrySettings(prompt.endCondition).maxRetries;
   }
 
   /**
    * Get effective retry prompt for current prompt (including defaults)
    */
   getEffectiveRetryPrompt(prompt: PromptStep): string | undefined {
-    return getEffectiveRetryPrompt(prompt.endCondition);
+    return resolveRetrySettings(prompt.endCondition).retryPrompt;
   } /**
    * Increment retry count for current prompt
    */

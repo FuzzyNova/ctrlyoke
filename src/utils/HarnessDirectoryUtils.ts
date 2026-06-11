@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as os from "os";
+import * as fs from "fs";
 import { HARNESS_IDS } from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
@@ -195,11 +196,91 @@ export function getAgentsUserSkillDir(): string {
 // VS Code user prompts directory
 // ============================================================================
 
-function getVSCodeVariant(): string {
+/**
+ * Detect which VS Code variant is running (e.g. "Code", "Code - Insiders", "VSCodium").
+ */
+export function getVSCodeVariant(): string {
   const execPath = process.execPath.toLowerCase();
   if (execPath.includes("insiders")) return "Code - Insiders";
   if (execPath.includes("vscodium")) return "VSCodium";
   return "Code";
+}
+
+/**
+ * Detect if running inside WSL (Windows Subsystem for Linux).
+ * In WSL, VS Code's UI runs on Windows, so files written by the Windows VS
+ * Code process (chat sessions, user prompts/agents) are not visible via the
+ * Linux ~/.config path.
+ */
+export function isWSL(): boolean {
+  return !!(
+    process.env.WSL_DISTRO_NAME ||
+    process.env.WSLENV ||
+    (process.env.PATH && process.env.PATH.includes("/mnt/c/"))
+  );
+}
+
+/**
+ * Return candidate Windows-host AppData/Roaming paths for the given VS Code
+ * variant (plus the "Code" fallback) when running inside WSL. Tries
+ * USERPROFILE first, then falls back to scanning /mnt/c/Users/* for any
+ * Windows user profile.
+ *
+ * @param variant VS Code variant directory name (e.g. "Code - Insiders")
+ * @param subPathSegments path segments appended after the variant directory,
+ *   e.g. ["User", "prompts"] or ["User", "workspaceStorage"]
+ */
+export function getWSLWindowsAppDataDirs(
+  variant: string,
+  subPathSegments: string[]
+): string[] {
+  const dirs: string[] = [];
+  const windowsMountBase = "/mnt/c/Users";
+
+  const addCandidates = (appDataRoaming: string) => {
+    const candidates = [
+      path.join(appDataRoaming, variant, ...subPathSegments),
+    ];
+    if (variant !== "Code") {
+      candidates.push(path.join(appDataRoaming, "Code", ...subPathSegments));
+    }
+    for (const candidate of candidates) {
+      if (!dirs.includes(candidate)) {
+        dirs.push(candidate);
+      }
+    }
+  };
+
+  // Prefer USERPROFILE env var (often set in WSL to /mnt/c/Users/<winuser>)
+  const userProfile = process.env.USERPROFILE;
+  if (userProfile) {
+    const normalizedProfile = userProfile.replace(/\\/g, "/");
+    addCandidates(path.join(normalizedProfile, "AppData", "Roaming"));
+  }
+
+  // Fall back: scan /mnt/c/Users/* for any Windows user profile
+  try {
+    if (fs.existsSync(windowsMountBase)) {
+      const windowsUsers = fs.readdirSync(windowsMountBase);
+      for (const winUser of windowsUsers) {
+        if (
+          winUser === "Public" ||
+          winUser === "Default" ||
+          winUser === "All Users" ||
+          winUser.startsWith(".")
+        ) {
+          continue;
+        }
+        addCandidates(
+          path.join(windowsMountBase, winUser, "AppData", "Roaming")
+        );
+      }
+    }
+  } catch {
+    // /mnt/c may not be accessible; ignore
+  }
+
+  return dirs;
 }
 
 /**

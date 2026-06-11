@@ -1,12 +1,15 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
-import * as os from "os";
 import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
 import {
   getHarnessAgentDirs,
   getFlightPathAgentDir,
+  getVSCodeUserAgentDirs,
+  getVSCodeVariant,
+  isWSL,
+  getWSLWindowsAppDataDirs,
 } from "./HarnessDirectoryUtils";
 import {
   HARNESS_IDS,
@@ -106,17 +109,14 @@ export class AgentDiscovery {
    * On WSL: also checks the Windows host AppData path at /mnt/c/Users/<winuser>/AppData/Roaming/Code/User/prompts
    */
   private static async discoverUserAgents(): Promise<AgentInfo[]> {
-    const dirs: string[] = [];
-
-    const userPromptsDir = this.getUserPromptsDirectory();
-    if (userPromptsDir) {
-      dirs.push(userPromptsDir);
-    }
+    const dirs: string[] = [...getVSCodeUserAgentDirs()];
 
     // On WSL, VS Code agents stored on the Windows host are not visible via the
     // Linux ~/.config path. Scan the Windows AppData prompts directory as well.
-    if (this.isWSL()) {
-      dirs.push(...this.getWSLWindowsPromptsDirs());
+    if (isWSL()) {
+      dirs.push(
+        ...getWSLWindowsAppDataDirs(getVSCodeVariant(), ["User", "prompts"])
+      );
     }
 
     const results: AgentInfo[] = [];
@@ -221,134 +221,6 @@ export class AgentDiscovery {
       );
     } catch {
       return false;
-    }
-  }
-
-  /**
-   * Detect if running inside WSL (Windows Subsystem for Linux).
-   * In WSL, VS Code's UI runs on Windows, so agent files stored in the Windows
-   * user prompts directory are not visible via the Linux ~/.config path.
-   */
-  private static isWSL(): boolean {
-    return !!(
-      process.env.WSL_DISTRO_NAME ||
-      process.env.WSLENV ||
-      (process.env.PATH && process.env.PATH.includes("/mnt/c/"))
-    );
-  }
-
-  /**
-   * Return all candidate Windows-host prompts directories when running in WSL.
-   * Tries USERPROFILE first, then falls back to scanning /mnt/c/Users/*.
-   * Path: /mnt/c/Users/<winuser>/AppData/Roaming/Code/User/prompts
-   */
-  private static getWSLWindowsPromptsDirs(): string[] {
-    const dirs: string[] = [];
-    const windowsMountBase = "/mnt/c/Users";
-
-    const addPromptsPath = (appDataRoaming: string) => {
-      // Support both the primary VS Code variant and the plain "Code" fallback
-      const variant = this.getVSCodeVariant();
-      const candidates = [
-        path.join(appDataRoaming, variant, "User", "prompts"),
-      ];
-      if (variant !== "Code") {
-        candidates.push(path.join(appDataRoaming, "Code", "User", "prompts"));
-      }
-      for (const p of candidates) {
-        if (!dirs.includes(p)) {
-          dirs.push(p);
-        }
-      }
-    };
-
-    // Prefer USERPROFILE env var (often set in WSL to /mnt/c/Users/<winuser>)
-    const userProfile = process.env.USERPROFILE;
-    if (userProfile) {
-      const normalizedProfile = userProfile.replace(/\\/g, "/");
-      addPromptsPath(path.join(normalizedProfile, "AppData", "Roaming"));
-    }
-
-    // Fall back: scan /mnt/c/Users/* for any Windows user profile
-    try {
-      if (fs.existsSync(windowsMountBase)) {
-        const windowsUsers = fs.readdirSync(windowsMountBase);
-        for (const winUser of windowsUsers) {
-          if (
-            winUser === "Public" ||
-            winUser === "Default" ||
-            winUser === "All Users" ||
-            winUser.startsWith(".")
-          ) {
-            continue;
-          }
-          addPromptsPath(
-            path.join(windowsMountBase, winUser, "AppData", "Roaming")
-          );
-        }
-      }
-    } catch {
-      // /mnt/c may not be accessible; ignore
-    }
-
-    return dirs;
-  }
-
-  /**
-   * Detect which VS Code variant is running (e.g. "Code", "Code - Insiders", "VSCodium").
-   */
-  private static getVSCodeVariant(): string {
-    const execPath = process.execPath.toLowerCase();
-    if (execPath.includes("insiders")) {
-      return "Code - Insiders";
-    } else if (execPath.includes("vscodium")) {
-      return "VSCodium";
-    } else {
-      return "Code";
-    }
-  }
-
-  /**
-   * Get the user prompts directory path based on OS
-   * Windows: %APPDATA%\Code\User\prompts\
-   * macOS: ~/Library/Application Support/Code/User/prompts/
-   * Linux: $XDG_CONFIG_HOME/Code/User/prompts/ (default: ~/.config/Code/User/prompts/)
-   */
-  private static getUserPromptsDirectory(): string | null {
-    try {
-      const platform = os.platform();
-      let baseDir: string;
-
-      if (platform === "win32") {
-        // Windows: %APPDATA%\Code\User\prompts\
-        const appData = process.env.APPDATA;
-        if (!appData) {
-          Log.warn("APPDATA environment variable not found");
-          return null;
-        }
-        baseDir = path.join(appData, "Code", "User", "prompts");
-      } else if (platform === "darwin") {
-        // macOS: ~/Library/Application Support/Code/User/prompts/
-        const homeDir = os.homedir();
-        baseDir = path.join(
-          homeDir,
-          "Library",
-          "Application Support",
-          "Code",
-          "User",
-          "prompts"
-        );
-      } else {
-        // Linux: ~/.config/Code/User/prompts/ (respects XDG_CONFIG_HOME if set)
-        const configDir =
-          process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
-        baseDir = path.join(configDir, "Code", "User", "prompts");
-      }
-
-      return baseDir;
-    } catch (error) {
-      Log.error("Error getting user prompts directory:", error);
-      return null;
     }
   }
 

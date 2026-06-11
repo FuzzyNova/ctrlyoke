@@ -440,7 +440,7 @@ export class WorkflowInstance {
     }
     try {
       const workflowId =
-        this.outputHistoryManager.extractWorkflowId(workingFilePath);
+        OutputHistoryManager.extractWorkflowId(workingFilePath);
       const [runs, runTimestamps, runStates] = await Promise.all([
         this.outputHistoryManager.getRunsForWorkflow(workflowId),
         this.outputHistoryManager.getRunTimestamps(workflowId),
@@ -461,7 +461,7 @@ export class WorkflowInstance {
     }
     try {
       const om = this.outputHistoryManager;
-      const fileId = om.extractWorkflowId(workingFilePath);
+      const fileId = OutputHistoryManager.extractWorkflowId(workingFilePath);
       const runs = await om.getRunsForWorkflow(fileId);
       if (runs.length > 0) {
         const historyPath = om.getHistoryFilePath(fileId, runs[0]);
@@ -500,7 +500,7 @@ export class WorkflowInstance {
     }
     try {
       const workflowId =
-        this.outputHistoryManager.extractWorkflowId(workingFilePath);
+        OutputHistoryManager.extractWorkflowId(workingFilePath);
       const [runs, runTimestamps, runStates] = await Promise.all([
         this.outputHistoryManager.getRunsForWorkflow(workflowId),
         this.outputHistoryManager.getRunTimestamps(workflowId),
@@ -723,7 +723,7 @@ export class WorkflowInstance {
     } catch (loadError) {
       Log.error("Failed to load workflow:", loadError as Error);
       this.platform.error(
-        `Failed to load workflow: ${loadError instanceof Error ? loadError.message : String(loadError)}`
+        `Failed to load workflow: ${getErrorMessage(loadError)}`
       );
       throw loadError;
     }
@@ -940,7 +940,7 @@ export class WorkflowInstance {
         workingFilePath
       ) {
         const workflowId =
-          this.outputHistoryManager.extractWorkflowId(workingFilePath);
+          OutputHistoryManager.extractWorkflowId(workingFilePath);
         const historyInit =
           await this.outputHistoryManager.initializeRun(workflowId);
         historyFilePath = historyInit.filePath;
@@ -957,7 +957,7 @@ export class WorkflowInstance {
         }
       } else if (isAppendContinuation && workingFilePath) {
         const workflowId =
-          this.outputHistoryManager.extractWorkflowId(workingFilePath);
+          OutputHistoryManager.extractWorkflowId(workingFilePath);
         historyFilePath =
           await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
         Log.debug(
@@ -1028,7 +1028,7 @@ export class WorkflowInstance {
         }
       } else if (continueFromCurrent && workingFilePath) {
         const workflowId =
-          this.outputHistoryManager.extractWorkflowId(workingFilePath);
+          OutputHistoryManager.extractWorkflowId(workingFilePath);
         historyFilePath =
           await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
         Log.debug(
@@ -1036,7 +1036,7 @@ export class WorkflowInstance {
         );
       } else if (isIdleContinuation && workingFilePath) {
         const workflowId =
-          this.outputHistoryManager.extractWorkflowId(workingFilePath);
+          OutputHistoryManager.extractWorkflowId(workingFilePath);
         historyFilePath =
           await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
         Log.debug(
@@ -2426,9 +2426,7 @@ export class WorkflowInstance {
         startedAt: Date.now(),
         lastHeartbeat: Date.now(),
         instanceId: this.id,
-        workflowId: path
-          .basename(workingFilePath)
-          .replace(/\.flightpath\.json$/, ""),
+        workflowId: OutputHistoryManager.extractWorkflowId(workingFilePath),
       };
       Log.debug(
         `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: acquiring ${runner} lock for "${path.basename(workingFilePath)}"`

@@ -471,19 +471,26 @@ export abstract class BaseLogParser implements ILogParser {
   /**
    * Find recently modified session log files
    *
-   * Helper for session discovery. Lists log files/directories in directory that were
-   * modified after the specified start time (potential session logs).
+   * Helper for session discovery. Lists log files/directories under `logDirectory`
+   * that were modified after the specified start time (potential session logs).
    *
    * @param logDirectory - Absolute path to log directory
    * @param startTime - Only include files/directories modified after this time
-   * @returns Array of absolute paths to candidate log files/directories
+   * @param options.recursive - Recurse into subdirectories instead of treating
+   *   them as candidates (default: false)
+   * @param options.filter - When set, only files whose name passes this
+   *   predicate are considered candidates (default: all files/directories)
+   * @returns Array of absolute paths to candidate log files/directories,
+   *   sorted by modification time (newest first)
    *
    * @remarks
    * **File Selection:**
    * - Checks modification time (mtime) against startTime
-   * - Returns files AND directories modified within reasonable window (startTime - 10s to now)
+   * - Returns files/directories modified within reasonable window (startTime - 10s to now)
    * - Sorts by modification time (newest first)
-   * - Handles both flat files (old format) and directories (new format)
+   * - Non-recursive mode handles both flat files (old format) and directories
+   *   (new format: session-id/events.jsonl) as candidates
+   * - Recursive mode traverses subdirectories and applies `filter` to file names
    *
    * **Use Case:**
    * Harness parsers use this to get candidate files/directories, then resolve
@@ -503,40 +510,67 @@ export abstract class BaseLogParser implements ILogParser {
    */
   protected findModifiedSessionLogs(
     logDirectory: string,
-    startTime: Date
+    startTime: Date,
+    options?: {
+      recursive?: boolean;
+      filter?: (fileName: string) => boolean;
+    }
   ): string[] {
+    const recursive = options?.recursive ?? false;
+    const filter = options?.filter;
+
     try {
       if (!fs.existsSync(logDirectory)) {
         return [];
       }
 
-      const files = fs.readdirSync(logDirectory);
       const candidates: { path: string; mtime: Date }[] = [];
 
       // Allow 10 second buffer before startTime (CLI may write logs slightly before)
       const bufferTime = new Date(startTime.getTime() - 10000);
 
-      for (const file of files) {
-        const filePath = path.join(logDirectory, file);
-
+      const scanDir = (dir: string): void => {
+        let entries: string[];
         try {
-          const stats = fs.statSync(filePath);
+          entries = fs.readdirSync(dir);
+        } catch {
+          // Skip directories that can't be read
+          return;
+        }
 
-          // Include both files (old format: session-id.jsonl)
-          // and directories (new format: session-id/events.jsonl)
-          if (!stats.isFile() && !stats.isDirectory()) {
+        for (const entry of entries) {
+          const entryPath = path.join(dir, entry);
+
+          try {
+            const stats = fs.statSync(entryPath);
+
+            if (stats.isDirectory()) {
+              if (recursive) {
+                scanDir(entryPath);
+                continue;
+              }
+              // Non-recursive: directories themselves are candidates
+              // (new format: session-id/events.jsonl)
+            } else if (!stats.isFile()) {
+              continue;
+            }
+
+            if (filter && !filter(entry)) {
+              continue;
+            }
+
+            // Check modification time
+            if (stats.mtime >= bufferTime) {
+              candidates.push({ path: entryPath, mtime: stats.mtime });
+            }
+          } catch {
+            // Skip entries that can't be accessed
             continue;
           }
-
-          // Check modification time
-          if (stats.mtime >= bufferTime) {
-            candidates.push({ path: filePath, mtime: stats.mtime });
-          }
-        } catch (error) {
-          // Skip files that can't be accessed
-          continue;
         }
-      }
+      };
+
+      scanDir(logDirectory);
 
       // Sort by modification time (newest first)
       candidates.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());

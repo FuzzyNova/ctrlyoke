@@ -1006,7 +1006,7 @@ export class FlightPathWebviewProvider
 
     try {
       const workflowId =
-        this.outputHistoryManager.extractWorkflowId(workingFilePath);
+        OutputHistoryManager.extractWorkflowId(workingFilePath);
       const runs =
         await this.outputHistoryManager.getRunsForWorkflow(workflowId);
       if (!runs.length) {

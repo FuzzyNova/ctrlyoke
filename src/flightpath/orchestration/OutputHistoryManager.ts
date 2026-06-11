@@ -67,7 +67,7 @@ export class OutputHistoryManager {
    * Extract workflow ID from working file path.
    * "workflow-2024-01-21T10-30-00.flightpath.json" → "workflow-2024-01-21T10-30-00"
    */
-  extractWorkflowId(workingFilePath: string): string {
+  static extractWorkflowId(workingFilePath: string): string {
     const basename = path.basename(workingFilePath);
     return basename
       .replace(/\.flightpath\.json$/, "")

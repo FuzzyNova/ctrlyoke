@@ -647,9 +647,7 @@ export class WorkflowOrchestrator {
     }
   ): Promise<void> {
     // Parse working file path to get workflowId (used for CLI session lookup)
-    const workflowId = path
-      .basename(filePath)
-      .replace(/\.flightpath\.json$/, "");
+    const workflowId = OutputHistoryManager.extractWorkflowId(filePath);
 
     // Check for CLI-managed session first
     const cliEntry = this.cliSessions.get(workflowId);
@@ -756,9 +754,7 @@ export class WorkflowOrchestrator {
    *          false if no active-cli lock exists or the session could not be started.
    */
   async ensureCliWatchSession(workingFilePath: string): Promise<boolean> {
-    const workflowId = path
-      .basename(workingFilePath)
-      .replace(/\.flightpath\.json$/, "");
+    const workflowId = OutputHistoryManager.extractWorkflowId(workingFilePath);
 
     // Already tracked — nothing to do
     if (this.cliSessions.has(workflowId)) {
@@ -1566,9 +1562,7 @@ export class WorkflowOrchestrator {
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
-    const workflowId = path
-      .basename(filePath)
-      .replace(/\.flightpath\.json$/, "");
+    const workflowId = OutputHistoryManager.extractWorkflowId(filePath);
 
     // If already tracked as a CLI session, switch the panel view to it (Entry Point 2)
     const existingCliEntry = this.cliSessions.get(workflowId);
@@ -1839,7 +1833,7 @@ export class WorkflowOrchestrator {
         } catch (loadError) {
           Log.error("Failed to load session:", loadError as Error);
           vscode.window.showErrorMessage(
-            `Failed to load session: ${loadError instanceof Error ? loadError.message : String(loadError)}`
+            `Failed to load session: ${getErrorMessage(loadError)}`
           );
         }
       }
@@ -2361,9 +2355,7 @@ export class WorkflowOrchestrator {
     );
 
     // Check if there is already an active CliWatchSession for this workflow
-    const workflowId = path
-      .basename(workingFilePath)
-      .replace(/\.flightpath\.json$/, "");
+    const workflowId = OutputHistoryManager.extractWorkflowId(workingFilePath);
 
     Log.debug(
       `[WorkflowOrchestrator] handleRunnerJsonEvent: CLI lock detected for "${workflowId}" pid=${lock.pid} heartbeat=${lock.lastHeartbeat}`
@@ -2396,9 +2388,7 @@ export class WorkflowOrchestrator {
     workingFilePath: string,
     workspaceFolderPath: string
   ): Promise<void> {
-    const workflowId = path
-      .basename(workingFilePath)
-      .replace(/\.flightpath\.json$/, "");
+    const workflowId = OutputHistoryManager.extractWorkflowId(workingFilePath);
 
     // Retire any existing VS Code WorkflowInstance tracking this same working file.
     // This prevents a conflict where VS Code auto-loaded the workflow in PAUSED state

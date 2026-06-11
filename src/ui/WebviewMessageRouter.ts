@@ -13,6 +13,7 @@ import {
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 import {
   getFileCompletions,
   getHashCompletions,
@@ -2520,7 +2521,7 @@ export class WebviewMessageRouter {
         orchestrator.getQueueState(this.clientId).workingFilePath ?? "";
       if (!workingFilePath) return "";
       const workflowId =
-        outputHistoryManager.extractWorkflowId(workingFilePath);
+        OutputHistoryManager.extractWorkflowId(workingFilePath);
       return await outputHistoryManager.getLatestHistoryFilePath(workflowId);
     } catch {
       return "";

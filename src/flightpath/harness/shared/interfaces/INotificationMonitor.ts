@@ -447,14 +447,15 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
   }
 
   /**
-   * Builds the hooks record for harnesses that use the command-style hook entry format:
-   *   { hooks: [{ type: "command", command: "..." }] }
+   * Builds the hooks record for harnesses that use a command-style hook entry
+   * format. By default each entry is `{ hooks: [{ type: "command", command: "..." }] }`
+   * (Claude/Gemini); pass `buildHookGroup` to customize the entry shape (e.g.
+   * Codex's matcher-based `{ matcher, hooks: [...] }` via `createCodexCommandHookGroup`).
    *
    * Handles:
    *   - Main FlightPath event hooks (with optional permissionRequest encoding)
    *   - Appending user-defined hooks (skipping permissionRequest if already registered)
    *
-   * Used by Claude and Gemini which share this hook entry format.
    * Returns the hooks record; callers serialize it as json-string or json.
    */
   protected buildCommandHooks(
@@ -462,7 +463,13 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
     eventMap: Partial<Record<HookEvent, string>>,
     selectedEvents: string[],
     userHooks: UserHookConfig[] | undefined,
-    encodedDecisionHook: string | undefined
+    encodedDecisionHook: string | undefined,
+    buildHookGroup: (
+      nativeEvent: string,
+      command: string
+    ) => Record<string, unknown> = (_nativeEvent, cmd) => ({
+      hooks: [{ type: "command", command: cmd }],
+    })
   ): Record<string, unknown[]> {
     const hooks: Record<string, unknown[]> = {};
 
@@ -473,9 +480,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         event === "permissionRequest" && encodedDecisionHook
           ? `${command} "${encodedDecisionHook}"`
           : command;
-      hooks[nativeEvent] = [
-        { hooks: [{ type: "command", command: eventCommand }] },
-      ];
+      hooks[nativeEvent] = [buildHookGroup(nativeEvent, eventCommand)];
     }
 
     if (userHooks) {
@@ -489,9 +494,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
         const nativeEvent = eventMap[uh.event];
         if (!nativeEvent) continue;
         if (!hooks[nativeEvent]) hooks[nativeEvent] = [];
-        hooks[nativeEvent].push({
-          hooks: [{ type: "command", command: uh.command }],
-        });
+        hooks[nativeEvent].push(buildHookGroup(nativeEvent, uh.command));
       }
     }
 

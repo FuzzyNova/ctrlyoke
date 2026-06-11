@@ -458,14 +458,10 @@ export class WorkflowExecutor {
     const currentStatus = runtime.status;
 
     if (
-      currentStatus === EXECUTION_STATES.PAUSED ||
-      currentStatus === EXECUTION_STATES.PAUSING
+      await this.confirmPauseAndStop(
+        "Workflow paused before executing next prompt"
+      )
     ) {
-      if (currentStatus === EXECUTION_STATES.PAUSING) {
-        runtime.confirmPaused();
-        await this.promptQueue.commitRuntimeTransition();
-      }
-      Log.info("Workflow paused before executing next prompt");
       return false;
     }
     if (
@@ -759,15 +755,7 @@ export class WorkflowExecutor {
         context.dashboardProvider.updateProgress(live.current, live.total);
       }
 
-      if (
-        runtime.status === EXECUTION_STATES.PAUSED ||
-        runtime.status === EXECUTION_STATES.PAUSING
-      ) {
-        if (runtime.status === EXECUTION_STATES.PAUSING) {
-          runtime.confirmPaused();
-          await this.promptQueue.commitRuntimeTransition();
-        }
-        Log.info("Workflow paused");
+      if (await this.confirmPauseAndStop("Workflow paused")) {
         return false;
       }
     }
@@ -899,17 +887,12 @@ export class WorkflowExecutor {
       attemptIndex,
       runIndex,
     };
-    if (context.dashboardProvider && signedStepIndex >= 0) {
-      context.dashboardProvider.updateCliOutput(signedStepIndex, initCliOutput);
-    } else if (
-      context.dashboardProvider &&
-      target.kind === FINAL_STEP_PHASES.FINAL_STEP
-    ) {
-      context.dashboardProvider.updateFinalStepOutput(
-        target.loopIndex,
-        initCliOutput
-      );
-    }
+    this.dispatchDashboardOutput(
+      context,
+      target,
+      signedStepIndex,
+      initCliOutput
+    );
 
     // Accumulate output chunks so interactive mode has output to save to history.
     const outputChunks: string[] = [];
@@ -1021,42 +1004,13 @@ export class WorkflowExecutor {
       runIndex,
     };
 
-    if (context.dashboardProvider && signedStepIndex >= 0) {
-      context.dashboardProvider.updateCliOutput(
-        signedStepIndex,
-        finalCliOutput
-      );
-    } else if (
-      context.dashboardProvider &&
-      target.kind === FINAL_STEP_PHASES.FINAL_STEP
-    ) {
-      context.dashboardProvider.updateFinalStepOutput(
-        target.loopIndex,
-        finalCliOutput
-      );
-    }
-
-    // Capture for output history replay (same pattern as updateDashboardWithResponse)
-    if (signedStepIndex >= 0) {
-      context.captureCompletedOutput?.(signedStepIndex, finalCliOutput);
-    } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalStepCompletedOutput?.(
-        target.loopIndex,
-        finalCliOutput
-      );
-    }
-
-    if (context.historyFilePath && context.outputHistoryManager) {
-      await context.outputHistoryManager
-        .saveExecutionOutput(
-          context.historyFilePath,
-          this.toOutputExecutionTarget(target),
-          [finalCliOutput]
-        )
-        .catch((err) =>
-          Log.warn("Failed to save script step output to history:", err)
-        );
-    }
+    await this.finalizeAndPersistOutput(
+      context,
+      target,
+      signedStepIndex,
+      finalCliOutput,
+      "script step output"
+    );
 
     if (evalResult.timeout) {
       await this.trackStatusMessage(
@@ -1124,15 +1078,7 @@ export class WorkflowExecutor {
         await this.promptQueue.commitRuntimeTransition();
       }
 
-      if (
-        runtime.status === EXECUTION_STATES.PAUSED ||
-        runtime.status === EXECUTION_STATES.PAUSING
-      ) {
-        if (runtime.status === EXECUTION_STATES.PAUSING) {
-          runtime.confirmPaused();
-          await this.promptQueue.commitRuntimeTransition();
-        }
-        Log.info("Workflow paused after script step");
+      if (await this.confirmPauseAndStop("Workflow paused after script step")) {
         return false;
       }
     }
@@ -1214,6 +1160,183 @@ export class WorkflowExecutor {
     target: ExecutionTarget
   ): number {
     return context.targetRunIndices?.get(getExecutionTargetRunKey(target)) ?? 0;
+  }
+
+  /**
+   * If the workflow is paused (or pausing), confirms the pause transition and
+   * returns true so the caller can stop execution. Returns false otherwise.
+   */
+  private async confirmPauseAndStop(logMessage: string): Promise<boolean> {
+    const runtime = this.getRuntime();
+    if (
+      runtime.status === EXECUTION_STATES.PAUSED ||
+      runtime.status === EXECUTION_STATES.PAUSING
+    ) {
+      if (runtime.status === EXECUTION_STATES.PAUSING) {
+        runtime.confirmPaused();
+        await this.promptQueue.commitRuntimeTransition();
+      }
+      Log.info(logMessage);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Routes a CliOutput to the dashboard — queue steps via `updateCliOutput`,
+   * finalStep loops via `updateFinalStepOutput`.
+   */
+  private dispatchDashboardOutput(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    signedStepIndex: number | undefined,
+    output: CliOutput
+  ): void {
+    if (signedStepIndex !== undefined && signedStepIndex >= 0) {
+      context.dashboardProvider?.updateCliOutput(signedStepIndex, output);
+    } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      context.dashboardProvider?.updateFinalStepOutput(
+        target.loopIndex,
+        output
+      );
+    }
+  }
+
+  /**
+   * Dispatches a completed CliOutput to the dashboard and the always-on
+   * capture buffer (for replay when the workflow is inactive/backgrounded).
+   */
+  private dispatchCompletedOutput(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    signedStepIndex: number | undefined,
+    output: CliOutput
+  ): void {
+    this.dispatchDashboardOutput(context, target, signedStepIndex, output);
+    if (signedStepIndex !== undefined && signedStepIndex >= 0) {
+      context.captureCompletedOutput?.(signedStepIndex, output);
+    } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
+      context.captureFinalStepCompletedOutput?.(target.loopIndex, output);
+    }
+  }
+
+  /** Persists a completed CliOutput to the history file, logging (not throwing) on failure. */
+  private async persistExecutionOutput(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    output: CliOutput,
+    logContext: string
+  ): Promise<void> {
+    if (!context.historyFilePath || !context.outputHistoryManager) {
+      return;
+    }
+    await context.outputHistoryManager
+      .saveExecutionOutput(
+        context.historyFilePath,
+        this.toOutputExecutionTarget(target),
+        [output]
+      )
+      .catch((err) =>
+        Log.warn(`Failed to save ${logContext} to history:`, err)
+      );
+  }
+
+  /** Dispatches a completed CliOutput to the dashboard/capture buffer and persists it to history. */
+  private async finalizeAndPersistOutput(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    signedStepIndex: number | undefined,
+    output: CliOutput,
+    logContext: string
+  ): Promise<void> {
+    this.dispatchCompletedOutput(context, target, signedStepIndex, output);
+    await this.persistExecutionOutput(context, target, output, logContext);
+  }
+
+  /**
+   * Emits an `isStreaming: true` placeholder CliOutput to the dashboard and
+   * the always-on init-capture buffer. Used both for the initial placeholder
+   * and the `onPromptReady` update (which fills in `cliCommand`).
+   */
+  private emitStreamingPlaceholder(
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    signedStepIndex: number | undefined,
+    prompt: string,
+    cliCommand: string | undefined,
+    timestampMs: number,
+    runIndex: number,
+    attemptIndex: number,
+    rawTextOutput: boolean | undefined
+  ): void {
+    const placeholder = {
+      prompt,
+      response: "",
+      elapsed: 0,
+      tokens: undefined,
+      isStreaming: true,
+      cliCommand,
+      workingDirectory: context.workspaceFolderPath,
+      timestampMs,
+      runIndex,
+      attemptIndex,
+      rawTextOutput,
+    };
+
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      if (signedStepIndex === undefined) {
+        return;
+      }
+      context.dashboardProvider?.updateCliOutput(signedStepIndex, placeholder);
+      context.captureOutputInit?.(
+        signedStepIndex,
+        prompt,
+        cliCommand,
+        context.workspaceFolderPath,
+        timestampMs,
+        attemptIndex,
+        rawTextOutput,
+        runIndex
+      );
+    } else {
+      context.dashboardProvider?.updateFinalStepOutput(
+        target.loopIndex,
+        placeholder
+      );
+      context.captureFinalStepOutputInit?.(
+        target.loopIndex,
+        prompt,
+        cliCommand,
+        context.workspaceFolderPath,
+        timestampMs,
+        attemptIndex,
+        rawTextOutput,
+        runIndex
+      );
+    }
+  }
+
+  /** Resolves token usage stats from parsed output metadata, falling back to last-result statistics. */
+  private resolveTokenCounts(
+    parsedOutput: ReturnType<HarnessIntegration["getLastParsedOutput"]>,
+    integration: HarnessIntegration
+  ): CliOutput["tokens"] {
+    if (parsedOutput?.metadata.usage) {
+      const u = parsedOutput.metadata.usage;
+      return {
+        prompt: u.inputTokens,
+        completion: u.outputTokens,
+        cached: u.cachedInputTokens,
+        cacheCreated: u.cacheCreatedTokens,
+        contextWindowUsed: u.contextWindowUsedTokens,
+        contextWindowSize: u.contextWindowSize,
+      };
+    }
+    const lastResult = integration.getLastResult();
+    if (lastResult?.statistics) {
+      return integration.parseTokenCounts(lastResult.statistics);
+    }
+    return undefined;
   }
 
   private describeExecutionTarget(target: ExecutionTarget): string {
@@ -1355,23 +1478,7 @@ export class WorkflowExecutor {
       structured = bufferedStructured;
     }
 
-    let tokens: CliOutput["tokens"];
-    if (parsedOutput?.metadata.usage) {
-      const u = parsedOutput.metadata.usage;
-      tokens = {
-        prompt: u.inputTokens,
-        completion: u.outputTokens,
-        cached: u.cachedInputTokens,
-        cacheCreated: u.cacheCreatedTokens,
-        contextWindowUsed: u.contextWindowUsedTokens,
-        contextWindowSize: u.contextWindowSize,
-      };
-    } else {
-      const lastResult = integration.getLastResult();
-      if (lastResult?.statistics) {
-        tokens = integration.parseTokenCounts(lastResult.statistics);
-      }
-    }
+    const tokens = this.resolveTokenCounts(parsedOutput, integration);
 
     return {
       prompt: prompt.prompt,
@@ -1617,61 +1724,20 @@ export class WorkflowExecutor {
     const initTimestampMs = attempt.startedAt;
     const rawTextOutput = integration.rawTextOutput || undefined;
 
-    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-      if (context.dashboardProvider && signedStepIndex !== undefined) {
-        context.dashboardProvider.updateCliStreamingChunk(signedStepIndex, "");
-        context.dashboardProvider.updateCliOutput(signedStepIndex, {
-          prompt: promptStep.prompt,
-          response: "",
-          elapsed: 0,
-          tokens: undefined,
-          isStreaming: true,
-          cliCommand: undefined,
-          workingDirectory: context.workspaceFolderPath,
-          timestampMs: initTimestampMs,
-          runIndex,
-          attemptIndex,
-          rawTextOutput,
-        });
-      }
-
-      if (signedStepIndex !== undefined) {
-        context.captureOutputInit?.(
-          signedStepIndex,
-          promptStep.prompt,
-          undefined,
-          context.workspaceFolderPath,
-          initTimestampMs,
-          attemptIndex,
-          rawTextOutput,
-          runIndex
-        );
-      }
-    } else {
-      context.dashboardProvider?.updateFinalStepOutput(target.loopIndex, {
-        prompt: promptStep.prompt,
-        response: "",
-        elapsed: 0,
-        tokens: undefined,
-        isStreaming: true,
-        cliCommand: undefined,
-        workingDirectory: context.workspaceFolderPath,
-        timestampMs: initTimestampMs,
-        runIndex,
-        attemptIndex,
-        rawTextOutput,
-      });
-      context.captureFinalStepOutputInit?.(
-        target.loopIndex,
-        promptStep.prompt,
-        undefined,
-        context.workspaceFolderPath,
-        initTimestampMs,
-        attemptIndex,
-        rawTextOutput,
-        runIndex
-      );
+    if (target.kind === FINAL_STEP_PHASES.QUEUE && signedStepIndex !== undefined) {
+      context.dashboardProvider?.updateCliStreamingChunk(signedStepIndex, "");
     }
+    this.emitStreamingPlaceholder(
+      context,
+      target,
+      signedStepIndex,
+      promptStep.prompt,
+      undefined,
+      initTimestampMs,
+      runIndex,
+      attemptIndex,
+      rawTextOutput
+    );
 
     const responsePromise = this.waitForResponseComplete(
       promptStep,
@@ -1687,61 +1753,17 @@ export class WorkflowExecutor {
         ? data.cliCommand
         : undefined;
 
-      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-        if (context.dashboardProvider && signedStepIndex !== undefined) {
-          context.dashboardProvider.updateCliOutput(signedStepIndex, {
-            prompt: promptStep.prompt,
-            response: "",
-            elapsed: 0,
-            tokens: undefined,
-            isStreaming: true,
-            cliCommand,
-            workingDirectory: context.workspaceFolderPath,
-            timestampMs: initTimestampMs,
-            runIndex,
-            attemptIndex,
-            rawTextOutput,
-          });
-        }
-
-        if (signedStepIndex !== undefined) {
-          context.captureOutputInit?.(
-            signedStepIndex,
-            promptStep.prompt,
-            cliCommand,
-            context.workspaceFolderPath,
-            initTimestampMs,
-            attemptIndex,
-            rawTextOutput,
-            runIndex
-          );
-        }
-      } else {
-        context.dashboardProvider?.updateFinalStepOutput(target.loopIndex, {
-          prompt: promptStep.prompt,
-          response: "",
-          elapsed: 0,
-          tokens: undefined,
-          isStreaming: true,
-          cliCommand,
-          workingDirectory: context.workspaceFolderPath,
-          timestampMs: initTimestampMs,
-          runIndex,
-          attemptIndex,
-          rawTextOutput,
-        });
-
-        context.captureFinalStepOutputInit?.(
-          target.loopIndex,
-          promptStep.prompt,
-          cliCommand,
-          context.workspaceFolderPath,
-          initTimestampMs,
-          attemptIndex,
-          rawTextOutput,
-          runIndex
-        );
-      }
+      this.emitStreamingPlaceholder(
+        context,
+        target,
+        signedStepIndex,
+        promptStep.prompt,
+        cliCommand,
+        initTimestampMs,
+        runIndex,
+        attemptIndex,
+        rawTextOutput
+      );
     });
 
     streamingDisposable = integration.onStreamingChunk((chunk) => {
@@ -2083,41 +2105,13 @@ export class WorkflowExecutor {
         (stoppedOutput.timestampMs ?? Date.now()) + 1
       );
 
-      if (context.dashboardProvider && signedStepIndex >= 0) {
-        context.dashboardProvider.updateCliOutput(
-          signedStepIndex,
-          stoppedOutput
-        );
-      } else if (
-        context.dashboardProvider &&
-        target.kind === FINAL_STEP_PHASES.FINAL_STEP
-      ) {
-        context.dashboardProvider.updateFinalStepOutput(
-          target.loopIndex,
-          stoppedOutput
-        );
-      }
-
-      if (signedStepIndex >= 0) {
-        context.captureCompletedOutput?.(signedStepIndex, stoppedOutput);
-      } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        context.captureFinalStepCompletedOutput?.(
-          target.loopIndex,
-          stoppedOutput
-        );
-      }
-
-      if (context.historyFilePath && context.outputHistoryManager) {
-        await context.outputHistoryManager
-          .saveExecutionOutput(
-            context.historyFilePath,
-            this.toOutputExecutionTarget(target),
-            [stoppedOutput]
-          )
-          .catch((err) =>
-            Log.warn("Failed to save stopped-by-user output to history:", err)
-          );
-      }
+      await this.finalizeAndPersistOutput(
+        context,
+        target,
+        signedStepIndex,
+        stoppedOutput,
+        "stopped-by-user output"
+      );
 
       if (target.kind === FINAL_STEP_PHASES.QUEUE && stoppedOutput.response) {
         await this.promptQueue
@@ -2196,41 +2190,13 @@ export class WorkflowExecutor {
         rawTextOutput: true,
       });
 
-      if (context.dashboardProvider && signedStepIndex >= 0) {
-        context.dashboardProvider.updateCliOutput(
-          signedStepIndex,
-          processExitOutput
-        );
-      } else if (
-        context.dashboardProvider &&
-        target.kind === FINAL_STEP_PHASES.FINAL_STEP
-      ) {
-        context.dashboardProvider.updateFinalStepOutput(
-          target.loopIndex,
-          processExitOutput
-        );
-      }
-
-      if (signedStepIndex >= 0) {
-        context.captureCompletedOutput?.(signedStepIndex, processExitOutput);
-      } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-        context.captureFinalStepCompletedOutput?.(
-          target.loopIndex,
-          processExitOutput
-        );
-      }
-
-      if (context.historyFilePath && context.outputHistoryManager) {
-        await context.outputHistoryManager
-          .saveExecutionOutput(
-            context.historyFilePath,
-            this.toOutputExecutionTarget(target),
-            [processExitOutput]
-          )
-          .catch((err) =>
-            Log.warn("Failed to save process-exit output to history:", err)
-          );
-      }
+      await this.finalizeAndPersistOutput(
+        context,
+        target,
+        signedStepIndex,
+        processExitOutput,
+        "process-exit output"
+      );
 
       this.promptQueue.markInFlightPromptCancelled();
       if (runtime.requestStop()) {
@@ -2285,41 +2251,13 @@ export class WorkflowExecutor {
       errorMessage: failureReason,
     };
 
-    if (context.dashboardProvider && signedStepIndex >= 0) {
-      context.dashboardProvider.updateCliOutput(
-        signedStepIndex,
-        errorCliOutput
-      );
-    } else if (
-      context.dashboardProvider &&
-      target.kind === FINAL_STEP_PHASES.FINAL_STEP
-    ) {
-      context.dashboardProvider.updateFinalStepOutput(
-        target.loopIndex,
-        errorCliOutput
-      );
-    }
-
-    if (signedStepIndex >= 0) {
-      context.captureCompletedOutput?.(signedStepIndex, errorCliOutput);
-    } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalStepCompletedOutput?.(
-        target.loopIndex,
-        errorCliOutput
-      );
-    }
-
-    if (context.historyFilePath && context.outputHistoryManager) {
-      await context.outputHistoryManager
-        .saveExecutionOutput(
-          context.historyFilePath,
-          this.toOutputExecutionTarget(target),
-          [errorCliOutput]
-        )
-        .catch((err) =>
-          Log.warn("Failed to save error output to history:", err)
-        );
-    }
+    await this.finalizeAndPersistOutput(
+      context,
+      target,
+      signedStepIndex,
+      errorCliOutput,
+      "error output"
+    );
 
     return false;
   }
@@ -2341,33 +2279,7 @@ export class WorkflowExecutor {
       structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
     }
 
-    let tokens:
-      | {
-          prompt: number;
-          completion: number;
-          cached?: number;
-          cacheCreated?: number;
-          contextWindowUsed?: number;
-          contextWindowSize?: number;
-        }
-      | undefined;
-
-    if (parsedOutput?.metadata.usage) {
-      const u = parsedOutput.metadata.usage;
-      tokens = {
-        prompt: u.inputTokens,
-        completion: u.outputTokens,
-        cached: u.cachedInputTokens,
-        cacheCreated: u.cacheCreatedTokens,
-        contextWindowUsed: u.contextWindowUsedTokens,
-        contextWindowSize: u.contextWindowSize,
-      };
-    } else {
-      const lastResult = integration.getLastResult();
-      if (lastResult?.statistics) {
-        tokens = integration.parseTokenCounts(lastResult.statistics);
-      }
-    }
+    const tokens = this.resolveTokenCounts(parsedOutput, integration);
 
     const cliCommand = context.shouldShowCliCommand
       ? integration.getLastCliCommand()
@@ -2388,34 +2300,13 @@ export class WorkflowExecutor {
       rawTextOutput: integration.rawTextOutput || undefined,
     };
 
-    if (context.dashboardProvider && signedStepIndex !== undefined) {
-      context.dashboardProvider.updateCliOutput(signedStepIndex, cliOutputObj);
-    } else if (
-      context.dashboardProvider &&
-      target.kind === FINAL_STEP_PHASES.FINAL_STEP
-    ) {
-      context.dashboardProvider.updateFinalStepOutput(
-        target.loopIndex,
-        cliOutputObj
-      );
-    }
-    if (signedStepIndex !== undefined) {
-      context.captureCompletedOutput?.(signedStepIndex, cliOutputObj);
-    } else if (target.kind === FINAL_STEP_PHASES.FINAL_STEP) {
-      context.captureFinalStepCompletedOutput?.(target.loopIndex, cliOutputObj);
-    }
-
-    if (context.historyFilePath && context.outputHistoryManager) {
-      await context.outputHistoryManager
-        .saveExecutionOutput(
-          context.historyFilePath,
-          this.toOutputExecutionTarget(target),
-          [cliOutputObj]
-        )
-        .catch((err) =>
-          Log.warn("Failed to save step output to history:", err)
-        );
-    }
+    await this.finalizeAndPersistOutput(
+      context,
+      target,
+      signedStepIndex,
+      cliOutputObj,
+      "step output"
+    );
   }
 
   private async finalizeWorkflowExecution(): Promise<void> {

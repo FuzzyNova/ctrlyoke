@@ -727,22 +727,23 @@ export class CodexLogParser extends BaseLogParser {
 
       const result = await retryWithBackoff(
         async () => {
-          // Get all rollout-*.jsonl files recursively
-          const candidates = this.findModifiedRolloutFiles(basePath, startTime);
+          // Get all rollout-*.jsonl files recursively, newest first
+          const candidates = this.findModifiedSessionLogs(basePath, startTime, {
+            recursive: true,
+            filter: (name) =>
+              name.startsWith("rollout-") && name.endsWith(".jsonl"),
+          });
 
           if (candidates.length === 0) {
             return null; // No candidates yet, will retry
           }
 
-          // Sort by modification time (newest first)
-          candidates.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-
           // Check each candidate
-          for (const candidate of candidates) {
+          for (const candidatePath of candidates) {
             try {
               // Read first 10 events
               const events = await this.readFirstNJsonlEvents(
-                candidate.path,
+                candidatePath,
                 10
               );
 
@@ -797,7 +798,7 @@ export class CodexLogParser extends BaseLogParser {
                     promptPrefix
                   )
                 ) {
-                  return candidate.path; // Success - found matching log
+                  return candidatePath; // Success - found matching log
                 }
               }
             } catch (error) {
@@ -1394,72 +1395,4 @@ export class CodexLogParser extends BaseLogParser {
     }
   }
 
-  /**
-   * Find all rollout-*.jsonl files modified after startTime
-   *
-   * Recursively searches base sessions directory for recently modified log files.
-   *
-   * @param basePath - Base sessions directory (~/.codex/sessions)
-   * @param startTime - Only include files modified after this time
-   * @returns Array of candidate files with paths and modification times
-   *
-   * @remarks
-   * **Search Strategy:**
-   * - Recursively traverses all subdirectories
-   * - Filters for rollout-*.jsonl files
-   * - Checks modification time (with 10s buffer before startTime)
-   * - Returns unsorted list (caller sorts by mtime)
-   *
-   * **Use Case:**
-   * Fallback for prompt text matching when no session ID available.
-   */
-  private findModifiedRolloutFiles(
-    basePath: string,
-    startTime: Date
-  ): Array<{ path: string; mtime: Date }> {
-    const candidates: Array<{ path: string; mtime: Date }> = [];
-
-    // Allow 10 second buffer before startTime (CLI may write logs slightly before)
-    const bufferTime = new Date(startTime.getTime() - 10000);
-
-    const searchDir = (dir: string): void => {
-      try {
-        if (!fs.existsSync(dir)) {
-          return;
-        }
-
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-
-          if (entry.isDirectory()) {
-            // Recurse into subdirectories
-            searchDir(fullPath);
-          } else if (
-            entry.isFile() &&
-            entry.name.startsWith("rollout-") &&
-            entry.name.endsWith(".jsonl")
-          ) {
-            // Check modification time
-            try {
-              const stats = fs.statSync(fullPath);
-              if (stats.mtime >= bufferTime) {
-                candidates.push({ path: fullPath, mtime: stats.mtime });
-              }
-            } catch (error) {
-              // Skip files we can't stat
-              continue;
-            }
-          }
-        }
-      } catch (error) {
-        // Skip directories we can't read
-        return;
-      }
-    };
-
-    searchDir(basePath);
-    return candidates;
-  }
 }

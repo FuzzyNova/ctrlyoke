@@ -71,24 +71,15 @@ export class CodexNotificationMonitor
       userPromptSubmit: "UserPromptSubmit",
       permissionRequest: "PermissionRequest",
     };
-    const permissionRequestHook = userHooks?.find(
-      (hook) => hook.event === "permissionRequest"
+    const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
+    const hooks = this.buildCommandHooks(
+      command,
+      eventMap,
+      selectedEvents,
+      undefined, // user hooks are merged by CodexCliProvider via SettingsJsonHooksTracker, not here
+      encodedDecisionHook,
+      createCodexCommandHookGroup
     );
-    const encodedDecisionHook = permissionRequestHook
-      ? Buffer.from(permissionRequestHook.command, "utf8").toString("base64")
-      : undefined;
-
-    const hooks: Record<string, unknown[]> = {};
-    for (const event of selectedEvents) {
-      const nativeEvent = eventMap[event];
-      const eventCommand =
-        event === "permissionRequest" && encodedDecisionHook
-          ? `${command} "${encodedDecisionHook}"`
-          : command;
-      hooks[nativeEvent] = [
-        createCodexCommandHookGroup(nativeEvent, eventCommand),
-      ];
-    }
 
     return {
       type: "json",

@@ -17,7 +17,7 @@ import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import type { TemplateManager } from "../flightpath/TemplateManager";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
-import type { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
+import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 import type { PostMessageFn } from "./WebviewSettingsSync";
 import type { WorkingFile } from "../types/FlightPathTypes";
 
@@ -852,7 +852,7 @@ export class WorkflowSerializer {
       }
 
       const workflowId =
-        outputHistoryManager.extractWorkflowId(workingFilePath);
+        OutputHistoryManager.extractWorkflowId(workingFilePath);
       const runs = await outputHistoryManager.getRunsForWorkflow(workflowId);
       if (!runs.length) {
         return;
@@ -919,7 +919,7 @@ export class WorkflowSerializer {
       }
 
       const workflowId =
-        outputHistoryManager.extractWorkflowId(workingFilePath);
+        OutputHistoryManager.extractWorkflowId(workingFilePath);
       const workflowHistoryDir = path.join(
         outputHistoryManager.historyBaseDir,
         workflowId

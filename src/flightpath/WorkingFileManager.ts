@@ -217,7 +217,7 @@ export class WorkingFileManager {
       })
       .catch((err) => {
         Log.error(
-          `operationQueue: updateWorkingFile failed: ${err instanceof Error ? err.message : String(err)}`
+          `operationQueue: updateWorkingFile failed: ${getErrorMessage(err)}`
         );
       });
 
@@ -395,7 +395,7 @@ export class WorkingFileManager {
       })
       .catch((err) => {
         Log.error(
-          `operationQueue: updateWorkingFileProperties failed: ${err instanceof Error ? err.message : String(err)}`
+          `operationQueue: updateWorkingFileProperties failed: ${getErrorMessage(err)}`
         );
       });
 
@@ -411,7 +411,7 @@ export class WorkingFileManager {
   public async runInQueue(fn: () => Promise<void>): Promise<void> {
     this.operationQueue = this.operationQueue.then(fn).catch((err) => {
       Log.error(
-        `operationQueue: serialized operation failed: ${err instanceof Error ? err.message : String(err)}`
+        `operationQueue: serialized operation failed: ${getErrorMessage(err)}`
       );
     });
 
