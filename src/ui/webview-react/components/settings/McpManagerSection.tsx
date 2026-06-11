@@ -14,6 +14,7 @@ import {
   FlyoutActionDropdown,
   type FlyoutGroup,
 } from "@components/shared/FlyoutActionDropdown";
+import { BulkLocationActionsBar } from "@components/shared/BulkLocationActionsBar";
 import {
   EMPTY_MCP_SERVER_FORM_STATE,
   McpServerForm,
@@ -30,6 +31,7 @@ import {
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
   type AnyTargetId,
+  type HarnessId,
   type SettingWriteScope,
 } from "@root/types/DashboardConstants";
 import type { McpServerConfig } from "@root/types/FlightPathTypes";
@@ -681,48 +683,6 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
     [managedServers]
   );
 
-  const bulkDeleteItems = useMemo<ActionDropdownItem[]>(() => {
-    const managedIds = new Set(
-      (managedServers ?? []).map((server) => server.id)
-    );
-    const grouped = new Map<
-      string,
-      { targetId: AnyTargetId; scope: SettingWriteScope; count: number }
-    >();
-
-    for (const entry of localServers) {
-      if (!managedIds.has(entry.id)) {
-        continue;
-      }
-      const target = getTargetForLocalSource(entry.source);
-      if (!target) {
-        continue;
-      }
-      const key = encodeTarget(target.targetId, target.scope);
-      const current = grouped.get(key);
-      grouped.set(key, {
-        targetId: target.targetId,
-        scope: target.scope,
-        count: (current?.count ?? 0) + 1,
-      });
-    }
-
-    return [...grouped.entries()]
-      .map(([value, target]) => ({
-        label: `${getExportTargetLabel(target.targetId)} (${formatScopeLabel(
-          target.scope
-        )})`,
-        value,
-        description:
-          target.count === 1
-            ? "Delete one exported managed server copy"
-            : `Delete ${target.count} exported managed server copies`,
-      }))
-      .sort((a, b) =>
-        a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
-      );
-  }, [localServers, managedServers]);
-
   useEffect(() => {
     requestServers();
     requestLocalScan();
@@ -845,13 +805,62 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
   const handleConfirmDeleteTarget = () => {
     if (!deleteTargetState || deleteTargetState.ids.length === 0) return;
-    deleteFromHarness(
-      deleteTargetState.ids,
-      deleteTargetState.targetId,
-      deleteTargetState.scope
-    );
+    if (deleteTargetState.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+      for (const id of deleteTargetState.ids) {
+        deleteServer(id, deleteTargetState.scope);
+      }
+    } else {
+      deleteFromHarness(
+        deleteTargetState.ids,
+        deleteTargetState.targetId,
+        deleteTargetState.scope
+      );
+    }
     setDeleteTargetState(null);
   };
+
+  const handleSaveAll = (id: AnyTargetId, scope: SettingWriteScope) => {
+    if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+      for (const server of managedServers ?? []) {
+        addOrUpdateServer(server.config, scope);
+      }
+      return;
+    }
+    exportToHarness(exportableServers, id, scope);
+  };
+
+  const handleDeleteAllRequest = (
+    id: AnyTargetId,
+    scope: SettingWriteScope
+  ) => {
+    if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+      const ids = (managedServers ?? [])
+        .filter((server) =>
+          server.locations.some(
+            (location) =>
+              location.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+              location.scope === scope
+          )
+        )
+        .map((server) => server.id);
+      setDeleteTargetState({ ids, targetId: id, scope });
+      return;
+    }
+    const ids = localServers
+      .filter((entry) => {
+        const target = getTargetForLocalSource(entry.source);
+        return target?.targetId === id && target.scope === scope;
+      })
+      .map((entry) => entry.id);
+    setDeleteTargetState({ ids, targetId: id, scope });
+  };
+
+  const getMcpTargetsForScope = (scope: SettingWriteScope): AnyTargetId[] =>
+    scope === SETTING_SCOPES.WORKSPACE
+      ? hasWorkspaceRoot
+        ? [...EXPORT_TARGET_IDS, SPECIAL_TARGET_IDS.FLIGHTPATH]
+        : []
+      : [...EXPORT_TARGET_IDS, SPECIAL_TARGET_IDS.FLIGHTPATH];
 
   return (
     <div className="space-y-4">
@@ -870,59 +879,6 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
         <span className="text-xxs text-description-fg">
           Using top-level scope: {formatScopeLabel(activeScope)}
         </span>
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {exportableServers.length > 0 ? (
-            <FlyoutActionDropdown
-              label="Save All"
-              groups={buildExportGroups(hasWorkspaceRoot)}
-              onSelect={(encoded) => {
-                const { id, scope } = decodeTarget(encoded);
-                exportToHarness(exportableServers, id, scope);
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              disabled
-              title="No managed servers available to export"
-              className="rounded border border-btn-border bg-btn-secondary-bg px-2 py-0.5 text-xs text-disabled-fg"
-            >
-              Save All
-            </button>
-          )}
-
-          {bulkDeleteItems.length > 0 ? (
-            <ActionDropdown
-              label="Delete Exported…"
-              items={bulkDeleteItems}
-              onSelect={(encoded) => {
-                const { id, scope } = decodeTarget(encoded);
-                const ids = localServers
-                  .filter((entry) => {
-                    const target = getTargetForLocalSource(entry.source);
-                    return (
-                      target?.targetId === id &&
-                      target.scope === scope &&
-                      managedServersById.has(entry.id)
-                    );
-                  })
-                  .map((entry) => entry.id);
-                setDeleteTargetState({ ids, targetId: id, scope });
-              }}
-              className="text-error-fg"
-            />
-          ) : (
-            <button
-              type="button"
-              disabled
-              title="No exported harness copies available to delete"
-              className="rounded border border-btn-border bg-btn-secondary-bg px-2 py-0.5 text-xs text-disabled-fg"
-            >
-              Delete Exported…
-            </button>
-          )}
-        </div>
       </div>
 
       <div className="space-y-2">
@@ -1168,6 +1124,16 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           </div>
         </div>
       </div>
+
+      <BulkLocationActionsBar
+        itemCount={managedServers?.length ?? 0}
+        getTargetsForScope={getMcpTargetsForScope}
+        getTargetLabel={getExportTargetLabel}
+        getTargetDescription={getExportTargetDescription}
+        defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
+        onSaveAll={handleSaveAll}
+        onDeleteAll={handleDeleteAllRequest}
+      />
 
       <div className="space-y-2">
         <div className="text-xxs font-semibold uppercase tracking-wide text-description-fg">
@@ -1542,7 +1508,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
           role="button"
           tabIndex={0}
-          aria-label="Close delete exported MCP copies dialog"
+          aria-label="Close delete all MCP servers dialog"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setDeleteTargetState(null);
@@ -1566,15 +1532,15 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
             aria-modal="true"
           >
             <p className="mb-1 text-sm font-semibold text-foreground">
-              Delete exported MCP copies?
+              Delete all MCP servers?
             </p>
             <p className="mb-4 text-xs text-description-fg">
-              Remove {deleteTargetState.ids.length} managed MCP server
-              {deleteTargetState.ids.length === 1 ? "" : "s"} from{" "}
+              Remove all {deleteTargetState.ids.length} MCP server
+              {deleteTargetState.ids.length === 1 ? "" : "s"} configured in{" "}
               <strong>
                 {getExportTargetLabel(deleteTargetState.targetId)}
               </strong>{" "}
-              ({deleteTargetState.scope})?
+              ({deleteTargetState.scope})? This cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button

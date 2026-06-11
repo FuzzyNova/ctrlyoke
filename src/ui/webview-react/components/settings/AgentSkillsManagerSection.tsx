@@ -1,12 +1,14 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useHarnessFileStore } from "@store/useHarnessFileStore";
 import { useSettingsStore } from "@store/settingsStore";
+import { sendMessage } from "@hooks/useMessageHandler";
 import {
   HARNESS_IDS,
   HARNESS_INFO,
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
   HARNESS_FILE_TYPES,
+  MESSAGE_TYPES,
 } from "@root/types/DashboardConstants";
 import type {
   HarnessId,
@@ -15,12 +17,14 @@ import type {
 } from "@root/types/DashboardConstants";
 import type {
   ManagedFile,
+  ManagedFileLocation,
   ManagedTargetDirectory,
 } from "@root/types/WebviewMessageTypes";
 import { ActionDropdown } from "@components/shared/ActionDropdown";
 import type { ActionDropdownItem } from "@components/shared/ActionDropdown";
 import { FlyoutActionDropdown } from "@components/shared/FlyoutActionDropdown";
 import type { FlyoutGroup } from "@components/shared/FlyoutActionDropdown";
+import { BulkLocationActionsBar } from "@components/shared/BulkLocationActionsBar";
 import { isStandalone } from "@hooks/useVsCodeApi";
 
 // ============================================================================
@@ -76,6 +80,31 @@ function getLocationFolderPath(
   return file.type === HARNESS_FILE_TYPES.SKILL
     ? location.path
     : getParentFolderPath(location.path);
+}
+
+// Primary source location: prefer flightpath workspace, then flightpath user, then first
+function getPrimaryLocation(file: ManagedFile): ManagedFileLocation {
+  return (
+    file.locations.find(
+      (l) =>
+        l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+        l.scope === SETTING_SCOPES.WORKSPACE
+    ) ??
+    file.locations.find(
+      (l) =>
+        l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+        l.scope === SETTING_SCOPES.USER
+    ) ??
+    file.locations[0]
+  );
+}
+
+// Path to open for "Edit": the .agent.md / .md file directly, or SKILL.md inside the skill folder
+function getEditFilePath(file: ManagedFile): string {
+  const primaryLoc = getPrimaryLocation(file);
+  return file.type === HARNESS_FILE_TYPES.SKILL
+    ? `${primaryLoc.path}/SKILL.md`
+    : primaryLoc.path;
 }
 
 function getTargetDirectoryPath(
@@ -218,38 +247,32 @@ interface FileRowProps {
   file: ManagedFile;
   availableIds: Set<HarnessId>;
   targetDirectories: ManagedTargetDirectory[];
+  isDefault: boolean;
   onSave: (
     sourcePath: string,
     id: AnyTargetId,
     scope: SettingWriteScope
   ) => void;
   onDelete: (name: string, id: AnyTargetId, scope: SettingWriteScope) => void;
+  onToggleDefault: (file: ManagedFile) => void;
+  onEdit: (file: ManagedFile) => void;
 }
 
 function FileRow({
   file,
   availableIds,
   targetDirectories,
+  isDefault,
   onSave,
   onDelete,
+  onToggleDefault,
+  onEdit,
 }: FileRowProps) {
   const presentKeys = new Set(
     file.locations.map((l) => encodeTarget(l.harnessId, l.scope))
   );
 
-  // Primary source path: prefer flightpath workspace, then flightpath user, then first
-  const primaryLoc =
-    file.locations.find(
-      (l) =>
-        l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
-        l.scope === SETTING_SCOPES.WORKSPACE
-    ) ??
-    file.locations.find(
-      (l) =>
-        l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
-        l.scope === SETTING_SCOPES.USER
-    ) ??
-    file.locations[0];
+  const primaryLoc = getPrimaryLocation(file);
 
   const deleteItems: ActionDropdownItem[] = file.locations.map(
     (loc, index) => ({
@@ -259,13 +282,52 @@ function FileRow({
     })
   );
 
+  const toggleTitle =
+    file.type === HARNESS_FILE_TYPES.AGENT
+      ? isDefault
+        ? "Remove as default agent"
+        : "Set as default agent"
+      : isDefault
+        ? "Remove from default skills"
+        : "Add to default skills";
+
   return (
     <div className="py-2 px-3 border-b border-panel-border last:border-0">
-      <div className="text-sm font-medium text-foreground truncate mb-1.5">
-        {file.displayName}
+      <div className="flex items-center gap-1.5">
+        <div className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {file.displayName}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1">
+          {!isStandalone && (
+            <button
+              type="button"
+              onClick={() => onEdit(file)}
+              className="flex items-center gap-1 rounded border border-panel-border px-1.5 py-0.5 text-xxs text-description-fg transition-colors hover:border-focus-border hover:text-foreground"
+              title={`Open ${file.type === HARNESS_FILE_TYPES.SKILL ? "SKILL.md" : file.displayName} in VS Code`}
+            >
+              <i className="codicon codicon-edit text-xxs" />
+              Edit
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onToggleDefault(file)}
+            className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-xxs transition-colors ${
+              isDefault
+                ? "border-btn-bg bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                : "border-panel-border text-description-fg hover:border-focus-border hover:text-foreground"
+            }`}
+            title={toggleTitle}
+          >
+            <i className="codicon codicon-globe text-xxs" />
+            {isDefault ? "Default" : "Set default"}
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
         <div className="flex items-center gap-1 flex-wrap">
           {file.locations.map((loc) => (
             <HarnessBadge
@@ -279,6 +341,7 @@ function FileRow({
         <div className="flex items-center gap-1.5 ml-auto">
           <FlyoutActionDropdown
             label="Save"
+            icon="save"
             groups={buildSaveFlyoutGroups(
               presentKeys,
               availableIds,
@@ -292,6 +355,7 @@ function FileRow({
 
           <ActionDropdown
             label="Delete"
+            icon="trash"
             items={deleteItems}
             onSelect={(encoded) => {
               const { id, scope } = decodeTarget(encoded);
@@ -306,116 +370,16 @@ function FileRow({
 }
 
 // ============================================================================
-// All-actions bar (Save All / Delete All) — two-level scope + target selects
-// ============================================================================
-
-type BulkAction = "save" | "delete";
-
-interface AllActionsBarProps {
-  files: ManagedFile[];
-  availableIds: Set<HarnessId>;
-  targetDirectories: ManagedTargetDirectory[];
-  onSave: (id: AnyTargetId, scope: SettingWriteScope) => void;
-  onDeleteAll: (id: AnyTargetId, scope: SettingWriteScope) => void;
-}
-
-function AllActionsBar({
-  files,
-  availableIds,
-  targetDirectories,
-  onSave,
-  onDeleteAll,
-}: AllActionsBarProps) {
-  const [action, setAction] = useState<BulkAction>("save");
-  const [scope, setScope] = useState<SettingWriteScope>(
-    SETTING_SCOPES.WORKSPACE
-  );
-  const [targetId, setTargetId] = useState<AnyTargetId>(
-    HARNESS_IDS.CLAUDE_CLI as HarnessId
-  );
-
-  const scopeTargets =
-    scope === SETTING_SCOPES.WORKSPACE
-      ? getWorkspaceTargets(availableIds)
-      : getUserTargets(availableIds);
-
-  // Reset target when scope or available harnesses change if current target isn't in the list
-  const handleScopeChange = (newScope: SettingWriteScope) => {
-    setScope(newScope);
-    const targets =
-      newScope === SETTING_SCOPES.WORKSPACE
-        ? getWorkspaceTargets(availableIds)
-        : getUserTargets(availableIds);
-    if (!targets.includes(targetId)) {
-      setTargetId(targets[0] ?? "flightpath");
-    }
-  };
-
-  const preposition = action === "save" ? "to:" : "from:";
-  const targetItems: ActionDropdownItem[] = scopeTargets.map((id) => ({
-    label: getTargetLabel(id),
-    value: id,
-    description: formatPathForDisplay(
-      getTargetDirectoryPath(targetDirectories, id, scope) ?? ""
-    ),
-  }));
-
-  return (
-    <div className="flex items-center gap-2 pt-3 border-t border-panel-border flex-wrap">
-      <select
-        value={action}
-        onChange={(e) => setAction(e.target.value as BulkAction)}
-        className="h-6 bg-input-bg border border-input-border rounded px-2 text-xs text-foreground focus:outline-none focus:border-focus-border shrink-0"
-      >
-        <option value="save">Save All</option>
-        <option value="delete">Delete All</option>
-      </select>
-
-      <span className="text-xs text-description-fg shrink-0">
-        {preposition}
-      </span>
-
-      <select
-        value={scope}
-        onChange={(e) => handleScopeChange(e.target.value as SettingWriteScope)}
-        className="h-6 bg-input-bg border border-input-border rounded px-2 text-xs text-foreground focus:outline-none focus:border-focus-border shrink-0"
-      >
-        <option value="workspace">Workspace</option>
-        <option value="user">User</option>
-      </select>
-
-      <ActionDropdown
-        label={getTargetLabel(targetId)}
-        items={targetItems}
-        onSelect={(value) => setTargetId(value as AnyTargetId)}
-        className="flex-1 min-w-[220px]"
-      />
-
-      <button
-        type="button"
-        disabled={files.length === 0}
-        onClick={() => {
-          if (action === "save") onSave(targetId, scope);
-          else onDeleteAll(targetId, scope);
-        }}
-        className={`h-6 px-2 text-xs rounded disabled:opacity-50 disabled:cursor-not-allowed shrink-0
-          ${
-            action === "delete"
-              ? "bg-btn-secondary-bg text-error-fg border border-btn-border hover:bg-btn-secondary-hover"
-              : "bg-btn-bg text-btn-fg hover:bg-btn-hover"
-          }`}
-      >
-        {action === "save" ? "Save All" : "Delete All"}
-      </button>
-    </div>
-  );
-}
-
-// ============================================================================
 // Main Section
 // ============================================================================
 
-export function AgentSkillsManagerSection() {
+type AgentSkillsManagerSectionProps = {
+  activeScope: SettingWriteScope;
+};
+
+export function AgentSkillsManagerSection({
+  activeScope,
+}: AgentSkillsManagerSectionProps) {
   const managedFiles = useHarnessFileStore((s) => s.managedFiles);
   const targetDirectories = useHarnessFileStore((s) => s.targetDirectories);
   const activeType = useHarnessFileStore((s) => s.activeType);
@@ -433,6 +397,53 @@ export function AgentSkillsManagerSection() {
   const availableIds = new Set(
     ELIGIBLE_HARNESS_IDS.filter((id) => harnessStatusMap[id]?.available)
   );
+
+  const globalSettings = useSettingsStore((s) => s.globalSettings);
+  const fullGlobalSettings = useSettingsStore((s) => s.fullGlobalSettings);
+
+  const defaultAgent = useMemo<string>(() => {
+    const fullValue = fullGlobalSettings?.settings?.defaults?.agent;
+    return typeof fullValue === "string" ? fullValue : (globalSettings.agent ?? "");
+  }, [fullGlobalSettings, globalSettings.agent]);
+
+  const defaultSkills = useMemo<string[]>(() => {
+    const fullValue = fullGlobalSettings?.settings?.defaults?.skills;
+    return Array.isArray(fullValue) ? fullValue : (globalSettings.skills ?? []);
+  }, [fullGlobalSettings, globalSettings.skills]);
+
+  const isFileDefault = useCallback(
+    (file: ManagedFile): boolean =>
+      file.type === HARNESS_FILE_TYPES.AGENT
+        ? defaultAgent === file.name
+        : defaultSkills.includes(file.name),
+    [defaultAgent, defaultSkills]
+  );
+
+  const handleToggleDefault = useCallback(
+    (file: ManagedFile) => {
+      if (file.type === HARNESS_FILE_TYPES.AGENT) {
+        sendMessage(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, {
+          path: "defaults.agent",
+          value: defaultAgent === file.name ? "" : file.name,
+          scope: activeScope,
+        });
+      } else {
+        const nextSkills = defaultSkills.includes(file.name)
+          ? defaultSkills.filter((name) => name !== file.name)
+          : [...defaultSkills, file.name];
+        sendMessage(MESSAGE_TYPES.UPDATE_GLOBAL_SETTING, {
+          path: "defaults.skills",
+          value: nextSkills,
+          scope: activeScope,
+        });
+      }
+    },
+    [activeScope, defaultAgent, defaultSkills]
+  );
+
+  const handleEditFile = useCallback((file: ManagedFile) => {
+    sendMessage(MESSAGE_TYPES.OPEN_FILE, { path: getEditFilePath(file) });
+  }, []);
 
   const [confirmDelete, setConfirmDelete] = useState<{
     name: string;
@@ -476,21 +487,10 @@ export function AgentSkillsManagerSection() {
 
   const handleSaveAll = useCallback(
     (id: AnyTargetId, scope: SettingWriteScope) => {
-      const files = managedFiles.map((f) => {
-        const primary =
-          f.locations.find(
-            (l) =>
-              l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
-              l.scope === SETTING_SCOPES.WORKSPACE
-          ) ??
-          f.locations.find(
-            (l) =>
-              l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
-              l.scope === SETTING_SCOPES.USER
-          ) ??
-          f.locations[0];
-        return { sourcePath: primary.path, name: f.name };
-      });
+      const files = managedFiles.map((f) => ({
+        sourcePath: getPrimaryLocation(f).path,
+        name: f.name,
+      }));
       syncAll(files, id, activeType, scope);
     },
     [managedFiles, syncAll, activeType]
@@ -590,18 +590,31 @@ export function AgentSkillsManagerSection() {
               file={file}
               availableIds={availableIds}
               targetDirectories={targetDirectories}
+              isDefault={isFileDefault(file)}
               onSave={handleSave}
               onDelete={handleDeleteRequest}
+              onToggleDefault={handleToggleDefault}
+              onEdit={handleEditFile}
             />
           ))}
       </div>
 
       {/* Bulk actions */}
-      <AllActionsBar
-        files={managedFiles}
-        availableIds={availableIds}
-        targetDirectories={targetDirectories}
-        onSave={handleSaveAll}
+      <BulkLocationActionsBar
+        itemCount={managedFiles.length}
+        getTargetsForScope={(scope) =>
+          scope === SETTING_SCOPES.WORKSPACE
+            ? getWorkspaceTargets(availableIds)
+            : getUserTargets(availableIds)
+        }
+        getTargetLabel={getTargetLabel}
+        getTargetDescription={(id, scope) =>
+          formatPathForDisplay(
+            getTargetDirectoryPath(targetDirectories, id, scope) ?? ""
+          )
+        }
+        defaultTargetId={HARNESS_IDS.CLAUDE_CLI as HarnessId}
+        onSaveAll={handleSaveAll}
         onDeleteAll={handleDeleteAllRequest}
       />
 

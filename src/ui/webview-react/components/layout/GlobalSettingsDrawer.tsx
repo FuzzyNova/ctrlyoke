@@ -219,7 +219,7 @@ export function GlobalSettingsDrawer() {
                 <ServerSection settings={fullSettings} {...sectionProps} />
               )}
               {effectiveActiveTab === "agentskillsmanager" && (
-                <AgentSkillsManagerSection />
+                <AgentSkillsManagerSection activeScope={activeScope} />
               )}
               {effectiveActiveTab === "mcpmanager" && (
                 <McpManagerSection activeScope={activeScope} />
