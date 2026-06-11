@@ -31,13 +31,18 @@
  */
 
 const fs = require("fs");
-const path = require("path");
-const os = require("os");
 const {
   initializeLogger,
   readStdinJson,
   maybeWriteHookArtifact,
-  runDecisionHook,
+  dispatchPermissionRequest,
+  logInvocation,
+  requireNotifyDir,
+  requireSessionId,
+  ensureNotifyDir,
+  buildNotifyFilePath,
+  STANDARD_LOGICAL_EVENT_MAP,
+  STANDARD_HANDLED_EVENTS,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-qwen-hook";
@@ -49,21 +54,7 @@ function main() {
 
   // Unconditional invocation log — written before any flag checks so we can confirm
   // the hook script is being called at all, regardless of diagnostic settings.
-  try {
-    const logsDir = notifyDir ? path.join(notifyDir, "..", "..", "logs") : null;
-    const logFile = logsDir
-      ? path.join(logsDir, `${SCRIPT_NAME}-debug.log`)
-      : path.join(os.tmpdir(), `${SCRIPT_NAME}-invocations.log`);
-    if (logsDir) {
-      fs.mkdirSync(logsDir, { recursive: true });
-    }
-    fs.appendFileSync(
-      logFile,
-      `[${new Date().toISOString()}] invoked argv=${JSON.stringify(process.argv)}\n`
-    );
-  } catch {
-    // Never block hook execution on logging
-  }
+  logInvocation(SCRIPT_NAME, notifyDir);
 
   const debugLog = initializeLogger(SCRIPT_NAME, notifyDir);
 
@@ -74,15 +65,7 @@ function main() {
     env_keys: Object.keys(process.env),
   });
 
-  if (process.argv.length < 3) {
-    const errorMsg = `No notification directory provided. Received ${process.argv.length - 1} argument(s): ${process.argv.slice(2).join(", ")}`;
-    debugLog("❌ FATAL ERROR: " + errorMsg, {
-      argv: process.argv,
-      expected: "node <script> <notifyDir>",
-    });
-    console.error(`${SCRIPT_PREFIX}: ${errorMsg}`);
-    process.exit(1);
-  }
+  requireNotifyDir(SCRIPT_PREFIX, debugLog);
 
   debugLog("📁 Hook configuration", { notifyDir });
 
@@ -93,16 +76,7 @@ function main() {
       allFields: Object.keys(hookInput),
     });
 
-    const HANDLED_EVENTS = new Set([
-      "SessionStart",
-      "UserPromptSubmit",
-      "Stop",
-      "PreToolUse",
-      "PostToolUse",
-      "PermissionRequest",
-    ]);
-
-    if (!HANDLED_EVENTS.has(hookEvent)) {
+    if (!STANDARD_HANDLED_EVENTS.has(hookEvent)) {
       debugLog("⏭️ Ignoring unhandled hook event", { hookEvent });
       process.exit(0);
     }
@@ -110,15 +84,7 @@ function main() {
     const sessionId = hookInput.session_id;
     const toolName = hookInput.tool_name || hookInput.tool?.name;
 
-    const LOGICAL_EVENT_MAP = {
-      PreToolUse: "preToolUse",
-      PostToolUse: "postToolUse",
-      UserPromptSubmit: "userPromptSubmit",
-      Stop: "stop",
-      SessionStart: "sessionStart",
-      PermissionRequest: "permissionRequest",
-    };
-    const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
+    const logicalEvent = STANDARD_LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
       maybeWriteHookArtifact(
         logicalEvent,
@@ -132,21 +98,12 @@ function main() {
     }
 
     if (hookEvent === "PermissionRequest") {
-      if (encodedDecisionHook) {
-        const decisionHookCommand = Buffer.from(
-          encodedDecisionHook,
-          "base64"
-        ).toString("utf8");
-        process.exit(
-          runDecisionHook(
-            decisionHookCommand,
-            JSON.stringify(hookInput),
-            debugLog
-          )
-        );
-      }
-      debugLog(`✅ Hook ${hookEvent} completed`);
-      process.exit(0);
+      dispatchPermissionRequest(
+        encodedDecisionHook,
+        hookInput,
+        hookEvent,
+        debugLog
+      );
     }
 
     // Events that don't need notification file I/O
@@ -155,34 +112,15 @@ function main() {
       process.exit(0);
     }
 
-    if (!sessionId) {
-      const errorMsg = `Missing session_id in ${hookEvent} hook input`;
-      debugLog("❌ ERROR: " + errorMsg, { hookInput });
-      console.error(`${SCRIPT_PREFIX}: ${errorMsg}`);
-      process.exit(1);
-    }
+    requireSessionId(sessionId, hookEvent, hookInput, SCRIPT_PREFIX, debugLog);
 
     debugLog("🔑 Session ID extracted", { hookEvent, sessionId });
 
-    if (!fs.existsSync(notifyDir)) {
-      fs.mkdirSync(notifyDir, { recursive: true });
-      debugLog("📁 Created notification directory", { notifyDir });
-    }
+    ensureNotifyDir(notifyDir, debugLog);
 
-    const safeSessionId = path.basename(sessionId);
     const isStartEvent =
       hookEvent === "SessionStart" || hookEvent === "UserPromptSubmit";
-    // For start events, use FLIGHTPATH_RUN_ID as the file prefix when set.
-    // This gives each parallel workflow its own uniquely-named start file so
-    // waitForSessionStart can do a direct lookup instead of a wildcard scan.
-    const runId = process.env.FLIGHTPATH_RUN_ID
-      ? path.basename(process.env.FLIGHTPATH_RUN_ID)
-      : null;
-    const startPrefix = runId || safeSessionId;
-    const notifyFile = path.join(
-      notifyDir,
-      isStartEvent ? `${startPrefix}-start.json` : `${safeSessionId}-stop.json`
-    );
+    const notifyFile = buildNotifyFilePath(notifyDir, sessionId, isStartEvent);
 
     const notifyData = {
       timestamp: Date.now(),

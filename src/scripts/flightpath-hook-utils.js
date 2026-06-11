@@ -319,6 +319,165 @@ function writeHookArtifact(notifyDir, artifact, debugLog) {
   }
 }
 
+/**
+ * Standard logical-event mapping shared by the Claude, Codex, and Qwen hook
+ * scripts: maps each harness's native hook event name to FlightPath's
+ * logical event name used for hook-artifact dispatch.
+ *
+ * @type {Record<string, string>}
+ */
+const STANDARD_LOGICAL_EVENT_MAP = {
+  SessionStart: "sessionStart",
+  Stop: "stop",
+  PreToolUse: "preToolUse",
+  PostToolUse: "postToolUse",
+  UserPromptSubmit: "userPromptSubmit",
+  PermissionRequest: "permissionRequest",
+};
+
+/**
+ * Native hook event names handled by the Claude, Codex, and Qwen hook
+ * scripts. Any other event is logged and ignored (exit 0).
+ *
+ * @type {Set<string>}
+ */
+const STANDARD_HANDLED_EVENTS = new Set(
+  Object.keys(STANDARD_LOGICAL_EVENT_MAP)
+);
+
+/**
+ * Write an unconditional invocation log entry before any flag checks, so
+ * hook registration/invocation can be confirmed regardless of diagnostic
+ * settings. Falls back to the system temp directory when notifyDir is
+ * unavailable. Errors are silently swallowed — must never block hook
+ * execution.
+ *
+ * @param {string} scriptName - Base name for the log file (e.g., 'flightpath-codex-notify')
+ * @param {string|undefined} notifyDir - Notification directory path (argv[2])
+ */
+function logInvocation(scriptName, notifyDir) {
+  try {
+    const logsDir = notifyDir
+      ? path.join(notifyDir, "..", "..", "logs")
+      : null;
+    const logFile = logsDir
+      ? path.join(logsDir, `${scriptName}-debug.log`)
+      : path.join(os.tmpdir(), `${scriptName}-invocations.log`);
+    if (logsDir) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    fs.appendFileSync(
+      logFile,
+      `[${new Date().toISOString()}] invoked argv=${JSON.stringify(process.argv)}\n`
+    );
+  } catch {
+    // Never block hook execution on logging
+  }
+}
+
+/**
+ * Validate that a notification directory was provided as argv[2]. Logs and
+ * exits the process with code 1 if missing.
+ *
+ * @param {string} scriptPrefix - Prefix for console.error messages (e.g., 'FlightPath Claude Hook')
+ * @param {function} debugLog - Logger returned by initializeLogger or createLogger
+ */
+function requireNotifyDir(scriptPrefix, debugLog) {
+  if (process.argv.length < 3) {
+    const errorMsg = `No notification directory provided. Received ${process.argv.length - 1} argument(s): ${process.argv.slice(2).join(", ")}`;
+    debugLog("❌ FATAL ERROR: " + errorMsg, {
+      argv: process.argv,
+      expected: "node <script> <notifyDir>",
+    });
+    console.error(`${scriptPrefix}: ${errorMsg}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * Validate that a session ID is present in the hook input. Logs and exits
+ * the process with code 1 if missing.
+ *
+ * @param {string|undefined} sessionId - Session ID extracted from hook input
+ * @param {string} hookEvent - Native hook event name (used in the error message)
+ * @param {object} hookInput - Parsed hook input object (for debug logging)
+ * @param {string} scriptPrefix - Prefix for console.error messages
+ * @param {function} debugLog - Logger returned by initializeLogger or createLogger
+ */
+function requireSessionId(sessionId, hookEvent, hookInput, scriptPrefix, debugLog) {
+  if (!sessionId) {
+    const errorMsg = `Missing session_id in ${hookEvent} hook input`;
+    debugLog("❌ ERROR: " + errorMsg, { hookInput });
+    console.error(`${scriptPrefix}: ${errorMsg}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * Create the notification directory if it does not already exist.
+ *
+ * @param {string} notifyDir - Notification directory path
+ * @param {function} debugLog - Logger returned by initializeLogger or createLogger
+ */
+function ensureNotifyDir(notifyDir, debugLog) {
+  if (!fs.existsSync(notifyDir)) {
+    fs.mkdirSync(notifyDir, { recursive: true });
+    debugLog("📁 Created notification directory", { notifyDir });
+  }
+}
+
+/**
+ * Build the start/stop notification file path for a session.
+ *
+ * Start files use FLIGHTPATH_RUN_ID as the filename prefix when set, giving
+ * each parallel workflow a uniquely-named start file so waitForSessionStart
+ * can do a direct lookup instead of a wildcard scan. Stop files are always
+ * keyed by session ID.
+ *
+ * @param {string} notifyDir - Notification directory path
+ * @param {string|null|undefined} sessionId - Session ID, or falsy to skip (returns null)
+ * @param {boolean} isStartEvent - True for start files, false for stop files
+ * @returns {string|null} Full path to the notification file, or null if sessionId is falsy
+ */
+function buildNotifyFilePath(notifyDir, sessionId, isStartEvent) {
+  if (!sessionId) {
+    return null;
+  }
+  const safeSessionId = path.basename(sessionId);
+  const runId = process.env.FLIGHTPATH_RUN_ID
+    ? path.basename(process.env.FLIGHTPATH_RUN_ID)
+    : null;
+  const startPrefix = runId || safeSessionId;
+  return path.join(
+    notifyDir,
+    isStartEvent ? `${startPrefix}-start.json` : `${safeSessionId}-stop.json`
+  );
+}
+
+/**
+ * Handle a permission/decision-request hook event: run the encoded decision
+ * hook (if any) and exit the process with its result, or exit 0 if no
+ * decision hook is configured. Never returns.
+ *
+ * @param {string|undefined} encodedDecisionHook - Base64-encoded decision hook command
+ * @param {object} hookInput - Parsed hook input object to pipe to the decision hook
+ * @param {string} eventLabel - Event name for debug logging (e.g. "PermissionRequest")
+ * @param {function} debugLog - Logger returned by initializeLogger or createLogger
+ */
+function dispatchPermissionRequest(encodedDecisionHook, hookInput, eventLabel, debugLog) {
+  if (encodedDecisionHook) {
+    const decisionHookCommand = Buffer.from(
+      encodedDecisionHook,
+      "base64"
+    ).toString("utf8");
+    process.exit(
+      runDecisionHook(decisionHookCommand, JSON.stringify(hookInput), debugLog)
+    );
+  }
+  debugLog(`✅ Hook ${eventLabel} completed`);
+  process.exit(0);
+}
+
 module.exports = {
   getDebugLogPath,
   getTempLogPath,
@@ -332,4 +491,12 @@ module.exports = {
   buildArtifactBase,
   isHookEventEnabled,
   maybeWriteHookArtifact,
+  STANDARD_LOGICAL_EVENT_MAP,
+  STANDARD_HANDLED_EVENTS,
+  logInvocation,
+  requireNotifyDir,
+  requireSessionId,
+  ensureNotifyDir,
+  buildNotifyFilePath,
+  dispatchPermissionRequest,
 };

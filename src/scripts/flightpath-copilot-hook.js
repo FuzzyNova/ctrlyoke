@@ -46,7 +46,9 @@ const {
   initializeLogger,
   readStdinJson,
   maybeWriteHookArtifact,
-  runDecisionHook,
+  dispatchPermissionRequest,
+  ensureNotifyDir,
+  buildNotifyFilePath,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-copilot-hook";
@@ -120,44 +122,23 @@ function main() {
     }
 
     if (hookType === "permissionRequest") {
-      if (encodedDecisionHook) {
-        const decisionHookCommand = Buffer.from(
-          encodedDecisionHook,
-          "base64"
-        ).toString("utf8");
-        process.exit(
-          runDecisionHook(
-            decisionHookCommand,
-            JSON.stringify(hookInput),
-            debugLog
-          )
-        );
-      }
-
-      debugLog(`✅ Hook ${hookType} completed successfully`);
-      process.exit(0);
+      dispatchPermissionRequest(
+        encodedDecisionHook,
+        hookInput,
+        hookType,
+        debugLog
+      );
     }
 
     if (hookType === "sessionStart" || hookType === "agentStop") {
-      if (!fs.existsSync(notifyDir)) {
-        fs.mkdirSync(notifyDir, { recursive: true });
-        debugLog("📁 Created notification directory", { notifyDir });
-      }
+      ensureNotifyDir(notifyDir, debugLog);
 
       // Use same file naming convention as flightpath-claude-hook.js:
       //   sessionStart → {runId|sessionId}-start.json  (runId when FLIGHTPATH_RUN_ID set)
       //   agentStop    → {sessionId}-stop.json
-      const safeSessionId = sessionId ? path.basename(sessionId) : null;
-      const runId = process.env.FLIGHTPATH_RUN_ID
-        ? path.basename(process.env.FLIGHTPATH_RUN_ID)
-        : null;
-      const startPrefix = runId || safeSessionId;
-      const filename = safeSessionId
-        ? hookType === "sessionStart"
-          ? `${startPrefix}-start.json`
-          : `${safeSessionId}-stop.json`
-        : `${hookType}-${Date.now()}.json`;
-      const notifyFile = path.join(notifyDir, filename);
+      const notifyFile =
+        buildNotifyFilePath(notifyDir, sessionId, hookType === "sessionStart") ||
+        path.join(notifyDir, `${hookType}-${Date.now()}.json`);
 
       const notifyData = {
         timestamp: Date.now(),

@@ -31,12 +31,15 @@
  */
 
 const fs = require("fs");
-const path = require("path");
 const {
   initializeLogger,
   readStdinJson,
   maybeWriteHookArtifact,
-  runDecisionHook,
+  dispatchPermissionRequest,
+  requireNotifyDir,
+  requireSessionId,
+  ensureNotifyDir,
+  buildNotifyFilePath,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-gemini-hook";
@@ -54,15 +57,7 @@ function main() {
     env_keys: Object.keys(process.env),
   });
 
-  if (process.argv.length < 3) {
-    const errorMsg = `No notification directory provided. Received ${process.argv.length - 1} argument(s): ${process.argv.slice(2).join(", ")}`;
-    debugLog("❌ FATAL ERROR: " + errorMsg, {
-      argv: process.argv,
-      expected: "node <script> <notifyDir>",
-    });
-    console.error(`${SCRIPT_PREFIX}: ${errorMsg}`);
-    process.exit(1);
-  }
+  requireNotifyDir(SCRIPT_PREFIX, debugLog);
 
   debugLog("📁 Hook configuration", { notifyDir });
 
@@ -122,22 +117,12 @@ function main() {
         process.exit(0);
       }
 
-      if (encodedDecisionHook) {
-        const decisionHookCommand = Buffer.from(
-          encodedDecisionHook,
-          "base64"
-        ).toString("utf8");
-        process.exit(
-          runDecisionHook(
-            decisionHookCommand,
-            JSON.stringify(hookInput),
-            debugLog
-          )
-        );
-      }
-
-      debugLog(`✅ Hook ${hookEvent} completed`);
-      process.exit(0);
+      dispatchPermissionRequest(
+        encodedDecisionHook,
+        hookInput,
+        hookEvent,
+        debugLog
+      );
     }
 
     // BeforeTool / AfterTool don't need notification files
@@ -146,32 +131,15 @@ function main() {
       process.exit(0);
     }
 
-    if (!sessionId) {
-      const errorMsg = `Missing session_id in ${hookEvent} hook input`;
-      debugLog("❌ ERROR: " + errorMsg, { hookInput });
-      console.error(`${SCRIPT_PREFIX}: ${errorMsg}`);
-      process.exit(1);
-    }
+    requireSessionId(sessionId, hookEvent, hookInput, SCRIPT_PREFIX, debugLog);
 
     debugLog("🔑 Session ID extracted", { hookEvent, sessionId });
 
-    if (!fs.existsSync(notifyDir)) {
-      fs.mkdirSync(notifyDir, { recursive: true });
-      debugLog("📁 Created notification directory", { notifyDir });
-    }
+    ensureNotifyDir(notifyDir, debugLog);
 
     // Normalize AfterAgent → "Stop" so NotificationMonitorBase works unchanged
     const isCompletion = hookEvent === "AfterAgent";
-    const safeSessionId = path.basename(sessionId);
-    // For start events, use FLIGHTPATH_RUN_ID as the file prefix when set.
-    const runId = process.env.FLIGHTPATH_RUN_ID
-      ? path.basename(process.env.FLIGHTPATH_RUN_ID)
-      : null;
-    const startPrefix = runId || safeSessionId;
-    const notifyFile = path.join(
-      notifyDir,
-      isCompletion ? `${safeSessionId}-stop.json` : `${startPrefix}-start.json`
-    );
+    const notifyFile = buildNotifyFilePath(notifyDir, sessionId, !isCompletion);
 
     const notifyData = {
       timestamp: Date.now(),

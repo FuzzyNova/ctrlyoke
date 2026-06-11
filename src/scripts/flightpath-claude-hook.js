@@ -30,12 +30,17 @@
  */
 
 const fs = require("fs");
-const path = require("path");
 const {
   initializeLogger,
   readStdinJson,
   maybeWriteHookArtifact,
-  runDecisionHook,
+  dispatchPermissionRequest,
+  requireNotifyDir,
+  requireSessionId,
+  ensureNotifyDir,
+  buildNotifyFilePath,
+  STANDARD_LOGICAL_EVENT_MAP,
+  STANDARD_HANDLED_EVENTS,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-claude-hook";
@@ -53,15 +58,7 @@ function main() {
     env_keys: Object.keys(process.env),
   });
 
-  if (process.argv.length < 3) {
-    const errorMsg = `No notification directory provided. Received ${process.argv.length - 1} argument(s): ${process.argv.slice(2).join(", ")}`;
-    debugLog("❌ FATAL ERROR: " + errorMsg, {
-      argv: process.argv,
-      expected: "node <script> <notifyDir>",
-    });
-    console.error(`${SCRIPT_PREFIX}: ${errorMsg}`);
-    process.exit(1);
-  }
+  requireNotifyDir(SCRIPT_PREFIX, debugLog);
 
   debugLog("📁 Hook configuration", { notifyDir });
 
@@ -72,16 +69,7 @@ function main() {
       allFields: Object.keys(hookInput),
     });
 
-    const HANDLED_EVENTS = new Set([
-      "SessionStart",
-      "Stop",
-      "PreToolUse",
-      "PostToolUse",
-      "UserPromptSubmit",
-      "PermissionRequest",
-    ]);
-
-    if (!HANDLED_EVENTS.has(hookEvent)) {
+    if (!STANDARD_HANDLED_EVENTS.has(hookEvent)) {
       debugLog("⏭️ Ignoring unhandled hook event", { hookEvent });
       process.exit(0);
     }
@@ -92,15 +80,7 @@ function main() {
     // Write hook artifact for preToolUse, postToolUse, userPromptSubmit,
     // permissionRequest — before any stdout/notify file activity.
     // NOTE: PermissionRequest is a decision hook — we must NOT produce stdout.
-    const LOGICAL_EVENT_MAP = {
-      PreToolUse: "preToolUse",
-      PostToolUse: "postToolUse",
-      UserPromptSubmit: "userPromptSubmit",
-      PermissionRequest: "permissionRequest",
-      Stop: "stop",
-      SessionStart: "sessionStart",
-    };
-    const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
+    const logicalEvent = STANDARD_LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
       maybeWriteHookArtifact(
         logicalEvent,
@@ -114,21 +94,12 @@ function main() {
     }
 
     if (hookEvent === "PermissionRequest") {
-      if (encodedDecisionHook) {
-        const decisionHookCommand = Buffer.from(
-          encodedDecisionHook,
-          "base64"
-        ).toString("utf8");
-        process.exit(
-          runDecisionHook(
-            decisionHookCommand,
-            JSON.stringify(hookInput),
-            debugLog
-          )
-        );
-      }
-      debugLog(`✅ Hook ${hookEvent} completed`);
-      process.exit(0);
+      dispatchPermissionRequest(
+        encodedDecisionHook,
+        hookInput,
+        hookEvent,
+        debugLog
+      );
     }
 
     // Events that don't need notification file I/O
@@ -142,33 +113,16 @@ function main() {
     }
 
     // SessionStart and Stop require session_id + notification file
-    if (!sessionId) {
-      const errorMsg = `Missing session_id in ${hookEvent} hook input`;
-      debugLog("❌ ERROR: " + errorMsg, { hookInput });
-      console.error(`${SCRIPT_PREFIX}: ${errorMsg}`);
-      process.exit(1);
-    }
+    requireSessionId(sessionId, hookEvent, hookInput, SCRIPT_PREFIX, debugLog);
 
     debugLog("🔑 Session ID extracted", { hookEvent, sessionId });
 
-    if (!fs.existsSync(notifyDir)) {
-      fs.mkdirSync(notifyDir, { recursive: true });
-      debugLog("📁 Created notification directory", { notifyDir });
-    }
+    ensureNotifyDir(notifyDir, debugLog);
 
-    const safeSessionId = path.basename(sessionId);
-    // For start events, use FLIGHTPATH_RUN_ID as the file prefix when set.
-    // This gives each parallel workflow its own uniquely-named start file so
-    // waitForSessionStart can do a direct lookup instead of a wildcard scan.
-    const runId = process.env.FLIGHTPATH_RUN_ID
-      ? path.basename(process.env.FLIGHTPATH_RUN_ID)
-      : null;
-    const startPrefix = runId || safeSessionId;
-    const notifyFile = path.join(
+    const notifyFile = buildNotifyFilePath(
       notifyDir,
+      sessionId,
       hookEvent === "SessionStart"
-        ? `${startPrefix}-start.json`
-        : `${safeSessionId}-stop.json`
     );
 
     const notifyData = {
