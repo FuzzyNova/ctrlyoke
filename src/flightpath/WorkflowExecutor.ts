@@ -2332,24 +2332,26 @@ export class WorkflowExecutor {
         failureKind === FAILURE_KINDS.PROCESS_EXIT ? true : undefined,
     });
 
-    await this.finalizeAndPersistOutput(
-      context,
-      target,
-      signedStepIndex,
-      failureOutputRecord,
-      `${failureKind} output`
-    );
+    const persistFailureOutput = async (): Promise<void> => {
+      await this.finalizeAndPersistOutput(
+        context,
+        target,
+        signedStepIndex,
+        failureOutputRecord,
+        `${failureKind} output`
+      );
 
-    if (
-      target.kind === FINAL_STEP_PHASES.QUEUE &&
-      context.dashboardProvider &&
-      signedStepIndex >= 0
-    ) {
-      context.dashboardProvider.updateStepStatus(signedStepIndex, {
-        state: STEP_STATUS.FAILED,
-        message: failureReason,
-      });
-    }
+      if (
+        target.kind === FINAL_STEP_PHASES.QUEUE &&
+        context.dashboardProvider &&
+        signedStepIndex >= 0
+      ) {
+        context.dashboardProvider.updateStepStatus(signedStepIndex, {
+          state: STEP_STATUS.FAILED,
+          message: failureReason,
+        });
+      }
+    };
 
     if (errorBehavior.onError === "continue") {
       await this.trackStatusMessage(
@@ -2359,6 +2361,8 @@ export class WorkflowExecutor {
         STATUS_MESSAGE_SEVERITY.WARNING,
         statusTimestampMs
       );
+
+      await persistFailureOutput();
 
       if (target.kind === FINAL_STEP_PHASES.QUEUE) {
         this.promptQueue.finalizeFailedInFlightPrompt(failureReason);
@@ -2388,6 +2392,8 @@ export class WorkflowExecutor {
       STATUS_MESSAGE_SEVERITY.WARNING,
       statusTimestampMs
     );
+
+    await persistFailureOutput();
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
       this.promptQueue.finalizeFailedInFlightPrompt(failureReason);

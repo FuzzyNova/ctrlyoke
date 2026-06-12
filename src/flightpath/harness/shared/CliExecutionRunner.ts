@@ -749,9 +749,22 @@ export class CliExecutionRunner {
                 "Headless CLI execution failed"
             )
           );
+        } else if (result.exitCode !== 0) {
+          this.deps.runtimeState.setFailureReason(
+            this.deps.failureTracker.markProcessExit(
+              result.exitCode,
+              collected.failureMessage ||
+                collected.cliResult.error ||
+                `Process exited with code ${result.exitCode}`
+            )
+          );
         } else {
           this.deps.runtimeState.setFailureReason(
-            collected.cliResult.error || "Headless CLI execution failed"
+            this.deps.failureTracker.markUnknownFailure(
+              collected.failureMessage ||
+                collected.cliResult.error ||
+                "Headless CLI execution failed"
+            )
           );
         }
       }

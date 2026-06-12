@@ -261,6 +261,7 @@ suite("WebviewSettingsSync", () => {
         sessionId: "abc-123",
         mcpServers: ["flightpath"],
         hooks: [{ type: "postToolUse", command: "echo done" }],
+        errorBehavior: { onError: "retry", maxRetries: 3, retryDelayMs: 2000 },
         endCondition: {
           script: "npm test",
           returns: "true",

@@ -28,12 +28,21 @@ export class PromptFileParser {
 
   private loadSchemas(): void {
     try {
-      // Load schema from bundled location (copied to out/schemas/ during build)
-      const promptSchemaPath = path.join(
-        __dirname,
-        "schemas",
-        "prompt-schema.json"
+      // The bundled extension (esbuild, __dirname === out/) gets schemas copied to
+      // out/schemas/. The tsc-compiled test output (__dirname === out/flightpath/)
+      // has no such copy, so fall back to the sibling out/schemas/ directory.
+      const candidatePaths = [
+        path.join(__dirname, "schemas", "prompt-schema.json"),
+        path.join(__dirname, "..", "schemas", "prompt-schema.json"),
+      ];
+      const promptSchemaPath = candidatePaths.find((candidate) =>
+        require("fs").existsSync(candidate)
       );
+      if (!promptSchemaPath) {
+        throw new Error(
+          `prompt-schema.json not found in any of: ${candidatePaths.join(", ")}`
+        );
+      }
 
       // Use synchronous read to avoid race condition where parsePromptFile
       // is called before the schema finishes loading

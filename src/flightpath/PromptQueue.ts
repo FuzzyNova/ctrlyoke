@@ -238,7 +238,8 @@ export class PromptQueue {
     const currentResult = this.state.results[index];
     if (
       currentResult?.status !== STEP_STATUS.SENT &&
-      currentResult?.status !== STEP_STATUS.RUNNING
+      currentResult?.status !== STEP_STATUS.RUNNING &&
+      currentResult?.status !== STEP_STATUS.PENDING
     ) {
       return false;
     }
