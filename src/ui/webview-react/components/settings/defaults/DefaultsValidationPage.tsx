@@ -104,30 +104,6 @@ export function DefaultsValidationPage({
 
   return (
     <div className="space-y-4">
-      <div className="border border-panel-border rounded p-3 group">
-        <div
-          className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg mb-1"
-          title="Default harness failure policy applied to all new workflows."
-        >
-          <ObjectSettingHeader
-            path="defaults.errorBehavior"
-            label="Default Error Behavior"
-            sources={sources}
-            activeScope={activeScope}
-            onReset={onReset}
-          />
-        </div>
-        <p className="text-xs text-description-fg mb-3">
-          Controls what new workflows do when the harness fails. Individual
-          workflows and prompts can override or disable it.
-        </p>
-        <ErrorBehaviorEditor
-          value={wf.errorBehavior}
-          onChange={(updated) => onUpdate("defaults.errorBehavior", updated)}
-          idPrefix="global-default-error"
-        />
-      </div>
-
       {/* Default Pre-Condition */}
       <div className="border border-panel-border rounded p-3 group">
         <div
@@ -183,8 +159,8 @@ export function DefaultsValidationPage({
           />
         </div>
         <p className="text-xs text-description-fg mb-2">
-          Validation that runs after each prompt. Prompts can override or
-          disable it.
+          Use to validate each prompt&apos;s work and determine whether it
+          should be re-run.
         </p>
         <AnimatedSection visible={endConditionEnabled}>
           <ScriptConditionEditor
@@ -194,6 +170,31 @@ export function DefaultsValidationPage({
             idPrefix="global-default-end"
           />
         </AnimatedSection>
+      </div>
+
+      {/* Default Error Behavior */}
+      <div className="border border-panel-border rounded p-3 group">
+        <div
+          className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg mb-1"
+          title="Default harness failure policy applied to all new workflows."
+        >
+          <ObjectSettingHeader
+            path="defaults.errorBehavior"
+            label="Default Error Behavior"
+            sources={sources}
+            activeScope={activeScope}
+            onReset={onReset}
+          />
+        </div>
+        <p className="text-xs text-description-fg mb-3">
+          What to do if the harness process crashes, errors, or exits early:
+          stop, retry, or continue.
+        </p>
+        <ErrorBehaviorEditor
+          value={wf.errorBehavior}
+          onChange={(updated) => onUpdate("defaults.errorBehavior", updated)}
+          idPrefix="global-default-error"
+        />
       </div>
     </div>
   );

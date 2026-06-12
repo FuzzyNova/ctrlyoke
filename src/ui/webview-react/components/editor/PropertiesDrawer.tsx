@@ -715,42 +715,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: Validation */}
         {activePage === DRAWER_PAGES.VALIDATION && (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label
-                htmlFor="prop-error-behavior-mode"
-                className="text-xs font-semibold uppercase text-description-fg"
-                title="Controls what happens when the harness itself fails before the prompt can complete successfully."
-              >
-                Error Behavior
-              </label>
-              <CustomSelect
-                id="prop-error-behavior-mode"
-                value={errorBehaviorMode}
-                onChange={(v) => {
-                  if (v === "inherit") {
-                    setProperty("errorBehavior", undefined);
-                  } else if (v === "none") {
-                    setProperty("errorBehavior", null);
-                  } else {
-                    setProperty("errorBehavior", {
-                      onError: "stop",
-                    } as ErrorBehavior);
-                  }
-                }}
-                options={buildConditionOptions(errorBehaviorInheritLabel)}
-              />
-              <AnimatedSection visible={errorBehaviorMode === "custom"}>
-                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
-                  <ErrorBehaviorEditor
-                    value={properties.errorBehavior}
-                    onChange={(updated) => setProperty("errorBehavior", updated)}
-                    disabled={false}
-                    idPrefix="prop-error"
-                  />
-                </div>
-              </AnimatedSection>
-            </div>
-
             {/* Pre-Condition Section */}
             <div className="space-y-2">
               <label
@@ -842,6 +806,43 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     narrow={isNarrow}
                     disabled={false}
                     idPrefix="prop-end"
+                  />
+                </div>
+              </AnimatedSection>
+            </div>
+
+            {/* Error Behavior Section */}
+            <div className="space-y-2">
+              <label
+                htmlFor="prop-error-behavior-mode"
+                className="text-xs font-semibold uppercase text-description-fg"
+                title="Controls what happens when the harness itself fails before the prompt can complete successfully."
+              >
+                Error Behavior
+              </label>
+              <CustomSelect
+                id="prop-error-behavior-mode"
+                value={errorBehaviorMode}
+                onChange={(v) => {
+                  if (v === "inherit") {
+                    setProperty("errorBehavior", undefined);
+                  } else if (v === "none") {
+                    setProperty("errorBehavior", null);
+                  } else {
+                    setProperty("errorBehavior", {
+                      onError: "stop",
+                    } as ErrorBehavior);
+                  }
+                }}
+                options={buildConditionOptions(errorBehaviorInheritLabel)}
+              />
+              <AnimatedSection visible={errorBehaviorMode === "custom"}>
+                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
+                  <ErrorBehaviorEditor
+                    value={properties.errorBehavior}
+                    onChange={(updated) => setProperty("errorBehavior", updated)}
+                    disabled={false}
+                    idPrefix="prop-error"
                   />
                 </div>
               </AnimatedSection>

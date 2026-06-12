@@ -826,8 +826,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
     toolPerms === null
       ? PERMISSION_MODES.NONE
       : (toolPerms?.mode ?? PERMISSION_MODES.ALLOW_ALL);
-  const effectiveErrorBehavior =
-    workflowProperties.errorBehavior ??
+  const effectiveErrorBehavior = workflowProperties.errorBehavior ??
     globalSettings.defaultErrorBehavior ?? { onError: "stop" as const };
   // Fall back to global settings when workflow doesn't have lists yet
   const effectiveAllowedTools =
@@ -1200,44 +1199,12 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
           {activePage === DRAWER_PAGES.VALIDATION && (
             <div className="space-y-4">
+              {/* Pre-Condition Section */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label
-                    htmlFor="settings-error-on-error"
-                    className="text-xs font-semibold uppercase text-description-fg"
-                    title="Controls what happens when the harness itself fails before prompt validation completes."
-                  >
-                    Error Behavior
-                  </label>
-                  <SetAsDefaultButton
-                    property="errorBehavior"
-                    show={isDifferentFromGlobal("errorBehavior")}
-                    onSetDefault={() =>
-                      handleSetAsDefault(
-                        "errorBehavior",
-                        workflowProperties.errorBehavior
-                      )
-                    }
-                  />
-                </div>
-                <p className="text-xs text-description-fg mb-3">
-                  Decide whether harness failures stop the workflow, retry the
-                  current step, or continue to the next step.
-                </p>
-                <ErrorBehaviorEditor
-                  value={effectiveErrorBehavior}
-                  onChange={handleErrorBehaviorChange}
-                  idPrefix="settings-error"
-                />
-              </div>
-
-              {/* Pre-Condition Section */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <label
                     htmlFor="settings-pre-condition-enabled"
                     className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer"
-                    title="Runs a script before each prompt. Use to gate execution based on a condition."
                   >
                     <input
                       type="checkbox"
@@ -1249,7 +1216,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       }
                       className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
                     />
-                    Enable Pre-Condition
+                    Pre-Condition
                   </label>
                   {preConditionEnabled && (
                     <SetAsDefaultButton
@@ -1264,6 +1231,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   )}
                 </div>
+                <p className="text-xs text-description-fg mb-3">
+                  Runs a script before each prompt. Use to gate execution based
+                  on a condition.
+                </p>
 
                 {/* Pre-condition fields — animated slide-down on show/hide */}
                 <AnimatedSection visible={preConditionEnabled}>
@@ -1284,13 +1255,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
                   </div>
                 </AnimatedSection>
               </div>
+
               {/* End Condition Section */}
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-2">
                   <label
                     htmlFor="settings-end-condition-enabled"
                     className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg cursor-pointer"
-                    title="Validation runs after each prompt completes. Individual prompts can override or disable this."
                   >
                     <input
                       type="checkbox"
@@ -1302,7 +1273,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       }
                       className="w-4 h-4 accent-focus-border cursor-pointer mt-1"
                     />
-                    Enable End Condition
+                    End Condition
                   </label>
                   {endConditionEnabled && (
                     <SetAsDefaultButton
@@ -1317,6 +1288,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   )}
                 </div>
+                <p className="text-xs text-description-fg mb-3">
+                  Use to validate the prompt&apos;s work and determine whether
+                  it should be re-run.
+                </p>
 
                 {/* End condition fields — animated slide-down on show/hide */}
                 <AnimatedSection visible={endConditionEnabled}>
@@ -1336,6 +1311,37 @@ const WorkflowPropertiesPanelInner: React.FC<{
                     />
                   </div>
                 </AnimatedSection>
+              </div>
+
+              {/* Error Behavior Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label
+                    htmlFor="settings-error-on-error"
+                    className="text-xs font-semibold uppercase text-description-fg"
+                  >
+                    Error Behavior
+                  </label>
+                  <SetAsDefaultButton
+                    property="errorBehavior"
+                    show={isDifferentFromGlobal("errorBehavior")}
+                    onSetDefault={() =>
+                      handleSetAsDefault(
+                        "errorBehavior",
+                        workflowProperties.errorBehavior
+                      )
+                    }
+                  />
+                </div>
+                <p className="text-xs text-description-fg mb-3">
+                  What to do if the harness process crashes, errors, or exits
+                  early: stop, retry, or continue.
+                </p>
+                <ErrorBehaviorEditor
+                  value={effectiveErrorBehavior}
+                  onChange={handleErrorBehaviorChange}
+                  idPrefix="settings-error"
+                />
               </div>
             </div>
           )}
