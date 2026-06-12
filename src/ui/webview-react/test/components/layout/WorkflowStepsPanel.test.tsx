@@ -12,6 +12,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { FINAL_STEP_PHASES, MESSAGE_TYPES } from "@/types/messages";
+import { EXECUTION_STATES, STEP_STATUS } from "@/types/messages";
 
 function resetStores() {
   useWorkflowStore.getState().resetWorkflow();
@@ -161,5 +162,84 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
         },
       })
     );
+  });
+
+  it("shows detailed status counts in the header tooltip and keeps the divider unlabeled", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        { prompt: "Completed step" },
+        { prompt: "Failed step" },
+        { prompt: "Skipped step" },
+        { prompt: "Running step" },
+        { prompt: "Pending step" },
+      ],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 3,
+      results: [
+        { status: STEP_STATUS.COMPLETED },
+        { status: STEP_STATUS.FAILED },
+        { status: STEP_STATUS.SKIPPED },
+      ],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      screen.getByTitle(
+        "Completed: 1 | Failed: 1 | Skipped: 1 | Cancelled: 0 | Running: 1 | Sent: 0 | Pending: 1"
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/completed .* failed .* skipped/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows compact runtime stats for failed steps", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        {
+          prompt: "Failed step",
+          _runtime: { elapsed: 12.3, sessionId: "session-abc123" },
+        } as any,
+        { prompt: "Current step" },
+      ],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.FAILED }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(screen.getByText("12.3s")).toBeInTheDocument();
+    expect(screen.getByText("abc123")).toBeInTheDocument();
+  });
+
+  it("shows a continuation message for failed steps that the workflow moved past", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [
+        {
+          prompt: "Failed step",
+          _runtime: { failureMessage: "Rate limited by harness" },
+        } as any,
+        { prompt: "Current step" },
+      ],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.FAILED }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      screen.getByText(
+        "Workflow continued after failure: Rate limited by harness"
+      )
+    ).toBeInTheDocument();
   });
 });

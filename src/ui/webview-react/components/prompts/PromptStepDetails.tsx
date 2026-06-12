@@ -53,6 +53,10 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
   runtimeMeta,
   overrides,
 }) => {
+  const showCompactStats =
+    status === STEP_STATUS.COMPLETED ||
+    status === STEP_STATUS.FAILED ||
+    status === STEP_STATUS.CANCELLED;
   const durationSeconds =
     details?.duration ?? latestOutput?.elapsed ?? runtimeMeta?.elapsed;
   const sessionId =
@@ -125,8 +129,8 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
         </div>
       )}
 
-      {/* Compact stats — for completed prompts: [duration] [sessionId {copy}] */}
-      {status === STEP_STATUS.COMPLETED &&
+      {/* Compact stats — for terminal prompts: [duration] [sessionId {copy}] */}
+      {showCompactStats &&
         (sessionId || durationSeconds !== undefined) && (
           <div
             className={`mt-0.5 flex items-center gap-1 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}

@@ -233,7 +233,8 @@ const WorkflowStepsPanelInner: React.FC<{
     const isTerminalStatus =
       status === STEP_STATUS.COMPLETED ||
       status === STEP_STATUS.FAILED ||
-      status === STEP_STATUS.CANCELLED;
+      status === STEP_STATUS.CANCELLED ||
+      status === STEP_STATUS.SKIPPED;
     if (
       (step._runtime?.harness ?? step._runtime?.model) ||
       (isTerminalStatus && step._runtime != null)
@@ -597,15 +598,23 @@ const WorkflowStepsPanelInner: React.FC<{
 
   // Build details object for a step
   const getStepDetails = (
-    _step: (typeof steps)[0],
-    index: number
+    step: (typeof steps)[0],
+    index: number,
+    status: StepStatus
   ): StepDetails => {
-    void _step; // Reserved for future use (end condition results)
     const output = getLatestOutput(index);
     const details: StepDetails = {};
 
     if (output?.elapsed) {
       details.duration = output.elapsed;
+    }
+
+    if (status === STEP_STATUS.FAILED && index < currentStep) {
+      const failureMessage =
+        !isScriptStep(step) ? step._runtime?.failureMessage : undefined;
+      details.message = failureMessage
+        ? `Workflow continued after failure: ${failureMessage}`
+        : "Workflow continued after this step failed.";
     }
 
     // TODO: End condition results would come from workflow state
@@ -619,11 +628,6 @@ const WorkflowStepsPanelInner: React.FC<{
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const canReorder = canChangeStartPosition && steps.length - currentStep > 1;
-
-  const completedCount = steps
-    .slice(0, currentStep)
-    .filter((p, i) => getPromptStatus(p, i) !== STEP_STATUS.SKIPPED).length;
-  const skippedCount = currentStep - completedCount;
 
   // Local sortable ID state — dnd-kit owns this for smooth drop animations.
   // IDs are stable absolute indices ("step-pending-N") so dnd-kit can track
@@ -821,7 +825,7 @@ const WorkflowStepsPanelInner: React.FC<{
                 const slotNumber = index + 1;
                 const status = getPromptStatus(step, index);
                 const retryState = retryStates[index];
-                const details = getStepDetails(step, index);
+                const details = getStepDetails(step, index, status);
                 const latestOutput = getLatestOutput(index);
                 const isSelected =
                   selectionTarget.kind === FINAL_STEP_PHASES.QUEUE &&
@@ -896,12 +900,7 @@ const WorkflowStepsPanelInner: React.FC<{
             })()}
 
             {/* Boundary bar between done and pending */}
-            {currentStep > 0 && currentStep < steps.length && (
-              <BoundaryBar
-                completedCount={completedCount}
-                skippedCount={skippedCount}
-              />
-            )}
+            {currentStep > 0 && currentStep < steps.length && <BoundaryBar />}
 
             {/* Sortable pending steps (currentStep..end) — includes current step */}
             <DndContext
@@ -922,7 +921,7 @@ const WorkflowStepsPanelInner: React.FC<{
                   const isCurrentStep = visualIdx === 0;
                   const status = getPromptStatus(step, index);
                   const retryState = retryStates[index];
-                  const details = getStepDetails(step, index);
+                  const details = getStepDetails(step, index, status);
                   const latestOutput = getLatestOutput(index);
                   const isCurrent = isRunning && isCurrentStep;
                   const isSelected =

@@ -59,8 +59,8 @@ export const STATUS_COLORS: Record<StepStatus, string> = {
   [STEP_STATUS.RUNNING]: "text-charts-blue",
   [STEP_STATUS.COMPLETED]: "text-indicator-success",
   [STEP_STATUS.FAILED]: "text-indicator-error",
-  [STEP_STATUS.CANCELLED]: "text-description-fg",
-  [STEP_STATUS.SKIPPED]: "text-description-fg",
+  [STEP_STATUS.CANCELLED]: "text-indicator-running",
+  [STEP_STATUS.SKIPPED]: "text-indicator-running",
 };
 
 /**

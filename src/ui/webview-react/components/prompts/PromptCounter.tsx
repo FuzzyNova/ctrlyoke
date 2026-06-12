@@ -1,7 +1,8 @@
 import React from "react";
-import { useWorkflowStore } from "../../store/workflowStore";
-import { STEP_STATUS } from "../../types/messages";
-import { isWorkflowActive } from "../../utils/status";
+import { useWorkflowStore } from "@store/workflowStore";
+import { usePromptStatus } from "@hooks/index";
+import { STEP_STATUS } from "@/types/messages";
+import { isWorkflowActive } from "@utils/status";
 
 interface PromptCounterProps {
   className?: string;
@@ -20,11 +21,37 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   narrow = false,
 }) => {
   const { steps: prompts, totalSteps, executionState } = useWorkflowStore();
+  const getPromptStatus = usePromptStatus();
+
+  const statusCounts = prompts.reduce(
+    (counts, prompt, index) => {
+      const status = getPromptStatus(prompt, index);
+      counts[status] = (counts[status] ?? 0) + 1;
+      return counts;
+    },
+    {
+      [STEP_STATUS.COMPLETED]: 0,
+      [STEP_STATUS.FAILED]: 0,
+      [STEP_STATUS.SKIPPED]: 0,
+      [STEP_STATUS.CANCELLED]: 0,
+      [STEP_STATUS.RUNNING]: 0,
+      [STEP_STATUS.SENT]: 0,
+      [STEP_STATUS.PENDING]: 0,
+    } as Record<string, number>
+  );
 
   // Calculate completed count based on prompt statuses
-  const completedCount = prompts.filter(
-    (p) => (p as any).status === STEP_STATUS.COMPLETED
-  ).length;
+  const completedCount = statusCounts[STEP_STATUS.COMPLETED];
+  const tooltipParts = [
+    `Completed: ${statusCounts[STEP_STATUS.COMPLETED]}`,
+    `Failed: ${statusCounts[STEP_STATUS.FAILED]}`,
+    `Skipped: ${statusCounts[STEP_STATUS.SKIPPED]}`,
+    `Cancelled: ${statusCounts[STEP_STATUS.CANCELLED]}`,
+    `Running: ${statusCounts[STEP_STATUS.RUNNING]}`,
+    `Sent: ${statusCounts[STEP_STATUS.SENT]}`,
+    `Pending: ${statusCounts[STEP_STATUS.PENDING]}`,
+  ];
+  const tooltip = tooltipParts.join(" | ");
 
   // Determine if workflow is active
   const isActive = isWorkflowActive(executionState);
@@ -37,7 +64,10 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   // During execution: Show "Completed N of M" (or "N/M" when narrow)
   if (isActive && totalSteps > 0) {
     return (
-      <span className={`text-xs text-description-fg ${className}`}>
+      <span
+        className={`text-xs text-description-fg ${className}`}
+        title={tooltip}
+      >
         {narrow
           ? `${completedCount}/${totalSteps}`
           : `Completed ${completedCount} of ${totalSteps}`}
@@ -47,7 +77,10 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
 
   // Idle state: Show count (or just the number when narrow)
   return (
-    <span className={`text-xs text-description-fg ${className}`}>
+    <span
+      className={`text-xs text-description-fg ${className}`}
+      title={tooltip}
+    >
       {narrow
         ? totalSteps
         : `${totalSteps} ${totalSteps === 1 ? "step" : "steps"}`}

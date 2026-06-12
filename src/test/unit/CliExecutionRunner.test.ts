@@ -224,10 +224,11 @@ suite("CliExecutionRunner", () => {
     assert.match(failureReason, /discovering the session log/iu);
   });
 
-  test("should send inject prompt and carriage return as separate PTY writes", async function () {
+  test("should send inject prompt in chunks with repeated focus and submit pulses", async function () {
     this.timeout(5_000);
 
     const writes: string[] = [];
+    const prompt = "x".repeat(300);
     const { runner, failureTracker } = createRunner({
       writeToCurrentPtySession: (text) => {
         writes.push(text);
@@ -248,10 +249,17 @@ suite("CliExecutionRunner", () => {
     };
 
     const result = await runner.executeInteractiveInject(
-      new CliExecutionSession({ prompt: { prompt: "send this" } })
+      new CliExecutionSession({ prompt: { prompt } })
     );
 
-    assert.deepStrictEqual(writes, ["\x1b[I", "send this", "\x1b[I", "\r"]);
+    assert.deepStrictEqual(writes, [
+      "\x1b[I",
+      "\x1b[I",
+      "x".repeat(256),
+      "x".repeat(44),
+      "\r",
+      "\r",
+    ]);
     assert.deepStrictEqual(result, { injected: false });
   });
 

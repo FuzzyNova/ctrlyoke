@@ -1,5 +1,6 @@
 import React from "react";
 import { STEP_STATUS, type StepStatus } from "../../types/messages";
+import { getStatusColorClass } from "@utils/status";
 
 interface StatusIconProps {
   status: StepStatus;
@@ -30,42 +31,42 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
       case STEP_STATUS.PENDING:
         return {
           icon: "codicon-circle-outline",
-          colorClass: "text-description-fg",
+          colorClass: getStatusColorClass(STEP_STATUS.PENDING),
         };
       case STEP_STATUS.SENT:
         return {
           icon: "codicon-arrow-up",
-          colorClass: "text-charts-blue",
+          colorClass: getStatusColorClass(STEP_STATUS.SENT),
         };
       case STEP_STATUS.RUNNING:
         return {
           icon: "codicon-play",
-          colorClass: "text-charts-blue",
+          colorClass: getStatusColorClass(STEP_STATUS.RUNNING),
         };
       case STEP_STATUS.COMPLETED:
         return {
           icon: "codicon-pass",
-          colorClass: "text-indicator-success",
+          colorClass: getStatusColorClass(STEP_STATUS.COMPLETED),
         };
       case STEP_STATUS.FAILED:
         return {
           icon: "codicon-error",
-          colorClass: "text-indicator-error",
+          colorClass: getStatusColorClass(STEP_STATUS.FAILED),
         };
       case STEP_STATUS.CANCELLED:
         return {
           icon: "codicon-circle-slash",
-          colorClass: "text-description-fg",
+          colorClass: getStatusColorClass(STEP_STATUS.CANCELLED),
         };
       case STEP_STATUS.SKIPPED:
         return {
           icon: "codicon-debug-step-over",
-          colorClass: "text-description-fg",
+          colorClass: getStatusColorClass(STEP_STATUS.SKIPPED),
         };
       default:
         return {
           icon: "codicon-circle-outline",
-          colorClass: "text-description-fg",
+          colorClass: getStatusColorClass(STEP_STATUS.PENDING),
         };
     }
   };

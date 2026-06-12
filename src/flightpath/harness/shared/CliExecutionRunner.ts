@@ -118,6 +118,14 @@ export interface InteractiveInjectContext {
 }
 
 export class CliExecutionRunner {
+  private static readonly INJECT_FOCUS_PULSE_COUNT = 2;
+  private static readonly INJECT_PROMPT_CHUNK_SIZE = 256;
+  private static readonly INJECT_FOCUS_SETTLE_DELAY_MS = 50;
+  private static readonly INJECT_CHUNK_DELAY_MS = 20;
+  private static readonly INJECT_PRE_SUBMIT_DELAY_MS = 200;
+  private static readonly INJECT_SUBMIT_PULSE_COUNT = 2;
+  private static readonly INJECT_SUBMIT_DELAY_MS = 75;
+
   /**
    * Context from the most recent successful interactive execution.
    * Set after `executeInTerminal` succeeds and cleared on reset/cancel.
@@ -211,47 +219,62 @@ export class CliExecutionRunner {
     // TUIs that don't use focus tracking (Claude CLI) safely ignore the sequence.
     // "\r" (CR, 0x0D) is the submit key — same byte xterm.js sends when Enter is pressed.
     // "\n" (LF) acts as a newline in multi-line input boxes, NOT submit.
-    // Send focus-in first, then wait a tick for the TUI to switch its input mode,
-    // send the text, wait another tick, then send Enter. If control/input bytes
-    // arrive in the same PTY write some TUIs treat CR as a literal newline
-    // instead of the submit key.
+    // Send focus-in twice, then stream the prompt in smaller chunks so an idling
+    // TUI has multiple chances to attach its input handler before the full prompt
+    // arrives. Finally, send Enter twice because duplicate submits are benign
+    // while an occasional dropped submit is not.
     const focusIn = "\x1b[I";
     const submit = "\r";
-    Log.debug(
-      `[inject] writing focus-in, text, then submit to PTY: ${JSON.stringify([focusIn, session.promptArgument, submit])} hex=${Buffer.from(focusIn + session.promptArgument + submit).toString("hex")}`
+    const promptChunks = this.chunkInjectPrompt(
+      session.promptArgument,
+      CliExecutionRunner.INJECT_PROMPT_CHUNK_SIZE
     );
-    const focused =
-      this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
-    if (!focused) {
-      Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
-      return { injected: false };
+    Log.debug(
+      `[inject] writing focus-in pulses, ${promptChunks.length} prompt chunk(s), then submit pulses to PTY: ${JSON.stringify([focusIn, ...promptChunks, submit, submit])} hex=${Buffer.from(focusIn.repeat(CliExecutionRunner.INJECT_FOCUS_PULSE_COUNT) + session.promptArgument + submit.repeat(CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT)).toString("hex")}`
+    );
+
+    for (
+      let pulse = 0;
+      pulse < CliExecutionRunner.INJECT_FOCUS_PULSE_COUNT;
+      pulse += 1
+    ) {
+      const focused =
+        this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
+      if (!focused) {
+        Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
+        return { injected: false };
+      }
+      await this.delay(CliExecutionRunner.INJECT_FOCUS_SETTLE_DELAY_MS);
     }
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
-    const promptWritten =
-      this.deps.transportCoordinator.writeToCurrentPtySession(
-        session.promptArgument
-      );
-
-    if (!promptWritten) {
-      Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
-      return { injected: false };
+    for (const chunk of promptChunks) {
+      const promptWritten =
+        this.deps.transportCoordinator.writeToCurrentPtySession(chunk);
+      if (!promptWritten) {
+        Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
+        return { injected: false };
+      }
+      await this.delay(CliExecutionRunner.INJECT_CHUNK_DELAY_MS);
     }
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    await this.delay(CliExecutionRunner.INJECT_PRE_SUBMIT_DELAY_MS);
 
-    // Re-send focus-in immediately before submit in case the terminal lost focus
-    // during the 200ms window (e.g., user clicked elsewhere). Without this,
-    // some TUIs silently drop the CR because their input handler is deactivated.
-    this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    for (
+      let pulse = 0;
+      pulse < CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT;
+      pulse += 1
+    ) {
+      const submitWritten =
+        this.deps.transportCoordinator.writeToCurrentPtySession(submit);
 
-    const submitWritten =
-      this.deps.transportCoordinator.writeToCurrentPtySession(submit);
+      if (!submitWritten) {
+        Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
+        return { injected: false };
+      }
 
-    if (!submitWritten) {
-      Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
-      return { injected: false };
+      if (pulse < CliExecutionRunner.INJECT_SUBMIT_PULSE_COUNT - 1) {
+        await this.delay(CliExecutionRunner.INJECT_SUBMIT_DELAY_MS);
+      }
     }
 
     // Yield to the event loop so any pending PTY exit events from the prior prompt
@@ -679,5 +702,21 @@ export class CliExecutionRunner {
       }
       return collected.success;
     };
+  }
+
+  private chunkInjectPrompt(prompt: string, chunkSize: number): string[] {
+    if (prompt.length <= chunkSize) {
+      return [prompt];
+    }
+
+    const chunks: string[] = [];
+    for (let index = 0; index < prompt.length; index += chunkSize) {
+      chunks.push(prompt.slice(index, index + chunkSize));
+    }
+    return chunks;
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, ms));
   }
 }

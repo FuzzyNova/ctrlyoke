@@ -15,6 +15,7 @@ import {
   canStopExecution,
   STATUS_ICONS,
   STATUS_COLORS,
+  getStepAccentClass,
 } from "@utils/status";
 import { STEP_STATUS, EXECUTION_STATES } from "@/types/messages";
 
@@ -68,6 +69,21 @@ describe("getStatusLabel", () => {
 
   it('returns "Unknown" for unrecognised status', () => {
     expect(getStatusLabel("mystery" as never)).toBe("Unknown");
+  });
+});
+
+describe("getStepAccentClass", () => {
+  it("uses warning accents for cancelled and skipped steps", () => {
+    expect(getStepAccentClass(STEP_STATUS.CANCELLED)).toBe(
+      "bg-indicator-running"
+    );
+    expect(getStepAccentClass(STEP_STATUS.SKIPPED)).toBe(
+      "bg-indicator-running"
+    );
+  });
+
+  it("uses error accents for failed steps", () => {
+    expect(getStepAccentClass(STEP_STATUS.FAILED)).toBe("bg-indicator-error");
   });
 });
 

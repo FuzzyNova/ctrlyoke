@@ -82,6 +82,7 @@ interface WorkflowStepProps {
     elapsed?: number;
     contextWindowUsed?: number;
     contextWindowSize?: number;
+    failureMessage?: string;
   };
   /** Drag handle props from dnd-kit sortable */
   dragHandleProps?: {

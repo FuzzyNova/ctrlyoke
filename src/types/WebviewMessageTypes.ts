@@ -280,6 +280,7 @@ export interface PromptStep {
     elapsed?: number;
     contextWindowUsed?: number;
     contextWindowSize?: number;
+    failureMessage?: string;
   };
   // Status for UI display
   status?: StepStatus;
