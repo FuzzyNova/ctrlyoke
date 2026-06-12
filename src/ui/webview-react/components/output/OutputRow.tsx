@@ -38,6 +38,7 @@ import {
   formatExecutionBadge,
   formatTime,
   getFirstWords,
+  isUserStoppedMessage,
 } from "@utils/outputUtils";
 import {
   getOutputRowSearchSegments,
@@ -1083,17 +1084,24 @@ function OutputRowComponent({
         );
         break;
       case "error":
+        {
+          const isWarning = isUserStoppedMessage(row.errorMessage);
+          const borderClass = isWarning
+            ? "border-l-severity-warning text-warning-fg"
+            : "border-l-severity-error text-error-fg";
+          const label = isWarning ? "Warning" : "Error";
         content = (
           <div
-            className={`${OUTPUT_BLOCK_BASE} border-l-severity-error text-error-fg`}
+            className={`${OUTPUT_BLOCK_BASE} ${borderClass}`}
           >
             {row.timestamp && (
               <span className="opacity-70">[{row.timestamp}] </span>
             )}
-            Error: {highlightText(row.errorMessage, getFieldMatches("error"))}
+            {label}: {highlightText(row.errorMessage, getFieldMatches("error"))}
           </div>
         );
         break;
+        }
       case "plain-response": {
         const responseMatches = getFieldMatches("response");
         content = (

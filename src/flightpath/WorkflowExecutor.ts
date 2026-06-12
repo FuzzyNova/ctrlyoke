@@ -2111,8 +2111,6 @@ export class WorkflowExecutor {
       // Workflow was stopped by the user. Flush whatever partial output is available
       // so the history file is not empty and the user can resume from the stopped state.
       const failureOutput = integration.getLastFailureOutput?.();
-      const failureReason =
-        integration.getLastFailureReason() || "Workflow stopped by user";
       const stoppedOutput = this.createFinalCliOutput({
         context,
         integration,
@@ -2122,7 +2120,6 @@ export class WorkflowExecutor {
         runIndex,
         attemptIndex,
         responseText: failureOutput,
-        errorMessage: failureReason,
       });
       const statusTimestampMs = Math.max(
         Date.now(),

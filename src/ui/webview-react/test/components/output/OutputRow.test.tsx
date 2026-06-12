@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
-import type { StructuredEventRow } from "@utils/outputRows";
+import type { OutputRenderRow, StructuredEventRow } from "@utils/outputRows";
 import type { OutputFindMatch } from "@utils/outputFind";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES } from "@/types/messages";
@@ -263,5 +263,23 @@ describe("OutputRow auto-expand on hidden active match", () => {
       "error",
       true
     );
+  });
+
+  it("renders legacy user-stop error rows as warnings", () => {
+    const row: OutputRenderRow = {
+      key: "row-error",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "error",
+      errorMessage: "Stopped by user",
+      timestamp: "12:03:21",
+    };
+
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+
+    expect(container).toHaveTextContent("[12:03:21] Warning: Stopped by user");
+    expect(container).not.toHaveTextContent("[12:03:21] Error: Stopped by user");
   });
 });

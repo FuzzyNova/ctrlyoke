@@ -318,4 +318,19 @@ describe("CliOutput", () => {
       container.querySelector("#fp-diff-q-0-r1-a0-e0")
     ).toBeInTheDocument();
   });
+
+  it("renders legacy user-stop error messages as warnings", () => {
+    const output: CliOutputType = {
+      prompt: "stop prompt",
+      response: "",
+      elapsed: 0,
+      isStreaming: false,
+      errorMessage: "Stopped by user",
+    };
+
+    render(<CliOutput output={output} stepIndex={0} attemptIndex={0} />);
+
+    expect(screen.getByText("Warning: Stopped by user")).toBeInTheDocument();
+    expect(screen.queryByText("Error: Stopped by user")).not.toBeInTheDocument();
+  });
 });

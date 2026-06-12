@@ -422,6 +422,54 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(runtimeAfterError?.status, STEP_STATUS.FAILED);
   });
 
+  test("persists user-stopped output without an error message and emits a warning status", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    const captureCalls: Array<{ stepIndex: number; output: any }> = [];
+    const statusCalls: Array<{
+      stepIndex: number;
+      message: string;
+      severity: string;
+    }> = [];
+
+    integration.lastFailureOutput = "partial response before stop";
+    integration.onSend = async () => {
+      (integration as any).lastFailureReason = "Stopped by user";
+      await requestQueueStop(queue);
+      return { success: false };
+    };
+
+    const context = makeContext(integration);
+    context.captureCompletedOutput = (stepIndex, output) => {
+      captureCalls.push({ stepIndex, output });
+    };
+    context.onStatusMessage = (stepIndex, message, severity) => {
+      statusCalls.push({ stepIndex, message, severity });
+    };
+
+    queue.loadPrompts({
+      steps: [{ prompt: "stop-me" }, { prompt: "after-stop" }],
+    });
+
+    await executor.execute(integration, context);
+
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(captureCalls.length, 1);
+    assert.strictEqual(captureCalls[0].stepIndex, 0);
+    assert.strictEqual(captureCalls[0].output.response, "partial response before stop");
+    assert.strictEqual(captureCalls[0].output.errorMessage, undefined);
+
+    assert.deepStrictEqual(statusCalls, [
+      {
+        stepIndex: 0,
+        message: "Stopped by user",
+        severity: "warning",
+      },
+    ]);
+  });
+
   test("emits finalStep status and output updates to dashboard sink", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);

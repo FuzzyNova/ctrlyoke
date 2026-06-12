@@ -113,6 +113,19 @@ export function extractCliOutputText(
 }
 
 /**
+ * Detects user-initiated stop/cancel messages that should render as warnings
+ * rather than hard errors.
+ */
+export function isUserStoppedMessage(message: string | undefined): boolean {
+  if (!message) return false;
+  const normalized = message.trim().toLowerCase();
+  return (
+    normalized === "stopped by user" ||
+    normalized === "workflow stopped by user"
+  );
+}
+
+/**
  * Extract key parameters from a tool call for compact display.
  */
 export function extractKeyParameters(

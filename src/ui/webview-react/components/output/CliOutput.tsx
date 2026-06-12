@@ -5,6 +5,7 @@ import {
   formatExecutionBadge,
   formatTime,
   getFirstWords,
+  isUserStoppedMessage,
   isStructuredPatchMalformed,
 } from "@utils/outputUtils";
 import { normalizeCliEvents } from "@root/utils/CliEventNormalizer";
@@ -173,6 +174,26 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
     </div>
   );
 };
+
+function renderOutputMessage(
+  message: string | undefined,
+  timestamp?: string
+): React.ReactNode {
+  if (!message) return null;
+
+  const isWarning = isUserStoppedMessage(message);
+  const borderClass = isWarning
+    ? "border-l-severity-warning text-warning-fg"
+    : "border-l-severity-error text-error-fg";
+  const label = isWarning ? "Warning" : "Error";
+
+  return (
+    <div className={`${OUTPUT_BLOCK_BASE} ${borderClass}`}>
+      {timestamp && <span className="opacity-70">[{timestamp}] </span>}
+      {label}: {message}
+    </div>
+  );
+}
 
 function getSnapshotStructuredPatch(
   path: string,
@@ -1202,13 +1223,7 @@ export const CliOutput = memo<CliOutputProps>(
           )}
 
           {/* Error message */}
-          {output.errorMessage && (
-            <div
-              className={`${OUTPUT_BLOCK_BASE} border-l-severity-error text-error-fg`}
-            >
-              Error: {output.errorMessage}
-            </div>
-          )}
+          {renderOutputMessage(output.errorMessage)}
 
           {/* Script stdout/stderr — plain text (or live streaming chunk) */}
           {(output.isStreaming && streamingChunk
@@ -1362,14 +1377,7 @@ export const CliOutput = memo<CliOutputProps>(
         )}
 
         {/* Error message */}
-        {output.errorMessage && (
-          <div
-            className={`${OUTPUT_BLOCK_BASE} border-l-severity-error text-error-fg`}
-          >
-            {timestamp && <span className="opacity-70">[{timestamp}] </span>}
-            Error: {output.errorMessage}
-          </div>
-        )}
+        {renderOutputMessage(output.errorMessage, timestamp)}
 
         {/* Response (structured or plain) */}
         {responseNode}
