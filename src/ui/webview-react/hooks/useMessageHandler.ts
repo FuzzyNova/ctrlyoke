@@ -159,6 +159,7 @@ function normalizeWorkflowProperties(
     hooks: workflowProperties?.hooks,
     endCondition: workflowProperties?.endCondition,
     preCondition: workflowProperties?.preCondition,
+    errorBehavior: workflowProperties?.errorBehavior,
     priorContext: workflowProperties?.priorContext,
     additionalArgs: workflowProperties?.additionalArgs,
     toolPermissions: workflowProperties?.toolPermissions,

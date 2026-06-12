@@ -188,6 +188,7 @@ export function useOutputVirtualization({
   );
   const nonVirtualRenderIdentityRef = useRef<string | null>(null);
   const lastVirtualRangeRef = useRef<string>("");
+  const isBulkRemeasureInProgressRef = useRef(false);
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
   const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const pendingMeasurementFlushTimerRef = useRef<ReturnType<
@@ -454,6 +455,14 @@ export function useOutputVirtualization({
   getVirtualItemsRef.current = () => rowVirtualizer.getVirtualItems();
 
   rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta) => {
+    // During a bulk remeasure (rowVirtualizer.measure()), every visible row can
+    // report a size delta in the same synchronous pass. Each call below would
+    // otherwise invoke applyScrollTargetRef, which can commit a new scroll
+    // target and cascade into React's nested-update limit (error #185).
+    // performBulkRemeasure applies the scroll target once after the pass settles.
+    if (isBulkRemeasureInProgressRef.current) {
+      return false;
+    }
     const now = performance.now();
     const hasRecentScrollEvent =
       lastScrollEventAtRef.current != null &&
@@ -490,6 +499,19 @@ export function useOutputVirtualization({
     }
     return shouldAdjust;
   };
+
+  // Wraps rowVirtualizer.measure() so the resulting burst of per-row size-change
+  // notifications doesn't each trigger applyScrollTargetRef (see
+  // shouldAdjustScrollPositionOnItemSizeChange above). The scroll target is
+  // reconciled once, after the measure pass and its re-render have settled.
+  const performBulkRemeasure = useCallback(() => {
+    isBulkRemeasureInProgressRef.current = true;
+    rowVirtualizer.measure();
+    requestAnimationFrame(() => {
+      isBulkRemeasureInProgressRef.current = false;
+      applyScrollTargetRef.current("bulk-remeasure", { force: true });
+    });
+  }, [applyScrollTargetRef, rowVirtualizer]);
 
   const measureRowElement = useCallback(
     (element: HTMLDivElement | null): void | (() => void) => {
@@ -707,9 +729,9 @@ export function useOutputVirtualization({
     measurementCacheRef.current.clear();
     setMeasurementVersion((v) => v + 1);
     if (isOutputVirtualized) {
-      rowVirtualizer.measure();
+      performBulkRemeasure();
     }
-  }, [isOutputVirtualized, rowVirtualizer]);
+  }, [isOutputVirtualized, performBulkRemeasure]);
 
   useEffect(() => {
     if (nonVirtualRenderFrameRef.current !== null) {
@@ -774,17 +796,17 @@ export function useOutputVirtualization({
     }
 
     requestAnimationFrame(() => {
-      rowVirtualizer.measure();
+      performBulkRemeasure();
     });
     // rows.length is intentionally excluded. rowVirtualizer.measure() clears
     // itemSizeCache and re-estimates every row from bucket estimates; doing
     // that on every appended row can momentarily mismatch dozens of
-    // already-rendered rows at once (each producing its own virtualizer
-    // notify), which during a cold/long session can cascade past React's
-    // nested-update limit (error #185). New rows are measured individually
-    // as they mount, so a full re-measure is only needed when the output
-    // pane transitions from hidden/collapsed back into view.
-  }, [activeOutputTab, isOutputVirtualized, outputCollapsed, rowVirtualizer]);
+    // already-rendered rows at once. New rows are measured individually as
+    // they mount, so a full re-measure is only needed when the output pane
+    // transitions from hidden/collapsed back into view. performBulkRemeasure
+    // suppresses the per-row scroll-correction cascade from that mismatch
+    // (error #185) and reconciles the scroll target once afterward.
+  }, [activeOutputTab, isOutputVirtualized, outputCollapsed, performBulkRemeasure]);
 
   const hasOutput = rows.length > 0;
   const nonVirtualVisibleRowCount = isOutputVirtualized
