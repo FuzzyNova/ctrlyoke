@@ -366,6 +366,26 @@ describe("generateMarkdownExport", () => {
     expect(md).toContain("/workspace> claude --model sonnet");
   });
 
+  it("renders injected prompts in the command section using the injected text", () => {
+    const outputs = [
+      {
+        type: "cli" as const,
+        target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+        timestamp: 1000,
+        attemptIndex: 0,
+        data: {
+          cliCommand: "Open the referenced file and summarize it.",
+          cliCommandWasInjected: true,
+        },
+      },
+    ];
+
+    const md = generateMarkdownExport(outputs, metadata);
+    expect(md).toContain("Prompt was injected into running terminal:");
+    expect(md).toContain("Open the referenced file and summarize it.");
+    expect(md).not.toContain("```bash");
+  });
+
   it("sorts outputs chronologically when out of order", () => {
     const outputs = [
       {

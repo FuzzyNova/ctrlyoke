@@ -143,6 +143,11 @@ export interface CliOutput {
   isStreaming: boolean;
   /** The CLI command executed (for debugging) */
   cliCommand?: string;
+  /**
+   * When true, `cliCommand` is the exact prompt text injected into a running
+   * terminal session rather than a spawned harness command line.
+   */
+  cliCommandWasInjected?: boolean;
   /** The working directory where the command was executed */
   workingDirectory?: string;
   /** Timestamp when the output was created (milliseconds since epoch) */

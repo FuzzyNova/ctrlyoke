@@ -213,6 +213,7 @@ export abstract class HarnessIntegration {
   protected promptReadyEmitter = new TypedEmitter<{
     fullPrompt: string;
     cliCommand?: string;
+    cliCommandWasInjected?: boolean;
   }>();
   public readonly onPromptReady = this.promptReadyEmitter.event;
 
@@ -1010,6 +1011,10 @@ export abstract class HarnessIntegration {
    * Returns undefined for non-CLI integrations
    */
   getLastCliCommand(): string | undefined {
+    return undefined;
+  }
+
+  getLastCliCommandWasInjected(): boolean | undefined {
     return undefined;
   }
 

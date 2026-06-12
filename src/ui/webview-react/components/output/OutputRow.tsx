@@ -49,6 +49,7 @@ import {
   type RowFindDecoration,
 } from "@utils/outputFind";
 import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
+import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import type {
   CliHeaderRow,
   HistoryBannerRow,
@@ -1077,7 +1078,11 @@ function OutputRowComponent({
             className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] whitespace-pre-wrap [overflow-wrap:anywhere]`}
           >
             {highlightText(
-              `${row.workingDirectory || "workspace"}> ${row.command}`,
+              formatCliCommandDisplay(
+                row.command,
+                row.workingDirectory,
+                row.wasInjected
+              ),
               getFieldMatches("command")
             )}
           </div>

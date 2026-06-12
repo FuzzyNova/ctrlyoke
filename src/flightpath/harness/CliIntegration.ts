@@ -501,6 +501,15 @@ export class CliIntegration extends HarnessIntegration {
     });
   }
 
+  private handleInjectedPromptPrepared(promptArgument: string): void {
+    this.activeSession?.recordInjectedPrompt(promptArgument);
+    this.promptReadyEmitter.fire({
+      fullPrompt: promptArgument,
+      cliCommand: promptArgument,
+      cliCommandWasInjected: true,
+    });
+  }
+
   private handlePtyExit(session: PtySession, exitCode: number): void {
     if (this.suppressPtyExitSessionId === session.id) {
       this.suppressPtyExitSessionId = undefined;
@@ -741,6 +750,7 @@ export class CliIntegration extends HarnessIntegration {
     // reused via WorkflowInstance.liveInjectIntegration, lastInteractiveContext is
     // already populated and shouldUseInjectMode passes without needing promptIndex > 0.
     if (isInteractive && this.shouldUseInjectMode(session)) {
+      this.handleInjectedPromptPrepared(session.promptArgument);
       const injectResult =
         await this.executionRunner.executeInteractiveInject(session);
       if (injectResult.injected) {
@@ -1159,6 +1169,10 @@ export class CliIntegration extends HarnessIntegration {
    */
   getLastCliCommand(): string | undefined {
     return this.lastExecutionSnapshot?.cliCommand;
+  }
+
+  override getLastCliCommandWasInjected(): boolean | undefined {
+    return this.lastExecutionSnapshot?.cliCommandWasInjected;
   }
 
   override getLastFailureOutput(): string | undefined {

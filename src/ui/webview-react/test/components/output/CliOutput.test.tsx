@@ -287,6 +287,28 @@ describe("CliOutput", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders injected prompts in the CLI command slot", () => {
+    const output: CliOutputType = {
+      prompt: "Original prompt",
+      cliCommand: "Actual injected prompt text",
+      cliCommandWasInjected: true,
+      response: "",
+      elapsed: 0,
+      isStreaming: false,
+    };
+
+    render(<CliOutput output={output} stepIndex={0} attemptIndex={0} />);
+
+    expect(
+      screen.getByText(
+        "Prompt was injected into running terminal: Actual injected prompt text"
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/workspace>\s*Actual injected prompt text/)
+    ).not.toBeInTheDocument();
+  });
+
   it("shows rerun labeling and run-aware diff anchors", () => {
     const output: CliOutputType = {
       prompt: "rerun prompt",

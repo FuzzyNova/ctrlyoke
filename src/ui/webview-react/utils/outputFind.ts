@@ -18,6 +18,7 @@ import type {
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
+import { formatCliCommandDisplay } from "./outputCommandDisplay";
 
 export type OutputFindField =
   | "header"
@@ -143,7 +144,11 @@ export function getOutputRowSearchSegments(
       return createSegments([
         {
           field: "command",
-          text: `${row.workingDirectory || "workspace"}> ${row.command}`,
+          text: formatCliCommandDisplay(
+            row.command,
+            row.workingDirectory,
+            row.wasInjected
+          ),
         },
       ]);
     case "error":

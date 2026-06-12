@@ -39,6 +39,7 @@ import {
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
   buildCollapsedOutputPreview,
 } from "./outputTruncation";
+import { formatCliCommandDisplay } from "./outputCommandDisplay";
 import type { DiffRenderPlan } from "./rdvAdapter";
 
 export interface OutputRowPromptUndoAction {
@@ -134,6 +135,7 @@ export interface CliCommandRow extends OutputRowBase {
   target: OutputMessageTarget;
   workingDirectory?: string;
   command: string;
+  wasInjected?: boolean;
 }
 
 export interface ErrorRow extends OutputRowBase {
@@ -901,7 +903,11 @@ export function estimateOutputRowHeight(
       // OUTPUT_BLOCK_BASE: font-mono sm font, body line-height:1.4, py-sm+my-sm=24px chrome.
       // chrome:32 matches actual horizontal padding (px-md outer + px-sm inner + border-l-3).
       return estimateTextBlockHeight(
-        `${row.workingDirectory || "workspace"}> ${row.command}`,
+        formatCliCommandDisplay(
+          row.command,
+          row.workingDirectory,
+          row.wasInjected
+        ),
         outputContentWidth,
         outputFontSize - 1,
         {
@@ -1097,6 +1103,7 @@ export function buildOutputRows(
         target,
         workingDirectory: output.workingDirectory,
         command: output.cliCommand,
+        wasInjected: output.cliCommandWasInjected,
         estimateSize: 32,
       });
     }

@@ -90,6 +90,7 @@ suite("OutputCaptureBuffer", () => {
         0,
         "Do something",
         "copilot --prompt",
+        undefined,
         "/ws",
         1000,
         0,
@@ -110,7 +111,16 @@ suite("OutputCaptureBuffer", () => {
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
       // First init (cliCommand undefined)
-      buffer.captureOutputInit(0, "prompt", undefined, "/ws", 1000, 0, false);
+      buffer.captureOutputInit(
+        0,
+        "prompt",
+        undefined,
+        undefined,
+        "/ws",
+        1000,
+        0,
+        false
+      );
       // Accumulate some data
       buffer.captureChunk(0, "partial response");
       // Second init (cliCommand populated)
@@ -118,6 +128,7 @@ suite("OutputCaptureBuffer", () => {
         0,
         "prompt",
         "copilot --prompt foo",
+        undefined,
         "/ws",
         1000,
         0,
@@ -160,6 +171,7 @@ suite("OutputCaptureBuffer", () => {
         "step 3",
         undefined,
         undefined,
+        undefined,
         500,
         0,
         undefined
@@ -176,6 +188,7 @@ suite("OutputCaptureBuffer", () => {
       buffer.captureOutputInit(
         0,
         "prompt",
+        undefined,
         undefined,
         undefined,
         100,
@@ -217,6 +230,7 @@ suite("OutputCaptureBuffer", () => {
       buffer.captureOutputInit(
         0,
         "prompt",
+        undefined,
         undefined,
         undefined,
         100,
@@ -266,6 +280,7 @@ suite("OutputCaptureBuffer", () => {
         0,
         "prompt",
         "codex exec",
+        undefined,
         "/workspace",
         100,
         0,
@@ -295,6 +310,7 @@ suite("OutputCaptureBuffer", () => {
       buffer.captureOutputInit(
         0,
         "prompt",
+        undefined,
         undefined,
         undefined,
         100,
@@ -376,7 +392,16 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureOutputInit(0, "p", undefined, undefined, 100, 0, false);
+      buffer.captureOutputInit(
+        0,
+        "p",
+        undefined,
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
       assert.strictEqual(buffer.stepBufferSize, 1);
 
       buffer.captureCompletedOutput(0, { response: "done" });
@@ -393,6 +418,7 @@ suite("OutputCaptureBuffer", () => {
         0,
         "final q",
         "cmd",
+        undefined,
         "/ws",
         999,
         0,
@@ -410,6 +436,7 @@ suite("OutputCaptureBuffer", () => {
       buffer.captureFinalStepOutputInit(
         0,
         "q",
+        undefined,
         undefined,
         undefined,
         100,
@@ -433,6 +460,7 @@ suite("OutputCaptureBuffer", () => {
       buffer.captureFinalStepOutputInit(
         0,
         "q",
+        undefined,
         undefined,
         undefined,
         100,
@@ -541,11 +569,21 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureOutputInit(0, "p", undefined, undefined, 100, 0, false);
+      buffer.captureOutputInit(
+        0,
+        "p",
+        undefined,
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
       buffer.captureCompletedOutput(0, { response: "done" });
       buffer.captureFinalStepOutputInit(
         0,
         "fp",
+        undefined,
         undefined,
         undefined,
         100,
@@ -619,6 +657,7 @@ suite("OutputCaptureBuffer", () => {
         2,
         "streaming prompt",
         "cmd",
+        undefined,
         "/ws",
         500,
         0,
@@ -653,7 +692,16 @@ suite("OutputCaptureBuffer", () => {
       const { callbacks } = makeCallbacks();
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
-      buffer.captureOutputInit(0, "p", undefined, undefined, 100, 0, false);
+      buffer.captureOutputInit(
+        0,
+        "p",
+        undefined,
+        undefined,
+        undefined,
+        100,
+        0,
+        false
+      );
       buffer.captureChunk(0, "data");
 
       const { sink, calls } = makeDashboardSink();
@@ -678,6 +726,7 @@ suite("OutputCaptureBuffer", () => {
         0,
         "final q",
         "cmd",
+        undefined,
         "/ws",
         999,
         0,
@@ -735,7 +784,16 @@ suite("OutputCaptureBuffer", () => {
       buffer.captureCompletedOutput(0, { response: "done0" });
       buffer.captureCompletedOutput(1, { response: "done1" });
       // Step 2 still streaming
-      buffer.captureOutputInit(2, "step3", "cmd", "/ws", 500, 0, false);
+      buffer.captureOutputInit(
+        2,
+        "step3",
+        "cmd",
+        undefined,
+        "/ws",
+        500,
+        0,
+        false
+      );
       buffer.captureChunk(2, "in progress");
 
       const { sink, calls } = makeDashboardSink();
@@ -767,7 +825,16 @@ suite("OutputCaptureBuffer", () => {
       const buffer = new OutputCaptureBuffer("tag", callbacks);
 
       // Step 0 attempt 1 is streaming (retry in progress)
-      buffer.captureOutputInit(0, "retry prompt", "cmd", "/ws", 100, 1, false);
+      buffer.captureOutputInit(
+        0,
+        "retry prompt",
+        "cmd",
+        undefined,
+        "/ws",
+        100,
+        1,
+        false
+      );
       buffer.captureChunk(0, "retry response");
 
       const { sink, calls } = makeDashboardSink();

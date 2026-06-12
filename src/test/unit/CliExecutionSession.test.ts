@@ -76,8 +76,30 @@ suite("CliExecutionSession", () => {
     assert.strictEqual(session.failureMessage, undefined);
     assert.deepStrictEqual(session.toSnapshot(), {
       cliCommand: undefined,
+      cliCommandWasInjected: undefined,
       parsedOutput,
       result: cliResult,
+    });
+  });
+
+  test("records injected prompt text separately from spawned commands", () => {
+    const session = new CliExecutionSession({
+      prompt: { prompt: "inject" },
+    });
+
+    session.preparePrompt("Actual injected prompt text", []);
+    session.recordInjectedPrompt("Actual injected prompt text");
+
+    assert.strictEqual(session.cliCommand, "Actual injected prompt text");
+    assert.strictEqual(
+      session.promptForSessionLog,
+      "Actual injected prompt text"
+    );
+    assert.deepStrictEqual(session.toSnapshot(), {
+      cliCommand: "Actual injected prompt text",
+      cliCommandWasInjected: true,
+      parsedOutput: undefined,
+      result: undefined,
     });
   });
 

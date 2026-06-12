@@ -35,6 +35,7 @@ import {
   formatExecutionBadge,
   getFirstWords,
 } from "./outputUtils";
+import { formatCliCommandDisplay } from "./outputCommandDisplay";
 
 // ── Private helpers ────────────────────────────────────────────────────────────
 
@@ -389,6 +390,7 @@ export function generateMarkdownExport(
         prompt?: string;
         response?: string;
         cliCommand?: string;
+        cliCommandWasInjected?: boolean;
         workingDirectory?: string;
         tokens?: {
           prompt: number;
@@ -438,9 +440,14 @@ export function generateMarkdownExport(
       if (includeCommand && output.cliCommand) {
         if (includeMetadata) lines.push("### CLI Command");
         lines.push("");
-        lines.push("```bash");
-        const workingDir = output.workingDirectory || "workspace";
-        lines.push(`${workingDir}> ${output.cliCommand}`);
+        lines.push(output.cliCommandWasInjected ? "```" : "```bash");
+        lines.push(
+          formatCliCommandDisplay(
+            output.cliCommand,
+            output.workingDirectory,
+            output.cliCommandWasInjected
+          )
+        );
         lines.push("```");
         lines.push("");
       }

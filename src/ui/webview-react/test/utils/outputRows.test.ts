@@ -58,6 +58,51 @@ describe("outputRows", () => {
     expect(result.lastCliIndexPerStep.get("queue:0")).toBe(0);
   });
 
+  it("marks injected prompt rows so they render without a workspace command prefix", () => {
+    const result = buildOutputRows({
+      allMessages: [
+        {
+          type: "cli",
+          target: { kind: FINAL_STEP_PHASES.QUEUE, index: 0 },
+          timestamp: 1000,
+          attemptIndex: 0,
+          runIndex: 0,
+          data: {
+            prompt: "Use inject mode",
+            cliCommand: "Actual injected prompt text",
+            cliCommandWasInjected: true,
+            response: "",
+            elapsed: 0,
+            isStreaming: false,
+          },
+        },
+      ],
+      steps,
+      finalStep: null,
+      streamingChunks: {},
+      finalStepStreamingChunks: {},
+      isExecutionActive: false,
+      allowUndoActions: false,
+      isViewingHistory: false,
+      historyOutputs: null,
+      workspaceSnapshots: {},
+      finalStepWorkspaceSnapshots: {},
+      undoRecords: {},
+      diffCollapseState: new Map(),
+      diffExpansionState: new Map(),
+      toolCallExpansionState: new Map(),
+      defaultDiffCollapsed: false,
+    });
+
+    expect(
+      result.rows.find((row) => row.rowKind === "cli-command")
+    ).toMatchObject({
+      rowKind: "cli-command",
+      command: "Actual injected prompt text",
+      wasInjected: true,
+    });
+  });
+
   it("keeps diff row keys stable when unrelated streaming chunks change", () => {
     const allMessages: OutputMessage[] = [
       {

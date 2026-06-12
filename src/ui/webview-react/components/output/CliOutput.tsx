@@ -23,6 +23,7 @@ import {
   GenericToolCallOutput,
 } from "./ToolCallOutput";
 import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
+import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import { WebviewLog } from "../../utils/logger";
 import { useWorkflowStore } from "@store/workflowStore";
 import {
@@ -1217,8 +1218,11 @@ export const CliOutput = memo<CliOutputProps>(
             <div
               className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)]`}
             >
-              {output.workingDirectory || "workspace"}
-              {">"} {output.cliCommand}
+              {formatCliCommandDisplay(
+                output.cliCommand,
+                output.workingDirectory,
+                output.cliCommandWasInjected
+              )}
             </div>
           )}
 
@@ -1371,8 +1375,11 @@ export const CliOutput = memo<CliOutputProps>(
           <div
             className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)]`}
           >
-            {output.workingDirectory || "workspace"}
-            {">"} {output.cliCommand}
+            {formatCliCommandDisplay(
+              output.cliCommand,
+              output.workingDirectory,
+              output.cliCommandWasInjected
+            )}
           </div>
         )}
 

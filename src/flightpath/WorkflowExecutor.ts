@@ -89,6 +89,7 @@ export interface WorkflowExecutionContext {
     stepIndex: number,
     prompt: string,
     cliCommand: string | undefined,
+    cliCommandWasInjected: boolean | undefined,
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
@@ -108,6 +109,7 @@ export interface WorkflowExecutionContext {
     loopIndex: number,
     prompt: string,
     cliCommand: string | undefined,
+    cliCommandWasInjected: boolean | undefined,
     workingDirectory: string | undefined,
     timestampMs: number,
     attemptIndex: number,
@@ -1293,6 +1295,7 @@ export class WorkflowExecutor {
     signedStepIndex: number | undefined,
     prompt: string,
     cliCommand: string | undefined,
+    cliCommandWasInjected: boolean | undefined,
     timestampMs: number,
     runIndex: number,
     attemptIndex: number,
@@ -1305,6 +1308,7 @@ export class WorkflowExecutor {
       tokens: undefined,
       isStreaming: true,
       cliCommand,
+      cliCommandWasInjected,
       workingDirectory: context.workspaceFolderPath,
       timestampMs,
       runIndex,
@@ -1321,6 +1325,7 @@ export class WorkflowExecutor {
         signedStepIndex,
         prompt,
         cliCommand,
+        cliCommandWasInjected,
         context.workspaceFolderPath,
         timestampMs,
         attemptIndex,
@@ -1336,6 +1341,7 @@ export class WorkflowExecutor {
         target.loopIndex,
         prompt,
         cliCommand,
+        cliCommandWasInjected,
         context.workspaceFolderPath,
         timestampMs,
         attemptIndex,
@@ -1518,6 +1524,10 @@ export class WorkflowExecutor {
       isStreaming: false,
       cliCommand: context.shouldShowCliCommand
         ? (integration.getLastCliCommand() ?? bufferedOutput?.cliCommand)
+        : undefined,
+      cliCommandWasInjected: context.shouldShowCliCommand
+        ? (integration.getLastCliCommandWasInjected() ??
+          bufferedOutput?.cliCommandWasInjected)
         : undefined,
       workingDirectory:
         bufferedOutput?.workingDirectory ?? context.workspaceFolderPath,
@@ -1762,6 +1772,7 @@ export class WorkflowExecutor {
       signedStepIndex,
       promptStep.prompt,
       undefined,
+      undefined,
       initTimestampMs,
       runIndex,
       attemptIndex,
@@ -1788,6 +1799,7 @@ export class WorkflowExecutor {
         signedStepIndex,
         promptStep.prompt,
         cliCommand,
+        data.cliCommandWasInjected,
         initTimestampMs,
         runIndex,
         attemptIndex,
@@ -2250,6 +2262,9 @@ export class WorkflowExecutor {
       cliCommand: context.shouldShowCliCommand
         ? integration.getLastCliCommand()
         : undefined,
+      cliCommandWasInjected: context.shouldShowCliCommand
+        ? integration.getLastCliCommandWasInjected()
+        : undefined,
       workingDirectory: context.workspaceFolderPath,
       timestampMs: this.getAttemptStartedAt(target) ?? Date.now(),
       attemptIndex,
@@ -2450,6 +2465,9 @@ export class WorkflowExecutor {
     const cliCommand = context.shouldShowCliCommand
       ? integration.getLastCliCommand()
       : undefined;
+    const cliCommandWasInjected = context.shouldShowCliCommand
+      ? integration.getLastCliCommandWasInjected()
+      : undefined;
 
     const cliOutputObj = {
       prompt: prompt.prompt,
@@ -2459,6 +2477,7 @@ export class WorkflowExecutor {
       tokens,
       isStreaming: false,
       cliCommand,
+      cliCommandWasInjected,
       workingDirectory: context.workspaceFolderPath,
       timestampMs: this.getAttemptStartedAt(target) ?? Date.now(),
       runIndex,

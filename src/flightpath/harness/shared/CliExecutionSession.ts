@@ -18,6 +18,7 @@ export interface CliExecutionSessionParams {
 
 export interface CliExecutionSessionSnapshot {
   cliCommand?: string;
+  cliCommandWasInjected?: boolean;
   parsedOutput?: UniversalCliOutput;
   result?: CliResult;
 }
@@ -33,6 +34,7 @@ export class CliExecutionSession {
   private tempFiles: string[] = [];
   private actualPromptSentText?: string;
   private command?: string;
+  private commandWasInjected = false;
   private parsed?: UniversalCliOutput;
   private cliResult?: CliResult;
   private extractedSessionIdValue?: string;
@@ -69,6 +71,13 @@ export class CliExecutionSession {
   }): void {
     this.actualPromptSentText = info.promptArgument;
     this.command = info.cliCommand;
+    this.commandWasInjected = false;
+  }
+
+  recordInjectedPrompt(promptArgument: string): void {
+    this.actualPromptSentText = promptArgument;
+    this.command = promptArgument;
+    this.commandWasInjected = true;
   }
 
   recordHeadlessResponse(collected: CollectedHeadlessResponse): void {
@@ -142,6 +151,7 @@ export class CliExecutionSession {
   toSnapshot(): CliExecutionSessionSnapshot {
     return {
       cliCommand: this.command,
+      cliCommandWasInjected: this.commandWasInjected || undefined,
       parsedOutput: this.parsed,
       result: this.cliResult,
     };
