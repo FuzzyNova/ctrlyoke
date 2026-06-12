@@ -65,7 +65,7 @@ interface WorkflowStepProps {
    * from the original absolute index. Defaults to `index + 1` when omitted.
    */
   displayNumber?: number;
-  /** When true, suppresses the bottom border (e.g. when a BoundaryBar follows) */
+  /** When true, suppresses the bottom border*/
   hideBorderBottom?: boolean;
   /** When true, renders the script step variant (terminal icon, Script badge, command text) */
   isScript?: boolean;

@@ -116,7 +116,19 @@ function SortableWorkflowStepWrapper({
       <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-xs text-description-fg select-none">
         {slotNumber}
       </div>
-      <div ref={setNodeRef} style={style} className="flex-1 min-w-0">
+      <div ref={setNodeRef} style={style} className="relative flex-1 min-w-0">
+        {stepItemProps.isCurrent && (
+          <>
+            <div
+              className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] ${borderBgClass}`}
+              aria-hidden="true"
+            />
+            <div
+              className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[2px] ${borderBgClass}`}
+              aria-hidden="true"
+            />
+          </>
+        )}
         <WorkflowStepItem
           {...stepItemProps}
           displayNumber={slotNumber}
