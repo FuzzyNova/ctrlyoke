@@ -8,7 +8,9 @@
 
 ## Overview
 
-This document covers everything needed to ship `flightpath.dev`: the marketing landing page, the published VitePress docs, the pricing/licensing page, and the Pro tier via Lemon Squeezy. The goal at release is a single perpetual license SKU that unlocks power-user features, with a clean free tier that still delivers real value.
+This document covers everything needed to ship `flightpath.dev`: the marketing landing page, the published VitePress docs, and the pricing page. The goal at release is a single perpetual license SKU that unlocks power-user features, with a clean free tier that still delivers real value.
+
+> **Scope note:** The **Pro licensing model** (provider choice, the extension `LicenseService`, entitlement verification, activation flow, tier gating, and the license-key-vs-accounts decision) used to live here in Phase 5. It has been **split out into [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)**. This document now owns only the **website surface** (marketing page, docs, pricing page, checkout link). The chosen direction is: pasted license key at launch, user accounts/sign-in as a later UX layer — see the Decision Record in `PRO_LICENSE_PLAN.md`.
 
 ---
 
@@ -131,67 +133,17 @@ export default defineConfig({
 
 ---
 
-## Phase 5 — Pro Licensing
+## Phase 5 — Pro Licensing → moved to [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
 
-### 5.1 Tier Structure
+The tier structure, `LicenseService`, entitlement verification, activation flow, and the license-key-vs-accounts decision now live in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md). Summary of the decision so this document stays self-consistent:
 
-| Feature                                            | Free               | Pro       |
-| -------------------------------------------------- | ------------------ | --------- |
-| All 7 harnesses                                    | ✅                 | ✅        |
-| Core workflow execution                            | ✅                 | ✅        |
-| Workflow step limit                                | 100 steps/workflow | Unlimited |
-| Hosted dashboard server (`FlightPathHostedServer`) | ❌                 | ✅        |
-| MCP server integration                             | ❌                 | ✅        |
-| AI commit message generation                       | ❌                 | ✅        |
-| All future Pro features                            | ❌                 | ✅        |
+- **Storefront / MoR:** **Lemon Squeezy** (existing account) — checkout, payment, global tax.
+- **Licensing:** **Keygen** — issues **Ed25519-signed license files** verified **offline** in the extension (no per-request phone-home); supports **air-gapped / enterprise** activation from launch.
+- **Glue:** a **Netlify Function** (this site's deploy) receives the Lemon Squeezy `order_created` webhook and creates the Keygen license.
+- **Later:** "Sign in with FlightPath" device-code flow as a UX layer over the **same** `LicenseService`, when the hosted dashboard becomes a paid cloud product.
+- **Pricing:** **$59 USD** perpetual, one-time; activates on up to 3 machines.
 
-**Step limit rationale:** 10 steps covers the vast majority of personal use. Teams and power users who build multi-step automation pipelines are the natural Pro audience.
-
-### 5.2 Lemon Squeezy Setup
-
-1. Create a Lemon Squeezy store for `flightpath.dev`
-2. Create one product: **FlightPath Pro** — perpetual license
-3. Set price: **$59 USD** (one-time, no subscription)
-4. Enable license key generation (Lemon Squeezy built-in)
-5. Configure webhook for `license_key_created` events (optional for analytics)
-
-**Why perpetual over subscription at launch:**
-
-- Easier sell for a VS Code extension (users expect one-time pricing, see GitLens, Copilot Kit, etc.)
-- Lower support burden — no churn, no renewal emails
-- Can add a subscription "Pro+" tier later for teams / AI usage credits
-
-### 5.3 License Activation Flow (Extension)
-
-```
-User purchases → receives license key email
-→ VS Code: Command "FlightPath: Activate Pro License"
-→ Input box → user pastes key
-→ Extension calls Lemon Squeezy Validate License API
-→ On success: store key in context.globalState, cache isPro=true with TTL
-→ Pro features unlock immediately, no restart needed
-```
-
-### 5.4 `LicenseService` Implementation
-
-Create `src/license/LicenseService.ts`:
-
-```typescript
-export class LicenseService {
-  private static readonly KEY = 'flightpath.licenseKey';
-  private static readonly CACHE_KEY = 'flightpath.proValidated';
-  private static readonly CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-  static async isPro(context: vscode.ExtensionContext): Promise<boolean> { ... }
-  static async activate(key: string, context: vscode.ExtensionContext): Promise<boolean> { ... }
-  static async deactivate(context: vscode.ExtensionContext): Promise<void> { ... }
-}
-```
-
-- Validation: `POST https://api.lemonsqueezy.com/v1/licenses/validate`
-- Cache validated state with timestamp in `globalState` (re-validates after TTL)
-- Offline grace period: if network unreachable, trust cached state for up to 30 days
-- Gate Pro features via `await LicenseService.isPro(context)` in `WorkflowExecutor`, `FlightPathHostedServer`, and `ScmCommitCommand`
+The website's licensing responsibilities are the **pricing page** (below), the **Lemon Squeezy checkout link**, and **hosting the webhook function** that bridges Lemon Squeezy → Keygen.
 
 ---
 
@@ -206,28 +158,32 @@ Two columns: **Free** (left) and **Pro** (right, highlighted).
 **Free column:**
 
 - All 7 harnesses
-- YAML / JSON / Markdown workflows
-- End conditions & retry logic
-- VS Code dashboard
-- Up to 100 steps per workflow
+- YAML / JSON / Markdown workflows — **unlimited steps** (no caps)
+- End conditions, pre-conditions & error/retry behavior
+- Full local VS Code dashboard
+- Local hosted dashboard (**localhost**)
+- Notifications, MCP manager, agent/skills manager, AI commit messages
+- CLI binary
 - Community support (GitHub Issues)
 
 **Pro column:**
 
 - Everything in Free
-- Unlimited workflow steps
-- Hosted web dashboard (browser access)
-- MCP server integration
-- AI-powered commit messages
+- **Code on the go** — remote / LAN browser dashboard on any device (QR-to-phone, mobile push)
+- Custom hooks
+- Air-gapped / offline activation (enterprise)
+- Custom icon color
 - All future Pro features
 - Email support
-- **[Buy Now — $59]** → Lemon Squeezy checkout link
+- **[Buy Now — $59]** → Lemon Squeezy checkout link (license issued by Keygen — see [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md))
+
+_New users get a **14-day free trial of remote access** — no card, no account. After it ends, the dashboard stays free on localhost._
 
 ### 6.2 FAQ Section
 
 - "What is a perpetual license?" — One-time purchase, yours forever, includes all future Pro features in the same tier.
 - "Can I use it on multiple machines?" — Yes, one license activates on up to 3 devices.
-- "Is there a trial?" — Yes, the free tier is fully functional. No time limit, no credit card.
+- "Is there a trial?" — Yes. The free tier is fully functional forever (no time limit, no credit card), and remote "code on the go" access is free to trial for 14 days on top of that.
 - "Do you offer team/enterprise pricing?" — Not yet. Coming soon. Contact us.
 
 ---
@@ -243,13 +199,12 @@ Two columns: **Free** (left) and **Pro** (right, highlighted).
 - [ ] Write landing page hero + features sections
 - [ ] Add harness icon grid (reuse from `src/ui/icons/`)
 - [ ] Write pricing page (Free vs Pro columns + FAQ)
-- [ ] Set up Lemon Squeezy product + checkout link
-- [ ] Implement `LicenseService` in extension
-- [ ] Add "Activate Pro License" command to `package.json` + `extension.ts`
-- [ ] Gate `FlightPathHostedServer`, `ScmCommitCommand`, MCP behind `isPro()`
-- [ ] Add free-tier step limit enforcement in `WorkflowExecutor`
+- [ ] Wire pricing-page checkout to Lemon Squeezy
+- [ ] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); details in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
 - [ ] Add `docs/pro/index.md` (activation instructions)
 - [ ] Add `docs/.vitepress/config.mts` logo + social links
+
+> **Extension-side licensing tasks** (provider setup, `LicenseService`, "Activate Pro License" command, gating `FlightPathHostedServer` / SCM commit / MCP, step-limit enforcement) are tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md), not here.
 
 ### Post-Launch (Nice to Have)
 
@@ -263,6 +218,7 @@ Two columns: **Free** (left) and **Pro** (right, highlighted).
 
 ## Related Backlog Items
 
+- [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) — Pro licensing model, `LicenseService`, tier gating (split out of this plan)
 - [`RELEASE_PLAN.md`](RELEASE_PLAN.md) — VS Code Marketplace release prerequisites
 - [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md) — Usage telemetry for the extension
 - [`ROADMAP.md`](ROADMAP.md) — Long-term feature roadmap

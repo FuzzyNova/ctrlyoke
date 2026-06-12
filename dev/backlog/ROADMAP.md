@@ -1,8 +1,8 @@
 # FlightPath Extension — Strategic Roadmap
 
-**Last updated:** May 30, 2026  
-**Current version:** 0.1.0 (released May 12, 2026)  
-**Status:** Active development — no backward compatibility constraints
+**Last updated:** June 12, 2026  
+**Current version:** 0.1.0 (unreleased — preparing the first VS Code Marketplace publish)  
+**Status:** Pre-release — no backward compatibility constraints
 
 ---
 
@@ -10,9 +10,15 @@
 
 FlightPath is a VS Code extension that automates AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini) through structured YAML/JSON prompt workflows. The core engine is fully functional: multi-harness CLI/Chat execution, parallel workflow execution, per-prompt session management, dynamic queue extension, React webview dashboard with CodeMirror 6 editor, script-based end conditions, agent injection, a standalone CLI binary, stale-state recovery, an embedded terminal, and mobile-responsive layout are all working.
 
-**v0.1.0 shipped on May 12, 2026.** Post-release, several Tier 1 quick wins have also shipped: completion notifications (1.1), backtick context suppression (1.2), workflow favorites (1.4), SCM commit message button (1.7), and inline prior context (2.6). The architecture is clean and SOLID-compliant, making new features straightforward to add.
+**FlightPath has not shipped yet.** The engine is feature-complete and a large number of post-MVP features are already implemented in the codebase — completion notifications (1.1), backtick context suppression (1.2), workflow favorites (1.4), SCM commit message button (1.7), inline prior context (2.6), pre-conditions, and the full error-behavior subsystem (2.1) — but nothing has been published to the VS Code Marketplace or npm. The architecture is clean and SOLID-compliant, making new features straightforward to add.
 
-**Recommended next focus:** Fix the active Claude `StopFailure` interactive-hang bug (2.1 Phase 2), then implement Raw Prompt Mode (1.3) and BMAD workflow templates (1.8). See [Tier 1](#tier-1--quick-wins) and [Tier 2](#tier-2--high-value-features) below.
+**Recommended next focus — the launch path.** The remaining work before a public launch is no longer core features; it is the go-to-market layer:
+
+1. **Landing page + docs site** at `flightpath.dev` ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md))
+2. **Pro licensing / monetization model** — now split into its own plan ([`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)) because the long-term licensing model (license key vs. user accounts) is a strategic decision that should be settled before launch, not after.
+3. **Marketplace publish mechanics** — the Tier 0 checklist below (publisher setup, production VSIX verification, CHANGELOG, listing polish, npm package).
+
+See [Tier 0](#tier-0--launch-blockers) for the remaining ship blockers.
 
 ---
 
@@ -45,6 +51,8 @@ FlightPath is a VS Code extension that automates AI coding assistants (GitHub Co
 - **Backtick context suppression (1.2)**: Context expansion skips `@path`, `#sym:`, etc. inside triple-backtick fenced blocks
 - **Workflow favorites (1.4)**: Star button persists `isFavorite` in working file; favorites sort to the top of the workflow list
 - **SCM commit message button (1.7)**: VS Code Source Control panel button generates a commit message via staged diff and active harness
+- **Error behavior (2.1)**: `errorBehavior` execution property (`stop`/`retry`/`continue`) for harness/session failures; structured `FailureKind` classification; Claude `StopFailure`, Copilot `errorOccurred`, and OpenCode `session.error` interactive error hooks; fixes the interactive-hang bug and the process-exit-routed-to-cancel bug
+- **Pre-conditions**: Script-based `preCondition` gate that must pass before a step runs, mirroring the end-condition mechanism
 - **MCP registry manager**: Central MCP server management UI with user/workspace merge and registry pagination
 - **Output virtualization**: Virtual row rendering for large outputs via `@tanstack/react-virtual`
 - **Output history search**: Dedicated history search modal with in-output find bar integration
@@ -87,7 +95,7 @@ FlightPath is a VS Code extension that automates AI coding assistants (GitHub Co
 
 - **Chat mode model switch**: `workbench.action.chat.changeModel` occasionally fails silently — shows warning and continues with current model, which may not match the configured default.
 - **Codex headless completion**: Detection via `{"type":"turn.completed"}` JSONL events is fragile; notify hook fallback behavior needs hardening.
-- **Interactive hang on harness error**: If a CLI harness encounters an unrecoverable error while keeping the TUI open (e.g. Claude `StopFailure`), FlightPath waits for a Stop hook that never arrives. Fix is tracked in `ERROR_BEHAVIOR_PLAN.md` (Phase 2 — Claude `StopFailure` hook).
+- **~~Interactive hang on harness error~~ ✅ FIXED**: Resolved by the error-behavior work (2.1). Claude `StopFailure`, Copilot `errorOccurred`, and OpenCode `session.error` now write `{sessionId}-error.json`, and process exit/timeout route through `errorBehavior` instead of hanging. Codex/Qwen/Gemini still rely on process-exit/timeout fallback (no verified session-level error hook yet).
 
 ### Technical Debt
 
@@ -98,23 +106,30 @@ FlightPath is a VS Code extension that automates AI coding assistants (GitHub Co
 
 ---
 
-## Tier 0 — v0.1.0 Release Blockers ✅ SHIPPED (May 12, 2026)
+## Tier 0 — Launch Blockers
 
-_All release blockers completed. v0.1.0 is published on the VS Code Marketplace. See [`RELEASE_PLAN.md`](RELEASE_PLAN.md) for the full post-release checklist._
+_FlightPath has **not** been published yet. This section is the remaining path to the first public release. The engineering MVP is done; the open work is the go-to-market layer (landing page, licensing model) plus the mechanical publish checklist. Prior drafts of this roadmap incorrectly marked these "shipped" — treat every item below as **needs verification before publish**, since the publish was never actually executed. See [`RELEASE_PLAN.md`](RELEASE_PLAN.md) for the full checklist._
+
+**The two strategic blockers (do these first):**
+
+- **0.A — Landing page + docs site** ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md)): `flightpath.dev` marketing page, published VitePress docs, pricing page. The homepage is the extension's primary first impression outside the Marketplace.
+- **0.B — Pro licensing model** ([`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)): Decide and implement the monetization model. **This was previously folded into the landing-page plan and has now been split out** because the choice between a simple pasted license key and a full user-account/sign-in model is a long-term architectural decision that affects the extension, the website, and the backend. It must be settled before launch so the free/Pro gating ships in v0.1.0.
+
+**The mechanical publish checklist (do after the strategic blockers):**
 
 ---
 
-### 0.1 Populate the CHANGELOG ✅
+### 0.1 Populate the CHANGELOG
 
-**Status: DONE**
+**Status: NEEDS VERIFICATION**
 
-`CHANGELOG.md` has only an `[Unreleased]` stub. VS Code Marketplace requires a populated CHANGELOG. Use "Current Version & Completed Milestones" above as source material.
+`CHANGELOG.md` must be populated before the Marketplace publish. Use "Current Version & Completed Milestones" above as source material.
 
 ---
 
-### 0.2 Production Build Verification ✅
+### 0.2 Production Build Verification
 
-**Status: DONE**
+**Status: NEEDS VERIFICATION**
 
 Run `npm run package`, install the VSIX locally via **Extensions: Install from VSIX**, and verify:
 
@@ -122,28 +137,29 @@ Run `npm run package`, install the VSIX locally via **Extensions: Install from V
 - New Workflow from Template works
 - Run a simple `.prompt.md` file end-to-end in at least one harness
 - Dev commands (DevMenu) are NOT visible in the command palette
+- Pro-gated features behave correctly in the unlicensed (free) state — see [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
 
 ---
 
-### 0.3 macOS Testing ✅
+### 0.3 macOS Testing
 
-**Status: DONE**
+**Status: NEEDS VERIFICATION**
 
-FlightPath has only been developed and tested on Windows/WSL. macOS is the primary platform for VS Code users. Key risks: `node-pty` native binaries differ per architecture, Homebrew CLI paths may not be in `PATH`, `chokidar` uses FSEvents on macOS. Test on Apple Silicon (arm64) if possible.
-
----
-
-### 0.4 Publisher Setup ✅
-
-**Status: DONE**
-
-Create or verify the Azure DevOps publisher account (`nhickster`), generate a PAT, run `vsce login nhickster`, and verify `vsce ls` output shows the correct file inclusion/exclusion.
+FlightPath has primarily been developed and tested on Windows. macOS is the primary platform for VS Code users. Key risks: `node-pty` native binaries differ per architecture, Homebrew CLI paths may not be in `PATH`, `chokidar` uses FSEvents on macOS. Test on Apple Silicon (arm64) if possible.
 
 ---
 
-### 0.5 Marketplace Listing Polish ✅
+### 0.4 Publisher Setup & Publish
 
-**Status: DONE**
+**Status: NOT DONE — this is the actual ship gate**
+
+Create or verify the Azure DevOps publisher account (`nhickster`), generate a PAT, run `vsce login nhickster`, verify `vsce ls` output shows the correct file inclusion/exclusion, then `vsce publish` (and `ovsx publish` for Open VSX).
+
+---
+
+### 0.5 Marketplace Listing Polish
+
+**Status: NEEDS VERIFICATION**
 
 - Update `package.json` description to mention all supported harnesses (current description undersells)
 - Add `keywords` field: `["AI", "automation", "copilot", "claude", "codex", "workflow", "prompt", "agent", "LLM"]`
@@ -153,9 +169,9 @@ Create or verify the Azure DevOps publisher account (`nhickster`), generate a PA
 
 ---
 
-### 0.6 CLI npm Package ✅
+### 0.6 CLI npm Package
 
-**Status: DONE**
+**Status: NEEDS VERIFICATION**
 
 The `flightpath` CLI (`out/cli.js`) ships separately from the VSIX. Decide on single vs. separate `package.json` structure, add `files` field, test with `npm pack --dry-run`, publish to npm.
 
@@ -169,13 +185,13 @@ _Under 1 week each. High impact, low risk. Ship in the weeks immediately after v
 
 ---
 
-#### 1.1 Completion Notifications ✅ SHIPPED
+#### 1.1 Completion Notifications ✅ IMPLEMENTED (unreleased)
 
 **Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/COMPLETION_NOTIFICATIONS_PLAN.md)
 
 ---
 
-#### 1.2 Backtick Context Suppression ✅ SHIPPED
+#### 1.2 Backtick Context Suppression ✅ IMPLEMENTED (unreleased)
 
 **Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md)
 
@@ -193,7 +209,7 @@ New `rawPromptMode: true` execution property that bypasses the entire context ex
 
 ---
 
-#### 1.4 Workflow Favorites ✅ SHIPPED
+#### 1.4 Workflow Favorites ✅ IMPLEMENTED (unreleased)
 
 **Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/WORKFLOW_FAVORITES_PLAN.md)
 
@@ -217,7 +233,7 @@ A **Preview** button on each prompt card in the dashboard shows the fully resolv
 
 ---
 
-#### 1.7 SCM Commit Message Button ✅ SHIPPED
+#### 1.7 SCM Commit Message Button ✅ IMPLEMENTED (unreleased)
 
 **Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/SCM_COMMIT_MESSAGE_BUTTON.md)
 
@@ -239,19 +255,11 @@ _1–4 weeks each. Core product improvements that significantly expand utility._
 
 ---
 
-#### 2.1 Error Behavior
+#### 2.1 Error Behavior ✅ IMPLEMENTED (unreleased)
 
-**Priority: HIGH** | **Effort: ~3.5 days** | **Doc: [`ERROR_BEHAVIOR_PLAN.md`](ERROR_BEHAVIOR_PLAN.md)**
+**Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/ERROR_BEHAVIOR_PLAN.md)
 
-New `errorBehavior` execution property controlling what happens when a harness itself fails (rate limits, crashes, server timeouts):
-
-- `onError: stop` — current behavior (default)
-- `onError: retry` — re-run the same step after a delay, up to `maxRetries`
-- `onError: continue` — log the error and advance to the next step
-
-Also fixes two active bugs: the Claude `StopFailure` hook (interactive hang when TUI stays open on error) and the missing Copilot `errorOccurred` hook. The Claude fix can ship independently as Phase 2 of the plan before the full schema work.
-
-**Why it matters:** Rate limits and transient server errors kill long-running workflows that would otherwise succeed on retry. The interactive hang bug is actively broken — users see error text in the TUI with FlightPath stuck waiting forever.
+All five phases are complete: the `errorBehavior` execution property (`stop`/`retry`/`continue`), structured `FailureKind` classification, Claude `StopFailure` / Copilot `errorOccurred` / OpenCode `session.error` interactive error hooks, `WorkflowExecutor` routing, and the prompt/workflow/default UI. This also fixed the interactive-hang bug and the process-exit-routed-to-cancel bug. Codex/Qwen/Gemini remain on the process-exit/timeout fallback (no verified session-level error hook yet).
 
 ---
 
@@ -305,7 +313,7 @@ End conditions are powerful but steep to learn:
 
 ---
 
-#### 2.6 Inline Prior Context ✅ SHIPPED
+#### 2.6 Inline Prior Context ✅ IMPLEMENTED (unreleased)
 
 **Status: DONE** | [Plan moved to `dev/implemented/`](../implemented/INLINE_PRIOR_CONTEXT_PLAN.md)
 
@@ -437,15 +445,13 @@ _Longer-term or requiring external decisions before implementation._
 
 ---
 
-#### 4.2 Premium Licensing (Pro Tier)
+#### 4.2 Premium Licensing (Pro Tier) — see [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
 
-**Priority: LOW (business decision needed)** | **Effort: 3–4 weeks**
+**Priority: LAUNCH BLOCKER (0.B)** | **Effort: see plan**
 
-Gate power features behind a Pro subscription to fund continued development. Dynamic queue extension and unlimited parallel workflows are natural Pro candidates. `LicenseManager.ts` + LemonSqueezy API + `vscode.SecretStorage`.
+> **Reclassified.** This was a Tier 4 "someday" item, but the first paid tier and its gating must ship **with** v0.1.0 so the free/Pro boundary is set from day one. The full design — tier structure, licensing-model decision (pasted license key vs. user accounts/sign-in), offline entitlement verification, provider choice, and the extension `LicenseService` — now lives in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md). The original Pro-licensing content has been moved out of [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) into that plan.
 
-**Considerations:** Decide free vs. open-source model before engineering. Requires stable v0.1.0 in users' hands first so gating decisions are based on real usage data.
-
-**Dependencies:** Stable v0.1.0 shipped. Parallel workflows and MCP hardening (3.1, 3.3) are the most natural Pro features.
+Later, usage-data-driven tier tuning and a possible subscription "Pro+" / Teams tier follow telemetry (2.2) and real adoption data.
 
 ---
 
@@ -475,14 +481,19 @@ Actions:
 ## Dependency Graph
 
 ```
-Tier 0 (Release Blockers) ✅ SHIPPED May 12, 2026
-  └─► 4.3 Marketplace Listing (done)
+LAUNCH (not yet shipped) — gated on:
+  0.A Landing Page + Docs ─┐
+  0.B Pro Licensing ───────┼─► Tier 0 publish checklist ─► 4.3 Marketplace Listing
+  Tier 0 publish mechanics ┘
+
+0.B Pro Licensing (PRO_LICENSE_PLAN.md)
+  ├── needs: licensing-model decision (license key vs. user accounts)
+  └── consumes: 2.8 / 0.A Landing Page (pricing page + checkout)
 
 1.2 Backtick Context Suppression ✅ DONE
   └─► 1.3 Raw Prompt Mode (ready to implement)
 
-2.1 Error Behavior Phase 2 (Claude StopFailure fix)
-  → ships independently as a bug fix, before full schema work
+2.1 Error Behavior ✅ DONE
 
 1.8 BMAD Templates
   └─► 2.4 AGENTS.md Generation (agent personas improve generation quality)
@@ -496,24 +507,26 @@ Tier 0 (Release Blockers) ✅ SHIPPED May 12, 2026
 4.1 AI Workflow Generation
   └── depends on: 2.3 + 2.4 + stable schema
 
-4.2 Premium Licensing
-  └── depends on stable v0.1.0 + real usage data (telemetry from 2.2)
+4.2 Premium Licensing (Pro tier)
+  └── now tracked in PRO_LICENSE_PLAN.md; pricing/gating ships at launch,
+      usage-data-driven tier tuning follows telemetry (2.2)
 ```
 
 ---
 
 ## Estimated Timeline
 
-| Milestone                  | Items                                                | Target         |
-| -------------------------- | ---------------------------------------------------- | -------------- |
-| **v0.1.0 Release** ✅      | Tier 0 blockers                                      | May 12, 2026   |
-| **v0.1.x Rapid UX**        | 1.1 ✅, 1.2 ✅, 1.3 (ready), 1.4 ✅, 1.7 ✅          | May–June 2026  |
-| **v0.2.0 Polish & DX**     | 1.5, 1.6, 1.8, 2.1 (error behavior), 2.2 (telemetry) | June–July 2026 |
-| **v0.3.0 Project Context** | 2.3 + 2.4 + 2.5 + 2.8 (docs site)                    | August 2026    |
-| **v0.4.0 Power Features**  | 3.1 + 3.2 + 3.3                                      | October 2026   |
-| **v0.5.0 Platform & Pro**  | 4.1 + 4.2 + 4.3                                      | Dec 2026       |
+| Milestone                  | Items                                                                  | Target          |
+| -------------------------- | ---------------------------------------------------------------------- | --------------- |
+| **Engine MVP** ✅          | Core engine + 1.1, 1.2, 1.4, 1.7, 2.1, 2.6, pre-conditions (all built) | Done            |
+| **v0.1.0 Launch**          | 0.A landing page, 0.B Pro licensing, Tier 0 publish checklist          | Next up         |
+| **v0.1.x Rapid UX**        | 1.3 (ready), 1.5, 1.6                                                   | After launch    |
+| **v0.2.0 Polish & DX**     | 1.8, 2.2 (telemetry), 2.5                                              | Following       |
+| **v0.3.0 Project Context** | 2.3 + 2.4 + 2.8 (docs site expansion)                                  | Later           |
+| **v0.4.0 Power Features**  | 3.1 + 3.2 + 3.3                                                        | Later           |
+| **v0.5.0 Platform & Pro+** | 4.1 + 4.2 (Pro+ tiers) + 4.3                                           | Later           |
 
-_Timeline is aspirational. Pre-release — prioritize quality over schedule._
+_Dates removed: the prior timeline asserted a May 12, 2026 release that never happened. Pre-release — prioritize quality and the launch blockers over a schedule._
 
 ---
 
@@ -528,16 +541,22 @@ _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 | [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md) | 🔄 ACTIVE | 2.8          |
 | [`../active/AUTOMATION_API_PLAN.md`](../active/AUTOMATION_API_PLAN.md)                 | 🔄 ACTIVE | —            |
 
+### Launch Blockers (must land before publish)
+
+| Document                                            | Status      | Roadmap Item |
+| --------------------------------------------------- | ----------- | ------------ |
+| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)     | 📝 PLANNING | 0.A / 2.8    |
+| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)       | 📝 PLANNING | 0.B / 4.2    |
+| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)               | 🔄 PARTIAL  | Tier 0       |
+
 ### Backlog (not yet started)
 
 | Document                                                                     | Status          | Roadmap Item |
 | ---------------------------------------------------------------------------- | --------------- | ------------ |
-| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                         | ✅ DONE         | Tier 0       |
 | [`RAW_PROMPT_MODE_PLAN.md`](RAW_PROMPT_MODE_PLAN.md)                         | NOT_IMPLEMENTED | 1.3          |
 | [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](SCRIPT_FIELD_COMPLETIONS_PLAN.md)       | NOT_IMPLEMENTED | 1.5          |
 | [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md)                         | NOT_IMPLEMENTED | 1.6          |
 | [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                           | NOT_IMPLEMENTED | 1.8          |
-| [`ERROR_BEHAVIOR_PLAN.md`](ERROR_BEHAVIOR_PLAN.md)                           | NOT_IMPLEMENTED | 2.1          |
 | [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md)                                     | NOT_IMPLEMENTED | 2.2          |
 | [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                     | NOT_IMPLEMENTED | 2.3          |
 | [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                         | NOT_IMPLEMENTED | 2.4          |
@@ -559,4 +578,5 @@ _Timeline is aspirational. Pre-release — prioritize quality over schedule._
 | [`../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md`](../implemented/BACKTICK_CONTEXT_SUPPRESSION_PLAN.md) | 1.2          |
 | [`../implemented/WORKFLOW_FAVORITES_PLAN.md`](../implemented/WORKFLOW_FAVORITES_PLAN.md)                     | 1.4          |
 | [`../implemented/SCM_COMMIT_MESSAGE_BUTTON.md`](../implemented/SCM_COMMIT_MESSAGE_BUTTON.md)                 | 1.7          |
+| [`../implemented/ERROR_BEHAVIOR_PLAN.md`](../implemented/ERROR_BEHAVIOR_PLAN.md)                             | 2.1          |
 | [`../implemented/INLINE_PRIOR_CONTEXT_PLAN.md`](../implemented/INLINE_PRIOR_CONTEXT_PLAN.md)                 | 2.6          |
