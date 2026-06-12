@@ -617,6 +617,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
       loopIndex,
       _prompt,
       _cliCommand,
+      _cliCommandWasInjected,
       _workingDirectory,
       _timestampMs,
       attemptIndex
