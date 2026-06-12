@@ -14,7 +14,7 @@ export const AutoResumeStatusRow: React.FC<AutoResumeStatusRowProps> = ({
 }) => {
   return (
     <p
-      className="text-xxs text-description-fg mt-0.5 flex items-center gap-1"
+      className="text-xs text-description-fg mt-0.5 flex items-center gap-1"
       title={AUTO_RESUME_TOOLTIP}
     >
       <i className="codicon codicon-history text-xxs" aria-hidden="true" />
