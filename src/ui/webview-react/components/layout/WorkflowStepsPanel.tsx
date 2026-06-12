@@ -111,24 +111,24 @@ function SortableWorkflowStepWrapper({
   return (
     // Number column sits outside setNodeRef so it stays anchored to the DOM
     // slot position while the content transforms during drag.
-    <div className="flex items-stretch">
+    <div className="relative flex items-stretch">
+      {stepItemProps.isCurrent && (
+        <>
+          <div
+            className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] ${borderBgClass}`}
+            aria-hidden="true"
+          />
+          <div
+            className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[2px] ${borderBgClass}`}
+            aria-hidden="true"
+          />
+        </>
+      )}
       <div className={`w-[2px] flex-shrink-0 self-stretch ${borderBgClass}`} />
-      <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-xs text-description-fg select-none">
+      <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
         {slotNumber}
       </div>
       <div ref={setNodeRef} style={style} className="relative flex-1 min-w-0">
-        {stepItemProps.isCurrent && (
-          <>
-            <div
-              className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] ${borderBgClass}`}
-              aria-hidden="true"
-            />
-            <div
-              className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[2px] ${borderBgClass}`}
-              aria-hidden="true"
-            />
-          </>
-        )}
         <WorkflowStepItem
           {...stepItemProps}
           displayNumber={slotNumber}
