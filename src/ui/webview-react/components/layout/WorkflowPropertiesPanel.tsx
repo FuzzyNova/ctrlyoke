@@ -43,10 +43,12 @@ import {
   ScriptConditionEditor,
   type ScriptConditionValue,
   AnimatedSection,
+  AutoResumeStatusRow,
 } from "../shared";
 import { HooksEditor } from "../editor/HooksEditor";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
 import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
+import { getAutoResumePreview } from "../../utils/autoResumePreview";
 /** Single breakpoint (px) where the settings drawer switches to narrow layout */
 const SETTINGS_DRAWER_BREAKPOINT = 400;
 
@@ -221,6 +223,15 @@ const WorkflowPropertiesPanelInner: React.FC<{
     setAdditionalArgsInput(effectiveAdditionalArgs);
   }, [effectiveAdditionalArgs]);
 
+  // Preview of what auto-resume would do for a new step appended to the
+  // queue, shown when the Session ID field is blank.
+  const steps = useWorkflowStore((s) => s.steps);
+  const autoResumePreview = getAutoResumePreview(
+    steps,
+    steps.length,
+    effectiveHarness
+  );
+
   // Derive the active model namespace from the current harness
   const modelNamespace = modelNamespaceForHarness(effectiveHarness);
 
@@ -294,8 +305,11 @@ const WorkflowPropertiesPanelInner: React.FC<{
           JSON.stringify(normalize(globalSettings.defaultPreCondition))
         );
       }
+      // Deep comparison for errorBehavior — null/undefined both fall back to
+      // the hardcoded "stop" default, so they're equivalent to an explicit
+      // { onError: "stop" } for this comparison.
       if (property === "errorBehavior") {
-        const normalize = (v: unknown) => (v == null ? null : v);
+        const normalize = (v: unknown) => v ?? { onError: "stop" as const };
         return (
           JSON.stringify(normalize(workflowValue)) !==
           JSON.stringify(normalize(globalSettings.defaultErrorBehavior))
@@ -1163,10 +1177,16 @@ const WorkflowPropertiesPanelInner: React.FC<{
                       onKeyDown={(e) => {
                         if (e.key === "Enter") e.currentTarget.blur();
                       }}
-                      placeholder="Enter session ID or prompt number"
+                      placeholder="Session ID, prompt number, or blank for auto-resume"
                       className="w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
-                      title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+                      title="Enter session ID (UUID), prompt number (e.g., 1, 2, 3), or leave blank for auto-resume. Auto-resume continues the most recent session from an earlier prompt using the same harness."
                     />
+                    {effectiveResumeSession &&
+                      workflowProperties.sessionId !==
+                        SESSION_ID_SENTINELS.FINAL_STEP &&
+                      !sessionIdInput && (
+                        <AutoResumeStatusRow preview={autoResumePreview} />
+                      )}
                   </div>
                 </FormField>
 

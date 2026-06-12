@@ -7,6 +7,7 @@ import {
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
+import { useWorkflowStore } from "../../store/workflowStore";
 import {
   HARNESS_IDS,
   CONDITION_ACTIONS,
@@ -41,7 +42,9 @@ import {
   ScriptConditionEditor,
   type ScriptConditionValue,
   AnimatedSection,
+  AutoResumeStatusRow,
 } from "../shared";
+import { getAutoResumePreview } from "../../utils/autoResumePreview";
 import { HooksEditor } from "./HooksEditor";
 import { EDITOR_FOOTER_HEIGHT_REM } from "./EditorFooter";
 import { DRAWER_PAGES, type DrawerPage } from "../../types/drawerPages";
@@ -67,8 +70,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   onClose,
   activePage,
 }) => {
-  const { properties, setProperty, setEndCondition, clearEndCondition } =
-    useEditorStore();
+  const {
+    properties,
+    setProperty,
+    setEndCondition,
+    clearEndCondition,
+    selectedPromptIndex,
+  } = useEditorStore();
 
   const {
     availableAgents,
@@ -77,6 +85,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties,
     getModelsForHarness,
   } = useSettingsStore();
+  const steps = useWorkflowStore((s) => s.steps);
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
     useUiStore();
   const handleResetAllToInherit = useCallback(() => {
@@ -149,6 +158,21 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const resolvedResumeSession =
     workflowProperties.resumeSession ?? globalSettings.resumeSession;
   const resolvedSessionId = workflowProperties.sessionId;
+
+  // Whether a blank Session ID field currently means "auto-resume the most
+  // recent session with the same harness", accounting for prompt-level
+  // overrides falling back to the resolved workflow/global values.
+  const effectiveResumeSessionForHint =
+    properties.resumeSession ?? resolvedResumeSession;
+  const effectiveSessionIdForHint =
+    properties.sessionId !== undefined
+      ? properties.sessionId
+      : resolvedSessionId;
+  const showAutoResumeHint =
+    effectiveResumeSessionForHint === true &&
+    effectiveSessionIdForHint !== SESSION_ID_SENTINELS.FINAL_STEP &&
+    !effectiveSessionIdForHint;
+
   const defaultResumeSessionLabel =
     resolvedResumeSession &&
     resolvedSessionId === SESSION_ID_SENTINELS.FINAL_STEP
@@ -254,6 +278,15 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     globalSettings.harness) as HarnessId;
   const models = getModelsForHarness(currentHarness);
   const modelNamespace = modelNamespaceForHarness(currentHarness);
+
+  // Preview of what auto-resume would do for this prompt, shown when the
+  // Session ID field is blank (see showAutoResumeHint above).
+  const autoResumeBeforeIndex = selectedPromptIndex ?? steps.length;
+  const autoResumePreview = getAutoResumePreview(
+    steps,
+    autoResumeBeforeIndex,
+    currentHarness
+  );
 
   // Handle harness change - also set model and additionalArgs to global defaults for the new harness
   const handleHarnessChange = (newHarness: string) => {
@@ -684,10 +717,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     placeholder={
                       isSessionIdDefault
                         ? "Inherited from workflow"
-                        : "Session ID or prompt number (e.g., 1)"
+                        : "Session ID, prompt number, or blank for auto-resume"
                     }
                     className="w-full px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+                    title="Enter session ID (UUID), prompt number (e.g., 1, 2, 3), or leave blank for auto-resume. Auto-resume continues the most recent session from an earlier prompt using the same harness."
                   />
+                  {showAutoResumeHint && (
+                    <AutoResumeStatusRow preview={autoResumePreview} />
+                  )}
                 </div>
               </div>
 
@@ -840,7 +877,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   <ErrorBehaviorEditor
                     value={properties.errorBehavior}
-                    onChange={(updated) => setProperty("errorBehavior", updated)}
+                    onChange={(updated) =>
+                      setProperty("errorBehavior", updated)
+                    }
                     disabled={false}
                     idPrefix="prop-error"
                   />

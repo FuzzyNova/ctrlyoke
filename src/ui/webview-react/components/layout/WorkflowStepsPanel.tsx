@@ -50,7 +50,6 @@ import {
   useSortable,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { BoundaryBar } from "../prompts/BoundaryBar";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import {
   getStepAccentClass,
@@ -610,8 +609,9 @@ const WorkflowStepsPanelInner: React.FC<{
     }
 
     if (status === STEP_STATUS.FAILED && index < currentStep) {
-      const failureMessage =
-        !isScriptStep(step) ? step._runtime?.failureMessage : undefined;
+      const failureMessage = !isScriptStep(step)
+        ? step._runtime?.failureMessage
+        : undefined;
       details.message = failureMessage
         ? `Workflow continued after failure: ${failureMessage}`
         : "Workflow continued after this step failed.";
@@ -898,9 +898,6 @@ const WorkflowStepsPanelInner: React.FC<{
                 );
               });
             })()}
-
-            {/* Boundary bar between done and pending */}
-            {currentStep > 0 && currentStep < steps.length && <BoundaryBar />}
 
             {/* Sortable pending steps (currentStep..end) — includes current step */}
             <DndContext
