@@ -174,9 +174,13 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
   return (
     <div
       aria-hidden={activeOutputTab !== "output" || isOutputCollapsed}
-      className={`${
-        !isOutputCollapsed && activeOutputTab === "output" ? "flex" : "hidden"
-      } relative flex-row min-h-0 flex-1`}
+      className={`absolute inset-0 flex flex-row min-h-0 ${
+        isOutputCollapsed
+          ? "hidden"
+          : activeOutputTab === "output"
+            ? ""
+            : "invisible pointer-events-none"
+      }`}
     >
       {findBar}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}

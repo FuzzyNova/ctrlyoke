@@ -49,7 +49,6 @@ interface PendingNavigationStateLike {
 }
 
 interface UseOutputVirtualizationInput {
-  activeOutputTab: "output" | "terminal";
   applyScrollTargetRef: RefObject<
     (
       phase: string,
@@ -151,7 +150,6 @@ function getRowHeightBucket(row: OutputRenderRow): string {
 }
 
 export function useOutputVirtualization({
-  activeOutputTab,
   applyScrollTargetRef,
   getVirtualItemsRef,
   isMeasurementFlushInProgressRef,
@@ -787,11 +785,7 @@ export function useOutputVirtualization({
   }, [isOutputVirtualized, rowRenderIdentity, rows.length]);
 
   useEffect(() => {
-    if (
-      activeOutputTab !== "output" ||
-      outputCollapsed ||
-      !isOutputVirtualized
-    ) {
+    if (outputCollapsed || !isOutputVirtualized) {
       return;
     }
 
@@ -803,10 +797,12 @@ export function useOutputVirtualization({
     // that on every appended row can momentarily mismatch dozens of
     // already-rendered rows at once. New rows are measured individually as
     // they mount, so a full re-measure is only needed when the output pane
-    // transitions from hidden/collapsed back into view. performBulkRemeasure
-    // suppresses the per-row scroll-correction cascade from that mismatch
-    // (error #185) and reconciles the scroll target once afterward.
-  }, [activeOutputTab, isOutputVirtualized, outputCollapsed, performBulkRemeasure]);
+    // transitions from collapsed back into view (the output/terminal tab
+    // switch keeps the pane's layout size via visibility, so it doesn't need
+    // this). performBulkRemeasure suppresses the per-row scroll-correction
+    // cascade from that mismatch (error #185) and reconciles the scroll
+    // target once afterward.
+  }, [isOutputVirtualized, outputCollapsed, performBulkRemeasure]);
 
   const hasOutput = rows.length > 0;
   const nonVirtualVisibleRowCount = isOutputVirtualized

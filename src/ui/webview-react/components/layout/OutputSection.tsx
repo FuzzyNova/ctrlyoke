@@ -444,7 +444,6 @@ const OutputSectionInner: React.FC = () => {
     schedulePendingMeasurementFlush,
     virtualRows,
   } = useOutputVirtualization({
-    activeOutputTab,
     applyScrollTargetRef,
     getVirtualItemsRef,
     isMeasurementFlushInProgressRef,
