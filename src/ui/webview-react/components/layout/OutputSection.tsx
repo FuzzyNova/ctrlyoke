@@ -38,6 +38,7 @@ import { OutputUndoDialogs } from "./output-section/OutputUndoDialogs";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
 import { useOutputContextMenu } from "@hooks/useOutputContextMenu";
 import { useLongPress } from "@hooks/useLongPress";
+import { toOutputMessageTarget } from "@utils/outputProjection";
 import {
   getProfilerState,
   logProfilerEvent,
@@ -123,8 +124,8 @@ const OutputSectionInner: React.FC = () => {
   const collapseAllDiffs = useUiStore((s) => s.collapseAllDiffs);
   const outputFontSize = useUiStore((s) => s.outputFontSize);
   const setOutputFontSize = useUiStore((s) => s.setOutputFontSize);
-  const pendingFindQuery = useUiStore((s) => s.pendingFindQuery);
-  const setPendingFindQuery = useUiStore((s) => s.setPendingFindQuery);
+  const pendingFindRequest = useUiStore((s) => s.pendingFindRequest);
+  const setPendingFindRequest = useUiStore((s) => s.setPendingFindRequest);
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
   const terminalFontSizeScope = useSettingsStore((s) =>
@@ -476,62 +477,6 @@ const OutputSectionInner: React.FC = () => {
     invalidateMeasuredRowForUserResize;
 
   const {
-    state: findState,
-    setState: setFindState,
-    open: openFind,
-    close: closeFind,
-    search: runSearch,
-    navigate: navigateFind,
-    handleKeyDown: handleFindKeyDown,
-    rowDecorations,
-    activeMatch,
-  } = useOutputFind(
-    rows,
-    (rowIndex) => rowVirtualizer.scrollToIndex(rowIndex, { align: "center" }),
-    pendingFindQuery
-  );
-
-  useEffect(() => {
-    if (pendingFindQuery !== null) {
-      setPendingFindQuery(null);
-    }
-  }, [pendingFindQuery, setPendingFindQuery]);
-
-  const handleOpenFind = useCallback(() => {
-    if (activeOutputTab !== "output") {
-      setActiveOutputTab(terminalWorkflowId, "output");
-    }
-    openFind();
-  }, [activeOutputTab, openFind, setActiveOutputTab, terminalWorkflowId]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        !(event.ctrlKey || event.metaKey) ||
-        event.altKey ||
-        event.key.toLowerCase() !== "f"
-      ) {
-        return;
-      }
-      // Let CodeMirror handle its own find when a prompt editor is focused —
-      // its capture-phase handler runs first and opens the search panel.
-      const target = event.target as HTMLElement | null;
-      if (target?.closest(".cm-editor")) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      handleOpenFind();
-    };
-
-    // Capture phase: run before VS Code's webview keydown forwarding and
-    // before bubbling reaches anything else, so Ctrl+F is scoped to this view.
-    window.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () =>
-      window.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [handleOpenFind]);
-
-  const {
     applyScrollTarget,
     scheduleScrollTargetCommit,
     setCurrentScrollTarget,
@@ -765,6 +710,70 @@ const OutputSectionInner: React.FC = () => {
       rows,
       setCurrentScrollTarget,
     });
+
+  const {
+    state: findState,
+    setState: setFindState,
+    open: openFind,
+    close: closeFind,
+    search: runSearch,
+    navigate: navigateFind,
+    handleKeyDown: handleFindKeyDown,
+    rowDecorations,
+    activeMatch,
+  } = useOutputFind(
+    rows,
+    (rowIndex) =>
+      navigationController.scrollToRowIndex(rowIndex, { align: "center" }),
+    pendingFindRequest
+      ? {
+          query: pendingFindRequest.query,
+          preferredTarget: pendingFindRequest.preferredTarget
+            ? toOutputMessageTarget(pendingFindRequest.preferredTarget)
+            : undefined,
+        }
+      : null
+  );
+
+  useEffect(() => {
+    if (pendingFindRequest !== null) {
+      setPendingFindRequest(null);
+    }
+  }, [pendingFindRequest, setPendingFindRequest]);
+
+  const handleOpenFind = useCallback(() => {
+    if (activeOutputTab !== "output") {
+      setActiveOutputTab(terminalWorkflowId, "output");
+    }
+    openFind();
+  }, [activeOutputTab, openFind, setActiveOutputTab, terminalWorkflowId]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        event.altKey ||
+        event.key.toLowerCase() !== "f"
+      ) {
+        return;
+      }
+      // Let CodeMirror handle its own find when a prompt editor is focused —
+      // its capture-phase handler runs first and opens the search panel.
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".cm-editor")) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      handleOpenFind();
+    };
+
+    // Capture phase: run before VS Code's webview keydown forwarding and
+    // before bubbling reaches anything else, so Ctrl+F is scoped to this view.
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [handleOpenFind]);
 
   // Auto-scroll effect — only fires for genuine new AI output, not layout changes.
   // measurementVersion is intentionally excluded: virtualizer height corrections

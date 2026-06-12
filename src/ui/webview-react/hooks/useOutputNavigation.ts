@@ -20,11 +20,12 @@ interface OutputRowLayoutModel {
 
 interface OutputRow {
   key: string;
+  target?: OutputMessageTarget;
 }
 
 interface PendingNavigationState {
   rowIndex: number;
-  align: "start" | "end";
+  align: "start" | "center" | "end";
   targetKind: OutputMessageTarget["kind"];
   targetIndex: number;
   requestedBehavior: ScrollBehavior;
@@ -38,7 +39,10 @@ interface PendingNavigationState {
 interface RowVirtualizerLike {
   scrollToIndex: (
     index: number,
-    options?: { align?: "start" | "end"; behavior?: ScrollBehavior }
+    options?: {
+      align?: "start" | "center" | "end";
+      behavior?: ScrollBehavior;
+    }
   ) => void;
   scrollToOffset: (
     offset: number,
@@ -227,14 +231,11 @@ export function useOutputNavigation({
   ]);
 
   const navigationController: OutputNavigationController = useMemo(
-    () => ({
-      scrollToTarget: (
-        target: OutputMessageTarget,
-        options?: { behavior?: ScrollBehavior; align?: "start" | "end" }
+    () => {
+      const scrollToRowIndex = (
+        rowIndex: number,
+        options?: { behavior?: ScrollBehavior; align?: "start" | "center" | "end" }
       ) => {
-        const rowIndex = firstRowIndexByTarget.get(
-          `${target.kind}:${target.index}`
-        );
         if (rowIndex === undefined || !outputRef.current) {
           return;
         }
@@ -244,12 +245,20 @@ export function useOutputNavigation({
         const behavior =
           requestedBehavior === "smooth" ? "auto" : requestedBehavior;
         const row = rows[rowIndex];
+        if (!row?.target) {
+          return;
+        }
         if (row) {
           const rowSize = rowLayout.rowSizesByKey.get(row.key);
           const viewportOffsetPx =
             align === "end"
               ? Math.max(0, outputRef.current.clientHeight - (rowSize ?? 0))
-              : 0;
+              : align === "center"
+                ? Math.max(
+                    0,
+                    outputRef.current.clientHeight / 2 - (rowSize ?? 0) / 2
+                  )
+                : 0;
           setCurrentScrollTarget(
             {
               kind: "row",
@@ -266,8 +275,8 @@ export function useOutputNavigation({
         pendingNavigationRef.current = {
           rowIndex,
           align,
-          targetKind: target.kind,
-          targetIndex: target.index,
+          targetKind: row.target.kind,
+          targetIndex: row.target.index,
           requestedBehavior,
           effectiveBehavior: behavior,
           startedAt,
@@ -301,19 +310,36 @@ export function useOutputNavigation({
 
         rowVirtualizer.scrollToIndex(rowIndex, { align, behavior });
         schedulePendingNavigationStabilization();
-      },
-      getTargetScrollFraction: (target: OutputMessageTarget) => {
-        const rowIndex = firstRowIndexByTarget.get(
-          `${target.kind}:${target.index}`
-        );
-        const totalSize = Math.max(1, rowLayout.totalSize);
-        if (rowIndex === undefined || totalSize <= 0) {
-          return null;
-        }
+      };
 
-        return rowLayout.rowStartsByIndex[rowIndex] / totalSize;
-      },
-    }),
+      return {
+        scrollToRowIndex,
+        scrollToTarget: (
+          target: OutputMessageTarget,
+          options?: { behavior?: ScrollBehavior; align?: "start" | "center" | "end" }
+        ) => {
+          const rowIndex = firstRowIndexByTarget.get(
+            `${target.kind}:${target.index}`
+          );
+          if (rowIndex === undefined) {
+            return;
+          }
+
+        scrollToRowIndex(rowIndex, options);
+        },
+        getTargetScrollFraction: (target: OutputMessageTarget) => {
+          const rowIndex = firstRowIndexByTarget.get(
+            `${target.kind}:${target.index}`
+          );
+          const totalSize = Math.max(1, rowLayout.totalSize);
+          if (rowIndex === undefined || totalSize <= 0) {
+            return null;
+          }
+
+          return rowLayout.rowStartsByIndex[rowIndex] / totalSize;
+        },
+      };
+    },
     [
       autoscrollEnabledRef,
       finalizePendingNavigation,

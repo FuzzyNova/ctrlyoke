@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { RefObject } from "react";
-import type { OutputScrollTarget } from "@store/uiStore";
+import {
+  areOutputScrollTargetsEqual,
+  type OutputScrollTarget,
+} from "@store/uiStore";
 import { captureViewportRowAnchor } from "@utils/outputDom";
 import { clamp } from "@utils/number";
 import {
@@ -88,6 +91,8 @@ export function useOutputScrollTarget({
     typeof setTimeout
   > | null>(null);
   const scrollTargetCommitRetryCountRef = useRef(0);
+  const previousRestoreTriggerRef = useRef<string | null>(null);
+  const previousWorkflowScrollTargetIdRef = useRef<string | null>(null);
 
   const setCurrentScrollTarget = useCallback(
     (target: OutputScrollTarget, reason: string) => {
@@ -321,6 +326,18 @@ export function useOutputScrollTarget({
   useEffect(() => {
     void restoreTrigger;
     const nextTarget = savedOutputScrollTarget ?? defaultTarget;
+    const restoreContextChanged =
+      previousRestoreTriggerRef.current !== restoreTrigger ||
+      previousWorkflowScrollTargetIdRef.current !== workflowScrollTargetId;
+    previousRestoreTriggerRef.current = restoreTrigger;
+    previousWorkflowScrollTargetIdRef.current = workflowScrollTargetId;
+    if (
+      !restoreContextChanged &&
+      areOutputScrollTargetsEqual(scrollTargetRef.current, nextTarget)
+    ) {
+      return;
+    }
+
     scrollTargetRef.current = nextTarget;
     autoscrollEnabledRef.current = nextTarget.kind === "bottom";
     requestAnimationFrame(() => {

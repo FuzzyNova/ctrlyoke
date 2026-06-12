@@ -111,14 +111,18 @@ export function captureViewportRowAnchor(
 export function alignRowElementToViewport(
   scrollElement: HTMLDivElement,
   rowElement: HTMLElement,
-  align: "start" | "end"
+  align: "start" | "center" | "end"
 ): boolean {
   const containerRect = scrollElement.getBoundingClientRect();
   const rowRect = rowElement.getBoundingClientRect();
   const delta =
     align === "end"
       ? rowRect.bottom - containerRect.bottom
-      : rowRect.top - containerRect.top;
+      : align === "center"
+        ? rowRect.top +
+          rowRect.height / 2 -
+          (containerRect.top + containerRect.height / 2)
+        : rowRect.top - containerRect.top;
 
   if (Math.abs(delta) < 2) {
     return true;
@@ -138,14 +142,18 @@ export function alignRowElementToViewport(
 export function getRowScopedScrollTop(
   scrollElement: HTMLDivElement,
   rowElement: HTMLElement,
-  align: "start" | "end"
+  align: "start" | "center" | "end"
 ): number {
   const containerRect = scrollElement.getBoundingClientRect();
   const rowRect = rowElement.getBoundingClientRect();
   const delta =
     align === "end"
       ? rowRect.bottom - containerRect.bottom
-      : rowRect.top - containerRect.top;
+      : align === "center"
+        ? rowRect.top +
+          rowRect.height / 2 -
+          (containerRect.top + containerRect.height / 2)
+        : rowRect.top - containerRect.top;
   const maxScroll = Math.max(
     0,
     scrollElement.scrollHeight - scrollElement.clientHeight
@@ -157,12 +165,14 @@ export function getEstimatedRowScopedScrollTop(
   scrollElement: HTMLDivElement,
   rowStart: number,
   rowSize: number | undefined,
-  align: "start" | "end"
+  align: "start" | "center" | "end"
 ): number {
   const target =
     align === "end"
       ? rowStart + (rowSize ?? 0) - scrollElement.clientHeight
-      : rowStart;
+      : align === "center"
+        ? rowStart + (rowSize ?? 0) / 2 - scrollElement.clientHeight / 2
+        : rowStart;
   const maxScroll = Math.max(
     0,
     scrollElement.scrollHeight - scrollElement.clientHeight

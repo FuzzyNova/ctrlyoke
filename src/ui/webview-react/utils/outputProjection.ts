@@ -73,7 +73,7 @@ export function mapOrderedHistoryEntriesToMessages(
   return sortOutputMessages(messages);
 }
 
-function toOutputMessageTarget(
+export function toOutputMessageTarget(
   target: OutputExecutionTarget
 ): OutputMessageTarget {
   return target.kind === FINAL_STEP_PHASES.QUEUE

@@ -89,17 +89,26 @@ describe("useOutputFind", () => {
     expect(onRevealRow).toHaveBeenLastCalledWith(0);
   });
 
-  it("opens and searches when an external query is provided", async () => {
+  it("opens and searches when an external request is provided", async () => {
     const rows = makeRows();
     const { result, rerender } = renderHook(
-      ({ externalQuery }: { externalQuery: string | null }) =>
-        useOutputFind(rows, onRevealRow, externalQuery),
+      ({
+        externalRequest,
+      }: {
+        externalRequest:
+          | { query: string; preferredTarget?: typeof target }
+          | null;
+      }) => useOutputFind(rows, onRevealRow, externalRequest),
       {
-        initialProps: { externalQuery: null as string | null },
+        initialProps: {
+          externalRequest: null as
+            | { query: string; preferredTarget?: typeof target }
+            | null,
+        },
       }
     );
 
-    rerender({ externalQuery: "alpha" });
+    rerender({ externalRequest: { query: "alpha", preferredTarget: target } });
 
     await waitFor(() => {
       expect(result.current.state.isOpen).toBe(true);

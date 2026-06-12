@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
 import type { WorkflowSummary } from "../types/messages";
 import { type FooterPicker } from "../types/messages";
+import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type { HistorySearchResult } from "@root/types/WorkflowTimelineTypes";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
@@ -67,6 +68,34 @@ export type OutputScrollTarget =
   | { kind: "row"; rowKey: string; viewportOffsetPx: number }
   | { kind: "bottom" };
 
+export interface PendingOutputFindRequest {
+  query: string;
+  preferredTarget?: OutputExecutionTarget;
+}
+
+export function areOutputScrollTargetsEqual(
+  left: OutputScrollTarget | undefined,
+  right: OutputScrollTarget | undefined
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right || left.kind !== right.kind) {
+    return false;
+  }
+  if (left.kind === "bottom") {
+    return true;
+  }
+  if (right.kind !== "row") {
+    return false;
+  }
+
+  return (
+    left.rowKey === right.rowKey &&
+    Math.abs(left.viewportOffsetPx - right.viewportOffsetPx) < 0.5
+  );
+}
+
 /**
  * UI state - Layout, visibility, and modal states
  */
@@ -105,7 +134,7 @@ interface UiState {
   // Output panel state
   selectedOutputStep: number | null; // Which step's output to show (null = current)
   outputScrollTargets: Record<string, OutputScrollTarget>; // transient per-workflow output scroll memory
-  pendingFindQuery: string | null;
+  pendingFindRequest: PendingOutputFindRequest | null;
 
   // History search modal state (transient, not persisted)
   isHistorySearchOpen: boolean;
@@ -117,6 +146,7 @@ interface UiState {
     workflowFilePath: string;
     runIndex: number;
     findQuery: string;
+    target: OutputExecutionTarget;
   } | null;
 
   // Run history display state
@@ -246,7 +276,7 @@ interface UiActions {
     workflowId: string,
     target: OutputScrollTarget
   ) => void;
-  setPendingFindQuery: (query: string | null) => void;
+  setPendingFindRequest: (request: PendingOutputFindRequest | null) => void;
   openHistorySearch: () => void;
   closeHistorySearch: () => void;
   setHistorySearchQuery: (query: string) => void;
@@ -260,6 +290,7 @@ interface UiActions {
       workflowFilePath: string;
       runIndex: number;
       findQuery: string;
+      target: OutputExecutionTarget;
     } | null
   ) => void;
 
@@ -399,7 +430,7 @@ const initialState: UiState = {
   settingsCollapsed: false,
   selectedOutputStep: null,
   outputScrollTargets: {},
-  pendingFindQuery: null,
+  pendingFindRequest: null,
   isHistorySearchOpen: false,
   historySearchResults: [],
   historySearchQuery: "",
@@ -579,14 +610,7 @@ export const useUiStore = create<UiState & UiActions>()(
       setOutputScrollTarget: (workflowId, target) =>
         set((state) => {
           const previous = state.outputScrollTargets[workflowId];
-          if (
-            previous?.kind === target.kind &&
-            (target.kind === "bottom" ||
-              (previous.kind === "row" &&
-                previous.rowKey === target.rowKey &&
-                Math.abs(previous.viewportOffsetPx - target.viewportOffsetPx) <
-                  0.5))
-          ) {
+          if (areOutputScrollTargetsEqual(previous, target)) {
             return state;
           }
 
@@ -598,7 +622,7 @@ export const useUiStore = create<UiState & UiActions>()(
           };
         }),
 
-      setPendingFindQuery: (query) => set({ pendingFindQuery: query }),
+      setPendingFindRequest: (request) => set({ pendingFindRequest: request }),
 
       openHistorySearch: () => set({ isHistorySearchOpen: true }),
 
@@ -901,6 +925,7 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchQuery: "",
           historySearchLoading: false,
           pendingHistorySearchNavigation: null,
+          pendingFindRequest: null,
           recentWorkflows: [],
           recentWorkflowsDropdownOpen: false,
           isLoading: false,

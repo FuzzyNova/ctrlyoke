@@ -189,6 +189,7 @@ describe("FILE_SELECTED", () => {
       workflowFilePath: "C:\\history.flightpath.yaml",
       runIndex: 2,
       findQuery: "needle",
+      target: { kind: "queue", stepIndex: 0 },
     });
 
     renderHook(() => useMessageHandler());
@@ -778,6 +779,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
         workflowFilePath: "C:\\history.flightpath.yaml",
         runIndex: 1,
         findQuery: "needle",
+        target: { kind: "queue", stepIndex: 0 },
       });
     });
 
@@ -798,7 +800,10 @@ describe("OUTPUT_HISTORY_LOADED", () => {
       });
     });
 
-    expect(useUiStore.getState().pendingFindQuery).toBe("needle");
+    expect(useUiStore.getState().pendingFindRequest).toEqual({
+      query: "needle",
+      preferredTarget: { kind: "queue", stepIndex: 0 },
+    });
     expect(useUiStore.getState().pendingHistorySearchNavigation).toBeNull();
   });
 });

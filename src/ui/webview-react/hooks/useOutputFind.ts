@@ -6,6 +6,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import type { OutputMessageTarget } from "@utils/outputProjection";
 import type { OutputRenderRow } from "@utils/outputRows";
 import {
   findOutputMatches,
@@ -29,10 +30,36 @@ const INITIAL_STATE: OutputFindState = {
   caseSensitive: false,
 };
 
+export interface OutputFindOpenRequest {
+  query: string;
+  preferredTarget?: OutputMessageTarget | null;
+}
+
+function areOutputMessageTargetsEqual(
+  left: OutputMessageTarget | undefined,
+  right: OutputMessageTarget | null | undefined
+): boolean {
+  return !!left && !!right && left.kind === right.kind && left.index === right.index;
+}
+
+function getInitialMatchIndex(
+  matches: readonly OutputFindMatch[],
+  preferredTarget?: OutputMessageTarget | null
+): number {
+  if (!preferredTarget) {
+    return 0;
+  }
+
+  const preferredIndex = matches.findIndex((match) =>
+    areOutputMessageTargetsEqual(match.target, preferredTarget)
+  );
+  return preferredIndex >= 0 ? preferredIndex : 0;
+}
+
 export function useOutputFind(
   rows: OutputRenderRow[],
   onRevealRow: (rowIndex: number) => void,
-  externalQuery?: string | null
+  externalRequest?: OutputFindOpenRequest | null
 ) {
   const [state, setState] = useState<OutputFindState>(INITIAL_STATE);
   const stateRef = useRef<OutputFindState>(INITIAL_STATE);
@@ -89,31 +116,45 @@ export function useOutputFind(
   }, [matches]);
 
   const search = useCallback(
-    (query: string, caseSensitive = stateRef.current.caseSensitive) => {
+    (
+      query: string,
+      caseSensitive = stateRef.current.caseSensitive,
+      options?: { preferredTarget?: OutputMessageTarget | null }
+    ) => {
       const nextMatches = findOutputMatches(rows, query, caseSensitive);
+      const nextMatchIndex = getInitialMatchIndex(
+        nextMatches,
+        options?.preferredTarget
+      );
       setState((previous) => ({
         ...previous,
         query,
         matchCount: nextMatches.length,
-        currentMatch: nextMatches.length > 0 ? 1 : 0,
+        currentMatch: nextMatches.length > 0 ? nextMatchIndex + 1 : 0,
         caseSensitive,
       }));
-      revealMatch(nextMatches[0]);
+      revealMatch(nextMatches[nextMatchIndex]);
       return nextMatches;
     },
     [revealMatch, rows]
   );
 
   const open = useCallback(
-    (query?: string) => {
-      const nextQuery = query ?? stateRef.current.query;
+    (request?: string | OutputFindOpenRequest) => {
+      const nextQuery =
+        typeof request === "string"
+          ? request
+          : request?.query ?? stateRef.current.query;
       setState((previous) => ({
         ...previous,
         isOpen: true,
         query: nextQuery,
       }));
       if (nextQuery) {
-        search(nextQuery, stateRef.current.caseSensitive);
+        search(nextQuery, stateRef.current.caseSensitive, {
+          preferredTarget:
+            typeof request === "string" ? undefined : request?.preferredTarget,
+        });
       }
     },
     [search]
@@ -183,10 +224,10 @@ export function useOutputFind(
     state.currentMatch > 0 ? matches[state.currentMatch - 1] ?? null : null;
 
   useEffect(() => {
-    if (externalQuery && externalQuery.trim()) {
-      open(externalQuery);
+    if (externalRequest?.query.trim()) {
+      open(externalRequest);
     }
-  }, [externalQuery, open]);
+  }, [externalRequest, open]);
 
   return {
     state,

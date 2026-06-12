@@ -2,10 +2,14 @@ import type { OutputMessageTarget } from "./outputProjection";
 
 export interface OutputNavigationOptions {
   behavior?: ScrollBehavior;
-  align?: "start" | "end";
+  align?: "start" | "center" | "end";
 }
 
 export interface OutputNavigationController {
+  scrollToRowIndex: (
+    rowIndex: number,
+    options?: OutputNavigationOptions
+  ) => void;
   scrollToTarget: (
     target: OutputMessageTarget,
     options?: OutputNavigationOptions

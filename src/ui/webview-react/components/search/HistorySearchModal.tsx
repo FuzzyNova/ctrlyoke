@@ -100,6 +100,7 @@ export function HistorySearchModal() {
         workflowFilePath: result.workflowFilePath,
         runIndex: result.runIndex,
         findQuery: query.trim(),
+        target: result.target,
       });
       vscode.postMessage({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,

@@ -98,13 +98,19 @@ describe("selectOutputStep", () => {
   });
 });
 
-describe("setPendingFindQuery", () => {
-  it("stores and clears the pending output find query", () => {
-    store().setPendingFindQuery("needle");
-    expect(store().pendingFindQuery).toBe("needle");
+describe("setPendingFindRequest", () => {
+  it("stores and clears the pending output find request", () => {
+    store().setPendingFindRequest({
+      query: "needle",
+      preferredTarget: { kind: "queue", stepIndex: 0 },
+    });
+    expect(store().pendingFindRequest).toEqual({
+      query: "needle",
+      preferredTarget: { kind: "queue", stepIndex: 0 },
+    });
 
-    store().setPendingFindQuery(null);
-    expect(store().pendingFindQuery).toBeNull();
+    store().setPendingFindRequest(null);
+    expect(store().pendingFindRequest).toBeNull();
   });
 });
 
@@ -137,6 +143,7 @@ describe("history search state", () => {
       workflowFilePath: "C:\\workflow.flightpath.yaml",
       runIndex: 1,
       findQuery: "needle",
+      target: { kind: "queue", stepIndex: 0 },
     });
 
     expect(store().isHistorySearchOpen).toBe(true);
@@ -148,6 +155,7 @@ describe("history search state", () => {
       workflowFilePath: "C:\\workflow.flightpath.yaml",
       runIndex: 1,
       findQuery: "needle",
+      target: { kind: "queue", stepIndex: 0 },
     });
 
     store().closeHistorySearch();

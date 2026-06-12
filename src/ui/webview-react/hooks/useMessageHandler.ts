@@ -1686,7 +1686,10 @@ function createMessageHandlers(): MessageHandlerMap {
         useUiStore.setState({ availableRuns });
         const pendingNavigation = uiStore.pendingHistorySearchNavigation;
         if (pendingNavigation?.findQuery) {
-          uiStore.setPendingFindQuery(pendingNavigation.findQuery);
+          uiStore.setPendingFindRequest({
+            query: pendingNavigation.findQuery,
+            preferredTarget: pendingNavigation.target,
+          });
           uiStore.setPendingHistorySearchNavigation(null);
         }
         return;
@@ -1707,7 +1710,10 @@ function createMessageHandlers(): MessageHandlerMap {
     const uiStore = useUiStore.getState();
     const pendingNavigation = uiStore.pendingHistorySearchNavigation;
     if (pendingNavigation?.findQuery) {
-      uiStore.setPendingFindQuery(pendingNavigation.findQuery);
+      uiStore.setPendingFindRequest({
+        query: pendingNavigation.findQuery,
+        preferredTarget: pendingNavigation.target,
+      });
       uiStore.setPendingHistorySearchNavigation(null);
     }
   };

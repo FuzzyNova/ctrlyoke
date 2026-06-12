@@ -35,6 +35,18 @@ export function createThemeExtension(surface: ThemeSurface = "editor") {
               overflow: "auto",
             }
           : {},
+      // Keep CodeMirror's aria-live announcer completely out of layout. If it
+      // falls back to normal flow, it pushes the scroller down by one or more
+      // lines and looks like the editor mount div is vertically offset.
+      ".cm-announced": {
+        position: "absolute",
+        top: 0,
+        width: "1px",
+        height: "1px",
+        overflow: "hidden",
+        clipPath: "inset(50%)",
+        whiteSpace: "nowrap",
+      },
       ".cm-content": {
         caretColor: "var(--vscode-editorCursor-foreground)",
         fontFamily: "var(--vscode-editor-font-family, 'Consolas, monospace')",
