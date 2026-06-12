@@ -52,7 +52,11 @@ import {
 } from "@dnd-kit/sortable";
 import { BoundaryBar } from "../prompts/BoundaryBar";
 import { triggerPanelAnimation } from "@utils/panelAnimation";
-import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
+import {
+  getStepAccentClass,
+  isWorkflowActive,
+  isWorkflowRunning,
+} from "../../utils/status";
 import {
   buildWorkflowStepEnabledState,
   isEditableClipboardTarget,
@@ -69,17 +73,6 @@ function isScriptStep(step: WorkflowStep): step is ScriptStep {
 /** Get the displayable text content of a step */
 function getStepText(step: WorkflowStep): string {
   return isScriptStep(step) ? step.script : step.prompt;
-}
-
-function getCompletedStepAccentClass(status: StepStatus): string {
-  switch (status) {
-    case STEP_STATUS.CANCELLED:
-      return "bg-indicator-running";
-    case STEP_STATUS.FAILED:
-      return "bg-indicator-error";
-    default:
-      return "bg-indicator-success";
-  }
 }
 
 type WorkflowStepComponentProps = React.ComponentProps<typeof WorkflowStepItem>;
@@ -849,7 +842,7 @@ const WorkflowStepsPanelInner: React.FC<{
                   >
                     {/* 2px status accent — compensated by narrowing number col by 2px so numbers stay aligned with pending items */}
                     <div
-                      className={`w-[2px] flex-shrink-0 self-stretch ${getCompletedStepAccentClass(status)}`}
+                      className={`w-[2px] flex-shrink-0 self-stretch ${getStepAccentClass(status)}`}
                     />
                     <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-xs text-description-fg select-none">
                       {slotNumber}

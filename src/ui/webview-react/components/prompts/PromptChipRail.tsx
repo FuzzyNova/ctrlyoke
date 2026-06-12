@@ -34,7 +34,11 @@ import {
   type StepStatus,
 } from "../../types/messages";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
-import { isWorkflowActive, isWorkflowRunning } from "../../utils/status";
+import {
+  getStepAccentClass,
+  isWorkflowActive,
+  isWorkflowRunning,
+} from "../../utils/status";
 import { buildWorkflowStepEnabledState } from "@utils/stepClipboard";
 import {
   DndContext,
@@ -63,14 +67,10 @@ function getChipBorderClass(status: StepStatus): string {
   switch (status) {
     case STEP_STATUS.RUNNING:
       return "bg-status-idle animate-pulse-custom";
-    case STEP_STATUS.FAILED:
-      return "bg-indicator-error";
-    case STEP_STATUS.CANCELLED:
-      return "bg-indicator-running";
     case STEP_STATUS.PENDING:
       return "bg-transparent";
     default:
-      return "bg-indicator-success";
+      return getStepAccentClass(status);
   }
 }
 

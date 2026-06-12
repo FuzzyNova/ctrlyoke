@@ -94,6 +94,22 @@ export function getStatusLabel(status: StepStatus): string {
 }
 
 /**
+ * Get the left-border/chip accent class for a step's terminal status.
+ * FAILED -> error (red), CANCELLED/SKIPPED -> warning (yellow), else success (green).
+ */
+export function getStepAccentClass(status: StepStatus): string {
+  switch (status) {
+    case STEP_STATUS.CANCELLED:
+    case STEP_STATUS.SKIPPED:
+      return "bg-indicator-running";
+    case STEP_STATUS.FAILED:
+      return "bg-indicator-error";
+    default:
+      return "bg-indicator-success";
+  }
+}
+
+/**
  * Execution state icons (for workflow-level status)
  */
 const EXECUTION_STATE_ICONS: Record<ExecutionState, string> = {

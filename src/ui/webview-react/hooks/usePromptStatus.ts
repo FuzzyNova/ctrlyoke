@@ -25,7 +25,22 @@ export function usePromptStatus() {
     // an explicit STEP_STATUS_CHANGED being sent (e.g., CLI watch mode).
     if (isRunning) {
       if (index === currentStep) return STEP_STATUS.RUNNING;
-      if (index < currentStep) return STEP_STATUS.COMPLETED;
+      if (index < currentStep) {
+        // Preserve a recorded terminal status (failed/cancelled/skipped) for
+        // past steps. Only fall back to COMPLETED when no terminal status has
+        // been recorded yet — e.g. currentStep advanced before the
+        // STEP_STATUS_CHANGED message arrived (CLI watch mode).
+        const status = (prompt as any).status as StepStatus | undefined;
+        switch (status) {
+          case STEP_STATUS.FAILED:
+          case STEP_STATUS.CANCELLED:
+          case STEP_STATUS.SKIPPED:
+          case STEP_STATUS.COMPLETED:
+            return status;
+          default:
+            return STEP_STATUS.COMPLETED;
+        }
+      }
     }
     // Eagerly reflect terminal states for the current step before the
     // per-step STEP_STATUS_CHANGED message arrives. executionState flips
