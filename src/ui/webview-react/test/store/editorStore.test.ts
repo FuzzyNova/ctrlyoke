@@ -192,6 +192,25 @@ describe("enterEditMode", () => {
     expect(store().properties.model).toBe("gpt-5");
   });
 
+  it("loads prompt-level error behavior from prompt data", () => {
+    store().enterEditMode(
+      1,
+      makePromptStep({
+        errorBehavior: {
+          onError: "retry",
+          maxRetries: 2,
+          retryDelayMs: 1000,
+        },
+      })
+    );
+
+    expect(store().properties.errorBehavior).toEqual({
+      onError: "retry",
+      maxRetries: 2,
+      retryDelayMs: 1000,
+    });
+  });
+
   it("loads disabled state from the step payload", () => {
     store().enterEditMode(2, makePromptStep({ enabled: false }));
     expect(store().stepEnabled).toBe(false);
@@ -402,6 +421,17 @@ describe("getPromptProperties", () => {
     store().setPromptText("Run tests");
     store().setEndCondition({ script: "  ", returns: "true" });
     expect("endCondition" in store().getPromptProperties()).toBe(false);
+  });
+
+  it("includes explicit errorBehavior overrides", () => {
+    store().setPromptText("Retry on harness failure");
+    store().setProperty("errorBehavior", {
+      onError: "continue",
+    });
+
+    expect(store().getPromptProperties().errorBehavior).toEqual({
+      onError: "continue",
+    });
   });
 });
 

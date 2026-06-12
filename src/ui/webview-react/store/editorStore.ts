@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
+import type { ErrorBehavior } from "@root/types/FlightPathTypes";
 import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type {
@@ -62,6 +63,7 @@ export interface PropertyValues {
   sessionId: string; // "" or session ID or prompt number reference
   mcpServers: (string | object)[] | null | undefined; // undefined = inherit, null = none, array = custom
   hooks: object[] | null | undefined; // undefined = inherit, null = none, array = custom
+  errorBehavior?: ErrorBehavior | null;
   endCondition?: EndConditionConfig | null;
   preCondition?: PreCondition | null;
   priorContext?: PriorContext; // undefined = inherit/default
@@ -82,6 +84,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   sessionId: "",
   mcpServers: undefined,
   hooks: undefined,
+  errorBehavior: undefined,
   endCondition: undefined, // undefined = inherit from workflow
   preCondition: undefined,
   additionalArgs: undefined,
@@ -530,6 +533,7 @@ export const useEditorStore = create<
             : "",
         mcpServers: promptData.mcpServers,
         hooks: promptData.hooks,
+        errorBehavior: promptData.errorBehavior,
         endCondition: promptData.endCondition,
         preCondition: promptData.preCondition,
         priorContext: promptData.priorContext,
@@ -1137,6 +1141,11 @@ export const useEditorStore = create<
     // Add end condition if configured
     if (properties.endCondition && properties.endCondition.script.trim()) {
       result.endCondition = properties.endCondition;
+    }
+
+    // Add errorBehavior when explicitly overridden
+    if (properties.errorBehavior !== undefined) {
+      result.errorBehavior = properties.errorBehavior;
     }
 
     // Add pre-condition if configured

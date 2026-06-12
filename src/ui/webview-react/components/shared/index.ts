@@ -55,6 +55,7 @@ export {
   ScriptConditionEditor,
   type ScriptConditionValue,
 } from "./ScriptConditionEditor";
+export { ErrorBehaviorEditor } from "./ErrorBehaviorEditor";
 export { AnimatedSection } from "./AnimatedSection";
 export { SettingSourceBadge } from "./SettingSourceBadge";
 export { SettingToggleRow } from "./SettingToggleRow";

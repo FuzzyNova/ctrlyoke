@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from "react";
+import type { ErrorBehavior } from "@root/types/FlightPathTypes";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
   useEditorStore,
@@ -10,9 +11,9 @@ import {
   HARNESS_IDS,
   CONDITION_ACTIONS,
   type HarnessId,
-  type PriorContext,
   type ToolPermissionsOverride,
   type ToolPermissionMode,
+  type PriorContext,
 } from "../../types/messages";
 import { PERMISSION_MODES } from "../../../../types/DashboardConstants";
 import {
@@ -36,6 +37,7 @@ import {
   PERMISSION_MODE_OPTIONS,
   getPermissionHarnessSupport,
   buildPermissionsDefaultLabel,
+  ErrorBehaviorEditor,
   ScriptConditionEditor,
   type ScriptConditionValue,
   AnimatedSection,
@@ -89,6 +91,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     setProperty("mcpServers", undefined);
     setProperty("toolPermissions", undefined);
     setProperty("hooks", undefined);
+    setProperty("errorBehavior", undefined);
     setProperty("preCondition", undefined);
     clearEndCondition();
   }, [setProperty, clearEndCondition]);
@@ -283,6 +286,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         ? "none"
         : "custom";
 
+  const errorBehaviorMode =
+    properties.errorBehavior === undefined
+      ? "inherit"
+      : properties.errorBehavior === null
+        ? "none"
+        : "custom";
+
   const resolvedEndConditionForInherit =
     workflowProperties.endCondition !== undefined
       ? workflowProperties.endCondition
@@ -292,6 +302,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     workflowProperties.preCondition !== undefined
       ? workflowProperties.preCondition
       : globalSettings.defaultPreCondition;
+
+  const resolvedErrorBehaviorForInherit =
+    workflowProperties.errorBehavior !== undefined
+      ? workflowProperties.errorBehavior
+      : globalSettings.defaultErrorBehavior;
 
   const buildConditionInheritLabel = (
     resolved: { script?: string } | null | undefined
@@ -308,6 +323,22 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   );
   const preConditionInheritLabel = buildConditionInheritLabel(
     resolvedPreConditionForInherit
+  );
+
+  const buildErrorBehaviorInheritLabel = (
+    resolved: ErrorBehavior | null | undefined
+  ) => {
+    if (!resolved) return "Inherit (Stop Workflow)";
+    if (resolved.onError === "retry") {
+      return `Inherit (Retry ${resolved.maxRetries ?? 1}x)`;
+    }
+    return resolved.onError === "continue"
+      ? "Inherit (Continue Workflow)"
+      : "Inherit (Stop Workflow)";
+  };
+
+  const errorBehaviorInheritLabel = buildErrorBehaviorInheritLabel(
+    resolvedErrorBehaviorForInherit
   );
 
   const buildConditionOptions = (inheritLabel: string) => [
@@ -684,6 +715,42 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Page: Validation */}
         {activePage === DRAWER_PAGES.VALIDATION && (
           <div className="space-y-4">
+            <div className="space-y-2">
+              <label
+                htmlFor="prop-error-behavior-mode"
+                className="text-xs font-semibold uppercase text-description-fg"
+                title="Controls what happens when the harness itself fails before the prompt can complete successfully."
+              >
+                Error Behavior
+              </label>
+              <CustomSelect
+                id="prop-error-behavior-mode"
+                value={errorBehaviorMode}
+                onChange={(v) => {
+                  if (v === "inherit") {
+                    setProperty("errorBehavior", undefined);
+                  } else if (v === "none") {
+                    setProperty("errorBehavior", null);
+                  } else {
+                    setProperty("errorBehavior", {
+                      onError: "stop",
+                    } as ErrorBehavior);
+                  }
+                }}
+                options={buildConditionOptions(errorBehaviorInheritLabel)}
+              />
+              <AnimatedSection visible={errorBehaviorMode === "custom"}>
+                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
+                  <ErrorBehaviorEditor
+                    value={properties.errorBehavior}
+                    onChange={(updated) => setProperty("errorBehavior", updated)}
+                    disabled={false}
+                    idPrefix="prop-error"
+                  />
+                </div>
+              </AnimatedSection>
+            </div>
+
             {/* Pre-Condition Section */}
             <div className="space-y-2">
               <label

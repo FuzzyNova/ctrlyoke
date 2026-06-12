@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
+import type { ErrorBehavior } from "@root/types/FlightPathTypes";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -38,6 +39,7 @@ import {
   type McpServersValue,
   PERMISSION_MODE_OPTIONS,
   getPermissionHarnessSupport,
+  ErrorBehaviorEditor,
   ScriptConditionEditor,
   type ScriptConditionValue,
   AnimatedSection,
@@ -290,6 +292,13 @@ const WorkflowPropertiesPanelInner: React.FC<{
         return (
           JSON.stringify(normalize(workflowValue)) !==
           JSON.stringify(normalize(globalSettings.defaultPreCondition))
+        );
+      }
+      if (property === "errorBehavior") {
+        const normalize = (v: unknown) => (v == null ? null : v);
+        return (
+          JSON.stringify(normalize(workflowValue)) !==
+          JSON.stringify(normalize(globalSettings.defaultErrorBehavior))
         );
       }
       // Deep comparison for toolPermissions — normalize null/undefined/none
@@ -714,6 +723,24 @@ const WorkflowPropertiesPanelInner: React.FC<{
     [syncWorkflowPropertiesForUndo, vscode]
   );
 
+  const handleErrorBehaviorChange = useCallback(
+    (updated: ErrorBehavior) => {
+      useSettingsStore
+        .getState()
+        .updateWorkflowProperty(
+          "errorBehavior",
+          updated as WorkflowProperties["errorBehavior"]
+        );
+      syncWorkflowPropertiesForUndo();
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "errorBehavior",
+        value: updated,
+      });
+    },
+    [syncWorkflowPropertiesForUndo, vscode]
+  );
+
   const handleSetAsDefault = useCallback(
     (property: string, value: unknown, harness?: string) => {
       vscode.postMessage({
@@ -749,6 +776,8 @@ const WorkflowPropertiesPanelInner: React.FC<{
       toolPermissions:
         globalSettings.toolPermissions as WorkflowProperties["toolPermissions"],
       hooks: globalSettings.hooks as WorkflowProperties["hooks"],
+      errorBehavior:
+        globalSettings.defaultErrorBehavior as WorkflowProperties["errorBehavior"],
       endCondition:
         globalSettings.defaultEndCondition as WorkflowProperties["endCondition"],
       preCondition:
@@ -797,6 +826,9 @@ const WorkflowPropertiesPanelInner: React.FC<{
     toolPerms === null
       ? PERMISSION_MODES.NONE
       : (toolPerms?.mode ?? PERMISSION_MODES.ALLOW_ALL);
+  const effectiveErrorBehavior =
+    workflowProperties.errorBehavior ??
+    globalSettings.defaultErrorBehavior ?? { onError: "stop" as const };
   // Fall back to global settings when workflow doesn't have lists yet
   const effectiveAllowedTools =
     toolPerms?.allowedTools ?? globalSettings.toolPermissions.allowedTools;
@@ -1168,6 +1200,37 @@ const WorkflowPropertiesPanelInner: React.FC<{
 
           {activePage === DRAWER_PAGES.VALIDATION && (
             <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label
+                    htmlFor="settings-error-on-error"
+                    className="text-xs font-semibold uppercase text-description-fg"
+                    title="Controls what happens when the harness itself fails before prompt validation completes."
+                  >
+                    Error Behavior
+                  </label>
+                  <SetAsDefaultButton
+                    property="errorBehavior"
+                    show={isDifferentFromGlobal("errorBehavior")}
+                    onSetDefault={() =>
+                      handleSetAsDefault(
+                        "errorBehavior",
+                        workflowProperties.errorBehavior
+                      )
+                    }
+                  />
+                </div>
+                <p className="text-xs text-description-fg mb-3">
+                  Decide whether harness failures stop the workflow, retry the
+                  current step, or continue to the next step.
+                </p>
+                <ErrorBehaviorEditor
+                  value={effectiveErrorBehavior}
+                  onChange={handleErrorBehaviorChange}
+                  idPrefix="settings-error"
+                />
+              </div>
+
               {/* Pre-Condition Section */}
               <div>
                 <div className="flex items-center justify-between mb-3">

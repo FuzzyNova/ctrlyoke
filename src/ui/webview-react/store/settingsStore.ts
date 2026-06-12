@@ -24,7 +24,7 @@ import type {
   PreCondition,
   TerminalSettings,
 } from "@root/types/WebviewMessageTypes";
-import type { EndCondition } from "@root/types/FlightPathTypes";
+import type { EndCondition, ErrorBehavior } from "@root/types/FlightPathTypes";
 
 /**
  * Model option for dropdowns
@@ -103,6 +103,7 @@ export interface GlobalSettings {
   showHiddenFiles: boolean;
   priorContext: string;
   workspaceRoot: string;
+  defaultErrorBehavior: ErrorBehavior | null;
   defaultEndCondition: EndCondition | null;
   defaultPreCondition: PreCondition | null;
   terminal?: TerminalSettings;
@@ -122,6 +123,7 @@ export interface WorkflowProperties {
   sessionId?: string | number; // UUID string or prompt number reference
   mcpServers?: (string | object)[] | null;
   hooks?: object[] | null;
+  errorBehavior?: ErrorBehavior | null;
   endCondition?: {
     script?: string; // Made optional - fields can be set incrementally
     returns?: string;
@@ -298,6 +300,7 @@ const initialGlobalSettings: GlobalSettings = {
   showHiddenFiles: true,
   priorContext: "none",
   workspaceRoot: "",
+  defaultErrorBehavior: null,
   defaultEndCondition: null,
   defaultPreCondition: null,
   terminal: {

@@ -5,10 +5,11 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import {
+  AnimatedSection,
+  ErrorBehaviorEditor,
   ScriptConditionEditor,
   type ScriptConditionValue,
-} from "../../shared/ScriptConditionEditor";
-import { AnimatedSection } from "../../shared/AnimatedSection";
+} from "../../shared";
 import { SettingSourceBadge } from "../../shared/SettingSourceBadge";
 
 interface Props {
@@ -103,6 +104,30 @@ export function DefaultsValidationPage({
 
   return (
     <div className="space-y-4">
+      <div className="border border-panel-border rounded p-3 group">
+        <div
+          className="flex items-center gap-2 text-xs font-semibold uppercase text-description-fg mb-1"
+          title="Default harness failure policy applied to all new workflows."
+        >
+          <ObjectSettingHeader
+            path="defaults.errorBehavior"
+            label="Default Error Behavior"
+            sources={sources}
+            activeScope={activeScope}
+            onReset={onReset}
+          />
+        </div>
+        <p className="text-xs text-description-fg mb-3">
+          Controls what new workflows do when the harness fails. Individual
+          workflows and prompts can override or disable it.
+        </p>
+        <ErrorBehaviorEditor
+          value={wf.errorBehavior}
+          onChange={(updated) => onUpdate("defaults.errorBehavior", updated)}
+          idPrefix="global-default-error"
+        />
+      </div>
+
       {/* Default Pre-Condition */}
       <div className="border border-panel-border rounded p-3 group">
         <div

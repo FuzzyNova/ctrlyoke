@@ -171,6 +171,7 @@ describe("setGlobalSettings", () => {
       showHiddenFiles: true,
       priorContext: "none",
       workspaceRoot: "",
+      defaultErrorBehavior: null,
       defaultEndCondition: null,
       defaultPreCondition: null,
       settingSources: {},

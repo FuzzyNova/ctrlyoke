@@ -6,7 +6,7 @@
 - [x] Phase 2 - Failure classification plumbing
 - [x] Phase 3 - Harness detection
 - [x] Phase 4 - WorkflowExecutor routing
-- [ ] Phase 5 - UI
+- [x] Phase 5 - UI
 
 ### Phase 1 progress
 
@@ -15,7 +15,7 @@
 - [x] Hook metadata/schema support for logical `error` event
 - [x] Parser / working-file default seeding / serializer wiring
 - [x] Settings sync + YAML property completion wiring
-- [ ] Remaining editor UI for authoring `errorBehavior`
+- [x] Remaining editor UI for authoring `errorBehavior`
 
 ### Phase 2 progress
 
@@ -966,21 +966,21 @@ adding broad false-positive log parsing.
 
 ### Phase 5 - UI
 
-1. Add workflow-level `errorBehavior` editing in the Validation section of
+1. [x] Add workflow-level `errorBehavior` editing in the Validation section of
    `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx`
-2. Add prompt-level `errorBehavior` editing in the Validation section of
+2. [x] Add prompt-level `errorBehavior` editing in the Validation section of
    `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`
-3. Add global default `errorBehavior` editing in the Validation section of
+3. [x] Add global default `errorBehavior` editing in the Validation section of
    `src/ui/webview-react/components/settings/defaults/DefaultsValidationPage.tsx`
-4. Use the existing nullable execution-property pattern in `PropertiesDrawer.tsx`:
+4. [x] Use the existing nullable execution-property pattern in `PropertiesDrawer.tsx`:
    dropdown options should include inherit / explicit none / custom behavior, matching the
    workflow-inheritance semantics already used for `endCondition` and `preCondition`
-5. Show `maxRetries` and `retryDelayMs` only when the selected `onError` value is `retry`
-6. Keep workflow/default-level controls simpler: `onError` selector always visible, with
+5. [x] Show `maxRetries` and `retryDelayMs` only when the selected `onError` value is `retry`
+6. [x] Keep workflow/default-level controls simpler: `onError` selector always visible, with
    `maxRetries` and `retryDelayMs` conditionally rendered under it when `retry` is selected
-7. Add status messaging for retry and continue outcomes where the current Validation UI
+7. [x] Add status messaging for retry and continue outcomes where the current Validation UI
    already surfaces execution/attempt state
-8. Do not add bespoke error controls to `NotificationsSection.tsx` or `HooksEditor.tsx`;
+8. [x] Do not add bespoke error controls to `NotificationsSection.tsx` or `HooksEditor.tsx`;
    the new logical `error` hook event should appear there through `HOOK_EVENT_METADATA`
 
 ---

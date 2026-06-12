@@ -147,6 +147,7 @@ interface PromptChangeFields {
   harness?: string | null;
   model?: string | null;
   agent?: string | null;
+  errorBehavior?: unknown;
   endCondition?: unknown;
   preCondition?: unknown;
   skills?: unknown;
@@ -170,6 +171,8 @@ function describePromptChange(
     return `Changed model on ${scope} to ${strVal(n.model)}`;
   if (p.agent !== n.agent)
     return `Changed agent on ${scope} to ${strVal(n.agent)}`;
+  if (JSON.stringify(p.errorBehavior) !== JSON.stringify(n.errorBehavior))
+    return `Changed error behavior on ${scope}`;
   if (JSON.stringify(p.endCondition) !== JSON.stringify(n.endCondition))
     return `Changed end condition on ${scope}`;
   if (JSON.stringify(p.preCondition) !== JSON.stringify(n.preCondition))
@@ -241,6 +244,11 @@ function describeChange(
       : `Disabled resume session`;
   if (prevWP.sessionId !== nextWP.sessionId)
     return `Changed session ID to ${strVal(nextWP.sessionId)}`;
+  if (
+    JSON.stringify(prevWP.errorBehavior) !==
+    JSON.stringify(nextWP.errorBehavior)
+  )
+    return `Changed workflow error behavior`;
   if (
     JSON.stringify(prevWP.endCondition) !== JSON.stringify(nextWP.endCondition)
   )
