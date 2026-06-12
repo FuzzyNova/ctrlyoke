@@ -27,6 +27,7 @@ export class CopilotNotificationMonitor
   /** Logical → Copilot native event name mapping. Shared with CopilotChatIntegration. */
   static readonly EVENT_MAP: Record<string, string> = {
     stop: "agentStop",
+    error: "errorOccurred",
     sessionStart: "sessionStart",
     preToolUse: "preToolUse",
     postToolUse: "postToolUse",
@@ -92,7 +93,11 @@ export class CopilotNotificationMonitor
 
     // Map logical event names to Copilot's native event names
     const eventMap = CopilotNotificationMonitor.EVENT_MAP;
-    const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
+    const selectedEvents = flightpathEvents ?? [
+      "sessionStart",
+      "stop",
+      "error",
+    ];
     const permissionRequestHook = userHooks?.find(
       (hook) => hook.event === "permissionRequest"
     );

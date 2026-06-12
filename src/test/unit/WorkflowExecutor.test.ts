@@ -16,6 +16,7 @@ import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
   STEP_STATUS,
+  FAILURE_KINDS,
 } from "../../types/DashboardConstants";
 import { CliEvent } from "../../types/WebviewMessageTypes";
 
@@ -50,6 +51,8 @@ type SendOutcome = {
 class MockHarnessIntegration extends HarnessIntegration {
   public sentPrompts: string[] = [];
   public processExitFailure: boolean = false;
+  public harnessErrorFailure: boolean = false;
+  public timeoutFailure: boolean = false;
   public lastFailureOutput?: string;
   public lastCliCommandValue?: string;
   public onSend?: (
@@ -92,6 +95,27 @@ class MockHarnessIntegration extends HarnessIntegration {
 
   override wasLastFailureProcessExit(): boolean {
     return this.processExitFailure;
+  }
+
+  override wasLastFailureHarnessError(): boolean {
+    return this.harnessErrorFailure;
+  }
+
+  override wasLastFailureTimeout(): boolean {
+    return this.timeoutFailure;
+  }
+
+  override getLastFailureKind() {
+    if (this.processExitFailure) {
+      return FAILURE_KINDS.PROCESS_EXIT;
+    }
+    if (this.harnessErrorFailure) {
+      return FAILURE_KINDS.HARNESS_ERROR;
+    }
+    if (this.timeoutFailure) {
+      return FAILURE_KINDS.TIMEOUT;
+    }
+    return undefined;
   }
 
   override getLastFailureOutput(): string | undefined {
@@ -583,7 +607,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(completedCalls[0].output.isStreaming, false);
   });
 
-  test("stops on process exit and persists warning plus PTY tail", async () => {
+  test("fails the step on process exit by default and persists warning plus PTY tail", async () => {
     const queue = new PromptQueue();
     const integration = new MockHarnessIntegration(undefined, false);
     const executor = makeExecutor(queue);
@@ -650,15 +674,15 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     await executor.execute(integration, context);
 
     const finalState = queue.getState();
-    assert.strictEqual(finalState.status, EXECUTION_STATES.STOPPED);
+    assert.strictEqual(finalState.status, EXECUTION_STATES.ERROR);
     assert.strictEqual(finalState.currentIndex, 1);
-    assert.strictEqual(finalState.results[0].status, STEP_STATUS.CANCELLED);
+    assert.strictEqual(finalState.results[0].status, STEP_STATUS.FAILED);
     assert.strictEqual(finalState.results[1].status, STEP_STATUS.PENDING);
 
     assert.strictEqual(statusCalls.length, 1);
     assert.strictEqual(statusCalls[0].stepIndex, 0);
     assert.strictEqual(statusCalls[0].severity, "warning");
-    assert.match(statusCalls[0].message, /Process exited unexpectedly/);
+    assert.match(statusCalls[0].message, /Stopping workflow/);
 
     assert.strictEqual(captureCalls.length, 1);
     assert.strictEqual(captureCalls[0].stepIndex, 0);
@@ -681,7 +705,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     );
     assert.match(
       appendedStatusMessages[0].statusMessage.message,
-      /Process exited unexpectedly/
+      /Stopping workflow/
     );
     assert.deepStrictEqual(historyCallOrder, ["status", "output"]);
     assert.deepStrictEqual(historySaves[0].target, {
@@ -692,6 +716,86 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.match(
       historySaves[0].cliOutputs[0].response,
       /unknown option '--poopy'/
+    );
+  });
+
+  test("continues to the next step when errorBehavior.onError is continue", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+
+    integration.harnessErrorFailure = true;
+    integration.onSend = async (prompt) => {
+      if (prompt.prompt === "first-step") {
+        (integration as any).lastFailureReason = "Claude StopFailure";
+        return { success: false };
+      }
+      return { success: true, responseText: `ok:${prompt.prompt}` };
+    };
+
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "first-step",
+          errorBehavior: { onError: "continue" },
+        },
+        { prompt: "second-step" },
+      ],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.deepStrictEqual(integration.sentPrompts, ["first-step", "second-step"]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.FAILED);
+    assert.strictEqual(queue.getState().results[1].status, STEP_STATUS.COMPLETED);
+  });
+
+  test("retries the same step when errorBehavior.onError is retry", async () => {
+    const queue = new PromptQueue();
+    const integration = new MockHarnessIntegration(undefined, false);
+    const executor = makeExecutor(queue);
+    let firstStepAttempts = 0;
+
+    integration.processExitFailure = true;
+    integration.onSend = async (prompt) => {
+      if (prompt.prompt === "retry-step") {
+        firstStepAttempts++;
+        if (firstStepAttempts === 1) {
+          (integration as any).lastFailureReason =
+            "CLI process exited unexpectedly (exit code 1)";
+          return { success: false };
+        }
+        integration.processExitFailure = false;
+      }
+      return { success: true, responseText: `ok:${prompt.prompt}` };
+    };
+
+    queue.loadPrompts({
+      steps: [
+        {
+          prompt: "retry-step",
+          errorBehavior: { onError: "retry", maxRetries: 1, retryDelayMs: 0 },
+        },
+        { prompt: "after-retry" },
+      ],
+    });
+
+    await executor.execute(integration, makeContext(integration));
+
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "retry-step",
+      "retry-step",
+      "after-retry",
+    ]);
+    assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
+    assert.strictEqual(
+      queue.getState().results[0].status,
+      STEP_STATUS.COMPLETED
+    );
+    assert.strictEqual(
+      queue.getState().results[1].status,
+      STEP_STATUS.COMPLETED
     );
   });
 });

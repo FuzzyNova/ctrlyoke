@@ -455,6 +455,20 @@ function buildNotifyFilePath(notifyDir, sessionId, isStartEvent) {
 }
 
 /**
+ * Build the error notification file path for a session.
+ *
+ * @param {string} notifyDir - Notification directory path
+ * @param {string|null|undefined} sessionId - Session ID, or falsy to skip
+ * @returns {string|null} Full path to the error notification file
+ */
+function buildErrorNotifyFilePath(notifyDir, sessionId) {
+  if (!sessionId) {
+    return null;
+  }
+  return path.join(notifyDir, `${path.basename(sessionId)}-error.json`);
+}
+
+/**
  * Handle a permission/decision-request hook event: run the encoded decision
  * hook (if any) and exit the process with its result, or exit 0 if no
  * decision hook is configured. Never returns.
@@ -498,5 +512,6 @@ module.exports = {
   requireSessionId,
   ensureNotifyDir,
   buildNotifyFilePath,
+  buildErrorNotifyFilePath,
   dispatchPermissionRequest,
 };

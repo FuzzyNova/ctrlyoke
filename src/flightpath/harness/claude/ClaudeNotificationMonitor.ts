@@ -27,6 +27,7 @@ export class ClaudeNotificationMonitor
   /** Map logical event names to Claude's native event names. */
   static readonly EVENT_MAP: Record<string, string> = {
     stop: "Stop",
+    error: "StopFailure",
     sessionStart: "SessionStart",
     preToolUse: "PreToolUse",
     postToolUse: "PostToolUse",
@@ -77,7 +78,7 @@ export class ClaudeNotificationMonitor
       scriptPath,
       notifyDir
     );
-    const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
+    const selectedEvents = flightpathEvents ?? ["sessionStart", "stop", "error"];
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const hooks = this.buildCommandHooks(
       command,

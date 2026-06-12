@@ -4,8 +4,8 @@
 
 - [~] Phase 1 - Types, schemas, parser, serializer
 - [x] Phase 2 - Failure classification plumbing
-- [ ] Phase 3 - Harness detection
-- [ ] Phase 4 - WorkflowExecutor routing
+- [x] Phase 3 - Harness detection
+- [x] Phase 4 - WorkflowExecutor routing
 - [ ] Phase 5 - UI
 
 ### Phase 1 progress
@@ -25,6 +25,30 @@
 - [x] Timeout routing stays structured instead of throwing from `CliExecutionRunner`
 - [x] Headless non-zero exits classify as `processExit`
 - [x] Failure classification persists into prompt `_runtime`
+
+### Phase 3 progress
+
+- [x] `ClaudeNotificationMonitor` registers logical `error` via Claude `StopFailure`
+- [x] `flightpath-claude-hook.js` handles `StopFailure` and writes `{sessionId}-error.json`
+- [x] `CopilotNotificationMonitor` registers logical `error` via Copilot `errorOccurred`
+- [x] `flightpath-copilot-hook.js` handles `errorOccurred` and writes `{sessionId}-error.json`
+- [x] `flightpath-opencode-plugin.ts` handles `session.error` and writes `{sessionId}-error.json`
+- [x] Shared hook utility support for explicit error notification file naming
+- [x] Interactive notification polling now treats `-error.json` as harness failure for Claude/Copilot/OpenCode
+- [x] Logical user-facing `error` event is preserved through the same notification artifact path
+- [ ] Harness-specific session-level log fallbacks remain intentionally deferred for Codex/Qwen/Gemini
+
+### Phase 4 progress
+
+- [x] `PropertyResolver` now resolves prompt/workflow `errorBehavior`
+- [x] `WorkflowExecutor` routes `processExit` through `errorBehavior` instead of cancellation
+- [x] `WorkflowExecutor` routes `harnessError` through `errorBehavior`
+- [x] `WorkflowExecutor` routes `timeout` through `errorBehavior`
+- [x] `userCancelled` stays on the existing cancellation path
+- [x] `errorBehavior.retry` retries the same queue/finalStep target without advancing early
+- [x] `errorBehavior.continue` finalizes the failed step and advances the queue
+- [x] Default behavior with no resolved `errorBehavior` remains `stop`
+- [x] Unit coverage updated for default stop, continue, and retry routing
 
 ## Problem
 
@@ -914,16 +938,16 @@ classification explicit.
 
 ### Phase 3 - Harness detection
 
-1. `flightpath-claude-hook.js`: add `StopFailure` to `HANDLED_EVENTS`, write error file
-2. `ClaudeNotificationMonitor`: register `StopFailure` in hook config
-3. `flightpath-copilot-hook.js`: add `errorOccurred` to `LOGICAL_EVENT_MAP`, write error file
-4. `CopilotNotificationMonitor`: register `errorOccurred` in hook config
-5. `flightpath-opencode-plugin.ts`: handle `session.error` event, write error file
-6. `OpenCodeNotificationMonitor`: scan for error files alongside stop files
-7. Map the logical user hook/notification event `error` to Claude `StopFailure`, Copilot
+1. [x] `flightpath-claude-hook.js`: add `StopFailure` to `HANDLED_EVENTS`, write error file
+2. [x] `ClaudeNotificationMonitor`: register `StopFailure` in hook config
+3. [x] `flightpath-copilot-hook.js`: add `errorOccurred` to `LOGICAL_EVENT_MAP`, write error file
+4. [x] `CopilotNotificationMonitor`: register `errorOccurred` in hook config
+5. [x] `flightpath-opencode-plugin.ts`: handle `session.error` event, write error file
+6. [x] `OpenCodeNotificationMonitor`: scan for error files alongside stop files
+7. [x] Map the logical user hook/notification event `error` to Claude `StopFailure`, Copilot
    `errorOccurred`, and OpenCode `session.error`
-8. `ClaudeNotificationMonitor`/`CopilotNotificationMonitor`: tighten log fallback to session-level only
-9. Leave Codex/Qwen/Gemini on process-exit/timeout fallback — no changes needed; they
+8. [ ] `ClaudeNotificationMonitor`/`CopilotNotificationMonitor`: tighten log fallback to session-level only
+9. [x] Leave Codex/Qwen/Gemini on process-exit/timeout fallback — no changes needed; they
    inherit Phase 2's structured classification automatically
 
 This is the smallest safe implementation slice that fixes the known blind spots without
@@ -931,22 +955,32 @@ adding broad false-positive log parsing.
 
 ### Phase 4 - WorkflowExecutor routing
 
-1. Move process exit off the cancel path — change `wasLastFailureProcessExit()` branch to
+1. [x] Move process exit off the cancel path — change `wasLastFailureProcessExit()` branch to
    route through `errorBehavior` instead of calling `runtime.cancelAttempt()` + stop
-2. Wire `wasLastFailureHarnessError()` as a new route (same policy lookup)
-3. Wire timeout (`failureKind: "timeout"`) as a new route
-4. Keep `userCancelled` on the existing cancellation path — unchanged
-5. Implement `retry` behavior
-6. Implement `continue` behavior
-7. Preserve existing `stop` behavior as the default when `errorBehavior` is not set
+2. [x] Wire `wasLastFailureHarnessError()` as a new route (same policy lookup)
+3. [x] Wire timeout (`failureKind: "timeout"`) as a new route
+4. [x] Keep `userCancelled` on the existing cancellation path — unchanged
+5. [x] Implement `retry` behavior
+6. [x] Implement `continue` behavior
+7. [x] Preserve existing `stop` behavior as the default when `errorBehavior` is not set
 
 ### Phase 5 - UI
 
-1. Add workflow-level default editing
-2. Add prompt-level inherit/none/custom editing
-3. Add retry-related inputs
-4. Add status messaging for retry and continue outcomes
-5. Do not add bespoke error controls to `NotificationsSection.tsx` or `HooksEditor.tsx`;
+1. Add workflow-level `errorBehavior` editing in the Validation section of
+   `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx`
+2. Add prompt-level `errorBehavior` editing in the Validation section of
+   `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`
+3. Add global default `errorBehavior` editing in the Validation section of
+   `src/ui/webview-react/components/settings/defaults/DefaultsValidationPage.tsx`
+4. Use the existing nullable execution-property pattern in `PropertiesDrawer.tsx`:
+   dropdown options should include inherit / explicit none / custom behavior, matching the
+   workflow-inheritance semantics already used for `endCondition` and `preCondition`
+5. Show `maxRetries` and `retryDelayMs` only when the selected `onError` value is `retry`
+6. Keep workflow/default-level controls simpler: `onError` selector always visible, with
+   `maxRetries` and `retryDelayMs` conditionally rendered under it when `retry` is selected
+7. Add status messaging for retry and continue outcomes where the current Validation UI
+   already surfaces execution/attempt state
+8. Do not add bespoke error controls to `NotificationsSection.tsx` or `HooksEditor.tsx`;
    the new logical `error` hook event should appear there through `HOOK_EVENT_METADATA`
 
 ---

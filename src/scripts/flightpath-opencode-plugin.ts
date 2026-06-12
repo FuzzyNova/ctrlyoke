@@ -219,6 +219,36 @@ export const FlightPathHook = async (_hookContext: unknown) => {
     }
   }
 
+  function _resolveSessionId(properties: Record<string, unknown>): string | null {
+    const directSessionId =
+      typeof properties.sessionID === "string"
+        ? properties.sessionID
+        : typeof properties.sessionId === "string"
+          ? properties.sessionId
+          : typeof properties.session_id === "string"
+            ? properties.session_id
+            : null;
+
+    if (directSessionId) {
+      return directSessionId;
+    }
+
+    const info = properties.info as
+      | { id?: unknown; sessionID?: unknown; sessionId?: unknown }
+      | undefined;
+    if (typeof info?.id === "string") {
+      return info.id;
+    }
+    if (typeof info?.sessionID === "string") {
+      return info.sessionID;
+    }
+    if (typeof info?.sessionId === "string") {
+      return info.sessionId;
+    }
+
+    return null;
+  }
+
   function _buildHookArtifactBase(): Omit<
     HookArtifact,
     "hookEvent" | "nativeHookEvent" | "rawHookData"
@@ -401,6 +431,49 @@ export const FlightPathHook = async (_hookContext: unknown) => {
             _runUserHooks("stop");
           }
         }
+      }
+
+      if (event.type === "session.error") {
+        const sessionId = _resolveSessionId(event.properties);
+        _debugLog("❌ session.error", {
+          sessionId,
+          properties: event.properties,
+        });
+
+        if (!sessionId) {
+          _debugLog("⚠️ session.error missing session identifier", {
+            properties: event.properties,
+          });
+          return;
+        }
+
+        _writeHookArtifact("error", "session.error", event.properties, {
+          sessionId,
+        });
+
+        if (NOTIFY_DIR) {
+          try {
+            mkdirSync(NOTIFY_DIR, { recursive: true });
+            const errorFile = `${NOTIFY_DIR}/${sessionId}-error.json`;
+            writeFileSync(
+              errorFile,
+              JSON.stringify({
+                hookEvent: "session.error",
+                sessionId,
+                status: "error",
+                timestamp: Date.now(),
+                rawHookData: event.properties,
+              })
+            );
+            _debugLog("✅ Wrote error file", { file: errorFile, sessionId });
+          } catch (e) {
+            _debugLog("❌ Failed to write error file", {
+              error: String(e),
+            });
+          }
+        }
+
+        _runUserHooks("error");
       }
     },
 

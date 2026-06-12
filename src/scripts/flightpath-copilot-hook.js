@@ -49,6 +49,7 @@ const {
   dispatchPermissionRequest,
   ensureNotifyDir,
   buildNotifyFilePath,
+  buildErrorNotifyFilePath,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-copilot-hook";
@@ -103,6 +104,7 @@ function main() {
     const LOGICAL_EVENT_MAP = {
       sessionStart: "sessionStart",
       agentStop: "stop",
+      errorOccurred: "error",
       preToolUse: "preToolUse",
       postToolUse: "postToolUse",
       userPromptSubmitted: "userPromptSubmit",
@@ -130,22 +132,43 @@ function main() {
       );
     }
 
-    if (hookType === "sessionStart" || hookType === "agentStop") {
+    if (
+      hookType === "sessionStart" ||
+      hookType === "agentStop" ||
+      hookType === "errorOccurred"
+    ) {
       ensureNotifyDir(notifyDir, debugLog);
 
       // Use same file naming convention as flightpath-claude-hook.js:
       //   sessionStart → {runId|sessionId}-start.json  (runId when FLIGHTPATH_RUN_ID set)
       //   agentStop    → {sessionId}-stop.json
+      //   errorOccurred → {sessionId}-error.json
       const notifyFile =
-        buildNotifyFilePath(notifyDir, sessionId, hookType === "sessionStart") ||
+        (hookType === "errorOccurred"
+          ? buildErrorNotifyFilePath(notifyDir, sessionId)
+          : buildNotifyFilePath(
+              notifyDir,
+              sessionId,
+              hookType === "sessionStart"
+            )) ||
         path.join(notifyDir, `${hookType}-${Date.now()}.json`);
 
       const notifyData = {
         timestamp: Date.now(),
         sessionId: sessionId || null,
-        status: hookType === "sessionStart" ? "started" : "completed",
+        status:
+          hookType === "sessionStart"
+            ? "started"
+            : hookType === "errorOccurred"
+              ? "error"
+              : "completed",
         // hookEvent matches Claude's format: "SessionStart" | "Stop"
-        hookEvent: hookType === "sessionStart" ? "SessionStart" : "Stop",
+        hookEvent:
+          hookType === "sessionStart"
+            ? "SessionStart"
+            : hookType === "errorOccurred"
+              ? "errorOccurred"
+              : "Stop",
         cwd: hookInput.cwd,
         rawHookData: hookInput,
       };

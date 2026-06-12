@@ -39,12 +39,18 @@ const {
   requireSessionId,
   ensureNotifyDir,
   buildNotifyFilePath,
+  buildErrorNotifyFilePath,
   STANDARD_LOGICAL_EVENT_MAP,
   STANDARD_HANDLED_EVENTS,
 } = require("./flightpath-hook-utils");
 
 const SCRIPT_NAME = "flightpath-claude-hook";
 const SCRIPT_PREFIX = "FlightPath Claude Hook";
+const HANDLED_EVENTS = new Set([...STANDARD_HANDLED_EVENTS, "StopFailure"]);
+const LOGICAL_EVENT_MAP = {
+  ...STANDARD_LOGICAL_EVENT_MAP,
+  StopFailure: "error",
+};
 
 function main() {
   const notifyDir = process.argv[2];
@@ -69,7 +75,7 @@ function main() {
       allFields: Object.keys(hookInput),
     });
 
-    if (!STANDARD_HANDLED_EVENTS.has(hookEvent)) {
+    if (!HANDLED_EVENTS.has(hookEvent)) {
       debugLog("⏭️ Ignoring unhandled hook event", { hookEvent });
       process.exit(0);
     }
@@ -80,7 +86,7 @@ function main() {
     // Write hook artifact for preToolUse, postToolUse, userPromptSubmit,
     // permissionRequest — before any stdout/notify file activity.
     // NOTE: PermissionRequest is a decision hook — we must NOT produce stdout.
-    const logicalEvent = STANDARD_LOGICAL_EVENT_MAP[hookEvent];
+    const logicalEvent = LOGICAL_EVENT_MAP[hookEvent];
     if (logicalEvent && notifyDir) {
       maybeWriteHookArtifact(
         logicalEvent,
@@ -112,28 +118,37 @@ function main() {
       process.exit(0);
     }
 
-    // SessionStart and Stop require session_id + notification file
+    // SessionStart, Stop, and StopFailure require session_id + notification file
     requireSessionId(sessionId, hookEvent, hookInput, SCRIPT_PREFIX, debugLog);
 
     debugLog("🔑 Session ID extracted", { hookEvent, sessionId });
 
     ensureNotifyDir(notifyDir, debugLog);
 
-    const notifyFile = buildNotifyFilePath(
-      notifyDir,
-      sessionId,
-      hookEvent === "SessionStart"
-    );
+    const notifyFile =
+      hookEvent === "StopFailure"
+        ? buildErrorNotifyFilePath(notifyDir, sessionId)
+        : buildNotifyFilePath(
+            notifyDir,
+            sessionId,
+            hookEvent === "SessionStart"
+          );
 
     const notifyData = {
       timestamp: Date.now(),
       sessionId,
-      status: hookEvent === "SessionStart" ? "started" : "completed",
+      status:
+        hookEvent === "SessionStart"
+          ? "started"
+          : hookEvent === "StopFailure"
+            ? "error"
+            : "completed",
       hookEvent,
       transcriptPath: hookInput.transcript_path,
       permissionMode: hookInput.permission_mode,
       sessionStartHookActive: hookInput.session_start_hook_active,
       stopHookActive: hookInput.stop_hook_active,
+      rawHookData: hookInput,
     };
 
     fs.writeFileSync(notifyFile, JSON.stringify(notifyData, null, 2));

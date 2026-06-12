@@ -25,6 +25,7 @@ import {
   CONDITION_ACTIONS,
   COMPARE_SOURCES,
   HARNESS_IDS,
+  FAILURE_KINDS,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
@@ -165,6 +166,11 @@ function getExecutionTargetRunKey(target: ExecutionTarget): string {
 function isStepEnabled(step: WorkflowStep | undefined | null): boolean {
   return step != null && step.enabled !== false;
 }
+
+type PromptFailureDisposition =
+  | { outcome: "retry" }
+  | { outcome: "continue" }
+  | { outcome: "stop" };
 
 /**
  * Drives the sequential execution loop for a FlightPath workflow.
@@ -606,53 +612,70 @@ export class WorkflowExecutor {
         ? target.stepIndex
         : state.steps.length;
 
-    const result = await this.executeWithStreaming(
-      prompt,
-      integration,
-      context,
-      target,
-      target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
-      runIndex,
-      0,
-      {
-        promptIndex: sendPromptIndex,
-        allPrompts: state.steps,
-        filePath: context.currentPromptFilePath,
-        workflowName: this.promptQueue.getState().workflowName,
-        instanceId: context.instanceId,
-        workingFilePath: context.workingFilePath,
-        resolvedProperties,
-        workflowFile,
-        workingFilePersistence: this.promptQueue,
-        getFinalStepResponseTexts: () =>
-          this.promptQueue.getFinalStepResponseTexts(),
-        finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
-          | string
-          | undefined,
-      },
-      async () => {
-        if (target.kind === FINAL_STEP_PHASES.QUEUE) {
-          await this.promptQueue.markCurrentAsSent();
+    let result: { responseText: string; duration: number } | null = null;
+    let attemptIndex = 0;
+
+    try {
+      while (true) {
+        result = await this.executeWithStreaming(
+          prompt,
+          integration,
+          context,
+          target,
+          target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
+          runIndex,
+          attemptIndex,
+          {
+            promptIndex: sendPromptIndex,
+            allPrompts: state.steps,
+            filePath: context.currentPromptFilePath,
+            workflowName: this.promptQueue.getState().workflowName,
+            instanceId: context.instanceId,
+            workingFilePath: context.workingFilePath,
+            resolvedProperties,
+            workflowFile,
+            workingFilePersistence: this.promptQueue,
+            getFinalStepResponseTexts: () =>
+              this.promptQueue.getFinalStepResponseTexts(),
+            finalStepSessionId: workflowFile.finalStep?._runtime?.sessionId as
+              | string
+              | undefined,
+          },
+          async () => {
+            if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+              await this.promptQueue.markCurrentAsSent();
+            }
+            this.isWaitingForResponse = true;
+          }
+        );
+
+        if (result) {
+          break;
         }
-        this.isWaitingForResponse = true;
+
+        const failureDisposition = await this.handlePromptSendFailure(
+          integration,
+          context,
+          target,
+          prompt,
+          signedStepIndex,
+          runIndex,
+          attemptIndex,
+          resolvedProperties
+        );
+
+        if (failureDisposition.outcome === "retry") {
+          attemptIndex++;
+          continue;
+        }
+
+        return failureDisposition.outcome === "continue";
       }
-    );
-
-    // Clear injected MCP servers after the chat prompt completes (or fails)
-    if (didSetMcpServers && context.mcpServerProvider) {
-      context.mcpServerProvider.setActiveServers([]);
-    }
-
-    if (!result) {
-      return this.handlePromptSendFailure(
-        integration,
-        context,
-        target,
-        prompt,
-        signedStepIndex,
-        runIndex,
-        0
-      );
+    } finally {
+      // Clear injected MCP servers after the chat prompt completes (or fails)
+      if (didSetMcpServers && context.mcpServerProvider) {
+        context.mcpServerProvider.setActiveServers([]);
+      }
     }
 
     const { responseText, duration } = result;
@@ -702,7 +725,7 @@ export class WorkflowExecutor {
         target,
         target.kind === FINAL_STEP_PHASES.QUEUE ? signedStepIndex : undefined,
         runIndex,
-        0,
+        attemptIndex,
         duration,
         vars && Object.keys(vars).length > 0 ? vars : undefined
       );
@@ -731,7 +754,7 @@ export class WorkflowExecutor {
         );
       }
     } else {
-      runtime.completeAttempt(target, 0);
+      runtime.completeAttempt(target, attemptIndex);
       if (
         target.kind === FINAL_STEP_PHASES.QUEUE &&
         context.dashboardProvider
@@ -2080,8 +2103,9 @@ export class WorkflowExecutor {
     prompt: PromptStep,
     signedStepIndex: number,
     runIndex: number,
-    attemptIndex: number
-  ): Promise<boolean> {
+    attemptIndex: number,
+    resolvedProperties?: ResolvedProperties
+  ): Promise<PromptFailureDisposition> {
     const runtime = this.getRuntime();
     if (runtime.stopped) {
       // Workflow was stopped by the user. Flush whatever partial output is available
@@ -2140,7 +2164,7 @@ export class WorkflowExecutor {
         statusTimestampMs
       );
 
-      return false;
+      return { outcome: "stop" };
     }
 
     if (integration.wasLastFailureUserCancellation()) {
@@ -2150,63 +2174,35 @@ export class WorkflowExecutor {
       if (runtime.requestStop()) {
         await this.promptQueue.commitRuntimeTransition({ persist: false });
       }
-      return false;
+      return { outcome: "stop" };
     }
 
-    // CLI process exited before completion (Ctrl+C, crash, SIGKILL).
-    // All CLI harnesses are TUIs that stay open between prompts — any process
-    // exit before a Stop hook or log-based completion is abnormal.
-    // Treat like a stop: show warning, stop queue, don't mark as errored.
-    if (integration.wasLastFailureProcessExit()) {
-      const failureReason = integration.getLastFailureReason();
-      const failureOutput = integration.getLastFailureOutput?.();
-      const attemptTimestampMs = this.getAttemptStartedAt(target) ?? Date.now();
-      const warningTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
-      const warningMessage = `Process exited unexpectedly — workflow stopped. ${failureReason}`;
-      Log.warn(
-        `⚠️ CLI process exited before completion — stopping workflow: ${failureReason}`
-      );
+    const failureKind =
+      integration.getLastFailureKind() ??
+      (integration.wasLastFailureProcessExit()
+        ? FAILURE_KINDS.PROCESS_EXIT
+        : integration.wasLastFailureHarnessError()
+          ? FAILURE_KINDS.HARNESS_ERROR
+          : integration.wasLastFailureTimeout()
+            ? FAILURE_KINDS.TIMEOUT
+            : undefined);
 
-      runtime.cancelAttempt(target, attemptIndex, failureReason);
-
-      await this.trackStatusMessage(
-        context,
-        target,
-        warningMessage,
-        STATUS_MESSAGE_SEVERITY.WARNING,
-        warningTimestampMs
-      );
-
-      const processExitOutput = this.createFinalCliOutput({
-        context,
+    if (
+      failureKind === FAILURE_KINDS.PROCESS_EXIT ||
+      failureKind === FAILURE_KINDS.HARNESS_ERROR ||
+      failureKind === FAILURE_KINDS.TIMEOUT
+    ) {
+      return this.handleHarnessFailure(
         integration,
+        context,
         target,
-        signedStepIndex,
         prompt,
+        signedStepIndex,
         runIndex,
         attemptIndex,
-        responseText: failureOutput,
-        errorMessage: failureReason,
-        rawTextOutput: true,
-      });
-
-      await this.finalizeAndPersistOutput(
-        context,
-        target,
-        signedStepIndex,
-        processExitOutput,
-        "process-exit output"
+        failureKind,
+        resolvedProperties
       );
-
-      this.promptQueue.markInFlightPromptCancelled();
-      if (runtime.requestStop()) {
-        await this.promptQueue.commitRuntimeTransition({ persist: false });
-      }
-      if (runtime.confirmStopped()) {
-        this.promptQueue.finalizeCancelledPromptAfterStop();
-        await this.promptQueue.commitRuntimeTransition();
-      }
-      return false;
     }
 
     const failureReason = integration.getLastFailureReason();
@@ -2259,7 +2255,160 @@ export class WorkflowExecutor {
       "error output"
     );
 
-    return false;
+    return { outcome: "stop" };
+  }
+
+  private async handleHarnessFailure(
+    integration: HarnessIntegration,
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    prompt: PromptStep,
+    signedStepIndex: number,
+    runIndex: number,
+    attemptIndex: number,
+    failureKind: typeof FAILURE_KINDS.PROCESS_EXIT | typeof FAILURE_KINDS.HARNESS_ERROR | typeof FAILURE_KINDS.TIMEOUT,
+    resolvedProperties?: ResolvedProperties
+  ): Promise<PromptFailureDisposition> {
+    const runtime = this.getRuntime();
+    const failureReason = integration.getLastFailureReason();
+    const failureOutput = integration.getLastFailureOutput?.();
+    const attemptTimestampMs = this.getAttemptStartedAt(target) ?? Date.now();
+    const statusTimestampMs = Math.max(Date.now(), attemptTimestampMs + 1);
+    const errorBehavior = resolvedProperties?.errorBehavior ?? {
+      onError: "stop" as const,
+    };
+
+    const failureLabel =
+      failureKind === FAILURE_KINDS.PROCESS_EXIT
+        ? "Process exited unexpectedly"
+        : failureKind === FAILURE_KINDS.TIMEOUT
+          ? "Harness execution timed out"
+          : "Harness reported an error";
+
+    if (
+      errorBehavior.onError === "retry" &&
+      attemptIndex < (errorBehavior.maxRetries ?? 0)
+    ) {
+      const nextAttemptIndex = attemptIndex + 1;
+      const retryCount = nextAttemptIndex;
+      const maxRetries = errorBehavior.maxRetries ?? 0;
+
+      runtime.failAttempt(target, attemptIndex, failureReason);
+      runtime.scheduleRetry(
+        target,
+        nextAttemptIndex,
+        retryCount,
+        maxRetries
+      );
+
+      await this.trackStatusMessage(
+        context,
+        target,
+        `${failureLabel}. Retrying attempt ${retryCount}/${maxRetries}. ${failureReason}`,
+        STATUS_MESSAGE_SEVERITY.WARNING,
+        statusTimestampMs
+      );
+
+      if ((errorBehavior.retryDelayMs ?? 0) > 0) {
+        await this.delay(errorBehavior.retryDelayMs!);
+      }
+
+      return { outcome: "retry" };
+    }
+
+    runtime.failAttempt(target, attemptIndex, failureReason);
+
+    const failureOutputRecord = this.createFinalCliOutput({
+      context,
+      integration,
+      target,
+      signedStepIndex,
+      prompt,
+      runIndex,
+      attemptIndex,
+      responseText: failureOutput,
+      errorMessage: failureReason,
+      rawTextOutput:
+        failureKind === FAILURE_KINDS.PROCESS_EXIT ? true : undefined,
+    });
+
+    await this.finalizeAndPersistOutput(
+      context,
+      target,
+      signedStepIndex,
+      failureOutputRecord,
+      `${failureKind} output`
+    );
+
+    if (
+      target.kind === FINAL_STEP_PHASES.QUEUE &&
+      context.dashboardProvider &&
+      signedStepIndex >= 0
+    ) {
+      context.dashboardProvider.updateStepStatus(signedStepIndex, {
+        state: STEP_STATUS.FAILED,
+        message: failureReason,
+      });
+    }
+
+    if (errorBehavior.onError === "continue") {
+      await this.trackStatusMessage(
+        context,
+        target,
+        `${failureLabel}. Continuing to the next step. ${failureReason}`,
+        STATUS_MESSAGE_SEVERITY.WARNING,
+        statusTimestampMs
+      );
+
+      if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+        this.promptQueue.finalizeFailedInFlightPrompt(failureReason);
+        await this.promptQueue.commitRuntimeTransition();
+        if (context.dashboardProvider) {
+          const live = this.promptQueue.getProgress();
+          context.dashboardProvider.updateProgress(live.current, live.total);
+        }
+        return { outcome: "continue" };
+      }
+
+      await this.setFinalStepRuntime(context, {
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: target.loopIndex,
+        status: STEP_STATUS.FAILED,
+        startedAt:
+          this.promptQueue.getFinalStepRuntime()?.startedAt ?? attemptTimestampMs,
+        completedAt: Date.now(),
+      });
+      return { outcome: "continue" };
+    }
+
+    await this.trackStatusMessage(
+      context,
+      target,
+      `${failureLabel}. Stopping workflow. ${failureReason}`,
+      STATUS_MESSAGE_SEVERITY.WARNING,
+      statusTimestampMs
+    );
+
+    if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      this.promptQueue.finalizeFailedInFlightPrompt(failureReason);
+    } else {
+      await this.setFinalStepRuntime(context, {
+        phase: FINAL_STEP_PHASES.FINAL_STEP,
+        loopCount: target.loopIndex,
+        status: STEP_STATUS.FAILED,
+        startedAt:
+          this.promptQueue.getFinalStepRuntime()?.startedAt ?? attemptTimestampMs,
+        completedAt: Date.now(),
+      });
+    }
+
+    runtime.fail();
+    await this.promptQueue.commitRuntimeTransition();
+    return { outcome: "stop" };
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, ms));
   }
 
   private async updateDashboardWithResponse(

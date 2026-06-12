@@ -3,6 +3,7 @@ import {
   PromptStep,
   HarnessId,
   EndCondition,
+  ErrorBehavior,
   PriorContext,
   McpServerConfig,
   ToolPermissionsOverride,
@@ -62,6 +63,9 @@ export interface ResolvedProperties {
 
   /** Tool permission config - null means none (no permission flags injected) */
   toolPermissions: ToolPermissionConfig | null;
+
+  /** Harness failure policy - undefined means use the executor default stop behavior */
+  errorBehavior?: ErrorBehavior;
 }
 
 /**
@@ -112,6 +116,7 @@ export class PropertyResolver {
       priorContext: this.resolvePriorContext(prompt, workflow),
       additionalArgs: this.resolveAdditionalArgs(prompt, workflow, harness),
       toolPermissions: this.resolveToolPermissions(prompt, workflow),
+      errorBehavior: this.resolveErrorBehavior(prompt, workflow),
     };
   }
 
@@ -584,6 +589,28 @@ export class PropertyResolver {
       allowedTools: effective.allowedTools ?? [],
       deniedTools: effective.deniedTools ?? [],
     };
+  }
+
+  /**
+   * Resolve errorBehavior with two-tier precedence.
+   *
+   * Precedence order:
+   * 1. Prompt-level override (prompt.errorBehavior)
+   *    - Object: use this policy
+   *    - null: explicitly disable inherited policy (executor falls back to default stop)
+   *    - undefined: inherit from workflow
+   * 2. Workflow-level default (workflow.errorBehavior)
+   * 3. No fallback — returns undefined so the executor applies its default stop behavior
+   */
+  private static resolveErrorBehavior(
+    prompt: PromptStep,
+    workflow: PromptFile
+  ): ErrorBehavior | undefined {
+    if (Object.prototype.hasOwnProperty.call(prompt, "errorBehavior")) {
+      return prompt.errorBehavior ?? undefined;
+    }
+
+    return workflow.errorBehavior ?? undefined;
   }
 
   /**
