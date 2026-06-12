@@ -26,11 +26,11 @@ function makeRows(): OutputRenderRow[] {
 }
 
 describe("useOutputFind", () => {
-  const onRevealRow = vi.fn();
+  const onRevealMatch = vi.fn();
   let originalRequestAnimationFrame: typeof window.requestAnimationFrame;
 
   beforeEach(() => {
-    onRevealRow.mockReset();
+    onRevealMatch.mockReset();
     originalRequestAnimationFrame = window.requestAnimationFrame;
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       callback(0);
@@ -44,7 +44,7 @@ describe("useOutputFind", () => {
 
   it("opens and closes the find bar", () => {
     const rows = makeRows();
-    const { result } = renderHook(() => useOutputFind(rows, onRevealRow));
+    const { result } = renderHook(() => useOutputFind(rows, onRevealMatch));
 
     act(() => {
       result.current.open("alpha");
@@ -66,7 +66,7 @@ describe("useOutputFind", () => {
 
   it("wraps navigation when moving past the last match", () => {
     const rows = makeRows();
-    const { result } = renderHook(() => useOutputFind(rows, onRevealRow));
+    const { result } = renderHook(() => useOutputFind(rows, onRevealMatch));
 
     act(() => {
       result.current.open("alpha");
@@ -79,14 +79,47 @@ describe("useOutputFind", () => {
     });
 
     expect(result.current.state.currentMatch).toBe(2);
-    expect(onRevealRow).toHaveBeenLastCalledWith(1);
+    expect(onRevealMatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rowIndex: 1, start: 5, end: 10 })
+    );
 
     act(() => {
       result.current.navigate(1);
     });
 
     expect(result.current.state.currentMatch).toBe(1);
-    expect(onRevealRow).toHaveBeenLastCalledWith(0);
+    expect(onRevealMatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rowIndex: 0, start: 0, end: 5 })
+    );
+  });
+
+  it("reveals distinct matches within the same row", () => {
+    const rows: OutputRenderRow[] = [
+      {
+        key: "row-1",
+        rowKind: "prompt",
+        target,
+        text: "alpha beta alpha",
+        estimateSize: 24,
+      },
+    ];
+    const { result } = renderHook(() => useOutputFind(rows, onRevealMatch));
+
+    act(() => {
+      result.current.open("alpha");
+    });
+
+    expect(onRevealMatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rowIndex: 0, start: 0, end: 5 })
+    );
+
+    act(() => {
+      result.current.navigate(1);
+    });
+
+    expect(onRevealMatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rowIndex: 0, start: 11, end: 16 })
+    );
   });
 
   it("opens and searches when an external request is provided", async () => {
@@ -98,7 +131,7 @@ describe("useOutputFind", () => {
         externalRequest:
           | { query: string; preferredTarget?: typeof target }
           | null;
-      }) => useOutputFind(rows, onRevealRow, externalRequest),
+      }) => useOutputFind(rows, onRevealMatch, externalRequest),
       {
         initialProps: {
           externalRequest: null as

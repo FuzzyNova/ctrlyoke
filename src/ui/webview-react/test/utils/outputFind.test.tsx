@@ -33,7 +33,12 @@ function makePlainResponseRow(text: string, key = "response-1"): OutputRenderRow
   };
 }
 
-function makeStructuredBashRow(command: string, key = "bash-1"): OutputRenderRow {
+function makeStructuredBashRow(
+  command: string,
+  output = "all tests passed",
+  error?: string,
+  key = "bash-1"
+): OutputRenderRow {
   return {
     key,
     rowKind: "structured-event",
@@ -42,7 +47,33 @@ function makeStructuredBashRow(command: string, key = "bash-1"): OutputRenderRow
       type: CLI_EVENT_TYPES.BASH_COMMAND,
       data: {
         command,
-        output: "all tests passed",
+        output,
+        error,
+      },
+    },
+    eventIndex: 0,
+    rawTextOutput: true,
+    attemptIndex: 0,
+    hideDiff: false,
+    estimateSize: 48,
+  };
+}
+
+function makeStructuredToolCallRow(
+  name: string,
+  result: { success: boolean; output?: string; error?: string },
+  key = "tool-1"
+): OutputRenderRow {
+  return {
+    key,
+    rowKind: "structured-event",
+    target,
+    event: {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      data: {
+        name,
+        parameters: {},
+        result,
       },
     },
     eventIndex: 0,
@@ -125,6 +156,55 @@ describe("outputFind", () => {
       expect(matches[0]).toMatchObject({
         rowKind: "structured-event",
         field: "command",
+      });
+    });
+
+    it("uses sanitized bash output text so match offsets align with rendered content", () => {
+      const row = makeStructuredBashRow(
+        "echo ok",
+        "\u001b[31malpha\u001b[0m beta"
+      );
+
+      const matches = findOutputMatches([row], "alpha", false);
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        field: "response",
+        start: "echo ok".length + 1,
+        end: "echo ok".length + 1 + "alpha".length,
+      });
+    });
+
+    it("mirrors bash duplicate output suppression so matches use the rendered error segment", () => {
+      const row = makeStructuredBashRow("run", "alpha", "alpha");
+
+      const matches = findOutputMatches([row], "alpha", false);
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        field: "error",
+        start: "run".length + 1,
+        end: "run".length + 1 + "alpha".length,
+      });
+    });
+
+    it("finds matches in generic tool call output text", () => {
+      const matches = findOutputMatches(
+        [
+          makeStructuredToolCallRow("read_file", {
+            success: true,
+            output: "alpha beta",
+          }),
+        ],
+        "alpha",
+        false
+      );
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        rowKind: "structured-event",
+        field: "toolContent",
+        start: "read_file".length + 1,
       });
     });
 

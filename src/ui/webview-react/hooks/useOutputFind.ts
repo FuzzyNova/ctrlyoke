@@ -58,7 +58,7 @@ function getInitialMatchIndex(
 
 export function useOutputFind(
   rows: OutputRenderRow[],
-  onRevealRow: (rowIndex: number) => void,
+  onRevealMatch: (match: OutputFindMatch) => void,
   externalRequest?: OutputFindOpenRequest | null
 ) {
   const [state, setState] = useState<OutputFindState>(INITIAL_STATE);
@@ -73,12 +73,12 @@ export function useOutputFind(
       if (!match) {
         return;
       }
-      onRevealRow(match.rowIndex);
+      onRevealMatch(match);
       requestAnimationFrame(() => {
-        onRevealRow(match.rowIndex);
+        onRevealMatch(match);
       });
     },
-    [onRevealRow]
+    [onRevealMatch]
   );
 
   const matches = useMemo(

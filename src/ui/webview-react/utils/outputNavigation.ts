@@ -3,6 +3,7 @@ import type { OutputMessageTarget } from "./outputProjection";
 export interface OutputNavigationOptions {
   behavior?: ScrollBehavior;
   align?: "start" | "center" | "end";
+  revealActiveFindMatch?: boolean;
 }
 
 export interface OutputNavigationController {

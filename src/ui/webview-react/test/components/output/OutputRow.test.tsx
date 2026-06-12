@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { OutputRow } from "@components/output/OutputRow";
 import type { OutputRenderRow, StructuredEventRow } from "@utils/outputRows";
-import type { OutputFindMatch } from "@utils/outputFind";
+import { findOutputMatches, type OutputFindMatch } from "@utils/outputFind";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES } from "@/types/messages";
 
@@ -263,6 +263,30 @@ describe("OutputRow auto-expand on hidden active match", () => {
       "error",
       true
     );
+  });
+
+  it("highlights sanitized bash output at the rendered location", () => {
+    const row = buildBashRow(
+      "echo ok",
+      "\u001b[31malpha\u001b[0m beta",
+      undefined
+    );
+    const [match] = findOutputMatches([row], "alpha", false);
+
+    const { container } = render(
+      <OutputRow
+        row={row}
+        findDecorations={{
+          matches: [{ start: match.start, end: match.end, active: true }],
+        }}
+        activeFindMatch={match}
+        isExecutionActive={false}
+      />
+    );
+
+    const mark = container.querySelector("mark");
+    expect(mark?.textContent).toBe("alpha");
+    expect(mark).toHaveAttribute("data-find-active", "true");
   });
 
   it("renders legacy user-stop error rows as warnings", () => {

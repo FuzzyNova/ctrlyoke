@@ -179,3 +179,69 @@ export function getEstimatedRowScopedScrollTop(
   );
   return Math.max(0, Math.min(maxScroll, target));
 }
+
+export interface ActiveFindRevealResult {
+  adjusted: boolean;
+  foundMark: boolean;
+  foundRow: boolean;
+  rowKey: string | null;
+  rowViewportOffsetPx: number | null;
+}
+
+export function revealActiveFindMatchInRow(
+  scrollElement: HTMLDivElement,
+  rowIndex: number
+): ActiveFindRevealResult {
+  const rowElement = findRenderedRowElement(scrollElement, rowIndex);
+  if (!rowElement) {
+    return {
+      adjusted: false,
+      foundMark: false,
+      foundRow: false,
+      rowKey: null,
+      rowViewportOffsetPx: null,
+    };
+  }
+
+  const activeMark = rowElement.querySelector<HTMLElement>(
+    'mark[data-find-active="true"]'
+  );
+  if (!activeMark) {
+    return {
+      adjusted: false,
+      foundMark: false,
+      foundRow: true,
+      rowKey: rowElement.dataset.rowKey ?? null,
+      rowViewportOffsetPx: null,
+    };
+  }
+
+  const containerRect = scrollElement.getBoundingClientRect();
+  const rowRect = rowElement.getBoundingClientRect();
+  const markRect = activeMark.getBoundingClientRect();
+  const markFullyVisible =
+    markRect.top >= containerRect.top && markRect.bottom <= containerRect.bottom;
+
+  if (!markFullyVisible) {
+    const delta =
+      markRect.top +
+      markRect.height / 2 -
+      (containerRect.top + containerRect.height / 2);
+    const maxScroll = Math.max(
+      0,
+      scrollElement.scrollHeight - scrollElement.clientHeight
+    );
+    scrollElement.scrollTop = Math.max(
+      0,
+      Math.min(maxScroll, scrollElement.scrollTop + delta)
+    );
+  }
+
+  return {
+    adjusted: !markFullyVisible,
+    foundMark: true,
+    foundRow: true,
+    rowKey: rowElement.dataset.rowKey ?? null,
+    rowViewportOffsetPx: rowRect.top - containerRect.top,
+  };
+}

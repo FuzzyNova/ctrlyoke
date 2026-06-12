@@ -723,8 +723,11 @@ const OutputSectionInner: React.FC = () => {
     activeMatch,
   } = useOutputFind(
     rows,
-    (rowIndex) =>
-      navigationController.scrollToRowIndex(rowIndex, { align: "center" }),
+    (match) =>
+      navigationController.scrollToRowIndex(match.rowIndex, {
+        align: "center",
+        revealActiveFindMatch: true,
+      }),
     pendingFindRequest
       ? {
           query: pendingFindRequest.query,

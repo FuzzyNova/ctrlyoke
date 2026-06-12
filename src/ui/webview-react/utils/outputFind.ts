@@ -16,6 +16,7 @@ import type {
   WebSearchData,
 } from "@/types/cliEvents";
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
+import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import type { OutputMessageTarget } from "./outputProjection";
 import type { OutputRenderRow } from "./outputRows";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
@@ -59,31 +60,35 @@ export interface OutputRowSearchSegment {
   end: number;
 }
 
-function coerceSearchText(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (value == null) {
-    return "";
-  }
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
 export function getToolResultText(result: ToolResult | undefined): string {
   if (!result) {
     return "";
   }
-  if (!result.success && result.error) {
-    return coerceSearchText(result.error);
+  if (!result.success && typeof result.error === "string") {
+    return result.error;
   }
-  if (result.output) {
-    return coerceSearchText(result.output);
+  if (typeof result.output === "string") {
+    return result.output;
   }
   return result.success ? "Success" : "Failed";
+}
+
+function getRenderedBashTexts(data: BashCommandData): {
+  command: string;
+  output: string;
+  error: string;
+} {
+  const command = sanitizeTerminalOutput(data.command ?? "").trim() || "command unavailable";
+  const output = sanitizeTerminalOutput(data.output ?? "");
+  const error = sanitizeTerminalOutput(data.error ?? "");
+  const isDuplicateOutputAndError =
+    output.trim().length > 0 && output.trim() === error.trim();
+
+  return {
+    command,
+    output: isDuplicateOutputAndError ? "" : output,
+    error,
+  };
 }
 
 function getStructuredPatchText(event: CliEvent): string {
@@ -170,10 +175,11 @@ export function getOutputRowSearchSegments(
           ]);
         case CLI_EVENT_TYPES.BASH_COMMAND: {
           const data = event.data as BashCommandData;
+          const rendered = getRenderedBashTexts(data);
           return createSegments([
-            { field: "command", text: data.command },
-            { field: "response", text: data.output },
-            { field: "error", text: data.error },
+            { field: "command", text: rendered.command },
+            { field: "response", text: rendered.output },
+            { field: "error", text: rendered.error },
           ]);
         }
         case CLI_EVENT_TYPES.FILE_EDIT:

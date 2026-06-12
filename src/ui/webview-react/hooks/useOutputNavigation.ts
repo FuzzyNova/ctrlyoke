@@ -6,9 +6,11 @@ import {
   findRenderedRowElement,
   getEstimatedRowScopedScrollTop,
   getRowScopedScrollTop,
+  revealActiveFindMatchInRow,
 } from "@utils/outputDom";
 import {
   setActiveOutputNavigationController,
+  type OutputNavigationOptions,
   type OutputNavigationController,
 } from "@utils/outputNavigation";
 
@@ -26,6 +28,7 @@ interface OutputRow {
 interface PendingNavigationState {
   rowIndex: number;
   align: "start" | "center" | "end";
+  revealActiveFindMatch: boolean;
   targetKind: OutputMessageTarget["kind"];
   targetIndex: number;
   requestedBehavior: ScrollBehavior;
@@ -179,6 +182,42 @@ export function useOutputNavigation({
         return;
       }
 
+      if (pending.revealActiveFindMatch) {
+        const revealResult = revealActiveFindMatchInRow(
+          scrollElement,
+          pending.rowIndex
+        );
+        if (revealResult.foundMark) {
+          if (
+            revealResult.rowKey &&
+            revealResult.rowViewportOffsetPx != null
+          ) {
+            setCurrentScrollTarget(
+              {
+                kind: "row",
+                rowKey: revealResult.rowKey,
+                viewportOffsetPx: revealResult.rowViewportOffsetPx,
+              },
+              "navigation-find-match"
+            );
+          }
+          finalizePendingNavigation();
+          return;
+        }
+
+        if (
+          pending.attempts >= maxAlignmentAttempts ||
+          now - pending.startedAt >= maxStabilizationMs
+        ) {
+          finalizePendingNavigation();
+          return;
+        }
+
+        pending.attempts += 1;
+        schedulePendingNavigationStabilization();
+        return;
+      }
+
       const isAligned = alignRowElementToViewport(
         scrollElement,
         rowElement,
@@ -214,6 +253,7 @@ export function useOutputNavigation({
     outputRef,
     pendingNavigationRef,
     rowVirtualizer,
+    setCurrentScrollTarget,
   ]);
 
   useEffect(() => {
@@ -234,13 +274,14 @@ export function useOutputNavigation({
     () => {
       const scrollToRowIndex = (
         rowIndex: number,
-        options?: { behavior?: ScrollBehavior; align?: "start" | "center" | "end" }
+        options?: OutputNavigationOptions
       ) => {
         if (rowIndex === undefined || !outputRef.current) {
           return;
         }
 
         const align = options?.align ?? "start";
+        const revealActiveFindMatch = options?.revealActiveFindMatch ?? false;
         const requestedBehavior = options?.behavior ?? "auto";
         const behavior =
           requestedBehavior === "smooth" ? "auto" : requestedBehavior;
@@ -275,6 +316,7 @@ export function useOutputNavigation({
         pendingNavigationRef.current = {
           rowIndex,
           align,
+          revealActiveFindMatch,
           targetKind: row.target.kind,
           targetIndex: row.target.index,
           requestedBehavior,
@@ -304,6 +346,26 @@ export function useOutputNavigation({
           if (rowElement) {
             lastScrollTopRef.current = top;
           }
+          if (revealActiveFindMatch) {
+            const revealResult = revealActiveFindMatchInRow(
+              outputRef.current,
+              rowIndex
+            );
+            if (
+              revealResult.foundMark &&
+              revealResult.rowKey &&
+              revealResult.rowViewportOffsetPx != null
+            ) {
+              setCurrentScrollTarget(
+                {
+                  kind: "row",
+                  rowKey: revealResult.rowKey,
+                  viewportOffsetPx: revealResult.rowViewportOffsetPx,
+                },
+                "navigation-find-match"
+              );
+            }
+          }
           finalizePendingNavigation();
           return;
         }
@@ -316,7 +378,7 @@ export function useOutputNavigation({
         scrollToRowIndex,
         scrollToTarget: (
           target: OutputMessageTarget,
-          options?: { behavior?: ScrollBehavior; align?: "start" | "center" | "end" }
+          options?: OutputNavigationOptions
         ) => {
           const rowIndex = firstRowIndexByTarget.get(
             `${target.kind}:${target.index}`
