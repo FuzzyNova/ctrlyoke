@@ -77,6 +77,8 @@ export interface RegistryEntry {
   frozen: boolean;
   /** Disposable returned by term.onData (stored so we can dispose it when freezing) */
   onDataDisposable?: { dispose(): void };
+  /** Deduplicates lazy WebGL addon loading across repeated attach calls. */
+  webglAddonLoadPromise?: Promise<void>;
   /**
    * Controller's column count, set when this client is a viewer.
    * Used by the ResizeObserver to maintain fixed cols while allowing rows to adapt
@@ -104,6 +106,30 @@ let currentTerminalSettings: TerminalSettings = {
 
 function makeKey(workflowId: string, sessionId: string): string {
   return `${workflowId}:${sessionId}`;
+}
+
+function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
+  if (entry.webglAddonLoadPromise) {
+    return entry.webglAddonLoadPromise;
+  }
+
+  entry.webglAddonLoadPromise = (async () => {
+    try {
+      const { WebglAddon } = await import("@xterm/addon-webgl");
+      const webgl = new WebglAddon();
+      // On context loss (e.g. Chromium's 16-context limit hit), let xterm
+      // fall back to its built-in renderer. @xterm/addon-canvas currently
+      // peers on xterm v5 and is not compatible with our xterm v6 package.
+      webgl.onContextLoss(() => {
+        webgl.dispose();
+      });
+      entry.term.loadAddon(webgl);
+    } catch {
+      // WebGL unavailable at startup — xterm uses its built-in renderer.
+    }
+  })();
+
+  return entry.webglAddonLoadPromise;
 }
 
 /**
@@ -219,22 +245,12 @@ export const terminalRegistry = {
     );
     if (!entry) return;
     if (!entry.term.element) {
-      // First render — open the terminal into the domEl, then load WebGL renderer
+      // First render — open the terminal into the domEl synchronously so React
+      // remounts cannot leave the terminal attached to a stale container while
+      // the optional WebGL addon is still loading in the background.
       container.appendChild(entry.domEl);
       entry.term.open(entry.domEl);
-      try {
-        const { WebglAddon } = await import("@xterm/addon-webgl");
-        const webgl = new WebglAddon();
-        // On context loss (e.g. Chromium's 16-context limit hit), let xterm
-        // fall back to its built-in renderer. @xterm/addon-canvas currently
-        // peers on xterm v5 and is not compatible with our xterm v6 package.
-        webgl.onContextLoss(() => {
-          webgl.dispose();
-        });
-        entry.term.loadAddon(webgl);
-      } catch {
-        // WebGL unavailable at startup — xterm uses its built-in renderer.
-      }
+      void ensureWebglAddonLoaded(entry);
     } else {
       // Subsequent attach — move the existing DOM element back in
       container.appendChild(entry.domEl);
