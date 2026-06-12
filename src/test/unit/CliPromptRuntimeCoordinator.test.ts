@@ -3,7 +3,7 @@ import { suite, test } from "mocha";
 import { CliPromptRuntimeCoordinator } from "../../flightpath/harness/shared/CliPromptRuntimeCoordinator";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { type PromptStep } from "../../types/FlightPathTypes";
-import { HARNESS_IDS } from "../../types/DashboardConstants";
+import { FAILURE_KINDS, HARNESS_IDS } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 
 function createCoordinator(options?: {
@@ -49,6 +49,8 @@ suite("CliPromptRuntimeCoordinator", () => {
         prompt,
         executionStartTime: new Date(1234),
         extractedSessionId: "session-123",
+        failureKind: FAILURE_KINDS.TIMEOUT,
+        failureMessage: "Log monitoring timeout",
         workingFilePersistence: {
           async updateWorkingFile(): Promise<void> {
             updateCount += 1;
@@ -62,6 +64,11 @@ suite("CliPromptRuntimeCoordinator", () => {
 
     assert.strictEqual(prompt._runtime?.startedAt, 1234);
     assert.strictEqual(prompt._runtime?.sessionId, "session-123");
+    assert.strictEqual(prompt._runtime?.failureKind, FAILURE_KINDS.TIMEOUT);
+    assert.strictEqual(
+      prompt._runtime?.failureMessage,
+      "Log monitoring timeout"
+    );
     assert.strictEqual(updateCount, 1);
     assert.deepStrictEqual(debugMessages, [
       "💾 Saved cancelled-prompt runtime to working file (sessionId: session-123)",
@@ -154,6 +161,8 @@ suite("CliPromptRuntimeCoordinator", () => {
     assert.strictEqual(prompt._runtime?.startedAt, 2000);
     assert.strictEqual(prompt._runtime?.completedAt, 3000);
     assert.strictEqual(prompt._runtime?.sessionId, "session-456");
+    assert.strictEqual(prompt._runtime?.failureKind, undefined);
+    assert.strictEqual(prompt._runtime?.failureMessage, undefined);
     assert.strictEqual(parsedOutput?.metadata.sessionId, "session-456");
     assert.strictEqual(updateCount, 1);
     assert.deepStrictEqual(debugMessages, [

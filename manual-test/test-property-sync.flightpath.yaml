@@ -45,6 +45,13 @@ hooks:
     timeoutSec: 5
   - event: sessionStart
     command: "echo workflow-level sessionStart hook"
+  - event: error
+    command: "echo workflow-level error hook"
+
+errorBehavior:
+  onError: retry
+  maxRetries: 2
+  retryDelayMs: 5000
 
 endCondition:
   script: manual-test/.flightpath/scripts/always_true.py
@@ -123,6 +130,9 @@ steps:
         On Pass:        continue
         On Fail:        stopWorkflow
 
+      ERROR BEHAVIOR
+        On Error:       continue
+
       END CONDITION
         Script:         always_true.py
         Returns:        "true"
@@ -169,6 +179,9 @@ steps:
       timeout: 15000
       onPass: continue
       onFail: stopWorkflow
+
+    errorBehavior:
+      onError: continue
 
     endCondition:
       script: manual-test/.flightpath/scripts/always_true.py
@@ -217,6 +230,9 @@ steps:
       HOOKS
         stop + sessionStart inherited from workflow level
 
+      ERROR BEHAVIOR
+        On Error: retry  |  Max Retries: 2  |  Retry Delay: 5000ms
+
       PRE-CONDITION
         Script:         always_true.py  |  Returns: "true"
         Compare Source: auto  |  Timeout: 10000ms
@@ -262,12 +278,16 @@ steps:
       END CONDITION
         (empty — null clears inherited endCondition)
 
+      ERROR BEHAVIOR
+        (empty — null clears inherited errorBehavior)
+
       Please respond with: "Step 3 complete — null overrides verified."
     agent: null
     mcpServers: null
     hooks: null
     endCondition: null
     preCondition: null
+    errorBehavior: null
     toolPermissions: null
     additionalArgs: null
 

@@ -1,5 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
+import { FAILURE_KINDS } from "../../types/DashboardConstants";
+import { CliLogMonitor } from "../../flightpath/harness/CliLogMonitor";
 import { CliExecutionSession } from "../../flightpath/harness/shared/CliExecutionSession";
 import {
   CliExecutionRunner,
@@ -264,7 +266,7 @@ suite("CliExecutionRunner", () => {
   });
 
   test("should expose collector failure reason for headless execution failures", async () => {
-    const { runner, getFailureReason } = createRunner({
+    const { runner, failureTracker, getFailureReason } = createRunner({
       collectedHeadlessResponse: {
         success: false,
         error: "error: unknown option '--poop'",
@@ -278,6 +280,10 @@ suite("CliExecutionRunner", () => {
 
     assert.strictEqual(success, false);
     assert.strictEqual(getFailureReason(), "error: unknown option '--poop'");
+    assert.strictEqual(
+      failureTracker.getLastFailureKind(),
+      FAILURE_KINDS.PROCESS_EXIT
+    );
   });
 
   test("should report stopped by user for cancelled headless execution", async () => {
@@ -296,5 +302,33 @@ suite("CliExecutionRunner", () => {
 
     assert.strictEqual(success, false);
     assert.strictEqual(getFailureReason(), "Stopped by user");
+  });
+
+  test("should classify log monitor timeouts without throwing", async () => {
+    const { runner, failureTracker, getFailureReason } = createRunner();
+    const originalMonitor = CliLogMonitor.prototype.monitor;
+
+    try {
+      CliLogMonitor.prototype.monitor = async () => {
+        return {
+          success: false,
+          failureKind: FAILURE_KINDS.TIMEOUT,
+          failureMessage: "Log monitoring timeout",
+          timedOut: true,
+        };
+      };
+
+      const result = await (runner as any).monitorLogFile(
+        "test.log",
+        new CliExecutionSession({ prompt: { prompt: "just say hi" } }),
+        { sessionId: null, startTime: new Date() }
+      );
+
+      assert.deepStrictEqual(result, { success: false, sessionId: undefined });
+      assert.strictEqual(failureTracker.wasLastFailureTimeout(), true);
+      assert.strictEqual(getFailureReason(), "Log monitoring timeout");
+    } finally {
+      CliLogMonitor.prototype.monitor = originalMonitor;
+    }
   });
 });

@@ -2,6 +2,7 @@ import type {
   CliResult,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
+import type { FailureKind } from "../../../types/FlightPathTypes";
 import type { PromptStep } from "../../../types/FlightPathTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -36,6 +37,8 @@ export class CliExecutionSession {
   private cliResult?: CliResult;
   private extractedSessionIdValue?: string;
   private injectModePrepared = false;
+  private failureKindValue?: FailureKind;
+  private failureMessageValue?: string;
 
   constructor(params: CliExecutionSessionParams) {
     this.prompt = params.prompt;
@@ -71,6 +74,8 @@ export class CliExecutionSession {
   recordHeadlessResponse(collected: CollectedHeadlessResponse): void {
     this.parsed = collected.parsedOutput;
     this.cliResult = collected.cliResult;
+    this.failureKindValue = collected.failureKind;
+    this.failureMessageValue = collected.failureMessage;
     if (collected.extractedSessionId) {
       this.extractedSessionIdValue = collected.extractedSessionId;
     }
@@ -82,6 +87,14 @@ export class CliExecutionSession {
 
   updateResult(result: CliResult | undefined): void {
     this.cliResult = result;
+  }
+
+  updateFailure(
+    failureKind: FailureKind | undefined,
+    failureMessage: string | undefined
+  ): void {
+    this.failureKindValue = failureKind;
+    this.failureMessageValue = failureMessage;
   }
 
   setExtractedSessionId(sessionId: string | undefined): void {
@@ -116,6 +129,14 @@ export class CliExecutionSession {
 
   get effectiveSessionId(): string | undefined {
     return this.extractedSessionIdValue ?? this.resolvedSessionId;
+  }
+
+  get failureKind(): FailureKind | undefined {
+    return this.failureKindValue;
+  }
+
+  get failureMessage(): string | undefined {
+    return this.failureMessageValue;
   }
 
   toSnapshot(): CliExecutionSessionSnapshot {

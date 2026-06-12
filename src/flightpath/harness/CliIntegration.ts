@@ -977,7 +977,10 @@ export class CliIntegration extends HarnessIntegration {
 
     if (
       !success &&
-      this.failureTracker.wasLastFailureProcessExit() &&
+      (this.failureTracker.wasLastFailureProcessExit() ||
+        this.failureTracker.wasLastFailureHarnessError() ||
+        this.failureTracker.wasLastFailureTimeout() ||
+        this.failureTracker.getLastFailureKind() !== undefined) &&
       workflowContext?.workingFilePersistence
     ) {
       await this.promptRuntimeCoordinator.persistCancelledPromptRuntime({
@@ -989,6 +992,13 @@ export class CliIntegration extends HarnessIntegration {
           session.result?.response !== session.result?.error
             ? session.result?.response
             : undefined,
+        failureKind:
+          session.failureKind ?? this.failureTracker.getLastFailureKind(),
+        failureMessage:
+          session.failureMessage ??
+          this.failureTracker.getLastFailureMessage() ??
+          this.lastFailureReason ??
+          undefined,
         resolvedProperties: session.resolvedProperties,
         workingFilePersistence: workflowContext.workingFilePersistence,
       });
@@ -1450,6 +1460,18 @@ export class CliIntegration extends HarnessIntegration {
    */
   override wasLastFailureProcessExit(): boolean {
     return this.failureTracker.wasLastFailureProcessExit();
+  }
+
+  override wasLastFailureHarnessError(): boolean {
+    return this.failureTracker.wasLastFailureHarnessError();
+  }
+
+  override wasLastFailureTimeout(): boolean {
+    return this.failureTracker.wasLastFailureTimeout();
+  }
+
+  override getLastFailureKind() {
+    return this.failureTracker.getLastFailureKind();
   }
 
   // ============================================================

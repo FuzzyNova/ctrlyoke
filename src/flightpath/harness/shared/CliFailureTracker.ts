@@ -1,5 +1,7 @@
 import {
+  FAILURE_KINDS,
   INTERACTIVE_ABORT_KINDS,
+  type FailureKind,
   type InteractiveAbortKind,
 } from "../../../types/DashboardConstants";
 
@@ -21,11 +23,15 @@ export class CliFailureTracker {
   private ptyExitCode: number | null = null;
   private processExitTermination: number | null = null;
   private lastFailureOutput?: string;
+  private lastFailureKind?: FailureKind;
+  private lastFailureMessage?: string;
 
   reset(): void {
     this.ptyExitCode = null;
     this.processExitTermination = null;
     this.lastFailureOutput = undefined;
+    this.lastFailureKind = undefined;
+    this.lastFailureMessage = undefined;
   }
 
   capturePtyExit(exitCode: number, reconnectBuffer: string[]): void {
@@ -59,17 +65,42 @@ export class CliFailureTracker {
   }
 
   markProcessExitDuringStage(stage: string, exitCode: number): string {
-    return this.markProcessExitReason(
+    return this.markProcessExit(
       exitCode,
       `CLI process exited unexpectedly while ${stage} (exit code ${exitCode})`
     );
   }
 
   markCompletionDetectionProcessExit(exitCode: number): string {
-    return this.markProcessExitReason(
+    return this.markProcessExit(
       exitCode,
       `CLI process exited unexpectedly (exit code ${exitCode})`
     );
+  }
+
+  markProcessExit(exitCode: number, reason: string): string {
+    this.processExitTermination = exitCode;
+    this.lastFailureKind = FAILURE_KINDS.PROCESS_EXIT;
+    this.lastFailureMessage = reason;
+    return reason;
+  }
+
+  markHarnessError(message: string): string {
+    this.lastFailureKind = FAILURE_KINDS.HARNESS_ERROR;
+    this.lastFailureMessage = message;
+    return message;
+  }
+
+  markTimeout(message: string): string {
+    this.lastFailureKind = FAILURE_KINDS.TIMEOUT;
+    this.lastFailureMessage = message;
+    return message;
+  }
+
+  markUnknownFailure(message: string): string {
+    this.lastFailureKind = FAILURE_KINDS.UNKNOWN;
+    this.lastFailureMessage = message;
+    return message;
   }
 
   getLastFailureOutput(): string | undefined {
@@ -80,9 +111,20 @@ export class CliFailureTracker {
     return this.processExitTermination !== null;
   }
 
-  private markProcessExitReason(exitCode: number, reason: string): string {
-    this.processExitTermination = exitCode;
-    return reason;
+  wasLastFailureHarnessError(): boolean {
+    return this.lastFailureKind === FAILURE_KINDS.HARNESS_ERROR;
+  }
+
+  wasLastFailureTimeout(): boolean {
+    return this.lastFailureKind === FAILURE_KINDS.TIMEOUT;
+  }
+
+  getLastFailureKind(): FailureKind | undefined {
+    return this.lastFailureKind;
+  }
+
+  getLastFailureMessage(): string | undefined {
+    return this.lastFailureMessage;
   }
 
   private extractInteractiveOutputTail(chunks: string[]): string | undefined {

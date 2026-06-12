@@ -22,7 +22,11 @@ suite("PromptFileParser Tests", () => {
   /**
    * Helper to assert result is valid and has prompts
    */
-  function assertValidResult(result: any): asserts result is { steps: any[] } {
+  function assertValidResult(result: any): asserts result is {
+    steps: any[];
+    errorBehavior?: unknown;
+    hooks?: unknown;
+  } {
     assert.ok(result, "Result should not be null");
     assert.ok(result.steps, "Should have prompts array");
     assert.ok(result.steps.length > 0, "Should have at least one prompt");
@@ -93,6 +97,81 @@ suite("PromptFileParser Tests", () => {
       assert.strictEqual(endCondition.script, "check_explanation.py");
       assert.strictEqual(endCondition.returns, "true");
       assert.strictEqual(endCondition.timeout, 30000);
+    });
+
+    test("should preserve errorBehavior in parsed result", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "flightpath-parser-error-behavior-")
+      );
+      const filePath = path.join(tempDir, "error-behavior.flightpath.json");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify(
+            {
+              errorBehavior: {
+                onError: "retry",
+                maxRetries: 3,
+                retryDelayMs: 1000,
+              },
+              hooks: [{ event: "error", command: "echo hook" }],
+              steps: [{ prompt: "Test prompt", errorBehavior: { onError: "continue" } }],
+            },
+            null,
+            2
+          ),
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+
+        assertValidResult(result);
+        assert.deepStrictEqual(result.errorBehavior, {
+          onError: "retry",
+          maxRetries: 3,
+          retryDelayMs: 1000,
+        });
+        assert.deepStrictEqual(result.hooks, [
+          { event: "error", command: "echo hook" },
+        ]);
+        assert.deepStrictEqual(result.steps[0].errorBehavior, {
+          onError: "continue",
+        });
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("should reject invalid errorBehavior values", async () => {
+      const tempDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "flightpath-parser-error-behavior-invalid-")
+      );
+      const filePath = path.join(tempDir, "invalid-error-behavior.flightpath.json");
+
+      try {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify(
+            {
+              steps: [
+                {
+                  prompt: "Test prompt",
+                  errorBehavior: { onError: "explode" },
+                },
+              ],
+            },
+            null,
+            2
+          ),
+          "utf8"
+        );
+
+        const result = await parser.parsePromptFile(filePath);
+        assert.strictEqual(result, null);
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
     });
 
     test("should keep resumeSession undefined when not explicitly set (uses global setting at execution time)", async () => {

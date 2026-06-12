@@ -341,6 +341,11 @@ suite("WebviewSettingsSync", () => {
         "hooks should be loaded from working file"
       );
       assert.deepStrictEqual(
+        props.errorBehavior,
+        { onError: "retry", maxRetries: 3, retryDelayMs: 2000 },
+        "errorBehavior should be loaded from working file"
+      );
+      assert.deepStrictEqual(
         props.endCondition,
         workingFile.endCondition,
         "endCondition should be loaded from working file"
@@ -418,6 +423,11 @@ suite("WebviewSettingsSync", () => {
         props.endCondition,
         undefined,
         "endCondition should be undefined when not set in working file"
+      );
+      assert.strictEqual(
+        props.errorBehavior,
+        undefined,
+        "errorBehavior should be undefined when not set in working file"
       );
     });
 
@@ -584,6 +594,7 @@ suite("WebviewSettingsSync", () => {
       "priorContext",
       "mcpServers",
       "hooks",
+      "errorBehavior",
       "toolPermissions",
       "endCondition",
       "preCondition",
@@ -656,6 +667,11 @@ suite("WebviewSettingsSync", () => {
         returns: "0",
       };
       const hook = { event: "postToolUse", command: "echo done" };
+      const errorBehavior = {
+        onError: "retry",
+        maxRetries: 2,
+        retryDelayMs: 1500,
+      };
 
       const cases: Array<{
         property: string;
@@ -719,6 +735,12 @@ suite("WebviewSettingsSync", () => {
           value: [hook],
           expectedKey: CONFIG_KEYS.DEFAULTS_HOOKS,
           expectedValue: [hook],
+        },
+        {
+          property: PROMPT_PROPERTIES.ERROR_BEHAVIOR,
+          value: errorBehavior,
+          expectedKey: CONFIG_KEYS.DEFAULTS_ERROR_BEHAVIOR,
+          expectedValue: errorBehavior,
         },
         {
           property: PROMPT_PROPERTIES.TOOL_PERMISSIONS,

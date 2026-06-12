@@ -15,6 +15,7 @@ import {
   ICON_FG_COLOR_DEFAULT,
 } from "./IconColorDefaults";
 import type {
+  ErrorBehavior,
   EndCondition,
   McpServerConfig,
   PreCondition,
@@ -43,6 +44,7 @@ export interface FlightPathGlobalSettings {
     priorContext: string;
     mcpServers: (string | McpServerConfig)[];
     hooks: UserHookConfig[];
+    errorBehavior?: ErrorBehavior | null;
     toolPermissions: {
       mode: "dangerouslyAllowAll" | "allowAll" | "custom";
       allowedTools: string[];
@@ -227,6 +229,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     priorContext: "none",
     mcpServers: [],
     hooks: [],
+    errorBehavior: null,
     toolPermissions: {
       mode: "allowAll",
       allowedTools: [
@@ -352,6 +355,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
         postToolUse: false,
         userPromptSubmit: false,
         permissionRequest: false,
+        error: false,
       },
     },
     includeWorkflowName: true,

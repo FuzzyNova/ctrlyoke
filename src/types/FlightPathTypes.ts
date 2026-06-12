@@ -14,8 +14,9 @@ import {
   type CompareSource,
   type HarnessId,
   type HookEvent,
+  type FailureKind,
 } from "./DashboardConstants";
-export type { HarnessId, HookEvent };
+export type { HarnessId, HookEvent, FailureKind };
 import { ToolPermissionMode } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 export type { ToolPermissionMode };
 
@@ -91,6 +92,14 @@ export interface ToolPermissionsOverride {
   allowedTools?: string[];
   /** Tool patterns to deny (takes precedence over allow list). */
   deniedTools?: string[];
+}
+
+export type ErrorBehaviorAction = "stop" | "retry" | "continue";
+
+export interface ErrorBehavior {
+  onError: ErrorBehaviorAction;
+  maxRetries?: number;
+  retryDelayMs?: number;
 }
 
 /**
@@ -178,6 +187,14 @@ export interface ExecutionProperties {
    * - undefined: Inherit from workflow/settings
    */
   toolPermissions?: ToolPermissionsOverride | null;
+
+  /**
+   * Harness/session failure policy.
+   * - object: override the workflow/settings policy
+   * - null: explicitly disable inherited errorBehavior
+   * - undefined: inherit from workflow/settings
+   */
+  errorBehavior?: ErrorBehavior | null;
 
   /**
    * User-defined hooks to run alongside FlightPath's completion-detection hooks.
@@ -386,6 +403,12 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
   /** Captured stdout/stderr from a ScriptStep execution.
    *  Stored here to enable priorContext injection for script steps. */
   scriptOutput?: ScriptRuntimeOutput;
+
+  /** Structured runtime failure classification for this prompt attempt. */
+  failureKind?: FailureKind;
+
+  /** Human-readable failure message persisted for UI/history display. */
+  failureMessage?: string;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { STEP_TYPES } from "../types/DashboardConstants";
 import type {
+  ErrorBehavior,
   EndCondition,
   McpServerConfig,
   PreCondition,
@@ -237,6 +238,25 @@ function clonePreCondition(value: unknown): PreCondition | null | undefined {
   };
 }
 
+function cloneErrorBehavior(value: unknown): ErrorBehavior | null | undefined {
+  if (value === null) {
+    return null;
+  }
+  if (!isRecord(value) || typeof value.onError !== "string") {
+    return undefined;
+  }
+
+  return {
+    onError: value.onError as ErrorBehavior["onError"],
+    ...(typeof value.maxRetries === "number" && {
+      maxRetries: value.maxRetries,
+    }),
+    ...(typeof value.retryDelayMs === "number" && {
+      retryDelayMs: value.retryDelayMs,
+    }),
+  };
+}
+
 function buildClipboardExecutionProperties(
   step: Record<string, unknown>
 ): Partial<PromptStep> {
@@ -245,6 +265,7 @@ function buildClipboardExecutionProperties(
   const hooks = cloneHooks(step.hooks);
   const endCondition = cloneEndCondition(step.endCondition);
   const preCondition = clonePreCondition(step.preCondition);
+  const errorBehavior = cloneErrorBehavior(step.errorBehavior);
   const priorContext = clonePriorContext(step.priorContext);
   const toolPermissions = cloneToolPermissions(step.toolPermissions);
 
@@ -275,6 +296,9 @@ function buildClipboardExecutionProperties(
     }),
     ...((preCondition !== undefined || step.preCondition === null) && {
       preCondition,
+    }),
+    ...((errorBehavior !== undefined || step.errorBehavior === null) && {
+      errorBehavior,
     }),
     ...(priorContext !== undefined && { priorContext }),
     ...((typeof step.additionalArgs === "string" ||

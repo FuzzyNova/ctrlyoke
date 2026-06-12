@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliExecutionSession } from "../../flightpath/harness/shared/CliExecutionSession";
+import { FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { CliResult, UniversalCliOutput } from "../../types/CliOutputTypes";
 
 function createParsedOutput(
@@ -71,11 +72,33 @@ suite("CliExecutionSession", () => {
     assert.strictEqual(session.parsedOutput, parsedOutput);
     assert.strictEqual(session.result, cliResult);
     assert.strictEqual(session.effectiveSessionId, "session-new");
+    assert.strictEqual(session.failureKind, undefined);
+    assert.strictEqual(session.failureMessage, undefined);
     assert.deepStrictEqual(session.toSnapshot(), {
       cliCommand: undefined,
       parsedOutput,
       result: cliResult,
     });
+  });
+
+  test("tracks structured failure metadata on failed headless responses", () => {
+    const session = new CliExecutionSession({
+      prompt: { prompt: "fail" },
+    });
+
+    session.recordHeadlessResponse({
+      success: false,
+      parsedOutput: createParsedOutput(),
+      cliResult: createCliResult({
+        success: false,
+        error: "Process exited with code 1",
+      }),
+      failureKind: FAILURE_KINDS.PROCESS_EXIT,
+      failureMessage: "Process exited with code 1",
+    });
+
+    assert.strictEqual(session.failureKind, FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(session.failureMessage, "Process exited with code 1");
   });
 
   test("uses the resolved session ID when no new session is extracted", () => {

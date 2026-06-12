@@ -179,6 +179,14 @@ export class PromptPropertyCompletionProvider
       insertSnippet: `${PROMPT_PROPERTIES.PRE_CONDITION}:\n  script: \n  onFail: skipPrompt`,
     },
     {
+      key: PROMPT_PROPERTIES.ERROR_BEHAVIOR,
+      detail: "Harness/session failure policy",
+      documentation:
+        "Controls what happens when the harness itself fails. `onError` supports `stop`, `retry`, or `continue`. `maxRetries` and `retryDelayMs` apply when retry is selected.",
+      insertSnippet:
+        `${PROMPT_PROPERTIES.ERROR_BEHAVIOR}:\n  onError: stop`,
+    },
+    {
       key: "allowDynamicExtension",
       detail: "Allow AI to extend the workflow queue (boolean)",
       documentation:

@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type { CliEvent } from "../../../types/CliOutputTypes";
-import { HARNESS_IDS } from "../../../types/DashboardConstants";
+import { FAILURE_KINDS, HARNESS_IDS } from "../../../types/DashboardConstants";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getErrorMessage } from "../../../utils/ErrorUtils";
@@ -645,17 +645,37 @@ export class CliExecutionRunner {
     if (result.cliResult) {
       session.updateResult(result.cliResult);
     }
-
-    if (result.processExited) {
-      this.deps.runtimeState.setFailureReason(
-        this.deps.failureTracker.markCompletionDetectionProcessExit(
-          result.processExited.exitCode
-        )
-      );
+    if (result.failureKind || result.failureMessage) {
+      session.updateFailure(result.failureKind, result.failureMessage);
     }
 
-    if (result.timedOut) {
-      throw new Error("Log monitoring timeout");
+    if (result.failureKind === FAILURE_KINDS.PROCESS_EXIT) {
+      const exitCode = result.processExited?.exitCode ?? -1;
+      this.deps.runtimeState.setFailureReason(
+        this.deps.failureTracker.markProcessExit(
+          exitCode,
+          result.failureMessage ??
+            `CLI process exited unexpectedly (exit code ${exitCode})`
+        )
+      );
+    } else if (result.failureKind === FAILURE_KINDS.HARNESS_ERROR) {
+      this.deps.runtimeState.setFailureReason(
+        this.deps.failureTracker.markHarnessError(
+          result.failureMessage ?? "Harness reported an error"
+        )
+      );
+    } else if (result.failureKind === FAILURE_KINDS.TIMEOUT) {
+      this.deps.runtimeState.setFailureReason(
+        this.deps.failureTracker.markTimeout(
+          result.failureMessage ?? "Log monitoring timeout"
+        )
+      );
+    } else if (result.failureKind === FAILURE_KINDS.UNKNOWN) {
+      this.deps.runtimeState.setFailureReason(
+        this.deps.failureTracker.markUnknownFailure(
+          result.failureMessage ?? "CLI execution failed"
+        )
+      );
     }
 
     return { success: result.success, sessionId: result.sessionId };
@@ -696,9 +716,44 @@ export class CliExecutionRunner {
 
       session.recordHeadlessResponse(collected);
       if (!collected.success) {
-        this.deps.runtimeState.setFailureReason(
-          collected.cliResult.error || "Headless CLI execution failed"
-        );
+        if (collected.failureKind === FAILURE_KINDS.PROCESS_EXIT) {
+          this.deps.runtimeState.setFailureReason(
+            this.deps.failureTracker.markProcessExit(
+              result.exitCode,
+              collected.failureMessage ||
+                collected.cliResult.error ||
+                `Process exited with code ${result.exitCode}`
+            )
+          );
+        } else if (collected.failureKind === FAILURE_KINDS.HARNESS_ERROR) {
+          this.deps.runtimeState.setFailureReason(
+            this.deps.failureTracker.markHarnessError(
+              collected.failureMessage ||
+                collected.cliResult.error ||
+                "Harness reported an error"
+            )
+          );
+        } else if (collected.failureKind === FAILURE_KINDS.TIMEOUT) {
+          this.deps.runtimeState.setFailureReason(
+            this.deps.failureTracker.markTimeout(
+              collected.failureMessage ||
+                collected.cliResult.error ||
+                "Headless CLI execution timed out"
+            )
+          );
+        } else if (collected.failureKind === FAILURE_KINDS.UNKNOWN) {
+          this.deps.runtimeState.setFailureReason(
+            this.deps.failureTracker.markUnknownFailure(
+              collected.failureMessage ||
+                collected.cliResult.error ||
+                "Headless CLI execution failed"
+            )
+          );
+        } else {
+          this.deps.runtimeState.setFailureReason(
+            collected.cliResult.error || "Headless CLI execution failed"
+          );
+        }
       }
       return collected.success;
     };

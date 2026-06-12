@@ -2,6 +2,8 @@ import type {
   CliResult,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
+import { FAILURE_KINDS } from "../../../types/DashboardConstants";
+import type { FailureKind } from "../../../types/FlightPathTypes";
 import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
 import { CliOutputFormatter } from "./CliOutputFormatter";
@@ -24,6 +26,8 @@ export interface CollectedHeadlessResponse {
   parsedOutput: UniversalCliOutput;
   cliResult: CliResult;
   extractedSessionId?: string;
+  failureKind?: FailureKind;
+  failureMessage?: string;
 }
 
 export class CliResponseCollector {
@@ -54,16 +58,16 @@ export class CliResponseCollector {
     const statistics = CliOutputFormatter.formatStatistics(
       parsedOutput.metadata
     );
-    const failureReason = this.getHeadlessFailureReason(params, parsedOutput);
-    const succeeded = failureReason === undefined;
-    const resultResponse = responseText || failureReason || "";
+    const failure = this.getHeadlessFailure(params, parsedOutput);
+    const succeeded = failure === undefined;
+    const resultResponse = responseText || failure?.message || "";
 
     const cliResult: CliResult = {
       success: succeeded,
       response: resultResponse,
       statistics,
       exitCode: params.exitCode,
-      error: failureReason,
+      error: failure?.message,
     };
 
     let extractedSessionId = parsedOutput.metadata.sessionId;
@@ -96,17 +100,22 @@ export class CliResponseCollector {
       parsedOutput,
       cliResult,
       extractedSessionId,
+      failureKind: failure?.kind,
+      failureMessage: failure?.message,
     };
   }
 
-  private getHeadlessFailureReason(
+  private getHeadlessFailure(
     params: { stdout: string; stderr: string; exitCode: number },
     parsedOutput: UniversalCliOutput
-  ): string | undefined {
+  ): { kind: FailureKind; message: string } | undefined {
     const stderr = sanitizeTerminalOutput(params.stderr).trim();
 
     if (params.exitCode !== 0) {
-      return stderr || `Process exited with code ${params.exitCode}`;
+      return {
+        kind: FAILURE_KINDS.PROCESS_EXIT,
+        message: stderr || `Process exited with code ${params.exitCode}`,
+      };
     }
 
     if (!stderr) {
@@ -117,7 +126,9 @@ export class CliResponseCollector {
       return undefined;
     }
 
-    return this.looksLikeCliInvocationError(stderr) ? stderr : undefined;
+    return this.looksLikeCliInvocationError(stderr)
+      ? { kind: FAILURE_KINDS.UNKNOWN, message: stderr }
+      : undefined;
   }
 
   private looksLikeCliInvocationError(stderr: string): boolean {

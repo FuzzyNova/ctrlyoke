@@ -342,6 +342,7 @@ export class WebviewSettingsSync {
         hooks: workingFile.hooks,
         endCondition: workingFile.endCondition,
         preCondition: workingFile.preCondition,
+        errorBehavior: workingFile.errorBehavior,
         priorContext: workingFile.priorContext,
         additionalArgs: workingFile.additionalArgs,
         toolPermissions: workingFile.toolPermissions,
@@ -552,6 +553,8 @@ export class WebviewSettingsSync {
       await ConfigurationUtils.setDefaultEndCondition(value ?? null);
     } else if (property === PROMPT_PROPERTIES.PRE_CONDITION) {
       await ConfigurationUtils.setDefaultPreCondition(value ?? null);
+    } else if (property === PROMPT_PROPERTIES.ERROR_BEHAVIOR) {
+      await ConfigurationUtils.setDefaultErrorBehavior(value ?? null);
     } else if (property === PROMPT_PROPERTIES.TOOL_PERMISSIONS) {
       const override = value as ToolPermissionsOverride | null;
       await ConfigurationUtils.updateSetting(
@@ -723,6 +726,8 @@ export class WebviewSettingsSync {
       resumeSession: resumeExistingSession,
       mcpServers: defaultMcpServers,
       hooks: ConfigurationUtils.getDefaultHooks(),
+      defaultErrorBehavior:
+        ConfigurationUtils.getDefaultErrorBehavior() ?? null,
       autoFocusOutputOnExecution:
         ConfigurationUtils.shouldAutoFocusOutputOnExecution(),
       terminal: ConfigurationUtils.getTerminalSettings(),

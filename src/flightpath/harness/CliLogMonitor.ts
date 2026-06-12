@@ -4,6 +4,8 @@ import type {
   CliResult,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
+import { FAILURE_KINDS } from "../../types/DashboardConstants";
+import type { FailureKind } from "../../types/FlightPathTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import { extractTextFromEvents } from "./shared/CliResponseTextExtractor";
@@ -23,6 +25,10 @@ export interface LogMonitorResult {
   parsedOutput?: UniversalCliOutput;
   /** Legacy CLI result (response text, statistics, exit code) */
   cliResult?: CliResult;
+  /** Structured prompt failure classification when monitoring ended unsuccessfully */
+  failureKind?: FailureKind;
+  /** Human-readable failure message captured at the monitor boundary */
+  failureMessage?: string;
   /** Set when monitoring ended because the CLI process exited before completion was detected.
    *  All CLI harnesses are TUIs that stay open between prompts, so any process exit
    *  before a Stop hook or log-based completion event is abnormal (Ctrl+C, crash, SIGKILL). */
@@ -124,6 +130,66 @@ export class CliLogMonitor {
       let draining = false;
       let timeoutHandle: NodeJS.Timeout | undefined;
       let cancellationInterval: NodeJS.Timeout | undefined;
+      let watcher: fs.FSWatcher | undefined;
+
+      const resolveFailure = async (params: {
+        failureKind: FailureKind;
+        failureMessage: string;
+        exitCode?: number;
+        timedOut?: boolean;
+        sessionIdOverride?: string;
+      }) => {
+        if (cancellationInterval) {
+          clearInterval(cancellationInterval);
+        }
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
+        watcher?.close();
+
+        try {
+          await drainLogEvents();
+        } catch {
+          // ignore drain failures during failure finalization
+        }
+
+        const partialResponse =
+          events.length > 0 ? parser.extractResponse(events) : undefined;
+        const partialText = partialResponse
+          ? extractTextFromEvents(partialResponse)
+          : undefined;
+        const effectiveSessionId =
+          params.sessionIdOverride ??
+          partialResponse?.metadata.sessionId ??
+          sessionId ??
+          undefined;
+
+        const partialResult: CliResult | undefined =
+          partialText || params.failureMessage
+            ? {
+                success: false,
+                response: partialText || params.failureMessage,
+                statistics: "",
+                exitCode: params.exitCode ?? -1,
+                sessionId: effectiveSessionId,
+                error: params.failureMessage,
+              }
+            : undefined;
+
+        resolve({
+          success: false,
+          sessionId: effectiveSessionId,
+          parsedOutput: partialResponse,
+          cliResult: partialResult,
+          failureKind: params.failureKind,
+          failureMessage: params.failureMessage,
+          timedOut: params.timedOut,
+          processExited:
+            params.exitCode !== undefined
+              ? { exitCode: params.exitCode }
+              : undefined,
+        });
+      };
 
       // Delegate timestamp extraction to BaseLogParser via the parser instance
       const getEntryTimestamp = (entry: BaseCliEvent): Date | null =>
@@ -212,7 +278,7 @@ export class CliLogMonitor {
           cliResult.statistics
         );
 
-        watcher.close();
+        watcher?.close();
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
         }
@@ -297,7 +363,7 @@ export class CliLogMonitor {
       // ──────────────────────────────────────────────────────
       // Start log file watcher for streaming content
       // ──────────────────────────────────────────────────────
-      const watcher: fs.FSWatcher = parser.watchLogFile(
+      watcher = parser.watchLogFile(
         logPath,
         (event) => {
           processEvent(event, "log file");
@@ -374,6 +440,27 @@ export class CliLogMonitor {
                 }
 
                 void handleCompletion("Stop hook");
+              } else if (result.kind === "error" && !completed) {
+                if (
+                  this.deps.notificationMonitor!.cleanupNotificationFiles &&
+                  sessionId
+                ) {
+                  await this.deps.notificationMonitor!.cleanupNotificationFiles(
+                    sessionId,
+                    notifyDir
+                  );
+                }
+
+                const sessionIdFromNotification =
+                  this.deps.notificationMonitor!.extractSessionId?.(result.data);
+
+                await resolveFailure({
+                  failureKind: FAILURE_KINDS.HARNESS_ERROR,
+                  failureMessage:
+                    result.error ||
+                    "Harness reported an error before completion",
+                  sessionIdOverride: sessionIdFromNotification,
+                });
               } else if (
                 !result.completed &&
                 sessionId &&
@@ -394,50 +481,11 @@ export class CliLogMonitor {
       if (timeoutMs !== undefined) {
         timeoutHandle = setTimeout(() => {
           Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
-          if (cancellationInterval) {
-            clearInterval(cancellationInterval);
-          }
-          watcher.close();
-          void (async () => {
-            try {
-              const newEntries = await parser.readNewLines(logPath);
-              for (const entry of newEntries) {
-                const entryTime = getEntryTimestamp(entry);
-                if (entryTime && entryTime < startTime) {
-                  continue;
-                }
-                events.push(entry);
-              }
-            } catch {
-              // ignore read errors during timeout flush
-            }
-
-            const partialResponse =
-              events.length > 0 ? parser.extractResponse(events) : undefined;
-            const partialText = partialResponse
-              ? extractTextFromEvents(partialResponse)
-              : undefined;
-            const effectiveSessionId =
-              partialResponse?.metadata.sessionId || sessionId || undefined;
-
-            const partialResult: CliResult | undefined = partialText
-              ? {
-                  success: false,
-                  response: partialText,
-                  statistics: "",
-                  exitCode: -1,
-                  sessionId: effectiveSessionId,
-                }
-              : undefined;
-
-            resolve({
-              success: false,
-              timedOut: true,
-              sessionId: sessionId || undefined,
-              parsedOutput: partialResponse,
-              cliResult: partialResult,
-            });
-          })();
+          void resolveFailure({
+            failureKind: FAILURE_KINDS.TIMEOUT,
+            failureMessage: "Log monitoring timeout",
+            timedOut: true,
+          });
         }, timeoutMs);
       }
 
@@ -450,7 +498,7 @@ export class CliLogMonitor {
           if (timeoutHandle) {
             clearTimeout(timeoutHandle);
           }
-          watcher.close();
+          watcher?.close();
           // Flush any remaining log events and extract partial output so the
           // stopped step shows what the AI had produced up to cancellation.
           void (async () => {
@@ -502,37 +550,15 @@ export class CliLogMonitor {
           if (timeoutHandle) {
             clearTimeout(timeoutHandle);
           }
-          watcher.close();
+          watcher?.close();
 
           Log.warn(
             `⚠️ CLI process exited (code ${ptyExit.exitCode}) before completion — stopping workflow`
           );
-          void drainLogEvents().then(() => {
-            const partialResponse =
-              events.length > 0 ? parser.extractResponse(events) : undefined;
-            const partialText = partialResponse
-              ? extractTextFromEvents(partialResponse)
-              : undefined;
-            const effectiveSessionId =
-              partialResponse?.metadata.sessionId || sessionId || undefined;
-
-            const partialResult: CliResult | undefined = partialText
-              ? {
-                  success: false,
-                  response: partialText,
-                  statistics: "",
-                  exitCode: ptyExit.exitCode,
-                  sessionId: effectiveSessionId,
-                }
-              : undefined;
-
-            resolve({
-              success: false,
-              sessionId: sessionId || undefined,
-              parsedOutput: partialResponse,
-              cliResult: partialResult,
-              processExited: { exitCode: ptyExit.exitCode },
-            });
+          void resolveFailure({
+            failureKind: FAILURE_KINDS.PROCESS_EXIT,
+            failureMessage: `CLI process exited unexpectedly (exit code ${ptyExit.exitCode})`,
+            exitCode: ptyExit.exitCode,
           });
         }
       }, CliLogMonitor.CANCELLATION_CHECK_INTERVAL_MS);

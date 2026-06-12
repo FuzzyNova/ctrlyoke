@@ -5,6 +5,7 @@ import {
   WorkflowStep,
   isScriptStep,
   ScriptRuntimeOutput,
+  type FailureKind,
 } from "../types/FlightPathTypes";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
@@ -1070,6 +1071,18 @@ export abstract class HarnessIntegration {
    */
   wasLastFailureProcessExit(): boolean {
     return false;
+  }
+
+  wasLastFailureHarnessError(): boolean {
+    return false;
+  }
+
+  wasLastFailureTimeout(): boolean {
+    return false;
+  }
+
+  getLastFailureKind(): FailureKind | undefined {
+    return undefined;
   }
 
   /**

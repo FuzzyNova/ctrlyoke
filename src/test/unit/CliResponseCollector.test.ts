@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
+import { FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CliResponseCollector } from "../../flightpath/harness/shared/CliResponseCollector";
 import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
@@ -225,6 +226,8 @@ suite("CliResponseCollector", () => {
     assert.strictEqual(result.cliResult.success, false);
     assert.strictEqual(result.cliResult.response, stderr);
     assert.strictEqual(result.cliResult.error, stderr);
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.UNKNOWN);
+    assert.strictEqual(result.failureMessage, stderr);
     assert.strictEqual(result.extractedSessionId, undefined);
     assert.strictEqual(logExtractionCalled, false);
     assert.deepStrictEqual(loggedResponses, [
@@ -267,5 +270,36 @@ suite("CliResponseCollector", () => {
 
     assert.strictEqual(result.extractedSessionId, undefined);
     assert.strictEqual(logExtractionCalled, false);
+  });
+
+  test("should classify non-zero headless exits as processExit", async () => {
+    const collector = new CliResponseCollector({
+      provider: {
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+        },
+      } as Pick<
+        ICliProvider,
+        "responseParser" | "augmentParsedOutput" | "extractSessionIdFromLogs"
+      >,
+      hostCallbacks: {
+        logResponse: () => {},
+        onResponseComplete: () => {},
+      },
+    });
+
+    const result = await collector.collectHeadlessResponse({
+      stdout: "",
+      stderr: "process crashed",
+      exitCode: 2,
+      promptForSessionLog: "say hi",
+      executionStartTime: new Date(),
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.failureKind, FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(result.failureMessage, "process crashed");
+    assert.strictEqual(result.cliResult.error, "process crashed");
   });
 });

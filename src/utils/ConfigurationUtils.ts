@@ -1,5 +1,6 @@
 import {
   DynamicQueueConfig,
+  ErrorBehavior,
   EndCondition,
   McpServerConfig,
   PreCondition,
@@ -43,6 +44,7 @@ export const CONFIG_KEYS = {
   DEFAULTS_PRIOR_CONTEXT: "defaults.priorContext",
   DEFAULTS_END_CONDITION: "defaults.endCondition",
   DEFAULTS_PRE_CONDITION: "defaults.preCondition",
+  DEFAULTS_ERROR_BEHAVIOR: "defaults.errorBehavior",
   DEFAULTS_TOOL_PERMISSIONS: "defaults.toolPermissions",
   DEFAULTS_TOOL_PERMISSIONS_MODE: "defaults.toolPermissions.mode",
   DEFAULTS_TOOL_PERMISSIONS_ALLOWED: "defaults.toolPermissions.allowedTools",
@@ -239,6 +241,13 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Get the default harness/session error behavior for new workflows.
+   */
+  getDefaultErrorBehavior(): ErrorBehavior | null | undefined {
+    return configService.get(CONFIG_KEYS.DEFAULTS).errorBehavior;
+  },
+
+  /**
    * Get default max retries for end conditions (reads from endCondition)
    */
   getDefaultMaxRetries(): number {
@@ -273,6 +282,19 @@ export const ConfigurationUtils = {
   async setDefaultPreCondition(value: PreCondition | null): Promise<void> {
     await configService.set(
       CONFIG_KEYS.DEFAULTS_PRE_CONDITION,
+      value,
+      CONFIG_SCOPE.USER
+    );
+  },
+
+  /**
+   * Set the default harness/session error behavior in settings.
+   */
+  async setDefaultErrorBehavior(
+    value: ErrorBehavior | null
+  ): Promise<void> {
+    await configService.set(
+      CONFIG_KEYS.DEFAULTS_ERROR_BEHAVIOR,
       value,
       CONFIG_SCOPE.USER
     );

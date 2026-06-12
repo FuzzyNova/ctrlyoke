@@ -31,6 +31,7 @@ import {
   DynamicQueueConfig,
   PreCondition,
   ToolPermissionsOverride,
+  ErrorBehavior,
 } from "../types/FlightPathTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
@@ -2999,6 +3000,9 @@ export class WorkflowInstance {
       }),
       ...(props?.preCondition !== undefined && {
         preCondition: props.preCondition as PreCondition | null,
+      }),
+      ...(props?.errorBehavior !== undefined && {
+        errorBehavior: props.errorBehavior as ErrorBehavior | null,
       }),
       ...(props?.skills !== undefined && {
         skills: props.skills as string[] | null,

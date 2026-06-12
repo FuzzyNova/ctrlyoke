@@ -1,6 +1,6 @@
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import type { PromptStep } from "../../../types/FlightPathTypes";
-import type { HarnessId } from "../../../types/DashboardConstants";
+import type { FailureKind, HarnessId } from "../../../types/DashboardConstants";
 import type { WorkflowWorkingFilePersistence } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { Log } from "../../../utils/Log";
@@ -24,6 +24,8 @@ export class CliPromptRuntimeCoordinator {
     extractedSessionId?: string;
     parsedOutput?: UniversalCliOutput;
     responseText?: string;
+    failureKind?: FailureKind;
+    failureMessage?: string;
     resolvedProperties?: ResolvedProperties;
     workingFilePersistence?: WorkflowWorkingFilePersistence;
   }): Promise<void> {
@@ -62,6 +64,8 @@ export class CliPromptRuntimeCoordinator {
     if (responseText) {
       params.prompt._runtime.responseText = responseText;
     }
+    params.prompt._runtime.failureKind = params.failureKind;
+    params.prompt._runtime.failureMessage = params.failureMessage;
     params.prompt._runtime.completedAt = this.now();
 
     await params.workingFilePersistence.updateWorkingFile();
@@ -111,6 +115,8 @@ export class CliPromptRuntimeCoordinator {
       }
     }
 
+    params.prompt._runtime.failureKind = undefined;
+    params.prompt._runtime.failureMessage = undefined;
     params.prompt._runtime.completedAt = this.now();
 
     if (params.workingFilePersistence) {

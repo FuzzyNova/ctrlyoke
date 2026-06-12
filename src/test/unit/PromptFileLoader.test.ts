@@ -109,6 +109,10 @@ suite("PromptFileLoader Tests", () => {
         defaults.toolPermissions !== undefined,
         "toolPermissions should be seeded"
       );
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(defaults, "errorBehavior"),
+        "errorBehavior should be seeded even when null"
+      );
     });
   });
 
@@ -191,7 +195,16 @@ suite("PromptFileLoader Tests", () => {
             event: "sessionStart",
             command: "echo workflow-level sessionStart hook",
           },
+          {
+            event: "error",
+            command: "echo workflow-level error hook",
+          },
         ]);
+        assert.deepStrictEqual(loaded.errorBehavior, {
+          onError: "retry",
+          maxRetries: 2,
+          retryDelayMs: 5000,
+        });
         assert.deepStrictEqual(loaded.preCondition, {
           script: "manual-test/.flightpath/scripts/always_true.py",
           returns: "true",
@@ -255,6 +268,9 @@ suite("PromptFileLoader Tests", () => {
       assert.deepStrictEqual(stepWithAllProperties.toolPermissions, {
         mode: "dangerouslyAllowAll",
       });
+      assert.deepStrictEqual(stepWithAllProperties.errorBehavior, {
+        onError: "continue",
+      });
       assert.deepStrictEqual(stepWithAllProperties.preCondition, {
         script: "manual-test/.flightpath/scripts/always_true.py",
         returns: "true",
@@ -290,6 +306,7 @@ suite("PromptFileLoader Tests", () => {
       assert.strictEqual(nullOverrideStep.hooks, null);
       assert.strictEqual(nullOverrideStep.endCondition, null);
       assert.strictEqual(nullOverrideStep.preCondition, null);
+      assert.strictEqual(nullOverrideStep.errorBehavior, null);
       assert.strictEqual(nullOverrideStep.toolPermissions, null);
       assert.strictEqual(nullOverrideStep.additionalArgs, null);
 

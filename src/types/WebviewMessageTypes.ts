@@ -34,6 +34,7 @@ import {
   type SettingWriteScope,
 } from "./DashboardConstants";
 import type {
+  ErrorBehavior,
   WorkflowSummary,
   McpServerConfig,
   PreCondition,
@@ -268,6 +269,7 @@ export interface PromptStep {
   priorContext?: PriorContext;
   additionalArgs?: string | null;
   toolPermissions?: ToolPermissionsOverride | null;
+  errorBehavior?: ErrorBehavior | null;
   _runtime?: {
     harness?: string;
     model?: string;

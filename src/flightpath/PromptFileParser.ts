@@ -333,6 +333,8 @@ export class PromptFileParser {
       promptStep.additionalArgs = source.additionalArgs;
     if (source.toolPermissions !== undefined)
       promptStep.toolPermissions = source.toolPermissions;
+    if (source.errorBehavior !== undefined)
+      promptStep.errorBehavior = source.errorBehavior;
 
     return promptStep;
   }
@@ -449,6 +451,8 @@ export class PromptFileParser {
       promptFile.additionalArgs = parsed.additionalArgs;
     if (parsed.toolPermissions !== undefined)
       promptFile.toolPermissions = parsed.toolPermissions;
+    if (parsed.errorBehavior !== undefined)
+      promptFile.errorBehavior = parsed.errorBehavior;
     if (parsed.vars !== undefined) promptFile.vars = parsed.vars;
   }
 

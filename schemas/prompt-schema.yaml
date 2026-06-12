@@ -285,6 +285,13 @@ definitions:
           inherited overrides and fall back to global VS Code settings. Set mode to 'passthrough' to
           omit all FlightPath permission flags and rely entirely on the harness's own local
           configuration.
+      errorBehavior:
+        oneOf:
+          - $ref: '#/definitions/errorBehavior'
+          - type: 'null'
+        description: >-
+          Harness/session failure policy for this prompt/workflow. Use null to explicitly disable an
+          inherited policy.
   workflowStep:
     oneOf:
       - $ref: '#/definitions/promptStep'
@@ -521,6 +528,30 @@ definitions:
           (default). 'stopWorkflow': halt execution.
     required:
       - script
+  errorBehavior:
+    type: object
+    description: >-
+      Policy for harness/session failures such as process exit, timeout, or harness-reported session
+      errors.
+    properties:
+      onError:
+        type: string
+        enum:
+          - stop
+          - retry
+          - continue
+        description: What to do when the harness/session fails.
+      maxRetries:
+        type: integer
+        minimum: 1
+        description: Maximum retry attempts when onError is retry.
+      retryDelayMs:
+        type: integer
+        minimum: 0
+        description: Delay before retrying, in milliseconds.
+    required:
+      - onError
+    additionalProperties: false
   promptRuntimeMetadata:
     type: object
     description: Per-prompt runtime execution metadata (optional, added automatically during execution)
@@ -553,6 +584,18 @@ definitions:
             description: >-
               Plain-text AI response from this prompt's execution. Written automatically during
               workflow execution. Used by the priorContext feature to inject prior prompt outputs.
+          failureKind:
+            type: string
+            enum:
+              - userCancelled
+              - processExit
+              - harnessError
+              - timeout
+              - unknown
+            description: Structured classification of the last harness/session failure for this prompt.
+          failureMessage:
+            type: string
+            description: Human-readable message describing the last harness/session failure.
         required:
           - startedAt
   runtimeMetadata:
@@ -639,6 +682,7 @@ definitions:
           - postToolUse
           - userPromptSubmit
           - permissionRequest
+          - error
         description: >-
           Logical hook event. Unsupported events for the active harness are silently skipped. 'stop'
           maps to Stop (Claude/Qwen), agentStop (Copilot), AfterAgent (Gemini), notify (Codex).

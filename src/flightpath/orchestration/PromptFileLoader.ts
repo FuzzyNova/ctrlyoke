@@ -19,6 +19,7 @@ const WORKFLOW_PROPERTY_KEYS = [
   "toolPermissions",
   "endCondition",
   "preCondition",
+  "errorBehavior",
   "priorContext",
   "additionalArgs",
   "vars",
@@ -328,6 +329,9 @@ export class PromptFileLoader {
     }
     if (explicitValues.priorContext === undefined) {
       defaults.priorContext = ConfigurationUtils.getPriorContext();
+    }
+    if (explicitValues.errorBehavior === undefined) {
+      defaults.errorBehavior = ConfigurationUtils.getDefaultErrorBehavior();
     }
     if (explicitValues.additionalArgs === undefined) {
       defaults.additionalArgs = ConfigurationUtils.getAdditionalArgsForHarness(

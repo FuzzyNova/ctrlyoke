@@ -63,7 +63,7 @@ export class CodexNotificationMonitor
       notifyDir
     );
     const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
-    const eventMap: Record<HookEvent, string> = {
+    const eventMap: Partial<Record<HookEvent, string>> = {
       stop: "Stop",
       sessionStart: "SessionStart",
       preToolUse: "PreToolUse",

@@ -124,6 +124,37 @@
             "additionalProperties": true
           }
         },
+        "errorBehavior": {
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "Default harness/session failure policy for new workflows.",
+              "properties": {
+                "onError": {
+                  "type": "string",
+                  "enum": ["stop", "retry", "continue"],
+                  "description": "What to do when the harness/session fails."
+                },
+                "maxRetries": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Maximum retry attempts when onError is retry."
+                },
+                "retryDelayMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Delay before retrying, in milliseconds."
+                }
+              },
+              "required": ["onError"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null",
+              "description": "Disabled (default). New workflows use stop behavior unless overridden."
+            }
+          ]
+        },
         "toolPermissions": {
           "type": "object",
           "description": "Default tool permission settings for prompt execution.",
@@ -626,6 +657,10 @@
                 "permissionRequest": {
                   "type": "boolean",
                   "description": "Notify when the AI requests permission to perform an action."
+                },
+                "error": {
+                  "type": "boolean",
+                  "description": "Notify when the harness reports a session-level error."
                 }
               }
             }

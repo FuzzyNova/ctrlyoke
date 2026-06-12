@@ -1,5 +1,31 @@
 # Error Behavior Plan
 
+## Progress Tracking
+
+- [~] Phase 1 - Types, schemas, parser, serializer
+- [x] Phase 2 - Failure classification plumbing
+- [ ] Phase 3 - Harness detection
+- [ ] Phase 4 - WorkflowExecutor routing
+- [ ] Phase 5 - UI
+
+### Phase 1 progress
+
+- [x] Shared `errorBehavior` types and `PROMPT_PROPERTIES.ERROR_BEHAVIOR`
+- [x] Prompt/settings schema support for `errorBehavior`
+- [x] Hook metadata/schema support for logical `error` event
+- [x] Parser / working-file default seeding / serializer wiring
+- [x] Settings sync + YAML property completion wiring
+- [ ] Remaining editor UI for authoring `errorBehavior`
+
+### Phase 2 progress
+
+- [x] Structured `FailureKind` tracker state in `CliFailureTracker`
+- [x] Structured `NotificationResult.kind` + `-error.json` monitor detection
+- [x] Structured `LogMonitorResult.failureKind` / `failureMessage`
+- [x] Timeout routing stays structured instead of throwing from `CliExecutionRunner`
+- [x] Headless non-zero exits classify as `processExit`
+- [x] Failure classification persists into prompt `_runtime`
+
 ## Problem
 
 FlightPath currently has no configurable policy for harness-level execution failures.

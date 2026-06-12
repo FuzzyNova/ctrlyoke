@@ -547,7 +547,8 @@ export type HookEvent =
   | "preToolUse"
   | "postToolUse"
   | "userPromptSubmit"
-  | "permissionRequest";
+  | "permissionRequest"
+  | "error";
 
 export interface HookEventMetadata {
   event: HookEvent;
@@ -564,6 +565,7 @@ export const HOOK_EVENT_ORDER: HookEvent[] = [
   "postToolUse",
   "userPromptSubmit",
   "permissionRequest",
+  "error",
 ];
 
 export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
@@ -641,6 +643,16 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
       HARNESS_IDS.CODEX_CLI,
       HARNESS_IDS.GEMINI_CLI,
       HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.OPENCODE_CLI,
+    ],
+  },
+  {
+    event: "error",
+    label: "Error",
+    description: "Fires when the harness reports a session-level error.",
+    supportedHarnesses: [
+      HARNESS_IDS.CLAUDE_CLI,
+      HARNESS_IDS.COPILOT_CLI,
       HARNESS_IDS.OPENCODE_CLI,
     ],
   },
@@ -791,6 +803,20 @@ export const INTERACTIVE_ABORT_KINDS = {
 
 export type InteractiveAbortKind =
   (typeof INTERACTIVE_ABORT_KINDS)[keyof typeof INTERACTIVE_ABORT_KINDS];
+
+// ============================================================================
+// FAILURE KINDS - Structured classification for harness/session failures
+// ============================================================================
+export const FAILURE_KINDS = {
+  USER_CANCELLED: "userCancelled",
+  PROCESS_EXIT: "processExit",
+  HARNESS_ERROR: "harnessError",
+  TIMEOUT: "timeout",
+  UNKNOWN: "unknown",
+} as const;
+
+export type FailureKind =
+  (typeof FAILURE_KINDS)[keyof typeof FAILURE_KINDS];
 
 // ============================================================================
 // TERMINAL SESSION STATUS - Status values for terminal sessions
@@ -977,6 +1003,7 @@ export const PROMPT_PROPERTIES = {
   // CLI overrides
   ADDITIONAL_ARGS: "additionalArgs",
   TOOL_PERMISSIONS: "toolPermissions",
+  ERROR_BEHAVIOR: "errorBehavior",
 } as const;
 
 // End condition property names

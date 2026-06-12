@@ -1,7 +1,10 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { CliFailureTracker } from "../../flightpath/harness/shared/CliFailureTracker";
-import { INTERACTIVE_ABORT_KINDS } from "../../types/DashboardConstants";
+import {
+  FAILURE_KINDS,
+  INTERACTIVE_ABORT_KINDS,
+} from "../../types/DashboardConstants";
 
 suite("CliFailureTracker", () => {
   test("should classify PTY exit as an interactive abort", () => {
@@ -28,6 +31,28 @@ suite("CliFailureTracker", () => {
       "CLI process exited unexpectedly while waiting for SessionStart hook (exit code 0)"
     );
     assert.strictEqual(tracker.wasLastFailureProcessExit(), true);
+    assert.strictEqual(tracker.getLastFailureKind(), FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(tracker.getLastFailureMessage(), reason);
+  });
+
+  test("should track harness errors and timeouts separately", () => {
+    const tracker = new CliFailureTracker();
+
+    const harnessError = tracker.markHarnessError("Claude StopFailure");
+    assert.strictEqual(harnessError, "Claude StopFailure");
+    assert.strictEqual(tracker.wasLastFailureHarnessError(), true);
+    assert.strictEqual(tracker.wasLastFailureTimeout(), false);
+    assert.strictEqual(
+      tracker.getLastFailureKind(),
+      FAILURE_KINDS.HARNESS_ERROR
+    );
+
+    const timeout = tracker.markTimeout("Log monitoring timeout");
+    assert.strictEqual(timeout, "Log monitoring timeout");
+    assert.strictEqual(tracker.wasLastFailureHarnessError(), false);
+    assert.strictEqual(tracker.wasLastFailureTimeout(), true);
+    assert.strictEqual(tracker.getLastFailureKind(), FAILURE_KINDS.TIMEOUT);
+    assert.strictEqual(tracker.getLastFailureMessage(), timeout);
   });
 
   test("should strip terminal control sequences from PTY output tail", () => {
@@ -64,6 +89,10 @@ suite("CliFailureTracker", () => {
 
     assert.strictEqual(tracker.getInteractiveAbortState(false), null);
     assert.strictEqual(tracker.wasLastFailureProcessExit(), false);
+    assert.strictEqual(tracker.wasLastFailureHarnessError(), false);
+    assert.strictEqual(tracker.wasLastFailureTimeout(), false);
     assert.strictEqual(tracker.getLastFailureOutput(), undefined);
+    assert.strictEqual(tracker.getLastFailureKind(), undefined);
+    assert.strictEqual(tracker.getLastFailureMessage(), undefined);
   });
 });

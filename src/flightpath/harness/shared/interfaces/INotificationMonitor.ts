@@ -27,6 +27,9 @@ export interface NotificationResult {
   /** Whether completion was detected */
   completed: boolean;
 
+  /** Structured notification outcome when a file was detected */
+  kind?: "completion" | "error";
+
   /** Error message if monitoring failed */
   error?: string;
 
@@ -145,7 +148,7 @@ export interface INotificationMonitor {
    * Cleanup notification files after completion or cancellation
    *
    * Called after every run (success, failure, or cancellation) to remove
-   * both the -start.json and -stop.json files for the session.
+   * the -start.json, -stop.json, and -error.json files for the session.
    *
    * The stop file may be orphaned when completion is detected via the log file
    * before monitorForCompletion() polls for it (the monitor exits early via the
@@ -228,7 +231,8 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
   }
 
   /**
-   * Monitor for completion via {sessionId}-stop.json with hookEvent: "Stop".
+   * Monitor for completion via {sessionId}-stop.json with hookEvent: "Stop",
+   * or detect a harness failure via {sessionId}-error.json.
    *
    * When sessionId is provided: polls {sessionId}-stop.json directly.
    * When sessionId is undefined (wildcard): scans for any *-stop.json newer than startTime.
@@ -257,6 +261,32 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
 
       try {
         if (sessionId) {
+          const errorFile = path.join(
+            config.directory,
+            `${sessionId}-error.json`
+          );
+          if (await this.isFileNewerThan(errorFile, startTime)) {
+            const data = await this.readNotificationFile(errorFile);
+
+            if (data?.status === "error") {
+              Log.warn(
+                `⚠️ Harness error detected via notification hook (session: ${sessionId})`
+              );
+              try {
+                fs.unlinkSync(errorFile);
+                Log.debug("🗑️ Cleaned up error notification file");
+              } catch (error) {
+                Log.debug(`Failed to cleanup error file: ${error}`);
+              }
+              return {
+                completed: false,
+                kind: "error",
+                error: "Harness reported an error",
+                data,
+              };
+            }
+          }
+
           const stopFile = path.join(
             config.directory,
             `${sessionId}-stop.json`
@@ -274,10 +304,39 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
               } catch (error) {
                 Log.debug(`Failed to cleanup Stop file: ${error}`);
               }
-              return { completed: true, data };
+              return { completed: true, kind: "completion", data };
             }
           }
         } else {
+          const errorFiles = await this.findNotificationFiles(
+            config.directory,
+            /-error\.json$/
+          );
+
+          for (const file of errorFiles) {
+            if (await this.isFileNewerThan(file, startTime)) {
+              const data = await this.readNotificationFile(file);
+
+              if (data?.status === "error") {
+                Log.warn(
+                  `⚠️ Harness error detected via notification hook (file: ${file})`
+                );
+                try {
+                  fs.unlinkSync(file);
+                  Log.debug("🗑️ Cleaned up error notification file");
+                } catch (error) {
+                  Log.debug(`Failed to cleanup error file: ${error}`);
+                }
+                return {
+                  completed: false,
+                  kind: "error",
+                  error: "Harness reported an error",
+                  data,
+                };
+              }
+            }
+          }
+
           const files = await this.findNotificationFiles(
             config.directory,
             /-stop\.json$/
@@ -297,7 +356,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
                 } catch (error) {
                   Log.debug(`Failed to cleanup Stop file: ${error}`);
                 }
-                return { completed: true, data };
+                return { completed: true, kind: "completion", data };
               }
             }
           }
@@ -411,7 +470,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
   /**
    * Cleanup notification files after session completion or cancellation.
    *
-   * Deletes both the start and stop files for the given session. The start file
+   * Deletes the start, stop, and error files for the given session. The start file
    * is normally deleted immediately by waitForSessionStart(), but may linger if
    * the session aborted early. The stop file may be orphaned if completion was
    * detected via the log file before monitorForCompletion() polled for it.
@@ -420,7 +479,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
     sessionId: string,
     directory: string
   ): Promise<void> {
-    for (const suffix of ["-start.json", "-stop.json"]) {
+    for (const suffix of ["-start.json", "-stop.json", "-error.json"]) {
       const file = path.join(directory, `${sessionId}${suffix}`);
       try {
         fs.unlinkSync(file);
