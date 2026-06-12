@@ -29,6 +29,10 @@ function makeOrchestrator(workingFilePath: string | undefined) {
 
 suite("WebviewSettingsSync", () => {
   const tempPaths: string[] = [];
+  const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "navigator"
+  );
 
   function tempFile(name?: string): string {
     const p = path.join(
@@ -40,6 +44,9 @@ suite("WebviewSettingsSync", () => {
   }
 
   afterEach(async () => {
+    if (originalNavigatorDescriptor) {
+      Object.defineProperty(globalThis, "navigator", originalNavigatorDescriptor);
+    }
     for (const p of tempPaths.splice(0)) {
       try {
         await fs.rm(p, { recursive: true, force: true });
@@ -106,6 +113,14 @@ suite("WebviewSettingsSync", () => {
   });
 
   suite("handleGenerateServerCert", () => {
+    function hideGlobalNavigator(): void {
+      Object.defineProperty(globalThis, "navigator", {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
+    }
+
     test("should save generated certs to the user FlightPath folder when scope is user", async () => {
       const originalGet = configService.get.bind(configService);
       const originalSet = configService.set.bind(configService);
@@ -127,6 +142,7 @@ suite("WebviewSettingsSync", () => {
         const postMessage = (msg: any) => messages.push(msg);
         const sync = new WebviewSettingsSync(postMessage, () => undefined);
 
+        hideGlobalNavigator();
         await sync.handleGenerateServerCert(postMessage, "user", () => homeDir);
 
         const expectedCertPath = path.join(
@@ -192,6 +208,7 @@ suite("WebviewSettingsSync", () => {
         const postMessage = (msg: any) => messages.push(msg);
         const sync = new WebviewSettingsSync(postMessage, () => undefined);
 
+        hideGlobalNavigator();
         await sync.handleGenerateServerCert(postMessage, "workspace");
 
         // Use the URI's fsPath so drive-letter casing matches what the implementation sees.

@@ -16,6 +16,7 @@ import {
   parseInlinePriorContextRefs,
   type InlinePriorContextRef,
 } from "../../../utils/FileReferenceParser";
+import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolver";
 import type {
   PriorContextItem,
   PromptSections,
@@ -27,7 +28,7 @@ export interface PromptFileResult {
 }
 
 export interface CliPromptPreparerDeps {
-  shouldOmitAgentsAndSkillsOnResume: () => boolean;
+  shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => boolean;
   buildPromptSections: (
     prompt: PromptStep,
     resolvedAgent?: string,
@@ -85,16 +86,30 @@ export class CliPromptPreparer {
       };
     }
 
-    const omitAgentsAndSkills =
-      !!resolvedSessionId && this.deps.shouldOmitAgentsAndSkillsOnResume();
-    const sections = await this.deps.buildPromptSections(
-      prompt,
-      omitAgentsAndSkills ? undefined : resolvedProperties?.agent,
-      omitAgentsAndSkills ? undefined : resolvedProperties?.skills
-    );
-
     const promptIndex = workflowContext?.promptIndex ?? 0;
     const allPrompts = workflowContext?.allPrompts ?? [prompt];
+    const attachmentResolution =
+      !!resolvedSessionId &&
+      this.deps.shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume()
+        ? ResumeAttachmentResolver.resolve({
+            promptIndex,
+            allPrompts,
+            harness: resolvedProperties?.harness,
+            resumeSession: true,
+            resolvedSessionId,
+            agent: resolvedProperties?.agent,
+            skills: resolvedProperties?.skills,
+          })
+        : {
+            agent: resolvedProperties?.agent,
+            skills: resolvedProperties?.skills,
+          };
+    const sections = await this.deps.buildPromptSections(
+      prompt,
+      attachmentResolution.agent,
+      attachmentResolution.skills
+    );
+
     const resolvedPriorContext = resolvedProperties?.priorContext;
     const inlineRefs = parseInlinePriorContextRefs(sections.userPromptText).map(
       (match) => match.ref

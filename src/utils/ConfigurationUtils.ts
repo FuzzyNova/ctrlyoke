@@ -679,8 +679,9 @@ export const ConfigurationUtils = {
    * session — preventing duplicate instructions since the harness already received them
    * in the first message of that session.
    */
-  shouldOmitAgentsAndSkillsOnResume(): boolean {
-    return configService.get(CONFIG_KEYS.GENERAL).omitAgentsSkillsOnResume;
+  shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume(): boolean {
+    return configService.get(CONFIG_KEYS.GENERAL)
+      .omitPreviouslyAttachedAgentsSkillsOnResume;
   },
 
   // ============================================================

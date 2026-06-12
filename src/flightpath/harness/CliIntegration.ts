@@ -576,8 +576,8 @@ export class CliIntegration extends HarnessIntegration {
 
   private createServices(): CliIntegrationServices {
     const promptPreparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () =>
-        ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume(),
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () =>
+        ConfigurationUtils.shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume(),
       buildPromptSections: (prompt, resolvedAgent, resolvedSkills) =>
         this.buildPromptSections(prompt, resolvedAgent, resolvedSkills),
       extractLeadingSlashCommand: (promptText) =>

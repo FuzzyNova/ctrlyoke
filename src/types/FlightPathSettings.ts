@@ -30,7 +30,7 @@ export interface FlightPathGlobalSettings {
     defaultFormat: "yaml" | "json";
     defaultTemplate: string;
     autoLoadRecentSession: boolean;
-    omitAgentsSkillsOnResume: boolean;
+    omitPreviouslyAttachedAgentsSkillsOnResume: boolean;
   };
 
   // Defaults (mirrors executionProperties 1:1)
@@ -209,7 +209,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     defaultFormat: "yaml",
     defaultTemplate: "blank",
     autoLoadRecentSession: true,
-    omitAgentsSkillsOnResume: true,
+    omitPreviouslyAttachedAgentsSkillsOnResume: true,
   },
   defaults: {
     harness: "copilot-cli",

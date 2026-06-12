@@ -23,9 +23,9 @@
           "type": "boolean",
           "description": "Automatically load the most recent session on startup."
         },
-        "omitAgentsSkillsOnResume": {
+        "omitPreviouslyAttachedAgentsSkillsOnResume": {
           "type": "boolean",
-          "description": "Omit agents/skills declarations when resuming an existing session."
+          "description": "When resuming an existing session, omit only agent/skill declarations that were already attached earlier in that same session."
         }
       }
     },

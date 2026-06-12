@@ -593,6 +593,12 @@ export class WorkflowExecutor {
     }
 
     if (target.kind === FINAL_STEP_PHASES.QUEUE) {
+      await this.promptQueue.persistRuntimeMetadata(target.stepIndex, {
+        harness: resolvedProperties.harness,
+        model: resolvedProperties.model,
+        agent: resolvedProperties.agent,
+        skills: resolvedProperties.skills,
+      });
       this.updateDashboardForPromptStart(
         context,
         prompt,
@@ -2160,6 +2166,14 @@ export class WorkflowExecutor {
         STATUS_MESSAGE_SEVERITY.WARNING,
         statusTimestampMs
       );
+
+      // The send attempt has already returned, so the process is done -
+      // finalize CANCELLING -> STOPPED now rather than waiting for the
+      // onResponseComplete listener registered by the stop request.
+      if (runtime.confirmStopped()) {
+        this.promptQueue.finalizeCancelledPromptAfterStop();
+        await this.promptQueue.commitRuntimeTransition();
+      }
 
       return { outcome: "stop" };
     }

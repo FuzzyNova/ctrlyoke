@@ -19,7 +19,7 @@ function createSections(overrides?: Partial<PromptSections>): PromptSections {
 suite("CliPromptPreparer", () => {
   test("should use fast path for simple prompts with no extras", async () => {
     const preparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () => false,
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () => createSections(),
       extractLeadingSlashCommand: () => null,
       isSimplePrompt: () => true,
@@ -51,12 +51,12 @@ suite("CliPromptPreparer", () => {
     });
   });
 
-  test("should omit agent and skills on resume when configured", async () => {
+  test("should keep attaching agents and skills that were not previously attached on resume", async () => {
     let capturedAgent: string | undefined;
     let capturedSkills: string[] | undefined;
 
     const preparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () => true,
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => true,
       buildPromptSections: async (
         _prompt: PromptStep,
         agent?: string,
@@ -79,19 +79,94 @@ suite("CliPromptPreparer", () => {
 
     await preparer.preparePrompt(
       { prompt: "resume" } as PromptStep,
-      undefined,
-      { agent: "reviewer", skills: ["git", "testing"] } as any,
+      {
+        promptIndex: 1,
+        allPrompts: [
+          {
+            prompt: "start",
+            _runtime: {
+              startedAt: 1,
+              completedAt: 2,
+              sessionId: "existing-session",
+              harness: "codex-cli",
+            },
+          } as PromptStep,
+          { prompt: "resume" } as PromptStep,
+        ],
+      } as WorkflowContext,
+      {
+        harness: "codex-cli",
+        agent: "reviewer",
+        skills: ["git", "testing"],
+      } as any,
+      "existing-session"
+    );
+
+    assert.strictEqual(capturedAgent, "reviewer");
+    assert.deepStrictEqual(capturedSkills, ["git", "testing"]);
+  });
+
+  test("should attach only newly added skills on resume when previous attachments overlap", async () => {
+    let capturedAgent: string | undefined;
+    let capturedSkills: string[] | undefined;
+
+    const preparer = new CliPromptPreparer({
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => true,
+      buildPromptSections: async (
+        _prompt: PromptStep,
+        agent?: string,
+        skills?: string[]
+      ) => {
+        capturedAgent = agent;
+        capturedSkills = skills;
+        return createSections();
+      },
+      extractLeadingSlashCommand: () => null,
+      isSimplePrompt: () => true,
+      gatherAndMergeContextItems: () => [],
+      buildPriorContextXmlFromItems: () => "",
+      getWorkspaceRoot: () => process.cwd(),
+      getTempFileSplitConfig: () => undefined,
+      formatDirectFileRef: () => "",
+      formatTempFileRef: () => "",
+      formatCategorizedReferences: () => "",
+    });
+
+    await preparer.preparePrompt(
+      { prompt: "resume" } as PromptStep,
+      {
+        promptIndex: 1,
+        allPrompts: [
+          {
+            prompt: "start",
+            _runtime: {
+              startedAt: 1,
+              completedAt: 2,
+              sessionId: "existing-session",
+              harness: "codex-cli",
+              agent: "reviewer",
+              skills: ["git"],
+            },
+          } as PromptStep,
+          { prompt: "resume" } as PromptStep,
+        ],
+      } as WorkflowContext,
+      {
+        harness: "codex-cli",
+        agent: "reviewer",
+        skills: ["git", "testing"],
+      } as any,
       "existing-session"
     );
 
     assert.strictEqual(capturedAgent, undefined);
-    assert.deepStrictEqual(capturedSkills, undefined);
+    assert.deepStrictEqual(capturedSkills, ["testing"]);
   });
 
   test("should create categorized files when extras exist", async () => {
     const createdFiles: string[] = [];
     const preparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () => false,
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () =>
         createSections({
           directFileRefs: ["C:/repo/src/index.ts"],
@@ -139,7 +214,7 @@ suite("CliPromptPreparer", () => {
   test("should create one prior-context file for inline refs", async () => {
     let capturedInlineRefCount = 0;
     const preparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () => false,
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () =>
         createSections({ userPromptText: "use $previous and continue" }),
       extractLeadingSlashCommand: () => null,
@@ -186,14 +261,13 @@ suite("CliPromptPreparer", () => {
 
   test("should use fast path when only file refs exist and full text is simple", async () => {
     const preparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () => false,
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () =>
         createSections({
           directFileRefs: ["/workspace/Path/To/Plan.md"],
           userPromptText: "fully implement @Path/To/Plan.md",
         }),
       extractLeadingSlashCommand: () => null,
-      // isSimplePrompt receives the full text including the @ref token
       isSimplePrompt: (text) =>
         !text.includes('"') && !text.includes("$") && !text.includes("`"),
       gatherAndMergeContextItems: () => [],
@@ -228,7 +302,7 @@ suite("CliPromptPreparer", () => {
     let buildSectionsCalled = false;
 
     const preparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () => false,
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () => {
         buildSectionsCalled = true;
         return createSections();
@@ -260,7 +334,7 @@ suite("CliPromptPreparer", () => {
 
   test("should not duplicate slash command prefixes on inline simple prompts", async () => {
     const preparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () => false,
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () =>
         createSections({ userPromptText: "/handoff summarize the session" }),
       extractLeadingSlashCommand: () => "/handoff",
@@ -289,7 +363,7 @@ suite("CliPromptPreparer", () => {
 
   test("should prepend slash commands to categorized instructions once", async () => {
     const preparer = new CliPromptPreparer({
-      shouldOmitAgentsAndSkillsOnResume: () => false,
+      shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
       buildPromptSections: async () =>
         createSections({
           directFileRefs: ["C:/repo/src/index.ts"],
@@ -338,7 +412,7 @@ suite("CliPromptPreparer", () => {
       > = {}
     ) {
       return new CliPromptPreparer({
-        shouldOmitAgentsAndSkillsOnResume: () => false,
+        shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume: () => false,
         buildPromptSections: async (p) =>
           createSections({ userPromptText: p.prompt.trim() }),
         extractLeadingSlashCommand: () => null,
@@ -365,7 +439,7 @@ suite("CliPromptPreparer", () => {
         undefined,
         undefined,
         undefined,
-        true // injectMode
+        true
       );
 
       assert.deepStrictEqual(result, {
@@ -440,7 +514,6 @@ suite("CliPromptPreparer", () => {
         true
       );
 
-      // Shell-special chars in text (quotes) but injectable — should go inline
       assert.deepStrictEqual(result, {
         promptWithInstruction: prompt,
         tempFilePaths: [],
@@ -451,7 +524,6 @@ suite("CliPromptPreparer", () => {
       const prompt = `fix the "async" error`;
       let categorizedRefsCalled = false;
       const preparer = makeBasePreparer({
-        // isSimplePrompt rejects quotes (shell-unsafe)
         isSimplePrompt: (text) => !/["'`$\\]/.test(text) && text.length <= 50,
         buildPromptSections: async () =>
           createSections({ userPromptText: prompt }),
@@ -467,7 +539,7 @@ suite("CliPromptPreparer", () => {
         undefined,
         undefined,
         undefined,
-        false // strict mode
+        false
       );
 
       assert.ok(

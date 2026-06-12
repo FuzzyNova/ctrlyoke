@@ -29,6 +29,7 @@ import { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { PromptSections } from "../../HarnessIntegration";
 import { CopilotNotificationMonitor } from "../copilot/CopilotNotificationMonitor";
 import { parseInlinePriorContextRefs } from "../../../utils/FileReferenceParser";
+import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolver";
 
 /**
  * GitHub Copilot Chat Integration - UI automation with session file monitoring.
@@ -1201,21 +1202,24 @@ export class CopilotChatIntegration extends HarnessIntegration {
     }
 
     // Non-native path: categorized typed temp files (agent, skills, excerpts, prompt)
-    const omitAgentsAndSkills =
+    const attachmentResolution =
       isResumedSession &&
-      ConfigurationUtils.shouldOmitAgentsAndSkillsOnResume();
-    if (omitAgentsAndSkills) {
-      Log.debug(
-        "⏭️ Omitting agent and skill blocks (resuming existing session)"
-      );
-    }
+      ConfigurationUtils.shouldOmitPreviouslyAttachedAgentsAndSkillsOnResume()
+        ? ResumeAttachmentResolver.resolve({
+            promptIndex: workflowContext?.promptIndex ?? 0,
+            allPrompts: workflowContext?.allPrompts ?? [prompt],
+            harness: workflowContext?.resolvedProperties?.harness,
+            resumeSession: true,
+            agent: workflowContext?.resolvedProperties?.agent,
+            skills: workflowContext?.resolvedProperties?.skills,
+          })
+        : {
+            agent: workflowContext?.resolvedProperties?.agent,
+            skills: workflowContext?.resolvedProperties?.skills,
+          };
 
-    const resolvedAgent = omitAgentsAndSkills
-      ? undefined
-      : workflowContext?.resolvedProperties?.agent;
-    const resolvedSkills = omitAgentsAndSkills
-      ? undefined
-      : workflowContext?.resolvedProperties?.skills;
+    const resolvedAgent = attachmentResolution.agent;
+    const resolvedSkills = attachmentResolution.skills;
 
     const sections = await this.buildPromptSections(
       prompt,

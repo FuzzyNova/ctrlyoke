@@ -79,11 +79,13 @@ export function GeneralSection({
           {...rowProps}
         />
         <SettingToggleRow
-          label="Omit agents & skills on resume"
-          description="Strip agent and skills overrides when resuming an existing session to avoid re-applying them."
-          checked={general.omitAgentsSkillsOnResume}
-          onChange={(v) => onUpdate("general.omitAgentsSkillsOnResume", v)}
-          path="general.omitAgentsSkillsOnResume"
+          label="Omit already attached agents & skills on resume"
+          description="When resuming a session, only attach agents and skills that are not already present in that session's context."
+          checked={general.omitPreviouslyAttachedAgentsSkillsOnResume}
+          onChange={(v) =>
+            onUpdate("general.omitPreviouslyAttachedAgentsSkillsOnResume", v)
+          }
+          path="general.omitPreviouslyAttachedAgentsSkillsOnResume"
           {...rowProps}
         />
       </div>
