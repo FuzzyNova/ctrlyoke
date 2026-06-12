@@ -21,17 +21,17 @@ That creates incorrect behavior and unclear UX:
 Adopt a two-namespace model:
 
 - Plain `/...` remains harness-native and is never reinterpreted by FlightPath.
-- `&skill:<skill-name>` becomes the explicit FlightPath skill invocation syntax.
+- `/skill:<skill-name>` becomes the explicit FlightPath skill invocation syntax.
 
 That keeps behavior deterministic:
 
 - `/commit` means "let the harness handle `/commit`."
-- `&skill:commit` means "resolve the FlightPath-discoverable skill `commit`, attach it, and rewrite the prompt text before send."
+- `/skill:commit` means "resolve the FlightPath-discoverable skill `commit`, attach it, and rewrite the prompt text before send."
 
 The completion dropdown should be a FlightPath skill insertion helper only:
 
-- typing `&` shows discovered FlightPath skills
-- selecting an item inserts `&skill:<skill-name>`
+- typing `/` shows discovered FlightPath skills
+- selecting an item inserts `/skill:<skill-name>`
 - the dropdown does not attempt to enumerate native harness slash commands
 
 This plan does not recommend auto-converting `/commit` into a FlightPath attachment when the active harness lacks that skill. That would make identical prompt text behave differently by harness in a way that is hard to explain and harder to debug.
@@ -40,10 +40,10 @@ This plan does not recommend auto-converting `/commit` into a FlightPath attachm
 
 ## Goals
 
-- Add dropdown completions for `&skill:<skill-name>` in the webview prompt editor.
-- Add parsing support so `&skill:<skill-name>` can participate in prompt preparation without requiring manual `skills: [...]` selection.
-- Rewrite `&skill:<skill-name>` into natural language before sending the prompt to the harness.
-- Add clickable links for `&skill:<skill-name>` in:
+- Add dropdown completions for `/skill:<skill-name>` in the webview prompt editor.
+- Add parsing support so `/skill:<skill-name>` can participate in prompt preparation without requiring manual `skills: [...]` selection.
+- Rewrite `/skill:<skill-name>` into natural language before sending the prompt to the harness.
+- Add clickable links for `/skill:<skill-name>` in:
   - the webview `CodeMirrorEditor`
   - VS Code prompt files via `PromptLinkProvider`
 - Use `SkillDiscovery` and harness-specific skill directories to tell whether a skill is native to the current harness or FlightPath-only.
@@ -57,31 +57,31 @@ This plan does not recommend auto-converting `/commit` into a FlightPath attachm
 - `/commit`
   - Native harness command or native harness skill invocation.
   - FlightPath passes it through unchanged.
-- `&skill:commit`
+- `/skill:commit`
   - Explicit FlightPath skill reference.
   - FlightPath resolves skill `commit`, attaches it through the normal skill prompt path, and rewrites the token before send.
 
 ### Rewrite behavior
 
-Prompt preparation should rewrite each `&skill:` token into natural language after skill extraction:
+Prompt preparation should rewrite each `/skill:` token into natural language after skill extraction:
 
-- `&skill:commit`
+- `/skill:commit`
   - becomes `use the attached skill "commit"`
-- `perform a code review using &skill:code-review, then run tests with &skill:test`
+- `perform a code review using /skill:code-review, then run tests with /skill:test`
   - becomes `perform a code review using the attached skill "code-review", then run tests with the attached skill "test"`
 
 This rewrite should happen only in the outgoing prompt text. The editor content should remain exactly as the user typed it.
 
 ### Editor completions
 
-When the user types `&`, the dropdown should show only FlightPath-discovered skills.
+When the user types `/`, the dropdown should show only FlightPath-discovered skills.
 
 Selection behavior:
 
-- selecting `commit` inserts `&skill:commit`
-- selecting `review` inserts `&skill:review`
+- selecting `commit` inserts `/skill:commit`
+- selecting `review` inserts `/skill:review`
 
-When the user types `&skill:` directly, the dropdown should filter the same skill list by the typed prefix.
+When the user types `/skill:` directly, the dropdown should filter the same skill list by the typed prefix.
 
 Suggested labels:
 
@@ -96,8 +96,8 @@ Suggested details:
 
 ### Linking behavior
 
-- Ctrl+Click on `&skill:commit` in a prompt file opens the resolved `SKILL.md`
-- Ctrl+Click on `&skill:commit` in the webview editor opens the same skill file
+- Ctrl+Click on `/skill:commit` in a prompt file opens the resolved `SKILL.md`
+- Ctrl+Click on `/skill:commit` in the webview editor opens the same skill file
 - If multiple discovered copies exist, resolution should follow the same precedence used for runtime invocation
 
 ---
@@ -109,12 +109,12 @@ Suggested details:
 Introduce a small parsing utility for FlightPath skill tokens:
 
 - native form: `/[a-zA-Z0-9:_-]+`
-- FlightPath form: `&skill:<skill-name>`
+- FlightPath form: `/skill:<skill-name>`
 
 The parser should not try to interpret arbitrary slash text beyond those forms. It only needs to:
 
 - detect whether the current token is a FlightPath skill token
-- extract the skill name for `&skill:<skill-name>`
+- extract the skill name for `/skill:<skill-name>`
 - leave plain `/...` tokens entirely alone
 
 This logic should be shared by:
@@ -129,7 +129,7 @@ This logic should be shared by:
 
 - is skill `X` installed in the active harness's native search paths?
 - is skill `X` only available through FlightPath discovery?
-- what concrete `SKILL.md` path should `&skill:X` open and attach?
+- what concrete `SKILL.md` path should `/skill:X` open and attach?
 
 Recommended extension to discovery output:
 
@@ -147,21 +147,21 @@ resolveFlightPathSkillInvocation(skills, name, harnessId)
 
 Those helpers should use `HarnessDirectoryUtils` as the single source of truth for harness skill directories.
 
-### 3. `&skill:` participates in skill attachment
+### 3. `/skill:` participates in skill attachment
 
-Prompt preparation should treat `&skill:<skill-name>` similarly to inline prior-context references:
+Prompt preparation should treat `/skill:<skill-name>` similarly to inline prior-context references:
 
-- detect `&skill:<skill-name>` in prompt text
+- detect `/skill:<skill-name>` in prompt text
 - merge that skill into the effective skill set for the prompt
 - attach it even if `skills: [...]` was not configured explicitly
 
 Important behavior rule:
 
-- `&skill:<skill-name>` should force attachment of that skill even if the prompt is otherwise simple
+- `/skill:<skill-name>` should force attachment of that skill even if the prompt is otherwise simple
 
 After extraction and attachment, the send path should rewrite the token into natural language, for example:
 
-- `&skill:commit` -> `use the attached skill "commit"`
+- `/skill:commit` -> `use the attached skill "commit"`
 
 This avoids harness parser conflicts while preserving readable inline semantics.
 
@@ -169,9 +169,9 @@ This avoids harness parser conflicts while preserving readable inline semantics.
 
 `CodeMirrorEditor.tsx` currently routes `@`, `#`, `~`, and `$` to extension-backed completions. Skill-token completions should follow the same general pattern:
 
-- detect the most recent `&` token when the cursor is in prompt mode
-- if token starts with `&skill:`, request FlightPath skill completions
-- otherwise, when the token starts with `&`, request the same FlightPath skill completions and insert `&skill:<skill-name>` on selection
+- detect the most recent `/` token when the cursor is in prompt mode
+- if token starts with `/skill:`, request FlightPath skill completions
+- otherwise, when the token starts with `/`, request the same FlightPath skill completions and insert `/skill:<skill-name>` on selection
 
 The dropdown should be interpreted as:
 
@@ -185,11 +185,11 @@ Completion entries should stay framework-agnostic on the extension side, then be
 
 ### 5. Prompt-file document links
 
-`PromptLinkProvider.ts` should recognize `&skill:<skill-name>` and create document links that open the resolved skill file.
+`PromptLinkProvider.ts` should recognize `/skill:<skill-name>` and create document links that open the resolved skill file.
 
 Recommended scope:
 
-- add `&skill:` links only
+- add `/skill:` links only
 - do not link plain `/commit` because those are harness-native and not reliably tied to a single local file
 
 Tooltip example:
@@ -200,7 +200,7 @@ Tooltip example:
 
 `CodeMirrorEditor.tsx` already decorates and opens `@`, `#`, `~`, and `$` references. Extend that system to:
 
-- decorate `&skill:<skill-name>` with `cm-link`
+- decorate `/skill:<skill-name>` with `cm-link`
 - attach data attributes containing `skillName`
 - post a message to open the resolved skill file when clicked
 
@@ -217,7 +217,7 @@ Add skill-token completion helpers in `src/completions/CompletionHelpers.ts` or 
 Responsibilities:
 
 - return FlightPath-discovered skill completions
-- support both `&` and `&skill:` trigger contexts
+- support both `/` and `/skill:` trigger contexts
 - filter and sort by typed prefix
 - expose plain completion items consumable by both VS Code and webview surfaces
 
@@ -236,12 +236,12 @@ The webview currently requests completions from the extension host. Extend that 
 
 Options:
 
-1. Reuse the existing completion request message with a new `trigger` value `&`
+1. Reuse the existing completion request message with a new `trigger` value `/`
 2. Add dedicated skill-token completion request/response messages
 
 Recommendation:
 
-- reuse the existing completion message flow if it can carry the `&skill:` token cleanly
+- reuse the existing completion message flow if it can carry the `/skill:` token cleanly
 - only add new message types if the existing payload becomes awkward
 
 ### Harness metadata
@@ -254,34 +254,34 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 
 ## Implementation Steps
 
-1. Add a new backlog-supported syntax spec for `&skill:<skill-name>`.
+1. Add a new backlog-supported syntax spec for `/skill:<skill-name>`.
 
-2. Add a shared parser utility for `&skill:` references.
+2. Add a shared parser utility for `/skill:` references.
 
 3. Extend skill discovery helpers so the system can answer:
    - whether a skill is native to a harness
-   - which file `&skill:<skill-name>` resolves to
+   - which file `/skill:<skill-name>` resolves to
 
 4. Add skill-token completion helpers on the extension side:
    - discovered FlightPath skill completions
-   - support insertion as `&skill:<skill>`
+   - support insertion as `/skill:<skill>`
 
 5. Update `CodeMirrorEditor.tsx`:
-   - detect `&` trigger context
+   - detect `/` trigger context
    - request skill-token completions
-   - decorate `&skill:<skill>` tokens as links
+   - decorate `/skill:<skill>` tokens as links
    - click-through to open the resolved skill file
 
-6. Update prompt preparation logic so `&skill:<skill>` contributes to the prompt's effective skills set and is rewritten to natural language before send.
+6. Update prompt preparation logic so `/skill:<skill>` contributes to the prompt's effective skills set and is rewritten to natural language before send.
 
-7. Update `PromptLinkProvider.ts` to recognize `&skill:<skill>` and open the resolved `SKILL.md`.
+7. Update `PromptLinkProvider.ts` to recognize `/skill:<skill>` and open the resolved `SKILL.md`.
 
 8. Add tests for:
    - skill-token parsing
    - skill-token completion filtering
-   - `&skill:` link detection
+   - `/skill:` link detection
    - pure `/commit` pass-through
-   - `&skill:commit` forced attachment and rewrite
+   - `/skill:commit` forced attachment and rewrite
 
 ---
 
@@ -289,14 +289,14 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 
 | File                                                          | Action                   | Purpose                                                                           |
 | ------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| `src/utils/SkillDiscovery.ts`                                 | Modify                   | Add harness-aware skill resolution helpers for `&skill:`                          |
+| `src/utils/SkillDiscovery.ts`                                 | Modify                   | Add harness-aware skill resolution helpers for `/skill:`                          |
 | `src/utils/HarnessDirectoryUtils.ts`                          | Maybe modify             | Extend or reuse directory helpers as single source of truth                       |
 | `src/completions/CompletionHelpers.ts`                        | Modify or extract helper | Add skill-token completion generation                                             |
-| `src/completions/PromptCompletionProvider.ts`                 | Modify                   | Add `&` trigger support for prompt-file completions if desired in VS Code editors |
-| `src/completions/PromptLinkProvider.ts`                       | Modify                   | Add `&skill:<skill>` document links                                               |
-| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Modify                   | Add `&skill:` completions and link decoration/click handling                      |
-| `src/flightpath/harness/shared/CliPromptPreparer.ts`          | Modify                   | Treat `&skill:` as attachable skill syntax and rewrite it before send             |
-| `src/flightpath/HarnessIntegration.ts`                        | Maybe modify             | Shared parser/helper hooks if prompt assembly should own `&skill:` extraction     |
+| `src/completions/PromptCompletionProvider.ts`                 | Modify                   | Add `/` trigger support for prompt-file completions if desired in VS Code editors |
+| `src/completions/PromptLinkProvider.ts`                       | Modify                   | Add `/skill:<skill>` document links                                               |
+| `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Modify                   | Add `/skill:` completions and link decoration/click handling                      |
+| `src/flightpath/harness/shared/CliPromptPreparer.ts`          | Modify                   | Treat `/skill:` as attachable skill syntax and rewrite it before send             |
+| `src/flightpath/HarnessIntegration.ts`                        | Maybe modify             | Shared parser/helper hooks if prompt assembly should own `/skill:` extraction     |
 | `src/types/DashboardConstants.ts`                             | Maybe modify             | Add message constants or skill-token metadata constants                           |
 | `src/types/WebviewMessageTypes.ts`                            | Maybe modify             | Add or extend completion/open-skill message payload types                         |
 
@@ -312,40 +312,40 @@ The dropdown should not depend on curated native slash-command lists. That avoid
   - multiple discovered copies with precedence
 
 - completion helper tests
-  - `&` shows FlightPath-discovered skills only
-  - `&skill:c` filters to matching FlightPath skills
-  - selected item inserts `&skill:<skill>`
+  - `/` shows FlightPath-discovered skills only
+  - `/skill:c` filters to matching FlightPath skills
+  - selected item inserts `/skill:<skill>`
 
 - `PromptLinkProvider` tests
-  - `&skill:commit` produces a document link
+  - `/skill:commit` produces a document link
   - plain `/commit` does not
 
 ### Webview tests
 
 - `CodeMirrorEditor` completion tests
-  - `&` requests skill-token completions
-  - selecting `&skill:commit` inserts the expected token
+  - `/` requests skill-token completions
+  - selecting `/skill:commit` inserts the expected token
 
 - `CodeMirrorEditor` link tests
-  - `&skill:commit` gets link decoration
+  - `/skill:commit` gets link decoration
   - clicking it posts the open-skill message
 
 ### Prompt-preparation tests
 
 - pure `/commit` remains inline and unassembled
-- `&skill:commit` forces skill attachment
-- `&skill:commit` rewrites to natural language before send
-- `&skill:commit` merges with explicit `skills: [...]`
-- `&skill:commit` does not require workflow-level `skills`
+- `/skill:commit` forces skill attachment
+- `/skill:commit` rewrites to natural language before send
+- `/skill:commit` merges with explicit `skills: [...]`
+- `/skill:commit` does not require workflow-level `skills`
 
 ---
 
 ## Open Questions
 
-1. Should VS Code prompt-file completions also support `&` in `PromptCompletionProvider`, or should skill-token completions be webview-only first?
+1. Should VS Code prompt-file completions also support `/` in `PromptCompletionProvider`, or should skill-token completions be webview-only first?
 2. Should the rewrite phrase always be `use the attached skill "<name>"`, or should it vary by sentence position, for example `the attached skill "<name>"` when the token follows `using`?
-3. If both workflow properties and `&skill:` add the same skill, should deduplication happen by name only or by resolved file path?
-4. Should `&skill:` be allowed multiple times in one prompt, and if so, should repeated entries preserve order or collapse to a set?
+3. If both workflow properties and `/skill:` add the same skill, should deduplication happen by name only or by resolved file path?
+4. Should `/skill:` be allowed multiple times in one prompt, and if so, should repeated entries preserve order or collapse to a set?
 5. Should the completion UI expose when a similarly named native harness skill also exists, for example detail text like `Native Claude skill also available`, or should the UI stay intentionally FlightPath-only?
 
 ---
@@ -354,7 +354,7 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 
 ### Phase 1
 
-- Add `&skill:` parsing
+- Add `/skill:` parsing
 - Add webview dropdown completions
 - Add prompt-file and webview links
 - Add prompt-preparation support with outgoing rewrite
@@ -366,7 +366,7 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 
 ### Phase 3
 
-- Revisit resume semantics so newly introduced skills from `&skill:` are attached even on resumed sessions while unchanged skills remain omitted
+- Revisit resume semantics so newly introduced skills from `/skill:` are attached even on resumed sessions while unchanged skills remain omitted
 
 ---
 
