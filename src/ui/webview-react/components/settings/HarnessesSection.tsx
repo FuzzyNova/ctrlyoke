@@ -6,7 +6,9 @@ import type {
 import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
 import { useSettingsStore } from "@store/settingsStore";
-import { CustomSelect } from "@components/shared";
+import { useUiStore } from "@store/uiStore";
+import { CustomSelect, HarnessDropdown } from "@components/shared";
+import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 
@@ -27,6 +29,8 @@ const CLI_HARNESSES: HarnessId[] = [
   HARNESS_IDS.COPILOT_CHAT,
 ] as HarnessId[];
 
+const EMPTY_HIDDEN_VALUES: string[] = [];
+
 export function HarnessesSection({
   settings,
   activeScope,
@@ -37,35 +41,43 @@ export function HarnessesSection({
   const additionalArgs = settings.settings.defaults.additionalArgs;
   const sources = settings.sources as Record<string, SettingSource>;
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
+  const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
+  const hideHarness = useUiStore((s) => s.hideDropdownOption);
+  const unhideHarness = useUiStore((s) => s.unhideDropdownOption);
   const rowProps = { sources, onReset, activeScope };
+  const hiddenHarnesses =
+    hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? EMPTY_HIDDEN_VALUES;
 
   return (
     <div className="space-y-4">
       <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
-        Default Harness
+        Harness Defaults
       </h3>
       <SettingInputRow
-        label="Active harness"
+        label="default harness"
         id="harness-active"
         path="defaults.harness"
         {...rowProps}
       >
-        <select
+        <HarnessDropdown
           id="harness-active"
           value={settings.settings.defaults.harness}
-          onChange={(e) => onUpdate("defaults.harness", e.target.value)}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
-        >
-          {CLI_HARNESSES.map((id) => (
-            <option key={id} value={id}>
-              {HARNESS_INFO[id as keyof typeof HARNESS_INFO].name}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => onUpdate("defaults.harness", value)}
+          showStatus={false}
+          hiddenValues={hiddenHarnesses}
+          onHideOption={(value) =>
+            hideHarness(DROPDOWN_NAMESPACES.HARNESS, value)
+          }
+          onUnhideOption={(value) =>
+            unhideHarness(DROPDOWN_NAMESPACES.HARNESS, value)
+          }
+          triggerAriaLabel="Choose active harness"
+          triggerTitle="Choose the default active harness"
+        />
       </SettingInputRow>
       <div className="border-t border-panel-border pt-4">
         <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
-          Harness Defaults
+          Model & Extra Args Defaults
         </h3>
       </div>
       <p className="text-xs text-description-fg -mt-2">

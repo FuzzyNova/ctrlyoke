@@ -211,6 +211,8 @@ export interface HarnessDropdownProps {
   id?: string;
   value: string;
   onChange: (value: string) => void;
+  triggerAriaLabel?: string;
+  triggerTitle?: string;
   /** Show a "Default" sentinel option above the groups (for per-prompt overrides). */
   showDefault?: boolean;
   /** Label for the "Default" sentinel option. Defaults to "Default". */
@@ -235,6 +237,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   id,
   value,
   onChange,
+  triggerAriaLabel,
+  triggerTitle,
   showDefault = false,
   defaultLabel,
   showStatus = true,
@@ -404,6 +408,10 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
             return !prev;
           })
         }
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={triggerAriaLabel}
+        title={triggerTitle}
         className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
       >
         <span>{triggerLabel}</span>

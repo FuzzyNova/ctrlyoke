@@ -36,6 +36,9 @@ export function DefaultsHarnessPage({
         onReset={onReset}
       />
       <div className="border-t border-panel-border pt-4 space-y-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+          Agent & Skill Defaults
+        </h3>
         <SettingInputRow
           label="Default agent"
           description="Agent to use when none is specified in the workflow."

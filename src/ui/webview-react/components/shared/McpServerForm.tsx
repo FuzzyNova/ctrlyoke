@@ -1,8 +1,14 @@
 import { useId } from "react";
 import type { McpServerConfig } from "@root/types/FlightPathTypes";
+import { CustomSelect } from "./CustomSelect";
 
 export type McpServerFormTab = "stdio" | "remote";
 export type McpServerTransport = "streamable-http" | "sse";
+
+const MCP_TRANSPORT_OPTIONS = [
+  { label: "streamable-http", value: "streamable-http" },
+  { label: "sse", value: "sse" },
+] as const;
 
 export interface McpServerFormState {
   id: string;
@@ -233,19 +239,18 @@ export function McpServerForm({
             }
             className="w-full rounded border border-input-border bg-input-bg px-2 py-1 font-mono text-xs text-input-fg focus:border-focus-border focus:outline-none"
           />
-          <select
+          <CustomSelect
             value={value.transport}
-            onChange={(event) =>
+            onChange={(transport) =>
               onChange({
                 ...value,
-                transport: event.target.value as McpServerTransport,
+                transport: transport as McpServerTransport,
               })
             }
-            className="w-full rounded border border-input-border bg-input-bg px-2 py-1 text-xs text-input-fg focus:border-focus-border focus:outline-none"
-          >
-            <option value="streamable-http">streamable-http</option>
-            <option value="sse">sse</option>
-          </select>
+            options={[...MCP_TRANSPORT_OPTIONS]}
+            triggerAriaLabel="Choose remote transport"
+            triggerTitle="Choose the transport used by the remote MCP server"
+          />
         </>
       )}
 

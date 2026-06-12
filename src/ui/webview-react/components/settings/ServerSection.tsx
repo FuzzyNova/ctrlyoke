@@ -11,6 +11,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
+import { CustomSelect } from "../shared/CustomSelect";
 import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -89,6 +90,11 @@ export function ServerSection({
 
   const [showQr, setShowQr] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const displayIpOptions = availableIps.map((ip) => ({ label: ip, value: ip }));
+  const bindAddressOptions = [
+    { label: "Localhost only (127.0.0.1)", value: "127.0.0.1" },
+    { label: "All interfaces (0.0.0.0) — LAN access", value: "0.0.0.0" },
+  ];
 
   // Local color state: onChange updates preview instantly without persisting.
   // onBlur commits via onUpdate, which persists to settings and triggers server-side PNG regeneration.
@@ -167,18 +173,14 @@ export function ServerSection({
           <div>
             {showIpSelector && (
               <SettingInputRow label="Connect via" id="server-display-ip">
-                <select
+                <CustomSelect
                   id="server-display-ip"
                   value={selectedDisplayIp ?? ""}
-                  onChange={(e) => setSelectedDisplayIp(e.target.value)}
-                  className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
-                >
-                  {availableIps.map((ip) => (
-                    <option key={ip} value={ip}>
-                      {ip}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedDisplayIp}
+                  options={displayIpOptions}
+                  triggerAriaLabel="Choose server connection address"
+                  triggerTitle="Choose which detected IP address to display"
+                />
               </SettingInputRow>
             )}
             <div className="flex items-center gap-2 p-2 bg-input-bg border border-input-border rounded mt-2">
@@ -289,17 +291,14 @@ export function ServerSection({
             path="server.bindAddress"
             {...rowProps}
           >
-            <select
+            <CustomSelect
               id="server-bind"
               value={server.bindAddress ?? "127.0.0.1"}
-              onChange={(e) => onUpdate("server.bindAddress", e.target.value)}
-              className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground"
-            >
-              <option value="127.0.0.1">Localhost only (127.0.0.1)</option>
-              <option value="0.0.0.0">
-                All interfaces (0.0.0.0) — LAN access
-              </option>
-            </select>
+              onChange={(value) => onUpdate("server.bindAddress", value)}
+              options={bindAddressOptions}
+              triggerAriaLabel="Choose server bind address"
+              triggerTitle="Choose whether the server listens only on localhost or all interfaces"
+            />
           </SettingInputRow>
         )}
       </div>

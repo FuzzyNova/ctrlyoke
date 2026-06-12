@@ -3,11 +3,13 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import { HARNESS_IDS, HARNESS_INFO } from "@root/types/DashboardConstants";
 import type { HarnessId } from "@root/types/DashboardConstants";
 import { FLIGHTPATH_SETTINGS_DEFAULTS } from "@root/types/FlightPathSettings";
 import { useSettingsStore } from "@store/settingsStore";
+import { useUiStore } from "@store/uiStore";
 import { CustomSelect } from "@components/shared/CustomSelect";
+import { HarnessDropdown } from "@components/shared/HarnessDropdown";
+import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { LocalTextInput, LocalTextarea } from "@components/shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 
@@ -33,17 +35,8 @@ function PromptPreview({ text }: { text: string }) {
   );
 }
 
-const ALL_HARNESSES: HarnessId[] = [
-  HARNESS_IDS.COPILOT_CLI,
-  HARNESS_IDS.CLAUDE_CLI,
-  HARNESS_IDS.CODEX_CLI,
-  HARNESS_IDS.OPENCODE_CLI,
-  HARNESS_IDS.QWEN_CLI,
-  HARNESS_IDS.GEMINI_CLI,
-  HARNESS_IDS.COPILOT_CHAT,
-] as HarnessId[];
-
 const DEFAULT_PROMPT = FLIGHTPATH_SETTINGS_DEFAULTS.commit.prompt;
+const EMPTY_HIDDEN_VALUES: string[] = [];
 
 export function CommitSection({
   settings,
@@ -54,10 +47,15 @@ export function CommitSection({
   const commit = settings.settings.commit;
   const sources = settings.sources as Record<string, SettingSource>;
   const getModelsForHarness = useSettingsStore((s) => s.getModelsForHarness);
+  const hiddenDropdownOptions = useUiStore((s) => s.hiddenDropdownOptions);
+  const hideHarness = useUiStore((s) => s.hideDropdownOption);
+  const unhideHarness = useUiStore((s) => s.unhideDropdownOption);
   const lastCommitMessageGeneration = useSettingsStore(
     (s) => s.lastCommitMessageGeneration
   );
   const rowProps = { sources, onReset, activeScope };
+  const hiddenHarnesses =
+    hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? EMPTY_HIDDEN_VALUES;
 
   // Resolve the effective harness for model discovery: explicit override or active global harness
   const effectiveHarness =
@@ -98,19 +96,25 @@ export function CommitSection({
         description="AI harness for commit message generation. Leave empty to use the active global harness."
         {...rowProps}
       >
-        <select
+        <HarnessDropdown
           id="commit-harness"
-          value={commit.harness as string}
-          onChange={(e) => onUpdate("commit.harness", e.target.value || "")}
-          className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-focus-border"
-        >
-          <option value="">Inherit active harness</option>
-          {ALL_HARNESSES.map((id) => (
-            <option key={id} value={id}>
-              {HARNESS_INFO[id as keyof typeof HARNESS_INFO].name}
-            </option>
-          ))}
-        </select>
+          value={(commit.harness as string) || "default"}
+          onChange={(value) =>
+            onUpdate("commit.harness", value === "default" ? "" : value)
+          }
+          showDefault={true}
+          defaultLabel="Inherit active harness"
+          showStatus={false}
+          hiddenValues={hiddenHarnesses}
+          onHideOption={(value) =>
+            hideHarness(DROPDOWN_NAMESPACES.HARNESS, value)
+          }
+          onUnhideOption={(value) =>
+            unhideHarness(DROPDOWN_NAMESPACES.HARNESS, value)
+          }
+          triggerAriaLabel="Choose commit message harness"
+          triggerTitle="Choose the harness used for commit message generation"
+        />
       </SettingInputRow>
 
       <SettingInputRow

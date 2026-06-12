@@ -36,6 +36,8 @@ interface CustomSelectProps extends HideableProps {
   options: SelectOption[];
   disabled?: boolean;
   className?: string;
+  triggerAriaLabel?: string;
+  triggerTitle?: string;
   /** Max height of the open dropdown panel. Defaults to "60vh". */
   dropdownMaxHeight?: string;
   /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
@@ -63,6 +65,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   options,
   disabled = false,
   className = "",
+  triggerAriaLabel,
+  triggerTitle,
   namespace,
   hiddenValues = [],
   onHideOption,
@@ -253,6 +257,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         type="button"
         disabled={disabled}
         onClick={handleToggle}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={triggerAriaLabel}
+        title={triggerTitle}
         className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <span className="truncate">{selectedOption?.label ?? value}</span>

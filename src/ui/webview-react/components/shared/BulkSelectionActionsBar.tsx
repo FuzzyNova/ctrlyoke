@@ -106,6 +106,10 @@ export function BulkSelectionActionsBar({
     label: getActionLabel(value),
     value,
   }));
+  const scopeItems: ActionDropdownItem[] = [
+    { label: "Workspace", value: SETTING_SCOPES.WORKSPACE },
+    { label: "User", value: SETTING_SCOPES.USER },
+  ];
   const targetItems: ActionDropdownItem[] = scopeTargets.map((id) => ({
     label: getTargetLabel(id),
     value: id,
@@ -147,16 +151,12 @@ export function BulkSelectionActionsBar({
               {action === "save" ? "to:" : "from:"}
             </span>
 
-            <select
-              value={scope}
-              onChange={(event) =>
-                handleScopeChange(event.target.value as SettingWriteScope)
-              }
-              className="h-6 shrink-0 rounded border border-input-border bg-input-bg px-2 text-xs text-foreground focus:border-focus-border focus:outline-none"
-            >
-              <option value={SETTING_SCOPES.WORKSPACE}>Workspace</option>
-              <option value={SETTING_SCOPES.USER}>User</option>
-            </select>
+            <ActionDropdown
+              label={scope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"}
+              items={scopeItems}
+              onSelect={(value) => handleScopeChange(value as SettingWriteScope)}
+              className="shrink-0 max-w-full"
+            />
 
             {scopeTargets.length > 0 ? (
               <ActionDropdown
