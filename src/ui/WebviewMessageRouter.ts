@@ -8,7 +8,6 @@ import {
   SESSION_KINDS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
-  GIT_CHANGE_KINDS,
   type WebviewLogLevel,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -24,10 +23,6 @@ import {
 import { resolveSymbol } from "../utils/AttachmentBuilders";
 import {
   getStashList,
-  getWorkingTreeDiff,
-  getStagedDiff,
-  getStashDiff,
-  getCommitDiff,
 } from "../utils/GitUtils";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -561,28 +556,6 @@ export class WebviewMessageRouter {
         message.ref as string,
         (message.stepCount as number) ?? 0
       );
-    });
-
-    table.set(MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW, async (message) => {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      let content: string;
-      if (!workspaceRoot) {
-        content = "No workspace folder open.";
-      } else {
-        try {
-          content = await this.buildGitChangeContent(
-            workspaceRoot,
-            message.ref as string
-          );
-        } catch (error) {
-          content = `Failed to load git change: ${getErrorMessage(error)}`;
-        }
-      }
-      this.emitMessage({
-        type: MESSAGE_TYPES.GIT_CHANGE_PREVIEW_RESULT,
-        ref: message.ref,
-        content,
-      });
     });
 
     table.set(MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW, async (message) => {
@@ -2057,29 +2030,6 @@ export class WebviewMessageRouter {
       Log.error("Error opening file:", error);
       vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
     }
-  }
-
-  /** Build the text content for a git change reference (diff/staged/stash/commit). */
-  private async buildGitChangeContent(
-    workspaceRoot: string,
-    ref: string
-  ): Promise<string> {
-    const lowerRef = ref.toLowerCase();
-    if (lowerRef === GIT_CHANGE_KINDS.DIFF) {
-      const content = await getWorkingTreeDiff(workspaceRoot);
-      return content.trim()
-        ? content
-        : "No uncommitted changes in working tree.";
-    }
-    if (lowerRef === GIT_CHANGE_KINDS.STAGED) {
-      const content = await getStagedDiff(workspaceRoot);
-      return content.trim() ? content : "No staged changes.";
-    }
-    if (lowerRef.startsWith(`${GIT_CHANGE_KINDS.STASH}:`)) {
-      const index = parseInt(lowerRef.slice(6), 10);
-      return await getStashDiff(workspaceRoot, index);
-    }
-    return await getCommitDiff(workspaceRoot, ref);
   }
 
   /** Build the prior-context XML preview without opening it in an editor. */

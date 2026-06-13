@@ -30,6 +30,7 @@
       "@types/*": ["./types/*"],
       "@root/types/*": ["../../types/*"],
       "@root/utils/*": ["../../utils/*"],
+      "@root/completions/*": ["../../completions/*"],
       "@icons/*": ["../icons/*"]
     }
   },

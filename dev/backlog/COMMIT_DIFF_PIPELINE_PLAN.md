@@ -1,6 +1,6 @@
 # Git Ref Diff Pipeline — Render diffs properly, drop the raw-text modal
 
-> **Status:** Not yet implemented — design draft. **Prerequisite for** `COMMIT_HISTORY_PANEL_PLAN.md` (the history panel's "View Diff" should ride on the pipeline this plan defines).
+> **Status:** Phase 2 (VS Code native diff) ✅ shipped — all four ref kinds open natively. Phase 1 (browser multi-file pane) and Phase 3 (cleanup) remain. **Prerequisite for** `COMMIT_HISTORY_PANEL_PLAN.md` (the history panel's "View Diff" rides on this pipeline).
 
 ---
 
@@ -73,7 +73,7 @@ not by keeping the modal alive.
 | `~<hash>` (commit) | **`git.viewCommit`** | `viewCommit(repository, historyItemId)`, registered `{ repository: true }`. The wrapper resolves `args[0]` to a repo via `model.getRepository()`, so invoke as `executeCommand("git.viewCommit", Uri.file(workspaceRoot), hash)`. Opens the native multi-file commit viewer. | ✅ done |
 | `~diff` (working tree) | `git.viewChanges` | `viewChanges(repository)` — pass the repo Uri. | ✅ done |
 | `~staged` | `git.viewStagedChanges` | `viewStagedChanges(repository)` — pass the repo Uri. | ✅ done |
-| `~stash:N` | **`vscode.changes`** | No built-in per-index stash command, so build the native multi-file diff ourselves (see below). | ⬜ pending |
+| `~stash:N` | **`vscode.changes`** | No built-in per-index stash command, so build the native multi-file diff ourselves (see below). | ✅ done |
 
 `git.viewCommit`/`viewChanges`/`viewStagedChanges` are implemented in
 `flightpath.openGitChange` (`extension.ts`), native-first with a generated-diff-document
@@ -82,30 +82,34 @@ single-sourced as `VSCODE_GIT_COMMANDS` in `DashboardConstants.ts`. This also up
 the `PromptLinkProvider` markdown hover links and the `OPEN_GIT_CHANGE` message, which
 already route through `flightpath.openGitChange`.
 
-### Native stash diff — `vscode.changes` (pending)
+### Native stash diff — `vscode.changes` ✅ implemented
 
 `git.stashView` only shows a stash *quick-pick* (no index argument), so for `~stash:N`
 we open the native multi-file diff editor directly with the **public** `vscode.changes`
-command — the same UI the other refs get, no raw text:
+command — the same UI the other refs get, no raw text. Implemented in
+`flightpath.openGitChange` (`extension.ts`) as `openNativeStashDiff()`:
 
 ```typescript
-// vscode.changes(title: string, resourceList: [resourceUri, originalUri, modifiedUri][])
-const git = vscode.extensions
-  .getExtension<GitExtension>("vscode.git")
+// vscode.changes(title, resourceList: [resourceUri, originalUri, modifiedUri][])
+const gitApi = vscode.extensions
+  .getExtension<{ getAPI(v: 1): { toGitUri(uri: vscode.Uri, ref: string): vscode.Uri } }>("vscode.git")
   ?.exports.getAPI(1);
-const ref = `stash@{${index}}`;
-// files: git stash show --name-only stash@{index}  (via a small GitUtils helper)
+const files = gitApi ? await getStashFiles(workspaceRoot, index) : []; // git stash show --name-only
+if (!gitApi || files.length === 0) { await openGeneratedDiff(); return; }
+const stashRef = `stash@{${index}}`;
 const resources = files.map((rel) => {
-  const fileUri = vscode.Uri.file(path.join(workspaceRoot, rel));
-  return [fileUri, git.toGitUri(fileUri, `${ref}^`), git.toGitUri(fileUri, ref)];
+  const fileUri = vscode.Uri.joinPath(repoUri, rel);
+  return [fileUri, gitApi.toGitUri(fileUri, `${stashRef}^`), gitApi.toGitUri(fileUri, stashRef)];
 });
-await vscode.commands.executeCommand("vscode.changes", `Git Stash #${index}`, resources);
+await vscode.commands.executeCommand(VSCODE_GIT_COMMANDS.CHANGES, `Git Stash #${index}`, resources);
 ```
 
-`vscode.changes` and `API.toGitUri(uri, ref)` are both confirmed public API. Add
-`CHANGES: "vscode.changes"` to `VSCODE_GIT_COMMANDS`. The generated-diff-document
-fallback still applies if the Git extension API is unavailable or `vscode.changes`
-throws — so stash never regresses to a hard failure, only (worst case) to raw text.
+`vscode.changes` and `API.toGitUri(uri, ref)` are confirmed public API.
+`CHANGES: "vscode.changes"` was added to `VSCODE_GIT_COMMANDS`, and
+`GitUtils.getStashFiles(root, index)` (tracked changes only, parity with `getStashDiff`)
+provides the file list. The generated-diff document remains the fallback when the Git
+extension API is unavailable, the stash has no tracked files (untracked-only), or
+`vscode.changes` throws — so stash never hard-fails, only (worst case) renders as text.
 
 ---
 
@@ -151,10 +155,9 @@ view's "View Diff" action calls the **same** two helpers (`openToGitRef` /
 
 The VS Code branch posts `OPEN_GIT_CHANGE`, which routes through `flightpath.openGitChange`
 (reused, not a new message) to invoke the native commands per the mapping table above
-instead of building a `language: "diff"` document. Commit/diff/staged are done; the
-remaining work is the **native stash path** (`vscode.changes` + `toGitUri`, see "Native
-stash diff" above), which needs a small `GitUtils.getStashFiles(root, index)` helper
-(`git stash show --name-only stash@{index}`) for the file list.
+instead of building a `language: "diff"` document. All four ref kinds are done —
+commit/diff/staged via the dedicated git commands, and stash via `vscode.changes` +
+`toGitUri` (see "Native stash diff" above), backed by `GitUtils.getStashFiles()`.
 
 `REQUEST_GIT_CHANGE_PREVIEW` / `GIT_CHANGE_PREVIEW_RESULT` and `buildGitChangeContent`
 become **dead code for the git path** once nothing posts them — delete them (and the
@@ -228,11 +231,11 @@ unified diff.
 - [ ] Factor `downloadTextFile()` shared util out of `ContentPreviewModal.handleExport`; use it from the pane
 - [ ] `CodeMirrorEditor.openContextReferenceLink()`: `isStandalone` branch → `openToGitRef` (replaces the interim `REQUEST_GIT_CHANGE_PREVIEW` browser branch)
 
-### Phase 2 — VS Code native diff
+### Phase 2 — VS Code native diff ✅ DONE
 - [x] `flightpath.openGitChange` rewritten to invoke native commands (`git.viewCommit`/`git.viewChanges`/`git.viewStagedChanges`) with a generated-diff fallback; command IDs added as `VSCODE_GIT_COMMANDS`
 - [x] `CodeMirrorEditor.openContextReferenceLink()`: VS Code branch posts `OPEN_GIT_CHANGE` (→ native); browser branch keeps `REQUEST_GIT_CHANGE_PREVIEW` (modal) until Phase 1 lands
 - [x] Raw-text untitled-doc behavior is now fallback-only, not the default
-- [ ] **Native stash:** `GitUtils.getStashFiles(root, index)` + `~stash:N` branch in `flightpath.openGitChange` using `vscode.changes` + `toGitUri`; add `CHANGES` to `VSCODE_GIT_COMMANDS`
+- [x] **Native stash:** `GitUtils.getStashFiles(root, index)` + `~stash:N` branch in `flightpath.openGitChange` using `vscode.changes` + `toGitUri`; added `CHANGES` to `VSCODE_GIT_COMMANDS`
 
 ### Phase 3 — Cleanup
 - [ ] Delete `REQUEST_GIT_CHANGE_PREVIEW`/`GIT_CHANGE_PREVIEW_RESULT` + `buildGitChangeContent` + the `buildGitPreviewTitle` git branch (keep `$prior-context` path)

@@ -122,3 +122,37 @@ export interface WorkspaceMoveRequest {
   /** Optional new name at destination; defaults to source basename */
   newName?: string;
 }
+
+// ── Commit history ────────────────────────────────────────────────────────────
+
+export interface WorkspaceCommitLogEntry {
+  hash: string;
+  shortHash: string;
+  subject: string;
+  author: string;
+  relativeDate: string;
+  isHead: boolean;
+  pushed: boolean;
+}
+
+export interface WorkspaceCommitLogResponse {
+  commits: WorkspaceCommitLogEntry[];
+  hasMore: boolean;
+  /** null when in detached HEAD state */
+  currentBranch: string | null;
+  detached: boolean;
+}
+
+export interface WorkspaceCheckoutCommitRequest {
+  hash: string;
+}
+
+export interface WorkspaceCheckoutBranchRequest {
+  branch: string;
+}
+
+// ── Git ref diff ──────────────────────────────────────────────────────────────
+
+export interface WorkspaceGitRefDiffResponse {
+  unifiedDiff: string;
+}

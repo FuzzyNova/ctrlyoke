@@ -25,20 +25,23 @@ export interface StashInfo {
  */
 export async function getRecentCommits(
   workspaceRoot: string,
-  limit: number = 30
+  limit: number = 30,
+  skip: number = 0
 ): Promise<CommitInfo[]> {
-  const { stdout } = await execFileAsync(
-    "git",
-    [
-      "-C",
-      workspaceRoot,
-      "log",
-      `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
-      `-n`,
-      String(limit),
-    ],
-    { timeout: GIT_TIMEOUT_MS }
-  );
+  const args = [
+    "-C",
+    workspaceRoot,
+    "log",
+    `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
+    `-n`,
+    String(limit),
+  ];
+  if (skip > 0) {
+    args.splice(args.indexOf("log") + 1, 0, `--skip=${skip}`);
+  }
+  const { stdout } = await execFileAsync("git", args, {
+    timeout: GIT_TIMEOUT_MS,
+  });
 
   return stdout
     .trim()
@@ -147,6 +150,26 @@ export async function getStashDiff(
     { timeout: GIT_TIMEOUT_MS }
   );
   return stdout;
+}
+
+/**
+ * Returns the repo-relative paths of tracked files changed in a stash entry.
+ * Used to build per-file URIs for VS Code's native multi-file diff editor.
+ * Tracked changes only — parity with {@link getStashDiff} (no `-u`).
+ */
+export async function getStashFiles(
+  workspaceRoot: string,
+  index: number
+): Promise<string[]> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", workspaceRoot, "stash", "show", "--name-only", `stash@{${index}}`],
+    { timeout: GIT_TIMEOUT_MS }
+  );
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 /**

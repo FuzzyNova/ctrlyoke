@@ -4,11 +4,12 @@ import { useUiStore } from "@store/uiStore";
 import { isStandalone } from "@hooks/useVsCodeApi";
 import { sendMessage } from "@hooks/useMessageHandler";
 import { MESSAGE_TYPES } from "@/types/messages";
+import { downloadTextFile } from "@utils/diff";
 
 /**
- * Modal that displays git diff or prior-context XML preview content.
- * Triggered by ~diff / ~staged / ~stash / ~<hash> and $prior-context links
- * in the CodeMirror prompt editor. Works in both VS Code and browser mode.
+ * Modal that displays prior-context XML preview content (and, as a fallback in
+ * VS Code mode, git-ref diffs before the native diff command is available).
+ * The primary git-ref path in browser mode now renders in WorkspaceDiffPane.
  *
  * Footer actions:
  * - Copy  — copies content to clipboard
@@ -40,15 +41,7 @@ export const ContentPreviewModal: React.FC = () => {
     if (isStandalone) {
       const ext = modal.language === "diff" ? ".diff" : ".xml";
       const filename = `flightpath-${modal.ref.replace(/[^a-z0-9_]/gi, "-").toLowerCase()}${ext}`;
-      const blob = new Blob([modal.content], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadTextFile(filename, modal.content);
     } else {
       sendMessage(MESSAGE_TYPES.EXPORT_CONTENT_PREVIEW, {
         content: modal.content,

@@ -115,6 +115,14 @@ interface DiffViewProps {
    */
   viewType?: "split" | "unified";
   className?: string;
+  /**
+   * Pre-parsed react-diff-view hunks (e.g. from parseUnifiedDiffToFiles).
+   * When provided, DiffView skips its own content/patch parsing and uses these
+   * directly. diffType must also be provided when hunks is provided.
+   */
+  hunks?: HunkData[];
+  /** Diff type to use alongside pre-parsed `hunks`. */
+  diffType?: DiffType;
 }
 
 export const DiffView: React.FC<DiffViewProps> = ({
@@ -131,6 +139,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
   onExpandGap,
   viewType: viewTypeProp,
   className = "",
+  hunks: externalHunks,
+  diffType: externalDiffType,
 }) => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const isControlled = collapsed !== undefined;
@@ -183,6 +193,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
   // Derive estimated line count for summary badge (cheap, no diff computation).
   const estimatedLineCount = useMemo(() => {
+    if (externalHunks !== undefined) {
+      return externalHunks.reduce(
+        (sum, h) => sum + h.changes.length,
+        0
+      );
+    }
     const normalizedPatch = normalizeStructuredPatch(structuredPatch);
     if (normalizedPatch.length > 0) {
       return countStructuredPatchDisplayLines(normalizedPatch);
@@ -193,7 +209,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       return Math.max(oldLines, newLines);
     }
     return 0;
-  }, [structuredPatch, oldContent, newContent]);
+  }, [externalHunks, structuredPatch, oldContent, newContent]);
 
   const hasDiff = estimatedLineCount > 0;
 
@@ -203,6 +219,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
     diffType: DiffType;
   } => {
     if (!isExpanded) return { baseHunks: [], diffType: "modify" };
+    if (externalHunks !== undefined) {
+      return { baseHunks: externalHunks, diffType: externalDiffType ?? "modify" };
+    }
     const normalizedPatch = normalizeStructuredPatch(structuredPatch);
     if (normalizedPatch.length > 0) {
       return { baseHunks: toRdvHunks(normalizedPatch), diffType: "modify" };
@@ -212,7 +231,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       return { baseHunks: result.hunks, diffType: result.diffType };
     }
     return { baseHunks: [], diffType: "modify" };
-  }, [isExpanded, structuredPatch, oldContent, newContent]);
+  }, [isExpanded, externalHunks, externalDiffType, structuredPatch, oldContent, newContent]);
 
   useEffect(() => {
     if (expandedGaps !== undefined) return;

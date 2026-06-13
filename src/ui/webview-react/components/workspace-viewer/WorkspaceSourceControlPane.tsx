@@ -5,6 +5,7 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useSettingsStore } from "@store/settingsStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import {
+  workspaceCommitLog,
   workspaceDiff,
   workspaceDiscard,
   workspaceStage,
@@ -15,6 +16,7 @@ import type { SourceControlFile } from "@root/types/HostedWorkspaceViewerTypes";
 import { Button } from "../shared/Button";
 import { Modal } from "../shared/Modal";
 import { WorkspaceCommitArea } from "./WorkspaceCommitArea";
+import { WorkspaceCommitHistoryPane } from "./WorkspaceCommitHistoryPane";
 import { WorkspaceDiffPane } from "./WorkspaceDiffPane";
 
 interface PendingDiscardAction {
@@ -56,6 +58,17 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const confirmDeleteOperations = useSettingsStore(
     (s) => s.globalSettings.confirmDeleteOperations
   );
+  const setCommitHistory = useWorkspaceViewerStore((s) => s.setCommitHistory);
+  const appendCommitHistory = useWorkspaceViewerStore(
+    (s) => s.appendCommitHistory
+  );
+  const setCommitHistoryLoading = useWorkspaceViewerStore(
+    (s) => s.setCommitHistoryLoading
+  );
+  const commitHistory = useWorkspaceViewerStore((s) => s.commitHistory);
+  const commitHistoryHasMore = useWorkspaceViewerStore(
+    (s) => s.commitHistoryHasMore
+  );
 
   const isMobile = useIsMobile();
   const [incomingCommitCount, setIncomingCommitCount] = useState(0);
@@ -80,8 +93,48 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     }
   }, [setScmError, setSourceControlFiles, setSourceControlLoading]);
 
+  const loadHistory = useCallback(async () => {
+    setCommitHistoryLoading(true);
+    try {
+      const result = await workspaceCommitLog(0, 30);
+      setCommitHistory(
+        result.commits,
+        result.hasMore,
+        result.currentBranch,
+        result.detached
+      );
+    } catch {
+      // silently ignore — history panel will show empty state
+    } finally {
+      setCommitHistoryLoading(false);
+    }
+  }, [setCommitHistory, setCommitHistoryLoading]);
+
+  const loadMoreHistory = useCallback(async () => {
+    if (!commitHistoryHasMore) return;
+    setCommitHistoryLoading(true);
+    try {
+      const result = await workspaceCommitLog(commitHistory.length, 30);
+      appendCommitHistory(result.commits, result.hasMore);
+    } catch {
+      // silently ignore
+    } finally {
+      setCommitHistoryLoading(false);
+    }
+  }, [
+    appendCommitHistory,
+    commitHistory.length,
+    commitHistoryHasMore,
+    setCommitHistoryLoading,
+  ]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadStatus(), loadHistory()]);
+  }, [loadHistory, loadStatus]);
+
   useEffect(() => {
     void loadStatus();
+    void loadHistory();
     // Intentional: run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -118,6 +171,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const refreshAfterMutation = useCallback(
     async (affectedPaths: string[]) => {
       const files = await loadStatus();
+      void loadHistory();
       if (!selectedDiffPath || !affectedPaths.includes(selectedDiffPath)) {
         return;
       }
@@ -136,6 +190,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     },
     [
       isMobile,
+      loadHistory,
       loadStatus,
       selectFileDiff,
       selectedDiffPath,
@@ -183,6 +238,17 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
   const staged = sourceControlFiles.filter((f) => f.stagedStatus !== null);
   const changed = sourceControlFiles.filter((f) => f.unstagedStatus !== null);
+  const filesEmpty = staged.length === 0 && changed.length === 0 && !sourceControlLoading;
+  const historyEmpty = commitHistory.length === 0;
+
+  // 50/50 flex split with empty-fill: when a region has no content, collapse
+  // it to its natural height so the sibling consumes the remaining slack.
+  const filesRegionClass = filesEmpty
+    ? "flex-none"
+    : "flex-1 basis-0 min-h-0 overflow-y-auto";
+  const historyRegionClass = historyEmpty
+    ? "flex-none"
+    : "flex-1 basis-0 min-h-0 overflow-y-auto";
 
   const openDiscardWarning = useCallback(
     (paths: string[], untrackedCount: number) => {
@@ -391,22 +457,35 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   );
 
   const leftColumn = (
-    <div className="w-64 flex-shrink-0 flex flex-col border-r border-panel-border overflow-y-auto">
+    <div className="w-64 flex-shrink-0 flex flex-col border-r border-panel-border overflow-hidden h-full">
       <WorkspaceCommitArea
         incomingCommitCount={incomingCommitCount}
-        onRefresh={loadStatus}
+        onRefresh={refreshAll}
         outgoingCommitCount={outgoingCommitCount}
       />
-      <div className="border-t border-panel-border" />
+      <div className="border-t border-panel-border flex-shrink-0" />
 
-      {sourceControlLoading ? (
-        <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
-          <i className="codicon codicon-loading animate-spin text-sm" />
-          <span className="text-xs">Refreshing…</span>
-        </div>
-      ) : (
-        sourceControlSections
-      )}
+      {/* Files region — independently scrollable */}
+      <div className={filesRegionClass}>
+        {sourceControlLoading ? (
+          <div className="flex items-center justify-center py-6 text-editor-fg opacity-50 gap-2">
+            <i className="codicon codicon-loading animate-spin text-sm" />
+            <span className="text-xs">Refreshing…</span>
+          </div>
+        ) : (
+          sourceControlSections
+        )}
+      </div>
+
+      <div className="border-t border-panel-border flex-shrink-0" />
+
+      {/* Commit history region — independently scrollable */}
+      <div className={historyRegionClass}>
+        <WorkspaceCommitHistoryPane
+          onLoadMore={() => void loadMoreHistory()}
+          onRefresh={() => void refreshAll()}
+        />
+      </div>
     </div>
   );
 
@@ -436,7 +515,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           <div className="flex-1 overflow-y-auto flex flex-col">
             <WorkspaceCommitArea
               incomingCommitCount={incomingCommitCount}
-              onRefresh={loadStatus}
+              onRefresh={refreshAll}
               outgoingCommitCount={outgoingCommitCount}
             />
             <div className="border-t border-panel-border" />
@@ -449,6 +528,12 @@ export const WorkspaceSourceControlPane: React.FC = () => {
             ) : (
               sourceControlSections
             )}
+
+            <div className="border-t border-panel-border" />
+            <WorkspaceCommitHistoryPane
+              onLoadMore={() => void loadMoreHistory()}
+              onRefresh={() => void refreshAll()}
+            />
           </div>
         </div>
 

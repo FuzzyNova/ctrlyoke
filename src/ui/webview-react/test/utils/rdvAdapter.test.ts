@@ -3,6 +3,7 @@ import { tokenize } from "react-diff-view";
 import {
   buildDiffRenderPlan,
   getRenderedDiffStats,
+  parseUnifiedDiffToFiles,
   type RenderedDiffRun,
 } from "@utils/rdvAdapter";
 import {
@@ -231,3 +232,64 @@ describe("syntaxHighlighting", () => {
     ).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// parseUnifiedDiffToFiles
+// ---------------------------------------------------------------------------
+
+const SAMPLE_UNIFIED_DIFF = `diff --git a/src/foo.ts b/src/foo.ts
+index abc1234..def5678 100644
+--- a/src/foo.ts
++++ b/src/foo.ts
+@@ -1,3 +1,3 @@
+ const x = 1;
+-const y = 2;
++const y = 3;
+ const z = 4;
+diff --git a/src/bar.md b/src/bar.md
+index 111aaaa..222bbbb 100644
+--- a/src/bar.md
++++ b/src/bar.md
+@@ -1,2 +1,2 @@
+-# Old heading
++# New heading
+ Some text.
+`;
+
+describe("parseUnifiedDiffToFiles", () => {
+  it("returns an empty array for empty input", () => {
+    expect(parseUnifiedDiffToFiles("")).toHaveLength(0);
+    expect(parseUnifiedDiffToFiles("   \n  ")).toHaveLength(0);
+  });
+
+  it("parses a multi-file diff into one entry per file", () => {
+    const files = parseUnifiedDiffToFiles(SAMPLE_UNIFIED_DIFF);
+    expect(files).toHaveLength(2);
+  });
+
+  it("sets the path from the b/ header", () => {
+    const files = parseUnifiedDiffToFiles(SAMPLE_UNIFIED_DIFF);
+    expect(files[0]!.path).toBe("src/foo.ts");
+    expect(files[1]!.path).toBe("src/bar.md");
+  });
+
+  it("infers language from the file extension", () => {
+    const files = parseUnifiedDiffToFiles(SAMPLE_UNIFIED_DIFF);
+    expect(files[0]!.language).toBe("typescript");
+    expect(files[1]!.language).toBe("markdown");
+  });
+
+  it("produces non-empty hunks for each changed file", () => {
+    const files = parseUnifiedDiffToFiles(SAMPLE_UNIFIED_DIFF);
+    for (const file of files) {
+      expect(file.hunks.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("does not throw on malformed / binary-only input", () => {
+    expect(() =>
+      parseUnifiedDiffToFiles("not a real diff")
+    ).not.toThrow();
+  });
+});
+

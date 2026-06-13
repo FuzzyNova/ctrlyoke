@@ -1574,18 +1574,10 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.CONTEXT_REFS_VALIDATION] = () => {};
 
   // --------------------------------------------------------------------------
-  // GIT_CHANGE_PREVIEW_RESULT / PRIOR_CONTEXT_PREVIEW_RESULT
+  // PRIOR_CONTEXT_PREVIEW_RESULT
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.GIT_CHANGE_PREVIEW_RESULT] = (message) => {
-    const ref = message.ref as string;
-    const title = buildGitPreviewTitle(ref);
-    useUiStore.getState().setContentPreviewModal({
-      title,
-      content: message.content as string,
-      language: "diff",
-      ref,
-    });
-  };
+  // GIT_CHANGE_PREVIEW_RESULT removed — browser now uses openToGitRef() →
+  // WorkspaceDiffPane; VS Code uses OPEN_GIT_CHANGE → native diff commands.
 
   handlers[MESSAGE_TYPES.PRIOR_CONTEXT_PREVIEW_RESULT] = (message) => {
     const ref = message.ref as string;
@@ -2087,15 +2079,6 @@ export function useMessageHandler(): UseMessageHandlerReturn {
   );
 
   return { sendMessage: sendMessageCallback };
-}
-
-/** Build a human-readable modal title for a ~git ref. */
-function buildGitPreviewTitle(ref: string): string {
-  const lower = ref.toLowerCase();
-  if (lower === "diff") return "Working Tree Diff (~diff)";
-  if (lower === "staged") return "Staged Changes (~staged)";
-  if (lower.startsWith("stash:")) return `Stash ${lower.slice(6)} (~${ref})`;
-  return `Commit ${ref.slice(0, 8)} (~${ref.slice(0, 8)})`;
 }
 
 /**

@@ -136,8 +136,8 @@ export const MESSAGE_TYPES = {
   OPEN_FILE: "openFile", // Open file from #file: link
   OPEN_GIT_CHANGE: "openGitChange", // Webview -> Extension: open a git diff in a new editor (legacy)
   OPEN_PRIOR_CONTEXT: "openPriorContext", // Webview -> Extension: preview inline $prior-context expansion (legacy)
-  REQUEST_GIT_CHANGE_PREVIEW: "requestGitChangePreview", // Webview -> Extension: request diff content for preview modal
-  GIT_CHANGE_PREVIEW_RESULT: "gitChangePreviewResult", // Extension -> Webview: { ref, content } diff text for modal
+  // REQUEST_GIT_CHANGE_PREVIEW and GIT_CHANGE_PREVIEW_RESULT removed — browser now opens
+  // the WorkspaceDiffPane via openToGitRef(); VS Code uses OPEN_GIT_CHANGE → native commands.
   REQUEST_PRIOR_CONTEXT_PREVIEW: "requestPriorContextPreview", // Webview -> Extension: request prior-context XML for preview modal
   PRIOR_CONTEXT_PREVIEW_RESULT: "priorContextPreviewResult", // Extension -> Webview: { ref, content } XML for modal
   EXPORT_CONTENT_PREVIEW: "exportContentPreview", // Webview -> Extension: open preview content in VS Code editor
@@ -1336,6 +1336,7 @@ export const VSCODE_GIT_COMMANDS = {
   VIEW_COMMIT: "git.viewCommit", // commit's multi-file diff in the native viewer
   VIEW_CHANGES: "git.viewChanges", // working-tree changes
   VIEW_STAGED_CHANGES: "git.viewStagedChanges", // staged changes
+  CHANGES: "vscode.changes", // generic multi-file diff editor (used for stashes)
 } as const;
 
 // VS Code context keys set by the extension (used in package.json `when` clauses)

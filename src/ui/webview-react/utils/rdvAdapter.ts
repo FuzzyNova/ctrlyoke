@@ -2,14 +2,103 @@
  * Adapter from FlightPath's internal UnifiedDiffHunk format to react-diff-view's HunkData format.
  *
  * Two entry points:
- *  - toRdvHunks()       — structured patch (e.g. from Claude) → HunkData[]
- *  - toRdvFromContent() — raw old/new file content → { hunks, diffType }
+ *  - toRdvHunks()              — structured patch (e.g. from Claude) → HunkData[]
+ *  - toRdvFromContent()        — raw old/new file content → { hunks, diffType }
+ *  - parseUnifiedDiffToFiles() — raw unified diff text (git show output) → ParsedDiffFile[]
  */
 import * as DiffLib from "diff";
 import { parseDiff } from "react-diff-view";
 import type { HunkData, ChangeData, DiffType, ViewType } from "react-diff-view";
 import { normalizeStructuredPatch } from "./diffUtils";
 import type { UnifiedDiffHunk } from "../types/cliEvents";
+
+// ── Multi-file unified diff parsing ──────────────────────────────────────────
+
+export interface ParsedDiffFile {
+  path: string;
+  oldPath?: string;
+  language?: string;
+  hunks: HunkData[];
+  diffType: DiffType;
+}
+
+function languageFromPath(filePath: string): string | undefined {
+  const LANGUAGE_MAP: Record<string, string> = {
+    ts: "typescript",
+    tsx: "typescriptreact",
+    js: "javascript",
+    jsx: "javascriptreact",
+    mjs: "javascript",
+    cjs: "javascript",
+    py: "python",
+    json: "json",
+    jsonc: "jsonc",
+    yaml: "yaml",
+    yml: "yaml",
+    md: "markdown",
+    mdx: "mdx",
+    css: "css",
+    scss: "scss",
+    less: "less",
+    html: "html",
+    htm: "html",
+    xml: "xml",
+    svg: "xml",
+    sh: "shell",
+    bash: "shell",
+    ps1: "powershell",
+    cs: "csharp",
+    java: "java",
+    kt: "kotlin",
+    go: "go",
+    rs: "rust",
+    c: "c",
+    cpp: "cpp",
+    rb: "ruby",
+    php: "php",
+    swift: "swift",
+    toml: "toml",
+    ini: "ini",
+    sql: "sql",
+    graphql: "graphql",
+    gql: "graphql",
+    tf: "hcl",
+    txt: "plaintext",
+  };
+  const base = filePath.split("/").pop()?.toLowerCase() ?? "";
+  if (base === "dockerfile") return "dockerfile";
+  if (base === ".env" || base.startsWith(".env.")) return "properties";
+  const ext = base.includes(".") ? base.slice(base.lastIndexOf(".") + 1) : "";
+  return LANGUAGE_MAP[ext];
+}
+
+/**
+ * Parse a raw unified diff string (e.g. from `git show --stat -p`) into an array
+ * of `ParsedDiffFile` entries, one per changed file. Binary-file stanzas that
+ * produce no hunks are returned with an empty hunks array so callers can skip them.
+ */
+export function parseUnifiedDiffToFiles(unifiedDiff: string): ParsedDiffFile[] {
+  if (!unifiedDiff.trim()) return [];
+
+  let files;
+  try {
+    files = parseDiff(unifiedDiff, { nearbySequences: "zip" });
+  } catch {
+    return [];
+  }
+
+  return files.map((file) => {
+    const newPath = file.newPath ?? file.oldPath ?? "";
+    const oldPath = file.oldPath !== file.newPath ? file.oldPath : undefined;
+    return {
+      path: newPath,
+      oldPath,
+      language: languageFromPath(newPath),
+      hunks: (file.hunks ?? []) as HunkData[],
+      diffType: (file.type as DiffType) ?? "modify",
+    };
+  });
+}
 
 export interface RenderedDiffRun {
   count: number;

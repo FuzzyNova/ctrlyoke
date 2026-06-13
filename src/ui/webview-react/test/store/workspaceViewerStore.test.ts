@@ -120,3 +120,77 @@ describe("reset", () => {
     expect(store().isOpen).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Commit history state
+// ---------------------------------------------------------------------------
+
+const sampleCommit = {
+  hash: "abc1234567890abcdef",
+  shortHash: "abc1234",
+  subject: "feat: add commit history panel",
+  author: "Dev",
+  relativeDate: "2 days ago",
+  isHead: true,
+  pushed: true,
+};
+
+describe("setCommitHistory", () => {
+  it("sets commits, hasMore, currentBranch, and detached", () => {
+    store().setCommitHistory([sampleCommit], true, "main", false);
+    const s = store();
+    expect(s.commitHistory).toHaveLength(1);
+    expect(s.commitHistoryHasMore).toBe(true);
+    expect(s.currentBranch).toBe("main");
+    expect(s.detached).toBe(false);
+  });
+
+  it("sets detached=true when in detached HEAD state", () => {
+    store().setCommitHistory([sampleCommit], false, null, true);
+    expect(store().detached).toBe(true);
+    expect(store().currentBranch).toBeNull();
+  });
+});
+
+describe("appendCommitHistory", () => {
+  it("appends new commits to existing history", () => {
+    store().setCommitHistory([sampleCommit], true, "main", false);
+    const extra = { ...sampleCommit, hash: "def456", shortHash: "def456", subject: "fix: bug" };
+    store().appendCommitHistory([extra], false);
+    expect(store().commitHistory).toHaveLength(2);
+    expect(store().commitHistoryHasMore).toBe(false);
+  });
+});
+
+describe("setCommitHistoryLoading", () => {
+  it("sets loading flag", () => {
+    store().setCommitHistoryLoading(true);
+    expect(store().commitHistoryLoading).toBe(true);
+    store().setCommitHistoryLoading(false);
+    expect(store().commitHistoryLoading).toBe(false);
+  });
+});
+
+describe("setPreviousBranch", () => {
+  it("stores and clears the previousBranch", () => {
+    store().setPreviousBranch("main");
+    expect(store().previousBranch).toBe("main");
+    store().setPreviousBranch(null);
+    expect(store().previousBranch).toBeNull();
+  });
+});
+
+describe("close() clears commit history loading", () => {
+  it("resets commitHistoryLoading on close", () => {
+    store().setCommitHistoryLoading(true);
+    store().close();
+    expect(store().commitHistoryLoading).toBe(false);
+  });
+
+  it("resets diffFiles and diffRefLoading on close", () => {
+    store().close();
+    expect(store().diffFiles).toBeNull();
+    expect(store().diffRefLabel).toBeNull();
+    expect(store().diffRefLoading).toBe(false);
+  });
+});

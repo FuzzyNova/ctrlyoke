@@ -25,6 +25,7 @@ import {
   getWorkingTreeDiff,
   getStagedDiff,
   getStashDiff,
+  getStashFiles,
 } from "./utils/GitUtils";
 import {
   getQueueStatus,
@@ -842,8 +843,9 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Open Git Change command — opens a git change (diff/staged/stash:N/<hash>) in
   // VS Code's native diff UI: the multi-file commit viewer for a hash, the changes
-  // views for working-tree/staged. Stashes (no native per-index command) and any
-  // failure (e.g. Git extension disabled) fall back to a generated diff document.
+  // views for working-tree/staged, and the generic multi-file diff editor for a
+  // stash (built from per-file git URIs). Any failure (e.g. Git extension disabled)
+  // falls back to a generated diff document.
   const openGitChangeCommand = vscode.commands.registerCommand(
     "flightpath.openGitChange",
     async (args: { ref: string; workspaceRoot?: string }) => {
@@ -882,6 +884,42 @@ function registerCommands(context: vscode.ExtensionContext) {
         await vscode.window.showTextDocument(doc, { preview: true });
       };
 
+      // Stash: no built-in command opens a specific stash by index, so build the
+      // native multi-file diff editor ourselves via `vscode.changes` + the git
+      // extension's `toGitUri` (stash@{N}^ vs stash@{N} per changed file).
+      const openNativeStashDiff = async (index: number): Promise<void> => {
+        const gitApi = vscode.extensions
+          .getExtension<{
+            getAPI(version: 1): {
+              toGitUri(uri: vscode.Uri, ref: string): vscode.Uri;
+            };
+          }>("vscode.git")
+          ?.exports.getAPI(1);
+        const files = gitApi
+          ? await getStashFiles(workspaceRoot, index)
+          : [];
+        if (!gitApi || files.length === 0) {
+          // No git API, or nothing tracked in the stash — the generated diff
+          // still surfaces untracked-only stashes as text.
+          await openGeneratedDiff();
+          return;
+        }
+        const stashRef = `stash@{${index}}`;
+        const resources = files.map((rel) => {
+          const fileUri = vscode.Uri.joinPath(repoUri, rel);
+          return [
+            fileUri,
+            gitApi.toGitUri(fileUri, `${stashRef}^`),
+            gitApi.toGitUri(fileUri, stashRef),
+          ];
+        });
+        await vscode.commands.executeCommand(
+          VSCODE_GIT_COMMANDS.CHANGES,
+          `Git Stash #${index}`,
+          resources
+        );
+      };
+
       try {
         if (ref === GIT_CHANGE_KINDS.DIFF) {
           await vscode.commands.executeCommand(
@@ -894,8 +932,7 @@ function registerCommands(context: vscode.ExtensionContext) {
             repoUri
           );
         } else if (stashIndex !== null) {
-          // No built-in command opens a specific stash by index — show its diff.
-          await openGeneratedDiff();
+          await openNativeStashDiff(stashIndex);
         } else {
           // Commit hash → native multi-file commit viewer. `git.viewCommit`
           // resolves its first arg to a repository, then opens the commit.

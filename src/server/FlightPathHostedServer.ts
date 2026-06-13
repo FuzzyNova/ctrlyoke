@@ -55,6 +55,7 @@ import type {
   WorkspaceCopyRequest,
   WorkspaceMoveRequest,
   WorkspaceGenerateCommitMessageResponse,
+  WorkspaceGitRefDiffResponse,
 } from "../types/HostedWorkspaceViewerTypes";
 
 export class FlightPathHostedServer
@@ -934,6 +935,89 @@ export class FlightPathHostedServer
           Log.error(
             `workspace-viewer /generate-commit-message error: ${message}`
           );
+          res.status(500).json({ error: message });
+        }
+      }
+    );
+
+    this.app.get(
+      "/api/workspace-viewer/commit-log",
+      requireToken,
+      async (req, res) => {
+        const skip = parseInt(String(req.query.skip ?? "0"), 10);
+        const limit = parseInt(String(req.query.limit ?? "30"), 10);
+        try {
+          res.json(
+            await this.viewerService.getCommitLog(
+              Number.isFinite(skip) ? skip : 0,
+              Number.isFinite(limit) && limit > 0 ? limit : 30
+            )
+          );
+        } catch (err) {
+          Log.error(
+            `workspace-viewer /commit-log error: ${String(err)}`
+          );
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.get(
+      "/api/workspace-viewer/git-ref-diff",
+      requireToken,
+      async (req, res) => {
+        const ref = req.query.ref;
+        if (typeof ref !== "string" || !ref) {
+          res.status(400).json({ error: "ref is required" });
+          return;
+        }
+        try {
+          const unifiedDiff = await this.viewerService.getGitRefDiff(ref);
+          res.json({ unifiedDiff } satisfies WorkspaceGitRefDiffResponse);
+        } catch (err) {
+          Log.error(
+            `workspace-viewer /git-ref-diff error: ${String(err)}`
+          );
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/checkout-commit",
+      requireToken,
+      async (req, res) => {
+        const body = req.body as { hash?: unknown };
+        if (typeof body.hash !== "string" || !body.hash.trim()) {
+          res.status(400).json({ error: "hash is required" });
+          return;
+        }
+        try {
+          res.json(await this.viewerService.checkoutCommit(body.hash.trim()));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          Log.error(`workspace-viewer /checkout-commit error: ${message}`);
+          res.status(500).json({ error: message });
+        }
+      }
+    );
+
+    this.app.post(
+      "/api/workspace-viewer/checkout-branch",
+      requireToken,
+      async (req, res) => {
+        const body = req.body as { branch?: unknown };
+        if (typeof body.branch !== "string" || !body.branch.trim()) {
+          res.status(400).json({ error: "branch is required" });
+          return;
+        }
+        try {
+          res.json(
+            await this.viewerService.checkoutBranch(body.branch.trim())
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          Log.error(`workspace-viewer /checkout-branch error: ${message}`);
           res.status(500).json({ error: message });
         }
       }

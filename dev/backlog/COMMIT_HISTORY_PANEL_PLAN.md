@@ -40,26 +40,79 @@ graph rendering, no branch management UI, no merge/rebase tooling.
 
 ## UI Placement
 
-Add `WorkspaceCommitHistoryPane.tsx` to
-`src/ui/webview-react/components/workspace-viewer/`, mounted in
-`WorkspaceSourceControlPane.tsx`'s `leftColumn` (and the mobile stack), directly below
-the existing staged/changes sections — i.e. the left column becomes:
+`WorkspaceCommitHistoryPane.tsx` (new, in
+`src/ui/webview-react/components/workspace-viewer/`) mounts as the **bottom region of
+the left column** in `WorkspaceSourceControlPane.tsx`, beneath the staged/changes file
+list. The model is VS Code's Source Control view: a pinned commit box on top, then two
+**independently scrollable** regions — the file list and the history — sharing the
+remaining height.
 
 ```
-WorkspaceCommitArea        (push/pull, commit message, generate)
-─────────────────────────
-Staged / Changes sections  (existing)
-─────────────────────────
-Commit History             (new — collapsible section, default expanded)
+leftColumn  (w-64, flex flex-col, h-full, overflow-hidden)
+├── WorkspaceCommitArea            flex-shrink-0      ← pinned: push/pull + message + Commit
+├── divider
+├── Files region (Staged+Changes)  flex-1 min-h-0 overflow-y-auto   ← own scrollbar
+├── divider
+└── WorkspaceCommitHistoryPane     flex-1 min-h-0 overflow-y-auto   ← own scrollbar
 ```
 
-A collapsible `<details>`-style header ("History") keeps it out of the way when the
-user is focused on staging/committing, similar to how the staged/changes sections are
-already collapsible-by-emptiness.
+### Desktop left column — restructure
 
-The commit's "View Diff" action reuses the existing `~<hash>` content-preview
-pipeline (`REQUEST_GIT_CHANGE_PREVIEW` → `ContentPreviewModal`) — see "Viewing a
-Commit's Diff" below. No new diff pane is needed.
+Today `leftColumn` is a single `overflow-y-auto` column (line ~393), so the commit box
+and file list scroll together. Change it to a fixed-height flex column where only the
+inner regions scroll:
+
+- `leftColumn` flips `overflow-y-auto` → `overflow-hidden` (it already stretches to full
+  height via the parent `flex h-full` row).
+- `WorkspaceCommitArea` stays `flex-shrink-0` — pinned at top, never scrolls.
+- The current `sourceControlSections` (Staged + Changes) moves into its **own**
+  `flex-1 min-h-0 overflow-y-auto` wrapper; the two sub-sections still scroll together
+  inside it, exactly as today.
+- `WorkspaceCommitHistoryPane` is a sibling `flex-1 min-h-0 overflow-y-auto` region.
+
+`min-h-0` on the flex children is the load-bearing detail — without it the `overflow-y-auto`
+never bounds and the column grows instead of scrolling.
+
+### Height split — 50/50 with empty-fill
+
+Baseline is 50/50 (`flex-1 basis-0` on both regions). To get the "stretch to fill when
+the sibling is empty" behavior **without** a resize handle, collapse the *empty* region
+to its natural height so the other consumes the slack:
+
+| State | Files region | History region |
+| --- | --- | --- |
+| both have content | `flex-1` (≈50%) | `flex-1` (≈50%) |
+| no changes/staged | `flex-none` (header + "No changes") | `flex-1` (fills up) |
+| empty history (new repo) | `flex-1` (fills down) | `flex-none` (header + empty note) |
+| both empty | `flex-none` | `flex-none` |
+
+Concretely, with `filesEmpty = staged.length === 0 && changed.length === 0` and
+`historyEmpty = commitHistory.length === 0`, each region gets `flex-1 basis-0 min-h-0`
+when it has content and `flex-none` when empty. Both keep `overflow-y-auto` so they
+scroll independently when full. **Resizable sashes are explicitly deferred** — this
+gives the VS-Code-like look without the drag machinery.
+
+### History pane internals — `WorkspaceCommitHistoryPane.tsx`
+
+- **Header row** matching the existing section headers (`px-3 py-1.5`,
+  `text-xs font-semibold uppercase text-editor-fg opacity-60`): label **History**, plus
+  an optional refresh affordance and (Phase 3) the detached-HEAD indicator.
+- **Commit rows** at the same density as `renderFileRow` (`px-2 py-1`, `text-xs`,
+  `hover:bg-list-hover-bg`, `bg-list-active-bg` when selected):
+  - short hash (mono, dim) · subject (`min-w-0 flex-1 truncate`) · right-aligned
+    `relativeDate` (dim); author secondary/optional.
+  - left-click → **View Diff** (shared git-ref pipeline); right-click → context menu.
+- **Footer**: a "Load more" button when `commitHistoryHasMore` (→ `appendCommitHistory`),
+  and a small spinner row while `commitHistoryLoading`.
+- **Empty state**: a single dim "No commits yet" line, so the `flex-none` rule collapses
+  the region cleanly.
+
+### Mobile
+
+The mobile branch (`if (isMobile)`, line ~432) is a single scrolling column, so
+independent sub-scrolling doesn't apply. Append `WorkspaceCommitHistoryPane` to the
+bottom of that stack (after the file sections); it renders its full list inline with no
+inner scrollbar and no 50/50 split. "Load more" still works.
 
 ---
 
@@ -281,7 +334,10 @@ and source control files.
 - [ ] Route: `GET /api/workspace-viewer/commit-log`
 - [ ] `hostedApi.ts`: `workspaceCommitLog()`
 - [ ] Store: `commitHistory`, `commitHistoryLoading`, `commitHistoryHasMore`, `currentBranch`, `detached`, `previousBranch` + setters
-- [ ] `WorkspaceCommitHistoryPane.tsx`: collapsible list, "Load more"
+- [ ] Restructure `WorkspaceSourceControlPane` `leftColumn`: `overflow-hidden` column; move `sourceControlSections` into a `flex-1 min-h-0 overflow-y-auto` files region (see "UI Placement")
+- [ ] `WorkspaceCommitHistoryPane.tsx`: header + commit rows + "Load more", as a sibling `flex-1 min-h-0 overflow-y-auto` region
+- [ ] 50/50 empty-fill rule: `flex-1 basis-0` per region when it has content, `flex-none` when empty (`filesEmpty`/`historyEmpty`)
+- [ ] Mobile: append the history pane to the single-scroll stack (no inner scroll / split)
 - [ ] "View Diff" calls the shared git-ref click pipeline (`openToGitRef` / `OPEN_GIT_CHANGE` — see `COMMIT_DIFF_PIPELINE_PLAN.md`, the prerequisite)
 
 ### Phase 2 — Context menu actions
@@ -317,7 +373,10 @@ and source control files.
 
 ---
 
+## Resolved Decisions
+
+- **Placement**: ✅ bottom region of the Source Control left column (not a third tab, not a collapsible `<details>`). Pinned commit box on top, then a files region and a history region that scroll independently and split 50/50 with empty-fill — see "UI Placement". Resizable sashes deferred.
+
 ## Open Questions
 
-1. **Pane vs. tab**: collapsible section under source control (as drafted) vs. a third tab alongside Explorer/Source Control? Collapsible section keeps it lean and avoids new tab-routing state — recommended.
-2. **History scope**: current branch only (via plain `git log`), or should it follow `HEAD` even when detached (i.e., `git log` always reflects whatever `HEAD` points at)? Recommend the latter — it's what `git log` does by default and keeps the implementation simple.
+1. **History scope**: current branch only (via plain `git log`), or should it follow `HEAD` even when detached (i.e., `git log` always reflects whatever `HEAD` points at)? Recommend the latter — it's what `git log` does by default and keeps the implementation simple.

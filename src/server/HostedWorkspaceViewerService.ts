@@ -19,7 +19,16 @@ import type {
   WorkspaceCopyRequest,
   WorkspaceMoveRequest,
   DiffKind,
+  WorkspaceCommitLogResponse,
+  WorkspaceCommitLogEntry,
 } from "../types/HostedWorkspaceViewerTypes";
+import {
+  getRecentCommits,
+  getWorkingTreeDiff,
+  getStagedDiff,
+  getStashDiff,
+  getCommitDiff,
+} from "../utils/GitUtils";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
@@ -755,5 +764,123 @@ export class HostedWorkspaceViewerService {
     } catch {
       return "origin";
     }
+  }
+
+  // ── Commit log ───────────────────────────────────────────────────────────
+
+  async getCommitLog(
+    skip = 0,
+    limit = 30
+  ): Promise<WorkspaceCommitLogResponse> {
+    // Fetch one extra to determine hasMore
+    const rows = await getRecentCommits(this.workspaceRoot, limit + 1, skip);
+    const hasMore = rows.length > limit;
+    const commits = hasMore ? rows.slice(0, limit) : rows;
+
+    const [branchName, headHashResult, upstreamCommitsResult] =
+      await Promise.allSettled([
+        execFileAsync(
+          "git",
+          ["-C", this.workspaceRoot, "branch", "--show-current"],
+          { timeout: GIT_TIMEOUT_MS }
+        ),
+        execFileAsync("git", ["-C", this.workspaceRoot, "rev-parse", "HEAD"], {
+          timeout: GIT_TIMEOUT_MS,
+        }),
+        execFileAsync(
+          "git",
+          [
+            "-C",
+            this.workspaceRoot,
+            "rev-list",
+            "--no-walk",
+            "@{upstream}..HEAD",
+          ],
+          { timeout: GIT_TIMEOUT_MS }
+        ),
+      ]);
+
+    const rawBranch =
+      branchName.status === "fulfilled"
+        ? branchName.value.stdout.trim()
+        : "HEAD";
+    const detached = rawBranch === "" || rawBranch === "HEAD";
+    const currentBranch = detached ? null : rawBranch;
+
+    const headHash =
+      headHashResult.status === "fulfilled"
+        ? headHashResult.value.stdout.trim()
+        : null;
+
+    // Commits that are ahead of upstream (not yet pushed)
+    const unpushedHashes = new Set<string>();
+    if (upstreamCommitsResult.status === "fulfilled") {
+      for (const line of upstreamCommitsResult.value.stdout
+        .trim()
+        .split("\n")
+        .filter(Boolean)) {
+        unpushedHashes.add(line.trim());
+      }
+    }
+    // If no upstream is configured, upstreamCommitsResult fails — treat all as pushed
+
+    const result: WorkspaceCommitLogEntry[] = commits.map((c) => ({
+      ...c,
+      isHead: headHash !== null && c.hash === headHash,
+      pushed: !unpushedHashes.has(c.hash),
+    }));
+
+    return { commits: result, hasMore, currentBranch, detached };
+  }
+
+  // ── Checkout ─────────────────────────────────────────────────────────────
+
+  async checkoutCommit(hash: string): Promise<{ detached: boolean }> {
+    // Validate the hash exists as a commit object
+    await execFileAsync(
+      "git",
+      ["-C", this.workspaceRoot, "cat-file", "-e", `${hash}^{commit}`],
+      { timeout: GIT_TIMEOUT_MS }
+    );
+    await execFileAsync(
+      "git",
+      ["-C", this.workspaceRoot, "checkout", hash],
+      { timeout: GIT_TIMEOUT_MS }
+    );
+    return { detached: true };
+  }
+
+  async checkoutBranch(branch: string): Promise<{ branch: string }> {
+    await execFileAsync(
+      "git",
+      ["-C", this.workspaceRoot, "checkout", branch],
+      { timeout: GIT_TIMEOUT_MS }
+    );
+    return { branch };
+  }
+
+  // ── Git ref diff ──────────────────────────────────────────────────────────
+
+  async getGitRefDiff(ref: string): Promise<string> {
+    const DIFF_REF = "~diff";
+    const STAGED_REF = "~staged";
+    const STASH_PREFIX = "~stash:";
+
+    if (ref === DIFF_REF) {
+      return getWorkingTreeDiff(this.workspaceRoot);
+    }
+    if (ref === STAGED_REF) {
+      return getStagedDiff(this.workspaceRoot);
+    }
+    if (ref.startsWith(STASH_PREFIX)) {
+      const index = parseInt(ref.slice(STASH_PREFIX.length), 10);
+      if (!Number.isFinite(index)) {
+        throw new Error(`Invalid stash ref: ${ref}`);
+      }
+      return getStashDiff(this.workspaceRoot, index);
+    }
+    // Treat as commit hash
+    const hash = ref.startsWith("~") ? ref.slice(1) : ref;
+    return getCommitDiff(this.workspaceRoot, hash);
   }
 }

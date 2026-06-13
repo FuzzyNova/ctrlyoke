@@ -14,6 +14,10 @@ import type {
   WorkspaceDeleteRequest,
   WorkspaceCopyRequest,
   WorkspaceMoveRequest,
+  WorkspaceCommitLogResponse,
+  WorkspaceCheckoutCommitRequest,
+  WorkspaceCheckoutBranchRequest,
+  WorkspaceGitRefDiffResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
 
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
@@ -184,4 +188,39 @@ export async function workspaceMoveEntry(
     method: "POST",
     body: JSON.stringify(req),
   });
+}
+
+export async function workspaceCommitLog(
+  skip = 0,
+  limit = 30
+): Promise<WorkspaceCommitLogResponse> {
+  return hostedFetch<WorkspaceCommitLogResponse>(
+    `/api/workspace-viewer/commit-log?skip=${skip}&limit=${limit}`
+  );
+}
+
+export async function workspaceGitRefDiff(
+  ref: string
+): Promise<WorkspaceGitRefDiffResponse> {
+  return hostedFetch<WorkspaceGitRefDiffResponse>(
+    `/api/workspace-viewer/git-ref-diff?ref=${encodeURIComponent(ref)}`
+  );
+}
+
+export async function workspaceCheckoutCommit(
+  req: WorkspaceCheckoutCommitRequest
+): Promise<{ detached: boolean }> {
+  return hostedFetch<{ detached: boolean }>(
+    "/api/workspace-viewer/checkout-commit",
+    { method: "POST", body: JSON.stringify(req) }
+  );
+}
+
+export async function workspaceCheckoutBranch(
+  req: WorkspaceCheckoutBranchRequest
+): Promise<{ branch: string }> {
+  return hostedFetch<{ branch: string }>(
+    "/api/workspace-viewer/checkout-branch",
+    { method: "POST", body: JSON.stringify(req) }
+  );
 }

@@ -5,7 +5,11 @@ import type {
   WorkspaceEntry,
   SourceControlFile,
   DiffKind,
+  WorkspaceCommitLogEntry,
 } from "@root/types/HostedWorkspaceViewerTypes";
+import type { ParsedDiffFile } from "@utils/rdvAdapter";
+import { workspaceGitRefDiff } from "@utils/hostedApi";
+import { parseUnifiedDiffToFiles } from "@utils/rdvAdapter";
 
 // ============================================================================
 // Types
@@ -67,6 +71,19 @@ interface WorkspaceViewerState {
   pulling: boolean;
   scmError: string | null;
 
+  // Commit history
+  commitHistory: WorkspaceCommitLogEntry[];
+  commitHistoryLoading: boolean;
+  commitHistoryHasMore: boolean;
+  currentBranch: string | null;
+  detached: boolean;
+  previousBranch: string | null;
+
+  // Multi-file git-ref diff (e.g. from clicking a ~<hash> link in browser mode)
+  diffFiles: ParsedDiffFile[] | null;
+  diffRefLabel: string | null;
+  diffRefLoading: boolean;
+
   // Pending navigation (set externally, consumed by WorkspaceExplorerPane)
   pendingNavigation: PendingNavigation | null;
 
@@ -125,6 +142,23 @@ interface WorkspaceViewerActions {
   setScmError(err: string | null): void;
   setError(err: string | null): void;
 
+  // Commit history
+  setCommitHistory(
+    commits: WorkspaceCommitLogEntry[],
+    hasMore: boolean,
+    currentBranch: string | null,
+    detached: boolean
+  ): void;
+  appendCommitHistory(
+    commits: WorkspaceCommitLogEntry[],
+    hasMore: boolean
+  ): void;
+  setCommitHistoryLoading(v: boolean): void;
+  setPreviousBranch(branch: string | null): void;
+
+  // Git-ref diff (browser multi-file pane)
+  openToGitRef(ref: string): Promise<void>;
+
   // Pending navigation
   openToFile(filePath: string, startLine?: number, endLine?: number): void;
   openToDirectory(dirPath: string): void;
@@ -172,6 +206,17 @@ const INITIAL_STATE: WorkspaceViewerState = {
   pulling: false,
   scmError: null,
 
+  commitHistory: [],
+  commitHistoryLoading: false,
+  commitHistoryHasMore: false,
+  currentBranch: null,
+  detached: false,
+  previousBranch: null,
+
+  diffFiles: null,
+  diffRefLabel: null,
+  diffRefLoading: false,
+
   pendingNavigation: null,
 
   error: null,
@@ -202,6 +247,10 @@ export const useWorkspaceViewerStore = create<
           fileSaving: false,
           sourceControlLoading: false,
           diffLoading: false,
+          diffFiles: null,
+          diffRefLabel: null,
+          diffRefLoading: false,
+          commitHistoryLoading: false,
           committing: false,
           generatingCommitMessage: false,
           pushing: false,
@@ -397,6 +446,9 @@ export const useWorkspaceViewerStore = create<
           diffLanguage: undefined,
           diffKind: null,
           diffLoading: false,
+          diffFiles: null,
+          diffRefLabel: null,
+          diffRefLoading: false,
         });
       },
 
@@ -439,6 +491,57 @@ export const useWorkspaceViewerStore = create<
 
       setError(err) {
         set({ error: err });
+      },
+
+      // --- Commit history ---
+
+      setCommitHistory(commits, hasMore, currentBranch, detached) {
+        set({ commitHistory: commits, commitHistoryHasMore: hasMore, currentBranch, detached });
+      },
+
+      appendCommitHistory(commits, hasMore) {
+        set((state) => ({
+          commitHistory: [...state.commitHistory, ...commits],
+          commitHistoryHasMore: hasMore,
+        }));
+      },
+
+      setCommitHistoryLoading(v) {
+        set({ commitHistoryLoading: v });
+      },
+
+      setPreviousBranch(branch) {
+        set({ previousBranch: branch });
+      },
+
+      // --- Git-ref diff (browser multi-file) ---
+
+      async openToGitRef(ref) {
+        set({
+          isOpen: true,
+          activeTab: "sourceControl",
+          // Clear single-file diff so the pane switches to ref mode
+          selectedDiffPath: null,
+          diffFiles: null,
+          diffRefLabel: null,
+          diffRefLoading: true,
+        });
+        try {
+          const { unifiedDiff } = await workspaceGitRefDiff(ref);
+          const diffFiles = parseUnifiedDiffToFiles(unifiedDiff);
+          const shortRef = ref.startsWith("~") ? ref.slice(1) : ref;
+          const diffRefLabel =
+            ref === "~diff"
+              ? "Working Tree Changes"
+              : ref === "~staged"
+                ? "Staged Changes"
+                : ref.startsWith("~stash:")
+                  ? `Stash #${ref.slice("~stash:".length)}`
+                  : `Commit ${shortRef.slice(0, 7)}`;
+          set({ diffFiles, diffRefLabel, diffRefLoading: false });
+        } catch {
+          set({ diffRefLoading: false });
+        }
       },
 
       // --- Pending navigation ---
