@@ -73,7 +73,7 @@ export function OutputFindBar({
 
   return (
     <div
-      className={`absolute right-6 top-0 z-0 flex items-center gap-2 rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
+      className={`absolute right-6 top-0 z-10 flex items-center gap-2 rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
         closing ? "animate-output-find-exit" : "animate-output-find-enter"
       }`}
       onKeyDown={onKeyDown}

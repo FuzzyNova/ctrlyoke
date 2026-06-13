@@ -87,6 +87,14 @@ export interface RegistryEntry {
   controllerCols?: number;
 }
 
+interface FitSessionResult {
+  cols: number;
+  rows: number;
+  proposedCols: number | null;
+  proposedRows: number | null;
+  mode: "controller" | "viewer";
+}
+
 // key: `${workflowId}:${sessionId}`
 const registry = new Map<string, RegistryEntry>();
 
@@ -106,6 +114,49 @@ let currentTerminalSettings: TerminalSettings = {
 
 function makeKey(workflowId: string, sessionId: string): string {
   return `${workflowId}:${sessionId}`;
+}
+
+function fitRegistryEntry(
+  entry: RegistryEntry,
+  mode: "controller" | "viewer"
+): FitSessionResult {
+  const dims = entry.fitAddon.proposeDimensions();
+  const proposedCols = dims?.cols ?? null;
+  const proposedRows = dims?.rows ?? null;
+
+  if (mode === "viewer" && entry.controllerCols != null) {
+    const rows = Math.max(1, proposedRows ?? entry.term.rows);
+    entry.term.resize(entry.controllerCols, rows);
+    entry.domEl.style.width = "fit-content";
+    entry.domEl.style.marginLeft = "auto";
+    entry.domEl.style.marginRight = "auto";
+    return {
+      cols: entry.term.cols,
+      rows: entry.term.rows,
+      proposedCols,
+      proposedRows,
+      mode,
+    };
+  }
+
+  if (
+    proposedCols != null &&
+    proposedRows != null &&
+    proposedCols > 0 &&
+    proposedRows > 0
+  ) {
+    entry.term.resize(proposedCols, proposedRows);
+  } else {
+    entry.fitAddon.fit();
+  }
+
+  return {
+    cols: entry.term.cols,
+    rows: entry.term.rows,
+    proposedCols,
+    proposedRows,
+    mode,
+  };
 }
 
 function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
@@ -259,21 +310,16 @@ export const terminalRegistry = {
       try {
         const containerSize = `${container.offsetWidth}x${container.offsetHeight}`;
         const containerDisplay = getComputedStyle(container).display;
+        const fitResult = fitRegistryEntry(
+          entry,
+          entry.controllerCols != null ? "viewer" : "controller"
+        );
         WebviewLog.debug(
           `[terminalRegistry.attach] rAF resize — container display=${containerDisplay} size=${containerSize} ` +
-            `domElConnected=${entry.domEl.isConnected} controllerCols=${entry.controllerCols ?? "none"}`
+            `domElConnected=${entry.domEl.isConnected} controllerCols=${entry.controllerCols ?? "none"} ` +
+            `proposed=${fitResult.proposedCols ?? "none"}x${fitResult.proposedRows ?? "none"} ` +
+            `actual=${fitResult.cols}x${fitResult.rows} mode=${fitResult.mode}`
         );
-        if (entry.controllerCols != null) {
-          // Viewer mode: lock to controller's cols, derive rows from container height
-          const dims = entry.fitAddon.proposeDimensions();
-          const rows = Math.max(1, dims?.rows ?? entry.term.rows);
-          entry.term.resize(entry.controllerCols, rows);
-          entry.domEl.style.width = "fit-content";
-          entry.domEl.style.marginLeft = "auto";
-          entry.domEl.style.marginRight = "auto";
-        } else {
-          entry.fitAddon.fit();
-        }
       } catch {
         // May throw if container has no dimensions yet — safe to ignore
       }
@@ -395,10 +441,9 @@ export const terminalRegistry = {
     entry.controllerCols = cols;
 
     // Compute rows from the current container height so the viewer fills vertically
-    const dims = entry.fitAddon.proposeDimensions();
-    const rows = dims?.rows ?? entry.term.rows;
     try {
-      entry.term.resize(cols, Math.max(1, rows));
+      const rows = Math.max(1, entry.fitAddon.proposeDimensions()?.rows ?? entry.term.rows);
+      entry.term.resize(cols, rows);
     } catch {
       // May throw if terminal isn't fully initialized yet — safe to ignore
     }
@@ -421,10 +466,23 @@ export const terminalRegistry = {
     entry.domEl.style.marginLeft = "";
     entry.domEl.style.marginRight = "";
     try {
-      entry.fitAddon.fit();
+      fitRegistryEntry(entry, "controller");
     } catch {
       // Ignore — terminal may not be visible
     }
+  },
+
+  fitSessionToContainer(
+    workflowId: string,
+    sessionId: string,
+    mode: "controller" | "viewer"
+  ): FitSessionResult | null {
+    const entry = registry.get(makeKey(workflowId, sessionId));
+    if (!entry) {
+      return null;
+    }
+
+    return fitRegistryEntry(entry, mode);
   },
 
   /**

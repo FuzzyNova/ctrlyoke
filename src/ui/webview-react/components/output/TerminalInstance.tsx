@@ -379,8 +379,13 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
             const isCtrl = sessNow?.isController;
             if (isCtrl !== false) {
               // Controller: fit to container, then report new dimensions to PTY
-              entry.fitAddon.fit();
-              const { cols, rows } = entry.term;
+              const fitResult = terminalRegistry.fitSessionToContainer(
+                workflowId,
+                sessionId,
+                "controller"
+              );
+              const cols = fitResult?.cols ?? entry.term.cols;
+              const rows = fitResult?.rows ?? entry.term.rows;
               sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
                 workflowId,
                 sessionId,
@@ -390,9 +395,11 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
             } else if (entry.controllerCols != null) {
               // Viewer: keep cols fixed at controller's width, let rows adapt to
               // the local container height so the terminal fills vertically.
-              const dims = entry.fitAddon.proposeDimensions();
-              const rows = Math.max(1, dims?.rows ?? entry.term.rows);
-              entry.term.resize(entry.controllerCols, rows);
+              terminalRegistry.fitSessionToContainer(
+                workflowId,
+                sessionId,
+                "viewer"
+              );
             }
           } catch {
             // Ignore — may fire before terminal is fully initialized
@@ -464,8 +471,13 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     if (wasViewer && !entry.frozen) {
       requestAnimationFrame(() => {
         try {
-          entry.fitAddon.fit();
-          const { cols, rows } = entry.term;
+          const fitResult = terminalRegistry.fitSessionToContainer(
+            workflowId,
+            sessionId,
+            "controller"
+          );
+          const cols = fitResult?.cols ?? entry.term.cols;
+          const rows = fitResult?.rows ?? entry.term.rows;
           sendMessage(MESSAGE_TYPES.TERMINAL_RESIZE, {
             workflowId,
             sessionId,
@@ -532,18 +544,20 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       }
 
       try {
-        if (activeEntry.controllerCols != null && isController === false) {
-          const dims = activeEntry.fitAddon.proposeDimensions();
-          const rows = Math.max(1, dims?.rows ?? activeEntry.term.rows);
-          activeEntry.term.resize(activeEntry.controllerCols, rows);
-        } else {
-          activeEntry.fitAddon.fit();
-        }
+        const fitResult = terminalRegistry.fitSessionToContainer(
+          workflowId,
+          sessionId,
+          activeEntry.controllerCols != null && isController === false
+            ? "viewer"
+            : "controller"
+        );
         activeEntry.term.refresh(0, Math.max(0, activeEntry.term.rows - 1));
         WebviewLog.debug(
           `[TerminalInstance] visible refresh ${phase} wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
             `containerSize=${activeContainer.offsetWidth}x${activeContainer.offsetHeight} ` +
-            `containerDisplay=${getComputedStyle(activeContainer).display} cols=${activeEntry.term.cols} rows=${activeEntry.term.rows}`
+            `containerDisplay=${getComputedStyle(activeContainer).display} ` +
+            `proposed=${fitResult?.proposedCols ?? "none"}x${fitResult?.proposedRows ?? "none"} ` +
+            `cols=${activeEntry.term.cols} rows=${activeEntry.term.rows}`
         );
       } catch (error) {
         WebviewLog.debug(
