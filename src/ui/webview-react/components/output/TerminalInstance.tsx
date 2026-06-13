@@ -52,6 +52,13 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   const controllerCols = session?.controllerCols;
 
   useEffect(() => {
+    WebviewLog.debug(
+      `[TerminalInstance] visibility wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+        `isVisible=${isVisible} isController=${isController} controllerCols=${controllerCols ?? "none"}`
+    );
+  }, [controllerCols, isController, isVisible, workflowId, sessionId]);
+
+  useEffect(() => {
     const previousIsController = previousIsControllerRef.current;
     if (previousIsController === null) {
       WebviewLog.debug(
@@ -501,6 +508,65 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     if (isController || controllerCols == null) return;
     terminalRegistry.applyControllerSize(workflowId, sessionId, controllerCols);
   }, [controllerCols, isController, workflowId, sessionId]);
+
+  useEffect(() => {
+    if (!isVisible) {
+      return;
+    }
+
+    const entry = terminalRegistry.get(workflowId, sessionId);
+    const container = containerRef.current;
+    if (!entry || !container) {
+      WebviewLog.debug(
+        `[TerminalInstance] visible refresh skipped wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+          `entryExists=${!!entry} containerConnected=${container?.isConnected ?? false}`
+      );
+      return;
+    }
+
+    const runVisibleRefresh = (phase: "raf1" | "raf2") => {
+      const activeEntry = terminalRegistry.get(workflowId, sessionId);
+      const activeContainer = containerRef.current;
+      if (!activeEntry || !activeContainer) {
+        return;
+      }
+
+      try {
+        if (activeEntry.controllerCols != null && isController === false) {
+          const dims = activeEntry.fitAddon.proposeDimensions();
+          const rows = Math.max(1, dims?.rows ?? activeEntry.term.rows);
+          activeEntry.term.resize(activeEntry.controllerCols, rows);
+        } else {
+          activeEntry.fitAddon.fit();
+        }
+        activeEntry.term.refresh(0, Math.max(0, activeEntry.term.rows - 1));
+        WebviewLog.debug(
+          `[TerminalInstance] visible refresh ${phase} wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+            `containerSize=${activeContainer.offsetWidth}x${activeContainer.offsetHeight} ` +
+            `containerDisplay=${getComputedStyle(activeContainer).display} cols=${activeEntry.term.cols} rows=${activeEntry.term.rows}`
+        );
+      } catch (error) {
+        WebviewLog.debug(
+          `[TerminalInstance] visible refresh ${phase} failed wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+            `${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    };
+
+    const raf1 = requestAnimationFrame(() => {
+      runVisibleRefresh("raf1");
+    });
+    const raf2 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        runVisibleRefresh("raf2");
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [controllerCols, isController, isVisible, workflowId, sessionId]);
 
   return (
     <div

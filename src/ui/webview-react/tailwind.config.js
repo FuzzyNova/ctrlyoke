@@ -29,6 +29,8 @@ module.exports = {
         foreground: "var(--vscode-foreground)",
         "panel-bg": "var(--vscode-panel-background)",
         "panel-border": "var(--vscode-panel-border)",
+        "panel-sticky-bg":
+          "var(--vscode-panelStickyScroll-background, var(--vscode-panel-background))",
         "sidebar-bg": "var(--vscode-sideBar-background)",
         "sidebar-drop-bg": "var(--vscode-sideBar-dropBackground)",
         "terminal-bg":
@@ -41,6 +43,8 @@ module.exports = {
         "focus-highlight":
           "var(--vscode-list-focusHighlightForeground, #2aaaff)",
         "widget-border": "var(--vscode-widget-border)",
+        "simple-find-sash-border":
+          "var(--vscode-simpleFindWidget-sashBorder, var(--vscode-widget-border))",
         "widget-highlight-fg":
           "var(--vscode-editorHoverWidget-highlightForeground)",
         "widget-highlight-fg-hover":
@@ -330,6 +334,26 @@ module.exports = {
           from: { transform: "translateY(0)" },
           to: { transform: "translateY(-100%)" },
         },
+        "output-find-enter": {
+          from: {
+            opacity: "0",
+            transform: "translateY(calc(-100% - 8px))",
+          },
+          to: {
+            opacity: "1",
+            transform: "translateY(0)",
+          },
+        },
+        "output-find-exit": {
+          from: {
+            opacity: "1",
+            transform: "translateY(0)",
+          },
+          to: {
+            opacity: "0",
+            transform: "translateY(calc(-100% - 8px))",
+          },
+        },
       },
 
       animation: {
@@ -347,6 +371,8 @@ module.exports = {
         "slide-out-sidebar": "slide-out-sidebar 0.22s ease-in both",
         "modal-enter": "modal-enter 0.25s ease-out forwards",
         "modal-exit": "modal-exit 0.22s ease-in forwards",
+        "output-find-enter": "output-find-enter 0.22s ease-out forwards",
+        "output-find-exit": "output-find-exit 0.18s ease-in forwards",
       },
 
       screens: {

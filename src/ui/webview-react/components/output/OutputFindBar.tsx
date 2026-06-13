@@ -1,6 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { OutputFindState } from "@hooks/useOutputFind";
+
+const EXIT_DURATION_MS = 180;
 
 interface OutputFindBarProps {
   state: OutputFindState;
@@ -20,13 +22,49 @@ export function OutputFindBar({
   onKeyDown,
 }: OutputFindBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [rendering, setRendering] = useState(state.isOpen);
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (exitTimerRef.current) {
+        clearTimeout(exitTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (state.isOpen) {
+      if (exitTimerRef.current) {
+        clearTimeout(exitTimerRef.current);
+        exitTimerRef.current = null;
+      }
+      setRendering(true);
+      setClosing(false);
       inputRef.current?.focus();
       inputRef.current?.select();
+      return;
     }
-  }, [state.isOpen]);
+
+    if (!rendering) {
+      return;
+    }
+
+    setClosing(true);
+    if (exitTimerRef.current) {
+      clearTimeout(exitTimerRef.current);
+    }
+    exitTimerRef.current = setTimeout(() => {
+      setRendering(false);
+      setClosing(false);
+      exitTimerRef.current = null;
+    }, EXIT_DURATION_MS);
+  }, [rendering, state.isOpen]);
+
+  if (!rendering) {
+    return null;
+  }
 
   const counterLabel =
     state.matchCount > 0
@@ -35,8 +73,11 @@ export function OutputFindBar({
 
   return (
     <div
-      className="absolute right-6 top-2 z-20 flex items-center gap-2 rounded border border-widget-border bg-editor-bg/95 px-2 py-1 shadow-md backdrop-blur-[1px]"
+      className={`absolute right-6 top-0 z-0 flex items-center gap-2 rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
+        closing ? "animate-output-find-exit" : "animate-output-find-enter"
+      }`}
       onKeyDown={onKeyDown}
+      aria-hidden={closing}
     >
       <input
         ref={inputRef}

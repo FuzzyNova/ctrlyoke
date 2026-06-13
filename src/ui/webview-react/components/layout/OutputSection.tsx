@@ -44,6 +44,7 @@ import {
   logProfilerEvent,
   shouldLogScrollFrame,
 } from "@utils/performanceProfiler";
+import { WebviewLog } from "@utils/logger";
 import {
   captureViewportRowAnchor,
   getResizeObserverEntryHeight,
@@ -1000,6 +1001,21 @@ const OutputSectionInner: React.FC = () => {
     (activeTerminalSession?.kind === SESSION_KINDS.AI_CLI &&
       !isExecutionActive);
 
+  useEffect(() => {
+    WebviewLog.debug(
+      `[OutputSection] terminal pane wf=${terminalWorkflowId.slice(0, 8)} activeTab=${activeOutputTab} ` +
+        `outputCollapsed=${outputCollapsed} terminalSessions=${terminalSessions.length} ` +
+        `activeSession=${activeTerminalSessionId?.slice(0, 8) ?? "none"} terminalActive=${terminalSessionActive}`
+    );
+  }, [
+    activeOutputTab,
+    activeTerminalSessionId,
+    outputCollapsed,
+    terminalSessionActive,
+    terminalSessions.length,
+    terminalWorkflowId,
+  ]);
+
   const handleCloseActiveTerminalSession = useCallback(() => {
     if (!activeTerminalSession) return;
 
@@ -1057,7 +1073,7 @@ const OutputSectionInner: React.FC = () => {
     }));
   }, [setFindState]);
 
-  const findBar = findState.isOpen ? (
+  const findBar = (
     <OutputFindBar
       state={findState}
       onQueryChange={handleFindQueryChange}
@@ -1066,7 +1082,7 @@ const OutputSectionInner: React.FC = () => {
       onClose={closeFind}
       onKeyDown={handleFindKeyDown}
     />
-  ) : null;
+  );
 
   const collapsedHeader = (
     <div
