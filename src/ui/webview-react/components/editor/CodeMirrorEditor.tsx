@@ -1748,9 +1748,7 @@ function openContextReferenceLink(
     const gitRef = target.getAttribute("data-git-ref");
     if (isStandalone) {
       // Browser: open the diff pane to this ref via the workspace viewer
-      void import("@store/workspaceViewerStore").then(({ useWorkspaceViewerStore }) => {
-        void useWorkspaceViewerStore.getState().openToGitRef(gitRef ?? "");
-      });
+      void useWorkspaceViewerStore.getState().openToGitRef(gitRef ?? "");
     } else {
       // VS Code: open the change in the native diff UI (multi-file commit viewer)
       vscode.postMessage({

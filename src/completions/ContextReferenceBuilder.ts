@@ -1,22 +1,9 @@
-import * as vscode from "vscode";
-
-function normalizeReferencePath(pathValue: string): string {
+export function normalizeReferencePath(pathValue: string): string {
   return pathValue.replace(/\\/g, "/");
 }
 
 export function quoteReferencePath(pathValue: string): string {
   return pathValue.includes(" ") ? `"${pathValue}"` : pathValue;
-}
-
-export function toWorkspaceRelativeReferencePath(
-  uri: vscode.Uri
-): string | null {
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-  if (!workspaceFolder) {
-    return null;
-  }
-
-  return normalizeReferencePath(vscode.workspace.asRelativePath(uri, false));
 }
 
 export function buildFileReferenceValue(relativePath: string): string {

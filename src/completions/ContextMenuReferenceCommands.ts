@@ -5,8 +5,8 @@ import {
   buildGitReference,
   buildSelectionReference,
   buildSymbolReference,
-  toWorkspaceRelativeReferencePath,
 } from "./ContextReferenceBuilder";
+import { toWorkspaceRelativeReferencePath } from "./WorkspaceReferencePaths";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { PROMPT_EDITOR_INSERT_MODES } from "../types/DashboardConstants";
 import type { PromptEditorInsertRequest } from "../types/WebviewMessageTypes";

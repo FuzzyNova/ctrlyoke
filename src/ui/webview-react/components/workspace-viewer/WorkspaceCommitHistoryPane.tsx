@@ -2,6 +2,7 @@ import React, { useCallback } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { useCommitHistoryContextMenu } from "@hooks/useCommitHistoryContextMenu";
+import { workspaceCheckoutBranch } from "@utils/hostedApi";
 
 interface WorkspaceCommitHistoryPaneProps {
   onLoadMore: () => void;
@@ -45,7 +46,6 @@ export const WorkspaceCommitHistoryPane: React.FC<
     const branch = previousBranch ?? currentBranch;
     if (!branch) return;
     try {
-      const { workspaceCheckoutBranch } = await import("@utils/hostedApi");
       await workspaceCheckoutBranch({ branch });
       setPreviousBranch(null);
       onRefresh();
