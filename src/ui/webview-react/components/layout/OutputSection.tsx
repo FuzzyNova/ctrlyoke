@@ -261,6 +261,10 @@ const OutputSectionInner: React.FC = () => {
   // Tracks the row count at the last auto-scroll so we can distinguish "new
   // rows arrived" (scroll) from "same rows re-rendered" (don't scroll).
   const lastAutoScrollRowCountRef = useRef(0);
+  // Collapse hides the output pane with display:none, which reports a transient
+  // width of 0. Suppress width/scroll bookkeeping during that transition so we
+  // do not re-anchor the viewport against a disappearing pane.
+  const suppressOutputLayoutWorkRef = useRef(outputCollapsed);
   // Suppresses TanStack Virtual's internal scroll corrections for 1 s after navigation
   // completes. Without this, new rows entering the virtual window post-navigation
   // repeatedly trigger corrections that oscillate the scroll position.
@@ -508,10 +512,19 @@ const OutputSectionInner: React.FC = () => {
   });
 
   useEffect(() => {
+    if (!outputCollapsed) {
+      suppressOutputLayoutWorkRef.current = false;
+    }
+  }, [outputCollapsed]);
+
+  useEffect(() => {
     const el = outputRef.current;
-    if (!el) return;
+    if (!el || outputCollapsed) return;
 
     const updateDiffViewType = () => {
+      if (suppressOutputLayoutWorkRef.current) {
+        return;
+      }
       const width = el.getBoundingClientRect().width;
       const widthChanged =
         outputContentWidth > 0 && Math.abs(outputContentWidth - width) >= 0.5;
@@ -575,6 +588,9 @@ const OutputSectionInner: React.FC = () => {
   const handleScroll = useCallback(() => {
     const el = outputRef.current;
     if (!el) return;
+    if (suppressOutputLayoutWorkRef.current) {
+      return;
+    }
     if (isProgrammaticScroll.current) {
       // Still update autoscrollEnabled so a user wheel mid-programmatic-scroll
       // correctly disables auto-scroll. Without this, the flag stays true and
@@ -786,7 +802,12 @@ const OutputSectionInner: React.FC = () => {
     const prevRowCount = lastAutoScrollRowCountRef.current;
     lastAutoScrollRowCountRef.current = rows.length;
 
-    if (!autoscrollEnabled.current || !outputRef.current || rows.length === 0) {
+    if (
+      suppressOutputLayoutWorkRef.current ||
+      !autoscrollEnabled.current ||
+      !outputRef.current ||
+      rows.length === 0
+    ) {
       return;
     }
 
@@ -968,9 +989,10 @@ const OutputSectionInner: React.FC = () => {
   );
 
   const handleToggleOutputCollapse = useCallback(() => {
+    suppressOutputLayoutWorkRef.current = !outputCollapsed;
     triggerPanelAnimation();
     toggleOutputCollapse();
-  }, [toggleOutputCollapse]);
+  }, [outputCollapsed, toggleOutputCollapse]);
 
   const handleSelectOutputTab = useCallback(() => {
     setActiveOutputTab(terminalWorkflowId, "output");

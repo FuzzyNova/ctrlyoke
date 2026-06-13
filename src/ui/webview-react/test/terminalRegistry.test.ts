@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+let proposedDimensionsQueue: Array<{ cols: number; rows: number } | undefined> =
+  [];
+
 vi.mock("@xterm/xterm", () => {
   class MockTerminal {
     element: HTMLElement | undefined;
@@ -26,6 +29,8 @@ vi.mock("@xterm/xterm", () => {
 
     scrollLines() {}
 
+    refresh() {}
+
     onData() {
       return { dispose() {} };
     }
@@ -41,7 +46,9 @@ vi.mock("@xterm/addon-fit", () => {
     fit() {}
 
     proposeDimensions() {
-      return { cols: 80, rows: 24 };
+      return proposedDimensionsQueue.length > 0
+        ? proposedDimensionsQueue.shift()
+        : { cols: 80, rows: 24 };
     }
   }
 
@@ -51,6 +58,8 @@ vi.mock("@xterm/addon-fit", () => {
 describe("terminalRegistry.attach", () => {
   afterEach(() => {
     vi.resetModules();
+    vi.unstubAllGlobals();
+    proposedDimensionsQueue = [];
     document.body.innerHTML = "";
   });
 
@@ -91,5 +100,58 @@ describe("terminalRegistry.attach", () => {
     expect(container.contains(entry.domEl)).toBe(true);
 
     resolveWebglImport?.();
+  });
+
+  it("retries connected refits until dimensions become measurable again", async () => {
+    const rafCallbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((callback: FrameRequestCallback) => {
+        rafCallbacks.push(callback);
+        return rafCallbacks.length;
+      })
+    );
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+    vi.doMock("@xterm/addon-webgl", () => {
+      return new Promise(() => {});
+    });
+
+    proposedDimensionsQueue = [
+      { cols: 153, rows: 15 },
+      undefined,
+      { cols: 153, rows: 15 },
+    ];
+
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const workflowId = "wf-webgl";
+    const sessionId = "sess-webgl";
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const entry = await terminalRegistry.create(workflowId, sessionId);
+    await terminalRegistry.attach(workflowId, sessionId, container);
+
+    rafCallbacks.shift()?.(performance.now());
+    expect(entry.term.cols).toBe(153);
+    expect(entry.term.rows).toBe(15);
+
+    entry.term.resize(80, 24);
+    expect(
+      terminalRegistry.scheduleFitSessionToContainer(
+        workflowId,
+        sessionId,
+        "test-recovery"
+      )
+    ).toBe(true);
+
+    rafCallbacks.shift()?.(performance.now());
+    expect(entry.term.cols).toBe(80);
+    expect(entry.term.rows).toBe(24);
+
+    expect(rafCallbacks.length).toBeGreaterThan(0);
+    rafCallbacks.shift()?.(performance.now());
+    expect(entry.term.cols).toBe(153);
+    expect(entry.term.rows).toBe(15);
   });
 });

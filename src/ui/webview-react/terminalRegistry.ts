@@ -159,6 +159,66 @@ function fitRegistryEntry(
   };
 }
 
+function getFitMode(entry: RegistryEntry): "controller" | "viewer" {
+  return entry.controllerCols != null ? "viewer" : "controller";
+}
+
+function refreshRegistryEntry(entry: RegistryEntry): void {
+  entry.term.refresh(0, Math.max(0, entry.term.rows - 1));
+}
+
+function scheduleConnectedFit(
+  entry: RegistryEntry,
+  reason: string,
+  maxAttempts = 6
+): void {
+  let attempt = 0;
+
+  const run = () => {
+    attempt += 1;
+
+    if (!entry.domEl.isConnected) {
+      WebviewLog.debug(
+        `[terminalRegistry.fitRecovery] reason=${reason} attempt=${attempt} skipped domElConnected=false`
+      );
+      return;
+    }
+
+    try {
+      const container = entry.domEl.parentElement;
+      const fitResult = fitRegistryEntry(entry, getFitMode(entry));
+      refreshRegistryEntry(entry);
+      const hasProposedDimensions =
+        fitResult.proposedCols != null && fitResult.proposedRows != null;
+
+      WebviewLog.debug(
+        `[terminalRegistry.fitRecovery] reason=${reason} attempt=${attempt} ` +
+          `containerSize=${container?.offsetWidth ?? "none"}x${container?.offsetHeight ?? "none"} ` +
+          `containerDisplay=${container ? getComputedStyle(container).display : "none"} ` +
+          `controllerCols=${entry.controllerCols ?? "none"} ` +
+          `proposed=${fitResult.proposedCols ?? "none"}x${fitResult.proposedRows ?? "none"} ` +
+          `actual=${fitResult.cols}x${fitResult.rows} mode=${fitResult.mode}`
+      );
+
+      if (hasProposedDimensions || attempt >= maxAttempts) {
+        return;
+      }
+    } catch (error) {
+      WebviewLog.debug(
+        `[terminalRegistry.fitRecovery] reason=${reason} attempt=${attempt} failed ` +
+          `${error instanceof Error ? error.message : String(error)}`
+      );
+      if (attempt >= maxAttempts) {
+        return;
+      }
+    }
+
+    requestAnimationFrame(run);
+  };
+
+  requestAnimationFrame(run);
+}
+
 function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
   if (entry.webglAddonLoadPromise) {
     return entry.webglAddonLoadPromise;
@@ -175,6 +235,7 @@ function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
         webgl.dispose();
       });
       entry.term.loadAddon(webgl);
+      scheduleConnectedFit(entry, "webgl-loaded");
     } catch {
       // WebGL unavailable at startup — xterm uses its built-in renderer.
     }
@@ -310,10 +371,7 @@ export const terminalRegistry = {
       try {
         const containerSize = `${container.offsetWidth}x${container.offsetHeight}`;
         const containerDisplay = getComputedStyle(container).display;
-        const fitResult = fitRegistryEntry(
-          entry,
-          entry.controllerCols != null ? "viewer" : "controller"
-        );
+        const fitResult = fitRegistryEntry(entry, getFitMode(entry));
         WebviewLog.debug(
           `[terminalRegistry.attach] rAF resize — container display=${containerDisplay} size=${containerSize} ` +
             `domElConnected=${entry.domEl.isConnected} controllerCols=${entry.controllerCols ?? "none"} ` +
@@ -483,6 +541,21 @@ export const terminalRegistry = {
     }
 
     return fitRegistryEntry(entry, mode);
+  },
+
+  scheduleFitSessionToContainer(
+    workflowId: string,
+    sessionId: string,
+    reason: string,
+    maxAttempts?: number
+  ): boolean {
+    const entry = registry.get(makeKey(workflowId, sessionId));
+    if (!entry) {
+      return false;
+    }
+
+    scheduleConnectedFit(entry, reason, maxAttempts);
+    return true;
   },
 
   /**
