@@ -1746,8 +1746,12 @@ function openContextReferenceLink(
 
   if (type === "git") {
     const gitRef = target.getAttribute("data-git-ref");
+    // VS Code: open the change in the native diff UI (multi-file commit viewer).
+    // Browser: there is no native editor, so show the rendered preview modal.
     vscode.postMessage({
-      type: MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW,
+      type: isStandalone
+        ? MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW
+        : MESSAGE_TYPES.OPEN_GIT_CHANGE,
       ref: gitRef,
     });
     return true;

@@ -17,6 +17,7 @@ import {
   MODEL_OPTION_VALUES,
   PANEL_CLIENT_ID,
   VSCODE_COMMANDS,
+  VSCODE_GIT_COMMANDS,
   type QueuePosition,
 } from "./types/DashboardConstants";
 import {
@@ -839,51 +840,81 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Open Git Change command — opens a git diff (diff/staged/stash:N/<hash>) in a new untitled editor
+  // Open Git Change command — opens a git change (diff/staged/stash:N/<hash>) in
+  // VS Code's native diff UI: the multi-file commit viewer for a hash, the changes
+  // views for working-tree/staged. Stashes (no native per-index command) and any
+  // failure (e.g. Git extension disabled) fall back to a generated diff document.
   const openGitChangeCommand = vscode.commands.registerCommand(
     "flightpath.openGitChange",
     async (args: { ref: string; workspaceRoot?: string }) => {
-      try {
-        const workspaceRoot =
-          args.workspaceRoot ??
-          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        if (!workspaceRoot) {
-          vscode.window.showErrorMessage(
-            "FlightPath: No workspace folder open."
-          );
-          return;
-        }
+      const workspaceRoot =
+        args.workspaceRoot ??
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        vscode.window.showErrorMessage("FlightPath: No workspace folder open.");
+        return;
+      }
 
+      const repoUri = vscode.Uri.file(workspaceRoot);
+      const ref = args.ref.toLowerCase();
+      const stashIndex = ref.startsWith(`${GIT_CHANGE_KINDS.STASH}:`)
+        ? parseInt(ref.slice(GIT_CHANGE_KINDS.STASH.length + 1), 10)
+        : null;
+
+      // Fallback: render the unified diff text in an untitled `diff` document.
+      const openGeneratedDiff = async (): Promise<void> => {
         let content: string;
-        const ref = args.ref.toLowerCase();
-
         if (ref === GIT_CHANGE_KINDS.DIFF) {
-          content = await getWorkingTreeDiff(workspaceRoot);
-          if (!content.trim()) {
-            content = "No uncommitted changes in working tree.";
-          }
+          content =
+            (await getWorkingTreeDiff(workspaceRoot)).trim() ||
+            "No uncommitted changes in working tree.";
         } else if (ref === GIT_CHANGE_KINDS.STAGED) {
-          content = await getStagedDiff(workspaceRoot);
-          if (!content.trim()) {
-            content = "No staged changes.";
-          }
-        } else if (ref.startsWith(`${GIT_CHANGE_KINDS.STASH}:`)) {
-          const index = parseInt(ref.slice(6), 10);
-          content = await getStashDiff(workspaceRoot, index);
+          content = (await getStagedDiff(workspaceRoot)).trim() || "No staged changes.";
+        } else if (stashIndex !== null) {
+          content = await getStashDiff(workspaceRoot, stashIndex);
         } else {
-          // Treat as commit hash
           content = await getCommitDiff(workspaceRoot, args.ref);
         }
-
         const doc = await vscode.workspace.openTextDocument({
           content,
           language: "diff",
         });
         await vscode.window.showTextDocument(doc, { preview: true });
+      };
+
+      try {
+        if (ref === GIT_CHANGE_KINDS.DIFF) {
+          await vscode.commands.executeCommand(
+            VSCODE_GIT_COMMANDS.VIEW_CHANGES,
+            repoUri
+          );
+        } else if (ref === GIT_CHANGE_KINDS.STAGED) {
+          await vscode.commands.executeCommand(
+            VSCODE_GIT_COMMANDS.VIEW_STAGED_CHANGES,
+            repoUri
+          );
+        } else if (stashIndex !== null) {
+          // No built-in command opens a specific stash by index — show its diff.
+          await openGeneratedDiff();
+        } else {
+          // Commit hash → native multi-file commit viewer. `git.viewCommit`
+          // resolves its first arg to a repository, then opens the commit.
+          await vscode.commands.executeCommand(
+            VSCODE_GIT_COMMANDS.VIEW_COMMIT,
+            repoUri,
+            args.ref
+          );
+        }
       } catch (error) {
-        vscode.window.showErrorMessage(
-          `FlightPath: Failed to open git change: ${getErrorMessage(error)}`
-        );
+        // Native command unavailable (older VS Code / Git extension disabled) —
+        // fall back to the generated diff document.
+        try {
+          await openGeneratedDiff();
+        } catch (fallbackError) {
+          vscode.window.showErrorMessage(
+            `FlightPath: Failed to open git change: ${getErrorMessage(fallbackError)}`
+          );
+        }
       }
     }
   );

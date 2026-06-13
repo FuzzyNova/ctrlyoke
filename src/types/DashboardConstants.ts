@@ -1328,6 +1328,16 @@ export const VSCODE_COMMANDS = {
   CANCEL_COMMIT_MESSAGE_GENERATION: "flightpath.cancelCommitMessageGeneration",
 } as const;
 
+// Built-in VS Code Git extension command IDs that FlightPath invokes to open
+// native diff UI (verified against the vscode.git extension command surface).
+// `git.viewCommit` resolves its first arg to a repository, so invoke it as
+// executeCommand(VIEW_COMMIT, Uri.file(workspaceRoot), commitHash).
+export const VSCODE_GIT_COMMANDS = {
+  VIEW_COMMIT: "git.viewCommit", // commit's multi-file diff in the native viewer
+  VIEW_CHANGES: "git.viewChanges", // working-tree changes
+  VIEW_STAGED_CHANGES: "git.viewStagedChanges", // staged changes
+} as const;
+
 // VS Code context keys set by the extension (used in package.json `when` clauses)
 export const VSCODE_CONTEXT_KEYS = {
   GENERATING_COMMIT_MESSAGE: "flightpath.generatingCommitMessage",
