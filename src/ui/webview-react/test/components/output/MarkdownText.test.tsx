@@ -101,6 +101,20 @@ describe("MarkdownText", () => {
     expect(container.querySelector(".markdown-text")).toBeTruthy();
   });
 
+  it("injects VS Code find-match theme styles for markdown marks", () => {
+    render(
+      <MarkdownText highlightQuery="alpha">
+        alpha beta alpha
+      </MarkdownText>
+    );
+
+    const style = document.getElementById("fp-find-highlight");
+    expect(style?.textContent).toContain("--vscode-editor-findMatchBackground");
+    expect(style?.textContent).toContain(
+      "--vscode-editor-findMatchHighlightBackground"
+    );
+  });
+
   it("highlights all occurrences of the find query", () => {
     const { container } = render(
       <MarkdownText highlightQuery="alpha">

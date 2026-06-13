@@ -60,6 +60,8 @@ export interface OutputRowSearchSegment {
   end: number;
 }
 
+export const OUTPUT_FIND_ACTIVE_ATTRIBUTE = "data-find-active";
+
 export function getToolResultText(result: ToolResult | undefined): string {
   if (!result) {
     return "";
@@ -323,11 +325,11 @@ export function highlightText(
         "mark",
         {
           key: `mark-${index}-${match.start}`,
-          "data-find-active": match.active ? "true" : undefined,
+          [OUTPUT_FIND_ACTIVE_ATTRIBUTE]: match.active ? "true" : undefined,
           className: `rounded px-0.5 ${
             match.active
-              ? "bg-badge-bg text-foreground ring-1 ring-focus-border"
-              : "bg-badge-bg/70 text-foreground"
+              ? "bg-find-match text-foreground ring-1 ring-find-match-border"
+              : "bg-find-match-highlight text-foreground"
           }`,
         },
         text.slice(match.start, match.end)

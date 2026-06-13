@@ -49,6 +49,12 @@ module.exports = {
           "var(--vscode-editorHoverWidget-highlightForeground)",
         "widget-highlight-fg-hover":
           "color-mix(in srgb, var(--vscode-editorHoverWidget-highlightForeground) 65%, white)",
+        "find-match":
+          "var(--vscode-editor-findMatchBackground, rgba(39, 103, 130, 0.56))",
+        "find-match-highlight":
+          "var(--vscode-editor-findMatchHighlightBackground, rgba(39, 103, 130, 0.5))",
+        "find-match-border":
+          "var(--vscode-editor-findMatchBorder, var(--vscode-focusBorder, transparent))",
 
         // Buttons
         "btn-bg": "var(--vscode-button-background)",

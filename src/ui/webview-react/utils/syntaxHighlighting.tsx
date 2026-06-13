@@ -25,6 +25,7 @@ import refractorToml from "refractor/toml";
 import refractorTsx from "refractor/tsx";
 import refractorTypescript from "refractor/typescript";
 import refractorYaml from "refractor/yaml";
+import { OUTPUT_FIND_ACTIVE_ATTRIBUTE } from "@utils/outputFind";
 
 const REGISTERED_SYNTAXES = [
   refractorTypescript,
@@ -288,21 +289,20 @@ const SYNTAX_TOKEN_STYLES = `
 }
 `;
 
-// Mirrors the "all other finds" / "current find" styling that highlightText()
-// applies to plain-text rows (bg-badge-bg/70 vs. bg-badge-bg + ring-focus-border)
-// so markdown <mark> highlights match plain-text highlights instead of using
-// the unrelated --vscode-editor-findMatch* (orange/yellow) palette.
+// Mirrors the shared "find in output" styling that highlightText() applies to
+// plain-text rows so markdown and non-markdown rows use the same VS Code
+// editor.findMatch palette.
 const FIND_HIGHLIGHT_STYLES = `
 .markdown-text mark {
-  background-color: color-mix(in srgb, var(--vscode-badge-background, #4d4d4d) 70%, transparent);
+  background-color: var(--vscode-editor-findMatchHighlightBackground, rgba(39, 103, 130, 0.5));
   color: var(--vscode-foreground, inherit);
   border-radius: 2px;
   padding: 0 1px;
 }
 
-.markdown-text mark[data-find-active="true"] {
-  background-color: var(--vscode-badge-background, #4d4d4d);
-  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+.markdown-text mark[${OUTPUT_FIND_ACTIVE_ATTRIBUTE}="true"] {
+  background-color: var(--vscode-editor-findMatchBackground, rgba(39, 103, 130, 0.56));
+  outline: 1px solid var(--vscode-editor-findMatchBorder, var(--vscode-focusBorder, transparent));
 }
 `;
 

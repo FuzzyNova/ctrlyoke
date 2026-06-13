@@ -248,6 +248,7 @@ describe("outputFind", () => {
 
       const mark = screen.getByText("me");
       expect(mark.tagName).toBe("MARK");
+      expect(mark).toHaveClass("bg-find-match-highlight");
     });
 
     it("marks the active match with data-find-active", () => {
@@ -258,6 +259,10 @@ describe("outputFind", () => {
       );
 
       expect(screen.getByText("me")).toHaveAttribute("data-find-active", "true");
+      expect(screen.getByText("me")).toHaveClass(
+        "bg-find-match",
+        "ring-find-match-border"
+      );
     });
   });
 });
