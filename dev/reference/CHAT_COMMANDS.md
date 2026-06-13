@@ -1,12 +1,11 @@
 # Available Chat Commands
 
-**Generated:** 2026-04-12T19:52:14.339Z  
-**Total Commands:** 399
+**Generated:** 2026-06-13T20:12:53.353Z  
+**Total Commands:** 409
 
 ---
 
-- `agentSessions.filter.toggleExclude:copilot-cloud-agent.agentsessionsviewerfiltersubmenu`
-- `agentSessions.filter.toggleExclude:copilotcli.agentsessionsviewerfiltersubmenu`
+- `agents.github.copilot.cli.deleteSessions`
 - `chat.installRecommendation.github.copilot-chat.cli`
 - `chat.installRecommendation.github.copilot-chat.cloud`
 - `copilot-chat.focus`
@@ -24,6 +23,7 @@
 - `github.copilot.chat.attachSelection`
 - `github.copilot.chat.checkoutPullRequestReroute`
 - `github.copilot.chat.cloudSessions.clearCaches`
+- `github.copilot.chat.cloudSessions.createPullRequestForTask`
 - `github.copilot.chat.cloudSessions.openRepository`
 - `github.copilot.chat.codeReview.run`
 - `github.copilot.chat.compact`
@@ -36,7 +36,6 @@
 - `github.copilot.chat.copilotCLI.rejectDiff`
 - `github.copilot.chat.createDraftPullRequestCopilotCLIAgentSession.createDraftPR`
 - `github.copilot.chat.createPullRequestCopilotCLIAgentSession.createPR`
-- `github.copilot.chat.createPullRequestCopilotCLIAgentSession.updatePR`
 - `github.copilot.chat.debug.exportAllPromptLogsAsJson`
 - `github.copilot.chat.debug.exportLogItem`
 - `github.copilot.chat.debug.exportPromptArchive`
@@ -64,12 +63,12 @@
 - `github.copilot.chat.notebook.disableFollowCellExecution`
 - `github.copilot.chat.notebook.enableFollowCellExecution`
 - `github.copilot.chat.openModelPicker`
-- `github.copilot.chat.openPullRequestCopilotCLIAgentSession.openPR`
 - `github.copilot.chat.openPullRequestReroute`
 - `github.copilot.chat.openSuggestionsPanel`
 - `github.copilot.chat.openUserPreferences`
 - `github.copilot.chat.otel.exportAgentTracesDB`
 - `github.copilot.chat.otel.flush`
+- `github.copilot.chat.otel.openSettings`
 - `github.copilot.chat.rerunWithCopilotDebug`
 - `github.copilot.chat.review`
 - `github.copilot.chat.review.apply`
@@ -95,10 +94,15 @@
 - `github.copilot.chat.startCopilotDebugCommand`
 - `github.copilot.chat.toggleStatusMenu`
 - `github.copilot.chat.tools.memory.clearMemories`
+- `github.copilot.chat.tools.memory.resolveMemoryFileUri`
 - `github.copilot.chat.tools.memory.showMemories`
 - `github.copilot.chat.triggerPermissiveSignIn`
-- `github.copilot.chat.updateCopilotCLIAgentSessionChanges.update`
+- `github.copilot.chronicle.reindex`
+- `github.copilot.claude.sessions.commit`
+- `github.copilot.claude.sessions.commitAndSync`
+- `github.copilot.claude.sessions.initializeRepository`
 - `github.copilot.claude.sessions.rename`
+- `github.copilot.claude.sessions.sync`
 - `github.copilot.cli.newSession`
 - `github.copilot.cli.newSessionToSide`
 - `github.copilot.cli.openInCopilotCLI`
@@ -135,7 +139,6 @@
 - `github.copilot.debug.resetVirtualToolGroups`
 - `github.copilot.debug.showChatLogView`
 - `github.copilot.debug.showContextInspectorView`
-- `github.copilot.debug.showNodeSystemCertificatesErrors`
 - `github.copilot.debug.showOutputChannel`
 - `github.copilot.debug.showOutputChannel.internal`
 - `github.copilot.debug.togglePowerSaveBlocker`
@@ -143,6 +146,7 @@
 - `github.copilot.debug.workbenchState`
 - `github.copilot.deleteExternalIngestWorkspaceIndex`
 - `github.copilot.devcontainer.generateDevContainerConfig`
+- `github.copilot.enableExternalIngest`
 - `github.copilot.executeSearch`
 - `github.copilot.generate`
 - `github.copilot.git.generateCommitMessage`
@@ -167,6 +171,10 @@
 - `github.copilot.search.feedback`
 - `github.copilot.search.markHelpful`
 - `github.copilot.search.markUnhelpful`
+- `github.copilot.sessionSync.deleteSessionFromCloud`
+- `github.copilot.sessionSync.deleteSessions`
+- `github.copilot.sessionSync.reindex`
+- `github.copilot.sessionSync.suggest`
 - `github.copilot.sessions.commit`
 - `github.copilot.sessions.commitAndSync`
 - `github.copilot.sessions.discardChanges`
@@ -187,6 +195,8 @@
 - `workbench.action.chat.acceptTool`
 - `workbench.action.chat.addDynamicVariable`
 - `workbench.action.chat.addToChatAction`
+- `workbench.action.chat.agentHost.otel.exportAgentTracesDB`
+- `workbench.action.chat.agentsHandoffTip.open`
 - `workbench.action.chat.applyCompareEdits`
 - `workbench.action.chat.applyInEditor`
 - `workbench.action.chat.archiveAllAgentSessions`
@@ -217,20 +227,24 @@
 - `workbench.action.chat.copyKatexMathSource`
 - `workbench.action.chat.copyLink`
 - `workbench.action.chat.createPlugin`
+- `workbench.action.chat.debugAgentHostInDevTools`
 - `workbench.action.chat.disableTips`
 - `workbench.action.chat.discardCompareEdits`
 - `workbench.action.chat.dismissTip`
 - `workbench.action.chat.dismissTipToolbar`
+- `workbench.action.chat.editPendingRequest`
 - `workbench.action.chat.editRequests`
 - `workbench.action.chat.editToolApproval`
 - `workbench.action.chat.executeHandoff`
 - `workbench.action.chat.export`
 - `workbench.action.chat.exportAgentDebugLog`
+- `workbench.action.chat.exportAgentHostDebugLogs`
 - `workbench.action.chat.exportAsZip`
 - `workbench.action.chat.focusAgentSessionsViewer`
 - `workbench.action.chat.focusConfirmation`
 - `workbench.action.chat.focusInput`
 - `workbench.action.chat.focusQuestionCarousel`
+- `workbench.action.chat.focusQuestionCarouselTerminal`
 - `workbench.action.chat.focusTip`
 - `workbench.action.chat.focusTodosView`
 - `workbench.action.chat.forkConversation`
@@ -253,14 +267,15 @@
 - `workbench.action.chat.insertIntoNotebook`
 - `workbench.action.chat.insertSearchResults`
 - `workbench.action.chat.insertTroubleshootCommand`
+- `workbench.action.chat.inspectAgentHostSubscriptions`
 - `workbench.action.chat.inspectChatModel`
 - `workbench.action.chat.inspectChatModelReferences`
 - `workbench.action.chat.installPluginFromSource`
 - `workbench.action.chat.logChatIndex`
 - `workbench.action.chat.logInputHistory`
 - `workbench.action.chat.manage`
+- `workbench.action.chat.manageAdditionalSpend`
 - `workbench.action.chat.manageLanguageModelAuthentication`
-- `workbench.action.chat.manageOverages`
 - `workbench.action.chat.managePluginMarketplaces`
 - `workbench.action.chat.managePlugins`
 - `workbench.action.chat.manageSettings`
@@ -281,8 +296,11 @@
 - `workbench.action.chat.open`
 - `workbench.action.chat.openAgentDebugPanel`
 - `workbench.action.chat.openAgentDebugPanelForSession`
-- `workbench.action.chat.openAsk`
+- `workbench.action.chat.openAgentHostAutoApprovePicker`
+- `workbench.action.chat.openAgentHostModePicker`
+- `workbench.action.chat.openAgentHostPermissionModePicker`
 - `workbench.action.chat.openCompareBlockInDiffEditor`
+- `workbench.action.chat.openCopilotCliStateFile`
 - `workbench.action.chat.openDelegationPicker`
 - `workbench.action.chat.openFeatureSettings`
 - `workbench.action.chat.openImageInCarousel`
@@ -291,22 +309,22 @@
 - `workbench.action.chat.openInSidebar`
 - `workbench.action.chat.openModePicker`
 - `workbench.action.chat.openModelPicker`
-- `workbench.action.chat.openNewChatSessionInPlace.agent-host-copilot`
 - `workbench.action.chat.openNewChatSessionInPlace.claude-code`
 - `workbench.action.chat.openNewChatSessionInPlace.copilot-cloud-agent`
 - `workbench.action.chat.openNewChatSessionInPlace.copilotcli`
 - `workbench.action.chat.openNewChatSessionInPlace.local`
 - `workbench.action.chat.openNewChatSessionInPlace.openai-codex`
+- `workbench.action.chat.openNewSessionEditor.agent-host-copilotcli`
 - `workbench.action.chat.openNewSessionEditor.claude-code`
 - `workbench.action.chat.openNewSessionEditor.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionEditor.copilotcli`
+- `workbench.action.chat.openNewSessionSidebar.agent-host-copilotcli`
 - `workbench.action.chat.openNewSessionSidebar.claude-code`
 - `workbench.action.chat.openNewSessionSidebar.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionSidebar.copilotcli`
 - `workbench.action.chat.openPermissionPicker`
-- `workbench.action.chat.openPlan`
 - `workbench.action.chat.openQuotaExceededDialog`
-- `workbench.action.chat.openSenior Developer`
+- `workbench.action.chat.openSessionInAgentsWindow`
 - `workbench.action.chat.openSessionInEditorGroup`
 - `workbench.action.chat.openSessionInNewEditorGroup`
 - `workbench.action.chat.openSessionInNewWindow`
@@ -318,17 +336,7 @@
 - `workbench.action.chat.openWorkspacePicker`
 - `workbench.action.chat.openagent`
 - `workbench.action.chat.openask`
-- `workbench.action.chat.opencode-reviewer`
-- `workbench.action.chat.opencopilot-beast`
-- `workbench.action.chat.opencopilot-prompt`
-- `workbench.action.chat.opendeep-research`
 - `workbench.action.chat.openedit`
-- `workbench.action.chat.openflightpath-orchestrator`
-- `workbench.action.chat.opentest-agent`
-- `workbench.action.chat.opentest-agent-alpha`
-- `workbench.action.chat.opentest-agent-beta`
-- `workbench.action.chat.opentest-agent-user`
-- `workbench.action.chat.pickAgentSession`
 - `workbench.action.chat.picker.customagents`
 - `workbench.action.chat.picker.customagents.disabled`
 - `workbench.action.chat.previousCodeBlock`
@@ -346,6 +354,7 @@
 - `workbench.action.chat.reportIssueForBug`
 - `workbench.action.chat.resetDismissedTips`
 - `workbench.action.chat.resetGrowthSession`
+- `workbench.action.chat.resetPermissionWarningDialogs`
 - `workbench.action.chat.resetTrustedTools`
 - `workbench.action.chat.restoreCheckpoint`
 - `workbench.action.chat.restoreLastCheckpoint`
@@ -378,6 +387,7 @@
 - `workbench.action.chat.submitWithCodebase`
 - `workbench.action.chat.submitWithoutDispatching`
 - `workbench.action.chat.switchToNextModel`
+- `workbench.action.chat.switchToNextPinnedModel`
 - `workbench.action.chat.toggle`
 - `workbench.action.chat.toggleAgentMode`
 - `workbench.action.chat.toggleCompareBlockDiffViewMode`

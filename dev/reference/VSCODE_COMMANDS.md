@@ -1,7 +1,7 @@
 # All Available VS Code Commands
 
-**Generated:** 2026-05-29T19:32:19.398Z  
-**Total Commands:** 3891
+**Generated:** 2026-06-13T20:13:04.940Z  
+**Total Commands:** 3924
 
 ---
 
@@ -172,7 +172,7 @@
 - `cancelLinkedEditingInput`
 - `cancelRenameInput`
 - `cancelSelection`
-- `changeEditorIndentation2`
+- `changeEditorIndentation5`
 - `chat.action.focus`
 - `chat.configureToolSets`
 - `chat.enableAdditionalUsage`
@@ -972,6 +972,7 @@
 - `flightpath.resumeSession`
 - `flightpath.run`
 - `flightpath.runFromContext`
+- `flightpath.searchHistory`
 - `flightpath.selectPromptFile`
 - `flightpath.showLanguageId`
 - `flightpath.showOutputPanel`
@@ -1181,6 +1182,7 @@
 - `github.copilot.chat.attachSelection`
 - `github.copilot.chat.checkoutPullRequestReroute`
 - `github.copilot.chat.cloudSessions.clearCaches`
+- `github.copilot.chat.cloudSessions.createPullRequestForTask`
 - `github.copilot.chat.cloudSessions.openRepository`
 - `github.copilot.chat.codeReview.run`
 - `github.copilot.chat.compact`
@@ -1225,6 +1227,7 @@
 - `github.copilot.chat.openUserPreferences`
 - `github.copilot.chat.otel.exportAgentTracesDB`
 - `github.copilot.chat.otel.flush`
+- `github.copilot.chat.otel.openSettings`
 - `github.copilot.chat.rerunWithCopilotDebug`
 - `github.copilot.chat.review`
 - `github.copilot.chat.review.apply`
@@ -1409,6 +1412,9 @@
 - `interactiveEditor.start`
 - `javascript.goToProjectConfig`
 - `javascript.reloadProjects`
+- `javascript.removeUnusedImports`
+- `javascript.sortImports`
+- `js.projectStatus.command`
 - `jsBrowserBreakpoints.focus`
 - `jsBrowserBreakpoints.open`
 - `jsBrowserBreakpoints.resetViewLocation`
@@ -1495,6 +1501,10 @@
 - `lm.addLanguageModelsProviderGroup`
 - `lm.migrateLanguageModelsProviderGroup`
 - `loadedScripts.collapse`
+- `markdown.api.reloadPlugins`
+- `markdown.api.render`
+- `markdown.editor.insertImageFromWorkspace`
+- `markdown.editor.insertLinkFromWorkspace`
 - `markdown.extension.checkTaskList`
 - `markdown.extension.closePreview`
 - `markdown.extension.editing._wrapBy`
@@ -1527,6 +1537,17 @@
 - `markdown.extension.toc.create`
 - `markdown.extension.toc.removeSecNumbers`
 - `markdown.extension.toc.update`
+- `markdown.findAllFileReferences`
+- `markdown.preview.refresh`
+- `markdown.preview.toggleLock`
+- `markdown.reopenAsPreview`
+- `markdown.reopenAsSource`
+- `markdown.showLockedPreviewToSide`
+- `markdown.showPreview`
+- `markdown.showPreviewSecuritySelector`
+- `markdown.showPreviewToSide`
+- `markdown.showSource`
+- `markdown.togglePreview`
 - `mcu-debug.debug-tracker-vscode.debugLevel`
 - `mcu-debug.debug-tracker-vscode.start`
 - `mcu-debug.memory-view.addMemoryView`
@@ -1755,6 +1776,7 @@
 - `notifications.toggleDoNotDisturbMode`
 - `notifications.toggleDoNotDisturbModeBySource`
 - `notifications.toggleList`
+- `npm-intellisense.import`
 - `npm.debugScript`
 - `npm.debugScriptFromHover`
 - `npm.focus`
@@ -2092,6 +2114,8 @@
 - `showNextParameterHint`
 - `showPrevParameterHint`
 - `signals.sounds.help`
+- `simpleBrowser.api.open`
+- `simpleBrowser.show`
 - `stm32ForVSCodeCommands.focus`
 - `stm32ForVSCodeCommands.open`
 - `stm32ForVSCodeCommands.resetViewLocation`
@@ -2106,7 +2130,6 @@
 - `targetsWsl.open`
 - `targetsWsl.resetViewLocation`
 - `terminal.focus`
-- `terminal.integrated.suggest.clearCachedGlobals`
 - `terminal.removeView`
 - `terminal.resetViewContainerLocation`
 - `terminal.resetViewLocation`
@@ -2193,6 +2216,7 @@
 - `timeline.removeView`
 - `timeline.resetViewLocation`
 - `timeline.toggleVisibility`
+- `toggle.chat.titleBar.openInAgentsWindow.enabled`
 - `toggle.chat.titleBar.signIn.enabled`
 - `toggle.chat.unifiedAgentsBar.enabled`
 - `toggle.diff.ignoreTrimWhitespace`
@@ -2230,11 +2254,15 @@
 - `type`
 - `typescript.experimental.disableTsgo`
 - `typescript.experimental.enableTsgo`
+- `typescript.findAllFileReferences`
 - `typescript.goToProjectConfig`
+- `typescript.goToSourceDefinition`
 - `typescript.openTsServerLog`
 - `typescript.reloadProjects`
+- `typescript.removeUnusedImports`
 - `typescript.restartTsServer`
 - `typescript.selectTypeScriptVersion`
+- `typescript.sortImports`
 - `typescript.tsserverRequest`
 - `undo`
 - `update.check`
@@ -2324,6 +2352,8 @@
 - `vscode.setEditorLayout`
 - `vscode.testing.getControllersWithTests`
 - `vscode.testing.getTestsInFile`
+- `vscodeMarkdownLanguageservice.open`
+- `vscodeMarkdownLanguageservice.rename`
 - `walkthroughs.selectStep`
 - `watch.collapse`
 - `welcome.goBack`
@@ -2351,8 +2381,10 @@
 - `workbench.action.askVScode`
 - `workbench.action.blur`
 - `workbench.action.browseColorThemesInMarketplace`
+- `workbench.action.browser.addAreaScreenshotToChat`
 - `workbench.action.browser.addConsoleLogsToChat`
 - `workbench.action.browser.addElementToChat`
+- `workbench.action.browser.addFullPageScreenshotToChat`
 - `workbench.action.browser.addScreenshotToChat`
 - `workbench.action.browser.clearEphemeralStorage`
 - `workbench.action.browser.clearGlobalStorage`
@@ -2365,7 +2397,6 @@
 - `workbench.action.browser.goBack`
 - `workbench.action.browser.goForward`
 - `workbench.action.browser.hardReload`
-- `workbench.action.browser.hideEmulationToolbar`
 - `workbench.action.browser.hideFind`
 - `workbench.action.browser.newTab`
 - `workbench.action.browser.open`
@@ -2379,9 +2410,11 @@
 - `workbench.action.browser.resetEmulation`
 - `workbench.action.browser.resetZoom`
 - `workbench.action.browser.setUserAgent`
-- `workbench.action.browser.showEmulationToolbar`
 - `workbench.action.browser.showFind`
+- `workbench.action.browser.showHistory`
 - `workbench.action.browser.toggleDevTools`
+- `workbench.action.browser.toggleDeviceEmulation`
+- `workbench.action.browser.toggleFavorite`
 - `workbench.action.browser.toggleMobileEmulation`
 - `workbench.action.browser.zoomIn`
 - `workbench.action.browser.zoomOut`
@@ -2390,6 +2423,7 @@
 - `workbench.action.chat.addDynamicVariable`
 - `workbench.action.chat.addToChatAction`
 - `workbench.action.chat.agentHost.otel.exportAgentTracesDB`
+- `workbench.action.chat.agentsHandoffTip.open`
 - `workbench.action.chat.applyCompareEdits`
 - `workbench.action.chat.applyInEditor`
 - `workbench.action.chat.archiveAllAgentSessions`
@@ -2460,6 +2494,7 @@
 - `workbench.action.chat.insertIntoNotebook`
 - `workbench.action.chat.insertSearchResults`
 - `workbench.action.chat.insertTroubleshootCommand`
+- `workbench.action.chat.inspectAgentHostSubscriptions`
 - `workbench.action.chat.inspectChatModel`
 - `workbench.action.chat.inspectChatModelReferences`
 - `workbench.action.chat.installPluginFromSource`
@@ -2489,9 +2524,6 @@
 - `workbench.action.chat.openAgentDebugPanel`
 - `workbench.action.chat.openAgentDebugPanelForSession`
 - `workbench.action.chat.openAgentHostAutoApprovePicker`
-- `workbench.action.chat.openAgentHostBranchPicker`
-- `workbench.action.chat.openAgentHostCustomAgentPicker`
-- `workbench.action.chat.openAgentHostIsolationPicker`
 - `workbench.action.chat.openAgentHostModePicker`
 - `workbench.action.chat.openAgentHostPermissionModePicker`
 - `workbench.action.chat.openCompareBlockInDiffEditor`
@@ -2519,6 +2551,7 @@
 - `workbench.action.chat.openNewSessionSidebar.copilotcli`
 - `workbench.action.chat.openPermissionPicker`
 - `workbench.action.chat.openQuotaExceededDialog`
+- `workbench.action.chat.openSessionInAgentsWindow`
 - `workbench.action.chat.openSessionInEditorGroup`
 - `workbench.action.chat.openSessionInNewEditorGroup`
 - `workbench.action.chat.openSessionInNewWindow`
@@ -2973,6 +3006,7 @@
 - `workbench.action.output.show.extension-output-nhickster.flightpath-#1-FlightPath`
 - `workbench.action.output.show.extension-output-saoudrizwan.claude-dev-#1-Cline`
 - `workbench.action.output.show.extension-output-streetsidesoftware.code-spell-checker-#1-Code Spell Checker Server`
+- `workbench.action.output.show.extension-output-vscode.markdown-language-features-#1-Markdown Language Server`
 - `workbench.action.output.show.exthost`
 - `workbench.action.output.show.main`
 - `workbench.action.output.show.mcpGateway`
@@ -2991,7 +3025,9 @@
 - `workbench.action.output.show.vscode.github-authentication.GitHub Authentication.log`
 - `workbench.action.output.show.vscode.github.GitHub.log`
 - `workbench.action.output.show.vscode.json-language-features.JSON Language Server.log`
+- `workbench.action.output.show.vscode.markdown-language-features.Markdown.log`
 - `workbench.action.output.show.vscode.microsoft-authentication.Microsoft Authentication.log`
+- `workbench.action.output.show.vscode.typescript-language-features.TypeScript.log`
 - `workbench.action.output.toggleOutput`
 - `workbench.action.pauseSocketWriting`
 - `workbench.action.pinEditor`
@@ -3377,7 +3413,6 @@
 - `workbench.banner.focusNextAction`
 - `workbench.banner.focusPreviousAction`
 - `workbench.chat.action.focusLastFocused`
-- `workbench.chat.agentHostAgentPicker.configure`
 - `workbench.command.new.agent`
 - `workbench.command.new.instructions`
 - `workbench.command.new.prompt`
@@ -3869,8 +3904,6 @@
 - `workbench.views.mcp.welcomeView.focus`
 - `workbench.views.mcp.welcomeView.open`
 - `workbench.views.mcp.welcomeView.resetViewLocation`
-- `workbench.views.service.panel.1c37f8d8-e2ce-4dd5-85e2-a82f10fe8697.resetViewContainerLocation`
-- `workbench.views.service.panel.2f37f917-0ad9-4f57-9bf9-7788d276fe6c.resetViewContainerLocation`
 - `workbench.views.sync.conflicts.focus`
 - `workbench.views.sync.conflicts.open`
 - `workbench.views.sync.conflicts.resetViewLocation`
