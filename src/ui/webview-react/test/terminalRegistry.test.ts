@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-let proposedDimensionsQueue: Array<{ cols: number; rows: number } | undefined> =
-  [];
+let terminalConstructCount = 0;
 
 vi.mock("@xterm/xterm", () => {
   class MockTerminal {
@@ -11,6 +10,7 @@ vi.mock("@xterm/xterm", () => {
     rows = 24;
 
     constructor(options: Record<string, unknown>) {
+      terminalConstructCount += 1;
       this.options = options;
     }
 
@@ -46,9 +46,7 @@ vi.mock("@xterm/addon-fit", () => {
     fit() {}
 
     proposeDimensions() {
-      return proposedDimensionsQueue.length > 0
-        ? proposedDimensionsQueue.shift()
-        : { cols: 80, rows: 24 };
+      return { cols: 80, rows: 24 };
     }
   }
 
@@ -59,7 +57,7 @@ describe("terminalRegistry.attach", () => {
   afterEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
-    proposedDimensionsQueue = [];
+    terminalConstructCount = 0;
     document.body.innerHTML = "";
   });
 
@@ -102,56 +100,22 @@ describe("terminalRegistry.attach", () => {
     resolveWebglImport?.();
   });
 
-  it("retries connected refits until dimensions become measurable again", async () => {
-    const rafCallbacks: FrameRequestCallback[] = [];
-    vi.stubGlobal(
-      "requestAnimationFrame",
-      vi.fn((callback: FrameRequestCallback) => {
-        rafCallbacks.push(callback);
-        return rafCallbacks.length;
-      })
-    );
-    vi.stubGlobal("cancelAnimationFrame", vi.fn());
-
+  it("deduplicates concurrent creates for the same terminal session", async () => {
     vi.doMock("@xterm/addon-webgl", () => {
       return new Promise(() => {});
     });
 
-    proposedDimensionsQueue = [
-      { cols: 153, rows: 15 },
-      undefined,
-      { cols: 153, rows: 15 },
-    ];
-
     const { terminalRegistry } = await import("../terminalRegistry");
-    const workflowId = "wf-webgl";
-    const sessionId = "sess-webgl";
-    const container = document.createElement("div");
-    document.body.appendChild(container);
+    const workflowId = "wf-concurrent";
+    const sessionId = "sess-concurrent";
 
-    const entry = await terminalRegistry.create(workflowId, sessionId);
-    await terminalRegistry.attach(workflowId, sessionId, container);
+    const [firstEntry, secondEntry] = await Promise.all([
+      terminalRegistry.create(workflowId, sessionId),
+      terminalRegistry.create(workflowId, sessionId),
+    ]);
 
-    rafCallbacks.shift()?.(performance.now());
-    expect(entry.term.cols).toBe(153);
-    expect(entry.term.rows).toBe(15);
-
-    entry.term.resize(80, 24);
-    expect(
-      terminalRegistry.scheduleFitSessionToContainer(
-        workflowId,
-        sessionId,
-        "test-recovery"
-      )
-    ).toBe(true);
-
-    rafCallbacks.shift()?.(performance.now());
-    expect(entry.term.cols).toBe(80);
-    expect(entry.term.rows).toBe(24);
-
-    expect(rafCallbacks.length).toBeGreaterThan(0);
-    rafCallbacks.shift()?.(performance.now());
-    expect(entry.term.cols).toBe(153);
-    expect(entry.term.rows).toBe(15);
+    expect(firstEntry).toBe(secondEntry);
+    expect(terminalRegistry.get(workflowId, sessionId)).toBe(firstEntry);
+    expect(terminalConstructCount).toBe(1);
   });
 });

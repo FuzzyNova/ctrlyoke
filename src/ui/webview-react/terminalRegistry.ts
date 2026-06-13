@@ -97,6 +97,7 @@ interface FitSessionResult {
 
 // key: `${workflowId}:${sessionId}`
 const registry = new Map<string, RegistryEntry>();
+const pendingCreates = new Map<string, Promise<RegistryEntry>>();
 
 let currentTerminalSettings: TerminalSettings = {
   fontSize: 14,
@@ -163,62 +164,6 @@ function getFitMode(entry: RegistryEntry): "controller" | "viewer" {
   return entry.controllerCols != null ? "viewer" : "controller";
 }
 
-function refreshRegistryEntry(entry: RegistryEntry): void {
-  entry.term.refresh(0, Math.max(0, entry.term.rows - 1));
-}
-
-function scheduleConnectedFit(
-  entry: RegistryEntry,
-  reason: string,
-  maxAttempts = 6
-): void {
-  let attempt = 0;
-
-  const run = () => {
-    attempt += 1;
-
-    if (!entry.domEl.isConnected) {
-      WebviewLog.debug(
-        `[terminalRegistry.fitRecovery] reason=${reason} attempt=${attempt} skipped domElConnected=false`
-      );
-      return;
-    }
-
-    try {
-      const container = entry.domEl.parentElement;
-      const fitResult = fitRegistryEntry(entry, getFitMode(entry));
-      refreshRegistryEntry(entry);
-      const hasProposedDimensions =
-        fitResult.proposedCols != null && fitResult.proposedRows != null;
-
-      WebviewLog.debug(
-        `[terminalRegistry.fitRecovery] reason=${reason} attempt=${attempt} ` +
-          `containerSize=${container?.offsetWidth ?? "none"}x${container?.offsetHeight ?? "none"} ` +
-          `containerDisplay=${container ? getComputedStyle(container).display : "none"} ` +
-          `controllerCols=${entry.controllerCols ?? "none"} ` +
-          `proposed=${fitResult.proposedCols ?? "none"}x${fitResult.proposedRows ?? "none"} ` +
-          `actual=${fitResult.cols}x${fitResult.rows} mode=${fitResult.mode}`
-      );
-
-      if (hasProposedDimensions || attempt >= maxAttempts) {
-        return;
-      }
-    } catch (error) {
-      WebviewLog.debug(
-        `[terminalRegistry.fitRecovery] reason=${reason} attempt=${attempt} failed ` +
-          `${error instanceof Error ? error.message : String(error)}`
-      );
-      if (attempt >= maxAttempts) {
-        return;
-      }
-    }
-
-    requestAnimationFrame(run);
-  };
-
-  requestAnimationFrame(run);
-}
-
 function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
   if (entry.webglAddonLoadPromise) {
     return entry.webglAddonLoadPromise;
@@ -235,7 +180,6 @@ function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
         webgl.dispose();
       });
       entry.term.loadAddon(webgl);
-      scheduleConnectedFit(entry, "webgl-loaded");
     } catch {
       // WebGL unavailable at startup — xterm uses its built-in renderer.
     }
@@ -291,51 +235,75 @@ export const terminalRegistry = {
     const key = makeKey(workflowId, sessionId);
     const existing = registry.get(key);
     if (existing) return existing;
+    const pending = pendingCreates.get(key);
+    if (pending) {
+      WebviewLog.debug(
+        `[terminalRegistry.create] joining pending create wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
+      );
+      return pending;
+    }
 
-    // Dynamic imports so xterm is only loaded when actually needed
-    const [{ Terminal }, { FitAddon }] = await Promise.all([
-      import("@xterm/xterm"),
-      import("@xterm/addon-fit"),
-    ]);
+    const createPromise = (async () => {
+      // Dynamic imports so xterm is only loaded when actually needed
+      const [{ Terminal }, { FitAddon }] = await Promise.all([
+        import("@xterm/xterm"),
+        import("@xterm/addon-fit"),
+      ]);
 
-    const theme = readVsCodeTheme();
-    const settings = this.getTerminalSettings();
-    // Read the resolved font family from VS Code CSS variables — xterm passes fontFamily
-    // directly to the canvas 2D context, which cannot resolve CSS var() expressions.
-    const fontFamily =
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--vscode-editor-font-family")
-        .trim() || '"Cascadia Code", "Courier New", monospace';
-    const term = new Terminal({
-      theme,
-      scrollback: settings.scrollback,
-      fontFamily,
-      fontSize: settings.fontSize,
-      lineHeight: settings.lineHeight,
-      letterSpacing: 0,
-      allowTransparency: false,
-      cursorStyle: settings.cursorStyle,
-      cursorBlink: settings.cursorBlink,
-      macOptionIsMeta: settings.macOptionIsMeta,
-      wordSeparator: settings.wordSeparators,
-    });
+      const existingAfterImport = registry.get(key);
+      if (existingAfterImport) {
+        return existingAfterImport;
+      }
 
-    const fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
+      const theme = readVsCodeTheme();
+      const settings = this.getTerminalSettings();
+      // Read the resolved font family from VS Code CSS variables — xterm passes fontFamily
+      // directly to the canvas 2D context, which cannot resolve CSS var() expressions.
+      const fontFamily =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--vscode-editor-font-family")
+          .trim() || '"Cascadia Code", "Courier New", monospace';
+      const term = new Terminal({
+        theme,
+        scrollback: settings.scrollback,
+        fontFamily,
+        fontSize: settings.fontSize,
+        lineHeight: settings.lineHeight,
+        letterSpacing: 0,
+        allowTransparency: false,
+        cursorStyle: settings.cursorStyle,
+        cursorBlink: settings.cursorBlink,
+        macOptionIsMeta: settings.macOptionIsMeta,
+        wordSeparator: settings.wordSeparators,
+      });
 
-    const domEl = document.createElement("div");
-    domEl.style.cssText = "width:100%;height:100%;";
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
 
-    const entry: RegistryEntry = {
-      term,
-      fitAddon,
-      domEl,
-      inputCapture: new InputCapture(),
-      frozen: false,
-    };
+      const domEl = document.createElement("div");
+      domEl.style.cssText = "width:100%;height:100%;";
 
-    registry.set(key, entry);
-    return entry;
+      const entry: RegistryEntry = {
+        term,
+        fitAddon,
+        domEl,
+        inputCapture: new InputCapture(),
+        frozen: false,
+      };
+
+      registry.set(key, entry);
+      WebviewLog.debug(
+        `[terminalRegistry.create] created wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
+      );
+      return entry;
+    })();
+
+    pendingCreates.set(key, createPromise);
+    try {
+      return await createPromise;
+    } finally {
+      pendingCreates.delete(key);
+    }
   },
 
   /**
@@ -541,21 +509,6 @@ export const terminalRegistry = {
     }
 
     return fitRegistryEntry(entry, mode);
-  },
-
-  scheduleFitSessionToContainer(
-    workflowId: string,
-    sessionId: string,
-    reason: string,
-    maxAttempts?: number
-  ): boolean {
-    const entry = registry.get(makeKey(workflowId, sessionId));
-    if (!entry) {
-      return false;
-    }
-
-    scheduleConnectedFit(entry, reason, maxAttempts);
-    return true;
   },
 
   /**
