@@ -736,7 +736,7 @@ export function AgentSkillsManagerSection({
       {/* Delete confirmation modal */}
       {confirmDelete && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          className="fixed inset-0 z-modal flex items-center justify-center bg-black/40"
           role="button"
           tabIndex={0}
           aria-label={`Close delete ${activeType} dialog`}
@@ -794,7 +794,7 @@ export function AgentSkillsManagerSection({
       {/* Bulk delete confirmation modal */}
       {confirmDeleteAll && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          className="fixed inset-0 z-modal flex items-center justify-center bg-black/40"
           role="button"
           tabIndex={0}
           aria-label={`Close delete selected ${activeType} dialog`}

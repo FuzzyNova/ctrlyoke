@@ -27,7 +27,7 @@ export const DropdownPortal = forwardRef<HTMLDivElement, DropdownPortalProps>(
     return createPortal(
       <div
         ref={ref}
-        className={`fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-[9999] flex flex-col${className ? ` ${className}` : ""}`}
+        className={`fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-popover flex flex-col${className ? ` ${className}` : ""}`}
         style={{
           top: popupPos.top,
           bottom: popupPos.bottom,

@@ -523,7 +523,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
         tabIndex={0}
         aria-label="Scroll viewport"
         aria-valuenow={Math.round(viewportPct.top * 100)}
-        className={`absolute left-0 right-0 rounded-sm z-10 ${
+        className={`absolute left-0 right-0 rounded-sm z-raised ${
           isDragging
             ? "bg-minimap-thumb-active"
             : isThumbHovered
@@ -584,7 +584,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
             key={step.key}
             role="button"
             tabIndex={0}
-            className="absolute right-0 flex flex-row items-center z-20"
+            className="absolute right-0 flex flex-row items-center z-header"
             style={{
               top: `clamp(3px, ${topPct}%, calc(100% - 3px))`,
               transform: "translateY(-50%)",

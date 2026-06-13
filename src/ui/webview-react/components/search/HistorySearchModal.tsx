@@ -155,7 +155,7 @@ export function HistorySearchModal() {
   }
 
   return (
-    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/50 px-4 py-6">
+    <div className="fixed inset-0 z-modal-prominent flex items-center justify-center bg-black/50 px-4 py-6">
       <div
         ref={panelRef}
         className="flex w-full max-w-[640px] max-h-[80vh] flex-col overflow-hidden rounded-lg border border-panel-border bg-editor-bg shadow-2xl"

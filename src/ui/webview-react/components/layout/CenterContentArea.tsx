@@ -26,7 +26,7 @@ export const CenterContentArea: React.FC = () => {
       />
 
       {/* Output and Editor sections (rendered as collapsed PanelBars) */}
-      <div className="relative z-10 w-full h-full flex flex-col">
+      <div className="relative w-full h-full flex flex-col">
         <OutputSection />
         <EditorSection />
       </div>

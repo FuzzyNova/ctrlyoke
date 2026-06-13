@@ -270,7 +270,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       <div
         ref={dropdownRef}
         role="listbox"
-        className={`absolute top-full left-0 mt-1 min-w-[200px] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-50 overflow-hidden transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
+        className={`absolute top-full left-0 mt-1 min-w-[200px] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-floating overflow-hidden transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
       >
         {options.map((option, index) =>
           option.divider ? (

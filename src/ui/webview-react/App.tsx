@@ -517,7 +517,7 @@ function App() {
                   />
                 );
               })()}
-              <div className="relative z-10 flex flex-col flex-1">
+              <div className="relative flex flex-col flex-1">
                 <div className="flex-none">
                   <OutputSection />
                 </div>
@@ -599,7 +599,7 @@ function App() {
                     {((mobileStepsOpen && mobileStepsMode === "fullwidth") ||
                       promptsOverlayClosing) && (
                       <div
-                        className={`absolute inset-0 z-20 bg-editor-bg flex flex-col ${promptsOverlayClosing ? "animate-slide-out-left" : "animate-slide-in-left"}`}
+                        className={`absolute inset-0 z-header bg-editor-bg flex flex-col ${promptsOverlayClosing ? "animate-slide-out-left" : "animate-slide-in-left"}`}
                         onAnimationEnd={
                           promptsOverlayClosing
                             ? () => {
@@ -675,7 +675,7 @@ function App() {
               {/* Backdrop — tap outside closes (hidden while closing) */}
               {!settingsOverlayClosing && (
                 <div
-                  className="absolute inset-0 z-30"
+                  className="absolute inset-0 z-overlay"
                   role="button"
                   tabIndex={0}
                   aria-label="Close settings"
@@ -687,7 +687,7 @@ function App() {
                 />
               )}
               <div
-                className={`absolute inset-0 z-40 bg-editor-bg flex flex-col ${settingsOverlayClosing ? "animate-slide-out-right" : "animate-slide-in-right"}`}
+                className={`absolute inset-0 z-drawer bg-editor-bg flex flex-col ${settingsOverlayClosing ? "animate-slide-out-right" : "animate-slide-in-right"}`}
                 onAnimationEnd={
                   settingsOverlayClosing
                     ? () => {
@@ -963,9 +963,9 @@ function App() {
           </Panel>
         </Group>
 
-        {/* Global Settings Drawer — slides up from bottom, z-40 */}
-        <GlobalSettingsDrawer />
-      </div>
+          {/* Global Settings Drawer — slides up from bottom above main content */}
+          <GlobalSettingsDrawer />
+        </div>
 
       {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
       <StartupOverlay />

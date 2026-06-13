@@ -630,7 +630,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
           <div
             ref={popupRef}
             role="listbox"
-            className="fixed min-w-[220px] overflow-y-auto bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[9999]"
+            className="fixed min-w-[220px] overflow-y-auto bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-popover"
             style={{
               top: popupPos.top,
               left: popupPos.left,

@@ -158,7 +158,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
           className="absolute top-full right-0 mt-1 w-max
             bg-dropdown-bg
             border border-dropdown-border
-            rounded shadow-lg z-50 overflow-y-auto overflow-x-hidden py-0.5"
+            rounded shadow-lg z-floating overflow-y-auto overflow-x-hidden py-0.5"
           style={{
             maxHeight: "var(--run-selector-max-h, 160px)",
             minWidth: "160px",

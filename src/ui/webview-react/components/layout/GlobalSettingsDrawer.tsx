@@ -109,7 +109,7 @@ export function GlobalSettingsDrawer() {
   return (
     <div
       ref={drawerRef}
-      className={`absolute inset-0 flex flex-col z-40 bg-panel-bg border-t border-panel-border
+      className={`absolute inset-0 flex flex-col z-drawer bg-panel-bg border-t border-panel-border
         transition-transform duration-200 ease-out
         ${globalSettingsOpen ? "translate-y-0" : "translate-y-full"}`}
       aria-hidden={!globalSettingsOpen}

@@ -140,7 +140,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         createPortal(
           <div
             ref={popupRef}
-            className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-[9999] flex flex-col"
+            className="fp-dropdown-popup fixed bg-dropdown-bg border border-dropdown-border z-popover flex flex-col"
             style={{
               bottom: popupPos.bottom,
               left: popupPos.left,

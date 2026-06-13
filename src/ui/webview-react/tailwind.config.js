@@ -381,6 +381,22 @@ module.exports = {
         "output-find-exit": "output-find-exit 0.18s ease-in forwards",
       },
 
+      zIndex: {
+        // Shared app layer scale. Use these for layers that cross component
+        // boundaries; keep local in-component stacking local.
+        raised: "10",
+        header: "20",
+        overlay: "30",
+        drawer: "40",
+        floating: "50",
+        panel: "100",
+        "modal-backdrop": "200",
+        modal: "210",
+        "modal-prominent": "220",
+        "workspace-viewer": "300",
+        popover: "9999",
+      },
+
       screens: {
         xs: "380px",
       },

@@ -55,7 +55,7 @@ export const WorkspaceViewerModal: React.FC = () => {
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[300] flex flex-col bg-sidebar-bg ${closing ? "animate-modal-exit" : "animate-modal-enter"}`}
+      className={`fixed inset-0 z-workspace-viewer flex flex-col bg-sidebar-bg ${closing ? "animate-modal-exit" : "animate-modal-enter"}`}
       onAnimationEnd={handleAnimationEnd}
     >
       <WorkspaceViewerHeader

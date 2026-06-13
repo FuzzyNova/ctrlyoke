@@ -115,11 +115,11 @@ function SortableWorkflowStepWrapper({
       {stepItemProps.isCurrent && (
         <>
           <div
-            className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] ${borderBgClass}`}
+            className={`pointer-events-none absolute inset-x-0 top-0 z-raised h-[2px] ${borderBgClass}`}
             aria-hidden="true"
           />
           <div
-            className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[2px] ${borderBgClass}`}
+            className={`pointer-events-none absolute inset-x-0 bottom-0 z-raised h-[2px] ${borderBgClass}`}
             aria-hidden="true"
           />
         </>

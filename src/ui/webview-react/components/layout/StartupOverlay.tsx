@@ -55,7 +55,7 @@ export const StartupOverlay: React.FC = () => {
 
   return (
     <div
-      className="absolute inset-0 z-[9999] flex items-center justify-center"
+      className="absolute inset-0 z-popover flex items-center justify-center"
       style={{
         pointerEvents: "all",
         backgroundColor:

@@ -163,7 +163,7 @@ export const TerminalControlBar: React.FC<TerminalControlBarProps> = ({
   return (
     <div
       ref={moreRef}
-      className="relative z-20 w-full flex-shrink-0 border-t border-panel-border"
+      className="relative z-header w-full flex-shrink-0 border-t border-panel-border"
       style={{
         background:
           "color-mix(in srgb, var(--vscode-terminal-background, var(--vscode-editor-background)) 92%, transparent)",

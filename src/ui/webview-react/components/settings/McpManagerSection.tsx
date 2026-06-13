@@ -1533,7 +1533,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
       {deleteLocationState && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          className="fixed inset-0 z-modal flex items-center justify-center bg-black/40"
           role="button"
           tabIndex={0}
           aria-label="Close delete MCP location dialog"
@@ -1594,7 +1594,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
       {deleteTargetState && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          className="fixed inset-0 z-modal flex items-center justify-center bg-black/40"
           role="button"
           tabIndex={0}
           aria-label="Close delete selected MCP servers dialog"

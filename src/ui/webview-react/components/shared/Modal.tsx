@@ -61,12 +61,12 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Backdrop */}
       <button
         type="button"
-        className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 border-0 p-0 bg-transparent cursor-default"
+        className="fixed inset-0 z-modal-backdrop flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 border-0 p-0 bg-transparent cursor-default"
         onClick={onClose}
         aria-label="Close modal backdrop"
       />
       {/* Modal content wrapper */}
-      <div className="fixed inset-0 z-[201] flex items-center justify-center overflow-y-auto pointer-events-none">
+      <div className="fixed inset-0 z-modal flex items-center justify-center overflow-y-auto pointer-events-none">
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, no action triggered */}
         <div
           ref={modalRef}
