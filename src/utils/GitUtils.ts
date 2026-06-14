@@ -10,6 +10,8 @@ export interface CommitInfo {
   subject: string; // first line of commit message
   author: string; // author name
   relativeDate: string; // e.g. "2 days ago"
+  parentHashes: string[]; // parent SHAs (>1 means a merge commit)
+  refNames: string[]; // decoration ref names, e.g. ["HEAD -> main", "origin/main", "tag: v1.0"]
 }
 
 export interface StashInfo {
@@ -22,22 +24,31 @@ export interface StashInfo {
  * Returns recent commits, most recent first.
  * Uses NUL byte (%x00) as field separator to safely handle subjects/authors
  * that contain pipe or other punctuation.
+ *
+ * When `ref` is supplied, the log walks that ref instead of HEAD. This lets the
+ * caller keep a branch's newer commits visible while in detached-HEAD state.
  */
 export async function getRecentCommits(
   workspaceRoot: string,
   limit: number = 30,
-  skip: number = 0
+  skip: number = 0,
+  ref?: string
 ): Promise<CommitInfo[]> {
   const args = [
     "-C",
     workspaceRoot,
     "log",
-    `--format=%H%x00%h%x00%s%x00%an%x00%ar`,
+    // Trailing %P (parents) and %D (decorate) enable merge detection and ref pills.
+    `--format=%H%x00%h%x00%s%x00%an%x00%ar%x00%P%x00%D`,
     `-n`,
     String(limit),
   ];
   if (skip > 0) {
     args.splice(args.indexOf("log") + 1, 0, `--skip=${skip}`);
+  }
+  // Explicit ref must come after all options so git treats it as a revision.
+  if (ref && ref.trim()) {
+    args.push(ref.trim());
   }
   const { stdout } = await execFileAsync("git", args, {
     timeout: GIT_TIMEOUT_MS,
@@ -49,8 +60,34 @@ export async function getRecentCommits(
     .filter(Boolean)
     .map((line) => {
       const parts = line.split("\0");
-      const [hash, shortHash, subject, author, relativeDate] = parts;
-      return { hash, shortHash, subject, author, relativeDate };
+      const [
+        hash,
+        shortHash,
+        subject,
+        author,
+        relativeDate,
+        parents,
+        decorate,
+      ] = parts;
+      const parentHashes = (parents ?? "").trim()
+        ? parents.trim().split(/\s+/)
+        : [];
+      const refNames = (decorate ?? "").trim()
+        ? decorate
+            .trim()
+            .split(",")
+            .map((r) => r.trim())
+            .filter(Boolean)
+        : [];
+      return {
+        hash,
+        shortHash,
+        subject,
+        author,
+        relativeDate,
+        parentHashes,
+        refNames,
+      };
     });
 }
 
@@ -203,7 +240,17 @@ export async function searchCommitsBySubject(
     .map((line) => {
       const parts = line.split("\0");
       const [hash, shortHash, subject, author, relativeDate] = parts;
-      return { hash, shortHash, subject, author, relativeDate };
+      // Search results don't carry graph decorations; the consumers that need
+      // parents/refs use getRecentCommits / getCommitLog instead.
+      return {
+        hash,
+        shortHash,
+        subject,
+        author,
+        relativeDate,
+        parentHashes: [],
+        refNames: [],
+      };
     });
 }
 

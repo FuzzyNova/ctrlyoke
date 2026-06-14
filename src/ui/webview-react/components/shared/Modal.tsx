@@ -14,6 +14,12 @@ interface ModalProps {
   headerSubtitle?: React.ReactNode;
   /** When true, the modal takes full width (no horizontal margin, no rounded corners) below the sm breakpoint. */
   fullWidthOnNarrow?: boolean;
+  /**
+   * When true, render above the full-screen workspace viewer overlay
+   * (z-workspace-viewer). Required for modals opened from inside the viewer,
+   * otherwise the default modal layer renders behind it and stays invisible.
+   */
+  elevated?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -26,8 +32,11 @@ export const Modal: React.FC<ModalProps> = ({
   headerActions,
   headerSubtitle,
   fullWidthOnNarrow = false,
+  elevated = false,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const backdropZ = elevated ? "z-viewer-modal-backdrop" : "z-modal-backdrop";
+  const contentZ = elevated ? "z-viewer-modal" : "z-modal";
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -61,12 +70,14 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Backdrop */}
       <button
         type="button"
-        className="fixed inset-0 z-modal-backdrop flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 border-0 p-0 bg-transparent cursor-default"
+        className={`fixed inset-0 ${backdropZ} flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 border-0 p-0 bg-transparent cursor-default`}
         onClick={onClose}
         aria-label="Close modal backdrop"
       />
       {/* Modal content wrapper */}
-      <div className="fixed inset-0 z-modal flex items-center justify-center overflow-y-auto pointer-events-none">
+      <div
+        className={`fixed inset-0 ${contentZ} flex items-center justify-center overflow-y-auto pointer-events-none`}
+      >
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-noninteractive-element-interactions -- stopPropagation only, no action triggered */}
         <div
           ref={modalRef}

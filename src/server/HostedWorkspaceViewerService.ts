@@ -21,6 +21,7 @@ import type {
   DiffKind,
   WorkspaceCommitLogResponse,
   WorkspaceCommitLogEntry,
+  GitRefLabel,
 } from "../types/HostedWorkspaceViewerTypes";
 import {
   getRecentCommits,
@@ -101,6 +102,37 @@ function toGitPath(p: string): string {
 
 function normalizeScmPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+/**
+ * Classifies raw `git log` decoration ref names (from `%D`) into typed labels
+ * used by the commit-history git-graph pills. Examples of inputs:
+ *   "HEAD -> main", "origin/main", "tag: v1.0", "HEAD", "upstream/feature"
+ */
+function classifyRefNames(refNames: string[]): GitRefLabel[] {
+  const labels: GitRefLabel[] = [];
+  for (const raw of refNames) {
+    let name = raw.trim();
+    if (!name) continue;
+
+    // "HEAD -> main" decorates the checked-out branch tip with both HEAD and
+    // the branch; surface the branch (HEAD itself is conveyed via isHead).
+    if (name.startsWith("HEAD ->")) {
+      name = name.slice("HEAD ->".length).trim();
+    }
+
+    if (name === "HEAD") {
+      labels.push({ name, type: "head" });
+    } else if (name.startsWith("tag: ")) {
+      labels.push({ name: name.slice("tag: ".length).trim(), type: "tag" });
+    } else if (name.includes("/")) {
+      // Anything with a slash is a remote-tracking ref (e.g. origin/main).
+      labels.push({ name, type: "remoteBranch" });
+    } else {
+      labels.push({ name, type: "localBranch" });
+    }
+  }
+  return labels;
 }
 
 export class HostedWorkspaceViewerService {
@@ -770,10 +802,22 @@ export class HostedWorkspaceViewerService {
 
   async getCommitLog(
     skip = 0,
-    limit = 30
+    limit = 30,
+    branchHint?: string
   ): Promise<WorkspaceCommitLogResponse> {
+    // When detached, the caller passes the branch it came from so the branch's
+    // newer ("ahead") commits stay visible instead of vanishing behind HEAD.
+    // The hint is a plain ref name validated against existing local branches to
+    // avoid feeding arbitrary input to git as a revision.
+    const safeBranch = await this.resolveBranchHint(branchHint);
+
     // Fetch one extra to determine hasMore
-    const rows = await getRecentCommits(this.workspaceRoot, limit + 1, skip);
+    const rows = await getRecentCommits(
+      this.workspaceRoot,
+      limit + 1,
+      skip,
+      safeBranch
+    );
     const hasMore = rows.length > limit;
     const commits = hasMore ? rows.slice(0, limit) : rows;
 
@@ -825,12 +869,46 @@ export class HostedWorkspaceViewerService {
     // If no upstream is configured, upstreamCommitsResult fails — treat all as pushed
 
     const result: WorkspaceCommitLogEntry[] = commits.map((c) => ({
-      ...c,
+      hash: c.hash,
+      shortHash: c.shortHash,
+      subject: c.subject,
+      author: c.author,
+      relativeDate: c.relativeDate,
       isHead: headHash !== null && c.hash === headHash,
       pushed: !unpushedHashes.has(c.hash),
+      isMerge: c.parentHashes.length > 1,
+      refs: classifyRefNames(c.refNames),
     }));
 
     return { commits: result, hasMore, currentBranch, detached };
+  }
+
+  /**
+   * Validates a branch hint against the repo's local branches. Returns the
+   * branch name when it exists, otherwise undefined (falls back to HEAD).
+   */
+  private async resolveBranchHint(
+    branchHint?: string
+  ): Promise<string | undefined> {
+    const name = branchHint?.trim();
+    if (!name) return undefined;
+    try {
+      await execFileAsync(
+        "git",
+        [
+          "-C",
+          this.workspaceRoot,
+          "show-ref",
+          "--verify",
+          "--quiet",
+          `refs/heads/${name}`,
+        ],
+        { timeout: GIT_TIMEOUT_MS }
+      );
+      return name;
+    } catch {
+      return undefined;
+    }
   }
 
   // ── Checkout ─────────────────────────────────────────────────────────────
@@ -842,20 +920,16 @@ export class HostedWorkspaceViewerService {
       ["-C", this.workspaceRoot, "cat-file", "-e", `${hash}^{commit}`],
       { timeout: GIT_TIMEOUT_MS }
     );
-    await execFileAsync(
-      "git",
-      ["-C", this.workspaceRoot, "checkout", hash],
-      { timeout: GIT_TIMEOUT_MS }
-    );
+    await execFileAsync("git", ["-C", this.workspaceRoot, "checkout", hash], {
+      timeout: GIT_TIMEOUT_MS,
+    });
     return { detached: true };
   }
 
   async checkoutBranch(branch: string): Promise<{ branch: string }> {
-    await execFileAsync(
-      "git",
-      ["-C", this.workspaceRoot, "checkout", branch],
-      { timeout: GIT_TIMEOUT_MS }
-    );
+    await execFileAsync("git", ["-C", this.workspaceRoot, "checkout", branch], {
+      timeout: GIT_TIMEOUT_MS,
+    });
     return { branch };
   }
 

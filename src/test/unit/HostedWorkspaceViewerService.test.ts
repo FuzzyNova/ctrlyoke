@@ -428,4 +428,99 @@ suite("HostedWorkspaceViewerService", () => {
       });
     });
   });
+
+  // ── getCommitLog ──────────────────────────────────────────────────────────
+
+  suite("getCommitLog", () => {
+    test("marks HEAD, parses branch ref labels, and reports the branch", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "a.txt", "one\n", "first");
+      commitFile(root, "b.txt", "two\n", "second");
+      const branch = runGit(root, "branch", "--show-current");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getCommitLog();
+
+      assert.strictEqual(result.detached, false);
+      assert.strictEqual(result.currentBranch, branch);
+      assert.strictEqual(result.commits.length, 2);
+
+      const head = result.commits[0];
+      assert.strictEqual(head.subject, "second");
+      assert.strictEqual(head.isHead, true);
+      assert.strictEqual(head.isMerge, false);
+      assert.ok(
+        head.refs.some((r) => r.type === "localBranch" && r.name === branch),
+        `expected a localBranch ref named ${branch}`
+      );
+    });
+
+    test("flags merge commits via isMerge", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "base.txt", "base\n", "base");
+      const main = runGit(root, "branch", "--show-current");
+
+      runGit(root, "checkout", "-b", "feature");
+      commitFile(root, "feature.txt", "feat\n", "feature work");
+
+      runGit(root, "checkout", main);
+      commitFile(root, "main.txt", "main\n", "main work");
+      runGit(root, "merge", "--no-ff", "-m", "merge feature", "feature");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getCommitLog();
+
+      const merge = result.commits.find((c) => c.subject === "merge feature");
+      assert.ok(merge, "merge commit should be present");
+      assert.strictEqual(merge?.isMerge, true);
+    });
+
+    test("keeps branch-ahead commits visible while detached when given a branch hint", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "a.txt", "one\n", "older");
+      const olderHash = runGit(root, "rev-parse", "HEAD");
+      commitFile(root, "b.txt", "two\n", "newer");
+      const branch = runGit(root, "branch", "--show-current");
+
+      // Detach onto the older commit.
+      runGit(root, "checkout", olderHash);
+
+      const svc = new HostedWorkspaceViewerService(root);
+
+      // Without a hint, the default HEAD log only shows the detached commit.
+      const noHint = await svc.getCommitLog();
+      assert.strictEqual(noHint.detached, true);
+      assert.strictEqual(noHint.currentBranch, null);
+      assert.strictEqual(noHint.commits.length, 1);
+      assert.strictEqual(noHint.commits[0].subject, "older");
+
+      // With the branch hint, the newer "ahead" commit stays visible and HEAD
+      // is still marked on the detached (older) commit.
+      const withHint = await svc.getCommitLog(0, 30, branch);
+      assert.strictEqual(withHint.commits.length, 2);
+      const newer = withHint.commits.find((c) => c.subject === "newer");
+      const older = withHint.commits.find((c) => c.subject === "older");
+      assert.strictEqual(newer?.isHead, false);
+      assert.strictEqual(older?.isHead, true);
+    });
+
+    test("ignores an unknown branch hint and falls back to HEAD", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      commitFile(root, "a.txt", "one\n", "only");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getCommitLog(0, 30, "no-such-branch");
+
+      assert.strictEqual(result.commits.length, 1);
+      assert.strictEqual(result.commits[0].subject, "only");
+    });
+  });
 });

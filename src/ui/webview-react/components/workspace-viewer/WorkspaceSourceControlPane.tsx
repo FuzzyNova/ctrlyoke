@@ -24,6 +24,16 @@ interface PendingDiscardAction {
   untrackedCount: number;
 }
 
+/**
+ * When in detached-HEAD state, returns the branch we came from (if known) so
+ * the commit-log request can keep that branch's newer commits visible.
+ * Returns undefined when on a branch (default HEAD log is correct).
+ */
+function detachedBranchHint(): string | undefined {
+  const { detached, previousBranch } = useWorkspaceViewerStore.getState();
+  return detached && previousBranch ? previousBranch : undefined;
+}
+
 function getStatusBadge(file: SourceControlFile): string {
   if (file.kind === "added") return "A";
   if (file.kind === "deleted") return "D";
@@ -96,7 +106,9 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const loadHistory = useCallback(async () => {
     setCommitHistoryLoading(true);
     try {
-      const result = await workspaceCommitLog(0, 30);
+      // While detached, keep the branch we came from visible so the commits
+      // "ahead" of the checked-out point still render in the graph.
+      const result = await workspaceCommitLog(0, 30, detachedBranchHint());
       setCommitHistory(
         result.commits,
         result.hasMore,
@@ -114,7 +126,11 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     if (!commitHistoryHasMore) return;
     setCommitHistoryLoading(true);
     try {
-      const result = await workspaceCommitLog(commitHistory.length, 30);
+      const result = await workspaceCommitLog(
+        commitHistory.length,
+        30,
+        detachedBranchHint()
+      );
       appendCommitHistory(result.commits, result.hasMore);
     } catch {
       // silently ignore
@@ -540,6 +556,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
         <Modal
           isOpen={pendingDiscard !== null}
           onClose={() => setPendingDiscard(null)}
+          elevated
           title={
             pendingDiscard?.untrackedCount === 1
               ? "Delete Untracked File?"
@@ -596,6 +613,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       <Modal
         isOpen={pendingDiscard !== null}
         onClose={() => setPendingDiscard(null)}
+        elevated
         title={
           pendingDiscard?.untrackedCount === 1
             ? "Delete Untracked File?"

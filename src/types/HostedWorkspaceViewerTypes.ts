@@ -125,6 +125,16 @@ export interface WorkspaceMoveRequest {
 
 // ── Commit history ────────────────────────────────────────────────────────────
 
+/** Kind of git ref that decorates a commit (for git-graph ref pills). */
+export type GitRefLabelType = "localBranch" | "remoteBranch" | "tag" | "head";
+
+/** A single ref pointing at a commit, parsed from `git log` decorations. */
+export interface GitRefLabel {
+  /** Display name, e.g. "main", "origin/main", "v1.0", or "HEAD". */
+  name: string;
+  type: GitRefLabelType;
+}
+
 export interface WorkspaceCommitLogEntry {
   hash: string;
   shortHash: string;
@@ -133,6 +143,10 @@ export interface WorkspaceCommitLogEntry {
   relativeDate: string;
   isHead: boolean;
   pushed: boolean;
+  /** Refs (branches, remotes, tags, HEAD) pointing at this commit. */
+  refs: GitRefLabel[];
+  /** True when the commit has more than one parent (a merge commit). */
+  isMerge: boolean;
 }
 
 export interface WorkspaceCommitLogResponse {

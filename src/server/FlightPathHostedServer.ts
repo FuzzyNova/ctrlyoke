@@ -946,11 +946,16 @@ export class FlightPathHostedServer
       async (req, res) => {
         const skip = parseInt(String(req.query.skip ?? "0"), 10);
         const limit = parseInt(String(req.query.limit ?? "30"), 10);
+        const branch =
+          typeof req.query.branch === "string" && req.query.branch.trim()
+            ? req.query.branch.trim()
+            : undefined;
         try {
           res.json(
             await this.viewerService.getCommitLog(
               Number.isFinite(skip) ? skip : 0,
-              Number.isFinite(limit) && limit > 0 ? limit : 30
+              Number.isFinite(limit) && limit > 0 ? limit : 30,
+              branch
             )
           );
         } catch (err) {

@@ -192,10 +192,14 @@ export async function workspaceMoveEntry(
 
 export async function workspaceCommitLog(
   skip = 0,
-  limit = 30
+  limit = 30,
+  branchHint?: string
 ): Promise<WorkspaceCommitLogResponse> {
+  const branchParam = branchHint
+    ? `&branch=${encodeURIComponent(branchHint)}`
+    : "";
   return hostedFetch<WorkspaceCommitLogResponse>(
-    `/api/workspace-viewer/commit-log?skip=${skip}&limit=${limit}`
+    `/api/workspace-viewer/commit-log?skip=${skip}&limit=${limit}${branchParam}`
   );
 }
 

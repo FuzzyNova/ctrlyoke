@@ -217,6 +217,16 @@ module.exports = {
         "code-inline-fg": "var(--vscode-debugTokenExpression-string, #ce9178)",
         "code-block": "var(--vscode-textCodeBlock-background)",
 
+        // ── SCM graph (commit history) colors ──
+        // Themed from VS Code's scmGraph palette so commit-history ref pills and
+        // graph nodes match the native Source Control graph. Fallbacks are Dark+.
+        "scm-graph-local":
+          "var(--vscode-scmGraph-historyItemRefColor, #57a3f8)",
+        "scm-graph-remote":
+          "var(--vscode-scmGraph-historyItemRemoteRefColor, #ad80d7)",
+        "scm-graph-base":
+          "var(--vscode-scmGraph-historyItemBaseRefColor, #ea5c00)",
+
         // ── Semantic accent colors ──
         "bash-expand-link": "#569cd6",
         favorite: "#e5c014",
@@ -394,6 +404,9 @@ module.exports = {
         modal: "210",
         "modal-prominent": "220",
         "workspace-viewer": "300",
+        // Modals opened from inside the workspace viewer must sit above it.
+        "viewer-modal-backdrop": "310",
+        "viewer-modal": "320",
         popover: "9999",
       },
 

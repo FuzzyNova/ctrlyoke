@@ -7,6 +7,8 @@ export function run(): Promise<void> {
   const mocha = new Mocha({
     ui: "tdd",
     color: true,
+    // Allow focused runs via `MOCHA_GREP="<pattern>"` for fast local iteration.
+    ...(process.env.MOCHA_GREP ? { grep: process.env.MOCHA_GREP } : {}),
   });
 
   const testsRoot = path.resolve(__dirname, "..");

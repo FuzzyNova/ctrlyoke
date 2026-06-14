@@ -137,6 +137,7 @@ export function useCommitHistoryContextMenu({
       <Modal
         isOpen={pendingCheckout !== null}
         onClose={() => setPendingCheckout(null)}
+        elevated
         title="Checkout Commit?"
         size="sm"
         footer={

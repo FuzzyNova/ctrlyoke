@@ -133,6 +133,8 @@ const sampleCommit = {
   relativeDate: "2 days ago",
   isHead: true,
   pushed: true,
+  refs: [],
+  isMerge: false,
 };
 
 describe("setCommitHistory", () => {
