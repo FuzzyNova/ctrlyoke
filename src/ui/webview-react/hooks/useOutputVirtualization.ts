@@ -26,6 +26,7 @@ import {
 } from "@utils/outputRows";
 
 const OUTPUT_ROW_RESIZE_SCROLL_SUPPRESS_MS = 300;
+const POST_LOAD_REMEASURE_DELAY_MS = 80;
 const NON_VIRTUAL_STAGING_ROW_THRESHOLD = 60;
 const NON_VIRTUAL_INITIAL_RENDER_ROWS = 24;
 const NON_VIRTUAL_RENDER_CHUNK_ROWS = 24;
@@ -190,6 +191,10 @@ export function useOutputVirtualization({
   const pendingMeasurementCacheRef = useRef<Map<string, number>>(new Map());
   const mountedRowElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const pendingMeasurementFlushTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const postLoadRemeasureFrameRef = useRef<number | null>(null);
+  const postLoadRemeasureTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
   const schedulePendingMeasurementFlushRef = useRef<() => void>(() => {});
@@ -632,6 +637,43 @@ export function useOutputVirtualization({
   }, [flushPendingScrollMeasurements]);
   schedulePendingMeasurementFlushRef.current = schedulePendingMeasurementFlush;
 
+  const measureMountedRowsAndRestoreTarget = useCallback(
+    (phase: string) => {
+      if (
+        outputCollapsed ||
+        !isOutputVirtualized ||
+        mountedRowElementsRef.current.size === 0
+      ) {
+        return;
+      }
+
+      const now = performance.now();
+      const hasRecentScrollEvent =
+        lastScrollEventAtRef.current != null &&
+        now - lastScrollEventAtRef.current < OUTPUT_USER_SCROLL_INPUT_GRACE_MS;
+      if (hasRecentScrollEvent) {
+        return;
+      }
+
+      isBulkRemeasureInProgressRef.current = true;
+      for (const element of mountedRowElementsRef.current.values()) {
+        rowVirtualizer.measureElement(element);
+      }
+
+      requestAnimationFrame(() => {
+        isBulkRemeasureInProgressRef.current = false;
+        applyScrollTargetRef.current(phase, { force: true });
+      });
+    },
+    [
+      applyScrollTargetRef,
+      isOutputVirtualized,
+      lastScrollEventAtRef,
+      outputCollapsed,
+      rowVirtualizer,
+    ]
+  );
+
   const rowLayout: OutputRowLayoutModel = useMemo(
     () =>
       measurePhase(
@@ -803,6 +845,37 @@ export function useOutputVirtualization({
     // cascade from that mismatch (error #185) and reconciles the scroll
     // target once afterward.
   }, [isOutputVirtualized, outputCollapsed, performBulkRemeasure]);
+
+  useEffect(() => {
+    if (postLoadRemeasureFrameRef.current !== null) {
+      cancelAnimationFrame(postLoadRemeasureFrameRef.current);
+      postLoadRemeasureFrameRef.current = null;
+    }
+    if (postLoadRemeasureTimerRef.current !== null) {
+      clearTimeout(postLoadRemeasureTimerRef.current);
+      postLoadRemeasureTimerRef.current = null;
+    }
+
+    if (outputCollapsed || !isOutputVirtualized || rows.length === 0) {
+      return;
+    }
+
+    postLoadRemeasureFrameRef.current = requestAnimationFrame(() => {
+      postLoadRemeasureFrameRef.current = null;
+      measureMountedRowsAndRestoreTarget("post-load-remeasure");
+
+      postLoadRemeasureTimerRef.current = setTimeout(() => {
+        postLoadRemeasureTimerRef.current = null;
+        measureMountedRowsAndRestoreTarget("post-load-remeasure-settle");
+      }, POST_LOAD_REMEASURE_DELAY_MS);
+    });
+  }, [
+    isOutputVirtualized,
+    measureMountedRowsAndRestoreTarget,
+    outputCollapsed,
+    rowRenderIdentity,
+    rows.length,
+  ]);
 
   const hasOutput = rows.length > 0;
   const nonVirtualVisibleRowCount = isOutputVirtualized
@@ -994,6 +1067,14 @@ export function useOutputVirtualization({
       if (pendingMeasurementFlushTimerRef.current !== null) {
         clearTimeout(pendingMeasurementFlushTimerRef.current);
         pendingMeasurementFlushTimerRef.current = null;
+      }
+      if (postLoadRemeasureFrameRef.current !== null) {
+        cancelAnimationFrame(postLoadRemeasureFrameRef.current);
+        postLoadRemeasureFrameRef.current = null;
+      }
+      if (postLoadRemeasureTimerRef.current !== null) {
+        clearTimeout(postLoadRemeasureTimerRef.current);
+        postLoadRemeasureTimerRef.current = null;
       }
       if (nonVirtualRenderFrameRef.current !== null) {
         cancelAnimationFrame(nonVirtualRenderFrameRef.current);
