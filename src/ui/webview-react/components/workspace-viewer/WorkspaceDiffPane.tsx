@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { DiffView } from "@components/output/DiffView";
+import { ExpandCollapseAllDiffsButton } from "@components/shared";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
 import { downloadTextFile } from "@utils/diff";
 import { workspaceGitRefDiff } from "@utils/hostedApi";
@@ -29,6 +30,18 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffRefLoading = useWorkspaceViewerStore((s) => s.diffRefLoading);
 
   const [downloading, setDownloading] = useState(false);
+  const [commitDiffsCollapsed, setCommitDiffsCollapsed] = useState(false);
+  const [commitDiffResetVersion, setCommitDiffResetVersion] = useState(0);
+
+  const handleExpandAllDiffs = useCallback(() => {
+    setCommitDiffsCollapsed(false);
+    setCommitDiffResetVersion((version) => version + 1);
+  }, []);
+
+  const handleCollapseAllDiffs = useCallback(() => {
+    setCommitDiffsCollapsed(true);
+    setCommitDiffResetVersion((version) => version + 1);
+  }, []);
 
   const handleDownload = useCallback(async () => {
     if (!diffRefLabel) return;
@@ -93,6 +106,13 @@ export const WorkspaceDiffPane: React.FC = () => {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {visibleFiles.length > 0 && (
+              <ExpandCollapseAllDiffsButton
+                anyDiffCollapsed={commitDiffsCollapsed}
+                onExpand={handleExpandAllDiffs}
+                onCollapse={handleCollapseAllDiffs}
+              />
+            )}
             <button
               onClick={() => void handleDownload()}
               disabled={downloading}
@@ -125,7 +145,8 @@ export const WorkspaceDiffPane: React.FC = () => {
                     oldContent=""
                     newContent=""
                     language={file.language}
-                    globallyCollapsed={false}
+                    globallyCollapsed={commitDiffsCollapsed}
+                    localResetVersion={commitDiffResetVersion}
                     hunks={file.hunks}
                     diffType={file.diffType}
                   />
