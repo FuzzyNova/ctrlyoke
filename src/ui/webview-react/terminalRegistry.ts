@@ -125,6 +125,24 @@ function makeKey(workflowId: string, sessionId: string): string {
   return `${workflowId}:${sessionId}`;
 }
 
+/**
+ * Letterbox a viewer's xterm element inside its container.
+ *
+ * The xterm is sized to the controller's exact cols×rows, so its rendered
+ * element has a fixed pixel size that rarely matches the viewer's container.
+ * Sizing domEl to `fit-content` in both axes makes it exactly the xterm canvas
+ * size, so the container's overflow-x/y:auto scrollbars engage when the viewer
+ * is smaller. Horizontal auto-margins center it when the viewer is wider; the
+ * element stays top-aligned vertically so scrolling from the top always works
+ * (auto top/bottom margins would clip the top in an overflow container).
+ */
+function applyViewerLetterbox(entry: RegistryEntry): void {
+  entry.domEl.style.width = "fit-content";
+  entry.domEl.style.height = "fit-content";
+  entry.domEl.style.marginLeft = "auto";
+  entry.domEl.style.marginRight = "auto";
+}
+
 function fitRegistryEntry(
   entry: RegistryEntry,
   mode: "controller" | "viewer"
@@ -134,11 +152,13 @@ function fitRegistryEntry(
   const proposedRows = dims?.rows ?? null;
 
   if (mode === "viewer" && entry.controllerCols != null) {
-    const rows = Math.max(1, proposedRows ?? entry.term.rows);
+    // Mirror the controller exactly: lock BOTH cols and rows to the controller's
+    // PTY so the rendered grid (including TUI / alternate-buffer output) matches.
+    // Fall back to the proposed/current rows only until controllerRows is known.
+    const rows =
+      entry.controllerRows ?? Math.max(1, proposedRows ?? entry.term.rows);
     entry.term.resize(entry.controllerCols, rows);
-    entry.domEl.style.width = "fit-content";
-    entry.domEl.style.marginLeft = "auto";
-    entry.domEl.style.marginRight = "auto";
+    applyViewerLetterbox(entry);
     return {
       cols: entry.term.cols,
       rows: entry.term.rows,
@@ -487,31 +507,23 @@ export const terminalRegistry = {
     entry.controllerCols = cols;
     if (rows != null) entry.controllerRows = rows;
 
-    // Compute rows from the current container height so the viewer fills
-    // vertically. NOTE: this intentionally does NOT use the controller's rows —
-    // viewer height tracks the local container, not the controller. The debug log
-    // below surfaces how far viewer rows drift from the controller, which is the
-    // suspected cause of TUI/alt-buffer mis-rendering on viewers (output is
-    // positioned for the controller's exact row count).
+    // Mirror the controller exactly: lock the viewer's xterm to the controller's
+    // cols AND rows. Rows are no longer derived from the local container — the
+    // grid must match the controller so TUI / alternate-buffer output (positioned
+    // for the controller's exact row count) renders identically. The viewer's
+    // container letterboxes the fixed-size grid via overflow scrollbars / margins.
+    const targetRows = Math.max(1, entry.controllerRows ?? entry.term.rows);
     try {
-      const proposedRows = Math.max(
-        1,
-        entry.fitAddon.proposeDimensions()?.rows ?? entry.term.rows
-      );
-      entry.term.resize(cols, proposedRows);
+      entry.term.resize(cols, targetRows);
     } catch {
       // May throw if terminal isn't fully initialized yet — safe to ignore
     }
 
-    // Shrink domEl to canvas width so parent overflow-x:auto triggers correctly
-    entry.domEl.style.width = "fit-content";
-    entry.domEl.style.marginLeft = "auto";
-    entry.domEl.style.marginRight = "auto";
+    applyViewerLetterbox(entry);
 
     WebviewLog.debug(
       `[terminalRegistry.applyControllerSize] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
-        `controller=${cols}x${rows ?? "?"} viewer=${entry.term.cols}x${entry.term.rows} ` +
-        `domElWidth=${entry.domEl.style.width}` +
+        `controller=${cols}x${rows ?? "?"} viewer=${entry.term.cols}x${entry.term.rows}` +
         (rows != null && rows !== entry.term.rows ? " ROW MISMATCH" : "")
     );
   },
@@ -524,7 +536,9 @@ export const terminalRegistry = {
     const entry = registry.get(makeKey(workflowId, sessionId));
     if (!entry) return;
     entry.controllerCols = undefined;
+    entry.controllerRows = undefined;
     entry.domEl.style.width = "100%";
+    entry.domEl.style.height = "100%";
     entry.domEl.style.marginLeft = "";
     entry.domEl.style.marginRight = "";
     try {

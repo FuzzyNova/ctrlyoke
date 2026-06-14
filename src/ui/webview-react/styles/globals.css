@@ -200,8 +200,9 @@
 
   /* Mobile: remove the 300ms tap delay on all interactive elements.
      "manipulation" allows single-finger tap/scroll but disables double-tap zoom,
-     which is what eliminates the delay. Does not affect the terminal container
-     (which uses touch-action:none via inline style for full touch control). */
+     which is what eliminates the delay. Does not affect the terminal container,
+     which sets touch-action via inline style per role (controller: none for full
+     custom scroll control; viewer: pan-x/pan-y for native grid panning). */
   button,
   [role="button"],
   a,

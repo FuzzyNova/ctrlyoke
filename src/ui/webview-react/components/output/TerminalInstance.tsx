@@ -50,13 +50,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   const session = sessions.find((s) => s.id === sessionId);
   const isController = session?.isController ?? true;
   const controllerCols = session?.controllerCols;
+  const controllerRows = session?.controllerRows;
 
   useEffect(() => {
     WebviewLog.debug(
       `[TerminalInstance] visibility wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
         `isVisible=${isVisible} isController=${isController} controllerCols=${controllerCols ?? "none"}`
     );
-  }, [controllerCols, isController, isVisible, workflowId, sessionId]);
+  }, [controllerCols, controllerRows, isController, isVisible, workflowId, sessionId]);
 
   useEffect(() => {
     const previousIsController = previousIsControllerRef.current;
@@ -88,16 +89,16 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     let touchScrollAccum = 0;
     let touchEl: HTMLElement | null = null;
 
-    // Axis lock for the gesture in progress. A gesture is classified as
-    // horizontal or vertical on the first significant move. Only viewers can
-    // scroll horizontally (to reveal a terminal wider than the screen); for them
-    // a horizontal-dominant gesture is handed to the container's native pan-x
-    // scroll. Vertical gestures (and all controller gestures) drive xterm
-    // scrollback via the custom handler below.
-    let gestureStartX = 0;
-    let gestureStartY = 0;
-    let axisLock: "none" | "x" | "y" = "none";
-    const AXIS_LOCK_THRESHOLD_PX = 6;
+    // The custom scrollback/inertia handler below runs for the CONTROLLER only.
+    // A viewer's xterm mirrors the controller's exact cols×rows grid, which is
+    // usually larger than the viewer's container, so a viewer instead pans that
+    // fixed grid via the container's native overflow scroll (touch-action below
+    // is set to allow pan-x/pan-y for viewers). Letting native panning own both
+    // axes is what makes the iOS horizontal scrollbar reachable and lets the user
+    // reach rows below the fold. Viewers therefore early-return from these
+    // handlers and never call preventDefault.
+    const isViewerNow = () =>
+      terminalRegistry.get(workflowId, sessionId)?.controllerCols != null;
 
     // Inertia state — velocity in px/ms, positive = scroll down
     let inertiaVelocity = 0;
@@ -197,14 +198,13 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     };
 
     const handleTouchStart = (e: TouchEvent) => {
+      // Viewers pan natively — leave the gesture entirely to the browser.
+      if (isViewerNow()) return;
       // Save current coasting velocity before stopping — a re-flick in the same
       // direction will add it back at touchend to accumulate momentum.
       preTouchInertiaVelocity = inertiaVelocity;
       stopInertia();
       touchStartY = e.touches[0].clientY;
-      gestureStartX = e.touches[0].clientX;
-      gestureStartY = e.touches[0].clientY;
-      axisLock = "none";
       touchScrollAccum = 0;
       inertiaScrollAccum = 0;
       velSamples = [];
@@ -212,43 +212,11 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
 
     const handleTouchMove = (e: TouchEvent) => {
       if (!e.touches.length) return;
+      // Viewers pan natively (both axes) — do not preventDefault or scroll xterm.
+      if (isViewerNow()) return;
       const now = performance.now();
-      const currentX = e.touches[0].clientX;
-      const currentY = e.touches[0].clientY;
-
-      const entry = terminalRegistry.get(workflowId, sessionId);
-      if (!entry) return;
-      const isViewer = entry.controllerCols != null;
-
-      // Classify the gesture axis on the first significant movement. Until it is
-      // classified, do NOT preventDefault — iOS Safari decides whether a gesture
-      // is eligible for native panning on the first touchmove, so calling
-      // preventDefault early permanently cancels the horizontal pan-x scroll.
-      if (axisLock === "none") {
-        const totalDx = currentX - gestureStartX;
-        const totalDy = currentY - gestureStartY;
-        if (
-          Math.abs(totalDx) >= AXIS_LOCK_THRESHOLD_PX ||
-          Math.abs(totalDy) >= AXIS_LOCK_THRESHOLD_PX
-        ) {
-          axisLock =
-            isViewer && Math.abs(totalDx) > Math.abs(totalDy) ? "x" : "y";
-        } else {
-          touchStartY = currentY;
-          return;
-        }
-      }
-
-      // Horizontal gesture on a viewer: leave it to the container's native pan-x
-      // scroll so the user can reach a terminal wider than the screen. Not
-      // calling preventDefault here is exactly what lets the iOS scrollbar work.
-      if (axisLock === "x") {
-        touchStartY = currentY;
-        return;
-      }
-
-      const deltaPixels = touchStartY - currentY;
-      touchStartY = currentY;
+      const deltaPixels = touchStartY - e.touches[0].clientY;
+      touchStartY = e.touches[0].clientY;
 
       // Accumulate velocity samples; prune anything outside the look-back window.
       velSamples.push({ dp: deltaPixels, t: now });
@@ -257,6 +225,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         velSamples.shift();
       }
 
+      const entry = terminalRegistry.get(workflowId, sessionId);
+      if (!entry) return;
       const fontSize =
         (entry.term.options.fontSize as number | undefined) ?? 14;
       const lineHeight =
@@ -272,6 +242,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     };
 
     const handleTouchEnd = (_e: TouchEvent) => {
+      if (isViewerNow()) return;
       const now = performance.now();
       const cutoff = now - VEL_WINDOW_MS;
       const recent = velSamples.filter((s) => s.t >= cutoff);
@@ -360,12 +331,15 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         clearPendingOutput(workflowId, sessionId);
       }
 
-      // Seed the registry entry with the controller's col count if already known
+      // Seed the registry entry with the controller's dimensions if already known
       // (TERMINAL_SIZE_CHANGED may have arrived before this mount ran).
       // attach()'s requestAnimationFrame checks entry.controllerCols and applies
-      // viewer sizing instead of fitAddon.fit() when this is set.
+      // viewer sizing (cols×rows mirror) instead of fitAddon.fit() when set.
       if (sess?.isController === false && sess.controllerCols != null) {
         entry.controllerCols = sess.controllerCols;
+        if (sess.controllerRows != null) {
+          entry.controllerRows = sess.controllerRows;
+        }
       }
 
       // Attach the xterm DOM element into this container (async: loads WebGL addon on first open)
@@ -562,18 +536,24 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       terminalRegistry.applyControllerSize(
         workflowId,
         sessionId,
-        entry.controllerCols
+        entry.controllerCols,
+        entry.controllerRows
       );
     }
-  }, [controllerCols, isController, workflowId, sessionId]);
+  }, [controllerCols, controllerRows, isController, workflowId, sessionId]);
 
-  // When controllerCols changes while already a viewer, reapply the new size.
-  // This handles the case where TERMINAL_SIZE_CHANGED arrives after isController
-  // has already been set to false.
+  // When the controller's dimensions change while already a viewer, reapply the
+  // new size. This handles the case where TERMINAL_SIZE_CHANGED arrives after
+  // isController has already been set to false.
   useEffect(() => {
     if (isController || controllerCols == null) return;
-    terminalRegistry.applyControllerSize(workflowId, sessionId, controllerCols);
-  }, [controllerCols, isController, workflowId, sessionId]);
+    terminalRegistry.applyControllerSize(
+      workflowId,
+      sessionId,
+      controllerCols,
+      controllerRows
+    );
+  }, [controllerCols, controllerRows, isController, workflowId, sessionId]);
 
   useEffect(() => {
     if (!isVisible) {
@@ -634,7 +614,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
     };
-  }, [controllerCols, isController, isVisible, workflowId, sessionId]);
+  }, [controllerCols, controllerRows, isController, isVisible, workflowId, sessionId]);
 
   return (
     <div
@@ -646,17 +626,19 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         flexDirection: "column",
         position: "relative",
         // Controllers fill their container with no overflow (fitAddon sizes exactly).
-        // Viewers lock xterm to the controller's col-width; if narrower they get a
-        // horizontal scrollbar, if wider the xterm is centered via auto margins.
+        // Viewers mirror the controller's exact cols×rows grid (fixed size) and
+        // letterbox it: scrollbars on whichever axis the viewer is smaller, auto
+        // horizontal margins center it when wider. Hence overflow auto on both
+        // axes for viewers.
         overflowX: isController ? "hidden" : "auto",
-        overflowY: "hidden",
+        overflowY: isController ? "hidden" : "auto",
         // Controllers take full touch control (touch-action:none) so our custom
         // handler owns vertical scrollback and the browser never pans/zooms the
-        // page. Viewers allow native horizontal panning (pan-x) so a terminal
-        // wider than the screen can be scrolled via the overflow-x:auto bar;
-        // vertical scrollback is still handled by the custom touch handler, which
-        // only consumes (preventDefault) gestures it has locked to the Y axis.
-        touchAction: isController ? "none" : "pan-x",
+        // page. Viewers pan the fixed mirrored grid natively on both axes
+        // (pan-x/pan-y) — this is what makes the horizontal scrollbar reachable on
+        // iOS Safari and lets the user reach rows below the fold. Pinch-zoom stays
+        // disabled either way.
+        touchAction: isController ? "none" : "pan-x pan-y",
       }}
     >
       {/* "Process exited" overlay for frozen ai-cli sessions */}

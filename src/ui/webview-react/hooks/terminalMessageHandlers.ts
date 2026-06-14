@@ -351,10 +351,16 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     const { workflowId, sessionId, cols, rows } = message;
     if (!workflowId || !sessionId || !cols) return;
 
-    // Always record the controller cols so ResizeObserver can maintain them
+    // Always record the controller dims so the ResizeObserver and mount seeding
+    // can maintain them.
     useTerminalStore
       .getState()
-      .setSessionControllerSize(workflowId, sessionId, cols as number);
+      .setSessionControllerSize(
+        workflowId,
+        sessionId,
+        cols as number,
+        rows as number | undefined
+      );
 
     // Only apply to the local xterm if this client is a viewer (not the controller)
     const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];

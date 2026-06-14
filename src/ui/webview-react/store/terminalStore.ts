@@ -34,6 +34,13 @@ export interface TerminalSession {
    * line-wrapping in the output matches exactly.
    */
   controllerCols?: number;
+  /**
+   * Row count of the controller's PTY, broadcast via TERMINAL_SIZE_CHANGED.
+   * Viewer clients lock their xterm height to this so the rendered grid mirrors
+   * the controller exactly — required for TUI / alternate-buffer apps whose
+   * output is positioned for the controller's precise row count.
+   */
+  controllerRows?: number;
 }
 
 interface TerminalState {
@@ -74,11 +81,12 @@ interface TerminalActions {
     isController: boolean
   ) => void;
 
-  /** Store the controller's PTY column count when TERMINAL_SIZE_CHANGED arrives */
+  /** Store the controller's PTY dimensions when TERMINAL_SIZE_CHANGED arrives */
   setSessionControllerSize: (
     workflowId: string,
     sessionId: string,
-    cols: number
+    cols: number,
+    rows?: number
   ) => void;
 
   /** Called on new run start — clears only ai-cli sessions; shell sessions survive */
@@ -190,10 +198,16 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),
 
-    setSessionControllerSize: (workflowId, sessionId, cols) =>
+    setSessionControllerSize: (workflowId, sessionId, cols, rows) =>
       set((state) => {
         const sessions = (state.sessions[workflowId] ?? []).map((s) =>
-          s.id === sessionId ? { ...s, controllerCols: cols } : s
+          s.id === sessionId
+            ? {
+                ...s,
+                controllerCols: cols,
+                ...(rows != null ? { controllerRows: rows } : {}),
+              }
+            : s
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),
