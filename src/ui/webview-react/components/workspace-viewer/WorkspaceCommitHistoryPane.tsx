@@ -184,13 +184,16 @@ interface CommitGraphGutterProps {
   isMerge: boolean;
   isFirst: boolean;
   isLast: boolean;
+  pushed: boolean;
 }
 
 /**
  * Single-lane git-graph gutter: a vertical connector line with one node per
  * commit. The HEAD node is highlighted as the current location; "ahead"
  * commits (newer than HEAD) are dimmed/hollow; merge commits get a base-color
- * ring. This intentionally does not render parallel branch lanes.
+ * ring. Node/ring color reflects whether the commit has been pushed, which
+ * replaces the old separate "not yet pushed" indicator dot. This
+ * intentionally does not render parallel branch lanes.
  */
 const CommitGraphGutter: React.FC<CommitGraphGutterProps> = ({
   relation,
@@ -198,18 +201,25 @@ const CommitGraphGutter: React.FC<CommitGraphGutterProps> = ({
   isMerge,
   isFirst,
   isLast,
+  pushed,
 }) => {
   const ahead = relation === "ahead";
 
   // Node styling by relation; HEAD wins as the highlighted current location.
+  // Color reflects push status (local-only commits use scm-graph-unpushed).
   let nodeClass: string;
   if (isHead) {
-    nodeClass =
-      "w-3 h-3 bg-scm-graph-local ring-2 ring-scm-graph-local/40 ring-offset-0";
+    nodeClass = pushed
+      ? "w-3 h-3 bg-scm-graph-local ring-2 ring-scm-graph-local/40 ring-offset-0"
+      : "w-3 h-3 bg-scm-graph-unpushed ring-2 ring-scm-graph-unpushed/40 ring-offset-0";
   } else if (ahead) {
-    nodeClass = "w-2.5 h-2.5 border-2 border-scm-graph-local bg-editor-bg";
+    nodeClass = pushed
+      ? "w-2.5 h-2.5 border-2 border-scm-graph-local bg-editor-bg"
+      : "w-2.5 h-2.5 border-2 border-scm-graph-unpushed bg-editor-bg";
   } else {
-    nodeClass = "w-2.5 h-2.5 bg-scm-graph-local";
+    nodeClass = pushed
+      ? "w-2.5 h-2.5 bg-scm-graph-local"
+      : "w-2.5 h-2.5 bg-scm-graph-unpushed";
   }
   const mergeRing = isMerge && !isHead ? " ring-1 ring-scm-graph-base" : "";
 
@@ -307,7 +317,9 @@ const CommitRow: React.FC<CommitRowProps> = ({
       }}
       onContextMenu={(e) => onContextMenu(e, commit)}
       {...longPressHandlers}
-      title={`${commit.hash}\n${commit.subject}\n${commit.author} · ${commit.relativeDate}`}
+      title={`${commit.hash}\n${commit.subject}\n${commit.author} · ${commit.relativeDate}${
+        commit.pushed ? "" : "\nNot yet pushed"
+      }`}
     >
       <CommitGraphGutter
         relation={relation}
@@ -315,9 +327,10 @@ const CommitRow: React.FC<CommitRowProps> = ({
         isMerge={commit.isMerge}
         isFirst={isFirst}
         isLast={isLast}
+        pushed={commit.pushed}
       />
-      <span className="font-mono text-xs text-editor-fg opacity-50 flex-shrink-0 w-12 truncate">
-        {commit.shortHash}
+      <span className="min-w-0 flex-1 truncate text-xs text-editor-fg">
+        {commit.subject}
       </span>
       {commit.refs.length > 0 && (
         <span className="flex items-center gap-1 flex-shrink-0">
@@ -325,18 +338,6 @@ const CommitRow: React.FC<CommitRowProps> = ({
             <RefPill key={`${ref.type}:${ref.name}`} label={ref} />
           ))}
         </span>
-      )}
-      <span className="min-w-0 flex-1 truncate text-xs text-editor-fg">
-        {commit.subject}
-      </span>
-      <span className="flex-shrink-0 text-xs text-editor-fg opacity-40">
-        {commit.relativeDate}
-      </span>
-      {!commit.pushed && (
-        <span
-          className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-yellow-400 opacity-80"
-          title="Not yet pushed"
-        />
       )}
     </button>
   );
