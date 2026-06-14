@@ -1,7 +1,8 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import type { WorkspaceCommitLogEntry } from "@root/types/HostedWorkspaceViewerTypes";
 import { useCommitHistoryContextMenu } from "@hooks/useCommitHistoryContextMenu";
+import { useLongPress } from "@hooks/useLongPress";
 import { workspaceCheckoutBranch } from "@utils/hostedApi";
 
 interface WorkspaceCommitHistoryPaneProps {
@@ -23,6 +24,9 @@ export const WorkspaceCommitHistoryPane: React.FC<
   const currentBranch = useWorkspaceViewerStore((s) => s.currentBranch);
   const previousBranch = useWorkspaceViewerStore((s) => s.previousBranch);
   const setPreviousBranch = useWorkspaceViewerStore((s) => s.setPreviousBranch);
+  const setMobileDiffVisible = useWorkspaceViewerStore(
+    (s) => s.setMobileDiffVisible
+  );
 
   const { openContextMenu, commitHistoryContextMenuPortal } =
     useCommitHistoryContextMenu({ onRefresh });
@@ -35,11 +39,19 @@ export const WorkspaceCommitHistoryPane: React.FC<
     [openContextMenu]
   );
 
+  const handleRowLongPressContextMenu = useCallback(
+    (x: number, y: number, commit: WorkspaceCommitLogEntry) => {
+      openContextMenu(x, y, commit);
+    },
+    [openContextMenu]
+  );
+
   const handleRowClick = useCallback(
     (commit: WorkspaceCommitLogEntry) => {
       void useWorkspaceViewerStore.getState().openToGitRef(`~${commit.hash}`);
+      setMobileDiffVisible(true);
     },
-    []
+    [setMobileDiffVisible]
   );
 
   const handleReturnToBranch = useCallback(async () => {
@@ -105,6 +117,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
               commit={commit}
               onClick={handleRowClick}
               onContextMenu={handleRowContextMenu}
+              onLongPressContextMenu={handleRowLongPressContextMenu}
             />
           ))}
         </div>
@@ -135,20 +148,40 @@ interface CommitRowProps {
   commit: WorkspaceCommitLogEntry;
   onClick: (commit: WorkspaceCommitLogEntry) => void;
   onContextMenu: (e: React.MouseEvent, commit: WorkspaceCommitLogEntry) => void;
+  onLongPressContextMenu: (
+    x: number,
+    y: number,
+    commit: WorkspaceCommitLogEntry
+  ) => void;
 }
 
 const CommitRow: React.FC<CommitRowProps> = ({
   commit,
   onClick,
   onContextMenu,
+  onLongPressContextMenu,
 }) => {
+  const ignoreNextClickRef = useRef(false);
+  const longPressHandlers = useLongPress((x, y) => {
+    ignoreNextClickRef.current = true;
+    onLongPressContextMenu(x, y, commit);
+  });
+
   return (
     <button
       className={`flex items-center gap-2 px-2 py-1 text-left hover:bg-list-hover-bg transition-colors w-full min-w-0 ${
         commit.isHead ? "bg-list-active-bg/40" : ""
       }`}
-      onClick={() => onClick(commit)}
+      onClick={(e) => {
+        if (ignoreNextClickRef.current) {
+          ignoreNextClickRef.current = false;
+          e.preventDefault();
+          return;
+        }
+        onClick(commit);
+      }}
       onContextMenu={(e) => onContextMenu(e, commit)}
+      {...longPressHandlers}
       title={`${commit.hash}\n${commit.subject}\n${commit.author} · ${commit.relativeDate}`}
     >
       <span className="font-mono text-xs text-editor-fg opacity-50 flex-shrink-0 w-12 truncate">

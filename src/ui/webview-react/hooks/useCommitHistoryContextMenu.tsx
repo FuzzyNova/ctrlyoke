@@ -31,7 +31,9 @@ export function useCommitHistoryContextMenu({
 
   const handleViewDiff = useCallback((commit: WorkspaceCommitLogEntry) => {
     if (isStandalone) {
-      void useWorkspaceViewerStore.getState().openToGitRef(`~${commit.hash}`);
+      const store = useWorkspaceViewerStore.getState();
+      void store.openToGitRef(`~${commit.hash}`);
+      store.setMobileDiffVisible(true);
     } else {
       sendMessage(MESSAGE_TYPES.OPEN_GIT_CHANGE, { ref: `~${commit.hash}` });
     }

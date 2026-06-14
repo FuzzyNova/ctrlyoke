@@ -13,6 +13,7 @@ const aliases = {
   "@types": path.resolve(__dirname, "types"),
   "@root/types": path.resolve(__dirname, "../../types"),
   "@root/utils": path.resolve(__dirname, "../../utils"),
+  "@root/completions": path.resolve(__dirname, "../../completions"),
   "@icons": path.resolve(__dirname, "../icons"),
 };
 
