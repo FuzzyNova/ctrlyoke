@@ -118,6 +118,25 @@ describe("WorkspaceCommitHistoryPane", () => {
 
     // "main" appears both in the header branch chip and as a ref pill.
     expect(screen.getAllByText("main").length).toBeGreaterThanOrEqual(1);
+    // In-sync remote ref shares the row with its local branch, so it's
+    // collapsed to just a cloud icon (no "origin/main" text).
+    expect(screen.queryByText("origin/main")).not.toBeInTheDocument();
+    expect(screen.getByTitle("origin/main")).toBeInTheDocument();
+  });
+
+  it("shows the full remote branch name when not sharing a row with a local branch ref", () => {
+    useWorkspaceViewerStore.setState({
+      commitHistory: [
+        {
+          ...commit,
+          refs: [{ name: "origin/main", type: "remoteBranch" }],
+        },
+      ],
+    });
+    render(
+      <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
+    );
+
     expect(screen.getByText("origin/main")).toBeInTheDocument();
   });
 

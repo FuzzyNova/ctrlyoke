@@ -268,9 +268,13 @@ const CommitGraphGutter: React.FC<CommitGraphGutterProps> = ({
 
 interface RefPillProps {
   label: GitRefLabel;
+  /** Render only the icon, with no branch-name text (used when a remote ref
+   *  is on the same commit as its in-sync local branch — the cloud icon
+   *  alone conveys "also pushed here"). */
+  iconOnly?: boolean;
 }
 
-const RefPill: React.FC<RefPillProps> = ({ label }) => {
+const RefPill: React.FC<RefPillProps> = ({ label, iconOnly }) => {
   const colorClass =
     label.type === "remoteBranch"
       ? "border-scm-graph-remote text-scm-graph-remote"
@@ -291,7 +295,7 @@ const RefPill: React.FC<RefPillProps> = ({ label }) => {
       title={label.name}
     >
       <i className={`codicon ${icon} text-xxs`} />
-      {label.name}
+      {!iconOnly && label.name}
     </span>
   );
 };
@@ -360,7 +364,14 @@ const CommitRow: React.FC<CommitRowProps> = ({
       {commit.refs.length > 0 && (
         <span className="flex items-center gap-1 flex-shrink-0">
           {commit.refs.map((ref) => (
-            <RefPill key={`${ref.type}:${ref.name}`} label={ref} />
+            <RefPill
+              key={`${ref.type}:${ref.name}`}
+              label={ref}
+              iconOnly={
+                ref.type === "remoteBranch" &&
+                commit.refs.some((r) => r.type === "localBranch")
+              }
+            />
           ))}
         </span>
       )}
