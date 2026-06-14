@@ -180,6 +180,23 @@ describe("setPreviousBranch", () => {
   });
 });
 
+describe("selectDiff", () => {
+  it("clears any active multi-file git-ref diff", () => {
+    useWorkspaceViewerStore.setState({
+      diffFiles: [],
+      diffRefLabel: "Commit abc1234",
+      diffRefLoading: true,
+    });
+
+    store().selectDiff("src/file.ts");
+
+    expect(store().selectedDiffPath).toBe("src/file.ts");
+    expect(store().diffFiles).toBeNull();
+    expect(store().diffRefLabel).toBeNull();
+    expect(store().diffRefLoading).toBe(false);
+  });
+});
+
 describe("close() clears commit history loading", () => {
   it("resets commitHistoryLoading on close", () => {
     store().setCommitHistoryLoading(true);

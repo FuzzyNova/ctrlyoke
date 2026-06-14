@@ -27,7 +27,6 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffFiles = useWorkspaceViewerStore((s) => s.diffFiles);
   const diffRefLabel = useWorkspaceViewerStore((s) => s.diffRefLabel);
   const diffRefLoading = useWorkspaceViewerStore((s) => s.diffRefLoading);
-  const clearDiff = useWorkspaceViewerStore((s) => s.clearDiff);
 
   const [downloading, setDownloading] = useState(false);
 
@@ -105,12 +104,6 @@ export const WorkspaceDiffPane: React.FC = () => {
               />
               Download
             </button>
-            <button
-              onClick={clearDiff}
-              className="codicon codicon-close text-xs text-editor-fg opacity-60 hover:opacity-100 transition-opacity"
-              title="Close diff"
-              aria-label="Close diff"
-            />
           </div>
         </div>
 

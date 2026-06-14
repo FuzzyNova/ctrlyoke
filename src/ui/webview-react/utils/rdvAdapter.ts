@@ -80,9 +80,13 @@ function languageFromPath(filePath: string): string | undefined {
 export function parseUnifiedDiffToFiles(unifiedDiff: string): ParsedDiffFile[] {
   if (!unifiedDiff.trim()) return [];
 
+  const firstPatchLine = unifiedDiff.search(/^diff --git /m);
+  if (firstPatchLine === -1) return [];
+  const patchText = unifiedDiff.slice(firstPatchLine);
+
   let files;
   try {
-    files = parseDiff(unifiedDiff, { nearbySequences: "zip" });
+    files = parseDiff(patchText, { nearbySequences: "zip" });
   } catch {
     return [];
   }

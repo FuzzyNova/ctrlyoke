@@ -256,6 +256,18 @@ index 111aaaa..222bbbb 100644
  Some text.
 `;
 
+const SAMPLE_GIT_SHOW_DIFF = `commit abc1234567890abcdef
+Author: Dev <dev@example.com>
+Date:   Fri Jun 12 12:00:00 2026 -0500
+
+    feat: add files
+
+ src/foo.ts | 2 +-
+ src/bar.md | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+${SAMPLE_UNIFIED_DIFF}`;
+
 describe("parseUnifiedDiffToFiles", () => {
   it("returns an empty array for empty input", () => {
     expect(parseUnifiedDiffToFiles("")).toHaveLength(0);
@@ -265,6 +277,13 @@ describe("parseUnifiedDiffToFiles", () => {
   it("parses a multi-file diff into one entry per file", () => {
     const files = parseUnifiedDiffToFiles(SAMPLE_UNIFIED_DIFF);
     expect(files).toHaveLength(2);
+  });
+
+  it("parses git show output with commit metadata and stat preamble", () => {
+    const files = parseUnifiedDiffToFiles(SAMPLE_GIT_SHOW_DIFF);
+    expect(files).toHaveLength(2);
+    expect(files[0]!.path).toBe("src/foo.ts");
+    expect(files[1]!.path).toBe("src/bar.md");
   });
 
   it("sets the path from the b/ header", () => {
@@ -292,4 +311,3 @@ describe("parseUnifiedDiffToFiles", () => {
     ).not.toThrow();
   });
 });
-

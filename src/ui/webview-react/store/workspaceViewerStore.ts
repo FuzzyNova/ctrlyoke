@@ -435,7 +435,12 @@ export const useWorkspaceViewerStore = create<
       },
 
       selectDiff(path) {
-        set({ selectedDiffPath: path });
+        set({
+          selectedDiffPath: path,
+          diffFiles: null,
+          diffRefLabel: null,
+          diffRefLoading: false,
+        });
       },
 
       clearDiff() {
