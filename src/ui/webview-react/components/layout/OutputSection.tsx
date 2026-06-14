@@ -1081,6 +1081,13 @@ const OutputSectionInner: React.FC = () => {
     });
   }, []);
 
+  const handleDeleteRun = useCallback((runIndex: number) => {
+    getVsCodeApi()?.postMessage({
+      type: MESSAGE_TYPES.DELETE_RUN_HISTORY,
+      runIndex,
+    });
+  }, []);
+
   const handleFindQueryChange = useCallback(
     (query: string) => {
       runSearch(query);
@@ -1170,6 +1177,7 @@ const OutputSectionInner: React.FC = () => {
           workflowUndoEntries={workflowUndoRedoData.undoEntries}
           onBackToLive={handleBackToLive}
           onClearHistory={handleClearHistory}
+          onDeleteRun={handleDeleteRun}
           onCollapseAllDiffs={collapseAllDiffs}
           onExecutionModeToggle={handleExecutionModeChange}
           onExpandAllDiffs={expandAllDiffs}

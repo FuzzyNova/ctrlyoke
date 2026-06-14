@@ -35,6 +35,7 @@ export interface OutputSectionHeaderProps {
   workflowUndoEntries: WorkflowStepEntry[];
   onBackToLive: () => void;
   onClearHistory: () => void;
+  onDeleteRun: (runIndex: number) => void;
   onCollapseAllDiffs: () => void;
   onExecutionModeToggle: (active: boolean) => void;
   onExpandAllDiffs: () => void;
@@ -77,6 +78,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
   workflowUndoEntries,
   onBackToLive,
   onClearHistory,
+  onDeleteRun,
   onCollapseAllDiffs,
   onExecutionModeToggle,
   onExpandAllDiffs,
@@ -299,6 +301,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
                 onSelectRun={onRunSelect}
                 onBackToLive={onBackToLive}
                 onClearHistory={onClearHistory}
+                onDeleteRun={onDeleteRun}
               />
             )}
             {hasOutput && (

@@ -507,6 +507,67 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       redoInstructions: [],
     });
   });
+
+  test("deleteRun removes a single run by index (newest = 0)", async () => {
+    const workflowId = "wf-delete";
+    const historyDir = path.join(manager.historyBaseDir, workflowId);
+    await fs.mkdir(historyDir, { recursive: true });
+
+    // Three runs with explicit, increasing startedAt so ordering is deterministic.
+    await recorder.initializeRun(
+      historyDir,
+      workflowId,
+      1,
+      1000,
+      EXECUTION_STATES.COMPLETED
+    );
+    await recorder.initializeRun(
+      historyDir,
+      workflowId,
+      2,
+      2000,
+      EXECUTION_STATES.COMPLETED
+    );
+    await recorder.initializeRun(
+      historyDir,
+      workflowId,
+      3,
+      3000,
+      EXECUTION_STATES.COMPLETED
+    );
+
+    assert.strictEqual((await manager.getRunsForWorkflow(workflowId)).length, 3);
+
+    // Delete the newest run (index 0) — the accidental-restart recovery case.
+    const remaining = await manager.deleteRun(workflowId, 0);
+    assert.strictEqual(remaining, 2);
+
+    const runs = await manager.getRunsForWorkflow(workflowId);
+    assert.strictEqual(runs.length, 2);
+
+    // The newest remaining run is now run 2 (startedAt 2000); run 3 is gone.
+    const newest = await recorder.readManifest(
+      manager.getHistoryFilePath(workflowId, runs[0])
+    );
+    assert.strictEqual(newest.runId, 2);
+  });
+
+  test("deleteRun is a no-op for an out-of-range index", async () => {
+    const workflowId = "wf-delete-oob";
+    const historyDir = path.join(manager.historyBaseDir, workflowId);
+    await fs.mkdir(historyDir, { recursive: true });
+    await recorder.initializeRun(
+      historyDir,
+      workflowId,
+      1,
+      1000,
+      EXECUTION_STATES.COMPLETED
+    );
+
+    const remaining = await manager.deleteRun(workflowId, 5);
+    assert.strictEqual(remaining, 1);
+    assert.strictEqual((await manager.getRunsForWorkflow(workflowId)).length, 1);
+  });
 });
 
 suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {

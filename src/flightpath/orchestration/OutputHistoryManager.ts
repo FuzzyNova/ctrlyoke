@@ -406,6 +406,39 @@ export class OutputHistoryManager {
   }
 
   /**
+   * Delete a single run by index (0 = most recent), matching the newest-first
+   * ordering of getRunsForWorkflow(). Disk-only: removes the one run directory,
+   * no working file changes. Returns the number of runs remaining afterward.
+   *
+   * Because continue/append always reuse getLatestHistoryFilePath() (newest run),
+   * deleting an accidental newest run lets the prior run resume seamlessly.
+   */
+  async deleteRun(workflowId: string, runIndex: number): Promise<number> {
+    const runs = await this.getRunsForWorkflow(workflowId);
+    const fileName = runs[runIndex];
+    if (!fileName) {
+      Log.warn(
+        `deleteRun: no run at index ${runIndex} for workflow ${workflowId}`
+      );
+      return runs.length;
+    }
+
+    const entryPath = path.join(this.historyBaseDir, workflowId, fileName);
+    try {
+      const stats = await fs.promises.stat(entryPath);
+      if (stats.isDirectory()) {
+        await fs.promises.rm(entryPath, { recursive: true, force: true });
+      } else {
+        await fs.promises.unlink(entryPath);
+      }
+    } catch (error) {
+      Log.warn(`Failed to delete run ${fileName}:`, error);
+    }
+
+    return (await this.getRunsForWorkflow(workflowId)).length;
+  }
+
+  /**
    * Persist an UndoRecord for a step after undo has been applied.
    */
   async saveUndoRecord(

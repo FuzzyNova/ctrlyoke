@@ -158,7 +158,8 @@ export const MESSAGE_TYPES = {
   SEARCH_HISTORY: "searchHistory", // Webview -> Extension: Search global run history
   SEARCH_HISTORY_RESULTS: "searchHistoryResults", // Extension -> Webview: Return global history matches
   OPEN_HISTORY_SEARCH: "openHistorySearch", // Extension -> Webview: Open global history search UI
-  CLEAR_RUN_HISTORY: "clearRunHistory", // Webview -> Extension: Delete run history
+  CLEAR_RUN_HISTORY: "clearRunHistory", // Webview -> Extension: Delete all run history
+  DELETE_RUN_HISTORY: "deleteRunHistory", // Webview -> Extension: Delete a single run by index
   RUN_HISTORY_UPDATED: "runHistoryUpdated", // Extension -> Webview: Available run count changed (new run started)
 
   // Save Workflow - Webview <-> Extension

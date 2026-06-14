@@ -12,6 +12,8 @@ export interface RunSelectorProps {
   onSelectRun: (runIndex: number) => void;
   onBackToLive: () => void;
   onClearHistory?: () => void;
+  /** Delete a single run by index (0 = newest). When omitted, no per-run delete UI is shown. */
+  onDeleteRun?: (runIndex: number) => void;
   /** startedAt timestamps for each run, index 0 = most recent. Optional. */
   runTimestamps?: (number | undefined)[];
   /** executionState for each run, index 0 = most recent. Optional. */
@@ -42,12 +44,17 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
   onSelectRun,
   onBackToLive,
   onClearHistory,
+  onDeleteRun,
   runTimestamps,
   runStates,
   narrow,
   veryNarrow,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  // Index pending an inline delete confirmation (null = none). Reset on close.
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(
+    null
+  );
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Get current execution state from the live workflow
@@ -75,10 +82,26 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
     }
   }, [isOpen]);
 
+  // Clear any pending delete confirmation whenever the dropdown closes.
+  useEffect(() => {
+    if (!isOpen) {
+      setPendingDeleteIndex(null);
+    }
+  }, [isOpen]);
+
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setIsOpen((prev) => !prev);
   }, []);
+
+  const handleConfirmDelete = useCallback(
+    (e: React.MouseEvent, runIndex: number) => {
+      e.stopPropagation();
+      setPendingDeleteIndex(null);
+      onDeleteRun?.(runIndex);
+    },
+    [onDeleteRun]
+  );
 
   const handleSelectRun = useCallback(
     (runIndex: number) => {
@@ -188,54 +211,106 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
               runState = runStates?.[i];
             }
 
+            // The live run (newest while a workflow is executing) cannot be
+            // deleted — it is actively writing to disk.
+            const canDelete = Boolean(onDeleteRun) && !isLiveRun;
+            const isConfirmingDelete = pendingDeleteIndex === i;
+
             return (
-              <button
+              <div
                 key={i}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                onClick={() => handleSelectRun(i)}
-                className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2
-                  transition-colors
+                className={`group flex items-center text-xs transition-colors
                   ${
                     isSelected
                       ? "bg-list-active-bg text-list-active-fg"
-                      : "text-dropdown-fg hover:bg-list-hover-bg cursor-pointer"
+                      : "text-dropdown-fg hover:bg-list-hover-bg"
                   }`}
               >
-                {/* Run number with optional live dot inline */}
-                <span className="flex items-center gap-1 flex-shrink-0">
-                  {isLiveRun && (
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse" />
-                  )}
-                  <span className="font-mono">{runNumber}</span>
-                </span>
-
-                {/* Status badge */}
-                {runState && (
-                  <span
-                    className={`text-xxs px-1 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(runState)}`}
-                  >
-                    {runState}
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => handleSelectRun(i)}
+                  className="flex-1 min-w-0 text-left pl-3 pr-2 py-1.5 flex items-center gap-2 cursor-pointer"
+                >
+                  {/* Run number with optional live dot inline */}
+                  <span className="flex items-center gap-1 flex-shrink-0">
+                    {isLiveRun && (
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-indicator-success animate-pulse" />
+                    )}
+                    <span className="font-mono">{runNumber}</span>
                   </span>
-                )}
 
-                {/* Spacer to push time right */}
-                <span className="flex-1 min-w-[8px]" />
-
-                {/* Relative time or "live" label */}
-                {isLiveRun ? (
-                  <span className="text-description-fg text-xxs flex-shrink-0">
-                    live
-                  </span>
-                ) : (
-                  timeAgo && (
-                    <span className="text-description-fg text-xxs flex-shrink-0">
-                      {timeAgo}
+                  {/* Status badge */}
+                  {runState && (
+                    <span
+                      className={`text-xxs px-1 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(runState)}`}
+                    >
+                      {runState}
                     </span>
-                  )
+                  )}
+
+                  {/* Spacer to push time right */}
+                  <span className="flex-1 min-w-[8px]" />
+
+                  {/* Relative time or "live" label */}
+                  {isLiveRun ? (
+                    <span className="text-description-fg text-xxs flex-shrink-0">
+                      live
+                    </span>
+                  ) : (
+                    timeAgo && (
+                      <span className="text-description-fg text-xxs flex-shrink-0">
+                        {timeAgo}
+                      </span>
+                    )
+                  )}
+                </button>
+
+                {/* Per-run delete control with inline confirm */}
+                {canDelete && (
+                  <span className="flex items-center flex-shrink-0 pr-2">
+                    {isConfirmingDelete ? (
+                      <span className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          title="Confirm delete run"
+                          aria-label="Confirm delete run"
+                          onClick={(e) => handleConfirmDelete(e, i)}
+                          className="flex items-center justify-center w-5 h-5 rounded text-terminal-ansiRed hover:bg-list-hover-bg"
+                        >
+                          <i className="codicon codicon-check text-xs" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Cancel"
+                          aria-label="Cancel delete run"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPendingDeleteIndex(null);
+                          }}
+                          className="flex items-center justify-center w-5 h-5 rounded text-description-fg hover:bg-list-hover-bg"
+                        >
+                          <i className="codicon codicon-close text-xs" />
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        title="Delete run"
+                        aria-label={`Delete run ${runNumber}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingDeleteIndex(i);
+                        }}
+                        className="flex items-center justify-center w-5 h-5 rounded text-description-fg opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-terminal-ansiRed hover:bg-list-hover-bg transition-opacity"
+                      >
+                        <i className="codicon codicon-trash text-xs" />
+                      </button>
+                    )}
+                  </span>
                 )}
-              </button>
+              </div>
             );
           })}
 

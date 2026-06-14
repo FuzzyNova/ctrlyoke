@@ -903,6 +903,14 @@ export class WebviewMessageRouter {
       );
     });
 
+    table.set(MESSAGE_TYPES.DELETE_RUN_HISTORY, async (message) => {
+      await this.serializer.handleDeleteRunHistory(
+        message.runIndex,
+        this.getCurrentPostMessage(),
+        this.clientId
+      );
+    });
+
     // ── Dashboard — New Workflow Modal ───────────────────────────────────
     table.set(MESSAGE_TYPES.NEW_WORKFLOW, () => {
       this.serializer.handleNewWorkflow(this.getCurrentPostMessage());

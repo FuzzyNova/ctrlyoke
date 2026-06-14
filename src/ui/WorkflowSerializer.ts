@@ -948,4 +948,57 @@ export class WorkflowSerializer {
       );
     }
   }
+
+  /**
+   * Handle DELETE_RUN_HISTORY: delete a single run (runIndex 0 = most recent).
+   * After deletion, refreshes the output view: shows the newest remaining run,
+   * or resets to the empty/live state when no runs remain.
+   *
+   * Confirmation is handled inline in the RunSelector UI, so no modal here.
+   */
+  async handleDeleteRunHistory(
+    runIndex: number,
+    postMessage?: PostMessageFn,
+    clientId: string = PANEL_CLIENT_ID
+  ): Promise<void> {
+    const pm = postMessage ?? this.postMessage;
+    const outputHistoryManager = this.getOutputHistoryManager();
+    if (!outputHistoryManager) {
+      return;
+    }
+
+    try {
+      const workingFilePath =
+        this.getManager()?.getQueueState(clientId).workingFilePath ?? "";
+      if (!workingFilePath) {
+        return;
+      }
+
+      const workflowId =
+        OutputHistoryManager.extractWorkflowId(workingFilePath);
+      const remaining = await outputHistoryManager.deleteRun(
+        workflowId,
+        runIndex
+      );
+
+      if (remaining === 0) {
+        // No runs left — reset to live view with no available runs.
+        pm({
+          type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
+          history: null,
+          availableRuns: 0,
+          currentRunIndex: 0,
+        });
+        return;
+      }
+
+      // Show the newest remaining run and refresh selector metadata.
+      await this.handleLoadRunHistory(0, pm, clientId);
+    } catch (error) {
+      Log.error("Failed to delete run history:", error);
+      vscode.window.showErrorMessage(
+        `Failed to delete run: ${getErrorMessage(error)}`
+      );
+    }
+  }
 }
