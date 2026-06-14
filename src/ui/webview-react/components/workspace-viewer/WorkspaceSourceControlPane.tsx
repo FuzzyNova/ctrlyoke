@@ -42,6 +42,13 @@ function getStatusBadge(file: SourceControlFile): string {
   return "M";
 }
 
+/** Splits a workspace-relative path into its file name and containing directory. */
+function splitFilePath(path: string): { name: string; dir: string } {
+  const lastSlash = path.lastIndexOf("/");
+  if (lastSlash === -1) return { name: path, dir: "" };
+  return { name: path.slice(lastSlash + 1), dir: path.slice(0, lastSlash) };
+}
+
 export const WorkspaceSourceControlPane: React.FC = () => {
   const vscode = useVsCodeApi();
   const sourceControlFiles = useWorkspaceViewerStore(
@@ -354,6 +361,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const renderFileRow = (file: SourceControlFile, isStaged: boolean) => {
     const badge = getStatusBadge(file);
     const isSelected = selectedDiffPath === file.path;
+    const { name, dir } = splitFilePath(file.path);
     const badgeStyle = {
       color: isStaged
         ? "var(--vscode-gitDecoration-addedResourceForeground, #81b88b)"
@@ -378,7 +386,12 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           >
             {badge}
           </span>
-          <span className="min-w-0 flex-1 truncate text-xs">{file.path}</span>
+          <span className="min-w-0 flex-1 flex flex-col">
+            <span className="truncate text-xs">{name}</span>
+            {dir && (
+              <span className="truncate text-[10px] opacity-50">{dir}</span>
+            )}
+          </span>
         </button>
 
         <div className="flex items-center">
