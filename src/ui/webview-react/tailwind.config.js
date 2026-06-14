@@ -226,9 +226,6 @@ module.exports = {
           "var(--vscode-scmGraph-historyItemRemoteRefColor, #ad80d7)",
         "scm-graph-base":
           "var(--vscode-scmGraph-historyItemBaseRefColor, #ea5c00)",
-        // Used for the graph gutter dot/ring on commits that haven't been pushed yet.
-        "scm-graph-unpushed":
-          "var(--vscode-scmGraph-foreground1, #ffb000)",
 
         // ── Semantic accent colors ──
         "bash-expand-link": "#569cd6",

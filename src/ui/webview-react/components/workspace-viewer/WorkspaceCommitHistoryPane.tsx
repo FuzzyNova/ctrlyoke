@@ -16,6 +16,30 @@ interface WorkspaceCommitHistoryPaneProps {
 /** Position of a commit relative to the current HEAD (current location). */
 type HeadRelation = "ahead" | "at" | "behind";
 
+/**
+ * Branch color for a commit's graph node, mirroring a canonical git graph:
+ * commits that exist only locally (unpushed) are "local", and commits shared
+ * with (or only on) the remote are "remote".
+ */
+type GraphColor = "scm-graph-local" | "scm-graph-remote";
+
+/** Tailwind classes for each graph color, keyed so node styling stays DRY. */
+const GRAPH_NODE_CLASSES: Record<
+  GraphColor,
+  { fill: string; border: string; ring: string }
+> = {
+  "scm-graph-local": {
+    fill: "bg-scm-graph-local",
+    border: "border-scm-graph-local",
+    ring: "ring-scm-graph-local/40",
+  },
+  "scm-graph-remote": {
+    fill: "bg-scm-graph-remote",
+    border: "border-scm-graph-remote",
+    ring: "ring-scm-graph-remote/40",
+  },
+};
+
 export const WorkspaceCommitHistoryPane: React.FC<
   WorkspaceCommitHistoryPaneProps
 > = ({ onLoadMore, onRefresh }) => {
@@ -83,6 +107,13 @@ export const WorkspaceCommitHistoryPane: React.FC<
     return index < headIndex ? "ahead" : "behind";
   };
 
+  // If the branch has any unpushed commits, it's ahead of its remote: those
+  // commits are colored "local" and the shared history they diverged from is
+  // colored "remote". Otherwise (in sync) everything is "local".
+  const hasUnpushed = commitHistory.some((c) => !c.pushed);
+  const colorFor = (commit: WorkspaceCommitLogEntry): GraphColor =>
+    hasUnpushed && commit.pushed ? "scm-graph-remote" : "scm-graph-local";
+
   return (
     <div className="flex flex-col min-h-0">
       {/* Section header */}
@@ -147,6 +178,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
               key={commit.hash}
               commit={commit}
               relation={relationFor(index)}
+              color={colorFor(commit)}
               isFirst={index === 0}
               isLast={index === commitHistory.length - 1}
               onClick={handleRowClick}
@@ -180,47 +212,38 @@ export const WorkspaceCommitHistoryPane: React.FC<
 
 interface CommitGraphGutterProps {
   relation: HeadRelation;
+  color: GraphColor;
   isHead: boolean;
   isMerge: boolean;
   isFirst: boolean;
   isLast: boolean;
-  pushed: boolean;
 }
 
 /**
  * Single-lane git-graph gutter: a vertical connector line with one node per
  * commit. The HEAD node is highlighted as the current location; "ahead"
  * commits (newer than HEAD) are dimmed/hollow; merge commits get a base-color
- * ring. Node/ring color reflects whether the commit has been pushed, which
- * replaces the old separate "not yet pushed" indicator dot. This
- * intentionally does not render parallel branch lanes.
+ * ring. Node/ring/border color follows `color` (local vs. remote branch).
+ * This intentionally does not render parallel branch lanes.
  */
 const CommitGraphGutter: React.FC<CommitGraphGutterProps> = ({
   relation,
+  color,
   isHead,
   isMerge,
   isFirst,
   isLast,
-  pushed,
 }) => {
   const ahead = relation === "ahead";
+  const { fill, border, ring } = GRAPH_NODE_CLASSES[color];
 
   // Node styling by relation; HEAD wins as the highlighted current location.
-  // Color reflects push status (local-only commits use scm-graph-unpushed).
-  let nodeClass: string;
-  if (isHead) {
-    nodeClass = pushed
-      ? "w-3 h-3 bg-scm-graph-local ring-2 ring-scm-graph-local/40 ring-offset-0"
-      : "w-3 h-3 bg-scm-graph-unpushed ring-2 ring-scm-graph-unpushed/40 ring-offset-0";
-  } else if (ahead) {
-    nodeClass = pushed
-      ? "w-2.5 h-2.5 border-2 border-scm-graph-local bg-editor-bg"
-      : "w-2.5 h-2.5 border-2 border-scm-graph-unpushed bg-editor-bg";
-  } else {
-    nodeClass = pushed
-      ? "w-2.5 h-2.5 bg-scm-graph-local"
-      : "w-2.5 h-2.5 bg-scm-graph-unpushed";
-  }
+  const sizeClass = isHead ? "w-3 h-3" : "w-2.5 h-2.5";
+  const nodeClass = ahead
+    ? `${sizeClass} border-2 ${border} bg-editor-bg`
+    : isHead
+      ? `${sizeClass} ${fill} ring-2 ${ring} ring-offset-0`
+      : `${sizeClass} ${fill}`;
   const mergeRing = isMerge && !isHead ? " ring-1 ring-scm-graph-base" : "";
 
   return (
@@ -276,6 +299,7 @@ const RefPill: React.FC<RefPillProps> = ({ label }) => {
 interface CommitRowProps {
   commit: WorkspaceCommitLogEntry;
   relation: HeadRelation;
+  color: GraphColor;
   isFirst: boolean;
   isLast: boolean;
   onClick: (commit: WorkspaceCommitLogEntry) => void;
@@ -290,6 +314,7 @@ interface CommitRowProps {
 const CommitRow: React.FC<CommitRowProps> = ({
   commit,
   relation,
+  color,
   isFirst,
   isLast,
   onClick,
@@ -323,11 +348,11 @@ const CommitRow: React.FC<CommitRowProps> = ({
     >
       <CommitGraphGutter
         relation={relation}
+        color={color}
         isHead={commit.isHead}
         isMerge={commit.isMerge}
         isFirst={isFirst}
         isLast={isLast}
-        pushed={commit.pushed}
       />
       <span className="min-w-0 flex-1 truncate text-xs text-editor-fg">
         {commit.subject}
