@@ -61,6 +61,13 @@ export function useCommitHistoryContextMenu({
         if (branchBeforeCheckout) {
           store.setPreviousBranch(branchBeforeCheckout);
         }
+        // Optimistically mark detached so the immediate refresh below passes the
+        // branch hint (detachedBranchHint requires `detached` to be true). The
+        // store's `detached` flag otherwise only flips once loadHistory's
+        // response lands, which would be too late for this first request and
+        // would hide the commits ahead of the checked-out point until a manual
+        // refresh.
+        store.setDetached(true);
         onRefresh();
       } catch {
         // errors surfaced via refresh
@@ -110,9 +117,7 @@ export function useCommitHistoryContextMenu({
             label: "Checkout Commit (Detach HEAD)",
             icon: "codicon-git-commit",
             disabled: isAlreadyHead,
-            disabledTitle: isAlreadyHead
-              ? "Already at this commit"
-              : undefined,
+            disabledTitle: isAlreadyHead ? "Already at this commit" : undefined,
             onClick: () => setPendingCheckout(commit),
           },
         ],
@@ -132,7 +137,10 @@ export function useCommitHistoryContextMenu({
   const commitHistoryContextMenuPortal = (
     <>
       {contextMenu && (
-        <StepContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />
+        <StepContextMenu
+          {...contextMenu}
+          onClose={() => setContextMenu(null)}
+        />
       )}
       <Modal
         isOpen={pendingCheckout !== null}

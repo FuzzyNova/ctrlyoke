@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useElementNarrow } from "@hooks/useElementNarrow";
 import type { OutputFindState } from "@hooks/useOutputFind";
 
 const EXIT_DURATION_MS = 180;
@@ -23,6 +24,7 @@ export function OutputFindBar({
 }: OutputFindBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [containerRef, isNarrow] = useElementNarrow<HTMLDivElement>(440);
   const [rendering, setRendering] = useState(state.isOpen);
   const [closing, setClosing] = useState(false);
 
@@ -68,12 +70,15 @@ export function OutputFindBar({
 
   const counterLabel =
     state.matchCount > 0
-      ? `${state.currentMatch} of ${state.matchCount}`
-      : "No results";
+      ? isNarrow
+        ? `${state.currentMatch}/${state.matchCount}`
+        : `${state.currentMatch} of ${state.matchCount}`
+      : "0";
 
   return (
     <div
-      className={`absolute right-6 top-0 z-raised flex items-center gap-2 rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
+      ref={containerRef}
+      className={`absolute left-2 right-2 top-0 z-raised flex items-center gap-1.5 overflow-hidden rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
         closing ? "animate-output-find-exit" : "animate-output-find-enter"
       }`}
       onKeyDown={onKeyDown}
@@ -86,14 +91,18 @@ export function OutputFindBar({
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder="Find in output"
         aria-label="Find in output"
-        className="h-7 w-52 rounded border border-input-border bg-input-bg px-2 text-sm text-input-fg outline-none focus:border-focus-border"
+        className="h-7 min-w-0 flex-1 basis-32 rounded border border-input-border bg-input-bg px-2 text-sm text-input-fg outline-none focus:border-focus-border"
       />
-      <span className="min-w-16 text-right text-xs text-description-fg">
+      <span
+        className={`shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-description-fg ${
+          isNarrow ? "w-8" : "w-16"
+        }`}
+      >
         {counterLabel}
       </span>
       <button
         type="button"
-        className="icon-btn px-1.5 py-1 text-description-fg hover:text-foreground"
+        className="icon-btn shrink-0 px-1.5 py-1 text-description-fg hover:text-foreground"
         onClick={() => onNavigate(-1)}
         title="Previous match"
         aria-label="Previous match"
@@ -102,7 +111,7 @@ export function OutputFindBar({
       </button>
       <button
         type="button"
-        className="icon-btn px-1.5 py-1 text-description-fg hover:text-foreground"
+        className="icon-btn shrink-0 px-1.5 py-1 text-description-fg hover:text-foreground"
         onClick={() => onNavigate(1)}
         title="Next match"
         aria-label="Next match"
@@ -111,7 +120,7 @@ export function OutputFindBar({
       </button>
       <button
         type="button"
-        className={`icon-btn px-1.5 py-1 ${
+        className={`icon-btn shrink-0 px-1.5 py-1 ${
           state.caseSensitive
             ? "text-foreground"
             : "text-description-fg hover:text-foreground"
@@ -125,7 +134,7 @@ export function OutputFindBar({
       </button>
       <button
         type="button"
-        className="icon-btn px-1.5 py-1 text-description-fg hover:text-foreground"
+        className="icon-btn shrink-0 px-1.5 py-1 text-description-fg hover:text-foreground"
         onClick={onClose}
         title="Close find"
         aria-label="Close find"

@@ -155,6 +155,7 @@ interface WorkspaceViewerActions {
   ): void;
   setCommitHistoryLoading(v: boolean): void;
   setPreviousBranch(branch: string | null): void;
+  setDetached(detached: boolean): void;
 
   // Git-ref diff (browser multi-file pane)
   openToGitRef(ref: string): Promise<void>;
@@ -501,7 +502,12 @@ export const useWorkspaceViewerStore = create<
       // --- Commit history ---
 
       setCommitHistory(commits, hasMore, currentBranch, detached) {
-        set({ commitHistory: commits, commitHistoryHasMore: hasMore, currentBranch, detached });
+        set({
+          commitHistory: commits,
+          commitHistoryHasMore: hasMore,
+          currentBranch,
+          detached,
+        });
       },
 
       appendCommitHistory(commits, hasMore) {
@@ -517,6 +523,10 @@ export const useWorkspaceViewerStore = create<
 
       setPreviousBranch(branch) {
         set({ previousBranch: branch });
+      },
+
+      setDetached(detached) {
+        set({ detached });
       },
 
       // --- Git-ref diff (browser multi-file) ---
