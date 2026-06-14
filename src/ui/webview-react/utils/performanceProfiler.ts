@@ -30,7 +30,7 @@ const LOG_PREFIX = "[FP-perf]";
 const STORAGE_KEY = "flightpath.profiler.enabled";
 const DEFAULT_STATE: PerformanceProfilerState = {
   enabled: false,
-  slowThresholdMs: 16,
+  slowThresholdMs: 200,
   logAllScrollFrames: false,
   logLongFrames: false,
   logMeasurements: false,
