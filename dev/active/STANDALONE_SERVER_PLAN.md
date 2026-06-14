@@ -39,19 +39,22 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - A full VS Code extension replacement
 - Supporting the `copilot-chat` harness in the standalone server (directly automates VS Code's UI)
 
-## Current Codebase Audit (updated 2026-04-25)
+## Current Codebase Audit (updated 2026-06-13)
 
 ### Already in place
 
 - `src/ui/IDashboardProvider.ts`, `src/types/IDashboardSink.ts`, and `src/ui/DashboardBroadcastHub.ts` are in place and already driving multi-client fanout.
 - `src/flightpath/WorkflowOrchestrator.ts` and `src/flightpath/WorkflowInstance.ts` already publish through the shared dashboard hub instead of treating the VS Code webview as a special sink.
-- `src/server/FlightPathHostedServer.ts` is implemented and already serves the Vite webview bundle over HTTP plus WebSocket, with token-gated HTML/API access, TLS support, and browser push-notification plumbing.
+- `src/server/FlightPathHostedServer.ts` is implemented (now ~1,500 lines) and already serves the Vite webview bundle over HTTP plus WebSocket, with token-gated HTML/API access (`requireToken` middleware), TLS support (`https.createServer` via an optional `tlsConfig`), a configurable `bindAddress`, and browser push-notification plumbing (`WebPushService`).
 - `src/server/standalone-shim.js` is implemented and already handles per-tab state, reconnects, READY replay, theme var application, and pre-React message buffering.
 - `src/ui/FlightPathWebviewProvider.ts` already exposes `routeExternalMessage(...)` and browser-client registration hooks, so hosted browser clients reuse the existing router instead of needing a separate hosted-server router class.
 - `src/extension.ts` already registers `flightpath.enableServer`, `flightpath.disableServer`, and `flightpath.regenerateServerToken`, auto-starts the hosted server when `server.enabled` is true, and forwards theme recapture events on color-theme changes.
 - `DashboardConstants.ts`, `useMessageHandler.ts`, `settingsStore.ts`, and `ServerSection.tsx` already handle `SERVER_STARTED`, `SERVER_STOPPED`, theme capture messages, token regeneration, available LAN IPs, TLS certificate download, and browser-side QR display.
 - `FlightPathConfigService` + file-backed config are already in place, and `FlightPathGlobalSettings` already includes `server.port`, `server.standalonePort`, `server.bindAddress`, `server.theme`, and `server.tls`.
 - `express`, `ws`, `qrcode`, `selfsigned`, and the server static-file copy step in `esbuild.js` are already present in the repo, so the hosted-server runtime plumbing is no longer theoretical.
+- **New since the April audit — `src/server/HostedWorkspaceViewerService.ts` (~890 lines) is a fully vscode-free workspace-viewer backend.** Its constructor takes only `workspaceRoot: string` (no `vscode.ExtensionContext`, no adapter) and it implements file tree listing, file read/write, copy/move, git status, file diff, stage/unstage/discard, commit/push/pull, commit log (`getCommitLog`), and git-ref diffs (`getGitRefDiff`). `FlightPathHostedServer.ts` mounts all of this behind token-gated `/api/workspace-viewer/*` routes (`tree`, `file`, `entry`, `copy`, `move`, `status`, `diff`, `git-ref-diff`, `commit-log`, `stage`, `unstage`, `discard`, `commit`, `push`, `pull`, …). This is effectively a ready-made backend for Phase 6/7's workspace-viewer feature parity — `FlightPathServer` can construct the same service from `cwd` and reuse the same route handlers nearly verbatim.
+- **`OPEN_GIT_CHANGE` is now marked legacy** in `DashboardConstants.ts`. The browser path for viewing a commit/ref diff (`~<hash>` references, commit history "View Diff") goes through `workspaceViewerStore.openToGitRef()` → `GET /api/workspace-viewer/git-ref-diff` → `HostedWorkspaceViewerService.getGitRefDiff()`, which is vscode-free end-to-end. Only the VS Code-native diff editor path still uses `OPEN_GIT_CHANGE` → `flightpath.openGitChange`.
+- **`src/completions/ContextReferenceBuilder.ts` is now fully vscode-free.** The one vscode-dependent helper (`toWorkspaceRelativeReferencePath`, used only by `ContextMenuReferenceCommands.ts`) was split into `src/completions/WorkspaceReferencePaths.ts`. The `@`/`#`/`~` reference-syntax builders (including `buildGitReference()`) are reusable as-is by any future standalone completion/router code.
 
 ### Still missing before implementation
 
@@ -63,18 +66,19 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 
 **Standalone server (Phases 5–10):**
 
-- `WorkflowOrchestrator` still hard-codes `new VsCodeAdapter(this.context)` — blocks standalone reuse.
-- `PromptFileWatcher` and `CliWatchSession` still call `vscode.workspace.createFileSystemWatcher()` directly.
-- `WebviewSettingsSync` still uses `vscode.workspace.workspaceFolders` directly for agent/skill/workspace discovery.
-- `src/cli.ts` still exposes only `run` and `validate`; there is no `flightpath server` subcommand yet.
+- `WorkflowOrchestrator` still hard-codes `new VsCodeAdapter(this.context)` (5 call sites) — blocks standalone reuse.
+- `PromptFileWatcher` and `CliWatchSession` still call `vscode.workspace.createFileSystemWatcher()` directly (4 watcher instances total); `PlatformAdapter` has no `createFileWatcher()` seam yet.
+- `WebviewSettingsSync` still uses `vscode.workspace.workspaceFolders` directly (7 occurrences) for agent/skill/workspace discovery.
+- `src/cli.ts` now exposes `run`, `validate`, and `commit`; there is still no `flightpath server` subcommand.
 - `StandaloneServerAdapter`, `FlightPathServer`, `WebSocketMessageRouter`, `CompletionService`, and `ServerFileWatcher` do not exist yet.
-- `fast-glob` and `ignore` are still not installed; they are needed once standalone file/symbol completions are added.
+- `fast-glob`, `ignore`, and `vscode-jsonrpc` are still not installed; the first two are needed once standalone file/symbol completions are added.
+- `src/ui/webview-react/utils/vsCodeStateStorage.ts` has not been renamed/wrapped as a platform-neutral `webviewStateStorage` helper yet.
 - The standalone launch UX does not exist yet: no terminal URL banner, no OSC-8 clickable link output, no terminal QR code, and no standalone token-persistence story outside VS Code secret storage.
 
 ### Readiness verdict
 
 - **VS Code-hosted server:** complete enough to treat as the reference implementation for standalone.
-- **Standalone server (Phases 5–10): not implemented yet.** The main blockers are still the `VsCodeAdapter` construction path in `WorkflowOrchestrator`, the VS Code-only watcher implementations in `PromptFileWatcher` / `CliWatchSession`, and the absence of a CLI/server entrypoint.
+- **Standalone server (Phases 5–10): not implemented yet, but lower-effort than the original estimate.** The main blockers are still the `VsCodeAdapter` construction path in `WorkflowOrchestrator`, the VS Code-only watcher implementations in `PromptFileWatcher` / `CliWatchSession`, and the absence of a CLI/server entrypoint — but the workspace-viewer feature set (file browser, git status/diff/stage/commit/push/pull, commit history, git-ref diffs) is now a vscode-free service that Phase 6/7 can mount directly, substantially shrinking that portion of the work.
 
 ### Standalone CLI UX Requirements
 
@@ -151,8 +155,9 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | `WebviewMessageRouter`          | `src/ui/WebviewMessageRouter.ts`         | Hosted server can reuse its logic only after exposing a direct callable entrypoint and preserving per-connection replies     |
 | `PlatformAdapter` interface     | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation; this seam also needs file-watcher support                             |
 | `vscode-shim` alias             | `esbuild.js` CLI bundle                  | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }`                                    |
-| Commander.js subcommands        | `src/cli.ts`                             | `run` and `validate` exist today; `server` still needs to be added as a subcommand                                           |
+| Commander.js subcommands        | `src/cli.ts`                             | `run`, `validate`, and `commit` exist today; `server` still needs to be added as a subcommand                                |
 | `setRuntimeMode`                | `src/cli.ts` line 27                     | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)` — `RUNNER_IDS.SERVER` already exists in `DashboardConstants.ts`  |
+| `HostedWorkspaceViewerService` + `/api/workspace-viewer/*` | `src/server/HostedWorkspaceViewerService.ts`, `src/server/FlightPathHostedServer.ts` | Already vscode-free (constructed from `workspaceRoot: string` alone); `FlightPathServer` (Phase 6) can construct the same service and mount the same routes verbatim for file tree, git status/diff/stage/commit/push/pull, commit history, and git-ref diffs |
 
 ---
 
@@ -167,6 +172,8 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | `src/completions/PromptCompletionProvider.ts` | VS Code IntelliSense in text editor             |
 | `src/completions/PromptLinkProvider.ts`       | VS Code document links — CodeMirror has its own |
 | `src/flightpath/harness/chat/`                | Automates VS Code's Copilot Chat UI             |
+| `src/completions/ContextMenuReferenceCommands.ts` | Explorer/SCM/Timeline right-click commands — no equivalent UI surface in a browser-only server |
+| `src/completions/WorkspaceReferencePaths.ts`  | `toWorkspaceRelativeReferencePath()` — only consumer is `ContextMenuReferenceCommands.ts` above |
 
 ### VS Code Dependencies Requiring Server Equivalents
 
@@ -174,7 +181,7 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | --------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `src/ui/FlightPathWebviewProvider.ts`               | `vscode.WebviewView`, `webview.postMessage()`, `notifyX()` methods           | Replaced by `FlightPathServer` + WebSocket broadcast                                                                   |
 | `src/flightpath/WorkflowOrchestrator.ts`            | `vscode.ExtensionContext`, `VsCodeAdapter`, primary-provider assumptions     | Finish provider fanout, add a broadcast sink for `WorkflowInstance`, and inject adapter/context cleanly for server use |
-| `src/ui/WebviewMessageRouter.ts`                    | `vscode.commands.executeCommand()` + webview-local reply channel             | Hosted server needs a callable router wrapper; standalone needs a WebSocket router with per-connection replies         |
+| `src/ui/WebviewMessageRouter.ts`                    | 14 `vscode.commands.executeCommand()` calls (incl. legacy `flightpath.openGitChange`) + webview-local reply channel | Hosted server needs a callable router wrapper; standalone needs a WebSocket router with per-connection replies. Most ref/commit-diff traffic already bypasses this via `/api/workspace-viewer/git-ref-diff` |
 | `src/ui/WebviewSettingsSync.ts`                     | `vscode.workspace.workspaceFolders`, command execution, `ConfigurationUtils` | Move workspace discovery behind adapter/constructor inputs; keep settings reads routed through `ConfigurationUtils`    |
 | `src/utils/ConfigurationUtils.ts`                   | `vscode.workspace.getConfiguration()`                                        | **Done** — now reads from `FlightPathConfigService` (file-based config). No VS Code dependency remaining.              |
 | `src/flightpath/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                                 | `chokidar` (already in dependencies)                                                                                   |
@@ -188,6 +195,8 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 - `src/flightpath/harness/CliIntegration.ts` + all CLI harnesses
 - `src/ui/webview-react/**` — React components and most stores are reusable, but the browser storage backend must not assume VS Code's `getState()` / `setState()` semantics
 - `src/types/**` — MESSAGE_TYPES, EXECUTION_STATES, WorkflowSummary, etc.
+- `src/completions/ContextReferenceBuilder.ts` — pure `@`/`#`/`~` reference-syntax builders, fully vscode-free as of the `WorkspaceReferencePaths.ts` split
+- `src/server/HostedWorkspaceViewerService.ts` — vscode-free workspace-viewer backend (file tree, git status/diff/stage/commit/push/pull, commit history, git-ref diffs); already powers the hosted server's `/api/workspace-viewer/*` routes and is reusable verbatim for standalone
 
 ---
 
@@ -779,13 +788,15 @@ export class FlightPathServer implements IDashboardProvider {
 
 **Webview dist path:** Vite outputs to `out/ui/webview-react/` (confirmed in `vite.config.ts` line 44).
 
+> **Reference implementation note:** the sketch above predates `FlightPathHostedServer.ts` growing into its current ~1,500-line form. The actual hosted server (`src/server/FlightPathHostedServer.ts`) is a much more accurate reference for `FlightPathServer`'s shape — it implements both `IDashboardProvider` and `IDashboardSink`, takes `(hub, webviewProvider, getOrchestrator, port, workspaceRoot, token, bindAddress, tlsConfig?)`, wires `express.json()`, a `requireToken` middleware, `WebSocketServer` with a heartbeat interval, TLS via `https.createServer`, and constructs a `HostedWorkspaceViewerService(workspaceRoot)` for the `/api/workspace-viewer/*` routes. `FlightPathServer` should follow this pattern directly — including constructing its own `HostedWorkspaceViewerService` and re-mounting the same workspace-viewer routes — rather than the original minimal sketch.
+
 ---
 
 ### Phase 7 — WebSocket Message Router (standalone)
 
 **New file:** `src/server/WebSocketMessageRouter.ts`
 
-Handles all webview → server messages. The existing `WebviewMessageRouter.ts` cannot be reused directly because 9 handlers call `vscode.commands.executeCommand()`. The server router replaces those with direct `WorkflowOrchestrator` method calls.
+Handles all webview → server messages. The existing `WebviewMessageRouter.ts` cannot be reused directly because 14 handlers call `vscode.commands.executeCommand()`. The server router replaces those with direct `WorkflowOrchestrator` method calls.
 
 **The handler mapping:**
 
@@ -805,11 +816,11 @@ Handles all webview → server messages. The existing `WebviewMessageRouter.ts` 
 | `SELECT_FILE`          | `executeCommand("flightpath.selectPromptFile")` | Respond with no-op or path input prompt |
 | `EDIT_FILE`            | Opens VS Code editor                            | no-op                                   |
 | `SHOW_OUTPUT`          | Reveals Output panel                            | no-op                                   |
-| `OPEN_GIT_CHANGE`      | VS Code diff editor                             | no-op or OS file open                   |
+| `OPEN_GIT_CHANGE`      | `executeCommand("flightpath.openGitChange")` (legacy) | **Largely superseded** — ref/commit diffs already go through `workspaceViewerStore.openToGitRef()` → `GET /api/workspace-viewer/git-ref-diff`, backed by the vscode-free `HostedWorkspaceViewerService.getGitRefDiff()`. Mount the same route/service for standalone; only a single-file VS Code diff-editor fallback (if any callers remain) needs no-op/OS-open handling |
 | `revealInExplorer`     | VS Code explorer                                | `open` / `xdg-open` (OS)                |
 | All other messages     | Platform-agnostic                               | Same implementation                     |
 
-All the non-`executeCommand` handlers in `WebviewMessageRouter` (`EXECUTE_PROMPT`, `UPDATE_PROMPT`, `REORDER_PROMPTS`, `UNDO_PROMPT_CHANGES`, etc.) are called on the orchestrator/instance directly and can be ported verbatim.
+All the non-`executeCommand` handlers in `WebviewMessageRouter` (`EXECUTE_PROMPT`, `UPDATE_PROMPT`, `REORDER_PROMPTS`, `UNDO_PROMPT_CHANGES`, etc.) are called on the orchestrator/instance directly and can be ported verbatim. Likewise, the entire `/api/workspace-viewer/*` family (tree, file read/write, status, diff, stage/unstage/discard, commit/push/pull, commit log, git-ref diff) is already implemented as plain Express routes in `FlightPathHostedServer.ts` and can be re-mounted on `FlightPathServer` against the same `HostedWorkspaceViewerService`.
 
 > **Future refactor (Phase 8):** Extract an abstract `BaseMessageRouter` from `WebviewMessageRouter` containing all platform-agnostic handlers. `WebviewMessageRouter` and `WebSocketMessageRouter` extend it, each providing only their transport/command differences. This eliminates duplication but is not required for the initial implementation.
 
