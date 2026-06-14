@@ -50,7 +50,7 @@ afterEach(() => {
 
 describe("useCommitHistoryContextMenu", () => {
   it("marks the store detached before refreshing so the post-checkout log keeps commits ahead visible", async () => {
-    vi.mocked(workspaceCheckoutCommit).mockResolvedValue(undefined);
+    vi.mocked(workspaceCheckoutCommit).mockResolvedValue({ detached: true });
     // Capture whether the store was already detached at the moment onRefresh
     // fires — this is the regression: the branch hint depends on it.
     let detachedAtRefresh: boolean | null = null;
