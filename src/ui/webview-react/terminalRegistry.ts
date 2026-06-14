@@ -85,6 +85,14 @@ export interface RegistryEntry {
    * to the local container height. Undefined when this client is the controller.
    */
   controllerCols?: number;
+  /**
+   * Controller's row count, recorded for diagnostics only. NOTE: viewer rows are
+   * currently derived from the local container height (see applyControllerSize),
+   * NOT synced to this value. Tracked so we can log controller-vs-viewer row
+   * drift while evaluating whether rows should be synced like cols — TUI /
+   * alternate-buffer output is positioned for the controller's exact row count.
+   */
+  controllerRows?: number;
 }
 
 interface FitSessionResult {
@@ -170,6 +178,7 @@ function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
   }
 
   entry.webglAddonLoadPromise = (async () => {
+    const startedAt = performance.now();
     try {
       const { WebglAddon } = await import("@xterm/addon-webgl");
       const webgl = new WebglAddon();
@@ -180,8 +189,18 @@ function ensureWebglAddonLoaded(entry: RegistryEntry): Promise<void> {
         webgl.dispose();
       });
       entry.term.loadAddon(webgl);
+      WebviewLog.debug(
+        `[terminalRegistry.ensureWebglAddonLoaded] WebGL ready in ${Math.round(
+          performance.now() - startedAt
+        )}ms`
+      );
     } catch {
       // WebGL unavailable at startup — xterm uses its built-in renderer.
+      WebviewLog.debug(
+        `[terminalRegistry.ensureWebglAddonLoaded] WebGL unavailable after ${Math.round(
+          performance.now() - startedAt
+        )}ms — using built-in renderer`
+      );
     }
   })();
 
@@ -460,16 +479,26 @@ export const terminalRegistry = {
   applyControllerSize(
     workflowId: string,
     sessionId: string,
-    cols: number
+    cols: number,
+    rows?: number
   ): void {
     const entry = registry.get(makeKey(workflowId, sessionId));
     if (!entry) return;
     entry.controllerCols = cols;
+    if (rows != null) entry.controllerRows = rows;
 
-    // Compute rows from the current container height so the viewer fills vertically
+    // Compute rows from the current container height so the viewer fills
+    // vertically. NOTE: this intentionally does NOT use the controller's rows —
+    // viewer height tracks the local container, not the controller. The debug log
+    // below surfaces how far viewer rows drift from the controller, which is the
+    // suspected cause of TUI/alt-buffer mis-rendering on viewers (output is
+    // positioned for the controller's exact row count).
     try {
-      const rows = Math.max(1, entry.fitAddon.proposeDimensions()?.rows ?? entry.term.rows);
-      entry.term.resize(cols, rows);
+      const proposedRows = Math.max(
+        1,
+        entry.fitAddon.proposeDimensions()?.rows ?? entry.term.rows
+      );
+      entry.term.resize(cols, proposedRows);
     } catch {
       // May throw if terminal isn't fully initialized yet — safe to ignore
     }
@@ -478,6 +507,13 @@ export const terminalRegistry = {
     entry.domEl.style.width = "fit-content";
     entry.domEl.style.marginLeft = "auto";
     entry.domEl.style.marginRight = "auto";
+
+    WebviewLog.debug(
+      `[terminalRegistry.applyControllerSize] wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
+        `controller=${cols}x${rows ?? "?"} viewer=${entry.term.cols}x${entry.term.rows} ` +
+        `domElWidth=${entry.domEl.style.width}` +
+        (rows != null && rows !== entry.term.rows ? " ROW MISMATCH" : "")
+    );
   },
 
   /**

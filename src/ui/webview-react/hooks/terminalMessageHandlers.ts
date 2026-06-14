@@ -348,7 +348,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   // TERMINAL_SIZE_CHANGED - Controller's PTY was resized; viewers must match
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TERMINAL_SIZE_CHANGED] = (message: any) => {
-    const { workflowId, sessionId, cols } = message;
+    const { workflowId, sessionId, cols, rows } = message;
     if (!workflowId || !sessionId || !cols) return;
 
     // Always record the controller cols so ResizeObserver can maintain them
@@ -359,11 +359,18 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     // Only apply to the local xterm if this client is a viewer (not the controller)
     const sessions = useTerminalStore.getState().sessions[workflowId] ?? [];
     const session = sessions.find((s) => s.id === sessionId);
+    const entry = terminalRegistry.get(workflowId, sessionId);
+    WebviewLog.debug(
+      `[TERMINAL_SIZE_CHANGED] wf=${workflowId?.slice(0, 8)} sess=${sessionId?.slice(0, 8)} ` +
+        `controller=${cols}x${rows ?? "?"} isController=${session?.isController} ` +
+        `viewerBefore=${entry ? `${entry.term.cols}x${entry.term.rows}` : "no-entry"}`
+    );
     if (session?.isController === false) {
       terminalRegistry.applyControllerSize(
         workflowId,
         sessionId,
-        cols as number
+        cols as number,
+        rows as number | undefined
       );
     }
   };

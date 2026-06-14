@@ -479,6 +479,10 @@ export function AgentSkillsManagerSection({
 
   useEffect(() => {
     setSelectedIds(new Set(managedFiles.map((file) => file.name)));
+    // managedFiles is intentionally excluded: this effect should only reset
+    // the selection when switching tabs, not when the file list updates
+    // (the effect below handles syncing selections as managedFiles changes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeType]);
 
   useEffect(() => {

@@ -88,6 +88,17 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     let touchScrollAccum = 0;
     let touchEl: HTMLElement | null = null;
 
+    // Axis lock for the gesture in progress. A gesture is classified as
+    // horizontal or vertical on the first significant move. Only viewers can
+    // scroll horizontally (to reveal a terminal wider than the screen); for them
+    // a horizontal-dominant gesture is handed to the container's native pan-x
+    // scroll. Vertical gestures (and all controller gestures) drive xterm
+    // scrollback via the custom handler below.
+    let gestureStartX = 0;
+    let gestureStartY = 0;
+    let axisLock: "none" | "x" | "y" = "none";
+    const AXIS_LOCK_THRESHOLD_PX = 6;
+
     // Inertia state — velocity in px/ms, positive = scroll down
     let inertiaVelocity = 0;
     let inertiaScrollAccum = 0;
@@ -191,6 +202,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       preTouchInertiaVelocity = inertiaVelocity;
       stopInertia();
       touchStartY = e.touches[0].clientY;
+      gestureStartX = e.touches[0].clientX;
+      gestureStartY = e.touches[0].clientY;
+      axisLock = "none";
       touchScrollAccum = 0;
       inertiaScrollAccum = 0;
       velSamples = [];
@@ -199,8 +213,42 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     const handleTouchMove = (e: TouchEvent) => {
       if (!e.touches.length) return;
       const now = performance.now();
-      const deltaPixels = touchStartY - e.touches[0].clientY;
-      touchStartY = e.touches[0].clientY;
+      const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
+
+      const entry = terminalRegistry.get(workflowId, sessionId);
+      if (!entry) return;
+      const isViewer = entry.controllerCols != null;
+
+      // Classify the gesture axis on the first significant movement. Until it is
+      // classified, do NOT preventDefault — iOS Safari decides whether a gesture
+      // is eligible for native panning on the first touchmove, so calling
+      // preventDefault early permanently cancels the horizontal pan-x scroll.
+      if (axisLock === "none") {
+        const totalDx = currentX - gestureStartX;
+        const totalDy = currentY - gestureStartY;
+        if (
+          Math.abs(totalDx) >= AXIS_LOCK_THRESHOLD_PX ||
+          Math.abs(totalDy) >= AXIS_LOCK_THRESHOLD_PX
+        ) {
+          axisLock =
+            isViewer && Math.abs(totalDx) > Math.abs(totalDy) ? "x" : "y";
+        } else {
+          touchStartY = currentY;
+          return;
+        }
+      }
+
+      // Horizontal gesture on a viewer: leave it to the container's native pan-x
+      // scroll so the user can reach a terminal wider than the screen. Not
+      // calling preventDefault here is exactly what lets the iOS scrollbar work.
+      if (axisLock === "x") {
+        touchStartY = currentY;
+        return;
+      }
+
+      const deltaPixels = touchStartY - currentY;
+      touchStartY = currentY;
 
       // Accumulate velocity samples; prune anything outside the look-back window.
       velSamples.push({ dp: deltaPixels, t: now });
@@ -209,8 +257,6 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         velSamples.shift();
       }
 
-      const entry = terminalRegistry.get(workflowId, sessionId);
-      if (!entry) return;
       const fontSize =
         (entry.term.options.fontSize as number | undefined) ?? 14;
       const lineHeight =
@@ -300,6 +346,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const { sessions, clearPendingOutput } = useTerminalStore.getState();
       const sess = (sessions[workflowId] ?? []).find((s) => s.id === sessionId);
       if (sess?.pendingOutput.length) {
+        const totalChars = sess.pendingOutput.reduce(
+          (n, c) => n + c.length,
+          0
+        );
+        WebviewLog.debug(
+          `[TerminalInstance] flushing ${sess.pendingOutput.length} pending chunk(s) (${totalChars} chars) ` +
+            `wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} isController=${sess.isController}`
+        );
         for (const chunk of sess.pendingOutput) {
           entry.term.write(chunk);
         }
@@ -596,10 +650,13 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
         // horizontal scrollbar, if wider the xterm is centered via auto margins.
         overflowX: isController ? "hidden" : "auto",
         overflowY: "hidden",
-        // Disable browser pan/zoom on the terminal so our touch-scroll handler
-        // has exclusive control over touch events. The browser would otherwise
-        // try to scroll the page instead of the xterm scrollback buffer.
-        touchAction: "none",
+        // Controllers take full touch control (touch-action:none) so our custom
+        // handler owns vertical scrollback and the browser never pans/zooms the
+        // page. Viewers allow native horizontal panning (pan-x) so a terminal
+        // wider than the screen can be scrolled via the overflow-x:auto bar;
+        // vertical scrollback is still handled by the custom touch handler, which
+        // only consumes (preventDefault) gestures it has locked to the Y axis.
+        touchAction: isController ? "none" : "pan-x",
       }}
     >
       {/* "Process exited" overlay for frozen ai-cli sessions */}

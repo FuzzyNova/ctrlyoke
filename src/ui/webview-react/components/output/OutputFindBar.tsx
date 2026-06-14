@@ -76,6 +76,7 @@ export function OutputFindBar({
       : "0";
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={containerRef}
       className={`absolute left-2 right-2 top-0 z-raised flex items-center gap-1.5 overflow-hidden rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
