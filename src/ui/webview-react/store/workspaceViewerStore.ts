@@ -87,9 +87,16 @@ interface WorkspaceViewerState {
   diffRefLoading: boolean;
   /** Full commit metadata, present only when diffFiles came from a single commit ref. */
   diffCommitInfo: WorkspaceCommitInfo | null;
+  /**
+   * Raw git ref currently shown in the diff pane (commit hash or
+   * `~diff`/`~staged`/`~stash:N`). Drives navigation URLs for commit/ref views.
+   */
+  diffRef: string | null;
 
   // Pending navigation (set externally, consumed by WorkspaceExplorerPane)
   pendingNavigation: PendingNavigation | null;
+  // Pending diff selection (set externally, consumed by WorkspaceSourceControlPane)
+  pendingDiff: string | null;
 
   // General
   error: string | null;
@@ -169,6 +176,8 @@ interface WorkspaceViewerActions {
   openToFile(filePath: string, startLine?: number, endLine?: number): void;
   openToDirectory(dirPath: string): void;
   clearPendingNavigation(): void;
+  openToDiff(path: string): void;
+  clearPendingDiff(): void;
 }
 
 // ============================================================================
@@ -224,8 +233,10 @@ const INITIAL_STATE: WorkspaceViewerState = {
   diffRefLabel: null,
   diffRefLoading: false,
   diffCommitInfo: null,
+  diffRef: null,
 
   pendingNavigation: null,
+  pendingDiff: null,
 
   error: null,
 };
@@ -259,6 +270,8 @@ export const useWorkspaceViewerStore = create<
           diffRefLabel: null,
           diffRefLoading: false,
           diffCommitInfo: null,
+          diffRef: null,
+          pendingDiff: null,
           commitHistoryLoading: false,
           committing: false,
           generatingCommitMessage: false,
@@ -454,6 +467,7 @@ export const useWorkspaceViewerStore = create<
           diffRefLabel: null,
           diffRefLoading: false,
           diffCommitInfo: null,
+          diffRef: null,
         });
       },
 
@@ -469,6 +483,8 @@ export const useWorkspaceViewerStore = create<
           diffRefLabel: null,
           diffRefLoading: false,
           diffCommitInfo: null,
+          diffRef: null,
+          pendingDiff: null,
         });
       },
 
@@ -555,6 +571,8 @@ export const useWorkspaceViewerStore = create<
           diffRefLabel: null,
           diffRefLoading: true,
           diffCommitInfo: null,
+          diffRef: ref,
+          pendingDiff: null,
         });
         try {
           const { unifiedDiff, commitInfo } = await workspaceGitRefDiff(ref);
@@ -599,6 +617,25 @@ export const useWorkspaceViewerStore = create<
 
       clearPendingNavigation() {
         set({ pendingNavigation: null });
+      },
+
+      openToDiff(path) {
+        set({
+          isOpen: true,
+          activeTab: "sourceControl",
+          selectedDiffPath: path,
+          pendingDiff: path,
+          // Leaving ref mode for a single-file diff.
+          diffFiles: null,
+          diffRefLabel: null,
+          diffRefLoading: false,
+          diffCommitInfo: null,
+          diffRef: null,
+        });
+      },
+
+      clearPendingDiff() {
+        set({ pendingDiff: null });
       },
     }),
     {

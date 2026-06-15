@@ -1,6 +1,7 @@
 import React from "react";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { NavHistoryControls } from "../shared/NavHistoryControls";
 
 interface WorkspaceViewerHeaderProps {
   activeTab: "explorer" | "sourceControl";
@@ -93,6 +94,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           <i className="codicon codicon-source-control codicon-sm px-1 sm:px-0" />
           <span className="hidden sm:inline">Source Control</span>
         </button>
+        <NavHistoryControls className="ml-2" />
       </div>
 
       {/* Title — takes remaining space, truncates before touching side elements */}

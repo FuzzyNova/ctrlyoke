@@ -213,3 +213,52 @@ describe("close() clears commit history loading", () => {
     expect(store().diffRefLoading).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// openToDiff + diffRef (navigation deep-link / back-forward restore)
+// ---------------------------------------------------------------------------
+
+describe("openToDiff", () => {
+  it("opens the source-control tab with a pending diff", () => {
+    store().openToDiff("src/file.ts");
+    expect(store().isOpen).toBe(true);
+    expect(store().activeTab).toBe("sourceControl");
+    expect(store().selectedDiffPath).toBe("src/file.ts");
+    expect(store().pendingDiff).toBe("src/file.ts");
+  });
+
+  it("clears any active ref-diff view", () => {
+    store().openToDiff("src/file.ts");
+    expect(store().diffRef).toBeNull();
+    expect(store().diffFiles).toBeNull();
+    expect(store().diffRefLabel).toBeNull();
+  });
+
+  it("clearPendingDiff resets the pending diff", () => {
+    store().openToDiff("src/file.ts");
+    store().clearPendingDiff();
+    expect(store().pendingDiff).toBeNull();
+  });
+});
+
+describe("diffRef tracking", () => {
+  it("selectDiff clears diffRef", () => {
+    useWorkspaceViewerStore.setState({ diffRef: "abc123" });
+    store().selectDiff("src/file.ts");
+    expect(store().diffRef).toBeNull();
+  });
+
+  it("clearDiff clears diffRef and pendingDiff", () => {
+    useWorkspaceViewerStore.setState({ diffRef: "abc123", pendingDiff: "x" });
+    store().clearDiff();
+    expect(store().diffRef).toBeNull();
+    expect(store().pendingDiff).toBeNull();
+  });
+
+  it("close clears diffRef and pendingDiff", () => {
+    useWorkspaceViewerStore.setState({ diffRef: "abc123", pendingDiff: "x" });
+    store().close();
+    expect(store().diffRef).toBeNull();
+    expect(store().pendingDiff).toBeNull();
+  });
+});

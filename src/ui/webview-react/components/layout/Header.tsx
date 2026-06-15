@@ -15,6 +15,7 @@ import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
 import { TemplateModal } from "../workflow/TemplateModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
+import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { HEADER_BUTTON_SIZES } from "../../constants";
 
 /**
@@ -328,6 +329,9 @@ export const Header: React.FC<{
             >
               <i className={`codicon codicon-list-ordered ${btnSize.icon}`} />
             </button>
+          )}
+          {isStandalone && (
+            <NavHistoryControls className="mr-1 flex-shrink-0" />
           )}
           <WorkflowStatus className="flex-1 sm:max-w-[500px]" />
           {isMobile && (

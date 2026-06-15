@@ -68,6 +68,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     (s) => s.sourceControlFiles
   );
   const selectedDiffPath = useWorkspaceViewerStore((s) => s.selectedDiffPath);
+  const pendingDiff = useWorkspaceViewerStore((s) => s.pendingDiff);
+  const clearPendingDiff = useWorkspaceViewerStore((s) => s.clearPendingDiff);
   const sourceControlLoading = useWorkspaceViewerStore(
     (s) => s.sourceControlLoading
   );
@@ -203,6 +205,14 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       setScmError,
     ]
   );
+
+  // Consume a diff selection set externally (back/forward, deep-link restore)
+  // by loading its content, mirroring how the explorer consumes pendingNavigation.
+  useEffect(() => {
+    if (!pendingDiff) return;
+    clearPendingDiff();
+    void selectFileDiff(pendingDiff);
+  }, [pendingDiff, clearPendingDiff, selectFileDiff]);
 
   const refreshAfterMutation = useCallback(
     async (affectedPaths: string[]) => {

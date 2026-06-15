@@ -1,0 +1,125 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { setupBrowserNavigation } from "@/navigation/browserNavigation";
+import { useBrowserHistoryStore } from "@/navigation/browserHistoryStore";
+import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { useUiStore } from "@store/uiStore";
+
+let cleanup: (() => void) | null = null;
+
+beforeEach(() => {
+  useWorkspaceViewerStore.getState().reset();
+  useUiStore.getState().setActiveWorkflowWorkingFilePath(null);
+  useBrowserHistoryStore.getState().reset();
+  window.history.replaceState({}, "", "/?token=t");
+});
+
+afterEach(() => {
+  cleanup?.();
+  cleanup = null;
+});
+
+describe("setupBrowserNavigation", () => {
+  it("restores the viewer from the initial URL", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?token=t&viewer=explorer&file=src/a.ts"
+    );
+    cleanup = setupBrowserNavigation();
+
+    const wv = useWorkspaceViewerStore.getState();
+    expect(wv.isOpen).toBe(true);
+    expect(wv.activeTab).toBe("explorer");
+    expect(wv.pendingNavigation).toEqual({
+      type: "file",
+      filePath: "src/a.ts",
+      startLine: undefined,
+      endLine: undefined,
+    });
+    expect(useBrowserHistoryStore.getState().idx).toBe(0);
+  });
+
+  it("sets the document title from the initial URL", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?token=t&viewer=explorer&file=src/a.ts"
+    );
+    cleanup = setupBrowserNavigation();
+    expect(document.title).toBe("a.ts — FlightPath");
+  });
+
+  it("replaces (no new entry) when the initial workflow resolves", () => {
+    window.history.replaceState({}, "", "/?token=t");
+    cleanup = setupBrowserNavigation();
+
+    // Server restores the most-recent workflow after a token-only load.
+    useUiStore.getState().setActiveWorkflowWorkingFilePath("src/m.yaml");
+
+    expect(useBrowserHistoryStore.getState().idx).toBe(0);
+    expect(window.location.search).toContain("workflow=src");
+  });
+
+  it("does not push a duplicate entry when a line-range deep link settles", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?token=t&viewer=explorer&file=src/a.ts&lines=10-20"
+    );
+    cleanup = setupBrowserNavigation();
+
+    // The explorer pane settles the selected file (without a line range).
+    useWorkspaceViewerStore.setState({ selectedFilePath: "src/a.ts" });
+
+    expect(useBrowserHistoryStore.getState().idx).toBe(0);
+    expect(window.location.search).toContain("lines=10-20");
+  });
+
+  it("threads a deep-linked workflow into the ui store before READY", () => {
+    window.history.replaceState({}, "", "/?token=t&workflow=src/m.yaml");
+    cleanup = setupBrowserNavigation();
+    expect(useUiStore.getState().activeWorkflowWorkingFilePath).toBe(
+      "src/m.yaml"
+    );
+  });
+
+  it("pushes a new history entry when the route settles to a new location", () => {
+    window.history.replaceState({}, "", "/?token=t&viewer=explorer");
+    cleanup = setupBrowserNavigation();
+
+    // Simulate the explorer pane settling into a directory.
+    useWorkspaceViewerStore.getState().setExplorerPath("src");
+
+    expect(useBrowserHistoryStore.getState().idx).toBe(1);
+    expect(window.location.search).toContain("dir=src");
+    expect(window.location.search).toContain("token=t");
+  });
+
+  it("pushes a ref URL when a commit diff becomes active", () => {
+    window.history.replaceState({}, "", "/?token=t&viewer=scm");
+    cleanup = setupBrowserNavigation();
+
+    // Simulate a commit/ref diff becoming active (as openToGitRef would).
+    useWorkspaceViewerStore.setState({ diffRef: "abc123" });
+
+    expect(useBrowserHistoryStore.getState().idx).toBe(1);
+    expect(window.location.search).toContain("ref=abc123");
+  });
+
+  it("applies the route on popstate and updates the index", () => {
+    window.history.replaceState({}, "", "/?token=t&viewer=explorer");
+    cleanup = setupBrowserNavigation();
+
+    window.history.replaceState(
+      { idx: 1 },
+      "",
+      "/?token=t&viewer=scm&file=src/c.ts"
+    );
+    window.dispatchEvent(new PopStateEvent("popstate", { state: { idx: 1 } }));
+
+    const wv = useWorkspaceViewerStore.getState();
+    expect(wv.activeTab).toBe("sourceControl");
+    expect(wv.selectedDiffPath).toBe("src/c.ts");
+    expect(useBrowserHistoryStore.getState().idx).toBe(1);
+  });
+});

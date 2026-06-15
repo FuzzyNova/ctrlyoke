@@ -41,11 +41,14 @@ import {
 } from "./components/layout";
 import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
 import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
+import { useNavigationSync } from "./navigation/useNavigationSync";
 import { HistorySearchModal } from "@components/search/HistorySearchModal";
 
 function App() {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
+  // Record workflow / workspace-viewer navigations for the back/forward controls.
+  useNavigationSync();
   // main.tsx rehydrates uiStore before App is imported, so the persisted
   // collapse state is available on the first render.
   const [uiLayoutReady] = useState(true);
