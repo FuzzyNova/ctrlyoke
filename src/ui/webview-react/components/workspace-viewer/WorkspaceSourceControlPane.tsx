@@ -13,6 +13,7 @@ import {
   workspaceUnstage,
 } from "@utils/hostedApi";
 import type { SourceControlFile } from "@root/types/HostedWorkspaceViewerTypes";
+import { SCM_KIND_COLOR_CLASS } from "@utils/scmStatus";
 import { Button } from "../shared/Button";
 import { Modal } from "../shared/Modal";
 import { WorkspaceCommitArea } from "./WorkspaceCommitArea";
@@ -39,17 +40,18 @@ function getStatusBadge(file: SourceControlFile): {
   label: string;
   colorClass: string;
 } {
+  const colorClass = SCM_KIND_COLOR_CLASS[file.kind];
   switch (file.kind) {
     case "added":
-      return { label: "A", colorClass: "text-scm-added-fg" };
+      return { label: "A", colorClass };
     case "deleted":
-      return { label: "D", colorClass: "text-scm-deleted-fg" };
+      return { label: "D", colorClass };
     case "renamed":
-      return { label: "R", colorClass: "text-scm-renamed-fg" };
+      return { label: "R", colorClass };
     case "untracked":
-      return { label: "U", colorClass: "text-scm-untracked-fg" };
+      return { label: "U", colorClass };
     default:
-      return { label: "M", colorClass: "text-scm-modified-fg" };
+      return { label: "M", colorClass };
   }
 }
 

@@ -149,6 +149,7 @@ suite("HostedWorkspaceViewerService", () => {
       assert.strictEqual(byName.get("tracked.txt")?.gitIgnored, false);
       assert.strictEqual(byName.get("ignored.txt")?.gitIgnored, true);
       assert.strictEqual(byName.get("ignored_dir")?.gitIgnored, true);
+      assert.strictEqual(byName.get(".git")?.gitIgnored, true);
     });
   });
 

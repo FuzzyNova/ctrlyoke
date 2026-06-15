@@ -13,12 +13,20 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useWorkspaceEditorContextMenu } from "@hooks/useWorkspaceEditorContextMenu";
 import { useWorkspaceExplorerContextMenu } from "@hooks/useWorkspaceExplorerContextMenu";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@/types/messages";
-import type { WorkspaceEntry } from "@root/types/HostedWorkspaceViewerTypes";
+import type {
+  WorkspaceEntry,
+  SourceControlFile,
+} from "@root/types/HostedWorkspaceViewerTypes";
 import {
   workspaceTree,
   workspaceFile,
   workspaceSaveFile,
+  workspaceStatus,
 } from "@utils/hostedApi";
+import {
+  SCM_IGNORED_COLOR_CLASS,
+  SCM_KIND_COLOR_CLASS,
+} from "@utils/scmStatus";
 import {
   WorkspaceFileEditor,
   type WorkspaceFileEditorHandle,
@@ -51,10 +59,44 @@ function toWorkspaceRelative(
   return norm;
 }
 
+/**
+ * Resolves the git-status text color class for an explorer entry, mirroring
+ * VS Code's explorer gitDecoration coloring.
+ * Ignored entries take priority. A directory with no status of its own falls
+ * back to the aggregate status of its descendants; a mix of different kinds
+ * is colored as modified (same as VS Code's folder decoration).
+ */
+function getEntryStatusColorClass(
+  entry: WorkspaceEntry,
+  sourceControlFiles: SourceControlFile[]
+): string | undefined {
+  if (entry.gitIgnored) return SCM_IGNORED_COLOR_CLASS;
+
+  const ownStatus = sourceControlFiles.find((f) => f.path === entry.path);
+  if (ownStatus && ownStatus.kind !== "deleted") {
+    return SCM_KIND_COLOR_CLASS[ownStatus.kind];
+  }
+
+  if (entry.kind !== "directory") return undefined;
+
+  const prefix = `${entry.path}/`;
+  let aggregateKind: SourceControlFile["kind"] | undefined;
+  for (const file of sourceControlFiles) {
+    if (file.kind === "deleted" || !file.path.startsWith(prefix)) continue;
+    if (aggregateKind === undefined) {
+      aggregateKind = file.kind;
+    } else if (aggregateKind !== file.kind) {
+      return SCM_KIND_COLOR_CLASS.modified;
+    }
+  }
+  return aggregateKind ? SCM_KIND_COLOR_CLASS[aggregateKind] : undefined;
+}
+
 interface EntryRowProps {
   entry: WorkspaceEntry;
   isSelected: boolean;
   isCut: boolean;
+  statusColorClass: string | undefined;
   onClick: () => void;
   openContextMenu: (x: number, y: number, entry: WorkspaceEntry) => void;
 }
@@ -63,6 +105,7 @@ function EntryRow({
   entry,
   isSelected,
   isCut,
+  statusColorClass,
   onClick,
   openContextMenu,
 }: EntryRowProps) {
@@ -95,7 +138,7 @@ function EntryRow({
             : "codicon-file"
         }`}
       />
-      <span className="truncate">
+      <span className={`truncate ${statusColorClass ?? ""}`}>
         {entry.name}
         {entry.kind === "directory" ? "/" : ""}
       </span>
@@ -117,6 +160,12 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const explorerIsGitRepo = useWorkspaceViewerStore((s) => s.explorerIsGitRepo);
   const setExplorerIsGitRepo = useWorkspaceViewerStore(
     (s) => s.setExplorerIsGitRepo
+  );
+  const sourceControlFiles = useWorkspaceViewerStore(
+    (s) => s.sourceControlFiles
+  );
+  const setSourceControlFiles = useWorkspaceViewerStore(
+    (s) => s.setSourceControlFiles
   );
   const selectedFilePath = useWorkspaceViewerStore((s) => s.selectedFilePath);
   const fileContent = useWorkspaceViewerStore((s) => s.fileContent);
@@ -222,11 +271,22 @@ export const WorkspaceExplorerPane: React.FC = () => {
     ]
   );
 
+  // Loads git status for the whole workspace, used to color explorer entries
+  // by their gitDecoration status (mirrors VS Code's explorer coloring).
+  const loadGitStatus = useCallback(() => {
+    workspaceStatus()
+      .then((result) => setSourceControlFiles(result.files))
+      .catch(() => {
+        // silently ignore — entries simply render without status colors
+      });
+  }, [setSourceControlFiles]);
+
   // Load root on mount, unless a pending navigation will handle it
   useEffect(() => {
     if (!useWorkspaceViewerStore.getState().pendingNavigation) {
       loadDirectory(explorerPath);
     }
+    loadGitStatus();
     // Intentional: run once on mount; navigation is explicit through loadDirectory calls
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -325,7 +385,8 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
   const handleRefresh = useCallback(() => {
     loadDirectory(explorerPath);
-  }, [explorerPath, loadDirectory]);
+    loadGitStatus();
+  }, [explorerPath, loadDirectory, loadGitStatus]);
 
   const handleSyncExplorer = useCallback(() => {
     if (!selectedFilePath) return;
@@ -563,6 +624,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 entry.kind === "file" && selectedFilePath === entry.path;
               const isCut =
                 clipboard?.operation === "cut" && clipboard.path === entry.path;
+              const statusColorClass = getEntryStatusColorClass(
+                entry,
+                sourceControlFiles
+              );
 
               return (
                 <li key={entry.path}>
@@ -570,6 +635,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     entry={entry}
                     isSelected={isSelected}
                     isCut={isCut}
+                    statusColorClass={statusColorClass}
                     onClick={() => {
                       if (entry.kind === "directory") {
                         loadDirectory(entry.path);

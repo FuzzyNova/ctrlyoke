@@ -193,6 +193,8 @@ module.exports = {
           "var(--vscode-gitDecoration-addedResourceForeground, #73c991)",
         "scm-deleted-fg":
           "var(--vscode-gitDecoration-deletedResourceForeground, #f48771)",
+        "scm-ignored-fg":
+          "var(--vscode-gitDecoration-ignoredResourceForeground, #8c8c8c)",
         "scm-modified-fg":
           "var(--vscode-gitDecoration-modifiedResourceForeground, #e5ba7d)",
         "scm-renamed-fg":

@@ -240,12 +240,21 @@ export class HostedWorkspaceViewerService {
         allEntries.map(async (dirent) => {
           const entryAbsolute = path.join(resolved, dirent.name);
           const entryRelative = this.relativePath(entryAbsolute);
+          // git never lists ".git" itself via ls-files, so it can't appear in
+          // ignoredNames — treat it as ignored explicitly (it's always a
+          // VCS-internal directory the user doesn't want to browse/track).
+          const gitIgnored =
+            dirent.name === ".git"
+              ? isGitRepo
+              : dirent.isDirectory()
+                ? (ignoredNames?.has(`${dirent.name}/`) ?? false)
+                : (ignoredNames?.has(dirent.name) ?? false);
           if (dirent.isDirectory()) {
             return {
               name: dirent.name,
               path: entryRelative,
               kind: "directory" as const,
-              gitIgnored: ignoredNames?.has(`${dirent.name}/`) ?? false,
+              gitIgnored,
             };
           }
           let size: number | undefined;
@@ -260,7 +269,7 @@ export class HostedWorkspaceViewerService {
             path: entryRelative,
             kind: "file" as const,
             size,
-            gitIgnored: ignoredNames?.has(dirent.name) ?? false,
+            gitIgnored,
           };
         })
       );
