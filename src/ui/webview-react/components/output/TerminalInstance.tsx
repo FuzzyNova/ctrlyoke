@@ -57,7 +57,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       `[TerminalInstance] visibility wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} ` +
         `isVisible=${isVisible} isController=${isController} controllerCols=${controllerCols ?? "none"}`
     );
-  }, [controllerCols, controllerRows, isController, isVisible, workflowId, sessionId]);
+  }, [
+    controllerCols,
+    controllerRows,
+    isController,
+    isVisible,
+    workflowId,
+    sessionId,
+  ]);
 
   useEffect(() => {
     const previousIsController = previousIsControllerRef.current;
@@ -317,10 +324,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const { sessions, clearPendingOutput } = useTerminalStore.getState();
       const sess = (sessions[workflowId] ?? []).find((s) => s.id === sessionId);
       if (sess?.pendingOutput.length) {
-        const totalChars = sess.pendingOutput.reduce(
-          (n, c) => n + c.length,
-          0
-        );
+        const totalChars = sess.pendingOutput.reduce((n, c) => n + c.length, 0);
         WebviewLog.debug(
           `[TerminalInstance] flushing ${sess.pendingOutput.length} pending chunk(s) (${totalChars} chars) ` +
             `wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} isController=${sess.isController}`
@@ -624,7 +628,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
     };
-  }, [controllerCols, controllerRows, isController, isVisible, workflowId, sessionId]);
+  }, [
+    controllerCols,
+    controllerRows,
+    isController,
+    isVisible,
+    workflowId,
+    sessionId,
+  ]);
 
   return (
     // Non-scrolling outer wrapper — the positioning context for the "View Only" /
@@ -632,37 +643,29 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     // terminal area instead of scrolling with the mirrored grid inside the inner
     // scroll container below.
     <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: isVisible ? "flex" : "none",
-        flexDirection: "column",
-        position: "relative",
-      }}
+      className={`relative w-full h-full flex-col ${isVisible ? "flex" : "hidden"}`}
     >
+      {/*
+        Controllers fill their container with no overflow (fitAddon sizes exactly).
+        Viewers mirror the controller's exact cols×rows grid (fixed size) and
+        letterbox it: scrollbars on whichever axis the viewer is smaller, auto
+        horizontal margins center it when wider. Hence overflow auto on both
+        axes for viewers.
+
+        Controllers take full touch control (touch-none) so our custom handler
+        owns vertical scrollback and the browser never pans/zooms the page.
+        Viewers pan the fixed mirrored grid natively on both axes (pan-x/pan-y)
+        — this is what makes the horizontal scrollbar reachable on iOS Safari
+        and lets the user reach rows below the fold. Pinch-zoom stays disabled
+        either way.
+      */}
       <div
         ref={containerRef}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          // Controllers fill their container with no overflow (fitAddon sizes exactly).
-          // Viewers mirror the controller's exact cols×rows grid (fixed size) and
-          // letterbox it: scrollbars on whichever axis the viewer is smaller, auto
-          // horizontal margins center it when wider. Hence overflow auto on both
-          // axes for viewers.
-          overflowX: isController ? "hidden" : "auto",
-          overflowY: isController ? "hidden" : "auto",
-          // Controllers take full touch control (touch-action:none) so our custom
-          // handler owns vertical scrollback and the browser never pans/zooms the
-          // page. Viewers pan the fixed mirrored grid natively on both axes
-          // (pan-x/pan-y) — this is what makes the horizontal scrollbar reachable on
-          // iOS Safari and lets the user reach rows below the fold. Pinch-zoom stays
-          // disabled either way.
-          touchAction: isController ? "none" : "pan-x pan-y",
-        }}
+        className={`flex flex-1 flex-col min-w-0 min-h-0 ${
+          isController
+            ? "overflow-hidden touch-none"
+            : "overflow-auto touch-pan-x touch-pan-y"
+        }`}
       />
       {/* "Process exited" overlay for frozen ai-cli sessions */}
       <FrozenOverlay workflowId={workflowId} sessionId={sessionId} />
@@ -693,10 +696,7 @@ const FrozenOverlay: React.FC<{ workflowId: string; sessionId: string }> = ({
   if (!isFrozen) return null;
 
   return (
-    <div
-      className="absolute bottom-0 left-0 right-0 flex items-center justify-center py-1 pointer-events-none"
-      style={{ background: "rgba(0,0,0,0.4)" }}
-    >
+    <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center py-1 pointer-events-none bg-overlay-scrim">
       <span className="text-xs text-description-fg select-none">
         {session?.status === TERMINAL_SESSION_STATUS.FAILED
           ? "Process exited with error"
@@ -733,26 +733,13 @@ const ViewOnlyBadge: React.FC<{ workflowId: string; sessionId: string }> = ({
   };
 
   return (
-    <div
-      className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-1"
-      style={{ background: "rgba(0,0,0,0.55)", zIndex: 10 }}
-    >
-      <span
-        className="text-xs select-none"
-        style={{ color: "var(--vscode-descriptionForeground)" }}
-      >
+    <div className="absolute bottom-0 left-0 right-0 z-raised flex items-center justify-between px-4 py-1.5 bg-overlay-scrim-strong">
+      <span className="text-sm text-severity-warning font-medium select-none">
         View Only
       </span>
       <button
         onClick={handleTakeControl}
-        className="text-xs px-2 py-0.5 rounded select-none cursor-pointer"
-        style={{
-          background:
-            "var(--vscode-button-secondaryBackground, rgba(255,255,255,0.12))",
-          color:
-            "var(--vscode-button-secondaryForeground, var(--vscode-descriptionForeground))",
-          border: "1px solid var(--vscode-button-secondaryBorder, transparent)",
-        }}
+        className="text-sm px-5 py-1 rounded select-none cursor-pointer border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
       >
         Take Control
       </button>

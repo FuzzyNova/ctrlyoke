@@ -17,7 +17,9 @@ import { useUiStore } from "@store/uiStore";
 import { centerPanelMountDefaults } from "@utils/panelSync";
 import {
   PANEL_COLLAPSED_SIZE_DEFAULT_PX,
+  PANEL_COLLAPSED_SIZE_SIDEBAR,
   PANEL_MIN_SIZE_CENTER,
+  PANEL_MIN_SIZE_CENTER_COLUMN,
   PANEL_MIN_SIZE_EDITOR_PX,
 } from "../constants";
 
@@ -139,6 +141,117 @@ export function useDesktopLayout({
         editor: mountDefaultEditor.current,
       },
     };
+  };
+
+  const getHorizontalGroupTotalPx = () => {
+    const groupElement = document.getElementById("flightpath-main-layout");
+    return groupElement?.getBoundingClientRect().width ?? 0;
+  };
+
+  const getHorizontalCollapsedPct = (totalPx: number) =>
+    Number(
+      (
+        (Number.parseInt(PANEL_COLLAPSED_SIZE_SIDEBAR, 10) / totalPx) *
+        100
+      ).toFixed(3)
+    );
+
+  const getHorizontalCenterMinPct = (totalPx: number) =>
+    Number(
+      (
+        (Number.parseInt(PANEL_MIN_SIZE_CENTER_COLUMN, 10) / totalPx) *
+        100
+      ).toFixed(3)
+    );
+
+  const buildHorizontalLayout = (totalPx: number) => {
+    const collapsedPct = getHorizontalCollapsedPct(totalPx);
+    const centerMinPct = getHorizontalCenterMinPct(totalPx);
+    const maxSidePct = Math.max(0, 100 - centerMinPct);
+
+    const stepsStoredPct = Number(
+      ((lastDesktopSizes.current.steps / totalPx) * 100).toFixed(3)
+    );
+    const settingsStoredPct = Number(
+      ((lastDesktopSizes.current.settings / totalPx) * 100).toFixed(3)
+    );
+
+    let stepsPct = promptsCollapsed ? collapsedPct : stepsStoredPct;
+    let settingsPct = settingsCollapsed ? collapsedPct : settingsStoredPct;
+    const maxExpandedStepsPct = promptsCollapsed
+      ? collapsedPct
+      : Math.max(0, maxSidePct - settingsPct);
+    const maxExpandedSettingsPct = settingsCollapsed
+      ? collapsedPct
+      : Math.max(0, maxSidePct - stepsPct);
+
+    if (!promptsCollapsed) {
+      stepsPct = Math.min(stepsPct, maxExpandedStepsPct);
+    }
+    if (!settingsCollapsed) {
+      settingsPct = Math.min(settingsPct, maxExpandedSettingsPct);
+    }
+
+    const totalSidePct = stepsPct + settingsPct;
+    if (totalSidePct > maxSidePct && totalSidePct > 0) {
+      const availableExpandedPct =
+        maxSidePct -
+        (promptsCollapsed ? collapsedPct : 0) -
+        (settingsCollapsed ? collapsedPct : 0);
+      const expandedTotalPct =
+        (promptsCollapsed ? 0 : stepsPct) + (settingsCollapsed ? 0 : settingsPct);
+      const scale =
+        expandedTotalPct > 0
+          ? Math.max(0, availableExpandedPct) / expandedTotalPct
+          : 1;
+
+      if (!promptsCollapsed) {
+        stepsPct = Number((stepsPct * scale).toFixed(3));
+      }
+      if (!settingsCollapsed) {
+        settingsPct = Number((settingsPct * scale).toFixed(3));
+      }
+    }
+
+    const centerPct = Number((100 - stepsPct - settingsPct).toFixed(3));
+
+    return {
+      "prompts-panel": stepsPct,
+      "center-content": centerPct,
+      "settings-panel": settingsPct,
+    };
+  };
+
+  const applyHorizontalLayoutSync = (reason: string) => {
+    syncCollapsiblePanel(stepsRef, promptsCollapsed);
+    syncCollapsiblePanel(settingsRef, settingsCollapsed);
+
+    if (!horizontalGroupRef.current) {
+      WebviewLog.error("[LAYOUT] horizontalGroupRef.current is null", {
+        reason,
+        snapshot: getDesktopPanelSnapshot(),
+      });
+      return;
+    }
+
+    const totalPx = getHorizontalGroupTotalPx();
+    if (totalPx <= 0) {
+      return;
+    }
+
+    const layout = buildHorizontalLayout(totalPx);
+
+    try {
+      horizontalGroupRef.current.setLayout(layout);
+    } catch (error) {
+      WebviewLog.error("[LAYOUT] setHorizontalLayout() failed", {
+        reason,
+        layout,
+        totalPx,
+        error: error instanceof Error ? error.message : String(error),
+        snapshot: getDesktopPanelSnapshot(),
+      });
+    }
   };
 
   const cancelRemountSync = () => {
@@ -346,8 +459,7 @@ export function useDesktopLayout({
   useLayoutEffect(() => {
     if (!uiLayoutReady) return;
     if (isMobile) return;
-    syncCollapsiblePanel(settingsRef, settingsCollapsed);
-    syncCollapsiblePanel(stepsRef, promptsCollapsed);
+    applyHorizontalLayoutSync("desktop-mount");
   }, [isMobile, uiLayoutReady]);
 
   // Open the horizontal onResize gate after mount events have settled.
@@ -363,13 +475,15 @@ export function useDesktopLayout({
   // Ongoing store → panel sync for settings and prompts collapse
   useEffect(() => {
     if (!uiLayoutReady) return;
-    syncCollapsiblePanel(settingsRef, settingsCollapsed);
-  }, [settingsCollapsed, uiLayoutReady]);
+    if (isMobile) return;
+    applyHorizontalLayoutSync("settings-collapse-sync");
+  }, [isMobile, settingsCollapsed, uiLayoutReady]);
 
   useEffect(() => {
     if (!uiLayoutReady) return;
-    syncCollapsiblePanel(stepsRef, promptsCollapsed);
-  }, [promptsCollapsed, uiLayoutReady]);
+    if (isMobile) return;
+    applyHorizontalLayoutSync("steps-collapse-sync");
+  }, [isMobile, promptsCollapsed, uiLayoutReady]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // VERTICAL PANEL SYNC (output / editor)

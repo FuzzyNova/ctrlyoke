@@ -179,6 +179,12 @@ module.exports = {
         "output-command-border": "rgb(255, 200, 100)",
         "output-streaming": "#4ec9b0",
 
+        // ── Overlay scrims (status bars over mirrored terminal content) ──
+        // Semi-transparent black, intentionally theme-independent — dimming
+        // the terminal beneath should look consistent in light and dark themes.
+        "overlay-scrim": "rgba(0, 0, 0, 0.4)",
+        "overlay-scrim-strong": "rgba(0, 0, 0, 0.55)",
+
         // ── Diff colors ──
         // diff-added-fg: used by UndoChangesDialog.tsx for "created" file status text.
         // The remaining diff-* tokens were only used by the old DiffView and are removed.
