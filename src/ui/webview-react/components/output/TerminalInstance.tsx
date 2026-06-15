@@ -442,7 +442,17 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       resizeObserverDisconnectRef.current = disconnect;
     }
 
-    mount();
+    // Defensive catch so an unexpected mount failure logs instead of surfacing as
+    // an unhandled rejection. xterm is statically imported now, so create() can no
+    // longer fail on a chunk fetch — the prior failure mode that left the terminal
+    // blank is gone.
+    void mount().catch((err) => {
+      if (cancelled) return;
+      WebviewLog.debug(
+        `[TerminalInstance] mount failed wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+    });
 
     return () => {
       cancelled = true;

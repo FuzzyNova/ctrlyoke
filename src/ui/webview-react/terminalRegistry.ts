@@ -11,8 +11,14 @@
  *    detach() removes DOM element from document (xterm survives in JS heap) →
  *    on return, attach() moves the existing DOM element back into the container.
  */
-import type { Terminal, ITheme } from "@xterm/xterm";
-import type { FitAddon } from "@xterm/addon-fit";
+// xterm and the fit addon are statically imported: the terminal is a core
+// feature, so there's no benefit to code-splitting them, and a static import
+// folds them into the app bundle (whose load is covered by the bootstrap
+// reconnect/reload watchdog) instead of a fragile runtime chunk fetch that could
+// transiently fail and leave the terminal blank. The WebGL addon stays dynamic
+// below — it's optional (DOM-renderer fallback) and best-effort.
+import { Terminal, type ITheme } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
 import {
   TERMINAL_CURSOR_STYLES,
   TERMINAL_MOBILE_CONTROL_BAR,
@@ -105,7 +111,6 @@ interface FitSessionResult {
 
 // key: `${workflowId}:${sessionId}`
 const registry = new Map<string, RegistryEntry>();
-const pendingCreates = new Map<string, Promise<RegistryEntry>>();
 
 let currentTerminalSettings: TerminalSettings = {
   fontSize: 14,
@@ -274,75 +279,50 @@ export const terminalRegistry = {
     const key = makeKey(workflowId, sessionId);
     const existing = registry.get(key);
     if (existing) return existing;
-    const pending = pendingCreates.get(key);
-    if (pending) {
-      WebviewLog.debug(
-        `[terminalRegistry.create] joining pending create wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
-      );
-      return pending;
-    }
 
-    const createPromise = (async () => {
-      // Dynamic imports so xterm is only loaded when actually needed
-      const [{ Terminal }, { FitAddon }] = await Promise.all([
-        import("@xterm/xterm"),
-        import("@xterm/addon-fit"),
-      ]);
+    // xterm/FitAddon are statically imported, so this runs synchronously with no
+    // await — concurrent callers can't interleave, hence no pending-create dedup.
+    const theme = readVsCodeTheme();
+    const settings = this.getTerminalSettings();
+    // Read the resolved font family from VS Code CSS variables — xterm passes fontFamily
+    // directly to the canvas 2D context, which cannot resolve CSS var() expressions.
+    const fontFamily =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--vscode-editor-font-family")
+        .trim() || '"Cascadia Code", "Courier New", monospace';
+    const term = new Terminal({
+      theme,
+      scrollback: settings.scrollback,
+      fontFamily,
+      fontSize: settings.fontSize,
+      lineHeight: settings.lineHeight,
+      letterSpacing: 0,
+      allowTransparency: false,
+      cursorStyle: settings.cursorStyle,
+      cursorBlink: settings.cursorBlink,
+      macOptionIsMeta: settings.macOptionIsMeta,
+      wordSeparator: settings.wordSeparators,
+    });
 
-      const existingAfterImport = registry.get(key);
-      if (existingAfterImport) {
-        return existingAfterImport;
-      }
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
 
-      const theme = readVsCodeTheme();
-      const settings = this.getTerminalSettings();
-      // Read the resolved font family from VS Code CSS variables — xterm passes fontFamily
-      // directly to the canvas 2D context, which cannot resolve CSS var() expressions.
-      const fontFamily =
-        getComputedStyle(document.documentElement)
-          .getPropertyValue("--vscode-editor-font-family")
-          .trim() || '"Cascadia Code", "Courier New", monospace';
-      const term = new Terminal({
-        theme,
-        scrollback: settings.scrollback,
-        fontFamily,
-        fontSize: settings.fontSize,
-        lineHeight: settings.lineHeight,
-        letterSpacing: 0,
-        allowTransparency: false,
-        cursorStyle: settings.cursorStyle,
-        cursorBlink: settings.cursorBlink,
-        macOptionIsMeta: settings.macOptionIsMeta,
-        wordSeparator: settings.wordSeparators,
-      });
+    const domEl = document.createElement("div");
+    domEl.style.cssText = "width:100%;height:100%;";
 
-      const fitAddon = new FitAddon();
-      term.loadAddon(fitAddon);
+    const entry: RegistryEntry = {
+      term,
+      fitAddon,
+      domEl,
+      inputCapture: new InputCapture(),
+      frozen: false,
+    };
 
-      const domEl = document.createElement("div");
-      domEl.style.cssText = "width:100%;height:100%;";
-
-      const entry: RegistryEntry = {
-        term,
-        fitAddon,
-        domEl,
-        inputCapture: new InputCapture(),
-        frozen: false,
-      };
-
-      registry.set(key, entry);
-      WebviewLog.debug(
-        `[terminalRegistry.create] created wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
-      );
-      return entry;
-    })();
-
-    pendingCreates.set(key, createPromise);
-    try {
-      return await createPromise;
-    } finally {
-      pendingCreates.delete(key);
-    }
+    registry.set(key, entry);
+    WebviewLog.debug(
+      `[terminalRegistry.create] created wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
+    );
+    return entry;
   },
 
   /**

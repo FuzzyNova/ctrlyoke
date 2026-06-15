@@ -63,6 +63,18 @@ export class FlightPathHostedServer
 {
   private static readonly SOCKET_HEARTBEAT_INTERVAL_MS = 30000;
 
+  /**
+   * When a new client connects we probe all existing sockets for liveness and
+   * reap any that don't respond within this grace window — far faster than the
+   * 30s steady-state heartbeat. This is what lets a freshly opened tab take over
+   * control quickly after the previous tab closed: iOS Safari often fails to send
+   * a WebSocket close (or run `pagehide`) on tab close, so without this the dead
+   * tab lingers as the recorded controller for up to ~60s and the new tab is
+   * stuck in view-only mode. Generous enough to tolerate high mobile RTT; a
+   * backgrounded tab that gets reaped simply reconnects when it returns.
+   */
+  private static readonly NEW_CONNECTION_LIVENESS_PROBE_GRACE_MS = 3000;
+
   private app = express();
   private httpServer: Server;
   private wss: WebSocketServer;
@@ -1287,6 +1299,11 @@ export class FlightPathHostedServer
       this.connections.add(ws);
       this.socketLiveness.set(ws, true);
       const clientTag = `${BROWSER_CLIENT_PREFIX}${this.nextConnectionId++}`;
+      // A new connection is the moment we most need to know whether previously
+      // recorded clients (e.g. a phone tab that was just closed) are actually
+      // still alive — so the new tab can take over an orphaned controller slot
+      // without waiting for the slow steady-state heartbeat.
+      this.probeExistingConnectionsForLiveness(ws, clientTag);
       let sawReady = false;
       const connectedAt = Date.now();
       Log.debug(
@@ -1335,6 +1352,55 @@ export class FlightPathHostedServer
         );
       });
     });
+  }
+
+  /**
+   * Ping every currently-open socket except the one that just connected, then
+   * terminate any that fail to pong within the grace window. Terminating a dead
+   * socket fires its `close` handler → `unregisterBrowserClient` → the orphaned
+   * controller slot is released and broadcast as CONTROLLER_CHANGED(undefined),
+   * which the surviving client auto-claims. Live clients pong and keep control,
+   * so this never steals control from an active controller.
+   */
+  private probeExistingConnectionsForLiveness(
+    newlyConnected: WebSocket,
+    newClientTag: string
+  ): void {
+    const probed: WebSocket[] = [];
+    for (const ws of this.connections) {
+      if (ws === newlyConnected) continue;
+      if (ws.readyState !== WebSocket.OPEN) continue;
+      this.socketLiveness.set(ws, false);
+      try {
+        ws.ping();
+        probed.push(ws);
+      } catch {
+        try {
+          ws.terminate();
+        } catch {
+          // Best-effort cleanup. close/error handlers own the rest.
+        }
+      }
+    }
+    if (probed.length === 0) return;
+    Log.debug(
+      `[hosted-server] new connection ${newClientTag} probing ${probed.length} existing socket(s) for liveness`
+    );
+    setTimeout(() => {
+      for (const ws of probed) {
+        if (ws.readyState !== WebSocket.OPEN) continue;
+        if (this.socketLiveness.get(ws) === false) {
+          Log.debug(
+            `[hosted-server] terminating unresponsive socket after ${newClientTag} liveness probe`
+          );
+          try {
+            ws.terminate();
+          } catch {
+            // Best-effort cleanup. close/error handlers own the rest.
+          }
+        }
+      }
+    }, FlightPathHostedServer.NEW_CONNECTION_LIVENESS_PROBE_GRACE_MS);
   }
 
   private setupHeartbeat(): void {
