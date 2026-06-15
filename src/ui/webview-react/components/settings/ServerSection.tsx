@@ -93,7 +93,11 @@ export function ServerSection({
   const displayIpOptions = availableIps.map((ip) => ({ label: ip, value: ip }));
   const bindAddressOptions = [
     { label: "Localhost only (127.0.0.1)", value: "127.0.0.1" },
-    { label: "All interfaces (0.0.0.0) — LAN access", value: "0.0.0.0" },
+    {
+      label:
+        "All interfaces (0.0.0.0) — LAN access (WAN access with VPN or port forwarding)",
+      value: "0.0.0.0",
+    },
   ];
 
   // Local color state: onChange updates preview instantly without persisting.

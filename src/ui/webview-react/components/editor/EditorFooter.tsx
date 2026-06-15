@@ -116,7 +116,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
 
       {/* Swappable zone: quick pickers ↔ DrawerTabBar — hidden in script mode */}
       {!isScriptMode && (
-        <div className="relative flex-1 min-w-0 self-stretch">
+        <div className="relative flex-1 min-w-0 self-stretch overflow-hidden">
           {/* Quick pickers — unified layout, exits upward as a single unit */}
           <div
             className={`absolute inset-0 flex items-center justify-between transition-all duration-300 ${
