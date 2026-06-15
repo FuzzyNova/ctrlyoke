@@ -417,7 +417,9 @@ export function AgentSkillsManagerSection({
 
   const defaultAgent = useMemo<string>(() => {
     const fullValue = fullGlobalSettings?.settings?.defaults?.agent;
-    return typeof fullValue === "string" ? fullValue : (globalSettings.agent ?? "");
+    return typeof fullValue === "string"
+      ? fullValue
+      : (globalSettings.agent ?? "");
   }, [fullGlobalSettings, globalSettings.agent]);
 
   const defaultSkills = useMemo<string[]>(() => {
@@ -617,17 +619,18 @@ export function AgentSkillsManagerSection({
     });
   }, [activeScope, activeType, defaultSkills, managedFiles, selectedFiles]);
 
+  const getContextDescription = (): string => {
+    if (activeType === HARNESS_FILE_TYPES.AGENT) {
+      return "Save agents to a harness directory to enable native subagent spawning from that harness.";
+    }
+    return "Save skills to a harness directory to make that skill always available for that harness, regardless of what FlightPath attaches.";
+  };
+
   return (
     <div className="space-y-4">
       <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
         Agent & Skills Manager
       </h3>
-
-      <p className="text-xs text-description-fg">
-        Manage agent and skill files across harness directories. Save to a
-        harness directory to give it native subagent-spawn access. Workspace
-        dirs live inside the project; user dirs apply globally.
-      </p>
 
       {/* Type switcher + Open Folder */}
       <div className="flex items-center gap-2">
@@ -671,6 +674,14 @@ export function AgentSkillsManagerSection({
             />
           </div>
         )}
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs text-description-fg">{getContextDescription()}</p>
+        <p className="text-xs text-description-fg">
+          Save to FlightPath for fine-grained control via properties. Workspace
+          directories are project-scoped; user directories apply globally.
+        </p>
       </div>
 
       {/* Bulk actions */}
