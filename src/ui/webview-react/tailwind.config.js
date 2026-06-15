@@ -185,6 +185,21 @@ module.exports = {
         "overlay-scrim": "rgba(0, 0, 0, 0.4)",
         "overlay-scrim-strong": "rgba(0, 0, 0, 0.55)",
 
+        // ── Source control status colors ──
+        // Used by WorkspaceSourceControlPane.tsx for file status badges (A/M/D/R/U).
+        // Matches VS Code's gitDecoration palette so badge colors are consistent
+        // with the native Source Control view. Fallbacks are Dark+ defaults.
+        "scm-added-fg":
+          "var(--vscode-gitDecoration-addedResourceForeground, #73c991)",
+        "scm-deleted-fg":
+          "var(--vscode-gitDecoration-deletedResourceForeground, #f48771)",
+        "scm-modified-fg":
+          "var(--vscode-gitDecoration-modifiedResourceForeground, #e5ba7d)",
+        "scm-renamed-fg":
+          "var(--vscode-gitDecoration-renamedResourceForeground, #73c991)",
+        "scm-untracked-fg":
+          "var(--vscode-gitDecoration-untrackedResourceForeground, #73c991)",
+
         // ── Diff colors ──
         // diff-added-fg: used by UndoChangesDialog.tsx for "created" file status text.
         // The remaining diff-* tokens were only used by the old DiffView and are removed.

@@ -34,12 +34,23 @@ function detachedBranchHint(): string | undefined {
   return detached && previousBranch ? previousBranch : undefined;
 }
 
-function getStatusBadge(file: SourceControlFile): string {
-  if (file.kind === "added") return "A";
-  if (file.kind === "deleted") return "D";
-  if (file.kind === "renamed") return "R";
-  if (file.kind === "untracked") return "U";
-  return "M";
+/** Status badge label and color class, keyed off the file's git status kind. */
+function getStatusBadge(file: SourceControlFile): {
+  label: string;
+  colorClass: string;
+} {
+  switch (file.kind) {
+    case "added":
+      return { label: "A", colorClass: "text-scm-added-fg" };
+    case "deleted":
+      return { label: "D", colorClass: "text-scm-deleted-fg" };
+    case "renamed":
+      return { label: "R", colorClass: "text-scm-renamed-fg" };
+    case "untracked":
+      return { label: "U", colorClass: "text-scm-untracked-fg" };
+    default:
+      return { label: "M", colorClass: "text-scm-modified-fg" };
+  }
 }
 
 /** Splits a workspace-relative path into its file name and containing directory. */
@@ -261,7 +272,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
 
   const staged = sourceControlFiles.filter((f) => f.stagedStatus !== null);
   const changed = sourceControlFiles.filter((f) => f.unstagedStatus !== null);
-  const filesEmpty = staged.length === 0 && changed.length === 0 && !sourceControlLoading;
+  const filesEmpty =
+    staged.length === 0 && changed.length === 0 && !sourceControlLoading;
   const historyEmpty = commitHistory.length === 0;
 
   // 50/50 flex split with empty-fill: when a region has no content, collapse
@@ -359,14 +371,9 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       : undefined;
 
   const renderFileRow = (file: SourceControlFile, isStaged: boolean) => {
-    const badge = getStatusBadge(file);
+    const { label: badge, colorClass: badgeColorClass } = getStatusBadge(file);
     const isSelected = selectedDiffPath === file.path;
     const { name, dir } = splitFilePath(file.path);
-    const badgeStyle = {
-      color: isStaged
-        ? "var(--vscode-gitDecoration-addedResourceForeground, #81b88b)"
-        : "var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d)",
-    };
 
     return (
       <div
@@ -381,16 +388,13 @@ export const WorkspaceSourceControlPane: React.FC = () => {
           title={file.path}
         >
           <span
-            className="flex-shrink-0 text-xs font-mono font-bold"
-            style={badgeStyle}
+            className={`flex-shrink-0 text-xs font-mono font-bold ${badgeColorClass}`}
           >
             {badge}
           </span>
           <span className="min-w-0 flex-1 flex flex-col">
             <span className="truncate text-xs">{name}</span>
-            {dir && (
-              <span className="truncate text-[10px] opacity-50">{dir}</span>
-            )}
+            {dir && <span className="truncate text-xxs opacity-50">{dir}</span>}
           </span>
         </button>
 
