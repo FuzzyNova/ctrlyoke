@@ -342,7 +342,7 @@ export interface InitMessageData {
     outputVirtualizationRowThreshold?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
-    showHiddenFiles?: boolean;
+    hideGitIgnoredFiles?: boolean;
     terminal?: TerminalSettings;
   };
   workflowProperties: Record<string, any>;
@@ -841,7 +841,7 @@ export interface GlobalSettingsUpdatedMessage {
     outputVirtualizationRowThreshold?: number;
     confirmDeleteOperations?: boolean;
     confirmResetOperations?: boolean;
-    showHiddenFiles?: boolean;
+    hideGitIgnoredFiles?: boolean;
     terminal?: TerminalSettings;
   };
 }

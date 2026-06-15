@@ -33,6 +33,7 @@ import {
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
+import { getGitTrackedFiles } from "../utils/GitUtils";
 import { Log } from "../utils/Log";
 import { configService } from "../config/FlightPathConfigService";
 import { createHostedHarnessStatusUpdate } from "./HostedServerMessageFactory";
@@ -617,10 +618,20 @@ export class FlightPathHostedServer
       this.setNoStore(res);
       res.send(this.buildHtml(webviewDist, req.get("host")));
     });
-    this.app.get("/api/workflow-files", requireToken, (_req, res) => {
+    this.app.get("/api/workflow-files", requireToken, async (_req, res) => {
+      const files = findWorkflowFilesInWorkspace(this.workspaceRoot);
+      const trackedFiles = await getGitTrackedFiles(this.workspaceRoot).catch(
+        () => null
+      );
+      const isGitRepo = trackedFiles !== null;
+      const trackedSet = trackedFiles ? new Set(trackedFiles) : null;
       res.json({
         workspaceRoot: this.workspaceRoot,
-        files: findWorkflowFilesInWorkspace(this.workspaceRoot),
+        isGitRepo,
+        files: files.map((file) => ({
+          ...file,
+          gitIgnored: trackedSet ? !trackedSet.has(file.relativePath) : false,
+        })),
       });
     });
 
@@ -971,9 +982,7 @@ export class FlightPathHostedServer
             )
           );
         } catch (err) {
-          Log.error(
-            `workspace-viewer /commit-log error: ${String(err)}`
-          );
+          Log.error(`workspace-viewer /commit-log error: ${String(err)}`);
           res.status(500).json({ error: "Internal server error" });
         }
       }
@@ -992,9 +1001,7 @@ export class FlightPathHostedServer
           const result = await this.viewerService.getGitRefDiff(ref);
           res.json(result satisfies WorkspaceGitRefDiffResponse);
         } catch (err) {
-          Log.error(
-            `workspace-viewer /git-ref-diff error: ${String(err)}`
-          );
+          Log.error(`workspace-viewer /git-ref-diff error: ${String(err)}`);
           res.status(500).json({ error: "Internal server error" });
         }
       }
@@ -1029,9 +1036,7 @@ export class FlightPathHostedServer
           return;
         }
         try {
-          res.json(
-            await this.viewerService.checkoutBranch(body.branch.trim())
-          );
+          res.json(await this.viewerService.checkoutBranch(body.branch.trim()));
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           Log.error(`workspace-viewer /checkout-branch error: ${message}`);

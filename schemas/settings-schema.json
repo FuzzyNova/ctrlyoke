@@ -523,9 +523,9 @@
           "type": "boolean",
           "description": "Show a confirmation dialog before resetting workflow start position."
         },
-        "showHiddenFiles": {
+        "hideGitIgnoredFiles": {
           "type": "boolean",
-          "description": "Show dotfiles and hidden directories in the workspace file explorer and workflow file picker."
+          "description": "Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker."
         }
       }
     },

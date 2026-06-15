@@ -114,6 +114,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const setExplorerLoading = useWorkspaceViewerStore(
     (s) => s.setExplorerLoading
   );
+  const explorerIsGitRepo = useWorkspaceViewerStore((s) => s.explorerIsGitRepo);
+  const setExplorerIsGitRepo = useWorkspaceViewerStore(
+    (s) => s.setExplorerIsGitRepo
+  );
   const selectedFilePath = useWorkspaceViewerStore((s) => s.selectedFilePath);
   const fileContent = useWorkspaceViewerStore((s) => s.fileContent);
   const fileDirty = useWorkspaceViewerStore((s) => s.fileDirty);
@@ -149,11 +153,11 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const selectionRequestSeqRef = useRef(0);
 
   const workspacePath = useSettingsStore((s) => s.globalSettings.workspaceRoot);
-  const showHiddenFiles = useSettingsStore(
-    (s) => s.globalSettings.showHiddenFiles
+  const hideGitIgnoredFiles = useSettingsStore(
+    (s) => s.globalSettings.hideGitIgnoredFiles
   );
-  const showHiddenFilesScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["ui.showHiddenFiles"] ===
+  const hideGitIgnoredFilesScope = useSettingsStore((s) =>
+    s.globalSettings.settingSources["ui.hideGitIgnoredFiles"] ===
     SETTING_SCOPES.WORKSPACE
       ? SETTING_SCOPES.WORKSPACE
       : SETTING_SCOPES.USER
@@ -182,10 +186,10 @@ export const WorkspaceExplorerPane: React.FC = () => {
 
   const visibleEntries = useMemo(
     () =>
-      showHiddenFiles
-        ? explorerEntries
-        : explorerEntries.filter((entry) => !entry.name.startsWith(".")),
-    [explorerEntries, showHiddenFiles]
+      hideGitIgnoredFiles
+        ? explorerEntries.filter((entry) => !entry.gitIgnored)
+        : explorerEntries,
+    [explorerEntries, hideGitIgnoredFiles]
   );
 
   const loadDirectory = useCallback(
@@ -202,13 +206,20 @@ export const WorkspaceExplorerPane: React.FC = () => {
           result.parentPath !== null ? fwd(result.parentPath) : null
         );
         setRootLabel(result.rootLabel);
+        setExplorerIsGitRepo(result.isGitRepo);
       } catch (err) {
         setError(String(err));
       } finally {
         setExplorerLoading(false);
       }
     },
-    [setExplorerLoading, setExplorerEntries, setExplorerPath, setError]
+    [
+      setExplorerLoading,
+      setExplorerEntries,
+      setExplorerPath,
+      setExplorerIsGitRepo,
+      setError,
+    ]
   );
 
   // Load root on mount, unless a pending navigation will handle it
@@ -472,27 +483,37 @@ export const WorkspaceExplorerPane: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={() =>
-            vscode.postMessage({
-              type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-              path: "ui.showHiddenFiles",
-              value: !showHiddenFiles,
-              scope: showHiddenFilesScope,
-            })
-          }
-          className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
-            showHiddenFiles
-              ? "hover:bg-btn-secondary-hover text-editor-fg"
-              : "hover:bg-btn-secondary-hover text-editor-fg opacity-40"
-          }`}
-          title={showHiddenFiles ? "Hide dotfiles" : "Show dotfiles"}
-          aria-label={showHiddenFiles ? "Hide dotfiles" : "Show dotfiles"}
-        >
-          <i
-            className={`codicon ${showHiddenFiles ? "codicon-eye" : "codicon-eye-closed"} text-xs`}
-          />
-        </button>
+        {explorerIsGitRepo && (
+          <button
+            onClick={() =>
+              vscode.postMessage({
+                type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+                path: "ui.hideGitIgnoredFiles",
+                value: !hideGitIgnoredFiles,
+                scope: hideGitIgnoredFilesScope,
+              })
+            }
+            className={`flex items-center justify-center w-6 h-6 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded transition-colors flex-shrink-0 ${
+              hideGitIgnoredFiles
+                ? "hover:bg-btn-secondary-hover text-editor-fg opacity-40"
+                : "hover:bg-btn-secondary-hover text-editor-fg"
+            }`}
+            title={
+              hideGitIgnoredFiles
+                ? "Show git-ignored files"
+                : "Hide git-ignored files"
+            }
+            aria-label={
+              hideGitIgnoredFiles
+                ? "Show git-ignored files"
+                : "Hide git-ignored files"
+            }
+          >
+            <i
+              className={`codicon ${hideGitIgnoredFiles ? "codicon-eye-closed" : "codicon-eye"} text-xs`}
+            />
+          </button>
+        )}
 
         <button
           onClick={handleRefresh}

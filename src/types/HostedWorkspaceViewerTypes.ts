@@ -9,6 +9,8 @@ export interface WorkspaceEntry {
   path: string;
   kind: "file" | "directory";
   size?: number;
+  /** True if this entry is ignored by .gitignore (or is itself an ignored directory). */
+  gitIgnored?: boolean;
 }
 
 /** Alias kept for API naming consistency — same shape as WorkspaceEntry. */
@@ -20,6 +22,8 @@ export interface WorkspaceTreeResponse {
   path: string;
   parentPath: string | null;
   entries: WorkspaceTreeEntry[];
+  /** Whether the workspace root is inside a git repository. */
+  isGitRepo: boolean;
 }
 
 export interface WorkspaceFileResponse {

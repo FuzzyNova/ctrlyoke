@@ -744,7 +744,7 @@ export class WebviewSettingsSync {
       confirmDeleteOperations:
         ConfigurationUtils.shouldConfirmDeleteOperations(),
       confirmResetOperations: ConfigurationUtils.shouldConfirmResetOperations(),
-      showHiddenFiles: ConfigurationUtils.shouldShowHiddenFiles(),
+      hideGitIgnoredFiles: ConfigurationUtils.shouldHideGitIgnoredFiles(),
       priorContext: ConfigurationUtils.getPriorContext(),
       defaultEndCondition: ConfigurationUtils.getDefaultEndCondition() ?? null,
       defaultPreCondition: ConfigurationUtils.getDefaultPreCondition() ?? null,

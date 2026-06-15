@@ -168,7 +168,7 @@ describe("setGlobalSettings", () => {
       outputVirtualizationRowThreshold: 200,
       confirmDeleteOperations: false,
       confirmResetOperations: false,
-      showHiddenFiles: true,
+      hideGitIgnoredFiles: true,
       priorContext: "none",
       workspaceRoot: "",
       defaultErrorBehavior: null,

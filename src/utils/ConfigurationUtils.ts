@@ -919,8 +919,8 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.UI).confirmResetOperations;
   },
 
-  shouldShowHiddenFiles(): boolean {
-    return configService.get(CONFIG_KEYS.UI).showHiddenFiles;
+  shouldHideGitIgnoredFiles(): boolean {
+    return configService.get(CONFIG_KEYS.UI).hideGitIgnoredFiles;
   },
 
   async setConfirmResetOperations(enabled: boolean): Promise<void> {

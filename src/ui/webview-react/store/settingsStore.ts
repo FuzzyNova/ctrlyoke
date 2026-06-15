@@ -100,7 +100,7 @@ export interface GlobalSettings {
   outputVirtualizationRowThreshold: number;
   confirmDeleteOperations: boolean;
   confirmResetOperations: boolean;
-  showHiddenFiles: boolean;
+  hideGitIgnoredFiles: boolean;
   priorContext: string;
   workspaceRoot: string;
   defaultErrorBehavior: ErrorBehavior | null;
@@ -297,7 +297,7 @@ const initialGlobalSettings: GlobalSettings = {
   outputVirtualizationRowThreshold: 200,
   confirmDeleteOperations: true,
   confirmResetOperations: true,
-  showHiddenFiles: true,
+  hideGitIgnoredFiles: false,
   priorContext: "none",
   workspaceRoot: "",
   defaultErrorBehavior: null,

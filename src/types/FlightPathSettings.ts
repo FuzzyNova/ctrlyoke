@@ -121,7 +121,7 @@ export interface FlightPathGlobalSettings {
     outputVirtualizationRowThreshold: number;
     confirmDeleteOperations: boolean;
     confirmResetOperations: boolean;
-    showHiddenFiles: boolean;
+    hideGitIgnoredFiles: boolean;
   };
 
   // Server (new)
@@ -322,7 +322,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     outputVirtualizationRowThreshold: 200,
     confirmDeleteOperations: true,
     confirmResetOperations: true,
-    showHiddenFiles: true,
+    hideGitIgnoredFiles: false,
   },
   server: {
     enabled: false,

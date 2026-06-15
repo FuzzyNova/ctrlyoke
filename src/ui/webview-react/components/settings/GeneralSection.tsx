@@ -185,11 +185,11 @@ export function GeneralSection({
           {...rowProps}
         />
         <SettingToggleRow
-          label="Show hidden files"
-          description="Show dotfiles and hidden directories in the workspace file explorer and workflow file picker."
-          checked={ui.showHiddenFiles}
-          onChange={(v) => onUpdate("ui.showHiddenFiles", v)}
-          path="ui.showHiddenFiles"
+          label="Hide git-ignored files"
+          description="Hide files and directories ignored by .gitignore in the workspace file explorer and workflow file picker."
+          checked={ui.hideGitIgnoredFiles}
+          onChange={(v) => onUpdate("ui.hideGitIgnoredFiles", v)}
+          path="ui.hideGitIgnoredFiles"
           {...rowProps}
         />
       </div>

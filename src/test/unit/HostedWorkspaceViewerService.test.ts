@@ -119,6 +119,37 @@ suite("HostedWorkspaceViewerService", () => {
 
       assert.strictEqual(result.rootLabel, path.basename(root));
     });
+
+    test("isGitRepo is false outside a git repository", async () => {
+      const root = createWorkspace();
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.listDirectory("");
+
+      assert.strictEqual(result.isGitRepo, false);
+    });
+
+    test("marks gitignored files and directories when in a git repository", async () => {
+      const root = createWorkspace();
+      runGit(root, "init");
+      configureGitIdentity(root);
+      fs.writeFileSync(
+        path.join(root, ".gitignore"),
+        "ignored.txt\nignored_dir/\n"
+      );
+      commitFile(root, "tracked.txt", "hello\n", "initial");
+      fs.writeFileSync(path.join(root, "ignored.txt"), "secret\n");
+      fs.mkdirSync(path.join(root, "ignored_dir"));
+      fs.writeFileSync(path.join(root, "ignored_dir", "inner.txt"), "secret\n");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.listDirectory("");
+
+      assert.strictEqual(result.isGitRepo, true);
+      const byName = new Map(result.entries.map((e) => [e.name, e]));
+      assert.strictEqual(byName.get("tracked.txt")?.gitIgnored, false);
+      assert.strictEqual(byName.get("ignored.txt")?.gitIgnored, true);
+      assert.strictEqual(byName.get("ignored_dir")?.gitIgnored, true);
+    });
   });
 
   // ── readFile ───────────────────────────────────────────────────────────────

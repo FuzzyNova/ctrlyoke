@@ -31,6 +31,7 @@ import {
   getStashDiff,
   getCommitDiff,
   getCommitInfo,
+  getIgnoredEntryNames,
 } from "../utils/GitUtils";
 
 const execFileAsync = promisify(execFile);
@@ -207,6 +208,7 @@ export class HostedWorkspaceViewerService {
         path: "",
         parentPath: null,
         entries: [],
+        isGitRepo: false,
       };
     }
 
@@ -228,6 +230,12 @@ export class HostedWorkspaceViewerService {
 
       const allEntries = [...dirs, ...files].slice(0, MAX_ENTRIES);
 
+      const ignoredNames = await getIgnoredEntryNames(
+        this.workspaceRoot,
+        relDir
+      );
+      const isGitRepo = ignoredNames !== null;
+
       const entries = await Promise.all(
         allEntries.map(async (dirent) => {
           const entryAbsolute = path.join(resolved, dirent.name);
@@ -237,6 +245,7 @@ export class HostedWorkspaceViewerService {
               name: dirent.name,
               path: entryRelative,
               kind: "directory" as const,
+              gitIgnored: ignoredNames?.has(`${dirent.name}/`) ?? false,
             };
           }
           let size: number | undefined;
@@ -251,16 +260,23 @@ export class HostedWorkspaceViewerService {
             path: entryRelative,
             kind: "file" as const,
             size,
+            gitIgnored: ignoredNames?.has(dirent.name) ?? false,
           };
         })
       );
 
-      return { rootLabel, path: relDir, parentPath, entries };
+      return { rootLabel, path: relDir, parentPath, entries, isGitRepo };
     } catch (err) {
       Log.error(
         `WorkspaceViewer: listDirectory failed for ${resolved}: ${String(err)}`
       );
-      return { rootLabel, path: relDir, parentPath, entries: [] };
+      return {
+        rootLabel,
+        path: relDir,
+        parentPath,
+        entries: [],
+        isGitRepo: false,
+      };
     }
   }
 

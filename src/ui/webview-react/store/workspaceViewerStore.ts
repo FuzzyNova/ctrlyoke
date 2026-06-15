@@ -36,6 +36,7 @@ interface WorkspaceViewerState {
   explorerPath: string;
   explorerEntries: WorkspaceEntry[];
   explorerLoading: boolean;
+  explorerIsGitRepo: boolean;
 
   // File editor
   selectedFilePath: string | null;
@@ -108,6 +109,7 @@ interface WorkspaceViewerActions {
   // Explorer
   setExplorerPath(path: string): void;
   setExplorerEntries(entries: WorkspaceEntry[]): void;
+  setExplorerIsGitRepo(isGitRepo: boolean): void;
   setExplorerLoading(loading: boolean): void;
 
   // File editor
@@ -180,6 +182,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   explorerPath: "",
   explorerEntries: [],
   explorerLoading: false,
+  explorerIsGitRepo: false,
 
   selectedFilePath: null,
   fileContent: "",
@@ -282,6 +285,10 @@ export const useWorkspaceViewerStore = create<
 
       setExplorerEntries(entries) {
         set({ explorerEntries: entries });
+      },
+
+      setExplorerIsGitRepo(isGitRepo) {
+        set({ explorerIsGitRepo: isGitRepo });
       },
 
       setExplorerLoading(loading) {

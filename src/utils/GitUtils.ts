@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import * as path from "path";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
@@ -334,4 +335,44 @@ export async function getGitTrackedFiles(repoRoot: string): Promise<string[]> {
     }
   );
   return stdout.split("\0").filter(Boolean);
+}
+
+/**
+ * Returns the names of entries directly inside `relDir` (relative to repoRoot)
+ * that are ignored by .gitignore, or `null` if repoRoot is not a git repository
+ * (or git is unavailable).
+ *
+ * Uses `git ls-files --others --ignored --exclude-standard --directory`, run
+ * with `relDir` as the working directory so results are scoped to that single
+ * directory level. Whole directories that are entirely ignored are returned
+ * with a trailing "/" (e.g. "node_modules/"); individually ignored files are
+ * returned without one (e.g. ".env").
+ */
+export async function getIgnoredEntryNames(
+  repoRoot: string,
+  relDir: string
+): Promise<Set<string> | null> {
+  try {
+    const cwd = relDir ? path.join(repoRoot, relDir) : repoRoot;
+    const { stdout } = await execFileAsync(
+      "git",
+      [
+        "ls-files",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "--directory",
+        "-z",
+        ".",
+      ],
+      {
+        cwd,
+        timeout: GIT_TIMEOUT_MS,
+        maxBuffer: 50 * 1024 * 1024,
+      }
+    );
+    return new Set(stdout.split("\0").filter(Boolean));
+  } catch {
+    return null;
+  }
 }

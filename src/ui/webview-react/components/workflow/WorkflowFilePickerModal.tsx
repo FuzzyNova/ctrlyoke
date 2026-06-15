@@ -9,16 +9,13 @@ import type { WorkflowFileEntry } from "@root/utils/WorkflowFileDiscovery";
 
 interface WorkflowFilesResponse {
   files?: WorkflowFileEntry[];
+  isGitRepo?: boolean;
 }
 
 const WORKFLOW_PATH_PLACEHOLDER = "path/to/workflow.flightpath.yaml";
 
 function normalizeWorkflowPath(filePath: string): string {
   return filePath.trim().replace(/\\/g, "/");
-}
-
-function hasHiddenSegment(relativePath: string): boolean {
-  return relativePath.split("/").some((segment) => segment.startsWith("."));
 }
 
 interface WorkflowFilePickerModalProps {
@@ -33,16 +30,17 @@ export const WorkflowFilePickerModal: React.FC<
   WorkflowFilePickerModalProps
 > = ({ isOpen, title, actionLabel, onClose, onSelect }) => {
   const [files, setFiles] = useState<WorkflowFileEntry[]>([]);
+  const [isGitRepo, setIsGitRepo] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedPath, setSelectedPath] = useState("");
   const [manualPath, setManualPath] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const showHiddenFiles = useSettingsStore(
-    (s) => s.globalSettings.showHiddenFiles
+  const hideGitIgnoredFiles = useSettingsStore(
+    (s) => s.globalSettings.hideGitIgnoredFiles
   );
-  const showHiddenFilesScope = useSettingsStore((s) =>
-    s.globalSettings.settingSources["ui.showHiddenFiles"] ===
+  const hideGitIgnoredFilesScope = useSettingsStore((s) =>
+    s.globalSettings.settingSources["ui.hideGitIgnoredFiles"] ===
     SETTING_SCOPES.WORKSPACE
       ? SETTING_SCOPES.WORKSPACE
       : SETTING_SCOPES.USER
@@ -69,6 +67,7 @@ export const WorkflowFilePickerModal: React.FC<
           relativePath: normalizeWorkflowPath(file.relativePath),
         }));
         setFiles(nextFiles);
+        setIsGitRepo(data.isGitRepo ?? false);
         setSelectedPath(nextFiles[0]?.path ?? "");
       })
       .catch((err) => {
@@ -76,6 +75,7 @@ export const WorkflowFilePickerModal: React.FC<
           return;
         }
         setFiles([]);
+        setIsGitRepo(false);
         setSelectedPath("");
         setError(err instanceof Error ? err.message : "Could not load files");
       })
@@ -93,7 +93,7 @@ export const WorkflowFilePickerModal: React.FC<
   const filteredFiles = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return files.filter((file) => {
-      if (!showHiddenFiles && hasHiddenSegment(file.relativePath)) return false;
+      if (hideGitIgnoredFiles && file.gitIgnored) return false;
       if (
         normalizedQuery &&
         !file.relativePath.toLowerCase().includes(normalizedQuery)
@@ -101,7 +101,7 @@ export const WorkflowFilePickerModal: React.FC<
         return false;
       return true;
     });
-  }, [files, query, showHiddenFiles]);
+  }, [files, query, hideGitIgnoredFiles]);
 
   const chosenPath = normalizeWorkflowPath(manualPath || selectedPath);
 
@@ -141,28 +141,34 @@ export const WorkflowFilePickerModal: React.FC<
             >
               Search workspace files
             </label>
-            <button
-              type="button"
-              onClick={() =>
-                vscode.postMessage({
-                  type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
-                  path: "ui.showHiddenFiles",
-                  value: !showHiddenFiles,
-                  scope: showHiddenFilesScope,
-                })
-              }
-              className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded transition-colors ${
-                showHiddenFiles
-                  ? "text-foreground hover:bg-btn-secondary-hover"
-                  : "text-description-fg hover:bg-btn-secondary-hover"
-              }`}
-              title={showHiddenFiles ? "Hide dotfiles" : "Show dotfiles"}
-            >
-              <i
-                className={`codicon ${showHiddenFiles ? "codicon-eye" : "codicon-eye-closed"} text-xs`}
-              />
-              <span>dotfiles</span>
-            </button>
+            {isGitRepo && (
+              <button
+                type="button"
+                onClick={() =>
+                  vscode.postMessage({
+                    type: MESSAGE_TYPES.UPDATE_GLOBAL_SETTING,
+                    path: "ui.hideGitIgnoredFiles",
+                    value: !hideGitIgnoredFiles,
+                    scope: hideGitIgnoredFilesScope,
+                  })
+                }
+                className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded transition-colors ${
+                  hideGitIgnoredFiles
+                    ? "text-description-fg hover:bg-btn-secondary-hover"
+                    : "text-foreground hover:bg-btn-secondary-hover"
+                }`}
+                title={
+                  hideGitIgnoredFiles
+                    ? "Show git-ignored files"
+                    : "Hide git-ignored files"
+                }
+              >
+                <i
+                  className={`codicon ${hideGitIgnoredFiles ? "codicon-eye-closed" : "codicon-eye"} text-xs`}
+                />
+                <span>git-ignored</span>
+              </button>
+            )}
           </div>
           <input
             id="workflow-file-search"

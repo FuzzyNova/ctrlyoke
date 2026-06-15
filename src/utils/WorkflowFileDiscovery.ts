@@ -4,6 +4,8 @@ import * as path from "path";
 export interface WorkflowFileEntry {
   path: string;
   relativePath: string;
+  /** True if this file is ignored by .gitignore. Only set by hosted-server callers. */
+  gitIgnored?: boolean;
 }
 
 const WORKFLOW_FILE_NAMES = new Set([
