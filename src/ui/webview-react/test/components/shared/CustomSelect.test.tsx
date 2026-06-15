@@ -234,4 +234,20 @@ describe("CustomSelect — hide/unhide feature", () => {
     const hideButtons = screen.queryAllByTitle("Hide this option");
     expect(hideButtons.length).toBe(2);
   });
+
+  it("renders the hidden toggle after inline options", () => {
+    const { container } = render(
+      <CustomSelect
+        value="a"
+        onChange={vi.fn()}
+        options={OPTIONS}
+        namespace="models"
+        hiddenValues={HIDDEN}
+        inline
+      />
+    );
+
+    const wrapper = container.firstElementChild;
+    expect(wrapper?.lastElementChild?.textContent).toContain("Show hidden");
+  });
 });

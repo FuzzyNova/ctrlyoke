@@ -24,6 +24,8 @@ interface FooterQuickPickerProps {
   children: React.ReactNode;
   /** Accessible label for the trigger button */
   title: string;
+  /** Optional heading shown in the popup title bar */
+  heading?: string;
   /** Optional min-width for the popup panel (default: 200px) */
   popupMinWidth?: string;
   /** Optional max-width for the popup panel */
@@ -53,6 +55,7 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
   onClose,
   children,
   title,
+  heading,
   popupMinWidth = "200px",
   popupMaxWidth,
   disabled = false,
@@ -149,6 +152,13 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
               maxHeight: popupPos.maxHeight,
             }}
           >
+            {heading && (
+              <div className="flex items-center px-3 py-2 border-b border-dropdown-border bg-editor-bg flex-shrink-0">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                  {heading}
+                </h3>
+              </div>
+            )}
             {children}
           </div>,
           document.body

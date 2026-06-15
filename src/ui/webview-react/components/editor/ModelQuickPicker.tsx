@@ -67,6 +67,7 @@ export const ModelQuickPicker: React.FC<ModelQuickPickerProps> = ({
       onToggle={() => setFooterOpenPicker(isOpen ? null : "model")}
       onClose={() => setFooterOpenPicker(null)}
       title="Model override"
+      heading="Model"
       popupMinWidth="220px"
       disabled={disabled}
     >

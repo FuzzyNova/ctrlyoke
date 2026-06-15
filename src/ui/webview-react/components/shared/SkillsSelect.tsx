@@ -2,6 +2,23 @@ import React, { useRef, useState } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
+import type { HideableProps } from "./CustomSelect";
+
+interface SkillOption {
+  name: string;
+  description?: string;
+}
+
+interface SkillsSelectProps extends HideableProps {
+  value: string[] | null | undefined;
+  onChange: (v: string[] | null | undefined) => void;
+  availableSkills: SkillOption[];
+  defaultLabel?: string;
+  placeholder?: string;
+  dropdownMaxHeight?: string;
+  /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
+  inline?: boolean;
+}
 
 /**
  * SkillsSelect — Hybrid dropdown for the prompt-level skills property.
@@ -14,25 +31,33 @@ import { DropdownPortal } from "./DropdownPortal";
  * Selecting a keyword clears the array selection; toggling checkboxes
  * switches to custom array mode (matching the PriorContextSelect pattern).
  */
-export const SkillsSelect: React.FC<{
-  value: string[] | null | undefined;
-  onChange: (v: string[] | null | undefined) => void;
-  availableSkills: Array<{ name: string; description?: string }>;
-  defaultLabel?: string;
-  dropdownMaxHeight?: string;
-  /** When true, renders the list inline without a trigger button. Used in FooterQuickPicker. */
-  inline?: boolean;
-}> = ({
+export const SkillsSelect: React.FC<SkillsSelectProps> = ({
   value,
   onChange,
   availableSkills,
   defaultLabel,
+  placeholder,
   dropdownMaxHeight = "60vh",
   inline = false,
+  namespace,
+  hiddenValues = [],
+  onHideOption,
+  onUnhideOption,
+  nonHideableValues = [],
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+
+  const hideEnabled = namespace !== undefined;
+  const selectedSkills = Array.isArray(value) ? value : [];
+  const visibleSkills = hideEnabled
+    ? availableSkills.filter((skill) => !hiddenValues.includes(skill.name))
+    : availableSkills;
+  const hiddenSkills = hideEnabled
+    ? availableSkills.filter((skill) => hiddenValues.includes(skill.name))
+    : [];
 
   const popupPos = useDropdownPortalPosition(
     buttonRef,
@@ -42,11 +67,12 @@ export const SkillsSelect: React.FC<{
   useClickOutside(
     [buttonRef, popupRef],
     isOpen,
-    () => setIsOpen(false),
+    () => {
+      setIsOpen(false);
+      setShowHidden(false);
+    },
     !inline
   );
-
-  const selectedSkills = Array.isArray(value) ? value : [];
 
   let buttonLabel: string;
   if (value === undefined) {
@@ -54,7 +80,7 @@ export const SkillsSelect: React.FC<{
   } else if (value === null) {
     buttonLabel = "None";
   } else if (selectedSkills.length === 0) {
-    buttonLabel = "None selected";
+    buttonLabel = placeholder ?? "None selected";
   } else if (selectedSkills.length <= 2) {
     buttonLabel = selectedSkills.join(", ");
   } else {
@@ -66,26 +92,56 @@ export const SkillsSelect: React.FC<{
     const updated = current.includes(name)
       ? current.filter((s) => s !== name)
       : [...current, name];
-    // If user unchecks all skills, revert to "inherit" (undefined) rather than leaving an empty selection
     onChange(updated.length === 0 ? undefined : updated);
   };
 
-  // ── Shared list content ───────────────────────────────────────────────────
+  const canHide = (skillName: string) =>
+    hideEnabled &&
+    !selectedSkills.includes(skillName) &&
+    !nonHideableValues.includes(skillName);
+
+  const handleKeywordSelect = (keyword: "default" | "none") => {
+    onChange(keyword === "default" ? undefined : null);
+    setIsOpen(false);
+    setShowHidden(false);
+  };
+
+  const handleHiddenSkillSelect = (skillName: string) => {
+    onUnhideOption?.(skillName);
+    if (!selectedSkills.includes(skillName)) {
+      toggleSkill(skillName);
+    }
+  };
+
+  const hiddenToggleBar = hideEnabled ? (
+    <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
+      <button
+        type="button"
+        disabled={hiddenSkills.length === 0}
+        onClick={() => setShowHidden((s) => !s)}
+        className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+      >
+        {showHidden
+          ? "Hide hidden"
+          : hiddenSkills.length > 0
+            ? `Show hidden (${hiddenSkills.length})`
+            : "Show hidden"}
+      </button>
+    </div>
+  ) : null;
+
   const listContent = (
     <div className="overflow-y-auto min-h-0 flex-1">
-      {/* Keyword options */}
-      {(["default", "none"] as const).map((k) => {
+      {(["default", "none"] as const).map((keyword) => {
         const isSelected =
-          k === "default" ? value === undefined : value === null;
-        const label = k === "default" ? (defaultLabel ?? "Default") : "None";
+          keyword === "default" ? value === undefined : value === null;
+        const label =
+          keyword === "default" ? (defaultLabel ?? "Default") : "None";
         return (
           <button
-            key={k}
+            key={keyword}
             type="button"
-            onClick={() => {
-              onChange(k === "default" ? undefined : null);
-              setIsOpen(false);
-            }}
+            onClick={() => handleKeywordSelect(keyword)}
             className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
               isSelected
                 ? "bg-dropdown-selected-bg text-list-active-fg"
@@ -102,64 +158,134 @@ export const SkillsSelect: React.FC<{
         );
       })}
 
-      {/* Skills checkbox section */}
       {availableSkills.length > 0 && (
         <>
           <div className="border-t border-dropdown-border" />
           <div className="px-2 py-1 text-xxs text-description-fg uppercase font-semibold tracking-wide">
             Select skills:
           </div>
-          {availableSkills.map((skill) => {
+          {visibleSkills.map((skill) => {
             const isChecked = selectedSkills.includes(skill.name);
             return (
-              <button
+              <div
                 key={skill.name}
-                type="button"
-                onClick={() => toggleSkill(skill.name)}
-                className={`w-full px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none ${
+                className={`group w-full flex items-start focus:outline-none border-none ${
                   isChecked
                     ? "bg-dropdown-selected-bg text-list-active-fg"
-                    : "hover:bg-list-hover-bg cursor-pointer"
+                    : "hover:bg-list-hover-bg"
                 }`}
               >
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  onChange={() => {}}
-                  aria-hidden={true}
-                  className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
-                  tabIndex={-1}
-                />
-                <span className="flex flex-col min-w-0">
-                  <span className="font-medium truncate">{skill.name}</span>
-                  {skill.description && (
-                    <span className="text-xxs text-description-fg truncate">
-                      {skill.description}
-                    </span>
-                  )}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => toggleSkill(skill.name)}
+                  className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => {}}
+                    aria-hidden={true}
+                    className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                    tabIndex={-1}
+                  />
+                  <span className="flex flex-col min-w-0">
+                    <span className="font-medium truncate">{skill.name}</span>
+                    {skill.description && (
+                      <span className="text-xxs text-description-fg truncate">
+                        {skill.description}
+                      </span>
+                    )}
+                  </span>
+                </button>
+                {canHide(skill.name) && (
+                  <button
+                    type="button"
+                    title="Hide this option"
+                    aria-label="Hide this option"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onHideOption?.(skill.name);
+                    }}
+                    className="flex-shrink-0 px-1.5 py-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
+                  >
+                    <i className="codicon codicon-eye-closed text-xs" />
+                  </button>
+                )}
+              </div>
             );
           })}
+
+          {hideEnabled && showHidden && hiddenSkills.length > 0 && (
+            <>
+              <div className="border-t border-dropdown-border my-0" />
+              {hiddenSkills.map((skill) => {
+                const isChecked = selectedSkills.includes(skill.name);
+                return (
+                  <div
+                    key={skill.name}
+                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg"
+                  >
+                    <button
+                      type="button"
+                      title="Unhide this option"
+                      aria-label="Unhide this option"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUnhideOption?.(skill.name);
+                      }}
+                      className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+                    >
+                      <i className="codicon codicon-eye text-xs" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleHiddenSkillSelect(skill.name)}
+                      className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
+                    >
+                      <span className="flex flex-col min-w-0">
+                        <span className="truncate">
+                          {skill.name}
+                          {isChecked ? " (selected)" : ""}
+                        </span>
+                        {skill.description && (
+                          <span className="text-xxs truncate">
+                            {skill.description}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </>
       )}
     </div>
   );
 
-  // ── Inline mode (FooterQuickPicker) ───────────────────────────────────────
   if (inline) {
     return (
-      <div className="flex flex-col flex-1 min-h-0 w-full">{listContent}</div>
+      <div className="flex flex-col flex-1 min-h-0 w-full">
+        {listContent}
+        {hiddenToggleBar}
+      </div>
     );
   }
 
-  // ── Trigger + dropdown mode ───────────────────────────────────────────────
   return (
     <div className="relative inline-block w-full">
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() =>
+          setIsOpen((prev) => {
+            if (prev) {
+              setShowHidden(false);
+            }
+            return !prev;
+          })
+        }
         className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
       >
         <span className="truncate">{buttonLabel}</span>
@@ -170,6 +296,7 @@ export const SkillsSelect: React.FC<{
 
       <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
         {listContent}
+        {hiddenToggleBar}
       </DropdownPortal>
     </div>
   );

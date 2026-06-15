@@ -355,10 +355,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     </div>
   );
 
-  const toggleBar = (atTop: boolean) => (
-    <div
-      className={`${atTop ? "border-b" : "border-t"} border-dropdown-border bg-editor-bg flex-shrink-0`}
-    >
+  const toggleBar = () => (
+    <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
       <button
         type="button"
         disabled={totalHidden === 0}
@@ -374,12 +372,12 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     </div>
   );
 
-  // ── Inline mode (FooterQuickPicker — drop-up, toggle bar at top) ──────────
+  // ── Inline mode (FooterQuickPicker) ───────────────────────────────────────
   if (inline) {
     return (
       <div ref={narrowRef} className="flex flex-col flex-1 min-h-0">
-        {toggleBar(true)}
         {scrollableList}
+        {toggleBar()}
       </div>
     );
   }
@@ -426,9 +424,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       </button>
 
       <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
-        {popupPos?.bottom !== undefined && toggleBar(true)}
         {scrollableList}
-        {popupPos?.top !== undefined && toggleBar(false)}
+        {toggleBar()}
       </DropdownPortal>
     </div>
   );

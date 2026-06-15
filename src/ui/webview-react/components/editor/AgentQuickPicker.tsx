@@ -66,6 +66,7 @@ export const AgentQuickPicker: React.FC<AgentQuickPickerProps> = ({
       onToggle={() => setFooterOpenPicker(isOpen ? null : "agent")}
       onClose={() => setFooterOpenPicker(null)}
       title="Agent override"
+      heading="Agent"
       popupMinWidth="220px"
       disabled={disabled}
     >

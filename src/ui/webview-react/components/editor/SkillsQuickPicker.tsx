@@ -2,6 +2,7 @@ import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
+import { DROPDOWN_NAMESPACES } from "../../types/dropdownNamespaces";
 import { FOOTER_PICKERS } from "../../types/messages";
 import { SkillsSelect } from "../shared";
 import { FooterQuickPicker } from "./FooterQuickPicker";
@@ -20,7 +21,13 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
   const { properties, setProperty } = useEditorStore();
   const { globalSettings, workflowProperties, availableSkills } =
     useSettingsStore();
-  const { footerOpenPicker, setFooterOpenPicker } = useUiStore();
+  const {
+    footerOpenPicker,
+    setFooterOpenPicker,
+    hiddenDropdownOptions,
+    hideDropdownOption,
+    unhideDropdownOption,
+  } = useUiStore();
 
   const isOpen = footerOpenPicker === FOOTER_PICKERS.SKILLS;
 
@@ -72,6 +79,7 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
       onToggle={() => setFooterOpenPicker(isOpen ? null : "skills")}
       onClose={() => setFooterOpenPicker(null)}
       title="Skills override"
+      heading="Skills"
       popupMinWidth="240px"
       popupMaxWidth="320px"
       disabled={disabled}
@@ -84,6 +92,12 @@ export const SkillsQuickPicker: React.FC<SkillsQuickPickerProps> = ({
           description: s.description || undefined,
         }))}
         defaultLabel={defaultSkillsLabel}
+        namespace={DROPDOWN_NAMESPACES.SKILLS}
+        hiddenValues={hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []}
+        onHideOption={(v) => hideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)}
+        onUnhideOption={(v) =>
+          unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
+        }
         dropdownMaxHeight="300px"
         inline={true}
       />

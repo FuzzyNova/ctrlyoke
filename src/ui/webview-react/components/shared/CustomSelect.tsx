@@ -218,11 +218,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     </div>
   );
 
-  const toggleBar = (atTop: boolean) =>
+  const toggleBar = () =>
     hideEnabled ? (
-      <div
-        className={`${atTop ? "border-b" : "border-t"} border-dropdown-border bg-editor-bg flex-shrink-0`}
-      >
+      <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
         <button
           type="button"
           disabled={hiddenOptions.length === 0}
@@ -238,12 +236,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       </div>
     ) : null;
 
-  // ── Inline mode (FooterQuickPicker — drop-up, toggle bar at top) ──────────
+  // ── Inline mode (FooterQuickPicker) ───────────────────────────────────────
   if (inline) {
     return (
       <div className={`flex flex-col flex-1 min-h-0 w-full ${className}`}>
-        {toggleBar(true)}
         {scrollableList}
+        {toggleBar()}
       </div>
     );
   }
@@ -271,9 +269,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
       {!disabled && (
         <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
-          {popupPos?.bottom !== undefined && toggleBar(true)}
           {scrollableList}
-          {popupPos?.top !== undefined && toggleBar(false)}
+          {toggleBar()}
         </DropdownPortal>
       )}
     </div>

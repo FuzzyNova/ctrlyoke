@@ -114,6 +114,7 @@ export const ContextQuickPicker: React.FC<ContextQuickPickerProps> = ({
       onToggle={() => setFooterOpenPicker(isOpen ? null : "context")}
       onClose={() => setFooterOpenPicker(null)}
       title="Context override"
+      heading="Context"
       popupMinWidth="260px"
       disabled={disabled}
     >

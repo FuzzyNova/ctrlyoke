@@ -77,6 +77,7 @@ export const HarnessQuickPicker: React.FC<HarnessQuickPickerProps> = ({
       onToggle={() => setFooterOpenPicker(isOpen ? null : "harness")}
       onClose={() => setFooterOpenPicker(null)}
       title="Harness override"
+      heading="Harness"
       popupMinWidth="220px"
       disabled={disabled}
     >
