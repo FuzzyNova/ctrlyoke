@@ -167,6 +167,20 @@ export interface WorkspaceCheckoutBranchRequest {
 
 // ── Git ref diff ──────────────────────────────────────────────────────────────
 
+/** Full commit metadata, included when the diffed ref is a single commit. */
+export interface WorkspaceCommitInfo {
+  hash: string;
+  shortHash: string;
+  subject: string;
+  body: string;
+  author: string;
+  authorEmail: string;
+  date: string;
+  relativeDate: string;
+}
+
 export interface WorkspaceGitRefDiffResponse {
   unifiedDiff: string;
+  /** Present only when `ref` resolves to a single commit (not diff/staged/stash). */
+  commitInfo?: WorkspaceCommitInfo;
 }

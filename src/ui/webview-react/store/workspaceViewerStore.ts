@@ -6,6 +6,7 @@ import type {
   SourceControlFile,
   DiffKind,
   WorkspaceCommitLogEntry,
+  WorkspaceCommitInfo,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
 import { workspaceGitRefDiff } from "@utils/hostedApi";
@@ -83,6 +84,8 @@ interface WorkspaceViewerState {
   diffFiles: ParsedDiffFile[] | null;
   diffRefLabel: string | null;
   diffRefLoading: boolean;
+  /** Full commit metadata, present only when diffFiles came from a single commit ref. */
+  diffCommitInfo: WorkspaceCommitInfo | null;
 
   // Pending navigation (set externally, consumed by WorkspaceExplorerPane)
   pendingNavigation: PendingNavigation | null;
@@ -217,6 +220,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   diffFiles: null,
   diffRefLabel: null,
   diffRefLoading: false,
+  diffCommitInfo: null,
 
   pendingNavigation: null,
 
@@ -251,6 +255,7 @@ export const useWorkspaceViewerStore = create<
           diffFiles: null,
           diffRefLabel: null,
           diffRefLoading: false,
+          diffCommitInfo: null,
           commitHistoryLoading: false,
           committing: false,
           generatingCommitMessage: false,
@@ -441,6 +446,7 @@ export const useWorkspaceViewerStore = create<
           diffFiles: null,
           diffRefLabel: null,
           diffRefLoading: false,
+          diffCommitInfo: null,
         });
       },
 
@@ -455,6 +461,7 @@ export const useWorkspaceViewerStore = create<
           diffFiles: null,
           diffRefLabel: null,
           diffRefLoading: false,
+          diffCommitInfo: null,
         });
       },
 
@@ -540,9 +547,10 @@ export const useWorkspaceViewerStore = create<
           diffFiles: null,
           diffRefLabel: null,
           diffRefLoading: true,
+          diffCommitInfo: null,
         });
         try {
-          const { unifiedDiff } = await workspaceGitRefDiff(ref);
+          const { unifiedDiff, commitInfo } = await workspaceGitRefDiff(ref);
           const diffFiles = parseUnifiedDiffToFiles(unifiedDiff);
           const shortRef = ref.startsWith("~") ? ref.slice(1) : ref;
           const diffRefLabel =
@@ -553,7 +561,12 @@ export const useWorkspaceViewerStore = create<
                 : ref.startsWith("~stash:")
                   ? `Stash #${ref.slice("~stash:".length)}`
                   : `Commit ${shortRef.slice(0, 7)}`;
-          set({ diffFiles, diffRefLabel, diffRefLoading: false });
+          set({
+            diffFiles,
+            diffRefLabel,
+            diffRefLoading: false,
+            diffCommitInfo: commitInfo ?? null,
+          });
         } catch {
           set({ diffRefLoading: false });
         }

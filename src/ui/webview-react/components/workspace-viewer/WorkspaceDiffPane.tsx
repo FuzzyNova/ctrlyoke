@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { DiffView } from "@components/output/DiffView";
 import { ExpandCollapseAllDiffsButton } from "@components/shared";
@@ -28,10 +28,16 @@ export const WorkspaceDiffPane: React.FC = () => {
   const diffFiles = useWorkspaceViewerStore((s) => s.diffFiles);
   const diffRefLabel = useWorkspaceViewerStore((s) => s.diffRefLabel);
   const diffRefLoading = useWorkspaceViewerStore((s) => s.diffRefLoading);
+  const diffCommitInfo = useWorkspaceViewerStore((s) => s.diffCommitInfo);
 
   const [downloading, setDownloading] = useState(false);
   const [commitDiffsCollapsed, setCommitDiffsCollapsed] = useState(false);
   const [commitDiffResetVersion, setCommitDiffResetVersion] = useState(0);
+  const [commitDetailsExpanded, setCommitDetailsExpanded] = useState(false);
+
+  useEffect(() => {
+    setCommitDetailsExpanded(false);
+  }, [diffRefLabel]);
 
   const handleExpandAllDiffs = useCallback(() => {
     setCommitDiffsCollapsed(false);
@@ -126,6 +132,43 @@ export const WorkspaceDiffPane: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Commit details (collapsible) */}
+        {diffCommitInfo && (
+          <div className="border-b border-panel-border flex-shrink-0">
+            <button
+              onClick={() => setCommitDetailsExpanded((v) => !v)}
+              className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-editor-fg hover:bg-list-hover-bg transition-colors"
+              title={commitDetailsExpanded ? "Hide commit details" : "Show commit details"}
+            >
+              <i
+                className={`codicon codicon-chevron-right text-xs flex-shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}
+              />
+              <span className="truncate font-medium">
+                {diffCommitInfo.subject}
+              </span>
+            </button>
+            {commitDetailsExpanded && (
+              <div className="px-3 pb-2 pl-7 text-xs text-editor-fg">
+                {diffCommitInfo.body && (
+                  <p className="whitespace-pre-wrap opacity-80 mb-2">
+                    {diffCommitInfo.body}
+                  </p>
+                )}
+                <div className="opacity-50 font-mono text-xxs space-y-0.5">
+                  <div>
+                    {diffCommitInfo.author} &lt;{diffCommitInfo.authorEmail}
+                    &gt;
+                  </div>
+                  <div>
+                    {diffCommitInfo.date} ({diffCommitInfo.relativeDate})
+                  </div>
+                  <div>{diffCommitInfo.hash}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* File list */}
         <div className="flex-1 overflow-auto px-3 py-2">

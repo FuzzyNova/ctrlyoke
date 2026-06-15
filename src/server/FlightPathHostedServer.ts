@@ -989,8 +989,8 @@ export class FlightPathHostedServer
           return;
         }
         try {
-          const unifiedDiff = await this.viewerService.getGitRefDiff(ref);
-          res.json({ unifiedDiff } satisfies WorkspaceGitRefDiffResponse);
+          const result = await this.viewerService.getGitRefDiff(ref);
+          res.json(result satisfies WorkspaceGitRefDiffResponse);
         } catch (err) {
           Log.error(
             `workspace-viewer /git-ref-diff error: ${String(err)}`

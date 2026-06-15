@@ -20,6 +20,17 @@ export interface StashInfo {
   relativeDate: string;
 }
 
+export interface CommitDetailInfo {
+  hash: string; // full 40-char SHA
+  shortHash: string; // 7-char abbreviated SHA
+  subject: string; // first line of commit message
+  body: string; // remaining lines of commit message, trimmed
+  author: string; // author name
+  authorEmail: string; // author email
+  date: string; // author date, ISO 8601
+  relativeDate: string; // e.g. "2 days ago"
+}
+
 /**
  * Returns recent commits, most recent first.
  * Uses NUL byte (%x00) as field separator to safely handle subjects/authors
@@ -89,6 +100,51 @@ export async function getRecentCommits(
         refNames,
       };
     });
+}
+
+/**
+ * Returns full commit metadata: subject, body, author, and dates.
+ * Uses NUL byte (%x00) as field separator, same convention as getRecentCommits.
+ */
+export async function getCommitInfo(
+  workspaceRoot: string,
+  hash: string
+): Promise<CommitDetailInfo> {
+  const { stdout } = await execFileAsync(
+    "git",
+    [
+      "-C",
+      workspaceRoot,
+      "show",
+      "-s",
+      `--format=%H%x00%h%x00%s%x00%b%x00%an%x00%ae%x00%aI%x00%ar`,
+      hash,
+    ],
+    { timeout: GIT_TIMEOUT_MS }
+  );
+
+  const parts = stdout.split("\0");
+  const [
+    fullHash,
+    shortHash,
+    subject,
+    body,
+    author,
+    authorEmail,
+    date,
+    relativeDate,
+  ] = parts;
+
+  return {
+    hash: fullHash,
+    shortHash,
+    subject,
+    body: (body ?? "").trim(),
+    author,
+    authorEmail,
+    date,
+    relativeDate: (relativeDate ?? "").trim(),
+  };
 }
 
 /**

@@ -102,3 +102,55 @@ describe("WorkspaceDiffPane commit diff controls", () => {
     );
   });
 });
+
+describe("WorkspaceDiffPane commit details section", () => {
+  it("does not render commit details when no commit info is available", () => {
+    useWorkspaceViewerStore.setState({
+      diffFiles: [diffFile],
+      diffRefLabel: "Working Tree Changes",
+      diffRefLoading: false,
+      diffCommitInfo: null,
+    });
+
+    render(<WorkspaceDiffPane />);
+
+    expect(
+      screen.queryByTitle("Show commit details")
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the subject when collapsed and reveals body/metadata when expanded", async () => {
+    const user = userEvent.setup();
+    useWorkspaceViewerStore.setState({
+      diffFiles: [diffFile],
+      diffRefLabel: "Commit abc1234",
+      diffRefLoading: false,
+      diffCommitInfo: {
+        hash: "abc1234567890",
+        shortHash: "abc1234",
+        subject: "Add new feature",
+        body: "This is the detailed description.",
+        author: "Jane Doe",
+        authorEmail: "jane@example.com",
+        date: "2026-06-01T12:00:00-00:00",
+        relativeDate: "2 days ago",
+      },
+    });
+
+    render(<WorkspaceDiffPane />);
+
+    expect(screen.getByText("Add new feature")).toBeInTheDocument();
+    expect(
+      screen.queryByText("This is the detailed description.")
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByTitle("Show commit details"));
+
+    expect(
+      screen.getByText("This is the detailed description.")
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Jane Doe/)).toBeInTheDocument();
+    expect(screen.getByText(/jane@example.com/)).toBeInTheDocument();
+    expect(screen.getByText("abc1234567890")).toBeInTheDocument();
+  });
+});

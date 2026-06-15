@@ -21,6 +21,7 @@ import type {
   DiffKind,
   WorkspaceCommitLogResponse,
   WorkspaceCommitLogEntry,
+  WorkspaceGitRefDiffResponse,
   GitRefLabel,
 } from "../types/HostedWorkspaceViewerTypes";
 import {
@@ -29,6 +30,7 @@ import {
   getStagedDiff,
   getStashDiff,
   getCommitDiff,
+  getCommitInfo,
 } from "../utils/GitUtils";
 
 const execFileAsync = promisify(execFile);
@@ -935,26 +937,30 @@ export class HostedWorkspaceViewerService {
 
   // ── Git ref diff ──────────────────────────────────────────────────────────
 
-  async getGitRefDiff(ref: string): Promise<string> {
+  async getGitRefDiff(ref: string): Promise<WorkspaceGitRefDiffResponse> {
     const DIFF_REF = "~diff";
     const STAGED_REF = "~staged";
     const STASH_PREFIX = "~stash:";
 
     if (ref === DIFF_REF) {
-      return getWorkingTreeDiff(this.workspaceRoot);
+      return { unifiedDiff: await getWorkingTreeDiff(this.workspaceRoot) };
     }
     if (ref === STAGED_REF) {
-      return getStagedDiff(this.workspaceRoot);
+      return { unifiedDiff: await getStagedDiff(this.workspaceRoot) };
     }
     if (ref.startsWith(STASH_PREFIX)) {
       const index = parseInt(ref.slice(STASH_PREFIX.length), 10);
       if (!Number.isFinite(index)) {
         throw new Error(`Invalid stash ref: ${ref}`);
       }
-      return getStashDiff(this.workspaceRoot, index);
+      return { unifiedDiff: await getStashDiff(this.workspaceRoot, index) };
     }
     // Treat as commit hash
     const hash = ref.startsWith("~") ? ref.slice(1) : ref;
-    return getCommitDiff(this.workspaceRoot, hash);
+    const [unifiedDiff, commitInfo] = await Promise.all([
+      getCommitDiff(this.workspaceRoot, hash),
+      getCommitInfo(this.workspaceRoot, hash),
+    ]);
+    return { unifiedDiff, commitInfo };
   }
 }
