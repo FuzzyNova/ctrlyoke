@@ -627,30 +627,43 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
   }, [controllerCols, controllerRows, isController, isVisible, workflowId, sessionId]);
 
   return (
+    // Non-scrolling outer wrapper — the positioning context for the "View Only" /
+    // "Process exited" overlays so they stay pinned to the bottom of the visible
+    // terminal area instead of scrolling with the mirrored grid inside the inner
+    // scroll container below.
     <div
-      ref={containerRef}
       style={{
         width: "100%",
         height: "100%",
         display: isVisible ? "flex" : "none",
         flexDirection: "column",
         position: "relative",
-        // Controllers fill their container with no overflow (fitAddon sizes exactly).
-        // Viewers mirror the controller's exact cols×rows grid (fixed size) and
-        // letterbox it: scrollbars on whichever axis the viewer is smaller, auto
-        // horizontal margins center it when wider. Hence overflow auto on both
-        // axes for viewers.
-        overflowX: isController ? "hidden" : "auto",
-        overflowY: isController ? "hidden" : "auto",
-        // Controllers take full touch control (touch-action:none) so our custom
-        // handler owns vertical scrollback and the browser never pans/zooms the
-        // page. Viewers pan the fixed mirrored grid natively on both axes
-        // (pan-x/pan-y) — this is what makes the horizontal scrollbar reachable on
-        // iOS Safari and lets the user reach rows below the fold. Pinch-zoom stays
-        // disabled either way.
-        touchAction: isController ? "none" : "pan-x pan-y",
       }}
     >
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          // Controllers fill their container with no overflow (fitAddon sizes exactly).
+          // Viewers mirror the controller's exact cols×rows grid (fixed size) and
+          // letterbox it: scrollbars on whichever axis the viewer is smaller, auto
+          // horizontal margins center it when wider. Hence overflow auto on both
+          // axes for viewers.
+          overflowX: isController ? "hidden" : "auto",
+          overflowY: isController ? "hidden" : "auto",
+          // Controllers take full touch control (touch-action:none) so our custom
+          // handler owns vertical scrollback and the browser never pans/zooms the
+          // page. Viewers pan the fixed mirrored grid natively on both axes
+          // (pan-x/pan-y) — this is what makes the horizontal scrollbar reachable on
+          // iOS Safari and lets the user reach rows below the fold. Pinch-zoom stays
+          // disabled either way.
+          touchAction: isController ? "none" : "pan-x pan-y",
+        }}
+      />
       {/* "Process exited" overlay for frozen ai-cli sessions */}
       <FrozenOverlay workflowId={workflowId} sessionId={sessionId} />
       {/* "View Only" badge for non-controller clients */}
