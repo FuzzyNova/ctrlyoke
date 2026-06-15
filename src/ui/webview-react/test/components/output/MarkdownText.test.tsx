@@ -95,6 +95,51 @@ describe("MarkdownText", () => {
     expect(openFile).toHaveBeenCalledWith("src/utils/foo.ts");
   });
 
+  it("opens Codex /abs/path drive markdown links as local file refs", async () => {
+    const user = userEvent.setup();
+    const { openFile } = await import("@hooks/useMessageHandler");
+    vi.mocked(openFile).mockClear();
+
+    render(
+      <MarkdownText>
+        {
+          "[useDesktopLayout.ts](/abs/path/c:/dev/FlightPath/src/ui/webview-react/hooks/useDesktopLayout.ts:143)"
+        }
+      </MarkdownText>
+    );
+
+    const fileBtn = await screen.findByTitle(
+      /Open C:\/dev\/FlightPath\/src\/ui\/webview-react\/hooks\/useDesktopLayout\.ts:143/
+    );
+    await user.click(fileBtn);
+    expect(openFile).toHaveBeenCalledWith(
+      "C:/dev/FlightPath/src/ui/webview-react/hooks/useDesktopLayout.ts",
+      143
+    );
+  });
+
+  it("opens slash-prefixed Windows drive markdown links as local file refs", async () => {
+    const user = userEvent.setup();
+    const { openFile } = await import("@hooks/useMessageHandler");
+    vi.mocked(openFile).mockClear();
+
+    render(
+      <MarkdownText>
+        {
+          "[ContextExpander.ts](/c:/dev/FlightPath/src/utils/ContextExpander.ts)"
+        }
+      </MarkdownText>
+    );
+
+    const fileBtn = await screen.findByTitle(
+      /Open C:\/dev\/FlightPath\/src\/utils\/ContextExpander\.ts/
+    );
+    await user.click(fileBtn);
+    expect(openFile).toHaveBeenCalledWith(
+      "C:/dev/FlightPath/src/utils/ContextExpander.ts"
+    );
+  });
+
   it("applies the markdown-text class on the container", () => {
     const { container } = render(<MarkdownText>text</MarkdownText>);
     // Streamdown wraps in a div — look for the markdown-text class anywhere

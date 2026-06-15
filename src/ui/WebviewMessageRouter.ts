@@ -1995,7 +1995,36 @@ export class WebviewMessageRouter {
         return;
       }
 
-      const normalizedPath = relativePath.replace(/\\/g, "/");
+      const normalizeCodexAbsPath = (rawPath: string): string => {
+        const pathWithDrive = rawPath.match(
+          /^\/abs\/path\/([A-Za-z]:)(\/.*)$/
+        );
+        if (pathWithDrive) {
+          return `${pathWithDrive[1].toUpperCase()}${pathWithDrive[2]}`;
+        }
+
+        const slashDrivePath = rawPath.match(/^\/([A-Za-z]:)(\/.*)$/);
+        if (slashDrivePath) {
+          return `${slashDrivePath[1].toUpperCase()}${slashDrivePath[2]}`;
+        }
+
+        return rawPath;
+      };
+
+      const isPathInside = (childPath: string, parentPath: string): boolean => {
+        const relative = path.relative(
+          path.resolve(parentPath),
+          path.resolve(childPath)
+        );
+        return (
+          relative === "" ||
+          (!relative.startsWith("..") && !path.isAbsolute(relative))
+        );
+      };
+
+      const normalizedPath = normalizeCodexAbsPath(
+        relativePath.replace(/\\/g, "/")
+      );
       const isDirectory = normalizedPath.endsWith("/");
       const trimmedPath = isDirectory
         ? normalizedPath.replace(/\/+$/, "")
@@ -2004,13 +2033,23 @@ export class WebviewMessageRouter {
       // Detect absolute paths (Windows: C:/... or C:\..., POSIX: /...)
       // and resolve them directly instead of joining with the workspace root.
       const isAbsolute =
-        /^[A-Za-z]:\//.test(trimmedPath) || trimmedPath.startsWith("/");
+        /^[A-Za-z]:\//.test(trimmedPath) || path.isAbsolute(trimmedPath);
       const targetUri = isAbsolute
         ? vscode.Uri.file(trimmedPath)
         : vscode.Uri.joinPath(
             workspaceFolder.uri,
             ...trimmedPath.split("/").filter(Boolean)
           );
+
+      if (!isPathInside(targetUri.fsPath, workspaceFolder.uri.fsPath)) {
+        Log.warn(
+          `Blocked dashboard request to open path outside workspace: ${relativePath}`
+        );
+        vscode.window.showWarningMessage(
+          "FlightPath blocked a file link outside the current workspace."
+        );
+        return;
+      }
 
       if (isDirectory) {
         try {

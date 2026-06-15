@@ -27,12 +27,14 @@ const FILE_EXTENSIONS =
 
 /**
  * Matches workspace-relative or absolute file paths that end with a
- * recognized extension. Three alternatives:
+ * recognized extension. Five alternatives:
  *   1. Windows absolute   – C:\path\to\file.ts  or  C:/path/to/file.ts
  *                           Also handles escaped double-backslashes (C:\\path)
  *                           output by some harnesses on Windows.
- *   2. Explicitly relative – ./path/file.ts  or  ../path/file.ts
- *   3. Bare relative       – src/path/file.ts  (lowercase start, ≥1 slash)
+ *   2. Codex pseudo-abs    – /abs/path/c:/path/file.ts
+ *   3. Slash drive abs     – /c:/path/file.ts
+ *   4. Explicitly relative – ./path/file.ts  or  ../path/file.ts
+ *   5. Bare relative       – src/path/file.ts  (lowercase start, ≥1 slash)
  *
  * Single-segment names like "file.ts" (no separator) are intentionally
  * excluded to avoid false positives in plain prose.
@@ -46,11 +48,17 @@ const FILE_PATH_SOURCE =
   "[A-Za-z]:" +
   SEP + // 1. Windows absolute  C:\  or  C:/  or  C:\\
   "|" +
+  "/abs/path/" +
+  "[A-Za-z]:/" + // 2. Codex pseudo-absolute /abs/path/c:/
+  "|" +
+  "/" +
+  "[A-Za-z]:/" + // 3. Slash-prefixed Windows absolute /c:/
+  "|" +
   "\\.{1,2}" +
-  SEP + // 2. Relative prefix   ./   or  ../
+  SEP + // 4. Relative prefix   ./   or  ../
   "|" +
   "[a-z][\\w-]*" +
-  SEP + // 3. Bare relative      src/  lib/  …
+  SEP + // 5. Bare relative      src/  lib/  …
   ")" +
   "(?:[\\w.\\-]+" +
   SEP +
@@ -87,6 +95,26 @@ function getNodeText(node: React.ReactNode): string {
 }
 
 /**
+ * Converts web-safe absolute file-link target forms back to native Windows
+ * absolute paths:
+ *   /abs/path/c:/dev/repo/file.ts -> C:/dev/repo/file.ts
+ *   /c:/dev/repo/file.ts          -> C:/dev/repo/file.ts
+ */
+function normalizeCodexAbsPath(raw: string): string {
+  const pathWithDrive = raw.match(/^\/abs\/path\/([A-Za-z]:)(\/.*)$/);
+  if (pathWithDrive) {
+    return `${pathWithDrive[1].toUpperCase()}${pathWithDrive[2]}`;
+  }
+
+  const slashDrivePath = raw.match(/^\/([A-Za-z]:)(\/.*)$/);
+  if (slashDrivePath) {
+    return `${slashDrivePath[1].toUpperCase()}${slashDrivePath[2]}`;
+  }
+
+  return raw;
+}
+
+/**
  * Remark plugin that walks MDAST text nodes (outside code/links) and
  * converts recognised file path patterns into raw HTML `<file-ref>` nodes.
  *
@@ -104,7 +132,9 @@ function remarkFileLinks() {
           // Fresh regex instance per transform call so lastIndex is always reset
           new RegExp(FILE_PATH_SOURCE, "gi"),
           (match: string) => {
-            const normalized = match.replace(/\\{2,}/g, "\\");
+            const normalized = normalizeCodexAbsPath(
+              match.replace(/\\{2,}/g, "\\")
+            );
             const encoded = encodeURIComponent(normalized);
             const display = escapeHtml(normalized);
             return {
@@ -125,12 +155,16 @@ function remarkFileLinks() {
  * webview would otherwise block:
  *   - `file://` / `file:///` URLs
  *   - Raw Windows absolute paths  (C:\…  or  C:/…)
+ *   - Codex pseudo-absolute paths (/abs/path/c:/…)
+ *   - Slash-prefixed Windows paths (/c:/…)
  *   - Explicitly relative paths   (./…  or  ../…)
  */
 function isLocalFileHref(href: string): boolean {
   return (
     href.startsWith("file://") ||
     /^[A-Za-z]:[/\\]/.test(href) ||
+    /^\/abs\/path\/[A-Za-z]:\//.test(href) ||
+    /^\/[A-Za-z]:\//.test(href) ||
     /^\.\.?[/\\]/.test(href)
   );
 }
@@ -142,16 +176,22 @@ function isLocalFileHref(href: string): boolean {
  * Handles:
  *   - `file:///C:/path/file.ts`  →  `C:/path/file.ts`
  *   - `file:///C:\path\file.ts`  →  `C:\path\file.ts`
+ *   - `/abs/path/c:/path/file.ts` → `C:/path/file.ts`
+ *   - `/c:/path/file.ts`          → `C:/path/file.ts`
  *   - Raw paths passed through unchanged.
  */
 function extractFilePath(href: string): string {
   if (href.startsWith("file:///")) {
-    return decodeURIComponent(href.slice("file:///".length));
+    return normalizeCodexAbsPath(
+      decodeURIComponent(href.slice("file:///".length))
+    );
   }
   if (href.startsWith("file://")) {
-    return decodeURIComponent(href.slice("file://".length));
+    return normalizeCodexAbsPath(
+      decodeURIComponent(href.slice("file://".length))
+    );
   }
-  return href;
+  return normalizeCodexAbsPath(href);
 }
 
 /**
