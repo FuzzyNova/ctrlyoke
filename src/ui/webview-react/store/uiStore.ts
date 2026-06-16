@@ -4,7 +4,10 @@ import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
 import type { WorkflowSummary } from "../types/messages";
 import { type FooterPicker } from "../types/messages";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
-import type { HistorySearchResult } from "@root/types/WorkflowTimelineTypes";
+import type {
+  HistorySearchIndexState,
+  HistorySearchResult,
+} from "@root/types/WorkflowTimelineTypes";
 import { DEFAULT_DESKTOP_SIZES, DEFAULT_MOBILE_SIZES } from "../constants";
 
 /**
@@ -141,6 +144,11 @@ interface UiState {
   historySearchResults: HistorySearchResult[];
   historySearchQuery: string;
   historySearchLoading: boolean;
+  historySearchLoadingMore: boolean;
+  historySearchTotalCount: number;
+  historySearchNextCursor?: string;
+  historySearchHasMore: boolean;
+  historySearchIndexState: HistorySearchIndexState;
   pendingHistorySearchNavigation: {
     workflowId: string;
     workflowFilePath: string;
@@ -282,7 +290,15 @@ interface UiActions {
   setHistorySearchQuery: (query: string) => void;
   setHistorySearchResults: (
     results: HistorySearchResult[],
-    loading: boolean
+    loading: boolean,
+    options?: {
+      append?: boolean;
+      totalCount?: number;
+      nextCursor?: string;
+      hasMore?: boolean;
+      indexState?: HistorySearchIndexState;
+      loadingMore?: boolean;
+    }
   ) => void;
   setPendingHistorySearchNavigation: (
     nav: {
@@ -435,6 +451,11 @@ const initialState: UiState = {
   historySearchResults: [],
   historySearchQuery: "",
   historySearchLoading: false,
+  historySearchLoadingMore: false,
+  historySearchTotalCount: 0,
+  historySearchNextCursor: undefined,
+  historySearchHasMore: false,
+  historySearchIndexState: "ready",
   pendingHistorySearchNavigation: null,
   newWorkflowModalOpen: false,
   templates: [],
@@ -628,12 +649,35 @@ export const useUiStore = create<UiState & UiActions>()(
         set({ isHistorySearchOpen: true, globalSettingsOpen: false }),
 
       closeHistorySearch: () =>
-        set({ isHistorySearchOpen: false, historySearchLoading: false }),
+        set({
+          isHistorySearchOpen: false,
+          historySearchLoading: false,
+          historySearchLoadingMore: false,
+        }),
 
-      setHistorySearchQuery: (query) => set({ historySearchQuery: query }),
+      setHistorySearchQuery: (query) =>
+        set({
+          historySearchQuery: query,
+          historySearchNextCursor: undefined,
+          historySearchHasMore: false,
+          historySearchTotalCount: 0,
+        }),
 
-      setHistorySearchResults: (results, loading) =>
-        set({ historySearchResults: results, historySearchLoading: loading }),
+      setHistorySearchResults: (results, loading, options) =>
+        set((state) => ({
+          historySearchResults: options?.append
+            ? [...state.historySearchResults, ...results]
+            : results,
+          historySearchLoading: loading,
+          historySearchLoadingMore: options?.loadingMore ?? false,
+          historySearchTotalCount:
+            options?.totalCount ??
+            (options?.append ? state.historySearchTotalCount : results.length),
+          historySearchNextCursor: options?.nextCursor,
+          historySearchHasMore: options?.hasMore ?? false,
+          historySearchIndexState:
+            options?.indexState ?? state.historySearchIndexState,
+        })),
 
       setPendingHistorySearchNavigation: (nav) =>
         set({ pendingHistorySearchNavigation: nav }),
@@ -929,6 +973,11 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchResults: [],
           historySearchQuery: "",
           historySearchLoading: false,
+          historySearchLoadingMore: false,
+          historySearchTotalCount: 0,
+          historySearchNextCursor: undefined,
+          historySearchHasMore: false,
+          historySearchIndexState: "ready",
           pendingHistorySearchNavigation: null,
           pendingFindRequest: null,
           recentWorkflows: [],

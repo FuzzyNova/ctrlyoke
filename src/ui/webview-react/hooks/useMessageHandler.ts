@@ -1714,16 +1714,35 @@ function createMessageHandlers(): MessageHandlerMap {
   // SEARCH_HISTORY_RESULTS - Global history search matches
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SEARCH_HISTORY_RESULTS] = (message) => {
-    const { results, query } = message as {
+    const {
+      results,
+      query,
+      totalCount,
+      nextCursor,
+      hasMore,
+      indexState,
+      cursor,
+    } = message as {
       results: HistorySearchResult[];
       query: string;
+      totalCount?: number;
+      nextCursor?: string;
       hasMore: boolean;
+      indexState?: "ready" | "building" | "fallback";
+      cursor?: string;
     };
     const uiStore = useUiStore.getState();
     if (uiStore.historySearchQuery !== query) {
       return;
     }
-    uiStore.setHistorySearchResults(results, false);
+    uiStore.setHistorySearchResults(results, false, {
+      append: Boolean(cursor),
+      totalCount,
+      nextCursor,
+      hasMore,
+      indexState,
+      loadingMore: false,
+    });
   };
 
   // --------------------------------------------------------------------------

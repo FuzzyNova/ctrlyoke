@@ -16,6 +16,7 @@ package.json.backup
 .flightpath/.queue/
 .flightpath/logs/
 .flightpath/.history/
+.flightpath/.search-index/
 .flightpath/capabilities.json
 manual-test/hooks/output/
 

@@ -20,6 +20,7 @@ import {
 } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { OutputHistoryTimelineAdapter } from "./OutputHistoryTimelineAdapter";
+import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { TimelineRecorder } from "./TimelineRecorder";
 import {
   TIMELINE_EVENT_TYPES,
@@ -48,6 +49,7 @@ export class OutputHistoryManager {
   private readonly timelineAdapter = new OutputHistoryTimelineAdapter(
     this.timelineRecorder
   );
+  private readonly historySearchIndexService = new HistorySearchIndexService();
   private readonly snapshotService = new WorkspaceSnapshotService();
 
   constructor(private _workspaceFolderPath: string) {
@@ -124,6 +126,7 @@ export class OutputHistoryManager {
       await this.pruneOldRuns(workflowId, maxRuns);
 
       const runCount = (await this.getRunsForWorkflow(workflowId)).length;
+      await this.refreshSearchIndex();
 
       return { filePath, runCount };
     } catch (error) {
@@ -171,6 +174,7 @@ export class OutputHistoryManager {
       await this.timelineRecorder.appendEvents(historyFilePath, [
         this.createStatusMessageRecordedDraft(target, statusMessage),
       ]);
+      await this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to append status message to history:", error);
     }
@@ -201,6 +205,7 @@ export class OutputHistoryManager {
           },
         },
       ]);
+      await this.refreshSearchIndex();
     } catch (error) {
       Log.warn(
         "Failed to append workflow runtime transition to history:",
@@ -242,6 +247,7 @@ export class OutputHistoryManager {
           },
         },
       ]);
+      await this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to save workspace snapshot to history:", error);
     }
@@ -271,6 +277,7 @@ export class OutputHistoryManager {
           lastUpdatedAt: completedAt,
         })
       );
+      await this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to finalize history run:", error);
     }
@@ -403,6 +410,7 @@ export class OutputHistoryManager {
         Log.warn(`Failed to delete old history file ${fileName}:`, error);
       }
     }
+    await this.refreshSearchIndex();
   }
 
   /**
@@ -435,6 +443,7 @@ export class OutputHistoryManager {
       Log.warn(`Failed to delete run ${fileName}:`, error);
     }
 
+    await this.refreshSearchIndex();
     return (await this.getRunsForWorkflow(workflowId)).length;
   }
 
@@ -467,6 +476,7 @@ export class OutputHistoryManager {
           },
         },
       ]);
+      await this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to save undo record to history:", error);
     }
@@ -511,6 +521,7 @@ export class OutputHistoryManager {
           },
         },
       ]);
+      await this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to mark undo record as redone:", error);
     }
@@ -601,6 +612,7 @@ export class OutputHistoryManager {
 
     eventDrafts.sort((left, right) => left.timestampMs - right.timestampMs);
     await this.timelineRecorder.appendEvents(historyFilePath, eventDrafts);
+    await this.refreshSearchIndex();
   }
 
   private createStatusMessageRecordedDraft(
@@ -625,5 +637,11 @@ export class OutputHistoryManager {
       startedAt: manifest.startedAt,
       executionState: manifest.executionState,
     };
+  }
+
+  private async refreshSearchIndex(): Promise<void> {
+    await this.historySearchIndexService.enqueueWorkspaceRefresh(
+      this._workspaceFolderPath
+    );
   }
 }

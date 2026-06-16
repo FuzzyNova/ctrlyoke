@@ -58,12 +58,16 @@ suite("HistorySearchService", () => {
     });
 
     await createRun(workflowId, 1, 1000, [
-      createCliOutputDraft(1100, { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 }, {
-        prompt: "first prompt",
-        response: "older needle response",
-        elapsed: 1,
-        isStreaming: false,
-      }),
+      createCliOutputDraft(
+        1100,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        {
+          prompt: "first prompt",
+          response: "older needle response",
+          elapsed: 1,
+          isStreaming: false,
+        }
+      ),
     ]);
 
     await createRun(workflowId, 2, 2000, [
@@ -74,9 +78,13 @@ suite("HistorySearchService", () => {
       ),
     ]);
 
-    const results = await service.search("needle", workspaceRoot);
+    const response = await service.search("needle", workspaceRoot);
+    const results = response.results;
 
     assert.strictEqual(results.length, 2);
+    assert.strictEqual(response.totalCount, 2);
+    assert.strictEqual(response.hasMore, false);
+    assert.strictEqual(response.indexState, "ready");
     assert.strictEqual(results[0]?.startedAt, 2000);
     assert.strictEqual(results[0]?.runIndex, 0);
     assert.strictEqual(results[0]?.workflowName, "Demo Workflow");
@@ -157,26 +165,116 @@ suite("HistorySearchService", () => {
       ),
     ]);
 
-    const bashResults = await service.search("bash-term", workspaceRoot);
+    const bashResults = (await service.search("bash-term", workspaceRoot))
+      .results;
     assert.strictEqual(bashResults[0]?.matchType, "bash");
     assert.strictEqual(bashResults[0]?.matchContext, "Final Step Loop 2");
 
-    const fileResults = await service.search("src/history-search.ts", workspaceRoot);
+    const fileResults = (
+      await service.search("src/history-search.ts", workspaceRoot)
+    ).results;
     assert.strictEqual(fileResults[0]?.matchType, "file");
     assert.strictEqual(fileResults[0]?.filePath, "src/history-search.ts");
     assert.strictEqual(fileResults[0]?.workflowName, "orphan");
 
-    const toolResults = await service.search("tool-result-term", workspaceRoot);
+    const toolResults = (
+      await service.search("tool-result-term", workspaceRoot)
+    ).results;
     assert.strictEqual(toolResults[0]?.matchType, "tool");
 
-    const diffResults = await service.search("diff-term", workspaceRoot);
+    const diffResults = (await service.search("diff-term", workspaceRoot))
+      .results;
     assert.strictEqual(diffResults[0]?.matchType, "diff");
     assert.strictEqual(diffResults[0]?.filePath, "src/history-search.ts");
   });
 
   test("returns no results for short queries", async () => {
-    const results = await service.search("a", workspaceRoot);
-    assert.deepStrictEqual(results, []);
+    const response = await service.search("a", workspaceRoot);
+    assert.deepStrictEqual(response.results, []);
+    assert.strictEqual(response.totalCount, 0);
+  });
+
+  test("returns accurate counts and stable cursor pages", async () => {
+    const workflowId = "paged-2026-06-09T18-00-00";
+    await writeWorkingFile(workflowId, { workflowName: "Paged Workflow" });
+    await createRun(workflowId, 1, 1000, [
+      createStatusDraft(
+        1100,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        "needle first"
+      ),
+      createStatusDraft(
+        1200,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        "needle second"
+      ),
+      createStatusDraft(
+        1300,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 2 },
+        "needle third"
+      ),
+    ]);
+
+    const firstPage = await service.search(
+      { query: "needle", limit: 2 },
+      workspaceRoot
+    );
+
+    assert.strictEqual(firstPage.totalCount, 3);
+    assert.strictEqual(firstPage.results.length, 2);
+    assert.strictEqual(firstPage.hasMore, true);
+    assert.ok(firstPage.nextCursor);
+    assert.strictEqual(firstPage.results[0]?.matchContext, "Prompt 3");
+
+    const secondPage = await service.search(
+      { query: "needle", limit: 2, cursor: firstPage.nextCursor },
+      workspaceRoot
+    );
+
+    assert.strictEqual(secondPage.totalCount, 3);
+    assert.strictEqual(secondPage.results.length, 1);
+    assert.strictEqual(secondPage.hasMore, false);
+    assert.strictEqual(secondPage.results[0]?.matchContext, "Prompt 1");
+  });
+
+  test("rebuilds missing, corrupt, and stale index data", async () => {
+    const workflowId = "rebuild-2026-06-09T19-00-00";
+    await writeWorkingFile(workflowId, { workflowName: "Rebuild Workflow" });
+    const manifestPath = await createRun(workflowId, 1, 1000, [
+      createStatusDraft(
+        1100,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 0 },
+        "needle before corruption"
+      ),
+    ]);
+
+    const initial = await service.search("needle", workspaceRoot);
+    assert.strictEqual(initial.totalCount, 1);
+
+    const documentsPath = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.SEARCH_INDEX_DIR,
+      "documents.jsonl"
+    );
+    await fs.writeFile(documentsPath, "{not-json}\n", "utf8");
+
+    service = new HistorySearchService();
+    const afterCorruption = await service.search("needle", workspaceRoot);
+    assert.strictEqual(afterCorruption.totalCount, 1);
+    assert.strictEqual(afterCorruption.indexState, "ready");
+
+    await recorder.appendEvents(manifestPath, [
+      createStatusDraft(
+        1200,
+        { kind: FINAL_STEP_PHASES.QUEUE, stepIndex: 1 },
+        "fresh-term after stale index"
+      ),
+    ]);
+
+    const afterStaleSource = await service.search("fresh-term", workspaceRoot);
+    assert.strictEqual(afterStaleSource.totalCount, 1);
+    assert.strictEqual(afterStaleSource.results[0]?.matchContext, "Prompt 2");
   });
 
   async function writeWorkingFile(
@@ -207,7 +305,7 @@ suite("HistorySearchService", () => {
     runId: number,
     startedAt: number,
     events: WorkflowTimelineEventDraft[]
-  ): Promise<void> {
+  ): Promise<string> {
     const historyDir = path.join(
       workspaceRoot,
       PATH_CONSTANTS.FLIGHTPATH_DIR,
@@ -234,6 +332,7 @@ suite("HistorySearchService", () => {
       runStepCount: 1,
       lastUpdatedAt: startedAt + 10,
     }));
+    return manifestPath;
   }
 
   function createCliOutputDraft(

@@ -10,6 +10,8 @@ import type { CliEvent } from "../../types/WebviewMessageTypes";
 import {
   TIMELINE_EVENT_TYPES,
   type CliOutputRecordedEvent,
+  type HistorySearchQuery,
+  type HistorySearchResponse,
   type HistorySearchResult,
   type StatusMessageRecordedEvent,
   type WorkflowRunManifest,
@@ -17,6 +19,7 @@ import {
 import { getErrorMessage } from "../../utils/ErrorUtils";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
+import { HistorySearchIndexService } from "./HistorySearchIndexService";
 import { TimelineRecorder } from "./TimelineRecorder";
 
 const MAX_RESULTS = 50;
@@ -40,10 +43,46 @@ interface MatchCandidate {
 
 export class HistorySearchService {
   private readonly timelineRecorder = new TimelineRecorder();
+  private readonly indexService = new HistorySearchIndexService();
 
   async search(
-    query: string,
+    query: string | HistorySearchQuery,
     workspaceFolderPath: string
+  ): Promise<HistorySearchResponse> {
+    const request =
+      typeof query === "string"
+        ? { query, limit: MAX_RESULTS }
+        : { ...query, limit: query.limit || MAX_RESULTS };
+
+    try {
+      return await this.indexService.search(request, workspaceFolderPath);
+    } catch (error) {
+      Log.warn(
+        `[HistorySearchService] Falling back to disk scan: ${getErrorMessage(error)}`
+      );
+      const results = await this.searchLegacy(
+        request.query,
+        workspaceFolderPath,
+        request.limit
+      );
+      return {
+        query: request.query.trim(),
+        results,
+        totalCount: results.length,
+        hasMore: results.length >= request.limit,
+        indexState: "fallback",
+      };
+    }
+  }
+
+  enqueueIndexRefresh(workspaceFolderPath: string): void {
+    void this.indexService.enqueueWorkspaceRefresh(workspaceFolderPath);
+  }
+
+  private async searchLegacy(
+    query: string,
+    workspaceFolderPath: string,
+    limit: number
   ): Promise<HistorySearchResult[]> {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < MIN_QUERY_LENGTH) {
@@ -96,7 +135,7 @@ export class HistorySearchService {
     const seen = new Set<string>();
 
     for (const workflow of workflowRuns) {
-      if (results.length >= MAX_RESULTS) {
+      if (results.length >= limit) {
         break;
       }
       if (workflow.runs.length === 0) {
@@ -109,7 +148,7 @@ export class HistorySearchService {
       );
 
       for (const [runIndex, run] of workflow.runs.entries()) {
-        if (results.length >= MAX_RESULTS) {
+        if (results.length >= limit) {
           break;
         }
 
@@ -123,7 +162,7 @@ export class HistorySearchService {
 
         const events = await this.readEventsSafe(manifestPath);
         for (const event of events) {
-          if (results.length >= MAX_RESULTS) {
+          if (results.length >= limit) {
             break;
           }
 
@@ -142,7 +181,7 @@ export class HistorySearchService {
             }
             seen.add(dedupeKey);
             results.push(match);
-            if (results.length >= MAX_RESULTS) {
+            if (results.length >= limit) {
               break;
             }
           }
@@ -152,7 +191,7 @@ export class HistorySearchService {
 
     return results
       .sort((left, right) => right.startedAt - left.startedAt)
-      .slice(0, MAX_RESULTS);
+      .slice(0, limit);
   }
 
   private async getWorkflowRuns(
@@ -287,7 +326,9 @@ export class HistorySearchService {
 
     if (cliOutput.structured?.events) {
       for (const structuredEvent of cliOutput.structured.events) {
-        candidates.push(...this.collectStructuredEventMatches(structuredEvent, query));
+        candidates.push(
+          ...this.collectStructuredEventMatches(structuredEvent, query)
+        );
       }
     }
 
@@ -356,12 +397,21 @@ export class HistorySearchService {
       case CLI_EVENT_TYPES.FILE_WRITE:
       case CLI_EVENT_TYPES.FILE_EDIT:
       case CLI_EVENT_TYPES.FILE_DELETE: {
-        const data = event.data as { path?: unknown; structuredPatch?: unknown };
+        const data = event.data as {
+          path?: unknown;
+          structuredPatch?: unknown;
+        };
         const filePath = this.getStringValue(data.path);
         this.addCandidateIfMatch(candidates, "file", filePath, query, filePath);
         if (event.type === CLI_EVENT_TYPES.FILE_EDIT) {
           const diffText = this.flattenStructuredPatch(data.structuredPatch);
-          this.addCandidateIfMatch(candidates, "diff", diffText, query, filePath);
+          this.addCandidateIfMatch(
+            candidates,
+            "diff",
+            diffText,
+            query,
+            filePath
+          );
         }
         break;
       }
@@ -398,9 +448,11 @@ export class HistorySearchService {
         break;
       }
       case CLI_EVENT_TYPES.TOOL_RESULT: {
-        const result = (event.data as {
-          result?: { output?: unknown; error?: unknown };
-        }).result;
+        const result = (
+          event.data as {
+            result?: { output?: unknown; error?: unknown };
+          }
+        ).result;
         this.addCandidateIfMatch(
           candidates,
           "tool",

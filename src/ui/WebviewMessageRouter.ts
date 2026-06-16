@@ -21,9 +21,7 @@ import {
   getPriorContextCompletions,
 } from "../completions/CompletionHelpers";
 import { resolveSymbol } from "../utils/AttachmentBuilders";
-import {
-  getStashList,
-} from "../utils/GitUtils";
+import { getStashList } from "../utils/GitUtils";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import * as fs from "fs";
@@ -441,7 +439,10 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.EXPORT_OUTPUT, async (message) => {
-      await this.serializer.handleExportOutput(message.content, message.fileName);
+      await this.serializer.handleExportOutput(
+        message.content,
+        message.fileName
+      );
     });
 
     // ── Dashboard — Prompt Editor ────────────────────────────────────────
@@ -876,23 +877,40 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.SEARCH_HISTORY, async (message) => {
       const query =
         typeof message.query === "string" ? message.query.trim() : "";
+      const limit =
+        typeof message.limit === "number" && message.limit > 0
+          ? Math.min(message.limit, 100)
+          : 50;
       const workspacePath = this.getWorkspaceRoot();
       if (!workspacePath) {
         this.emitMessage({
           type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
           query,
           results: [],
+          totalCount: 0,
           hasMore: false,
+          indexState: "fallback",
         });
         return;
       }
 
-      const results = await this.historySearchService.search(query, workspacePath);
+      const response = await this.historySearchService.search(
+        {
+          query,
+          limit,
+          cursor:
+            typeof message.cursor === "string" ? message.cursor : undefined,
+          filters:
+            message.filters && typeof message.filters === "object"
+              ? message.filters
+              : undefined,
+        },
+        workspacePath
+      );
       this.emitMessage({
         type: MESSAGE_TYPES.SEARCH_HISTORY_RESULTS,
-        query,
-        results,
-        hasMore: results.length >= 50,
+        ...response,
+        cursor: typeof message.cursor === "string" ? message.cursor : undefined,
       });
     });
 
@@ -1996,9 +2014,7 @@ export class WebviewMessageRouter {
       }
 
       const normalizeCodexAbsPath = (rawPath: string): string => {
-        const pathWithDrive = rawPath.match(
-          /^\/abs\/path\/([A-Za-z]:)(\/.*)$/
-        );
+        const pathWithDrive = rawPath.match(/^\/abs\/path\/([A-Za-z]:)(\/.*)$/);
         if (pathWithDrive) {
           return `${pathWithDrive[1].toUpperCase()}${pathWithDrive[2]}`;
         }

@@ -60,6 +60,10 @@ import type {
   PromptChangeType,
   UndoRecord,
 } from "./OutputHistoryTypes";
+import type {
+  HistorySearchQuery,
+  HistorySearchResponse,
+} from "./WorkflowTimelineTypes";
 
 // ============================================================================
 // IMPORT TYPES FROM DASHBOARDCONSTANTS
@@ -931,6 +935,16 @@ export interface RunHistoryUpdatedMessage {
   runStates?: (string | undefined)[];
 }
 
+export interface SearchHistoryMessage extends Partial<HistorySearchQuery> {
+  type: typeof MESSAGE_TYPES.SEARCH_HISTORY;
+  query: string;
+}
+
+export interface SearchHistoryResultsMessage extends HistorySearchResponse {
+  type: typeof MESSAGE_TYPES.SEARCH_HISTORY_RESULTS;
+  cursor?: string;
+}
+
 /**
  * Output history loaded message (extension -> webview)
  * NOTE: Uses `any` for `history` to avoid circular dependency with OutputHistoryTypes.
@@ -1455,6 +1469,7 @@ export type IncomingMessage =
   | GlobalSettingsUpdatedMessage
   | ResetWorkflowStateMessage
   | RunHistoryUpdatedMessage
+  | SearchHistoryResultsMessage
   | OutputHistoryLoadedMessage
   | SetStartPositionConfirmedMessage
   | StepUndoDataUpdatedMessage

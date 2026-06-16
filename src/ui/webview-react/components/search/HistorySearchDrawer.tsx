@@ -7,10 +7,7 @@ import {
 } from "react";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
-import {
-  MESSAGE_TYPES,
-  type HistorySearchResult,
-} from "@/types/messages";
+import { MESSAGE_TYPES, type HistorySearchResult } from "@/types/messages";
 import { formatRelativeTimeVerbose } from "@utils/time";
 
 const RESULT_LIMIT = 50;
@@ -49,6 +46,11 @@ export function HistorySearchDrawer() {
   const query = useUiStore((s) => s.historySearchQuery);
   const results = useUiStore((s) => s.historySearchResults);
   const loading = useUiStore((s) => s.historySearchLoading);
+  const loadingMore = useUiStore((s) => s.historySearchLoadingMore);
+  const totalCount = useUiStore((s) => s.historySearchTotalCount);
+  const nextCursor = useUiStore((s) => s.historySearchNextCursor);
+  const hasMore = useUiStore((s) => s.historySearchHasMore);
+  const indexState = useUiStore((s) => s.historySearchIndexState);
   const closeHistorySearch = useUiStore((s) => s.closeHistorySearch);
   const setHistorySearchQuery = useUiStore((s) => s.setHistorySearchQuery);
   const setHistorySearchResults = useUiStore((s) => s.setHistorySearchResults);
@@ -73,15 +75,25 @@ export function HistorySearchDrawer() {
 
     const trimmedQuery = query.trim();
     if (trimmedQuery.length < 2) {
-      setHistorySearchResults([], false);
+      setHistorySearchResults([], false, {
+        totalCount: 0,
+        hasMore: false,
+        nextCursor: undefined,
+        indexState: "ready",
+      });
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      setHistorySearchResults([], true);
+      setHistorySearchResults([], true, {
+        totalCount: 0,
+        hasMore: false,
+        nextCursor: undefined,
+      });
       vscode.postMessage({
         type: MESSAGE_TYPES.SEARCH_HISTORY,
         query: trimmedQuery,
+        limit: RESULT_LIMIT,
       });
     }, 400);
 
@@ -139,12 +151,44 @@ export function HistorySearchDrawer() {
   );
 
   const trimmedQuery = query.trim();
+
+  const loadMore = useCallback(() => {
+    if (!nextCursor || loadingMore || loading || !hasMore) {
+      return;
+    }
+    setHistorySearchResults([], false, {
+      append: true,
+      loadingMore: true,
+      totalCount,
+      nextCursor,
+      hasMore,
+    });
+    vscode.postMessage({
+      type: MESSAGE_TYPES.SEARCH_HISTORY,
+      query: trimmedQuery,
+      limit: RESULT_LIMIT,
+      cursor: nextCursor,
+    });
+  }, [
+    hasMore,
+    loading,
+    loadingMore,
+    nextCursor,
+    setHistorySearchResults,
+    totalCount,
+    trimmedQuery,
+    vscode,
+  ]);
+
   const footerLabel = useMemo(() => {
-    if (results.length < RESULT_LIMIT) {
+    if (trimmedQuery.length < 2 || loading) {
       return null;
     }
-    return `Showing ${results.length} of ${RESULT_LIMIT}`;
-  }, [results.length]);
+    if (totalCount === 0) {
+      return null;
+    }
+    return `Showing ${results.length} of ${totalCount}`;
+  }, [loading, results.length, totalCount, trimmedQuery.length]);
 
   return (
     <div
@@ -216,7 +260,9 @@ export function HistorySearchDrawer() {
             {results.map((result, index) => {
               const relativeTime =
                 formatRelativeTimeVerbose(result.startedAt) ?? "Unknown time";
-              const startedAtTitle = new Date(result.startedAt).toLocaleString();
+              const startedAtTitle = new Date(
+                result.startedAt
+              ).toLocaleString();
 
               return (
                 <button
@@ -253,13 +299,28 @@ export function HistorySearchDrawer() {
                 </button>
               );
             })}
+
+            {hasMore && (
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="mt-2 flex h-8 items-center justify-center gap-2 rounded border border-btn-border bg-btn-secondary-bg px-3 text-xs font-medium text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-60"
+              >
+                {loadingMore && (
+                  <i className="codicon codicon-loading animate-spin" />
+                )}
+                <span>{loadingMore ? "Loading..." : "Load more"}</span>
+              </button>
+            )}
           </div>
         )}
       </div>
 
       {footerLabel && (
-        <div className="border-t border-panel-border px-4 py-2 text-right text-xs text-description-fg">
-          {footerLabel}
+        <div className="flex items-center justify-between border-t border-panel-border px-4 py-2 text-xs text-description-fg">
+          <span>{indexState === "building" ? "Index updating" : ""}</span>
+          <span>{footerLabel}</span>
         </div>
       )}
     </div>

@@ -58,11 +58,60 @@ export interface HistorySearchResult {
   startedAt: number;
   executionState: string;
   target: OutputExecutionTarget;
-  matchType: "response" | "file" | "bash" | "status" | "prompt" | "tool" | "diff";
+  matchType:
+    | "response"
+    | "file"
+    | "bash"
+    | "status"
+    | "prompt"
+    | "tool"
+    | "diff";
   matchSnippet: string;
   matchContext: string;
   filePath?: string;
   workflowFilePath: string;
+}
+
+export type HistorySearchIndexState = "ready" | "building" | "fallback";
+
+export interface HistorySearchQuery {
+  query: string;
+  limit: number;
+  cursor?: string;
+  filters?: {
+    matchTypes?: HistorySearchResult["matchType"][];
+    workflowIds?: string[];
+    since?: number;
+    until?: number;
+  };
+}
+
+export interface HistorySearchResponse {
+  query: string;
+  results: HistorySearchResult[];
+  totalCount: number;
+  nextCursor?: string;
+  hasMore: boolean;
+  indexState: HistorySearchIndexState;
+}
+
+export interface HistorySearchDocument {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  workflowFilePath: string;
+  runId: number;
+  runIndex: number;
+  startedAt: number;
+  executionState: string;
+  target: OutputExecutionTarget;
+  attemptIndex: number;
+  sequence: number;
+  timestampMs: number;
+  matchType: HistorySearchResult["matchType"];
+  text: string;
+  normalizedText: string;
+  filePath?: string;
 }
 
 interface TargetedTimelineEventDraftBase {

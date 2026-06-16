@@ -103,6 +103,8 @@ export {
   type PromptEditorInsertRequest,
   type PromptEditorInsertMessage,
   type IncomingMessage,
+  type SearchHistoryMessage,
+  type SearchHistoryResultsMessage,
 
   // Prompt and workflow types
   type PromptStep,
@@ -157,4 +159,9 @@ export type {
   ToolPermissionMode,
 } from "@root/types/FlightPathTypes";
 export { workflowDisplayStep } from "@root/types/FlightPathTypes";
-export type { HistorySearchResult } from "@root/types/WorkflowTimelineTypes";
+export type {
+  HistorySearchIndexState,
+  HistorySearchQuery,
+  HistorySearchResponse,
+  HistorySearchResult,
+} from "@root/types/WorkflowTimelineTypes";
