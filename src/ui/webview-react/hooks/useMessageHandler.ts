@@ -1727,7 +1727,7 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // OPEN_HISTORY_SEARCH - Open global history search modal
+  // OPEN_HISTORY_SEARCH - Open global history search drawer
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.OPEN_HISTORY_SEARCH] = () => {
     useUiStore.getState().openHistorySearch();

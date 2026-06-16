@@ -42,7 +42,7 @@ import {
 import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
 import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
 import { useNavigationSync } from "./navigation/useNavigationSync";
-import { HistorySearchModal } from "@components/search/HistorySearchModal";
+import { HistorySearchDrawer } from "@components/search";
 
 function App() {
   const vscode = useVsCodeApi();
@@ -708,8 +708,9 @@ function App() {
             </>
           )}
 
-          {/* Global Settings Drawer — slides up from bottom, sits above all other content */}
+          {/* Global drawers - scoped below the header inside the main content area */}
           <GlobalSettingsDrawer />
+          <HistorySearchDrawer />
         </div>
 
         {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
@@ -720,9 +721,6 @@ function App() {
 
         {/* Content preview modal — git diff / prior-context XML */}
         <ContentPreviewModal />
-
-        {/* Global history search modal */}
-        <HistorySearchModal />
 
         {/* iOS safe area spacer — lifts all content above the home indicator.
             height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.
@@ -966,8 +964,9 @@ function App() {
           </Panel>
         </Group>
 
-          {/* Global Settings Drawer — slides up from bottom above main content */}
+          {/* Global drawers - scoped below the header inside the main content area */}
           <GlobalSettingsDrawer />
+          <HistorySearchDrawer />
         </div>
 
       {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
@@ -978,9 +977,6 @@ function App() {
 
       {/* Content preview modal — git diff / prior-context XML */}
       <ContentPreviewModal />
-
-      {/* Global history search modal */}
-      <HistorySearchModal />
 
       {/* iOS safe area spacer — see mobile layout comment above */}
       <div className="safe-area-spacer" aria-hidden="true" />

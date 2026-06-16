@@ -36,6 +36,7 @@ suite("WorkspaceInitializer", () => {
     const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
 
     assert.match(gitignoreContent, /^\.history\/$/m);
+    assert.match(gitignoreContent, /^\.search-index\/$/m);
     assert.match(gitignoreContent, /^\.queue\/$/m);
     assert.match(gitignoreContent, /^logs\/$/m);
     assert.match(gitignoreContent, /^temp\/$/m);
@@ -63,6 +64,7 @@ suite("WorkspaceInitializer", () => {
       "existing generated entries should not be duplicated"
     );
     assert.match(gitignoreContent, /^capabilities\.json$/m);
+    assert.match(gitignoreContent, /^\.search-index\/$/m);
     assert.match(gitignoreContent, /^\.gitignore$/m);
   });
 });

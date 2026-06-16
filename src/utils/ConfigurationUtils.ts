@@ -103,6 +103,9 @@ export const PATH_CONSTANTS = {
   /** History directory name (subdirectory of FLIGHTPATH_DIR) */
   HISTORY_DIR: ".history",
 
+  /** Persistent search index directory name (subdirectory of FLIGHTPATH_DIR) */
+  SEARCH_INDEX_DIR: ".search-index",
+
   /** Agents directory name (subdirectory of FLIGHTPATH_DIR) */
   AGENTS_DIR: "agents",
 

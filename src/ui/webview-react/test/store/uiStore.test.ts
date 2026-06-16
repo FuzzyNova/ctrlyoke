@@ -115,7 +115,7 @@ describe("setPendingFindRequest", () => {
 });
 
 describe("history search state", () => {
-  it("opens, updates, and closes the history search modal", () => {
+  it("opens, updates, and closes the history search drawer", () => {
     expect(store().isHistorySearchOpen).toBe(false);
 
     store().openHistorySearch();
@@ -160,6 +160,21 @@ describe("history search state", () => {
 
     store().closeHistorySearch();
 
+    expect(store().isHistorySearchOpen).toBe(false);
+    expect(store().historySearchLoading).toBe(false);
+  });
+
+  it("keeps history search and global settings mutually exclusive", () => {
+    store().toggleGlobalSettings();
+    expect(store().globalSettingsOpen).toBe(true);
+
+    store().openHistorySearch();
+    expect(store().isHistorySearchOpen).toBe(true);
+    expect(store().globalSettingsOpen).toBe(false);
+
+    store().setHistorySearchResults([], true);
+    store().toggleGlobalSettings();
+    expect(store().globalSettingsOpen).toBe(true);
     expect(store().isHistorySearchOpen).toBe(false);
     expect(store().historySearchLoading).toBe(false);
   });

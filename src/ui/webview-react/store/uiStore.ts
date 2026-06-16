@@ -136,7 +136,7 @@ interface UiState {
   outputScrollTargets: Record<string, OutputScrollTarget>; // transient per-workflow output scroll memory
   pendingFindRequest: PendingOutputFindRequest | null;
 
-  // History search modal state (transient, not persisted)
+  // History search drawer state (transient, not persisted)
   isHistorySearchOpen: boolean;
   historySearchResults: HistorySearchResult[];
   historySearchQuery: string;
@@ -624,7 +624,8 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setPendingFindRequest: (request) => set({ pendingFindRequest: request }),
 
-      openHistorySearch: () => set({ isHistorySearchOpen: true }),
+      openHistorySearch: () =>
+        set({ isHistorySearchOpen: true, globalSettingsOpen: false }),
 
       closeHistorySearch: () =>
         set({ isHistorySearchOpen: false, historySearchLoading: false }),
@@ -875,7 +876,11 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       toggleGlobalSettings: () =>
-        set((state) => ({ globalSettingsOpen: !state.globalSettingsOpen })),
+        set((state) => ({
+          globalSettingsOpen: !state.globalSettingsOpen,
+          isHistorySearchOpen: false,
+          historySearchLoading: false,
+        })),
 
       closeGlobalSettings: () => set({ globalSettingsOpen: false }),
 

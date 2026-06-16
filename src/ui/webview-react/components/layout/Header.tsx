@@ -27,7 +27,7 @@ import { HEADER_BUTTON_SIZES } from "../../constants";
  * Button groups (left → right by role):
  *   [action controls] — Save · Undo/Redo (history chevron) — mutate the workflow; sit with WorkflowControls.
  *   [execution]       — Run · Pause/Resume · Stop — the primary controls, centered.
- *   [app navigation]  — Search · Workspace Explorer · Settings — each opens a modal/overlay; Settings in the corner.
+ *   [app navigation]  — Search · Workspace Explorer · Settings — each opens a drawer/overlay; Settings in the corner.
  *
  * Layout (three tiers):
  *   Wide (lg+):     ([WorkflowControls][action] left) ([forward/back][WorkflowStatus][execution] centered) ([app nav] right)  ← one row
@@ -83,6 +83,7 @@ export const Header: React.FC<{
     mobileStepsOpen,
     mobileWorkflowPropsOpen,
     globalSettingsOpen,
+    isHistorySearchOpen,
     toggleGlobalSettings,
     openHistorySearch,
   } = useUiStore();
@@ -440,7 +441,7 @@ export const Header: React.FC<{
         </div>
 
         {/* Right Section: App navigation — Search / Workspace Explorer / Settings.
-            These all open a modal (search) or an overlay view (explorer, settings),
+            These all open a drawer (search/settings) or an overlay view (explorer),
             so they live together with Settings parked in the top-right corner.
             Row 1 on wide; drops to row 2 (full-width span, right-aligned) below lg. On narrow the
             Workflow Properties drawer pull trails the group, flush to the screen's right edge. */}
@@ -452,10 +453,17 @@ export const Header: React.FC<{
           >
             {/* Search */}
             <button
-              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
+              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                isHistorySearchOpen ? "fp-contrast-active " : ""
+              }${
+                isHistorySearchOpen
+                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
               onClick={openHistorySearch}
               title="Search History (Ctrl+Shift+F)"
               aria-label="Search history"
+              aria-pressed={isHistorySearchOpen}
             >
               <i className={`codicon codicon-search ${btnSize.icon}`} />
             </button>

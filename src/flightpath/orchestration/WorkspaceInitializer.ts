@@ -6,6 +6,7 @@ import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 const GITIGNORE_CONTENT = [
   "# FlightPath runtime directories — generated at runtime, do not commit...unless you really want to",
   `${PATH_CONSTANTS.HISTORY_DIR}/`,
+  `${PATH_CONSTANTS.SEARCH_INDEX_DIR}/`,
   `${PATH_CONSTANTS.QUEUE_DIR}/`,
   `${PATH_CONSTANTS.LOGS_DIR}/`,
   `${PATH_CONSTANTS.TEMP_DIR}/`,

@@ -809,7 +809,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
 });
 
 describe("history search messages", () => {
-  it("opens the history search modal when requested", () => {
+  it("opens the history search drawer when requested", () => {
     renderHook(() => useMessageHandler());
 
     act(() => {

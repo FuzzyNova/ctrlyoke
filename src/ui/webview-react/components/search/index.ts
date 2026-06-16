@@ -1,1 +1,1 @@
-export { HistorySearchModal } from "./HistorySearchModal";
+export { HistorySearchDrawer } from "./HistorySearchDrawer";
