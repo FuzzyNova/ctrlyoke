@@ -224,9 +224,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       return;
     }
 
-    const header = container.closest("header");
-    const anchor = header ?? container;
-    setDropdownTop(anchor.getBoundingClientRect().bottom);
+    // Anchor the dropdown to the status control's own bottom (not the header's). The header can
+    // have a second row of controls beneath the status (medium/narrow tiers), so anchoring to the
+    // header bottom would leave that controls row wedged between the status button and the dropdown
+    // list. Opening from the control's bottom makes the list expand directly from where it's invoked.
+    setDropdownTop(container.getBoundingClientRect().bottom);
   }, []);
 
   const closeDropdown = useCallback(() => {
