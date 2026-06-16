@@ -547,7 +547,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       ) : (
         /* Display Mode - Split Button Style */
         <div
-          className={`workflow-split-button flex border rounded-button overflow-hidden max-w-full sm:max-w-[500px] w-full min-w-0 transition-colors ${wfStatusSize.container} ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
+          className={`workflow-split-button flex border rounded-button overflow-hidden max-w-full sm:max-w-[500px] lg:max-w-none w-full min-w-0 transition-colors ${wfStatusSize.container} ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}
         >
           {/* Main Button - Workflow Name */}
           <button

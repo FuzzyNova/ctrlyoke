@@ -24,18 +24,27 @@ import { HEADER_BUTTON_SIZES } from "../../constants";
 /**
  * Header Component
  *
- * Layout (three tiers):
- *   Wide (lg+):     [WorkflowControls + editing buttons] [forward/back + WorkflowStatus (centered)] [Run/Pause/Stop]
- *   Medium (sm–lg): [WorkflowControls + editing buttons]                                            [Run/Pause/Stop]
- *                                       [forward/back + WorkflowStatus (centered)]                   ← own second row
- *   Narrow (< sm):  [WorkflowControls]  [editing buttons (left)]                      [Run/Pause/Stop (right)]
- *                   [[Steps]            [WorkflowStatus (centered)]          [Workflow Properties]]  ← mobile only
+ * Button groups (left → right by role):
+ *   [action controls] — Save · Undo/Redo (history chevron) — mutate the workflow; sit with WorkflowControls.
+ *   [execution]       — Run · Pause/Resume · Stop — the primary controls, centered.
+ *   [app navigation]  — Search · Workspace Explorer · Settings — each opens a modal/overlay; Settings in the corner.
  *
- * Medium and Wide share the desktop button sizing (HEADER_BUTTON_SIZES.default); only the
- * narrow (< sm) tier uses touch sizing. The single-row 3-column grid engages at lg; below lg the
- * center column (forward/back + status) drops to its own row so the status field keeps its width.
- * forward/back (NavHistoryControls, standalone only) is hidden below sm so the mobile title row
- * — flanked by the Steps and Workflow Properties toggles — isn't cramped.
+ * Layout (three tiers):
+ *   Wide (lg+):     ([WorkflowControls][action] left) ([forward/back][WorkflowStatus][execution] centered) ([app nav] right)
+ *   Medium (sm–lg): ([WorkflowControls][action] left)              ([execution] centered)                   ([app nav] right)
+ *                                                      ([forward/back][WorkflowStatus] centered)            ← own second row
+ *   Narrow (< sm):  ([WorkflowControls][action] left)              ([execution] centered)                   ([app nav] right)
+ *                   ([Steps] ⟵edge)               ([WorkflowStatus] centered)               (edge⟶ [Workflow Properties]) ← mobile only
+ *
+ * Grid: 3 columns below lg ([1fr auto 1fr]), 4 columns on wide ([1fr minmax(0,1fr) auto 1fr]). The
+ * execution controls stay centered on the top row at every tier. On wide the status fills the flexible
+ * center column and sits left of the execution controls — its width tracks the viewport, not its content
+ * (like a browser address bar), so the flanking controls hold position as the workflow name/badges change;
+ * short names just leave whitespace. Below lg the status drops to its own full-width second row.
+ * Medium and Wide share desktop button sizing (HEADER_BUTTON_SIZES.default); only the narrow (< sm) tier
+ * uses touch sizing. forward/back (NavHistoryControls, standalone only) is hidden below sm so the mobile
+ * title row isn't cramped. The Steps / Workflow Properties half-pills are edge-anchored drawer pulls:
+ * the flex-1 WorkflowStatus between them fills the row and pins each one flush to its screen edge.
  *
  * Features:
  * - WorkflowControls: Split button for New/Load/Queue workflow actions
@@ -222,15 +231,15 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header grid grid-cols-[1fr_auto] lg:grid-cols-[1fr_minmax(0,1fr)_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
-        {/* Left Section: Workflow Controls + grouped editing buttons */}
-        <div className="header-left flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
+      <header className="header grid grid-cols-[1fr_auto_1fr] lg:grid-cols-[1fr_minmax(0,1fr)_auto_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+        {/* Left Section: Workflow Controls + action controls (Save / Undo / Redo) */}
+        <div className="header-left col-start-1 row-start-1 justify-self-start flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls />
-          {/* Grouped Editing Buttons */}
+          {/* Action controls — mutate the workflow. History chevron hidden below sm (in UndoRedoControl). */}
           <div
             className={`fp-button-group ${btnSize.groupContainer}`}
             role="group"
-            aria-label="Workflow editing controls"
+            aria-label="Workflow action controls"
           >
             {/* Save button */}
             <button
@@ -262,52 +271,6 @@ export const Header: React.FC<{
               embedded
               onAction={handleUndoRedoAction}
             />
-
-            <div className="fp-button-group-divider" />
-
-            {/* Workspace Explorer button — standalone (browser) mode only */}
-            {isStandalone && (
-              <>
-                <button
-                  className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
-                  onClick={openWorkspaceViewer}
-                  title="Explore files and changes"
-                  aria-label="Explore files and changes"
-                >
-                  <i className={`codicon codicon-files ${btnSize.icon}`} />
-                </button>
-
-                <div className="fp-button-group-divider" />
-              </>
-            )}
-
-            <button
-              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
-              onClick={openHistorySearch}
-              title="Search History (Ctrl+Shift+F)"
-              aria-label="Search history"
-            >
-              <i className={`codicon codicon-search ${btnSize.icon}`} />
-            </button>
-
-            <div className="fp-button-group-divider" />
-
-            {/* Settings button */}
-            <button
-              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                globalSettingsOpen ? "fp-contrast-active " : ""
-              }${
-                globalSettingsOpen
-                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              }`}
-              onClick={toggleGlobalSettings}
-              title="Global Settings"
-              aria-label="Open global settings"
-              aria-pressed={globalSettingsOpen}
-            >
-              <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
-            </button>
           </div>
         </div>
 
@@ -320,8 +283,11 @@ export const Header: React.FC<{
           onClose={closeNewWorkflowModal}
         />
 
-        {/* Center Section: Workflow Status - own row below lg (narrow + medium tiers), perfectly centered on wide (lg+) via 1fr/auto/1fr grid */}
-        <div className="header-center order-last lg:order-none col-span-2 lg:col-span-1 justify-self-center w-full flex items-center justify-center min-w-0 gap-0">
+        {/* Status row: forward/back + WorkflowStatus. Sits inline (centered, left of the execution
+            controls) on wide (lg+); drops to its own full-width second row below lg. Mobile adds the
+            Steps / Workflow-Properties half-pill drawer pulls — the flex-1 status field between them
+            fills the row and pins each pull flush to the left/right screen edge. */}
+        <div className="header-status col-start-1 col-end-4 row-start-2 lg:col-start-2 lg:col-end-3 lg:row-start-1 justify-self-stretch w-full flex items-center justify-center min-w-0 gap-0">
           {isMobile && (
             <button
               className={`control-button flex items-center justify-center mr-2 gap-0.5 pl-3.5 pr-2 ${btnSize.mobileToggleButton} rounded-r-button border-y border-r border-btn-border transition-colors ${
@@ -340,10 +306,8 @@ export const Header: React.FC<{
             </button>
           )}
           {/* Back/forward hidden below sm so the mobile title row (Steps · status · Properties) isn't cramped */}
-          {isStandalone && !isMobile && (
-            <NavHistoryControls className="flex-shrink-0" />
-          )}
-          <WorkflowStatus className="flex-1 sm:max-w-[500px]" />
+          {!isMobile && <NavHistoryControls className="flex-shrink-0" />}
+          <WorkflowStatus className="flex-1 sm:max-w-[500px] lg:max-w-none" />
           {isMobile && (
             <button
               className={`control-button flex items-center justify-center ml-2 gap-0.5 pl-2 pr-3.5 ${btnSize.mobileToggleButton} rounded-l-button border-y border-l border-btn-border transition-colors ${
@@ -363,8 +327,8 @@ export const Header: React.FC<{
           )}
         </div>
 
-        {/* Right Section: Control Buttons */}
-        <div className="header-right justify-self-end flex items-center pr-1 sm:pr-0">
+        {/* Center Section (top row): Primary execution controls — Run / Pause / Stop */}
+        <div className="header-run-controls col-start-2 row-start-1 lg:col-start-3 justify-self-center flex items-center">
           <div
             className={`fp-button-group ${btnSize.groupContainer}`}
             role="group"
@@ -463,6 +427,61 @@ export const Header: React.FC<{
               aria-label="Stop"
             >
               <i className={`codicon codicon-debug-stop ${btnSize.icon}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Right Section: App navigation — Search / Workspace Explorer / Settings.
+            These all open a modal (search) or an overlay view (explorer, settings),
+            so they live together with Settings parked in the top-right corner. */}
+        <div className="header-app-nav col-start-3 row-start-1 lg:col-start-4 justify-self-end flex items-center pr-1 sm:pr-0">
+          <div
+            className={`fp-button-group ${btnSize.groupContainer}`}
+            role="group"
+            aria-label="App navigation controls"
+          >
+            {/* Search */}
+            <button
+              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
+              onClick={openHistorySearch}
+              title="Search History (Ctrl+Shift+F)"
+              aria-label="Search history"
+            >
+              <i className={`codicon codicon-search ${btnSize.icon}`} />
+            </button>
+
+            {/* Workspace Explorer — standalone (browser) mode only */}
+            {isStandalone && (
+              <>
+                <div className="fp-button-group-divider" />
+                <button
+                  className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
+                  onClick={openWorkspaceViewer}
+                  title="Explore files and changes"
+                  aria-label="Explore files and changes"
+                >
+                  <i className={`codicon codicon-files ${btnSize.icon}`} />
+                </button>
+              </>
+            )}
+
+            <div className="fp-button-group-divider" />
+
+            {/* Settings button */}
+            <button
+              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                globalSettingsOpen ? "fp-contrast-active " : ""
+              }${
+                globalSettingsOpen
+                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              onClick={toggleGlobalSettings}
+              title="Global Settings"
+              aria-label="Open global settings"
+              aria-pressed={globalSettingsOpen}
+            >
+              <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
             </button>
           </div>
         </div>
