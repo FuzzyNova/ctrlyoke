@@ -543,40 +543,46 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       role="group"
       aria-label="Undo / Redo"
     >
-      {/* Undo */}
-      <button
-        type="button"
-        className={`${resolvedBtnBase} ${undoDisabled ? disabledClass : activeClass}`}
-        onClick={() => {
-          onAction?.("undo-click", getDebugDetails());
-          handleUndo();
-        }}
-        disabled={undoDisabled}
-        title="Undo"
-        aria-label="Undo"
-      >
-        <i className={`codicon codicon-discard ${btnSizes.icon}`} />
-      </button>
+      {/* Undo — hidden on mobile when unavailable */}
+      {(!isMobile || !undoDisabled) && (
+        <button
+          type="button"
+          className={`${resolvedBtnBase} ${undoDisabled ? disabledClass : activeClass}`}
+          onClick={() => {
+            onAction?.("undo-click", getDebugDetails());
+            handleUndo();
+          }}
+          disabled={undoDisabled}
+          title="Undo"
+          aria-label="Undo"
+        >
+          <i className={`codicon codicon-discard ${btnSizes.icon}`} />
+        </button>
+      )}
 
-      {/* Separator */}
-      <div className={separatorClass}>
-        <div className="w-px h-full bg-current opacity-40" />
-      </div>
+      {/* Separator — hidden on mobile when either button is hidden */}
+      {(!isMobile || (!undoDisabled && !redoDisabled)) && (
+        <div className={separatorClass}>
+          <div className="w-px h-full bg-current opacity-40" />
+        </div>
+      )}
 
-      {/* Redo */}
-      <button
-        type="button"
-        className={`${resolvedBtnBase} ${redoDisabled ? disabledClass : activeClass}`}
-        onClick={() => {
-          onAction?.("redo-click", getDebugDetails());
-          handleRedo();
-        }}
-        disabled={redoDisabled}
-        title="Redo"
-        aria-label="Redo"
-      >
-        <i className={`codicon codicon-redo ${btnSizes.icon}`} />
-      </button>
+      {/* Redo — hidden on mobile when unavailable */}
+      {(!isMobile || !redoDisabled) && (
+        <button
+          type="button"
+          className={`${resolvedBtnBase} ${redoDisabled ? disabledClass : activeClass}`}
+          onClick={() => {
+            onAction?.("redo-click", getDebugDetails());
+            handleRedo();
+          }}
+          disabled={redoDisabled}
+          title="Redo"
+          aria-label="Redo"
+        >
+          <i className={`codicon codicon-redo ${btnSizes.icon}`} />
+        </button>
+      )}
 
       {!isMobile && (
         <>
