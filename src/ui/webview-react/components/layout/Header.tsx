@@ -24,10 +24,19 @@ import { HEADER_BUTTON_SIZES } from "../../constants";
 /**
  * Header Component
  *
- * Layout:
- *   Wide:   [WorkflowControls + grouped editing buttons] [WorkflowStatus (centered)] [Run/Pause/Stop]
- *   Narrow: [WorkflowControls] [Grouped editing buttons (centered)] [Run/Pause/Stop (right)]
- *           [[Steps]            [WorkflowStatus (centered)]    [Workflow Properties]]   ← mobile only
+ * Layout (three tiers):
+ *   Wide (lg+):     [WorkflowControls + editing buttons] [forward/back + WorkflowStatus (centered)] [Run/Pause/Stop]
+ *   Medium (sm–lg): [WorkflowControls + editing buttons]                                            [Run/Pause/Stop]
+ *                                       [forward/back + WorkflowStatus (centered)]                   ← own second row
+ *   Narrow (< sm):  [WorkflowControls]  [editing buttons (left)]                      [Run/Pause/Stop (right)]
+ *                   [[Steps]            [WorkflowStatus (centered)]          [Workflow Properties]]  ← mobile only
+ *
+ * Medium and Wide share the desktop button sizing (HEADER_BUTTON_SIZES.default); only the
+ * narrow (< sm) tier uses touch sizing. The single-row 3-column grid engages at lg; below lg the
+ * center column (forward/back + status) drops to its own row so the status field keeps its width.
+ * forward/back (NavHistoryControls, standalone only) is hidden below sm so the mobile title row
+ * — flanked by the Steps and Workflow Properties toggles — isn't cramped.
+ *
  * Features:
  * - WorkflowControls: Split button for New/Load/Queue workflow actions
  * - WorkflowStatus: Workflow name + execution state badge (editable name, recent workflows dropdown)
@@ -213,7 +222,7 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_minmax(0,1fr)_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header grid grid-cols-[1fr_auto] lg:grid-cols-[1fr_minmax(0,1fr)_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls + grouped editing buttons */}
         <div className="header-left flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls />
@@ -311,8 +320,8 @@ export const Header: React.FC<{
           onClose={closeNewWorkflowModal}
         />
 
-        {/* Center Section: Workflow Status - own row on narrow, perfectly centered on wide via 1fr/auto/1fr grid */}
-        <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full flex items-center justify-center min-w-0 gap-1">
+        {/* Center Section: Workflow Status - own row below lg (narrow + medium tiers), perfectly centered on wide (lg+) via 1fr/auto/1fr grid */}
+        <div className="header-center order-last lg:order-none col-span-2 lg:col-span-1 justify-self-center w-full flex items-center justify-center min-w-0 gap-0">
           {isMobile && (
             <button
               className={`control-button flex items-center justify-center mr-2 gap-0.5 pl-3.5 pr-2 ${btnSize.mobileToggleButton} rounded-r-button border-y border-r border-btn-border transition-colors ${
@@ -330,8 +339,9 @@ export const Header: React.FC<{
               <i className={`codicon codicon-list-ordered ${btnSize.icon}`} />
             </button>
           )}
-          {isStandalone && (
-            <NavHistoryControls className="mr-1 flex-shrink-0" />
+          {/* Back/forward hidden below sm so the mobile title row (Steps · status · Properties) isn't cramped */}
+          {isStandalone && !isMobile && (
+            <NavHistoryControls className="flex-shrink-0" />
           )}
           <WorkflowStatus className="flex-1 sm:max-w-[500px]" />
           {isMobile && (
