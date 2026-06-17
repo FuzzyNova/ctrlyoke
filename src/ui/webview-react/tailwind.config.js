@@ -127,9 +127,9 @@ module.exports = {
         "badge-fg": "var(--vscode-badge-foreground)",
 
         // Command Center (used for WorkflowStatus split button styling)
-        "cmd-bg": "var(--vscode-commandCenter-background)",
+        "cmd-bg": "var(--vscode-commandCenter-activeBackground)",
         "cmd-fg": "var(--vscode-commandCenter-foreground)",
-        "cmd-active-bg": "var(--vscode-commandCenter-activeBackground)",
+        "cmd-active-bg": "var(--vscode-commandCenter-debuggingBackground)",
         "cmd-active-fg": "var(--vscode-commandCenter-activeForeground)",
         "cmd-inactive-fg": "var(--vscode-commandCenter-inactiveForeground)",
         // commandCenter.border defaults to contrastBorder (null in standard themes);

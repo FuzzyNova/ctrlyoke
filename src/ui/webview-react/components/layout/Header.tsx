@@ -30,17 +30,17 @@ import { HEADER_BUTTON_SIZES } from "../../constants";
  *   [app navigation]  — Search · Workspace Explorer · Settings — each opens a drawer/overlay; Settings in the corner.
  *
  * Layout (three tiers):
- *   Wide (lg+):     ([WorkflowControls label][action] left) ([forward/back][WorkflowStatus][execution] center lane) ([app nav] right)  ← one row
+ *   Wide (lg+):     ([WorkflowControls label][action] left) ([forward/back] [WorkflowStatus] [execution] centered tracks) ([app nav] right)  ← one row
  *   Medium (sm–lg): ([WorkflowControls icon][action] left)  ([forward/back][WorkflowStatus][execution] center lane) ([app nav] right)  ← one row
  *   Narrow (< sm):  ([WorkflowControls icon] left) ([WorkflowStatus][execution] centered)                                         ← row 1
  *                   ([Steps]⟵edge [action] left)                    ([app nav] right [Workflow Properties]⟶edge)                 ← row 2
  *
- * Grid: mobile keeps [1fr · status · auto · 1fr], then from sm up the header switches to
- * [auto · minmax(0,1fr) · auto]. The left and right groups pin to the edges, while the center lane owns
- * all remaining width and contains forward/back + WorkflowStatus + execution controls as a single flex row.
- * That lets the middle controls consume open space before they ever visually overlap the side groups. The
- * status control keeps a floor width inside that center lane, then expands like a browser address bar as
- * viewport width grows.
+ * Grid: mobile keeps [auto · minmax(0,1fr) · auto], then from sm up the header switches to
+ * [auto · minmax(0,1fr) · auto]. At lg+ it returns to a symmetric outer grid
+ * [minmax(0,1fr) · auto · minmax(0,1fr)] so the middle region stays page-centered regardless of wider
+ * controls on either side. Inside that wide middle region, forward/back, WorkflowStatus, and execution
+ * controls each get their own track so the status itself remains perfectly centered and aligned with its
+ * dropdown anchor.
  * The action controls (Save · Undo/Redo) render inline with WorkflowControls from sm up, and only drop to
  * the row-2 left group on narrow mobile — rendered in a single location chosen by `isMobile` (one
  * UndoRedoControl instance). Medium and Wide share desktop button sizing (HEADER_BUTTON_SIZES.default),
@@ -382,18 +382,18 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header grid grid-cols-[1fr_minmax(0,500px)_auto_1fr] sm:grid-cols-[auto_minmax(0,1fr)_auto] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls — always top-left (col 1 / row 1) at every tier so the
             workflow picker anchors the corner. From sm up the action controls sit inline here; on
             narrow mobile they drop to the row-2 group (header-actions). */}
-        <div className="header-left col-start-1 row-start-1 justify-self-start flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
+        <div className="header-left col-start-1 row-start-1 justify-self-start lg:justify-self-stretch min-w-0 flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls compactUntilLg />
           {!isMobile && actionControls}
         </div>
 
         {/* Row-2 left group (narrow mobile only): Steps drawer pull + action controls. Spans the full
             width, left-aligned; hidden from sm up where the action controls live with WorkflowControls. */}
-        <div className="header-actions col-start-1 col-end-5 row-start-2 justify-self-start sm:hidden flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
+        <div className="header-actions col-start-1 col-end-4 row-start-2 justify-self-start sm:hidden flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           {/* Steps drawer pull (mobile only) — flat left edge to the screen, rounded toward content */}
           {isMobile && (
             <button
@@ -426,16 +426,16 @@ export const Header: React.FC<{
 
         {/* Mobile status row: forward/back + WorkflowStatus. Hidden from sm up, where both controls
             move into the shared center lane so they can negotiate width together. */}
-        <div className="header-status col-start-2 row-start-1 justify-self-stretch w-full flex items-center justify-center min-w-0 gap-0 sm:hidden">
+        <div className="header-status col-start-2 row-start-1 justify-self-stretch w-full flex items-center justify-center min-w-0 gap-0 px-1 sm:hidden">
           {!isMobile && <NavHistoryControls className="flex-shrink-0" />}
           <WorkflowStatus className="flex-1 min-w-0" />
         </div>
 
-        {/* Desktop center lane: forward/back + WorkflowStatus + execution controls share one flexible
-            lane so the status uses available middle space before any side-group overlap can happen. */}
-        <div className="hidden sm:flex sm:col-start-2 sm:row-start-1 min-w-0 items-center justify-center gap-0">
+        {/* Desktop center lane: medium keeps a shared flex row, while lg+ promotes the centered
+            region back into dedicated tracks so WorkflowStatus stays perfectly page-centered. */}
+        <div className="hidden sm:flex sm:col-start-2 sm:row-start-1 lg:col-start-2 min-w-0 items-center justify-center gap-0 lg:grid lg:grid-cols-[auto_minmax(0,500px)_auto] lg:justify-items-center lg:gap-1">
           <NavHistoryControls className="hidden md:flex flex-shrink-0" />
-          <WorkflowStatus className="flex-1 min-w-[200px] max-w-[500px] mr-1" />
+          <WorkflowStatus className="flex-1 min-w-[200px] max-w-[500px] mr-1 lg:mr-0 lg:w-[500px] lg:max-w-[min(500px,calc(100vw-32rem))]" />
           {runControls}
         </div>
 
@@ -449,7 +449,7 @@ export const Header: React.FC<{
             so they live together with Settings parked in the top-right corner.
             Row 1 from sm up; narrow mobile keeps them on row 2 with the Workflow Properties drawer
             pull trailing the group, flush to the screen's right edge. */}
-        <div className="header-app-nav col-start-1 col-end-5 row-start-2 justify-self-end sm:col-start-3 sm:col-end-4 sm:row-start-1 flex items-center pr-1 sm:pr-0">
+        <div className="header-app-nav col-start-1 col-end-4 row-start-2 justify-self-end sm:col-start-3 sm:col-end-4 sm:row-start-1 lg:col-start-3 lg:col-end-4 lg:justify-self-stretch min-w-0 flex items-center justify-end pr-1 sm:pr-0">
           <div
             className={`fp-button-group ${btnSize.groupContainer}`}
             role="group"
