@@ -210,7 +210,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const mergedContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -690,7 +689,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
       {/* Dropdown Menu */}
       <div
-        ref={dropdownRef}
         className={`workflow-dropdown-menu fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-hidden flex flex-col transition-all duration-200 ease-out ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
         style={{
           top: dropdownTop,

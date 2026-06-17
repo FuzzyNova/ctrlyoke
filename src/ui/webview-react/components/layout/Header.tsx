@@ -30,17 +30,16 @@ import { HEADER_BUTTON_SIZES } from "../../constants";
  *   [app navigation]  — Search · Workspace Explorer · Settings — each opens a drawer/overlay; Settings in the corner.
  *
  * Layout (three tiers):
- *   Wide (lg+):     ([WorkflowControls label][action] left) ([forward/back] [WorkflowStatus] [execution] centered tracks) ([app nav] right)  ← one row
+ *   Wide (lg+):     ([WorkflowControls label][action] left) [spacer] [forward/back] [WorkflowStatus] [execution] [spacer] ([app nav] right)  ← one row
  *   Medium (sm–lg): ([WorkflowControls icon][action] left)  ([forward/back][WorkflowStatus][execution] center lane) ([app nav] right)  ← one row
  *   Narrow (< sm):  ([WorkflowControls icon] left) ([WorkflowStatus][execution] centered)                                         ← row 1
  *                   ([Steps]⟵edge [action] left)                    ([app nav] right [Workflow Properties]⟶edge)                 ← row 2
  *
  * Grid: mobile keeps [auto · minmax(0,1fr) · auto], then from sm up the header switches to
- * [auto · minmax(0,1fr) · auto]. At lg+ it returns to a symmetric outer grid
- * [minmax(0,1fr) · auto · minmax(0,1fr)] so the middle region stays page-centered regardless of wider
- * controls on either side. Inside that wide middle region, forward/back, WorkflowStatus, and execution
- * controls each get their own track so the status itself remains perfectly centered and aligned with its
- * dropdown anchor.
+ * [auto · minmax(0,1fr) · auto]. At lg+ it expands to
+ * [auto · minmax(0,1fr) · auto · minmax(0,500px) · auto · minmax(0,1fr) · auto].
+ * The two flexible spacer tracks isolate the centered controls from the left and right groups, while the
+ * dedicated nav/status/run tracks keep the status anchored to the page center and aligned with its dropdown.
  * The action controls (Save · Undo/Redo) render inline with WorkflowControls from sm up, and only drop to
  * the row-2 left group on narrow mobile — rendered in a single location chosen by `isMobile` (one
  * UndoRedoControl instance). Medium and Wide share desktop button sizing (HEADER_BUTTON_SIZES.default),
@@ -382,11 +381,11 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,500px)_auto_minmax(0,1fr)_auto] gap-x-1 sm:gap-x-1 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,500px)_auto_minmax(0,1fr)_auto] gap-x-1 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls — always top-left (col 1 / row 1) at every tier so the
             workflow picker anchors the corner. From sm up the action controls sit inline here; on
             narrow mobile they drop to the row-2 group (header-actions). */}
-        <div className="header-left col-start-1 row-start-1 justify-self-start lg:justify-self-start min-w-0 flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
+        <div className="header-left col-start-1 row-start-1 justify-self-start min-w-0 flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls compactUntilLg />
           {!isMobile && actionControls}
         </div>

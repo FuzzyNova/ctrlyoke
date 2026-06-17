@@ -301,6 +301,19 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
     maxHeight: number;
   } | null>(null);
 
+  const getPopupPosition = useCallback(() => {
+    if (!containerRef.current) {
+      return null;
+    }
+
+    const rect = containerRef.current.getBoundingClientRect();
+    return {
+      top: rect.bottom + 4,
+      left: rect.left,
+      maxHeight: Math.max(window.innerHeight - rect.bottom - 8, 120),
+    };
+  }, []);
+
   const canUndo = useWorkflowTemporalStore((s) => s.pastStates.length > 0);
   const canRedo = useWorkflowTemporalStore((s) => s.futureStates.length > 0);
   const pastStates = useWorkflowTemporalStore((s) => s.pastStates);
@@ -316,23 +329,10 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setPopupPos({
-          top: rect.bottom + 4,
-          left: rect.left,
-          maxHeight: Math.max(window.innerHeight - rect.bottom - 8, 120),
-        });
-      }
       const updatePosition = () => {
-        if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        setPopupPos({
-          top: rect.bottom + 4,
-          left: rect.left,
-          maxHeight: Math.max(window.innerHeight - rect.bottom - 8, 120),
-        });
+        setPopupPos(getPopupPosition());
       };
+      updatePosition();
       window.addEventListener("resize", updatePosition);
       window.addEventListener("scroll", updatePosition, true);
       return () => {
@@ -341,7 +341,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       };
     }
     setPopupPos(null);
-  }, [isOpen]);
+  }, [getPopupPosition, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
