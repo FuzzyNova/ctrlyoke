@@ -8,6 +8,7 @@ import {
   getExecutionStateColorClass,
   getExecutionStateLabel,
   getExecutionStateBadgeClass,
+  getWorkflowExecutionControls,
   isExecutionBusy,
   canStartExecution,
   canPauseExecution,
@@ -205,5 +206,72 @@ describe("canStopExecution", () => {
     expect(canStopExecution(EXECUTION_STATES.COMPLETED)).toBe(false);
     expect(canStopExecution(EXECUTION_STATES.ERROR)).toBe(false);
     expect(canStopExecution(EXECUTION_STATES.STOPPED)).toBe(false);
+  });
+});
+
+describe("getWorkflowExecutionControls", () => {
+  const getControls = (
+    executionState: (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES],
+    overrides: { currentStep?: number; hasFile?: boolean } = {}
+  ) =>
+    getWorkflowExecutionControls({
+      executionState,
+      currentStep: overrides.currentStep ?? 0,
+      hasFile: overrides.hasFile ?? true,
+    });
+
+  it("allows run from idle when a workflow file is loaded", () => {
+    expect(getControls(EXECUTION_STATES.IDLE).canRun).toBe(true);
+  });
+
+  it("blocks run when no workflow file is loaded", () => {
+    expect(
+      getControls(EXECUTION_STATES.IDLE, { hasFile: false }).canRun
+    ).toBe(false);
+  });
+
+  it("allows pause and stop while running", () => {
+    const controls = getControls(EXECUTION_STATES.RUNNING);
+
+    expect(controls.canRun).toBe(false);
+    expect(controls.canPause).toBe(true);
+    expect(controls.canStop).toBe(true);
+  });
+
+  it("allows cancelling a pending pause", () => {
+    const controls = getControls(EXECUTION_STATES.PAUSING);
+
+    expect(controls.canRun).toBe(false);
+    expect(controls.canCancelPause).toBe(true);
+    expect(controls.canStop).toBe(true);
+  });
+
+  it("allows resume and rerun from paused, stopped, or errored states", () => {
+    for (const state of [
+      EXECUTION_STATES.PAUSED,
+      EXECUTION_STATES.STOPPED,
+      EXECUTION_STATES.ERROR,
+    ]) {
+      const controls = getControls(state);
+
+      expect(controls.canRun).toBe(true);
+      expect(controls.canResume).toBe(true);
+      expect(controls.isRerun).toBe(true);
+    }
+  });
+
+  it("allows resume from idle only when the current step has an offset", () => {
+    expect(getControls(EXECUTION_STATES.IDLE).canResume).toBe(false);
+    expect(
+      getControls(EXECUTION_STATES.IDLE, { currentStep: 1 }).canResume
+    ).toBe(true);
+  });
+
+  it("blocks run and resume while cancelling but keeps stop available", () => {
+    const controls = getControls(EXECUTION_STATES.CANCELLING);
+
+    expect(controls.canRun).toBe(false);
+    expect(controls.canResume).toBe(false);
+    expect(controls.canStop).toBe(true);
   });
 });

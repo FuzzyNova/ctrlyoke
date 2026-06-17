@@ -249,6 +249,77 @@ export function canStopExecution(state: ExecutionState): boolean {
   );
 }
 
+export interface WorkflowExecutionControlsState {
+  isRunning: boolean;
+  isPausing: boolean;
+  isPaused: boolean;
+  isCompleted: boolean;
+  isError: boolean;
+  isStopped: boolean;
+  isCancelling: boolean;
+  isIdle: boolean;
+  isIdleWithOffset: boolean;
+  canRun: boolean;
+  canPause: boolean;
+  canCancelPause: boolean;
+  canResume: boolean;
+  canStop: boolean;
+  isRerun: boolean;
+}
+
+export interface WorkflowExecutionControlsInput {
+  executionState: ExecutionState;
+  currentStep: number;
+  hasFile: boolean;
+}
+
+/**
+ * Derive dashboard execution-control state from workflow runtime state.
+ *
+ * Keep header/button semantics here so components don't each reinterpret
+ * resumable, cancellable, and restartable execution states.
+ */
+export function getWorkflowExecutionControls({
+  executionState,
+  currentStep,
+  hasFile,
+}: WorkflowExecutionControlsInput): WorkflowExecutionControlsState {
+  const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const isPausing = executionState === EXECUTION_STATES.PAUSING;
+  const isPaused = executionState === EXECUTION_STATES.PAUSED;
+  const isCompleted = executionState === EXECUTION_STATES.COMPLETED;
+  const isError = executionState === EXECUTION_STATES.ERROR;
+  const isStopped = executionState === EXECUTION_STATES.STOPPED;
+  const isCancelling = executionState === EXECUTION_STATES.CANCELLING;
+  const isIdle = executionState === EXECUTION_STATES.IDLE;
+  const isIdleWithOffset = isIdle && currentStep > 0;
+
+  const canRun = hasFile && !isRunning && !isPausing && !isCancelling;
+  const canPause = isRunning && !isCancelling;
+  const canCancelPause = isPausing && !isCancelling;
+  const canResume = isPaused || isStopped || isError || isIdleWithOffset;
+  const canStop = isRunning || isPausing || isPaused || isCancelling;
+  const isRerun = isCompleted || isError || isPaused || isStopped;
+
+  return {
+    isRunning,
+    isPausing,
+    isPaused,
+    isCompleted,
+    isError,
+    isStopped,
+    isCancelling,
+    isIdle,
+    isIdleWithOffset,
+    canRun,
+    canPause,
+    canCancelPause,
+    canResume,
+    canStop,
+    isRerun,
+  };
+}
+
 /**
  * Execution state badge classes (background + text color)
  * Used for status badges in workflow status and recent workflows

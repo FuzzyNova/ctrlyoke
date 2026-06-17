@@ -63,6 +63,9 @@ export {
   canPauseExecution,
   canResumeExecution,
   canStopExecution,
+  getWorkflowExecutionControls,
+  type WorkflowExecutionControlsInput,
+  type WorkflowExecutionControlsState,
 } from "./status";
 
 // Diff utilities

@@ -3,7 +3,6 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import {
   MESSAGE_TYPES,
-  EXECUTION_STATES,
   RUNNER_IDS,
 } from "../../types/messages";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
@@ -17,6 +16,7 @@ import { TemplateModal } from "../workflow/TemplateModal";
 import { UndoRedoControl } from "../shared/UndoRedoControl";
 import { NavHistoryControls } from "../shared/NavHistoryControls";
 import { HEADER_BUTTON_SIZES } from "../../constants";
+import { getWorkflowExecutionControls } from "@utils/status";
 
 /**
  * Execution state badge configuration
@@ -86,46 +86,26 @@ export const Header: React.FC<{
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
 
-  // Derived state
-  const isRunning = executionState === EXECUTION_STATES.RUNNING;
-  const isPausing = executionState === EXECUTION_STATES.PAUSING;
-  const isPaused = executionState === EXECUTION_STATES.PAUSED;
-  const isCompleted = executionState === EXECUTION_STATES.COMPLETED;
-  const isError = executionState === EXECUTION_STATES.ERROR;
-  const isStopped = executionState === EXECUTION_STATES.STOPPED;
-  const isCancelling = executionState === EXECUTION_STATES.CANCELLING;
-  const isIdle = executionState === EXECUTION_STATES.IDLE;
-  // True when user stopped then used "set start position" — idle but not at step 0
-  const isIdleWithOffset = isIdle && currentStep > 0;
   const hasFile = fileName !== null;
-
-  // Button enable states
-  // Enable Run button if: has file AND (not running OR is completed OR is paused OR is stopped)
-  // Disable during cancellation - must wait for process to fully stop
-  // When paused/stopped/completed, Run button acts as "Restart from beginning"
-  const canRun =
-    hasFile &&
-    !isCancelling &&
-    !(isRunning && !isCompleted && !isPaused && !isStopped) &&
-    !isPausing;
-
-  // Pause button becomes resume button when paused, stopped, errored, or idle-with-offset.
-  // Disable during cancellation.
-  // PAUSING: Clicking again cancels the pending pause (returns to RUNNING)
-  // PAUSED: Resumes to next prompt (current one completed normally)
-  // STOPPED: Resumes to next prompt (cancelled prompt already advanced past)
-  // ERROR: Retries the current prompt from the beginning
-  // IDLE+offset: User stopped then set start position — resume from the repositioned step
-  const canPause = isRunning && !isCancelling;
-  const canCancelPause = isPausing && !isCancelling;
-  const canResume = isPaused || isStopped || isError || isIdleWithOffset;
-
-  // Stop button enabled when running, pausing, paused, or cancelling (allow re-pressing Stop to see status)
-  // Disable when stopped (already stopped)
-  const canStop = isRunning || isPausing || isPaused || isCancelling;
-
-  // Run button shows restart icon when paused, stopped, completed, or errored
-  const isRerun = isCompleted || isError || isPaused || isStopped;
+  const {
+    isRunning,
+    isPausing,
+    isPaused,
+    isError,
+    isStopped,
+    isCancelling,
+    isIdleWithOffset,
+    canRun,
+    canPause,
+    canCancelPause,
+    canResume,
+    canStop,
+    isRerun,
+  } = getWorkflowExecutionControls({
+    executionState,
+    currentStep,
+    hasFile,
+  });
 
   const handleStopCliRun = useCallback(() => {
     if (activeWorkflowId) {
