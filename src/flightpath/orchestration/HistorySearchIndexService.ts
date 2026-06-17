@@ -175,7 +175,7 @@ export class HistorySearchIndexService {
       try {
         do {
           this.rebuildQueued = false;
-          await this.rebuild(workspaceFolderPath);
+          await this.rebuild(workspaceFolderPath, { retainDocuments: false });
         } while (this.rebuildQueued);
       } catch (error) {
         Log.warn(
@@ -198,7 +198,7 @@ export class HistorySearchIndexService {
       return;
     }
 
-    await this.rebuild(workspaceFolderPath);
+    await this.rebuild(workspaceFolderPath, { retainDocuments: true });
   }
 
   private async loadIfPossible(workspaceFolderPath: string): Promise<void> {
@@ -235,7 +235,21 @@ export class HistorySearchIndexService {
     }
   }
 
-  private async rebuild(workspaceFolderPath: string): Promise<void> {
+  /**
+   * Rebuilds the on-disk index from history.
+   *
+   * `retainDocuments` controls steady-state memory: the search path keeps the
+   * built documents resident for fast querying, while the refresh path (used by
+   * every `OutputHistoryManager`, one per live workflow) streams straight to
+   * disk and retains nothing — otherwise each write-only instance would hold a
+   * full copy of the index in the extension-host heap. Documents are also
+   * streamed per-run rather than accumulated, so a refresh never materializes
+   * the whole index in memory at once.
+   */
+  private async rebuild(
+    workspaceFolderPath: string,
+    options: { retainDocuments: boolean }
+  ): Promise<void> {
     const indexDir = this.getIndexDir(workspaceFolderPath);
     await fs.promises.mkdir(indexDir, { recursive: true });
 
@@ -245,40 +259,58 @@ export class HistorySearchIndexService {
       const rebuildDir = path.join(indexDir, `rebuild-${builtAt}`);
       await fs.promises.mkdir(rebuildDir, { recursive: true });
 
-      const documents: HistorySearchDocument[] = [];
       const indexedRuns: HistorySearchIndexManifest["indexedRuns"] = {};
       const runSources = await this.listRunSources(workspaceFolderPath);
+      const retained: HistorySearchDocument[] | undefined =
+        options.retainDocuments ? [] : undefined;
 
-      for (const source of runSources) {
-        const manifest = await this.readManifestSafe(source.manifestPath);
-        if (!manifest) {
-          continue;
+      const documentsPath = path.join(rebuildDir, DOCUMENTS_FILE_NAME);
+      const manifestPath = path.join(rebuildDir, MANIFEST_FILE_NAME);
+      const stream = fs.createWriteStream(documentsPath, { encoding: "utf8" });
+      try {
+        for (const source of runSources) {
+          const manifest = await this.readManifestSafe(source.manifestPath);
+          if (!manifest) {
+            continue;
+          }
+          const events = await this.readEventsSafe(source.manifestPath);
+          const metadata = await this.readWorkflowMetadata(
+            workspaceFolderPath,
+            source.workflowId
+          );
+
+          for (const document of this.buildRunDocuments(
+            manifest,
+            events,
+            metadata,
+            source.runIndex
+          )) {
+            retained?.push(document);
+            if (!stream.write(JSON.stringify(document) + "\n")) {
+              await once(stream, "drain");
+            }
+          }
+
+          const manifestStats = await fs.promises.stat(source.manifestPath);
+          const eventsStats = await this.statOptional(source.eventsPath);
+          indexedRuns[path.resolve(source.manifestPath)] = {
+            manifestPath: source.manifestPath,
+            eventsPath: source.eventsPath,
+            workflowId: manifest.workflowId,
+            runId: manifest.runId,
+            startedAt: manifest.startedAt,
+            eventCount: manifest.eventCount,
+            lastUpdatedAt: manifest.lastUpdatedAt,
+            sourceManifestMtimeMs: manifestStats.mtimeMs,
+            sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
+          };
         }
-        const events = await this.readEventsSafe(source.manifestPath);
-        const metadata = await this.readWorkflowMetadata(
-          workspaceFolderPath,
-          source.workflowId
-        );
-        documents.push(
-          ...this.buildRunDocuments(manifest, events, metadata, source.runIndex)
-        );
-
-        const manifestStats = await fs.promises.stat(source.manifestPath);
-        const eventsStats = await this.statOptional(source.eventsPath);
-        indexedRuns[path.resolve(source.manifestPath)] = {
-          manifestPath: source.manifestPath,
-          eventsPath: source.eventsPath,
-          workflowId: manifest.workflowId,
-          runId: manifest.runId,
-          startedAt: manifest.startedAt,
-          eventCount: manifest.eventCount,
-          lastUpdatedAt: manifest.lastUpdatedAt,
-          sourceManifestMtimeMs: manifestStats.mtimeMs,
-          sourceEventsMtimeMs: eventsStats?.mtimeMs ?? 0,
-        };
+      } finally {
+        stream.end();
+        await once(stream, "finish");
       }
 
-      const manifest: HistorySearchIndexManifest = {
+      const indexManifest: HistorySearchIndexManifest = {
         schemaVersion: INDEX_SCHEMA_VERSION,
         builtAt,
         workspaceRootHash: this.hashPath(workspaceFolderPath),
@@ -288,19 +320,24 @@ export class HistorySearchIndexService {
         indexedRuns,
       };
 
-      const documentsPath = path.join(rebuildDir, DOCUMENTS_FILE_NAME);
-      const manifestPath = path.join(rebuildDir, MANIFEST_FILE_NAME);
-      await this.writeDocumentsJsonl(documentsPath, documents);
       await fs.promises.writeFile(
         manifestPath,
-        JSON.stringify(manifest, null, 2),
+        JSON.stringify(indexManifest, null, 2),
         "utf8"
       );
 
       await this.swapIndexFiles(indexDir, manifestPath, documentsPath);
-      this.loadedWorkspacePath = workspaceFolderPath;
-      this.loadedManifest = manifest;
-      this.documents = documents;
+      if (retained) {
+        this.loadedWorkspacePath = workspaceFolderPath;
+        this.loadedManifest = indexManifest;
+        this.documents = retained;
+      } else {
+        // Write-only refresh: drop any in-memory index so refresh-only
+        // instances don't retain a full copy. A later search reloads from disk.
+        this.loadedWorkspacePath = undefined;
+        this.loadedManifest = undefined;
+        this.documents = [];
+      }
       await this.cleanupRebuildDirs(indexDir, rebuildDir);
     });
   }
@@ -702,30 +739,6 @@ export class HistorySearchIndexService {
         `[HistorySearchIndexService] Failed to read events ${manifestPath}: ${getErrorMessage(error)}`
       );
       return [];
-    }
-  }
-
-  /**
-   * Streams documents to disk one JSON line at a time. Building a single
-   * `documents.map(JSON.stringify).join("\n")` string materialized the entire
-   * index as one contiguous allocation — for a large history that single
-   * allocation aborted the extension-host V8 heap (OOM). Streaming keeps peak
-   * memory flat and honors write backpressure.
-   */
-  private async writeDocumentsJsonl(
-    documentsPath: string,
-    documents: HistorySearchDocument[]
-  ): Promise<void> {
-    const stream = fs.createWriteStream(documentsPath, { encoding: "utf8" });
-    try {
-      for (const document of documents) {
-        if (!stream.write(JSON.stringify(document) + "\n")) {
-          await once(stream, "drain");
-        }
-      }
-    } finally {
-      stream.end();
-      await once(stream, "finish");
     }
   }
 

@@ -51,6 +51,8 @@ export class OutputHistoryManager {
   );
   private readonly historySearchIndexService = new HistorySearchIndexService();
   private readonly snapshotService = new WorkspaceSnapshotService();
+  /** Latest fire-and-forget search-index refresh; see flushPendingIndexRefresh. */
+  private pendingIndexRefresh: Promise<void> = Promise.resolve();
 
   constructor(private _workspaceFolderPath: string) {
     this.historyBaseDir = path.join(
@@ -646,8 +648,20 @@ export class OutputHistoryManager {
    * a full index rebuild (and contributed to the extension-host OOM).
    */
   private refreshSearchIndex(): void {
-    void this.historySearchIndexService.enqueueWorkspaceRefresh(
-      this._workspaceFolderPath
-    );
+    this.pendingIndexRefresh = this.historySearchIndexService
+      .enqueueWorkspaceRefresh(this._workspaceFolderPath)
+      .catch(() => {
+        /* index refresh failures are logged inside the index service */
+      });
+  }
+
+  /**
+   * Resolves once any in-flight background search-index refresh has settled.
+   * Search-index writes are intentionally fire-and-forget, so callers that need
+   * a quiescent workspace (disposal, tests deleting the workspace dir) should
+   * await this first to avoid racing a rebuild still writing to `.search-index`.
+   */
+  async flushPendingIndexRefresh(): Promise<void> {
+    await this.pendingIndexRefresh;
   }
 }

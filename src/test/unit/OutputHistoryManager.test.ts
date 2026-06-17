@@ -33,6 +33,7 @@ suite("OutputHistoryManager timeline-backed storage", () => {
   });
 
   teardown(async () => {
+    await manager.flushPendingIndexRefresh();
     await fs.rm(tempWorkspace, { recursive: true, force: true });
   });
 
@@ -580,6 +581,7 @@ suite("OutputHistoryManager snapshot enrichment on loadHistory", () => {
   });
 
   teardown(async () => {
+    await manager.flushPendingIndexRefresh();
     await fs.rm(tempWorkspace, { recursive: true, force: true });
   });
 
