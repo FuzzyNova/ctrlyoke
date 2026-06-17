@@ -287,6 +287,7 @@ interface UiActions {
   setPendingFindRequest: (request: PendingOutputFindRequest | null) => void;
   openHistorySearch: () => void;
   closeHistorySearch: () => void;
+  toggleHistorySearch: () => void;
   setHistorySearchQuery: (query: string) => void;
   setHistorySearchResults: (
     results: HistorySearchResult[],
@@ -654,6 +655,17 @@ export const useUiStore = create<UiState & UiActions>()(
           historySearchLoading: false,
           historySearchLoadingMore: false,
         }),
+
+      toggleHistorySearch: () =>
+        set((state) =>
+          state.isHistorySearchOpen
+            ? {
+                isHistorySearchOpen: false,
+                historySearchLoading: false,
+                historySearchLoadingMore: false,
+              }
+            : { isHistorySearchOpen: true, globalSettingsOpen: false }
+        ),
 
       setHistorySearchQuery: (query) =>
         set({

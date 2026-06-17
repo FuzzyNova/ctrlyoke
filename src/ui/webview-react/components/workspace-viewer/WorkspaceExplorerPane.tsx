@@ -27,6 +27,8 @@ import {
   SCM_IGNORED_COLOR_CLASS,
   SCM_KIND_COLOR_CLASS,
 } from "@utils/scmStatus";
+import { getLanguageFromPath } from "@utils/syntaxHighlighting";
+import { MarkdownText } from "@components/output/MarkdownText";
 import {
   WorkspaceFileEditor,
   type WorkspaceFileEditorHandle,
@@ -218,8 +220,25 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const editorRef = useRef<WorkspaceFileEditorHandle>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
   const [pendingEditorSelection, setPendingEditorSelection] =
     useState<WorkspaceFileEditorPendingSelection | null>(null);
+
+  // Markdown files can be toggled between the CodeMirror editor and a rendered
+  // markdown preview (reusing MarkdownText). Non-markdown files never preview.
+  const isMarkdownFile = useMemo(
+    () =>
+      !!selectedFilePath &&
+      getLanguageFromPath(selectedFilePath) === "markdown",
+    [selectedFilePath]
+  );
+  const showPreview = previewMode && isMarkdownFile && !fileReadOnly;
+
+  // Reset to the editor view whenever the open file changes so a newly-opened
+  // (possibly non-markdown) file never lands in a stale preview state.
+  useEffect(() => {
+    setPreviewMode(false);
+  }, [selectedFilePath]);
   const {
     openContextMenu: openEditorContextMenu,
     editorContextMenuPortal,
@@ -730,6 +749,28 @@ export const WorkspaceExplorerPane: React.FC = () => {
                     <i className="codicon codicon-redo" />
                   </button>
                 </div>
+                {isMarkdownFile && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewMode((p) => !p)}
+                    aria-pressed={previewMode}
+                    className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded border transition-colors flex-shrink-0 ${
+                      previewMode
+                        ? "border-btn-border bg-btn-bg text-btn-fg hover:opacity-80"
+                        : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                    }`}
+                    title={
+                      previewMode
+                        ? "Show the editor"
+                        : "Preview rendered markdown"
+                    }
+                  >
+                    <i
+                      className={`codicon ${previewMode ? "codicon-code" : "codicon-open-preview"}`}
+                    />
+                    {previewMode ? "Edit" : "Preview"}
+                  </button>
+                )}
                 <button
                   onClick={handleDiscardUnsaved}
                   disabled={fileSaving || fileLoading || !fileDirty}
@@ -775,26 +816,35 @@ export const WorkspaceExplorerPane: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div
-              className="flex-1 overflow-hidden"
-              role="presentation"
-              onContextMenu={(e) => {
-                e.preventDefault();
-                openEditorContextMenu(e.clientX, e.clientY);
-              }}
-              {...editorLongPressHandlers}
-            >
-              <WorkspaceFileEditor
-                ref={editorRef}
-                filePath={selectedFilePath}
-                content={fileContent}
-                onChange={(newContent) => setFileContent(newContent)}
-                onSave={handleSave}
-                saving={fileSaving}
-                onUndoRedoChange={handleUndoRedoChange}
-                pendingSelection={pendingEditorSelection}
-                onPendingSelectionApplied={handlePendingSelectionApplied}
-              />
+            <div className="flex-1 overflow-hidden relative">
+              {/* Editor stays mounted while previewing so undo history and
+                  scroll position survive toggling back to edit mode. */}
+              <div
+                className={`h-full ${showPreview ? "hidden" : ""}`}
+                role="presentation"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  openEditorContextMenu(e.clientX, e.clientY);
+                }}
+                {...editorLongPressHandlers}
+              >
+                <WorkspaceFileEditor
+                  ref={editorRef}
+                  filePath={selectedFilePath}
+                  content={fileContent}
+                  onChange={(newContent) => setFileContent(newContent)}
+                  onSave={handleSave}
+                  saving={fileSaving}
+                  onUndoRedoChange={handleUndoRedoChange}
+                  pendingSelection={pendingEditorSelection}
+                  onPendingSelectionApplied={handlePendingSelectionApplied}
+                />
+              </div>
+              {showPreview && (
+                <div className="absolute inset-0 overflow-auto bg-editor-bg px-4 py-3">
+                  <MarkdownText>{fileContent}</MarkdownText>
+                </div>
+              )}
             </div>
           )}
         </div>

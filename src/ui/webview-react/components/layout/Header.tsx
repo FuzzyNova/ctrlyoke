@@ -78,7 +78,7 @@ export const Header: React.FC<{
     globalSettingsOpen,
     isHistorySearchOpen,
     toggleGlobalSettings,
-    openHistorySearch,
+    toggleHistorySearch,
   } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
@@ -455,7 +455,7 @@ export const Header: React.FC<{
                   ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
                   : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               }`}
-              onClick={openHistorySearch}
+              onClick={toggleHistorySearch}
               title="Search History (Ctrl+Shift+F)"
               aria-label="Search history"
               aria-pressed={isHistorySearchOpen}
