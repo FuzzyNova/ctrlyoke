@@ -361,17 +361,18 @@ export const Header: React.FC<{
       <header className="header grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,500px)_auto_minmax(0,1fr)_auto] gap-x-1 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls — always top-left (col 1 / row 1) at every tier so the
             workflow picker anchors the corner. From sm up the action controls sit inline here; on
-            narrow mobile they drop to the row-2 group (header-actions). */}
+            narrow mobile they move to the combined row-2 group. */}
         <div className="header-left col-start-1 row-start-1 justify-self-start min-w-0 flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls compactUntilLg />
           {!isMobile && actionControls}
         </div>
 
-        {/* Row-2 left group (narrow mobile only): Steps drawer pull + action controls. Spans the full
-            width, left-aligned; hidden from sm up where the action controls live with WorkflowControls. */}
-        <div className="header-actions col-start-1 col-end-4 row-start-2 justify-self-start sm:hidden flex items-center gap-1 sm:gap-2">
-          {/* Steps drawer pull (mobile only) — flat left edge to the screen, rounded toward content */}
-          {isMobile && (
+        {/* Row-2 (mobile only): Steps pull | combined controls | Workflow Properties pull.
+            Spans all 3 outer grid columns and uses its own 1fr·auto·1fr internal grid so the center
+            group stays at the true screen midpoint regardless of what the outer auto columns hold. */}
+        <div className="col-start-1 col-end-4 row-start-2 sm:hidden grid grid-cols-[1fr_auto_1fr] items-center">
+          {/* Left (1fr): Steps drawer pull — flat left edge to screen, rounded toward content */}
+          <div className="flex items-center">
             <button
               className={`control-button flex items-center justify-center gap-0.5 pl-3.5 pr-2 ${btnSize.mobileToggleButton} rounded-r-button border-y border-r border-btn-border transition-colors ${
                 mobileStepsOpen ? "fp-contrast-active " : ""
@@ -387,8 +388,110 @@ export const Header: React.FC<{
             >
               <i className={`codicon codicon-list-ordered ${btnSize.icon}`} />
             </button>
-          )}
-          {isMobile && actionControls}
+          </div>
+
+          {/* Center (auto): All controls in one group — Save, Undo/Redo, Search, Explorer, Settings */}
+          <div
+            className={`fp-button-group ${btnSize.groupContainer}`}
+            role="group"
+            aria-label="Workflow controls"
+          >
+            {/* Save */}
+            <button
+              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                canSave
+                  ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+              }`}
+              onClick={handleSave}
+              disabled={!canSave}
+              title={
+                !hasFile
+                  ? "Load a workflow to save"
+                  : !hasPrompts
+                    ? "Add prompts to save"
+                    : "Save workflow to file"
+              }
+              aria-label="Save workflow"
+            >
+              <i className={`codicon codicon-save ${btnSize.icon}`} />
+            </button>
+            <div className="fp-button-group-divider" />
+            {/* Undo / Redo / History */}
+            <UndoRedoControl
+              isRunning={isRunning}
+              isPaused={isPaused}
+              embedded
+              showHistoryChevronOnDesktopOnly="lg"
+              onAction={handleUndoRedoAction}
+            />
+            <div className="fp-button-group-divider" />
+            {/* Search */}
+            <button
+              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                isHistorySearchOpen ? "fp-contrast-active " : ""
+              }${
+                isHistorySearchOpen
+                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              onClick={toggleHistorySearch}
+              title="Search History (Ctrl+Shift+F)"
+              aria-label="Search history"
+              aria-pressed={isHistorySearchOpen}
+            >
+              <i className={`codicon codicon-search ${btnSize.icon}`} />
+            </button>
+            {isStandalone && (
+              <>
+                <div className="fp-button-group-divider" />
+                <button
+                  className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover`}
+                  onClick={openWorkspaceViewer}
+                  title="Explore files and changes"
+                  aria-label="Explore files and changes"
+                >
+                  <i className={`codicon codicon-files ${btnSize.icon}`} />
+                </button>
+              </>
+            )}
+            <div className="fp-button-group-divider" />
+            {/* Settings */}
+            <button
+              className={`control-button flex h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+                globalSettingsOpen ? "fp-contrast-active " : ""
+              }${
+                globalSettingsOpen
+                  ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              onClick={toggleGlobalSettings}
+              title="Global Settings"
+              aria-label="Open global settings"
+              aria-pressed={globalSettingsOpen}
+            >
+              <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
+            </button>
+          </div>
+
+          {/* Right (1fr): Workflow Properties drawer pull — rounded toward content, flat right edge to screen */}
+          <div className="flex items-center justify-end">
+            <button
+              className={`control-button flex items-center justify-center gap-0.5 pl-2 pr-3.5 ${btnSize.mobileToggleButton} rounded-l-button border-y border-l border-btn-border transition-colors ${
+                mobileWorkflowPropsOpen ? "fp-contrast-active " : ""
+              }${
+                mobileWorkflowPropsOpen
+                  ? "bg-btn-bg text-btn-fg"
+                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              }`}
+              onClick={onToggleMobileWorkflowProps}
+              title="Workflow Properties"
+              aria-label="Toggle workflow properties"
+              aria-pressed={mobileWorkflowPropsOpen}
+            >
+              <i className={`codicon codicon-settings ${btnSize.icon}`} />
+            </button>
+          </div>
         </div>
 
         {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}
@@ -433,11 +536,8 @@ export const Header: React.FC<{
         </div>
 
         {/* Right Section: App navigation — Search / Workspace Explorer / Settings.
-            These all open a drawer (search/settings) or an overlay view (explorer),
-            so they live together with Settings parked in the top-right corner.
-            Row 1 from sm up; narrow mobile keeps them on row 2 with the Workflow Properties drawer
-            pull trailing the group, flush to the screen's right edge. */}
-        <div className="header-app-nav col-start-1 col-end-4 row-start-2 justify-self-end sm:col-start-3 sm:col-end-4 sm:row-start-1 lg:col-start-7 lg:col-end-8 lg:justify-self-end min-w-0 flex items-center justify-end">
+            Desktop only (sm+); on mobile these buttons live in the row-2 combined center group. */}
+        <div className="header-nav hidden sm:flex sm:col-start-3 sm:col-end-4 sm:row-start-1 lg:col-start-7 lg:col-end-8 min-w-0 items-center justify-end">
           <div
             className={`fp-button-group ${btnSize.groupContainer}`}
             role="group"
@@ -494,25 +594,6 @@ export const Header: React.FC<{
               <i className={`codicon codicon-settings-gear ${btnSize.icon}`} />
             </button>
           </div>
-
-          {/* Workflow Properties drawer pull (mobile only) — rounded toward content, flat right edge to the screen */}
-          {isMobile && (
-            <button
-              className={`control-button flex items-center justify-center ml-2 gap-0.5 pl-2 pr-3.5 ${btnSize.mobileToggleButton} rounded-l-button border-y border-l border-btn-border transition-colors ${
-                mobileWorkflowPropsOpen ? "fp-contrast-active " : ""
-              }${
-                mobileWorkflowPropsOpen
-                  ? "bg-btn-bg text-btn-fg"
-                  : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-              }`}
-              onClick={onToggleMobileWorkflowProps}
-              title="Workflow Properties"
-              aria-label="Toggle workflow properties"
-              aria-pressed={mobileWorkflowPropsOpen}
-            >
-              <i className={`codicon codicon-settings ${btnSize.icon}`} />
-            </button>
-          )}
         </div>
       </header>
       {isPausing && (
