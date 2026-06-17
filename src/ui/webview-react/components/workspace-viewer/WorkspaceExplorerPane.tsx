@@ -841,7 +841,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                 />
               </div>
               {showPreview && (
-                <div className="absolute inset-0 overflow-auto bg-editor-bg px-4 py-3">
+                <div className="absolute inset-0 overflow-y-auto overflow-x-hidden bg-editor-bg px-4 py-3">
                   <MarkdownText>{fileContent}</MarkdownText>
                 </div>
               )}
