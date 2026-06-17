@@ -479,6 +479,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             newContent={data.newContent}
             structuredPatch={displayStructuredPatch}
             error={data.error}
+            findQuery={findQuery}
+            findCaseSensitive={findCaseSensitive}
             onUndoFile={handleUndo}
             fileUndoMode={
               row.undoRecord != null && row.undoRecord.isRedone !== true

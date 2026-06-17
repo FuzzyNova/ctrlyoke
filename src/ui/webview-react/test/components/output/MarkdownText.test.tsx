@@ -201,14 +201,28 @@ describe("MarkdownText", () => {
     expect(strong).toBeInTheDocument();
   });
 
-  it("does not highlight inside fenced code blocks", () => {
+  it("highlights find matches inside syntax-highlighted fenced code blocks", () => {
     const { container } = render(
       <MarkdownText highlightQuery="value">
         {"```ts\nconst value = 1;\n```"}
       </MarkdownText>
     );
 
-    expect(container.querySelector("code mark")).toBeNull();
+    const mark = container.querySelector("code.fp-syntax mark");
+    expect(mark?.textContent).toBe("value");
+    // Syntax tokens are preserved alongside the find highlight.
+    expect(
+      container.querySelector("code.fp-syntax .token.keyword")?.textContent
+    ).toBe("const");
+  });
+
+  it("highlights find matches inside inline code", () => {
+    const { container } = render(
+      <MarkdownText highlightQuery="value">{"`const value`"}</MarkdownText>
+    );
+
+    const mark = container.querySelector("code mark");
+    expect(mark?.textContent).toBe("value");
   });
 
   it("is case-insensitive by default and case-sensitive when requested", () => {

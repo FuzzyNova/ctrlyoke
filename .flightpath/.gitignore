@@ -9,3 +9,4 @@ capabilities.json
 certs/
 notifications/
 settings.json
+.search-index/

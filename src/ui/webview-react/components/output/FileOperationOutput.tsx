@@ -122,6 +122,10 @@ interface FileEditOutputProps {
   onExpandGap?: (gapIndex: number, nextExpandedToLine: number) => void;
   /** Forwarded to DiffView to avoid the initial wrong-viewType render. */
   viewType?: "split" | "unified";
+  /** "Find in output" query to highlight within the diff. */
+  findQuery?: string;
+  /** Whether `findQuery` matching is case-sensitive. */
+  findCaseSensitive?: boolean;
   className?: string;
 }
 
@@ -150,6 +154,8 @@ export const FileEditOutput = memo<FileEditOutputProps>(
     expandedGaps,
     onExpandGap,
     viewType,
+    findQuery,
+    findCaseSensitive,
     className = "",
   }) => {
     const dotStatus = fileOpDotStatus(status);
@@ -210,6 +216,8 @@ export const FileEditOutput = memo<FileEditOutputProps>(
             expandedGaps={expandedGaps}
             onExpandGap={onExpandGap}
             viewType={viewType}
+            findQuery={findQuery}
+            findCaseSensitive={findCaseSensitive}
           />
         ) : (
           undoButton && <div className="ml-6 mt-1">{undoButton}</div>

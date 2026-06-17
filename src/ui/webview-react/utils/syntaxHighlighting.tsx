@@ -293,7 +293,8 @@ const SYNTAX_TOKEN_STYLES = `
 // plain-text rows so markdown and non-markdown rows use the same VS Code
 // editor.findMatch palette.
 const FIND_HIGHLIGHT_STYLES = `
-.markdown-text mark {
+.markdown-text mark,
+.diff-code-mark-find {
   background-color: var(--vscode-editor-findMatchHighlightBackground, rgba(39, 103, 130, 0.5));
   color: var(--vscode-foreground, inherit);
   border-radius: 2px;
@@ -356,9 +357,61 @@ function toReactProps(
   return reactProps;
 }
 
-function renderSyntaxNode(node: RootContent, key: string): ReactNode {
+/** "Find in output" query to highlight inside rendered code. */
+export interface CodeFindHighlight {
+  query: string;
+  caseSensitive: boolean;
+}
+
+/**
+ * Wraps occurrences of a find query inside a plain code string with `<mark>`
+ * elements. Mirrors the plain-text `highlightText()` behavior so code blocks
+ * and inline code participate in "find in output" highlighting (they're skipped
+ * by the markdown text-node pass in MarkdownText). Styled via the shared
+ * `.markdown-text mark` rule in {@link injectFindHighlightStyles}.
+ */
+export function highlightCodeText(
+  text: string,
+  highlight: CodeFindHighlight | undefined
+): ReactNode {
+  const query = highlight?.query;
+  if (!query) return text;
+
+  const haystack = highlight.caseSensitive ? text : text.toLowerCase();
+  const needle = highlight.caseSensitive ? query : query.toLowerCase();
+  if (!haystack.includes(needle)) return text;
+
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let matchIndex = haystack.indexOf(needle);
+  let key = 0;
+  while (matchIndex !== -1) {
+    if (matchIndex > cursor) {
+      nodes.push(text.slice(cursor, matchIndex));
+    }
+    nodes.push(
+      React.createElement(
+        "mark",
+        { key: `find-${key++}` },
+        text.slice(matchIndex, matchIndex + needle.length)
+      )
+    );
+    cursor = matchIndex + needle.length;
+    matchIndex = haystack.indexOf(needle, cursor);
+  }
+  if (cursor < text.length) {
+    nodes.push(text.slice(cursor));
+  }
+  return nodes;
+}
+
+function renderSyntaxNode(
+  node: RootContent,
+  key: string,
+  highlight: CodeFindHighlight | undefined
+): ReactNode {
   if (node.type === "text") {
-    return node.value;
+    return highlight ? highlightCodeText(node.value, highlight) : node.value;
   }
 
   if (node.type !== "element") {
@@ -369,31 +422,33 @@ function renderSyntaxNode(node: RootContent, key: string): ReactNode {
   return React.createElement(
     element.tagName,
     { key, ...toReactProps(element.properties) },
-    renderSyntaxNodes(element.children, key)
+    renderSyntaxNodes(element.children, key, highlight)
   );
 }
 
 function renderSyntaxNodes(
   nodes: ReadonlyArray<RootContent>,
-  keyPrefix: string
+  keyPrefix: string,
+  highlight: CodeFindHighlight | undefined
 ): ReactNode[] {
   return nodes.map((node, index) =>
-    renderSyntaxNode(node, `${keyPrefix}-${index}`)
+    renderSyntaxNode(node, `${keyPrefix}-${index}`, highlight)
   );
 }
 
 export function renderHighlightedCode(
   code: string,
-  language: string | undefined
+  language: string | undefined,
+  highlight?: CodeFindHighlight
 ): ReactNode {
   const normalized = normalizeSyntaxLanguage(language);
-  if (!normalized) return code;
+  if (!normalized) return highlightCodeText(code, highlight);
 
   try {
     const tree = refractorCore.highlight(code, normalized);
-    return renderSyntaxNodes(tree.children, normalized);
+    return renderSyntaxNodes(tree.children, normalized, highlight);
   } catch {
-    return code;
+    return highlightCodeText(code, highlight);
   }
 }
 

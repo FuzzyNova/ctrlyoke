@@ -7,9 +7,11 @@ import type { Root } from "mdast";
 import type { PluginTuple } from "unified";
 import { openFile } from "@hooks/useMessageHandler";
 import {
+  highlightCodeText,
   injectFindHighlightStyles,
   injectSyntaxHighlightStyles,
   renderHighlightedCode,
+  type CodeFindHighlight,
 } from "@utils/syntaxHighlighting";
 
 // Ensure the shared VS Code-themed syntax/find-highlight styles are in <head>.
@@ -388,6 +390,18 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   highlightCaseSensitive = false,
   highlightActiveIndex = -1,
 }) => {
+  // Find-highlight options for code blocks/inline code. These are skipped by
+  // remarkHighlightMatches (which only visits markdown text nodes), so they're
+  // highlighted at render time here instead. Memoized so the `components` memo
+  // below stays stable across re-renders while the query is unchanged.
+  const codeFindHighlight: CodeFindHighlight | undefined = useMemo(
+    () =>
+      highlightQuery?.trim()
+        ? { query: highlightQuery, caseSensitive: highlightCaseSensitive }
+        : undefined,
+    [highlightQuery, highlightCaseSensitive]
+  );
+
   // Memoize components to avoid re-creating on every streaming chunk
   const components = useMemo(
     () => ({
@@ -545,7 +559,9 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         if (!language) {
           return (
             <code className="bg-code-block text-code-inline-fg rounded px-1 py-0.5 font-mono">
-              {codeChildren}
+              {codeFindHighlight
+                ? highlightCodeText(getNodeText(codeChildren), codeFindHighlight)
+                : codeChildren}
             </code>
           );
         }
@@ -554,7 +570,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
 
         return (
           <code className={`fp-syntax ${langClass ?? ""} font-mono block`}>
-            {renderHighlightedCode(rawText, language)}
+            {renderHighlightedCode(rawText, language, codeFindHighlight)}
           </code>
         );
       },
@@ -568,7 +584,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         </pre>
       ),
     }),
-    []
+    [codeFindHighlight]
   );
 
   // Only append the highlight plugin when there's a non-whitespace query, so

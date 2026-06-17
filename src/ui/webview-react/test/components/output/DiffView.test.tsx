@@ -48,6 +48,7 @@ const {
 
 vi.mock("@utils/syntaxHighlighting", () => ({
   injectSyntaxHighlightStyles: vi.fn(),
+  injectFindHighlightStyles: vi.fn(),
   normalizeSyntaxLanguage: vi.fn((lang) => lang),
   refractor: {
     registered: mockRefractorRegistered,

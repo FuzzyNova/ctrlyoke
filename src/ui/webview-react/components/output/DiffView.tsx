@@ -38,10 +38,12 @@ import {
   countStructuredPatchDisplayLines,
 } from "@utils/outputUtils";
 import {
+  injectFindHighlightStyles,
   injectSyntaxHighlightStyles,
   normalizeSyntaxLanguage,
   refractor,
 } from "@utils/syntaxHighlighting";
+import { markFindTokens } from "@utils/rdvFindTokens";
 import { useUiStore } from "@store/uiStore";
 import { useElementNarrow } from "@hooks/useElementNarrow";
 
@@ -63,8 +65,9 @@ type WindowWithIdleCallback = Window & {
   cancelIdleCallback?: (handle: number) => void;
 };
 
-// Ensure the shared VS Code-themed syntax styles are in <head>.
+// Ensure the shared VS Code-themed syntax + find-highlight styles are in <head>.
 injectSyntaxHighlightStyles();
+injectFindHighlightStyles();
 
 function formatHiddenLines(count: number): string {
   return `${count} hidden line${count === 1 ? "" : "s"}`;
@@ -123,6 +126,10 @@ interface DiffViewProps {
   hunks?: HunkData[];
   /** Diff type to use alongside pre-parsed `hunks`. */
   diffType?: DiffType;
+  /** "Find in output" query to highlight within rendered diff lines. */
+  findQuery?: string;
+  /** Whether `findQuery` matching is case-sensitive. */
+  findCaseSensitive?: boolean;
 }
 
 export const DiffView: React.FC<DiffViewProps> = ({
@@ -141,6 +148,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
   className = "",
   hunks: externalHunks,
   diffType: externalDiffType,
+  findQuery,
+  findCaseSensitive = false,
 }) => {
   const diffResetVersion = useUiStore((s) => s.diffResetVersion);
   const isControlled = collapsed !== undefined;
@@ -376,6 +385,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }
   }, [expandedHunks, lang, oldContent, shouldComputeTokens]);
 
+  // Wrap find-query occurrences in `mark` tokens so they highlight inside the
+  // rendered diff. react-diff-view's default token renderer paints `mark`
+  // tokens via the `.diff-code-mark-find` style (no custom renderToken needed).
+  const highlightedTokens = useMemo(
+    () => markFindTokens(tokens, findQuery, findCaseSensitive),
+    [tokens, findQuery, findCaseSensitive]
+  );
+
   const minimapStats = useMemo(
     () => getRenderedDiffStats(expandedHunks, viewType),
     [expandedHunks, viewType]
@@ -459,7 +476,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             viewType={viewType}
             diffType={diffType}
             hunks={expandedHunks}
-            tokens={tokens}
+            tokens={highlightedTokens}
             optimizeSelection={viewType === "split"}
           >
             {(hunks) =>
