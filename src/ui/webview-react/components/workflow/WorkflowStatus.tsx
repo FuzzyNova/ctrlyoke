@@ -2,6 +2,7 @@ import React, {
   useState,
   useRef,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useMemo,
 } from "react";
@@ -188,6 +189,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const [editValue, setEditValue] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [dropdownTop, setDropdownTop] = useState(0);
+  const [dropdownLeft, setDropdownLeft] = useState(0);
+  const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
   const [workflowSearch, setWorkflowSearch] = useState("");
   // Pending workflow path waiting for delete confirmation
   const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(
@@ -221,6 +224,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     const container = containerRef.current;
     if (!container) {
       setDropdownTop(0);
+      setDropdownLeft(0);
+      setDropdownWidth(null);
       return;
     }
 
@@ -228,8 +233,42 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     // have a second row of controls beneath the status (medium/narrow tiers), so anchoring to the
     // header bottom would leave that controls row wedged between the status button and the dropdown
     // list. Opening from the control's bottom makes the list expand directly from where it's invoked.
-    setDropdownTop(container.getBoundingClientRect().bottom);
-  }, []);
+    const rect = container.getBoundingClientRect();
+    const desktopDropdownWidth = Math.min(500, window.innerWidth);
+    const alignedDropdownWidth = isMobile
+      ? rect.width
+      : Math.max(rect.width, desktopDropdownWidth);
+    const centeredLeft = rect.left + rect.width / 2 - alignedDropdownWidth / 2;
+    const clampedLeft = Math.max(
+      0,
+      Math.min(centeredLeft, window.innerWidth - alignedDropdownWidth)
+    );
+    setDropdownTop(rect.bottom);
+    setDropdownLeft(clampedLeft);
+    setDropdownWidth(alignedDropdownWidth);
+  }, [isMobile]);
+
+  useLayoutEffect(() => {
+    updateDropdownTop();
+
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateDropdownTop();
+    });
+    resizeObserver.observe(container);
+    window.addEventListener("resize", updateDropdownTop);
+    window.addEventListener("scroll", updateDropdownTop, true);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateDropdownTop);
+      window.removeEventListener("scroll", updateDropdownTop, true);
+    };
+  }, [updateDropdownTop]);
 
   const closeDropdown = useCallback(() => {
     setIsDropdownOpen(false);
@@ -267,12 +306,10 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     }
   }, [isEditing]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isDropdownOpen) return;
 
     updateDropdownTop();
-    window.addEventListener("resize", updateDropdownTop);
-    return () => window.removeEventListener("resize", updateDropdownTop);
   }, [isDropdownOpen, updateDropdownTop]);
 
   // Start editing workflow name
@@ -654,9 +691,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       {/* Dropdown Menu */}
       <div
         ref={dropdownRef}
-        className={`workflow-dropdown-menu fixed left-0 right-0 w-screen sm:left-1/2 sm:right-auto sm:w-[min(500px,90vw)] sm:-translate-x-1/2 bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-hidden flex flex-col transition-all duration-200 ease-out ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
+        className={`workflow-dropdown-menu fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-hidden flex flex-col transition-all duration-200 ease-out ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
         style={{
           top: dropdownTop,
+          left: !isMobile && dropdownWidth !== null ? dropdownLeft : undefined,
+          width: !isMobile && dropdownWidth !== null ? dropdownWidth : undefined,
           bottom: 0,
           clipPath:
             isDropdownOpen && !isEditing

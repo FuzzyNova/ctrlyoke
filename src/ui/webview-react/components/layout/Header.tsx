@@ -382,11 +382,11 @@ export const Header: React.FC<{
 
   return (
     <>
-      <header className="header grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header grid grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,500px)_auto_minmax(0,1fr)_auto] gap-x-1 sm:gap-x-1 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls — always top-left (col 1 / row 1) at every tier so the
             workflow picker anchors the corner. From sm up the action controls sit inline here; on
             narrow mobile they drop to the row-2 group (header-actions). */}
-        <div className="header-left col-start-1 row-start-1 justify-self-start lg:justify-self-stretch min-w-0 flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
+        <div className="header-left col-start-1 row-start-1 justify-self-start lg:justify-self-start min-w-0 flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           <WorkflowControls compactUntilLg />
           {!isMobile && actionControls}
         </div>
@@ -433,9 +433,21 @@ export const Header: React.FC<{
 
         {/* Desktop center lane: medium keeps a shared flex row, while lg+ promotes the centered
             region back into dedicated tracks so WorkflowStatus stays perfectly page-centered. */}
-        <div className="hidden sm:flex sm:col-start-2 sm:row-start-1 lg:col-start-2 min-w-0 items-center justify-center gap-0 lg:grid lg:grid-cols-[auto_minmax(0,500px)_auto] lg:justify-items-center lg:gap-1">
+        <div className="hidden sm:flex sm:col-start-2 sm:row-start-1 lg:hidden min-w-0 items-center justify-center gap-0">
           <NavHistoryControls className="hidden md:flex flex-shrink-0" />
-          <WorkflowStatus className="flex-1 min-w-[200px] max-w-[500px] mr-1 lg:mr-0 lg:w-[500px] lg:max-w-[min(500px,calc(100vw-32rem))]" />
+          <WorkflowStatus className="flex-1 min-w-[200px] max-w-[500px] mr-1" />
+          {runControls}
+        </div>
+
+        <div className="hidden lg:flex lg:col-start-3 lg:row-start-1 items-center justify-end min-w-0 mr-1">
+          <NavHistoryControls className="hidden md:flex flex-shrink-0" />
+        </div>
+
+        <div className="hidden lg:flex lg:col-start-4 lg:row-start-1 items-center justify-center min-w-0">
+          <WorkflowStatus className="w-full min-w-0 max-w-[500px]" />
+        </div>
+
+        <div className="hidden lg:flex lg:col-start-5 lg:row-start-1 items-center justify-start min-w-0 ml-1">
           {runControls}
         </div>
 
@@ -449,7 +461,7 @@ export const Header: React.FC<{
             so they live together with Settings parked in the top-right corner.
             Row 1 from sm up; narrow mobile keeps them on row 2 with the Workflow Properties drawer
             pull trailing the group, flush to the screen's right edge. */}
-        <div className="header-app-nav col-start-1 col-end-4 row-start-2 justify-self-end sm:col-start-3 sm:col-end-4 sm:row-start-1 lg:col-start-3 lg:col-end-4 lg:justify-self-stretch min-w-0 flex items-center justify-end pr-1 sm:pr-0">
+        <div className="header-app-nav col-start-1 col-end-4 row-start-2 justify-self-end sm:col-start-3 sm:col-end-4 sm:row-start-1 lg:col-start-7 lg:col-end-8 lg:justify-self-end min-w-0 flex items-center justify-end pr-1 sm:pr-0">
           <div
             className={`fp-button-group ${btnSize.groupContainer}`}
             role="group"
