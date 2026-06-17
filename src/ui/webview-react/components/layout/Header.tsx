@@ -1,10 +1,7 @@
 import React, { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
-import {
-  MESSAGE_TYPES,
-  RUNNER_IDS,
-} from "../../types/messages";
+import { MESSAGE_TYPES, RUNNER_IDS } from "../../types/messages";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
 import { useIsMobile } from "@hooks/useMediaQuery";
@@ -372,7 +369,7 @@ export const Header: React.FC<{
 
         {/* Row-2 left group (narrow mobile only): Steps drawer pull + action controls. Spans the full
             width, left-aligned; hidden from sm up where the action controls live with WorkflowControls. */}
-        <div className="header-actions col-start-1 col-end-4 row-start-2 justify-self-start sm:hidden flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
+        <div className="header-actions col-start-1 col-end-4 row-start-2 justify-self-start sm:hidden flex items-center gap-1 sm:gap-2">
           {/* Steps drawer pull (mobile only) — flat left edge to the screen, rounded toward content */}
           {isMobile && (
             <button
@@ -440,7 +437,7 @@ export const Header: React.FC<{
             so they live together with Settings parked in the top-right corner.
             Row 1 from sm up; narrow mobile keeps them on row 2 with the Workflow Properties drawer
             pull trailing the group, flush to the screen's right edge. */}
-        <div className="header-app-nav col-start-1 col-end-4 row-start-2 justify-self-end sm:col-start-3 sm:col-end-4 sm:row-start-1 lg:col-start-7 lg:col-end-8 lg:justify-self-end min-w-0 flex items-center justify-end pr-1 sm:pr-0">
+        <div className="header-app-nav col-start-1 col-end-4 row-start-2 justify-self-end sm:col-start-3 sm:col-end-4 sm:row-start-1 lg:col-start-7 lg:col-end-8 lg:justify-self-end min-w-0 flex items-center justify-end">
           <div
             className={`fp-button-group ${btnSize.groupContainer}`}
             role="group"
