@@ -21,6 +21,7 @@ interface UndoRedoControlProps {
   isRunning: boolean;
   isPaused: boolean;
   embedded?: boolean;
+  showHistoryChevronOnDesktopOnly?: "sm" | "lg";
   onAction?: (
     action: "undo-click" | "redo-click" | "history-toggle" | "history-jump",
     details: {
@@ -286,6 +287,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   isRunning,
   isPaused,
   embedded = false,
+  showHistoryChevronOnDesktopOnly = "sm",
   onAction,
 }) => {
   const vscode = useVsCodeApi();
@@ -509,6 +511,8 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const undoDisabled = !canUndo || editingDisabled;
   const redoDisabled = !canRedo || editingDisabled;
   const chevronDisabled = historyEntries.length === 0 || editingDisabled;
+  const historyChevronVisibilityClass =
+    showHistoryChevronOnDesktopOnly === "lg" ? "hidden lg:flex" : "hidden sm:flex";
 
   const getDebugDetails = useCallback(
     (
@@ -578,14 +582,14 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
       {!isMobile && (
         <>
           {/* Separator */}
-          <div className={separatorClass}>
+          <div className={`${separatorClass} ${historyChevronVisibilityClass}`}>
             <div className="w-px h-full bg-current opacity-40" />
           </div>
 
           {/* History chevron */}
           <button
             type="button"
-            className={`${resolvedBtnBase} px-1.5 ${chevronDisabled ? disabledClass : activeClass} ${isOpen ? "bg-btn-secondary-hover" : ""}`}
+            className={`${resolvedBtnBase} ${historyChevronVisibilityClass} px-1.5 ${chevronDisabled ? disabledClass : activeClass} ${isOpen ? "bg-btn-secondary-hover" : ""}`}
             onClick={() => {
               const nextOpen = !isOpen;
               onAction?.(

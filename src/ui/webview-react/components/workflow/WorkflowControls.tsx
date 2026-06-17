@@ -13,6 +13,8 @@ import { WorkflowFilePickerModal } from "@components/workflow/WorkflowFilePicker
 interface WorkflowControlsProps {
   /** Additional className for styling */
   className?: string;
+  /** Hide the text label until lg while keeping the icon-only split button visible */
+  compactUntilLg?: boolean;
 }
 
 /**
@@ -32,6 +34,7 @@ interface WorkflowControlsProps {
  */
 export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   className = "",
+  compactUntilLg = false,
 }) => {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
@@ -116,7 +119,9 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         mainLabel={
           <span className="flex items-center gap-1.5">
             <i className={`codicon codicon-add py-0.5 ${btnSizes.icon}`} />
-            <span className="sm:inline hidden">New</span>
+            <span className={compactUntilLg ? "hidden lg:inline" : "hidden sm:inline"}>
+              New
+            </span>
           </span>
         }
         mainAction={handleNewWorkflow}

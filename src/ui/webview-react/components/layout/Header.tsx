@@ -8,7 +8,7 @@ import {
 } from "../../types/messages";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
+import { useIsMobile } from "@hooks/useMediaQuery";
 import { WebviewLog } from "@utils/logger";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
@@ -30,28 +30,26 @@ import { HEADER_BUTTON_SIZES } from "../../constants";
  *   [app navigation]  — Search · Workspace Explorer · Settings — each opens a drawer/overlay; Settings in the corner.
  *
  * Layout (three tiers):
- *   Wide (lg+):     ([WorkflowControls][action] left) ([forward/back][WorkflowStatus][execution] centered) ([app nav] right)  ← one row
- *   Medium (sm–lg): ([WorkflowControls] left) ([forward/back][WorkflowStatus][execution] centered)                            ← row 1
- *                   ([action] left)                                                  ([app nav] right)                        ← row 2
- *   Narrow (< sm):  ([WorkflowControls] left) ([WorkflowStatus][execution] centered)                                          ← row 1
- *                   ([Steps]⟵edge [action] left)                    ([app nav] right [Workflow Properties]⟶edge)             ← row 2
+ *   Wide (lg+):     ([WorkflowControls label][action] left) ([forward/back][WorkflowStatus][execution] center lane) ([app nav] right)  ← one row
+ *   Medium (sm–lg): ([WorkflowControls icon][action] left)  ([forward/back][WorkflowStatus][execution] center lane) ([app nav] right)  ← one row
+ *   Narrow (< sm):  ([WorkflowControls icon] left) ([WorkflowStatus][execution] centered)                                         ← row 1
+ *                   ([Steps]⟵edge [action] left)                    ([app nav] right [Workflow Properties]⟶edge)                 ← row 2
  *
- * Grid: 4 columns at every tier — [1fr · status · auto · 1fr]. WorkflowControls anchors col 1 / row 1
- * at ALL widths (top-left corner) with justify-self-start, so it sits at the far left while the col-1
- * 1fr track stays equal to the empty col-4 track — keeping the status+execution pair (columns 2–3,
- * row 1, at every width) centered. "Execution sits next to the workflow" is therefore consistent across
- * tiers. The status column is capped (minmax(0,500px)) below lg and fills (minmax(0,1fr)) on wide, where
- * it behaves like a browser address bar — width tracks the viewport, not the content, so the flanking
- * controls hold position as the workflow name/badges change; short names just leave whitespace.
- * The action controls (Save · Undo/Redo) render inline with WorkflowControls on wide, and drop to the
- * row-2 left group below lg — rendered in a single location chosen by `isWide` (one UndoRedoControl
- * instance). Below lg that row-2 group and the row-2 app-nav group each span the full width with
- * justify-self start/end so their content can't shift the centered row-1 pair. Medium and Wide share
- * desktop button sizing (HEADER_BUTTON_SIZES.default); only the narrow (< sm) tier uses touch sizing.
- * forward/back (NavHistoryControls, standalone only) is hidden below sm. The Steps / Workflow Properties
- * half-pills are edge-anchored drawer pulls living at the outer ends of the row-2 groups (flat edge flush
- * to the screen, rounded toward the interior). The workflow dropdown anchors to the status button's own
- * bottom (not the header's), so it expands directly from the control even with the row-2 controls beneath it.
+ * Grid: mobile keeps [1fr · status · auto · 1fr], then from sm up the header switches to
+ * [auto · minmax(0,1fr) · auto]. The left and right groups pin to the edges, while the center lane owns
+ * all remaining width and contains forward/back + WorkflowStatus + execution controls as a single flex row.
+ * That lets the middle controls consume open space before they ever visually overlap the side groups. The
+ * status control keeps a floor width inside that center lane, then expands like a browser address bar as
+ * viewport width grows.
+ * The action controls (Save · Undo/Redo) render inline with WorkflowControls from sm up, and only drop to
+ * the row-2 left group on narrow mobile — rendered in a single location chosen by `isMobile` (one
+ * UndoRedoControl instance). Medium and Wide share desktop button sizing (HEADER_BUTTON_SIZES.default),
+ * but below lg the WorkflowControls split button stays icon-first (plus + chevron only) to preserve room
+ * for the centered status. forward/back (NavHistoryControls, standalone only) is hidden below md. The
+ * Steps / Workflow Properties half-pills are edge-anchored drawer pulls living at the outer ends of the
+ * row-2 groups (flat edge flush to the screen, rounded toward the interior). The workflow dropdown anchors
+ * to the status button's own bottom (not the header's), so it expands directly from the control even with
+ * the row-2 controls beneath it.
  *
  * Features:
  * - WorkflowControls: Split button for New/Load/Queue workflow actions
@@ -64,10 +62,6 @@ export const Header: React.FC<{
 }> = ({ onToggleMobileSteps, onToggleMobileWorkflowProps }) => {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
-  // Wide tier (Tailwind lg). Drives whether the action controls (Save/Undo/Redo) render inline with
-  // WorkflowControls on the single top row, or drop to the row-2 group below lg. Rendered in exactly
-  // one place to keep a single UndoRedoControl instance.
-  const isWide = useMediaQuery("(min-width: 1024px)");
   const btnSize = isMobile
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
@@ -242,8 +236,8 @@ export const Header: React.FC<{
   );
 
   // Action controls — mutate the workflow (Save · Undo/Redo). Rendered in a single location chosen by
-  // tier: inline with WorkflowControls on wide, or in the row-2 group below lg. History chevron hidden
-  // below sm (handled inside UndoRedoControl).
+  // tier: inline with WorkflowControls from sm up, or in the row-2 group on narrow mobile. History
+  // chevron hidden below sm (handled inside UndoRedoControl).
   const actionControls = (
     <div
       className={`fp-button-group ${btnSize.groupContainer}`}
@@ -278,25 +272,128 @@ export const Header: React.FC<{
         isRunning={isRunning}
         isPaused={isPaused}
         embedded
+        showHistoryChevronOnDesktopOnly="lg"
         onAction={handleUndoRedoAction}
       />
     </div>
   );
 
+  const runControls = (
+    <div className="header-run-controls flex items-center flex-shrink-0">
+      <div
+        className={`fp-button-group ${btnSize.groupContainer}`}
+        role="group"
+        aria-label="Workflow execution controls"
+      >
+        <button
+          className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+            isRerun ? "font-bold" : ""
+          } ${
+            canRun && !isCLIManaged
+              ? "flex bg-btn-bg text-btn-fg hover:bg-btn-hover"
+              : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+          }`}
+          onClick={handleRun}
+          disabled={!canRun || isCLIManaged}
+          title={
+            isCLIManaged
+              ? "Workflow is running via FlightPath CLI"
+              : !hasFile
+                ? "Load a workflow to run"
+                : isRerun
+                  ? "Restart from beginning"
+                  : "Run"
+          }
+          aria-label={isRerun ? "Restart from beginning" : "Run"}
+        >
+          <i
+            className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"} ${btnSize.icon}`}
+          />
+        </button>
+
+        <div
+          className={`fp-button-group-divider ${canRun && !isCLIManaged && (canPause || canCancelPause || canResume) ? "" : "hidden xs:block"}`}
+        />
+
+        <button
+          className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+            (canPause || canCancelPause || canResume) && !isCLIManaged
+              ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+          }`}
+          onClick={handlePauseResume}
+          disabled={
+            (!canPause && !canCancelPause && !canResume) || isCLIManaged
+          }
+          title={
+            isCLIManaged
+              ? "Workflow is running via FlightPath CLI"
+              : isPaused
+                ? "Resume"
+                : isStopped
+                  ? "Resume"
+                  : isError
+                    ? "Continue (retry current prompt)"
+                    : isIdleWithOffset
+                      ? "Resume from start position"
+                      : isPausing
+                        ? "Cancel pause"
+                        : "Pause after current step completes"
+          }
+          aria-label={
+            isPaused || isStopped || isError || isIdleWithOffset
+              ? "Resume"
+              : isPausing
+                ? "Cancel pause"
+                : "Pause"
+          }
+        >
+          <i
+            className={`codicon ${
+              isPaused || isStopped || isError || isIdleWithOffset
+                ? "codicon-debug-continue"
+                : isPausing
+                  ? "codicon-debug-pause animate-pulse-cancelling"
+                  : "codicon-debug-pause"
+            } ${btnSize.icon}`}
+          />
+        </button>
+
+        <div
+          className={`fp-button-group-divider ${(canPause || canCancelPause || canResume) && !isCLIManaged && (canStop || isCLIManaged) ? "" : "hidden xs:block"}`}
+        />
+
+        <button
+          className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
+            canStop || isCLIManaged
+              ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
+          }`}
+          onClick={isCLIManaged ? handleStopCliRun : handleStop}
+          disabled={!canStop && !isCLIManaged}
+          title={isCLIManaged ? "Stop CLI run" : "Stop immediately"}
+          aria-label="Stop"
+        >
+          <i className={`codicon codicon-debug-stop ${btnSize.icon}`} />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <>
-      <header className="header grid grid-cols-[1fr_minmax(0,500px)_auto_1fr] lg:grid-cols-[1fr_minmax(0,1fr)_auto_1fr] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
+      <header className="header grid grid-cols-[1fr_minmax(0,500px)_auto_1fr] sm:grid-cols-[auto_minmax(0,1fr)_auto] gap-x-1 sm:gap-x-4 gap-y-1.5 items-center sm:px-3 py-1.5 border-b-2 border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls — always top-left (col 1 / row 1) at every tier so the
-            workflow picker anchors the corner. On wide the action controls sit inline here; below lg
-            they drop to the row-2 group (header-actions). */}
+            workflow picker anchors the corner. From sm up the action controls sit inline here; on
+            narrow mobile they drop to the row-2 group (header-actions). */}
         <div className="header-left col-start-1 row-start-1 justify-self-start flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
-          <WorkflowControls />
-          {isWide && actionControls}
+          <WorkflowControls compactUntilLg />
+          {!isMobile && actionControls}
         </div>
 
-        {/* Row-2 left group (below lg only): Steps drawer pull (mobile) + action controls. Spans the
-            full width, left-aligned; hidden on wide where the action controls live with WorkflowControls. */}
-        <div className="header-actions col-start-1 col-end-5 row-start-2 justify-self-start lg:hidden flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
+        {/* Row-2 left group (narrow mobile only): Steps drawer pull + action controls. Spans the full
+            width, left-aligned; hidden from sm up where the action controls live with WorkflowControls. */}
+        <div className="header-actions col-start-1 col-end-5 row-start-2 justify-self-start sm:hidden flex items-center gap-1 sm:gap-2 pl-1 sm:pl-0">
           {/* Steps drawer pull (mobile only) — flat left edge to the screen, rounded toward content */}
           {isMobile && (
             <button
@@ -315,7 +412,7 @@ export const Header: React.FC<{
               <i className={`codicon codicon-list-ordered ${btnSize.icon}`} />
             </button>
           )}
-          {!isWide && actionControls}
+          {isMobile && actionControls}
         </div>
 
         {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}
@@ -327,125 +424,32 @@ export const Header: React.FC<{
           onClose={closeNewWorkflowModal}
         />
 
-        {/* Status row: forward/back + WorkflowStatus. Lives in column 2 / row 1 at every tier,
-            directly left of the execution controls (the status+execution pair stays glued). Below lg
-            the column is capped (minmax(0,500px)); on wide it fills. forward/back is hidden below sm. */}
-        <div className="header-status col-start-2 row-start-1 justify-self-stretch w-full flex items-center justify-center min-w-0 gap-0">
+        {/* Mobile status row: forward/back + WorkflowStatus. Hidden from sm up, where both controls
+            move into the shared center lane so they can negotiate width together. */}
+        <div className="header-status col-start-2 row-start-1 justify-self-stretch w-full flex items-center justify-center min-w-0 gap-0 sm:hidden">
           {!isMobile && <NavHistoryControls className="flex-shrink-0" />}
-          <WorkflowStatus className="flex-1 sm:max-w-[500px] lg:max-w-none" />
+          <WorkflowStatus className="flex-1 min-w-0" />
         </div>
 
-        {/* Center Section (top row): Primary execution controls — Run / Pause / Stop.
-            Column 3 / row 1 at every tier, immediately right of the status. */}
-        <div className="header-run-controls col-start-3 row-start-1 justify-self-center flex items-center">
-          <div
-            className={`fp-button-group ${btnSize.groupContainer}`}
-            role="group"
-            aria-label="Workflow execution controls"
-          >
-            {/* Run/Restart Button (icon-only) */}
-            <button
-              className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                isRerun ? "font-bold" : ""
-              } ${
-                canRun && !isCLIManaged
-                  ? "flex bg-btn-bg text-btn-fg hover:bg-btn-hover"
-                  : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-              }`}
-              onClick={handleRun}
-              disabled={!canRun || isCLIManaged}
-              title={
-                isCLIManaged
-                  ? "Workflow is running via FlightPath CLI"
-                  : !hasFile
-                    ? "Load a workflow to run"
-                    : isRerun
-                      ? "Restart from beginning"
-                      : "Run"
-              }
-              aria-label={isRerun ? "Restart from beginning" : "Run"}
-            >
-              <i
-                className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"} ${btnSize.icon}`}
-              />
-            </button>
+        {/* Desktop center lane: forward/back + WorkflowStatus + execution controls share one flexible
+            lane so the status uses available middle space before any side-group overlap can happen. */}
+        <div className="hidden sm:flex sm:col-start-2 sm:row-start-1 min-w-0 items-center justify-center gap-0">
+          <NavHistoryControls className="hidden md:flex flex-shrink-0" />
+          <WorkflowStatus className="flex-1 min-w-[200px] max-w-[500px] mr-1" />
+          {runControls}
+        </div>
 
-            <div
-              className={`fp-button-group-divider ${canRun && !isCLIManaged && (canPause || canCancelPause || canResume) ? "" : "hidden xs:block"}`}
-            />
-
-            {/* Pause/Resume Button */}
-            <button
-              className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                (canPause || canCancelPause || canResume) && !isCLIManaged
-                  ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                  : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-              }`}
-              onClick={handlePauseResume}
-              disabled={
-                (!canPause && !canCancelPause && !canResume) || isCLIManaged
-              }
-              title={
-                isCLIManaged
-                  ? "Workflow is running via FlightPath CLI"
-                  : isPaused
-                    ? "Resume"
-                    : isStopped
-                      ? "Resume"
-                      : isError
-                        ? "Continue (retry current prompt)"
-                        : isIdleWithOffset
-                          ? "Resume from start position"
-                          : isPausing
-                            ? "Cancel pause"
-                            : "Pause after current step completes"
-              }
-              aria-label={
-                isPaused || isStopped || isError || isIdleWithOffset
-                  ? "Resume"
-                  : isPausing
-                    ? "Cancel pause"
-                    : "Pause"
-              }
-            >
-              <i
-                className={`codicon ${
-                  isPaused || isStopped || isError || isIdleWithOffset
-                    ? "codicon-debug-continue"
-                    : isPausing
-                      ? "codicon-debug-pause animate-pulse-cancelling"
-                      : "codicon-debug-pause"
-                } ${btnSize.icon}`}
-              />
-            </button>
-
-            <div
-              className={`fp-button-group-divider ${(canPause || canCancelPause || canResume) && !isCLIManaged && (canStop || isCLIManaged) ? "" : "hidden xs:block"}`}
-            />
-
-            {/* Stop Button */}
-            <button
-              className={`control-button h-full self-stretch items-center justify-center ${btnSize.iconButton} rounded-none border-0 transition-colors ${
-                canStop || isCLIManaged
-                  ? "flex bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
-                  : "hidden xs:flex bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
-              }`}
-              onClick={isCLIManaged ? handleStopCliRun : handleStop}
-              disabled={!canStop && !isCLIManaged}
-              title={isCLIManaged ? "Stop CLI run" : "Stop immediately"}
-              aria-label="Stop"
-            >
-              <i className={`codicon codicon-debug-stop ${btnSize.icon}`} />
-            </button>
-          </div>
+        {/* Mobile run controls stay in their own grid column to keep the narrow row-1 layout compact. */}
+        <div className="col-start-3 row-start-1 justify-self-center flex items-center sm:hidden">
+          {runControls}
         </div>
 
         {/* Right Section: App navigation — Search / Workspace Explorer / Settings.
             These all open a drawer (search/settings) or an overlay view (explorer),
             so they live together with Settings parked in the top-right corner.
-            Row 1 on wide; drops to row 2 (full-width span, right-aligned) below lg. On narrow the
-            Workflow Properties drawer pull trails the group, flush to the screen's right edge. */}
-        <div className="header-app-nav col-start-1 col-end-5 row-start-2 justify-self-end lg:col-start-4 lg:col-end-5 lg:row-start-1 flex items-center pr-1 sm:pr-0">
+            Row 1 from sm up; narrow mobile keeps them on row 2 with the Workflow Properties drawer
+            pull trailing the group, flush to the screen's right edge. */}
+        <div className="header-app-nav col-start-1 col-end-5 row-start-2 justify-self-end sm:col-start-3 sm:col-end-4 sm:row-start-1 flex items-center pr-1 sm:pr-0">
           <div
             className={`fp-button-group ${btnSize.groupContainer}`}
             role="group"
