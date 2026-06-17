@@ -57,6 +57,7 @@ import {
   handleCompletionNotificationEvent,
 } from "@utils/browserNotifications";
 import { autoFocusOutputOnExecution } from "@utils/executionOutputFocus";
+import { getReadyPreferredWorkingFilePath } from "@/navigation/readyRoute";
 
 // ============================================================================
 // Types
@@ -448,10 +449,9 @@ function createMessageHandlers(): MessageHandlerMap {
       startupReady: false,
       myClientId: "",
     });
-    const { activeWorkflowWorkingFilePath } = useUiStore.getState();
     getVsCodeApi().postMessage({
       type: MESSAGE_TYPES.READY,
-      preferredWorkingFilePath: activeWorkflowWorkingFilePath,
+      preferredWorkingFilePath: getReadyPreferredWorkingFilePath(),
     });
     // schedulePanelReconnectReloadWatchdog() is a no-op when this is a fresh
     // page load that already sent READY via BootstrapApp (freshPageReadySent=true).

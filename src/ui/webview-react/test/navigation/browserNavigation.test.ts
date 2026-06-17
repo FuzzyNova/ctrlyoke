@@ -49,7 +49,7 @@ describe("setupBrowserNavigation", () => {
     expect(document.title).toBe("a.ts — FlightPath");
   });
 
-  it("replaces (no new entry) when the initial workflow resolves", () => {
+  it("keeps token-only startup as an implicit recent-workflow route", () => {
     window.history.replaceState({}, "", "/?token=t");
     cleanup = setupBrowserNavigation();
 
@@ -57,7 +57,45 @@ describe("setupBrowserNavigation", () => {
     useUiStore.getState().setActiveWorkflowWorkingFilePath("src/m.yaml");
 
     expect(useBrowserHistoryStore.getState().idx).toBe(0);
-    expect(window.location.search).toContain("workflow=src");
+    expect(new URLSearchParams(window.location.search).get("workflow")).toBe(
+      null
+    );
+  });
+
+  it("keeps an explicit initial workflow URL canonicalized to that workflow", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?token=t&workflow=src/old.yaml"
+    );
+    cleanup = setupBrowserNavigation();
+
+    useUiStore.getState().setActiveWorkflowWorkingFilePath("src/old.yaml");
+
+    expect(useBrowserHistoryStore.getState().idx).toBe(0);
+    expect(new URLSearchParams(window.location.search).get("workflow")).toBe(
+      "src/old.yaml"
+    );
+  });
+
+  it("writes workflow to the URL after switching away from the implicit recent workflow", () => {
+    window.history.replaceState({}, "", "/?token=t");
+    cleanup = setupBrowserNavigation();
+
+    useUiStore.getState().setActiveWorkflowWorkingFilePath("src/recent.yaml");
+    expect(new URLSearchParams(window.location.search).get("workflow")).toBe(
+      null
+    );
+
+    useUiStore.getState().setActiveWorkflowWorkingFilePath("src/other.yaml");
+
+    expect(useBrowserHistoryStore.getState()).toMatchObject({
+      idx: 1,
+      length: 2,
+    });
+    expect(new URLSearchParams(window.location.search).get("workflow")).toBe(
+      "src/other.yaml"
+    );
   });
 
   it("does not push a duplicate entry when a line-range deep link settles", () => {
@@ -121,5 +159,54 @@ describe("setupBrowserNavigation", () => {
     expect(wv.activeTab).toBe("sourceControl");
     expect(wv.selectedDiffPath).toBe("src/c.ts");
     expect(useBrowserHistoryStore.getState().idx).toBe(1);
+  });
+
+  it("does not push stale file entries while a popstate file route settles", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?token=t&viewer=explorer&file=src/a.ts"
+    );
+    cleanup = setupBrowserNavigation();
+
+    useWorkspaceViewerStore.setState({ selectedFilePath: "src/a.ts" });
+    useWorkspaceViewerStore.getState().openToFile("src/b.ts");
+    useWorkspaceViewerStore.getState().clearPendingNavigation();
+    useWorkspaceViewerStore.setState({ selectedFilePath: "src/b.ts" });
+
+    expect(useBrowserHistoryStore.getState()).toMatchObject({
+      idx: 1,
+      length: 2,
+    });
+    expect(new URLSearchParams(window.location.search).get("file")).toBe(
+      "src/b.ts"
+    );
+
+    window.history.replaceState(
+      { idx: 0 },
+      "",
+      "/?token=t&viewer=explorer&file=src/a.ts"
+    );
+    window.dispatchEvent(new PopStateEvent("popstate", { state: { idx: 0 } }));
+
+    // The explorer consumes pendingNavigation before it selects the requested
+    // file. That transient old-file state must not become a fresh URL entry.
+    useWorkspaceViewerStore.getState().clearPendingNavigation();
+    expect(useBrowserHistoryStore.getState()).toMatchObject({
+      idx: 0,
+      length: 2,
+    });
+    expect(new URLSearchParams(window.location.search).get("file")).toBe(
+      "src/a.ts"
+    );
+
+    useWorkspaceViewerStore.setState({ selectedFilePath: "src/a.ts" });
+    expect(useBrowserHistoryStore.getState()).toMatchObject({
+      idx: 0,
+      length: 2,
+    });
+    expect(new URLSearchParams(window.location.search).get("file")).toBe(
+      "src/a.ts"
+    );
   });
 });

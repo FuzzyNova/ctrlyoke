@@ -39,9 +39,10 @@ function updateTitle(route: Route): void {
 }
 
 /**
- * The initial workflow resolving (after a token-only load the server restores
- * the most-recent workflow) refines the current entry rather than creating a
- * new one — otherwise Back would land on a pre-workflow empty state.
+ * An explicit workflow URL should be refined into the current entry when the
+ * host confirms it. Token-only startup is different: it intentionally means
+ * "load the latest workflow", so the resolved workflow must stay implicit or
+ * bookmarking the entry URL would pin that one workflow forever.
  */
 function shouldReplace(prev: Route, next: Route): boolean {
   return (
@@ -70,18 +71,49 @@ export function setupBrowserNavigation(): () => void {
   updateTitle(initialRoute);
 
   let lastRoute: Route = initialRoute;
+  const startedWithImplicitRecentWorkflow = !initialRoute.workflow;
+  let implicitRecentWorkingFilePath: string | null = null;
+  let hasResolvedImplicitRecentWorkflow = false;
+  let preserveImplicitRecentWorkflow = startedWithImplicitRecentWorkflow;
 
   // Apply only the viewer portion locally; the workflow rides READY above.
   applyRoute({ ...initialRoute, workflow: undefined }, vscode);
 
+  let pendingPopRoute: Route | null = null;
+
+  const routeForHistory = (route: Route): Route => {
+    if (!preserveImplicitRecentWorkflow || !route.workflow) return route;
+    if (!hasResolvedImplicitRecentWorkflow) {
+      implicitRecentWorkingFilePath = route.workflow;
+      hasResolvedImplicitRecentWorkflow = true;
+    }
+    if (route.workflow === implicitRecentWorkingFilePath) {
+      return { ...route, workflow: undefined };
+    }
+
+    preserveImplicitRecentWorkflow = false;
+    return route;
+  };
+
   const handleStoreChange = (): void => {
     if (isApplyingRoute()) return;
-    const route = deriveCurrentRoute();
+    const route = routeForHistory(deriveCurrentRoute());
+
+    if (pendingPopRoute) {
+      if (sameNavigation(route, pendingPopRoute)) {
+        lastRoute = route;
+        pendingPopRoute = null;
+        updateTitle(route);
+      }
+      return;
+    }
+
     // A line range within the same file is not a distinct history entry, so the
     // settle of a `?…&lines=` deep link must not push (and drop the range).
     if (sameNavigation(route, lastRoute)) return;
 
-    const replace = shouldReplace(lastRoute, route);
+    const replace =
+      !startedWithImplicitRecentWorkflow && shouldReplace(lastRoute, route);
     lastRoute = route;
     updateTitle(route);
 
@@ -98,11 +130,20 @@ export function setupBrowserNavigation(): () => void {
   const handlePopState = (event: PopStateEvent): void => {
     const route = parseRoute(window.location.search);
     lastRoute = route;
+    pendingPopRoute = route;
     const state = event.state as { idx?: number } | null;
     useBrowserHistoryStore
       .getState()
       .setIdx(typeof state?.idx === "number" ? state.idx : 0);
-    applyRoute(route, vscode);
+    applyRoute(
+      route.workflow || !implicitRecentWorkingFilePath
+        ? route
+        : { ...route, workflow: implicitRecentWorkingFilePath },
+      vscode
+    );
+    if (sameNavigation(routeForHistory(deriveCurrentRoute()), route)) {
+      pendingPopRoute = null;
+    }
     updateTitle(route);
   };
 

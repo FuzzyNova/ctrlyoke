@@ -80,26 +80,18 @@
     }
   }
 
-  function getPersistedWorkingFilePath() {
-    const rawUiState = _state && _state["flightpath-ui-state"];
-    if (typeof rawUiState !== "string") return undefined;
-    try {
-      const parsed = JSON.parse(rawUiState);
-      const path = parsed?.state?.activeWorkflowWorkingFilePath;
-      return typeof path === "string" && path.trim().length > 0
-        ? path
-        : undefined;
-    } catch {
-      return undefined;
-    }
+  function getUrlWorkingFilePath() {
+    const workflow = new URLSearchParams(location.search).get("workflow");
+    return workflow && workflow.trim() ? workflow : undefined;
   }
 
   function buildReadyMessage() {
-    const preferredWorkingFilePath =
-      getPersistedWorkingFilePath() ||
-      lastReadyMessage?.preferredWorkingFilePath;
+    const preferredWorkingFilePath = getUrlWorkingFilePath();
+    const baseReadyMessage = lastReadyMessage || { type: "ready" };
+    const { preferredWorkingFilePath: _ignored, ...readyMessage } =
+      baseReadyMessage;
     return {
-      ...(lastReadyMessage || { type: "ready" }),
+      ...readyMessage,
       ...(preferredWorkingFilePath ? { preferredWorkingFilePath } : {}),
     };
   }

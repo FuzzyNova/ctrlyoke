@@ -42,6 +42,7 @@ import {
 import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
 import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
 import { useNavigationSync } from "./navigation/useNavigationSync";
+import { getReadyPreferredWorkingFilePath } from "./navigation/readyRoute";
 import { HistorySearchDrawer } from "@components/search";
 
 function App() {
@@ -336,10 +337,9 @@ function App() {
 
   // Signal ready to extension
   useEffect(() => {
-    const { activeWorkflowWorkingFilePath } = useUiStore.getState();
     vscode.postMessage({
       type: MESSAGE_TYPES.READY,
-      preferredWorkingFilePath: activeWorkflowWorkingFilePath,
+      preferredWorkingFilePath: getReadyPreferredWorkingFilePath(),
     });
     // In standalone (browser) mode the server is the authoritative source of theme
     // vars. Sending THEME_VARS_CAPTURED from the browser strips --fp-color-theme-kind
