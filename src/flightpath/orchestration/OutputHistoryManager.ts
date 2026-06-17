@@ -126,7 +126,7 @@ export class OutputHistoryManager {
       await this.pruneOldRuns(workflowId, maxRuns);
 
       const runCount = (await this.getRunsForWorkflow(workflowId)).length;
-      await this.refreshSearchIndex();
+      this.refreshSearchIndex();
 
       return { filePath, runCount };
     } catch (error) {
@@ -174,7 +174,7 @@ export class OutputHistoryManager {
       await this.timelineRecorder.appendEvents(historyFilePath, [
         this.createStatusMessageRecordedDraft(target, statusMessage),
       ]);
-      await this.refreshSearchIndex();
+      this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to append status message to history:", error);
     }
@@ -205,7 +205,7 @@ export class OutputHistoryManager {
           },
         },
       ]);
-      await this.refreshSearchIndex();
+      this.refreshSearchIndex();
     } catch (error) {
       Log.warn(
         "Failed to append workflow runtime transition to history:",
@@ -247,7 +247,7 @@ export class OutputHistoryManager {
           },
         },
       ]);
-      await this.refreshSearchIndex();
+      this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to save workspace snapshot to history:", error);
     }
@@ -277,7 +277,7 @@ export class OutputHistoryManager {
           lastUpdatedAt: completedAt,
         })
       );
-      await this.refreshSearchIndex();
+      this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to finalize history run:", error);
     }
@@ -410,7 +410,7 @@ export class OutputHistoryManager {
         Log.warn(`Failed to delete old history file ${fileName}:`, error);
       }
     }
-    await this.refreshSearchIndex();
+    this.refreshSearchIndex();
   }
 
   /**
@@ -443,7 +443,7 @@ export class OutputHistoryManager {
       Log.warn(`Failed to delete run ${fileName}:`, error);
     }
 
-    await this.refreshSearchIndex();
+    this.refreshSearchIndex();
     return (await this.getRunsForWorkflow(workflowId)).length;
   }
 
@@ -476,7 +476,7 @@ export class OutputHistoryManager {
           },
         },
       ]);
-      await this.refreshSearchIndex();
+      this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to save undo record to history:", error);
     }
@@ -521,7 +521,7 @@ export class OutputHistoryManager {
           },
         },
       ]);
-      await this.refreshSearchIndex();
+      this.refreshSearchIndex();
     } catch (error) {
       Log.warn("Failed to mark undo record as redone:", error);
     }
@@ -612,7 +612,7 @@ export class OutputHistoryManager {
 
     eventDrafts.sort((left, right) => left.timestampMs - right.timestampMs);
     await this.timelineRecorder.appendEvents(historyFilePath, eventDrafts);
-    await this.refreshSearchIndex();
+    this.refreshSearchIndex();
   }
 
   private createStatusMessageRecordedDraft(
@@ -639,8 +639,14 @@ export class OutputHistoryManager {
     };
   }
 
-  private async refreshSearchIndex(): Promise<void> {
-    await this.historySearchIndexService.enqueueWorkspaceRefresh(
+  /**
+   * Kick off a search-index refresh without blocking the history write. The
+   * index service coalesces bursts internally, so firing this after every
+   * append is cheap. Awaiting it here previously stalled workflow completion on
+   * a full index rebuild (and contributed to the extension-host OOM).
+   */
+  private refreshSearchIndex(): void {
+    void this.historySearchIndexService.enqueueWorkspaceRefresh(
       this._workspaceFolderPath
     );
   }

@@ -110,7 +110,6 @@ export interface HistorySearchDocument {
   timestampMs: number;
   matchType: HistorySearchResult["matchType"];
   text: string;
-  normalizedText: string;
   filePath?: string;
 }
 

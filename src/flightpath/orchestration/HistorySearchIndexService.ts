@@ -1,6 +1,8 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
+import * as readline from "readline";
+import { once } from "events";
 import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
@@ -25,11 +27,21 @@ import { withFileLock } from "../../utils/FileLockUtils";
 import { Log } from "../../utils/Log";
 import { TimelineRecorder } from "./TimelineRecorder";
 
-const INDEX_SCHEMA_VERSION = "1.0.0" as const;
+const INDEX_SCHEMA_VERSION = "2.0.0" as const;
 const MANIFEST_FILE_NAME = "manifest.json";
 const DOCUMENTS_FILE_NAME = "documents.jsonl";
 const MIN_QUERY_LENGTH = 2;
 const DEFAULT_LIMIT = 50;
+
+/**
+ * Maximum number of characters stored per indexed candidate. History events
+ * (bash output, tool results, responses) can each be megabytes; storing them
+ * verbatim made the on-disk index larger than the history itself and blew the
+ * extension-host JS heap while building it. Search only needs enough text to
+ * match and render a snippet, so we cap each candidate. Matches past this
+ * offset within a single very large value are intentionally not indexed.
+ */
+const MAX_INDEXED_TEXT_LENGTH = 2000;
 
 interface HistorySearchIndexManifest {
   schemaVersion: typeof INDEX_SCHEMA_VERSION;
@@ -82,6 +94,7 @@ export class HistorySearchIndexService {
   private loadedManifest?: HistorySearchIndexManifest;
   private documents: HistorySearchDocument[] = [];
   private rebuildPromise?: Promise<void>;
+  private rebuildQueued = false;
 
   async search(
     request: HistorySearchQuery,
@@ -105,7 +118,7 @@ export class HistorySearchIndexService {
     const filters = request.filters;
 
     const matches = this.documents
-      .filter((document) => document.normalizedText.includes(lowered))
+      .filter((document) => document.text.toLowerCase().includes(lowered))
       .filter((document) =>
         filters?.matchTypes
           ? filters.matchTypes.includes(document.matchType)
@@ -149,15 +162,29 @@ export class HistorySearchIndexService {
   }
 
   enqueueWorkspaceRefresh(workspaceFolderPath: string): Promise<void> {
-    this.rebuildPromise ??= this.rebuild(workspaceFolderPath)
-      .catch((error) => {
+    // A workflow completing appends many history events in quick succession.
+    // Without coalescing, each append would kick off (and we would previously
+    // even await) a full index rebuild. Instead, if a rebuild is already
+    // running, just flag that one more pass is needed once it finishes.
+    if (this.rebuildPromise) {
+      this.rebuildQueued = true;
+      return this.rebuildPromise;
+    }
+
+    this.rebuildPromise = (async () => {
+      try {
+        do {
+          this.rebuildQueued = false;
+          await this.rebuild(workspaceFolderPath);
+        } while (this.rebuildQueued);
+      } catch (error) {
         Log.warn(
           `[HistorySearchIndexService] Failed to refresh index: ${getErrorMessage(error)}`
         );
-      })
-      .finally(() => {
+      } finally {
         this.rebuildPromise = undefined;
-      });
+      }
+    })();
     return this.rebuildPromise;
   }
 
@@ -263,12 +290,7 @@ export class HistorySearchIndexService {
 
       const documentsPath = path.join(rebuildDir, DOCUMENTS_FILE_NAME);
       const manifestPath = path.join(rebuildDir, MANIFEST_FILE_NAME);
-      await fs.promises.writeFile(
-        documentsPath,
-        documents.map((document) => JSON.stringify(document)).join("\n") +
-          (documents.length > 0 ? "\n" : ""),
-        "utf8"
-      );
+      await this.writeDocumentsJsonl(documentsPath, documents);
       await fs.promises.writeFile(
         manifestPath,
         JSON.stringify(manifest, null, 2),
@@ -424,7 +446,6 @@ export class HistorySearchIndexService {
         timestampMs: event.timestampMs,
         matchType: candidate.matchType,
         text: candidate.text,
-        normalizedText: candidate.text.toLowerCase(),
         filePath: candidate.filePath,
       }));
     });
@@ -584,7 +605,14 @@ export class HistorySearchIndexService {
     text: string | undefined,
     filePath?: string
   ): MatchCandidate[] {
-    return text && text.length > 0 ? [{ matchType, text, filePath }] : [];
+    if (!text || text.length === 0) {
+      return [];
+    }
+    const capped =
+      text.length > MAX_INDEXED_TEXT_LENGTH
+        ? text.slice(0, MAX_INDEXED_TEXT_LENGTH)
+        : text;
+    return [{ matchType, text: capped, filePath }];
   }
 
   private toResult(
@@ -677,17 +705,48 @@ export class HistorySearchIndexService {
     }
   }
 
+  /**
+   * Streams documents to disk one JSON line at a time. Building a single
+   * `documents.map(JSON.stringify).join("\n")` string materialized the entire
+   * index as one contiguous allocation — for a large history that single
+   * allocation aborted the extension-host V8 heap (OOM). Streaming keeps peak
+   * memory flat and honors write backpressure.
+   */
+  private async writeDocumentsJsonl(
+    documentsPath: string,
+    documents: HistorySearchDocument[]
+  ): Promise<void> {
+    const stream = fs.createWriteStream(documentsPath, { encoding: "utf8" });
+    try {
+      for (const document of documents) {
+        if (!stream.write(JSON.stringify(document) + "\n")) {
+          await once(stream, "drain");
+        }
+      }
+    } finally {
+      stream.end();
+      await once(stream, "finish");
+    }
+  }
+
   private async readDocumentsJsonl(
     documentsPath: string
   ): Promise<HistorySearchDocument[]> {
-    const content = await fs.promises.readFile(documentsPath, "utf8");
-    if (!content.trim()) {
-      return [];
+    const documents: HistorySearchDocument[] = [];
+    const reader = readline.createInterface({
+      input: fs.createReadStream(documentsPath, { encoding: "utf8" }),
+      crlfDelay: Infinity,
+    });
+    try {
+      for await (const line of reader) {
+        if (line.trim().length > 0) {
+          documents.push(JSON.parse(line) as HistorySearchDocument);
+        }
+      }
+    } finally {
+      reader.close();
     }
-    return content
-      .split(/\r?\n/)
-      .filter((line) => line.trim().length > 0)
-      .map((line) => JSON.parse(line) as HistorySearchDocument);
+    return documents;
   }
 
   private async swapIndexFiles(
