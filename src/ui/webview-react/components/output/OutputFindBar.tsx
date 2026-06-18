@@ -36,7 +36,9 @@ export function OutputFindBar({
     if (!rendering) return;
     const parent = containerDivRef.current?.parentElement ?? null;
     parentRef(parent);
-    return () => parentRef(null);
+    return () => {
+      parentRef(null);
+    };
   }, [parentRef, rendering]);
 
   useEffect(() => {
