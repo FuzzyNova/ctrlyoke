@@ -82,12 +82,62 @@ export class EndConditionEvaluator {
     scriptPath: string;
     args: string[];
   } {
-    // Simple parsing: split by spaces, first part is script, rest are args
-    // This handles common cases like ".flightpath/scripts/check.py 5"
-    const parts = script.trim().split(/\s+/);
+    // Quote-aware tokenizer: splits on unquoted whitespace, keeps quoted spans
+    // (single or double) intact, and strips the surrounding quotes.
+    //
+    // This matters because scripts run with `shell: false` — any leftover quote
+    // characters are passed literally to the spawned process. For example,
+    // `node "C:\dir\check.js" arg` must yield args ["C:\dir\check.js", "arg"],
+    // not ['"C:\dir\check.js"', "arg"], otherwise node tries to resolve a
+    // filename that literally contains quotes.
+    //
+    // Backslashes are NOT treated as escape characters so Windows paths
+    // (C:\foo\bar) survive intact.
+    const tokens: string[] = [];
+    let current = "";
+    let inSingle = false;
+    let inDouble = false;
+    let hasToken = false; // distinguishes an empty quoted arg ("") from no token
+
+    for (const ch of script.trim()) {
+      if (inSingle) {
+        if (ch === "'") inSingle = false;
+        else current += ch;
+        continue;
+      }
+      if (inDouble) {
+        if (ch === '"') inDouble = false;
+        else current += ch;
+        continue;
+      }
+      if (ch === "'") {
+        inSingle = true;
+        hasToken = true;
+        continue;
+      }
+      if (ch === '"') {
+        inDouble = true;
+        hasToken = true;
+        continue;
+      }
+      if (/\s/.test(ch)) {
+        if (hasToken) {
+          tokens.push(current);
+          current = "";
+          hasToken = false;
+        }
+        continue;
+      }
+      current += ch;
+      hasToken = true;
+    }
+    if (hasToken) {
+      tokens.push(current);
+    }
+
     return {
-      scriptPath: parts[0],
-      args: parts.slice(1),
+      scriptPath: tokens[0] ?? "",
+      args: tokens.slice(1),
     };
   }
 

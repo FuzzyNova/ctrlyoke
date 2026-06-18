@@ -13,7 +13,10 @@ import {
   TextData,
   ToolResultData,
   CompactionData,
+  FileEditData,
+  UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
+import { CliResponseParser } from "../shared/CliResponseParser";
 import {
   CLI_EVENT_TYPES,
   COMPACTION_TRIGGERS,
@@ -261,6 +264,19 @@ export class CodexLogParser extends BaseLogParser {
         if (info?.model_context_window) {
           modelContextWindow = info.model_context_window;
         }
+      }
+
+      // event_msg:patch_apply_end - Correct apply_patch diff line numbers.
+      // Codex's apply_patch tool payload uses bare `@@` markers with no line
+      // numbers, so the INITIATED FILE_EDIT events default every hunk to line 1.
+      // This follow-up event carries a proper unified diff per file with real
+      // offsets; rewrite the tracked INITIATED events in place so the diff
+      // renders at the correct location.
+      if (
+        event.type === "event_msg" &&
+        event.payload?.type === "patch_apply_end"
+      ) {
+        this.applyPatchApplyEndPositions(event.payload, this.toolCallMap);
       }
 
       // response_item with role="assistant" - Assistant content
@@ -964,6 +980,14 @@ export class CodexLogParser extends BaseLogParser {
       : Date.now();
     const results: CliEvent[] = [];
 
+    // event_msg:patch_apply_end - Correct apply_patch diff line numbers in place
+    // on the pending (streaming) tool call so the COMPLETED event renders the
+    // diff at the right file offset. Emits no event of its own.
+    if (e.type === "event_msg" && e.payload?.type === "patch_apply_end") {
+      this.applyPatchApplyEndPositions(e.payload, this.pendingStreamingCalls);
+      return results;
+    }
+
     // event_msg:agent_message is a duplicate of response_item:role=assistant:output_text.
     // Skipped here; text is captured below when response_item arrives.
 
@@ -1327,6 +1351,69 @@ export class CodexLogParser extends BaseLogParser {
         `[CodexLogParser] Failed to extract token usage from log: ${error}`
       );
       return undefined;
+    }
+  }
+
+  /**
+   * Rewrite tracked apply_patch FILE_EDIT hunks with correct line numbers from
+   * a Codex `patch_apply_end` event.
+   *
+   * Codex's `apply_patch` tool payload encodes hunks with bare `@@` markers (no
+   * line numbers), so {@link ApplyPatchParser} can only assign positions starting
+   * at line 1 — making every Codex diff render at the top of the file. The
+   * `patch_apply_end` event reports a real unified diff per changed file
+   * (`@@ -482,2 +482,9 @@`) with accurate offsets.
+   *
+   * The INITIATED FILE_EDIT events are stored by reference in the tracking map
+   * (and already pushed to the output list), and the COMPLETED event copies its
+   * structuredPatch from them, so mutating `structuredPatch` here corrects both
+   * the INITIATED and COMPLETED renders.
+   *
+   * @param payload     - The `patch_apply_end` payload (has `call_id` and `changes`)
+   * @param trackingMap - Active tool-call map (toolCallMap or pendingStreamingCalls)
+   */
+  private applyPatchApplyEndPositions(
+    payload: Record<string, any>,
+    trackingMap: Map<string, CodexTrackedToolCall>
+  ): void {
+    const callId = payload.call_id as string | undefined;
+    const changes = payload.changes as
+      | Record<string, { unified_diff?: string }>
+      | undefined;
+    if (!callId || !changes) {
+      return;
+    }
+
+    const toolInfo = trackingMap.get(callId);
+    if (
+      !toolInfo ||
+      toolInfo.type !== CLI_EVENT_TYPES.FILE_EDIT ||
+      !toolInfo.initiatedEvents
+    ) {
+      return;
+    }
+
+    // Index corrected hunks by normalized (lowercased) path so file-path case
+    // differences between the patch header and patch_apply_end don't break matching.
+    const correctedByPath = new Map<string, UnifiedDiffHunk[] | undefined>();
+    for (const [changePath, change] of Object.entries(changes)) {
+      if (change?.unified_diff) {
+        correctedByPath.set(
+          changePath.toLowerCase(),
+          CliResponseParser.parseUnifiedDiff(change.unified_diff)
+        );
+      }
+    }
+
+    for (const initiatedEvent of toolInfo.initiatedEvents) {
+      const data = initiatedEvent.data as FileEditData | undefined;
+      if (!data?.path) {
+        continue;
+      }
+      const corrected = correctedByPath.get(data.path.toLowerCase());
+      if (corrected && corrected.length > 0) {
+        data.structuredPatch = corrected;
+      }
     }
   }
 

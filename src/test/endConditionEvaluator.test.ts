@@ -30,6 +30,77 @@ suite("EndConditionEvaluator Tests", () => {
     evaluator.dispose();
   });
 
+  suite("parseScriptCommand - Tokenization", () => {
+    test("splits simple space-separated command", () => {
+      const { scriptPath, args } = EndConditionEvaluator.parseScriptCommand(
+        ".flightpath/scripts/check.py 5"
+      );
+      assert.strictEqual(scriptPath, ".flightpath/scripts/check.py");
+      assert.deepStrictEqual(args, ["5"]);
+    });
+
+    test("strips surrounding double quotes from path and args", () => {
+      const { scriptPath, args } = EndConditionEvaluator.parseScriptCommand(
+        'node "C:\\dir\\check.js" "C:\\dir\\out.txt" 2'
+      );
+      assert.strictEqual(scriptPath, "node");
+      assert.deepStrictEqual(args, [
+        "C:\\dir\\check.js",
+        "C:\\dir\\out.txt",
+        "2",
+      ]);
+    });
+
+    test("preserves spaces inside quoted spans", () => {
+      const { scriptPath, args } = EndConditionEvaluator.parseScriptCommand(
+        'node "C:\\my dir\\check.js" "arg with spaces"'
+      );
+      assert.strictEqual(scriptPath, "node");
+      assert.deepStrictEqual(args, [
+        "C:\\my dir\\check.js",
+        "arg with spaces",
+      ]);
+    });
+
+    test("does not treat backslashes as escapes (Windows paths)", () => {
+      const { scriptPath } = EndConditionEvaluator.parseScriptCommand(
+        '"C:\\Users\\me\\scripts\\check.js"'
+      );
+      assert.strictEqual(scriptPath, "C:\\Users\\me\\scripts\\check.js");
+    });
+
+    test("supports single quotes", () => {
+      const { scriptPath, args } = EndConditionEvaluator.parseScriptCommand(
+        "node 'with space.js' plain"
+      );
+      assert.strictEqual(scriptPath, "node");
+      assert.deepStrictEqual(args, ["with space.js", "plain"]);
+    });
+
+    test("concatenates adjacent quoted and bare runs in one token", () => {
+      const { scriptPath, args } = EndConditionEvaluator.parseScriptCommand(
+        'check.py --path="a b" --flag'
+      );
+      assert.strictEqual(scriptPath, "check.py");
+      assert.deepStrictEqual(args, ["--path=a b", "--flag"]);
+    });
+
+    test("keeps an empty quoted argument", () => {
+      const { scriptPath, args } = EndConditionEvaluator.parseScriptCommand(
+        'node check.js ""'
+      );
+      assert.strictEqual(scriptPath, "node");
+      assert.deepStrictEqual(args, ["check.js", ""]);
+    });
+
+    test("returns empty scriptPath for empty input", () => {
+      const { scriptPath, args } =
+        EndConditionEvaluator.parseScriptCommand("   ");
+      assert.strictEqual(scriptPath, "");
+      assert.deepStrictEqual(args, []);
+    });
+  });
+
   suite("buildRetryPrompt - Template Substitution", () => {
     const mockResult: EvaluationResult = {
       passed: false,

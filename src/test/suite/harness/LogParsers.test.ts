@@ -1211,6 +1211,75 @@ suite("CodexLogParser", () => {
       );
     });
 
+    test("should correct apply_patch diff line numbers from patch_apply_end", () => {
+      // Codex apply_patch payloads use bare `@@` markers (no line numbers), so the
+      // INITIATED hunk defaults to oldStart/newStart = 1. The follow-up
+      // patch_apply_end event carries a real unified diff with correct offsets.
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "apply_patch",
+            call_id: "call-patch-1",
+            input:
+              "*** Begin Patch\n" +
+              "*** Update File: c:\\dev\\FlightPath\\package.json\n" +
+              "@@\n" +
+              "       ],\n" +
+              '+      "scm/historyItem/context": [],\n' +
+              '       "scm/title": [\n' +
+              "*** End Patch",
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "patch_apply_end",
+            call_id: "call-patch-1",
+            success: true,
+            changes: {
+              "c:\\dev\\FlightPath\\package.json": {
+                type: "update",
+                unified_diff:
+                  "@@ -482,2 +482,3 @@\n" +
+                  "       ],\n" +
+                  '+      "scm/historyItem/context": [],\n' +
+                  '       "scm/title": [\n',
+              },
+            },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call_output",
+            call_id: "call-patch-1",
+            output: "Success. Updated the following files:\nM package.json",
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      const fileEditEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.FILE_EDIT
+      );
+      assert.ok(fileEditEvents.length > 0, "expected FILE_EDIT events");
+      // Every emitted FILE_EDIT hunk (INITIATED and COMPLETED) must carry the
+      // corrected offset (482), not the line-number-less default (1).
+      for (const editEvent of fileEditEvents) {
+        const hunks = (editEvent.data as any).structuredPatch as
+          | Array<{ oldStart: number; newStart: number }>
+          | undefined;
+        assert.ok(hunks && hunks.length > 0, "expected structuredPatch hunks");
+        assert.strictEqual(hunks[0].oldStart, 482);
+        assert.strictEqual(hunks[0].newStart, 482);
+      }
+    });
+
     test("should handle thread_xxx session ID format", () => {
       const events = [
         {
