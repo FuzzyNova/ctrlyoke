@@ -1,7 +1,9 @@
 import React, { useRef, useState } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
+import { useHideableOptions } from "@hooks/useHideableOptions";
 import { DropdownPortal } from "./DropdownPortal";
+import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 import type { HideableProps } from "./CustomSelect";
 
 interface SkillOption {
@@ -50,14 +52,17 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  const hideEnabled = namespace !== undefined;
   const selectedSkills = Array.isArray(value) ? value : [];
-  const visibleSkills = hideEnabled
-    ? availableSkills.filter((skill) => !hiddenValues.includes(skill.name))
-    : availableSkills;
-  const hiddenSkills = hideEnabled
-    ? availableSkills.filter((skill) => hiddenValues.includes(skill.name))
-    : [];
+  const {
+    hideEnabled,
+    visible: visibleSkills,
+    hidden: hiddenSkills,
+  } = useHideableOptions(
+    availableSkills,
+    (skill) => skill.name,
+    hiddenValues,
+    namespace
+  );
 
   const popupPos = useDropdownPortalPosition(
     buttonRef,
@@ -114,20 +119,11 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
   };
 
   const hiddenToggleBar = hideEnabled ? (
-    <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
-      <button
-        type="button"
-        disabled={hiddenSkills.length === 0}
-        onClick={() => setShowHidden((s) => !s)}
-        className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-      >
-        {showHidden
-          ? "Hide hidden"
-          : hiddenSkills.length > 0
-            ? `Show hidden (${hiddenSkills.length})`
-            : "Show hidden"}
-      </button>
-    </div>
+    <DropdownHiddenToggle
+      hiddenCount={hiddenSkills.length}
+      showHidden={showHidden}
+      onToggle={() => setShowHidden((s) => !s)}
+    />
   ) : null;
 
   const listContent = (
@@ -286,7 +282,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             return !prev;
           })
         }
-        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 fp-dropdown-row"
+        className="fp-select-trigger fp-dropdown-row"
       >
         <span className="truncate">{buttonLabel}</span>
         <i

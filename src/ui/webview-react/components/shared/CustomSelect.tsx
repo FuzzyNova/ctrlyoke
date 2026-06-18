@@ -1,7 +1,9 @@
 import React, { useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
+import { useHideableOptions } from "@hooks/useHideableOptions";
 import { DropdownPortal } from "./DropdownPortal";
+import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 
 export interface SelectOption {
   value: string;
@@ -80,18 +82,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  const hideEnabled = namespace !== undefined;
   const nonHideable = nonHideableValues ?? DEFAULT_NON_HIDEABLE;
 
   const selectedOption = options.find((o) => o.value === value);
 
   // Split options into visible and hidden lists
-  const visibleOptions = hideEnabled
-    ? options.filter((o) => !hiddenValues.includes(o.value))
-    : options;
-  const hiddenOptions = hideEnabled
-    ? options.filter((o) => hiddenValues.includes(o.value))
-    : [];
+  const {
+    hideEnabled,
+    visible: visibleOptions,
+    hidden: hiddenOptions,
+  } = useHideableOptions(options, (o) => o.value, hiddenValues, namespace);
 
   const handleSelect = (optValue: string) => {
     onChange(optValue);
@@ -220,20 +220,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
   const toggleBar = () =>
     hideEnabled ? (
-      <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
-        <button
-          type="button"
-          disabled={hiddenOptions.length === 0}
-          onClick={() => setShowHidden((s) => !s)}
-          className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-        >
-          {showHidden
-            ? "Hide hidden"
-            : hiddenOptions.length > 0
-              ? `Show hidden (${hiddenOptions.length})`
-              : "Show hidden"}
-        </button>
-      </div>
+      <DropdownHiddenToggle
+        hiddenCount={hiddenOptions.length}
+        showHidden={showHidden}
+        onToggle={() => setShowHidden((s) => !s)}
+      />
     ) : null;
 
   // ── Inline mode (FooterQuickPicker) ───────────────────────────────────────
@@ -259,7 +250,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-haspopup="listbox"
         aria-label={triggerAriaLabel}
         title={triggerTitle}
-        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 disabled:opacity-50 disabled:cursor-not-allowed fp-dropdown-row"
+        className="fp-select-trigger fp-dropdown-row"
       >
         <span className="truncate">{selectedOption?.label ?? value}</span>
         <i

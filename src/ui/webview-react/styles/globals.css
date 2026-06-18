@@ -516,6 +516,18 @@ button .codicon {
     outline-offset: -1px;
   }
 
+  /* Shared trigger button for custom select dropdowns (CustomSelect,
+     HarnessDropdown, SkillsSelect, MultiCheckboxDropdown, PriorContextSelect).
+     The single source for the closed-state select box: same height, padding,
+     typography, border, and focus treatment across every select. Pair with
+     fp-dropdown-row at the call site for the HC hover outline. */
+  .fp-select-trigger {
+    @apply w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border
+           border-dropdown-border rounded focus:outline-none focus:border-focus-border
+           text-left flex items-center justify-between h-7
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
   /* Generic full-height segmented button group used in header actions. */
   .fp-button-group {
     /* The outer group owns the corner radius. Inner buttons stay square so

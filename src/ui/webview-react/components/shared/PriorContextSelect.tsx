@@ -196,7 +196,7 @@ export const PriorContextSelect: React.FC<PriorContextSelectProps> = ({
           id={id}
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 fp-dropdown-row"
+          className="fp-select-trigger fp-dropdown-row"
         >
           <span className="truncate">{buttonLabel}</span>
           <i

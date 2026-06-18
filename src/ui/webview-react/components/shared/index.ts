@@ -67,5 +67,6 @@ export {
   type ActionDropdownProps,
 } from "./ActionDropdown";
 export { DropdownPortal } from "./DropdownPortal";
+export { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 export { ExpandCollapseAllDiffsButton } from "./ExpandCollapseAllDiffsButton";
 export { AutoResumeStatusRow } from "./AutoResumeStatusRow";

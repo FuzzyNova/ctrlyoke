@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
 import { DropdownPortal } from "./DropdownPortal";
+import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 import {
   HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
@@ -356,20 +357,11 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   );
 
   const toggleBar = () => (
-    <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
-      <button
-        type="button"
-        disabled={totalHidden === 0}
-        onClick={() => setShowHidden((s) => !s)}
-        className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-      >
-        {showHidden
-          ? "Hide hidden"
-          : totalHidden > 0
-            ? `Show hidden (${totalHidden})`
-            : "Show hidden"}
-      </button>
-    </div>
+    <DropdownHiddenToggle
+      hiddenCount={totalHidden}
+      showHidden={showHidden}
+      onToggle={() => setShowHidden((s) => !s)}
+    />
   );
 
   // ── Inline mode (FooterQuickPicker) ───────────────────────────────────────
@@ -410,7 +402,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         aria-haspopup="listbox"
         aria-label={triggerAriaLabel}
         title={triggerTitle}
-        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 fp-dropdown-row"
+        className="fp-select-trigger fp-dropdown-row"
       >
         <span>{triggerLabel}</span>
         <div className="flex items-center gap-1">

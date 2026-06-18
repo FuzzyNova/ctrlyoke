@@ -23,3 +23,7 @@ export {
 export { useFinalStepContextMenu } from "./useFinalStepContextMenu";
 export { useLongPress } from "./useLongPress";
 export { useLatestStepOutput } from "./useLatestStepOutput";
+export {
+  useHideableOptions,
+  type HideablePartition,
+} from "./useHideableOptions";

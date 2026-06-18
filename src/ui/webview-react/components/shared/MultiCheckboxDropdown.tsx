@@ -1,7 +1,9 @@
 import React, { useState, useRef } from "react";
 import { useDropdownPortalPosition } from "@hooks/useDropdownPortalPosition";
 import { useClickOutside } from "@hooks/useClickOutside";
+import { useHideableOptions } from "@hooks/useHideableOptions";
 import { DropdownPortal } from "./DropdownPortal";
+import { DropdownHiddenToggle } from "./DropdownHiddenToggle";
 import type { HideableProps } from "./CustomSelect";
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
@@ -44,8 +46,12 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  const hideEnabled = namespace !== undefined;
   const nonHideable = nonHideableValues ?? DEFAULT_NON_HIDEABLE;
+  const {
+    hideEnabled,
+    visible: visibleOptions,
+    hidden: hiddenOptions,
+  } = useHideableOptions(options, (o) => o.value, hiddenValues, namespace);
 
   const popupPos = useDropdownPortalPosition(
     buttonRef,
@@ -84,14 +90,6 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   const canHide = (value: string) =>
     hideEnabled && !nonHideable.includes(value);
 
-  // Split into visible and hidden
-  const visibleOptions = hideEnabled
-    ? options.filter((o) => !hiddenValues.includes(o.value))
-    : options;
-  const hiddenOptions = hideEnabled
-    ? options.filter((o) => hiddenValues.includes(o.value))
-    : [];
-
   // Build button label from visible (non-hidden) selected values only
   const visibleSelected = selectedValues.filter(
     (v) => !hiddenValues.includes(v)
@@ -117,7 +115,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             return !prev;
           })
         }
-        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 fp-dropdown-row"
+        className="fp-select-trigger fp-dropdown-row"
       >
         <span className="truncate">
           {visibleSelected.length === 0 ? (
@@ -134,20 +132,12 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
       <DropdownPortal isOpen={isOpen} popupPos={popupPos} ref={popupRef}>
         {/* Show hidden toggle — at top when expanding upward (end-cap is the visual end) */}
         {popupPos?.bottom !== undefined && hideEnabled && (
-          <div className="border-b border-dropdown-border bg-editor-bg flex-shrink-0">
-            <button
-              type="button"
-              disabled={hiddenOptions.length === 0}
-              onClick={() => setShowHidden((s) => !s)}
-              className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-            >
-              {showHidden
-                ? "Hide hidden"
-                : hiddenOptions.length > 0
-                  ? `Show hidden (${hiddenOptions.length})`
-                  : "Show hidden"}
-            </button>
-          </div>
+          <DropdownHiddenToggle
+            hiddenCount={hiddenOptions.length}
+            showHidden={showHidden}
+            onToggle={() => setShowHidden((s) => !s)}
+            dividerSide="bottom"
+          />
         )}
 
         {/* Scrollable options area */}
@@ -270,20 +260,11 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
 
         {/* Show hidden toggle — at bottom when expanding downward */}
         {popupPos?.top !== undefined && hideEnabled && (
-          <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
-            <button
-              type="button"
-              disabled={hiddenOptions.length === 0}
-              onClick={() => setShowHidden((s) => !s)}
-              className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-            >
-              {showHidden
-                ? "Hide hidden"
-                : hiddenOptions.length > 0
-                  ? `Show hidden (${hiddenOptions.length})`
-                  : "Show hidden"}
-            </button>
-          </div>
+          <DropdownHiddenToggle
+            hiddenCount={hiddenOptions.length}
+            showHidden={showHidden}
+            onToggle={() => setShowHidden((s) => !s)}
+          />
         )}
       </DropdownPortal>
     </div>
