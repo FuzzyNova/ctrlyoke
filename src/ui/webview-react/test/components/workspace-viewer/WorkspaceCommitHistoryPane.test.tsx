@@ -57,6 +57,24 @@ describe("WorkspaceCommitHistoryPane", () => {
     expect(workspaceGitRefDiff).toHaveBeenCalledWith(`~${commit.hash}`);
   });
 
+  it("outlines the commit currently shown in the diff pane", () => {
+    useWorkspaceViewerStore.setState({ diffRef: `~${commit.hash}` });
+    render(
+      <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
+    );
+
+    expect(commitRow().className).toContain("outline-list-focus-outline");
+  });
+
+  it("does not outline any commit when a non-commit ref is viewed", () => {
+    useWorkspaceViewerStore.setState({ diffRef: "~diff" });
+    render(
+      <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
+    );
+
+    expect(commitRow().className).not.toContain("outline-list-focus-outline");
+  });
+
   it("opens the context menu on long press without also opening the diff", () => {
     vi.useFakeTimers();
     render(

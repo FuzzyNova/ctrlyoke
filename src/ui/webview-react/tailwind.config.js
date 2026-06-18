@@ -99,6 +99,12 @@ module.exports = {
           "var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground))",
         "list-focus-bg":
           "var(--vscode-list-focusBackground, var(--vscode-list-hoverBackground))",
+        // Selected-row outline — VS Code defines list.focusOutline in both
+        // standard and high-contrast themes, so a solid outline in this color
+        // marks the selected row visibly everywhere. Fall back to focusBorder
+        // for the rare theme that omits it.
+        "list-focus-outline":
+          "var(--vscode-list-focusOutline, var(--vscode-focusBorder))",
 
         // Dropdowns
         "dropdown-bg": "var(--vscode-dropdown-background)",

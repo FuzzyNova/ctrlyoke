@@ -50,6 +50,9 @@ export const WorkspaceCommitHistoryPane: React.FC<
   const commitHistoryHasMore = useWorkspaceViewerStore(
     (s) => s.commitHistoryHasMore
   );
+  // Raw ref shown in the diff pane; for a commit it is `~<hash>`. Used to mark
+  // the row whose commit is currently being viewed.
+  const diffRef = useWorkspaceViewerStore((s) => s.diffRef);
   const detached = useWorkspaceViewerStore((s) => s.detached);
   const currentBranch = useWorkspaceViewerStore((s) => s.currentBranch);
   const previousBranch = useWorkspaceViewerStore((s) => s.previousBranch);
@@ -181,6 +184,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
               color={colorFor(commit)}
               isFirst={index === 0}
               isLast={index === commitHistory.length - 1}
+              isSelected={diffRef === `~${commit.hash}`}
               onClick={handleRowClick}
               onContextMenu={handleRowContextMenu}
               onLongPressContextMenu={handleRowLongPressContextMenu}
@@ -306,6 +310,8 @@ interface CommitRowProps {
   color: GraphColor;
   isFirst: boolean;
   isLast: boolean;
+  /** This commit is the one currently shown in the diff pane. */
+  isSelected: boolean;
   onClick: (commit: WorkspaceCommitLogEntry) => void;
   onContextMenu: (e: React.MouseEvent, commit: WorkspaceCommitLogEntry) => void;
   onLongPressContextMenu: (
@@ -321,6 +327,7 @@ const CommitRow: React.FC<CommitRowProps> = ({
   color,
   isFirst,
   isLast,
+  isSelected,
   onClick,
   onContextMenu,
   onLongPressContextMenu,
@@ -333,8 +340,12 @@ const CommitRow: React.FC<CommitRowProps> = ({
 
   return (
     <button
-      className={`flex items-center gap-2 px-2 py-1 text-left hover:bg-list-hover-bg transition-colors w-full min-w-0 ${
-        commit.isHead ? "bg-list-active-bg/40" : ""
+      className={`flex items-center gap-2 px-2 py-1 text-left transition-colors w-full min-w-0 [outline-offset:-1px] ${
+        isSelected
+          ? "bg-list-active-bg outline outline-1 outline-list-focus-outline"
+          : `hover:bg-list-hover-bg hover:outline-1 hover:outline-dashed hover:outline-contrast-active-border${
+              commit.isHead ? " bg-list-active-bg/40" : ""
+            }`
       }`}
       onClick={(e) => {
         if (ignoreNextClickRef.current) {

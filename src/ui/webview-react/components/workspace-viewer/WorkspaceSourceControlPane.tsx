@@ -390,9 +390,11 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     return (
       <div
         key={`${isStaged ? "staged" : "changed"}-${file.path}`}
-        className={`flex items-center gap-1 px-2 py-1 ${
-          isSelected ? "bg-list-active-bg" : "hover:bg-list-hover-bg"
-        } transition-colors`}
+        className={`flex items-center gap-1 px-2 py-1 transition-colors [outline-offset:-1px] ${
+          isSelected
+            ? "bg-list-active-bg outline outline-1 outline-list-focus-outline"
+            : "hover:bg-list-hover-bg hover:outline-1 hover:outline-dashed hover:outline-contrast-active-border"
+        }`}
       >
         <button
           onClick={() => selectFileDiff(file.path)}
