@@ -24,6 +24,7 @@ React dashboard shared by the VS Code webview and the hosted browser client. The
 - Use the Vite aliases (`@`, `@components`, `@hooks`, `@store`, `@utils`, `@types`, `@root/types`, `@root/utils`) instead of long relative imports.
 - Normalize UI-facing workspace paths to forward-slash, workspace-relative keys. The hosted workspace viewer and navigation helpers rely on stable normalized paths even on Windows.
 - Prefer semantic Tailwind token classes from `styles/globals.css` (`bg-editor-bg`, `text-foreground`, etc.) over raw `var(--vscode-...)` in component markup.
+- Reuse the shared select/dropdown primitives instead of re-implementing them: `CustomSelect`/`HarnessDropdown`/`SkillsSelect`/`MultiCheckboxDropdown`/`PriorContextSelect` for the selects themselves; the `.fp-select-trigger` class (closed-state box) and `.fp-dropdown-row`/`.fp-dropdown-row-selected` classes (HC hover/selection outline) for trigger and row chrome; `DropdownHiddenToggle` + `useHideableOptions` for the per-item hide feature; and `DropdownPortal` + `useDropdownPortalPosition` + `useClickOutside` for popup positioning. Recurring control shapes belong in `@layer components` in `globals.css`, not copy-pasted utility strings.
 - Guard host-specific behavior with the existing standalone helpers instead of branching on ad-hoc URL/window checks.
 - `App.tsx` should stay focused on layout composition, panel geometry, and top-level modal/overlay wiring. Business state belongs in stores/hooks, with panel refs only synchronizing visual layout.
 </conventions>
