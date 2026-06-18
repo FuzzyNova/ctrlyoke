@@ -148,10 +148,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             key={option.value}
             className={`group w-full flex items-center focus:outline-none border-none ${
               isSelected
-                ? "bg-dropdown-selected-bg text-list-active-fg"
+                ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
                 : option.disabled
                   ? "opacity-50 cursor-not-allowed"
-                  : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
+                  : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer fp-dropdown-row"
             }`}
           >
             <button
@@ -188,7 +188,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           {hiddenOptions.map((option) => (
             <div
               key={option.value}
-              className="group w-full flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
+              className="group w-full flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
             >
               {/* Eye icon at far left — primary unhide action */}
               <button
@@ -259,7 +259,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-haspopup="listbox"
         aria-label={triggerAriaLabel}
         title={triggerTitle}
-        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 disabled:opacity-50 disabled:cursor-not-allowed fp-dropdown-row"
       >
         <span className="truncate">{selectedOption?.label ?? value}</span>
         <i

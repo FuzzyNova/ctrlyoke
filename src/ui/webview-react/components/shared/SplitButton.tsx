@@ -286,11 +286,11 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
               aria-selected={focusedIndex === index}
               onClick={() => handleOptionClick(option)}
               disabled={option.disabled}
-              className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2 ${
+              className={`fp-dropdown-row w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2 ${
                 option.disabled
                   ? "opacity-50 cursor-not-allowed text-disabled-fg"
                   : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
-              } ${focusedIndex === index ? "bg-dropdown-selected-bg text-list-active-fg" : ""}`}
+              } ${focusedIndex === index ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected" : ""}`}
             >
               {option.icon && (
                 <span className="flex-shrink-0">{option.icon}</span>

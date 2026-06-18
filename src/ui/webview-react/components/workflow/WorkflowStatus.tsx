@@ -591,7 +591,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           <button
             type="button"
             onClick={startEditing}
-            className={`workflow-button-main flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors ${wfStatusSize.mainButton} bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg`}
+            className={`workflow-button-main fp-dropdown-row flex-1 min-w-0 text-left overflow-hidden cursor-pointer transition-colors ${wfStatusSize.mainButton} bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg`}
             title="Click to edit workflow name"
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">
@@ -653,7 +653,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             aria-haspopup="listbox"
             aria-expanded={isDropdownOpen}
             title="Show recent workflows"
-            className={`workflow-button-dropdown ${wfStatusSize.triggerButton} bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors hover:bg-cmd-active-bg hover:text-cmd-active-fg ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg" : ""}`}
+            className={`workflow-button-dropdown fp-dropdown-row ${wfStatusSize.triggerButton} bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors hover:bg-cmd-active-bg hover:text-cmd-active-fg ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg fp-dropdown-row-selected" : ""}`}
           >
             {/* Pulsing dot: another loaded workflow is running */}
             {effectiveLoadedWorkflows.some(

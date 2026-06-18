@@ -140,7 +140,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         title="Select run to view"
-        className={`flex items-center gap-1 ${veryNarrow ? "px-1" : "px-2"} py-0.5 text-xs rounded
+        className={`fp-dropdown-row flex items-center gap-1 ${veryNarrow ? "px-1" : "px-2"} py-0.5 text-xs rounded
           text-description-fg
           hover:text-foreground
           hover:bg-list-hover-bg
@@ -222,8 +222,8 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
                 className={`group flex items-center text-xs transition-colors
                   ${
                     isSelected
-                      ? "bg-list-active-bg text-list-active-fg"
-                      : "text-dropdown-fg hover:bg-list-hover-bg"
+                      ? "bg-list-active-bg text-list-active-fg fp-dropdown-row-selected"
+                      : "text-dropdown-fg hover:bg-list-hover-bg fp-dropdown-row"
                   }`}
               >
                 <button
@@ -323,7 +323,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
                   setIsOpen(false);
                   onClearHistory();
                 }}
-                className="w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
+                className="fp-dropdown-row w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
               >
                 Clear History
               </button>

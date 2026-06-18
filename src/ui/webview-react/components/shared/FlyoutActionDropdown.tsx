@@ -213,8 +213,8 @@ export function FlyoutActionDropdown({
             className={`flex items-center justify-between w-full px-3 py-1.5 text-xs transition-colors cursor-pointer
               ${
                 activeGroupId === group.id
-                  ? "bg-list-active-bg text-list-active-fg"
-                  : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg"
+                  ? "bg-list-active-bg text-list-active-fg fp-dropdown-row-selected"
+                  : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
               }`}
           >
             <span>{group.label}</span>
@@ -250,7 +250,7 @@ export function FlyoutActionDropdown({
               undefined
             }
             onClick={() => handleSelect(item.value)}
-            className={`block w-full text-left px-3 py-1.5 text-xs transition-colors
+            className={`fp-dropdown-row block w-full text-left px-3 py-1.5 text-xs transition-colors
               ${
                 item.disabled
                   ? "text-disabled-fg cursor-default"

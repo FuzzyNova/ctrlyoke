@@ -117,7 +117,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             return !prev;
           })
         }
-        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
+        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 fp-dropdown-row"
       >
         <span className="truncate">
           {visibleSelected.length === 0 ? (
@@ -164,8 +164,8 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                   key={option.value}
                   className={`group w-full flex items-start focus:outline-none border-none cursor-pointer ${
                     isSelected
-                      ? "bg-dropdown-selected-bg text-list-active-fg"
-                      : "hover:bg-list-hover-bg hover:text-list-highlight-fg"
+                      ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
+                      : "hover:bg-list-hover-bg hover:text-list-highlight-fg fp-dropdown-row"
                   }`}
                 >
                   <button
@@ -221,7 +221,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                 return (
                   <div
                     key={option.value}
-                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
+                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
                   >
                     {/* Eye icon at far left — unhide action */}
                     <button

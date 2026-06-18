@@ -84,7 +84,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
             <button
               type="button"
               onClick={() => onNewWorkflow?.()}
-              className="w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
+              className="fp-dropdown-row w-full px-3 py-2 text-left text-sm text-description-fg hover:bg-list-hover-bg hover:text-list-highlight-fg flex items-center gap-2"
             >
               <i className="codicon codicon-add text-xs" />
               New Workflow
@@ -110,8 +110,8 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 title={workflow.filePath}
                 className={`workflow-menu-item group w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors cursor-pointer gap-2 ${
                   isCurrent
-                    ? "bg-list-active-bg text-list-active-fg font-semibold"
-                    : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg"
+                    ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
+                    : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
                 }`}
               >
                 {/* Workflow Name */}
@@ -208,7 +208,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
           <button
             type="button"
             onClick={onClearHistory}
-            className="workflow-menu-action w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
+            className="workflow-menu-action fp-dropdown-row w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
           >
             Clear History
           </button>

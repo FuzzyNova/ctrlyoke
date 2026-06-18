@@ -119,8 +119,8 @@ export const FooterQuickPicker: React.FC<FooterQuickPickerProps> = ({
         title={title}
         className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           isOverride || isOpen
-            ? "bg-btn-secondary-bg text-btn-secondary-fg"
-            : "hover:bg-list-hover-bg text-foreground"
+            ? "bg-btn-secondary-bg text-btn-secondary-fg fp-dropdown-row-selected"
+            : "hover:bg-list-hover-bg text-foreground fp-dropdown-row"
         }`}
       >
         {icon}

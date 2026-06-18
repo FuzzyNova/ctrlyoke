@@ -144,8 +144,8 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             onClick={() => handleKeywordSelect(keyword)}
             className={`w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 focus:outline-none border-none ${
               isSelected
-                ? "bg-dropdown-selected-bg text-list-active-fg"
-                : "hover:bg-list-hover-bg cursor-pointer"
+                ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
+                : "hover:bg-list-hover-bg cursor-pointer fp-dropdown-row"
             }`}
           >
             <i
@@ -171,8 +171,8 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                 key={skill.name}
                 className={`group w-full flex items-start focus:outline-none border-none ${
                   isChecked
-                    ? "bg-dropdown-selected-bg text-list-active-fg"
-                    : "hover:bg-list-hover-bg"
+                    ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
+                    : "hover:bg-list-hover-bg fp-dropdown-row"
                 }`}
               >
                 <button
@@ -223,7 +223,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
                 return (
                   <div
                     key={skill.name}
-                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg"
+                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg fp-dropdown-row"
                   >
                     <button
                       type="button"
@@ -286,7 +286,7 @@ export const SkillsSelect: React.FC<SkillsSelectProps> = ({
             return !prev;
           })
         }
-        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
+        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 fp-dropdown-row"
       >
         <span className="truncate">{buttonLabel}</span>
         <i

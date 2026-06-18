@@ -132,7 +132,7 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
   if (isHidden) {
     // Dimmed, italic, eye-open on the left to restore
     return (
-      <div className="group flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer">
+      <div className="group flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer fp-dropdown-row">
         <button
           type="button"
           title="Unhide this harness"
@@ -164,10 +164,10 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
     <div
       className={`group flex items-center pr-2 gap-1 ${
         isSelected
-          ? "bg-dropdown-selected-bg text-list-active-fg"
+          ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
           : !isAvailable && !isChecking
             ? "opacity-50 cursor-not-allowed"
-            : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
+            : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer fp-dropdown-row"
       }`}
     >
       <button
@@ -323,8 +323,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         <div
           className={`flex items-center ${
             value === "default"
-              ? "bg-dropdown-selected-bg text-list-active-fg"
-              : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
+              ? "bg-dropdown-selected-bg text-list-active-fg fp-dropdown-row-selected"
+              : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer fp-dropdown-row"
           }`}
         >
           <button
@@ -410,7 +410,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
         aria-haspopup="listbox"
         aria-label={triggerAriaLabel}
         title={triggerTitle}
-        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
+        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7 fp-dropdown-row"
       >
         <span>{triggerLabel}</span>
         <div className="flex items-center gap-1">

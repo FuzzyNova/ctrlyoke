@@ -81,8 +81,8 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
     <div
       className={`running-workflow-item w-full flex items-center px-3 py-2 text-sm transition-colors gap-2 cursor-pointer ${
         isCurrent
-          ? "bg-list-active-bg text-list-active-fg font-semibold"
-          : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg"
+          ? "bg-list-active-bg text-list-active-fg font-semibold fp-dropdown-row-selected"
+          : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
       }`}
       onClick={onClick}
       role="button"

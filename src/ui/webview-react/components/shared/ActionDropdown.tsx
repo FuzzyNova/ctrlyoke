@@ -122,7 +122,7 @@ export function ActionDropdown({
                 setOpen(false);
                 onSelect(item.value);
               }}
-              className={`block w-full text-left px-3 py-1.5 text-xs transition-colors
+              className={`fp-dropdown-row block w-full text-left px-3 py-1.5 text-xs transition-colors
                     ${
                       item.disabled
                         ? "text-disabled-fg cursor-default"

@@ -651,7 +651,7 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
                   );
                   handleJumpTo(stepCount, direction);
                 }}
-                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer flex items-center gap-2 ${
+                className={`fp-dropdown-row w-full text-left px-3 py-1.5 text-sm hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer flex items-center gap-2 ${
                   direction === "redo"
                     ? "text-dropdown-fg opacity-80"
                     : "text-dropdown-fg"

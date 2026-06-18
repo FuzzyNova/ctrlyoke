@@ -496,6 +496,26 @@ button .codicon {
     box-shadow: var(--fp-dropdown-popup-shadow);
   }
 
+  /* ── Dropdown / select rows and triggers ───────────────────────────────────
+     VS Code high-contrast themes signal hover and selection with an outline
+     rather than a filled background. Declare a transparent outline on every
+     row/trigger so standard themes (where --vscode-contrastActiveBorder is
+     unset) are visually unchanged, then light it up on hover. outline-offset
+     of -1px draws the outline inside the element so it never shifts layout or
+     gets clipped by the scrolling list container. fp-dropdown-row-selected
+     keeps the outline lit for the currently-selected row. */
+  .fp-dropdown-row {
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+  }
+  .fp-dropdown-row:hover:not(:disabled) {
+    outline-color: var(--vscode-contrastActiveBorder, transparent);
+  }
+  .fp-dropdown-row-selected {
+    outline: 1px solid var(--vscode-contrastActiveBorder, transparent);
+    outline-offset: -1px;
+  }
+
   /* Generic full-height segmented button group used in header actions. */
   .fp-button-group {
     /* The outer group owns the corner radius. Inner buttons stay square so
