@@ -63,7 +63,7 @@ describe("WorkspaceCommitHistoryPane", () => {
       <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
     );
 
-    expect(commitRow().className).toContain("outline-list-focus-outline");
+    expect(commitRow().className).toContain("fp-list-row-selected");
   });
 
   it("does not outline any commit when a non-commit ref is viewed", () => {
@@ -72,7 +72,7 @@ describe("WorkspaceCommitHistoryPane", () => {
       <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
     );
 
-    expect(commitRow().className).not.toContain("outline-list-focus-outline");
+    expect(commitRow().className).not.toContain("fp-list-row-selected");
   });
 
   it("opens the context menu on long press without also opening the diff", () => {

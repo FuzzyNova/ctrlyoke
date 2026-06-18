@@ -531,7 +531,7 @@ export const Header: React.FC<{
         </div>
 
         {/* Mobile run controls stay in their own grid column to keep the narrow row-1 layout compact. */}
-        <div className="col-start-3 row-start-1 justify-self-center flex items-center sm:hidden">
+        <div className="col-start-3 row-start-1 justify-self-center flex items-center sm:hidden pr-1">
           {runControls}
         </div>
 

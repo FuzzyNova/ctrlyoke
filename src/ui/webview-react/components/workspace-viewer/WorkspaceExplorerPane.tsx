@@ -126,10 +126,10 @@ function EntryRow({
       }}
       {...longPressHandlers}
       style={isCut ? { opacity: 0.5 } : undefined}
-      className={`w-full flex items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors [outline-offset:-1px] ${
+      className={`fp-list-row w-full flex items-center gap-1.5 px-3 py-1 min-h-[44px] sm:min-h-0 text-sm text-left transition-colors ${
         isSelected
-          ? "bg-list-active-bg text-editor-fg outline outline-1 outline-list-focus-outline"
-          : "text-editor-fg hover:bg-list-hover-bg hover:outline-1 hover:outline-dashed hover:outline-contrast-active-border"
+          ? "fp-list-row-selected bg-list-active-bg text-editor-fg"
+          : "text-editor-fg hover:bg-list-hover-bg"
       }`}
       title={entry.path}
     >

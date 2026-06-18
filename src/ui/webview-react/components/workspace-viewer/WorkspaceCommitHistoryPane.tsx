@@ -340,12 +340,10 @@ const CommitRow: React.FC<CommitRowProps> = ({
 
   return (
     <button
-      className={`flex items-center gap-2 px-2 py-1 text-left transition-colors w-full min-w-0 [outline-offset:-1px] ${
+      className={`fp-list-row flex items-center gap-2 px-2 py-1 text-left transition-colors w-full min-w-0 ${
         isSelected
-          ? "bg-list-active-bg outline outline-1 outline-list-focus-outline"
-          : `hover:bg-list-hover-bg hover:outline-1 hover:outline-dashed hover:outline-contrast-active-border${
-              commit.isHead ? " bg-list-active-bg/40" : ""
-            }`
+          ? "fp-list-row-selected bg-list-active-bg"
+          : `hover:bg-list-hover-bg${commit.isHead ? " bg-list-active-bg/40" : ""}`
       }`}
       onClick={(e) => {
         if (ignoreNextClickRef.current) {

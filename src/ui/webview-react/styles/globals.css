@@ -516,6 +516,34 @@ button .codicon {
     outline-offset: -1px;
   }
 
+  /* ── File / SCM / commit list rows ──────────────────────────────────────────
+     Shared selection + hover affordance for the workspace explorer, source-
+     control file list, and commit history. The hover outline is a dashed
+     contrastActiveBorder (transparent — and so invisible — in standard themes,
+     where the list hover background carries hover instead). The selected row
+     gets a solid list.focusOutline outline, which VS Code defines in both
+     standard and high-contrast themes, so selection is always visible. The
+     outline is drawn inside the row (outline-offset: -1px) so it never shifts
+     layout or gets clipped by the scrolling list.
+
+     Unlike dropdown rows, these rows keep DOM focus after a mouse click, which
+     would otherwise trigger the global `:focus:not(:focus-visible)` reset and
+     erase the outline. The `:focus` selector below raises specificity to match
+     that reset so the selection outline survives a focused click. */
+  .fp-list-row {
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+  }
+  .fp-list-row:not(.fp-list-row-selected):hover {
+    outline-style: dashed;
+    outline-color: var(--vscode-contrastActiveBorder, transparent);
+  }
+  .fp-list-row-selected,
+  .fp-list-row-selected:focus {
+    outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder));
+    outline-offset: -1px;
+  }
+
   /* ── Tab control high-contrast edges ───────────────────────────────────────
      Shared, opt-in high-contrast affordance for tab controls (DrawerTabBar,
      OutputSectionHeader, WorkspaceViewerHeader). An outline can't be limited to
