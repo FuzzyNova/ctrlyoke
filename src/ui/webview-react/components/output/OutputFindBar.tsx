@@ -24,9 +24,20 @@ export function OutputFindBar({
 }: OutputFindBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [containerRef, isNarrow] = useElementNarrow<HTMLDivElement>(440);
+  const containerDivRef = useRef<HTMLDivElement>(null);
+  const [parentRef, isNarrow] = useElementNarrow<HTMLElement>(440);
   const [rendering, setRendering] = useState(state.isOpen);
   const [closing, setClosing] = useState(false);
+
+  // Observe the *parent* element, not the bar itself. The bar's width changes
+  // when isNarrow flips (left-2 added/removed), which would create a
+  // ResizeObserver feedback loop if we watched the bar directly.
+  useEffect(() => {
+    if (!rendering) return;
+    const parent = containerDivRef.current?.parentElement ?? null;
+    parentRef(parent);
+    return () => parentRef(null);
+  }, [parentRef, rendering]);
 
   useEffect(() => {
     return () => {
@@ -78,10 +89,10 @@ export function OutputFindBar({
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
-      ref={containerRef}
-      className={`absolute left-2 right-2 top-0 z-raised flex items-center gap-1.5 overflow-hidden rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
-        closing ? "animate-output-find-exit" : "animate-output-find-enter"
-      }`}
+      ref={containerDivRef}
+      className={`absolute right-2 top-0 z-raised flex items-center gap-1.5 overflow-hidden rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
+        isNarrow ? "left-2" : ""
+      } ${closing ? "animate-output-find-exit" : "animate-output-find-enter"}`}
       onKeyDown={onKeyDown}
       aria-hidden={closing}
     >
