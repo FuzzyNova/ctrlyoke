@@ -250,6 +250,13 @@ module.exports = {
         "scm-graph-base":
           "var(--vscode-scmGraph-historyItemBaseRefColor, #ea5c00)",
 
+        // ── Context window bar ──
+        // Track (empty portion) uses a 15% tint of the foreground so it reads
+        // clearly in both regular dark and HC themes without clashing with the
+        // bright teal border color that HC assigns to --vscode-panel-border.
+        "ctx-bar-track":
+          "color-mix(in srgb, var(--vscode-foreground) 15%, transparent)",
+
         // ── Semantic accent colors ──
         "bash-expand-link": "#569cd6",
         favorite: "#e5c014",

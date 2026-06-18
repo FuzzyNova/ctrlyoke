@@ -327,7 +327,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
         {contextPct !== undefined && (
           <div className="flex-shrink-0 flex flex-col items-center w-3 self-stretch ml-0.5">
             {/* Track */}
-            <div className="flex-1 w-1.5 rounded-full bg-panel-border overflow-hidden relative">
+            <div className="flex-1 w-1.5 rounded-full bg-ctx-bar-track overflow-hidden relative">
               {/* Fill */}
               <div
                 key={contextPct}
@@ -335,8 +335,8 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
                   contextPct >= 85
                     ? "bg-error-fg opacity-90"
                     : contextPct >= 70
-                      ? "bg-warning-fg opacity-70"
-                      : "bg-description-fg opacity-50"
+                      ? "bg-warning-fg opacity-85"
+                      : "bg-info-fg opacity-80"
                 }`}
                 style={{ height: `${contextPct}%` }}
               />
