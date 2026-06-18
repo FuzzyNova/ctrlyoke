@@ -320,11 +320,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         : "custom";
 
   const errorBehaviorMode =
-    properties.errorBehavior === undefined
-      ? "inherit"
-      : properties.errorBehavior === null
-        ? "none"
-        : "custom";
+    properties.errorBehavior === undefined ? "inherit" : "custom";
 
   const resolvedEndConditionForInherit =
     workflowProperties.endCondition !== undefined
@@ -377,6 +373,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   const buildConditionOptions = (inheritLabel: string) => [
     { value: "inherit", label: inheritLabel },
     { value: "none", label: "None" },
+    { value: "custom", label: "Custom" },
+  ];
+
+  const errorBehaviorOptions = [
+    { value: "inherit", label: errorBehaviorInheritLabel },
     { value: "custom", label: "Custom" },
   ];
 
@@ -863,15 +864,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 onChange={(v) => {
                   if (v === "inherit") {
                     setProperty("errorBehavior", undefined);
-                  } else if (v === "none") {
-                    setProperty("errorBehavior", null);
                   } else {
                     setProperty("errorBehavior", {
                       onError: "stop",
                     } as ErrorBehavior);
                   }
                 }}
-                options={buildConditionOptions(errorBehaviorInheritLabel)}
+                options={errorBehaviorOptions}
               />
               <AnimatedSection visible={errorBehaviorMode === "custom"}>
                 <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">

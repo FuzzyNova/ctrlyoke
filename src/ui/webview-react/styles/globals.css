@@ -516,6 +516,33 @@ button .codicon {
     outline-offset: -1px;
   }
 
+  /* ── Tab control high-contrast edges ───────────────────────────────────────
+     Shared, opt-in high-contrast affordance for tab controls (DrawerTabBar,
+     OutputSectionHeader, WorkspaceViewerHeader). An outline can't be limited to
+     two sides, so a tab signals hover and selection with left/right borders
+     instead. Every tab reserves a 1px transparent border on its left and right
+     edges, so toggling the contrast color never shifts layout. On hover, an
+     unselected tab's edges become dashed contrastActiveBorder; pairing with
+     fp-tab-hc-selected keeps the edges solid for the active tab. Any
+     bottom/active indicator is kept on a separate border-b-* utility at the
+     call site, so it never competes with these side borders. Standard themes
+     leave --vscode-contrastActiveBorder unset, so the side borders stay
+     transparent and tabs look unchanged. */
+  .fp-tab-hc {
+    border-left: 1px solid transparent;
+    border-right: 1px solid transparent;
+  }
+  .fp-tab-hc:not(.fp-tab-hc-selected):hover {
+    border-left-style: dashed;
+    border-right-style: dashed;
+    border-left-color: var(--vscode-contrastActiveBorder, transparent);
+    border-right-color: var(--vscode-contrastActiveBorder, transparent);
+  }
+  .fp-tab-hc-selected {
+    border-left-color: var(--vscode-contrastActiveBorder, transparent);
+    border-right-color: var(--vscode-contrastActiveBorder, transparent);
+  }
+
   /* Shared trigger button for custom select dropdowns (CustomSelect,
      HarnessDropdown, SkillsSelect, MultiCheckboxDropdown, PriorContextSelect).
      The single source for the closed-state select box: same height, padding,
@@ -546,7 +573,7 @@ button .codicon {
            flex items-center gap-1 transition-colors;
   }
   .fp-tab-active {
-    @apply text-foreground border-b border-foreground;
+    @apply text-foreground border-b border-b-foreground;
   }
   .fp-tab-inactive {
     @apply text-description-fg hover:text-foreground;

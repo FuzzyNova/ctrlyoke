@@ -43,17 +43,17 @@ export const DrawerTabBar: React.FC<DrawerTabBarProps> = ({
         const activeColor = override?.activeColor ?? "text-foreground";
         const hoverClass = !isActive
           ? (override?.hoverColor ?? "hover:text-foreground") +
-            " hover:border-panel-border"
+            " hover:border-b-panel-border"
           : "";
         return (
           <button
             key={tab.id}
             type="button"
             title={tab.label}
-            className={`flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
+            className={`fp-tab-hc${isActive ? " fp-tab-hc-selected" : ""} flex-1 flex items-center justify-center py-2 transition-colors cursor-pointer border-b-2 ${
               isActive
-                ? `border-focus-border ${activeColor}`
-                : `border-transparent ${inactiveColor} ${hoverClass}${tab.placeholder ? " opacity-60" : ""}`
+                ? `border-b-focus-border ${activeColor}`
+                : `border-b-transparent ${inactiveColor} ${hoverClass}${tab.placeholder ? " opacity-60" : ""}`
             }`}
             onClick={() => onTabChange(tab.id)}
           >

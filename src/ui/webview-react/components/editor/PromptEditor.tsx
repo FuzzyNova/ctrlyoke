@@ -389,9 +389,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearProperties.push("endCondition");
       }
 
-      // Error Behavior — three-state:
+      // Error Behavior:
       //   object → specific harness failure policy
-      //   null   → explicitly disable inherited policy
       //   key in clearProperties → inherit from workflow/settings
       if (properties.errorBehavior !== undefined) {
         result.errorBehavior = properties.errorBehavior;

@@ -75,7 +75,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
       {/* Tab buttons — fixed left, never shrink */}
       <div className="flex items-center flex-shrink-0" role="tablist">
         <button
-          className={`fp-tab ${activeTab === "explorer" ? "fp-tab-active" : "fp-tab-inactive"}`}
+          className={`fp-tab fp-tab-hc ${activeTab === "explorer" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
           onClick={() => onTabChange("explorer")}
           aria-selected={activeTab === "explorer"}
           role="tab"
@@ -85,7 +85,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
           <span className="hidden sm:inline">Explorer</span>
         </button>
         <button
-          className={`fp-tab ${activeTab === "sourceControl" ? "fp-tab-active" : "fp-tab-inactive"}`}
+          className={`fp-tab fp-tab-hc ${activeTab === "sourceControl" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
           onClick={() => onTabChange("sourceControl")}
           aria-selected={activeTab === "sourceControl"}
           role="tab"

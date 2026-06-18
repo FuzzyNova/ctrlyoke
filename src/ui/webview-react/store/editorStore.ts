@@ -99,6 +99,16 @@ export const END_CONDITION_DEFAULTS: EndConditionConfig = {
   retryPrompt: "",
 };
 
+function normalizePromptErrorBehavior(
+  errorBehavior: ErrorBehavior | null | undefined
+): ErrorBehavior | undefined {
+  if (errorBehavior === null) {
+    return { onError: "stop" };
+  }
+
+  return errorBehavior;
+}
+
 /**
  * Saved new step state for restoring when switching from edit to new mode
  */
@@ -533,7 +543,7 @@ export const useEditorStore = create<
             : "",
         mcpServers: promptData.mcpServers,
         hooks: promptData.hooks,
-        errorBehavior: promptData.errorBehavior,
+        errorBehavior: normalizePromptErrorBehavior(promptData.errorBehavior),
         endCondition: promptData.endCondition,
         preCondition: promptData.preCondition,
         priorContext: promptData.priorContext,
@@ -827,7 +837,15 @@ export const useEditorStore = create<
 
   setProperty: (key, value) =>
     set((state) => ({
-      properties: { ...state.properties, [key]: value },
+      properties: {
+        ...state.properties,
+        [key]:
+          key === "errorBehavior"
+            ? normalizePromptErrorBehavior(
+                value as PropertyValues["errorBehavior"]
+              )
+            : value,
+      },
       isDirty: true,
     })),
 

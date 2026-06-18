@@ -128,7 +128,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
         {showTerminalTab ? (
           <div className="flex items-center ml-1">
             <button
-              className={`fp-tab ${activeOutputTab === "output" ? "fp-tab-active" : "fp-tab-inactive"}`}
+              className={`fp-tab fp-tab-hc ${activeOutputTab === "output" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectOutputTab}
             >
               <i
@@ -137,7 +137,7 @@ export const OutputSectionHeader: React.FC<OutputSectionHeaderProps> = ({
               {!isHeaderNarrow && <span>Output</span>}
             </button>
             <button
-              className={`fp-tab ${activeOutputTab === "terminal" ? "fp-tab-active" : "fp-tab-inactive"}`}
+              className={`fp-tab fp-tab-hc ${activeOutputTab === "terminal" ? "fp-tab-active fp-tab-hc-selected" : "fp-tab-inactive"}`}
               onClick={onSelectTerminalTab}
             >
               <i

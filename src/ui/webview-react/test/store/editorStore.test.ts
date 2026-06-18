@@ -211,6 +211,14 @@ describe("enterEditMode", () => {
     });
   });
 
+  it("normalizes legacy null error behavior to stop when loading prompt data", () => {
+    store().enterEditMode(1, makePromptStep({ errorBehavior: null }));
+
+    expect(store().properties.errorBehavior).toEqual({
+      onError: "stop",
+    });
+  });
+
   it("loads disabled state from the step payload", () => {
     store().enterEditMode(2, makePromptStep({ enabled: false }));
     expect(store().stepEnabled).toBe(false);
@@ -431,6 +439,18 @@ describe("getPromptProperties", () => {
 
     expect(store().getPromptProperties().errorBehavior).toEqual({
       onError: "continue",
+    });
+  });
+
+  it("normalizes null errorBehavior overrides to stop", () => {
+    store().setPromptText("Stop on harness failure");
+    store().setProperty("errorBehavior", null);
+
+    expect(store().properties.errorBehavior).toEqual({
+      onError: "stop",
+    });
+    expect(store().getPromptProperties().errorBehavior).toEqual({
+      onError: "stop",
     });
   });
 });
