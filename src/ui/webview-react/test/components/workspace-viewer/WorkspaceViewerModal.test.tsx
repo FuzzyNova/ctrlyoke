@@ -11,7 +11,7 @@
  * render, and assert modal visibility / tab switching / close-guard behavior.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkspaceViewerModal } from "@components/workspace-viewer/WorkspaceViewerModal";
 import { useSettingsStore } from "@store/settingsStore";
@@ -67,6 +67,29 @@ describe("WorkspaceViewerModal — visibility", () => {
 
     expect(screen.getByTestId("explorer-pane")).toBeInTheDocument();
     expect(screen.queryByTestId("source-control-pane")).not.toBeInTheDocument();
+  });
+
+  it("keeps rendering when reopened before the close animation timer fires", () => {
+    vi.useFakeTimers();
+    try {
+      useWorkspaceViewerStore.setState({ isOpen: true });
+      render(<WorkspaceViewerModal />);
+
+      act(() => {
+        useWorkspaceViewerStore.getState().close();
+      });
+      act(() => {
+        useWorkspaceViewerStore.getState().open();
+      });
+      act(() => {
+        vi.advanceTimersByTime(221);
+      });
+
+      expect(screen.getByTestId("workspace-name")).toBeInTheDocument();
+      expect(useWorkspaceViewerStore.getState().isOpen).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

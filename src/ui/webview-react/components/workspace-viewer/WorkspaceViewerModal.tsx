@@ -27,6 +27,10 @@ export const WorkspaceViewerModal: React.FC = () => {
 
   useEffect(() => {
     if (isOpen) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       setClosing(false);
       setRendering(true);
     } else {
@@ -35,6 +39,7 @@ export const WorkspaceViewerModal: React.FC = () => {
       timerRef.current = setTimeout(() => {
         setRendering(false);
         setClosing(false);
+        timerRef.current = null;
       }, EXIT_DURATION_MS);
     }
   }, [isOpen]);
