@@ -3,6 +3,7 @@
 **Created:** May 21, 2026  
 **Status:** PLANNING  
 **Domain:** flightpath.dev (purchased, hosted on Netlify)
+**Launch dependency:** business email, support inboxes, vendor account ownership, and publisher identity are tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
 
 ---
 
@@ -192,6 +193,7 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 
 ### Pre-Launch
 
+- [ ] Complete Phase 0 business email and account ownership setup in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)
 - [ ] Create `landing/` Astro project in repo root
 - [ ] Configure `netlify.toml` for dual build + `/docs/` path merge
 - [ ] Set `base: '/docs/'` in `docs/.vitepress/config.mts`
@@ -200,6 +202,7 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - [ ] Add harness icon grid (reuse from `src/ui/icons/`)
 - [ ] Write pricing page (Free vs Pro columns + FAQ)
 - [ ] Wire pricing-page checkout to Lemon Squeezy
+- [ ] Publish `support@flightpath.dev` as the customer support path on the site, docs, README, and marketplace listing
 - [ ] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); details in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
 - [ ] Add `docs/pro/index.md` (activation instructions)
 - [ ] Add `docs/.vitepress/config.mts` logo + social links
@@ -219,6 +222,7 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 ## Related Backlog Items
 
 - [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) — Pro licensing model, `LicenseService`, tier gating (split out of this plan)
+- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — top-level launch sequence, business email, account ownership, legal, and support readiness
 - [`RELEASE_PLAN.md`](RELEASE_PLAN.md) — VS Code Marketplace release prerequisites
 - [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md) — Usage telemetry for the extension
 - [`ROADMAP.md`](ROADMAP.md) — Long-term feature roadmap

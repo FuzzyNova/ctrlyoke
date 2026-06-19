@@ -4,6 +4,7 @@
 **Status:** PLANNING
 **Roadmap item:** 0.B (launch blocker) / 4.2 (Pro tier)
 **Split from:** [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) Phase 5 (Pro Licensing) — moved here so the long-term model is decided on its own merits.
+**Launch dependency:** create the `flightpath.dev` business email/support identity and vendor account ownership first; tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
 
 ---
 
@@ -290,6 +291,7 @@ Nothing in Phase 1 hardcodes "key" assumptions outside `activateWithKey()` / `im
 
 ## Implementation Order (Phase 1)
 
+0. Complete Phase 0 business email and account ownership setup in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): `support@flightpath.dev`, vendor owner emails, GitHub/publisher identity, and DNS/email authentication.
 1. `LicenseService` interface + `Entitlement` type + `PRO_FEATURES` constants (`DashboardConstants.ts`).
 2. **Keygen** account: product, perpetual-Pro **Policy** (Ed25519, encrypted files, 3-machine limit); copy the **account public key** into the extension build config.
 3. **Lemon Squeezy** product **FlightPath Pro** (perpetual, $59); webhook → Netlify; HMAC secret in Netlify env.
@@ -347,6 +349,7 @@ Nothing in Phase 1 hardcodes "key" assumptions outside `activateWithKey()` / `im
 ## Related Documents
 
 - [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) — website, pricing page, LS checkout, Netlify deploy (hosts the webhook function)
+- [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) — top-level launch sequence, business email, vendor ownership, legal, and support readiness
 - [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md) — docs site (`docs/pro/index.md`)
 - [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md) — usage data to tune tiers/pricing post-launch
 - [`ROADMAP.md`](ROADMAP.md) — items 0.B and 4.2

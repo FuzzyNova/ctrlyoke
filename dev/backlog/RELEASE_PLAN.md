@@ -1,584 +1,324 @@
 # FlightPath v0.1.0 Release Plan
 
-**Created:** March 11, 2026  
-**Status:** IN_PROGRESS  
-**Target:** VS Code Marketplace public release + npm CLI package
+**Created:** March 11, 2026
+**Updated:** June 19, 2026
+**Status:** READY_FOR_PUBLISH_PREP
+**Target:** VS Code Marketplace public release first; npm CLI package after the extension release path is settled.
 
 ---
 
-## Overview
+## Current State
 
-This document tracks every step required to ship FlightPath v0.1.0 to the VS Code Marketplace. Items are ordered by priority and grouped into phases. Complete all **Blockers** before publishing — the rest are strongly recommended but not strictly required.
+This plan was refreshed against the current repository state on June 19, 2026.
 
-For the strategic roadmap (post-release features), see [`ROADMAP.md`](ROADMAP.md).
+The original critical testing work is complete:
 
----
+- [x] Release package built: `flightpath-0.1.0.vsix` exists at repo root.
+- [x] Release package has been installed and used on macOS.
+- [x] Release package has been installed and used on Linux.
+- [x] Dashboard/webview works from the packaged VSIX on tested platforms.
+- [x] Platform-sensitive runtime areas have been exercised in real use: PTY execution, file paths, file watching, `.flightpath/` workspace state, prompt execution, and packaged webview assets.
 
-## Phase 1 — Critical Blockers (Must Fix Before Publishing)
+Codebase-backed release facts:
 
-These will either prevent publishing outright or break the extension for all users.
+- `package.json` version is `0.1.0`.
+- `package.json` publisher is currently `nhickster`.
+- `package.json` repository/homepage/bugs URLs still point to `https://github.com/nhickster/flightpath`.
+- `package.json` license is still `Elastic-2.0`.
+- `package.json` has current marketplace metadata: improved description, categories, keywords, and gallery banner.
+- `package.json` contributes both bins: `flightpath-mcp` and `flightpath`, but `.vscodeignore` intentionally excludes `out/cli.js` from the VSIX.
+- `.vscodeignore` is now allowlist-based and includes the extension bundle, MCP server, webview assets, schemas, templates, runtime scripts, `resvg.wasm`, and `node-pty`.
+- `CHANGELOG.md` has a populated `[0.1.0] - 2026-05-12` release entry.
+- `README.md` documents all seven harnesses: `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli`, and `copilot-chat`.
 
-### 1.1 Fix `.vscodeignore` — Webview Bundle Is Missing From VSIX
-
-**Priority: CRITICAL** | **Status: DONE** | **Effort: 30 minutes**
-
-The `.vscodeignore` excluded `out/**` but only whitelisted `out/extension.js`, `out/templates/**`, and `out/schemas/**`. The React dashboard webview bundle built to `out/ui/webview-react/` and the CLI hook scripts in `out/scripts/**` were missing, causing a blank dashboard for any published VSIX.
-
-**Decision: MCP server ships with the VS Code extension; CLI is a separate npm package.**
-
-- `out/mcp-server.js` — **whitelisted** (`!out/mcp-server.js`). The MCP server must be co-located with the extension so VS Code can launch it via the `flightpath-mcp` bin entry.
-- `out/cli.js` — **excluded** (stays out of VSIX). The `flightpath` CLI is published separately to npm (see Phase 7). Users install it independently via `npm install -g flightpath`.
-
-**Changes applied to `.vscodeignore`:**
-
-```
-# Whitelisted (added):
-!out/mcp-server.js
-!out/ui/**
-!out/scripts/**
-
-# Excluded junk (added):
-archive/**
-AGENTS.md
-CLAUDE.md
-CHORES.md
-schemas/**        # source schemas; compiled copies ship in out/schemas/**
-scripts/**        # root-level build scripts, not needed at runtime
-.prettierrc.json
-.prettierignore
-.flightpath/**
-```
-
-> `.github/**` was already excluded in the original file.
+Related launch/business planning now lives in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md). Licensing and commercial terms are tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
 
 ---
 
-### 1.2 Populate the CHANGELOG
+## Release Decision
 
-**Priority: CRITICAL** | **Effort: 2–4 hours**
+Do not publish until the identity decision is made:
 
-The current `CHANGELOG.md` has only an `[Unreleased]` section and a "Planned for v0.1.0" stub. VS Code Marketplace requires a populated CHANGELOG for extensions to pass review. More importantly, users need to know what they're installing.
+1. Publish now as `nhickster.flightpath`, matching current `package.json`.
+2. Or move the product identity first, then publish under the long-term Fuzzy Nova / FlightPath identity.
 
-Use `ROADMAP.md` § "Current Version & Completed Milestones" as the source of truth. The CHANGELOG entry for v0.1.0 should cover:
+Given the new business setup plan, the recommended path is:
 
-- Multi-harness execution (Copilot CLI, Claude Code, Codex, OpenCode, Copilot Chat)
-- Parallel workflow execution with pause/resume/cancel
-- React dashboard with CodeMirror 6 editor
-- End conditions with retry logic
-- Dynamic queue extension via MCP tools
-- Agent and skills injection
-- IntelliSense completions for `@file`, `#file:`, `#sym:`
-- Output history with run selector
-- Workflow templates (blank, simple-feature, fix-tests, full-feature)
-- Multi-format workflow files (.flightpath.yaml/.json/.prompt.md)
-- Status bar integration
+- Create the `flightpath.dev` email/support identity first.
+- Move or confirm the canonical GitHub home (`fuzzynova/flightpath` if that is the long-term plan).
+- Decide the VS Code Marketplace publisher before the first public publish.
+- Update `package.json`, README, marketplace links, and support links once, then publish.
+
+This avoids launching under `nhickster.flightpath` and immediately needing to migrate customer-facing URLs and publisher identity.
 
 ---
 
-### 1.3 Verify Production Build End-to-End
+## Phase 1 - Completed Release Readiness
 
-**Priority: CRITICAL** | **Effort: 1–2 hours**
+### 1.1 Production Build and Manual Platform Testing
 
-Run `npm run package` and install the resulting `.vsix` file locally via **Extensions: Install from VSIX**. Verify:
+**Status:** DONE
 
-- [ ] Dashboard panel loads (React webview renders, not blank)
-- [ ] Settings panel works
-- [ ] New Workflow from Template works
-- [ ] Run a simple `.prompt.md` file end-to-end in at least one harness
-- [ ] No `console.error` crashes visible in the extension host dev tools
-- [ ] Dev commands (DevMenu) are NOT visible in the command palette
-- [ ] `IS_DEV_MODE` is `false` (verify by checking that dev-only commands are absent)
+- [x] Built `flightpath-0.1.0.vsix`.
+- [x] Installed the VSIX locally.
+- [x] Used the packaged extension on macOS.
+- [x] Used the packaged extension on Linux.
+- [x] Verified dashboard loads from packaged assets.
+- [x] Verified normal workflow use from the packaged extension.
+
+### 1.2 CHANGELOG
+
+**Status:** DONE
+
+`CHANGELOG.md` now has a real `0.1.0` entry covering:
+
+- Seven harnesses
+- Parallel workflow execution
+- React dashboard with CodeMirror
+- End conditions and retries
+- MCP queue extension
+- Agents and skills
+- Prompt completions
+- Output history
+- Templates
+- CLI and MCP binaries
+- Session management, diff view, and stale-state recovery
+
+### 1.3 Marketplace Metadata
+
+**Status:** MOSTLY DONE
+
+Already present in `package.json`:
+
+- [x] Improved description
+- [x] Categories include `Other`, `Machine Learning`, and `Programming Languages`
+- [x] Keywords exist
+- [x] Gallery banner exists
+- [x] Icon exists at `images/icon.png`
+
+Still open:
+
+- [ ] Decide publisher: current `nhickster` vs. long-term business publisher.
+- [ ] Update repository/homepage/bugs URLs if moving to `fuzzynova/flightpath`.
+- [ ] Update support/contact URLs after `support@flightpath.dev` exists.
+
+### 1.4 VSIX Contents
+
+**Status:** DONE
+
+`.vscodeignore` now uses an allowlist. The VSIX should include runtime assets and exclude source/development files by default.
+
+Expected included runtime assets:
+
+- `package.json`, README, CHANGELOG, LICENSE, QUICK_START
+- `images/*` icons referenced by contributions
+- `out/extension.js`
+- `out/mcp-server.js`
+- `out/resvg.wasm`
+- `out/templates/**`
+- `out/schemas/**`
+- `out/scripts/*.js`
+- `out/server/standalone-shim.js`
+- `out/ui/webview-scripts/*.js`
+- `out/ui/webview-react/**` runtime assets
+- `node_modules/node-pty/**`
+- `node_modules/node-addon-api/**`
+
+Expected excluded runtime asset:
+
+- `out/cli.js` - the standalone npm CLI path, not bundled in the VS Code extension package.
 
 ---
 
-### 1.4 macOS Testing
+## Phase 2 - Remaining Pre-Publish Blockers
 
-**Priority: CRITICAL** | **Effort: 2–4 hours**
+### 2.1 Publisher and Identity
 
-FlightPath has only been developed and tested on Linux/WSL. macOS is the primary platform for VS Code users and must be verified before Marketplace publication. macOS-specific risks:
+**Status:** OPEN
 
-- **`node-pty` native binaries** — prebuilt binaries differ per platform/architecture (x64 vs arm64). Must verify PTY-based terminal works on both Intel and Apple Silicon.
-- **CLI tool paths** — Homebrew installs to `/opt/homebrew/bin` (Apple Silicon) or `/usr/local/bin` (Intel). `PATH` may not include these in the extension host process. Test that `gh copilot`, `claude`, `codex`, etc. are discovered correctly.
-- **File path handling** — macOS is case-insensitive but case-preserving. Test that workspace-relative paths, `.flightpath/` resolution, and temp file creation all work correctly.
-- **PTY behavior** — Terminal resize, ANSI escape handling, and process spawning behave differently on macOS. Verify interactive terminal display and headless output capture.
-- **File watching** — `chokidar` behaves differently on macOS (uses `FSEvents` instead of `inotify`). Verify log file monitoring and workflow file change detection.
-- **Permissions** — macOS may prompt for folder access permissions. Test on a clean user account without pre-granted permissions.
+- [ ] Complete Phase 0 of [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): business email, support inbox, vendor ownership, and publisher identity.
+- [ ] Decide whether the first Marketplace publisher remains `nhickster` or moves to a Fuzzy Nova publisher.
+- [ ] If moving, update `package.json#publisher` before publishing.
+- [ ] If moving the repo, update:
+  - [ ] `package.json#repository.url`
+  - [ ] `package.json#homepage`
+  - [ ] `package.json#bugs.url`
+  - [ ] README links
+  - [ ] Marketplace listing/support copy
 
-**Test checklist (macOS):**
+### 2.2 README Requirements Mismatch
 
-- [ ] Extension installs and activates without errors
-- [ ] Dashboard panel loads correctly
-- [ ] Interactive terminal renders (PTY works on target architecture)
-- [ ] Run a workflow end-to-end in `copilot-cli` harness (interactive mode)
-- [ ] Run a workflow end-to-end in `claude-cli` harness (interactive mode)
-- [ ] Headless mode produces output and exits cleanly
-- [ ] Log file monitoring detects AI completions (file watch works)
-- [ ] Temp prompt files are created and cleaned up correctly
-- [ ] `.flightpath/` directory is created in workspace root
-- [ ] End condition scripts execute successfully
+**Status:** OPEN
 
-**Test on both architectures if possible:**
+`README.md` currently says VS Code `1.85.0 or higher`, while `package.json#engines.vscode` requires `^1.104.0`.
 
-- [ ] Apple Silicon (arm64) — M1/M2/M3 Mac
-- [ ] Intel (x64) — or verify Rosetta compatibility
+- [ ] Decide the real minimum VS Code version.
+- [ ] Update README or `package.json` so they match.
+- [ ] If lowering the engine range, verify APIs used by MCP server definition providers, language model tools, webviews, and chat integration are available in that target version.
 
----
+Recommended for v0.1.0: keep `^1.104.0` unless there is a tested reason to lower it.
 
-## Phase 2 — Publisher & Marketplace Setup
+### 2.3 License and Commercial Terms
 
-Steps required to get the publisher account and tooling configured for the first `vsce publish`.
+**Status:** OPEN
 
-### 2.1 Create / Verify Azure DevOps Publisher Account
+Current state:
 
-**Effort: 30 minutes (if not already done)**
+- `package.json#license` is `Elastic-2.0`.
+- Root `LICENSE` exists.
+- The Pro plan says this is temporary and should become a custom commercial EULA before commercial launch.
 
-- Go to https://marketplace.visualstudio.com/manage
-- Sign in with the Microsoft account linked to publisher ID `nhickster` (already set in `package.json`)
-- If the publisher doesn't exist yet: **New Publisher** → name: `nhickster`
-- Verify the publisher name is available — it must match `package.json#publisher` exactly
+Before a commercial/pro launch:
 
-### 2.2 Generate a Personal Access Token (PAT)
+- [ ] Complete legal review from [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
+- [ ] Replace `LICENSE` / add `LICENSE.md` if custom terms are adopted.
+- [ ] Update `package.json#license` to `SEE LICENSE IN LICENSE.md` if the license becomes custom.
 
-**Effort: 15 minutes**
+For a free pre-Pro Marketplace launch, keeping `Elastic-2.0` may be acceptable, but the decision should be explicit.
 
-- Azure DevOps → User Settings → Personal Access Tokens
-- Organization: **All accessible organizations**
-- Scopes: **Marketplace → Manage** (full access)
-- Store the token securely (you'll use it once during `vsce login`)
+### 2.4 Final Package Inspection
 
-### 2.3 Install `@vscode/vsce` and Login
+**Status:** OPEN
+
+Run immediately before publishing:
 
 ```bash
-npm install -g @vscode/vsce
-vsce login nhickster
-# paste PAT when prompted
+npm run package
+npx vsce ls
 ```
 
-### 2.4 Verify the VSIX Passes `vsce ls` Checks
+Confirm:
 
-```bash
-vsce ls           # shows files that will be included in the VSIX
-vsce package      # builds the .vsix
-```
-
-Review the `vsce ls` output and confirm:
-
-- `archive/` files are NOT listed ✅ (fixed in 1.1)
-- `out/ui/webview-react/` files ARE listed ✅ (fixed in 1.1)
-- `out/scripts/` files ARE listed ✅ (fixed in 1.1)
-- `out/mcp-server.js` IS listed ✅ (fixed in 1.1 — MCP ships with extension)
-- `out/cli.js` is NOT listed ✅ (CLI is a separate npm package — see Phase 7)
-- `src/` files are NOT listed (already excluded)
-- Sensitive files (`.env`, `AGENTS.md`, `CLAUDE.md`, `CHORES.md`) are NOT listed ✅ (fixed in 1.1)
+- [ ] `out/ui/webview-react/` assets are included.
+- [ ] `out/mcp-server.js` is included.
+- [ ] `out/cli.js` is not included.
+- [ ] `node_modules/node-pty/` is included.
+- [ ] `.flightpath/`, `.agents/`, local logs, prompts, test logs, and dev-only files are not included.
+- [ ] The generated VSIX version is `0.1.0`.
 
 ---
 
-## Phase 3 — Content & Documentation Polish
+## Phase 3 - Marketplace Publish
 
-Not strict blockers, but expected by marketplace reviewers and important for first impressions.
+### 3.1 Marketplace Account
 
-### 3.1 README Review
+- [ ] Create or verify the Marketplace publisher matching `package.json#publisher`.
+- [ ] Generate an Azure DevOps PAT with Marketplace Manage scope.
+- [ ] Login:
 
-**Effort: 1–2 hours**
+```bash
+npx vsce login <publisher>
+```
 
-The README is in good shape but needs a pass before public release:
+### 3.2 Publish
 
-- [ ] Verify all doc links (`./docs/QUEUE_APPEND_FEATURE.md`, `./docs/SESSION_MANAGEMENT.md`, `./docs/ADDING_NEW_CLI_HARNESS.md`) exist
-- [ ] Add OpenCode CLI (`opencode-cli`) to the harnesses table (it's in settings but missing from the README table)
-- [ ] Verify quick-start instructions work end-to-end with the current CLI tool versions
-- [ ] Add a **Screenshots** section with at least one screenshot of the dashboard in action — this significantly increases Marketplace click-through rate
-- [ ] Consider adding a **Known Issues** or **Limitations** section for the issues documented in ROADMAP.md (e.g., Chat mode model switch fragility, Codex headless detection)
+```bash
+npm run package
+npx vsce publish
+```
 
-### 3.2 Marketplace Listing Metadata (`package.json`)
+If publishing from the already-built VSIX instead:
 
-**Effort: 30 minutes**
+```bash
+npx vsce publish --packagePath flightpath-0.1.0.vsix
+```
 
-- [ ] `"description"` is currently `"Automate GitHub Copilot with structured prompt workflows"` — this undersells it. Suggested: `"Automate AI coding assistants (Copilot, Claude, Codex) through structured YAML/JSON prompt workflows with sequential execution, retry logic, and live dashboard."`
-- [ ] `"categories"` is `["Other", "Machine Learning"]` — consider adding `"Programming Languages"` (for the YAML/JSON IntelliSense completions) and `"Linters"` (for end condition scripts)
-- [ ] `"keywords"` field is missing entirely. Add: `["AI", "automation", "copilot", "claude", "codex", "workflow", "prompt", "agent", "LLM"]`
-- [ ] `"galleryBanner"` field is missing. Add a banner color/theme that matches the icon:
-  ```json
-  "galleryBanner": {
-    "color": "#1e1e2e",
-    "theme": "dark"
-  }
-  ```
-- [ ] Verify `"homepage"` URL (`https://github.com/nhickster/flightpath`) is a public repo
+### 3.3 Post-Publish Verification
 
-### 3.3 Screenshots / Demo GIF
-
-**Effort: 1–2 hours**
-
-The Marketplace listing will show a blank preview if no screenshots are included. At minimum:
-
-- Capture a screenshot of the FlightPath dashboard with a workflow running
-- Add it to `images/` and reference in README: `![FlightPath Dashboard](images/screenshot-dashboard.png)`
-- Optional: A short GIF showing a multi-step workflow executing end-to-end
-
-### 3.4 Verify GitHub Repository Is Public
-
-- [ ] Confirm `https://github.com/nhickster/flightpath` is publicly accessible (the `"repository"` field in `package.json` points there)
-- [ ] Ensure `LICENSE` file is present at root ✅ (already exists)
-- [ ] Push all local commits before publishing
+- [ ] Visit the Marketplace listing.
+- [ ] Confirm README renders correctly.
+- [ ] Confirm CHANGELOG tab shows `0.1.0`.
+- [ ] Install from the Marketplace into a clean VS Code profile.
+- [ ] Run one simple workflow from the Marketplace install.
+- [ ] Confirm dev-only command `FlightPath: Developer Tools` is hidden unless `flightpath.devMode` is set.
 
 ---
 
-## Phase 4 — Code Cleanup (Recommended Pre-Release)
+## Phase 4 - Documentation and Listing Polish
 
-Issues found during the pre-release audit. None are blockers, but they reduce quality and can confuse contributors. Group by effort.
+These are not hard blockers now that package testing is complete, but they are high-value before broad announcement.
 
-### 4.1 Remove Dead File: `CliTerminalFormatter.ts` in `harness/shared/`
-
-**Effort: 5 minutes** | **File: `src/flightpath/harness/shared/CliTerminalFormatter.ts`**
-
-This file is a dead duplicate of `src/cli/CliTerminalFormatter.ts`. It is never imported anywhere. Delete it.
-
-### 4.2 Remove/Relocate `chat-log-investigation.ts`
-
-**Effort: 10 minutes** | **File: `src/test/chat-log-investigation.ts`**
-
-A 296-line investigation script with 20+ `console.log` calls that lives in `src/test/` but is not a Mocha test. It is only reachable via a dev-only import in `DevCommands.ts`. Move it to `src/dev/` or delete it.
-
-### 4.3 Fix `console.error`/`console.warn` Bypassing Log System
-
-**Effort: 1 hour** | **Files listed below**
-
-These fire in the VS Code extension host at runtime, bypassing the FlightPath Output channel and log level settings:
-
-| File                                                   | Lines                   | Issue                                                                         |
-| ------------------------------------------------------ | ----------------------- | ----------------------------------------------------------------------------- |
-| `src/flightpath/harness/shared/BaseLogParser.ts`       | 297, 375, 379, 384, 469 | 5× `console.error` — replace with `Log.error()`                               |
-| `src/flightpath/harness/CliIntegration.ts`             | 477–481                 | `console.log` progress print — guard with `isCli()` check or use `Log.info()` |
-| `src/flightpath/PromptFileParser.ts`                   | 49, 109, 148            | 3× `console.error` fallbacks — replace with `Log.error()`                     |
-| `src/utils/FileLockUtils.ts`                           | 64                      | `console.warn` in `releaseLock` — replace with `Log.warn()`                   |
-| `src/flightpath/harness/copilot/CopilotCliProvider.ts` | 246                     | Duplicate `console.warn` (same info already in `Log.warn`) — remove           |
-| `src/flightpath/harness/claude/ClaudeCliProvider.ts`   | 230                     | Same as above                                                                 |
-| `src/flightpath/harness/codex/CodexCliProvider.ts`     | 248                     | Same as above                                                                 |
-
-### 4.4 Fix Webview `console.log` Calls in `useVsCodeApi.ts`
-
-**Effort: 15 minutes** | **File: `src/ui/webview-react/hooks/useVsCodeApi.ts`**
-
-Lines 21 and 37 log to the browser console on every render and effect run. Users who inspect the webview will see noise. Remove or gate behind a debug flag.
-
-### 4.5 Fix Stale Model Lists in `DashboardConstants.ts` and `settingsStore.ts`
-
-**Effort: 1–2 hours** | **Files: `src/types/DashboardConstants.ts`, `src/ui/webview-react/store/settingsStore.ts`**
-
-Both files declare local `CLAUDE_CLI_MODELS` and `CODEX_CLI_MODELS` constants that are out of sync with `ModelConstants.ts` (missing 1–2 entries each). Users see an incomplete model list in the dashboard dropdown until the dynamic registry loads.
-
-Fix: import from `ModelConstants.ts` with a mapping to `{value, label}` shape, or at minimum sync the hardcoded lists.
-
-### 4.6 Remove Dead Exports from `ModelConstants.ts`
-
-**Effort: 15 minutes**
-
-- `CLAUDE_CLI_MODEL_ALIASES` (line 112): `= CLAUDE_CLI_MODELS` with no importers — delete
-- `CLAUDE_CLI_DEFAULT_MODEL` (line 117): zero importers — delete
-- `CODEX_CLI_DEFAULT_MODEL` (line 150): zero importers — delete
-
-### 4.7 Collapse Duplicate Function Pair in `ModelRegistry.ts`
-
-**Effort: 15 minutes**
-
-`getOpenCodeModelIds()` and `getOpenCodeModelIdsSync()` (lines 388–401) are byte-for-byte identical. Remove `getOpenCodeModelIds` (the non-Sync variant) and update the single call site to use `getOpenCodeModelIdsSync`. Repeat for `getCliSupportedModelIds` / `getCliSupportedModelIdsSync` (lines 340/348).
-
-### 4.8 Update Stale `FlightPathManager` References
-
-**Effort: 30 minutes**
-
-`FlightPathManager.ts` no longer exists — the class was renamed to `WorkflowOrchestrator`. Approximately 20 JSDoc/comment references across `PromptQueue.ts`, `WorkflowExecutor.ts`, `EndConditionHandler.ts`, etc. still say `FlightPathManager`. Do a project-wide find-and-replace in comments.
-
-### 4.9 Clean Up `DashboardConstants.ts` Unimplemented Message Types
-
-**Effort: 30 minutes** | **File: `src/types/DashboardConstants.ts`**
-
-- `PROMPTS_APPENDED` (line 27): Marked `// Reserved: defined for future use (no handler exists yet)`. Either implement the handler or remove the constant and the send call.
-- `DYNAMIC_QUEUE_ENABLED` / `DYNAMIC_QUEUE_DISABLED` (lines 34–35): Sent by `FlightPathWebviewProvider.ts` (lines 545–546) but have no handlers in the webview's `useMessageHandler.ts`. Messages are sent and silently dropped. Either add handlers or remove.
-
-### 4.10 Delete or Archive the `archive/` Directory
-
-**Effort: 5 minutes**
-
-`archive/` contains the pre-React webview implementation (~22 vanilla JS/SCSS files, two `.ts.old` files). Nothing in the active codebase imports from it. For a clean release, delete it from the working tree (it will remain in git history).
-
-This also fixes `.vscodeignore` concern (the directory currently ships in VSIX until the ignore rule is added in 1.1).
+- [ ] Add at least one dashboard screenshot or GIF to `images/` and README.
+- [ ] Add `flightpath.dev` links after the landing page exists.
+- [ ] Add `support@flightpath.dev` after the inbox exists.
+- [ ] Add a short Known Issues section if carrying known harness-specific rough edges into v0.1.0.
+- [ ] Confirm README install/setup instructions match the published Marketplace path.
 
 ---
 
-## Phase 5 — Publishing
+## Phase 5 - GitHub Release
 
-### 5.1 Final Pre-Publish Checklist
-
-Run through this checklist immediately before `vsce publish`:
-
-- [ ] `npm run package` completes without errors
-- [ ] `vsce ls` output reviewed — correct files included/excluded
-- [ ] VSIX installed locally and dashboard tested (Phase 1.3)
-- [ ] Version in `package.json` is `0.1.0`
-- [ ] CHANGELOG has a proper `[0.1.0] - YYYY-MM-DD` entry
-- [ ] GitHub repo is public and up to date
-- [ ] `npm test` passes (or known failures documented)
-- [ ] `npm run lint` passes with no errors
-
-### 5.2 Publish
-
-```bash
-vsce login nhickster
-vsce publish
-```
-
-Or publish with a specific version bump:
-
-```bash
-vsce publish patch    # 0.1.0 → 0.1.1
-vsce publish minor    # 0.1.0 → 0.2.0
-```
-
-### 5.3 Verify the Marketplace Listing
-
-After publishing:
-
-- [ ] Visit `https://marketplace.visualstudio.com/items?itemName=nhickster.flightpath`
-- [ ] Verify the README renders correctly (images load, links work)
-- [ ] Verify the CHANGELOG tab shows the v0.1.0 entry
-- [ ] Install from the marketplace into a clean VS Code instance and test
-
-### 5.4 (Optional) Submit for Featured Listing
-
-- Go to `https://github.com/microsoft/vscode-discussions` and open an issue requesting a featured or highlighted listing
-- This is informal but can get the extension in the "New & Noteworthy" section
+- [ ] Tag `v0.1.0`.
+- [ ] Create GitHub Release from the `CHANGELOG.md` entry.
+- [ ] Attach the final `flightpath-0.1.0.vsix`.
+- [ ] Make sure the GitHub release URL matches the canonical repository decision.
 
 ---
 
-## Phase 6 — Post-Release Infrastructure (First Week)
+## Phase 6 - npm CLI Package
 
-### 6.1 GitHub Releases
+The codebase currently has a CLI entrypoint:
 
-Create a GitHub Release tagged `v0.1.0`:
+- `package.json#bin.flightpath` -> `./out/cli.js`
+- `package.json#bin.flightpath-mcp` -> `./out/mcp-server.js`
+- `.vscodeignore` excludes `out/cli.js` from the VSIX.
 
-- Attach the `.vsix` file from `vsce package`
-- Copy the CHANGELOG entry as the release notes
+The npm CLI package should be treated as a separate release decision, not a blocker for the VS Code Marketplace release.
 
-### 6.2 Open VSX Registry (Optional, Recommended)
+Open decisions:
 
-Publish to Open VSX for users on VSCodium or other VS Code forks:
-
-```bash
-npm install -g ovsx
-ovsx publish flightpath-0.1.0.vsix -p <OVSX_PAT>
-```
-
-Get a PAT at https://open-vsx.org/
-
-### 6.3 CI/CD for Future Releases
-
-Wire up GitHub Actions to automate future publishes:
-
-```yaml
-# .github/workflows/release.yml
-on:
-  push:
-    tags: ["v*"]
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: npm ci
-      - run: npm run package
-      - uses: HaaLeo/publish-vscode-extension@v2
-        with:
-          pat: ${{ secrets.VSCE_PAT }}
-          registryUrl: https://marketplace.visualstudio.com
-```
-
----
-
-## Phase 7 — Publish `flightpath` CLI to npm
-
-The `flightpath` CLI (`out/cli.js`) is excluded from the VS Code extension VSIX. It is a standalone tool that users install globally via npm:
+- [ ] Decide single root package vs. dedicated CLI package.
+- [ ] If using the root package for npm, add a `files` allowlist so npm does not publish the full extension repo unintentionally.
+- [ ] If using a dedicated CLI package, create a separate package folder and publish pipeline.
+- [ ] Confirm the `flightpath` npm package name is available or choose a scoped package.
+- [ ] Test with:
 
 ```bash
-npm install -g flightpath
-```
-
-This phase covers preparing and publishing the CLI as its own npm package.
-
-### 7.1 Decide: Separate Package or Unified Package?
-
-**Two options:**
-
-**Option A — Single `package.json` (current structure):**  
-The CLI and extension share one `package.json`. `npm publish` would publish the entire repo as both the VS Code extension binary and the npm CLI. This is unusual and can confuse npm users who expect a lean CLI install (not 80 MB of extension + node_modules).
-
-**Option B — Dedicated `cli/` package (recommended):**  
-Extract the CLI into `packages/cli/package.json` with its own name (`flightpath`), `bin`, `main`, and `dependencies`. The extension stays at the root. This cleanly separates the two distribution channels.
-
-> **Decision needed:** Choose Option A or B before proceeding.
-
-### 7.2 Prepare the CLI Package
-
-If using Option A (simplest for v0.1.0):
-
-- Verify `package.json` `"name"` and `"version"` are correct for npm publishing
-- Add `"files"` field to `package.json` to limit what npm publishes (npm uses `files` the same way VS Code uses `.vscodeignore`):
-  ```json
-  "files": [
-    "out/cli.js",
-    "out/cli.js.map",
-    "README.md",
-    "LICENSE",
-    "CHANGELOG.md"
-  ]
-  ```
-- Confirm `"bin": { "flightpath": "./out/cli.js" }` is correct (it already exists in `package.json`)
-- Add `"preferGlobal": true` (cosmetic hint, not enforced)
-- The `"main"` field points to `./out/extension.js` (VS Code extension entry). For npm CLI-only use, this is harmless but can be confusing — document this in a note
-
-If using Option B (separate package):
-
-- Create `packages/cli/package.json` with minimal fields
-- Copy/symlink `out/cli.js` into the CLI package output on build
-- Update `scripts` in root `package.json` to build and publish the CLI package separately
-
-### 7.3 Create a npm Account / Verify Access
-
-- Ensure you have an npm account at https://www.npmjs.com
-- Check if `flightpath` is available as a package name: `npm search flightpath`
-- If the name is taken, consider `@nhickster/flightpath` (scoped) or `flightpath-cli`
-- Log in: `npm login`
-
-### 7.4 Test the CLI Package Locally
-
-```bash
-# Build the CLI
 npm run build:prod
-
-# Pack and inspect what would be published
 npm pack --dry-run
-
-# Install locally to test
 npm pack
 npm install -g ./flightpath-0.1.0.tgz
 flightpath --help
 ```
 
-Verify the CLI works for basic commands after a fresh global install (no extension or repo context).
+Recommended: defer npm publishing until after the extension Marketplace release unless a standalone CLI launch is required for v0.1.0.
 
-### 7.5 Publish to npm
+---
 
-```bash
-npm publish --access public
-```
+## Phase 7 - Optional Registries and Automation
 
-Or for a scoped package:
-
-```bash
-npm publish --access public  # required for scoped packages
-```
-
-### 7.6 Verify the npm Listing
-
-- Visit `https://www.npmjs.com/package/flightpath` (or scoped URL)
-- Confirm `npm install -g flightpath` works in a clean environment
-- Run `flightpath --help` and verify the version matches `0.1.0`
-
-### 7.7 Update README with npm Install Instructions
-
-Add to the README (CLI section):
-
-````md
-## CLI Installation
-
-The FlightPath CLI is available as a standalone npm package:
-
-```bash
-npm install -g flightpath
-```
-````
-
-The CLI is separate from the VS Code extension. Install the extension from the VS Code Marketplace for the dashboard UI and workflow orchestration.
-
-````
-
-### 7.8 CI/CD for CLI Releases (Optional)
-
-Wire up GitHub Actions to publish the CLI to npm on tag:
-
-```yaml
-# .github/workflows/npm-release.yml
-on:
-  push:
-    tags: ["v*"]
-jobs:
-  npm-publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-      - run: npm ci
-      - run: npm run build:prod
-      - run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-````
+- [ ] Publish to Open VSX for VSCodium and other compatible editors.
+- [ ] Add GitHub Actions for tagged VS Code releases.
+- [ ] Add GitHub Actions for npm CLI releases after the CLI packaging decision is made.
 
 ---
 
 ## Summary Checklist
 
-| #       | Item                                                            | Phase | Effort | Blocker? | Status  |
-| ------- | --------------------------------------------------------------- | ----- | ------ | -------- | ------- |
-| 1.1     | Fix `.vscodeignore` (webview bundle missing)                    | 1     | 30 min | **YES**  | ✅ DONE |
-| 1.2     | Populate CHANGELOG for v0.1.0                                   | 1     | 2–4 hr | **YES**  |         |
-| 1.3     | Verify production build end-to-end (Linux/WSL)                  | 1     | 1–2 hr | **YES**  |         |
-| 1.4     | macOS testing (PTY, paths, file watch, both architectures)      | 1     | 2–4 hr | **YES**  |         |
-| 2.1     | Create/verify Azure DevOps publisher                            | 2     | 30 min | **YES**  |         |
-| 2.2     | Generate PAT                                                    | 2     | 15 min | **YES**  |         |
-| 2.3     | Install vsce + login                                            | 2     | 15 min | **YES**  |         |
-| 2.4     | Verify `vsce ls` output                                         | 2     | 15 min | **YES**  |         |
-| 3.1     | README review and polish                                        | 3     | 1–2 hr | No       |         |
-| 3.2     | Marketplace metadata in package.json                            | 3     | 30 min | No       |         |
-| 3.3     | Add screenshots/GIF                                             | 3     | 1–2 hr | No       |         |
-| 3.4     | Verify GitHub repo is public                                    | 3     | 5 min  | No       |         |
-| 4.1     | Delete dead `CliTerminalFormatter.ts`                           | 4     | 5 min  | No       | ✅ DONE |
-| 4.2     | Relocate `chat-log-investigation.ts`                            | 4     | 10 min | No       | ✅ DONE |
-| 4.3     | Fix `console.*` bypassing log system                            | 4     | 1 hr   | No       | ✅ DONE |
-| 4.4     | Fix webview `console.log` in `useVsCodeApi.ts`                  | 4     | 15 min | No       | ✅ DONE |
-| 4.5     | Sync stale model lists                                          | 4     | 1–2 hr | No       | ✅ DONE |
-| 4.6     | Remove dead exports from `ModelConstants.ts`                    | 4     | 15 min | No       | ✅ DONE |
-| 4.7     | Collapse duplicate function pairs in `ModelRegistry.ts`         | 4     | 15 min | No       | ✅ DONE |
-| 4.8     | Update stale `FlightPathManager` references                     | 4     | 30 min | No       | ✅ DONE |
-| 4.9     | Clean up unimplemented message types in `DashboardConstants.ts` | 4     | 30 min | No       | ✅ DONE |
-| 4.10    | Delete `archive/` directory                                     | 4     | 5 min  | No       | ✅ DONE |
-| 5.1–5.4 | Publish extension + verify + optional featured listing          | 5     | 1 hr   | —        |         |
-| 6.1–6.3 | Post-release: GitHub Release, Open VSX, CI/CD                   | 6     | 2–3 hr | —        |         |
-| 7.1     | Decide single vs. separate CLI package structure                | 7     | 30 min | **YES**  |         |
-| 7.2     | Prepare CLI package (`files` field or separate package)         | 7     | 1–2 hr | **YES**  |         |
-| 7.3     | Verify npm account + package name availability                  | 7     | 15 min | **YES**  |         |
-| 7.4     | Test CLI package locally with `npm pack`                        | 7     | 30 min | **YES**  |         |
-| 7.5     | Publish CLI to npm                                              | 7     | 15 min | **YES**  |         |
-| 7.6     | Verify npm listing and global install                           | 7     | 15 min | **YES**  |         |
-| 7.7     | Update README with npm install instructions                     | 7     | 15 min | No       |         |
-| 7.8     | CI/CD for CLI npm releases (optional)                           | 7     | 1–2 hr | No       |         |
-
-**Estimated total for VS Code extension blockers only (Phases 1–2):** ~5–8 hours  
-**Estimated total including recommended polish and cleanup (Phases 1–4):** ~12–18 hours  
-**Estimated total for CLI npm publish (Phase 7, blockers only):** ~3–4 hours
+| Item | Status | Notes |
+| --- | --- | --- |
+| Populate `CHANGELOG.md` for `0.1.0` | DONE | Current changelog has a full entry |
+| Build release VSIX | DONE | `flightpath-0.1.0.vsix` exists |
+| Test package on Linux | DONE | User-reported complete |
+| Test package on macOS | DONE | User-reported complete |
+| Fix VSIX allowlist / webview assets | DONE | `.vscodeignore` is allowlist-based |
+| Marketplace metadata | MOSTLY DONE | Publisher/repo identity still open |
+| README harness coverage | DONE | All seven harnesses listed |
+| README/package VS Code version consistency | OPEN | README says 1.85; package requires 1.104 |
+| Business email/support identity | OPEN | Tracked in `RELEASE_CHECKLIST.md` |
+| Publisher identity | OPEN | `nhickster` vs. business publisher |
+| License/commercial terms | OPEN | `Elastic-2.0` vs. custom EULA |
+| Final `vsce ls` package inspection | OPEN | Run immediately before publish |
+| Marketplace publish | OPEN | Blocked on identity decision |
+| npm CLI publish | DEFERRED | Separate packaging decision |
 
 ---
 
 ## Known Issues Accepted for v0.1.0
 
-These are documented bugs carried into the release with no fix planned for v0.1.0 (see `ROADMAP.md` § "Known Issues"):
+Carry these only if they are still accurate at final publish time:
 
-- **Chat mode model switch** (`workbench.action.chat.changeModel`) can fail silently — shows warning and continues with current model
-- **Codex headless completion detection** is fragile — `{"type":"turn.completed"}` JSONL parsing and notify hook fallback need hardening
-- **Webview `style-src 'unsafe-inline'`** — required by Tailwind CSS and CodeMirror, cannot be removed without library migration; accepted risk
-- **Webview message payload validation** — incoming messages from webview are not schema-validated; low priority given single-user local deployment model
+- Chat mode model switching can fail silently in VS Code and should warn rather than block execution.
+- Codex headless completion detection remains sensitive to upstream JSONL/event changes.
+- Webview CSP still allows inline styles for Tailwind/CodeMirror compatibility.
+- Webview message payloads are trusted local extension messages, not schema-validated external input.
