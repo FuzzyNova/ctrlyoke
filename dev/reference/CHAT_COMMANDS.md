@@ -1,10 +1,12 @@
 # Available Chat Commands
 
-**Generated:** 2026-06-13T20:12:53.353Z  
-**Total Commands:** 409
+**Generated:** 2026-06-19T18:39:48.634Z  
+**Total Commands:** 426
 
 ---
 
+- `agentSessions.filter.toggleExclude:copilot-cloud-agent.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExclude:copilotcli.agentsessionsviewerfiltersubmenu`
 - `agents.github.copilot.cli.deleteSessions`
 - `chat.installRecommendation.github.copilot-chat.cli`
 - `chat.installRecommendation.github.copilot-chat.cloud`
@@ -196,6 +198,7 @@
 - `workbench.action.chat.addDynamicVariable`
 - `workbench.action.chat.addToChatAction`
 - `workbench.action.chat.agentHost.otel.exportAgentTracesDB`
+- `workbench.action.chat.agentsHandoffTip.mute`
 - `workbench.action.chat.agentsHandoffTip.open`
 - `workbench.action.chat.applyCompareEdits`
 - `workbench.action.chat.applyInEditor`
@@ -297,8 +300,10 @@
 - `workbench.action.chat.openAgentDebugPanel`
 - `workbench.action.chat.openAgentDebugPanelForSession`
 - `workbench.action.chat.openAgentHostAutoApprovePicker`
+- `workbench.action.chat.openAgentHostFolderPicker`
 - `workbench.action.chat.openAgentHostModePicker`
 - `workbench.action.chat.openAgentHostPermissionModePicker`
+- `workbench.action.chat.openAsk`
 - `workbench.action.chat.openCompareBlockInDiffEditor`
 - `workbench.action.chat.openCopilotCliStateFile`
 - `workbench.action.chat.openDelegationPicker`
@@ -323,7 +328,9 @@
 - `workbench.action.chat.openNewSessionSidebar.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionSidebar.copilotcli`
 - `workbench.action.chat.openPermissionPicker`
+- `workbench.action.chat.openPlan`
 - `workbench.action.chat.openQuotaExceededDialog`
+- `workbench.action.chat.openSenior Developer`
 - `workbench.action.chat.openSessionInAgentsWindow`
 - `workbench.action.chat.openSessionInEditorGroup`
 - `workbench.action.chat.openSessionInNewEditorGroup`
@@ -336,7 +343,17 @@
 - `workbench.action.chat.openWorkspacePicker`
 - `workbench.action.chat.openagent`
 - `workbench.action.chat.openask`
+- `workbench.action.chat.opencode-reviewer`
+- `workbench.action.chat.opencopilot-beast`
+- `workbench.action.chat.opencopilot-prompt`
+- `workbench.action.chat.opendeep-research`
 - `workbench.action.chat.openedit`
+- `workbench.action.chat.openflightpath-orchestrator`
+- `workbench.action.chat.opentest-agent`
+- `workbench.action.chat.opentest-agent-alpha`
+- `workbench.action.chat.opentest-agent-beta`
+- `workbench.action.chat.opentest-agent-user`
+- `workbench.action.chat.pickAgentSession`
 - `workbench.action.chat.picker.customagents`
 - `workbench.action.chat.picker.customagents.disabled`
 - `workbench.action.chat.previousCodeBlock`

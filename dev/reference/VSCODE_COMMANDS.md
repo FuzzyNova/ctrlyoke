@@ -1,16 +1,10 @@
 # All Available VS Code Commands
 
-**Generated:** 2026-06-13T20:13:04.940Z  
-**Total Commands:** 3924
+**Generated:** 2026-06-19T18:40:02.897Z  
+**Total Commands:** 3859
 
 ---
 
-- `CppReferencesView.focus`
-- `CppReferencesView.open`
-- `CppReferencesView.resetViewLocation`
-- `CppSshTargetsView.focus`
-- `CppSshTargetsView.open`
-- `CppSshTargetsView.resetViewLocation`
 - `PowerShellCommands.focus`
 - `PowerShellCommands.open`
 - `PowerShellCommands.resetViewLocation`
@@ -40,12 +34,30 @@
 - `agentSessionSection.collapseAll`
 - `agentSessionSection.markRead`
 - `agentSessionSection.unarchive`
+- `agentSessions.filter.resetExcludes.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.sortByCreated.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.sortByUpdated.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExclude:claude-code.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExclude:copilot-cloud-agent.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExclude:copilotcli.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExclude:local.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExclude:openai-codex.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExcludeArchived.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExcludeRead.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExcludeState:0.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExcludeState:1.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExcludeState:2.agentsessionsviewerfiltersubmenu`
+- `agentSessions.filter.toggleExcludeState:3.agentsessionsviewerfiltersubmenu`
 - `agentSessions.hideAgentSessionsSidebar`
 - `agentSessions.showAgentSessionsSidebar`
 - `agentSessions.toggleAgentSessionsSidebar`
 - `agentSessionsViewer.find`
 - `agentSessionsViewer.refresh`
 - `agents.github.copilot.cli.deleteSessions`
+- `agentsVoice.pushToTalk`
+- `agentsVoice.resetOnboarding`
+- `agentsVoice.showTranscripts`
+- `agentsVoice.toggleWindow`
 - `aiCustomization.generateDebugReport`
 - `aiCustomization.openManagementEditor`
 - `aiCustomization.openMarketplace`
@@ -172,7 +184,7 @@
 - `cancelLinkedEditingInput`
 - `cancelRenameInput`
 - `cancelSelection`
-- `changeEditorIndentation5`
+- `changeEditorIndentation3`
 - `chat.action.focus`
 - `chat.configureToolSets`
 - `chat.enableAdditionalUsage`
@@ -186,7 +198,6 @@
 - `chat.installRecommendation.github.copilot-chat.cli`
 - `chat.installRecommendation.github.copilot-chat.cloud`
 - `chat.installRecommendation.openai.chatgpt.codex`
-- `chat.internal.codeReview.run`
 - `chat.internal.explain`
 - `chat.internal.fix`
 - `chat.internal.review`
@@ -301,18 +312,6 @@
 - `closeReferenceSearch`
 - `closeReferenceSearchEditor`
 - `closeReplaceInFilesWidget`
-- `cmake.bookmarks.focus`
-- `cmake.bookmarks.open`
-- `cmake.bookmarks.resetViewLocation`
-- `cmake.outline.focus`
-- `cmake.outline.open`
-- `cmake.outline.resetViewLocation`
-- `cmake.pinnedCommands.focus`
-- `cmake.pinnedCommands.open`
-- `cmake.pinnedCommands.resetViewLocation`
-- `cmake.projectStatus.focus`
-- `cmake.projectStatus.open`
-- `cmake.projectStatus.resetViewLocation`
 - `codelens.showLensesInCurrentLine`
 - `codereferencing.showOutputPane2`
 - `collapseSectionCodeAction`
@@ -345,22 +344,6 @@
 - `copyActiveEditor`
 - `copyFilePath`
 - `copyRelativeFilePath`
-- `cortex-debug.examineMemory`
-- `cortex-debug.examineMemoryLegacy`
-- `cortex-debug.liveWatch.addExpr`
-- `cortex-debug.liveWatch.addToLiveWatch`
-- `cortex-debug.liveWatch.editExpr`
-- `cortex-debug.liveWatch.focus`
-- `cortex-debug.liveWatch.moveDown`
-- `cortex-debug.liveWatch.moveUp`
-- `cortex-debug.liveWatch.open`
-- `cortex-debug.liveWatch.removeExpr`
-- `cortex-debug.liveWatch.resetViewLocation`
-- `cortex-debug.pvtEnableDebug`
-- `cortex-debug.resetDevice`
-- `cortex-debug.toggleVariableHexFormat`
-- `cortex-debug.varHexModeTurnOff`
-- `cortex-debug.varHexModeTurnOn`
 - `createCursor`
 - `cspell-info.showHelloWorld`
 - `cspell.showActionsMenu`
@@ -1359,15 +1342,6 @@
 - `github.openPullRequest`
 - `github.publish`
 - `github.timeline.openOnGitHub`
-- `go.explorer.focus`
-- `go.explorer.open`
-- `go.explorer.resetViewLocation`
-- `go.package.outline.focus`
-- `go.package.outline.open`
-- `go.package.outline.resetViewLocation`
-- `go.test.profile.focus`
-- `go.test.profile.open`
-- `go.test.profile.resetViewLocation`
 - `goToNextReference`
 - `goToNextReferenceFromEmbeddedEditor`
 - `goToPreviousReference`
@@ -1548,30 +1522,6 @@
 - `markdown.showPreviewToSide`
 - `markdown.showSource`
 - `markdown.togglePreview`
-- `mcu-debug.debug-tracker-vscode.debugLevel`
-- `mcu-debug.debug-tracker-vscode.start`
-- `mcu-debug.memory-view.addMemoryView`
-- `mcu-debug.memory-view.hello`
-- `mcu-debug.memory-view.toggleMemoryView`
-- `mcu-debug.memory-view.uriTest`
-- `mcu-debug.peripheral-viewer.svd.copyValue`
-- `mcu-debug.peripheral-viewer.svd.focus`
-- `mcu-debug.peripheral-viewer.svd.forceRefresh`
-- `mcu-debug.peripheral-viewer.svd.open`
-- `mcu-debug.peripheral-viewer.svd.pin`
-- `mcu-debug.peripheral-viewer.svd.refreshAll`
-- `mcu-debug.peripheral-viewer.svd.resetViewLocation`
-- `mcu-debug.peripheral-viewer.svd.setFormat`
-- `mcu-debug.peripheral-viewer.svd.unpin`
-- `mcu-debug.peripheral-viewer.svd.updateNode`
-- `mcu-debug.rtos-views.helloWorld`
-- `mcu-debug.rtos-views.refresh`
-- `mcu-debug.rtos-views.toggleRTOSPanel`
-- `memory-view.memoryView.focus`
-- `memory-view.memoryView.open`
-- `memory-view.memoryView.removeView`
-- `memory-view.memoryView.resetViewLocation`
-- `memory-view.memoryView.toggleVisibility`
 - `menu.resetHiddenStates`
 - `merge-conflict.accept.all-both`
 - `merge-conflict.accept.all-current`
@@ -1820,34 +1770,6 @@
 - `planReviewFeedback.action.clearAll`
 - `planReviewFeedback.action.navigateNext`
 - `planReviewFeedback.action.navigatePrevious`
-- `platformio-debug.disassembly.focus`
-- `platformio-debug.disassembly.open`
-- `platformio-debug.disassembly.removeView`
-- `platformio-debug.disassembly.resetViewLocation`
-- `platformio-debug.disassembly.toggleVisibility`
-- `platformio-debug.memory.focus`
-- `platformio-debug.memory.open`
-- `platformio-debug.memory.removeView`
-- `platformio-debug.memory.resetViewLocation`
-- `platformio-debug.memory.toggleVisibility`
-- `platformio-debug.peripherals.focus`
-- `platformio-debug.peripherals.open`
-- `platformio-debug.peripherals.removeView`
-- `platformio-debug.peripherals.resetViewLocation`
-- `platformio-debug.peripherals.toggleVisibility`
-- `platformio-debug.registers.focus`
-- `platformio-debug.registers.open`
-- `platformio-debug.registers.removeView`
-- `platformio-debug.registers.resetViewLocation`
-- `platformio-debug.registers.toggleVisibility`
-- `platformio-ide.projectTasks.focus`
-- `platformio-ide.projectTasks.open`
-- `platformio-ide.projectTasks.resetViewLocation`
-- `platformio-ide.quickAccess.focus`
-- `platformio-ide.quickAccess.open`
-- `platformio-ide.quickAccess.removeView`
-- `platformio-ide.quickAccess.resetViewLocation`
-- `platformio-ide.quickAccess.toggleVisibility`
 - `prettier.createConfigFile`
 - `prettier.forceFormatDocument`
 - `prettier.openOutput`
@@ -2015,11 +1937,6 @@
 - `revealInExplorer`
 - `revealLine`
 - `revealReference`
-- `rtos-views.rtos.focus`
-- `rtos-views.rtos.open`
-- `rtos-views.rtos.removeView`
-- `rtos-views.rtos.resetViewLocation`
-- `rtos-views.rtos.toggleVisibility`
 - `runCommands`
 - `saveAll`
 - `scm.acceptInput`
@@ -2116,9 +2033,6 @@
 - `signals.sounds.help`
 - `simpleBrowser.api.open`
 - `simpleBrowser.show`
-- `stm32ForVSCodeCommands.focus`
-- `stm32ForVSCodeCommands.open`
-- `stm32ForVSCodeCommands.resetViewLocation`
 - `suggestWidgetCopy`
 - `tab`
 - `tailwindCSS.showOutput`
@@ -2130,6 +2044,7 @@
 - `targetsWsl.open`
 - `targetsWsl.resetViewLocation`
 - `terminal.focus`
+- `terminal.integrated.suggest.clearCachedGlobals`
 - `terminal.removeView`
 - `terminal.resetViewContainerLocation`
 - `terminal.resetViewLocation`
@@ -2213,8 +2128,12 @@
 - `testing.viewAsTree`
 - `timeline.focus`
 - `timeline.open`
+- `timeline.refresh`
 - `timeline.removeView`
 - `timeline.resetViewLocation`
+- `timeline.toggleExcludeSource:git-history`
+- `timeline.toggleExcludeSource:timeline.localHistory`
+- `timeline.toggleFollowActiveEditor`
 - `timeline.toggleVisibility`
 - `toggle.chat.titleBar.openInAgentsWindow.enabled`
 - `toggle.chat.titleBar.signIn.enabled`
@@ -2284,6 +2203,10 @@
 - `views.moveViewLeft`
 - `views.moveViewRight`
 - `views.moveViewUp`
+- `voiceTranscripts.archiveAll`
+- `voiceTranscripts.deleteAll`
+- `voiceTranscripts.focus`
+- `voiceTranscripts.refresh`
 - `vscode-containers.views.containers.focus`
 - `vscode-containers.views.containers.open`
 - `vscode-containers.views.containers.removeView`
@@ -2423,6 +2346,7 @@
 - `workbench.action.chat.addDynamicVariable`
 - `workbench.action.chat.addToChatAction`
 - `workbench.action.chat.agentHost.otel.exportAgentTracesDB`
+- `workbench.action.chat.agentsHandoffTip.mute`
 - `workbench.action.chat.agentsHandoffTip.open`
 - `workbench.action.chat.applyCompareEdits`
 - `workbench.action.chat.applyInEditor`
@@ -2524,8 +2448,10 @@
 - `workbench.action.chat.openAgentDebugPanel`
 - `workbench.action.chat.openAgentDebugPanelForSession`
 - `workbench.action.chat.openAgentHostAutoApprovePicker`
+- `workbench.action.chat.openAgentHostFolderPicker`
 - `workbench.action.chat.openAgentHostModePicker`
 - `workbench.action.chat.openAgentHostPermissionModePicker`
+- `workbench.action.chat.openAsk`
 - `workbench.action.chat.openCompareBlockInDiffEditor`
 - `workbench.action.chat.openCopilotCliStateFile`
 - `workbench.action.chat.openDelegationPicker`
@@ -2550,7 +2476,9 @@
 - `workbench.action.chat.openNewSessionSidebar.copilot-cloud-agent`
 - `workbench.action.chat.openNewSessionSidebar.copilotcli`
 - `workbench.action.chat.openPermissionPicker`
+- `workbench.action.chat.openPlan`
 - `workbench.action.chat.openQuotaExceededDialog`
+- `workbench.action.chat.openSenior Developer`
 - `workbench.action.chat.openSessionInAgentsWindow`
 - `workbench.action.chat.openSessionInEditorGroup`
 - `workbench.action.chat.openSessionInNewEditorGroup`
@@ -2563,7 +2491,17 @@
 - `workbench.action.chat.openWorkspacePicker`
 - `workbench.action.chat.openagent`
 - `workbench.action.chat.openask`
+- `workbench.action.chat.opencode-reviewer`
+- `workbench.action.chat.opencopilot-beast`
+- `workbench.action.chat.opencopilot-prompt`
+- `workbench.action.chat.opendeep-research`
 - `workbench.action.chat.openedit`
+- `workbench.action.chat.openflightpath-orchestrator`
+- `workbench.action.chat.opentest-agent`
+- `workbench.action.chat.opentest-agent-alpha`
+- `workbench.action.chat.opentest-agent-beta`
+- `workbench.action.chat.opentest-agent-user`
+- `workbench.action.chat.pickAgentSession`
 - `workbench.action.chat.picker.customagents`
 - `workbench.action.chat.picker.customagents.disabled`
 - `workbench.action.chat.previousCodeBlock`
@@ -3001,7 +2939,6 @@
 - `workbench.action.output.show.extension-output-GitHub.copilot-chat-#1-GitHub Copilot Log (Code References)`
 - `workbench.action.output.show.extension-output-bradlc.vscode-tailwindcss-#1-Tailwind CSS IntelliSense`
 - `workbench.action.output.show.extension-output-esbenp.prettier-vscode-#1-Prettier`
-- `workbench.action.output.show.extension-output-mcu-debug.debug-tracker-vscode-#1-Mcu-debug Tracker`
 - `workbench.action.output.show.extension-output-ms-dotnettools.vscode-dotnet-runtime-#1-.NET Install Tool`
 - `workbench.action.output.show.extension-output-nhickster.flightpath-#1-FlightPath`
 - `workbench.action.output.show.extension-output-saoudrizwan.claude-dev-#1-Cline`
@@ -3021,6 +2958,7 @@
 - `workbench.action.output.show.textModelChanges`
 - `workbench.action.output.show.tunnelHostService`
 - `workbench.action.output.show.userDataSync`
+- `workbench.action.output.show.vscode.css-language-features.CSS Language Server.log`
 - `workbench.action.output.show.vscode.git.Git.log`
 - `workbench.action.output.show.vscode.github-authentication.GitHub Authentication.log`
 - `workbench.action.output.show.vscode.github.GitHub.log`
@@ -3387,6 +3325,8 @@
 - `workbench.actions.syncData.reset`
 - `workbench.actions.table.workbench.panel.markers.view.viewAsTable`
 - `workbench.actions.table.workbench.panel.markers.view.viewAsTree`
+- `workbench.actions.treeView.npm.collapseAll`
+- `workbench.actions.treeView.npm.refresh`
 - `workbench.actions.treeView.workbench.panel.markers.view.collapseAll`
 - `workbench.actions.updateIndicator`
 - `workbench.actions.view.problems`
@@ -3583,6 +3523,7 @@
 - `workbench.files.action.showActiveFileInExplorer`
 - `workbench.getCodeExchangeProxyEndpoints`
 - `workbench.mcp.addConfiguration`
+- `workbench.mcp.agentHostServerOptions`
 - `workbench.mcp.browseResources`
 - `workbench.mcp.browseServers`
 - `workbench.mcp.configureSamplingModels`
@@ -3747,8 +3688,6 @@
 - `workbench.view.extension.claude-sidebar-secondary`
 - `workbench.view.extension.claude-sidebar-secondary.resetViewContainerLocation`
 - `workbench.view.extension.claude-sidebar.resetViewContainerLocation`
-- `workbench.view.extension.cmake-view`
-- `workbench.view.extension.cmake-view.resetViewContainerLocation`
 - `workbench.view.extension.codexSecondaryViewContainer`
 - `workbench.view.extension.codexSecondaryViewContainer.resetViewContainerLocation`
 - `workbench.view.extension.codexViewContainer`
@@ -3767,18 +3706,10 @@
 - `workbench.view.extension.cspellPanel.resetViewContainerLocation`
 - `workbench.view.extension.flightpath`
 - `workbench.view.extension.flightpath.resetViewContainerLocation`
-- `workbench.view.extension.memory-view`
-- `workbench.view.extension.memory-view.resetViewContainerLocation`
-- `workbench.view.extension.platformio`
-- `workbench.view.extension.platformio.resetViewContainerLocation`
 - `workbench.view.extension.python`
 - `workbench.view.extension.python.resetViewContainerLocation`
 - `workbench.view.extension.references-view`
 - `workbench.view.extension.references-view.resetViewContainerLocation`
-- `workbench.view.extension.rtos-views`
-- `workbench.view.extension.rtos-views.resetViewContainerLocation`
-- `workbench.view.extension.stm32-for-vscode-commands`
-- `workbench.view.extension.stm32-for-vscode-commands.resetViewContainerLocation`
 - `workbench.view.extension.test`
 - `workbench.view.extension.test.resetViewContainerLocation`
 - `workbench.view.extension.vscode-supabase-extension`
@@ -3805,6 +3736,10 @@
 - `workbench.view.testing.removeView`
 - `workbench.view.testing.resetViewLocation`
 - `workbench.view.testing.toggleVisibility`
+- `workbench.view.voiceTranscripts.focus`
+- `workbench.view.voiceTranscripts.resetViewLocation`
+- `workbench.view.voiceTranscriptsContainer`
+- `workbench.view.voiceTranscriptsContainer.resetViewContainerLocation`
 - `workbench.views.agentPlugins.default.marketplace.focus`
 - `workbench.views.agentPlugins.default.marketplace.open`
 - `workbench.views.agentPlugins.default.marketplace.resetViewLocation`

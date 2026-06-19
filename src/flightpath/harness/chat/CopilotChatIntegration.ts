@@ -21,7 +21,6 @@ import {
   type SplitConfig,
 } from "../../../utils/PromptFileSplitter";
 import { TempFileManager } from "../../../utils/TempFileManager";
-import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { AgentExpander } from "../../../utils/AgentExpander";
 import { CliOutputFormatter } from "../shared/CliOutputFormatter";
 import { UniversalCliOutput } from "../../../types/CliOutputTypes";
@@ -649,68 +648,106 @@ export class CopilotChatIntegration extends HarnessIntegration {
   }
 
   /**
-   * Submit with exponential backoff retry and session file verification
+   * Submit the prompt once, then verify it landed by polling the session files.
    *
-   * Session file verification is 100% reliable vs unreliable clipboard approach.
-   * Uses RetryUtils defaults: 15 attempts over ~18 seconds for robust verification.
+   * IMPORTANT: Submit is fired exactly ONCE. We do NOT re-press
+   * `workbench.action.chat.submit` inside the verification loop.
+   *
+   * VS Code flushes the prompt into its session JSON lazily (can lag many
+   * seconds), but the chat input is already empty the instant the first submit
+   * dispatches. Pressing submit again while waiting for that lagging write just
+   * fires blank messages at an empty input — that is the "spam empty prompts"
+   * bug. Verification therefore polls only; it never submits.
+   *
+   * Session-file search handles resumed sessions of any age and duplicate
+   * prompts (newest-modified match wins), because VS Code bumps mtime on write.
+   *
+   * @param promptText Raw text to match in session files (no XML)
+   * @param chatPrompt Full prompt to re-paste for the one guarded recovery submit
    */
-  private async submitWithRetry(promptText: string): Promise<boolean> {
+  private async submitWithRetry(
+    promptText: string,
+    chatPrompt: string
+  ): Promise<boolean> {
     const normalizedPrompt = promptText.trim().substring(0, 60);
-    Log.debug(`🔍 Verifying submission for prompt: "${normalizedPrompt}..."`);
+    Log.debug(`🔍 Submitting and verifying prompt: "${normalizedPrompt}..."`);
 
-    const result = await retryWithBackoff(
-      async () => {
-        // Check for cancellation
-        if (this.isCancelling) {
-          Log.info("⏹️ Cancelled during submit retry");
-          return false; // Stop retrying
-        }
+    // Fire submit exactly once. The prompt is already pasted into the input.
+    await vscode.commands.executeCommand("workbench.action.chat.submit");
 
-        // Execute submit command
-        await vscode.commands.executeCommand("workbench.action.chat.submit");
+    // Poll-only verification. VS Code can take 45+ seconds to write the session
+    // file, so we keep a long window — but we never re-submit during it.
+    const POLL_INTERVAL_MS = 500;
+    const MAX_WAIT_MS = 84000;
+    // One-time guarded recovery: if nothing shows up after this grace period the
+    // first submit was likely dropped (focus/timing). We re-paste before that
+    // resubmit so it can never send a blank message.
+    const RESUBMIT_AFTER_MS = 6000;
+    const startTime = Date.now();
+    let didRecoverySubmit = false;
 
-        // Wait for UI to process
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        // Verify submission by searching for our prompt in session files
-        // Searches ALL files sorted by newest first - handles both:
-        // 1. Resumed sessions from any age (user might resume chat from weeks ago)
-        // 2. Duplicate prompts (most recently modified session wins)
-        // VS Code updates file mtime when writing, so active sessions float to top
-        const sessionFile =
-          this.sessionMonitor.findSessionFileByPromptText(promptText);
-
-        if (sessionFile) {
-          Log.debug(
-            `✅ Submit verified via session file: ${path.basename(sessionFile)}`
-          );
-          // Cache session file so waitForCompletion() doesn't re-search
-          this.sessionMonitor.setSessionFile(sessionFile);
-          return sessionFile; // Success
-        }
-
-        // Submit didn't work, return null to trigger retry
-        return null;
-      },
-      {
-        // Use defaults: maxAttempts=60, delays=[100,200,500,1000,1500] (~84s total)
-        // VS Code can take 45+ seconds to write session files, so we need long retry window
-        onRetry: (attempt, maxAttempts) => {
-          if (attempt % 5 === 0 || attempt <= 3) {
-            Log.warn(
-              `⚠️ Submit verification failed, retrying (${attempt}/${maxAttempts}) — prompt: "${normalizedPrompt}..."`
-            );
-          }
-        },
+    while (Date.now() - startTime < MAX_WAIT_MS) {
+      if (this.isCancelling) {
+        Log.info("⏹️ Cancelled during submit verification");
+        return false;
       }
-    );
 
-    if (!result) {
-      Log.error("❌ Submit failed after all retry attempts");
+      const sessionFile =
+        this.sessionMonitor.findSessionFileByPromptText(promptText);
+
+      if (sessionFile) {
+        Log.debug(
+          `✅ Submit verified via session file: ${path.basename(sessionFile)}`
+        );
+        // Cache session file so waitForCompletion() doesn't re-search
+        this.sessionMonitor.setSessionFile(sessionFile);
+        return true;
+      }
+
+      const elapsed = Date.now() - startTime;
+      if (!didRecoverySubmit && elapsed >= RESUBMIT_AFTER_MS) {
+        didRecoverySubmit = true;
+        Log.warn(
+          `⚠️ No session file after ${Math.round(elapsed / 1000)}s — ` +
+            `re-pasting and submitting once more (prompt: "${normalizedPrompt}...")`
+        );
+        await this.repasteForRecoverySubmit(chatPrompt);
+        await vscode.commands.executeCommand("workbench.action.chat.submit");
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+
+    if (this.isCancelling) {
       return false;
     }
 
-    return true;
+    Log.error("❌ Submit could not be verified within the wait window");
+    return false;
+  }
+
+  /**
+   * Re-paste the prompt for the single guarded recovery submit in
+   * {@link submitWithRetry}. Clearing then pasting guarantees the recovery
+   * submit carries the real prompt text rather than an empty message.
+   * Best-effort: failures are logged and swallowed so the recovery submit
+   * still proceeds against whatever is in the input.
+   */
+  private async repasteForRecoverySubmit(chatPrompt: string): Promise<void> {
+    const previousClipboard = await vscode.env.clipboard.readText();
+    try {
+      await vscode.commands.executeCommand("editor.action.selectAll");
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await vscode.env.clipboard.writeText(chatPrompt);
+      await vscode.commands.executeCommand(
+        "editor.action.clipboardPasteAction"
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    } catch (error) {
+      Log.warn("⚠️ Recovery re-paste failed:", error);
+    } finally {
+      await vscode.env.clipboard.writeText(previousClipboard);
+    }
   }
 
   /**
@@ -778,9 +815,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
       await new Promise((resolve) => setTimeout(resolve, 500)); // PROVEN: 500ms required
 
-      // Step 4: Submit with retry logic and session file verification
-      // Use raw prompt text (without XML) for session file matching
-      const submitSuccess = await this.submitWithRetry(rawPromptText);
+      // Step 4: Submit once, then verify via session file (no re-submitting).
+      // Use raw prompt text (without XML) for session file matching; pass the
+      // full chatPrompt so the one guarded recovery submit can re-paste it.
+      const submitSuccess = await this.submitWithRetry(rawPromptText, chatPrompt);
 
       if (!submitSuccess) {
         if (this.isCancelling) {
