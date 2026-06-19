@@ -21,6 +21,7 @@ import {
   PANEL_MIN_SIZE_CENTER,
   PANEL_MIN_SIZE_CENTER_COLUMN,
   PANEL_MIN_SIZE_EDITOR_PX,
+  PANEL_MIN_SIZE_SIDEBAR,
 } from "../constants";
 
 interface DesktopLayoutParams {
@@ -58,6 +59,11 @@ export function useDesktopLayout({
   // both-collapsed → one-open transition).
   const initializedRef = useRef(false);
   const horizontalInitializedRef = useRef(false);
+
+  // Previous collapse state of each side panel, used to detect the
+  // collapsed→expanded transition that triggers sidebar mutual exclusion.
+  const prevSettingsCollapsedRef = useRef(settingsCollapsed);
+  const prevPromptsCollapsedRef = useRef(promptsCollapsed);
 
   // Resize tracking
   const isForcingResize = useRef(false);
@@ -146,6 +152,24 @@ export function useDesktopLayout({
   const getHorizontalGroupTotalPx = () => {
     const groupElement = document.getElementById("flightpath-main-layout");
     return groupElement?.getBoundingClientRect().width ?? 0;
+  };
+
+  // Pixel width required to display both side panels (prompts + settings) and the
+  // center column simultaneously, each at its minimum size. Below this threshold
+  // the two side panels are mutually exclusive: expanding one collapses the
+  // other. Without this, buildHorizontalLayout() is forced to request
+  // sub-minimum widths for the side panels, which react-resizable-panels cannot
+  // satisfy — it clamps each side back to its 192px minSize, over-constrains the
+  // group, and strands the just-expanded panel at its collapsed width.
+  const bothSidebarsMinWidthPx =
+    2 * Number.parseInt(PANEL_MIN_SIZE_SIDEBAR, 10) +
+    Number.parseInt(PANEL_MIN_SIZE_CENTER_COLUMN, 10);
+
+  const canFitBothSidebars = () => {
+    const totalPx = getHorizontalGroupTotalPx();
+    // Treat an unmeasured group (totalPx === 0) as "fits" so we never collapse a
+    // panel based on a missing measurement.
+    return totalPx === 0 || totalPx >= bothSidebarsMinWidthPx;
   };
 
   const getHorizontalCollapsedPct = (totalPx: number) =>
@@ -459,6 +483,15 @@ export function useDesktopLayout({
   useLayoutEffect(() => {
     if (!uiLayoutReady) return;
     if (isMobile) return;
+    // Resolve a persisted/restored both-expanded state that no longer fits
+    // (e.g. the VS Code side panel was narrowed while both sidebars were open).
+    // Collapse the settings panel so the layout is solvable; the resulting store
+    // change re-runs the settings sync below.
+    const store = useUiStore.getState();
+    if (!store.stepsCollapsed && !store.settingsCollapsed && !canFitBothSidebars()) {
+      store.setSettingsCollapsed(true);
+      return;
+    }
     applyHorizontalLayoutSync("desktop-mount");
   }, [isMobile, uiLayoutReady]);
 
@@ -472,16 +505,44 @@ export function useDesktopLayout({
     }
   }, [isMobile, uiLayoutReady]);
 
-  // Ongoing store → panel sync for settings and prompts collapse
+  // Ongoing store → panel sync for settings and prompts collapse.
+  //
+  // Sidebar mutual exclusion: when a side panel is expanded but there isn't room
+  // for both side panels plus the center column at their minimum widths, collapse
+  // the opposite side panel rather than letting the layout over-constrain and
+  // strand the just-expanded panel at its collapsed width. The store change
+  // re-runs the sibling's sync effect, which applies the now-solvable layout.
   useEffect(() => {
     if (!uiLayoutReady) return;
+    const justExpanded =
+      prevSettingsCollapsedRef.current && !settingsCollapsed;
+    prevSettingsCollapsedRef.current = settingsCollapsed;
     if (isMobile) return;
+    if (
+      justExpanded &&
+      !useUiStore.getState().stepsCollapsed &&
+      !canFitBothSidebars()
+    ) {
+      useUiStore.getState().setPromptsCollapsed(true);
+      return;
+    }
     applyHorizontalLayoutSync("settings-collapse-sync");
   }, [isMobile, settingsCollapsed, uiLayoutReady]);
 
   useEffect(() => {
     if (!uiLayoutReady) return;
+    const justExpanded =
+      prevPromptsCollapsedRef.current && !promptsCollapsed;
+    prevPromptsCollapsedRef.current = promptsCollapsed;
     if (isMobile) return;
+    if (
+      justExpanded &&
+      !useUiStore.getState().settingsCollapsed &&
+      !canFitBothSidebars()
+    ) {
+      useUiStore.getState().setSettingsCollapsed(true);
+      return;
+    }
     applyHorizontalLayoutSync("steps-collapse-sync");
   }, [isMobile, promptsCollapsed, uiLayoutReady]);
 
