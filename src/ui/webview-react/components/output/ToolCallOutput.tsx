@@ -177,6 +177,9 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
     });
   const showCollapsedParamsIndicator =
     !resolvedRenderPlan.params.isExpanded && resolvedRenderPlan.params.canToggle;
+  const summaryAlreadySignalsTruncation = params.includes("...");
+  const showSummaryEllipsis =
+    showCollapsedParamsIndicator && !summaryAlreadySignalsTruncation;
 
   const updateExpansion = (
     section: ToolCallExpansionSection,
@@ -247,10 +250,10 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           {nameFindMatches?.length ? (
             <>
               {highlightText(name, nameFindMatches)}({params})
-              {showCollapsedParamsIndicator && "..."}
+              {showSummaryEllipsis && "..."}
             </>
           ) : (
-            `${name}(${params})${showCollapsedParamsIndicator ? "..." : ""}`
+            `${name}(${params})${showSummaryEllipsis ? "..." : ""}`
           )}
         </span>
       {resolvedRenderPlan.params.canToggle && (

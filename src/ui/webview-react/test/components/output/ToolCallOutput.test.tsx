@@ -183,4 +183,20 @@ describe("GenericToolCallOutput", () => {
       )
     ).toBeInTheDocument();
   });
+
+  it("does not append a second ellipsis when the compact parameter summary is already truncated", () => {
+    render(
+      <GenericToolCallOutput
+        name="exec"
+        parameters={{
+          input: `const r = await tools.shell_command({ command: "${"x".repeat(120)}" }); text(r);`,
+        }}
+      />
+    );
+
+    expect(
+      screen.getByText(/exec\(input: .*\.{3}\)$/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/exec\(input: .*\.{6}\)$/i)).not.toBeInTheDocument();
+  });
 });
