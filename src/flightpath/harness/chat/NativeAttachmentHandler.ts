@@ -5,6 +5,7 @@ import {
 } from "../../../utils/FileReferenceParser";
 import { Log } from "../../../utils/Log";
 import { resolveSymbol } from "../../../utils/AttachmentBuilders";
+import { getVsCodeWorkspaceRoot } from "../../../platform/VsCodeWorkspaceRoot";
 
 /** Function type for resolving workspace-relative paths */
 export type PathResolver = (relativePath: string) => string;
@@ -63,7 +64,10 @@ export class NativeAttachmentHandler {
           // Symbol reference - resolve to file location
           const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
           Log.debug(`🔍 Resolving symbol: ${symbolRef}`);
-          const resolved = await resolveSymbol(symbolRef);
+          const resolved = await resolveSymbol(
+            symbolRef,
+            getVsCodeWorkspaceRoot()
+          );
           if (resolved) {
             resolvedRefs.push(resolved);
             Log.debug(

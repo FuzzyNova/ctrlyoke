@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { getAvailableModelsSync } from "../utils/ModelRegistry";
 import { Log } from "../utils/Log";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import {
   getFileCompletions,
   getHashCompletions,
@@ -174,8 +175,9 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   private async getTildeCompletions(
     filterText: string
   ): Promise<vscode.CompletionList> {
-    const workspaceRoot =
-      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : "";
     const plainItems = await getGitChangeCompletions(workspaceRoot, filterText);
 
     const range = this.calculateCompletionRange("~");

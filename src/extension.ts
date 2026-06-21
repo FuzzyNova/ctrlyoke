@@ -8,6 +8,7 @@ import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 import { ContextMenuReferenceCommands } from "./completions/ContextMenuReferenceCommands";
 import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
+import { getVsCodeWorkspaceRoot } from "./platform/VsCodeWorkspaceRoot";
 import { FlightPathHostedServer } from "./server/FlightPathHostedServer";
 import {
   EXECUTION_STATES,
@@ -296,7 +297,7 @@ export async function activate(context: vscode.ExtensionContext) {
     configService.setUserBackend(userConfigBackend);
     if (workspaceFolders && workspaceFolders.length > 0) {
       const workspaceConfigBackend = createWorkspaceConfigBackend(
-        workspaceFolders[0].uri.fsPath,
+        getVsCodeWorkspaceRoot(),
         () => {
           configService.notify();
         }
@@ -305,7 +306,10 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     // Initialize logging system early (creates output channel)
-    Log.initialize(context);
+    Log.initialize(
+      context,
+      workspaceFolders?.length ? getVsCodeWorkspaceRoot() : undefined
+    );
     // Initialize model registry (queries available Copilot models)
     // Run this early so models are available for IntelliSense
     initializeModelRegistry().catch((err) => {
@@ -318,7 +322,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // prompt in the dashboard.
     let pendingInitWorkspaceRoot: string | undefined;
     if (workspaceFolders && workspaceFolders.length > 0) {
-      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      const workspaceRoot = getVsCodeWorkspaceRoot();
 
       if (WorkspaceInitializer.isInitialized(workspaceRoot)) {
         // Already initialized — idempotently ensure scaffold is up to date
@@ -448,6 +452,44 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       vscode.window.onDidChangeActiveColorTheme(() => {
         webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
+      })
+    );
+
+    // React to runtime workspace-folder changes. The resolved `.flightpath`
+    // root is window-stable: the orchestrator, history, settings, and session
+    // stack are all built against it at activation. The *first* folder change
+    // restarts the extension host (VS Code does not fire this event in that
+    // case), so this handler only ever sees non-first changes. When the
+    // resolved root is unchanged (the common case — a sibling folder was
+    // added/removed) we no-op; when it changed (e.g. the resolver was falling
+    // back to folder [0] and [0] was removed) we offer a window reload rather
+    // than hot-swapping the singleton stack mid-session.
+    let resolvedWorkspaceRoot = workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        const nextRoot = vscode.workspace.workspaceFolders?.length
+          ? getVsCodeWorkspaceRoot()
+          : undefined;
+        if (nextRoot === resolvedWorkspaceRoot) {
+          return;
+        }
+        const previousRoot = resolvedWorkspaceRoot;
+        resolvedWorkspaceRoot = nextRoot;
+        Log.warn(
+          `FlightPath: Resolved workspace root changed from "${previousRoot}" to "${nextRoot}". A window reload is required to relocate .flightpath.`
+        );
+        vscode.window
+          .showWarningMessage(
+            "FlightPath: The workspace root changed. Reload the window to relocate the .flightpath directory.",
+            "Reload Window"
+          )
+          .then((choice) => {
+            if (choice === "Reload Window") {
+              vscode.commands.executeCommand("workbench.action.reloadWindow");
+            }
+          });
       })
     );
 
@@ -716,9 +758,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       return undefined;
     }
 
-    const promptFiles = findWorkflowFilesInWorkspace(
-      workspaceFolders[0].uri.fsPath
-    );
+    const promptFiles = findWorkflowFilesInWorkspace(getVsCodeWorkspaceRoot());
 
     if (promptFiles.length === 0) {
       vscode.window.showWarningMessage("No prompt files found in workspace");
@@ -851,7 +891,9 @@ function registerCommands(context: vscode.ExtensionContext) {
     async (args: { ref: string; workspaceRoot?: string }) => {
       const workspaceRoot =
         args.workspaceRoot ??
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        (vscode.workspace.workspaceFolders?.length
+          ? getVsCodeWorkspaceRoot()
+          : undefined);
       if (!workspaceRoot) {
         vscode.window.showErrorMessage("FlightPath: No workspace folder open.");
         return;
@@ -1046,7 +1088,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         return;
       }
       try {
-        await WorkspaceInitializer.reinitialize(workspaceFolders[0].uri.fsPath);
+        await WorkspaceInitializer.reinitialize(getVsCodeWorkspaceRoot());
         vscode.window.showInformationMessage(
           `FlightPath: Workspace initialized — ${PATH_CONSTANTS.FLIGHTPATH_DIR}/ directories and .gitignore are up to date.`
         );
@@ -1065,8 +1107,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       if (hostedServer) return;
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
       const port = configService.get("server")?.port ?? 3000;
-      const workspaceRoot =
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+      const workspaceRoot = getVsCodeWorkspaceRoot();
       const storedToken = await context.secrets.get("flightpath.server.token");
       const token = storedToken ?? randomBytes(32).toString("hex");
       if (!storedToken)

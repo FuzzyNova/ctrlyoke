@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { getErrorMessage } from "../utils/ErrorUtils";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
@@ -542,7 +543,9 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.OPEN_GIT_CHANGE, async (message) => {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workspaceRoot = vscode.workspace.workspaceFolders?.length
+        ? getVsCodeWorkspaceRoot()
+        : undefined;
       if (!workspaceRoot) {
         return;
       }
@@ -1734,8 +1737,9 @@ export class WebviewMessageRouter {
     } else if (trigger === "#") {
       return await getHashCompletions(prefix.substring(1)); // Remove #
     } else if (trigger === "~") {
-      const workspaceRoot =
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+      const workspaceRoot = vscode.workspace.workspaceFolders?.length
+        ? getVsCodeWorkspaceRoot()
+        : "";
       return await getGitChangeCompletions(workspaceRoot, prefix.substring(1)); // Remove ~
     } else if (trigger === "$") {
       return getPriorContextCompletions(prefix.substring(1)); // Remove $
@@ -1755,8 +1759,9 @@ export class WebviewMessageRouter {
    *   3. Relative to .flightpath directory inside workspace root
    */
   private async handleFileRefValidation(filePath: string): Promise<void> {
-    const workspaceRoot =
-      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : null;
     let exists = false;
 
     try {
@@ -1806,8 +1811,9 @@ export class WebviewMessageRouter {
     }>,
     seq?: number
   ): Promise<void> {
-    const workspaceRoot =
-      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : null;
 
     const results = await Promise.all(
       references.map(async (reference) => {
@@ -1898,7 +1904,7 @@ export class WebviewMessageRouter {
       }
 
       const symbolRef = `${reference.path}:${reference.symbolName}:${reference.line}`;
-      const resolved = await resolveSymbol(symbolRef);
+      const resolved = await resolveSymbol(symbolRef, this.getWorkspaceRoot());
       return resolved
         ? { exists: true }
         : { exists: false, message: "symbol not found" };
@@ -2007,11 +2013,12 @@ export class WebviewMessageRouter {
     lineEnd?: number
   ): Promise<void> {
     try {
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      if (!workspaceFolder) {
+      if (!vscode.workspace.workspaceFolders?.length) {
         Log.warn("No workspace folder open");
         return;
       }
+      const workspaceRoot = getVsCodeWorkspaceRoot();
+      const workspaceRootUri = vscode.Uri.file(workspaceRoot);
 
       const normalizeCodexAbsPath = (rawPath: string): string => {
         const pathWithDrive = rawPath.match(/^\/abs\/path\/([A-Za-z]:)(\/.*)$/);
@@ -2053,11 +2060,11 @@ export class WebviewMessageRouter {
       const targetUri = isAbsolute
         ? vscode.Uri.file(trimmedPath)
         : vscode.Uri.joinPath(
-            workspaceFolder.uri,
+            workspaceRootUri,
             ...trimmedPath.split("/").filter(Boolean)
           );
 
-      if (!isPathInside(targetUri.fsPath, workspaceFolder.uri.fsPath)) {
+      if (!isPathInside(targetUri.fsPath, workspaceRoot)) {
         Log.warn(
           `Blocked dashboard request to open path outside workspace: ${relativePath}`
         );
@@ -2172,7 +2179,9 @@ export class WebviewMessageRouter {
   private async handleAttachmentTokenCountRequest(
     references: string[]
   ): Promise<void> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
     if (!workspaceRoot || !references || references.length === 0) {
       this.emitMessage({
         type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
@@ -2568,7 +2577,9 @@ export class WebviewMessageRouter {
   }
 
   private getWorkspaceRoot(): string {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+    return vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : "";
   }
 
   private getMcpRegistryFileManager(): McpRegistryFileManager {

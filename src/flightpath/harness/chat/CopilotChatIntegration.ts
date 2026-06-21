@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { getVsCodeWorkspaceRoot } from "../../../platform/VsCodeWorkspaceRoot";
 import {
   PromptStep,
   type UserHookConfig,
@@ -201,7 +202,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
   /** Resolve workspace root for chat-mode file expansion/attachments. */
   protected override getWorkspaceRoot(): string | undefined {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    return vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
   }
 
   /** Preserve VS Code status-bar progress updates for chat harness. */
@@ -495,7 +498,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
           : !!prompt.endCondition?.script;
 
       // Write user-defined hooks to .github/hooks/ before the session starts
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+      const workspaceRoot = this.getWorkspaceRoot();
       const userHooks = workflowContext?.resolvedProperties?.hooks;
       if (userHooks && userHooks.length > 0 && workspaceRoot) {
         await this.writeUserHookFile(

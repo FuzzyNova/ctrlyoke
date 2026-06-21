@@ -39,15 +39,20 @@ export class Log {
    * Initialize logging. In dev builds, automatically uses TRACE level and writes
    * log files unconditionally. In production builds, reads from VS Code's log level
    * setting and only writes log files when `flightpath.enableDiagnosticLogs` is true.
+   *
+   * @param workspaceRoot Resolved workspace root (where `.flightpath` lives), or
+   *   `undefined` when no folder is open. Passed in by the extension entry point
+   *   so this shared module never depends on the VS Code workspace-resolution
+   *   layer; the CLI uses {@link initializeCli} instead.
    */
   static initialize(
     context: vscode.ExtensionContext,
-    _logLevel?: LogLevel
+    workspaceRoot?: string
   ): void {
     this.outputChannel = vscode.window.createOutputChannel("FlightPath");
     context.subscriptions.push(this.outputChannel);
 
-    this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    this.workspaceRoot = workspaceRoot;
 
     if (IS_DEV_MODE) {
       // Dev builds: show everything including trace logs.

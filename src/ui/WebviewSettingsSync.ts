@@ -43,6 +43,10 @@ import {
   ToolPermissionsOverride,
 } from "../types/FlightPathTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
+import {
+  getVsCodeWorkspaceRoot,
+  getVsCodeWorkspaceFolder,
+} from "../platform/VsCodeWorkspaceRoot";
 import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import { AgentDiscovery } from "../utils/AgentDiscovery";
 import type { AgentInfo } from "../utils/AgentDiscovery";
@@ -163,7 +167,7 @@ export class WebviewSettingsSync {
       }
 
       this.availableAgents = await AgentDiscovery.discoverAgents(
-        workspaceFolders[0]
+        getVsCodeWorkspaceFolder()
       );
 
       this.sendAgentsUpdate();
@@ -177,14 +181,9 @@ export class WebviewSettingsSync {
    */
   async discoverSkills(): Promise<void> {
     try {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      const workspaceFolder =
-        workspaceFolders && workspaceFolders.length > 0
-          ? workspaceFolders[0]
-          : undefined;
-
-      this.availableSkills =
-        await SkillDiscovery.discoverSkills(workspaceFolder);
+      this.availableSkills = await SkillDiscovery.discoverSkills(
+        getVsCodeWorkspaceFolder()
+      );
 
       this.sendSkillsUpdate();
     } catch (error) {
@@ -621,7 +620,7 @@ export class WebviewSettingsSync {
       return;
     }
 
-    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+    const workspaceRoot = getVsCodeWorkspaceRoot();
     const capabilitiesPath = path.join(
       workspaceRoot,
       PATH_CONSTANTS.FLIGHTPATH_DIR,
@@ -709,11 +708,9 @@ export class WebviewSettingsSync {
       ),
     };
 
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    const workspaceRoot =
-      workspaceFolders && workspaceFolders.length > 0
-        ? workspaceFolders[0].uri.fsPath
-        : "";
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : "";
 
     return {
       harness,
@@ -942,9 +939,7 @@ export class WebviewSettingsSync {
     homedirFn: () => string = os.homedir
   ): Promise<void> {
     const baseDir =
-      scope === CONFIG_SCOPE.USER
-        ? homedirFn()
-        : (vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd());
+      scope === CONFIG_SCOPE.USER ? homedirFn() : getVsCodeWorkspaceRoot();
     const certsDir = path.join(
       baseDir,
       PATH_CONSTANTS.FLIGHTPATH_DIR,

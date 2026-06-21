@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { PlatformAdapter } from "./PlatformAdapter";
+import { getVsCodeWorkspaceRoot } from "./VsCodeWorkspaceRoot";
 
 /**
  * VS Code implementation of PlatformAdapter.
@@ -10,7 +11,7 @@ export class VsCodeAdapter implements PlatformAdapter {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   getWorkspaceRoot(): string {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    return getVsCodeWorkspaceRoot();
   }
 
   log(message: string): void {

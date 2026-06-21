@@ -7,8 +7,14 @@
  */
 export interface PlatformAdapter {
   /**
-   * Get the root directory of the current workspace/project.
-   * VS Code: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
+   * Get the directory that contains the `.flightpath` folder for the current
+   * workspace. The value is window-stable (resolved once per window session).
+   *
+   * VS Code: resolved by `WorkspaceRootResolver` in this order —
+   *   1. the `flightpath.workspaceDirectory` setting, if set;
+   *   2. the `.code-workspace` file's directory, when one is open on disk;
+   *   3. the first workspace folder (single-folder case);
+   *   4. `process.cwd()` when no folder is open.
    * CLI: config.cwd ?? process.cwd()
    */
   getWorkspaceRoot(): string;

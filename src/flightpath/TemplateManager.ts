@@ -7,6 +7,7 @@ import {
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
 import { RETRY_PROMPT_PLACEHOLDERS } from "../types/DashboardConstants";
 
 /**
@@ -186,7 +187,7 @@ export class TemplateManager {
    * Get the workspace folder for the current workspace
    */
   private getWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
-    return vscode.workspace.workspaceFolders?.[0];
+    return getVsCodeWorkspaceFolder();
   }
 
   /**

@@ -391,7 +391,7 @@ export class ContextExpander {
           Log.debug(`Using cached resolution for: ${symbolRef}`);
         } else {
           // Not in cache - resolve and cache the result
-          resolved = await resolveSymbol(symbolRef);
+          resolved = await resolveSymbol(symbolRef, this.workspaceRoot);
           this.symbolResolutionCache.set(symbolRef, resolved);
         }
 

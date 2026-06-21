@@ -51,6 +51,17 @@
     "flightpath": "./out/cli.js"
   },
   "contributes": {
+    "configuration": {
+      "title": "FlightPath",
+      "properties": {
+        "flightpath.workspaceDirectory": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "markdownDescription": "Directory that contains the `.flightpath` folder for this workspace. Leave empty to auto-detect: the folder of the `.code-workspace` file when one is open, otherwise the first workspace folder. Accepts an absolute path or a path relative to the workspace file. Supports `${workspaceFolder}` and `${workspaceFolder:Name}`."
+        }
+      }
+    },
     "mcpServerDefinitionProviders": [
       {
         "id": "flightpath.workflowMcpProvider",

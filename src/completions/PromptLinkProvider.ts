@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 
 /**
  * Provides clickable links for FlightPath context references
@@ -107,7 +108,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
    */
   private getWorkspaceRoot(): string | undefined {
     const folders = vscode.workspace.workspaceFolders;
-    return folders && folders.length > 0 ? folders[0].uri.fsPath : undefined;
+    return folders && folders.length > 0
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
   }
 
   /**

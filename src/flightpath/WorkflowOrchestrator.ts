@@ -61,6 +61,7 @@ import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager
 import { WorkspaceInitializer } from "./orchestration/WorkspaceInitializer";
 import { PromptFileParser } from "./PromptFileParser";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
+import { getVsCodeWorkspaceFolder } from "../platform/VsCodeWorkspaceRoot";
 import {
   DashboardBroadcastHub,
   type DashboardClient,
@@ -209,8 +210,9 @@ export class WorkflowOrchestrator {
     // Status bar
     this.statusBarManager = new StatusBarManager(context);
 
-    // Workspace
-    this.currentWorkspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    // Workspace — the folder matching the resolved `.flightpath` root
+    // (honors the `.code-workspace` dir and `flightpath.workspaceDirectory`).
+    this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
 
     // Shared parsers / orchestration helpers
     this.promptFileParser = new PromptFileParser(new VsCodeAdapter(context));

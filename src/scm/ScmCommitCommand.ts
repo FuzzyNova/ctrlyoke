@@ -3,6 +3,7 @@ import { CommitMessageGenerator } from "../git/CommitMessageGenerator";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import { VSCODE_CONTEXT_KEYS } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 
 interface GitRepository {
   rootUri: vscode.Uri;
@@ -50,7 +51,7 @@ export class ScmCommitCommand {
       return;
     }
 
-    const cwd = workspaceFolders[0].uri.fsPath;
+    const cwd = getVsCodeWorkspaceRoot();
     this.activeAbortController = new AbortController();
     await vscode.commands.executeCommand(
       "setContext",

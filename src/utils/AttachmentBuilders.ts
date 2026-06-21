@@ -20,10 +20,15 @@ import { Log } from "./Log";
  * - Same symbol name appears multiple times in same file
  *
  * @param symbolRef Symbol reference string (e.g., "src/utils/AttachmentBuilders.ts:resolveSymbol:10")
+ * @param workspaceRoot Absolute workspace root used to resolve workspace-relative
+ *   paths. Passed in by the caller (the resolved root in VS Code, the CLI cwd in
+ *   the standalone binary) so this shared helper never depends on the VS Code
+ *   workspace-resolution layer.
  * @returns FileReference with path and line range, or null if not found
  */
 export async function resolveSymbol(
-  symbolRef: string
+  symbolRef: string,
+  workspaceRoot: string
 ): Promise<FileReference | null> {
   try {
     Log.debug(`[resolveSymbol] Resolving: ${symbolRef}`);
@@ -60,14 +65,16 @@ export async function resolveSymbol(
       `[resolveSymbol] Parsed: filePath="${filePath}", symbolName="${symbolName}", line=${targetLine}`
     );
 
-    // Resolve workspace-relative path to URI
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-      Log.warn("No workspace folder open");
+    // Resolve workspace-relative path to URI against the caller-provided root.
+    if (!workspaceRoot) {
+      Log.warn("No workspace root provided");
       return null;
     }
 
-    const fileUri = vscode.Uri.joinPath(workspaceFolders[0].uri, filePath);
+    const fileUri = vscode.Uri.joinPath(
+      vscode.Uri.file(workspaceRoot),
+      filePath
+    );
 
     // Open document to query symbols (needed for symbol provider to work)
     await vscode.workspace.openTextDocument(fileUri);

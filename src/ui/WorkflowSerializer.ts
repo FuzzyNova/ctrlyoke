@@ -13,6 +13,7 @@ import {
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
 import type { TemplateManager } from "../flightpath/TemplateManager";
@@ -76,10 +77,9 @@ export class WorkflowSerializer {
       return;
     }
 
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    const workflowsDir = workspaceFolder
+    const workflowsDir = vscode.workspace.workspaceFolders?.length
       ? path.join(
-          workspaceFolder.uri.fsPath,
+          getVsCodeWorkspaceRoot(),
           PATH_CONSTANTS.FLIGHTPATH_DIR,
           PATH_CONSTANTS.WORKFLOWS_DIR
         )
@@ -253,9 +253,8 @@ export class WorkflowSerializer {
 
       let absolutePath = filePath;
       if (!path.isAbsolute(filePath)) {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (workspaceFolder) {
-          absolutePath = path.join(workspaceFolder.uri.fsPath, filePath);
+        if (vscode.workspace.workspaceFolders?.length) {
+          absolutePath = path.join(getVsCodeWorkspaceRoot(), filePath);
         }
       }
 
@@ -305,7 +304,9 @@ export class WorkflowSerializer {
         baseName += ".md";
       }
 
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workspaceRoot = vscode.workspace.workspaceFolders?.length
+        ? getVsCodeWorkspaceRoot()
+        : undefined;
       let defaultUri: vscode.Uri;
       if (workspaceRoot) {
         const outputDir = path.join(
@@ -467,7 +468,9 @@ export class WorkflowSerializer {
     postMessage?: PostMessageFn
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = vscode.workspace.workspaceFolders?.length
+      ? getVsCodeWorkspaceRoot()
+      : undefined;
     const filters: Record<string, string[]> = {};
 
     if (fileFilter && fileFilter.length > 0) {
@@ -484,7 +487,7 @@ export class WorkflowSerializer {
     const uris = await vscode.window.showOpenDialog({
       canSelectMany: false,
       canSelectFolders: false,
-      defaultUri: workspaceFolder?.uri,
+      defaultUri: workspaceRoot ? vscode.Uri.file(workspaceRoot) : undefined,
       filters,
       title: `Select file for {${variable}}`,
     });
@@ -492,8 +495,8 @@ export class WorkflowSerializer {
     if (uris && uris.length > 0) {
       // Return a workspace-relative path when possible so workflows are portable
       let filePath = uris[0].fsPath;
-      if (workspaceFolder) {
-        const wsPath = workspaceFolder.uri.fsPath;
+      if (workspaceRoot) {
+        const wsPath = workspaceRoot;
         if (filePath.startsWith(wsPath)) {
           filePath = filePath.slice(wsPath.length).replace(/^[\\/]/, "");
         }
@@ -540,7 +543,9 @@ export class WorkflowSerializer {
   ): Promise<void> {
     const pm = replyPostMessage ?? this.postMessage;
     try {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workspaceRoot = vscode.workspace.workspaceFolders?.length
+        ? getVsCodeWorkspaceRoot()
+        : undefined;
       if (!workspaceRoot) {
         pm({
           type: MESSAGE_TYPES.RECENT_WORKFLOWS,
@@ -707,7 +712,9 @@ export class WorkflowSerializer {
     }
 
     try {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workspaceRoot = vscode.workspace.workspaceFolders?.length
+        ? getVsCodeWorkspaceRoot()
+        : undefined;
       if (!workspaceRoot) {
         return false;
       }
@@ -766,7 +773,9 @@ export class WorkflowSerializer {
    */
   async handleRemoveWorkflowHistory(filePath: string): Promise<void> {
     try {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workspaceRoot = vscode.workspace.workspaceFolders?.length
+        ? getVsCodeWorkspaceRoot()
+        : undefined;
       if (!workspaceRoot) {
         return;
       }

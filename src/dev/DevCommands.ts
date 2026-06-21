@@ -28,6 +28,7 @@ import {
 } from "../utils/ModelRegistry";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 
 export type DevDashboardAction =
@@ -776,7 +777,7 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
       return;
     }
 
-    const fullPath = path.join(workspaceFolders[0].uri.fsPath, outputFilePath);
+    const fullPath = path.join(getVsCodeWorkspaceRoot(), outputFilePath);
     const dir = path.dirname(fullPath);
 
     // Ensure directory exists
@@ -854,7 +855,7 @@ async function exportDiscoveredModels(): Promise<void> {
   }
 
   const outputPath = path.join(
-    workspaceFolders[0].uri.fsPath,
+    getVsCodeWorkspaceRoot(),
     "scripts",
     "discovered-models.json"
   );
@@ -945,7 +946,7 @@ async function dumpVsCodeCssVariables(
       panel.dispose();
 
       const outputPath = path.join(
-        workspaceFolders[0].uri.fsPath,
+        getVsCodeWorkspaceRoot(),
         "dev",
         "reference",
         "vscode-css-vars.json"
