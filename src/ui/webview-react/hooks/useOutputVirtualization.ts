@@ -18,7 +18,10 @@ import {
   shouldLogMeasurement,
   shouldLogVirtualRange,
 } from "@utils/performanceProfiler";
-import { OUTPUT_USER_SCROLL_INPUT_GRACE_MS } from "@utils/outputScrollConstants";
+import {
+  OUTPUT_USER_SCROLL_INPUT_GRACE_MS,
+  OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX,
+} from "@utils/outputScrollConstants";
 import {
   estimateOutputRowHeight,
   type OutputRenderRow,
@@ -421,10 +424,37 @@ export function useOutputVirtualization({
           });
         }
       }
-      scheduleMeasurementVersionBump();
+      // When a row ABOVE the viewport changes height meaningfully, its reflow
+      // shifts everything below it — including the anchored content the user is
+      // looking at. scheduleMeasurementVersionBump defers the corrective
+      // layout-effect to a rAF, so the correction lands a frame AFTER TanStack's
+      // reflow has already painted: the visible "jump then snap back" flash. For
+      // that case bump the version synchronously so the correction batches with
+      // the reflow render and lands in the SAME paint. The common in/after-
+      // viewport case keeps the batched rAF bump to avoid per-row render churn,
+      // and the flush path owns its own (already synchronous) reconciliation.
+      const baseHeight = previousHeight ?? estimatedHeight;
+      const scrollElement = outputRef.current;
+      const isAboveViewportSignificantResize =
+        !isMeasurementFlushInProgressRef.current &&
+        scrollElement != null &&
+        Math.abs(nextHeight - baseHeight) >=
+          OUTPUT_ABOVE_VIEWPORT_SYNC_CORRECTION_MIN_DELTA_PX &&
+        element.getBoundingClientRect().bottom <=
+          scrollElement.getBoundingClientRect().top;
+      if (isAboveViewportSignificantResize) {
+        setMeasurementVersion((version) => version + 1);
+      } else {
+        scheduleMeasurementVersionBump();
+      }
       return nextHeight;
     },
-    [lastScrollEventAtRef, scheduleMeasurementVersionBump]
+    [
+      isMeasurementFlushInProgressRef,
+      lastScrollEventAtRef,
+      outputRef,
+      scheduleMeasurementVersionBump,
+    ]
   );
 
   const measureOutputRowElement = useCallback(
@@ -587,7 +617,16 @@ export function useOutputVirtualization({
       }
     }
     pendingMeasurementCacheRef.current.clear();
-    applyScrollTargetRef.current("measurement-flush-sync");
+    // Don't correct scrollTop on this synchronous path. measureElement above has
+    // updated the virtualizer's measurementsCache, but the new row transforms
+    // only paint on React's next commit — writing scrollTop now shifts the
+    // viewport a frame before the rows reflow, which is the visible "jump then
+    // snap back". Instead bump measurementVersion synchronously: it batches with
+    // the virtualizer's own measurement-driven re-render, so layoutApplyTrigger
+    // changes in the SAME render pass and the post-commit useLayoutEffect in
+    // useOutputScrollTarget applies the correction in lockstep with the reflow.
+    // The RAF chain below remains an idempotent safety net.
+    setMeasurementVersion((version) => version + 1);
     requestAnimationFrame(() => {
       const firstFrameRestore = applyScrollTargetRef.current(
         "measurement-flush-raf-1"

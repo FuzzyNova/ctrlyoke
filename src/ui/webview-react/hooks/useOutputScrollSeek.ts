@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { RefObject } from "react";
 import { getWheelDeltaPixels } from "@components/layout/output-section/OutputScrollSeekPlaceholder";
 import { logProfilerEvent } from "@utils/performanceProfiler";
@@ -33,6 +39,7 @@ interface UseOutputScrollSeekInput {
     ) => { resolved: boolean; appliedDelta: number }
   >;
   commitScrollTargetFromViewportRef: RefObject<(reason: string) => void>;
+  flushPendingScrollMeasurementsRef: RefObject<() => void>;
   getRowEstimateStats: () => unknown[];
   getVirtualItemsRef: RefObject<() => readonly { index: number }[]>;
   hasOutput: boolean;
@@ -59,6 +66,7 @@ export interface OutputScrollSeekScrollMetrics {
 export function useOutputScrollSeek({
   applyScrollTargetRef,
   commitScrollTargetFromViewportRef,
+  flushPendingScrollMeasurementsRef,
   getRowEstimateStats,
   getVirtualItemsRef,
   hasOutput,
@@ -390,7 +398,12 @@ export function useOutputScrollSeek({
     lastTouchYRef.current = null;
   }, []);
 
-  useEffect(() => {
+  // useLayoutEffect (not useEffect): the placeholder→real-row swap and its
+  // accumulated estimate catch-up (often several thousand px when many rows were
+  // fast-scrolled past) must be reconciled BEFORE the browser paints, otherwise
+  // the user sees the uncorrected layout for a frame — the "flash after scroll
+  // stops".
+  useLayoutEffect(() => {
     if (scrollSeekPlaceholderActive || !hasOutput) {
       return;
     }
@@ -412,7 +425,14 @@ export function useOutputScrollSeek({
       measurementVersion,
     });
     scrollSeekSettlingUntilRef.current = now + OUTPUT_SCROLL_SEEK_SETTLE_MS;
+    // Capture the anchor the user is currently looking at (pre-flush DOM), then
+    // drain all deferred measurements so the layout model is complete in one
+    // shot, then restore that anchor against the settled model. Doing the flush
+    // here — between capture and apply — collapses what was previously a
+    // commit → late-flush → re-correct sequence (the double -7145/-7590 applies
+    // in the logs) into a single pre-paint correction.
     commitScrollTargetFromViewportRef.current("scroll-seek-restore-commit");
+    flushPendingScrollMeasurementsRef.current();
     applyScrollTargetRef.current("scroll-seek-restore");
 
     logProfilerEvent("rowEstimateStats", {
@@ -459,6 +479,7 @@ export function useOutputScrollSeek({
   }, [
     applyScrollTargetRef,
     commitScrollTargetFromViewportRef,
+    flushPendingScrollMeasurementsRef,
     getRowEstimateStats,
     hasOutput,
     measurementVersion,

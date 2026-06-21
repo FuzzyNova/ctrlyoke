@@ -250,6 +250,10 @@ const OutputSectionInner: React.FC = () => {
   const commitScrollTargetFromViewportRef = useRef<(reason: string) => void>(
     () => {}
   );
+  // Populated from useOutputVirtualization below; lets the scroll-seek restore
+  // (which runs first in source order) drain deferred measurements synchronously
+  // before it re-anchors the viewport.
+  const flushPendingScrollMeasurementsRef = useRef<() => void>(() => {});
   const lastScrollEventAtRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef<number | null>(null);
   const measurementVersionRefForScrollSeek = useRef(0);
@@ -416,6 +420,7 @@ const OutputSectionInner: React.FC = () => {
   } = useOutputScrollSeek({
     applyScrollTargetRef,
     commitScrollTargetFromViewportRef,
+    flushPendingScrollMeasurementsRef,
     getRowEstimateStats: () => getRowEstimateStatsRef.current(),
     getVirtualItemsRef,
     hasOutput: rows.length > 0,
@@ -430,6 +435,7 @@ const OutputSectionInner: React.FC = () => {
 
   const {
     clearMeasurements,
+    flushPendingScrollMeasurements,
     getRowEstimateStats,
     hasPendingMeasurements,
     handleOutputProfilerRender,
@@ -471,6 +477,7 @@ const OutputSectionInner: React.FC = () => {
     scrollSeekSettlingUntilRef,
     scrollTargetRef,
   });
+  flushPendingScrollMeasurementsRef.current = flushPendingScrollMeasurements;
 
   isOutputVirtualizedRef.current = isOutputVirtualized;
   measurementVersionRefForScrollSeek.current = measurementVersion;
