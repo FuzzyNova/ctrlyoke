@@ -2030,6 +2030,18 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // SERVER_CERT_GENERATED - Self-signed cert written; settings updated with paths
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SERVER_CERT_GENERATED] = (_message) => {
+    useUiStore
+      .getState()
+      .showToast(
+        "Certificate generated. Restart the server to apply.",
+        "success"
+      );
+  };
+
+  // --------------------------------------------------------------------------
   // CAPTURE_THEME_VARS - Extension wants the webview to capture --vscode-* CSS vars
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CAPTURE_THEME_VARS] = (_message) => {
