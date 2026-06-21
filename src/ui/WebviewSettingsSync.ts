@@ -961,10 +961,15 @@ export class WebviewSettingsSync {
         : [];
 
     const { generate } = await import("selfsigned");
-    const pems = generate(
+    const notBeforeDate = new Date();
+    const notAfterDate = new Date(notBeforeDate);
+    notAfterDate.setDate(notAfterDate.getDate() + 365);
+
+    const pems = await generate(
       [{ name: "commonName", value: "FlightPath Local CA" }],
       {
-        days: 365,
+        notBeforeDate,
+        notAfterDate,
         keySize: 2048,
         algorithm: "sha256",
         extensions: [
@@ -983,13 +988,12 @@ export class WebviewSettingsSync {
             critical: true,
           },
           { name: "extKeyUsage", serverAuth: true },
-          { name: "subjectKeyIdentifier" },
           {
             name: "subjectAltName",
             altNames: [
               { type: 2, value: "localhost" },
               { type: 7, ip: "127.0.0.1" },
-              ...lanIps.map((ip) => ({ type: 7, ip })),
+              ...lanIps.map((ip) => ({ type: 7 as const, ip })),
             ],
           },
         ],

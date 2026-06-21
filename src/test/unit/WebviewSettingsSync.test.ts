@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import { X509Certificate } from "crypto";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
@@ -160,6 +161,37 @@ suite("WebviewSettingsSync", () => {
 
         await fs.access(expectedCertPath);
         await fs.access(expectedKeyPath);
+
+        const certPem = await fs.readFile(expectedCertPath, "utf8");
+        const keyPem = await fs.readFile(expectedKeyPath, "utf8");
+        const cert = new X509Certificate(certPem);
+
+        assert.match(
+          keyPem,
+          /^-----BEGIN PRIVATE KEY-----/m,
+          "generated key should remain a Node-compatible PKCS#8 private key"
+        );
+        assert.strictEqual(
+          cert.ca,
+          true,
+          "generated certificate must remain a CA certificate for the mobile trust flow"
+        );
+        assert.match(
+          cert.subject,
+          /CN=FlightPath Local CA/,
+          "generated certificate should preserve the expected common name"
+        );
+        assert.match(
+          cert.subjectAltName ?? "",
+          /DNS:localhost/,
+          "generated certificate should include localhost as a DNS SAN"
+        );
+        assert.match(
+          cert.subjectAltName ?? "",
+          /IP Address:127\.0\.0\.1/,
+          "generated certificate should include loopback as an IP SAN"
+        );
+
         assert.deepStrictEqual(
           setCalls,
           [
