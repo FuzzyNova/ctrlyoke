@@ -338,7 +338,11 @@ export class CodexToolBuilder {
     src: string,
     key: string
   ): string | undefined {
-    const re = new RegExp(`${key}\\s*:\\s*`, "g");
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Codex currently serializes helper arguments with JSON-style quoted keys
+    // (`{"command":"..."}`), while older/test payloads used JavaScript-style
+    // bare keys (`{command:"..."}`). Accept both forms.
+    const re = new RegExp(`(?:["']${escapedKey}["']|${escapedKey})\\s*:\\s*`, "g");
     let match: RegExpExecArray | null;
     while ((match = re.exec(src)) !== null) {
       const quoteIdx = match.index + match[0].length;

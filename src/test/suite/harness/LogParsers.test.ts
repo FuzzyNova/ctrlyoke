@@ -1292,8 +1292,8 @@ suite("CodexLogParser", () => {
             name: "exec",
             call_id: "call_exec_shell",
             input:
-              'const r = await tools.shell_command({command:"npm test",' +
-              'workdir:"C:\\\\dev\\\\FlightPath",timeout_ms:10000}); text(r)\n',
+              'const r = await tools.shell_command({"command":"npm test",' +
+              '"workdir":"C:\\\\dev\\\\FlightPath","timeout_ms":10000}); text(r)\n',
           },
         },
         {
