@@ -143,6 +143,216 @@ export class CodexToolBuilder {
     return TYPES_WITH_COMPLETION.has(eventType);
   }
 
+  // ── LOG FORMAT: EXEC TOOL (Codex gpt-5.x) ─────────────────────────────────
+
+  /**
+   * Build INITIATED events for a Codex `exec` custom tool call.
+   *
+   * Newer Codex models (gpt-5.x) no longer expose discrete `shell` / `apply_patch`
+   * tools. Instead every action arrives as a single `exec` custom tool whose
+   * `input` is a JavaScript snippet driving sandbox helpers, e.g.:
+   *
+   * ```js
+   * const r = await tools.shell_command({command:"...", workdir:"..."}); text(r)
+   * ```
+   * ```js
+   * const patch = "*** Begin Patch\n...*** End Patch";
+   * text(await tools.apply_patch(patch));
+   * ```
+   *
+   * This unwraps that snippet back into the underlying shell command or
+   * apply_patch payload and delegates to {@link buildLogToolInitiatedEvents} so
+   * the rest of the pipeline emits BASH_COMMAND / FILE_EDIT events instead of an
+   * opaque `exec(input: ...)` tool-call row. Falls back to a generic tool call
+   * when the snippet cannot be parsed.
+   *
+   * @param input     - The raw JavaScript snippet from `payload.input`
+   * @param callId    - Call ID for correlation with the COMPLETED event
+   * @param timestamp - Event timestamp in milliseconds
+   */
+  static buildExecInitiatedEvents(
+    input: string,
+    callId: string | undefined,
+    timestamp: number
+  ): CliEvent[] {
+    const parsed = this.parseExecInput(input);
+    if (!parsed) {
+      Log.debug(
+        "[CodexToolBuilder] exec input not recognized, emitting generic tool call"
+      );
+      return BaseToolBuilder.buildInitiatedEvents(
+        "exec",
+        { input },
+        callId,
+        timestamp
+      );
+    }
+
+    if (parsed.kind === "patch") {
+      return this.buildLogToolInitiatedEvents(
+        "apply_patch",
+        { input: parsed.patch },
+        callId,
+        timestamp
+      );
+    }
+
+    return this.buildLogToolInitiatedEvents(
+      "shell_command",
+      { command: parsed.command, workingDir: parsed.workdir },
+      callId,
+      timestamp
+    );
+  }
+
+  /**
+   * Unwrap a Codex `exec` JavaScript snippet into its underlying operation.
+   *
+   * @returns A shell command (with optional workdir), an apply_patch payload, or
+   *          null when the snippet matches no known helper.
+   */
+  static parseExecInput(
+    input: string
+  ):
+    | { kind: "shell"; command: string; workdir?: string }
+    | { kind: "patch"; patch: string }
+    | null {
+    if (input.includes("apply_patch") || input.includes("*** Begin Patch")) {
+      const patch = this.extractJsStringLiterals(input).find((literal) =>
+        literal.includes("*** Begin Patch")
+      );
+      if (patch) {
+        return { kind: "patch", patch };
+      }
+    }
+
+    if (input.includes("shell_command") || /\bcommand\s*:/.test(input)) {
+      const command = this.readJsObjectStringValue(input, "command");
+      if (command !== undefined) {
+        const workdir = this.readJsObjectStringValue(input, "workdir");
+        return { kind: "shell", command, workdir };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Flatten a Codex `custom_tool_call_output` payload to display text.
+   *
+   * Newer Codex versions return an array of `{type, text}` parts; older versions
+   * return a single string. Both shapes flatten to a single string here.
+   */
+  static flattenCustomToolOutput(output: unknown): string {
+    if (typeof output === "string") {
+      return output;
+    }
+    if (Array.isArray(output)) {
+      return output
+        .map((part) =>
+          typeof part === "string"
+            ? part
+            : ((part as { text?: string })?.text ?? "")
+        )
+        .join("");
+    }
+    return "";
+  }
+
+  /**
+   * Read and decode a JS/JSON string literal beginning at the opening quote
+   * `src[quoteIdx]`. Handles `\n`, `\t`, `\\`, `\"`, `\'`, and backtick escapes;
+   * backslashes are otherwise preserved so Windows paths survive intact.
+   */
+  private static readJsStringLiteral(
+    src: string,
+    quoteIdx: number
+  ): { value: string; endIdx: number } | null {
+    const quote = src[quoteIdx];
+    let i = quoteIdx + 1;
+    let value = "";
+    while (i < src.length) {
+      const ch = src[i];
+      if (ch === "\\") {
+        const next = src[i + 1];
+        switch (next) {
+          case "n":
+            value += "\n";
+            break;
+          case "r":
+            value += "\r";
+            break;
+          case "t":
+            value += "\t";
+            break;
+          case "b":
+            value += "\b";
+            break;
+          case "f":
+            value += "\f";
+            break;
+          case undefined:
+            break;
+          default:
+            // \\, \", \', \`, and unknown escapes → literal next char
+            value += next;
+            break;
+        }
+        i += 2;
+        continue;
+      }
+      if (ch === quote) {
+        return { value, endIdx: i + 1 };
+      }
+      value += ch;
+      i += 1;
+    }
+    return null;
+  }
+
+  /** Extract and decode every top-level string literal from a JS snippet. */
+  private static extractJsStringLiterals(src: string): string[] {
+    const literals: string[] = [];
+    let i = 0;
+    while (i < src.length) {
+      const ch = src[i];
+      if (ch === '"' || ch === "'" || ch === "`") {
+        const parsed = this.readJsStringLiteral(src, i);
+        if (parsed) {
+          literals.push(parsed.value);
+          i = parsed.endIdx;
+          continue;
+        }
+      }
+      i += 1;
+    }
+    return literals;
+  }
+
+  /**
+   * Read the decoded string value for `key:` within a JS object literal. Skips
+   * false matches (e.g. `command` not followed by a quoted value) by scanning
+   * every occurrence of the key.
+   */
+  private static readJsObjectStringValue(
+    src: string,
+    key: string
+  ): string | undefined {
+    const re = new RegExp(`${key}\\s*:\\s*`, "g");
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(src)) !== null) {
+      const quoteIdx = match.index + match[0].length;
+      const quote = src[quoteIdx];
+      if (quote === '"' || quote === "'" || quote === "`") {
+        const parsed = this.readJsStringLiteral(src, quoteIdx);
+        if (parsed) {
+          return parsed.value;
+        }
+      }
+    }
+    return undefined;
+  }
+
   // ── LOG FORMAT: COMPLETED ─────────────────────────────────────────────────
 
   /**

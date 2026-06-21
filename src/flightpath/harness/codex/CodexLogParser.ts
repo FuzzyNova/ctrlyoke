@@ -436,24 +436,10 @@ export class CodexLogParser extends BaseLogParser {
       ) {
         const toolName = event.payload.name?.toLowerCase() || "";
         const input = event.payload.input;
-        let params: Record<string, unknown> =
-          typeof input === "string"
-            ? { input }
-            : (input as Record<string, unknown>) || {};
-
-        // Parse JSON input if it's a string
-        if (typeof input === "string") {
-          try {
-            params = JSON.parse(input) as Record<string, unknown>;
-          } catch {
-            params = { input };
-          }
-        }
-
         const callId = event.payload.call_id as string | undefined;
-        const eventsForTool = CodexToolBuilder.buildLogToolInitiatedEvents(
+        const eventsForTool = this.buildCustomToolCallInitiatedEvents(
           toolName,
-          params,
+          input,
           callId,
           timestamp
         );
@@ -481,21 +467,9 @@ export class CodexLogParser extends BaseLogParser {
         const callId = event.payload.call_id as string | undefined;
         const toolInfo = callId ? this.toolCallMap.get(callId) : undefined;
 
-        // Parse JSON output to extract metadata
-        let parsedOutput: Record<string, any> = {};
-        let outputText: string = event.payload.output as string;
-        try {
-          parsedOutput = JSON.parse(event.payload.output as string) as Record<
-            string,
-            any
-          >;
-          outputText =
-            (parsedOutput.output as string) || (event.payload.output as string);
-        } catch {
-          // Use raw output if not JSON
-        }
-
-        const exitCode = parsedOutput.metadata?.exit_code as number | undefined;
+        const { outputText, exitCode } = this.parseCustomToolCallOutput(
+          event.payload.output
+        );
         const success = exitCode === 0 || exitCode === undefined;
 
         if (toolInfo) {
@@ -1125,21 +1099,10 @@ export class CodexLogParser extends BaseLogParser {
     if (e.type === "response_item" && e.payload?.type === "custom_tool_call") {
       const toolName = e.payload.name?.toLowerCase() || "";
       const input = e.payload.input;
-      let params: Record<string, unknown> =
-        typeof input === "string"
-          ? { input }
-          : (input as Record<string, unknown>) || {};
-      if (typeof input === "string") {
-        try {
-          params = JSON.parse(input) as Record<string, unknown>;
-        } catch {
-          params = { input };
-        }
-      }
       const callId = e.payload.call_id as string | undefined;
-      const toolEvents = CodexToolBuilder.buildLogToolInitiatedEvents(
+      const toolEvents = this.buildCustomToolCallInitiatedEvents(
         toolName,
-        params,
+        input,
         callId,
         timestamp
       );
@@ -1169,19 +1132,9 @@ export class CodexLogParser extends BaseLogParser {
       const toolInfo = callId
         ? this.pendingStreamingCalls.get(callId)
         : undefined;
-      let parsedOutput: Record<string, any> = {};
-      let outputText: string = e.payload.output as string;
-      try {
-        parsedOutput = JSON.parse(e.payload.output as string) as Record<
-          string,
-          any
-        >;
-        outputText =
-          (parsedOutput.output as string) || (e.payload.output as string);
-      } catch {
-        // Use raw output if not JSON
-      }
-      const exitCode = parsedOutput.metadata?.exit_code as number | undefined;
+      const { outputText, exitCode } = this.parseCustomToolCallOutput(
+        e.payload.output
+      );
       const success = exitCode === 0 || exitCode === undefined;
       if (toolInfo) {
         results.push(
@@ -1355,6 +1308,80 @@ export class CodexLogParser extends BaseLogParser {
   }
 
   /**
+   * Build INITIATED events for a Codex `custom_tool_call`, handling both the
+   * legacy discrete-tool format and the newer `exec` wrapper (gpt-5.x), where
+   * `input` is a JavaScript snippet. Shared by the full-response and streaming
+   * parse paths so the unwrapping logic is single-sourced.
+   */
+  private buildCustomToolCallInitiatedEvents(
+    toolName: string,
+    input: unknown,
+    callId: string | undefined,
+    timestamp: number
+  ): CliEvent[] {
+    // Newer Codex models wrap every action in an `exec` tool whose input is a
+    // JavaScript snippet driving sandbox helpers (shell_command / apply_patch).
+    if (toolName === "exec" && typeof input === "string") {
+      return CodexToolBuilder.buildExecInitiatedEvents(input, callId, timestamp);
+    }
+
+    // Legacy format: input is a plain value or a JSON string of tool arguments.
+    let params: Record<string, unknown> =
+      typeof input === "string"
+        ? { input }
+        : (input as Record<string, unknown>) || {};
+    if (typeof input === "string") {
+      try {
+        params = JSON.parse(input) as Record<string, unknown>;
+      } catch {
+        params = { input };
+      }
+    }
+
+    return CodexToolBuilder.buildLogToolInitiatedEvents(
+      toolName,
+      params,
+      callId,
+      timestamp
+    );
+  }
+
+  /**
+   * Normalize a Codex `custom_tool_call_output` payload into display text and an
+   * exit code. Handles both output shapes:
+   * - Legacy: a JSON string with `output` / `metadata.exit_code`.
+   * - Newer (gpt-5.x): an array of `{type, text}` parts whose text carries a
+   *   `Exit code: N` line and an `Output:\n<content>` body.
+   */
+  private parseCustomToolCallOutput(output: unknown): {
+    outputText: string;
+    exitCode: number | undefined;
+  } {
+    const raw = CodexToolBuilder.flattenCustomToolOutput(output);
+    let outputText = raw;
+    let exitCode: number | undefined;
+
+    try {
+      const parsed = JSON.parse(raw) as Record<string, any>;
+      outputText = (parsed.output as string) ?? raw;
+      exitCode = parsed.metadata?.exit_code as number | undefined;
+    } catch {
+      // Newer format: extract exit code and strip the Codex shell wrapper so the
+      // displayed output is just the command's actual stdout.
+      const exitMatch = raw.match(/Exit code:\s*(\d+)/);
+      if (exitMatch) {
+        exitCode = parseInt(exitMatch[1], 10);
+      }
+      const outIdx = raw.lastIndexOf("Output:\n");
+      if (outIdx >= 0) {
+        outputText = raw.slice(outIdx + "Output:\n".length);
+      }
+    }
+
+    return { outputText, exitCode };
+  }
+
+  /**
    * Rewrite tracked apply_patch FILE_EDIT hunks with correct line numbers from
    * a Codex `patch_apply_end` event.
    *
@@ -1376,20 +1403,10 @@ export class CodexLogParser extends BaseLogParser {
     payload: Record<string, any>,
     trackingMap: Map<string, CodexTrackedToolCall>
   ): void {
-    const callId = payload.call_id as string | undefined;
     const changes = payload.changes as
       | Record<string, { unified_diff?: string }>
       | undefined;
-    if (!callId || !changes) {
-      return;
-    }
-
-    const toolInfo = trackingMap.get(callId);
-    if (
-      !toolInfo ||
-      toolInfo.type !== CLI_EVENT_TYPES.FILE_EDIT ||
-      !toolInfo.initiatedEvents
-    ) {
+    if (!changes) {
       return;
     }
 
@@ -1404,15 +1421,35 @@ export class CodexLogParser extends BaseLogParser {
         );
       }
     }
+    if (correctedByPath.size === 0) {
+      return;
+    }
 
-    for (const initiatedEvent of toolInfo.initiatedEvents) {
-      const data = initiatedEvent.data as FileEditData | undefined;
-      if (!data?.path) {
-        continue;
-      }
-      const corrected = correctedByPath.get(data.path.toLowerCase());
-      if (corrected && corrected.length > 0) {
-        data.structuredPatch = corrected;
+    // Correlate to the originating apply_patch call. Older Codex builds reuse the
+    // tool's call_id here; newer builds (gpt-5.x exec) emit a separate
+    // `exec-<uuid>` call_id that does NOT match the tool call. When the direct
+    // lookup fails, fall back to matching every tracked FILE_EDIT call by path —
+    // the `changes` keys are file paths, so this stays correct regardless of id.
+    const callId = payload.call_id as string | undefined;
+    const direct = callId ? trackingMap.get(callId) : undefined;
+    const targets =
+      direct?.type === CLI_EVENT_TYPES.FILE_EDIT && direct.initiatedEvents
+        ? [direct]
+        : [...trackingMap.values()].filter(
+            (info) =>
+              info.type === CLI_EVENT_TYPES.FILE_EDIT && info.initiatedEvents
+          );
+
+    for (const toolInfo of targets) {
+      for (const initiatedEvent of toolInfo.initiatedEvents!) {
+        const data = initiatedEvent.data as FileEditData | undefined;
+        if (!data?.path) {
+          continue;
+        }
+        const corrected = correctedByPath.get(data.path.toLowerCase());
+        if (corrected && corrected.length > 0) {
+          data.structuredPatch = corrected;
+        }
       }
     }
   }

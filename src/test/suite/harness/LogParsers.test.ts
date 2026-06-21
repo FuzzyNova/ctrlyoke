@@ -1280,6 +1280,154 @@ suite("CodexLogParser", () => {
       }
     });
 
+    test("should unwrap exec shell_command into BASH_COMMAND (gpt-5.x format)", () => {
+      // Newer Codex models wrap every action in a single `exec` custom tool whose
+      // input is a JS snippet driving sandbox helpers. The output is an array of
+      // {type, text} parts (not a string) carrying an `Exit code:` / `Output:` body.
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "exec",
+            call_id: "call_exec_shell",
+            input:
+              'const r = await tools.shell_command({command:"npm test",' +
+              'workdir:"C:\\\\dev\\\\FlightPath",timeout_ms:10000}); text(r)\n',
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call_output",
+            call_id: "call_exec_shell",
+            output: [
+              { type: "input_text", text: "Script completed\nWall time 1s\nOutput:\n" },
+              {
+                type: "input_text",
+                text: "Exit code: 0\nWall time: 1s\nOutput:\nall tests passed\n",
+              },
+            ],
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      // No event should remain an opaque generic tool call named "exec".
+      const execToolCalls = response.events.filter(
+        (e) =>
+          e.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          (e.data as { name?: string }).name === "exec"
+      );
+      assert.strictEqual(
+        execToolCalls.length,
+        0,
+        "exec must be unwrapped, not rendered as a generic tool call"
+      );
+
+      const bashEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      assert.ok(bashEvents.length >= 2, "expected INITIATED + COMPLETED bash events");
+      assert.strictEqual(
+        (bashEvents[0].data as { command?: string }).command,
+        "npm test"
+      );
+      const completed = bashEvents.find(
+        (e) => (e.data as { output?: string }).output
+      );
+      assert.ok(completed, "expected a completed bash event with output");
+      const data = completed!.data as { output: string; exitCode?: number };
+      assert.strictEqual(data.exitCode, 0);
+      // Output should be stripped of the Codex shell wrapper preamble.
+      assert.strictEqual(data.output, "all tests passed\n");
+    });
+
+    test("should unwrap exec apply_patch into FILE_EDIT (gpt-5.x format)", () => {
+      // exec apply_patch: the patch is a JS string literal (escaped \n / \\) and the
+      // patch_apply_end event uses a separate `exec-<uuid>` call_id that does NOT
+      // match the tool call_id — correlation must fall back to file-path matching.
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "exec",
+            call_id: "call_exec_patch",
+            input:
+              'const patch = "*** Begin Patch\\n' +
+              "*** Update File: src/foo.ts\\n" +
+              "@@\\n" +
+              " context\\n" +
+              "-old line\\n" +
+              '+new line\\n*** End Patch";\n' +
+              "text(await tools.apply_patch(patch));",
+          },
+        },
+        {
+          type: "event_msg",
+          payload: {
+            type: "patch_apply_end",
+            call_id: "exec-70bd704a-1978-4cab-a8f4-aab7736f4b58",
+            success: true,
+            changes: {
+              "src/foo.ts": {
+                type: "update",
+                unified_diff:
+                  "@@ -120,3 +120,3 @@\n context\n-old line\n+new line\n",
+              },
+            },
+          },
+        },
+        {
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call_output",
+            call_id: "call_exec_patch",
+            output: [
+              {
+                type: "input_text",
+                text: "Success. Updated the following files:\nM src/foo.ts\n",
+              },
+            ],
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      const execToolCalls = response.events.filter(
+        (e) =>
+          e.type === CLI_EVENT_TYPES.TOOL_CALL &&
+          (e.data as { name?: string }).name === "exec"
+      );
+      assert.strictEqual(execToolCalls.length, 0, "exec must be unwrapped");
+
+      const fileEditEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.FILE_EDIT
+      );
+      assert.ok(fileEditEvents.length > 0, "expected FILE_EDIT events");
+      assert.strictEqual(
+        (fileEditEvents[0].data as { path?: string }).path,
+        "src/foo.ts"
+      );
+      // patch_apply_end offsets (120) must be applied despite the mismatched
+      // exec-<uuid> call_id, via path-based correlation.
+      for (const editEvent of fileEditEvents) {
+        const hunks = (editEvent.data as any).structuredPatch as
+          | Array<{ oldStart: number; newStart: number }>
+          | undefined;
+        assert.ok(hunks && hunks.length > 0, "expected structuredPatch hunks");
+        assert.strictEqual(hunks[0].oldStart, 120);
+        assert.strictEqual(hunks[0].newStart, 120);
+      }
+    });
+
     test("should handle thread_xxx session ID format", () => {
       const events = [
         {
