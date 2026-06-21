@@ -242,6 +242,9 @@ export const BashOutput = memo<BashOutputProps>(
                 commandPreview.visibleText,
                 commandFindMatches ?? []
               )}
+              {!resolvedExpansion.commandExpanded &&
+                commandPreview.isTruncated &&
+                "..."}
             </span>
             {renderStatusBadge()}
           </span>

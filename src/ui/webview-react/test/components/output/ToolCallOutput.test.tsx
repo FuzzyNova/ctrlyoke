@@ -33,6 +33,11 @@ describe("GenericToolCallOutput", () => {
     expect(
       screen.queryByText("detail: lift expansion state")
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /write_memory\(subject: output-layout, detail: lift expansion state\)\.\.\./i
+      )
+    ).toBeInTheDocument();
     expect(collapsedOutput?.textContent).toContain("line 10");
     expect(collapsedOutput?.textContent).not.toContain("line 11");
 
@@ -45,6 +50,11 @@ describe("GenericToolCallOutput", () => {
           false
       ).length
     ).toBeGreaterThan(0);
+    expect(
+      screen.queryByText(
+        /write_memory\(subject: output-layout, detail: lift expansion state\)\.\.\./i
+      )
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByText(/\[show 2 more lines\]/i));
     const expandedOutput = screen.getByText(/\[show less\]/i).parentElement;
@@ -154,5 +164,23 @@ describe("GenericToolCallOutput", () => {
     const mark = container.querySelector("mark");
     expect(mark).toHaveAttribute("data-find-active", "true");
     expect(mark?.textContent).toBe("alpha");
+  });
+
+  it("shows an inline ellipsis when parameters are collapsed", () => {
+    render(
+      <GenericToolCallOutput
+        name="write_memory"
+        parameters={{
+          subject: "output-layout",
+          detail: "lift expansion state",
+        }}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        /write_memory\(subject: output-layout, detail: lift expansion state\)\.\.\./i
+      )
+    ).toBeInTheDocument();
   });
 });

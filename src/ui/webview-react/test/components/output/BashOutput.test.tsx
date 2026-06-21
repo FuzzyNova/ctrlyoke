@@ -16,11 +16,13 @@ describe("BashOutput", () => {
     const { container } = render(<BashOutput command={longCommand} />);
 
     expect(screen.getByTitle("Show full command")).toBeInTheDocument();
+    expect(container.textContent).toContain("...");
     expect(container.textContent).not.toContain("x".repeat(200));
 
     await user.click(screen.getByTitle("Show full command"));
 
     expect(screen.getByTitle("Hide full command")).toBeInTheDocument();
+    expect(container.textContent).not.toContain(`${"x".repeat(160)}...`);
     expect(container.textContent).toContain(longCommand);
   });
 

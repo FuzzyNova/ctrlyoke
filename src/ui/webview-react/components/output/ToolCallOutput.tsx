@@ -175,6 +175,8 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       result,
       expansion: resolvedExpansion,
     });
+  const showCollapsedParamsIndicator =
+    !resolvedRenderPlan.params.isExpanded && resolvedRenderPlan.params.canToggle;
 
   const updateExpansion = (
     section: ToolCallExpansionSection,
@@ -245,12 +247,13 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
           {nameFindMatches?.length ? (
             <>
               {highlightText(name, nameFindMatches)}({params})
+              {showCollapsedParamsIndicator && "..."}
             </>
           ) : (
-            `${name}(${params})`
+            `${name}(${params})${showCollapsedParamsIndicator ? "..." : ""}`
           )}
         </span>
-        {resolvedRenderPlan.params.canToggle && (
+      {resolvedRenderPlan.params.canToggle && (
           <button
             type="button"
             className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
