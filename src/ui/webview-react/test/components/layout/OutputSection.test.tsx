@@ -301,7 +301,9 @@ describe("OutputSection", () => {
   it("skips width-change scroll restoration while collapsing the output pane", () => {
     render(<OutputSection />);
 
-    expect(screen.getByRole("button", { name: "Collapse output" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Collapse output" })
+    ).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse output" }));
     outputWidth = 0;
@@ -312,5 +314,11 @@ describe("OutputSection", () => {
 
     expect(useUiStore.getState().outputCollapsed).toBe(true);
     expect(applyScrollTargetSpy).not.toHaveBeenCalledWith("width-change");
+  });
+
+  it("routes live auto-scroll through the shared scroll target", () => {
+    render(<OutputSection />);
+
+    expect(applyScrollTargetSpy).toHaveBeenCalledWith("auto-scroll");
   });
 });

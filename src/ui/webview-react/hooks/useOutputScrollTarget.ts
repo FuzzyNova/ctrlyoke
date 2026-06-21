@@ -90,6 +90,9 @@ export function useOutputScrollTarget({
   const scrollTargetCommitTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  const deferredScrollTargetApplyTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const scrollTargetCommitRetryCountRef = useRef(0);
   const previousRestoreTriggerRef = useRef<string | null>(null);
   const previousWorkflowScrollTargetIdRef = useRef<string | null>(null);
@@ -225,7 +228,21 @@ export function useOutputScrollTarget({
         !options?.force &&
         (hasRecentUserScrollInput || pendingNavigationRef.current !== null)
       ) {
+        if (hasRecentUserScrollInput && pendingNavigationRef.current === null) {
+          if (deferredScrollTargetApplyTimerRef.current !== null) {
+            clearTimeout(deferredScrollTargetApplyTimerRef.current);
+          }
+          deferredScrollTargetApplyTimerRef.current = setTimeout(() => {
+            deferredScrollTargetApplyTimerRef.current = null;
+            applyScrollTargetRef.current(`${phase}-deferred`);
+          }, userScrollInputGraceMs);
+        }
         return { resolved: false, appliedDelta: 0 };
+      }
+
+      if (deferredScrollTargetApplyTimerRef.current !== null) {
+        clearTimeout(deferredScrollTargetApplyTimerRef.current);
+        deferredScrollTargetApplyTimerRef.current = null;
       }
 
       if (scrollTargetCommitTimerRef.current !== null) {
@@ -358,6 +375,10 @@ export function useOutputScrollTarget({
       if (scrollTargetCommitTimerRef.current !== null) {
         clearTimeout(scrollTargetCommitTimerRef.current);
         scrollTargetCommitTimerRef.current = null;
+      }
+      if (deferredScrollTargetApplyTimerRef.current !== null) {
+        clearTimeout(deferredScrollTargetApplyTimerRef.current);
+        deferredScrollTargetApplyTimerRef.current = null;
       }
     },
     []

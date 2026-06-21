@@ -819,22 +819,13 @@ const OutputSectionInner: React.FC = () => {
     }
 
     setCurrentScrollTarget(DEFAULT_OUTPUT_SCROLL_TARGET, "auto-scroll");
-    isProgrammaticScroll.current = true;
-    if (isOutputVirtualized) {
-      rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
-    } else {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }
-    requestAnimationFrame(() => {
-      isProgrammaticScroll.current = false;
-    });
+    applyScrollTarget("auto-scroll");
   }, [
+    applyScrollTarget,
     rows,
     streamingChunks,
     finalStepStreamingChunks,
     isExecutionActive,
-    isOutputVirtualized,
-    rowVirtualizer,
     setCurrentScrollTarget,
   ]);
 

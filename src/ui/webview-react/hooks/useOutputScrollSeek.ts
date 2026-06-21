@@ -169,6 +169,19 @@ export function useOutputScrollSeek({
 
       overscanRestoreTimerRef.current = setTimeout(() => {
         overscanRestoreTimerRef.current = null;
+        const now = performance.now();
+        const lastScrollActivityAt = Math.max(
+          lastScrollEventAtRef.current ?? 0,
+          lastUserScrollInputAtRef.current ?? 0
+        );
+        const scrollIdleMs = now - lastScrollActivityAt;
+        if (scrollIdleMs < OUTPUT_USER_SCROLL_INPUT_GRACE_MS) {
+          scheduleOverscanRestore(
+            OUTPUT_USER_SCROLL_INPUT_GRACE_MS - scrollIdleMs
+          );
+          return;
+        }
+
         scrollSeekEntryRenderedIndicesRef.current = new Set();
         if (scrollSeekPlaceholderRef.current) {
           setOutputOverscanMode(
@@ -184,7 +197,7 @@ export function useOutputScrollSeek({
         }
       }, delayMs ?? OUTPUT_OVERSCAN_RESTORE_DELAY_MS);
     },
-    [setOutputOverscanMode]
+    [lastScrollEventAtRef, lastUserScrollInputAtRef, setOutputOverscanMode]
   );
 
   const enterFastScrollOverscan = useCallback(
@@ -400,7 +413,7 @@ export function useOutputScrollSeek({
     });
     scrollSeekSettlingUntilRef.current = now + OUTPUT_SCROLL_SEEK_SETTLE_MS;
     commitScrollTargetFromViewportRef.current("scroll-seek-restore-commit");
-    applyScrollTargetRef.current("scroll-seek-restore", { force: true });
+    applyScrollTargetRef.current("scroll-seek-restore");
 
     logProfilerEvent("rowEstimateStats", {
       buckets: getRowEstimateStats(),
