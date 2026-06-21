@@ -11,6 +11,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import { isStandalone } from "@hooks/useVsCodeApi";
+import { useUiStore } from "@store/uiStore";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -55,6 +56,7 @@ export function NotificationsSection({
   const notif = settings.settings.notifications;
   const server = settings.settings.server;
   const sources = settings.sources as Record<string, SettingSource>;
+  const setGlobalSettingsTab = useUiStore((s) => s.setGlobalSettingsTab);
   const [status, setStatus] = useState<BrowserNotificationStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -176,12 +178,32 @@ export function NotificationsSection({
             onChange={(value) => onUpdate("notifications.browser.mode", value)}
             options={BROWSER_MODE_OPTIONS}
           />
-          {!isStandalone ? (
-            <p className="text-xs text-description-fg mt-1">
-              Browser notifications apply to the hosted server dashboard, not
-              the VS Code sidebar.
+          <div className="mt-1 space-y-1 text-xs text-description-fg">
+            <p>
+              Browser notifications deliver FlightPath alerts through the hosted
+              dashboard, including on your phone. Choose a mode here, then open
+              FlightPath on your phone and allow notifications there.
             </p>
-          ) : null}
+            <p>
+              Phone notifications require HTTPS.
+              {!isStandalone ? (
+                <>
+                  {" "}
+                  Enable it in the{" "}
+                  <button
+                    type="button"
+                    onClick={() => setGlobalSettingsTab("server")}
+                    className="text-link-fg hover:underline"
+                  >
+                    Server settings
+                  </button>
+                  .
+                </>
+              ) : (
+                " Enable HTTPS on the hosted server."
+              )}
+            </p>
+          </div>
         </SettingInputRow>
 
         {browserModeEnabled ? (
