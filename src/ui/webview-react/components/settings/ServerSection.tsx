@@ -248,8 +248,8 @@ export function ServerSection({
               <button
                 type="button"
                 onClick={() => setShowQr((v) => !v)}
-                title="Show QR code"
-                aria-label="Show QR code"
+                title="Show QR code to open on your phone"
+                aria-label="Show QR code to open on your phone"
                 className="shrink-0 text-description-fg hover:text-foreground"
               >
                 <svg
@@ -265,16 +265,7 @@ export function ServerSection({
               </button>
             </div>
 
-            {showQr && (
-              <div className="mt-2 flex flex-col items-center gap-1 p-3 bg-white rounded">
-                <canvas ref={qrCanvasRef} />
-                <p className="text-xs text-description-fg">
-                  Scan to open on your phone
-                </p>
-              </div>
-            )}
-
-            <div className="mt-1 flex flex-col gap-1">
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <button
                 type="button"
                 onClick={tokenFlash ? undefined : handleRegenerateToken}
@@ -292,10 +283,35 @@ export function ServerSection({
                 </span>
               </button>
               {lastTokenRegenerated !== null && !tokenFlash && (
-                <p className="text-xs text-description-fg">
+                <span className="text-xs text-description-fg">
                   Restart the server for the new token to take effect.
-                </p>
+                </span>
               )}
+            </div>
+
+            {showQr && (
+              <div className="mt-2 flex flex-col items-center gap-1 p-3 bg-white rounded">
+                <canvas ref={qrCanvasRef} />
+                <p className="text-xs text-description-fg">
+                  Scan to open on your phone
+                </p>
+              </div>
+            )}
+
+            <div className="mt-2 space-y-1 text-xs text-description-fg italic">
+              <p>
+                FlightPath uses the token in this link instead of a user login.
+                Treat the link like a password and share it only with people you
+                trust. Select the QR code button next to the link to open
+                FlightPath on your phone, then choose{" "}
+                <em>Add to Home Screen</em> or <em>Install app</em> in your
+                browser.
+              </p>
+              <p>
+                Regenerate the token if this link is exposed or someone should
+                no longer have access. Like changing a password, this
+                invalidates the old link after the server restarts.
+              </p>
             </div>
           </div>
         )}
