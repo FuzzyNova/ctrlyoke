@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
+import * as fs from "fs/promises";
 import * as path from "path";
 import { FileReference } from "./FileReferenceParser";
 import { Log } from "./Log";
+import { getErrorMessage } from "./ErrorUtils";
+import { findSymbolRange } from "./SymbolRangeFinder";
 
 /**
  * Utility functions for building XML attachments for various reference types
@@ -25,6 +28,11 @@ import { Log } from "./Log";
  *   the standalone binary) so this shared helper never depends on the VS Code
  *   workspace-resolution layer.
  * @returns FileReference with path and line range, or null if not found
+ *
+ * Symbol resolution reads the file directly and derives the symbol's extent from
+ * its text (see {@link findSymbolRange}). It deliberately does NOT use VS Code's
+ * symbol provider, so symbol attachments expand identically in the editor and the
+ * standalone CLI.
  */
 export async function resolveSymbol(
   symbolRef: string,
@@ -65,110 +73,45 @@ export async function resolveSymbol(
       `[resolveSymbol] Parsed: filePath="${filePath}", symbolName="${symbolName}", line=${targetLine}`
     );
 
-    // Resolve workspace-relative path to URI against the caller-provided root.
     if (!workspaceRoot) {
       Log.warn("No workspace root provided");
       return null;
     }
 
-    const fileUri = vscode.Uri.joinPath(
-      vscode.Uri.file(workspaceRoot),
-      filePath
-    );
-
-    // Open document to query symbols (needed for symbol provider to work)
-    await vscode.workspace.openTextDocument(fileUri);
-
-    // Get document symbols
-    const symbols = (await vscode.commands.executeCommand(
-      "vscode.executeDocumentSymbolProvider",
-      fileUri
-    )) as vscode.DocumentSymbol[];
-
-    if (!symbols || symbols.length === 0) {
-      Log.warn(`No symbols found in ${filePath}`);
-      return null;
-    }
-
-    Log.debug(
-      `[resolveSymbol] Found ${symbols.length} top-level symbols, searching for "${symbolName}" at line ${targetLine}...`
-    );
-
-    // Find symbol at or near the target line
-    const targetSymbol = findSymbolAtLine(symbols, symbolName, targetLine);
-
-    if (!targetSymbol) {
+    // Read the file directly (Node fs — works in both VS Code and the CLI).
+    const absolutePath = path.join(workspaceRoot, filePath);
+    let content: string;
+    try {
+      content = await fs.readFile(absolutePath, "utf8");
+    } catch (err) {
       Log.warn(
-        `Symbol '${symbolName}' not found at line ${targetLine} in ${filePath}`
+        `[resolveSymbol] Could not read ${filePath}: ${getErrorMessage(err)}`
       );
       return null;
     }
 
+    // Derive the symbol's extent from the file text — no symbol provider needed.
+    const { startLine, endLine } = findSymbolRange(
+      content,
+      symbolName,
+      targetLine,
+      path.extname(filePath)
+    );
+
     Log.debug(
-      `[resolveSymbol] Found symbol: ${targetSymbol.name} (lines ${targetSymbol.range.start.line + 1}-${targetSymbol.range.end.line + 1})`
+      `[resolveSymbol] Resolved "${symbolName}" to lines ${startLine}-${endLine} in ${filePath}`
     );
 
     return {
       path: filePath,
-      startLine: targetSymbol.range.start.line + 1,
-      endLine: targetSymbol.range.end.line + 1,
-      symbolName: targetSymbol.name,
+      startLine,
+      endLine,
+      symbolName: symbolName.replace(/\(\)$/, ""),
     };
   } catch (error) {
     Log.error(`Failed to resolve symbol '${symbolRef}':`, error);
     return null;
   }
-}
-
-/**
- * Recursively find a symbol at a specific line in a symbol tree
- * @param symbols Array of document symbols to search
- * @param symbolName Name of the symbol to find (may include () for methods)
- * @param targetLine Line number to match (1-based)
- * @returns Matching symbol or null
- */
-function findSymbolAtLine(
-  symbols: vscode.DocumentSymbol[],
-  symbolName: string,
-  targetLine: number
-): vscode.DocumentSymbol | null {
-  // Normalize symbol names for comparison:
-  // - VS Code returns "methodName" but user may search for "methodName()"
-  // - Strip trailing () from search term for matching
-  const normalizedSearchName = symbolName.replace(/\(\)$/, "");
-
-  for (const symbol of symbols) {
-    // Check if this symbol matches (name and line)
-    const symbolStartLine = symbol.range.start.line + 1; // Convert to 1-based
-    const normalizedSymbolName = symbol.name.replace(/\(\)$/, "");
-
-    // Only log individual checks at debug level to reduce verbosity
-    // (checking dozens of symbols is normal for large files)
-
-    if (
-      normalizedSymbolName === normalizedSearchName &&
-      symbolStartLine === targetLine
-    ) {
-      Log.debug(
-        `[findSymbolAtLine] ✓ Found: ${symbol.name} at line ${symbolStartLine}`
-      );
-      return symbol;
-    }
-
-    // Recursively check children
-    if (symbol.children && symbol.children.length > 0) {
-      const childMatch = findSymbolAtLine(
-        symbol.children,
-        symbolName,
-        targetLine
-      );
-      if (childMatch) {
-        return childMatch;
-      }
-    }
-  }
-
-  return null;
 }
 
 /**

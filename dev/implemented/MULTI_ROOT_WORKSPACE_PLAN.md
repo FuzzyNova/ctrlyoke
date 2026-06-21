@@ -157,6 +157,24 @@ Two shared modules that *are* bundled into the CLI (`Log`, `AttachmentBuilders`)
 This guarantees a shared module can never accidentally pull VS Code workspace resolution onto
 a CLI code path (which would silently ignore `--cwd` and use `process.cwd()`).
 
+### Symbol expansion no longer needs the VS Code symbol provider
+
+A related CLI-independence bug surfaced while doing the above: `resolveSymbol`
+(`AttachmentBuilders.ts`) expanded `#sym:` references via
+`vscode.executeDocumentSymbolProvider`. That command returns nothing under the CLI shim, so
+**symbol attachments silently failed when running a VS Code-authored workflow from the CLI**
+— even though the reference already encodes the file path and start line, and everything
+downstream (`ContextExpander.buildAttachmentXml`) already reads files with Node `fs`.
+
+Fix: a pure `SymbolRangeFinder.ts` derives the symbol's end line directly from the file text
+(brace-depth tracking for brace languages, indentation for Python/YAML), so symbol expansion
+behaves identically in the editor and the CLI and needs no language extension loaded. The
+symbol provider is now used only for **completions** (`getWorkspaceSymbols`,
+`ContextMenuReferenceCommands`) — editor-only code that never runs in the CLI. With this,
+**all** context-expansion ref types work headless: files and selections (`fs.readFile`),
+symbols (`SymbolRangeFinder`), directories (`workspace.fs`, shim-backed by Node fs), and git
+changes (`GitUtils` against the resolved root). Covered by `SymbolRangeFinder.test.ts`.
+
 ---
 
 ## Implementation
