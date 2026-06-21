@@ -105,4 +105,35 @@ describe("applyRoute — workflow", () => {
     applyRoute({ workflow: "src/m.yaml" }, api);
     expect(api.postMessage).not.toHaveBeenCalled();
   });
+
+  // Regression: routes are forward-slash normalized, but loadedWorkflows carry
+  // native paths (backslashes on Windows). Back/forward to a running workflow
+  // must still resolve to its live instance via SWITCH_WORKFLOW — otherwise it
+  // falls through to LOAD_WORKFLOW and the workflow is reloaded as STOPPED.
+  it("matches a loaded workflow whose path uses native separators", () => {
+    useUiStore.getState().setLoadedWorkflows([
+      {
+        id: "w1",
+        workingFilePath: "c:\\dev\\proj\\.flightpath\\.queue\\m.flightpath.json",
+      } as unknown as WorkflowSummary,
+    ]);
+    const api = fakeVsCode();
+    applyRoute(
+      { workflow: "c:/dev/proj/.flightpath/.queue/m.flightpath.json" },
+      api
+    );
+    expect(api.postMessage).toHaveBeenCalledWith({
+      type: MESSAGE_TYPES.SWITCH_WORKFLOW,
+      workflowId: "w1",
+    });
+  });
+
+  it("treats a separator-only difference as already active (no-op)", () => {
+    useUiStore
+      .getState()
+      .setActiveWorkflowWorkingFilePath("c:\\dev\\proj\\m.flightpath.json");
+    const api = fakeVsCode();
+    applyRoute({ workflow: "c:/dev/proj/m.flightpath.json" }, api);
+    expect(api.postMessage).not.toHaveBeenCalled();
+  });
 });

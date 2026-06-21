@@ -84,6 +84,22 @@ import {
  * Phase 2: Will hold many instances in parallel; `activeWorkflowId` decides
  *          which one is displayed in the dashboard.
  */
+
+/**
+ * Compare two working-file paths ignoring separator style. Navigation routes
+ * are forward-slash normalized (for shareable URLs / browser history), but
+ * instance summaries carry native paths (backslashes on Windows). A raw `===`
+ * misses on Windows, so a LOAD_WORKFLOW carrying a route-normalized path would
+ * fail to match the live running instance and build a fresh STOPPED duplicate.
+ */
+function sameWorkingFilePath(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  if (a == null || b == null) return a === b;
+  return a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
+}
+
 export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────
   // Instance registry
@@ -676,8 +692,8 @@ export class WorkflowOrchestrator {
     }
 
     // Check if already in instances registry by working file path
-    const existing = [...this.instances.values()].find(
-      (w) => w.getSummary().workingFilePath === filePath
+    const existing = [...this.instances.values()].find((w) =>
+      sameWorkingFilePath(w.getSummary().workingFilePath, filePath)
     );
     if (existing) {
       this.setViewedWorkflowId(clientId, existing.id);
@@ -689,8 +705,8 @@ export class WorkflowOrchestrator {
 
     // Check retired instances (completed/stopped workflows) by working file path.
     // Reuse the existing retired instance so its PTY sessions remain accessible.
-    const existingRetired = [...this.retiredInstances.values()].find(
-      (w) => w.getSummary().workingFilePath === filePath
+    const existingRetired = [...this.retiredInstances.values()].find((w) =>
+      sameWorkingFilePath(w.getSummary().workingFilePath, filePath)
     );
     if (existingRetired) {
       this.setViewedWorkflowId(clientId, existingRetired.id);
@@ -1326,8 +1342,8 @@ export class WorkflowOrchestrator {
           this.storedPanelSend,
           this.PANEL_CLIENT_ID
         );
-        instance = [...this.retiredInstances.values()].find(
-          (w) => w.getSummary().workingFilePath === workingFilePath
+        instance = [...this.retiredInstances.values()].find((w) =>
+          sameWorkingFilePath(w.getSummary().workingFilePath, workingFilePath)
         );
         if (!instance) {
           Log.warn(
@@ -1606,7 +1622,7 @@ export class WorkflowOrchestrator {
     // Reuse an existing retired instance for this file if one exists.
     // This preserves PTY session associations so terminals survive workflow switches.
     const existingRetiredForPanel = [...this.retiredInstances.values()].find(
-      (w) => w.getSummary().workingFilePath === filePath
+      (w) => sameWorkingFilePath(w.getSummary().workingFilePath, filePath)
     );
     if (existingRetiredForPanel) {
       this.setViewedWorkflowId(
@@ -2397,7 +2413,12 @@ export class WorkflowOrchestrator {
     // and the CLI is now taking over execution. Without this, the PAUSED instance
     // stays in the Running Workflows section alongside the CLI watch session.
     for (const [instanceId, instance] of [...this.instances.entries()]) {
-      if (instance.getSummary().workingFilePath === workingFilePath) {
+      if (
+        sameWorkingFilePath(
+          instance.getSummary().workingFilePath,
+          workingFilePath
+        )
+      ) {
         Log.info(
           `[WorkflowOrchestrator] startCliWatchSession: retiring conflicting WorkflowInstance inst:${instanceId.slice(0, 8)} for "${workflowId}"`
         );

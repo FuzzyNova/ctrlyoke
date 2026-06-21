@@ -182,3 +182,58 @@ suite("WorkflowOrchestrator active workflow helpers", () => {
     ]);
   });
 });
+
+suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
+  // Regression: navigation routes are forward-slash normalized, but instance
+  // summaries carry native paths (backslashes on Windows). A LOAD_WORKFLOW for
+  // a running workflow must resolve to its live instance instead of building a
+  // fresh instance from disk (which restores as STOPPED).
+  test("matches a live instance whose working file path uses native separators", async () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+
+    const nativePath =
+      "c:\\dev\\FlightPath\\.flightpath\\.queue\\wf.flightpath.json";
+    const routePath = "c:/dev/FlightPath/.flightpath/.queue/wf.flightpath.json";
+
+    const liveInstance = {
+      id: "live-1",
+      getSummary: () => ({ workingFilePath: nativePath }),
+    };
+
+    internal.cliSessions = new Map();
+    internal.instances = new Map<string, any>([["live-1", liveInstance]]);
+    internal.retiredInstances = new Map<string, any>();
+    internal.ensureCliWatchSession = async () => false;
+
+    let viewed: { clientId: string; workflowId: string } | undefined;
+    internal.setViewedWorkflowId = (clientId: string, workflowId: string) => {
+      viewed = { clientId, workflowId };
+    };
+
+    let freshLoaded = false;
+    internal.loadFreshInstanceAndReplay = async () => {
+      freshLoaded = true;
+    };
+
+    let replayedId: string | undefined;
+    internal.replayWorkflowStateTo = async (workflowId: string) => {
+      replayedId = workflowId;
+    };
+
+    await orchestrator.loadWorkflowForClient(
+      routePath,
+      () => {},
+      PANEL_CLIENT_ID
+    );
+
+    assert.strictEqual(freshLoaded, false, "must not build a fresh instance");
+    assert.deepStrictEqual(viewed, {
+      clientId: PANEL_CLIENT_ID,
+      workflowId: "live-1",
+    });
+    assert.strictEqual(replayedId, "live-1");
+  });
+});

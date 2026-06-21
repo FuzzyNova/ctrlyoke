@@ -22,6 +22,22 @@ interface PostMessageApi {
 
 let applying = false;
 
+/**
+ * Compare two paths ignoring separator style. Routes are forward-slash
+ * normalized (for shareable URLs), but `loadedWorkflows` / instance summaries
+ * carry native paths (backslashes on Windows). A raw `===` between the two
+ * misses on Windows, so back/forward navigation to a *running* workflow would
+ * fall through to a fresh disk load (which restores as STOPPED) instead of
+ * switching to the live instance.
+ */
+function samePath(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  if (a == null || b == null) return a === b;
+  return a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
+}
+
 /** True while {@link applyRoute} is mutating stores; gates the nav recorder. */
 export function isApplyingRoute(): boolean {
   return applying;
@@ -42,14 +58,16 @@ function applyWorkflow(route: Route, vscode: PostMessageApi): void {
   if (!target) return;
 
   const ui = useUiStore.getState();
-  if (target === (ui.activeWorkflowWorkingFilePath ?? undefined)) return;
+  if (samePath(target, ui.activeWorkflowWorkingFilePath)) return;
 
   // Optimistically set the working file path (mirrors WorkflowStatus's switch
   // handlers) so the derived route settles immediately; the host confirms the
   // switch asynchronously.
   ui.setActiveWorkflowWorkingFilePath(target);
 
-  const loaded = ui.loadedWorkflows.find((w) => w.workingFilePath === target);
+  const loaded = ui.loadedWorkflows.find((w) =>
+    samePath(w.workingFilePath, target)
+  );
   if (loaded) {
     vscode.postMessage({
       type: MESSAGE_TYPES.SWITCH_WORKFLOW,
