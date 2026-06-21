@@ -35,8 +35,10 @@ import {
   type ToolCallExpansionState,
 } from "./toolCallLayout";
 import {
+  DEFAULT_COLLAPSED_COMMAND_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+  buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
 } from "./outputTruncation";
 import { formatCliCommandDisplay } from "./outputCommandDisplay";
@@ -76,6 +78,7 @@ export interface OutputRowToolCallMeta {
 }
 
 export interface OutputRowBashExpansionState {
+  commandExpanded: boolean;
   outputExpanded: boolean;
   errorExpanded: boolean;
 }
@@ -584,10 +587,14 @@ function estimateBashOutputHeight(
   const commandText = (
     sanitizeTerminalOutput(data.command ?? "").trim() || "command unavailable"
   ).replace(/\n/g, " ");
+  const commandPreview = buildCollapsedSingleLinePreview(commandText, {
+    expanded: expansion?.commandExpanded ?? false,
+    maxChars: DEFAULT_COLLAPSED_COMMAND_MAX_CHARS,
+  });
   // TOOL_CALL_TERMINAL has my-2=16px total vertical margin (captured via
   // flow-root). Split as 8px for command + 8px for result = 16px total.
   let totalHeight = estimateTerminalSummaryHeight(
-    commandText,
+    commandPreview.visibleText,
     outputContentWidth,
     outputFontSize,
     8

@@ -1,5 +1,6 @@
 export const DEFAULT_COLLAPSED_OUTPUT_MAX_LINES = 10;
 export const DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS = 1200;
+export const DEFAULT_COLLAPSED_COMMAND_MAX_CHARS = 160;
 
 export interface CollapsedOutputPreview {
   fullLineCount: number;
@@ -12,6 +13,11 @@ export interface CollapsedOutputPreview {
 export interface CollapsedOutputPreviewOptions {
   expanded: boolean;
   maxLines?: number;
+  maxChars?: number;
+}
+
+export interface CollapsedSingleLinePreviewOptions {
+  expanded: boolean;
   maxChars?: number;
 }
 
@@ -102,4 +108,18 @@ export function formatCollapsedOutputToggleLabel(
   return `[show ${preview.hiddenLineCount} more line${
     preview.hiddenLineCount !== 1 ? "s" : ""
   }]`;
+}
+
+export function buildCollapsedSingleLinePreview(
+  text: string,
+  {
+    expanded,
+    maxChars = DEFAULT_COLLAPSED_COMMAND_MAX_CHARS,
+  }: CollapsedSingleLinePreviewOptions
+): CollapsedOutputPreview {
+  return buildCollapsedOutputPreview(text.replace(/\s*\n+\s*/g, " "), {
+    expanded,
+    maxLines: 1,
+    maxChars,
+  });
 }

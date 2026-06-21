@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
   formatCollapsedOutputToggleLabel,
 } from "@utils/outputTruncation";
@@ -41,5 +42,16 @@ describe("outputTruncation", () => {
     expect(formatCollapsedOutputToggleLabel(preview, false)).toBe(
       "[show more output]"
     );
+  });
+
+  it("flattens embedded newlines when building a single-line preview", () => {
+    const preview = buildCollapsedSingleLinePreview("alpha\nbeta\ngamma", {
+      expanded: false,
+      maxChars: 9,
+    });
+
+    expect(preview.visibleText).toBe("alpha bet");
+    expect(preview.hiddenLineCount).toBe(0);
+    expect(preview.isTruncated).toBe(true);
   });
 });

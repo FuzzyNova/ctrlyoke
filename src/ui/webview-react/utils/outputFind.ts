@@ -80,7 +80,10 @@ function getRenderedBashTexts(data: BashCommandData): {
   output: string;
   error: string;
 } {
-  const command = sanitizeTerminalOutput(data.command ?? "").trim() || "command unavailable";
+  const command =
+    sanitizeTerminalOutput(data.command ?? "")
+      .trim()
+      .replace(/\s*\n+\s*/g, " ") || "command unavailable";
   const output = sanitizeTerminalOutput(data.output ?? "");
   const error = sanitizeTerminalOutput(data.error ?? "");
   const isDuplicateOutputAndError =

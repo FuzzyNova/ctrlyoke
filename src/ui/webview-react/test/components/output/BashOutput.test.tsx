@@ -10,6 +10,20 @@ describe("BashOutput", () => {
     expect(screen.getByText("npm test")).toBeInTheDocument();
   });
 
+  it("truncates a long single-line command and expands it on demand", async () => {
+    const user = userEvent.setup();
+    const longCommand = `node -e "${"x".repeat(220)}"`;
+    const { container } = render(<BashOutput command={longCommand} />);
+
+    expect(screen.getByTitle("Show full command")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("x".repeat(200));
+
+    await user.click(screen.getByTitle("Show full command"));
+
+    expect(screen.getByTitle("Hide full command")).toBeInTheDocument();
+    expect(container.textContent).toContain(longCommand);
+  });
+
   it("renders output when status is completed", () => {
     render(
       <BashOutput

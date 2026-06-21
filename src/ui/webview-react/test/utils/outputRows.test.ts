@@ -831,6 +831,7 @@ describe("outputRows", () => {
         [
           rowKey,
           {
+            commandExpanded: false,
             outputExpanded: true,
             errorExpanded: false,
           },

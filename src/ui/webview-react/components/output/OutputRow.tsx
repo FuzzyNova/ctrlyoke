@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useState } from "react";
 import { calcContextPct } from "@utils/tokenUtils";
 import { getHarnessModelDisplayName } from "@root/utils/ModelConstants";
+import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
   BashOutput,
   FileDeleteOutput,
@@ -68,6 +69,7 @@ import {
   type ToolCallExpansionSection,
 } from "@utils/toolCallLayout";
 import {
+  DEFAULT_COLLAPSED_COMMAND_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
   buildCollapsedOutputPreview,
@@ -331,7 +333,22 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
     if (isActiveRow && event.type === CLI_EVENT_TYPES.BASH_COMMAND) {
       const data = event.data as BashCommandData;
       const expansion = bashExpansion ?? DEFAULT_BASH_OUTPUT_EXPANSION_STATE;
+      const renderedCommand =
+        sanitizeTerminalOutput(data.command ?? "")
+          .trim()
+          .replace(/\s*\n+\s*/g, " ") || "command unavailable";
       if (
+        activeFindMatch?.field === "command" &&
+        isActiveMatchHidden(
+          renderedCommand,
+          getFieldMatches("command"),
+          expansion.commandExpanded,
+          1,
+          DEFAULT_COLLAPSED_COMMAND_MAX_CHARS
+        )
+      ) {
+        pendingBashExpand = "command";
+      } else if (
         activeFindMatch?.field === "response" &&
         isActiveMatchHidden(
           data.output ?? "",
@@ -431,10 +448,7 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             command={data.command}
             output={data.output}
             error={data.error}
-            commandContent={highlightText(
-              data.command,
-              getFieldMatches("command")
-            )}
+            commandFindMatches={getFieldMatches("command")}
             outputFindMatches={getFieldMatches("response")}
             errorFindMatches={getFieldMatches("error")}
             exitCode={data.exitCode}

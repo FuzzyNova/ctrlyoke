@@ -1,8 +1,10 @@
-import React, { useState, useId, memo } from "react";
+import { useState, useId, memo } from "react";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
 import {
+  DEFAULT_COLLAPSED_COMMAND_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
   DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
+  buildCollapsedSingleLinePreview,
   buildCollapsedOutputPreview,
   formatCollapsedOutputToggleLabel,
 } from "@utils/outputTruncation";
@@ -29,13 +31,14 @@ interface BashOutputProps {
   command: string;
   output?: string;
   error?: string;
-  commandContent?: React.ReactNode;
+  commandFindMatches?: RowFindDecoration["matches"];
   outputFindMatches?: RowFindDecoration["matches"];
   errorFindMatches?: RowFindDecoration["matches"];
   exitCode?: number;
   status?: FileOperationStatus;
   maxLines?: number;
   maxCharacters?: number;
+  maxCommandCharacters?: number;
   expansion?: BashOutputExpansionState;
   onExpansionChange?: (
     section: BashOutputExpansionSection,
@@ -44,15 +47,17 @@ interface BashOutputProps {
   className?: string;
 }
 
-export type BashOutputExpansionSection = "output" | "error";
+export type BashOutputExpansionSection = "command" | "output" | "error";
 
 export interface BashOutputExpansionState {
+  commandExpanded: boolean;
   outputExpanded: boolean;
   errorExpanded: boolean;
 }
 
 export const DEFAULT_BASH_OUTPUT_EXPANSION_STATE: Readonly<BashOutputExpansionState> =
   {
+    commandExpanded: false,
     outputExpanded: false,
     errorExpanded: false,
   };
@@ -75,19 +80,21 @@ export const BashOutput = memo<BashOutputProps>(
     command,
     output,
     error,
-    commandContent,
+    commandFindMatches,
     outputFindMatches,
     errorFindMatches,
     exitCode,
     status,
     maxLines = DEFAULT_COLLAPSED_OUTPUT_MAX_LINES,
     maxCharacters = DEFAULT_COLLAPSED_OUTPUT_MAX_CHARS,
+    maxCommandCharacters = DEFAULT_COLLAPSED_COMMAND_MAX_CHARS,
     expansion,
     onExpansionChange,
     className = "",
   }) => {
     const [uncontrolledExpansion, setUncontrolledExpansion] =
       useState<BashOutputExpansionState>({
+        commandExpanded: false,
         outputExpanded: false,
         errorExpanded: false,
       });
@@ -100,14 +107,26 @@ export const BashOutput = memo<BashOutputProps>(
       if (expansion === undefined) {
         setUncontrolledExpansion((previous) => ({
           ...previous,
-          [section === "output" ? "outputExpanded" : "errorExpanded"]: expanded,
+          [section === "command"
+            ? "commandExpanded"
+            : section === "output"
+              ? "outputExpanded"
+              : "errorExpanded"]: expanded,
         }));
       }
       onExpansionChange?.(section, expanded);
     };
-    const sanitizedCommand = sanitizeTerminalOutput(command).trim();
+    const sanitizedCommand = sanitizeTerminalOutput(command)
+      .trim()
+      .replace(/\s*\n+\s*/g, " ");
     const displayCommand = sanitizedCommand || "command unavailable";
     const hasCommandLabel = sanitizedCommand.length > 0;
+    const commandPreview = buildCollapsedSingleLinePreview(displayCommand, {
+      expanded: resolvedExpansion.commandExpanded,
+      maxChars: maxCommandCharacters,
+    });
+    const canToggleCommand =
+      resolvedExpansion.commandExpanded || commandPreview.isTruncated;
     const sanitizedOutput = sanitizeTerminalOutput(output || "");
     const sanitizedError = sanitizeTerminalOutput(error || "");
     const hasDuplicateOutputAndError =
@@ -210,7 +229,7 @@ export const BashOutput = memo<BashOutputProps>(
     return (
       <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
         <div className={TOOL_CALL_LINE}>
-          <span className="min-w-0 [overflow-wrap:anywhere]">
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
             <span className={dotColorClass}>●</span>{" "}
             <span
               className={
@@ -219,10 +238,30 @@ export const BashOutput = memo<BashOutputProps>(
                   : "text-description-fg italic [overflow-wrap:anywhere]"
               }
             >
-              {commandContent ?? displayCommand}
+              {highlightText(
+                commandPreview.visibleText,
+                commandFindMatches ?? []
+              )}
             </span>
             {renderStatusBadge()}
           </span>
+          {canToggleCommand && (
+            <button
+              type="button"
+              className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"
+              onClick={(event) => {
+                event.preventDefault();
+                updateExpansion("command", !resolvedExpansion.commandExpanded);
+              }}
+              title={
+                resolvedExpansion.commandExpanded
+                  ? "Hide full command"
+                  : "Show full command"
+              }
+            >
+              {resolvedExpansion.commandExpanded ? "▲" : "▼"}
+            </button>
+          )}
         </div>
 
         {/* Only show output/error for completed commands */}

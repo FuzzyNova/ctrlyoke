@@ -394,6 +394,8 @@ export function useOutputRowsModel({
           previous.get(rowKey) ?? DEFAULT_BASH_OUTPUT_EXPANSION_STATE;
         const nextState: BashOutputExpansionState = {
           ...currentState,
+          commandExpanded:
+            section === "command" ? expanded : currentState.commandExpanded,
           outputExpanded:
             section === "output" ? expanded : currentState.outputExpanded,
           errorExpanded:
@@ -401,9 +403,12 @@ export function useOutputRowsModel({
         };
 
         const isDefaultState =
-          !nextState.outputExpanded && !nextState.errorExpanded;
+          !nextState.commandExpanded &&
+          !nextState.outputExpanded &&
+          !nextState.errorExpanded;
 
         if (
+          currentState.commandExpanded === nextState.commandExpanded &&
           currentState.outputExpanded === nextState.outputExpanded &&
           currentState.errorExpanded === nextState.errorExpanded
         ) {

@@ -78,6 +78,48 @@ const TWENTY_LINES = Array.from({ length: 20 }, (_, i) => `line ${i}`).join(
 );
 
 describe("OutputRow auto-expand on hidden active match", () => {
+  it("expands a truncated bash command when the active match is hidden", () => {
+    const command = `node -e "${"x".repeat(220)} target"`;
+    const row = buildBashRow(command, undefined, undefined);
+    const localStart = command.indexOf("target");
+    const activeMatch = buildActiveMatch(
+      row,
+      "command",
+      localStart,
+      localStart + "target".length
+    );
+    const onBashExpansionChange = vi.fn();
+
+    render(
+      <OutputRow
+        row={row}
+        findDecorations={{
+          matches: [
+            {
+              start: localStart,
+              end: localStart + "target".length,
+              active: true,
+            },
+          ],
+        }}
+        activeFindMatch={activeMatch}
+        isExecutionActive={false}
+        bashExpansion={{
+          commandExpanded: false,
+          outputExpanded: false,
+          errorExpanded: false,
+        }}
+        onBashExpansionChange={onBashExpansionChange}
+      />
+    );
+
+    expect(onBashExpansionChange).toHaveBeenCalledWith(
+      "row-bash",
+      "command",
+      true
+    );
+  });
+
   it("expands bash output when the active match is hidden behind 'show more'", () => {
     const command = "cat";
     const row = buildBashRow(command, TWENTY_LINES, undefined);
@@ -100,7 +142,11 @@ describe("OutputRow auto-expand on hidden active match", () => {
         }}
         activeFindMatch={activeMatch}
         isExecutionActive={false}
-        bashExpansion={{ outputExpanded: false, errorExpanded: false }}
+        bashExpansion={{
+          commandExpanded: false,
+          outputExpanded: false,
+          errorExpanded: false,
+        }}
         onBashExpansionChange={onBashExpansionChange}
       />
     );
@@ -129,7 +175,11 @@ describe("OutputRow auto-expand on hidden active match", () => {
         }}
         activeFindMatch={activeMatch}
         isExecutionActive={false}
-        bashExpansion={{ outputExpanded: false, errorExpanded: false }}
+        bashExpansion={{
+          commandExpanded: false,
+          outputExpanded: false,
+          errorExpanded: false,
+        }}
         onBashExpansionChange={onBashExpansionChange}
       />
     );
@@ -163,7 +213,11 @@ describe("OutputRow auto-expand on hidden active match", () => {
         }}
         activeFindMatch={activeMatch}
         isExecutionActive={false}
-        bashExpansion={{ outputExpanded: false, errorExpanded: false }}
+        bashExpansion={{
+          commandExpanded: false,
+          outputExpanded: false,
+          errorExpanded: false,
+        }}
         onBashExpansionChange={onBashExpansionChange}
       />
     );
@@ -191,7 +245,11 @@ describe("OutputRow auto-expand on hidden active match", () => {
         }}
         activeFindMatch={activeMatch}
         isExecutionActive={false}
-        bashExpansion={{ outputExpanded: false, errorExpanded: false }}
+        bashExpansion={{
+          commandExpanded: false,
+          outputExpanded: false,
+          errorExpanded: false,
+        }}
         onBashExpansionChange={onBashExpansionChange}
       />
     );
