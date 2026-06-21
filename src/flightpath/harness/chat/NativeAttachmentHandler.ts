@@ -1,11 +1,6 @@
 import * as vscode from "vscode";
-import {
-  FileReference,
-  parseAllFileReferences,
-} from "../../../utils/FileReferenceParser";
+import { parseAllFileReferences } from "../../../utils/FileReferenceParser";
 import { Log } from "../../../utils/Log";
-import { resolveSymbol } from "../../../utils/AttachmentBuilders";
-import { getVsCodeWorkspaceRoot } from "../../../platform/VsCodeWorkspaceRoot";
 
 /** Function type for resolving workspace-relative paths */
 export type PathResolver = (relativePath: string) => string;
@@ -51,44 +46,15 @@ export class NativeAttachmentHandler {
   /** Attach files via native commands; returns prompt unchanged */
   async processAttachments(prompt: string): Promise<string> {
     try {
-      let fileReferences = parseAllFileReferences(prompt);
+      const fileReferences = parseAllFileReferences(prompt);
 
       if (fileReferences.length === 0) {
         return prompt;
       }
 
-      // Resolve symbol references to actual file locations
-      const resolvedRefs: FileReference[] = [];
+      Log.info(`📎 Attaching ${fileReferences.length} file(s)...`);
+
       for (const ref of fileReferences) {
-        if (ref.symbolName) {
-          // Symbol reference - resolve to file location
-          const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
-          Log.debug(`🔍 Resolving symbol: ${symbolRef}`);
-          const resolved = await resolveSymbol(
-            symbolRef,
-            getVsCodeWorkspaceRoot()
-          );
-          if (resolved) {
-            resolvedRefs.push(resolved);
-            Log.debug(
-              `✓ Resolved to: ${resolved.path}:${resolved.startLine}-${resolved.endLine}`
-            );
-          } else {
-            Log.warn(`Could not resolve symbol: ${symbolRef}`);
-          }
-        } else {
-          // Regular file/directory reference
-          resolvedRefs.push(ref);
-        }
-      }
-
-      if (resolvedRefs.length === 0) {
-        return prompt;
-      }
-
-      Log.info(`📎 Attaching ${resolvedRefs.length} file(s)...`);
-
-      for (const ref of resolvedRefs) {
         const absolutePath = this.resolvePath(ref.path);
         const uri = vscode.Uri.file(absolutePath);
 

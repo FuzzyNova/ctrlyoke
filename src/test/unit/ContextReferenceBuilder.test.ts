@@ -61,12 +61,12 @@ suite("ContextReferenceBuilder", () => {
 
   test("builds symbol references", () => {
     assert.strictEqual(
-      buildSymbolReferenceValue("src/app.ts", "runWorkflow", 42),
-      "sym:src/app.ts:runWorkflow:42"
+      buildSymbolReferenceValue("src/app.ts", "runWorkflow", 42, 58),
+      "sym:src/app.ts:runWorkflow:42-58"
     );
     assert.strictEqual(
-      buildSymbolReference("src/app.ts", "runWorkflow", 42),
-      "#sym:src/app.ts:runWorkflow:42"
+      buildSymbolReference("src/app.ts", "runWorkflow", 42, 58),
+      "#sym:src/app.ts:runWorkflow:42-58"
     );
   });
 

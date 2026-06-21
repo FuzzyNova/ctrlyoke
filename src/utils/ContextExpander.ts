@@ -5,10 +5,7 @@ import {
   parseAllFileReferences,
   parseGitChangeReferences,
 } from "./FileReferenceParser";
-import {
-  resolveSymbol,
-  buildDirectoryAttachmentXml,
-} from "./AttachmentBuilders";
+import { buildDirectoryAttachmentXml } from "./AttachmentBuilders";
 import { Log } from "./Log";
 import {
   getCommitDiff,
@@ -41,7 +38,7 @@ export interface SplitContext {
  * - @path/to/dir/ (directory listing)
  * - #file:path (full file)
  * - #selection:path:line-line (line range)
- * - #sym:path:symbol:line (symbol context)
+ * - #sym:path:symbol:line-line (symbol context)
  *
  * This class consolidates all attachment building logic that was previously
  * scattered across HarnessIntegration and CLI classes. It produces fully-expanded
@@ -57,9 +54,6 @@ export class ContextExpander {
   private workspaceRoot: string;
   // Track attachment IDs to prevent duplicates
   private attachmentIds = new Set<string>();
-  // Cache resolved symbols to avoid redundant VS Code API calls
-  // Key: "path:symbolName:line", Value: resolved FileReference
-  private symbolResolutionCache = new Map<string, FileReference | null>();
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
@@ -98,12 +92,9 @@ export class ContextExpander {
         `[ContextExpander] Expanding ${fileReferences.length} reference(s): ${fileReferences.map((r) => this.getRefDescription(r)).join(", ")}`
       );
 
-      // Resolve symbol references to actual file locations
-      const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
-
       // Build file attachments in parallel for performance
       const t0 = Date.now();
-      const attachmentPromises = resolvedRefs.map((ref) =>
+      const attachmentPromises = fileReferences.map((ref) =>
         this.buildAttachmentForReference(ref).catch((err) => {
           const refDesc = this.getRefDescription(ref);
           Log.error(`Failed to attach ${refDesc}:`, err);
@@ -178,10 +169,7 @@ export class ContextExpander {
         return { directFileRefs: [], excerptBlocks: "" };
       }
 
-      // Resolve symbol references to actual file locations
-      const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
-
-      for (const ref of resolvedRefs) {
+      for (const ref of fileReferences) {
         const attachmentId = this.getAttachmentId(ref);
 
         if (this.attachmentIds.has(attachmentId)) {
@@ -366,47 +354,6 @@ export class ContextExpander {
 
     // Full file
     return `file:${ref.path}`;
-  }
-
-  /**
-   * Resolve symbol references to file locations
-   * @param fileReferences Array of file references from parseAllFileReferences
-   * @returns Array with symbols resolved to actual file locations
-   */
-  private async resolveSymbolReferences(
-    fileReferences: FileReference[]
-  ): Promise<FileReference[]> {
-    const resolvedRefs: FileReference[] = [];
-
-    for (const ref of fileReferences) {
-      if (ref.symbolName) {
-        // Symbol reference - build full reference string for resolveSymbol
-        // Format: path/to/file.ts:SymbolName:123
-        const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
-
-        // Check cache first to avoid expensive re-resolution
-        let resolved: FileReference | null;
-        if (this.symbolResolutionCache.has(symbolRef)) {
-          resolved = this.symbolResolutionCache.get(symbolRef)!;
-          Log.debug(`Using cached resolution for: ${symbolRef}`);
-        } else {
-          // Not in cache - resolve and cache the result
-          resolved = await resolveSymbol(symbolRef, this.workspaceRoot);
-          this.symbolResolutionCache.set(symbolRef, resolved);
-        }
-
-        if (resolved) {
-          resolvedRefs.push(resolved);
-        } else {
-          Log.warn(`Could not resolve symbol: ${symbolRef}`);
-        }
-      } else {
-        // Regular file/directory reference
-        resolvedRefs.push(ref);
-      }
-    }
-
-    return resolvedRefs;
   }
 
   /**

@@ -55,14 +55,14 @@ describe("WorkspaceFileEditor link navigation", () => {
     }
   });
 
-  it("opens #sym links at the symbol line on touch tap", async () => {
+  it("opens #sym links at the symbol range on touch tap", async () => {
     const onChange = vi.fn();
     const onSave = vi.fn();
 
     const { container } = render(
       <WorkspaceFileEditor
         filePath="notes.prompt.md"
-        content="#sym:src/utils.ts:runWorkflow:42"
+        content="#sym:src/utils.ts:runWorkflow:42-58"
         onChange={onChange}
         onSave={onSave}
       />
@@ -85,7 +85,7 @@ describe("WorkspaceFileEditor link navigation", () => {
     if (nav?.type === "file") {
       expect(nav.filePath).toBe("src/utils.ts");
       expect(nav.startLine).toBe(42);
-      expect(nav.endLine).toBe(42);
+      expect(nav.endLine).toBe(58);
     }
   });
 

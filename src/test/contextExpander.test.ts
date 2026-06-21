@@ -212,6 +212,26 @@ suite("ContextExpander.expandContextSplit", () => {
     });
   });
 
+  suite("line-range #sym: references", () => {
+    test("uses the encoded range without runtime symbol discovery", async () => {
+      const root = freshWorkspace();
+      fs.writeFileSync(
+        path.join(root, "symbol.ts"),
+        ["before", "start", "middle", "end", "after"].join("\n")
+      );
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(
+        "Check #sym:symbol.ts:notARealSymbol:2-4"
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.ok(result.excerptBlocks.includes("    2→start"));
+      assert.ok(result.excerptBlocks.includes("    4→end"));
+      assert.ok(!result.excerptBlocks.includes("    5→after"));
+    });
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   suite("mixed references", () => {
     test("separates full-file refs from line-range refs", async () => {
@@ -250,7 +270,7 @@ suite("ContextExpander.expandContextSplit", () => {
           "```ts",
           "@inside.ts",
           "#selection:inside.ts:1-1",
-          "#sym:inside.ts:inside:1",
+          "#sym:inside.ts:inside:1-1",
           "~diff",
           "```",
         ].join("\n")

@@ -171,22 +171,24 @@ suite("FileReferenceParser", () => {
     });
 
     test("parses #sym: reference", () => {
-      const refs = parseSymbolReferences("#sym:src/utils.ts:myFunction:42");
+      const refs = parseSymbolReferences("#sym:src/utils.ts:myFunction:42-58");
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "src/utils.ts");
       assert.strictEqual(refs[0].symbolName, "myFunction");
       assert.strictEqual(refs[0].startLine, 42);
+      assert.strictEqual(refs[0].endLine, 58);
     });
 
     test("parses #sym: reference with method syntax (parentheses)", () => {
-      const refs = parseSymbolReferences("#sym:src/class.ts:handleClick():100");
+      const refs = parseSymbolReferences("#sym:src/class.ts:handleClick():100-125");
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].symbolName, "handleClick()");
       assert.strictEqual(refs[0].startLine, 100);
     });
 
     test("parses multiple #sym: references", () => {
-      const prompt = "See #sym:src/a.ts:funcA:10 and #sym:src/b.ts:ClassB:50";
+      const prompt =
+        "See #sym:src/a.ts:funcA:10-20 and #sym:src/b.ts:ClassB:50-75";
       const refs = parseSymbolReferences(prompt);
       assert.strictEqual(refs.length, 2);
       assert.strictEqual(refs[0].symbolName, "funcA");
@@ -194,23 +196,24 @@ suite("FileReferenceParser", () => {
     });
 
     test("line number is stored as startLine", () => {
-      const refs = parseSymbolReferences("#sym:src/file.ts:myVar:99");
+      const refs = parseSymbolReferences("#sym:src/file.ts:myVar:99-101");
       assert.strictEqual(refs[0].startLine, 99);
     });
 
     test("parses quoted path in #sym: reference", () => {
       const refs = parseSymbolReferences(
-        '#sym:"path with spaces/example.py":ProductInSpace:11'
+        '#sym:"path with spaces/example.py":ProductInSpace:11-24'
       );
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "path with spaces/example.py");
       assert.strictEqual(refs[0].symbolName, "ProductInSpace");
       assert.strictEqual(refs[0].startLine, 11);
+      assert.strictEqual(refs[0].endLine, 24);
     });
 
     test("parses quoted path in #sym: reference with method syntax", () => {
       const refs = parseSymbolReferences(
-        '#sym:"my dir/class.ts":handleClick():50'
+        '#sym:"my dir/class.ts":handleClick():50-65'
       );
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].path, "my dir/class.ts");
@@ -220,7 +223,7 @@ suite("FileReferenceParser", () => {
 
     test("does not include surrounding quotes in path when quoted", () => {
       const refs = parseSymbolReferences(
-        '#sym:"path with spaces/file.ts":myFunc:1'
+        '#sym:"path with spaces/file.ts":myFunc:1-4'
       );
       assert.strictEqual(refs.length, 1);
       assert.ok(
@@ -230,6 +233,13 @@ suite("FileReferenceParser", () => {
       assert.ok(
         !refs[0].path.endsWith('"'),
         "path should not end with a quote"
+      );
+    });
+
+    test("does not parse the obsolete start-line-only format", () => {
+      assert.deepStrictEqual(
+        parseSymbolReferences("#sym:src/utils.ts:myFunction:42"),
+        []
       );
     });
   });
@@ -322,7 +332,7 @@ suite("FileReferenceParser", () => {
       const prompt = [
         "Look at @src/utils.ts",
         "and #selection:src/types.ts:1-50",
-        "and #sym:src/index.ts:main:10",
+        "and #sym:src/index.ts:main:10-20",
       ].join(" ");
       const refs = parseAllFileReferences(prompt);
       // Should contain all three types
@@ -342,7 +352,7 @@ suite("FileReferenceParser", () => {
 
     test("returns unique syntaxes from mixed prompt", () => {
       const prompt =
-        "@src/a.ts #selection:src/b.ts:1-5 #sym:src/c.ts:myFunc:10";
+        "@src/a.ts #selection:src/b.ts:1-5 #sym:src/c.ts:myFunc:10-20";
       const refs = parseAllFileReferences(prompt);
       assert.strictEqual(refs.length, 3);
     });

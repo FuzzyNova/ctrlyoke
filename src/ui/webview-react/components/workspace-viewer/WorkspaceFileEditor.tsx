@@ -64,7 +64,6 @@ interface WorkspaceReferenceMatch {
   path: string;
   lineStart?: string;
   lineEnd?: string;
-  line?: string;
 }
 
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
@@ -290,8 +289,8 @@ function findWorkspaceReferenceMatches(
     directory: /@([^\s@#"]+\/)/g,
     lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
     lineRange: /#selection:([^\s:"]+):(\d+)-(\d+)/g,
-    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)/g,
-    symbol: /#sym:([^\s:"]+):([^:]+):(\d+)/g,
+    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)-(\d+)/g,
+    symbol: /#sym:([^\s:"]+):([^:]+):(\d+)-(\d+)/g,
   };
 
   const fileMatches: WorkspaceReferenceMatch[] = [];
@@ -346,7 +345,8 @@ function findWorkspaceReferenceMatches(
         to: offset + match.index + match[0].length,
         type: "symbol",
         path: match[1],
-        line: match[3],
+        lineStart: match[3],
+        lineEnd: match[4],
       });
     }
   };
@@ -407,9 +407,6 @@ function createWorkspaceReferenceDecorationExtension() {
             if (linkMatch.lineEnd) {
               attrs["data-line-end"] = linkMatch.lineEnd;
             }
-            if (linkMatch.line) {
-              attrs["data-line"] = linkMatch.line;
-            }
 
             builder.add(
               linkMatch.from,
@@ -461,11 +458,12 @@ function openWorkspaceReferenceLink(
   }
 
   if (type === "symbol") {
-    const line = target.getAttribute("data-line");
+    const lineStart = target.getAttribute("data-line-start");
+    const lineEnd = target.getAttribute("data-line-end");
     openToFile(
       path,
-      line ? parseInt(line, 10) : undefined,
-      line ? parseInt(line, 10) : undefined
+      lineStart ? parseInt(lineStart, 10) : undefined,
+      lineEnd ? parseInt(lineEnd, 10) : undefined
     );
     return true;
   }

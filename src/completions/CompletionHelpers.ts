@@ -344,15 +344,16 @@ async function getSymbolCompletions(
         false
       );
 
-      // Get line number (1-based)
-      const line = symbol.location.range.start.line + 1;
+      const startLine = symbol.location.range.start.line + 1;
+      const endLine = symbol.location.range.end.line + 1;
 
-      // Insert #sym:path/to/file.ts:SymbolName:123
+      // Insert #sym:path/to/file.ts:SymbolName:123-145
       // Quote paths with spaces so FileReferenceParser can handle them correctly
       const insertText = buildSymbolReferenceValue(
         relativePath,
         symbol.name,
-        line
+        startLine,
+        endLine
       );
 
       // Show symbol kind and location
@@ -365,13 +366,13 @@ async function getSymbolCompletions(
         label: symbol.name,
         kind: completionKind,
         insertText: insertText,
-        detail: `${symbolKindName} in ${relativePath}:${line}`,
+        detail: `${symbolKindName} in ${relativePath}:${startLine}-${endLine}`,
         documentation:
           `**Symbol Reference**\n\n` +
           `Type: ${symbolKindName}\n\n` +
-          `Location: \`${relativePath}:${line}\`\n\n` +
-          `Insert: \`${buildSymbolReference(relativePath, symbol.name, line)}\`\n\n` +
-          `_FlightPath will resolve this symbol to its exact location and attach the code._`,
+          `Location: \`${relativePath}:${startLine}-${endLine}\`\n\n` +
+          `Insert: \`${buildSymbolReference(relativePath, symbol.name, startLine, endLine)}\`\n\n` +
+          `_FlightPath will attach this symbol's recorded line range._`,
         sortText: symbol.name,
         filterText: `${symbol.name} ${relativePath}`,
       };

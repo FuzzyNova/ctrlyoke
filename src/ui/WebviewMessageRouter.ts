@@ -21,7 +21,6 @@ import {
   getPromptFileCompletions,
   getPriorContextCompletions,
 } from "../completions/CompletionHelpers";
-import { resolveSymbol } from "../utils/AttachmentBuilders";
 import { getStashList } from "../utils/GitUtils";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -1806,7 +1805,6 @@ export class WebviewMessageRouter {
       gitRef?: string;
       lineStart?: string;
       lineEnd?: string;
-      line?: string;
       symbolName?: string;
     }>,
     seq?: number
@@ -1842,7 +1840,6 @@ export class WebviewMessageRouter {
       gitRef?: string;
       lineStart?: string;
       lineEnd?: string;
-      line?: string;
       symbolName?: string;
     },
     workspaceRoot: string | null
@@ -1874,16 +1871,25 @@ export class WebviewMessageRouter {
       return { exists: false, message: "file not found" };
     }
 
-    if (reference.type === "lineRange") {
+    if (reference.type === "lineRange" || reference.type === "symbol") {
       const startLine = Number.parseInt(reference.lineStart ?? "", 10);
       const endLine = Number.parseInt(reference.lineEnd ?? "", 10);
+      const missingSymbolName =
+        reference.type === "symbol" && !reference.symbolName;
       if (
+        missingSymbolName ||
         !Number.isInteger(startLine) ||
         !Number.isInteger(endLine) ||
         startLine < 1 ||
         endLine < startLine
       ) {
-        return { exists: false, message: "selection not found" };
+        return {
+          exists: false,
+          message:
+            reference.type === "symbol"
+              ? "symbol not found"
+              : "selection not found",
+        };
       }
 
       try {
@@ -1892,22 +1898,22 @@ export class WebviewMessageRouter {
         );
         return endLine <= document.lineCount
           ? { exists: true }
-          : { exists: false, message: "selection not found" };
+          : {
+              exists: false,
+              message:
+                reference.type === "symbol"
+                  ? "symbol not found"
+                  : "selection not found",
+            };
       } catch {
-        return { exists: false, message: "selection not found" };
+        return {
+          exists: false,
+          message:
+            reference.type === "symbol"
+              ? "symbol not found"
+              : "selection not found",
+        };
       }
-    }
-
-    if (reference.type === "symbol") {
-      if (!reference.symbolName || !reference.line) {
-        return { exists: false, message: "symbol not found" };
-      }
-
-      const symbolRef = `${reference.path}:${reference.symbolName}:${reference.line}`;
-      const resolved = await resolveSymbol(symbolRef, this.getWorkspaceRoot());
-      return resolved
-        ? { exists: true }
-        : { exists: false, message: "symbol not found" };
     }
 
     return { exists: true };

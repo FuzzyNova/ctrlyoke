@@ -9,7 +9,7 @@ import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
  * - @path/to/file.ts       → Open file
  * - @path/to/dir/          → Reveal directory
  * - #selection:path:10-20  → Open file with line selection
- * - #sym:path:symbol:42    → Open file at symbol line
+ * - #sym:path:symbol:42-58 → Open file at symbol range
  *
  * Enables Ctrl+Click (Cmd+Click on Mac) navigation from prompts back to source code.
  * Complements PromptCompletionProvider for bidirectional context flow.
@@ -40,12 +40,12 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     // Matches: #selection:src/extension.ts:10-20
     lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
 
-    // #sym:"path with spaces/file":symbol:42 (quoted path, symbol reference)
-    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)/g,
+    // #sym:"path with spaces/file":symbol:42-58 (quoted path, symbol reference)
+    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)-(\d+)/g,
 
-    // #sym:path:symbol:42 (unquoted, symbol reference)
-    // Matches: #sym:src/extension.ts:activate:14
-    symbol: /#sym:([^\s:]+):([^:]+):(\d+)/g,
+    // #sym:path:symbol:42-58 (unquoted, symbol reference)
+    // Matches: #sym:src/extension.ts:activate:14-36
+    symbol: /#sym:([^\s:]+):([^:]+):(\d+)-(\d+)/g,
   };
 
   /**
@@ -77,7 +77,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     // 3. Detect line range references (#selection:path:10-20 and #selection:"path with spaces/file":10-20)
     links.push(...this.findLineRangeLinks(document, text, workspaceRoot));
 
-    // 4. Detect symbol references (#sym:path:symbol:42 and #sym:"path with spaces/file":symbol:42)
+    // 4. Detect symbol references with encoded line ranges
     links.push(...this.findSymbolLinks(document, text, workspaceRoot));
 
     // 5. Detect git change references (~diff, ~staged, ~stash:N, ~<hash>)
@@ -293,7 +293,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   }
 
   /**
-   * Find symbol reference links (#sym:path:symbol:42 and #sym:"path with spaces/file":symbol:42)
+   * Find symbol reference links with encoded line ranges.
    */
   private findSymbolLinks(
     document: vscode.TextDocument,
@@ -306,7 +306,8 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
     const addSymbolLink = (match: RegExpExecArray): void => {
       const relativePath = match[1];
       const symbolName = match[2];
-      const line = parseInt(match[3], 10);
+      const startLine = parseInt(match[3], 10);
+      const endLine = parseInt(match[4], 10);
 
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
@@ -319,25 +320,25 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         `command:flightpath.openFileWithSelection?${encodeURIComponent(
           JSON.stringify({
             uri: fileUri.toString(),
-            startLine: line,
-            endLine: line,
+            startLine,
+            endLine,
           })
         )}`
       );
 
       const link = new vscode.DocumentLink(range, commandUri);
-      link.tooltip = `Go to ${symbolName} in ${relativePath}:${line}`;
+      link.tooltip = `Go to ${symbolName} in ${relativePath}:${startLine}-${endLine}`;
       links.push(link);
     };
 
-    // Match quoted paths first (#sym:"path with spaces/file":symbol:42)
+    // Match quoted paths first.
     const quotedPattern = new RegExp(this.patterns.symbolQuoted.source, "g");
     let match: RegExpExecArray | null;
     while ((match = quotedPattern.exec(text)) !== null) {
       addSymbolLink(match);
     }
 
-    // Match plain unquoted paths (#sym:path:symbol:42)
+    // Match plain unquoted paths.
     const plainPattern = new RegExp(this.patterns.symbol.source, "g");
     while ((match = plainPattern.exec(text)) !== null) {
       addSymbolLink(match);

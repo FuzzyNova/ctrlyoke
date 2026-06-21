@@ -7,8 +7,8 @@
  * 3. @path/to/directory/ → Directory structure (trailing slash)
  * 4. #selection:path:line-line → Line range snippet (FlightPath XML)
  * 5. #selection:"path with spaces":line-line → Line range with quoted path
- * 6. #sym:path:SymbolName:line → Symbol reference (resolves to file + line range)
- * 7. #sym:"path with spaces":SymbolName:line → Symbol reference with quoted path
+ * 6. #sym:path:SymbolName:line-line → Symbol reference with an encoded line range
+ * 7. #sym:"path with spaces":SymbolName:line-line → Quoted-path symbol reference
  *
  * This module provides unified parsing logic used by:
  * - NativeAttachmentHandler (Chat mode)
@@ -136,11 +136,11 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
  * Parse #sym: references from prompt text (symbol references)
  *
  * Supports formats:
- * - #sym:path/to/file.ts:SymbolName:123 (plain path)
- * - #sym:"path with spaces/file.ts":SymbolName:123 (quoted path for paths with spaces)
- * - #sym:path/to/file.ts:methodName():123 (method with parentheses)
+ * - #sym:path/to/file.ts:SymbolName:123-145 (plain path)
+ * - #sym:"path with spaces/file.ts":SymbolName:123-145 (quoted path)
+ * - #sym:path/to/file.ts:methodName():123-145 (method with parentheses)
  *
- * File path (workspace-relative), symbol name, and line number (1-based) together
+ * File path (workspace-relative), symbol name, and line range (1-based) together
  * ensure unique identification when the same symbol appears in multiple files.
  *
  * @param prompt The prompt text containing #sym: references
@@ -149,26 +149,23 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
 export function parseSymbolReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
 
-  // Match quoted paths: #sym:"path with spaces/file.ts":SymbolName:123
-  // Group 1: quoted path, Group 2: symbol name (with optional parens), Group 3: line number
-  const quotedRegex = /#sym:"([^"]+)":([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)/g;
+  const quotedRegex = /#sym:"([^"]+)":([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)-(\d+)/g;
   let match;
 
   while ((match = quotedRegex.exec(prompt)) !== null) {
-    const [, filePath, symbolName, lineStr] = match;
+    const [, filePath, symbolName, startLine, endLine] = match;
     references.push({
       path: filePath,
       symbolName,
-      startLine: parseInt(lineStr, 10),
+      startLine: parseInt(startLine, 10),
+      endLine: parseInt(endLine, 10),
     });
   }
 
-  // Match unquoted paths: #sym:path/to/file.ts:SymbolName:123
-  // Captures: (1) file path, (2) symbol name (with optional parens), (3) line number
-  const plainRegex = /#sym:([^:]+):([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)/g;
+  const plainRegex = /#sym:([^:]+):([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)-(\d+)/g;
 
   while ((match = plainRegex.exec(prompt)) !== null) {
-    const [, filePath, symbolName, lineStr] = match;
+    const [, filePath, symbolName, startLine, endLine] = match;
 
     // Skip if this position was already captured by the quoted regex
     // (plain regex would match the quoted form too, capturing '"path..."')
@@ -179,7 +176,8 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
     references.push({
       path: filePath,
       symbolName,
-      startLine: parseInt(lineStr, 10),
+      startLine: parseInt(startLine, 10),
+      endLine: parseInt(endLine, 10),
     });
   }
 

@@ -197,7 +197,8 @@ export class ContextMenuReferenceCommands {
       return buildSymbolReference(
         relativePath,
         symbol.name,
-        symbol.range.start.line + 1
+        symbol.range.start.line + 1,
+        symbol.range.end.line + 1
       );
     } catch (error) {
       Log.warn(

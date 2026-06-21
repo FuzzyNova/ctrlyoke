@@ -109,7 +109,6 @@ interface ContextReferenceMatch {
   gitRef?: string;
   lineStart?: string;
   lineEnd?: string;
-  line?: string;
   symbolName?: string;
 }
 
@@ -1269,8 +1268,8 @@ function findContextReferenceMatches(
     directory: /@([^\s@#"]+\/)/g,
     lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
     lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
-    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)/g,
-    symbol: /#sym:([^\s:]+):([^:]+):(\d+)/g,
+    symbolQuoted: /#sym:"([^"]+)":([^:]+):(\d+)-(\d+)/g,
+    symbol: /#sym:([^\s:]+):([^:]+):(\d+)-(\d+)/g,
   };
 
   const fileMatches: ContextReferenceMatch[] = [];
@@ -1328,7 +1327,8 @@ function findContextReferenceMatches(
         type: "symbol",
         path: match[1],
         symbolName: match[2],
-        line: match[3],
+        lineStart: match[3],
+        lineEnd: match[4],
       });
     }
   };
@@ -1482,9 +1482,6 @@ function createLinkDecorationExtension() {
             }
             if (linkMatch.lineEnd) {
               attrs["data-line-end"] = linkMatch.lineEnd;
-            }
-            if (linkMatch.line) {
-              attrs["data-line"] = linkMatch.line;
             }
             if (linkMatch.symbolName) {
               attrs["data-symbol-name"] = linkMatch.symbolName;
@@ -1796,11 +1793,15 @@ function openContextReferenceLink(
     }
 
     if (type === "symbol") {
-      const line = target.getAttribute("data-line");
-      const lineNum = line ? parseInt(line) : undefined;
+      const lineStart = target.getAttribute("data-line-start");
+      const lineEnd = target.getAttribute("data-line-end");
       useWorkspaceViewerStore
         .getState()
-        .openToFile(path ?? "", lineNum, lineNum);
+        .openToFile(
+          path ?? "",
+          lineStart ? parseInt(lineStart) : undefined,
+          lineEnd ? parseInt(lineEnd) : undefined
+        );
       return true;
     }
 
@@ -1828,12 +1829,13 @@ function openContextReferenceLink(
   }
 
   if (type === "symbol") {
-    const line = target.getAttribute("data-line");
+    const lineStart = target.getAttribute("data-line-start");
+    const lineEnd = target.getAttribute("data-line-end");
     vscode.postMessage({
       type: MESSAGE_TYPES.OPEN_FILE,
       path,
-      lineStart: line ? parseInt(line) : undefined,
-      lineEnd: line ? parseInt(line) : undefined,
+      lineStart: lineStart ? parseInt(lineStart) : undefined,
+      lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
     });
     return true;
   }

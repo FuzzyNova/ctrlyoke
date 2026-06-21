@@ -45,17 +45,19 @@ export function buildSelectionReference(
 export function buildSymbolReferenceValue(
   relativePath: string,
   symbolName: string,
-  line: number
+  startLine: number,
+  endLine: number
 ): string {
-  return `sym:${buildFileReferenceValue(relativePath)}:${symbolName}:${line}`;
+  return `sym:${buildFileReferenceValue(relativePath)}:${symbolName}:${startLine}-${endLine}`;
 }
 
 export function buildSymbolReference(
   relativePath: string,
   symbolName: string,
-  line: number
+  startLine: number,
+  endLine: number
 ): string {
-  return `#${buildSymbolReferenceValue(relativePath, symbolName, line)}`;
+  return `#${buildSymbolReferenceValue(relativePath, symbolName, startLine, endLine)}`;
 }
 
 function buildGitReferenceValue(ref: string): string {
