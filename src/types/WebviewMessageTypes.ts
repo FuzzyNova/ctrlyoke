@@ -889,6 +889,14 @@ export interface GenerateServerCertMessage {
   scope: SettingWriteScope;
 }
 
+/** Extension → Webview: self-signed cert was written and settings updated */
+export interface ServerCertGeneratedMessage {
+  type: typeof MESSAGE_TYPES.SERVER_CERT_GENERATED;
+  generatedAt: string;
+  expiresAt: string;
+  sans: string[];
+}
+
 /** Extension → Webview: acknowledge a setting update */
 export interface GlobalSettingUpdatedMessage {
   type: typeof MESSAGE_TYPES.GLOBAL_SETTING_UPDATED;

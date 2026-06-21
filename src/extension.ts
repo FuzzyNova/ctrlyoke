@@ -1180,9 +1180,6 @@ function registerCommands(context: vscode.ExtensionContext) {
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,
       });
-      vscode.window.showInformationMessage(
-        "FlightPath: Server token regenerated. Restart the server for the new token to take effect."
-      );
       Log.info("FlightPath: Server token regenerated");
     }
   );

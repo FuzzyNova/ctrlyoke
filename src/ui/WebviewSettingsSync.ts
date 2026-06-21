@@ -888,11 +888,35 @@ export class WebviewSettingsSync {
   ): Promise<void> {
     const allSettings = configService.getAll();
     const sources = configService.getLeafSources();
+
+    let certMeta: { generatedAt: string; expiresAt: string; sans: string[] } | null = null;
+    const certPath = allSettings.server?.tls?.certPath;
+    if (certPath && allSettings.server?.tls?.enabled) {
+      try {
+        const { X509Certificate } = await import("crypto");
+        const certContent = await fs.readFile(certPath, "utf8");
+        const x509 = new X509Certificate(certContent);
+        certMeta = {
+          generatedAt: new Date(x509.validFrom).toISOString(),
+          expiresAt: new Date(x509.validTo).toISOString(),
+          sans: x509.subjectAltName
+            ? x509.subjectAltName
+                .split(", ")
+                .map((s) => s.replace(/^(?:DNS:|IP Address:)/, "").trim())
+                .filter(Boolean)
+            : [],
+        };
+      } catch {
+        // cert file missing or unparseable — silently omit
+      }
+    }
+
     this.emitMessage(
       {
         type: MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED,
         settings: { settings: allSettings, sources },
         commitMessageGeneration: commitMessageGenerationTracker.getLastRecord(),
+        certMeta,
       },
       postMessage
     );
@@ -1010,7 +1034,12 @@ export class WebviewSettingsSync {
     await this.handleGlobalSettingsLoadRequest(postMessage);
 
     this.emitMessage(
-      { type: MESSAGE_TYPES.SERVER_CERT_GENERATED },
+      {
+        type: MESSAGE_TYPES.SERVER_CERT_GENERATED,
+        generatedAt: notBeforeDate.toISOString(),
+        expiresAt: notAfterDate.toISOString(),
+        sans: ["localhost", "127.0.0.1", ...lanIps],
+      },
       postMessage
     );
   }

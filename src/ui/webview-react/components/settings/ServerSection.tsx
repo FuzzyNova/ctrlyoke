@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, SETTING_SCOPES } from "@root/types/DashboardConstants";
@@ -50,6 +50,42 @@ export function ServerSection({
     (state) => state.setSelectedDisplayIp
   );
   const vscode = useVsCodeApi();
+
+  const lastCertGenerated = useSettingsStore((s) => s.lastCertGenerated);
+  const certFlashCount = useSettingsStore((s) => s.certFlashCount);
+  const lastTokenRegenerated = useSettingsStore((s) => s.lastTokenRegenerated);
+  const tokenFlashCount = useSettingsStore((s) => s.tokenFlashCount);
+  const [certFlash, setCertFlash] = useState(false);
+  const [tokenFlash, setTokenFlash] = useState(false);
+
+  useEffect(() => {
+    if (certFlashCount === 0) return;
+    setCertFlash(true);
+    const t = setTimeout(() => setCertFlash(false), 3000);
+    return () => clearTimeout(t);
+  }, [certFlashCount]);
+
+  useEffect(() => {
+    if (tokenFlashCount === 0) return;
+    setTokenFlash(true);
+    const t = setTimeout(() => setTokenFlash(false), 2000);
+    return () => clearTimeout(t);
+  }, [tokenFlashCount]);
+
+  const certExpired =
+    lastCertGenerated != null &&
+    new Date(lastCertGenerated.expiresAt) < new Date();
+
+  const handleGenerateCert = useCallback(() => {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.GENERATE_SERVER_CERT,
+      scope: activeScope,
+    });
+  }, [vscode, activeScope]);
+
+  const handleRegenerateToken = useCallback(() => {
+    vscode.postMessage({ type: MESSAGE_TYPES.REGENERATE_SERVER_TOKEN });
+  }, [vscode]);
 
   const rowProps = { sources, onReset, activeScope };
 
@@ -238,18 +274,28 @@ export function ServerSection({
               </div>
             )}
 
-            <div className="mt-1">
+            <div className="mt-1 flex flex-col gap-1">
               <button
                 type="button"
-                onClick={() =>
-                  vscode.postMessage({
-                    type: MESSAGE_TYPES.REGENERATE_SERVER_TOKEN,
-                  })
-                }
-                className="text-xs text-description-fg hover:text-foreground underline"
+                onClick={tokenFlash ? undefined : handleRegenerateToken}
+                className={`inline-flex items-center gap-1 text-xs transition-colors ${
+                  tokenFlash
+                    ? "text-indicator-success cursor-default"
+                    : "text-description-fg hover:text-foreground"
+                }`}
               >
-                Regenerate token
+                <i
+                  className={`codicon ${tokenFlash ? "codicon-check" : "codicon-shield"}`}
+                />
+                <span className={tokenFlash ? undefined : "underline"}>
+                  {tokenFlash ? "Token regenerated" : "Regenerate token"}
+                </span>
               </button>
+              {lastTokenRegenerated !== null && !tokenFlash && (
+                <p className="text-xs text-description-fg">
+                  Restart the server for the new token to take effect.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -415,28 +461,84 @@ export function ServerSection({
                   className="w-full bg-input-bg border border-input-border rounded px-2 py-1 text-sm text-foreground font-mono focus:outline-none focus:border-focus-border"
                 />
               </SettingInputRow>
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() =>
-                    vscode.postMessage({
-                      type: MESSAGE_TYPES.GENERATE_SERVER_CERT,
-                      scope: activeScope,
-                    })
-                  }
-                  className="text-xs text-description-fg hover:text-foreground underline"
-                >
-                  Generate self-signed certificate
-                </button>
-                {certDownloadUrl && (
-                  <a
-                    href={certDownloadUrl}
-                    download="flightpath.cer"
-                    className="text-xs text-description-fg hover:text-foreground underline"
-                    title="Download the server certificate for manual installation on iOS"
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-baseline gap-4">
+                  <button
+                    type="button"
+                    onClick={certFlash ? undefined : handleGenerateCert}
+                    className={`inline-flex items-center gap-1 text-xs transition-colors ${
+                      certFlash
+                        ? "text-indicator-success cursor-default"
+                        : "text-description-fg hover:text-foreground"
+                    }`}
                   >
-                    Download certificate
-                  </a>
+                    <i
+                      className={`codicon ${certFlash ? "codicon-check" : "codicon-key"}`}
+                    />
+                    <span className={certFlash ? undefined : "underline"}>
+                      {certFlash
+                        ? "Cert generated"
+                        : "Generate self-signed certificate"}
+                    </span>
+                  </button>
+                  {certDownloadUrl && !certFlash && (
+                    <a
+                      href={certDownloadUrl}
+                      download="flightpath.cer"
+                      className="inline-flex items-center gap-1 text-xs text-description-fg hover:text-foreground"
+                      title="Download the server certificate for manual installation on iOS"
+                    >
+                      <i className="codicon codicon-download" />
+                      <span className="underline">Download certificate</span>
+                    </a>
+                  )}
+                </div>
+                {lastCertGenerated && (
+                  <div
+                    className={`text-xs space-y-0.5 ${certFlash ? "text-indicator-success" : ""}`}
+                  >
+                    {certExpired ? (
+                      <p className="flex items-baseline gap-1 text-error-fg font-medium">
+                        <i className="codicon codicon-warning" />
+                        <span>
+                          Certificate expired{" "}
+                          {new Date(
+                            lastCertGenerated.expiresAt
+                          ).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </p>
+                    ) : (
+                      <p className={certFlash ? "" : "text-description-fg"}>
+                        Valid{" "}
+                        {new Date(
+                          lastCertGenerated.generatedAt
+                        ).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                        {" → "}
+                        {new Date(
+                          lastCertGenerated.expiresAt
+                        ).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </p>
+                    )}
+                    {lastCertGenerated.sans.length > 0 && (
+                      <p
+                        className={`font-mono ${certFlash ? "" : "text-description-fg"}`}
+                      >
+                        {lastCertGenerated.sans.join(" · ")}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               <p className="text-xs text-description-fg italic">

@@ -183,6 +183,18 @@ interface SettingsState {
   // The IP currently selected for display in the URL/QR code (null = use serverUrl as-is)
   selectedDisplayIp: string | null;
 
+  // Last generated self-signed cert metadata (generatedAt/expiresAt are ISO strings)
+  lastCertGenerated: { generatedAt: string; expiresAt: string; sans: string[] } | null;
+
+  // Incremented each time a cert is actually generated — drives the flash without triggering on settings load
+  certFlashCount: number;
+
+  // Timestamp (ms) of the last server token regeneration — persists until server restarts
+  lastTokenRegenerated: number | null;
+
+  // Incremented each time the token is regenerated — drives the flash without triggering on remount
+  tokenFlashCount: number;
+
   // Developer dashboard controls (dev builds only)
   dev: DevStatus | null;
   devBuild: DevBuildState;
@@ -239,6 +251,12 @@ interface SettingsActions {
   // Available IPs + selected display IP
   setAvailableIps: (ips: string[]) => void;
   setSelectedDisplayIp: (ip: string | null) => void;
+
+  // Cert / token feedback signals
+  setLastCertGenerated: (info: { generatedAt: string; expiresAt: string; sans: string[] } | null) => void;
+  bumpCertFlashCount: () => void;
+  setLastTokenRegenerated: (timestamp: number | null) => void;
+  bumpTokenFlashCount: () => void;
 
   // Developer dashboard
   setDevStatus: (dev: DevStatus | null) => void;
@@ -371,6 +389,10 @@ const initialState: SettingsState = {
   serverUrl: null,
   availableIps: [],
   selectedDisplayIp: null,
+  lastCertGenerated: null,
+  certFlashCount: 0,
+  lastTokenRegenerated: null,
+  tokenFlashCount: 0,
   dev: null,
   devBuild: {
     isBuilding: false,
@@ -487,6 +509,11 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setAvailableIps: (ips) => set({ availableIps: ips }),
 
     setSelectedDisplayIp: (ip) => set({ selectedDisplayIp: ip }),
+
+    setLastCertGenerated: (info) => set({ lastCertGenerated: info }),
+    bumpCertFlashCount: () => set((s) => ({ certFlashCount: s.certFlashCount + 1 })),
+    setLastTokenRegenerated: (timestamp) => set({ lastTokenRegenerated: timestamp }),
+    bumpTokenFlashCount: () => set((s) => ({ tokenFlashCount: s.tokenFlashCount + 1 })),
 
     setDevStatus: (dev) => set({ dev }),
 

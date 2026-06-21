@@ -373,6 +373,11 @@ function createMessageHandlers(): MessageHandlerMap {
     settingsStore.setLastCommitMessageGeneration(
       message.commitMessageGeneration ?? null
     );
+    if (message.certMeta) {
+      settingsStore.setLastCertGenerated(message.certMeta);
+    } else if (!message.settings?.settings?.server?.tls?.enabled) {
+      settingsStore.setLastCertGenerated(null);
+    }
   };
 
   handlers[MESSAGE_TYPES.GLOBAL_SETTING_UPDATED] = (message) => {
@@ -2004,6 +2009,8 @@ function createMessageHandlers(): MessageHandlerMap {
       : [];
     settingsStore.setAvailableIps(ips);
     settingsStore.setSelectedDisplayIp(ips[0] ?? null);
+    // Server started — any previously regenerated token is now in effect
+    settingsStore.setLastTokenRegenerated(null);
   };
 
   // --------------------------------------------------------------------------
@@ -2018,27 +2025,25 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // SERVER_TOKEN_REGENERATED - Token deleted; user must restart server
+  // SERVER_TOKEN_REGENERATED - Token deleted; signal component for in-place flash
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SERVER_TOKEN_REGENERATED] = (_message) => {
-    useUiStore
-      .getState()
-      .showToast(
-        "Server token regenerated. Restart the server to apply the new token.",
-        "info"
-      );
+    const store = useSettingsStore.getState();
+    store.setLastTokenRegenerated(Date.now());
+    store.bumpTokenFlashCount();
   };
 
   // --------------------------------------------------------------------------
-  // SERVER_CERT_GENERATED - Self-signed cert written; settings updated with paths
+  // SERVER_CERT_GENERATED - Self-signed cert written; store metadata for in-place flash
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.SERVER_CERT_GENERATED] = (_message) => {
-    useUiStore
-      .getState()
-      .showToast(
-        "Certificate generated. Restart the server to apply.",
-        "success"
-      );
+  handlers[MESSAGE_TYPES.SERVER_CERT_GENERATED] = (message) => {
+    const store = useSettingsStore.getState();
+    store.setLastCertGenerated({
+      generatedAt: message.generatedAt ?? new Date().toISOString(),
+      expiresAt: message.expiresAt ?? "",
+      sans: message.sans ?? [],
+    });
+    store.bumpCertFlashCount();
   };
 
   // --------------------------------------------------------------------------
