@@ -265,8 +265,7 @@ export class WorkflowSerializer {
         serialized = yaml.dump(clean, {
           lineWidth: -1,
           noRefs: true,
-          quotingType: '"',
-          forceQuotes: false,
+          quoteStyle: "double",
         });
       } else {
         serialized = JSON.stringify(clean, null, 2);

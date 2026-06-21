@@ -86,7 +86,7 @@ export class PromptFileParser {
         try {
           parsed = yaml.load(content, {
             filename: filePath,
-            schema: yaml.DEFAULT_SCHEMA,
+            schema: yaml.CORE_SCHEMA,
             json: false, // Use YAML semantics, not JSON compatibility mode
           });
         } catch (yamlError: any) {
