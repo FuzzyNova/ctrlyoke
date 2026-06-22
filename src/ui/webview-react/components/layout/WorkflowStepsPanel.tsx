@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
@@ -105,26 +111,14 @@ function SortableWorkflowStepWrapper({
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
-  const borderBgClass = stepItemProps.isCurrent
-    ? "bg-status-idle animate-pulse-custom"
-    : "bg-transparent";
   return (
     // Number column sits outside setNodeRef so it stays anchored to the DOM
     // slot position while the content transforms during drag.
-    <div className="relative flex items-stretch">
-      {stepItemProps.isCurrent && (
-        <>
-          <div
-            className={`pointer-events-none absolute inset-x-0 top-0 z-raised h-[2px] ${borderBgClass}`}
-            aria-hidden="true"
-          />
-          <div
-            className={`pointer-events-none absolute inset-x-0 bottom-0 z-raised h-[2px] ${borderBgClass}`}
-            aria-hidden="true"
-          />
-        </>
-      )}
-      <div className={`w-[2px] flex-shrink-0 self-stretch ${borderBgClass}`} />
+    <div
+      className="relative flex items-stretch"
+      data-workflow-step-index={stepItemProps.index}
+    >
+      <div className="w-[2px] flex-shrink-0 self-stretch" />
       <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
         {slotNumber}
       </div>
@@ -136,6 +130,67 @@ function SortableWorkflowStepWrapper({
         />
       </div>
     </div>
+  );
+}
+
+interface ExecutingStepHighlightProps {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  layoutKey: string;
+  stepIndex: number;
+  visible: boolean;
+}
+
+/**
+ * A single overlay owned by the list rather than an individual row. Moving the
+ * same element between row bounds lets CSS animate execution advancing, and
+ * can later be extended to span the first/last rows in a parallel group.
+ */
+function ExecutingStepHighlight({
+  containerRef,
+  layoutKey,
+  stepIndex,
+  visible,
+}: ExecutingStepHighlightProps) {
+  const [bounds, setBounds] = useState({ top: 0, height: 0, measured: false });
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || !visible) return;
+
+    const target = container.querySelector<HTMLElement>(
+      `[data-workflow-step-index="${stepIndex}"]`
+    );
+    if (!target) return;
+
+    const measure = () => {
+      setBounds({
+        top: target.offsetTop,
+        height: target.offsetHeight,
+        measured: true,
+      });
+    };
+
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(container);
+    resizeObserver.observe(target);
+    return () => resizeObserver.disconnect();
+  }, [containerRef, layoutKey, stepIndex, visible]);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      data-testid="executing-step-highlight"
+      className={`pointer-events-none absolute inset-x-0 top-0 z-raised border-2 border-status-idle animate-pulse-custom transition-[transform,height,opacity] duration-300 ease-out ${
+        bounds.measured ? "opacity-100" : "opacity-0"
+      }`}
+      style={{
+        height: bounds.height,
+        transform: `translateY(${bounds.top}px)`,
+      }}
+      aria-hidden="true"
+    />
   );
 }
 
@@ -187,6 +242,7 @@ const WorkflowStepsPanelInner: React.FC<{
     useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
+  const stepListRef = useRef<HTMLDivElement>(null);
   // Determine if workflow is running
   const isRunning = isWorkflowRunning(executionState);
   const canChangeStartPosition =
@@ -822,7 +878,13 @@ const WorkflowStepsPanelInner: React.FC<{
             </p>
           </div>
         ) : (
-          <div className="py-1">
+          <div ref={stepListRef} className="relative py-1">
+            <ExecutingStepHighlight
+              containerRef={stepListRef}
+              layoutKey={sortableIds.join("|")}
+              stepIndex={currentStep}
+              visible={isRunning}
+            />
             {/* Done steps (indices 0..doneStepCount-1).
                 doneStepCount is capped at currentStep to guarantee no overlap with
                 the pending section (which starts at currentStep). History entries
@@ -855,12 +917,13 @@ const WorkflowStepsPanelInner: React.FC<{
                   <div
                     key={`step-${index}-${step.name || ""}`}
                     className="flex items-stretch"
+                    data-workflow-step-index={index}
                   >
-                    {/* 2px status accent — compensated by narrowing number col by 2px so numbers stay aligned with pending items */}
+                    {/* Keep the status accent separate from the consistently sized number column. */}
                     <div
                       className={`w-[2px] flex-shrink-0 self-stretch ${getStepAccentClass(status)}`}
                     />
-                    <div className="flex-shrink-0 w-[26px] flex items-start justify-end pt-2 pr-1 text-xs text-description-fg select-none">
+                    <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
                       {slotNumber}
                     </div>
                     <div className="flex-1 min-w-0">

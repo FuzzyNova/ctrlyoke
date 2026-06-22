@@ -196,6 +196,66 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders the running-step accent as one animated four-sided overlay", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Running step" }, { prompt: "Pending step" }],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 0,
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    const highlight = screen.getByTestId("executing-step-highlight");
+    expect(highlight).toHaveClass(
+      "border-2",
+      "border-status-idle",
+      "animate-pulse-custom",
+      "transition-[transform,height,opacity]"
+    );
+    expect(
+      screen.getByText("Running step").closest("[data-workflow-step-index]")
+    ).toHaveAttribute("data-workflow-step-index", "0");
+  });
+
+  it("does not render the execution highlight while the workflow is idle", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Idle step" }],
+      executionState: EXECUTION_STATES.IDLE,
+      currentStep: 0,
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    expect(
+      screen.queryByTestId("executing-step-highlight")
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses the same centered number styling for completed and executing steps", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Completed step" }, { prompt: "Running step" }],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.COMPLETED }],
+    });
+
+    render(<WorkflowStepsPanel />);
+
+    for (const number of ["1", "2"]) {
+      expect(screen.getByText(number)).toHaveClass(
+        "w-[26px]",
+        "justify-center",
+        "text-sm"
+      );
+    }
+  });
+
   it("shows compact runtime stats for failed steps", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({
