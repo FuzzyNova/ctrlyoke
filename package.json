@@ -746,6 +746,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-tailwindcss": "^3.18.3",
     "jsdom": "^29.1.1",
     "knip": "^6.15.0",
     "mdast-util-find-and-replace": "^3.0.2",

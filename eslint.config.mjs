@@ -3,6 +3,12 @@ import tsParser from "@typescript-eslint/parser";
 import prettierConfig from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import jsxA11y from "eslint-plugin-jsx-a11y";
+import tailwindcss from "eslint-plugin-tailwindcss";
+import { resolve } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const TAILWIND_CONFIG = resolve(__dirname, "src/ui/webview-react/tailwind.config.js");
 
 export default [
   {
@@ -89,6 +95,33 @@ export default [
           includeRoles: ["alert", "dialog"],
         },
       ],
+    },
+  },
+  // Tailwind CSS linting for webview-react files.
+  // Scoped to webview-react (the only part of the codebase that uses Tailwind).
+  // flat/recommended is an array [pluginEntry, rulesEntry] — spread both with
+  // the file scope applied, then add settings + rule overrides in a third block.
+  ...tailwindcss.configs["flat/recommended"].map((config) => ({
+    ...config,
+    files: ["src/ui/webview-react/**/*.{ts,tsx}"],
+  })),
+  {
+    files: ["src/ui/webview-react/**/*.{ts,tsx}"],
+    settings: {
+      tailwindcss: { config: TAILWIND_CONFIG },
+    },
+    rules: {
+      // classnames-order: off — no prettier-plugin-tailwindcss to auto-fix ordering.
+      // Also uses context.getSourceCode() removed in ESLint v10.
+      "tailwindcss/classnames-order": "off",
+      // enforces-shorthand: off — also uses context.getSourceCode() (ESLint v10 incompatible)
+      "tailwindcss/enforces-shorthand": "off",
+      // migration-from-tailwind-2: off — already off in recommended, but explicit
+      "tailwindcss/migration-from-tailwind-2": "off",
+      // no-custom-classname: off — project has many custom VS Code theme tokens
+      "tailwindcss/no-custom-classname": "off",
+      // no-contradicting-classname: matches VS Code Tailwind IntelliSense cssConflict
+      "tailwindcss/no-contradicting-classname": "warn",
     },
   },
   // Prettier config must be last to override other configs

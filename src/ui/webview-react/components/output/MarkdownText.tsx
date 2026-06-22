@@ -546,7 +546,7 @@ function MermaidBlock({ code }: { code: string }) {
         />
       ) : state === "error" ? (
         <>
-          <div className="p-3 font-mono text-xs text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          <div className="p-3 font-mono text-xs text-foreground whitespace-pre-wrap [overflow-wrap:anywhere]">
             {code}
           </div>
           <p className="px-3 pb-2 text-xs text-error-fg">{errorMsg}</p>
@@ -770,7 +770,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       // Preserve indentation while still allowing long code lines to wrap
       // inside narrow output panes instead of forcing horizontal overflow.
       pre: ({ children: preChildren }: React.HTMLAttributes<HTMLElement>) => (
-        <pre className="bg-editor-bg border border-panel-border rounded p-3 my-2 font-mono whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+        <pre className="bg-editor-bg border border-panel-border rounded p-3 my-2 font-mono whitespace-pre-wrap [overflow-wrap:anywhere]">
           {preChildren}
         </pre>
       ),
