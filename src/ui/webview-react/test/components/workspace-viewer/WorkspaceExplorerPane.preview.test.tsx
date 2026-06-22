@@ -28,8 +28,19 @@ vi.mock("@components/workspace-viewer/WorkspaceFileEditor", () => ({
 // Stub the markdown renderer so we can assert it receives the file content
 // without pulling in the full Streamdown pipeline.
 vi.mock("@components/output/MarkdownText", () => ({
-  MarkdownText: ({ children }: { children: string }) => (
-    <div data-testid="markdown-preview">{children}</div>
+  MarkdownText: ({
+    children,
+    tableFullscreen,
+  }: {
+    children: string;
+    tableFullscreen?: boolean;
+  }) => (
+    <div
+      data-testid="markdown-preview"
+      data-table-fullscreen={String(tableFullscreen)}
+    >
+      {children}
+    </div>
   ),
 }));
 
@@ -109,6 +120,10 @@ describe("WorkspaceExplorerPane — markdown preview toggle", () => {
 
     // Button now offers a way back to the editor.
     expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();
+
+    // The preview disables streamdown's table fullscreen control, whose overlay
+    // portals to document.body and doesn't surface from this pane.
+    expect(preview).toHaveAttribute("data-table-fullscreen", "false");
   });
 
   it("returns to the editor when toggled back off", async () => {

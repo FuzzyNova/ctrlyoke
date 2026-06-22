@@ -375,17 +375,197 @@ function estimateTextBlockHeight(
   );
 }
 
+// ── Markdown table layout (streamdown's renderer) ──────────────────────────
+// Streamdown wraps every table in a bordered card with a control bar (copy /
+// download / fullscreen buttons) and an overflow-x-auto scroll region:
+//   <div class="my-4 ... rounded-lg border p-2">      ← wrapper
+//     <div class="...justify-end gap-1">...buttons</div> ← control bar
+//     <div class="overflow-x-auto ... border rounded"> ← scroll region
+//       <table class="w-full divide-y">                ← th: nowrap px-4 py-2
+// Cells use px-4 (32px horizontal) / py-2 (16px vertical) padding, header cells
+// are whitespace-nowrap (always one line), body cells wrap.
+const TABLE_CELL_HPAD = 32; // px-4 left + right
+const TABLE_CELL_VCHROME = 17; // py-2 (16) + divide-y border (1)
+// my-4 (32) + p-2 (16) + gap-2 (8) + control bar (~26) + inner/outer borders (4)
+const TABLE_WRAPPER_VCHROME = 86;
+const TABLE_WRAPPER_HCHROME = 20; // p-2 (16) + inner + outer borders (4)
+// When a many-column table overflows the pane, the browser crams columns far
+// below their natural width. Empirically (10-col real-world table measured at
+// 3747px) columns settle around ~7-8 characters wide; 7.5 lands the estimate at
+// ~3900px (+4%, intentionally a touch high — under-estimates cause scroll jumps).
+const TABLE_OVERFLOW_COL_CHARS = 7.5;
+
+// Mermaid fenced blocks auto-render to a diagram (see MermaidBlock) whose height
+// can't be derived from the source text. Use a flat per-diagram estimate (header
+// bar + a typical diagram); the virtualizer corrects to the real measured height
+// once the row is realized.
+const MERMAID_DIAGRAM_ESTIMATED_HEIGHT = 280;
+
+function isTableRowLine(line: string): boolean {
+  return line.trim().startsWith("|");
+}
+
+function isTableSeparatorLine(line: string): boolean {
+  const trimmed = line.trim();
+  return (
+    /^\|?[\s:|-]+\|?$/.test(trimmed) &&
+    trimmed.includes("-") &&
+    trimmed.includes("|")
+  );
+}
+
+function parseTableCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+/**
+ * Estimates the rendered height of a single streamdown markdown table. Models
+ * CSS auto table-layout: columns size between their min-content (longest word)
+ * and max-content (longest cell) width, clamped to the available pane width;
+ * when the table overflows, columns are capped narrow and body cells wrap. Row
+ * height is driven by the tallest cell in each row.
+ */
+function estimateMarkdownTableHeight(
+  blockLines: string[],
+  outputContentWidth: number | undefined,
+  outputFontSize: number
+): number {
+  const rows = blockLines.filter(isTableRowLine);
+  if (rows.length < 1) {
+    return 0;
+  }
+  const header = parseTableCells(rows[0]);
+  const body = rows
+    .slice(1)
+    .filter((line) => !isTableSeparatorLine(line))
+    .map(parseTableCells);
+  const columnCount = Math.max(
+    header.length,
+    ...body.map((cells) => cells.length),
+    1
+  );
+
+  const charWidth = Math.max(5.5, outputFontSize * 0.6);
+  const lineHeight = Math.max(16, outputFontSize * 1.5);
+  const availableWidth =
+    resolveContentWidth(outputContentWidth, OUTPUT_ROW_HORIZONTAL_CHROME) -
+    TABLE_WRAPPER_HCHROME;
+  const overflowColWidth =
+    TABLE_CELL_HPAD + TABLE_OVERFLOW_COL_CHARS * charWidth;
+
+  // Per-column min-content (longest unbreakable word; header is nowrap so its
+  // whole text counts) and max-content (longest cell) widths, in pixels.
+  const minWidths: number[] = [];
+  const maxWidths: number[] = [];
+  for (let c = 0; c < columnCount; c++) {
+    const headerText = header[c] ?? "";
+    let longestWord = headerText.length;
+    let longestCell = headerText.length;
+    for (const cells of body) {
+      const cell = cells[c] ?? "";
+      longestCell = Math.max(longestCell, cell.length);
+      for (const word of cell.split(/\s+/)) {
+        longestWord = Math.max(longestWord, word.length);
+      }
+    }
+    minWidths.push(longestWord * charWidth + TABLE_CELL_HPAD);
+    maxWidths.push(longestCell * charWidth + TABLE_CELL_HPAD);
+  }
+  const sumMin = minWidths.reduce((a, b) => a + b, 0);
+  const sumMax = maxWidths.reduce((a, b) => a + b, 0);
+
+  let columnWidths: number[];
+  if (sumMax <= availableWidth) {
+    // Table fits at full width — every cell renders on a single line.
+    columnWidths = maxWidths;
+  } else if (sumMin >= availableWidth) {
+    // Table overflows even at min-content — columns are crammed/capped narrow.
+    columnWidths = minWidths.map((w) => Math.min(w, overflowColWidth));
+  } else {
+    // Distribute the slack between min and max proportionally (CSS auto layout).
+    const slack = availableWidth - sumMin;
+    const span = sumMax - sumMin || 1;
+    columnWidths = minWidths.map(
+      (w, i) => w + (slack * (maxWidths[i] - w)) / span
+    );
+  }
+  const charsPerColumn = columnWidths.map((w) =>
+    Math.max(1, Math.floor((w - TABLE_CELL_HPAD) / charWidth))
+  );
+
+  // Header is nowrap → exactly one line. Each body row is as tall as its
+  // tallest (most-wrapped) cell.
+  let height = lineHeight + TABLE_CELL_VCHROME;
+  for (const cells of body) {
+    let rowLines = 1;
+    for (let c = 0; c < columnCount; c++) {
+      const cellLength = (cells[c] ?? "").length;
+      rowLines = Math.max(rowLines, Math.ceil(cellLength / charsPerColumn[c]));
+    }
+    height += rowLines * lineHeight + TABLE_CELL_VCHROME;
+  }
+  return height + TABLE_WRAPPER_VCHROME;
+}
+
 function estimateMarkdownBlockHeight(
   text: string,
   outputContentWidth: number | undefined,
   outputFontSize: number
 ): number {
+  // Split the text into prose and table blocks. Tables render through
+  // streamdown's bordered table card with its own column-wrapping behavior, so
+  // they need a dedicated estimator — wrapping them as plain full-width text
+  // (as the base estimate does) under-counts the height of narrow columns by 3×.
+  const lines = normalizeTextForLayout(text).split("\n");
+  const proseLines: string[] = [];
+  const tableBlocks: string[][] = [];
+  let mermaidBlocks = 0;
+  let i = 0;
+  while (i < lines.length) {
+    // Mermaid fenced block — auto-renders to a diagram, not source text, so
+    // pull it out of the prose estimate and count it for a flat diagram height.
+    if (/^```mermaid\b/.test(lines[i].trim())) {
+      mermaidBlocks++;
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i].trim())) {
+        i++;
+      }
+      if (i < lines.length) {
+        i++; // consume the closing fence
+      }
+      continue;
+    }
+    // A GFM table is a header row immediately followed by a separator row.
+    if (
+      isTableRowLine(lines[i]) &&
+      i + 1 < lines.length &&
+      isTableSeparatorLine(lines[i + 1])
+    ) {
+      const block = [lines[i], lines[i + 1]];
+      i += 2;
+      while (i < lines.length && isTableRowLine(lines[i])) {
+        block.push(lines[i]);
+        i++;
+      }
+      tableBlocks.push(block);
+      continue;
+    }
+    proseLines.push(lines[i]);
+    i++;
+  }
+  const proseText = proseLines.join("\n");
+
   // emptyLineWeight: 0.5 — \n\n paragraph breaks render as compact margins
   // (~half a line height), not as full blank lines. Without this, long AI
   // responses with many paragraph breaks are consistently over-estimated by
   // 10-15%, which the bucket correction can't fix (it only scales upward).
   const baseHeight = estimateTextBlockHeight(
-    text,
+    proseText,
     outputContentWidth,
     outputFontSize,
     {
@@ -397,42 +577,28 @@ function estimateMarkdownBlockHeight(
       emptyLineWeight: 0.5,
     }
   );
-  const headingCount = (text.match(/^#{1,6}\s+/gm) ?? []).length;
-  const bulletCount = (text.match(/^\s*(?:[-*+]|\d+\.)\s+/gm) ?? []).length;
-  const codeFenceCount = Math.floor((text.match(/^```/gm) ?? []).length / 2);
-  const mermaidFenceCount = (text.match(/^```mermaid\b/gm) ?? []).length;
-  const blockQuoteCount = (text.match(/^\s*>\s+/gm) ?? []).length;
+  const headingCount = (proseText.match(/^#{1,6}\s+/gm) ?? []).length;
+  const bulletCount = (proseText.match(/^\s*(?:[-*+]|\d+\.)\s+/gm) ?? []).length;
+  const codeFenceCount = Math.floor(
+    (proseText.match(/^```/gm) ?? []).length / 2
+  );
+  const blockQuoteCount = (proseText.match(/^\s*>\s+/gm) ?? []).length;
 
-  // Markdown tables: th/td render with py-1.5 (12px padding) + 1px border,
-  // making each visible row taller than a plain text line. Separator rows
-  // (|---|) count as full text lines in the base estimate but render as 0px.
-  const tableRowMatches = text.match(/^\|.+\|/gm) ?? [];
-  const tableSeparatorCount = tableRowMatches.filter((r) =>
-    /^\|\s*[-: |]+$/.test(r)
-  ).length;
-  const tableVisibleRowCount = tableRowMatches.length - tableSeparatorCount;
-  // lineHeight matches the markdown base estimate (1.6 multiplier) so that
-  // the separator row subtraction cancels exactly what baseHeight counted.
-  const tableLineHeight = Math.max(16, outputFontSize * 1.6);
-  // Base correction (24) was calibrated at FS=13. Scale up for larger fonts
-  // since table content in narrow columns wraps more at higher font sizes.
-  const tableRowCorrection =
-    24 + Math.max(0, Math.round((outputFontSize - 13) * 2.0));
-  const tableCorrection =
-    tableVisibleRowCount > 0
-      ? tableVisibleRowCount * tableRowCorrection +
-        16 -
-        tableSeparatorCount * tableLineHeight
-      : 0;
+  const tableHeight = tableBlocks.reduce(
+    (total, block) =>
+      total +
+      estimateMarkdownTableHeight(block, outputContentWidth, outputFontSize),
+    0
+  );
 
   return (
     baseHeight +
     headingCount * 8 +
     bulletCount * 2 +
     codeFenceCount * 14 +
-    mermaidFenceCount * 48 +
     blockQuoteCount * 6 +
-    tableCorrection
+    tableHeight +
+    mermaidBlocks * MERMAID_DIAGRAM_ESTIMATED_HEIGHT
   );
 }
 

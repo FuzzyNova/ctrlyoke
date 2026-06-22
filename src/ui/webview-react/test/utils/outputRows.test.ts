@@ -708,6 +708,72 @@ describe("outputRows", () => {
     );
   });
 
+  it("estimates a multi-column markdown table far taller than plain prose", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const tableText = [
+      "| ID | Name | Category | Status | Owner | Priority | Notes | Start Date | End Date | Details |",
+      "|---|---|---|---|---|---|---|---|---|---|",
+      ...Array.from(
+        { length: 10 },
+        (_, i) =>
+          `| ${i + 1} | Alpha | Planning | In Progress | Maya | High | Building the first pass of the markdown renderer with theme-aware output | 2026-06-01 | 2026-06-05 | Define acceptance criteria, identify integration points, and document any cross-layer contract changes before implementation begins. |`
+      ),
+    ].join("\n");
+
+    const tableRow = {
+      key: "table",
+      rowKind: "plain-response",
+      target,
+      text: tableText,
+      rawTextOutput: false,
+      animated: false,
+      estimateSize: 0,
+    } as const;
+
+    // Same character volume rendered as plain prose (no table layout).
+    const proseRow = {
+      ...tableRow,
+      key: "prose",
+      text: tableText.replace(/\|/g, " "),
+    } as const;
+
+    const tableHeight = estimateOutputRowHeight(tableRow, 13, 600);
+    const proseHeight = estimateOutputRowHeight(proseRow, 13, 600);
+
+    // The column-aware estimate must account for narrow columns wrapping each
+    // cell over many lines — historically this regressed to a ~3× underestimate
+    // (≈1100px) when streamdown's table renderer replaced the custom one.
+    expect(tableHeight).toBeGreaterThan(2500);
+    expect(tableHeight).toBeGreaterThan(proseHeight * 2);
+  });
+
+  it("estimates a small fitting table close to one line per row", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const smallTable = [
+      "| Key | Value |",
+      "|---|---|",
+      "| a | 1 |",
+      "| b | 2 |",
+      "| c | 3 |",
+    ].join("\n");
+
+    const row = {
+      key: "small-table",
+      rowKind: "plain-response",
+      target,
+      text: smallTable,
+      rawTextOutput: false,
+      animated: false,
+      estimateSize: 0,
+    } as const;
+
+    const height = estimateOutputRowHeight(row, 13, 760);
+    // 4 single-line rows + streamdown wrapper chrome — well under a wrapped
+    // many-column table, but above the bare wrapper chrome.
+    expect(height).toBeGreaterThan(120);
+    expect(height).toBeLessThan(400);
+  });
+
   it("scales bash structured-event estimates with content length and width", () => {
     const allMessages: OutputMessage[] = [
       {

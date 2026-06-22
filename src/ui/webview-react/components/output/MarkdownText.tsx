@@ -1,11 +1,21 @@
-import React, { memo, useMemo } from "react";
-import { Streamdown, defaultRemarkPlugins, type MermaidOptions } from "streamdown";
+import React, {
+  memo,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+} from "react";
+import { Streamdown, defaultRemarkPlugins } from "streamdown";
+import type { ControlsConfig } from "streamdown";
+import mermaid from "mermaid";
 import { findAndReplace } from "mdast-util-find-and-replace";
 import { visit } from "unist-util-visit";
 import { toString as mdastToString } from "mdast-util-to-string";
 import type { Root } from "mdast";
 import type { PluginTuple } from "unified";
 import { openFile } from "@hooks/useMessageHandler";
+import { WebviewLog } from "@utils/logger";
 import {
   highlightCodeText,
   injectFindHighlightStyles,
@@ -344,17 +354,212 @@ const REMARK_PLUGINS = [
   remarkFileLinks,
 ];
 
-// Pick the mermaid theme that matches the VS Code body class set before React
-// mounts. "dark" for dark/high-contrast themes, "default" for light themes.
-const MERMAID_OPTIONS: MermaidOptions = {
-  config: {
-    theme:
-      document.body.classList.contains("vscode-dark") ||
-      document.body.classList.contains("vscode-high-contrast")
-        ? "dark"
-        : "default",
-  },
-};
+// Initialise mermaid once at module load. Theme matched to VS Code body class
+// which is set by the host before any scripts run.
+mermaid.initialize({
+  startOnLoad: false,
+  theme:
+    document.body.classList.contains("vscode-dark") ||
+    document.body.classList.contains("vscode-high-contrast")
+      ? "dark"
+      : "default",
+});
+
+let mermaidIdCounter = 0;
+
+const MERMAID_HEADER_BTN_CLASS =
+  "inline-flex items-center justify-center rounded px-1.5 py-0.5 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed";
+
+// Module-level cache of rendered SVG keyed by diagram source. Mermaid blocks
+// unmount when virtualized out of view; caching lets a re-realized block show
+// the diagram instantly (and at its already-measured height) instead of
+// replaying the async render — and guarantees the diagram, not raw source, is
+// always what reappears.
+const mermaidSvgCache = new Map<string, string>();
+
+/**
+ * Rasterizes a mermaid SVG string to a PNG Blob via an offscreen canvas.
+ * Mermaid often emits only a viewBox + max-width (no pixel width/height), which
+ * would make the Image rasterize at 0×0, so we derive an intrinsic size and
+ * inject explicit dimensions. `scale` oversamples for a crisper export.
+ */
+function mermaidSvgToPngBlob(svg: string, scale = 2): Promise<Blob> {
+  // Mermaid emits width="100%" + a viewBox, so trust the viewBox for the true
+  // pixel size and aspect ratio. Fall back to numeric width/height attributes
+  // (percentage widths are ignored) and finally a sane default. Matching the
+  // svg width attribute instead would yield 100 and rasterize a tall sliver.
+  const viewBox = svg.match(
+    /viewBox="\s*[\d.-]+\s+[\d.-]+\s+([\d.]+)\s+([\d.]+)/
+  );
+  const widthAttr = svg.match(/<svg[^>]*?\swidth="([\d.]+)(?:px)?"/);
+  const heightAttr = svg.match(/<svg[^>]*?\sheight="([\d.]+)(?:px)?"/);
+  const width = parseFloat(viewBox?.[1] ?? widthAttr?.[1] ?? "800") || 800;
+  const height = parseFloat(viewBox?.[2] ?? heightAttr?.[1] ?? "600") || 600;
+
+  // Force explicit pixel dimensions on the root <svg> so the rasterized Image
+  // gets the correct intrinsic size (a width="100%" SVG rasterizes as a sliver).
+  const sized = svg.replace(
+    /<svg([^>]*)>/,
+    (_full, attrs: string) =>
+      `<svg${attrs
+        .replace(/\swidth="[^"]*"/, "")
+        .replace(/\sheight="[^"]*"/, "")} width="${width}" height="${height}">`
+  );
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Failed to create 2D canvas context"));
+        return;
+      }
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) =>
+          blob ? resolve(blob) : reject(new Error("Failed to create PNG blob")),
+        "image/png"
+      );
+    };
+    image.onerror = () => reject(new Error("Failed to load SVG for export"));
+    // base64-encode so the data URL stays valid for large / unicode SVGs.
+    image.src =
+      "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(sized)));
+  });
+}
+
+/**
+ * Renders a mermaid fenced code block as a diagram. The diagram renders
+ * automatically when the block mounts (cached across virtualization, so
+ * scrolling away and back keeps showing the diagram rather than resetting to
+ * source). Two controls cover the real needs: "Copy" copies the raw source and
+ * "PNG" downloads the rendered diagram as an image. On render failure the
+ * source is shown inline with the error so the diagram can be diagnosed.
+ */
+function MermaidBlock({ code }: { code: string }) {
+  const cached = mermaidSvgCache.get(code);
+  const [svg, setSvg] = useState(cached ?? "");
+  const [state, setState] = useState<"rendering" | "done" | "error">(
+    cached ? "done" : "rendering"
+  );
+  const [errorMsg, setErrorMsg] = useState("");
+  const [copied, setCopied] = useState(false);
+  // Unique DOM ID required by mermaid.render(); counter is simpler than crypto.
+  const idRef = useRef(`fp-mermaid-${++mermaidIdCounter}`);
+  const copyResetRef = useRef(0);
+
+  // Auto-render on mount / when the source changes, unless already cached.
+  useEffect(() => {
+    const hit = mermaidSvgCache.get(code);
+    if (hit) {
+      setSvg(hit);
+      setState("done");
+      return;
+    }
+    let cancelled = false;
+    setState("rendering");
+    void (async () => {
+      try {
+        const { svg: rendered } = await mermaid.render(idRef.current, code);
+        if (cancelled) return;
+        mermaidSvgCache.set(code, rendered);
+        setSvg(rendered);
+        setState("done");
+      } catch (e) {
+        if (cancelled) return;
+        setErrorMsg(e instanceof Error ? e.message : String(e));
+        setState("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  useEffect(() => () => window.clearTimeout(copyResetRef.current), []);
+
+  const copySource = useCallback(async () => {
+    try {
+      await navigator.clipboard?.writeText(code);
+      setCopied(true);
+      window.clearTimeout(copyResetRef.current);
+      copyResetRef.current = window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable (e.g. insecure context) — silently ignore.
+    }
+  }, [code]);
+
+  const downloadPng = useCallback(async () => {
+    if (!svg) return;
+    try {
+      const blob = await mermaidSvgToPngBlob(svg);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "diagram.png";
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      WebviewLog.warn("Mermaid PNG export failed", e);
+    }
+  }, [svg]);
+
+  // -mx-3 -my-3 cancels the outer <pre>'s p-3 so MermaidBlock fills the container
+  // edge-to-edge; font-sans/whitespace-normal reset the pre's typography cascade.
+  return (
+    <div className="-mx-3 -my-3 font-sans whitespace-normal">
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-panel-border text-description-fg text-xs">
+        <span className="font-mono">mermaid</span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={copySource}
+            title={copied ? "Copied" : "Copy source"}
+            aria-label={copied ? "Copied" : "Copy source"}
+            className={MERMAID_HEADER_BTN_CLASS}
+          >
+            <i
+              className={`codicon ${copied ? "codicon-check" : "codicon-copy"} text-sm`}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={downloadPng}
+            disabled={state !== "done"}
+            title="Download as PNG"
+            aria-label="Download as PNG"
+            className={MERMAID_HEADER_BTN_CLASS}
+          >
+            <i className="codicon codicon-download text-sm" />
+          </button>
+        </div>
+      </div>
+      {state === "done" ? (
+        <div
+          className="p-3 overflow-auto"
+          // mermaid.render() produces trusted SVG — no user content reaches here
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      ) : state === "error" ? (
+        <>
+          <div className="p-3 font-mono text-xs text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {code}
+          </div>
+          <p className="px-3 pb-2 text-xs text-error-fg">{errorMsg}</p>
+        </>
+      ) : (
+        <div className="flex items-center gap-2 p-4 text-description-fg text-xs">
+          <i className="codicon codicon-loading codicon-modifier-spin" />
+          <span>Rendering diagram…</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Extends rehype-sanitize's allowlist so it keeps <file-ref path="…"> and
 // <mark data-find-active="…"> nodes produced by remarkFileLinks /
@@ -379,6 +584,14 @@ interface MarkdownTextProps {
   highlightCaseSensitive?: boolean;
   /** 0-based index (across the whole text) of the currently-active match */
   highlightActiveIndex?: number;
+  /**
+   * Whether streamdown's per-table "view fullscreen" control is enabled.
+   * Its fullscreen overlay portals into `document.body`, which only renders
+   * correctly inside the main dashboard webview. In the workspace-viewer
+   * markdown preview that overlay doesn't surface, so callers there pass
+   * `false` to hide the button (copy / download controls stay). Default true.
+   */
+  tableFullscreen?: boolean;
 }
 
 /**
@@ -401,6 +614,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   highlightQuery,
   highlightCaseSensitive = false,
   highlightActiveIndex = -1,
+  tableFullscreen = true,
 }) => {
   // Find-highlight options for code blocks/inline code. These are skipped by
   // remarkHighlightMatches (which only visits markdown text nodes), so they're
@@ -507,48 +721,6 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
         </h6>
       ),
 
-      // ── Tables ─────────────────────────────────────────────────────────
-      table: ({ children: c }: React.HTMLAttributes<HTMLTableElement>) => (
-        <div className="overflow-x-auto my-2">
-          <table className="border-collapse w-full">{c}</table>
-        </div>
-      ),
-
-      thead: ({
-        children: c,
-      }: React.HTMLAttributes<HTMLTableSectionElement>) => (
-        <thead className="bg-md-table-head-bg">{c}</thead>
-      ),
-
-      tbody: ({
-        children: c,
-      }: React.HTMLAttributes<HTMLTableSectionElement>) => <tbody>{c}</tbody>,
-
-      tr: ({ children: c }: React.HTMLAttributes<HTMLTableRowElement>) => (
-        <tr className="border-b border-panel-border">{c}</tr>
-      ),
-
-      th: ({
-        children: c,
-        ...props
-      }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
-        <th
-          {...props}
-          className="border border-panel-border px-3 py-1.5 text-left text-md-strong-fg font-semibold whitespace-nowrap"
-        >
-          {c}
-        </th>
-      ),
-
-      td: ({
-        children: c,
-        ...props
-      }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
-        <td {...props} className="border border-panel-border px-3 py-1.5">
-          {c}
-        </td>
-      ),
-
       // ── Blockquote ─────────────────────────────────────────────────────
       blockquote: ({ children: c }: React.HTMLAttributes<HTMLQuoteElement>) => (
         <blockquote className="border-l-2 border-link-fg pl-3 my-2 text-description-fg italic">
@@ -576,6 +748,13 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
                 : codeChildren}
             </code>
           );
+        }
+
+        // Mermaid fenced blocks — our own renderer since components.code
+        // overrides streamdown's default handler that would otherwise do this.
+        if (language === "mermaid") {
+          const rawText = getNodeText(codeChildren).replace(/\n$/, "");
+          return <MermaidBlock code={rawText} />;
         }
 
         const rawText = getNodeText(codeChildren).replace(/\n$/, "");
@@ -626,6 +805,14 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   // Keying on the highlight state forces React to remount Streamdown whenever
   // it changes, guaranteeing the new highlight options take effect. The key is
   // a constant when there's no active query, so the common case never remounts.
+  // Disable only the table fullscreen control when requested; leave copy /
+  // download (and all other defaults) on. `true` keeps streamdown's default
+  // (all controls), so the common case passes no override.
+  const controls: ControlsConfig = useMemo(
+    () => (tableFullscreen ? true : { table: { fullscreen: false } }),
+    [tableFullscreen]
+  );
+
   const isHighlighting = !!highlightQuery?.trim();
   const streamdownKey = isHighlighting
     ? `find:${JSON.stringify([highlightQuery, highlightCaseSensitive, highlightActiveIndex])}`
@@ -645,9 +832,9 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       mode={isHighlighting ? "static" : "streaming"}
       className={`markdown-text ${className ?? ""}`}
       components={components}
+      controls={controls}
       remarkPlugins={remarkPlugins}
       allowedTags={FILE_REF_ALLOWED_TAGS}
-      mermaid={MERMAID_OPTIONS}
       // No plugins prop: omitting avoids Shiki WASM CSP issues in VS Code webview
     >
       {children}

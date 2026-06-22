@@ -413,6 +413,18 @@ button .codicon {
   color: var(--vscode-descriptionForeground);
 }
 
+/* Table cell borders — streamdown's default table uses divide-y on tbody but
+   no per-cell borders. Restore them to match our VS Code theme appearance. */
+.markdown-text table th,
+.markdown-text table td {
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+/* Table header accent — match the md-strong-fg symbol colour used elsewhere. */
+.markdown-text table thead th {
+  color: var(--vscode-symbolIcon-interfaceForeground, #75beff);
+}
+
 /* Streaming caret */
 [data-streamdown="caret"] {
   background-color: var(

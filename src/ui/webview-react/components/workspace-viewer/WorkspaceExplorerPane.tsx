@@ -842,7 +842,12 @@ export const WorkspaceExplorerPane: React.FC = () => {
               </div>
               {showPreview && (
                 <div className="absolute inset-0 overflow-y-auto overflow-x-hidden bg-editor-bg px-4 py-3">
-                  <MarkdownText>{fileContent}</MarkdownText>
+                  {/* tableFullscreen=false: streamdown's table fullscreen
+                      overlay portals to document.body and doesn't surface from
+                      this preview pane — hide the button (copy/download stay). */}
+                  <MarkdownText tableFullscreen={false}>
+                    {fileContent}
+                  </MarkdownText>
                 </div>
               )}
             </div>

@@ -308,4 +308,45 @@ describe("MarkdownText", () => {
     expect(marks[0]).not.toHaveAttribute("data-find-active");
     expect(marks[1]).toHaveAttribute("data-find-active", "true");
   });
+
+  it("auto-renders mermaid with Copy + PNG controls and no render/source toggle", async () => {
+    const source = "graph TD\n  A --> B";
+    render(<MarkdownText>{`\`\`\`mermaid\n${source}\n\`\`\``}</MarkdownText>);
+
+    // Diagram renders on mount (no gating button); Copy + PNG are the controls.
+    expect(
+      await screen.findByRole("button", { name: /copy source/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /download as png/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /render diagram/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /show source/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("copies the mermaid source to the clipboard", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const source = "graph TD\n  A --> B";
+    render(<MarkdownText>{`\`\`\`mermaid\n${source}\n\`\`\``}</MarkdownText>);
+
+    await user.click(
+      await screen.findByRole("button", { name: /copy source/i })
+    );
+
+    expect(writeText).toHaveBeenCalledWith(source);
+    // On success the icon button's accessible name flips to "Copied".
+    expect(
+      await screen.findByRole("button", { name: /copied/i })
+    ).toBeInTheDocument();
+  });
 });
