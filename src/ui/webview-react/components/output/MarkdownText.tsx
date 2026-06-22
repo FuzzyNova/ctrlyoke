@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from "react";
-import { Streamdown, defaultRemarkPlugins } from "streamdown";
+import { Streamdown, defaultRemarkPlugins, type MermaidOptions } from "streamdown";
 import { findAndReplace } from "mdast-util-find-and-replace";
 import { visit } from "unist-util-visit";
 import { toString as mdastToString } from "mdast-util-to-string";
@@ -344,6 +344,18 @@ const REMARK_PLUGINS = [
   remarkFileLinks,
 ];
 
+// Pick the mermaid theme that matches the VS Code body class set before React
+// mounts. "dark" for dark/high-contrast themes, "default" for light themes.
+const MERMAID_OPTIONS: MermaidOptions = {
+  config: {
+    theme:
+      document.body.classList.contains("vscode-dark") ||
+      document.body.classList.contains("vscode-high-contrast")
+        ? "dark"
+        : "default",
+  },
+};
+
 // Extends rehype-sanitize's allowlist so it keeps <file-ref path="…"> and
 // <mark data-find-active="…"> nodes produced by remarkFileLinks /
 // remarkHighlightMatches.
@@ -635,6 +647,7 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
       components={components}
       remarkPlugins={remarkPlugins}
       allowedTags={FILE_REF_ALLOWED_TAGS}
+      mermaid={MERMAID_OPTIONS}
       // No plugins prop: omitting avoids Shiki WASM CSP issues in VS Code webview
     >
       {children}

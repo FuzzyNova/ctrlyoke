@@ -400,6 +400,7 @@ function estimateMarkdownBlockHeight(
   const headingCount = (text.match(/^#{1,6}\s+/gm) ?? []).length;
   const bulletCount = (text.match(/^\s*(?:[-*+]|\d+\.)\s+/gm) ?? []).length;
   const codeFenceCount = Math.floor((text.match(/^```/gm) ?? []).length / 2);
+  const mermaidFenceCount = (text.match(/^```mermaid\b/gm) ?? []).length;
   const blockQuoteCount = (text.match(/^\s*>\s+/gm) ?? []).length;
 
   // Markdown tables: th/td render with py-1.5 (12px padding) + 1px border,
@@ -429,6 +430,7 @@ function estimateMarkdownBlockHeight(
     headingCount * 8 +
     bulletCount * 2 +
     codeFenceCount * 14 +
+    mermaidFenceCount * 48 +
     blockQuoteCount * 6 +
     tableCorrection
   );
