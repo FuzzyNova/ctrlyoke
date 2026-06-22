@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import {
   buildPromptReferenceInsertion,
+  findContextReferenceMatches,
   getRetryPlaceholderCompletions,
   type CodeMirrorEditorMode,
 } from "@components/editor/CodeMirrorEditor";
@@ -93,5 +94,29 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
       to: "Analyze current output".length,
       text: "\n@src/extension.ts",
     });
+  });
+});
+
+describe("CodeMirrorEditor context reference parsing", () => {
+  it("treats a dotted path with a trailing slash only as a directory", () => {
+    expect(findContextReferenceMatches("@.flightpath/.history/")).toEqual([
+      {
+        from: 0,
+        to: "@.flightpath/.history/".length,
+        type: "directory",
+        path: ".flightpath/.history/",
+      },
+    ]);
+  });
+
+  it("still recognizes file paths with alphanumeric extensions", () => {
+    expect(findContextReferenceMatches("Review @src/file.ts.")).toEqual([
+      {
+        from: "Review ".length,
+        to: "Review @src/file.ts".length,
+        type: "file",
+        path: "src/file.ts",
+      },
+    ]);
   });
 });

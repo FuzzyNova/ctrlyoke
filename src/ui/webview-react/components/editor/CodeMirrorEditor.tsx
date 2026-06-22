@@ -101,7 +101,7 @@ type ContextReferenceType =
   | "symbol"
   | "git";
 
-interface ContextReferenceMatch {
+export interface ContextReferenceMatch {
   from: number;
   to: number;
   type: ContextReferenceType;
@@ -1257,14 +1257,18 @@ function splitCamelCaseWord(
   return parts.length > 0 ? parts : [{ text: word, offset: 0 }];
 }
 
-function findContextReferenceMatches(
+export function findContextReferenceMatches(
   text: string,
   offset = 0
 ): ContextReferenceMatch[] {
   const patterns = {
     fullFileQuoted: /@"([^"]+\.[a-zA-Z0-9]+)"(?!\/)/g,
     directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
-    fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?!\/)/g,
+    // Include alphanumerics in the boundary check so the engine cannot
+    // backtrack to a partial extension when the complete path ends in `/`.
+    // Without this, `@.flightpath/.history/` also matched a truncated file
+    // reference such as `@.flightpath/.histor`.
+    fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?![a-zA-Z0-9/])/g,
     directory: /@([^\s@#"]+\/)/g,
     lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,
     lineRange: /#selection:([^\s:]+):(\d+)-(\d+)/g,
