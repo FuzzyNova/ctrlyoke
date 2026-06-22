@@ -183,6 +183,50 @@ suite("WorkflowOrchestrator active workflow helpers", () => {
   });
 });
 
+suite("WorkflowOrchestrator promoteInstanceToLive", () => {
+  // Regression: a multi-step run that briefly hits a terminal state gets retired
+  // (moved to retiredInstances), then re-registered as RUNNING on the next step.
+  // The re-registration must remove the retired copy so the instance is never in
+  // both maps — otherwise the still-running workflow looks "retired" to
+  // setViewedWorkflowId/unregisterClient, which can dispose it mid-run.
+  test("removes the retired copy when an instance is promoted back to live", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+
+    const instance = { id: "wf-1" };
+    internal.instances = new Map<string, any>();
+    internal.retiredInstances = new Map<string, any>([["wf-1", instance]]);
+
+    const wasRetired = internal.promoteInstanceToLive(instance);
+
+    assert.strictEqual(wasRetired, true);
+    assert.strictEqual(internal.instances.get("wf-1"), instance);
+    assert.strictEqual(
+      internal.retiredInstances.has("wf-1"),
+      false,
+      "instance must not remain in retiredInstances after promotion"
+    );
+  });
+
+  test("reports no stale entry when promoting a never-retired instance", () => {
+    const orchestrator = Object.create(
+      WorkflowOrchestrator.prototype
+    ) as WorkflowOrchestrator;
+    const internal = orchestrator as any;
+
+    const instance = { id: "wf-2" };
+    internal.instances = new Map<string, any>();
+    internal.retiredInstances = new Map<string, any>();
+
+    const wasRetired = internal.promoteInstanceToLive(instance);
+
+    assert.strictEqual(wasRetired, false);
+    assert.strictEqual(internal.instances.get("wf-2"), instance);
+  });
+});
+
 suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
   // Regression: navigation routes are forward-slash normalized, but instance
   // summaries carry native paths (backslashes on Windows). A LOAD_WORKFLOW for

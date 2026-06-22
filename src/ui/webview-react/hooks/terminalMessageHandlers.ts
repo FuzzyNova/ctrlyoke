@@ -135,13 +135,17 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       entry.term.write(data as string);
       return;
     }
-    // Only buffer for the active workflow. For inactive workflows the
-    // server-side reconnect buffer replays output on SWITCH_WORKFLOW, so
-    // buffering here would cause duplicate output when the user switches.
+    // No entry yet — the PTY can emit its first chunks before create() runs.
+    // Buffer in the registry (keyed by workflow+session, independent of whether
+    // the session record exists yet) so create() can flush them in order. Only
+    // for the active workflow: backgrounded workflows are replayed from the
+    // server-side reconnect buffer on switch, so buffering here would double up.
     if (workflowId === useUiStore.getState().activeWorkflowId) {
-      useTerminalStore
-        .getState()
-        .pushPendingOutput(workflowId, sessionId, data as string);
+      terminalRegistry.bufferOrphanOutput(
+        workflowId,
+        sessionId,
+        data as string
+      );
     }
   };
 
@@ -259,7 +263,6 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
       harnessId,
       shellKind,
       status: TERMINAL_SESSION_STATUS.RUNNING,
-      pendingOutput: [],
       isController,
     });
 

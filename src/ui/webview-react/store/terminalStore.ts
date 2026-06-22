@@ -20,8 +20,6 @@ export interface TerminalSession {
   /** Shell variant for SHELL sessions. Undefined for ai-cli sessions. */
   shellKind?: ShellKind;
   status: TerminalSessionStatus;
-  /** Chunks buffered before TerminalInstance mounts — flushed on mount */
-  pendingOutput: string[];
   /**
    * True when this client owns interactive control of the PTY (input + resize).
    * Defaults to true optimistically; updated by TERMINAL_CONTROLLER_CHANGED.
@@ -66,13 +64,6 @@ interface TerminalActions {
   setActiveSession: (workflowId: string, sessionId: string) => void;
   /** Explicitly close/remove a session (user × button on shell sessions) */
   removeSession: (workflowId: string, sessionId: string) => void;
-
-  pushPendingOutput: (
-    workflowId: string,
-    sessionId: string,
-    chunk: string
-  ) => void;
-  clearPendingOutput: (workflowId: string, sessionId: string) => void;
 
   /** Update isController for a session when TERMINAL_CONTROLLER_CHANGED arrives */
   setSessionController: (
@@ -170,24 +161,6 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
             [workflowId]: newActive,
           },
         };
-      }),
-
-    pushPendingOutput: (workflowId, sessionId, chunk) =>
-      set((state) => {
-        const sessions = (state.sessions[workflowId] ?? []).map((s) =>
-          s.id === sessionId
-            ? { ...s, pendingOutput: [...s.pendingOutput, chunk] }
-            : s
-        );
-        return { sessions: { ...state.sessions, [workflowId]: sessions } };
-      }),
-
-    clearPendingOutput: (workflowId, sessionId) =>
-      set((state) => {
-        const sessions = (state.sessions[workflowId] ?? []).map((s) =>
-          s.id === sessionId ? { ...s, pendingOutput: [] } : s
-        );
-        return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),
 
     setSessionController: (workflowId, sessionId, isController) =>

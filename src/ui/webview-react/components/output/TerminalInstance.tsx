@@ -316,29 +316,17 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
           `isNewEntry=${!entry.term.element}`
       );
 
-      // Flush buffered output immediately after the entry lands in the registry,
-      // before attach()'s async WebGL import. Any TERMINAL_OUTPUT messages that
-      // arrive after create() completes write directly to entry.term.write(); if
-      // we flushed pendingOutput after attach() those earlier chunks would be
-      // written out-of-order (after chunks that arrived during the WebGL import).
-      const { sessions, clearPendingOutput } = useTerminalStore.getState();
-      const sess = (sessions[workflowId] ?? []).find((s) => s.id === sessionId);
-      if (sess?.pendingOutput.length) {
-        const totalChars = sess.pendingOutput.reduce((n, c) => n + c.length, 0);
-        WebviewLog.debug(
-          `[TerminalInstance] flushing ${sess.pendingOutput.length} pending chunk(s) (${totalChars} chars) ` +
-            `wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)} isController=${sess.isController}`
-        );
-        for (const chunk of sess.pendingOutput) {
-          entry.term.write(chunk);
-        }
-        clearPendingOutput(workflowId, sessionId);
-      }
+      // Output that arrived before this entry existed is flushed inside
+      // terminalRegistry.create() — the single point where the entry materializes
+      // — so it renders in order before any live chunks that now write directly.
 
       // Seed the registry entry with the controller's dimensions if already known
       // (TERMINAL_SIZE_CHANGED may have arrived before this mount ran).
       // attach()'s requestAnimationFrame checks entry.controllerCols and applies
       // viewer sizing (cols×rows mirror) instead of fitAddon.fit() when set.
+      const sess = useTerminalStore
+        .getState()
+        .sessions[workflowId]?.find((s) => s.id === sessionId);
       if (sess?.isController === false && sess.controllerCols != null) {
         entry.controllerCols = sess.controllerCols;
         if (sess.controllerRows != null) {

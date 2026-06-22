@@ -416,6 +416,24 @@ export class WorkflowOrchestrator {
    * Silently retire a workflow from the registry — no confirmation, no stop prompts.
    * Called automatically when a workflow reaches COMPLETED, ERROR, or STOPPED state.
    */
+  /**
+   * Move an instance into the live registry, enforcing the invariant that an
+   * instance lives in EITHER `instances` OR `retiredInstances` — never both.
+   *
+   * The inverse of {@link retireWorkflow}. Used when a retired instance becomes
+   * active again (a multi-step run that briefly hit a terminal state, or a
+   * restart from the dashboard). Leaving a stale `retiredInstances` copy behind
+   * makes the still-running workflow look retired to `setViewedWorkflowId` and
+   * `unregisterClient`, which can dispose the shared instance object out from
+   * under the live run.
+   *
+   * @returns true if a stale retired entry was removed.
+   */
+  private promoteInstanceToLive(instance: WorkflowInstance): boolean {
+    this.instances.set(instance.id, instance);
+    return this.retiredInstances.delete(instance.id);
+  }
+
   private retireWorkflow(workflowId: string): void {
     const instance = this.instances.get(workflowId);
     if (!instance) {
@@ -2170,10 +2188,11 @@ export class WorkflowOrchestrator {
           state.status === EXECUTION_STATES.PAUSED) &&
         !inRegistry
       ) {
-        this.instances.set(instance.id, instance);
+        const wasRetired = this.promoteInstanceToLive(instance);
         Log.debug(
           `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
-            `name="${summary.workflowName || "(empty)"}" (total: ${this.instances.size})`
+            `name="${summary.workflowName || "(empty)"}" (total: ${this.instances.size})` +
+            (wasRetired ? " — removed stale retiredInstances entry" : "")
         );
         this.dashboardBroadcastHub.notifyWorkflowAdded(summary);
 

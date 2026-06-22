@@ -1298,7 +1298,6 @@ describe("EXECUTION_STARTED", () => {
       stepName: "Step 1",
       kind: SESSION_KINDS.AI_CLI,
       status: TERMINAL_SESSION_STATUS.COMPLETED,
-      pendingOutput: [],
       isController: true,
     });
 
@@ -1326,7 +1325,6 @@ describe("EXECUTION_STARTED", () => {
       stepName: "Step 1",
       kind: SESSION_KINDS.AI_CLI,
       status: TERMINAL_SESSION_STATUS.COMPLETED,
-      pendingOutput: [],
       isController: true,
     });
 
@@ -1354,7 +1352,6 @@ describe("EXECUTION_STARTED", () => {
       stepName: "Step 1",
       kind: SESSION_KINDS.AI_CLI,
       status: TERMINAL_SESSION_STATUS.COMPLETED,
-      pendingOutput: [],
       isController: true,
     });
 

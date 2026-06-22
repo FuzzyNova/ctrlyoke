@@ -112,6 +112,22 @@ interface FitSessionResult {
 // key: `${workflowId}:${sessionId}`
 const registry = new Map<string, RegistryEntry>();
 
+/**
+ * Output chunks that arrive on the active workflow *before* its xterm entry
+ * exists. The PTY can emit its first render in the brief gap between the
+ * TERMINAL_STARTED message and the TerminalInstance mount that calls create()
+ * — chunks in that window have no entry to write to and no session record to
+ * hang off of, so without this they were silently dropped and only recoverable
+ * by switching workflows away and back (which replays the server-side reconnect
+ * buffer).
+ *
+ * Keyed by `${workflowId}:${sessionId}`. Drained into the terminal the moment
+ * create() materializes the entry, then deleted. This is a *local* gap-filler,
+ * distinct from the server reconnect buffer: the TERMINAL_OUTPUT handler only
+ * feeds this for the active workflow, so the two never double up.
+ */
+const orphanOutput = new Map<string, string[]>();
+
 let currentTerminalSettings: TerminalSettings = {
   fontSize: 14,
   lineHeight: 1.2,
@@ -319,10 +335,48 @@ export const terminalRegistry = {
     };
 
     registry.set(key, entry);
+
+    // Flush output that arrived before this entry existed. Must happen here —
+    // the single point where the entry materializes — and before attach()'s
+    // optional async WebGL import, so buffered chunks render in order ahead of
+    // any live chunks that now write directly via get().
+    const buffered = orphanOutput.get(key);
+    if (buffered?.length) {
+      const totalChars = buffered.reduce((n, c) => n + c.length, 0);
+      WebviewLog.debug(
+        `[terminalRegistry.create] flushing ${buffered.length} buffered chunk(s) (${totalChars} chars) ` +
+          `wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
+      );
+      for (const chunk of buffered) {
+        term.write(chunk);
+      }
+      orphanOutput.delete(key);
+    }
+
     WebviewLog.debug(
       `[terminalRegistry.create] created wf=${workflowId.slice(0, 8)} sess=${sessionId.slice(0, 8)}`
     );
     return entry;
+  },
+
+  /**
+   * Buffer a chunk that arrived before create() — see orphanOutput. Callers
+   * (the TERMINAL_OUTPUT handler) MUST gate this to the active workflow so it
+   * never competes with the server reconnect-buffer replay for backgrounded
+   * workflows.
+   */
+  bufferOrphanOutput(
+    workflowId: string,
+    sessionId: string,
+    chunk: string
+  ): void {
+    const key = makeKey(workflowId, sessionId);
+    const existing = orphanOutput.get(key);
+    if (existing) {
+      existing.push(chunk);
+    } else {
+      orphanOutput.set(key, [chunk]);
+    }
   },
 
   /**
@@ -553,6 +607,7 @@ export const terminalRegistry = {
     );
     for (const sessionId of sessionIds) {
       const key = makeKey(workflowId, sessionId);
+      orphanOutput.delete(key);
       const entry = registry.get(key);
       if (entry) {
         entry.term.dispose();
@@ -566,6 +621,7 @@ export const terminalRegistry = {
    */
   clearSession(workflowId: string, sessionId: string): void {
     const key = makeKey(workflowId, sessionId);
+    orphanOutput.delete(key);
     const entry = registry.get(key);
     if (entry) {
       WebviewLog.debug(

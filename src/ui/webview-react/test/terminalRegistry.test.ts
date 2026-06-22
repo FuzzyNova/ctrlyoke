@@ -8,6 +8,7 @@ vi.mock("@xterm/xterm", () => {
     options: Record<string, unknown>;
     cols = 80;
     rows = 24;
+    writes: string[] = [];
 
     constructor(options: Record<string, unknown>) {
       terminalConstructCount += 1;
@@ -25,7 +26,9 @@ vi.mock("@xterm/xterm", () => {
       this.rows = rows;
     }
 
-    write() {}
+    write(data: string) {
+      this.writes.push(data);
+    }
 
     scrollLines() {}
 
@@ -117,5 +120,63 @@ describe("terminalRegistry.attach", () => {
     expect(firstEntry).toBe(secondEntry);
     expect(terminalRegistry.get(workflowId, sessionId)).toBe(firstEntry);
     expect(terminalConstructCount).toBe(1);
+  });
+});
+
+describe("terminalRegistry orphan output buffer", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    terminalConstructCount = 0;
+    document.body.innerHTML = "";
+  });
+
+  it("flushes output buffered before create() into the new terminal, in order", async () => {
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const workflowId = "wf-orphan";
+    const sessionId = "sess-orphan";
+
+    // No entry exists yet — the PTY's first chunks arrive before mount.
+    expect(terminalRegistry.get(workflowId, sessionId)).toBeUndefined();
+    terminalRegistry.bufferOrphanOutput(workflowId, sessionId, "first ");
+    terminalRegistry.bufferOrphanOutput(workflowId, sessionId, "second");
+
+    const entry = await terminalRegistry.create(workflowId, sessionId);
+
+    expect((entry.term as unknown as { writes: string[] }).writes).toEqual([
+      "first ",
+      "second",
+    ]);
+  });
+
+  it("does not replay buffered output on a second create() after the entry exists", async () => {
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const workflowId = "wf-orphan-once";
+    const sessionId = "sess-orphan-once";
+
+    terminalRegistry.bufferOrphanOutput(workflowId, sessionId, "only-once");
+    const entry = await terminalRegistry.create(workflowId, sessionId);
+    const writes = (entry.term as unknown as { writes: string[] }).writes;
+    expect(writes).toEqual(["only-once"]);
+
+    // A subsequent create() returns the existing entry and must not re-flush.
+    const again = await terminalRegistry.create(workflowId, sessionId);
+    expect(again).toBe(entry);
+    expect(writes).toEqual(["only-once"]);
+  });
+
+  it("drops buffered output when the session is cleared before create()", async () => {
+    const { terminalRegistry } = await import("../terminalRegistry");
+    const workflowId = "wf-orphan-clear";
+    const sessionId = "sess-orphan-clear";
+
+    terminalRegistry.bufferOrphanOutput(workflowId, sessionId, "stale");
+    // Session disposed (e.g. run boundary) before it ever mounted — the stale
+    // chunk must not survive to replay into a future entry and duplicate the
+    // server reconnect-buffer replay.
+    terminalRegistry.clearSession(workflowId, sessionId);
+
+    const entry = await terminalRegistry.create(workflowId, sessionId);
+    expect((entry.term as unknown as { writes: string[] }).writes).toEqual([]);
   });
 });
