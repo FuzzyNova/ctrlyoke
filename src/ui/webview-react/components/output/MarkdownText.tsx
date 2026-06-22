@@ -541,7 +541,6 @@ function MermaidBlock({ code }: { code: string }) {
         <div
           className="p-3 overflow-auto"
           // mermaid.render() produces trusted SVG — no user content reaches here
-          // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       ) : state === "error" ? (

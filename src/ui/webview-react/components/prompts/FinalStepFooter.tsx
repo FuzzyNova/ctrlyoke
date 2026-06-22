@@ -123,7 +123,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
 
           {isDisabled && (
             <div className="mt-1">
-              <span className="inline-flex rounded bg-badge-bg px-1 py-[1px] text-xxs text-badge-fg">
+              <span className="inline-flex rounded bg-badge-bg px-1 py-px text-xxs text-badge-fg">
                 Disabled
               </span>
             </div>
@@ -190,7 +190,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
         </span>
         {hasFinalStep && finalStep && isScriptStep(finalStep) && (
           <span
-            className="ml-1 px-1 py-[1px] rounded text-xxs bg-badge-bg text-badge-fg opacity-75 flex-shrink-0"
+            className="ml-1 px-1 py-px rounded text-xxs bg-badge-bg text-badge-fg opacity-75 flex-shrink-0"
             title="Script step — runs a shell command"
           >
             script
@@ -208,7 +208,7 @@ export const FinalStepFooter: React.FC<FinalStepFooterProps> = ({
           </span>
         )}
         {loopCount > 0 && (
-          <span className="ml-1 px-1.5 py-[1px] rounded bg-badge-bg text-badge-fg text-xxs">
+          <span className="ml-1 px-1.5 py-px rounded bg-badge-bg text-badge-fg text-xxs">
             Loop {loopCount + 1}
           </span>
         )}

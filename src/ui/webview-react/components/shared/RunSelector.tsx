@@ -244,7 +244,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
                   {/* Status badge */}
                   {runState && (
                     <span
-                      className={`text-xxs px-1 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(runState)}`}
+                      className={`text-xxs px-1 py-px rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(runState)}`}
                     >
                       {runState}
                     </span>

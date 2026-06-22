@@ -134,7 +134,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                   className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[76px]"}`}
                 >
                   <span
-                    className={`workflow-menu-item-state inline-flex items-center text-xs px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
+                    className={`workflow-menu-item-state inline-flex items-center text-xs px-1.5 py-px rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
                     title={isNarrow ? workflow.executionState : undefined}
                   >
                     {isNarrow ? (

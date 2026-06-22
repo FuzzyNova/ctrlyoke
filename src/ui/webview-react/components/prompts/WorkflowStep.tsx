@@ -264,7 +264,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
                   {name ? name : text}
                 </span>
                 {isDisabled && (
-                  <span className="px-1 py-[1px] rounded text-xxs bg-badge-bg text-badge-fg flex-shrink-0">
+                  <span className="px-1 py-px rounded text-xxs bg-badge-bg text-badge-fg flex-shrink-0">
                     Disabled
                   </span>
                 )}
@@ -301,7 +301,7 @@ export const WorkflowStepItem: React.FC<WorkflowStepProps> = ({
                   {name ? name : text}
                 </span>
                 {isDisabled && (
-                  <span className="px-1 py-[1px] rounded text-xxs bg-badge-bg text-badge-fg flex-shrink-0">
+                  <span className="px-1 py-px rounded text-xxs bg-badge-bg text-badge-fg flex-shrink-0">
                     Disabled
                   </span>
                 )}

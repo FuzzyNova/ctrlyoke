@@ -680,7 +680,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const fileEditorColumn = (
     <div className="flex-1 flex flex-col overflow-hidden relative">
       {/* File toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0 min-h-[2.25rem]">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-panel-border flex-shrink-0 min-h-9">
         {isMobile && (
           <button
             onClick={handleMobileBack}

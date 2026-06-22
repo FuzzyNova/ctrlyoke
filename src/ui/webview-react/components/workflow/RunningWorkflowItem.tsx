@@ -110,7 +110,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         className={`flex-shrink-0 flex justify-center ${isNarrow ? "w-[28px]" : "w-[76px]"}`}
       >
         <span
-          className={`inline-flex items-center text-xs px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
+          className={`inline-flex items-center text-xs px-1.5 py-px rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
           title={isNarrow ? workflow.executionState : undefined}
         >
           {isNarrow ? (

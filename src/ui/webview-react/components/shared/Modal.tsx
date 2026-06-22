@@ -70,7 +70,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Backdrop */}
       <button
         type="button"
-        className={`fixed inset-0 ${backdropZ} flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 border-0 p-0 bg-transparent cursor-default`}
+        className={`fixed inset-0 ${backdropZ} flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 border-0 p-0 cursor-default`}
         onClick={onClose}
         aria-label="Close modal backdrop"
       />
