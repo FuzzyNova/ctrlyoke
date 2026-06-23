@@ -9,7 +9,7 @@ import {
   tooltips,
 } from "@codemirror/view";
 import { createThemeExtension } from "@utils/codemirrorTheme";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Transaction } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
   autocompletion,
@@ -276,7 +276,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const pendingValidationRequestsRef = useRef<
     Map<number, (value: ContextReferenceValidationResult[]) => void>
   >(new Map());
-
   const vscode = getVsCodeApi();
 
   // Keep callback refs current
@@ -373,18 +372,30 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     };
   }, []);
 
-  // Re-measure when an ancestor panel is resized programmatically (e.g. the
-  // editor auto-expand setLayout() calls in App.tsx). CM's own ResizeObserver
-  // usually catches this, but a synchronous flex-grow change can land in the
-  // same frame and leave cached scroller/cursor-layer geometry stale.
+  // Re-measure after an ancestor panel is resized programmatically. This event
+  // can be emitted from a CodeMirror measure write callback, where a synchronous
+  // requestMeasure() is ignored because CodeMirror is already measuring.
   useEffect(() => {
-    const handleRemeasure = () => viewRef.current?.requestMeasure();
+    let frameId: number | null = null;
+    const handleRemeasure = () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      frameId = requestAnimationFrame(() => {
+        frameId = null;
+        viewRef.current?.requestMeasure();
+      });
+    };
     window.addEventListener("fp-request-editor-remeasure", handleRemeasure);
-    return () =>
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
       window.removeEventListener(
         "fp-request-editor-remeasure",
         handleRemeasure
       );
+    };
   }, []);
 
   // Initialize Typo.js spell checker
@@ -698,6 +709,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       doc: value,
       extensions: [
         minimalSetup,
+        createSelectionResetDiagnosticExtension(),
         createFindKeyHandlerExtension(),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnlyRef.current),
@@ -803,6 +815,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             const newValue = update.state.doc.toString();
             onChangeRef.current(newValue);
           }
+          // Selection-reset diagnostics live in the transactionFilter
+          // (createSelectionResetDiagnosticExtension) so we can capture the
+          // dispatching call stack — an updateListener runs after the fact and
+          // cannot identify who moved the caret.
           if (
             mode === "prompt" &&
             (update.docChanged || update.geometryChanged)
@@ -912,6 +928,55 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   return <div id={id} ref={editorRef} className={editorClassName} />;
 };
+
+// Definitive diagnostic for the "cursor stuck at the start" bug: capture the
+// dispatching call stack at the exact moment the caret snaps back to document
+// position 0 (or to the document end). A transactionFilter runs synchronously
+// inside `view.dispatch`, so `new Error().stack` includes whatever code path
+// produced the transaction — letting us distinguish CodeMirror's own DOMObserver
+// (native-selection sync) from a keymap command or one of our effects.
+//
+// We only log selection-only snaps (no doc change) where the caret jumps from a
+// non-boundary position to a boundary, and we de-dupe by stack so a rapid
+// snap-back loop produces one entry per distinct origin rather than hundreds.
+function createSelectionResetDiagnosticExtension() {
+  let lastStack: string | null = null;
+  return EditorState.transactionFilter.of((tr) => {
+    if (tr.docChanged) return tr;
+
+    const before = tr.startState.selection.main;
+    const after = tr.state.selection.main;
+    const docLength = tr.startState.doc.length;
+    if (docLength === 0) return tr;
+
+    const snappedToBoundary =
+      after.empty &&
+      (after.head === 0 || after.head === docLength) &&
+      before.head !== after.head &&
+      !(before.head === 0 || before.head === docLength);
+
+    if (snappedToBoundary) {
+      const stack = new Error().stack ?? "";
+      if (stack !== lastStack) {
+        lastStack = stack;
+        WebviewLog.debug("[CodeMirror] Caret snapped to boundary", {
+          beforeAnchor: before.anchor,
+          beforeHead: before.head,
+          afterHead: after.head,
+          docLength,
+          // "select.pointer" / "select" (DOMObserver sync) / "input.type" / etc.
+          userEvent: tr.annotation(Transaction.userEvent) ?? null,
+          // true when the transaction explicitly carried a selection (a command
+          // or our code); false when selection only changed via change mapping.
+          explicitSelection: tr.selection !== undefined,
+          stack,
+        });
+      }
+    }
+
+    return tr;
+  });
+}
 
 // Intercept Ctrl/Cmd+F before it can bubble to the page — without this, the
 // keystroke would also reach OutputSection's window-level "open find" listener.
