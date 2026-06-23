@@ -34,6 +34,7 @@ Mocha/TDD tests for FlightPath core logic and the VS Code extension host. This s
 
 - Tests execute from compiled `out/test`, not directly from `src/test`. Resolve fixture paths from `__dirname` accordingly instead of assuming `process.cwd()`.
 - Use repo-relative resolution only when the code under test truly depends on repository layout (for example compiled CLI paths or workspace-scoped config files).
+- Never hardcode absolute, OS-specific paths (e.g. `C:\dev\FlightPath\...`) in fixtures or assertions — the suite runs on Windows, macOS, and Linux. Use neutral relative forward-slash paths (`src/foo.ts`) or derive real paths via `os.tmpdir()`/`path.join`. Pure parser/string inputs that merely *represent* CLI output and never touch the filesystem may stay realistic.
 
 </pathAndFixtureGotchas>
 
@@ -41,6 +42,7 @@ Mocha/TDD tests for FlightPath core logic and the VS Code extension host. This s
 
 - `src/test/harness/helpers/harnessRunner.ts` is the shared helper for new real-harness tests: compiled CLI path, cheapest-model defaults, `runWorkflowFile()`, and exit-code-3 skip handling already live there.
 - Real harness tests are correctness checks, not fast unit tests. Keep generous timeouts, require compiled output, and treat CLI exit code `3` as "harness not installed" (skip) rather than a failure.
+- Do **not** run `npm run test:harness` to verify ordinary code changes: it drives **live** AI CLIs, takes ~30 minutes, and individual harnesses can be unavailable (e.g. a vendor pulling CLI support). For verification use `npm test` / `npm run test:ui`, and target specific cases by grep (extension host: `node ./out/test/runTest.js --grep "<pattern>"` after compiling; Vitest: pass a file path).
 - Keep real-harness coverage focused on flows that mocks cannot prove: hook delivery, multi-step execution, retry/end-condition behavior, MCP queue extension, and other harness-specific end-to-end contracts.
 
 </harnessTests>

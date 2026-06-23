@@ -9,7 +9,7 @@ import {
   tooltips,
 } from "@codemirror/view";
 import { createThemeExtension } from "@utils/codemirrorTheme";
-import { EditorState, Transaction } from "@codemirror/state";
+import { EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
   autocompletion,
@@ -398,6 +398,24 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     };
   }, []);
 
+  // Second layer of the orphaned-mouse-selection teardown (see
+  // createOrphanedMouseSelectionGuardExtension). When a drag-select ends outside
+  // the webview iframe, the editor's `mouseup` is lost to the host, leaving
+  // CodeMirror's auto-scroll interval re-pinning the caret to position 0. The
+  // contentDOM `blur` handler catches focus leaving the editor element; this
+  // catches the iframe `window` losing focus, which can fire when the editor
+  // element itself never receives a blur (e.g. focus jumps straight to a VS Code
+  // surface outside the iframe). Both are no-ops unless a phantom drag is active.
+  useEffect(() => {
+    const handleWindowBlur = () => {
+      if (viewRef.current) {
+        destroyOrphanedMouseSelection(viewRef.current);
+      }
+    };
+    window.addEventListener("blur", handleWindowBlur);
+    return () => window.removeEventListener("blur", handleWindowBlur);
+  }, []);
+
   // Initialize Typo.js spell checker
   useEffect(() => {
     const initTypoChecker = async () => {
@@ -709,7 +727,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       doc: value,
       extensions: [
         minimalSetup,
-        createSelectionResetDiagnosticExtension(),
+        createOrphanedMouseSelectionGuardExtension(),
         createFindKeyHandlerExtension(),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnlyRef.current),
@@ -929,52 +947,46 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   return <div id={id} ref={editorRef} className={editorClassName} />;
 };
 
-// Definitive diagnostic for the "cursor stuck at the start" bug: capture the
-// dispatching call stack at the exact moment the caret snaps back to document
-// position 0 (or to the document end). A transactionFilter runs synchronously
-// inside `view.dispatch`, so `new Error().stack` includes whatever code path
-// produced the transaction — letting us distinguish CodeMirror's own DOMObserver
-// (native-selection sync) from a keymap command or one of our effects.
+// Fixes the "cursor stuck at the start of the editor" bug in the VS Code webview.
 //
-// We only log selection-only snaps (no doc change) where the caret jumps from a
-// non-boundary position to a boundary, and we de-dupe by stack so a rapid
-// snap-back loop produces one entry per distinct origin rather than hundreds.
-function createSelectionResetDiagnosticExtension() {
-  let lastStack: string | null = null;
-  return EditorState.transactionFilter.of((tr) => {
-    if (tr.docChanged) return tr;
-
-    const before = tr.startState.selection.main;
-    const after = tr.state.selection.main;
-    const docLength = tr.startState.doc.length;
-    if (docLength === 0) return tr;
-
-    const snappedToBoundary =
-      after.empty &&
-      (after.head === 0 || after.head === docLength) &&
-      before.head !== after.head &&
-      !(before.head === 0 || before.head === docLength);
-
-    if (snappedToBoundary) {
-      const stack = new Error().stack ?? "";
-      if (stack !== lastStack) {
-        lastStack = stack;
-        WebviewLog.debug("[CodeMirror] Caret snapped to boundary", {
-          beforeAnchor: before.anchor,
-          beforeHead: before.head,
-          afterHead: after.head,
-          docLength,
-          // "select.pointer" / "select" (DOMObserver sync) / "input.type" / etc.
-          userEvent: tr.annotation(Transaction.userEvent) ?? null,
-          // true when the transaction explicitly carried a selection (a command
-          // or our code); false when selection only changed via change mapping.
-          explicitSelection: tr.selection !== undefined,
-          stack,
-        });
-      }
+// When a drag-select reaches a viewport edge, CodeMirror's MouseSelection starts
+// a 50ms auto-scroll setInterval that re-derives the selection from the *last
+// pointer position* on every tick (MouseSelection.scroll → select). That interval
+// is normally torn down on `mouseup`. Inside the webview iframe, though, the
+// mouseup can land outside the iframe and never reach the editor's document, so
+// the MouseSelection is orphaned with its interval still running — repeatedly
+// snapping the caret back to position 0 (the last pointer coords near the top-left
+// edge). CodeMirror self-heals on the next `mousemove` (buttons===0 → destroy),
+// but keyboard-only navigation never produces a mousemove, so arrow keys can't
+// escape it while a pointer click can.
+//
+// By the time any key is pressed the mouse button is necessarily up, so a stale
+// MouseSelection here is always an orphan — tear it down. During normal typing
+// there is no active mouseSelection, so this is a no-op except in the stuck state.
+// `inputState.mouseSelection` is not in CodeMirror's public typings; access it
+// defensively so a future internal change degrades to a no-op instead of throwing.
+export function destroyOrphanedMouseSelection(view: EditorView): void {
+  const inputState = (
+    view as unknown as {
+      inputState?: { mouseSelection?: { destroy?: () => void } | null };
     }
+  ).inputState;
+  inputState?.mouseSelection?.destroy?.();
+}
 
-    return tr;
+function createOrphanedMouseSelectionGuardExtension() {
+  const teardown = (_event: Event, view: EditorView) => {
+    destroyOrphanedMouseSelection(view);
+    return false;
+  };
+  return EditorView.domEventHandlers({
+    // `keydown` covers the still-focused case (the button is necessarily up by
+    // the time a key is pressed). `blur` covers the case the keydown guard
+    // alone missed: when the gesture ends outside the iframe, VS Code moves
+    // focus out of the editor, so no keystroke ever reaches it — focus loss is
+    // then the only in-iframe signal we get that the (now phantom) drag is over.
+    keydown: teardown,
+    blur: teardown,
   });
 }
 

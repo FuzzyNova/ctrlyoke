@@ -28,6 +28,10 @@ FlightPath automates AI coding harnesses through structured YAML/JSON/Markdown w
 - `manifest.json` — step metadata and run summary.
 
 **Adding logs**: use `Log` from `src/utils/Log.ts` for extension/backend code; use `WebviewLog` from `src/ui/webview-react/utils/logger.ts` for webview/UI code. Do not use `console.log` directly.
+
+**Crash investigation**: a VS Code "crash" a few seconds after a workflow completes is usually an **extension-host V8 heap OOM** (the ext host is a Node UtilityProcess), not a webview/GPU crash — the tell is the FlightPath session log stopping dead mid-line with no error written. Minidumps land in `%APPDATA%\Code\Crashpad\reports\*.dmp`; scan them for ASCII strings (`electron.v8-oom.is_heap_oom=1`, `CALL_AND_RETRY_LAST`) to confirm — no symbol server needed. A single large allocation on an already-large heap (not a slow leak) is the typical shape.
+
+**Temp prompt files**: prompt files under `.flightpath/temp/` are deleted by `TempFileManager` as soon as the turn that consumed them completes. Never try to re-read a temp file that was referenced in an *earlier* turn — it will 404. Infer intent from the changes already made instead of re-fetching the source.
 </debugging>
 
 <commonCommands>
@@ -103,6 +107,17 @@ FlightPath automates AI coding harnesses through structured YAML/JSON/Markdown w
 - Keep shared contracts, persisted workflow fields, schema definitions, config plumbing, and webview/server message payloads synchronized when changing cross-layer behavior.
 - Update nearby tests with every behavior change: core/orchestration/harness changes belong in `src/test/**`; React dashboard changes belong in `src/ui/webview-react/test/**`.
 </agentGuidance>
+
+<knowledgeCapture>
+## Capturing project knowledge (shared memory)
+- When you learn something durable and non-obvious — a root cause, a cross-layer gotcha, an architectural decision, a "do it this way" convention, or a sharp edge that cost real debugging time — write it into the relevant `.github/instructions/*.instructions.md` file (or this base file for cross-cutting facts). These instruction files ARE the project's shared memory: every harness (Claude, Copilot, Codex, Qwen, Gemini, opencode) reads them, whereas any single agent's private/internal memory is invisible to the others. Do not leave shared-worthy knowledge in agent-private memory.
+- Pick the most specific instruction file using the routing table in `CLAUDE.md`. Keep entries concise and forward-looking: capture the durable rule, constraint, or "why", not a play-by-play of the change (git history already has that). Don't restate what the code or schema already makes obvious.
+- Verify any file/symbol/line references against the current code before recording them — instruction files are asserted as fact, so stale citations are worse than none.
+</knowledgeCapture>
+
+<commits>
+- Do not add attribution or trailer lines to commit messages — no `Co-Authored-By:`, no "Generated with …" footers. Use plain conventional-commit messages only.
+</commits>
 
 <codingPrinciples>
 - **SOLID principles**: Separation of concerns, always look for opportunities to single source code and follow the DRY principle.

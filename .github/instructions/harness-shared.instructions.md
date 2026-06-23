@@ -30,3 +30,7 @@ Shared CLI-harness infrastructure: provider contracts, prompt assembly, response
 - `ApplyPatchParser` exists to turn patch payloads into accurate line ranges; prefer it over parser-specific regex heuristics.
 - `CliProviderUtils.buildMcpConfigBlock()` centralizes “should MCP be attached at all?” logic. Providers should only supply format-specific config generation.
 </eventMapping>
+
+<windowsCliLaunch>
+- `CliLauncherResolver.getWindowsCommandMetadata` resolves Windows CLI shims by preferring `Application` (`.cmd`/`.bat`/`.exe`) over `ExternalScript` (`.ps1`) — keep that ordering. npm-generated `.ps1` shims pipe `$input` to node when `$MyInvocation.ExpectingInput` is set; an open stdin pipe from `execFileAsync` makes PowerShell take the `$input |` branch and hang ~30s. The `.cmd` counterpart calls node directly and avoids it. The `.ps1` fallback is only for shims that lack that pattern (e.g. VS Code's `copilot.ps1`). If you must spawn a `.ps1` and stdin hangs are a risk, close stdin (`stdio: ['ignore', 'pipe', 'pipe']`).
+</windowsCliLaunch>

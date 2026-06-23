@@ -46,6 +46,7 @@ Disk/UI-facing orchestration helpers for workflow loading, session recovery, his
 
 - `HistorySearchService` searches persisted timeline events, not in-memory workflow state. It scans runs newest-first and only indexes matchable CLI output / status-message content.
 - Search results intentionally expose the queue working-file path as `workflowFilePath`, because the resume/load flow needs the `.flightpath/.queue/...` file even when the original source file is missing or the workflow was created from the dashboard.
+- `HistorySearchIndexService` is memory-sensitive — it rebuilds on history append and has OOM'd the extension host before. Keep it bounded and streamed: indexed text stays capped at `MAX_INDEXED_TEXT_LENGTH`, documents stream to/from disk (never a whole-index `JSON.stringify().join()`), and `rebuild(..., { retainDocuments })` lets write-only refreshers retain nothing while the single reader keeps one warm copy. The refresh is intentionally fire-and-forget, so disposal paths and tests must `await OutputHistoryManager.flushPendingIndexRefresh()` before deleting the workspace, or the background rebuild races the delete (`ENOTEMPTY` on `.search-index`).
 
 </searchAndRecovery>
 

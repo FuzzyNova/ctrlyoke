@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 import {
   buildPromptReferenceInsertion,
+  destroyOrphanedMouseSelection,
   findContextReferenceMatches,
   getRetryPlaceholderCompletions,
   type CodeMirrorEditorMode,
@@ -94,6 +96,32 @@ describe("CodeMirrorEditor prompt reference insertion", () => {
       to: "Analyze current output".length,
       text: "\n@src/extension.ts",
     });
+  });
+});
+
+describe("CodeMirrorEditor orphaned mouse-selection guard", () => {
+  it("tears down a lingering MouseSelection (the stuck-caret orphan)", () => {
+    const destroy = vi.fn();
+    const view = {
+      inputState: { mouseSelection: { destroy } },
+    } as unknown as EditorView;
+
+    destroyOrphanedMouseSelection(view);
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a no-op (and does not throw) when there is no active mouse selection", () => {
+    expect(() =>
+      destroyOrphanedMouseSelection({
+        inputState: { mouseSelection: null },
+      } as unknown as EditorView)
+    ).not.toThrow();
+
+    // Also tolerate a future CodeMirror that drops/renames inputState entirely.
+    expect(() =>
+      destroyOrphanedMouseSelection({} as unknown as EditorView)
+    ).not.toThrow();
   });
 });
 
