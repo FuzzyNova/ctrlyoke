@@ -26,6 +26,10 @@
         "omitPreviouslyAttachedAgentsSkillsOnResume": {
           "type": "boolean",
           "description": "When resuming an existing session, omit only agent/skill declarations that were already attached earlier in that same session."
+        },
+        "includeFullDiffsInPriorContext": {
+          "type": "boolean",
+          "description": "Include full file diffs in captured AI responses so later prior-context attachments contain the actual changes instead of edit summaries."
         }
       }
     },

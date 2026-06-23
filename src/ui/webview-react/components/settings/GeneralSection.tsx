@@ -195,6 +195,21 @@ export function GeneralSection({
       </div>
       <div className="pt-3 border-t border-panel-border mt-3">
         <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          Prior Context
+        </h3>
+        <SettingToggleRow
+          label="Include full file diffs"
+          description="Include actual file changes in captured responses used by later prior-context attachments. Disable for smaller response-only context."
+          checked={general.includeFullDiffsInPriorContext}
+          onChange={(v) =>
+            onUpdate("general.includeFullDiffsInPriorContext", v)
+          }
+          path="general.includeFullDiffsInPriorContext"
+          {...rowProps}
+        />
+      </div>
+      <div className="pt-3 border-t border-panel-border mt-3">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
           File Management
         </h3>
         <SettingToggleRow

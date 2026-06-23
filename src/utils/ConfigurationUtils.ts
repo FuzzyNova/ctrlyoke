@@ -52,6 +52,8 @@ export const CONFIG_KEYS = {
   DEFAULTS_MCP_SERVERS: "defaults.mcpServers",
   DEFAULTS_HOOKS: "defaults.hooks",
   GENERAL_DEFAULT_TEMPLATE: "general.defaultTemplate",
+  GENERAL_INCLUDE_FULL_DIFFS_IN_PRIOR_CONTEXT:
+    "general.includeFullDiffsInPriorContext",
   EXECUTION_MODE: "execution.mode",
   SERVER_ENABLED: "server.enabled",
   SERVER_TLS_CERT_PATH: "server.tls.certPath",
@@ -293,9 +295,7 @@ export const ConfigurationUtils = {
   /**
    * Set the default harness/session error behavior in settings.
    */
-  async setDefaultErrorBehavior(
-    value: ErrorBehavior | null
-  ): Promise<void> {
+  async setDefaultErrorBehavior(value: ErrorBehavior | null): Promise<void> {
     await configService.set(
       CONFIG_KEYS.DEFAULTS_ERROR_BEHAVIOR,
       value,
@@ -879,6 +879,12 @@ export const ConfigurationUtils = {
       templateId,
       CONFIG_SCOPE.USER
     );
+  },
+
+  /** Whether captured responses should retain full file diffs for prior context. */
+  shouldIncludeFullDiffsInPriorContext(): boolean {
+    return configService.get(CONFIG_KEYS.GENERAL)
+      .includeFullDiffsInPriorContext;
   },
 
   // ============================================================

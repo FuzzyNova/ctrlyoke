@@ -31,6 +31,7 @@ export interface FlightPathGlobalSettings {
     defaultTemplate: string;
     autoLoadRecentSession: boolean;
     omitPreviouslyAttachedAgentsSkillsOnResume: boolean;
+    includeFullDiffsInPriorContext: boolean;
   };
 
   // Defaults (mirrors executionProperties 1:1)
@@ -210,6 +211,7 @@ export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
     defaultTemplate: "blank",
     autoLoadRecentSession: true,
     omitPreviouslyAttachedAgentsSkillsOnResume: true,
+    includeFullDiffsInPriorContext: true,
   },
   defaults: {
     harness: "copilot-cli",
