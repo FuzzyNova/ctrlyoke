@@ -29,31 +29,31 @@ Avoid using a personal email or shared consumer Gmail as the long-term owner for
 
 ### 0.1 Email Workspace
 
-- [ ] Create one Google Workspace for the business identity (recommended: Google Workspace Business Starter).
-- [ ] Use `fuzzno.com` as the primary Workspace/business domain if Fuzzy Nova is the durable operating identity.
-- [ ] Add `flightpath.dev` to the same Workspace as a secondary domain or user alias domain for the product brand.
+- [x] Create one Google Workspace for the business identity (recommended: Google Workspace Business Starter).
+- [x] Use `fuzzno.com` as the primary Workspace/business domain if Fuzzy Nova is the durable operating identity.
+- [x] Add `flightpath.dev` to the same Workspace as a secondary domain or user alias domain for the product brand.
   - Google Workspace supports adding domains you own to one account. Use a **user alias domain** when the same people need addresses at both domains; use a **secondary domain** when the domains represent separate teams/users.
   - Recommended here: `fuzzno.com` as the primary/admin domain and `flightpath.dev` as the product domain, likely secondary if product groups like `support@flightpath.dev` should be managed distinctly.
-- [ ] Create one real business admin mailbox, such as `admin@fuzzno.com` or the founder's named `@fuzzno.com` address.
-- [ ] Add Fuzzy Nova business aliases / groups:
-  - [ ] `hello@fuzzno.com` — general business contact
-  - [ ] `admin@fuzzno.com` — admin/vendor ownership if not using a named mailbox
-  - [ ] `billing@fuzzno.com` — business billing and vendor receipts, if separate from product billing
-- [ ] Add FlightPath product group aliases / collaborative inboxes:
-  - [ ] `support@flightpath.dev` — customer support, Pro support, marketplace contact
-  - [ ] `billing@flightpath.dev` — product payment/customer billing notices
-  - [ ] `security@flightpath.dev` — vulnerability/security contact
-  - [ ] `sales@flightpath.dev` — enterprise invoice, PO, and MSA fallback
-- [ ] Route each group to the admin mailbox initially; add future collaborators as members instead of sharing one password.
-- [ ] Configure SPF, DKIM, and DMARC for both `fuzzno.com` and `flightpath.dev`.
-- [ ] Decide whether `hello@flightpath.dev` or `team@flightpath.dev` should exist for general contact.
+- [x] Create one real business admin mailbox, such as `admin@fuzzno.com` or the founder's named `@fuzzno.com` address.
+- [x] Add Fuzzy Nova business aliases / groups:
+  - [x] `hello@fuzzno.com` — general business contact
+  - `admin@fuzzno.com` — real mailbox (not a group); already created as the workspace owner
+  - ~~`billing@fuzzno.com`~~ — not needed; Fuzzy Nova has no product customers and vendor receipts go to the admin inbox
+- [x] Add FlightPath product group aliases / collaborative inboxes:
+  - [x] `support@flightpath.dev` — customer support, Pro support, marketplace contact
+  - [x] `billing@flightpath.dev` — product payment/customer billing notices
+  - [x] `security@flightpath.dev` — vulnerability/security contact
+  - [x] `sales@flightpath.dev` — enterprise invoice, PO, and MSA fallback
+- [x] Route each group to the admin mailbox initially; add future collaborators as members instead of sharing one password.
+- [x] Configure SPF, DKIM, and DMARC for both `fuzzno.com` and `flightpath.dev`.
+- ~~Decide whether `hello@flightpath.dev` or `team@flightpath.dev` should exist for general contact.~~ — not needed; `support@` and `sales@` cover all inbound contact.
 
 ### 0.2 Vendor Account Ownership
 
 Use the domain email identity for every vendor account created or migrated for launch:
 
-- [ ] Netlify account / site ownership for `flightpath.dev` owned by a Fuzzy Nova admin mailbox
-- [ ] Lemon Squeezy store owner/admin email under `fuzzno.com`; public support email under `flightpath.dev`
+- [x] Netlify account / site ownership for `flightpath.dev` owned by a Fuzzy Nova admin mailbox
+- [x] Lemon Squeezy store owner/admin email under `fuzzno.com`; public support email under `flightpath.dev`
 - [ ] Keygen account owner/admin email under `fuzzno.com`; customer/license support under `flightpath.dev`
 - [ ] VS Code Marketplace publisher contact
 - [ ] GitHub organization ownership / billing
