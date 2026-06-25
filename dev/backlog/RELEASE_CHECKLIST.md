@@ -54,18 +54,18 @@ Use the domain email identity for every vendor account created or migrated for l
 
 - [x] Netlify account / site ownership for `flightpath.dev` owned by a Fuzzy Nova admin mailbox
 - [x] Lemon Squeezy store owner/admin email under `fuzzno.com`; public support email under `flightpath.dev`
-- [ ] Keygen account owner/admin email under `fuzzno.com`; customer/license support under `flightpath.dev`
-- [ ] VS Code Marketplace publisher contact
-- [ ] GitHub organization ownership / billing
+- [x] Keygen account owner/admin email under `fuzzno.com`; customer/license support under `flightpath.dev`
+- [x] VS Code Marketplace publisher contact
+- [x] GitHub organization ownership / billing
 - [ ] Domain registrar and DNS access
 - [ ] Future support desk account, if adopted (Plain, Pylon, Help Scout, etc.)
 
 ### 0.3 GitHub / Publisher Identity
 
-- [ ] Confirm the target GitHub organization is `fuzzynova`.
-- [ ] Move or mirror the repository to `fuzzynova/flightpath` before public launch if that is the long-term canonical location.
-- [ ] Confirm VS Code Marketplace publisher branding matches the long-term business/product identity.
-- [ ] Update README, docs, and marketplace copy to use `flightpath.dev` and `support@flightpath.dev`.
+- [x] Confirm the target GitHub organization is `fuzzynova`.
+- [x] Move or mirror the repository to `fuzzynova/flightpath` before public launch if that is the long-term canonical location.
+- [x] Confirm VS Code Marketplace publisher branding matches the long-term business/product identity.
+- [x] Update README, docs, and marketplace copy to use `flightpath.dev` and `support@flightpath.dev`.
 
 ---
 

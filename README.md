@@ -18,7 +18,7 @@ FlightPath is a VS Code extension that automates AI coding assistants through st
 
 ## Requirements
 
-- VS Code 1.85.0 or higher
+- VS Code 1.104.0 or higher
 - Node.js 18 or higher
 - At least one supported harness installed and authenticated
 
@@ -406,4 +406,8 @@ Design documents and implementation notes are in `dev/implemented/`.
 
 ---
 
-**Enjoy!**
+## Support
+
+- **Issues:** [github.com/FuzzyNova/flightpath/issues](https://github.com/FuzzyNova/flightpath/issues)
+- **Email:** support@flightpath.dev
+- **Website:** [flightpath.dev](https://flightpath.dev)
