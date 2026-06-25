@@ -1,6 +1,6 @@
 import { defineConfig } from "vitepress";
 
-const base = process.env.DOCS_BASE ?? "/flightpath/";
+const base = process.env.DOCS_BASE ?? "/docs/";
 
 export default defineConfig({
   title: "FlightPath",
@@ -15,7 +15,7 @@ export default defineConfig({
       { text: "Workflows", link: "/workflows/" },
       { text: "Reference", link: "/reference/workflow-schema" },
       { text: "CLI", link: "/cli/" },
-      { text: "GitHub", link: "https://github.com/nhickster/flightpath" },
+      { text: "GitHub", link: "https://github.com/FuzzyNova/flightpath" },
     ],
     sidebar: {
       "/guide/": [
@@ -109,15 +109,15 @@ export default defineConfig({
       provider: "local",
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/nhickster/flightpath" },
+      { icon: "github", link: "https://github.com/FuzzyNova/flightpath" },
     ],
     editLink: {
-      pattern: "https://github.com/nhickster/flightpath/edit/main/docs/:path",
+      pattern: "https://github.com/FuzzyNova/flightpath/edit/main/docs/:path",
       text: "Edit this page on GitHub",
     },
     footer: {
-      message: "Released under the Elastic License 2.0.",
-      copyright: "Copyright © FlightPath contributors",
+      message: "Source-available under the FlightPath Commercial License.",
+      copyright: "Copyright © Fuzzy Nova",
     },
   },
 });

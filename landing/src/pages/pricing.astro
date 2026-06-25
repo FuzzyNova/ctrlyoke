@@ -1,0 +1,182 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const freeTier = [
+  "All 7 harnesses (Copilot, Claude, Codex, OpenCode, Qwen, Gemini, Copilot Chat)",
+  "YAML / JSON / Markdown workflows — unlimited steps",
+  "End conditions, pre-conditions & error / retry behavior",
+  "Full VS Code dashboard",
+  "Hosted dashboard on localhost",
+  "Completion notifications",
+  "MCP server & MCP manager",
+  "Agent & skills manager",
+  "AI commit message generation",
+  "CLI binary & templates",
+  "Output history",
+  "Community support (GitHub Issues)",
+];
+
+const proTier = [
+  { text: "Everything in Free", highlight: false },
+  { text: "Remote & LAN browser dashboard (QR-to-phone, mobile push)", highlight: true },
+  { text: "Custom execution hooks", highlight: true },
+  { text: "Air-gapped / offline activation (enterprise)", highlight: true },
+  { text: "Custom icon color", highlight: false },
+  { text: "All future Pro features", highlight: false },
+  { text: "Email support (support@flightpath.dev)", highlight: false },
+];
+
+const faq = [
+  {
+    q: "What is a perpetual license?",
+    a: "A one-time purchase that never expires. You own the license forever and it includes all future Pro features in the same tier — no subscription required.",
+  },
+  {
+    q: "Can I use FlightPath on multiple machines?",
+    a: "Yes. One Pro license activates on up to 10 machines, so you can use it on your work desktop, laptop, home machine, and more.",
+  },
+  {
+    q: "Is there a trial?",
+    a: "Yes — two layers. The free tier is fully functional forever with no time limit. On top of that, every new install gets a 14-day free trial of remote access (the Pro-only feature). No credit card required for either.",
+  },
+  {
+    q: "I work at a large company. Do I need an enterprise license?",
+    a: "Organizations above $10M annual revenue or 250 employees must be licensed. You can satisfy this yourself by purchasing an individual Pro license — you do not need to wait for your company to buy an enterprise plan.",
+  },
+  {
+    q: "Do you offer team or enterprise pricing?",
+    a: "An enterprise site license (unlimited seats, annual) is coming soon. Contact sales@flightpath.dev for early access or to discuss requirements.",
+  },
+  {
+    q: "What payment methods are accepted?",
+    a: "All major credit and debit cards. Checkout is handled by Lemon Squeezy, our Merchant of Record, who also manages international tax and VAT on our behalf.",
+  },
+];
+---
+
+<Layout
+  title="Pricing — FlightPath"
+  description="Free for individuals and small teams. Pro for power users who want to code from anywhere."
+>
+
+  <!-- Header -->
+  <section class="border-b border-white/5 px-6 py-20 text-center">
+    <div class="mx-auto max-w-2xl">
+      <h1 class="mb-4 text-4xl font-bold text-white md:text-5xl">Simple, honest pricing</h1>
+      <p class="text-lg text-slate-400">
+        Free forever for individuals and small teams. Pro for developers who want to
+        code from anywhere.
+      </p>
+    </div>
+  </section>
+
+  <!-- Pricing table -->
+  <section class="px-6 py-16">
+    <div class="mx-auto grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-2">
+
+      <!-- Free -->
+      <div class="flex flex-col rounded-2xl border border-white/8 bg-brand-900/40 p-8">
+        <div class="mb-6">
+          <h2 class="mb-1 text-xl font-bold text-white">Free</h2>
+          <p class="text-sm text-slate-400">For individuals and teams under $10M revenue / 250 employees.</p>
+        </div>
+        <div class="mb-6 flex items-end gap-1">
+          <span class="text-4xl font-bold text-white">$0</span>
+          <span class="mb-1 text-slate-400">forever</span>
+        </div>
+        <a
+          href="https://marketplace.visualstudio.com/items?itemName=fuzzynova.flightpath"
+          class="mb-8 block rounded-lg border border-white/10 py-3 text-center font-semibold text-slate-300 hover:border-white/20 hover:text-white transition-colors"
+        >
+          Install for VS Code
+        </a>
+        <ul class="flex flex-col gap-3">
+          {freeTier.map((item) => (
+            <li class="flex items-start gap-2.5 text-sm text-slate-400">
+              <svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Pro -->
+      <div class="relative flex flex-col rounded-2xl border border-sky-400/30 bg-gradient-to-br from-brand-800 to-brand-900 p-8">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span class="rounded-full bg-sky-400 px-4 py-1 text-xs font-bold uppercase tracking-wider text-brand-950">
+            Most popular
+          </span>
+        </div>
+        <div class="mb-6">
+          <h2 class="mb-1 text-xl font-bold text-white">Pro</h2>
+          <p class="text-sm text-slate-400">For developers who want to code from anywhere. Activates on up to 10 machines.</p>
+        </div>
+        <div class="mb-2 flex items-end gap-1">
+          <span class="text-4xl font-bold text-white">$59</span>
+          <span class="mb-1 text-slate-400">one-time</span>
+        </div>
+        <p class="mb-6 text-sm text-slate-400">Perpetual license. Includes all future Pro features.</p>
+        <a
+          href="#"
+          aria-disabled="true"
+          class="mb-8 block rounded-lg bg-sky-400 py-3 text-center font-semibold text-brand-950 hover:bg-sky-300 transition-colors"
+        >
+          Buy Pro — $59
+        </a>
+        <p class="mb-6 text-center text-xs text-slate-500">
+          14-day free trial of remote access included — no card required to start.
+        </p>
+        <ul class="flex flex-col gap-3">
+          {proTier.map((item) => (
+            <li class={`flex items-start gap-2.5 text-sm ${item.highlight ? "text-white" : "text-slate-400"}`}>
+              <svg class={`mt-0.5 h-4 w-4 shrink-0 ${item.highlight ? "text-sky-400" : "text-slate-500"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+              {item.text}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Enterprise note -->
+    <div class="mx-auto mt-8 max-w-4xl rounded-xl border border-white/5 bg-brand-900/30 p-6 text-center">
+      <p class="text-sm text-slate-400">
+        Need a site license for your team?
+        <a href="mailto:sales@flightpath.dev" class="ml-1 text-sky-400 hover:text-sky-300 transition-colors">
+          Contact us for enterprise pricing →
+        </a>
+      </p>
+    </div>
+  </section>
+
+  <!-- License note -->
+  <section class="border-t border-white/5 bg-brand-900/20 px-6 py-12">
+    <div class="mx-auto max-w-3xl text-center">
+      <p class="text-sm leading-relaxed text-slate-500">
+        FlightPath is <strong class="text-slate-400">source-available</strong> software under a custom commercial license.
+        Free for individuals and organizations under $10M annual revenue or 250 employees.
+        Larger organizations must purchase a Pro license per user, or an enterprise site license.
+        <a href="/terms/" class="ml-1 text-slate-400 underline hover:text-white transition-colors">Read the license.</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="border-t border-white/5 px-6 py-20">
+    <div class="mx-auto max-w-2xl">
+      <h2 class="mb-12 text-center text-2xl font-bold text-white">Frequently asked questions</h2>
+      <div class="flex flex-col divide-y divide-white/5">
+        {faq.map((item) => (
+          <div class="py-6">
+            <h3 class="mb-2 font-semibold text-white">{item.q}</h3>
+            <p class="text-sm leading-relaxed text-slate-400">{item.a}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+</Layout>

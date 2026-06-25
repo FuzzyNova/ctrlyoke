@@ -1,0 +1,7 @@
+[build]
+  command = "cd landing && npm ci && npm run build && cd ../docs && npm ci && npx vitepress build && cp -r .vitepress/dist ../landing/dist/docs"
+  publish  = "landing/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  DOCS_BASE    = "/docs/"

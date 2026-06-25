@@ -142,7 +142,7 @@ The tier structure, `LicenseService`, entitlement verification, activation flow,
 - **Licensing:** **Keygen** — issues **Ed25519-signed license files** verified **offline** in the extension (no per-request phone-home); supports **air-gapped / enterprise** activation from launch.
 - **Glue:** a **Netlify Function** (this site's deploy) receives the Lemon Squeezy `order_created` webhook and creates the Keygen license.
 - **Later:** "Sign in with FlightPath" device-code flow as a UX layer over the **same** `LicenseService`, when the hosted dashboard becomes a paid cloud product.
-- **Pricing:** **$59 USD** perpetual, one-time; activates on up to 3 machines.
+- **Pricing:** **$59 USD** perpetual, one-time; activates on up to 10 machines.
 
 The website's licensing responsibilities are the **pricing page** (below), the **Lemon Squeezy checkout link**, and **hosting the webhook function** that bridges Lemon Squeezy → Keygen.
 
@@ -183,7 +183,7 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 ### 6.2 FAQ Section
 
 - "What is a perpetual license?" — One-time purchase, yours forever, includes all future Pro features in the same tier.
-- "Can I use it on multiple machines?" — Yes, one license activates on up to 3 devices.
+- "Can I use it on multiple machines?" — Yes, one license activates on up to 10 devices.
 - "Is there a trial?" — Yes. The free tier is fully functional forever (no time limit, no credit card), and remote "code on the go" access is free to trial for 14 days on top of that.
 - "Do you offer team/enterprise pricing?" — Not yet. Coming soon. Contact us.
 
