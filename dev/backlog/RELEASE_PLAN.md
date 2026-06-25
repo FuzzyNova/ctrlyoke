@@ -1,7 +1,7 @@
 # FlightPath v0.1.0 Release Plan
 
 **Created:** March 11, 2026
-**Updated:** June 19, 2026
+**Updated:** June 25, 2026
 **Status:** READY_FOR_PUBLISH_PREP
 **Target:** VS Code Marketplace public release first; npm CLI package after the extension release path is settled.
 
@@ -22,9 +22,9 @@ The original critical testing work is complete:
 Codebase-backed release facts:
 
 - `package.json` version is `0.1.0`.
-- `package.json` publisher is currently `nhickster`.
-- `package.json` repository/homepage/bugs URLs still point to `https://github.com/nhickster/flightpath`.
-- `package.json` license is still `Elastic-2.0`.
+- `package.json` publisher is `fuzzynova`.
+- `package.json` repository/homepage/bugs URLs point to `https://github.com/FuzzyNova/flightpath` and `https://flightpath.dev`.
+- `package.json` license is `Elastic-2.0` (placeholder — to be replaced with custom commercial EULA before launch; see §2.3).
 - `package.json` has current marketplace metadata: improved description, categories, keywords, and gallery banner.
 - `package.json` contributes both bins: `flightpath-mcp` and `flightpath`, but `.vscodeignore` intentionally excludes `out/cli.js` from the VSIX.
 - `.vscodeignore` is now allowlist-based and includes the extension bundle, MCP server, webview assets, schemas, templates, runtime scripts, `resvg.wasm`, and `node-pty`.
@@ -37,19 +37,9 @@ Related launch/business planning now lives in [`RELEASE_CHECKLIST.md`](RELEASE_C
 
 ## Release Decision
 
-Do not publish until the identity decision is made:
+**Identity decision: made (June 2026).** Publisher is `fuzzynova`, GitHub org is `FuzzyNova/flightpath`, product domain is `flightpath.dev`, support inbox is `support@flightpath.dev`. All `package.json` fields and README updated.
 
-1. Publish now as `nhickster.flightpath`, matching current `package.json`.
-2. Or move the product identity first, then publish under the long-term Fuzzy Nova / FlightPath identity.
-
-Given the new business setup plan, the recommended path is:
-
-- Create the `flightpath.dev` email/support identity first.
-- Move or confirm the canonical GitHub home (`fuzzynova/flightpath` if that is the long-term plan).
-- Decide the VS Code Marketplace publisher before the first public publish.
-- Update `package.json`, README, marketplace links, and support links once, then publish.
-
-This avoids launching under `nhickster.flightpath` and immediately needing to migrate customer-facing URLs and publisher identity.
+**License decision: made (June 2026).** Custom commercial EULA (source-available, $10M revenue / 250-employee threshold), not Elastic-2.0. Pro licensing via Keygen at launch. Draft at [`LICENSE_DRAFT.md`](LICENSE_DRAFT.md); requires attorney review before publish.
 
 ---
 
@@ -134,47 +124,38 @@ Expected excluded runtime asset:
 
 ### 2.1 Publisher and Identity
 
-**Status:** OPEN
+**Status:** DONE
 
-- [ ] Complete Phase 0 of [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): business email, support inbox, vendor ownership, and publisher identity.
-- [ ] Decide whether the first Marketplace publisher remains `nhickster` or moves to a Fuzzy Nova publisher.
-- [ ] If moving, update `package.json#publisher` before publishing.
-- [ ] If moving the repo, update:
-  - [ ] `package.json#repository.url`
-  - [ ] `package.json#homepage`
-  - [ ] `package.json#bugs.url`
-  - [ ] README links
-  - [ ] Marketplace listing/support copy
+- [x] Complete Phase 0 of [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): business email, support inbox, vendor ownership, and publisher identity.
+- [x] Publisher: `fuzzynova` (VS Code Marketplace publisher created under `admin@fuzzno.com`).
+- [x] `package.json#publisher` → `fuzzynova`
+- [x] `package.json#repository.url` → `https://github.com/FuzzyNova/flightpath`
+- [x] `package.json#homepage` → `https://flightpath.dev`
+- [x] `package.json#bugs.url` → `https://github.com/FuzzyNova/flightpath/issues`
+- [x] README support section updated with `support@flightpath.dev` and `flightpath.dev`
 
 ### 2.2 README Requirements Mismatch
 
-**Status:** OPEN
+**Status:** DONE
 
-`README.md` currently says VS Code `1.85.0 or higher`, while `package.json#engines.vscode` requires `^1.104.0`.
-
-- [ ] Decide the real minimum VS Code version.
-- [ ] Update README or `package.json` so they match.
-- [ ] If lowering the engine range, verify APIs used by MCP server definition providers, language model tools, webviews, and chat integration are available in that target version.
-
-Recommended for v0.1.0: keep `^1.104.0` unless there is a tested reason to lower it.
+- [x] Decision: keep `^1.104.0` (no tested reason to lower it).
+- [x] README updated to `VS Code 1.104.0 or higher` — matches `package.json#engines.vscode`.
 
 ### 2.3 License and Commercial Terms
 
-**Status:** OPEN
+**Status:** DECISION MADE — awaiting attorney review
 
-Current state:
+Decisions recorded (June 2026):
+- **Custom commercial EULA** — not Elastic-2.0, not BSL. Source-available; bespoke terms.
+- **Source-available** — public repo, visible source, governed by the custom EULA. Code visibility builds trust for a tool that drives AI over user codebases; Pro protection comes from legal terms + Keygen's offline crypto, not source secrecy.
+- **Commercial threshold** — $10M USD annual revenue OR 250 employees (Docker's line). Organizations above this threshold must purchase Pro licenses even for free-tier features.
+- **Pro licensing at launch** — Keygen offline Ed25519-signed licenses via Lemon Squeezy storefront. See [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
 
-- `package.json#license` is `Elastic-2.0`.
-- Root `LICENSE` exists.
-- The Pro plan says this is temporary and should become a custom commercial EULA before commercial launch.
-
-Before a commercial/pro launch:
-
-- [ ] Complete legal review from [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
-- [ ] Replace `LICENSE` / add `LICENSE.md` if custom terms are adopted.
-- [ ] Update `package.json#license` to `SEE LICENSE IN LICENSE.md` if the license becomes custom.
-
-For a free pre-Pro Marketplace launch, keeping `Elastic-2.0` may be acceptable, but the decision should be explicit.
+Open:
+- [ ] Attorney reviews and finalizes [`LICENSE_DRAFT.md`](LICENSE_DRAFT.md).
+- [ ] Replace `LICENSE` with final custom EULA text.
+- [ ] Update `package.json#license` to `SEE LICENSE IN LICENSE.md`.
+- [ ] Publish `flightpath.dev/terms` (web-facing copy + plain-language summary).
 
 ### 2.4 Final Package Inspection
 
@@ -304,10 +285,10 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 | Fix VSIX allowlist / webview assets | DONE | `.vscodeignore` is allowlist-based |
 | Marketplace metadata | MOSTLY DONE | Publisher/repo identity still open |
 | README harness coverage | DONE | All seven harnesses listed |
-| README/package VS Code version consistency | OPEN | README says 1.85; package requires 1.104 |
-| Business email/support identity | OPEN | Tracked in `RELEASE_CHECKLIST.md` |
-| Publisher identity | OPEN | `nhickster` vs. business publisher |
-| License/commercial terms | OPEN | `Elastic-2.0` vs. custom EULA |
+| README/package VS Code version consistency | DONE | Both say 1.104.0 |
+| Business email/support identity | DONE | `support@flightpath.dev`, DNS/DKIM/DMARC configured |
+| Publisher identity | DONE | `fuzzynova`, repo at FuzzyNova/flightpath |
+| License/commercial terms | DECISION MADE | Custom EULA (source-available, $10M threshold); draft at `LICENSE_DRAFT.md`; needs attorney |
 | Final `vsce ls` package inspection | OPEN | Run immediately before publish |
 | Marketplace publish | OPEN | Blocked on identity decision |
 | npm CLI publish | DEFERRED | Separate packaging decision |

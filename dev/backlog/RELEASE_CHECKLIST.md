@@ -57,8 +57,8 @@ Use the domain email identity for every vendor account created or migrated for l
 - [x] Keygen account owner/admin email under `fuzzno.com`; customer/license support under `flightpath.dev`
 - [x] VS Code Marketplace publisher contact
 - [x] GitHub organization ownership / billing
-- [ ] Domain registrar and DNS access
-- [ ] Future support desk account, if adopted (Plain, Pylon, Help Scout, etc.)
+- [x] Domain registrar and DNS access
+- ~~[ ] Future support desk account, if adopted (Plain, Pylon, Help Scout, etc.)~~ — skipped; not needed for launch
 
 ### 0.3 GitHub / Publisher Identity
 
@@ -71,11 +71,11 @@ Use the domain email identity for every vendor account created or migrated for l
 
 ## Phase 1 — Release Foundation
 
-- [ ] Confirm package metadata, extension display name, repository URL, icon, categories, and marketplace publisher.
-- [ ] Confirm the existing release checklist in [`RELEASE_PLAN.md`](RELEASE_PLAN.md).
-- [ ] Confirm all pre-release launch blockers in [`ROADMAP.md`](ROADMAP.md).
-- [ ] Decide whether the public repo remains source-available under the custom commercial EULA before the first commercial launch.
-- [ ] Replace the placeholder license only after legal review, as tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
+- [x] Confirm package metadata, extension display name, repository URL, icon, categories, and marketplace publisher. (`fuzzynova`, `FuzzyNova/flightpath`, `flightpath.dev`)
+- [x] Confirm the existing release checklist in [`RELEASE_PLAN.md`](RELEASE_PLAN.md). (Updated June 25 — stale `nhickster` references and resolved items corrected.)
+- [x] Confirm all pre-release launch blockers in [`ROADMAP.md`](ROADMAP.md). (Two strategic blockers: landing page (Phase 2) and Pro licensing (Phase 3–4).)
+- [x] Decide whether the public repo remains source-available under the custom commercial EULA before the first commercial launch. **Decision: yes — source-available under custom EULA.**
+- [ ] Replace the placeholder license only after legal review, as tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md). **Draft at [`LICENSE_DRAFT.md`](LICENSE_DRAFT.md) — send to attorney.**
 
 ---
 

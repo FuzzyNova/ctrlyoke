@@ -117,7 +117,7 @@ The non-obvious addition for a commercial product: a **private** support path fo
 ### 1.1 Roles
 
 - **Lemon Squeezy** — one product (**FlightPath Pro**, perpetual). Used purely as storefront + MoR. We do **not** use LS's native license keys; Keygen issues the real license. Disable/ignore LS key generation, or use LS custom fulfillment to deliver the Keygen key.
-- **Keygen** — one **Policy** (perpetual Pro, Ed25519 scheme, encrypted license files, machine activation limit = 3). Licenses are created per purchase via the webhook.
+- **Keygen** — one **Policy** (perpetual Pro, Ed25519 scheme, encrypted license files, machine activation limit = 10). Licenses are created per purchase via the webhook.
 - **Netlify Function** — `netlify/functions/ls-webhook.ts`: verify LS HMAC signature, on `order_created` call Keygen `POST /v1/licenses`, then deliver the key to the buyer.
 
 ### 1.2 Purchase → license issuance flow
@@ -241,7 +241,7 @@ Add **"FlightPath: Deactivate Pro License"** and a Free/Pro status surface (stat
 
 - **Perpetual, one-time** — matches VS Code-extension buyer expectations; lowest support/churn.
 - Target **$59 USD** one-time (validate against comparable extensions).
-- Activates on up to **3 machines** (enforced by Keygen machine limits, not LS).
+- Activates on up to **10 machines** (enforced by Keygen machine limits, not LS). FlightPath is a developer tool; 10 machines is appropriate for a developer who works across a work desktop, home machine, laptop, and VMs.
 - Subscription "Pro+" / Teams is a Phase-2 concern (roadmap 4.2), not launch.
 
 ### 1.7.1 Enterprise SKU (self-serve site license)
