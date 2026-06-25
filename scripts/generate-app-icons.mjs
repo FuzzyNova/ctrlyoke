@@ -8,7 +8,7 @@
  *                                       → flightpath-icon-simple-dark.svg  (#C5C5C5, for VS Code dark themes)
  *                                       → src/ui/icons/generate-commit-message.svg (copy, currentColor for inline use)
  *
- * All generated icons use #1076ba background with #ffffff fill/stroke.
+ * All generated icons use #072c45 background with #ffffff fill/stroke.
  * Uses @resvg/resvg-wasm for PNG rendering — no native tools (Inkscape, etc.) required.
  *
  * Usage: node scripts/generate-app-icons.mjs
@@ -24,7 +24,7 @@ const __dirname = dirname(__filename);
 const rootDir = join(__dirname, "..");
 const imagesDir = join(rootDir, "images");
 
-const BG_COLOR = "#1076ba";
+const BG_COLOR = "#072c45";
 const FG_COLOR = "#ffffff";
 const LIGHT_THEME_ICON_COLOR = "#424242";
 const DARK_THEME_ICON_COLOR = "#C5C5C5";
