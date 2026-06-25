@@ -202,10 +202,16 @@ function App() {
 
       const basePx = mobile.lastMobileSizes.current.editor;
       const maxAutoExpand = Math.max(0, totalPx * 0.6 - basePx);
-      const targetA = Math.max(0, Math.min(A + signedOverflow, maxAutoExpand));
-      if (Math.abs(targetA - A) < 1) return;
+      // Anchor growth on the ACTUAL measured editor size, not `basePx + A`
+      // (see the desktop branch for why the `A` accumulator drifts and clips
+      // the first/last line). Growing from the measured size is self-healing.
+      const targetEditorPx = Math.max(
+        basePx,
+        Math.min(editorPx + signedOverflow, basePx + maxAutoExpand)
+      );
+      const targetA = targetEditorPx - basePx;
+      if (Math.abs(targetEditorPx - editorPx) < 1) return;
 
-      const targetEditorPx = basePx + targetA;
       const editorPct = Number(((targetEditorPx / totalPx) * 100).toFixed(3));
       const outputPct = Number((100 - editorPct).toFixed(3));
 
@@ -243,13 +249,24 @@ function App() {
 
       const basePx = desktop.lastDesktopSizes.current.editor;
       const maxAutoExpand = Math.max(0, totalPx * 0.6 - basePx);
-      const targetA = Math.max(0, Math.min(A + signedOverflow, maxAutoExpand));
+      // Anchor growth on the ACTUAL measured editor size, not `basePx + A`.
+      // The `A` accumulator drifts from reality (percentage rounding via
+      // toFixed(3), minSize clamping, preserve-pixel-size after window/group
+      // resizes), so `basePx + targetA` snaps the panel to a slightly wrong
+      // absolute size — leaving the first/last line clipped behind the
+      // editor header/footer. Growing from the measured size by exactly the
+      // overflow, then clamping to [basePx, basePx + maxAutoExpand], is
+      // self-healing.
+      const targetEditorPx = Math.max(
+        basePx,
+        Math.min(editorPx + signedOverflow, basePx + maxAutoExpand)
+      );
+      const targetA = targetEditorPx - basePx;
 
-      if (Math.abs(targetA - A) < 1) {
+      if (Math.abs(targetEditorPx - editorPx) < 1) {
         return;
       }
 
-      const targetEditorPx = basePx + targetA;
       const editorPct = Number(((targetEditorPx / totalPx) * 100).toFixed(3));
       const outputPct = Number((100 - editorPct).toFixed(3));
 
