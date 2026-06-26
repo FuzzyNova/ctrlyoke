@@ -1,0 +1,27 @@
+name: Deploy Site to Netlify
+
+# Production deploy of flightpath.dev (landing + docs). Path-filtered so routine
+# extension commits don't redeploy the site. Requires NETLIFY_AUTH_TOKEN and
+# NETLIFY_SITE_ID repo secrets (the flightpath.dev Netlify site).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'landing/**'
+      - 'docs/**'
+      - 'scripts/merge-docs-into-landing.mjs'
+      - 'netlify.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/deploy-preview.yml'
+      - '.github/workflows/_netlify-deploy.yml'
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_netlify-deploy.yml
+    with:
+      deploy-args: --prod
+    secrets:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

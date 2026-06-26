@@ -1,0 +1,39 @@
+name: Netlify Deploy (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      deploy-args:
+        description: 'Extra args passed to netlify deploy (e.g. --prod or --alias=branch-name)'
+        required: true
+        type: string
+    secrets:
+      NETLIFY_AUTH_TOKEN:
+        required: true
+      NETLIFY_SITE_ID:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # Root install provides VitePress (a root devDep) for the docs build.
+      # build:landing installs the landing project's own deps via `npm --prefix landing ci`.
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build landing site + docs
+        run: npm run build:site
+
+      - name: Deploy to Netlify
+        run: npx netlify-cli@latest deploy --dir=landing/dist ${{ inputs.deploy-args }}
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

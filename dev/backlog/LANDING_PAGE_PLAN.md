@@ -300,14 +300,15 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 ### Pre-Launch
 
 - [ ] Complete Phase 0 business email and account ownership setup in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)
-- [ ] Create `landing/` Astro project in repo root
-- [ ] Configure `netlify.toml` for dual build + `/docs/` path merge
-- [ ] Add the three Netlify deploy workflows from §2.3 (mirror `FuzzyNova/fuzzno`), set `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` repo secrets, and **retire the legacy `docs-deploy.yml`** (GitHub Pages) once the new site deploy is green
-- [ ] Set `base: '/docs/'` in `docs/.vitepress/config.mts`
+- [x] Create `landing/` Astro project in repo root (Astro 5 + Tailwind)
+- [x] Configure dual build + `/docs/` merge — root `build:site` script (`build:landing` → `build:docs` → `scripts/merge-docs-into-landing.mjs`); `netlify.toml` updated
+- [x] Add the three Netlify deploy workflows (§2.3, mirror `FuzzyNova/fuzzno`) and retire the legacy `docs-deploy.yml`. **Still TODO before first deploy:** create the flightpath.dev Netlify site and add `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` repo secrets, then confirm the first deploy is green
+- [x] `base: '/docs/'` in `docs/.vitepress/config.mts` (already the default; old `DOCS_BASE=/flightpath/` override retired with `docs-deploy.yml`)
 - [ ] Point `flightpath.dev` DNS to Netlify
-- [ ] Write landing page hero + features sections
-- [ ] Add harness icon grid (reuse from `src/ui/icons/`)
-- [ ] Write pricing page (Free vs Pro columns + FAQ)
+- [x] Write landing page hero + features sections
+- [x] Add harness icon grid (`landing/public/icons/harnesses/`)
+- [x] Write pricing page (Free vs Pro columns + FAQ)
+- [x] Add `/terms` + `/privacy` pages (render canonical root `LICENSE.md` / `PRIVACY.md`)
 - [ ] Wire pricing-page checkout to Lemon Squeezy
 - [ ] Publish `support@flightpath.dev` as the customer support path on the site, docs, README, and marketplace listing
 - [ ] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); details in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)

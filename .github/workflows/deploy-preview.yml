@@ -1,0 +1,24 @@
+name: Deploy Site Preview to Netlify
+
+# Per-branch preview deploy (Netlify alias URL) for non-main branches that touch the
+# site or docs. Useful for previewing a major site change before merging to main.
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'landing/**'
+      - 'docs/**'
+      - 'scripts/merge-docs-into-landing.mjs'
+      - 'netlify.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/_netlify-deploy.yml'
+
+jobs:
+  deploy-preview:
+    uses: ./.github/workflows/_netlify-deploy.yml
+    with:
+      deploy-args: --alias=${{ github.ref_name }}
+    secrets:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
