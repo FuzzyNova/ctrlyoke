@@ -224,9 +224,9 @@ The existing `docs/` structure is solid and ships as-is. Minor additions needed 
 
 - [ ] `docs/guide/installation.md` — confirm CLI install instructions are up to date (`npm install -g flightpath`)
 - [ ] `docs/changelog.md` — add as a redirect target or mirrored page
-- [ ] `docs/pro/index.md` — Pro features overview and license activation instructions
-- [ ] Update `docs/.vitepress/config.mts` — set `base: '/docs/'` for subdirectory hosting
-- [ ] Add `docs/.vitepress/config.mts` → `themeConfig.logo` and `socialLinks` for GitHub
+- [x] `docs/pro/index.md` — Pro features overview, "Who needs a license?", and activation instructions
+- [x] Update `docs/.vitepress/config.mts` — `base: '/docs/'` (already default)
+- [x] Add `docs/.vitepress/config.mts` → `themeConfig.logo` (+ `socialLinks` already present); added Pro nav/sidebar entry; logo at `docs/public/flightpath-icon.svg`
 
 ### 4.2 VitePress Base Path
 
@@ -312,8 +312,8 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - [ ] Wire pricing-page checkout to Lemon Squeezy
 - [ ] Publish `support@flightpath.dev` as the customer support path on the site, docs, README, and marketplace listing
 - [ ] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); details in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
-- [ ] Add `docs/pro/index.md` (activation instructions)
-- [ ] Add `docs/.vitepress/config.mts` logo + social links
+- [x] Add `docs/pro/index.md` (activation instructions)
+- [x] Add `docs/.vitepress/config.mts` logo + social links
 
 > **Extension-side licensing tasks** (provider setup, `LicenseService`, "Activate Pro License" command, gating `FlightPathHostedServer` / SCM commit / MCP, step-limit enforcement) are tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md), not here.
 

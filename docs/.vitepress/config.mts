@@ -9,12 +9,14 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   themeConfig: {
+    logo: "/flightpath-icon.svg",
     nav: [
       { text: "Guide", link: "/guide/" },
       { text: "Harnesses", link: "/harnesses/" },
       { text: "Workflows", link: "/workflows/" },
       { text: "Reference", link: "/reference/workflow-schema" },
       { text: "CLI", link: "/cli/" },
+      { text: "Pro", link: "/pro/" },
       { text: "GitHub", link: "https://github.com/FuzzyNova/flightpath" },
     ],
     sidebar: {
@@ -86,6 +88,12 @@ export default defineConfig({
             { text: "flightpath", link: "/cli/flightpath" },
             { text: "flightpath-mcp", link: "/cli/flightpath-mcp" },
           ],
+        },
+      ],
+      "/pro/": [
+        {
+          text: "FlightPath Pro",
+          items: [{ text: "Overview & activation", link: "/pro/" }],
         },
       ],
       "/examples/": [
