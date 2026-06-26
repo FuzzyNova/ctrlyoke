@@ -1,7 +1,7 @@
 # FlightPath Landing Page Plan
 
 **Created:** May 21, 2026  
-**Status:** PLANNING  
+**Status:** IN PROGRESS — site, docs, and deploy pipeline implemented; DNS + first production deploy + testing pending. (Updated June 26, 2026.)  
 **Domain:** flightpath.dev (purchased, hosted on Netlify)
 **Launch dependency:** business email, support inboxes, vendor account ownership, and publisher identity are tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
 
@@ -12,6 +12,21 @@
 This document covers everything needed to ship `flightpath.dev`: the marketing landing page, the published VitePress docs, and the pricing page. The goal at release is a single perpetual license SKU that unlocks power-user features, with a clean free tier that still delivers real value.
 
 > **Scope note:** The **Pro licensing model** (provider choice, the extension `LicenseService`, entitlement verification, activation flow, tier gating, and the license-key-vs-accounts decision) used to live here in Phase 5. It has been **split out into [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)**. This document now owns only the **website surface** (marketing page, docs, pricing page, checkout link). The chosen direction is: pasted license key at launch, user accounts/sign-in as a later UX layer — see the Decision Record in `PRO_LICENSE_PLAN.md`.
+
+---
+
+## Implementation Status — June 26, 2026
+
+The plan below is largely **implemented**. What exists in the repo today:
+
+- **Architecture:** Option B (monorepo) — `landing/` Astro 5 + Tailwind (+ `@tailwindcss/typography`), `output: "static"`.
+- **Pages** (`landing/src/pages/`): `index.astro` (hero, YAML snippet, harness grid, features, how-it-works, Pro callout, install CTA), `pricing.astro` (Free vs Pro + FAQ), `terms.astro` + `privacy.astro` (render the **canonical root `LICENSE.md` / `PRIVACY.md`** directly — single source of truth), shared `layouts/Layout.astro`.
+- **Pre-launch mode:** single `LAUNCHED` flag in `landing/src/config.ts` + `components/Cta.astro` → Install/Buy CTAs render as disabled "Coming soon", a pre-launch banner shows, and the site is `noindex`. Flip `LAUNCHED` to `true` at launch (and set `CHECKOUT_URL`) to reverse all of it.
+- **Docs:** VitePress `base: '/docs/'` (default), logo at `docs/public/flightpath-icon.svg`, `docs/pro/index.md` (+ Pro nav/sidebar). Merged into the landing output by `scripts/merge-docs-into-landing.mjs`.
+- **Build:** root scripts `build:site` → `build:landing` → `build:docs` (order matters; see §2.3); `netlify.toml` updated.
+- **Deploy:** `.github/workflows/{deploy,deploy-preview,_netlify-deploy}.yml` (GitHub Actions + `netlify-cli`); legacy `docs-deploy.yml` retired. Netlify site created; `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` secrets added.
+
+**Still pending:** point `flightpath.dev` DNS at Netlify · first production deploy via push + verify the Action is green · test all live routes and the pre-launch state · `/changelog/` page · `ls-webhook` Netlify Function (tracked in `PRO_LICENSE_PLAN.md`) · set `[DATE]` in the legal docs and flip `LAUNCHED` at launch. The per-phase sections and the **Phase 7 checklist** below carry the detail.
 
 ---
 
@@ -35,7 +50,7 @@ Create a new repo (or monorepo subfolder `landing/`) for the Astro site. The exi
 Option A — **Separate repo**: `flightpath-landing` → deploys to `flightpath.dev`  
 Option B — **Monorepo**: add `landing/` alongside `docs/` in this repo, with one Netlify site
 
-**Recommendation: Option B (monorepo).** Keeps the docs and landing page in sync with extension releases. One repo, one Netlify deploy, one CI pipeline.
+**Recommendation: Option B (monorepo).** Keeps the docs and landing page in sync with extension releases. One repo, one Netlify deploy, one CI pipeline. **✅ Implemented — `landing/` lives in this repo.**
 
 ---
 
@@ -304,16 +319,18 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - [x] Configure dual build + `/docs/` merge — root `build:site` script (`build:landing` → `build:docs` → `scripts/merge-docs-into-landing.mjs`); `netlify.toml` updated
 - [x] Add the three Netlify deploy workflows (§2.3, mirror `FuzzyNova/fuzzno`) and retire the legacy `docs-deploy.yml`. **Still TODO before first deploy:** create the flightpath.dev Netlify site and add `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` repo secrets, then confirm the first deploy is green
 - [x] `base: '/docs/'` in `docs/.vitepress/config.mts` (already the default; old `DOCS_BASE=/flightpath/` override retired with `docs-deploy.yml`)
-- [ ] Point `flightpath.dev` DNS to Netlify
+- [ ] **Point `flightpath.dev` DNS to Netlify** ← next step
 - [x] Write landing page hero + features sections
 - [x] Add harness icon grid (`landing/public/icons/harnesses/`)
 - [x] Write pricing page (Free vs Pro columns + FAQ)
 - [x] Add `/terms` + `/privacy` pages (render canonical root `LICENSE.md` / `PRIVACY.md`)
-- [ ] Wire pricing-page checkout to Lemon Squeezy
-- [ ] Publish `support@flightpath.dev` as the customer support path on the site, docs, README, and marketplace listing
+- [x] Pre-launch mode — `LAUNCHED` flag (`landing/src/config.ts`) gates disabled "Coming soon" CTAs, a banner, and `noindex`
+- [ ] Wire pricing-page checkout to Lemon Squeezy — **deferred:** disabled pre-launch; set `CHECKOUT_URL` and flip `LAUNCHED` at launch
+- [x] Publish `support@flightpath.dev` as the support path on the site/docs (README/marketplace tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) Phase 0.3)
 - [ ] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); details in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
 - [x] Add `docs/pro/index.md` (activation instructions)
 - [x] Add `docs/.vitepress/config.mts` logo + social links
+- [ ] **Push to `main` for the first production deploy; confirm the Action is green, then test all live routes + the pre-launch state**
 
 > **Extension-side licensing tasks** (provider setup, `LicenseService`, "Activate Pro License" command, gating `FlightPathHostedServer` / SCM commit / MCP, step-limit enforcement) are tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md), not here.
 
