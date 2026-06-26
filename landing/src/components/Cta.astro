@@ -1,0 +1,30 @@
+---
+// Renders a normal link when the site has launched; otherwise a disabled
+// "Coming soon" control. Gated by LAUNCHED in src/config.ts so every CTA flips
+// back on with one boolean at launch.
+import { LAUNCHED } from "../config";
+
+interface Props {
+  href: string;
+  class?: string;
+  comingSoonLabel?: string;
+}
+
+const { href, class: className = "", comingSoonLabel = "Coming soon" } = Astro.props;
+---
+
+{
+  LAUNCHED ? (
+    <a href={href} class={className}>
+      <slot />
+    </a>
+  ) : (
+    <span
+      class={`${className} cursor-not-allowed opacity-50`}
+      aria-disabled="true"
+      title="Available at launch"
+    >
+      {comingSoonLabel}
+    </span>
+  )
+}
