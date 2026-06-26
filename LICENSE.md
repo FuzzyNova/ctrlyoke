@@ -2,7 +2,7 @@
 
 **Licensor:** Fuzzy Nova
 **Product:** FlightPath VS Code Extension and companion binaries
-**Effective Date:** [DATE]
+**Effective Date:** June 26, 2026
 **Version:** 1.0
 
 ## 0. Acceptance

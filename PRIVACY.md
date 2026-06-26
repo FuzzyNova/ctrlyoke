@@ -2,7 +2,7 @@
 
 **Controller:** Fuzzy Nova
 **Product:** FlightPath VS Code extension and companion CLI / MCP server binaries
-**Effective Date:** [DATE]
+**Effective Date:** June 26, 2026
 **Version:** 1.0
 
 ## 1. Scope
