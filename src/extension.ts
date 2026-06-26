@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { randomBytes } from "crypto";
 import { WorkflowOrchestrator } from "./flightpath/WorkflowOrchestrator";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCompletionProvider";
@@ -9,6 +8,7 @@ import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 import { ContextMenuReferenceCommands } from "./completions/ContextMenuReferenceCommands";
 import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
 import { getVsCodeWorkspaceRoot } from "./platform/VsCodeWorkspaceRoot";
+import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { FlightPathHostedServer } from "./server/FlightPathHostedServer";
 import {
   EXECUTION_STATES,
@@ -1121,10 +1121,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
       const port = configService.get("server")?.port ?? 3000;
       const workspaceRoot = getVsCodeWorkspaceRoot();
-      const storedToken = await context.secrets.get("flightpath.server.token");
-      const token = storedToken ?? randomBytes(32).toString("hex");
-      if (!storedToken)
-        await context.secrets.store("flightpath.server.token", token);
+      const token = await new ServerTokenStore(context.secrets).getOrCreate();
       const bindAddress =
         configService.get("server")?.bindAddress ?? "127.0.0.1";
       const tlsCfg = configService.get("server")?.tls;
@@ -1189,7 +1186,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const regenerateServerTokenCommand = vscode.commands.registerCommand(
     "flightpath.regenerateServerToken",
     async () => {
-      await context.secrets.delete("flightpath.server.token");
+      await new ServerTokenStore(context.secrets).regenerate();
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,
       });
