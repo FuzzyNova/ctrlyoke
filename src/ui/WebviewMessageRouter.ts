@@ -1192,6 +1192,13 @@ export class WebviewMessageRouter {
         type: MESSAGE_TYPES.WORKFLOWS_LIST,
         workflows: summaries,
       });
+      // The dropdown fetches this when opened; refresh the global active-terminal
+      // set at the same time so the per-row terminal icon is accurate for every
+      // workflow, not just the one this client is viewing.
+      this.emitMessage({
+        type: MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
+        workflows: orchestrator?.getActiveTerminalWorkflowRefs() ?? [],
+      });
     });
 
     table.set(MESSAGE_TYPES.SWITCH_WORKFLOW, async (message) => {

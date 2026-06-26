@@ -5,6 +5,7 @@ import {
   type TerminalSessionStatus,
   type SessionKind,
   type ShellKind,
+  type ActiveTerminalWorkflowRef,
 } from "../types/messages";
 
 export type { SessionKind };
@@ -46,6 +47,14 @@ interface TerminalState {
   sessions: Record<string, TerminalSession[]>;
   /** workflowId → currently active sessionId in the rail */
   activeSessionIds: Record<string, string | null>;
+  /**
+   * Global set of workflows that currently have at least one running PTY
+   * session, broadcast authoritatively by the extension. This is the single
+   * source of truth for the dropdown terminal icon: unlike `sessions` (which a
+   * client only hydrates for the workflow it is actively viewing), this stays
+   * complete for every workflow on every client, including hosted browser tabs.
+   */
+  activeTerminalWorkflows: ActiveTerminalWorkflowRef[];
 }
 
 interface TerminalActions {
@@ -85,11 +94,17 @@ interface TerminalActions {
 
   /** Revive a previously ended ai-cli session back to RUNNING (inject mode resume) */
   resumeSession: (workflowId: string, sessionId: string) => void;
+
+  /** Replace the global active-terminal set (ACTIVE_TERMINAL_WORKFLOWS broadcast) */
+  setActiveTerminalWorkflows: (
+    workflows: ActiveTerminalWorkflowRef[]
+  ) => void;
 }
 
 const initialState: TerminalState = {
   sessions: {},
   activeSessionIds: {},
+  activeTerminalWorkflows: [],
 };
 
 export const useTerminalStore = create<TerminalState & TerminalActions>()(
@@ -194,6 +209,9 @@ export const useTerminalStore = create<TerminalState & TerminalActions>()(
         );
         return { sessions: { ...state.sessions, [workflowId]: sessions } };
       }),
+
+    setActiveTerminalWorkflows: (workflows) =>
+      set({ activeTerminalWorkflows: workflows }),
 
     clearAiCliSessions: (workflowId) =>
       set((state) => {

@@ -403,9 +403,22 @@ export async function activate(context: vscode.ExtensionContext) {
     // (panel + browser tabs). initPtyProcessManager only had the panel reference; now
     // that the hub exists we redirect through it so browser tabs receive TERMINAL_STARTED,
     // TERMINAL_OUTPUT, and TERMINAL_ENDED in real-time.
-    setPtyPostMessage((msg) =>
-      workflowOrchestrator.getDashboardBroadcastHub().postMessage(msg)
-    );
+    //
+    // This is also the single chokepoint for every PTY lifecycle message, so we use
+    // it to keep the global active-terminal set in sync: whenever a session starts or
+    // ends we re-broadcast which workflows have running terminals. That drives the
+    // dropdown terminal icon for all workflows on every client, not just the one each
+    // client happens to be viewing.
+    setPtyPostMessage((msg) => {
+      workflowOrchestrator.getDashboardBroadcastHub().postMessage(msg);
+      const msgType = (msg as { type?: string } | null)?.type;
+      if (
+        msgType === MESSAGE_TYPES.TERMINAL_STARTED ||
+        msgType === MESSAGE_TYPES.TERMINAL_ENDED
+      ) {
+        workflowOrchestrator.broadcastActiveTerminalWorkflows();
+      }
+    });
 
     // Register notification manager as a dashboard client so it observes
     // workflow state transitions and fires VS Code toasts as configured.

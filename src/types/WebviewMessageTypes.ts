@@ -744,6 +744,28 @@ export interface RecentWorkflowsMessage {
 }
 
 /**
+ * Reference to a workflow that currently has at least one running PTY session.
+ * Broadcast globally so every client (panel + browser tabs) can render the
+ * dropdown terminal icon for any workflow, not just the one it is viewing.
+ * `workingFilePath` lets recent-list rows (keyed by working file path) match
+ * without depending on the client having previously hydrated that workflow.
+ */
+export interface ActiveTerminalWorkflowRef {
+  workflowId: string;
+  workingFilePath?: string;
+}
+
+/**
+ * Active terminal workflows broadcast (extension -> all clients).
+ * Replaces the previous per-client terminal-store inference, which left
+ * non-viewed workflows without an icon on hosted/browser clients.
+ */
+export interface ActiveTerminalWorkflowsMessage {
+  type: typeof MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS;
+  workflows: ActiveTerminalWorkflowRef[];
+}
+
+/**
  * Save workflow dialog data message (extension -> webview)
  * Sent when the user clicks the Save button; provides the default path / format.
  */

@@ -37,7 +37,10 @@ import {
 } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
-import type { CliOutput } from "../types/WebviewMessageTypes";
+import type {
+  CliOutput,
+  ActiveTerminalWorkflowRef,
+} from "../types/WebviewMessageTypes";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
 import { getErrorMessage } from "../utils/ErrorUtils";
@@ -530,6 +533,17 @@ export class WorkflowOrchestrator {
   ): Promise<void> {
     const sink = new PostMessageDashboardSink(send);
 
+    // Seed this client with the global active-terminal set so the dropdown
+    // terminal icon is correct for *every* workflow immediately — not just the
+    // one being replayed. Browser clients only receive per-workflow terminal
+    // replay, so without this they would only ever see the icon for the
+    // currently-viewed workflow and lose it on switch. Sent on every replay
+    // (initial connect and workflow switches) regardless of skipTerminalReplay.
+    send({
+      type: MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
+      workflows: this.getActiveTerminalWorkflowRefs(),
+    });
+
     // Check live instances first, then retired (terminal-state workflows that were
     // loaded for viewing — e.g. completed workflows selected from recent list).
     const inLive = this.instances.has(workflowId);
@@ -648,6 +662,41 @@ export class WorkflowOrchestrator {
         `replayWorkflowStateTo: workflowId "${workflowId.slice(0, 8)}" not found`
       );
     }
+  }
+
+  /**
+   * Build the global set of workflows that currently have at least one running
+   * PTY session, each paired with its working file path so clients can match
+   * both loaded rows (by workflowId) and recent-list rows (by working file
+   * path). Source of truth is the PtyProcessManager, resolved against live,
+   * retired, and CLI-managed instances for path lookup.
+   */
+  getActiveTerminalWorkflowRefs(): ActiveTerminalWorkflowRef[] {
+    const ptyManager = getPtyProcessManager();
+    if (!ptyManager) {
+      return [];
+    }
+    return ptyManager.getWorkflowIdsWithRunningSessions().map((workflowId) => {
+      const instance =
+        this.instances.get(workflowId) ?? this.retiredInstances.get(workflowId);
+      const workingFilePath =
+        instance?.getSummary().workingFilePath ??
+        this.cliSessions.get(workflowId)?.summary.workingFilePath;
+      return { workflowId, workingFilePath };
+    });
+  }
+
+  /**
+   * Broadcast the global active-terminal set to every client (panel + browser
+   * tabs). Called whenever a PTY session starts or ends so the dropdown
+   * terminal icon stays in sync across all workflows regardless of which one
+   * each client is viewing.
+   */
+  broadcastActiveTerminalWorkflows(): void {
+    this.dashboardBroadcastHub.postMessage({
+      type: MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS,
+      workflows: this.getActiveTerminalWorkflowRefs(),
+    });
   }
 
   /** Return summaries without exposing WorkflowInstance internals */

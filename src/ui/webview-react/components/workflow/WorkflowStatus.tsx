@@ -14,7 +14,6 @@ import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
-  TERMINAL_SESSION_STATUS,
   RUNNER_IDS,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
@@ -71,38 +70,38 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setActiveWorkflowWorkingFilePath,
   } = useUiStore();
   const { globalSettings } = useSettingsStore();
-  const terminalSessionsByWorkflow = useTerminalStore((s) => s.sessions);
+  // Global set of workflows with a running PTY, broadcast by the extension. This
+  // is complete for every workflow on every client (including hosted browser
+  // tabs) — unlike the per-workflow `sessions` map, which a client only hydrates
+  // for the workflow it is actively viewing. Using it here is what keeps the
+  // dropdown terminal icon visible for non-viewed workflows and across switches.
+  const activeTerminalWorkflows = useTerminalStore(
+    (s) => s.activeTerminalWorkflows
+  );
+  const activeTerminalWorkflowIds = useMemo(
+    () => new Set(activeTerminalWorkflows.map((w) => w.workflowId)),
+    [activeTerminalWorkflows]
+  );
+  const activeTerminalWorkflowPaths = useMemo(
+    () =>
+      new Set(
+        activeTerminalWorkflows
+          .map((w) => w.workingFilePath)
+          .filter((p): p is string => !!p)
+      ),
+    [activeTerminalWorkflows]
+  );
 
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy ===
     RUNNER_IDS.CLI;
   const workflowHasActiveTerminal = useCallback(
     (workflowId: string | null | undefined) =>
-      !!workflowId &&
-      (terminalSessionsByWorkflow[workflowId] ?? []).some(
-        (session) => session.status === TERMINAL_SESSION_STATUS.RUNNING
-      ),
-    [terminalSessionsByWorkflow]
+      !!workflowId && activeTerminalWorkflowIds.has(workflowId),
+    [activeTerminalWorkflowIds]
   );
   const currentWorkflowHasActiveTerminal =
     workflowHasActiveTerminal(activeWorkflowId);
-
-  // Accumulates filePath/workingFilePath → workflowId for every workflow that has
-  // ever been in loadedWorkflows this session. Used by recentWorkflowHasActiveTerminal
-  // to find terminal sessions for completed workflows (which are removed from
-  // loadedWorkflows on completion but may still have active shell terminals).
-  const seenWorkflowIdsRef = useRef<Map<string, string>>(new Map());
-
-  useEffect(() => {
-    for (const workflow of loadedWorkflows) {
-      if (workflow.filePath) {
-        seenWorkflowIdsRef.current.set(workflow.filePath, workflow.id);
-      }
-      if (workflow.workingFilePath) {
-        seenWorkflowIdsRef.current.set(workflow.workingFilePath, workflow.id);
-      }
-    }
-  }, [loadedWorkflows]);
 
   const syntheticActiveWorkflow = useMemo(
     () =>
@@ -144,43 +143,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   );
 
   const recentWorkflowHasActiveTerminal = useCallback(
-    (workflow: RecentWorkflow) => {
-      // Case 1: workflow is still in loadedWorkflows (or synthesized as active)
-      const loadedWorkflow = effectiveLoadedWorkflows.find(
+    (workflow: RecentWorkflow) =>
+      // RecentWorkflow.filePath is the working file path, so it matches the
+      // working file paths carried in the global active-terminal set directly —
+      // even for completed workflows with a lingering shell that are no longer
+      // loaded. Fall back to resolving via a loaded workflow for the rare case
+      // where the row is keyed by the source prompt path instead.
+      activeTerminalWorkflowPaths.has(workflow.filePath) ||
+      effectiveLoadedWorkflows.some(
         (w) =>
-          w.filePath === workflow.filePath ||
-          w.workingFilePath === workflow.filePath
-      );
-      if (loadedWorkflow) {
-        return workflowHasActiveTerminal(loadedWorkflow.id);
-      }
-
-      // Case 2: workflow completed/stopped and was previously in loadedWorkflows.
-      // Its workflowId was recorded in seenWorkflowIdsRef while active — use it
-      // to check for still-running terminal sessions (e.g. an open shell).
-      const knownWorkflowId = seenWorkflowIdsRef.current.get(workflow.filePath);
-      if (knownWorkflowId) {
-        return workflowHasActiveTerminal(knownWorkflowId);
-      }
-
-      // Case 3: workflow is the currently active workflow (retired/completed on load,
-      // so it never entered loadedWorkflows). Match by full working file path —
-      // fileName from workflowStore is the basename only and won't match.
-      if (
-        workflow.filePath === activeWorkflowWorkingFilePath ||
-        workflow.filePath === fileName
-      ) {
-        return workflowHasActiveTerminal(activeWorkflowId);
-      }
-
-      return false;
-    },
+          (w.filePath === workflow.filePath ||
+            w.workingFilePath === workflow.filePath) &&
+          activeTerminalWorkflowIds.has(w.id)
+      ),
     [
-      activeWorkflowId,
-      activeWorkflowWorkingFilePath,
+      activeTerminalWorkflowIds,
+      activeTerminalWorkflowPaths,
       effectiveLoadedWorkflows,
-      fileName,
-      workflowHasActiveTerminal,
     ]
   );
 

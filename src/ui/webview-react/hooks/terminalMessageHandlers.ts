@@ -385,6 +385,16 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   };
 
   // --------------------------------------------------------------------------
+  // ACTIVE_TERMINAL_WORKFLOWS - Global set of workflows with a running PTY.
+  // Authoritative source for the dropdown terminal icon; independent of which
+  // workflow this client is currently viewing.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS] = (message: any) => {
+    const workflows = Array.isArray(message?.workflows) ? message.workflows : [];
+    useTerminalStore.getState().setActiveTerminalWorkflows(workflows);
+  };
+
+  // --------------------------------------------------------------------------
   // TERMINAL_ENDED - PTY session exited; freeze registry entry, update rail
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.TERMINAL_ENDED] = (message: any) => {

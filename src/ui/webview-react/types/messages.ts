@@ -100,6 +100,8 @@ export {
   type WorkflowPropertiesUpdateMessage,
   type OpenNewWorkflowModalMessage,
   type RecentWorkflowsMessage,
+  type ActiveTerminalWorkflowRef,
+  type ActiveTerminalWorkflowsMessage,
   type PromptEditorInsertRequest,
   type PromptEditorInsertMessage,
   type IncomingMessage,

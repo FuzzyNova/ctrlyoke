@@ -12,12 +12,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore, type RecentWorkflow } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
-import {
-  MESSAGE_TYPES,
-  EXECUTION_STATES,
-  SESSION_KINDS,
-  TERMINAL_SESSION_STATUS,
-} from "@/types/messages";
+import { MESSAGE_TYPES, EXECUTION_STATES } from "@/types/messages";
 
 const postMessageSpy = vi.fn();
 
@@ -26,7 +21,11 @@ beforeEach(() => {
   useWorkflowStore.temporal.getState().clear();
   useUiStore.getState().resetUi();
   useSettingsStore.getState().resetSettings();
-  useTerminalStore.setState({ sessions: {}, activeSessionIds: {} });
+  useTerminalStore.setState({
+    sessions: {},
+    activeSessionIds: {},
+    activeTerminalWorkflows: [],
+  });
   (
     window.vscodeApi as unknown as { postMessage: ReturnType<typeof vi.fn> }
   ).postMessage = postMessageSpy;
@@ -286,19 +285,12 @@ describe("WorkflowStatus — loaded state", () => {
       ],
     });
     useTerminalStore.setState({
-      sessions: {
-        "workflow-1": [
-          {
-            id: "term-1",
-            workflowId: "workflow-1",
-            stepName: "Step 1",
-            kind: SESSION_KINDS.AI_CLI,
-            status: TERMINAL_SESSION_STATUS.RUNNING,
-            isController: true,
-          },
-        ],
-      },
-      activeSessionIds: { "workflow-1": "term-1" },
+      activeTerminalWorkflows: [
+        {
+          workflowId: "workflow-1",
+          workingFilePath: "/workspace/running.flightpath.yaml",
+        },
+      ],
     });
 
     render(<WorkflowStatus />);
@@ -311,25 +303,21 @@ describe("WorkflowStatus — loaded state", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("marks the current completed workflow row when its terminal is still running", async () => {
+  it("marks a recent (unloaded) workflow row by working file path when its terminal is still running", async () => {
     const user = userEvent.setup();
     useUiStore.setState({
-      activeWorkflowId: "workflow-1",
+      activeWorkflowId: "workflow-2",
     });
+    // The completed workflow is no longer loaded, but the global active-terminal
+    // set still reports a lingering PTY for its working file path — the row must
+    // light up purely from that broadcast, with no per-session store state.
     useTerminalStore.setState({
-      sessions: {
-        "workflow-1": [
-          {
-            id: "term-1",
-            workflowId: "workflow-1",
-            stepName: "Shell",
-            kind: SESSION_KINDS.SHELL,
-            status: TERMINAL_SESSION_STATUS.RUNNING,
-            isController: true,
-          },
-        ],
-      },
-      activeSessionIds: { "workflow-1": "term-1" },
+      activeTerminalWorkflows: [
+        {
+          workflowId: "workflow-1",
+          workingFilePath: "/workspace/my-workflow.flightpath.yaml",
+        },
+      ],
     });
 
     render(<WorkflowStatus />);

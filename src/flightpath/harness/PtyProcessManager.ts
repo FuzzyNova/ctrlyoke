@@ -527,6 +527,23 @@ export class PtyProcessManager {
   }
 
   /**
+   * Distinct workflowIds that currently have at least one running PTY session.
+   * Source of truth for the global "active terminal" broadcast — lets every
+   * client render the dropdown terminal icon for any workflow regardless of
+   * which workflow it is viewing. Exited sessions are deleted from the map on
+   * exit, but we still filter by RUNNING to ignore any transient terminal state.
+   */
+  getWorkflowIdsWithRunningSessions(): string[] {
+    const ids = new Set<string>();
+    for (const session of this.sessions.values()) {
+      if (session.status === TERMINAL_SESSION_STATUS.RUNNING) {
+        ids.add(session.workflowId);
+      }
+    }
+    return Array.from(ids);
+  }
+
+  /**
    * Get all active sessions across all workflows.
    */
   getAllSessions(): PtySession[] {
