@@ -1,7 +1,11 @@
+# NOTE: flightpath.dev deploys via GitHub Actions + netlify-cli (see LANDING_PAGE_PLAN.md
+# §2.3) because free-tier Netlify does not run native builds for org-owned repos. The
+# Action builds the site and runs `netlify deploy --dir=landing/dist`, so the [build]
+# command below is NOT used for production — it is kept only so a native Netlify build
+# (if ever connected) stays correct and in sync with the npm scripts.
 [build]
-  command = "cd landing && npm ci && npm run build && cd ../docs && npm ci && npx vitepress build && cp -r .vitepress/dist ../landing/dist/docs"
+  command = "npm ci && npm run build:site"
   publish  = "landing/dist"
 
 [build.environment]
-  NODE_VERSION = "20"
-  DOCS_BASE    = "/docs/"
+  NODE_VERSION = "22"
