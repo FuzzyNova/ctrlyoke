@@ -18,7 +18,12 @@ const EMPTY_SESSIONS: TerminalSession[] = [];
 interface TerminalInstanceProps {
   workflowId: string;
   sessionId: string;
-  /** false = display:none (rail switching within workflow) */
+  /**
+   * false = inactive session in the rail. Hidden with visibility:hidden (not
+   * display:none) so the container keeps its real dimensions — collapsing it to
+   * 0×0 would make the controller's ResizeObserver fit to a clamped 2×1 grid and
+   * push that bogus size to the PTY, squishing the harness TUI on switch-back.
+   */
   isVisible: boolean;
 }
 
@@ -392,6 +397,18 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       const { observer, disconnect } = createAnimationFrameResizeObserver(
         () => {
           if (!entry.term.element) return;
+          // Never fit/resize against a collapsed container. A 0×0 box (display:none
+          // somewhere up the tree, mid-transition layout) makes FitAddon clamp to its
+          // 2×1 minimum; for a controller that bogus size is then sent to the PTY and
+          // squishes the harness TUI. Bail until the container has real dimensions.
+          const container = containerRef.current;
+          if (
+            !container ||
+            container.offsetWidth === 0 ||
+            container.offsetHeight === 0
+          ) {
+            return;
+          }
           try {
             const sessNow = useTerminalStore
               .getState()
@@ -578,6 +595,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       if (!activeEntry || !activeContainer) {
         return;
       }
+      // Same 0×0 guard as the ResizeObserver: refusing to fit a collapsed
+      // container avoids a local 2×1 resize that would visibly squish on show.
+      if (
+        activeContainer.offsetWidth === 0 ||
+        activeContainer.offsetHeight === 0
+      ) {
+        return;
+      }
 
       try {
         const fitResult = terminalRegistry.fitSessionToContainer(
@@ -630,8 +655,16 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
     // "Process exited" overlays so they stay pinned to the bottom of the visible
     // terminal area instead of scrolling with the mirrored grid inside the inner
     // scroll container below.
+    //
+    // Inactive rail sessions are hidden with visibility:hidden (via `invisible`)
+    // while staying absolutely positioned at full size, NOT display:none. A
+    // collapsed 0×0 container fires the ResizeObserver below and pushes a clamped
+    // 2×1 fit to the PTY, which reflows and squishes the harness TUI. Mirrors the
+    // pane-level visibility trick in OutputSection.
     <div
-      className={`relative w-full h-full flex-col ${isVisible ? "flex" : "hidden"}`}
+      className={`absolute inset-0 flex flex-col ${
+        isVisible ? "" : "invisible pointer-events-none"
+      }`}
     >
       {/*
         Controllers fill their container with no overflow (fitAddon sizes exactly).
