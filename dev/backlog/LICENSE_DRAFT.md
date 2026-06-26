@@ -197,4 +197,28 @@ The following are the open points that need attorney judgment — the draft abov
 11. **Minimum-age / COPPA** — is a minimum-age clause needed given the product is developer tooling (unlikely to be used by minors, but confirm)?
 12. **Arbitration / class action waiver (§13(g))** — advise on whether to include, which rules to use (AAA, JAMS), whether to carve out injunctive relief, and enforceability in key international markets (EU, UK, CA, AU).
 13. **Educational carve-out enforcement (§3(c))** — is the "currently enrolled in accredited educational programs" language sufficient, or does it need a verification mechanism or an explicit statement that Licensor may request proof of eligibility?
-14. **Privacy policy** — once a privacy policy exists at `flightpath.dev/privacy`, the license should reference it. Add a forward reference now or on next revision.
+14. **Privacy policy** — once a privacy policy exists at `flightpath.dev/privacy`, the license should reference it. Add a forward reference now or on next revision. A companion draft is at [`PRIVACY_POLICY_DRAFT.md`](PRIVACY_POLICY_DRAFT.md) — please finalize both documents together.
+
+---
+
+## Data Collection & Privacy — Questions for Counsel
+
+These are distinct from the EULA questions above and pair with [`PRIVACY_POLICY_DRAFT.md`](PRIVACY_POLICY_DRAFT.md). FlightPath has **two separate data flows** with different legal bases; please confirm both are correctly characterized and adequately disclosed.
+
+**Bucket A — Contract-necessary data (not optional).** Required to deliver paid Pro features the customer purchased; we believe the lawful basis is *performance of a contract*, not consent.
+
+15. **License activation data** — online activation/refresh through Keygen processes a **machine fingerprint, license key, and IP address**, bound to the purchaser. Confirm this is correctly framed as contract-necessary (not telemetry/consent), and that the offline signed-license path (which avoids the network call entirely) is the right default to minimize this collection.
+16. **Payment data** — checkout is handled by Lemon Squeezy as merchant of record (name, email, billing country, payment metadata). Confirm whether Lemon Squeezy acting as MoR changes our controller/processor characterization and what we must disclose vs. what they disclose.
+17. **Sub-processor disclosure** — is a named sub-processor list (Lemon Squeezy, Keygen, Azure Application Insights, Netlify, Google Workspace) required in the privacy policy, or sufficient to describe by category? Does any of these require a signed DPA on our side?
+
+**Bucket B — Telemetry (anonymous, opt-in by design).** We will collect anonymous usage telemetry via `@vscode/extension-telemetry`, which respects the user's VS Code `telemetry.telemetryLevel` setting (no custom consent UI). No prompt text, file paths, model output, session IDs, or user-generated strings are sent — only enums, counts, and durations.
+
+18. **Lawful basis for telemetry** — is respecting the VS Code `telemetry.telemetryLevel` setting sufficient consent under GDPR/ePrivacy, or do we additionally need an explicit in-app notice/opt-in? Does the anonymized-by-design payload change the analysis?
+19. **"Anonymous" claim** — can we accurately call the telemetry "anonymous" (vs. "pseudonymous") given the reporter auto-attaches a VS Code machine ID, extension/VS Code version, and OS platform? Advise on the defensible term to use in the policy and marketplace copy.
+20. **Disclosure placement** — confirm the README + marketplace disclosure text in [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md) is adequate, and whether the privacy policy must be live *before* the first telemetry-enabled build ships (RELEASE_CHECKLIST Phase 5 currently gates the policy on purchase metadata regardless).
+
+**Cross-cutting.**
+
+21. **CCPA/CPRA** — do we need a "Do Not Sell or Share" disclosure? We do not sell data, but confirm whether sub-processor sharing triggers any notice obligation.
+22. **Data retention & deletion** — Azure App Insights free tier retains telemetry 90 days; Keygen/Lemon Squeezy retain license and order records longer. Confirm we can state these retention windows and how a user exercises deletion/access rights given the data lives with sub-processors.
+23. **Children / minimum age** — same question as EULA #11; confirm the privacy policy's age statement is consistent with the EULA.

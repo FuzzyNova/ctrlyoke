@@ -44,6 +44,8 @@ Avoid using a personal email or shared consumer Gmail as the long-term owner for
   - [x] `billing@flightpath.dev` — product payment/customer billing notices
   - [x] `security@flightpath.dev` — vulnerability/security contact
   - [x] `sales@flightpath.dev` — enterprise invoice, PO, and MSA fallback
+  - [x] `privacy@flightpath.dev` — privacy policy contact; DSAR / data access & deletion requests
+  - [x] `licensing@flightpath.dev` — EULA licensing contact (§16(f)); enterprise/threshold and license-key inquiries
 - [x] Route each group to the admin mailbox initially; add future collaborators as members instead of sharing one password.
 - [x] Configure SPF, DKIM, and DMARC for both `fuzzno.com` and `flightpath.dev`.
 - ~~Decide whether `hello@flightpath.dev` or `team@flightpath.dev` should exist for general contact.~~ — not needed; `support@` and `sales@` cover all inbound contact.
@@ -97,7 +99,7 @@ Tracked in detail by [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md).
 Tracked in detail by [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
 
 - [ ] Create Keygen account under the FlightPath domain identity.
-- [ ] Create Keygen Pro policy: perpetual Pro, Ed25519 signed license files, encrypted files if selected, 3-machine limit.
+- [ ] Create Keygen Pro policy: perpetual Pro, Ed25519 signed license files, encrypted files if selected, 10-machine limit.
 - [ ] Record the Keygen account public key for extension-side verification.
 - [ ] Create Lemon Squeezy store / product for FlightPath Pro under the FlightPath domain identity.
 - [ ] Configure Lemon Squeezy support, receipt, and seller-facing metadata.
@@ -127,7 +129,7 @@ Tracked in detail by [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
 - [ ] Publish canonical repo license text in `LICENSE` / `LICENSE.md`.
 - [ ] Set `package.json` license to `SEE LICENSE IN LICENSE.md`.
 - [ ] Publish web terms at `flightpath.dev/terms`.
-- [ ] Publish privacy policy before collecting analytics, telemetry, support data, or purchase metadata.
+- [ ] Publish privacy policy before collecting analytics, telemetry, support data, or purchase metadata. **Draft at [`PRIVACY_POLICY_DRAFT.md`](PRIVACY_POLICY_DRAFT.md) — send to attorney with the EULA.**
 - [ ] Publish a standard DPA and trust/security page before pushing enterprise self-serve.
 - [ ] Keep public GitHub Issues for community reports.
 - [ ] Keep `support@flightpath.dev` private for Pro / Enterprise customer support.

@@ -193,9 +193,17 @@ Add to `package.json` under `contributes`:
 
 Add a brief note to the README and marketplace description:
 
-> FlightPath collects anonymous usage telemetry (harness type, step counts, durations,
-> error types) to improve the extension. No prompt content, file paths, or personal data
-> are collected. Telemetry respects your VS Code `telemetry.telemetryLevel` setting.
+> FlightPath collects limited usage telemetry (harness type, step counts, durations, error
+> types, and standard environment metadata such as extension/VS Code version and OS) to
+> improve the extension. It does not collect prompt content, code, file paths, or workspace
+> names. Telemetry respects your VS Code `telemetry.telemetryLevel` setting — set it to `off`
+> to disable. See our Privacy Policy at `flightpath.dev/privacy` for details.
+
+> **Wording note:** Do not describe the telemetry as "anonymous" or claim "no personal data
+> is collected." The `@vscode/extension-telemetry` library attaches a VS Code machine
+> identifier, which is pseudonymous personal data. `PRIVACY_POLICY_FINAL.md` §3.1
+> deliberately avoids the "anonymous" framing — README, marketplace, and any marketing copy
+> must match it to avoid contradicting the published policy.
 
 ---
 
