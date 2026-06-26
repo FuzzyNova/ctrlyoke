@@ -82,6 +82,112 @@ npx astro add netlify
 "build:docs": "cd docs && vitepress build && cp -r .vitepress/dist ../landing/dist/docs"
 ```
 
+### 2.3 Deploy via GitHub Actions (Netlify CLI)
+
+**Why Actions and not Netlify's native Git integration:** free-tier Netlify does **not** offer native auto-build/deploy for **organization-owned** repos (`FuzzyNova/flightpath`) — that is gated behind a paid Netlify plan. So, exactly like the `FuzzyNova/fuzzno` site, we deploy from CI using the Netlify CLI with a personal `NETLIFY_AUTH_TOKEN` and the site's `NETLIFY_SITE_ID`. This mirrors fuzzno's proven three-file pattern, with two monorepo adaptations: **(1)** a build step (Astro + VitePress), and **(2)** `paths:` filters so routine extension commits don't redeploy the site.
+
+> **No Astro Netlify adapter.** Because we ship a static marketing site and deploy the built `landing/dist` via the Netlify CLI, **skip `npx astro add netlify`** — that adapter is for SSR / native Netlify builds. Astro's default static output is what we deploy.
+
+> **Build order matters.** Run `build:landing` **before** `build:docs`: `astro build` cleans `landing/dist`, and `build:docs` copies VitePress output into `landing/dist/docs`, so docs must be copied *after* the Astro build. Fix the Phase 2.2 ordering to `build:landing && build:docs` (the current `build:docs && build:landing` would let Astro wipe the copied docs).
+
+Three files under `.github/workflows/`:
+
+**`_netlify-deploy.yml`** (reusable build + deploy):
+
+```yaml
+name: Netlify Deploy (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      deploy-args:
+        description: 'Extra args passed to netlify deploy (e.g. --prod or --alias=branch-name)'
+        required: true
+        type: string
+    secrets:
+      NETLIFY_AUTH_TOKEN:
+        required: true
+      NETLIFY_SITE_ID:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build landing + docs (landing first — see build-order note)
+        run: npm run build:landing && npm run build:docs
+
+      - name: Deploy to Netlify
+        run: npx netlify-cli@latest deploy --dir=landing/dist ${{ inputs.deploy-args }}
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+```
+
+**`deploy.yml`** (production on `main`, path-filtered):
+
+```yaml
+name: Deploy Site to Netlify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'landing/**'
+      - 'docs/**'
+      - 'netlify.toml'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/deploy-preview.yml'
+      - '.github/workflows/_netlify-deploy.yml'
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_netlify-deploy.yml
+    with:
+      deploy-args: --prod
+    secrets:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+```
+
+**`deploy-preview.yml`** (per-branch preview URLs, path-filtered):
+
+```yaml
+name: Deploy Site Preview to Netlify
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'landing/**'
+      - 'docs/**'
+      - 'netlify.toml'
+      - '.github/workflows/_netlify-deploy.yml'
+
+jobs:
+  deploy-preview:
+    uses: ./.github/workflows/_netlify-deploy.yml
+    with:
+      deploy-args: --alias=${{ github.ref_name }}
+    secrets:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+```
+
+**Repo secrets to add** (FlightPath repo → Settings → Secrets): `NETLIFY_AUTH_TOKEN` (personal access token) and `NETLIFY_SITE_ID` (the **flightpath.dev** Netlify site's API ID — a distinct site/token from fuzzno's).
+
+This trio **replaces** the legacy `.github/workflows/docs-deploy.yml` (which pushed VitePress to GitHub Pages at base `/flightpath/`); delete it once the new site deploy is green.
+
 ---
 
 ## Phase 3 — Landing Page Content
@@ -196,6 +302,7 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - [ ] Complete Phase 0 business email and account ownership setup in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)
 - [ ] Create `landing/` Astro project in repo root
 - [ ] Configure `netlify.toml` for dual build + `/docs/` path merge
+- [ ] Add the three Netlify deploy workflows from §2.3 (mirror `FuzzyNova/fuzzno`), set `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` repo secrets, and **retire the legacy `docs-deploy.yml`** (GitHub Pages) once the new site deploy is green
 - [ ] Set `base: '/docs/'` in `docs/.vitepress/config.mts`
 - [ ] Point `flightpath.dev` DNS to Netlify
 - [ ] Write landing page hero + features sections
