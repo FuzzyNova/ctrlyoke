@@ -1,0 +1,27 @@
+---
+import Layout from "../layouts/Layout.astro";
+// Canonical source: repo-root PRIVACY.md (single source of truth — do not duplicate).
+import { Content } from "../../../PRIVACY.md";
+---
+
+<Layout
+  title="Privacy Policy — FlightPath"
+  description="How FlightPath and Fuzzy Nova collect, use, and protect your information."
+>
+  <section class="px-6 py-16 md:py-20">
+    <div class="mx-auto max-w-3xl">
+      <a
+        href="/"
+        class="mb-10 inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors"
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        Back to home
+      </a>
+      <article
+        class="prose prose-invert max-w-none prose-headings:scroll-mt-24 prose-h1:text-white prose-h1:text-3xl prose-h2:text-white prose-h2:border-b prose-h2:border-white/10 prose-h2:pb-2 prose-h3:text-slate-200 prose-a:text-sky-400 hover:prose-a:text-sky-300 prose-strong:text-slate-200 prose-code:text-sky-300 prose-code:before:content-[''] prose-code:after:content-[''] prose-table:text-sm prose-th:text-slate-300 prose-hr:border-white/10"
+      >
+        <Content />
+      </article>
+    </div>
+  </section>
+</Layout>

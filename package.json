@@ -4,7 +4,7 @@
   "description": "Run multi-step AI coding workflows across 7 harnesses (Copilot, Claude, Codex, Gemini, Qwen, OpenCode) with sequential execution, end-condition validation, and a live dashboard.",
   "version": "0.1.0",
   "publisher": "fuzzynova",
-  "license": "Elastic-2.0",
+  "license": "SEE LICENSE IN LICENSE.md",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
