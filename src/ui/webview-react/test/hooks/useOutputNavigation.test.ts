@@ -140,4 +140,109 @@ describe("useOutputNavigation", () => {
       "navigation-find-match"
     );
   });
+
+  it("uses auto behavior for non-virtual navigation even when smooth is requested", () => {
+    const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
+    const scrollElement = document.createElement("div");
+    const rowElement = document.createElement("div");
+
+    rowElement.dataset.index = "0";
+    rowElement.dataset.rowKey = "row-1";
+    scrollElement.appendChild(rowElement);
+    document.body.appendChild(scrollElement);
+
+    Object.defineProperty(scrollElement, "clientHeight", {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(scrollElement, "scrollHeight", {
+      configurable: true,
+      value: 4000,
+    });
+    let scrollTop = 1200;
+    Object.defineProperty(scrollElement, "scrollTop", {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value;
+      },
+    });
+    scrollElement.getBoundingClientRect = () =>
+      ({
+        top: 0,
+        bottom: 200,
+        height: 200,
+      }) as DOMRect;
+    rowElement.getBoundingClientRect = () =>
+      ({
+        top: 40,
+        bottom: 120,
+        height: 80,
+      }) as DOMRect;
+    scrollElement.scrollTo = vi.fn(
+      ({ top }: { top?: number; behavior?: ScrollBehavior }) => {
+        if (typeof top === "number") {
+          scrollTop = top;
+        }
+      }
+    ) as typeof scrollElement.scrollTo;
+
+    const autoscrollEnabledRef = { current: false };
+    const isProgrammaticScrollRef = { current: false };
+    const lastScrollTopRef = { current: null as number | null };
+    const measurementVersionRef = { current: 0 };
+    const navigationFrameRef = { current: null as number | null };
+    const outputRef = { current: scrollElement };
+    const pendingNavigationRef = { current: null };
+    const postNavSettlingRef = { current: false };
+    const postNavSettlingTimerRef = {
+      current: null as ReturnType<typeof setTimeout> | null,
+    };
+    const rowVirtualizer = {
+      scrollToIndex: vi.fn(),
+      scrollToOffset: vi.fn(),
+    };
+    const setCurrentScrollTarget = vi.fn();
+
+    const { result } = renderHook(() =>
+      useOutputNavigation({
+        autoscrollEnabledRef,
+        finalizeSettlingDelayMs: 1000,
+        firstRowIndexByTarget: new Map([[`${target.kind}:${target.index}`, 0]]),
+        isOutputVirtualized: false,
+        isProgrammaticScrollRef,
+        lastScrollTopRef,
+        maxAlignmentAttempts: 8,
+        maxStabilizationMs: 1000,
+        measurementVersion: 0,
+        measurementVersionRef,
+        navigationFrameRef,
+        outputRef,
+        pendingNavigationRef: pendingNavigationRef as never,
+        postNavSettlingRef,
+        postNavSettlingTimerRef,
+        rowLayout: {
+          rowSizesByKey: new Map([["row-1", 80]]),
+          rowStartsByIndex: [100],
+          totalSize: 4000,
+        },
+        rowVirtualizer,
+        rows: [{ key: "row-1", target }],
+        setCurrentScrollTarget,
+      })
+    );
+
+    act(() => {
+      result.current.navigationController.scrollToTarget(target, {
+        align: "start",
+        behavior: "smooth",
+      });
+    });
+
+    expect(scrollElement.scrollTo).toHaveBeenCalledWith({
+      top: 1240,
+      behavior: "auto",
+    });
+    expect(scrollTop).toBe(1240);
+  });
 });

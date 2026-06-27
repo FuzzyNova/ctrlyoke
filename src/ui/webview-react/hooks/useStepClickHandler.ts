@@ -24,7 +24,10 @@ export function useStepClickHandler() {
 
       requestAnimationFrame(() => {
         const navigationController = getActiveOutputNavigationController();
-        if (navigationController?.getTargetScrollFraction(target) == null) {
+        const scrollFraction =
+          navigationController?.getTargetScrollFraction(target) ?? null;
+
+        if (navigationController == null || scrollFraction == null) {
           return;
         }
 

@@ -342,7 +342,7 @@ export function useOutputNavigation({
                   rowLayout.rowSizesByKey.get(rows[rowIndex]?.key ?? ""),
                   align
                 );
-          outputRef.current.scrollTo({ top, behavior: requestedBehavior });
+          outputRef.current.scrollTo({ top, behavior });
           if (rowElement) {
             lastScrollTopRef.current = top;
           }
@@ -380,14 +380,13 @@ export function useOutputNavigation({
           target: OutputMessageTarget,
           options?: OutputNavigationOptions
         ) => {
-          const rowIndex = firstRowIndexByTarget.get(
-            `${target.kind}:${target.index}`
-          );
+          const targetKey = `${target.kind}:${target.index}`;
+          const rowIndex = firstRowIndexByTarget.get(targetKey);
           if (rowIndex === undefined) {
             return;
           }
 
-        scrollToRowIndex(rowIndex, options);
+          scrollToRowIndex(rowIndex, options);
         },
         getTargetScrollFraction: (target: OutputMessageTarget) => {
           const rowIndex = firstRowIndexByTarget.get(
