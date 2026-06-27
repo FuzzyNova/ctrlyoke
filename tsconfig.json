@@ -21,6 +21,8 @@
     "out",
     ".vscode-test",
     "manual-test",
-    "src/ui/webview-react"
+    "src/ui/webview-react",
+    "landing",
+    "docs"
   ]
 }
