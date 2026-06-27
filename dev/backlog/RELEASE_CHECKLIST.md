@@ -15,17 +15,15 @@ _Handoff summary so a fresh session can pick up. Detail lives in the per-phase c
 
 - **Phase 0** — business identity, Google Workspace, all `@flightpath.dev` / `@fuzzno.com` inboxes (incl. `privacy@`, `licensing@`), vendor accounts, GitHub org/publisher.
 - **Phase 1 + Phase 5 legal** — attorney-final EULA and Privacy Policy committed as **canonical repo files `LICENSE.md` + `PRIVACY.md`** (single source of truth; the backlog `*_FINAL.md` files are now pointers). `package.json` → `SEE LICENSE IN LICENSE.md`. Governing law Texas/Austin; binding arbitration + class-action waiver included.
-- **Phase 2 website (built, not yet live)** — Astro site in `landing/`: home, `/pricing`, `/terms`, `/privacy`; VitePress docs merged at `/docs/` (with `docs/pro/index.md`, logo, Pro nav). The `/terms` and `/privacy` pages render the canonical root `LICENSE.md` / `PRIVACY.md` directly (no duplication).
-- **Deploy pipeline** — GitHub Actions (`deploy.yml` prod + `deploy-preview.yml` + reusable `_netlify-deploy.yml`) driving `netlify-cli` (free-tier org repos can't use Netlify native builds). `npm run build:site` builds landing + merges docs. Legacy `docs-deploy.yml` (GitHub Pages) retired. Netlify site created; `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` repo secrets added.
-- **Pre-launch mode** — single `LAUNCHED` flag in `landing/src/config.ts` gates disabled "Coming soon" CTAs, a pre-launch banner, and `noindex`. Flip to `true` at launch to reverse all three.
+- **Phase 2 website — built and live** — Astro site in `landing/`: home, `/pricing`, `/terms`, `/privacy`; VitePress docs merged at `/docs/` (with `docs/pro/index.md`, logo, Pro nav). The `/terms` and `/privacy` pages render the canonical root `LICENSE.md` / `PRIVACY.md` directly (no duplication). DNS pointed at Netlify; first `deploy.yml` prod action green; all routes confirmed loading.
+- **Deploy pipeline** — GitHub Actions (`deploy.yml` prod + `deploy-preview.yml` + reusable `_netlify-deploy.yml`) driving `netlify-cli`. `npm run build:site` builds landing + merges docs. Legacy `docs-deploy.yml` (GitHub Pages) retired. `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` secrets added.
+- **Pre-launch mode** — single `LAUNCHED` flag in `landing/src/config.ts` gates disabled "Coming soon" CTAs, a pre-launch banner, and `noindex`.
 
-**➡️ Immediate next steps — site deploy & testing** (suggested starting point for the next session)
+**➡️ Immediate next steps** (suggested starting point for the next session)
 
-1. Point **`flightpath.dev` DNS** at Netlify (Domain management).
-2. **Push to `main`** to trigger the first `deploy.yml` → `netlify deploy --prod`. Confirm the Action is green; if it fails, read the log (distinguish the build step from the deploy step).
-3. **Test the live site**: `/`, `/pricing`, `/terms`, `/privacy`, `/docs/` (+ a few docs subpages) all load; the `/docs/` base and assets resolve.
-4. **Verify pre-launch state on prod**: banner shows, `noindex` present, every Install/Buy CTA is a disabled "Coming soon" (no dead Marketplace/checkout links), CLI snippet hidden.
-5. _Optional:_ push a throwaway branch to confirm `deploy-preview.yml` produces an alias preview URL.
+1. **URGENT — Set `[DATE]`** effective date in `LICENSE.md` and `PRIVACY.md` — the site is live and `/terms` + `/privacy` are publicly serving this placeholder right now.
+2. **Phase 3** — Keygen and Lemon Squeezy vendor setup (accounts, policy, product, webhook secrets). This is the prerequisite gate for all licensing implementation.
+3. **Phase 4** — `LicenseService`, offline/online activation, air-gapped import, 14-day trial, Pro gating.
 
 **Not started**
 
@@ -36,7 +34,7 @@ _Handoff summary so a fresh session can pick up. Detail lives in the per-phase c
 
 **Before go-live (small but required)**
 
-- Set the **`[DATE]`** effective date in `LICENSE.md` and `PRIVACY.md`.
+- ~~Set the **`[DATE]`** effective date in `LICENSE.md` and `PRIVACY.md`.~~ **DO THIS NOW — site is live.**
 - Fill `CHECKOUT_URL` in `landing/src/config.ts` (Lemon Squeezy) and flip `LAUNCHED = true`.
 
 ---
@@ -127,13 +125,14 @@ Tracked in detail by [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md).
 - [x] Add `docs/pro/index.md` with activation and "Who needs a license?" guidance.
 - [x] Make `support@flightpath.dev` the visible support path on the site/docs (README/marketplace tracked in Phase 0.3).
 
-**Deploy & infra (built; deploy + test pending):**
+**Deploy & infra:**
 
 - [x] GitHub Actions → Netlify CLI deploy workflows (`deploy.yml`, `deploy-preview.yml`, `_netlify-deploy.yml`); `npm run build:site`; `docs-deploy.yml` retired; `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` secrets added.
 - [x] Pre-launch mode — `LAUNCHED` flag (disabled CTAs, banner, `noindex`).
-- [ ] **Point `flightpath.dev` DNS to Netlify.**
-- [ ] **Push to `main`; confirm the first production deploy is green.**
-- [ ] **Test the live site** — all routes load and the pre-launch state (banner, `noindex`, disabled CTAs) is verified on prod.
+- [x] **Point `flightpath.dev` DNS to Netlify.**
+- [x] **Push to `main`; first production deploy is green.**
+- [x] **Test the live site** — all routes load; links correct.
+- [ ] **Set `[DATE]` in `LICENSE.md` + `PRIVACY.md`** — site is live, these pages are public. Do before anything else.
 
 ---
 
@@ -163,6 +162,7 @@ Tracked in detail by [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
 - [ ] Gate Pro capabilities by feature/reach, not usage limits.
 - [ ] Add upsell surfaces linking to `flightpath.dev/pricing/`.
 - [ ] Add production verification for the unlicensed/free path.
+- [ ] Add `FlightPath: Manage License` command: shows activation count (e.g. "8 of 10 machines"), lists all activated machines by hostname/OS (via `GET /machines` with license key as auth), and allows deactivating any machine remotely (via `DELETE /machines/:id`) — supports the dead-machine replacement flow without a support ticket.
 
 ---
 
