@@ -18,8 +18,9 @@
 | **VS Code command namespace** | **`ctrlyoke.*`** | e.g. `ctrlyoke.openPanel`, `ctrlyoke.run`. User-facing churn is fine pre-release. |
 | **Config namespace / setting** | **`ctrlyoke.workspaceDirectory`** | Single `CONFIG_NAMESPACE` constant. |
 | **Workflow file extension** | **`.workflow.yml` / `.workflow.json`** (NOT `.ctrlyoke.*`) | Decoupled from the product name per the decision in `rebrand-naming.md` §"Decision". Tracked here as a coordinated workstream ([§6](#6-workstream-f--workflow-file-extension)) because it touches the same `package.json` activation/validation surfaces. |
+| **Wordmark (text)** | **lowercase `ctrlyoke`** everywhere it's written | Matches package/CLI/domain (all forced lowercase); zero "how do I capitalize it" overhead. The keycap styling lives **only in the logo**, never in the text wordmark. Pronounced **"control-yoke"** — the `ctrl` keycap reinforces the pronunciation. |
 | **PascalCase identifier root** | **`CtrlYoke`** | `FlightPathConfigService` → `CtrlYokeConfigService`, etc. |
-| **Publisher** | **Keep `fuzzynova`** (open question — see [§12](#12-open-questions)) | FuzzyNova is the parent brand (rebrand doc references "Fuzzy Nova parent branding"). Confirm before touching `package.json publisher`. |
+| **Publisher** | **Keep `fuzzynova`** (resolved) | Fuzzy Nova is the studio (a DBA to Nathan); unaffected by the product rename. `package.json publisher` stays `fuzzynova`; marketplace item → `fuzzynova.ctrlyoke`. |
 | **Domain** | **`ctrlyoke.dev`** (redirect `controlyoke.*` + `.com` → `.dev`) | Per rebrand doc; replaces `flightpath.dev`. |
 
 ---
@@ -148,13 +149,57 @@ Independent brand decision (`rebrand-naming.md`): `*.flightpath.{yaml,yml,json}`
 
 ---
 
-## 8. Workstream J — Icons & images
+## 8. Workstream J — Logo, icons & images
 
-Rename and re-point (`package.json` icon paths + any `<img>`/import in landing/docs/README):
+> **✅ IMPLEMENTED (separate chat, June 29, 2026) — the rename PR should SKIP this section and not touch `images/` or the icon generators.** Standardized on a **single master** `images/ctrlyoke-icon.svg` (no more `-simple`/`-standard` variants; gradients deferred). All assets generate from it via `npm run generate-icons`. Files now: master `ctrlyoke-icon.svg`, generated `ctrlyoke-app-icon.svg` (2-token), `ctrlyoke-sidebar-icon.svg`, `ctrlyoke-icon-{light,dark}.svg`, `icon.png`, `apple-touch-icon.png`. All `flightpath-*` image files deleted; `package.json`/`.vscodeignore`/`vite.config.ts`/`DashboardConstants.ts` (`HOSTED_ICON_FILES`)/`FlightPathHostedServer.ts`/`ServerSection.tsx` icon refs updated; `generate-icons` script reordered (app-icons before custom-icons). Subsections below are retained as the design rationale.
 
-- `images/flightpath-icon.svg`, `flightpath-icon-simple.svg`, `flightpath-sidebar-icon.svg`, `flightpath-app-icon.svg`, `flightpath-icon-color-simple.{svg,png}`, `flightpath-icon-simple-{light,dark}.svg`, `images/drafts/flightpath-color-icon*` → `ctrlyoke-*`.
-- The icon-generation scripts (`scripts/generate-sidebar-icon.mjs`, `generate-custom-icons.mjs`, `generate-app-icons.mjs`) likely hardcode these names — update source + output paths.
-- **New artwork is a design task, not just a rename** — the current art may encode the "flight path" metaphor; a `ctrl`-key/yoke visual is a separate design item. For the code rename, keep the existing glyphs under new filenames and swap art later.
+### 8.1 Brand/logo design decisions (locked June 28, 2026)
+
+Three distinct layers — keep them separate:
+
+| Layer | Value | Nature |
+| --- | --- | --- |
+| **Name (canonical)** — what you type/write | lowercase **`ctrlyoke`** | CLI, npm, domain, prose, `package.json` `displayName` value & panel `title` |
+| **Logotype / wordmark** — stylized text logo | all-caps **`CTRLYOKE`** (custom font) *allowed* | design asset (artwork) |
+| **Logomark** — the icon | `ctrl` keycap → yoke "Y" | design asset (artwork) |
+
+- The all-caps `CTRLYOKE` logotype is **logo styling only** — it does **not** change the canonical lowercase name or the CLI. (Mirrors a real keyboard: the keycap is stamped **CTRL**, but you type `ctrl` — which is the brand metaphor itself.)
+- **Logomark = a `ctrl` keycap whose edges resolve into a yoke "Y".** The Y is formed by **shared edges / negative space** — the keycap's bottom edge *becomes* the yoke stem — **not** by a rendered drop-shadow. This is the deliberate design constraint, because it's the only way the mark survives flattening (see §8.2). The keycap (an uppercase-stamped `CTRL`) reinforces the "control-yoke" pronunciation.
+- **One logomark, multiple renders.** Author a single 2-color master; the full-color version layers "extra" (lit-from-top highlight, soft shadow, gradient) on top of the *same geometry*. Monochrome and color must read as the same logo.
+- **Wide logotype variant** (full `CTRLYOKE` lockup) for site headers / marketplace banner is a separate asset from the square logomark used in the VS Code tab.
+
+> **VS Code title casing (verified behavior):** VS Code force-uppercases **view/panel titles** via CSS (`text-transform: uppercase`), so the panel tab displays `CTRLYOKE` regardless of the `title` string — which happens to match the all-caps logotype. The **marketplace `displayName`** and **command-palette category** render *as typed*. → set `displayName`/`title`/`category` to lowercase `ctrlyoke`; the caps appear only as logo artwork + VS Code's automatic title-casing.
+
+### 8.2 Rendering matrix — design to these constraints
+
+The mark renders in three materially different ways. The geometry must satisfy the **most constrained** (activity-bar) context:
+
+| Context | Rendering | Implication for the art |
+| --- | --- | --- |
+| **VS Code activity-bar / panel tab** (`viewsContainers.panel[].icon`) | VS Code uses the icon's **alpha channel as a mask** and fills with a **single theme color**. Transparency/opacity gradients survive *as shades of that one color*; **two distinct colors collapse to one**. | Must read as a **single-color silhouette**. The ctrl→Y relationship must be **structural (edges/negative space)**, not color- or shadow-dependent. Draw the shape on a **transparent** background (no filled square). |
+| **Marketplace icon** (top-level `package.json` `icon`, 128px PNG) | Full color, no masking | Home of the rich full-color version with the "extra" (highlight/shadow/gradient). |
+| **Server favicon + PWA app icon + settings live-preview** (`ServerSection`) | Full color, **user-recolorable 2-color** | See §8.3 — must preserve the 2-token contract. |
+
+### 8.3 Custom-color (2-token) contract — must not break
+
+The hosted-server favicon / PWA icon / settings live-preview let users recolor the icon (`ServerSection.tsx` → `buildIconPreviewDataUrl`, plus server-side PNG regeneration). The mechanism is a **literal regex swap of exactly two color tokens** in the master SVG:
+
+- `ICON_BG_COLOR_DEFAULT = "#072c45"` (background) and `ICON_FG_COLOR_DEFAULT = "#ffffff"` (foreground) — defined in `src/types/IconColorDefaults.ts` (**generated** by `scripts/generate-app-icons.mjs`).
+- The new `ctrlyoke` master app-icon SVG **must use exactly these two color literals** (one bg, one fg) so the swap keeps working. New brand defaults are fine — but change them **via the generator**, not by hand-editing `IconColorDefaults.ts` (it's `@generated`).
+- Update the `?raw` import in `ServerSection.tsx:18` (`flightpath-app-icon.svg` → `ctrlyoke-app-icon.svg`).
+
+### 8.4 Asset pipeline (as implemented — single master)
+
+- **One hand-authored source:** `images/ctrlyoke-icon.svg` — transparent background, every shape `currentColor` (so the generators can recolor and VS Code can theme it). Never add a background rect to the master (the sidebar/activity-bar render alpha-masks it).
+- **`npm run generate-icons`** runs, in order: `generate-sidebar-icon` (→ `ctrlyoke-sidebar-icon.svg`, currentColor @ 24×24) → `generate-app-icons` (→ `ctrlyoke-app-icon.svg` [2-token], `icon.png` 512, `apple-touch-icon.png` 180, `ctrlyoke-icon-{light,dark}.svg` for the SCM toolbar, copies the master to `src/ui/icons/generate-commit-message.svg`, regenerates `IconColorDefaults.ts`) → `generate-custom-icons` (rebuilds `custom-icons.css` masks, incl. the commit-message icon).
+- **Remaining design follow-ups** (not blocking): the optional full-color/gradient marketplace render (§8.1 "extra") and the wide `CTRLYOKE` logotype lockup are deferred — `icon.png` is currently the flat 2-color render.
+- **Out of scope here:** the landing/docs *site* favicons (`landing/`, `docs/.vitepress`) have their own asset copies — those belong to the domain/site rebrand ([§11](#11-workstream-m--docs-instructions-and-project-memory)/[§11.5](#115-workstream-n--release-coupled-business-identity-the-real-long-pole)), not this extension-icon work.
+
+### 8.5 Trademark filing (logo vs. wordmark) — *not legal advice; confirm with TM attorney*
+
+- File the **standard-character wordmark "ctrlyoke" first** — broad, font/case/color-agnostic protection; covers the keycap logo's text and any future restyle. This is the one that matters.
+- File the **logo as a separate design mark later**, once the art is finalized (logos evolve; word marks are forever — don't pay to protect a draft).
+- Two marks = two USPTO applications (separate fees, per class). Likely classes IC 009 (downloadable software) + IC 042 (SaaS) — same classes as the FlightPath clearance.
 
 ---
 
@@ -172,7 +217,7 @@ No runtime back-compat shim — pre-release.
 
 ## 10. Workstream L — Repo & CI
 
-- **GitHub repo rename** `FuzzyNova/flightpath` → `FuzzyNova/ctrlyoke` (or new org if publisher changes — see [§12](#12-open-questions)). GitHub auto-redirects old URLs, but update `package.json` `repository`/`bugs`/`homepage` and any hardcoded URLs in docs/landing.
+- **GitHub repo rename** `FuzzyNova/flightpath` → `FuzzyNova/ctrlyoke` (publisher stays `fuzzynova` — [§12](#12-decisions-resolved--june-28-2026) resolved). GitHub auto-redirects old URLs, but update `package.json` `repository`/`bugs`/`homepage` and any hardcoded URLs in docs/landing.
 - `.github/workflows/deploy.yml` and other workflows — branding, paths, deploy target (site domain).
 - `.vscode/launch.json` — `.flightpath` paths / debug config names.
 - `esbuild.js`, `knip.json`, `.vscodeignore` — renamed script-file globs ([§5](#5-workstream-c--hooknotify-scripts--user-dir-paths)).
@@ -181,7 +226,7 @@ No runtime back-compat shim — pre-release.
 
 ## 11. Workstream M — Docs, instructions, and project memory
 
-- **`.github/copilot-instructions.md`, `CLAUDE.md`, all `.github/instructions/*.instructions.md`** — branding, the routing table, log-path examples (`.flightpath/logs/`), the `flightpath-<harness>-hook-debug.log` references in `<debugging>`. Several instruction files are named `flightpath-*.instructions.md` (`flightpath-core`, `flightpath-orchestration`, `flightpath-cli-binary`, `flightpath-chat`) — decide whether to rename the files (then update the routing table) or keep filenames and only fix content. **Recommend keeping the instruction filenames** (they describe the `src/flightpath/` *directory*, which we are NOT renaming) and only updating prose. → confirm the `src/flightpath/` source dir stays (it's brand-neutral-ish; renaming it is a large, low-value churn — recommend **keep**).
+- **`.github/copilot-instructions.md`, `CLAUDE.md`, all `.github/instructions/*.instructions.md`** — branding, the routing table, log-path examples (`.flightpath/logs/`), the `flightpath-<harness>-hook-debug.log` references in `<debugging>`. The `flightpath-*.instructions.md` files (`flightpath-core`, `flightpath-orchestration`, `flightpath-cli-binary`, `flightpath-chat`) carry the brand in their names and map to the renamed `src/core/` dir ([§12](#12-decisions-resolved--june-28-2026) #2) — **rename them to drop the brand** (e.g. `flightpath-core` → `core`) and update the routing-table paths (`src/flightpath/**` → `src/core/**`) in the same pass as the dir rename.
 - **`docs/`** (VitePress) — `docs/cli/flightpath.md` + `flightpath-mcp.md` rename, `docs/.vitepress/config.mts` branding/domain, all guide/reference/workflow/troubleshooting prose.
 - **`landing/`** — `src/config.ts` (`MARKETPLACE_URL` itemName `fuzzynova.flightpath`), `Layout.astro`, all `pages/*.astro` branding + domain.
 - **`README.md`, `QUICK_START.md`, `CHANGELOG.md`, `AGENTS.md`, `CHORES.md`** — branding.
@@ -190,19 +235,38 @@ No runtime back-compat shim — pre-release.
 
 ---
 
-## 12. Open questions
+## 11.5 Workstream N — Release-coupled business identity (the real long pole)
 
-1. **Publisher / org**: keep `fuzzynova` (parent brand) or move to a `ctrlyoke`-owned publisher? Affects `package.json publisher`, `MARKETPLACE_URL` itemName, and repo org. *Recommend: keep `fuzzynova`.*
-2. **`src/flightpath/` directory rename**: it's the engine namespace. Renaming to `src/ctrlyoke/` is huge churn for little gain and the engine is brand-neutral internally. *Recommend: keep the directory; rename only the `FlightPath*`-prefixed files in [§4](#4-workstream-b--source-identifiers-classes-types-files).*
-3. **`prompt-schema.*` → `workflow-schema.*`**: rename for consistency with the new `.workflow.*` extension? *Recommend: yes.*
-4. **Sequencing**: brand rename and extension change (`.workflow.*`) as **two PRs** or one? *Recommend: two — they're independent decisions.*
+> **Reality check.** The *code* rebrand is ~a day with agents. The items below are **not code** — they're external/business-identity changes with real-world lead times and a couple of decisions, and they (not the code) are the actual gate on a **commercial launch under `ctrlyoke`**. Lucky timing: most are "configure under the new name from the start" rather than "migrate," because nothing is published yet (see `RELEASE_CHECKLIST.md`).
+
+**True migrations (have lead time):**
+- **Product domain** `flightpath.dev` → **`ctrlyoke.dev`**: add `ctrlyoke.dev` to Google Workspace (domain verification), point DNS → Netlify, set the Netlify site's primary domain, and **301 `flightpath.dev` → `ctrlyoke.dev`** (keep the redirect permanently for old links/SEO). DNS + Workspace verification take hours, not minutes.
+- **Product email inboxes**: the customer-facing groups currently on `@flightpath.dev` (`support@`, `billing@`, `security@`, `sales@`, `privacy@`, `licensing@` — `RELEASE_CHECKLIST.md` Phase 0.1) must be recreated on **`@ctrlyoke.dev`**. Keep the `@flightpath.dev` versions as **forwarders during a transition overlap**. Studio inboxes (`admin@`/`hello@fuzzno.com`) are unaffected.
+- **Legal docs** `LICENSE.md` + `PRIVACY.md` (attorney-final, rendered live at `/terms` + `/privacy`): hardcode "FlightPath", `flightpath.dev`, and the `privacy@`/`support@`/`licensing@flightpath.dev` addresses. Update product name + addresses; a name/address swap is minor but **flag the change to the attorney** since these are counsel-final.
+- **GitHub repo** `FuzzyNova/flightpath` → `FuzzyNova/ctrlyoke` (auto-redirects; [§10](#10-workstream-l--repo--ci)).
+
+**Configure under the new name from the start (no migration — not yet published):**
+- **VS Code Marketplace publisher item**: publish as **`fuzzynova.ctrlyoke`** (driven by `package.json` `name`). `MARKETPLACE_URL` in `landing/src/config.ts` follows.
+- **Licensing vendors** (`RELEASE_CHECKLIST.md` Phase 3, not started): create the Lemon Squeezy product + Keygen policy under `ctrlyoke` naming directly.
+
+**Decisions:** (a) keep `@flightpath.dev` inboxes as forwarders during overlap — *recommend yes, short overlap*; (b) keep `flightpath.dev` as a permanent redirect — *recommend yes*.
+
+---
+
+## 12. Decisions (resolved — June 28, 2026)
+
+1. **Publisher / org: keep `fuzzynova`.** Fuzzy Nova is the studio (a DBA to Nathan), unaffected by the product rename. `package.json publisher` stays `fuzzynova`; marketplace item becomes **`fuzzynova.ctrlyoke`**; repo → `FuzzyNova/ctrlyoke`.
+2. **`src/flightpath/` directory: rename to `src/core/`** (NOT `ctrlyoke`). Naming a subdirectory after the product was always a smell, and keeping `flightpath/` post-rebrand leaves the *abandoned* brand as a top-level source dir (worse than either rename). `core` is accurate — the workflow engine + runtime/harness/orchestration layers, vs. the `ui`/`cli`/`server`/`mcp-server` adapters — brand-neutral, and future-proof against any later rename. **Do it as part of the rebrand**, not a follow-up: imports are already being rewritten, so folding it in is nearly free and avoids shipping a stale dir or paying the churn twice. *(Plus the `FlightPath*`-prefixed file renames in [§4](#4-workstream-b--source-identifiers-classes-types-files).)*
+   **Mechanics:** `git mv src/flightpath src/core` → rewrite all `flightpath/` → `core/` import paths → update the `CLAUDE.md` routing table (`src/flightpath/**` → `src/core/**`) and any `tsconfig`/lint/`knip` globs → rename the brand-carrying `flightpath-*.instructions.md` files (e.g. `flightpath-core` → `core`) and the routing-table references in the same pass ([§11](#11-workstream-m--docs-instructions-and-project-memory)).
+3. **`prompt-schema.*` → `workflow-schema.*`: yes, rename** for consistency with the `.workflow.*` extension ([§7](#7-workstream-g--schemas)).
+4. **Sequencing: two PRs.** PR 1 = brand rename (FlightPath → ctrlyoke, everything except the file extension). PR 2 = workflow file-extension change (`.flightpath.*` → `.workflow.*`, [§6](#6-workstream-f--workflow-file-extension)). Independent; easier to review/revert separately.
 
 ---
 
 ## 13. Suggested execution order
 
 1. **Constants first** ([§2](#2-single-sources-of-truth-do-these-first--they-cascade)) — flips most runtime path references via `PATH_CONSTANTS`/`CONFIG_NAMESPACE`.
-2. **Source file/identifier renames** ([§4](#4-workstream-b--source-identifiers-classes-types-files)) via LSP rename; fix imports.
+2. **Directory + source/identifier renames** — `git mv src/flightpath src/core` ([§12](#12-decisions-resolved--june-28-2026) #2) and rewrite imports, then the `FlightPath*` file renames ([§4](#4-workstream-b--source-identifiers-classes-types-files)) via LSP rename. Do these together so imports are rewritten once.
 3. **Hook scripts + user-dir paths** ([§5](#5-workstream-c--hooknotify-scripts--user-dir-paths)).
 4. **`package.json` manifest** ([§3](#3-workstream-a--packagejson-extension-manifest)) + `setContext` keys in `extension.ts`.
 5. **Schemas + icons** ([§7](#7-workstream-g--schemas), [§8](#8-workstream-j--icons--images)).

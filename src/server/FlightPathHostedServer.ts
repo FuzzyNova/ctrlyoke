@@ -1066,7 +1066,7 @@ export class FlightPathHostedServer
     html = html.replace(/\{\{typoUri\}\}/g, "/typo.js");
     html = html.replace(/\{\{codiconsUri\}\}/g, "/codicons/codicon.css");
     html = html.replace(/\{\{customIconsUri\}\}/g, "/custom-icons.css");
-    html = html.replace(/\{\{logoUri\}\}/g, "/flightpath-icon.svg");
+    html = html.replace(/\{\{logoUri\}\}/g, "/ctrlyoke-icon.svg");
     // Vite adds crossorigin to module scripts; remove it for same-origin serving.
     html = html.replace(
       /<script type="module" crossorigin/g,
@@ -1087,7 +1087,7 @@ export class FlightPathHostedServer
           : "vscode-dark";
     html = html.replace(
       "<body>",
-      `<body class="${themeBodyClass}" data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/flightpath-icon.svg">`
+      `<body class="${themeBodyClass}" data-aff-uri="/dictionaries/en_US/en_US.aff" data-dic-uri="/dictionaries/en_US/en_US.dic" data-logo-uri="/ctrlyoke-icon.svg">`
     );
 
     // Replace the VS Code-specific CSP with a browser-compatible policy.

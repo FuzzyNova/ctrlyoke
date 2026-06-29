@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * Generate flightpath-sidebar-icon.svg from flightpath-icon.svg
+ * Generate ctrlyoke-sidebar-icon.svg from ctrlyoke-icon.svg
  *
- * This script reads the main icon SVG and converts it for use in VS Code's sidebar:
+ * This script reads the master icon SVG and converts it for use in VS Code's sidebar:
  * - Ensures all fill/stroke attributes use currentColor for theme support
  * - Sets appropriate viewBox and dimensions for sidebar display (24x24)
- * - Writes the optimized version to images/flightpath-sidebar-icon.svg
+ * - Writes the optimized version to images/ctrlyoke-sidebar-icon.svg
+ *
+ * VS Code alpha-masks this icon to a single theme color, so it must read as a
+ * transparent-background silhouette — never add a background rect here.
  *
  * Usage: node scripts/generate-sidebar-icon.mjs
  */
@@ -20,8 +23,8 @@ const __dirname = dirname(__filename);
 const rootDir = join(__dirname, "..");
 
 // Paths
-const sourceIcon = join(rootDir, "images", "flightpath-icon.svg");
-const sidebarIcon = join(rootDir, "images", "flightpath-sidebar-icon.svg");
+const sourceIcon = join(rootDir, "images", "ctrlyoke-icon.svg");
+const sidebarIcon = join(rootDir, "images", "ctrlyoke-sidebar-icon.svg");
 
 console.log("📦 Generating sidebar icon from source...");
 
@@ -57,7 +60,7 @@ try {
   // Write sidebar icon
   writeFileSync(sidebarIcon, svg, "utf8");
 
-  console.log("✅ Generated images/flightpath-sidebar-icon.svg");
+  console.log("✅ Generated images/ctrlyoke-sidebar-icon.svg");
   console.log("   - All colors replaced with currentColor");
   console.log("   - Dimensions set to 24x24 for sidebar display");
   console.log("   - ViewBox preserved from source icon");

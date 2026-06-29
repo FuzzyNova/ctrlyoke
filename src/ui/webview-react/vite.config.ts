@@ -44,11 +44,13 @@ export default defineConfig(({ mode }) => ({
         },
         // Copy extension logo for browser-hosted dashboard background
         {
-          src: "../../../images/flightpath-icon.svg",
+          src: "../../../images/ctrlyoke-icon.svg",
           dest: ".",
           rename: { stripBase: true },
         },
-        // Copy hosted dashboard favicon/PWA assets
+        // Copy hosted dashboard favicon/PWA assets. Single-master icon: FAVICON_* now
+        // resolve to the same files as APP_ICON_* (icon.png + ctrlyoke-app-icon.svg), so
+        // those two copies cover both the favicon and app-icon server routes.
         {
           src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_PNG}`,
           dest: ".",
@@ -56,16 +58,6 @@ export default defineConfig(({ mode }) => ({
         },
         {
           src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_SVG}`,
-          dest: ".",
-          rename: { stripBase: true },
-        },
-        {
-          src: `../../../images/${HOSTED_ICON_FILES.FAVICON_PNG}`,
-          dest: ".",
-          rename: { stripBase: true },
-        },
-        {
-          src: `../../../images/${HOSTED_ICON_FILES.FAVICON_SVG}`,
           dest: ".",
           rename: { stripBase: true },
         },

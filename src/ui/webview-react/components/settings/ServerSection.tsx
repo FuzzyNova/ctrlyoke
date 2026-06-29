@@ -15,7 +15,7 @@ import { CustomSelect } from "../shared/CustomSelect";
 import { LocalNumberInput, LocalTextInput } from "../shared/LocalInputs";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
-import appIconSvg from "../../../../../images/flightpath-app-icon.svg?raw";
+import appIconSvg from "../../../../../images/ctrlyoke-app-icon.svg?raw";
 
 function buildIconPreviewDataUrl(bgColor: string, fgColor: string): string {
   const svg = appIconSvg

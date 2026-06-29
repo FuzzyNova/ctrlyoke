@@ -1,14 +1,24 @@
 #!/usr/bin/env node
 
 /**
- * Generate app icons from the two primary SVG sources:
- *   - images/flightpath-icon.svg        → icon.png (512), apple-touch-icon.png (180), flightpath-app-icon.svg
- *   - images/flightpath-icon-simple.svg → flightpath-icon-color-simple.svg, flightpath-icon-color-simple.png (512)
- *                                       → flightpath-icon-simple-light.svg (#424242, for VS Code light themes)
- *                                       → flightpath-icon-simple-dark.svg  (#C5C5C5, for VS Code dark themes)
- *                                       → src/ui/icons/generate-commit-message.svg (copy, currentColor for inline use)
+ * Generate every brand icon from a SINGLE master source:
+ *   images/ctrlyoke-icon.svg  (transparent background, all shapes `currentColor`)
  *
- * All generated icons use #072c45 background with #ffffff fill/stroke.
+ * Outputs:
+ *   - images/ctrlyoke-app-icon.svg  → #ffffff fill on #072c45 background; the
+ *                                     user-customizable 2-token file (favicon + PWA + settings preview).
+ *   - images/icon.png (512)         → VS Code Marketplace icon + manifest app icon.
+ *   - images/apple-touch-icon.png (180)
+ *   - images/ctrlyoke-icon-light.svg (#424242) / ctrlyoke-icon-dark.svg (#C5C5C5)
+ *                                     → VS Code SCM-toolbar command icon (light/dark themes,
+ *                                       rendered as <img>, no CSS cascade).
+ *   - src/ui/icons/generate-commit-message.svg → copy of the master (currentColor) for inline mask use.
+ *   - src/types/IconColorDefaults.ts → keeps BG/FG defaults in sync with the 2-token contract.
+ *
+ * The 2-token contract: ctrlyoke-app-icon.svg contains exactly BG_COLOR + FG_COLOR as literals,
+ * which ServerSection.tsx and the hosted server swap for user-chosen colors. Do not introduce a
+ * third hardcoded color into the master, or the recolor will be partial.
+ *
  * Uses @resvg/resvg-wasm for PNG rendering — no native tools (Inkscape, etc.) required.
  *
  * Usage: node scripts/generate-app-icons.mjs
@@ -72,47 +82,35 @@ const wasmPath = join(
 await initWasm(readFileSync(wasmPath));
 
 try {
-  const primarySvg = readFileSync(
-    join(imagesDir, "flightpath-icon.svg"),
-    "utf8"
-  );
-  const simpleSvg = readFileSync(
-    join(imagesDir, "flightpath-icon-simple.svg"),
-    "utf8"
-  );
+  const masterSvg = readFileSync(join(imagesDir, "ctrlyoke-icon.svg"), "utf8");
 
-  const coloredPrimary = applyColors(primarySvg);
-  const coloredSimple = applyColors(simpleSvg);
+  const colored = applyColors(masterSvg);
 
-  // SVG outputs
-  const appIconSvgPath = join(imagesDir, "flightpath-app-icon.svg");
-  writeFileSync(appIconSvgPath, coloredPrimary, "utf8");
-  console.log("✓ images/flightpath-app-icon.svg");
-
-  const faviconSvgPath = join(imagesDir, "flightpath-icon-color-simple.svg");
-  writeFileSync(faviconSvgPath, coloredSimple, "utf8");
-  console.log("✓ images/flightpath-icon-color-simple.svg");
+  // 2-token customizable SVG (favicon + PWA app icon + settings live-preview).
+  writeFileSync(join(imagesDir, "ctrlyoke-app-icon.svg"), colored, "utf8");
+  console.log("✓ images/ctrlyoke-app-icon.svg");
 
   // VS Code SCM toolbar icon variants — light/dark themes require hardcoded colors
   // because VS Code renders { light, dark } command icons as <img> (no CSS cascade).
   writeFileSync(
-    join(imagesDir, "flightpath-icon-simple-light.svg"),
-    colorize(simpleSvg, LIGHT_THEME_ICON_COLOR),
+    join(imagesDir, "ctrlyoke-icon-light.svg"),
+    colorize(masterSvg, LIGHT_THEME_ICON_COLOR),
     "utf8"
   );
-  console.log("✓ images/flightpath-icon-simple-light.svg");
+  console.log("✓ images/ctrlyoke-icon-light.svg");
 
   writeFileSync(
-    join(imagesDir, "flightpath-icon-simple-dark.svg"),
-    colorize(simpleSvg, DARK_THEME_ICON_COLOR),
+    join(imagesDir, "ctrlyoke-icon-dark.svg"),
+    colorize(masterSvg, DARK_THEME_ICON_COLOR),
     "utf8"
   );
-  console.log("✓ images/flightpath-icon-simple-dark.svg");
+  console.log("✓ images/ctrlyoke-icon-dark.svg");
 
-  // Keep src/ui/icons/generate-commit-message.svg in sync with the source SVG.
+  // Keep src/ui/icons/generate-commit-message.svg in sync with the master (currentColor;
+  // the custom-icons generator strips color for mask use).
   writeFileSync(
     join(rootDir, "src", "ui", "icons", "generate-commit-message.svg"),
-    simpleSvg,
+    masterSvg,
     "utf8"
   );
   console.log("✓ src/ui/icons/generate-commit-message.svg");
@@ -120,20 +118,14 @@ try {
   // PNG exports via resvg-wasm
   console.log("\nRendering PNGs via resvg-wasm...");
 
-  writeFileSync(join(imagesDir, "icon.png"), renderPng(coloredPrimary, 512));
+  writeFileSync(join(imagesDir, "icon.png"), renderPng(colored, 512));
   console.log("  ✓ images/icon.png (512×512)");
 
   writeFileSync(
     join(imagesDir, "apple-touch-icon.png"),
-    renderPng(coloredPrimary, 180)
+    renderPng(colored, 180)
   );
   console.log("  ✓ images/apple-touch-icon.png (180×180)");
-
-  writeFileSync(
-    join(imagesDir, "flightpath-icon-color-simple.png"),
-    renderPng(coloredSimple, 512)
-  );
-  console.log("  ✓ images/flightpath-icon-color-simple.png (512×512)");
 
   // Keep the TypeScript constants file in sync with BG_COLOR / FG_COLOR so every
   // spot in the codebase that references the default icon colors stays correct.
@@ -150,7 +142,7 @@ try {
   writeFileSync(iconDefaultsPath, iconDefaultsContent, "utf8");
   console.log("✓ src/types/IconColorDefaults.ts");
 
-  console.log("\n✅ All app icons generated successfully.");
+  console.log("\n✅ All app icons generated successfully from ctrlyoke-icon.svg.");
 } catch (err) {
   console.error("❌ Error:", err.message);
   process.exit(1);

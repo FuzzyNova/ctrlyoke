@@ -331,7 +331,7 @@ export class FlightPathWebviewProvider
       vscode.Uri.joinPath(
         this.context.extensionUri,
         "images",
-        "flightpath-icon.svg"
+        "ctrlyoke-icon.svg"
       )
     );
     html = html.replace(/\{\{logoUri\}\}/g, logoUri.toString());
