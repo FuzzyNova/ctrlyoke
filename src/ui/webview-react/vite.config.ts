@@ -48,9 +48,8 @@ export default defineConfig(({ mode }) => ({
           dest: ".",
           rename: { stripBase: true },
         },
-        // Copy hosted dashboard favicon/PWA assets. Single-master icon: FAVICON_* now
-        // resolve to the same files as APP_ICON_* (icon.png + ctrlyoke-app-icon.svg), so
-        // those two copies cover both the favicon and app-icon server routes.
+        // Copy hosted dashboard favicon/PWA assets. APP_ICON_* use the standard mark;
+        // FAVICON_* use the dedicated simple mark (the standard mark is illegible at favicon size).
         {
           src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_PNG}`,
           dest: ".",
@@ -58,6 +57,16 @@ export default defineConfig(({ mode }) => ({
         },
         {
           src: `../../../images/${HOSTED_ICON_FILES.APP_ICON_SVG}`,
+          dest: ".",
+          rename: { stripBase: true },
+        },
+        {
+          src: `../../../images/${HOSTED_ICON_FILES.FAVICON_PNG}`,
+          dest: ".",
+          rename: { stripBase: true },
+        },
+        {
+          src: `../../../images/${HOSTED_ICON_FILES.FAVICON_SVG}`,
           dest: ".",
           rename: { stripBase: true },
         },
