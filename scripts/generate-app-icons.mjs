@@ -21,6 +21,10 @@
  *   - src/ui/icons/generate-commit-message.svg → copy of the simple master (currentColor) for inline mask use.
  *   - images/ctrlyoke-icon-simple-color.svg → #ffffff on #072c45, 2-token; the hosted-dashboard favicon SVG.
  *   - images/ctrlyoke-icon-simple-color.png (512) → static favicon PNG / notification badge.
+ *   - landing/public/ctrlyoke-icon.svg + docs/public/ctrlyoke-icon.svg → web favicon + header
+ *                                     logos for the marketing + docs sites. Same favicon-size
+ *                                     context, and loaded via <img>/<link rel=icon> (no CSS
+ *                                     cascade), so they get the baked-color simple mark.
  *
  * Also:
  *   - src/types/IconColorDefaults.ts → keeps BG/FG defaults in sync with the 2-token contract.
@@ -43,6 +47,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, "..");
 const imagesDir = join(rootDir, "images");
+const landingPublicDir = join(rootDir, "landing", "public");
+const docsPublicDir = join(rootDir, "docs", "public");
 
 const BG_COLOR = "#072c45";
 const FG_COLOR = "#ffffff";
@@ -113,6 +119,21 @@ try {
     "utf8"
   );
   console.log("✓ images/ctrlyoke-icon-simple-color.svg");
+
+  // Web favicons + header logos for the landing site and docs site. Same
+  // favicon-size context as the hosted-dashboard favicon, so they use the SIMPLE
+  // mark (the yoke is lost in the standard mark when tiny). These are consumed via
+  // <link rel="icon"> and <img src> — which render an SVG in isolation and IGNORE
+  // ancestor CSS color — so they must carry BAKED colors, not currentColor (a
+  // currentColor mark renders black/invisible on the dark sites). Single-sourced
+  // here so editing images/ctrlyoke-icon-simple.svg propagates to the web assets.
+  for (const dest of [
+    join(landingPublicDir, "ctrlyoke-icon.svg"),
+    join(docsPublicDir, "ctrlyoke-icon.svg"),
+  ]) {
+    writeFileSync(dest, coloredSimple, "utf8");
+    console.log(`✓ ${dest.slice(rootDir.length + 1).replace(/\\/g, "/")}`);
+  }
 
   // VS Code SCM toolbar icon variants — light/dark themes require hardcoded colors
   // because VS Code renders { light, dark } command icons as <img> (no CSS cascade).
