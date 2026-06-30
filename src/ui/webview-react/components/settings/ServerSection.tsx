@@ -374,50 +374,54 @@ export function ServerSection({
         <div className="text-xs font-semibold uppercase text-description-fg mb-2 tracking-wide">
           Icon Colors
         </div>
-        <div className="flex items-end gap-4 mb-2">
-          <div className="flex-1">
-            <SettingInputRow
-              label="Background"
-              id="icon-bg-color"
-              path="server.iconBgColor"
-              {...rowProps}
-            >
-              <input
+        <div className="mb-2 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <SettingInputRow
+                label="Background"
                 id="icon-bg-color"
-                type="color"
-                value={localBg}
-                onChange={(e) => setLocalBg(e.target.value)}
-                onBlur={(e) => onUpdate("server.iconBgColor", e.target.value)}
-                className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
-                title="Icon background color"
-              />
-            </SettingInputRow>
-          </div>
-          <div className="flex-1">
-            <SettingInputRow
-              label="Foreground"
-              id="icon-fg-color"
-              path="server.iconFgColor"
-              {...rowProps}
-            >
-              <input
+                path="server.iconBgColor"
+                {...rowProps}
+              >
+                <input
+                  id="icon-bg-color"
+                  type="color"
+                  value={localBg}
+                  onChange={(e) => setLocalBg(e.target.value)}
+                  onBlur={(e) => onUpdate("server.iconBgColor", e.target.value)}
+                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                  title="Icon background color"
+                />
+              </SettingInputRow>
+            </div>
+            <div>
+              <SettingInputRow
+                label="Foreground"
                 id="icon-fg-color"
-                type="color"
-                value={localFg}
-                onChange={(e) => setLocalFg(e.target.value)}
-                onBlur={(e) => onUpdate("server.iconFgColor", e.target.value)}
-                className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
-                title="Icon foreground color"
-              />
-            </SettingInputRow>
+                path="server.iconFgColor"
+                {...rowProps}
+              >
+                <input
+                  id="icon-fg-color"
+                  type="color"
+                  value={localFg}
+                  onChange={(e) => setLocalFg(e.target.value)}
+                  onBlur={(e) => onUpdate("server.iconFgColor", e.target.value)}
+                  className="w-full h-8 cursor-pointer rounded border border-input-border p-0.5 bg-input-bg"
+                  title="Icon foreground color"
+                />
+              </SettingInputRow>
+            </div>
           </div>
-          <img
-            src={buildIconPreviewDataUrl(localBg, localFg)}
-            alt="Icon preview"
-            width={32}
-            height={32}
-            className="rounded shrink-0 mb-0.5"
-          />
+          <div className="flex justify-center rounded border border-panel-border bg-editor-bg p-4">
+            <img
+              src={buildIconPreviewDataUrl(localBg, localFg)}
+              alt="Icon preview"
+              width={72}
+              height={72}
+              className="h-[72px] w-[72px] rounded"
+            />
+          </div>
         </div>
         <p className="text-xs text-description-fg italic">
           SVG favicon and PWA icon update immediately. PNG icon clients (iOS
