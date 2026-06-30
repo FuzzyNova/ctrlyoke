@@ -1474,6 +1474,63 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
     });
 
+    test("should merge archived terminal fields and ignore history-only stats when redo snapshot has partial runtime", async () => {
+      queue.loadPrompts(
+        createPromptFile([
+          {
+            prompt: "p0",
+            _runtime: {
+              sessionId: "s0",
+              startedAt: 100,
+              completedAt: 200,
+            },
+          },
+          {
+            prompt: "added",
+            _runtime: {
+              sessionId: "s-added",
+              startedAt: 300,
+              completedAt: 400,
+              responseText: "archived response",
+              elapsed: 8.7,
+              contextWindowUsed: 11424,
+              contextWindowSize: 200000,
+            },
+          },
+        ])
+      );
+      (queue as any).state.currentIndex = 2;
+
+      await queue.syncStepsForUndoRedo([{ prompt: "p0" }]);
+      await queue.syncStepsForUndoRedo([
+        { prompt: "p0" },
+        {
+          prompt: "added",
+          status: STEP_STATUS.COMPLETED,
+          _runtime: {
+            sessionId: "s-added",
+            elapsed: 9.1,
+            contextWindowUsed: 12000,
+            contextWindowSize: 200000,
+          },
+        } as any,
+      ]);
+
+      const state = queue.getState();
+      assert.strictEqual(state.steps[1]._runtime?.sessionId, "s-added");
+      assert.strictEqual(state.steps[1]._runtime?.startedAt, 300);
+      assert.strictEqual(state.steps[1]._runtime?.completedAt, 400);
+      assert.strictEqual(
+        state.steps[1]._runtime?.responseText,
+        "archived response"
+      );
+      assert.strictEqual(state.steps[1]._runtime?.elapsed, undefined);
+      assert.strictEqual(state.steps[1]._runtime?.contextWindowUsed, undefined);
+      assert.strictEqual(state.steps[1]._runtime?.contextWindowSize, undefined);
+      assert.strictEqual(state.currentIndex, 2);
+      assert.strictEqual(state.results[1].status, STEP_STATUS.COMPLETED);
+    });
+
     test("should restore start-position-cleared runtime from the queue archive", async () => {
       queue.loadPrompts(
         createPromptFile([

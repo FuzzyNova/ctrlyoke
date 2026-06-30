@@ -1595,13 +1595,18 @@ export class PromptQueue {
           ? existing._runtime
           : undefined;
       const archivedRuntime = this.getArchivedRuntime(persistableStep, i);
-      const runtime =
-        existingRuntime ?? persistableStep._runtime ?? archivedRuntime;
+      const runtime = this.mergeRuntimeMetadata(
+        archivedRuntime,
+        persistableStep._runtime,
+        existingRuntime
+      );
+      const persistableRuntime =
+        this.stripHistoryOnlyRuntimeFieldsForUndoRedo(runtime);
       if (!existingRuntime && !persistableStep._runtime && archivedRuntime) {
         restoredFromArchive++;
       }
-      if (runtime) {
-        return { ...persistableStep, _runtime: runtime };
+      if (persistableRuntime) {
+        return { ...persistableStep, _runtime: persistableRuntime };
       }
       return persistableStep;
     });
@@ -1688,6 +1693,58 @@ export class PromptQueue {
       }
     }
     return undefined;
+  }
+
+  private mergeRuntimeMetadata(
+    ...candidates: Array<PromptRuntimeMetadata | undefined>
+  ): PromptRuntimeMetadata | undefined {
+    let merged: Partial<PromptRuntimeMetadata> | undefined;
+
+    for (const candidate of candidates) {
+      if (!candidate) {
+        continue;
+      }
+      merged ??= {};
+      for (const [key, value] of Object.entries(candidate) as Array<
+        [
+          keyof PromptRuntimeMetadata,
+          PromptRuntimeMetadata[keyof PromptRuntimeMetadata],
+        ]
+      >) {
+        if (value !== undefined) {
+          (merged as Record<keyof PromptRuntimeMetadata, unknown>)[key] = value;
+        }
+      }
+    }
+
+    return merged as PromptRuntimeMetadata | undefined;
+  }
+
+  private stripHistoryOnlyRuntimeFieldsForUndoRedo(
+    runtime: PromptRuntimeMetadata | undefined
+  ): PromptRuntimeMetadata | undefined {
+    if (!runtime) {
+      return undefined;
+    }
+
+    // Duration and context-window stats are canonical in output history
+    // (events.jsonl / CliOutput tokens). They may be present in webview undo
+    // snapshots because the UI decorates steps from history, but undo/redo
+    // sync should not introduce them into the working file when normal
+    // execution does not persist them there.
+    const {
+      elapsed: _elapsed,
+      contextWindowUsed: _contextWindowUsed,
+      contextWindowSize: _contextWindowSize,
+      ...persistableRuntime
+    } = runtime;
+    void _elapsed;
+    void _contextWindowUsed;
+    void _contextWindowSize;
+
+    return Object.keys(persistableRuntime).length > 0
+      ? (persistableRuntime as PromptRuntimeMetadata)
+      : undefined;
   }
 
   private getResultStatusFromRuntime(
