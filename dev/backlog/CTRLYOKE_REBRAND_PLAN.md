@@ -1,10 +1,61 @@
 # ctrlyoke Rebrand — Source/Repo/Product Rename Plan
 
 **Created:** June 28, 2026
-**Status:** Backlog — planning
+**Status:** 🟡 In progress — **PR1 (brand) + PR2 (extension) DONE & committed on `main`.** Remaining: `docs/` + `landing/` prose, legal docs, and external/business steps. **See [Execution Status](#execution-status--updated-june-30-2026) first.**
 **Decision:** Rename the product from **FlightPath** to **ctrlyoke**. See `dev/reference/rebrand-naming.md` for the naming rationale and trademark clearance (`dev/reference/trademark-search-results.csv`).
 
 > **Pre-release, no back-compat.** Per `CLAUDE.md`, there are no published users to migrate. We rename hard — no aliases, no dual-read of old directory/extension names — except the developer-local cleanup noted in [§9](#9-developer-local-migration). This keeps the rename a clean cut rather than a permanent compatibility tax.
+
+---
+
+## Execution Status — updated June 30, 2026
+
+> **Fresh-chat handoff.** The **code rebrand is essentially complete** — PR1 (brand) and PR2 (extension) are committed on `main`. What's left is docs/site *prose*, legal docs, and external/business steps. Read this section first; the workstreams below (§0–§13) are the original detailed reference.
+
+### ✅ Done & committed (`main`)
+
+Three commits:
+- `5310c2b6` — **PR1 wave 1**: §2 constants, §12.2 `src/flightpath → src/core`, §4 file renames, §5 script renames, §3 `package.json`, all `src/` brand.
+- `8e7c612b` — **PR1 wave 2**: §11 instruction files + shared-memory docs, agent-template renames.
+- `a11db47d` — **PR2**: §6 extension `*.flightpath.* → *.ctrlyoke.*` + §7 schema rename, **plus** the brand gaps PR1's `src`-only sweep missed (`scripts/`, `prompts/`, `manual-test/`, `README`, `QUICK_START`).
+
+Completed workstreams:
+- **§2 Constants** — `CTRLYOKE_DIR=".ctrlyoke"`, `CONFIG_NAMESPACE="ctrlyoke"`, `EXTENSION_NAMESPACE="ctrlyoke."`. ⚠ The suggested DRY extraction of a shared constants module was **not** done — `mcp-server.ts` still hardcodes its own `CTRLYOKE_DIR` dupe.
+- **§3 `package.json`** — name/displayName/bin/~30 commands/config/4 LM tools/views/menus/`when`-keys all `ctrlyoke.*`. `repository`/`homepage`/`bugs` already point at `FuzzyNova/ctrlyoke` + `ctrlyoke.dev` → **⚠ these 404 until the repo rename + domain go live.**
+- **§4 Identifiers** — all 8 `FlightPath*` files → `CtrlYoke*`; MCP shorthand id `"ctrlyoke"`. Also caught `Flightpath`/`flightPath` casing variants the §1 token map missed.
+- **§5 Hook scripts + user dir** — 8 scripts renamed; `~/.flightpath → ~/.ctrlyoke` via `CTRLYOKE_DIR`. Stale Copilot hook-file comments (`.github/hooks/flightpath.json`) → `ctrlyoke.json`.
+- **§6 Extension (PR2)** — 37 workflow files renamed + every string/regex/when-clause + `WORKFLOW_FILE_NAMES`/`WORKFLOW_FILE_SUFFIXES`. Working-file path now reads `.ctrlyoke/.queue/<name>.ctrlyoke.json`.
+- **§7 Schemas** — `prompt-schema.* → workflow-schema.*` (renamed + content + refs + yaml regenerated). **Decision: kept `workflow-schema`, NOT `ctrlyoke-schema`** — internal plumbing (only `package.json` url / `PromptFileParser` / scripts reference it), so accurate-and-neutral wins.
+- **§8 Icons** — already implemented in a prior chat; untouched as instructed.
+- **§9 Dev-local migration** — `.flightpath → .ctrlyoke` (repo + `manual-test/`), `flightpath-test.code-workspace → ctrlyoke-test.code-workspace`, `.gitignore`. ⚠ **Renaming `.flightpath` while the extension host was running crashed it** — do dev-local moves with ctrlyoke STOPPED.
+- **§11 (the code-adjacent half)** — `.github/instructions/*` (+ 4 brand-named files renamed *dropping* the brand: `flightpath-core→core`, etc.), `copilot-instructions.md`, regenerated `CLAUDE.md`/`AGENTS.md` (fixed hardcoded brand in `generate-agent-files.mjs`), `README`, `QUICK_START`, `CHORES.md`, `scripts/*.mjs`, `prompts/`, `manual-test/`.
+- **Build-correctness fix:** `strip-dev-commands.mjs` matched the stale `"FlightPath Test"` category / `flightpath.test.*` ids (dev-command strip was silently broken) — now `ctrlyoke`.
+
+**Verification — all green:** `npm run typecheck` ✅ · `npm run lint` ✅ · `npm run test:ui` (937/937) ✅ · `npm run compile` ✅. Residue audit: **0** `flightpath|FlightPath|FLIGHTPATH` across `src/`, `scripts/`, `schemas/`, `prompts/`, `.github/`, `package.json`, `manual-test/`, `README`, `QUICK_START`.
+
+**Not verifiable in the rebrand chat — run locally:** `npm test` (downloads VS Code) and `npm run test:harness` (spawns real CLIs). Plus a manual smoke: create `foo.ctrlyoke.yaml`, confirm discovery + schema validation, run it, confirm hooks fire and logs land in `.ctrlyoke/logs/`.
+
+### ⏳ Remaining
+
+**Code-side (safe to do now — same `flightpath → ctrlyoke` map):**
+- **§11 `docs/`** (~340 hits) — VitePress prose; rename `docs/cli/flightpath.md` + `flightpath-mcp.md`; `docs/.vitepress/config.mts` branding/domain. Brand → `ctrlyoke`, extension refs `.flightpath.* → .ctrlyoke.*`, domain `flightpath.dev → ctrlyoke.dev`.
+- **§11 `landing/`** (~93 hits) — `src/config.ts` (`MARKETPLACE_URL` itemName `fuzzynova.flightpath → fuzzynova.ctrlyoke`), `Layout.astro` + `pages/*.astro`, domain. (Deferred only because URLs want the live domain.)
+- `dev/` plans + `CHANGELOG.md` history → **leave** (historical record; the plan docs intentionally mention both names).
+
+**Legal (counsel-final — §11.5; flag to attorney, don't silently ship):**
+- `LICENSE.md` (5) + `PRIVACY.md` (9) — product name + `flightpath.dev` + `*@flightpath.dev` addresses. Name/address swap only.
+
+**External / business (Nathan — §10, §11.5):**
+- GitHub repo rename `FuzzyNova/flightpath → FuzzyNova/ctrlyoke`.
+- Domain DNS + Netlify (`.github/workflows/deploy.yml` already references `ctrlyoke.dev`), `@ctrlyoke.dev` email inboxes, marketplace publish `fuzzynova.ctrlyoke`, licensing vendors.
+- `.vscode/launch.json` `--disable-extension=...` id — sanity-check against your actually-installed extension id.
+
+### How a fresh chat should continue
+1. Confirm clean tree on `main` (the 3 rebrand commits above present).
+2. `docs/` + `landing/` swap (brand + extension + `ctrlyoke.dev` URLs) → commit.
+3. Hand `LICENSE.md` / `PRIVACY.md` to the attorney.
+4. Run `npm test` + `npm run test:harness` + manual smoke locally.
+5. External steps (repo / domain / email / marketplace).
 
 ---
 
@@ -276,4 +327,4 @@ No runtime back-compat shim — pre-release.
 8. **Repo + CI + domain** ([§10](#10-workstream-l--repo--ci)) — last, coordinated with marketplace.
 9. **Extension rename `.ctrlyoke.*`** ([§6](#6-workstream-f--workflow-file-extension)) — separate PR.
 
-**Verification gates:** `npm run typecheck` → `npm run lint` → full test suites → manual smoke (init a workspace, confirm `.ctrlyoke/` is created, run a `.workflow.yaml`, confirm hooks fire and logs land in `.ctrlyoke/logs/`). Grep `flightpath|FlightPath|FLIGHTPATH` should return only intentional historical references (`dev/implemented/`, `dev/research/`, CHANGELOG history).
+**Verification gates:** `npm run typecheck` → `npm run lint` → full test suites → manual smoke (init a workspace, confirm `.ctrlyoke/` is created, run a `.ctrlyoke.yaml`, confirm hooks fire and logs land in `.ctrlyoke/logs/`). Grep `flightpath|FlightPath|FLIGHTPATH` should return only intentional historical references (`dev/implemented/`, `dev/research/`, CHANGELOG history) plus the still-pending `docs/` + `landing/` ([Execution Status](#execution-status--updated-june-30-2026)).
