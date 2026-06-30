@@ -1,8 +1,10 @@
 # FlightPath Release Checklist
 
+> ⚠️ **REBRANDED → ctrlyoke (June 2026).** The product is now **ctrlyoke** (`ctrlyoke.dev`). This document is the **FlightPath-era record** — Phase 0–2 below were completed under the `flightpath.dev` identity and are kept as history. **For the remaining external/business work, follow the re-pointed instructions in [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)**, not the `flightpath.dev` names/inboxes/repo URLs below. The code rebrand is tracked in [`CTRLYOKE_REBRAND_PLAN.md`](CTRLYOKE_REBRAND_PLAN.md).
+
 **Created:** June 19, 2026
-**Status:** IN PROGRESS — business identity, legal, and website are built; site deploy + testing is the next step.
-**Last updated:** June 26, 2026
+**Status:** SUPERSEDED for external steps by `CTRLYOKE_REBRAND_CUTOVER.md` — business identity, legal, and website were built under FlightPath; the cutover to ctrlyoke + licensing vendors is the remaining work.
+**Last updated:** June 30, 2026
 **Purpose:** top-level launch sequencing across product release, business identity, website, licensing, legal, and support.
 
 ---
