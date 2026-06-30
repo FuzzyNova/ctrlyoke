@@ -39,7 +39,7 @@ export function useCommitHistoryContextMenu({
     }
   }, []);
 
-  const handleAddToFlightPath = useCallback(
+  const handleAddToCtrlYoke = useCallback(
     (commit: WorkspaceCommitLogEntry) => {
       const editorStore = useEditorStore.getState();
       editorStore.preparePromptEditorForInsert();
@@ -107,10 +107,10 @@ export function useCommitHistoryContextMenu({
             onClick: () => handleViewDiff(commit),
           },
           {
-            label: "Add Commit to FlightPath",
+            label: "Add Commit to ctrlyoke",
             icon: "codicon-add",
             disabled: false,
-            onClick: () => handleAddToFlightPath(commit),
+            onClick: () => handleAddToCtrlYoke(commit),
           },
           { type: "divider" },
           {
@@ -123,7 +123,7 @@ export function useCommitHistoryContextMenu({
         ],
       });
     },
-    [detached, handleAddToFlightPath, handleViewDiff]
+    [detached, handleAddToCtrlYoke, handleViewDiff]
   );
 
   const handleConfirmCheckout = useCallback(() => {

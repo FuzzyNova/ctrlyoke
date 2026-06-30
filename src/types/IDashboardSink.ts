@@ -1,21 +1,21 @@
 import type { CliEvent, UndoExecutionTarget } from "./WebviewMessageTypes";
-import type { WorkflowStep } from "./FlightPathTypes";
+import type { WorkflowStep } from "./CtrlYokeTypes";
 import type {
   FinalStepPhase,
   StepStatus,
   StatusMessageSeverity,
 } from "./DashboardConstants";
 import type { WorkspaceSnapshot } from "./OutputHistoryTypes";
-import type { FlightPathNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 
 /**
  * IDashboardSink
  *
  * Minimal interface for posting state updates to the webview dashboard.
- * WorkflowInstance depends on this interface (not the concrete FlightPathWebviewProvider)
+ * WorkflowInstance depends on this interface (not the concrete CtrlYokeWebviewProvider)
  * so it stays free of VS Code API imports.
  *
- * FlightPathWebviewProvider satisfies this interface structurally — no `implements`
+ * CtrlYokeWebviewProvider satisfies this interface structurally — no `implements`
  * declaration is required.
  */
 export interface IDashboardSink {
@@ -192,6 +192,6 @@ export interface IDashboardSink {
     workspaceSnapshot?: WorkspaceSnapshot
   ): void;
 
-  /** Deliver a FlightPath notification event (completion or hook) to the sink. */
-  notifyNotificationEvent?(event: FlightPathNotificationEvent): void;
+  /** Deliver a ctrlyoke notification event (completion or hook) to the sink. */
+  notifyNotificationEvent?(event: CtrlYokeNotificationEvent): void;
 }

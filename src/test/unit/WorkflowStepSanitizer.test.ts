@@ -5,7 +5,7 @@ import {
   parseClipboardWorkflowStep,
   sanitizeClipboardWorkflowStep,
   serializeWorkflowStepForClipboard,
-} from "../../flightpath/WorkflowStepSanitizer";
+} from "../../core/WorkflowStepSanitizer";
 
 suite("WorkflowStepSanitizer clipboard helpers", () => {
   test("sanitizeClipboardWorkflowStep strips transient fields and preserves persistable prompt properties", () => {
@@ -21,7 +21,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       resumeSession: true,
       sessionId: "session-123",
       mcpServers: [
-        "flightpath",
+        "ctrlyoke",
         {
           id: "local-server",
           command: "npx",
@@ -81,7 +81,7 @@ suite("WorkflowStepSanitizer clipboard helpers", () => {
       resumeSession: true,
       sessionId: "session-123",
       mcpServers: [
-        "flightpath",
+        "ctrlyoke",
         {
           id: "local-server",
           command: "npx",

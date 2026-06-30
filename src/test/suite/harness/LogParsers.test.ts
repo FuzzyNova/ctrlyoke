@@ -2,10 +2,10 @@ import * as assert from "assert";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import { ClaudeLogParser } from "../../../flightpath/harness/claude/ClaudeLogParser";
-import { CopilotLogParser } from "../../../flightpath/harness/copilot/CopilotLogParser";
-import { CodexLogParser } from "../../../flightpath/harness/codex/CodexLogParser";
-import { OpenCodeLogParser } from "../../../flightpath/harness/opencode/OpenCodeLogParser";
+import { ClaudeLogParser } from "../../../core/harness/claude/ClaudeLogParser";
+import { CopilotLogParser } from "../../../core/harness/copilot/CopilotLogParser";
+import { CodexLogParser } from "../../../core/harness/codex/CodexLogParser";
+import { OpenCodeLogParser } from "../../../core/harness/opencode/OpenCodeLogParser";
 import {
   UniversalCliOutput,
   ToolCall,
@@ -14,7 +14,7 @@ import {
   FileWriteData,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
-import { BaseCliEvent } from "../../../flightpath/harness/shared/interfaces/ILogParser";
+import { BaseCliEvent } from "../../../core/harness/shared/interfaces/ILogParser";
 
 /**
  * Comprehensive unit tests for CLI log parser implementations
@@ -43,7 +43,7 @@ import { BaseCliEvent } from "../../../flightpath/harness/shared/interfaces/ILog
  * @returns Absolute path to temp file
  */
 function createTempJsonlFile(events: any[]): string {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "flightpath-test-"));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-test-"));
   const filePath = path.join(tempDir, "test.jsonl");
   const content = events.map((e) => JSON.stringify(e)).join("\n");
   fs.writeFileSync(filePath, content, "utf8");
@@ -1081,7 +1081,7 @@ suite("CodexLogParser", () => {
                 name: "write_file",
                 input: {
                   path: "app.ts",
-                  content: "export const app = 'FlightPath';",
+                  content: "export const app = 'ctrlyoke';",
                 },
                 id: "tool-codex-1",
               },
@@ -1101,7 +1101,7 @@ suite("CodexLogParser", () => {
       assert.strictEqual((fileWriteEvents[0].data as any).path, "app.ts");
       assert.strictEqual(
         (fileWriteEvents[0].data as any).content,
-        "export const app = 'FlightPath';"
+        "export const app = 'ctrlyoke';"
       );
     });
 
@@ -1224,7 +1224,7 @@ suite("CodexLogParser", () => {
             call_id: "call-patch-1",
             input:
               "*** Begin Patch\n" +
-              "*** Update File: c:\\dev\\FlightPath\\package.json\n" +
+              "*** Update File: c:\\dev\\ctrlyoke\\package.json\n" +
               "@@\n" +
               "       ],\n" +
               '+      "scm/historyItem/context": [],\n' +
@@ -1239,7 +1239,7 @@ suite("CodexLogParser", () => {
             call_id: "call-patch-1",
             success: true,
             changes: {
-              "c:\\dev\\FlightPath\\package.json": {
+              "c:\\dev\\ctrlyoke\\package.json": {
                 type: "update",
                 unified_diff:
                   "@@ -482,2 +482,3 @@\n" +
@@ -1293,7 +1293,7 @@ suite("CodexLogParser", () => {
             call_id: "call_exec_shell",
             input:
               'const r = await tools.shell_command({"command":"npm test",' +
-              '"workdir":"C:\\\\dev\\\\FlightPath","timeout_ms":10000}); text(r)\n',
+              '"workdir":"C:\\\\dev\\\\ctrlyoke","timeout_ms":10000}); text(r)\n',
           },
         },
         {

@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { CliFailureTracker } from "../../flightpath/harness/shared/CliFailureTracker";
+import { CliFailureTracker } from "../../core/harness/shared/CliFailureTracker";
 import {
   FAILURE_KINDS,
   INTERACTIVE_ABORT_KINDS,

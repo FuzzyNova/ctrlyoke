@@ -1,8 +1,8 @@
 import {
   type PriorContextItem,
   buildPriorContextXmlFromItems,
-} from "../flightpath/HarnessIntegration";
-import { type WorkflowStep, isScriptStep } from "../types/FlightPathTypes";
+} from "../core/HarnessIntegration";
+import { type WorkflowStep, isScriptStep } from "../types/CtrlYokeTypes";
 
 /**
  * Builds the exact XML preview a user will see in the editor when they

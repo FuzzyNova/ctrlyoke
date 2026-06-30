@@ -381,8 +381,8 @@ const WorkflowStepsPanelInner: React.FC<{
         });
       } else if (Array.isArray(step.mcpServers)) {
         const count = step.mcpServers.length;
-        const hasFlightpath = step.mcpServers.some(
-          (s) => typeof s === "string" && s === "flightpath"
+        const hasCtrlYoke = step.mcpServers.some(
+          (s) => typeof s === "string" && s === "ctrlyoke"
         );
         const serverIds = step.mcpServers.map((s) =>
           typeof s === "string" ? s : ((s as { id?: string }).id ?? "custom")
@@ -392,11 +392,11 @@ const WorkflowStepsPanelInner: React.FC<{
             label: "MCP: 0",
             title: "MCP servers explicitly set to empty",
           });
-        } else if (hasFlightpath && count === 1) {
-          result.push({ label: "MCP[flightpath]", title: "MCP: flightpath" });
-        } else if (hasFlightpath) {
+        } else if (hasCtrlYoke && count === 1) {
+          result.push({ label: "MCP[ctrlyoke]", title: "MCP: ctrlyoke" });
+        } else if (hasCtrlYoke) {
           result.push({
-            label: `MCP[flightpath]+${count - 1}`,
+            label: `MCP[ctrlyoke]+${count - 1}`,
             title: serverIds.join(", "),
           });
         } else {

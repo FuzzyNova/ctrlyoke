@@ -214,7 +214,7 @@ export function GeneralSection({
         </h3>
         <SettingToggleRow
           label="Auto-delete temp files"
-          description="Automatically delete prompt temp files after execution. Disable to retain files in .flightpath/temp/ for debugging."
+          description="Automatically delete prompt temp files after execution. Disable to retain files in .ctrlyoke/temp/ for debugging."
           checked={exec.autoDeleteTempFiles}
           onChange={(v) => onUpdate("execution.autoDeleteTempFiles", v)}
           path="execution.autoDeleteTempFiles"

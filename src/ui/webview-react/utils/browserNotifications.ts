@@ -12,7 +12,7 @@ import type {
 } from "@root/types/WebviewMessageTypes";
 import { isStandalone } from "@hooks/useVsCodeApi";
 
-const PUSH_SUBSCRIPTION_ID_KEY = "flightpath-push-subscription-id";
+const PUSH_SUBSCRIPTION_ID_KEY = "ctrlyoke-push-subscription-id";
 
 export type BrowserPermissionStatus =
   | "unsupported"
@@ -222,7 +222,7 @@ async function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistrat
     return existing;
   }
 
-  return navigator.serviceWorker.register("/flightpath-service-worker.js", {
+  return navigator.serviceWorker.register("/ctrlyoke-service-worker.js", {
     scope: "/",
   });
 }
@@ -338,7 +338,7 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   const token = new URLSearchParams(window.location.search).get("token");
   if (token) {
-    headers.set("x-flightpath-token", token);
+    headers.set("x-ctrlyoke-token", token);
   }
   if (init?.body && !headers.has("content-type")) {
     headers.set("content-type", "application/json");

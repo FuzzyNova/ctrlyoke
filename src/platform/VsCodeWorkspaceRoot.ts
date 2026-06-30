@@ -6,8 +6,8 @@ import {
 } from "./WorkspaceRootResolver";
 
 /** Native VS Code config namespace for bootstrap settings. */
-const CONFIG_NAMESPACE = "flightpath";
-/** Native setting key holding the directory that contains `.flightpath`. */
+const CONFIG_NAMESPACE = "ctrlyoke";
+/** Native setting key holding the directory that contains `.ctrlyoke`. */
 const WORKSPACE_DIRECTORY_SETTING = "workspaceDirectory";
 
 /**
@@ -17,8 +17,8 @@ const WORKSPACE_DIRECTORY_SETTING = "workspaceDirectory";
  * This is the single VS Code-side binding for the workspace root. Every
  * extension-host consumer that previously read
  * `vscode.workspace.workspaceFolders?.[0]?.uri.fsPath` must call this instead,
- * so the `.flightpath` location is computed in exactly one place and honors the
- * `.code-workspace` directory plus the `flightpath.workspaceDirectory` setting.
+ * so the `.ctrlyoke` location is computed in exactly one place and honors the
+ * `.code-workspace` directory plus the `ctrlyoke.workspaceDirectory` setting.
  */
 export function getVsCodeWorkspaceRoot(): string {
   const setting = vscode.workspace
@@ -51,7 +51,7 @@ export function getVsCodeWorkspaceRoot(): string {
  *
  * When the resolved root matches a real workspace folder, that folder is
  * returned as-is. Otherwise (the root is a `.code-workspace` directory or an
- * explicit `flightpath.workspaceDirectory` override that is not itself one of
+ * explicit `ctrlyoke.workspaceDirectory` override that is not itself one of
  * the folders) a synthetic folder pointing at the resolved root is returned, so
  * every consumer that derives paths from `.uri.fsPath` stays in agreement with
  * {@link getVsCodeWorkspaceRoot}. Use this only where a `WorkspaceFolder`

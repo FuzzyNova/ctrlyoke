@@ -7,7 +7,7 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   type ScriptProperties,
   type EndConditionCompareSource,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import {
   COMPARE_SOURCES,
   RETRY_PROMPT_PLACEHOLDERS,
@@ -144,7 +144,7 @@ export class EndConditionEvaluator {
   /**
    * Evaluate a script condition (endCondition, preCondition, or scriptStep).
    * When `returns` is absent, exit code 0 = pass.
-   * @param vars Optional variable map — injected as FLIGHTPATH_VAR_<KEY> environment
+   * @param vars Optional variable map — injected as CTRLYOKE_VAR_<KEY> environment
    *   variables so end condition scripts can branch on workflow variables.
    * @param onOutput Optional streaming callback — called for each stdout chunk as it
    *   arrives so callers can forward live output to the dashboard without waiting for
@@ -244,8 +244,8 @@ export class EndConditionEvaluator {
    *   1. Absolute path — validated against workspace root OR home scripts dir
    *   2. Relative to workingDirectory — same validation
    *   3. Relative to workspace root — validated within workspace
-   *   4. Relative to .flightpath/ dir — validated within workspace
-   *   5. Relative to ~/.flightpath/scripts — user-level shared scripts, validated within home scripts dir
+   *   4. Relative to .ctrlyoke/ dir — validated within workspace
+   *   5. Relative to ~/.ctrlyoke/scripts — user-level shared scripts, validated within home scripts dir
    *
    * All resolved paths are canonicalized with realpath() to prevent sibling-prefix
    * and symlink-escape bypasses before the boundary check.
@@ -317,26 +317,26 @@ export class EndConditionEvaluator {
         }
         return canonical;
       } catch {
-        // Continue to .flightpath directory
+        // Continue to .ctrlyoke directory
       }
 
-      // Try in .flightpath directory
-      const flightpathPath = path.resolve(
+      // Try in .ctrlyoke directory
+      const ctrlyokePath = path.resolve(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         scriptPath
       );
       try {
-        await fs.promises.access(flightpathPath);
+        await fs.promises.access(ctrlyokePath);
         const canonical =
-          await EndConditionEvaluator.canonicalizePath(flightpathPath);
+          await EndConditionEvaluator.canonicalizePath(ctrlyokePath);
         const canonicalRoot =
           await EndConditionEvaluator.canonicalizePath(workspaceRoot);
         if (
           !EndConditionEvaluator.isWithinDirectory(canonical, canonicalRoot)
         ) {
           Log.error(
-            `Security: Script path traversal detected: "${flightpathPath}" resolves outside workspace root "${workspaceRoot}"`
+            `Security: Script path traversal detected: "${ctrlyokePath}" resolves outside workspace root "${workspaceRoot}"`
           );
           return null;
         }
@@ -346,7 +346,7 @@ export class EndConditionEvaluator {
       }
     }
 
-    // Try in ~/.flightpath/scripts (user shared scripts directory)
+    // Try in ~/.ctrlyoke/scripts (user shared scripts directory)
     const homeScriptPath = path.resolve(homeScriptsDir, scriptPath);
     try {
       await fs.promises.access(homeScriptPath);
@@ -420,7 +420,7 @@ export class EndConditionEvaluator {
    * Both paths must be canonicalized (via canonicalizePath) before calling.
    *
    * Using `path.sep` prevents sibling-prefix bypass attacks where a path like
-   * `C:\dev\FlightPath-evil` would incorrectly match workspace root `C:\dev\FlightPath`.
+   * `C:\dev\ctrlyoke-evil` would incorrectly match workspace root `C:\dev\ctrlyoke`.
    */
   static isWithinDirectory(candidate: string, directory: string): boolean {
     return (
@@ -429,14 +429,14 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Returns the user's shared FlightPath scripts directory (~/.flightpath/scripts).
+   * Returns the user's shared ctrlyoke scripts directory (~/.ctrlyoke/scripts).
    * Scripts placed here can be referenced from any workspace, giving users a
    * single location for shared scripts without copying them per-project.
    */
   static getUserHomeScriptsDir(): string {
     return path.join(
       os.homedir(),
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.SCRIPTS_DIR
     );
   }
@@ -525,10 +525,10 @@ export class EndConditionEvaluator {
       `Cleaned ${vsCodeEnvVars.length} VS Code env vars for isolated execution`
     );
 
-    // Inject workflow variables as FLIGHTPATH_VAR_<KEY>=value so scripts can branch on them.
+    // Inject workflow variables as CTRLYOKE_VAR_<KEY>=value so scripts can branch on them.
     if (vars && Object.keys(vars).length > 0) {
       for (const [k, v] of Object.entries(vars)) {
-        cleanEnv[`FLIGHTPATH_VAR_${k.toUpperCase()}`] = v;
+        cleanEnv[`CTRLYOKE_VAR_${k.toUpperCase()}`] = v;
       }
     }
 
@@ -761,10 +761,10 @@ export class EndConditionEvaluator {
     }
 
     const baseDir = workingDirectory || workspaceRoot!;
-    const flightpathDir = path.join(baseDir, PATH_CONSTANTS.FLIGHTPATH_DIR);
-    const scriptsDir = path.join(flightpathDir, PATH_CONSTANTS.SCRIPTS_DIR);
+    const ctrlyokeDir = path.join(baseDir, PATH_CONSTANTS.CTRLYOKE_DIR);
+    const scriptsDir = path.join(ctrlyokeDir, PATH_CONSTANTS.SCRIPTS_DIR);
 
-    // Ensure .flightpath/scripts directory exists
+    // Ensure .ctrlyoke/scripts directory exists
     try {
       await fs.promises.mkdir(scriptsDir, { recursive: true });
     } catch {

@@ -1,18 +1,18 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { EndConditionHandler } from "../../flightpath/EndConditionHandler";
+import { EndConditionHandler } from "../../core/EndConditionHandler";
 import {
   EndConditionEvaluator,
   type EvaluationResult,
-} from "../../flightpath/EndConditionEvaluator";
-import { PromptQueue } from "../../flightpath/PromptQueue";
-import { WorkflowStateMachine } from "../../flightpath/WorkflowStateMachine";
+} from "../../core/EndConditionEvaluator";
+import { PromptQueue } from "../../core/PromptQueue";
+import { WorkflowStateMachine } from "../../core/WorkflowStateMachine";
 import {
   HarnessIntegration,
   HarnessStatus,
-} from "../../flightpath/HarnessIntegration";
+} from "../../core/HarnessIntegration";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
-import { type PromptStep } from "../../types/FlightPathTypes";
+import { type PromptStep } from "../../types/CtrlYokeTypes";
 import {
   WORKFLOW_ATTEMPT_STATUS,
   FINAL_STEP_PHASES,

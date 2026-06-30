@@ -5,7 +5,7 @@ import {
   PromptStep,
   type WorkflowAttemptTarget,
   type EndConditionAction,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import {
   STATUS_MESSAGE_SEVERITY,
   CONDITION_ACTIONS,
@@ -214,7 +214,7 @@ export class EndConditionHandler {
     Log.error(`❌ ${errorMessage}`);
 
     const action = await this.platform?.showChoice(
-      `FlightPath: ${errorMessage}`,
+      `ctrlyoke: ${errorMessage}`,
       DIALOG_ACTIONS.STOP_WORKFLOW,
       DIALOG_ACTIONS.SKIP_CONDITION,
       DIALOG_ACTIONS.OPEN_SCRIPT
@@ -383,7 +383,7 @@ export class EndConditionHandler {
         // Failed to send retry prompt - get actual reason from integration
         const failureReason = retryContext.integration.getLastFailureReason();
         this.platform?.error(
-          `FlightPath: Failed to send retry prompt: ${failureReason}`
+          `ctrlyoke: Failed to send retry prompt: ${failureReason}`
         );
         return { shouldContinue: false, failureReason };
       }
@@ -467,7 +467,7 @@ export class EndConditionHandler {
         : `End condition validation failed.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}`;
 
     const action = await this.platform?.showChoice(
-      `FlightPath: ${message}`,
+      `ctrlyoke: ${message}`,
       DIALOG_ACTIONS.STOP_WORKFLOW,
       DIALOG_ACTIONS.CONTINUE_ANYWAY,
       DIALOG_ACTIONS.RETRY_ONCE_MORE

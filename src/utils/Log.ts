@@ -38,9 +38,9 @@ export class Log {
   /**
    * Initialize logging. In dev builds, automatically uses TRACE level and writes
    * log files unconditionally. In production builds, reads from VS Code's log level
-   * setting and only writes log files when `flightpath.enableDiagnosticLogs` is true.
+   * setting and only writes log files when `ctrlyoke.enableDiagnosticLogs` is true.
    *
-   * @param workspaceRoot Resolved workspace root (where `.flightpath` lives), or
+   * @param workspaceRoot Resolved workspace root (where `.ctrlyoke` lives), or
    *   `undefined` when no folder is open. Passed in by the extension entry point
    *   so this shared module never depends on the VS Code workspace-resolution
    *   layer; the CLI uses {@link initializeCli} instead.
@@ -49,7 +49,7 @@ export class Log {
     context: vscode.ExtensionContext,
     workspaceRoot?: string
   ): void {
-    this.outputChannel = vscode.window.createOutputChannel("FlightPath");
+    this.outputChannel = vscode.window.createOutputChannel("ctrlyoke");
     context.subscriptions.push(this.outputChannel);
 
     this.workspaceRoot = workspaceRoot;
@@ -77,7 +77,7 @@ export class Log {
       // React to setting changes at runtime
       context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((e) => {
-          if (e.affectsConfiguration("flightpath.enableDiagnosticLogs")) {
+          if (e.affectsConfiguration("ctrlyoke.enableDiagnosticLogs")) {
             const enabled = ConfigurationUtils.isDiagnosticLogsEnabled();
             if (enabled && !this.logFilePath) {
               this.openLogFile();
@@ -89,17 +89,17 @@ export class Log {
       );
     }
 
-    this.info("FlightPath logging initialized");
+    this.info("ctrlyoke logging initialized");
   }
 
   /**
    * Initialize logging for the standalone CLI binary.
    *
    * Must be called early in `runCommand()` before any Log.* calls.
-   * Redirects all log output to `.flightpath/logs/flightpath-cli-<timestamp>.log`
+   * Redirects all log output to `.ctrlyoke/logs/ctrlyoke-cli-<timestamp>.log`
    * and suppresses console output so the terminal stays clean for prompt output.
    *
-   * @param workspaceDir - Working directory (parent of .flightpath/).
+   * @param workspaceDir - Working directory (parent of .ctrlyoke/).
    * @param verbose      - When true, enables DEBUG level; otherwise INFO.
    */
   static initializeCli(workspaceDir: string, verbose = false): void {
@@ -108,14 +108,14 @@ export class Log {
 
     const logDir = path.join(
       workspaceDir,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.LOGS_DIR
     );
     try {
       fs.mkdirSync(logDir, { recursive: true });
       this.cliLogFilePath = path.join(
         logDir,
-        `flightpath-cli-${Date.now()}.log`
+        `ctrlyoke-cli-${Date.now()}.log`
       );
       fs.writeFileSync(this.cliLogFilePath, ""); // create / truncate
       this.cleanupOldLogs(logDir);
@@ -126,10 +126,10 @@ export class Log {
   }
 
   /**
-   * Open a new timestamped log file in .flightpath/logs/.
+   * Open a new timestamped log file in .ctrlyoke/logs/.
    * Called on initialization (dev always, prod when diagnostic logging enabled).
    *
-   * Bails out silently when .flightpath/ does not yet exist so that file
+   * Bails out silently when .ctrlyoke/ does not yet exist so that file
    * logging never creates the directory scaffold for untrusted workspaces
    * (which would bypass the workspace trust gate).
    */
@@ -137,17 +137,17 @@ export class Log {
     if (!this.workspaceRoot) {
       return;
     }
-    const fpDir = path.join(this.workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR);
+    const fpDir = path.join(this.workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
     // Only write logs if the workspace has already been initialized.
-    // Creating .flightpath/logs/ with { recursive: true } would implicitly
-    // create .flightpath/ itself, bypassing the workspace trust check.
+    // Creating .ctrlyoke/logs/ with { recursive: true } would implicitly
+    // create .ctrlyoke/ itself, bypassing the workspace trust check.
     if (!fs.existsSync(fpDir)) {
       return;
     }
     const logDir = path.join(fpDir, PATH_CONSTANTS.LOGS_DIR);
     try {
       fs.mkdirSync(logDir, { recursive: true });
-      this.logFilePath = path.join(logDir, `flightpath-${Date.now()}.log`);
+      this.logFilePath = path.join(logDir, `ctrlyoke-${Date.now()}.log`);
       fs.writeFileSync(this.logFilePath, ""); // truncate on each session start
       this.cleanupOldLogs(logDir);
     } catch {
@@ -157,7 +157,7 @@ export class Log {
 
   /**
    * Start writing log output to a file now that the workspace has been
-   * initialized (i.e. trust has just been granted and .flightpath/ exists).
+   * initialized (i.e. trust has just been granted and .ctrlyoke/ exists).
    *
    * Called by WorkflowOrchestrator.handleInitializeWorkspace() immediately after
    * WorkspaceInitializer.initializeIfNeeded() creates the directory scaffold.
@@ -179,7 +179,7 @@ export class Log {
       const files = fs.readdirSync(logDir);
       const now = Date.now();
       for (const file of files) {
-        if (!file.startsWith("flightpath-") || !file.endsWith(".log")) {
+        if (!file.startsWith("ctrlyoke-") || !file.endsWith(".log")) {
           continue;
         }
         // Skip the single-file hook debug logs — hooks manage those themselves
@@ -347,7 +347,7 @@ export class Log {
 
     if (IS_DEV_MODE) {
       // Also log to console for development
-      console.log(`FlightPath ${logEntry}`);
+      console.log(`ctrlyoke ${logEntry}`);
     }
 
     if (this.logFilePath) {

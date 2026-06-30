@@ -4,7 +4,7 @@ import {
   SETTING_SCOPES,
   type SettingWriteScope,
 } from "@/types/messages";
-import type { McpServerConfig } from "@root/types/FlightPathTypes";
+import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type {
   AnyTargetId,
   LocalMcpServerEntry,

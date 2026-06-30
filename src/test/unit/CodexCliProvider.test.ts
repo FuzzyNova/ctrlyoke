@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { CodexCliProvider } from "../../flightpath/harness/codex/CodexCliProvider";
+import { CodexCliProvider } from "../../core/harness/codex/CodexCliProvider";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -177,7 +177,7 @@ suite("CodexCliProvider", () => {
       );
       const workingFilePath = path.join(
         workspaceRoot,
-        ".flightpath",
+        ".ctrlyoke",
         "wf.json"
       );
 

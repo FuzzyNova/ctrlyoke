@@ -75,7 +75,7 @@ export const WorkspaceDiffPane: React.FC = () => {
       }
       const { unifiedDiff } = await workspaceGitRefDiff(ref);
       const safeName = refLabel.replace(/[^a-z0-9_]/gi, "-").toLowerCase();
-      downloadTextFile(`flightpath-${safeName}.diff`, unifiedDiff);
+      downloadTextFile(`ctrlyoke-${safeName}.diff`, unifiedDiff);
     } catch {
       // ignore download errors
     } finally {

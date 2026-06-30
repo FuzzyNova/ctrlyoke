@@ -46,7 +46,7 @@ describe("setupBrowserNavigation", () => {
       "/?token=t&viewer=explorer&file=src/a.ts"
     );
     cleanup = setupBrowserNavigation();
-    expect(document.title).toBe("a.ts — FlightPath");
+    expect(document.title).toBe("a.ts — ctrlyoke");
   });
 
   it("keeps token-only startup as an implicit recent-workflow route", () => {

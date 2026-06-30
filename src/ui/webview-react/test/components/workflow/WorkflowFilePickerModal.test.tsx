@@ -19,7 +19,7 @@ describe("WorkflowFilePickerModal", () => {
     hostedFetchMock.mockResolvedValueOnce({
       files: [
         {
-          path: "C:\\dev\\FlightPath\\flows\\example.flightpath.yaml",
+          path: "C:\\dev\\ctrlyoke\\flows\\example.flightpath.yaml",
           relativePath: "flows\\example.flightpath.yaml",
         },
       ],

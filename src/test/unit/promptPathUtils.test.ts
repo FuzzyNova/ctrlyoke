@@ -67,7 +67,7 @@ suite("promptPathUtils", () => {
       assert.strictEqual(looksLikeFilePath("   "), false);
     });
 
-    test("returns false for FlightPath inline reference starting with #", () => {
+    test("returns false for ctrlyoke inline reference starting with #", () => {
       assert.strictEqual(
         looksLikeFilePath("#selection:src/index.ts:10-20"),
         false

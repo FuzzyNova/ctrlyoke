@@ -1,7 +1,7 @@
-# FlightPath VS Code Extension
+# ctrlyoke VS Code Extension
 
 <projectPurpose>
-FlightPath automates AI coding harnesses through structured YAML/JSON/Markdown workflows, sequential execution, end-condition validation, pause/resume support, and context-aware prompt expansion. The repository contains a shared workflow engine plus VS Code, CLI, MCP server, and React dashboard adapters around that core.
+ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown workflows, sequential execution, end-condition validation, pause/resume support, and context-aware prompt expansion. The repository contains a shared workflow engine plus VS Code, CLI, MCP server, and React dashboard adapters around that core.
 </projectPurpose>
 
 <orientation>
@@ -12,26 +12,26 @@ FlightPath automates AI coding harnesses through structured YAML/JSON/Markdown w
 <debugging>
 ## Debugging
 
-**Log files** (in `.flightpath/logs/`):
+**Log files** (in `.ctrlyoke/logs/`):
 
-- `flightpath-<timestamp>.log` — session log; state transitions, orchestration flow, session ID resolution. Start here for unexpected stops or state issues.
-- `flightpath-<harness>-hook-debug.log` (e.g. `flightpath-copilot-hook-debug.log`) — every hook/notify invocation and result. Start here when completion never fires or session IDs don't match.
+- `ctrlyoke-<timestamp>.log` — session log; state transitions, orchestration flow, session ID resolution. Start here for unexpected stops or state issues.
+- `ctrlyoke-<harness>-hook-debug.log` (e.g. `ctrlyoke-copilot-hook-debug.log`) — every hook/notify invocation and result. Start here when completion never fires or session IDs don't match.
 
-**Working files** (in `.flightpath/.queue/`):
+**Working files** (in `.ctrlyoke/.queue/`):
 
 - `<name>.flightpath.json` — live working copy with `_runtime` blocks per step (harness, sessionId, responseText, timestamps).
 - `<name>.runner.json` — runner lock; a stale file with a dead PID can cause false "already running" errors — safe to delete.
 
-**History files** (in `.flightpath/.history/<name>-<timestamp>/run-<timestamp>/`):
+**History files** (in `.ctrlyoke/.history/<name>-<timestamp>/run-<timestamp>/`):
 
 - `events.jsonl` — per-step output events (one CLI output chunk per line). Useful for comparing actual AI output vs. what an end-condition script received, or diagnosing why a retry loop triggered.
 - `manifest.json` — step metadata and run summary.
 
 **Adding logs**: use `Log` from `src/utils/Log.ts` for extension/backend code; use `WebviewLog` from `src/ui/webview-react/utils/logger.ts` for webview/UI code. Do not use `console.log` directly.
 
-**Crash investigation**: a VS Code "crash" a few seconds after a workflow completes is usually an **extension-host V8 heap OOM** (the ext host is a Node UtilityProcess), not a webview/GPU crash — the tell is the FlightPath session log stopping dead mid-line with no error written. Minidumps land in `%APPDATA%\Code\Crashpad\reports\*.dmp`; scan them for ASCII strings (`electron.v8-oom.is_heap_oom=1`, `CALL_AND_RETRY_LAST`) to confirm — no symbol server needed. A single large allocation on an already-large heap (not a slow leak) is the typical shape.
+**Crash investigation**: a VS Code "crash" a few seconds after a workflow completes is usually an **extension-host V8 heap OOM** (the ext host is a Node UtilityProcess), not a webview/GPU crash — the tell is the ctrlyoke session log stopping dead mid-line with no error written. Minidumps land in `%APPDATA%\Code\Crashpad\reports\*.dmp`; scan them for ASCII strings (`electron.v8-oom.is_heap_oom=1`, `CALL_AND_RETRY_LAST`) to confirm — no symbol server needed. A single large allocation on an already-large heap (not a slow leak) is the typical shape.
 
-**Temp prompt files**: prompt files under `.flightpath/temp/` are deleted by `TempFileManager` as soon as the turn that consumed them completes. Never try to re-read a temp file that was referenced in an *earlier* turn — it will 404. Infer intent from the changes already made instead of re-fetching the source.
+**Temp prompt files**: prompt files under `.ctrlyoke/temp/` are deleted by `TempFileManager` as soon as the turn that consumed them completes. Never try to re-read a temp file that was referenced in an *earlier* turn — it will 404. Infer intent from the changes already made instead of re-fetching the source.
 </debugging>
 
 <commonCommands>
@@ -70,7 +70,7 @@ FlightPath automates AI coding harnesses through structured YAML/JSON/Markdown w
 1. Prompt files (`.flightpath.yaml/.yml/.json`, `.prompt.md`) are parsed and validated by `PromptFileParser` against `schemas/prompt-schema.json`.
 2. `WorkflowOrchestrator` manages harness integrations and shared services.
 3. `WorkflowInstance`, `WorkflowExecutor`, `WorkflowStateMachine`, `PromptQueue`, and end-condition classes run the workflow lifecycle.
-4. `src/flightpath/harness/` adapts the core engine to CLI harnesses, shared CLI services, and Copilot Chat.
+4. `src/core/harness/` adapts the core engine to CLI harnesses, shared CLI services, and Copilot Chat.
 5. `src/ui/` is the VS Code-side dashboard adapter layer; `src/ui/webview-react/` is the React client used by both the webview and hosted browser dashboard.
 6. `src/cli.ts` and `src/mcp-server.ts` provide standalone binaries on top of the same core.
 </architecture>
@@ -82,9 +82,9 @@ FlightPath automates AI coding harnesses through structured YAML/JSON/Markdown w
 | `src/extension.ts` | VS Code extension entry point and registration wiring |
 | `src/cli.ts`, `src/cli/` | Standalone CLI binary and CLI-only helpers |
 | `src/mcp-server.ts` | Standalone MCP server binary |
-| `src/flightpath/*.ts` | Core workflow engine and runtime orchestration |
-| `src/flightpath/orchestration/` | File loading, watching, command handling, history, session helpers |
-| `src/flightpath/harness/` | Harness runtime, CLI provider implementations, shared CLI services, Copilot Chat integration |
+| `src/core/*.ts` | Core workflow engine and runtime orchestration |
+| `src/core/orchestration/` | File loading, watching, command handling, history, session helpers |
+| `src/core/harness/` | Harness runtime, CLI provider implementations, shared CLI services, Copilot Chat integration |
 | `src/ui/` | VS Code-side dashboard bridge, message routing, notifications, serialization |
 | `src/ui/webview-react/` | React dashboard, Zustand stores, hooks, components, hosted-browser support |
 | `src/types/` | Shared contracts and runtime constants across core/UI/server |
@@ -96,8 +96,8 @@ FlightPath automates AI coding harnesses through structured YAML/JSON/Markdown w
 
 <singleSourcesOfTruth>
 - `src/types/DashboardConstants.ts` — shared string constants and helper union types
-- `src/types/FlightPathTypes.ts` — core workflow and harness contracts
-- `src/config/FlightPathConfigService.ts` — platform-agnostic config hierarchy
+- `src/types/CtrlYokeTypes.ts` — core workflow and harness contracts
+- `src/config/CtrlYokeConfigService.ts` — platform-agnostic config hierarchy
 - `src/utils/ConfigurationUtils.ts` — VS Code settings access
 - `src/utils/ModelConstants.ts` — model lists and display metadata
 - `schemas/prompt-schema.json` — prompt schema source

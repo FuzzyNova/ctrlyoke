@@ -13,7 +13,7 @@ import {
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
-import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
+import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import {
   getFileCompletions,
   getHashCompletions,
@@ -28,7 +28,7 @@ import * as fs from "fs";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import { encode } from "gpt-tokenizer";
-import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
+import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { WebviewSettingsSync, PostMessageFn } from "./WebviewSettingsSync";
 import type { WorkflowSerializer } from "./WorkflowSerializer";
 import type {
@@ -50,7 +50,7 @@ import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
 import {
   getPtyProcessManager,
   ptyPostMessage,
-} from "../flightpath/harness/PtyProcessManager";
+} from "../core/harness/PtyProcessManager";
 import {
   safeDiscoverLocalMcpServers,
   safeFetchMcpRegistry,
@@ -59,7 +59,7 @@ import { PriorContextPreviewBuilder } from "../utils/PriorContextPreviewBuilder"
 import { HarnessFileManager } from "../utils/HarnessFileManager";
 import { HarnessMcpExporter } from "../utils/HarnessMcpExporter";
 import { McpRegistryFileManager } from "../utils/McpRegistryFileManager";
-import { HistorySearchService } from "../flightpath/orchestration/HistorySearchService";
+import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 
 const execFileAsync = promisify(execFile);
 const GIT_VALIDATION_TIMEOUT_MS = 5000;
@@ -67,7 +67,7 @@ const GIT_VALIDATION_TIMEOUT_MS = 5000;
 /**
  * WebviewMessageRouter
  *
- * Dispatch table replacing the giant switch statement in FlightPathWebviewProvider.
+ * Dispatch table replacing the giant switch statement in CtrlYokeWebviewProvider.
  * Routes incoming webview messages to the appropriate handler on the provider,
  * WebviewSettingsSync, or WorkflowSerializer.
  *
@@ -375,11 +375,11 @@ export class WebviewMessageRouter {
 
     // ── Dashboard — Workflow Control ──────────────────────────────────────
     table.set(MESSAGE_TYPES.NEW_PROMPT, () => {
-      vscode.commands.executeCommand("flightpath.createDraftPrompt");
+      vscode.commands.executeCommand("ctrlyoke.createDraftPrompt");
     });
 
     table.set(MESSAGE_TYPES.SELECT_FILE, () => {
-      vscode.commands.executeCommand("flightpath.selectPromptFile");
+      vscode.commands.executeCommand("ctrlyoke.selectPromptFile");
     });
 
     table.set(MESSAGE_TYPES.APPEND_FILE, async (message) => {
@@ -391,11 +391,11 @@ export class WebviewMessageRouter {
         );
         return;
       }
-      vscode.commands.executeCommand("flightpath.appendFromDashboard");
+      vscode.commands.executeCommand("ctrlyoke.appendFromDashboard");
     });
 
     table.set(MESSAGE_TYPES.EDIT_FILE, () => {
-      vscode.commands.executeCommand("flightpath.editCurrentPromptFile");
+      vscode.commands.executeCommand("ctrlyoke.editCurrentPromptFile");
     });
 
     table.set(MESSAGE_TYPES.CLEAR_WORKFLOW, async (_message) => {
@@ -419,23 +419,23 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.RUN, () => {
-      vscode.commands.executeCommand("flightpath.run");
+      vscode.commands.executeCommand("ctrlyoke.run");
     });
 
     table.set(MESSAGE_TYPES.PAUSE, () => {
-      vscode.commands.executeCommand("flightpath.pause");
+      vscode.commands.executeCommand("ctrlyoke.pause");
     });
 
     table.set(MESSAGE_TYPES.RESUME, () => {
-      vscode.commands.executeCommand("flightpath.resume");
+      vscode.commands.executeCommand("ctrlyoke.resume");
     });
 
     table.set(MESSAGE_TYPES.STOP, () => {
-      vscode.commands.executeCommand("flightpath.stop");
+      vscode.commands.executeCommand("ctrlyoke.stop");
     });
 
     table.set(MESSAGE_TYPES.SHOW_OUTPUT, () => {
-      vscode.commands.executeCommand("flightpath.showOutputPanel");
+      vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
     });
 
     table.set(MESSAGE_TYPES.EXPORT_OUTPUT, async (message) => {
@@ -548,7 +548,7 @@ export class WebviewMessageRouter {
       if (!workspaceRoot) {
         return;
       }
-      await vscode.commands.executeCommand("flightpath.openGitChange", {
+      await vscode.commands.executeCommand("ctrlyoke.openGitChange", {
         workspaceRoot,
         ref: message.ref,
       });
@@ -704,10 +704,10 @@ export class WebviewMessageRouter {
       }
     });
 
-    table.set(MESSAGE_TYPES.IMPORT_TO_FLIGHTPATH, async (message) => {
+    table.set(MESSAGE_TYPES.IMPORT_TO_CTRLYOKE, async (message) => {
       const workspaceRoot = this.getWorkspaceRoot();
       try {
-        await HarnessFileManager.importToFlightPath(
+        await HarnessFileManager.importToCtrlYoke(
           message.sourcePath,
           workspaceRoot,
           message.fileType,
@@ -1762,7 +1762,7 @@ export class WebviewMessageRouter {
    * an actual file.  Resolution order mirrors PromptFileParser:
    *   1. Absolute path
    *   2. Relative to workspace root
-   *   3. Relative to .flightpath directory inside workspace root
+   *   3. Relative to .ctrlyoke directory inside workspace root
    */
   private async handleFileRefValidation(filePath: string): Promise<void> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
@@ -1779,7 +1779,7 @@ export class WebviewMessageRouter {
           path.resolve(workspaceRoot, filePath),
           path.resolve(
             workspaceRoot,
-            PATH_CONSTANTS.FLIGHTPATH_DIR,
+            PATH_CONSTANTS.CTRLYOKE_DIR,
             filePath.replace(/^\.\.?\//, "")
           ),
         ];
@@ -1942,7 +1942,7 @@ export class WebviewMessageRouter {
             path.resolve(workspaceRoot, filePath),
             path.resolve(
               workspaceRoot,
-              PATH_CONSTANTS.FLIGHTPATH_DIR,
+              PATH_CONSTANTS.CTRLYOKE_DIR,
               filePath.replace(/^\.\.?\//, "")
             ),
           ]
@@ -2082,7 +2082,7 @@ export class WebviewMessageRouter {
           `Blocked dashboard request to open path outside workspace: ${relativePath}`
         );
         vscode.window.showWarningMessage(
-          "FlightPath blocked a file link outside the current workspace."
+          "ctrlyoke blocked a file link outside the current workspace."
         );
         return;
       }
@@ -2130,7 +2130,7 @@ export class WebviewMessageRouter {
         const raw = fs.readFileSync(workingFilePath, "utf-8");
         const workingFile = JSON.parse(raw) as { steps?: unknown[] };
         const steps = (workingFile.steps ??
-          []) as import("../types/FlightPathTypes").WorkflowStep[];
+          []) as import("../types/CtrlYokeTypes").WorkflowStep[];
         return PriorContextPreviewBuilder.buildPreview(ref, stepCount, steps);
       } catch {
         return `<!-- Could not read workflow state for $${ref} -->`;
@@ -2162,7 +2162,7 @@ export class WebviewMessageRouter {
         const raw = fs.readFileSync(workingFilePath, "utf-8");
         const workingFile = JSON.parse(raw) as { steps?: unknown[] };
         const steps = (workingFile.steps ??
-          []) as import("../types/FlightPathTypes").WorkflowStep[];
+          []) as import("../types/CtrlYokeTypes").WorkflowStep[];
         content = PriorContextPreviewBuilder.buildPreview(
           ref,
           stepCount,
@@ -2724,7 +2724,7 @@ export class WebviewMessageRouter {
 }
 
 /**
- * Callbacks from the router back to the FlightPathWebviewProvider.
+ * Callbacks from the router back to the CtrlYokeWebviewProvider.
  * These are methods that remain on the provider because they're part
  * of the public API or touch provider-internal state.
  */
@@ -2742,7 +2742,7 @@ export interface WebviewRouterCallbacks {
   getAvailableIps?: () => string[];
   /**
    * Called synchronously when the VS Code panel sends READY.
-   * Used by FlightPathWebviewProvider to cancel pending RECONNECT retries
+   * Used by CtrlYokeWebviewProvider to cancel pending RECONNECT retries
    * so no stale retries fire after the handshake is already complete.
    */
   onPanelReady?: () => void;

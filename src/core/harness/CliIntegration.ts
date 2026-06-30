@@ -7,7 +7,7 @@ import {
   CliResult,
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
-import { PromptStep, McpServerConfig } from "../../types/FlightPathTypes";
+import { PromptStep, McpServerConfig } from "../../types/CtrlYokeTypes";
 import { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -21,7 +21,7 @@ import {
   type HarnessId,
   HOOK_EVENT_ORDER,
 } from "../../types/DashboardConstants";
-import { configService } from "../../config/FlightPathConfigService";
+import { configService } from "../../config/CtrlYokeConfigService";
 import type { ICliProvider } from "./shared/interfaces/ICliProvider";
 import type { ToolPermissionConfig } from "./shared/interfaces/IToolPermissionMapper";
 import { CliFailureTracker } from "./shared/CliFailureTracker";
@@ -38,7 +38,7 @@ import { CliSessionResolverAdapter } from "./shared/CliSessionResolverAdapter";
 import { CliTransportCoordinator } from "./shared/CliTransportCoordinator";
 import type { ResolvedProperties } from "../../utils/PropertyResolver";
 import type { PtySession } from "./PtyProcessManager";
-import type { HookEvent } from "../../types/FlightPathTypes";
+import type { HookEvent } from "../../types/CtrlYokeTypes";
 
 /** Timeout (ms) for waiting for SessionStart hook from CLI harness */
 /**
@@ -260,7 +260,7 @@ export class CliIntegration extends HarnessIntegration {
    *
    * @param toolPermissions Resolved permissions from workflow context.
    *   - undefined: no workflow context — falls back to ConfigurationUtils global settings
-   *   - null: none mode — returns false (FlightPath can't know what the harness allows)
+   *   - null: none mode — returns false (ctrlyoke can't know what the harness allows)
    *   - ToolPermissionConfig: use the resolved config directly
    */
   protected hasFullPermissions(
@@ -808,7 +808,7 @@ export class CliIntegration extends HarnessIntegration {
 
       // Remove hook artifacts from the previous prompt before setting up new ones.
       // Providers that write per-prompt files (Copilot: .github/hooks/*.json,
-      // Claude: .flightpath/temp/claude-hook-settings-*.json) implement this so
+      // Claude: .ctrlyoke/temp/claude-hook-settings-*.json) implement this so
       // that hooks from earlier prompts don't persist into the current prompt's run.
       // Skip when hooks are explicitly disabled (null) — no prior hooks to clean up.
       if (!hooksExplicitlyDisabled) {
@@ -816,7 +816,7 @@ export class CliIntegration extends HarnessIntegration {
       }
 
       if (isInteractive) {
-        // Notification hooks (FlightPath completion detection + user hooks combined)
+        // Notification hooks (ctrlyoke completion detection + user hooks combined)
         const hookArgs =
           (await this.provider.buildNotificationHookArgs?.(
             extensionPath,
@@ -1102,7 +1102,7 @@ export class CliIntegration extends HarnessIntegration {
   /**
    * Merge server-level `deniedTools` from McpServerConfig objects into the tool permission config.
    *
-   * Each McpServerConfig may declare bare tool names to deny (e.g. `["flightpath_append_queue"]`).
+   * Each McpServerConfig may declare bare tool names to deny (e.g. `["ctrlyoke_append_queue"]`).
    * These are translated to `mcp__<id>__<tool>` patterns and appended to the resolved deny list
    * before the harness-specific `buildPermissionArgs` call.
    *

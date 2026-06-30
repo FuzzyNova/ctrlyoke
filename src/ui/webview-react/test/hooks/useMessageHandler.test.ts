@@ -519,7 +519,7 @@ describe("STARTUP_COMPLETE", () => {
     useUiStore
       .getState()
       .setActiveWorkflowWorkingFilePath(
-        "c:/dev/FlightPath/.flightpath/.queue/example.flightpath.json"
+        "c:/dev/ctrlyoke/.ctrlyoke/.queue/example.flightpath.json"
       );
 
     renderHook(() => useMessageHandler());
@@ -654,7 +654,7 @@ describe("NOTIFICATION_EVENT", () => {
       dispatch(MESSAGE_TYPES.NOTIFICATION_EVENT, {
         event: {
           id: "workflow:wf-1:completed",
-          title: "FlightPath - Workflow Timed Out",
+          title: "ctrlyoke - Workflow Timed Out",
           body: "refactor.flightpath.yaml - completed 2 of 4 prompts before timeout",
           severity: "warning",
           tag: "workflow:wf-1",
@@ -692,13 +692,13 @@ describe("OPEN_HARNESS_DIR_RESULT", () => {
       dispatch(MESSAGE_TYPES.OPEN_HARNESS_DIR_RESULT, {
         success: false,
         error:
-          "The workspace skill folder does not exist yet: C:\\dev\\FlightPath\\.flightpath\\skills",
+          "The workspace skill folder does not exist yet: C:\\dev\\ctrlyoke\\.ctrlyoke\\skills",
       });
     });
 
     expect(useUiStore.getState().toast).toEqual({
       message:
-        "The workspace skill folder does not exist yet: C:\\dev\\FlightPath\\.flightpath\\skills",
+        "The workspace skill folder does not exist yet: C:\\dev\\ctrlyoke\\.ctrlyoke\\skills",
       type: "warning",
       visible: true,
     });

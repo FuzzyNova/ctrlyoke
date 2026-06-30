@@ -439,8 +439,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    *
    * **Project Directory Resolution:**
    * - Base: `~/.claude/projects/`
-   * - Path: Normalized workspace path (e.g., `dev_FlightPath`)
-   * - Full: `~/.claude/projects/dev_FlightPath/`
+   * - Path: Normalized workspace path (e.g., `dev_ctrlyoke`)
+   * - Full: `~/.claude/projects/dev_ctrlyoke/`
    *
    * **Matching Strategy:**
    * - Session ID: Direct file lookup (much faster)
@@ -837,8 +837,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * @remarks
    * **Path Normalization:**
    * - Replaces path separators with underscores
-   * - Example: `/Users/name/dev/FlightPath` → `dev_FlightPath`
-   * - Windows: `C:\dev\FlightPath` → `dev_FlightPath`
+   * - Example: `/Users/name/dev/ctrlyoke` → `dev_ctrlyoke`
+   * - Windows: `C:\dev\ctrlyoke` → `dev_ctrlyoke`
    *
    * **Directory Structure:**
    * - Base: `~/.claude/projects/`
@@ -868,20 +868,20 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * Converts filesystem path to Claude's normalized format.
    *
    * @param workspacePath - Absolute workspace path
-   * @returns Normalized path (e.g., "C--dev-FlightPath")
+   * @returns Normalized path (e.g., "C--dev-ctrlyoke")
    *
    * @remarks
    * **Normalization Rules:**
    * - Convert drive colon to double dash (Windows: `C:\` → `C--`)
    * - Replace path separators with dashes (leading slash becomes a leading dash)
-   * - Example Windows: `C:\dev\FlightPath` → `C--dev-FlightPath`
-   * - Example Unix: `/home/name/dev/FlightPath` → `-home-name-dev-FlightPath`
+   * - Example Windows: `C:\dev\ctrlyoke` → `C--dev-ctrlyoke`
+   * - Example Unix: `/home/name/dev/ctrlyoke` → `-home-name-dev-ctrlyoke`
    *
    * **Note:** This is based on observed Claude CLI behavior.
    * The actual normalization may vary depending on Claude CLI version.
    */
   private normalizeWorkspacePath(workspacePath: string): string {
-    // Replace drive letter colon with double dash on Windows (e.g., "C:\dev\FlightPath" → "C--dev-FlightPath")
+    // Replace drive letter colon with double dash on Windows (e.g., "C:\dev\ctrlyoke" → "C--dev-ctrlyoke")
     let normalized = workspacePath.replace(/^([A-Z]):[\\\/]/i, "$1--");
 
     // Replace path separators with dashes (leading slash on Unix becomes a leading dash,

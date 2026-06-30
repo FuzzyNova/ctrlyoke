@@ -6,7 +6,7 @@ import { CopilotChatIntegration } from "./harness/chat/CopilotChatIntegration";
 import { CliIntegration } from "./harness/CliIntegration";
 import { VsCodeIntegrationFactory } from "./VsCodeIntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
-import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
+import type { CtrlYokeMcpServerProvider } from "../ui/CtrlYokeMcpServerProvider";
 import { PromptQueue } from "./PromptQueue";
 import {
   QueueState,
@@ -17,7 +17,7 @@ import {
   type PromptStep,
   type WorkflowStep,
   workflowDisplayStep,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import {
   ACTION_TYPES,
   HARNESS_IDS,
@@ -177,9 +177,9 @@ export class WorkflowOrchestrator {
   private startupAutoLoadTriggered: boolean = false;
   /** Timestamp (ms) when setDashboardReady was first called — used to compute READY→STARTUP_COMPLETE latency. */
   private dashboardReadyAt: number = 0;
-  /** Set when FlightPath has not yet been initialized in this workspace. Blocks startup auto-load until resolved. */
+  /** Set when ctrlyoke has not yet been initialized in this workspace. Blocks startup auto-load until resolved. */
   private workspaceInitPending: boolean = false;
-  /** The workspace root path waiting for FlightPath initialization. */
+  /** The workspace root path waiting for ctrlyoke initialization. */
   private pendingInitWorkspaceRoot: string | undefined;
   /** Set on first-ever workspace init — blocks startup until the user chooses a panel layout preference. */
   private layoutPreferencePending: boolean = false;
@@ -196,7 +196,7 @@ export class WorkflowOrchestrator {
   private panelStartupReplayedWorkflowId: string | null = null;
 
   /** MCP server provider for injecting user-defined MCP servers into VS Code (chat harness only) */
-  private mcpServerProvider?: FlightPathMcpServerProvider;
+  private mcpServerProvider?: CtrlYokeMcpServerProvider;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -229,8 +229,8 @@ export class WorkflowOrchestrator {
     // Status bar
     this.statusBarManager = new StatusBarManager(context);
 
-    // Workspace — the folder matching the resolved `.flightpath` root
-    // (honors the `.code-workspace` dir and `flightpath.workspaceDirectory`).
+    // Workspace — the folder matching the resolved `.ctrlyoke` root
+    // (honors the `.code-workspace` dir and `ctrlyoke.workspaceDirectory`).
     this.currentWorkspaceFolder = getVsCodeWorkspaceFolder();
 
     // Shared parsers / orchestration helpers
@@ -308,7 +308,7 @@ export class WorkflowOrchestrator {
   }
 
   /** Set the MCP server provider for injecting user-defined MCP servers (chat harness) */
-  public setMcpServerProvider(provider: FlightPathMcpServerProvider): void {
+  public setMcpServerProvider(provider: CtrlYokeMcpServerProvider): void {
     this.mcpServerProvider = provider;
   }
 
@@ -873,7 +873,7 @@ export class WorkflowOrchestrator {
    * an empty array to clear any stale data left by earlier versions.
    */
   async saveState(): Promise<void> {
-    await this.context.workspaceState.update("flightpath.loadedWorkflows", []);
+    await this.context.workspaceState.update("ctrlyoke.loadedWorkflows", []);
   }
 
   /**
@@ -940,7 +940,7 @@ export class WorkflowOrchestrator {
       this.orchestratorInitialized = true;
       Log.error("Failed to initialize WorkflowOrchestrator:", error);
       vscode.window.showErrorMessage(
-        `FlightPath: Initialization failed: ${error}`
+        `ctrlyoke: Initialization failed: ${error}`
       );
     }
   }
@@ -984,7 +984,7 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Mark FlightPath as not yet initialized in this workspace. Blocks startup
+   * Mark ctrlyoke as not yet initialized in this workspace. Blocks startup
    * auto-load and broadcasts WORKSPACE_INIT_REQUIRED to the webview instead of
    * STARTUP_COMPLETE until handleInitializeWorkspace() is called.
    */
@@ -992,13 +992,13 @@ export class WorkflowOrchestrator {
     this.workspaceInitPending = true;
     this.pendingInitWorkspaceRoot = workspaceRoot;
     Log.info(
-      `FlightPath: Workspace initialization pending for "${workspaceRoot}"`
+      `ctrlyoke: Workspace initialization pending for "${workspaceRoot}"`
     );
   }
 
   /**
-   * Called when the user approves FlightPath initialization from the dashboard.
-   * Creates the .flightpath/ directory scaffold, then resumes the normal
+   * Called when the user approves ctrlyoke initialization from the dashboard.
+   * Creates the .ctrlyoke/ directory scaffold, then resumes the normal
    * startup sequence (triggers auto-load and broadcasts STARTUP_COMPLETE).
    */
   async handleInitializeWorkspace(): Promise<void> {
@@ -1007,7 +1007,7 @@ export class WorkflowOrchestrator {
 
     if (!workspaceRoot) {
       Log.warn(
-        "FlightPath: handleInitializeWorkspace called with no workspace root"
+        "ctrlyoke: handleInitializeWorkspace called with no workspace root"
       );
       return;
     }
@@ -1015,12 +1015,12 @@ export class WorkflowOrchestrator {
     let isNew = false;
     try {
       isNew = await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
-      // .flightpath/ now exists — start file logging for this session.
+      // .ctrlyoke/ now exists — start file logging for this session.
       Log.enableWorkspaceFileLogging();
       if (isNew) {
         void vscode.window
           .showInformationMessage(
-            `FlightPath: Workspace initialized! A ${PATH_CONSTANTS.FLIGHTPATH_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
+            `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
             "Reveal Folder"
           )
           .then((choice) => {
@@ -1028,14 +1028,14 @@ export class WorkflowOrchestrator {
               vscode.commands.executeCommand(
                 "revealFileInOS",
                 vscode.Uri.file(
-                  path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR)
+                  path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR)
                 )
               );
             }
           });
       }
     } catch (err) {
-      Log.warn("FlightPath: Workspace initialization failed:", err);
+      Log.warn("ctrlyoke: Workspace initialization failed:", err);
     }
 
     this.workspaceInitPending = false;
@@ -1913,7 +1913,7 @@ export class WorkflowOrchestrator {
           await this.getActiveInstance().restoreWorkflowFromWorkingFile(
             selected.filePath
           );
-          await vscode.commands.executeCommand("flightpath.dashboard.focus");
+          await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
           Log.info(`Resumed session: ${selected.label}`);
         } catch (loadError) {
           Log.error("Failed to load session:", loadError as Error);
@@ -2356,7 +2356,7 @@ export class WorkflowOrchestrator {
 
     const queueDir = path.join(
       workspaceFolderPath,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.QUEUE_DIR
     );
 

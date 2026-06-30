@@ -361,7 +361,7 @@
   function showConnectionErrorBanner() {
     const certUrl = location.protocol + "//" + location.host + "/cert";
     const html =
-      "<strong>Cannot connect to FlightPath server.</strong> " +
+      "<strong>Cannot connect to ctrlyoke server.</strong> " +
       "The server may be offline, or the certificate is not trusted.<br>" +
       "<strong>iOS Safari fix (requires iOS 18.2+):</strong> " +
       '<a href="' +
@@ -474,7 +474,7 @@
 
   connect();
 
-  window.__flightpathStandalone = true;
+  window.__ctrlyokeStandalone = true;
 
   window.vscodeApi = {
     postMessage(msg) {

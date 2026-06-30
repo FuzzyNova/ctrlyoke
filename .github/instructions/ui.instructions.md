@@ -18,12 +18,12 @@ Key roles:
 
 - **`DashboardBroadcastHub`** fans out shared events to all connected clients, but intentionally does **not** broadcast active-workflow selection or full session replay. Those are per-client operations.
 - **`PostMessageDashboardSink`** is the single source of truth for `IDashboardSink` → message payload translation. If a sink method changes, update this file first and keep provider/server delegates thin.
-- **`FlightPathWebviewProvider`** is the VS Code-specific shell: generates secure HTML, owns READY/RECONNECT lifecycle, queues prompt-editor insert requests until the panel is actually ready, and adds panel-only side effects around otherwise-shared sink behavior.
+- **`CtrlYokeWebviewProvider`** is the VS Code-specific shell: generates secure HTML, owns READY/RECONNECT lifecycle, queues prompt-editor insert requests until the panel is actually ready, and adds panel-only side effects around otherwise-shared sink behavior.
 - **`WebviewMessageRouter`** is the inbound control plane. It uses a dispatch table plus a chained `routeQueue` so most UI mutations happen serially, but long-running workflow execution/resume paths are deliberately fire-and-forget so the queue does not deadlock.
 - **`WebviewSettingsSync`** owns global settings, workflow-property syncing, harness availability, agent/skill discovery, and the `capabilities.json` file consumed by the external MCP server process.
 - **`WorkflowSerializer`** owns workflow save/export/history flows and strips runtime-only working-file data by explicit allowlists before writing YAML/JSON.
 - **`NotificationManager`** is just another hub client; notification payload construction lives in `notifications/CompletionNotificationFactory.ts` so browser and VS Code notifications share wording/rules.
-- **`FlightPathMcpServerProvider`** applies only to the `copilot-chat` harness and only for user-defined stdio MCP servers. The built-in `flightpath` MCP server is registered elsewhere and should not be handled here.
+- **`CtrlYokeMcpServerProvider`** applies only to the `copilot-chat` harness and only for user-defined stdio MCP servers. The built-in `ctrlyoke` MCP server is registered elsewhere and should not be handled here.
 </architecture>
 
 <terminology>
@@ -31,15 +31,15 @@ Key roles:
 - Old: copilot-cli provider, copilot-chat provider, claude-cli provider
 - New: copilot-cli harness, copilot-chat harness, claude-cli harness
 - Constants: HARNESS_IDS (not PROVIDER_IDS)
-- Types: Harness type (from FlightPathTypes)
-- Configuration: flightpath.harness setting
+- Types: Harness type (from CtrlYokeTypes)
+- Configuration: ctrlyoke.harness setting
 - Always use "harness" in new code, comments, and messages
 </terminology>
 
 <criticalPatterns>
 **Per-client replay vs broadcast:** `DashboardBroadcastHub` is for shared events only. Full workflow state, active workflow changes, and targeted startup completion go through per-client replay/send paths.
 
-**Panel reconnect logic is deliberate:** `FlightPathWebviewProvider` sends `RECONNECT` with retry/backoff because VS Code can retain the old iframe across extension-host restarts. Do not “simplify” this by reassigning `webview.html`; that caused raw-HTML/blank-panel regressions.
+**Panel reconnect logic is deliberate:** `CtrlYokeWebviewProvider` sends `RECONNECT` with retry/backoff because VS Code can retain the old iframe across extension-host restarts. Do not “simplify” this by reassigning `webview.html`; that caused raw-HTML/blank-panel regressions.
 
 **READY handling is asymmetric:** panel READY and browser READY differ. Browser READY may complete startup follow-up in the background to avoid blocking the shared router queue; panel READY also replays PTY/controller state and flushes queued editor inserts.
 
@@ -51,11 +51,11 @@ Key roles:
 
 **Capabilities file is external contract:** `WebviewSettingsSync.writeCapabilities()` feeds the separate MCP server process. If harness/model availability semantics change, keep this file in sync.
 
-**Theme vars come from the panel:** `THEME_VARS_CAPTURED` is forwarded through `FlightPathWebviewProvider`/`WebviewMessageRouter` so hosted browser clients can mirror VS Code theme colors.
+**Theme vars come from the panel:** `THEME_VARS_CAPTURED` is forwarded through `CtrlYokeWebviewProvider`/`WebviewMessageRouter` so hosted browser clients can mirror VS Code theme colors.
 </criticalPatterns>
 
 <relatedFiles>
-- `src/ui/FlightPathWebviewProvider.ts` — outer shell for HTML/bootstrap, READY/RECONNECT, panel-only behavior
+- `src/ui/CtrlYokeWebviewProvider.ts` — outer shell for HTML/bootstrap, READY/RECONNECT, panel-only behavior
 - `src/ui/WebviewMessageRouter.ts` — inbound dispatch table and client-scoped routing rules
 - `src/ui/WebviewSettingsSync.ts` — settings/workflow-property sync plus capabilities.json generation
 - `src/ui/PostMessageDashboardSink.ts` — canonical sink-to-message translation

@@ -2,8 +2,8 @@ import * as assert from "assert";
 import { suite, test } from "mocha";
 import { FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
-import { CliResponseCollector } from "../../flightpath/harness/shared/CliResponseCollector";
-import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
+import { CliResponseCollector } from "../../core/harness/shared/CliResponseCollector";
+import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { Log } from "../../utils/Log";
 
 function createParsedOutput(

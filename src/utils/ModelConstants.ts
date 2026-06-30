@@ -2,7 +2,7 @@
  * ModelConstants - Single source of truth for model definitions
  *
  * This file defines all supported AI models with their display names.
- * Other files (ModelRegistry.ts, ValidationUtils.ts, FlightPathWebviewProvider.ts)
+ * Other files (ModelRegistry.ts, ValidationUtils.ts, CtrlYokeWebviewProvider.ts)
  * import from here instead of maintaining duplicate lists.
  *
  * package.json enums are synced via: `npm run sync-models`
@@ -61,7 +61,7 @@ export const COPILOT_MODELS: Record<string, string> = {
  * Update this when new CLI models become available.
  *
  * Last updated: 2026-04-26
- * Command: FlightPath: Export Discovered Models → cliModelIds
+ * Command: ctrlyoke: Export Discovered Models → cliModelIds
  */
 export const COPILOT_CLI_MODEL_IDS = [
   "claude-sonnet-4.6",
@@ -139,7 +139,7 @@ export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
 
 /**
  * Sentinel value to suppress the --model flag entirely.
- * When a user selects "none", FlightPath skips the --model argument so the
+ * When a user selects "none", ctrlyoke skips the --model argument so the
  * harness uses its own default or the user can pass a custom model via additionalArgs.
  * Useful for harnesses that require a custom model string (e.g., hosted Bedrock).
  */

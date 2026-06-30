@@ -29,7 +29,7 @@ export const SaveWorkflowDialog: React.FC = () => {
 
   // Normalize a file path to use the given format extension.
   function applyFormat(p: string, fmt: "yaml" | "json"): string {
-    const target = `.flightpath.${fmt}`;
+    const target = `.ctrlyoke.${fmt}`;
     return p
       .replace(/\.flightpath\.(yaml|yml|json)$/i, target)
       .replace(/\.(yaml|yml|json)$/i, target);

@@ -12,7 +12,7 @@ interface State {
 }
 
 /**
- * Top-level error boundary for the FlightPath webview.
+ * Top-level error boundary for the ctrlyoke webview.
  *
  * Catches uncaught render/effect errors (including React error #185 from
  * useSyncExternalStore tearing) and logs the component stack so we can
@@ -51,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
             color: "var(--vscode-errorForeground, #f44)",
           }}
         >
-          <strong>FlightPath encountered an error.</strong>
+          <strong>ctrlyoke encountered an error.</strong>
           <pre
             style={{
               whiteSpace: "pre-wrap",

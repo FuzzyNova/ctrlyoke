@@ -1,17 +1,17 @@
-# FlightPath
+# ctrlyoke
 
-FlightPath is a VS Code extension that automates AI coding assistants through structured YAML/JSON/Markdown workflows. Define multi-step prompt sequences, execute them against any supported harness, and let the AI continue working unattended.
+ctrlyoke is a VS Code extension that automates AI coding assistants through structured YAML/JSON/Markdown workflows. Define multi-step prompt sequences, execute them against any supported harness, and let the AI continue working unattended.
 
 ---
 
 ## What it does
 
-- **Sequential prompt execution** — define prompts in a YAML or JSON workflow file; FlightPath sends them one at a time, waits for each to finish, and advances automatically
+- **Sequential prompt execution** — define prompts in a YAML or JSON workflow file; ctrlyoke sends them one at a time, waits for each to finish, and advances automatically
 - **Script-based validation** — attach an end condition script to any prompt; if the script returns the expected value the step passes, otherwise the AI retries with a configurable retry prompt
 - **Harness-agnostic** — switch between seven AI harnesses with one setting; the workflow format, permissions, agent/skill injection, and the output dashboard stay the same
-- **Dynamic queue extension** — include `"flightpath"` in `mcpServers` to give the AI MCP tools (`flightpath_append_queue`, `flightpath_queue_status`) so it can extend the workflow queue autonomously
+- **Dynamic queue extension** — include `"ctrlyoke"` in `mcpServers` to give the AI MCP tools (`ctrlyoke_append_queue`, `ctrlyoke_queue_status`) so it can extend the workflow queue autonomously
 - **User-defined hooks** — attach shell commands to harness lifecycle events (`stop`, `sessionStart`, `preToolUse`, `postToolUse`) per prompt, per workflow, or globally in settings
-- **Universal agents and skills** — define agent instruction files once; FlightPath discovers them from standard locations (`.github/agents/`, `.claude/agents/`, `.flightpath/agents/`) and injects content into prompts regardless of harness
+- **Universal agents and skills** — define agent instruction files once; ctrlyoke discovers them from standard locations (`.github/agents/`, `.claude/agents/`, `.ctrlyoke/agents/`) and injects content into prompts regardless of harness
 - **Dashboard with embedded terminal** — a bottom-panel UI with a CodeMirror prompt editor, live xterm.js terminal running the AI CLI directly, streaming output with tool-call visualization, file diff views, undo/redo for workspace changes, and per-run output history
 
 ---
@@ -39,10 +39,10 @@ FlightPath is a VS Code extension that automates AI coding assistants through st
 Set the active harness:
 
 ```json
-{ "flightpath.harness": "claude-cli" }
+{ "ctrlyoke.harness": "claude-cli" }
 ```
 
-CLI harnesses run in **interactive** mode (VS Code terminal with live output) or **headless** mode (background process). Set with `flightpath.cliExecutionMode`.
+CLI harnesses run in **interactive** mode (VS Code terminal with live output) or **headless** mode (background process). Set with `ctrlyoke.cliExecutionMode`.
 
 ---
 
@@ -51,7 +51,7 @@ CLI harnesses run in **interactive** mode (VS Code terminal with live output) or
 ### 1. Open the panel
 
 ```
-Command Palette → FlightPath: Open FlightPath Panel
+Command Palette → ctrlyoke: Open ctrlyoke Panel
 ```
 
 The panel opens in the bottom tab area of VS Code.
@@ -76,8 +76,8 @@ Focus on input validation and authentication logic.
 ### 3. Run
 
 - **Panel** — load a workflow file and click Run
-- **Context menu** — right-click any prompt file → Run with FlightPath
-- **Context menu** — right-click → Queue with FlightPath to append to a running workflow
+- **Context menu** — right-click any prompt file → Run with ctrlyoke
+- **Context menu** — right-click → Queue with ctrlyoke to append to a running workflow
 
 ---
 
@@ -143,7 +143,7 @@ Properties follow a three-tier precedence: **prompt-level → workflow-level →
 | `skills`          | `string[]`                              | Skill file names; content injected into the prompt                              |
 | `resumeSession`   | `boolean`                               | Continue the previous prompt's conversation session                             |
 | `sessionId`       | `string \| number`                      | Resume a session by ID or by prior prompt index                                 |
-| `mcpServers`      | `(string \| McpServerConfig)[] \| null` | MCP servers to inject; `"flightpath"` enables dynamic queue extension           |
+| `mcpServers`      | `(string \| McpServerConfig)[] \| null` | MCP servers to inject; `"ctrlyoke"` enables dynamic queue extension           |
 | `hooks`           | `UserHookConfig[]`                      | Shell commands to run at harness lifecycle events                               |
 | `endCondition`    | `EndCondition`                          | Validation script with retry configuration                                      |
 | `priorContext`    | `string \| number[]`                    | Inject prior prompt outputs: `none`, `previous`, `all`, or index array          |
@@ -169,11 +169,11 @@ endCondition:
 ```yaml
 # Enable dynamic queue extension (AI can append prompts via MCP tools)
 mcpServers:
-  - flightpath
+  - ctrlyoke
 
 # User-defined MCP server alongside the built-in one
 mcpServers:
-  - flightpath
+  - ctrlyoke
   - id: my-database
     command: node
     args: [/path/to/db-mcp-server.js]
@@ -185,11 +185,11 @@ mcpServers:
 mcpServers: null
 ```
 
-The `"flightpath"` shorthand injects the built-in FlightPath MCP server, giving the AI access to `flightpath_append_queue` and `flightpath_queue_status`. Include it on the last prompt (or as `finalStep`) to allow autonomous workflow extension.
+The `"ctrlyoke"` shorthand injects the built-in ctrlyoke MCP server, giving the AI access to `ctrlyoke_append_queue` and `ctrlyoke_queue_status`. Include it on the last prompt (or as `finalStep`) to allow autonomous workflow extension.
 
 ### Final prompt
 
-`finalStep` is a special prompt that runs after all queued prompts complete. If the AI appended new prompts during the final prompt loop and `"flightpath"` is in `mcpServers`, the executor re-runs the queue then `finalStep` again until no new prompts are added.
+`finalStep` is a special prompt that runs after all queued prompts complete. If the AI appended new prompts during the final prompt loop and `"ctrlyoke"` is in `mcpServers`, the executor re-runs the queue then `finalStep` again until no new prompts are added.
 
 ```yaml
 prompts:
@@ -198,7 +198,7 @@ prompts:
 finalStep:
   prompt: "Review the work and append follow-up tasks if needed."
   mcpServers:
-    - flightpath
+    - ctrlyoke
 ```
 
 ### Hooks
@@ -241,13 +241,13 @@ The prompt editor provides IntelliSense completions triggered by three character
 | `#`     | Current editor selection or workspace symbol | `#MyClass`, `#selection:path:10-20` |
 | `~`     | Git-changed file reference                   | `~src/main.ts`                      |
 
-Completions respect `.gitignore` by default (`flightpath.respectGitignoreForCompletions`). They work inside YAML `prompt:` values, JSON `"prompt"` strings, and `.prompt.md` files.
+Completions respect `.gitignore` by default (`ctrlyoke.respectGitignoreForCompletions`). They work inside YAML `prompt:` values, JSON `"prompt"` strings, and `.prompt.md` files.
 
 ---
 
 ## Dashboard
 
-The FlightPath panel opens in the VS Code bottom panel area and contains:
+The ctrlyoke panel opens in the VS Code bottom panel area and contains:
 
 **Prompts panel** — draggable prompt list with numbered slots, status indicators, and a prompt counter. Select any prompt to open it in the editor.
 
@@ -274,31 +274,31 @@ The FlightPath panel opens in the VS Code bottom panel area and contains:
 
 | Command                                   | Description                                           |
 | ----------------------------------------- | ----------------------------------------------------- |
-| `FlightPath: Open FlightPath Panel`       | Open the dashboard in the bottom panel                |
-| `FlightPath: New Workflow from Template`  | Create a workflow from a built-in or custom template  |
-| `FlightPath: New Blank Workflow`          | Clear the dashboard and start with an empty workflow  |
-| `FlightPath: New Draft Prompt`            | Create a draft `.prompt.md` file                      |
-| `FlightPath: Create Prompt File`          | Create a new prompt file in a folder                  |
-| `FlightPath: Run with FlightPath`         | Run a prompt file (Explorer / editor context menu)    |
-| `FlightPath: Load in FlightPath`          | Load a prompt file into the dashboard without running |
-| `FlightPath: Queue with FlightPath`       | Append prompts to the end of the active queue         |
-| `FlightPath: Queue Next with FlightPath`  | Insert prompts immediately after the current position |
-| `FlightPath: Pause Execution`             | Pause a running workflow                              |
-| `FlightPath: Resume Execution`            | Resume a paused workflow                              |
-| `FlightPath: Stop Execution`              | Stop and reset the workflow                           |
-| `FlightPath: Resume Session`              | Resume from a saved session                           |
-| `FlightPath: Initialize Workspace`        | Set up `.flightpath/` directory structure             |
-| `FlightPath: Import FlightPath Agents`    | Import agent files into the workspace                 |
-| `FlightPath: Import Workflow Templates`   | Import example workflow templates                     |
-| `FlightPath: Create End Condition Script` | Scaffold a validation script                          |
-| `FlightPath: Create New Custom Template`  | Save the current workflow as a reusable template      |
-| `FlightPath: Show Output Panel`           | Show the CLI output panel                             |
+| `ctrlyoke: Open ctrlyoke Panel`       | Open the dashboard in the bottom panel                |
+| `ctrlyoke: New Workflow from Template`  | Create a workflow from a built-in or custom template  |
+| `ctrlyoke: New Blank Workflow`          | Clear the dashboard and start with an empty workflow  |
+| `ctrlyoke: New Draft Prompt`            | Create a draft `.prompt.md` file                      |
+| `ctrlyoke: Create Prompt File`          | Create a new prompt file in a folder                  |
+| `ctrlyoke: Run with ctrlyoke`         | Run a prompt file (Explorer / editor context menu)    |
+| `ctrlyoke: Load in ctrlyoke`          | Load a prompt file into the dashboard without running |
+| `ctrlyoke: Queue with ctrlyoke`       | Append prompts to the end of the active queue         |
+| `ctrlyoke: Queue Next with ctrlyoke`  | Insert prompts immediately after the current position |
+| `ctrlyoke: Pause Execution`             | Pause a running workflow                              |
+| `ctrlyoke: Resume Execution`            | Resume a paused workflow                              |
+| `ctrlyoke: Stop Execution`              | Stop and reset the workflow                           |
+| `ctrlyoke: Resume Session`              | Resume from a saved session                           |
+| `ctrlyoke: Initialize Workspace`        | Set up `.ctrlyoke/` directory structure             |
+| `ctrlyoke: Import ctrlyoke Agents`    | Import agent files into the workspace                 |
+| `ctrlyoke: Import Workflow Templates`   | Import example workflow templates                     |
+| `ctrlyoke: Create End Condition Script` | Scaffold a validation script                          |
+| `ctrlyoke: Create New Custom Template`  | Save the current workflow as a reusable template      |
+| `ctrlyoke: Show Output Panel`           | Show the CLI output panel                             |
 
 ---
 
 ## Settings
 
-All settings use the `flightpath.` prefix.
+All settings use the `ctrlyoke.` prefix.
 
 ### Core
 
@@ -307,7 +307,7 @@ All settings use the `flightpath.` prefix.
 | `harness`                  | `copilot-cli` | Active harness                                              |
 | `cliExecutionMode`         | `interactive` | `interactive` (terminal) or `headless` (background process) |
 | `scriptTimeout`            | `30`          | End condition script timeout in seconds (range: 5–300)      |
-| `promptsDirectory`         | `.flightpath` | Base directory for workflows and scripts                    |
+| `promptsDirectory`         | `.ctrlyoke` | Base directory for workflows and scripts                    |
 | `maxPromptExecutionTime`   | `10800`       | Max seconds per prompt; -1 = unlimited                      |
 | `maxWorkflowExecutionTime` | `86400`       | Max seconds per workflow; -1 = unlimited                    |
 
@@ -343,7 +343,7 @@ All settings use the `flightpath.` prefix.
 
 | Setting                  | Default | Description                                                                                                   |
 | ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------- |
-| `mcpServers`             | `[]`    | Default MCP servers for workflow prompts. Include `"flightpath"` to enable dynamic queue extension by default |
+| `mcpServers`             | `[]`    | Default MCP servers for workflow prompts. Include `"ctrlyoke"` to enable dynamic queue extension by default |
 | `maxQueueSize`           | `100`   | Maximum prompts allowed in the dynamic queue (range: 1–1000)                                                  |
 | `unlimitedMode`          | `false` | Remove queue size and execution time limits                                                                   |
 | `notifyOnQueueExtension` | `true`  | Show a notification when the AI appends prompts to the queue                                                  |
@@ -375,9 +375,9 @@ All settings use the `flightpath.` prefix.
 | ---------------------- | ------- | ------------------------------------------------------ |
 | `showCliOutput`        | `true`  | Show CLI output in the Output panel                    |
 | `showCliCommand`       | `false` | Show the full CLI invocation in the dashboard          |
-| `saveOutputHistory`    | `true`  | Save per-run output history in `.flightpath/.history/` |
+| `saveOutputHistory`    | `true`  | Save per-run output history in `.ctrlyoke/.history/` |
 | `maxHistoryRuns`       | `-1`    | Max history entries per workflow (-1 = keep all)       |
-| `enableDiagnosticLogs` | `false` | Write diagnostic logs to `.flightpath/logs/`           |
+| `enableDiagnosticLogs` | `false` | Write diagnostic logs to `.ctrlyoke/logs/`           |
 
 ### Copilot Chat harness
 
@@ -408,6 +408,6 @@ Design documents and implementation notes are in `dev/implemented/`.
 
 ## Support
 
-- **Issues:** [github.com/FuzzyNova/flightpath/issues](https://github.com/FuzzyNova/flightpath/issues)
-- **Email:** support@flightpath.dev
-- **Website:** [flightpath.dev](https://flightpath.dev)
+- **Issues:** [github.com/FuzzyNova/ctrlyoke/issues](https://github.com/FuzzyNova/ctrlyoke/issues)
+- **Email:** support@ctrlyoke.dev
+- **Website:** [ctrlyoke.dev](https://ctrlyoke.dev)

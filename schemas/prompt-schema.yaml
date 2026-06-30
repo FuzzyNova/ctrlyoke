@@ -1,10 +1,10 @@
 $schema: http://json-schema.org/draft-07/schema#
-title: FlightPath Prompt Schema
+title: ctrlyoke Prompt Schema
 type: object
 description: >-
-  Schema for FlightPath workflows. Steps should be in final-form format with all context references
+  Schema for ctrlyoke workflows. Steps should be in final-form format with all context references
   (e.g., @path/to/file, @path/to/dir/, #file:path, #selection:path:line-line, #sym:path:symbol:line)
-  included directly in the prompt text. FlightPath expands these references into inline file/symbol
+  included directly in the prompt text. ctrlyoke expands these references into inline file/symbol
   content before sending to the AI.
 oneOf:
   - title: Single Step
@@ -21,7 +21,7 @@ oneOf:
             $ref: '#/definitions/workflowStep'
             description: >-
               A step that always runs after all queued prompts complete. Can be an AI prompt or a
-              script step. If mcpServers includes "flightpath" and the finalStep appends prompts,
+              script step. If mcpServers includes "ctrlyoke" and the finalStep appends prompts,
               those prompts run before finalStep executes again.
           originalFile:
             type: string
@@ -55,7 +55,7 @@ definitions:
         type: string
         description: >-
           Harness to use for this prompt. Determines which AI CLI or chat integration executes the
-          prompt. Optional - defaults to flightpath.harness setting.
+          prompt. Optional - defaults to ctrlyoke.harness setting.
         enum:
           - copilot-cli
           - copilot-chat
@@ -120,7 +120,7 @@ definitions:
           - type: 'null'
         description: >-
           Custom agent to use for this prompt. Specify ONLY the agent name without file extensions
-          (e.g., 'flightpath-orchestrator' for file 'flightpath-orchestrator.agent.md'). The agent's
+          (e.g., 'ctrlyoke-orchestrator' for file 'ctrlyoke-orchestrator.agent.md'). The agent's
           instructions will be prepended to your prompt using <agentInstructions> tags. Agents are
           discovered from .github/agents/, .claude/agents/, or user prompts directory. Works with
           all providers (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat). Use null to explicitly
@@ -129,7 +129,7 @@ definitions:
         type: boolean
         description: >-
           Whether to resume the existing chat session for this prompt. When omitted, defaults to the
-          flightpath.resumeExistingSession setting (default: false). Set to true to continue in the
+          ctrlyoke.resumeExistingSession setting (default: false). Set to true to continue in the
           existing session for context continuity. Retries continue in the same session by default;
           set endCondition.resumeSessionOnRetry=false to start a fresh session for each retry.
       mcpServers:
@@ -138,16 +138,14 @@ definitions:
             items:
               oneOf:
                 - type: string
-                  description: >-
-                    A well-known MCP server ID (e.g., "flightpath" to enable dynamic queue
-                    extension).
+                  description: A well-known MCP server ID (e.g., "ctrlyoke" to enable dynamic queue extension).
                 - $ref: '#/definitions/mcpServerConfig'
-            description: MCP servers to attach. Include "flightpath" to enable dynamic queue extension.
+            description: MCP servers to attach. Include "ctrlyoke" to enable dynamic queue extension.
           - type: 'null'
             description: Explicitly disable inherited MCP servers.
         description: >-
-          MCP servers to attach to the harness for this prompt/workflow. Include "flightpath" to
-          enable dynamic queue extension via FlightPath's MCP server. Use null to explicitly disable
+          MCP servers to attach to the harness for this prompt/workflow. Include "ctrlyoke" to
+          enable dynamic queue extension via ctrlyoke's MCP server. Use null to explicitly disable
           inherited servers.
       hooks:
         oneOf:
@@ -160,7 +158,7 @@ definitions:
           - type: 'null'
             description: Explicitly disables all hooks for this prompt/workflow.
         description: >-
-          User-defined hooks run alongside FlightPath's completion-detection hooks. Supported events
+          User-defined hooks run alongside ctrlyoke's completion-detection hooks. Supported events
           vary by harness; unsupported events are silently skipped.
       sessionId:
         type:
@@ -237,12 +235,12 @@ definitions:
           - type: string
           - type: 'null'
         description: >-
-          Additional CLI flags appended to FlightPath's standard argument set. FlightPath continues
-          to manage model, permissions, workspace dirs, and session flags normally. Tokens are
-          injected before the tool permission args. Applies only to CLI harnesses (copilot-cli,
-          claude-cli, codex-cli, opencode-cli). Ignored for copilot-chat. Use null at prompt level
-          to explicitly disable additional args even if the workflow or settings define some.
-          Example: "--effort high --max-turns 10"
+          Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to
+          manage model, permissions, workspace dirs, and session flags normally. Tokens are injected
+          before the tool permission args. Applies only to CLI harnesses (copilot-cli, claude-cli,
+          codex-cli, opencode-cli). Ignored for copilot-chat. Use null at prompt level to explicitly
+          disable additional args even if the workflow or settings define some. Example: "--effort
+          high --max-turns 10"
       toolPermissions:
         oneOf:
           - type: object
@@ -260,7 +258,7 @@ definitions:
                 description: >-
                   Permission mode. 'dangerouslyAllowAll' bypasses all restrictions. 'allowAll'
                   auto-grants all but respects deny list. 'custom' uses allowedTools + deniedTools
-                  only. 'passthrough' omits all FlightPath permission flags — the harness uses
+                  only. 'passthrough' omits all ctrlyoke permission flags — the harness uses
                   whatever permissions the user has configured in its own local settings (e.g.
                   ~/.claude/settings.json, Copilot CLI config).
               allowedTools:
@@ -283,7 +281,7 @@ definitions:
         description: >-
           Tool permission overrides for this prompt/workflow. Use null to explicitly disable
           inherited overrides and fall back to global VS Code settings. Set mode to 'passthrough' to
-          omit all FlightPath permission flags and rely entirely on the harness's own local
+          omit all ctrlyoke permission flags and rely entirely on the harness's own local
           configuration.
       errorBehavior:
         oneOf:
@@ -310,8 +308,8 @@ definitions:
           name:
             type: string
             description: >-
-              Optional human-readable display label shown in the FlightPath dashboard. If omitted,
-              the dashboard shows a truncated preview of the prompt text.
+              Optional human-readable display label shown in the ctrlyoke dashboard. If omitted, the
+              dashboard shows a truncated preview of the prompt text.
             maxLength: 100
           enabled:
             type: boolean
@@ -326,7 +324,7 @@ definitions:
               for files/directories, and #file:path, #selection:path:line-line, or
               #sym:path:symbol:line for file excerpts and symbols. OR (2) A file path to a
               .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative
-              to the prompt file's directory, then workspace root, then .flightpath directory.
+              to the prompt file's directory, then workspace root, then .ctrlyoke directory.
               Absolute paths are also supported.
           _runtime:
             $ref: '#/definitions/promptRuntimeMetadata'
@@ -350,7 +348,7 @@ definitions:
           step in the workflow but skip execution.
       script:
         type: string
-        description: Shell command or path to script. Resolved relative to workspace root or .flightpath/.
+        description: Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.
       compareSource:
         type: string
         enum:
@@ -370,7 +368,7 @@ definitions:
           values checks stdout.
       timeout:
         type: number
-        description: Timeout in milliseconds. Defaults to flightpath.scriptTimeout setting.
+        description: Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting.
       onPass:
         type: string
         enum:
@@ -403,7 +401,7 @@ definitions:
         type: string
         description: >-
           Path to script file to execute, or direct shell command (e.g., 'npm test', 'python
-          script.py'). File paths are resolved relative to workspace root or .flightpath directory.
+          script.py'). File paths are resolved relative to workspace root or .ctrlyoke directory.
       returns:
         type: string
         description: >-
@@ -476,7 +474,7 @@ definitions:
     properties:
       script:
         type: string
-        description: Shell command or path to script. Resolved relative to workspace root or .flightpath/.
+        description: Shell command or path to script. Resolved relative to workspace root or .ctrlyoke/.
       compareSource:
         type: string
         enum:
@@ -493,7 +491,7 @@ definitions:
         description: Expected result to compare against. When absent, exit code 0 = pass.
       timeout:
         type: number
-        description: Timeout in milliseconds. Defaults to flightpath.scriptTimeout setting.
+        description: Timeout in milliseconds. Defaults to ctrlyoke.scriptTimeout setting.
     required:
       - script
   preCondition:
@@ -602,7 +600,7 @@ definitions:
     type: object
     description: >-
       Workflow-level runtime execution state for working files (optional, added automatically by
-      FlightPath during execution)
+      ctrlyoke during execution)
     properties:
       currentIndex:
         type: number

@@ -1,6 +1,6 @@
-# FlightPath Developer Chores
+# ctrlyoke Developer Chores
 
-Regular maintenance tasks for FlightPath development. These are manual tasks that don't happen automatically during builds.
+Regular maintenance tasks for ctrlyoke development. These are manual tasks that don't happen automatically during builds.
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ npm run chores -- --task check-all
 
 **Frequency**: Monthly or when new CLI versions are released
 
-Update to the latest versions of the CLI tools FlightPath integrates with:
+Update to the latest versions of the CLI tools ctrlyoke integrates with:
 
 #### Copilot CLI
 
@@ -69,7 +69,7 @@ npm install -g @openai/codex
 
 **Frequency**: When new Copilot/Claude/Codex models are released
 
-This workflow discovers new models available in GitHub Copilot Chat and updates FlightPath's model registry.
+This workflow discovers new models available in GitHub Copilot Chat and updates ctrlyoke's model registry.
 
 #### Steps:
 
@@ -78,7 +78,7 @@ This workflow discovers new models available in GitHub Copilot Chat and updates 
 
 2. **Export discovered models**:
    - Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-   - Run: `FlightPath: Export Discovered Models`
+   - Run: `ctrlyoke: Export Discovered Models`
    - This creates/updates `scripts/discovered-models.json`
 
 3. **Import models to ModelConstants.ts**:
@@ -124,7 +124,7 @@ node scripts/sync-models.mjs --discover
 
 **Frequency**: When VS Code updates or when we need to refresh command lists
 
-FlightPath references VS Code commands (especially chat commands). Keep these up-to-date.
+ctrlyoke references VS Code commands (especially chat commands). Keep these up-to-date.
 
 #### Steps:
 
@@ -133,11 +133,11 @@ FlightPath references VS Code commands (especially chat commands). Keep these up
 
 2. **List all VS Code commands**:
    - Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-   - Run: `FlightPath: List All Commands`
+   - Run: `ctrlyoke: List All Commands`
    - This outputs all commands to Output panel
 
 3. **List chat-specific commands**:
-   - Run: `FlightPath: List Chat Commands`
+   - Run: `ctrlyoke: List Chat Commands`
    - Outputs chat-related commands
 
 4. **Update reference documentation**:
@@ -146,7 +146,7 @@ FlightPath references VS Code commands (especially chat commands). Keep these up
 
 5. **Check for new useful commands**:
    - Look for new `workbench.action.chat.*` commands
-   - Update `src/flightpath/chat/CopilotChatIntegration.ts` if needed
+   - Update `src/core/chat/CopilotChatIntegration.ts` if needed
 
 ---
 
@@ -245,7 +245,7 @@ npm run sync-models
 
 **Frequency**: Before first release (one-time), or when updating icon
 
-FlightPath currently has SVG icons only. VS Code Marketplace requires a PNG icon (at least 128x128px).
+ctrlyoke currently has SVG icons only. VS Code Marketplace requires a PNG icon (at least 128x128px).
 
 **Steps**:
 

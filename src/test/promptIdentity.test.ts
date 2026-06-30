@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { hashPromptContent } from "../utils/PromptIdentity";
-import { PromptStep } from "../types/FlightPathTypes";
+import { PromptStep } from "../types/CtrlYokeTypes";
 
 suite("PromptIdentity Tests", () => {
   suite("hashPromptContent", () => {

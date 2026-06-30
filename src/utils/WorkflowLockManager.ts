@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { WorkflowRunnerLock } from "../types/FlightPathTypes";
+import { WorkflowRunnerLock } from "../types/CtrlYokeTypes";
 import {
   RUNNER_IDS,
   LOCK_STATUS,

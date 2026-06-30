@@ -30,7 +30,7 @@ import type {
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
-} from "../../../types/FlightPathTypes";
+} from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const CODEX_HOOK_ARGS = ["--enable", "hooks"] as const;
@@ -253,12 +253,12 @@ export class CodexCliProvider implements ICliProvider {
   }
 
   /**
-   * Set up FlightPath notification hooks (SessionStart + Stop + user hooks) for interactive mode.
+   * Set up ctrlyoke notification hooks (SessionStart + Stop + user hooks) for interactive mode.
    * Writes hooks to .codex/hooks.json and enables the Codex hook system.
    *
    * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
-   * Codex tracks trust in hooks.state. FlightPath passes inline trusted hashes
-   * for the FlightPath-managed hook entries so Codex does not prompt for review.
+   * Codex tracks trust in hooks.state. ctrlyoke passes inline trusted hashes
+   * for the ctrlyoke-managed hook entries so Codex does not prompt for review.
    *
    * @returns Hook activation args plus trust config overrides.
    */
@@ -293,7 +293,7 @@ export class CodexCliProvider implements ICliProvider {
 
   /**
    * Set up user-only hooks for headless execution.
-   * No FlightPath notification hooks are included since headless uses process-exit for completion.
+   * No ctrlyoke notification hooks are included since headless uses process-exit for completion.
    * Returns hook activation args plus trust config overrides so Codex activates
    * its hook system without prompting during automation.
    */
@@ -306,7 +306,7 @@ export class CodexCliProvider implements ICliProvider {
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const workflowKey = workingFilePath ?? workspaceRoot;
-    const flightpathHooksSection =
+    const ctrlyokeHooksSection =
       enabledNotificationHookEvents.length > 0
         ? (() => {
             const hookConfig = this.notificationMonitor.buildHookConfig(
@@ -314,7 +314,7 @@ export class CodexCliProvider implements ICliProvider {
                 extensionPath,
                 "out",
                 "scripts",
-                "flightpath-codex-notify.js"
+                "ctrlyoke-codex-notify.js"
               ),
               this.notificationMonitor.getNotificationDirectory(workspaceRoot),
               workspaceRoot,
@@ -338,7 +338,7 @@ export class CodexCliProvider implements ICliProvider {
       await CodexCliProvider.hooksTracker.registerWorkflow(
         workflowKey,
         workspaceRoot,
-        flightpathHooksSection,
+        ctrlyokeHooksSection,
         workflowUserHooks
       );
       trustArgs = SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
@@ -393,7 +393,7 @@ export class CodexCliProvider implements ICliProvider {
   }
 
   /**
-   * Write FlightPath hooks into .codex/hooks.json for completion detection.
+   * Write ctrlyoke hooks into .codex/hooks.json for completion detection.
    * Shared implementation for buildNotificationHookArgs.
    */
   private async writeCodexHooks(
@@ -401,13 +401,13 @@ export class CodexCliProvider implements ICliProvider {
     workspaceRoot: string,
     workflowKey: string,
     userHooks?: UserHookConfig[],
-    flightpathEvents?: HookEvent[]
+    ctrlyokeEvents?: HookEvent[]
   ): Promise<string[]> {
     const scriptPath = path.join(
       extensionPath,
       "out",
       "scripts",
-      "flightpath-codex-notify.js"
+      "ctrlyoke-codex-notify.js"
     );
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
@@ -418,19 +418,19 @@ export class CodexCliProvider implements ICliProvider {
       notifyDir,
       workspaceRoot,
       userHooks,
-      flightpathEvents
+      ctrlyokeEvents
     );
     if (hookConfig.type !== "json") {
       throw new Error("Unexpected hook config type for Codex CLI");
     }
 
-    const flightpathHooksSection = (
+    const ctrlyokeHooksSection = (
       hookConfig.config as Record<string, unknown>
     )["hooks"] as Record<string, unknown[]>;
 
     const workflowUserHooks = this.buildUserHooksSection(
       userHooks,
-      flightpathEvents
+      ctrlyokeEvents
     );
 
     // Register hooks via ref-counted tracker under lock
@@ -439,7 +439,7 @@ export class CodexCliProvider implements ICliProvider {
       await CodexCliProvider.hooksTracker.registerWorkflow(
         workflowKey,
         workspaceRoot,
-        flightpathHooksSection,
+        ctrlyokeHooksSection,
         workflowUserHooks
       );
       trustArgs = SettingsJsonHooksTracker.serializeCodexInlineTrustOverride(
@@ -527,12 +527,12 @@ export class CodexCliProvider implements ICliProvider {
   }
 
   /**
-   * Convert FlightPath user hooks to the Codex hooks.json section format.
+   * Convert ctrlyoke user hooks to the Codex hooks.json section format.
    * Codex uses matcher-based entries: { matcher: "", hooks: [{type, command}] }
    */
   private buildUserHooksSection(
     userHooks?: UserHookConfig[],
-    wrappedFlightpathEvents: HookEvent[] = []
+    wrappedCtrlYokeEvents: HookEvent[] = []
   ): Record<string, unknown[]> {
     const codexEventMap: Record<string, string> = {
       stop: "Stop",
@@ -549,7 +549,7 @@ export class CodexCliProvider implements ICliProvider {
     for (const uh of userHooks ?? []) {
       if (
         uh.event === "permissionRequest" &&
-        wrappedFlightpathEvents.includes("permissionRequest")
+        wrappedCtrlYokeEvents.includes("permissionRequest")
       ) {
         continue;
       }
@@ -595,7 +595,7 @@ export class CodexCliProvider implements ICliProvider {
    * Codex expects: codex exec [OPTIONS] [PROMPT]
    * The prompt argument must come LAST after all flags/options.
    *
-   * Handles both direct prompts and file references (e.g., ".flightpath/temp/prompt.md")
+   * Handles both direct prompts and file references (e.g., ".ctrlyoke/temp/prompt.md")
    *
    * @param baseArgs Base arguments array
    * @param prompt Prompt text or file reference
@@ -641,7 +641,7 @@ export class CodexCliProvider implements ICliProvider {
    * Returns the file path without the @ prefix.
    *
    * @param relativeFilePath Relative file path
-   * @returns File path without @ prefix (e.g., ".flightpath/temp/prompt.md")
+   * @returns File path without @ prefix (e.g., ".ctrlyoke/temp/prompt.md")
    */
   formatFileReference(relativeFilePath: string): string {
     // Codex CLI doesn't support @ prefix - just return the path as-is
@@ -652,11 +652,11 @@ export class CodexCliProvider implements ICliProvider {
    * Generate MCP server configuration arguments for Codex CLI
    *
    * Codex CLI uses repeated -c/--config overrides in inline TOML format.
-   * Supports the built-in FlightPath server and user-defined stdio servers.
+   * Supports the built-in ctrlyoke server and user-defined stdio servers.
    *
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
-   * @param workingFilePath Active working file for this workflow (sets FLIGHTPATH_WORKING_FILE)
+   * @param workingFilePath Active working file for this workflow (sets CTRLYOKE_WORKING_FILE)
    * @returns CLI arguments array with -c flag, or null if MCP not supported
    */
   async getMcpConfigArgs(
@@ -677,7 +677,7 @@ export class CodexCliProvider implements ICliProvider {
         configArgs.push(
           "-c",
           CliMcpConfigGenerator.generateInlineTomlConfig(
-            "flightpath",
+            "ctrlyoke",
             mcpServerPath,
             workspaceRoot,
             workingFilePath,
@@ -687,7 +687,7 @@ export class CodexCliProvider implements ICliProvider {
 
         configArgs.push(
           "-c",
-          "mcp_servers.flightpath.default_tools_approval_mode='approve'"
+          "mcp_servers.ctrlyoke.default_tools_approval_mode='approve'"
         );
       }
 

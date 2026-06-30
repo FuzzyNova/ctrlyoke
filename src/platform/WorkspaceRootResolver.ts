@@ -18,7 +18,7 @@ export interface ResolverWorkspaceFolder {
  */
 export interface WorkspaceRootResolverInput {
   /**
-   * Value of the native `flightpath.workspaceDirectory` setting. Empty,
+   * Value of the native `ctrlyoke.workspaceDirectory` setting. Empty,
    * whitespace, or `undefined` means "unset — auto-detect".
    */
   setting?: string;
@@ -61,13 +61,13 @@ function expandWorkspaceFolderVars(
 }
 
 /**
- * Resolve the directory that contains the `.flightpath` folder for the current
+ * Resolve the directory that contains the `.ctrlyoke` folder for the current
  * window. The result is window-stable and must be computed in exactly one place
  * (this function) so every consumer agrees on the location.
  *
  * Resolution order:
  *
- * 1. `flightpath.workspaceDirectory` setting, if set — used as-is when
+ * 1. `ctrlyoke.workspaceDirectory` setting, if set — used as-is when
  *    absolute, otherwise resolved against the `.code-workspace` dir (if any),
  *    else the first workspace folder, else `cwd`. Supports `${workspaceFolder}`
  *    and `${workspaceFolder:Name}` expansion.

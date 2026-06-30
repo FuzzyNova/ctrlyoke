@@ -781,7 +781,7 @@ async function fetchMcpRegistry(
 
   const url = `${MCP_REGISTRY_URL}?${params}`;
   const response = await fetch(url, {
-    headers: { "User-Agent": "FlightPath-VSCode-Extension/1.0" },
+    headers: { "User-Agent": "ctrlyoke-VSCode-Extension/1.0" },
     signal: AbortSignal.timeout(10_000),
   });
 

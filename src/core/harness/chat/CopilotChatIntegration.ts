@@ -5,7 +5,7 @@ import { getVsCodeWorkspaceRoot } from "../../../platform/VsCodeWorkspaceRoot";
 import {
   PromptStep,
   type UserHookConfig,
-} from "../../../types/FlightPathTypes";
+} from "../../../types/CtrlYokeTypes";
 import {
   HARNESS_IDS,
   TEMP_FILE_CATEGORIES,
@@ -33,7 +33,7 @@ import { ResumeAttachmentResolver } from "../../../utils/ResumeAttachmentResolve
 
 /**
  * GitHub Copilot Chat Integration - UI automation with session file monitoring.
- * See flightpath-chat.instructions.md for implementation details.
+ * See ctrlyoke-chat.instructions.md for implementation details.
  *
  * Completion Detection:
  * - Session file monitoring (100% reliable) - Method 5 from CHAT_COMPLETION_DETECTION.md
@@ -63,7 +63,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
   // Hook files written to .github/hooks/ for the current prompt (cleaned up after execution)
   private hookFilePaths: string[] = [];
-  /** Path to temporary .gitignore written in .github/hooks/ to hide FlightPath files from git. */
+  /** Path to temporary .gitignore written in .github/hooks/ to hide ctrlyoke files from git. */
   private hooksDirGitignorePath: string | undefined;
 
   constructor(
@@ -212,7 +212,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
     if (this.totalSteps > 0) {
       const progress = `${this.workflowStep}/${this.totalSteps}`;
       vscode.window.setStatusBarMessage(
-        `$(compass-dot) FlightPath: Step ${progress} completed`,
+        `$(compass-dot) ctrlyoke: Step ${progress} completed`,
         3000
       );
     }
@@ -227,7 +227,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
     if (!isModelAvailable(targetModel)) {
       const message = `Model "${targetModel}" not recognized. Using current chat model.`;
       Log.warn(`⚠️ ${message}`);
-      vscode.window.showWarningMessage(`FlightPath: ${message}`);
+      vscode.window.showWarningMessage(`ctrlyoke: ${message}`);
       return;
     }
 
@@ -254,7 +254,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
     } catch (error) {
       Log.error(`❌ Model switch failed (${targetModel}):`, error);
       vscode.window.showWarningMessage(
-        `FlightPath: Could not switch to model "${targetModel}". ` +
+        `ctrlyoke: Could not switch to model "${targetModel}". ` +
           `This model may not be available on your subscription. ` +
           `Using current model instead. You can change the default in Settings.`
       );
@@ -415,12 +415,12 @@ export class CopilotChatIntegration extends HarnessIntegration {
   /** Manually retry Copilot detection */
   async retryDetection(): Promise<void> {
     vscode.window.showInformationMessage(
-      "FlightPath: Retrying Copilot detection..."
+      "ctrlyoke: Retrying Copilot detection..."
     );
     await this.startBackgroundPolling();
   }
 
-  /** Send prompt via direct automation. See flightpath-chat.instructions.md for timing. */
+  /** Send prompt via direct automation. See ctrlyoke-chat.instructions.md for timing. */
   async sendPrompt(
     prompt: PromptStep,
     needsCompletionDetection?: boolean,
@@ -434,7 +434,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       if (!this.isAvailable) {
         Log.error("❌ Automation became unavailable");
         vscode.window.showErrorMessage(
-          "FlightPath: Automation became unavailable"
+          "ctrlyoke: Automation became unavailable"
         );
         return false;
       }
@@ -460,7 +460,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
         Log.info("🆕 Starting new chat session");
 
         // When using native attachments and an agent is selected, open the
-        // agent-specific chat window (e.g., workbench.action.chat.openflightpath-orchestrator)
+        // agent-specific chat window (e.g., workbench.action.chat.openctrlyoke-orchestrator)
         // so Copilot automatically applies that agent's instructions.
         let openedAgentChat = false;
         if (useNativeAttachments && resolvedAgent) {
@@ -599,7 +599,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
             : "Failed to send prompt to Copilot";
       }
       vscode.window.showErrorMessage(
-        `FlightPath: Failed to send prompt: ${error}`
+        `ctrlyoke: Failed to send prompt: ${error}`
       );
       await this.cleanupTempFiles();
       return false;
@@ -847,7 +847,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
       vscode.window
         .showErrorMessage(
-          `FlightPath: Automation failed: ${error}. Check that Copilot Chat is open and responsive.`,
+          `ctrlyoke: Automation failed: ${error}. Check that Copilot Chat is open and responsive.`,
           "Show Output Log"
         )
         .then((action) => {
@@ -1137,7 +1137,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
    *
    * Copilot Chat reads the same .github/hooks/ directory as Copilot CLI —
    * hooks fire on sessionStart, sessionEnd, preToolUse, postToolUse, and
-   * userPromptSubmitted. No FlightPath notification entries are included
+   * userPromptSubmitted. No ctrlyoke notification entries are included
    * here because CopilotChatIntegration uses ChatSessionMonitor for
    * completion detection, not the notification-file mechanism.
    *
@@ -1158,7 +1158,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       ? path.basename(workingFilePath).replace(/\.flightpath\.json$/i, "")
       : String(Date.now());
     const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
-    const hookFileName = `flightpath-${safeStem}-p${promptIndex}.json`;
+    const hookFileName = `ctrlyoke-${safeStem}-p${promptIndex}.json`;
 
     const hookDir = path.join(workspaceRoot, ".github", "hooks");
 
@@ -1188,7 +1188,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
   }
 
   /**
-   * Write a temporary .gitignore to .github/hooks/ to prevent FlightPath hook files
+   * Write a temporary .gitignore to .github/hooks/ to prevent ctrlyoke hook files
    * from appearing as untracked in git. The .gitignore hides itself too.
    * No-op if a .gitignore already exists there (user-owned file).
    */
@@ -1204,8 +1204,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
       // File doesn't exist — write it
     }
     const content = [
-      "# FlightPath temp files (auto-managed, do not commit)",
-      "flightpath-*.json",
+      "# ctrlyoke temp files (auto-managed, do not commit)",
+      "ctrlyoke-*.json",
       ".gitignore",
       "",
     ].join("\n");
@@ -1392,7 +1392,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
   /** Test automation capability (diagnostic) */
   async testAutomation(): Promise<boolean> {
-    const testMessage = "FlightPath automation test. Please acknowledge.";
+    const testMessage = "ctrlyoke automation test. Please acknowledge.";
 
     try {
       // Test message has no XML tags, so pass same text for both params
@@ -1403,14 +1403,14 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
       if (result) {
         vscode.window.showInformationMessage(
-          "✅ FlightPath: Automation test successful! Check Copilot Chat for test message."
+          "✅ ctrlyoke: Automation test successful! Check Copilot Chat for test message."
         );
       }
 
       return result;
     } catch (error) {
       vscode.window.showErrorMessage(
-        `❌ FlightPath: Automation test failed: ${error}`
+        `❌ ctrlyoke: Automation test failed: ${error}`
       );
       return false;
     }

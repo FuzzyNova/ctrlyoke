@@ -4,14 +4,14 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 
 /**
  * Copilot CLI Notification Monitor
  *
- * Hook file format: .github/hooks/flightpath.json (bash/powershell fields)
- * Notification directory: .flightpath/temp/copilot-notifications/
- * Notification script: flightpath-copilot-hook.js
+ * Hook file format: .github/hooks/ctrlyoke.json (bash/powershell fields)
+ * Notification directory: .ctrlyoke/temp/copilot-notifications/
+ * Notification script: ctrlyoke-copilot-hook.js
  *
  * Notification file format (standardized with Claude):
  *   {sessionId}-start.json → { hookEvent: "SessionStart", sessionId, status: "started" }
@@ -36,7 +36,7 @@ export class CopilotNotificationMonitor
   };
 
   /**
-   * Build a user-hooks-only Copilot hook config object (no FlightPath notification entries).
+   * Build a user-hooks-only Copilot hook config object (no ctrlyoke notification entries).
    * Used by CopilotChatIntegration, which has its own completion detection mechanism.
    */
   static buildUserOnlyConfig(
@@ -60,10 +60,10 @@ export class CopilotNotificationMonitor
   /**
    * Build Copilot hook configuration
    *
-   * Creates JSON object for .github/hooks/flightpath.json with sessionStart and sessionEnd hooks.
+   * Creates JSON object for .github/hooks/ctrlyoke.json with sessionStart and sessionEnd hooks.
    * The hooks call a Node.js script that writes notification files in the standardized format.
    *
-   * @param scriptPath Path to notification handler script (flightpath-copilot-hook.js)
+   * @param scriptPath Path to notification handler script (ctrlyoke-copilot-hook.js)
    * @param notifyDir Notification directory path
    * @param workspaceRoot Workspace root directory (unused for Copilot)
    * @returns Hook configuration as JSON object
@@ -73,11 +73,11 @@ export class CopilotNotificationMonitor
     notifyDir: string,
     _workspaceRoot: string,
     userHooks?: UserHookConfig[],
-    flightpathEvents?: HookEvent[]
+    ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
     // Normalize Windows drive letter to lowercase for stable output (VS Code returns
     // uppercase from GUI launches, lowercase from CLI launches — normalize to avoid
-    // spurious diffs in the tracked .github/hooks/flightpath.json file).
+    // spurious diffs in the tracked .github/hooks/ctrlyoke.json file).
     const normalizeDrive = (p: string) =>
       p.replace(/^([A-Za-z]):/, (_, d) => d.toLowerCase() + ":");
     const normalizedScriptPath = normalizeDrive(scriptPath);
@@ -93,7 +93,7 @@ export class CopilotNotificationMonitor
 
     // Map logical event names to Copilot's native event names
     const eventMap = CopilotNotificationMonitor.EVENT_MAP;
-    const selectedEvents = flightpathEvents ?? [
+    const selectedEvents = ctrlyokeEvents ?? [
       "sessionStart",
       "stop",
       "error",
@@ -160,7 +160,7 @@ export class CopilotNotificationMonitor
   /**
    * Get notification directory for Copilot CLI
    *
-   * Uses shared pattern: {workspace}/.flightpath/temp/copilot-notifications/
+   * Uses shared pattern: {workspace}/.ctrlyoke/temp/copilot-notifications/
    *
    * @param workspaceRoot Workspace root directory
    * @returns Notification directory path

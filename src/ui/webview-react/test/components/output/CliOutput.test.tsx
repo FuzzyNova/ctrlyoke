@@ -150,7 +150,7 @@ describe("CliOutput", () => {
         metadata: {},
       },
       isStreaming: false,
-      workingDirectory: "C:/dev/FlightPath",
+      workingDirectory: "C:/dev/ctrlyoke",
     };
 
     const workspaceSnapshot: WorkspaceSnapshot = {
@@ -237,7 +237,7 @@ describe("CliOutput", () => {
         metadata: {},
       },
       isStreaming: false,
-      workingDirectory: "C:/dev/FlightPath",
+      workingDirectory: "C:/dev/ctrlyoke",
     };
 
     const workspaceSnapshot: WorkspaceSnapshot = {

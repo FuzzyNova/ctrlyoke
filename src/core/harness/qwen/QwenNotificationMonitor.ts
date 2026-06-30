@@ -4,15 +4,15 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 
 /**
  * Qwen Code CLI Notification Monitor
  *
  * Hook configuration: Written to .qwen/settings.json in workspace (no --settings flag).
  * Requires --experimental-hooks CLI flag to activate the hook system.
- * Notification directory: .flightpath/temp/qwen-notifications/
- * Notification script: flightpath-qwen-hook.js
+ * Notification directory: .ctrlyoke/temp/qwen-notifications/
+ * Notification script: ctrlyoke-qwen-hook.js
  *
  * Qwen Code is a Claude fork — uses the same hook event names (SessionStart + Stop)
  * and the same two-file notification format.
@@ -55,7 +55,7 @@ export class QwenNotificationMonitor
     notifyDir: string,
     _workspaceRoot: string,
     userHooks?: UserHookConfig[],
-    flightpathEvents?: HookEvent[]
+    ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
     // No quotes: Qwen's hook runner calls spawn(cmd.exe, ['/d','/s','/c', command], {shell:false}).
     // Node.js Windows arg escaping converts any `"` in the command to `\"`, which cmd.exe then
@@ -70,7 +70,7 @@ export class QwenNotificationMonitor
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
 
     const hooks: Record<string, unknown[]> = {};
-    for (const event of flightpathEvents ?? [
+    for (const event of ctrlyokeEvents ?? [
       "sessionStart",
       "userPromptSubmit",
       "stop",
@@ -96,7 +96,7 @@ export class QwenNotificationMonitor
 
   /**
    * Get notification directory for Qwen Code CLI.
-   * Uses shared pattern: {workspace}/.flightpath/temp/qwen-notifications/
+   * Uses shared pattern: {workspace}/.ctrlyoke/temp/qwen-notifications/
    */
   getNotificationDirectory(workspaceRoot: string): string {
     return CliNotificationMonitor.getNotificationDirectory(

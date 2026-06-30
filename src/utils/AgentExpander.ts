@@ -128,9 +128,9 @@ export class AgentExpander {
   /**
    * Strip YAML frontmatter from agent file content, returning only the markdown body.
    *
-   * FlightPath does NOT honor agent-level model or tool overrides:
-   * - `model`: FlightPath uses its own harness/model settings (prompt → workflow → global)
-   * - `tools`: FlightPath uses its own permission settings (flightpath.cliToolPermissions)
+   * ctrlyoke does NOT honor agent-level model or tool overrides:
+   * - `model`: ctrlyoke uses its own harness/model settings (prompt → workflow → global)
+   * - `tools`: ctrlyoke uses its own permission settings (ctrlyoke.cliToolPermissions)
    *
    * These fields are silently dropped and a warning is logged when present.
    */
@@ -151,12 +151,12 @@ export class AgentExpander {
 
     if (/^\s*model\s*:/m.test(frontmatter)) {
       Log.warn(
-        `⚠️ Agent "${agentName}" specifies a model override — FlightPath ignores agent-level model settings and uses its own harness/model configuration.`
+        `⚠️ Agent "${agentName}" specifies a model override — ctrlyoke ignores agent-level model settings and uses its own harness/model configuration.`
       );
     }
     if (/^\s*tools\s*:/m.test(frontmatter)) {
       Log.warn(
-        `⚠️ Agent "${agentName}" specifies tool overrides — FlightPath ignores agent-level tool settings and uses its own permission configuration (flightpath.cliToolPermissions).`
+        `⚠️ Agent "${agentName}" specifies tool overrides — ctrlyoke ignores agent-level tool settings and uses its own permission configuration (ctrlyoke.cliToolPermissions).`
       );
     }
 

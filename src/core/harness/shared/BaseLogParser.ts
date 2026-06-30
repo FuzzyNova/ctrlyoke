@@ -630,11 +630,11 @@ export abstract class BaseLogParser implements ILogParser {
    *
    * @remarks
    * **Why this is needed:**
-   * When FlightPath uses temp files for complex prompts, it sends something like:
-   * - We send: `"Follow instructions in @.flightpath\temp\file.md"`
-   * - CLI logs: `"Follow instructions in @.flightpath\\temp\\file.md"`
+   * When ctrlyoke uses temp files for complex prompts, it sends something like:
+   * - We send: `"Follow instructions in @.ctrlyoke\temp\file.md"`
+   * - CLI logs: `"Follow instructions in @.ctrlyoke\\temp\\file.md"`
    *
-   * After normalization, both become: `"follow instructions in @.flightpath/temp/file.md"`
+   * After normalization, both become: `"follow instructions in @.ctrlyoke/temp/file.md"`
    *
    * This ensures prompt discovery works reliably regardless of path separator
    * escaping differences across different CLIs.

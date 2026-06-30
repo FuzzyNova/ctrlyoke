@@ -1,9 +1,9 @@
 import * as assert from "assert";
-import { PromptFileParser } from "../flightpath/PromptFileParser";
-import { PromptQueue } from "../flightpath/PromptQueue";
+import { PromptFileParser } from "../core/PromptFileParser";
+import { PromptQueue } from "../core/PromptQueue";
 import { ValidationUtils } from "../utils/ValidationUtils";
 import { EXECUTION_STATES } from "../types/DashboardConstants";
-import { PromptFile } from "../types/FlightPathTypes";
+import { PromptFile } from "../types/CtrlYokeTypes";
 
 /**
  * Helper to wrap prompts array into PromptFile for tests
@@ -12,7 +12,7 @@ function createPromptFile(prompts: any[]): PromptFile {
   return { steps: prompts };
 }
 
-suite("FlightPath Core Tests", () => {
+suite("ctrlyoke Core Tests", () => {
   test("PromptFileParser should be instantiable", () => {
     const parser = new PromptFileParser();
     assert.ok(parser);

@@ -10,11 +10,11 @@ suite("HostedServiceWorkerScript", () => {
   test("renders shared badge message types into the template", () => {
     const rendered = renderHostedServiceWorkerScript(
       `
-if (data.type === "__FLIGHTPATH_CLEAR_BADGE_MESSAGE_TYPE__") {
-  return "__FLIGHTPATH_INCREMENT_BADGE_MESSAGE_TYPE__";
+if (data.type === "__CTRLYOKE_CLEAR_BADGE_MESSAGE_TYPE__") {
+  return "__CTRLYOKE_INCREMENT_BADGE_MESSAGE_TYPE__";
 }
-const icon = "__FLIGHTPATH_NOTIFICATION_ICON_PATH__";
-const badge = "__FLIGHTPATH_NOTIFICATION_BADGE_PATH__";
+const icon = "__CTRLYOKE_NOTIFICATION_ICON_PATH__";
+const badge = "__CTRLYOKE_NOTIFICATION_BADGE_PATH__";
 `.trim()
     );
 
@@ -38,9 +38,9 @@ const badge = "__FLIGHTPATH_NOTIFICATION_BADGE_PATH__";
     const rendered = buildHostedServiceWorkerScript();
 
     assert.match(rendered, /self\.addEventListener\("push"/);
-    assert.ok(!rendered.includes("__FLIGHTPATH_CLEAR_BADGE_MESSAGE_TYPE__"));
+    assert.ok(!rendered.includes("__CTRLYOKE_CLEAR_BADGE_MESSAGE_TYPE__"));
     assert.ok(
-      !rendered.includes("__FLIGHTPATH_INCREMENT_BADGE_MESSAGE_TYPE__")
+      !rendered.includes("__CTRLYOKE_INCREMENT_BADGE_MESSAGE_TYPE__")
     );
   });
 });

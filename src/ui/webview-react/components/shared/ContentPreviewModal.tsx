@@ -40,7 +40,7 @@ export const ContentPreviewModal: React.FC = () => {
     if (!modal) return;
     if (isStandalone) {
       const ext = modal.language === "diff" ? ".diff" : ".xml";
-      const filename = `flightpath-${modal.ref.replace(/[^a-z0-9_]/gi, "-").toLowerCase()}${ext}`;
+      const filename = `ctrlyoke-${modal.ref.replace(/[^a-z0-9_]/gi, "-").toLowerCase()}${ext}`;
       downloadTextFile(filename, modal.content);
     } else {
       sendMessage(MESSAGE_TYPES.EXPORT_CONTENT_PREVIEW, {

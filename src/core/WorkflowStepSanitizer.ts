@@ -10,7 +10,7 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
   WorkflowStep,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 
 /**
  * Removes webview-only fields before core queue state is persisted.

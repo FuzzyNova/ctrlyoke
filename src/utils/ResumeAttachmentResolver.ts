@@ -1,4 +1,4 @@
-import type { HarnessId, WorkflowStep } from "../types/FlightPathTypes";
+import type { HarnessId, WorkflowStep } from "../types/CtrlYokeTypes";
 
 export interface ResumeAttachmentResolution {
   agent: string | undefined;

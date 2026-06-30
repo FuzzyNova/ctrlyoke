@@ -37,9 +37,9 @@ function createManagedServer(id: string): ManagedMcpServer {
     },
     locations: [
       {
-        targetId: SPECIAL_TARGET_IDS.FLIGHTPATH,
+        targetId: SPECIAL_TARGET_IDS.CTRLYOKE,
         scope: SETTING_SCOPES.USER,
-        path: `C:\\repo\\.flightpath\\mcp\\${id}.json`,
+        path: `C:\\repo\\.ctrlyoke\\mcp\\${id}.json`,
       },
     ],
   };
@@ -65,7 +65,7 @@ const LOCAL_SERVERS: LocalMcpServerEntry[] = [
 function renderSection(servers: ManagedMcpServer[]) {
   useSettingsStore
     .getState()
-    .updateGlobalSetting("workspaceRoot", "C:\\repo\\FlightPath");
+    .updateGlobalSetting("workspaceRoot", "C:\\repo\\ctrlyoke");
   useMcpManagerStore.setState({
     managedServers: servers,
     isLoadingRegistry: false,
@@ -107,7 +107,7 @@ describe("McpManagerSection", () => {
     });
   });
 
-  it("saves only selected servers to the FlightPath registry", async () => {
+  it("saves only selected servers to the ctrlyoke registry", async () => {
     const user = userEvent.setup();
     renderSection([createManagedServer("server-a"), createManagedServer("server-b")]);
     const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
@@ -117,7 +117,7 @@ describe("McpManagerSection", () => {
     await user.click(screen.getByRole("checkbox", { name: "Select server-b" }));
     await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[0]);
     await user.click(within(bulkBar).getByRole("button", { name: "Claude Code" }));
-    await user.click(screen.getByRole("button", { name: /FlightPath/ }));
+    await user.click(screen.getByRole("button", { name: /ctrlyoke/ }));
     await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[1]);
 
     expect(sendMessageMock).toHaveBeenCalledWith(
@@ -133,7 +133,7 @@ describe("McpManagerSection", () => {
     );
   });
 
-  it("deletes only selected servers from the FlightPath registry", async () => {
+  it("deletes only selected servers from the ctrlyoke registry", async () => {
     const user = userEvent.setup();
     renderSection([createManagedServer("server-a"), createManagedServer("server-b")]);
     const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
@@ -145,7 +145,7 @@ describe("McpManagerSection", () => {
     const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
     await user.click(deleteButtons[deleteButtons.length - 1]);
     await user.click(within(bulkBar).getByRole("button", { name: "Claude Code" }));
-    await user.click(screen.getByRole("button", { name: /FlightPath/ }));
+    await user.click(screen.getByRole("button", { name: /ctrlyoke/ }));
     await user.click(within(bulkBar).getAllByRole("button", { name: "Delete" })[1]);
     const confirmButtons = screen.getAllByRole("button", { name: "Delete" });
     await user.click(confirmButtons[confirmButtons.length - 1]);

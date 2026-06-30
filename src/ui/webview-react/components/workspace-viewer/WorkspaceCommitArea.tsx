@@ -189,7 +189,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
           title={
             generatingCommitMessage
               ? "Cancel generation"
-              : "Generate commit message with FlightPath"
+              : "Generate commit message with ctrlyoke"
           }
           data-testid="generate-commit-message-btn"
           className="flex-shrink-0 w-8 flex items-center justify-center self-stretch rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover"

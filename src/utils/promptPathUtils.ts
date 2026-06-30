@@ -19,13 +19,13 @@ export const PROMPT_FILE_EXTENSIONS = [".prompt.md", ".md", ".txt"] as const;
  * Rules:
  * - Must be the *only* thing in the string (no surrounding text)
  * - Must start with `./`, `../`, `/`, or a Windows drive letter (e.g. `C:\`)
- * - Must NOT start with `#` (that is a FlightPath inline reference like #selection:)
+ * - Must NOT start with `#` (that is a ctrlyoke inline reference like #selection:)
  * - Must end with a known extension (.prompt.md, .md, .txt) OR any extension-like suffix
  */
 export function looksLikeFilePath(promptValue: string): boolean {
   const trimmed = promptValue.trim();
 
-  // Skip if it starts with # — that's a FlightPath reference, not a prompt file path
+  // Skip if it starts with # — that's a ctrlyoke reference, not a prompt file path
   if (trimmed.startsWith("#")) {
     return false;
   }

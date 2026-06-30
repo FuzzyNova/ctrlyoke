@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * FlightPath Codex Hook Handler
+ * ctrlyoke Codex Hook Handler
  *
  * This script is executed by Codex CLI when hook events occur.
  * It receives hook input JSON via stdin and writes a notification file
- * that FlightPath monitors for session discovery and completion detection.
+ * that ctrlyoke monitors for session discovery and completion detection.
  *
  * Supported hook events:
  * - SessionStart: Called when a new session starts (provides session ID immediately)
  * - Stop: Called when execution completes
  *
- * Usage (configured by FlightPath via .codex/hooks.json, requires --enable hooks):
+ * Usage (configured by ctrlyoke via .codex/hooks.json, requires --enable hooks):
  *   { "hooks": { "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "node <script> <notifyDir>" }] }], "Stop": [...] } }
  *
  * Hook input format (from Codex via stdin):
@@ -28,7 +28,7 @@
  *
  * Notification directory is passed as first command-line argument.
  *
- * Debug logging: All hook data logged to <workspace>/.flightpath/logs/flightpath-codex-notify-debug.log
+ * Debug logging: All hook data logged to <workspace>/.ctrlyoke/logs/ctrlyoke-codex-notify-debug.log
  */
 
 const fs = require("fs");
@@ -44,10 +44,10 @@ const {
   buildNotifyFilePath,
   STANDARD_LOGICAL_EVENT_MAP,
   STANDARD_HANDLED_EVENTS,
-} = require("./flightpath-hook-utils");
+} = require("./ctrlyoke-hook-utils");
 
-const SCRIPT_NAME = "flightpath-codex-notify";
-const SCRIPT_PREFIX = "FlightPath Codex Hook";
+const SCRIPT_NAME = "ctrlyoke-codex-notify";
+const SCRIPT_PREFIX = "ctrlyoke Codex Hook";
 
 function main() {
   const notifyDir = process.argv[2];

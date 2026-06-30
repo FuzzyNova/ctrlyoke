@@ -5,15 +5,15 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import { createCodexCommandHookGroup } from "../shared/CodexHookUtils";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 
 /**
  * Codex CLI Notification Monitor
  *
  * Hook configuration: Written to .codex/hooks.json in workspace.
  * Requires --enable hooks flag to activate the hook system.
- * Notification directory: .flightpath/temp/codex-notifications/
- * Notification script: flightpath-codex-notify.js
+ * Notification directory: .ctrlyoke/temp/codex-notifications/
+ * Notification script: ctrlyoke-codex-notify.js
  *
  * Codex hooks use a matcher-based format (unlike Claude/Qwen which omit matcher):
  *   { matcher: "", hooks: [{ type: "command", command: "..." }] }
@@ -45,7 +45,7 @@ export class CodexNotificationMonitor
    *
    * Returns a JSON object that CodexCliProvider writes to .codex/hooks.json.
    * Uses Codex's matcher-based format: { matcher: "", hooks: [{...}] }
-   * Registers SessionStart and Stop for FlightPath's completion detection.
+   * Registers SessionStart and Stop for ctrlyoke's completion detection.
    *
    * User hooks (from the workflow `hooks:` property) are handled by
    * CodexCliProvider via SettingsJsonHooksTracker — not here. The
@@ -56,13 +56,13 @@ export class CodexNotificationMonitor
     notifyDir: string,
     _workspaceRoot: string,
     userHooks?: UserHookConfig[],
-    flightpathEvents?: HookEvent[]
+    ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
       notifyDir
     );
-    const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
+    const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop"];
     const eventMap: Partial<Record<HookEvent, string>> = {
       stop: "Stop",
       sessionStart: "SessionStart",
@@ -89,7 +89,7 @@ export class CodexNotificationMonitor
 
   /**
    * Get notification directory for Codex CLI.
-   * Uses shared pattern: {workspace}/.flightpath/temp/codex-notifications/
+   * Uses shared pattern: {workspace}/.ctrlyoke/temp/codex-notifications/
    */
   getNotificationDirectory(workspaceRoot: string): string {
     return CliNotificationMonitor.getNotificationDirectory(

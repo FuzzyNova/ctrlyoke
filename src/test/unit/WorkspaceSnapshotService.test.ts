@@ -30,8 +30,8 @@ suite("WorkspaceSnapshotService", () => {
 
   async function initializeRepo(): Promise<void> {
     runGit(["init"]);
-    runGit(["config", "user.name", "FlightPath Tests"]);
-    runGit(["config", "user.email", "flightpath-tests@example.com"]);
+    runGit(["config", "user.name", "ctrlyoke Tests"]);
+    runGit(["config", "user.email", "ctrlyoke-tests@example.com"]);
     await writeWorkspaceFile("tracked.txt", "base\n");
     runGit(["add", "tracked.txt"]);
     runGit(["commit", "-m", "Initial commit"]);

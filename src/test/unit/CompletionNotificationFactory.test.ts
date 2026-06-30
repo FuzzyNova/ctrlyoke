@@ -11,7 +11,7 @@ import {
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
 } from "../../ui/notifications/CompletionNotificationFactory";
-import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../../types/FlightPathSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
 suite("CompletionNotificationFactory", () => {
   test("builds workflow success notifications when workflow events are enabled", () => {
@@ -19,18 +19,18 @@ suite("CompletionNotificationFactory", () => {
       summary: {
         id: "wf-1",
         workflowName: "refactor.flightpath.yaml",
-        filePath: "C:/dev/FlightPath/refactor.flightpath.yaml",
+        filePath: "C:/dev/ctrlyoke/refactor.flightpath.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
         currentStep: 4,
         totalSteps: 4,
         startedAt: 0,
       },
-      settings: FLIGHTPATH_SETTINGS_DEFAULTS.notifications,
+      settings: CTRLYOKE_SETTINGS_DEFAULTS.notifications,
       url: "http://localhost:4747/?token=test",
     });
 
     assert.ok(event);
-    assert.strictEqual(event?.title, "FlightPath - Workflow Complete");
+    assert.strictEqual(event?.title, "ctrlyoke - Workflow Complete");
     assert.match(event?.body ?? "", /refactor\.flightpath\.yaml/);
     assert.strictEqual(event?.url, "http://localhost:4747/?token=test");
   });
@@ -40,7 +40,7 @@ suite("CompletionNotificationFactory", () => {
       "http://localhost:4747/?token=test"
     );
 
-    assert.strictEqual(event.title, "FlightPath - Test Notification");
+    assert.strictEqual(event.title, "ctrlyoke - Test Notification");
     assert.strictEqual(event.body, "Developer test notification");
     assert.strictEqual(event.workflowId, "test");
     assert.strictEqual(event.url, "http://localhost:4747/?token=test");
@@ -51,15 +51,15 @@ suite("CompletionNotificationFactory", () => {
       summary: {
         id: "wf-2",
         workflowName: "compile",
-        filePath: "C:/dev/FlightPath/compile.flightpath.yaml",
+        filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
         currentStep: 2,
         totalSteps: 2,
       },
       settings: {
-        ...FLIGHTPATH_SETTINGS_DEFAULTS.notifications,
+        ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
         events: {
-          ...FLIGHTPATH_SETTINGS_DEFAULTS.notifications.events,
+          ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events,
           workflowComplete: NOTIFICATION_EVENT_MODES.FAILURES_ONLY,
         },
       },
@@ -74,7 +74,7 @@ suite("CompletionNotificationFactory", () => {
         {
           id: "wf-2",
           workflowName: "compile",
-          filePath: "C:/dev/FlightPath/compile.flightpath.yaml",
+          filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
           executionState: EXECUTION_STATES.RUNNING,
           currentStep: 1,
           totalSteps: 2,
@@ -82,7 +82,7 @@ suite("CompletionNotificationFactory", () => {
         {
           id: "wf-2",
           workflowName: "compile",
-          filePath: "C:/dev/FlightPath/compile.flightpath.yaml",
+          filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
           executionState: EXECUTION_STATES.COMPLETED,
           currentStep: 2,
           totalSteps: 2,
@@ -95,7 +95,7 @@ suite("CompletionNotificationFactory", () => {
       isWorkflowCompletionTransition(undefined, {
         id: "wf-2",
         workflowName: "compile",
-        filePath: "C:/dev/FlightPath/compile.flightpath.yaml",
+        filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
         currentStep: 2,
         totalSteps: 2,
@@ -108,7 +108,7 @@ suite("CompletionNotificationFactory", () => {
         {
           id: "wf-2",
           workflowName: "compile",
-          filePath: "C:/dev/FlightPath/compile.flightpath.yaml",
+          filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
           executionState: EXECUTION_STATES.COMPLETED,
           currentStep: 2,
           totalSteps: 2,
@@ -116,7 +116,7 @@ suite("CompletionNotificationFactory", () => {
         {
           id: "wf-2",
           workflowName: "compile",
-          filePath: "C:/dev/FlightPath/compile.flightpath.yaml",
+          filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
           executionState: EXECUTION_STATES.COMPLETED,
           currentStep: 2,
           totalSteps: 2,
@@ -131,7 +131,7 @@ suite("CompletionNotificationFactory", () => {
       summary: {
         id: "wf-3",
         workflowName: "lint",
-        filePath: "C:/dev/FlightPath/lint.flightpath.yaml",
+        filePath: "C:/dev/ctrlyoke/lint.flightpath.yaml",
         executionState: EXECUTION_STATES.RUNNING,
         currentStep: 1,
         totalSteps: 3,
@@ -147,16 +147,16 @@ suite("CompletionNotificationFactory", () => {
         message: "End condition failed",
       },
       settings: {
-        ...FLIGHTPATH_SETTINGS_DEFAULTS.notifications,
+        ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
         events: {
-          ...FLIGHTPATH_SETTINGS_DEFAULTS.notifications.events,
+          ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.events,
           promptComplete: NOTIFICATION_EVENT_MODES.FAILURES_ONLY,
         },
       },
     });
 
     assert.ok(event);
-    assert.strictEqual(event?.title, "FlightPath - Prompt Failed");
+    assert.strictEqual(event?.title, "ctrlyoke - Prompt Failed");
     assert.match(event?.body ?? "", /step 2 "implement"/);
     assert.match(event?.body ?? "", /End condition failed/);
   });

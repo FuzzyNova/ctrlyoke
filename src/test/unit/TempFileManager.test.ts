@@ -39,7 +39,7 @@ suite("TempFileManager", () => {
   suite("createPromptFile", () => {
     test("creates file with correct content", async () => {
       manager = freshManager();
-      const content = "Hello, FlightPath!";
+      const content = "Hello, ctrlyoke!";
       const filePath = await manager.createPromptFile(content);
       createdFiles.push(filePath);
       const written = await fs.promises.readFile(filePath, "utf-8");
@@ -174,15 +174,15 @@ suite("TempFileManager", () => {
       manager = freshManager();
       const abs = path.join(
         workspaceRoot,
-        ".flightpath",
+        ".ctrlyoke",
         "temp",
         "some.prompt.md"
       );
       const rel = manager.getRelativePath(abs);
       assert.ok(!path.isAbsolute(rel), "result should be relative");
       assert.ok(
-        rel.includes(".flightpath"),
-        "should contain .flightpath segment"
+        rel.includes(".ctrlyoke"),
+        "should contain .ctrlyoke segment"
       );
     });
   });

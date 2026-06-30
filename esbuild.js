@@ -188,7 +188,7 @@ const copyServerPlugin = {
 
       const serverStaticFiles = [
         "standalone-shim.js",
-        "flightpath-service-worker.js",
+        "ctrlyoke-service-worker.js",
       ];
 
       for (const fileName of serverStaticFiles) {
@@ -234,7 +234,7 @@ const copyWasmPlugin = {
 
 async function main() {
   // Build webview inline scripts (bootstrap + module loader)
-  // These run in the browser webview context and are read/injected by FlightPathWebviewProvider.
+  // These run in the browser webview context and are read/injected by CtrlYokeWebviewProvider.
   const webviewScriptsCtx = await esbuild.context({
     entryPoints: [
       "src/ui/webview-react/scripts/bootstrapScript.ts",

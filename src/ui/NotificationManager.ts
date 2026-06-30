@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import { configService } from "../config/FlightPathConfigService";
-import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
-import type { WorkflowStep, WorkflowSummary } from "../types/FlightPathTypes";
+import { configService } from "../config/CtrlYokeConfigService";
+import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import type { WorkflowStep, WorkflowSummary } from "../types/CtrlYokeTypes";
 import type { DashboardClient } from "./DashboardBroadcastHub";
 import {
   COMPLETION_NOTIFICATION_SEVERITY,
@@ -12,7 +12,7 @@ import {
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
-  type FlightPathNotificationEvent,
+  type CtrlYokeNotificationEvent,
 } from "./notifications/CompletionNotificationFactory";
 import { Log } from "../utils/Log";
 
@@ -112,12 +112,12 @@ export class NotificationManager implements DashboardClient {
     return workflow?.getQueueState().steps;
   }
 
-  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+  notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {
     this.showNotification(event);
   }
 
   private showNotification(
-    event: FlightPathNotificationEvent | undefined
+    event: CtrlYokeNotificationEvent | undefined
   ): void {
     if (!event) {
       return;
@@ -152,9 +152,9 @@ export class NotificationManager implements DashboardClient {
         )
         .then((action) => {
           if (action === "Open Dashboard") {
-            void vscode.commands.executeCommand("flightpath.openPanel");
+            void vscode.commands.executeCommand("ctrlyoke.openPanel");
           } else if (action === "View Output") {
-            void vscode.commands.executeCommand("flightpath.showOutputPanel");
+            void vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
           }
         });
       return;
@@ -171,9 +171,9 @@ export class NotificationManager implements DashboardClient {
         )
         .then((action) => {
           if (action === "Open Dashboard") {
-            void vscode.commands.executeCommand("flightpath.openPanel");
+            void vscode.commands.executeCommand("ctrlyoke.openPanel");
           } else if (action === "View Output") {
-            void vscode.commands.executeCommand("flightpath.showOutputPanel");
+            void vscode.commands.executeCommand("ctrlyoke.showOutputPanel");
           }
         });
       return;
@@ -188,7 +188,7 @@ export class NotificationManager implements DashboardClient {
       )
       .then((action) => {
         if (action === "Open Dashboard") {
-          void vscode.commands.executeCommand("flightpath.openPanel");
+          void vscode.commands.executeCommand("ctrlyoke.openPanel");
         }
       });
   }

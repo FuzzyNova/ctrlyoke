@@ -71,7 +71,7 @@ describe("setAvailableAgents", () => {
     useSettingsStore.getState().setAvailableAgents([
       {
         name: "my-agent",
-        path: "/workspace/.flightpath/agents/my-agent.agent.md",
+        path: "/workspace/.ctrlyoke/agents/my-agent.agent.md",
       },
     ]);
     expect(useSettingsStore.getState().availableAgents).toHaveLength(1);
@@ -84,8 +84,8 @@ describe("setAvailableAgents", () => {
 describe("setAvailableSkills", () => {
   it("updates the skills list", () => {
     useSettingsStore.getState().setAvailableSkills([
-      { name: "skill-a", path: "/workspace/.flightpath/skills/skill-a.md" },
-      { name: "skill-b", path: "/workspace/.flightpath/skills/skill-b.md" },
+      { name: "skill-a", path: "/workspace/.ctrlyoke/skills/skill-a.md" },
+      { name: "skill-b", path: "/workspace/.ctrlyoke/skills/skill-b.md" },
     ]);
     expect(useSettingsStore.getState().availableSkills).toHaveLength(2);
   });
@@ -155,7 +155,7 @@ describe("setGlobalSettings", () => {
       skills: ["skill-a"],
       executionMode: "headless",
       resumeSession: true,
-      mcpServers: ["flightpath"],
+      mcpServers: ["ctrlyoke"],
       hooks: [],
       autoFocusOutputOnExecution: true,
       toolPermissions: {

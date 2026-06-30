@@ -4,13 +4,13 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import type * as vscode from "vscode";
-import { CliIntegration } from "../../flightpath/harness/CliIntegration";
+import { CliIntegration } from "../../core/harness/CliIntegration";
 import { EXECUTION_MODES } from "../../types/DashboardConstants";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
-import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
+import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
-import type { PromptStep } from "../../types/FlightPathTypes";
-import { configService } from "../../config/FlightPathConfigService";
+import type { PromptStep } from "../../types/CtrlYokeTypes";
+import { configService } from "../../config/CtrlYokeConfigService";
 
 class MockVsCodePlatform implements PlatformAdapter {
   getWorkspaceRoot(): string {
@@ -227,12 +227,12 @@ suite("CliIntegration", () => {
       ["@src/ui/webview-react/components/output/CliOutput.tsx"],
       [],
       [],
-      ["@.flightpath/temp/example.prompt.md"]
+      ["@.ctrlyoke/temp/example.prompt.md"]
     );
 
     assert.strictEqual(
       formatted,
-      "using these file references @src/ui/webview-react/components/output/CliOutput.tsx, follow the instructions in @.flightpath/temp/example.prompt.md "
+      "using these file references @src/ui/webview-react/components/output/CliOutput.tsx, follow the instructions in @.ctrlyoke/temp/example.prompt.md "
     );
     assert.strictEqual(/[\r\n]/u.test(formatted), false);
   });
@@ -467,7 +467,7 @@ suite("CliIntegration", () => {
 
   test("should clean up workflow artifacts and delegate workspace cleanup", async () => {
     const workspaceRoot = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "flightpath-cli-integration-")
+      path.join(os.tmpdir(), "ctrlyoke-cli-integration-")
     );
     const mcpConfigPath = path.join(workspaceRoot, "mcp-config.json");
     const extraPath = path.join(workspaceRoot, "extra-artifact.json");

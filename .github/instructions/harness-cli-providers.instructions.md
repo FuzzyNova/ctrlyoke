@@ -1,5 +1,5 @@
 ---
-applyTo: "src/flightpath/harness/copilot/**, src/flightpath/harness/claude/**, src/flightpath/harness/codex/**, src/flightpath/harness/opencode/**, src/flightpath/harness/qwen/**, src/flightpath/harness/gemini/**"
+applyTo: "src/core/harness/copilot/**, src/core/harness/claude/**, src/core/harness/codex/**, src/core/harness/opencode/**, src/core/harness/qwen/**, src/core/harness/gemini/**"
 ---
 
 <purpose>

@@ -4,8 +4,8 @@ import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { suite, test, setup, teardown } from "mocha";
-import { OutputHistoryManager } from "../../flightpath/orchestration/OutputHistoryManager";
-import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
+import { OutputHistoryManager } from "../../core/orchestration/OutputHistoryManager";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,

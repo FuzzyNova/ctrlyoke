@@ -1,5 +1,5 @@
 /**
- * Shared queue operations for FlightPath MCP server and Language Model Tools
+ * Shared queue operations for ctrlyoke MCP server and Language Model Tools
  * Single source of truth for queue status and append operations
  * Used by:
  * 1. MCP server (CLI integration)
@@ -12,7 +12,7 @@ import {
   PromptStep,
   EndCondition,
   isScriptStep,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   QUEUE_POSITION,

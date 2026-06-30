@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from "react";
-import type { ErrorBehavior } from "@root/types/FlightPathTypes";
+import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
   useEditorStore,
@@ -577,7 +577,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 <label
                   htmlFor="prop-additional-args-mode"
                   className="text-xs font-semibold uppercase text-description-fg"
-                  title="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
+                  title="Extra CLI flags appended to ctrlyoke's standard argument set. Only applies to CLI harnesses."
                 >
                   Additional Args
                 </label>
@@ -774,7 +774,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     setProperty("preCondition", {
                       script: "",
                       onFail: CONDITION_ACTIONS.SKIP_PROMPT,
-                    } as import("../../../../types/FlightPathTypes").PreCondition);
+                    } as import("../../../../types/CtrlYokeTypes").PreCondition);
                   }
                 }}
                 options={buildConditionOptions(preConditionInheritLabel)}
@@ -792,7 +792,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     onChange={(updated) =>
                       setProperty(
                         "preCondition",
-                        updated as import("../../../../types/FlightPathTypes").PreCondition
+                        updated as import("../../../../types/CtrlYokeTypes").PreCondition
                       )
                     }
                     narrow={isNarrow}

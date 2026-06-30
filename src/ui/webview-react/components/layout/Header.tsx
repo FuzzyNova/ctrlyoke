@@ -273,7 +273,7 @@ export const Header: React.FC<{
           disabled={!canRun || isCLIManaged}
           title={
             isCLIManaged
-              ? "Workflow is running via FlightPath CLI"
+              ? "Workflow is running via ctrlyoke CLI"
               : !hasFile
                 ? "Load a workflow to run"
                 : isRerun
@@ -303,7 +303,7 @@ export const Header: React.FC<{
           }
           title={
             isCLIManaged
-              ? "Workflow is running via FlightPath CLI"
+              ? "Workflow is running via ctrlyoke CLI"
               : isPaused
                 ? "Resume"
                 : isStopped

@@ -3,13 +3,13 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { WorkflowInstance } from "../../flightpath/WorkflowInstance";
+import { WorkflowInstance } from "../../core/WorkflowInstance";
 import {
   HarnessIntegration,
   HarnessStatus,
-} from "../../flightpath/HarnessIntegration";
-import { IntegrationFactory } from "../../flightpath/IntegrationFactory";
-import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
+} from "../../core/HarnessIntegration";
+import { IntegrationFactory } from "../../core/IntegrationFactory";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import {
   EXECUTION_STATES,
@@ -18,7 +18,7 @@ import {
   HARNESS_IDS,
   type HarnessId,
 } from "../../types/DashboardConstants";
-import { PromptStep } from "../../types/FlightPathTypes";
+import { PromptStep } from "../../types/CtrlYokeTypes";
 import { TIMELINE_EVENT_TYPES } from "../../types/WorkflowTimelineTypes";
 
 class MockPlatform implements PlatformAdapter {
@@ -251,7 +251,7 @@ suite("WorkflowInstance runtime transitions", () => {
   test("loading a stale running working file restores it as stopped without starting execution", async () => {
     const platform = new MockPlatform();
     const tempDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), "flightpath-stale-running-")
+      path.join(os.tmpdir(), "ctrlyoke-stale-running-")
     );
     const workingFilePath = path.join(tempDir, "stale.flightpath.json");
 

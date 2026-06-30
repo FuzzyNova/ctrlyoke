@@ -70,7 +70,7 @@ export async function saveIfDirty(filePath: string): Promise<void> {
     } catch (error) {
       Log.error("Failed to auto-save file:", error);
       vscode.window.showWarningMessage(
-        "FlightPath: Could not auto-save file. Running with last saved version."
+        "ctrlyoke: Could not auto-save file. Running with last saved version."
       );
     }
   }

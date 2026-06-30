@@ -42,7 +42,7 @@ const ELIGIBLE_HARNESS_IDS: HarnessId[] = ALL_HARNESS_IDS.filter(
 );
 
 function getTargetLabel(id: AnyTargetId): string {
-  if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) return "FlightPath";
+  if (id === SPECIAL_TARGET_IDS.CTRLYOKE) return "ctrlyoke";
   if (id === SPECIAL_TARGET_IDS.AGENTS) return "Agents";
   if (id === SPECIAL_TARGET_IDS.VSCODE) return "VS Code";
   const info = HARNESS_INFO[id as keyof typeof HARNESS_INFO];
@@ -85,17 +85,17 @@ function getLocationFolderPath(
     : getParentFolderPath(location.path);
 }
 
-// Primary source location: prefer flightpath workspace, then flightpath user, then first
+// Primary source location: prefer ctrlyoke workspace, then ctrlyoke user, then first
 function getPrimaryLocation(file: ManagedFile): ManagedFileLocation {
   return (
     file.locations.find(
       (l) =>
-        l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+        l.harnessId === SPECIAL_TARGET_IDS.CTRLYOKE &&
         l.scope === SETTING_SCOPES.WORKSPACE
     ) ??
     file.locations.find(
       (l) =>
-        l.harnessId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+        l.harnessId === SPECIAL_TARGET_IDS.CTRLYOKE &&
         l.scope === SETTING_SCOPES.USER
     ) ??
     file.locations[0]
@@ -125,8 +125,8 @@ function getTargetDirectoryPath(
 // ============================================================================
 
 // Special targets that always appear regardless of harness availability
-const SPECIAL_WORKSPACE_SUFFIXES: AnyTargetId[] = ["agents", "flightpath"];
-const SPECIAL_USER_SUFFIXES: AnyTargetId[] = ["agents", "vscode", "flightpath"];
+const SPECIAL_WORKSPACE_SUFFIXES: AnyTargetId[] = ["agents", "ctrlyoke"];
+const SPECIAL_USER_SUFFIXES: AnyTargetId[] = ["agents", "vscode", "ctrlyoke"];
 
 function getWorkspaceTargets(availableIds: Set<HarnessId>): AnyTargetId[] {
   return [
@@ -226,7 +226,7 @@ function HarnessBadge({
   id: AnyTargetId;
   scope: SettingWriteScope;
 }) {
-  const isFp = id === "flightpath";
+  const isFp = id === "ctrlyoke";
   return (
     <span
       className={`inline-flex items-center px-1 py-0.5 rounded text-xxs font-medium leading-none
@@ -623,7 +623,7 @@ export function AgentSkillsManagerSection({
     if (activeType === HARNESS_FILE_TYPES.AGENT) {
       return "Save agents to a harness directory to enable native subagent spawning from that harness.";
     }
-    return "Save skills to a harness directory to make that skill always available for that harness, regardless of what FlightPath attaches.";
+    return "Save skills to a harness directory to make that skill always available for that harness, regardless of what ctrlyoke attaches.";
   };
 
   return (
@@ -679,7 +679,7 @@ export function AgentSkillsManagerSection({
       <div className="space-y-2">
         <p className="text-xs text-description-fg">{getContextDescription()}</p>
         <p className="text-xs text-description-fg">
-          Save to FlightPath for fine-grained control via properties. Workspace
+          Save to ctrlyoke for fine-grained control via properties. Workspace
           directories are project-scoped; user directories apply globally.
         </p>
       </div>

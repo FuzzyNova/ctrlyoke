@@ -189,7 +189,7 @@ describe("save workflow dialog", () => {
     store().openSaveWorkflowDialog({
       defaultPath: "/workspace/wf.flightpath.yaml",
       defaultFormat: "yaml",
-      workflowsDir: ".flightpath/workflows",
+      workflowsDir: ".ctrlyoke/workflows",
     });
     expect(store().saveWorkflowDialogOpen).toBe(true);
     expect(store().saveWorkflowDialogData?.defaultFormat).toBe("yaml");
@@ -213,7 +213,7 @@ describe("new workflow modal", () => {
   it("opens with templates and selects default", () => {
     store().openNewWorkflowModal({
       templates,
-      workflowsDir: ".flightpath/workflows",
+      workflowsDir: ".ctrlyoke/workflows",
       defaultTemplateId: "starter",
     });
     expect(store().newWorkflowModalOpen).toBe(true);

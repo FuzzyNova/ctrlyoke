@@ -150,7 +150,7 @@ export function useDesktopLayout({
   };
 
   const getHorizontalGroupTotalPx = () => {
-    const groupElement = document.getElementById("flightpath-main-layout");
+    const groupElement = document.getElementById("ctrlyoke-main-layout");
     return groupElement?.getBoundingClientRect().width ?? 0;
   };
 

@@ -5,7 +5,7 @@ import type {
   UniversalCliOutput,
 } from "../../types/CliOutputTypes";
 import { FAILURE_KINDS } from "../../types/DashboardConstants";
-import type { FailureKind } from "../../types/FlightPathTypes";
+import type { FailureKind } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import { extractTextFromEvents } from "./shared/CliResponseTextExtractor";

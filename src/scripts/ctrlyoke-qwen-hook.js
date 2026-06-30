@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * FlightPath Qwen Code Hook Handler
+ * ctrlyoke Qwen Code Hook Handler
  *
  * This script is executed by Qwen Code CLI when hook events occur.
  * It receives hook input JSON via stdin and writes a notification file
- * that FlightPath monitors for session discovery and completion detection.
+ * that ctrlyoke monitors for session discovery and completion detection.
  *
  * Supported hook events:
  * - SessionStart: Called when new session starts (provides session ID immediately)
  * - Stop: Called when execution completes
  *
- * Usage (configured by FlightPath via .qwen/settings.json, requires --experimental-hooks):
+ * Usage (configured by ctrlyoke via .qwen/settings.json, requires --experimental-hooks):
  *   { "hooks": { "SessionStart": [...], "Stop": [...] } }
  *
  * Hook input format (from Qwen Code via stdin):
@@ -27,7 +27,7 @@
  *
  * Notification directory is passed as first command-line argument.
  *
- * Debug logging: All hook data logged to <workspace>/.flightpath/logs/flightpath-qwen-hook-debug.log
+ * Debug logging: All hook data logged to <workspace>/.ctrlyoke/logs/ctrlyoke-qwen-hook-debug.log
  */
 
 const fs = require("fs");
@@ -43,10 +43,10 @@ const {
   buildNotifyFilePath,
   STANDARD_LOGICAL_EVENT_MAP,
   STANDARD_HANDLED_EVENTS,
-} = require("./flightpath-hook-utils");
+} = require("./ctrlyoke-hook-utils");
 
-const SCRIPT_NAME = "flightpath-qwen-hook";
-const SCRIPT_PREFIX = "FlightPath Qwen Hook";
+const SCRIPT_NAME = "ctrlyoke-qwen-hook";
+const SCRIPT_PREFIX = "ctrlyoke Qwen Hook";
 
 function main() {
   const notifyDir = process.argv[2];

@@ -10,7 +10,7 @@ import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 /**
  * Claude CLI Tool Permission Mapper
  *
- * Converts FlightPath's unified tool permission configuration into
+ * Converts ctrlyoke's unified tool permission configuration into
  * Claude CLI arguments.
  *
  * Permission modes:

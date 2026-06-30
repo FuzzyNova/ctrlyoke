@@ -1,4 +1,4 @@
-import type { WorkflowStep, WorkflowSummary } from "../types/FlightPathTypes";
+import type { WorkflowStep, WorkflowSummary } from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
   StatusMessageSeverity,
@@ -13,7 +13,7 @@ import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { IDashboardProvider } from "./IDashboardProvider";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
-import type { FlightPathNotificationEvent } from "./notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
 
 export type DashboardClient = IDashboardProvider & Partial<IDashboardSink>;
 
@@ -387,7 +387,7 @@ export class DashboardBroadcastHub
     }
   }
 
-  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+  notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {
     for (const client of this.clients) {
       client.notifyNotificationEvent?.(event);
     }

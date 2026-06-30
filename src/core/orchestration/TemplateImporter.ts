@@ -38,7 +38,7 @@ interface WorkflowManifest {
  *
  * Handles import operations including:
  * - Importing agents to .github/agents/
- * - Importing workflow templates to .flightpath/templates/
+ * - Importing workflow templates to .ctrlyoke/templates/
  * - Loading and parsing manifests
  * - File copying with overwrite confirmation
  */
@@ -59,12 +59,12 @@ export class TemplateImporter {
   }
 
   /**
-   * Import FlightPath custom agents to the workspace's .github/agents folder
+   * Import ctrlyoke custom agents to the workspace's .github/agents folder
    */
   async importAgents(): Promise<void> {
     try {
       if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder open");
+        vscode.window.showErrorMessage("ctrlyoke: No workspace folder open");
         return;
       }
 
@@ -77,7 +77,7 @@ export class TemplateImporter {
 
       if (!manifest.agents || manifest.agents.length === 0) {
         vscode.window.showInformationMessage(
-          "FlightPath: No agents available to import"
+          "ctrlyoke: No agents available to import"
         );
         return;
       }
@@ -93,7 +93,7 @@ export class TemplateImporter {
         })),
         {
           placeHolder: "Select agents to import to .github/agents/",
-          title: "FlightPath: Import Custom Agents",
+          title: "ctrlyoke: Import Custom Agents",
           canPickMany: true,
         }
       );
@@ -137,18 +137,18 @@ export class TemplateImporter {
         selectedAgents[0]?.agent.file
       );
     } catch (error) {
-      Log.error("FlightPath: Error importing agents:", error);
+      Log.error("ctrlyoke: Error importing agents:", error);
       vscode.window.showErrorMessage(`❌ Failed to import agents: ${error}`);
     }
   }
 
   /**
-   * Import FlightPath workflow templates to the workspace's .flightpath folder
+   * Import ctrlyoke workflow templates to the workspace's .ctrlyoke folder
    */
   async importWorkflowTemplates(): Promise<void> {
     try {
       if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder open");
+        vscode.window.showErrorMessage("ctrlyoke: No workspace folder open");
         return;
       }
 
@@ -161,7 +161,7 @@ export class TemplateImporter {
 
       if (!manifest.workflows || manifest.workflows.length === 0) {
         vscode.window.showInformationMessage(
-          "FlightPath: No workflow templates available to import"
+          "ctrlyoke: No workflow templates available to import"
         );
         return;
       }
@@ -177,8 +177,8 @@ export class TemplateImporter {
         })),
         {
           placeHolder:
-            "Select workflow templates to import to .flightpath/templates/",
-          title: "FlightPath: Import Workflow Templates",
+            "Select workflow templates to import to .ctrlyoke/templates/",
+          title: "ctrlyoke: Import Workflow Templates",
           canPickMany: true,
         }
       );
@@ -187,10 +187,10 @@ export class TemplateImporter {
         return; // User cancelled
       }
 
-      // Create .flightpath/templates directory
+      // Create .ctrlyoke/templates directory
       const targetDir = path.join(
         this.currentWorkspaceFolder.uri.fsPath,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.TEMPLATES_DIR
       );
 
@@ -223,7 +223,7 @@ export class TemplateImporter {
         selectedWorkflows[0]?.workflow.file
       );
     } catch (error) {
-      Log.error("FlightPath: Error importing workflow templates:", error);
+      Log.error("ctrlyoke: Error importing workflow templates:", error);
       vscode.window.showErrorMessage(
         `❌ Failed to import workflow templates: ${error}`
       );
@@ -252,9 +252,9 @@ export class TemplateImporter {
       const manifestContent = await vscode.workspace.fs.readFile(manifestUri);
       return JSON.parse(Buffer.from(manifestContent).toString("utf-8"));
     } catch (error) {
-      Log.error(`FlightPath: Failed to load ${type} manifest:`, error);
+      Log.error(`ctrlyoke: Failed to load ${type} manifest:`, error);
       vscode.window.showErrorMessage(
-        `❌ Failed to load FlightPath ${type}. The extension may not be properly installed.`
+        `❌ Failed to load ctrlyoke ${type}. The extension may not be properly installed.`
       );
       return undefined;
     }
@@ -304,7 +304,7 @@ export class TemplateImporter {
         await vscode.workspace.fs.writeFile(vscode.Uri.file(destPath), content);
         importedItems.push(item.label);
       } catch (error) {
-        Log.error(`FlightPath: Failed to import ${item.id}:`, error);
+        Log.error(`ctrlyoke: Failed to import ${item.id}:`, error);
         failedItems.push(item.label);
       }
     }

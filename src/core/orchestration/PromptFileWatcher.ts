@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { PromptQueue } from "../PromptQueue";
-import { EXECUTION_STATES } from "../../types/FlightPathTypes";
+import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import { Log } from "../../utils/Log";
 

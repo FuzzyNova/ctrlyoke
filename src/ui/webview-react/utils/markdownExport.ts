@@ -327,7 +327,7 @@ export function generateMarkdownExport(
 
   if (includeMetadata) {
     const timestamp = new Date().toISOString();
-    lines.push("# FlightPath Execution Output");
+    lines.push("# ctrlyoke Execution Output");
     lines.push("");
     lines.push(`**File:** ${metadata.fileName || "Unknown"}`);
     lines.push(`**Exported:** ${timestamp}`);

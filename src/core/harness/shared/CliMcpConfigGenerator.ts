@@ -1,5 +1,5 @@
 import * as path from "path";
-import type { McpServerConfig } from "../../../types/FlightPathTypes";
+import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../../../utils/ConfigurationUtils";
 
 /**
@@ -26,7 +26,7 @@ export interface McpUserServerHarnessConfig {
   /** type field value for stdio servers (e.g., "local" for Copilot, "stdio" for Claude) */
   stdioType?: string;
   /**
-   * Maps FlightPath transport values to the harness-specific type field value for remote servers.
+   * Maps ctrlyoke transport values to the harness-specific type field value for remote servers.
    * e.g., { "streamable-http": "http", "sse": "sse" } for Copilot CLI.
    * If not provided, the transport value is used as-is.
    */
@@ -165,7 +165,7 @@ export class CliMcpConfigGenerator {
   }
 
   /**
-   * Compute the path for a file-based MCP config in .flightpath/temp/.
+   * Compute the path for a file-based MCP config in .ctrlyoke/temp/.
    *
    * Single source of truth for all file-based MCP config paths. Both
    * getMcpConfigArgs (write) and getMcpConfigFilePath (cleanup) must use
@@ -186,7 +186,7 @@ export class CliMcpConfigGenerator {
       : "default";
     return path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.TEMP_DIR,
       `${filenamePrefix}-${configSuffix}.json`
     );
@@ -198,7 +198,7 @@ export class CliMcpConfigGenerator {
    * @param serverPath Path to MCP server script
    * @param workspaceRoot Workspace root directory
    * @param serverConfig Optional server configuration fields (type, tools, etc.)
-   * @param workingFilePath Active working file path (sets FLIGHTPATH_WORKING_FILE for precise targeting)
+   * @param workingFilePath Active working file path (sets CTRLYOKE_WORKING_FILE for precise targeting)
    * @returns JSON config string
    */
   static generateJsonConfig(
@@ -213,17 +213,17 @@ export class CliMcpConfigGenerator {
     const normalizedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
 
     const env: Record<string, string> = {
-      FLIGHTPATH_WORKSPACE: normalizedWorkspaceRoot,
+      CTRLYOKE_WORKSPACE: normalizedWorkspaceRoot,
     };
     if (workingFilePath) {
-      env["FLIGHTPATH_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
+      env["CTRLYOKE_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
     }
     if (additionalEnv) {
       Object.assign(env, additionalEnv);
     }
 
     const mcpServers: any = {
-      flightpath: {
+      ctrlyoke: {
         command: "node",
         args: [normalizedServerPath],
         env,
@@ -233,10 +233,10 @@ export class CliMcpConfigGenerator {
     // Add optional server configuration fields
     if (serverConfig) {
       if (serverConfig.type) {
-        mcpServers.flightpath.type = serverConfig.type;
+        mcpServers.ctrlyoke.type = serverConfig.type;
       }
       if (serverConfig.tools) {
-        mcpServers.flightpath.tools = serverConfig.tools;
+        mcpServers.ctrlyoke.tools = serverConfig.tools;
       }
     }
 
@@ -247,14 +247,14 @@ export class CliMcpConfigGenerator {
   /**
    * Generate JSON MCP configuration including user-defined MCP servers.
    *
-   * Merges the FlightPath built-in server with any user-defined McpServerConfig objects.
+   * Merges the ctrlyoke built-in server with any user-defined McpServerConfig objects.
    *
    * @param serverPath Path to MCP server script
    * @param workspaceRoot Workspace root directory
    * @param userServers User-defined MCP server configs to merge in
    * @param serverConfig Optional harness server configuration fields (type, tools, etc.)
    * @param workingFilePath Active working file path
-   * @param additionalEnv Additional environment variables for FlightPath server
+   * @param additionalEnv Additional environment variables for ctrlyoke server
    * @param userServerConfig Optional harness-specific formatting for user server entries
    * @returns JSON config string
    */
@@ -267,7 +267,7 @@ export class CliMcpConfigGenerator {
     additionalEnv?: Record<string, string>,
     userServerConfig?: McpUserServerHarnessConfig
   ): string {
-    // Parse the base config with the flightpath server
+    // Parse the base config with the ctrlyoke server
     const baseConfig = JSON.parse(
       this.generateJsonConfig(
         serverPath,
@@ -290,9 +290,9 @@ export class CliMcpConfigGenerator {
   }
 
   /**
-   * Generate JSON MCP configuration with ONLY user-defined servers (no FlightPath server).
+   * Generate JSON MCP configuration with ONLY user-defined servers (no ctrlyoke server).
    *
-   * Used when the workflow specifies user-defined MCP servers but does NOT include "flightpath"
+   * Used when the workflow specifies user-defined MCP servers but does NOT include "ctrlyoke"
    * in the mcpServers list. Generates a config with just the user's servers.
    *
    * @param userServers User-defined MCP server configs
@@ -356,10 +356,10 @@ export class CliMcpConfigGenerator {
    *
    * Note: Uses single quotes inside TOML to avoid PowerShell escaping issues
    *
-   * @param serverName MCP server name (e.g., "flightpath")
+   * @param serverName MCP server name (e.g., "ctrlyoke")
    * @param serverPath Path to MCP server script
    * @param workspaceRoot Workspace root directory
-   * @param workingFilePath Active working file path (sets FLIGHTPATH_WORKING_FILE for precise targeting)
+   * @param workingFilePath Active working file path (sets CTRLYOKE_WORKING_FILE for precise targeting)
    * @returns TOML config string
    */
   static generateInlineTomlConfig(
@@ -374,10 +374,10 @@ export class CliMcpConfigGenerator {
     const escapedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
 
     const env: Record<string, string> = {
-      FLIGHTPATH_WORKSPACE: escapedWorkspaceRoot,
+      CTRLYOKE_WORKSPACE: escapedWorkspaceRoot,
     };
     if (workingFilePath) {
-      env.FLIGHTPATH_WORKING_FILE = workingFilePath.replace(/\\/g, "/");
+      env.CTRLYOKE_WORKING_FILE = workingFilePath.replace(/\\/g, "/");
     }
     if (additionalEnv) {
       Object.assign(env, additionalEnv);

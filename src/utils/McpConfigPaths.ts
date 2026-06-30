@@ -159,26 +159,26 @@ export function getQwenUserMcpConfigPath(): string {
 }
 
 /**
- * Returns the workspace FlightPath MCP registry path.
+ * Returns the workspace ctrlyoke MCP registry path.
  */
-export function getFlightpathWorkspaceMcpRegistryPath(
+export function getCtrlYokeWorkspaceMcpRegistryPath(
   workspaceRoot: string
 ): string {
   return path.join(
     workspaceRoot,
-    PATH_CONSTANTS.FLIGHTPATH_DIR,
+    PATH_CONSTANTS.CTRLYOKE_DIR,
     PATH_CONSTANTS.MCP_DIR,
     PATH_CONSTANTS.MCP_SERVERS_FILE
   );
 }
 
 /**
- * Returns the user FlightPath MCP registry path (~/.flightpath/mcp/servers.json).
+ * Returns the user ctrlyoke MCP registry path (~/.ctrlyoke/mcp/servers.json).
  */
-export function getFlightpathUserMcpRegistryPath(): string {
+export function getCtrlYokeUserMcpRegistryPath(): string {
   return path.join(
     getHomeDir(),
-    PATH_CONSTANTS.FLIGHTPATH_DIR,
+    PATH_CONSTANTS.CTRLYOKE_DIR,
     PATH_CONSTANTS.MCP_DIR,
     PATH_CONSTANTS.MCP_SERVERS_FILE
   );

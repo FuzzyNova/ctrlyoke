@@ -5,7 +5,7 @@ import {
 } from "../shared/interfaces/INotificationMonitor";
 import * as path from "path";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 
 /**
  * OpenCode CLI Notification Monitor
@@ -13,7 +13,7 @@ import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
  * Completion detection strategy: OpenCode TypeScript plugin system.
  *
  * Before the TUI launches, OpenCodeCliProvider writes a CommonJS plugin to
- * .opencode/plugin/flightpath-completion-hook.ts. The plugin listens for
+ * .opencode/plugin/ctrlyoke-completion-hook.ts. The plugin listens for
  * session.created, session.idle, and session.busy events, then writes:
  *
  *   {sessionId}-start.json → on session.created (for early session ID capture)
@@ -39,14 +39,14 @@ export class OpenCodeNotificationMonitor
   getPluginFilePath(workspaceRoot: string): string {
     return path.join(
       this.getPluginDirectory(workspaceRoot),
-      "flightpath-completion-hook.ts"
+      "ctrlyoke-completion-hook.ts"
     );
   }
 
   getPluginHooksFilePath(workspaceRoot: string): string {
     return path.join(
       this.getPluginDirectory(workspaceRoot),
-      "flightpath-hooks.json"
+      "ctrlyoke-hooks.json"
     );
   }
 
@@ -72,7 +72,7 @@ export class OpenCodeNotificationMonitor
     _notifyDir: string,
     _workspaceRoot: string,
     _userHooks?: UserHookConfig[],
-    _flightpathEvents?: HookEvent[]
+    _ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
     return { type: "none" };
   }

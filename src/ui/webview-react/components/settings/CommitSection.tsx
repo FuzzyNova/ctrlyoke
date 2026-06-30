@@ -4,7 +4,7 @@ import type {
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
 import type { HarnessId } from "@root/types/DashboardConstants";
-import { FLIGHTPATH_SETTINGS_DEFAULTS } from "@root/types/FlightPathSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { CustomSelect } from "@components/shared/CustomSelect";
@@ -35,7 +35,7 @@ function PromptPreview({ text }: { text: string }) {
   );
 }
 
-const DEFAULT_PROMPT = FLIGHTPATH_SETTINGS_DEFAULTS.commit.prompt;
+const DEFAULT_PROMPT = CTRLYOKE_SETTINGS_DEFAULTS.commit.prompt;
 const EMPTY_HIDDEN_VALUES: string[] = [];
 
 export function CommitSection({
@@ -86,7 +86,7 @@ export function CommitSection({
       <p className="text-xs text-description-fg -mt-2">
         Configure the AI harness, model, and system prompt used when generating
         commit messages via the generate button (SCM panel, hosted dashboard) or
-        the <code className="font-mono">flightpath commit</code> CLI command.
+        the <code className="font-mono">ctrlyoke commit</code> CLI command.
       </p>
 
       <SettingInputRow
@@ -166,7 +166,7 @@ export function CommitSection({
 
         <p className="text-xs text-description-fg">
           Shows the most recent real git diff text appended to the commit prompt
-          before FlightPath asked the selected harness to generate a commit
+          before ctrlyoke asked the selected harness to generate a commit
           message. Opening this section does not run git or generate a new
           preview.
         </p>

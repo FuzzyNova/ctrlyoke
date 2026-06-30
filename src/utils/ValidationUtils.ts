@@ -1,5 +1,5 @@
 import Ajv, { JSONSchemaType } from "ajv";
-import { PromptStep } from "../types/FlightPathTypes";
+import { PromptStep } from "../types/CtrlYokeTypes";
 import { HARNESS_IDS } from "../types/DashboardConstants";
 import { Log } from "./Log";
 import {

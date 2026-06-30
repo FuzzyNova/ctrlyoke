@@ -1,5 +1,5 @@
 /**
- * FlightPath Hook Script Shared Utilities
+ * ctrlyoke Hook Script Shared Utilities
  *
  * Common functions used by all hook/notify scripts (Copilot, Claude, Codex).
  * Plain CommonJS with only Node.js built-in dependencies.
@@ -14,7 +14,7 @@ const os = require("os");
  * Ensures the logs directory exists before returning the path.
  *
  * @param {string} logsDir - Directory where log files should be written
- * @param {string} scriptName - Base name for the log file (e.g., 'flightpath-copilot-hook')
+ * @param {string} scriptName - Base name for the log file (e.g., 'ctrlyoke-copilot-hook')
  * @returns {string} Full path to the debug log file
  */
 function getDebugLogPath(logsDir, scriptName) {
@@ -67,21 +67,21 @@ function createLogger(logPath) {
 }
 
 /**
- * Derive the .flightpath/logs/ directory from a notification directory path.
- * Notification directories follow the pattern: <workspace>/.flightpath/temp/<harness>-notifications
- * This navigates up 2 levels to reach .flightpath/, then appends logs/.
+ * Derive the .ctrlyoke/logs/ directory from a notification directory path.
+ * Notification directories follow the pattern: <workspace>/.ctrlyoke/temp/<harness>-notifications
+ * This navigates up 2 levels to reach .ctrlyoke/, then appends logs/.
  *
  * @param {string} notifyDir - The notification directory path
  * @returns {string} Path to the logs directory
  */
 function getLogsDirFromNotifyDir(notifyDir) {
-  const flightpathDir = path.join(notifyDir, "..", "..");
-  return path.join(flightpathDir, "logs");
+  const ctrlyokeDir = path.join(notifyDir, "..", "..");
+  return path.join(ctrlyokeDir, "logs");
 }
 
 /**
  * Derive the workspace root from a notification directory path.
- * Notification directories follow the pattern: <workspace>/.flightpath/temp/<harness>-notifications
+ * Notification directories follow the pattern: <workspace>/.ctrlyoke/temp/<harness>-notifications
  * This navigates up 3 levels to reach the workspace root.
  *
  * @param {string} notifyDir - The notification directory path
@@ -94,18 +94,18 @@ function getWorkspaceRootFromNotifyDir(notifyDir) {
 /**
  * Initialize the debug logger for a stdin-based hook script.
  *
- * Checks the FLIGHTPATH_DIAGNOSTIC_LOGS environment variable (injected into
- * the CLI process env at spawn time by FlightPath) and returns a configured
+ * Checks the CTRLYOKE_DIAGNOSTIC_LOGS environment variable (injected into
+ * the CLI process env at spawn time by ctrlyoke) and returns a configured
  * logger when enabled. Returns a no-op logger otherwise — hook scripts must
  * never crash due to logging setup.
  *
- * @param {string} scriptName - Base name for the log file (e.g., 'flightpath-claude-hook')
+ * @param {string} scriptName - Base name for the log file (e.g., 'ctrlyoke-claude-hook')
  * @param {string|undefined} notifyDir - Notification directory path (argv[2])
  * @returns {function(string, object=): void} Configured logger function
  */
 function initializeLogger(scriptName, notifyDir) {
   try {
-    if (notifyDir && process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true") {
+    if (notifyDir && process.env.CTRLYOKE_DIAGNOSTIC_LOGS === "true") {
       const logsDir = getLogsDirFromNotifyDir(notifyDir);
       return createLogger(getDebugLogPath(logsDir, scriptName));
     }
@@ -126,7 +126,7 @@ function initializeLogger(scriptName, notifyDir) {
  * process.exit() directly for validation errors or success — any
  * uncaught exception it throws is caught here.
  *
- * @param {string} scriptPrefix - Prefix for console.error messages (e.g., 'FlightPath Claude Hook')
+ * @param {string} scriptPrefix - Prefix for console.error messages (e.g., 'ctrlyoke Claude Hook')
  * @param {function} debugLog - Logger returned by initializeLogger or createLogger
  * @param {function(object): void} callback - Called with parsed JSON on success
  */
@@ -216,34 +216,34 @@ function runDecisionHook(command, payloadJson, debugLog) {
 
 /**
  * Build the base fields for a hook artifact from env vars.
- * Returns null if FLIGHTPATH_RUN_ID is not set.
+ * Returns null if CTRLYOKE_RUN_ID is not set.
  *
  * @returns {object|null} Base artifact object (without hookEvent/nativeHookEvent/toolName/rawHookData)
  */
 function buildArtifactBase() {
-  const runId = process.env.FLIGHTPATH_RUN_ID;
+  const runId = process.env.CTRLYOKE_RUN_ID;
   if (!runId) {
     return null;
   }
   return {
     runId,
     timestamp: Date.now(),
-    workflowId: process.env.FLIGHTPATH_WORKFLOW_ID || "",
-    workflowName: process.env.FLIGHTPATH_WORKFLOW_NAME || "",
-    promptIndex: parseInt(process.env.FLIGHTPATH_PROMPT_INDEX || "0", 10),
-    promptName: process.env.FLIGHTPATH_PROMPT_NAME || "",
-    harnessId: process.env.FLIGHTPATH_HARNESS_ID || "",
+    workflowId: process.env.CTRLYOKE_WORKFLOW_ID || "",
+    workflowName: process.env.CTRLYOKE_WORKFLOW_NAME || "",
+    promptIndex: parseInt(process.env.CTRLYOKE_PROMPT_INDEX || "0", 10),
+    promptName: process.env.CTRLYOKE_PROMPT_NAME || "",
+    harnessId: process.env.CTRLYOKE_HARNESS_ID || "",
   };
 }
 
 /**
- * Check if a logical hook event is enabled in FLIGHTPATH_NOTIFY_HOOK_EVENTS.
+ * Check if a logical hook event is enabled in CTRLYOKE_NOTIFY_HOOK_EVENTS.
  *
  * @param {string} logicalEvent - Logical event name (e.g. "preToolUse")
  * @returns {boolean} True if the event is enabled
  */
 function isHookEventEnabled(logicalEvent) {
-  const enabled = process.env.FLIGHTPATH_NOTIFY_HOOK_EVENTS;
+  const enabled = process.env.CTRLYOKE_NOTIFY_HOOK_EVENTS;
   if (!enabled) {
     return false;
   }
@@ -290,11 +290,11 @@ function maybeWriteHookArtifact(
 /**
  * Write a hook artifact file to the notify directory.
  *
- * Hook scripts call this when FLIGHTPATH_NOTIFY_HOOK_EVENTS contains the
+ * Hook scripts call this when CTRLYOKE_NOTIFY_HOOK_EVENTS contains the
  * event name. The file is picked up and deleted by HookEventMonitor in the
  * extension. File naming: `{runId}-hook-{timestamp}-{pid}.json`.
  *
- * @param {string} notifyDir - Notification directory path (from FLIGHTPATH_NOTIFY_DIR)
+ * @param {string} notifyDir - Notification directory path (from CTRLYOKE_NOTIFY_DIR)
  * @param {object} artifact - The HookArtifact payload to write
  * @param {function} debugLog - Logger returned by initializeLogger or createLogger
  */
@@ -321,7 +321,7 @@ function writeHookArtifact(notifyDir, artifact, debugLog) {
 
 /**
  * Standard logical-event mapping shared by the Claude, Codex, and Qwen hook
- * scripts: maps each harness's native hook event name to FlightPath's
+ * scripts: maps each harness's native hook event name to ctrlyoke's
  * logical event name used for hook-artifact dispatch.
  *
  * @type {Record<string, string>}
@@ -352,7 +352,7 @@ const STANDARD_HANDLED_EVENTS = new Set(
  * unavailable. Errors are silently swallowed — must never block hook
  * execution.
  *
- * @param {string} scriptName - Base name for the log file (e.g., 'flightpath-codex-notify')
+ * @param {string} scriptName - Base name for the log file (e.g., 'ctrlyoke-codex-notify')
  * @param {string|undefined} notifyDir - Notification directory path (argv[2])
  */
 function logInvocation(scriptName, notifyDir) {
@@ -379,7 +379,7 @@ function logInvocation(scriptName, notifyDir) {
  * Validate that a notification directory was provided as argv[2]. Logs and
  * exits the process with code 1 if missing.
  *
- * @param {string} scriptPrefix - Prefix for console.error messages (e.g., 'FlightPath Claude Hook')
+ * @param {string} scriptPrefix - Prefix for console.error messages (e.g., 'ctrlyoke Claude Hook')
  * @param {function} debugLog - Logger returned by initializeLogger or createLogger
  */
 function requireNotifyDir(scriptPrefix, debugLog) {
@@ -429,7 +429,7 @@ function ensureNotifyDir(notifyDir, debugLog) {
 /**
  * Build the start/stop notification file path for a session.
  *
- * Start files use FLIGHTPATH_RUN_ID as the filename prefix when set, giving
+ * Start files use CTRLYOKE_RUN_ID as the filename prefix when set, giving
  * each parallel workflow a uniquely-named start file so waitForSessionStart
  * can do a direct lookup instead of a wildcard scan. Stop files are always
  * keyed by session ID.
@@ -444,8 +444,8 @@ function buildNotifyFilePath(notifyDir, sessionId, isStartEvent) {
     return null;
   }
   const safeSessionId = path.basename(sessionId);
-  const runId = process.env.FLIGHTPATH_RUN_ID
-    ? path.basename(process.env.FLIGHTPATH_RUN_ID)
+  const runId = process.env.CTRLYOKE_RUN_ID
+    ? path.basename(process.env.CTRLYOKE_RUN_ID)
     : null;
   const startPrefix = runId || safeSessionId;
   return path.join(

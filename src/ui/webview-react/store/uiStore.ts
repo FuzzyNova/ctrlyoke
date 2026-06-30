@@ -236,7 +236,7 @@ interface UiState {
   // NOT persisted: every panel open should show the overlay until startup settles.
   startupReady: boolean;
   devRestarting: boolean;
-  /** True when FlightPath has not yet been initialized in this workspace and the user must approve before startup proceeds. */
+  /** True when ctrlyoke has not yet been initialized in this workspace and the user must approve before startup proceeds. */
   workspaceInitRequired: boolean;
   /** True after workspace init when the user should choose a panel layout preference (first install only). */
   showLayoutPreference: boolean;
@@ -461,7 +461,7 @@ const initialState: UiState = {
   newWorkflowModalOpen: false,
   templates: [],
   currentTemplate: null,
-  workflowsDir: ".flightpath/workflows",
+  workflowsDir: ".ctrlyoke/workflows",
   defaultTemplateId: "blank",
   templateFileSelection: null,
   recentWorkflows: [],
@@ -1026,7 +1026,7 @@ export const useUiStore = create<UiState & UiActions>()(
       },
     }),
     {
-      name: "flightpath-ui-state",
+      name: "ctrlyoke-ui-state",
       // Rehydrated explicitly from main.tsx before App mounts so retained
       // panel reconnects do not call vscode.getState() during module import.
       skipHydration: true,

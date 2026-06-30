@@ -9,11 +9,11 @@ import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 /**
  * Qwen Code CLI Tool Permission Mapper
  *
- * Converts FlightPath's unified permission configuration to Qwen CLI arguments.
+ * Converts ctrlyoke's unified permission configuration to Qwen CLI arguments.
  *
  * **Key Difference:** Qwen uses **mode-based** permissions, not pattern-based like Claude/Copilot.
  *
- * | FlightPath Setting | Qwen Mapping |
+ * | ctrlyoke Setting | Qwen Mapping |
  * |-------------------|--------------|
  * | `cliExecutionMode: 'headless'` | No flag (default) |
  * | `cliExecutionMode: 'interactive'` | Terminal TUI (handled by CliIntegration) |
@@ -36,7 +36,7 @@ export class QwenToolPermissionMapper
   /**
    * Build CLI arguments for tool permissions
    *
-   * Converts FlightPath permission config to Qwen CLI arguments.
+   * Converts ctrlyoke permission config to Qwen CLI arguments.
    *
    * @param config Tool permission configuration
    * @returns CLI arguments array
@@ -52,7 +52,7 @@ export class QwenToolPermissionMapper
       // YOLO mode - bypass all approval prompts and tool restrictions.
       // Consistent with all other harnesses: dangerouslyAllowAll means everything
       // is permitted, including ignored deny lists. If Qwen enforces deny rules
-      // in YOLO mode that is a Qwen bug, not something FlightPath works around.
+      // in YOLO mode that is a Qwen bug, not something ctrlyoke works around.
       args.push("-y");
       Log.debug("🔓 Qwen YOLO mode enabled (dangerouslyAllowAll)");
     } else if (config.mode === PERMISSION_MODES.ALLOW_ALL) {
@@ -61,9 +61,9 @@ export class QwenToolPermissionMapper
       Log.debug("✅ Qwen auto-edit mode enabled (allowAll)");
 
       // Denied tools apply in allowAll mode (e.g. MCP tool filtering during
-      // commit message generation: mcp__flightpath-commit__*).
+      // commit message generation: mcp__ctrlyoke-commit__*).
       if (config.deniedTools.length > 0) {
-        const deniedArgs = this.convertFlightPathPatternsToQwenTools(
+        const deniedArgs = this.convertCtrlYokePatternsToQwenTools(
           config.deniedTools
         );
         if (deniedArgs.length > 0) {
@@ -78,7 +78,7 @@ export class QwenToolPermissionMapper
 
       // Add allowed tools if specified
       if (config.allowedTools.length > 0) {
-        const allowedArgs = this.convertFlightPathPatternsToQwenTools(
+        const allowedArgs = this.convertCtrlYokePatternsToQwenTools(
           config.allowedTools
         );
         if (allowedArgs.length > 0) {
@@ -89,7 +89,7 @@ export class QwenToolPermissionMapper
 
       // Add denied tools if specified (takes precedence over allowed)
       if (config.deniedTools.length > 0) {
-        const deniedArgs = this.convertFlightPathPatternsToQwenTools(
+        const deniedArgs = this.convertCtrlYokePatternsToQwenTools(
           config.deniedTools
         );
         if (deniedArgs.length > 0) {
@@ -103,16 +103,16 @@ export class QwenToolPermissionMapper
   }
 
   /**
-   * Convert FlightPath tool patterns to Qwen tool specifiers.
+   * Convert ctrlyoke tool patterns to Qwen tool specifiers.
    *
-   * FlightPath uses patterns like "shell(git:*)" which need to be
+   * ctrlyoke uses patterns like "shell(git:*)" which need to be
    * converted to Qwen's tool specifier format.
    *
    * Qwen supports sub-command filtering with the same parentheses syntax as
    * Claude Code, but uses a space instead of a colon as the command/args separator:
-   *   FlightPath: shell(rm:*)      → Qwen: Bash(rm *)
-   *   FlightPath: shell(git:*)     → Qwen: Bash(git *)
-   *   FlightPath: shell            → Qwen: Bash          (block all shell)
+   *   ctrlyoke: shell(rm:*)      → Qwen: Bash(rm *)
+   *   ctrlyoke: shell(git:*)     → Qwen: Bash(git *)
+   *   ctrlyoke: shell            → Qwen: Bash          (block all shell)
    *
    * MCP tools support server-level wildcards:
    *   mcp__servername              → matches all tools from that server
@@ -121,10 +121,10 @@ export class QwenToolPermissionMapper
    * Deduplicates via Set so multiple shell(X:*) patterns mapping to the same
    * Qwen specifier don't produce repeated entries (e.g. Bash,Bash,Bash).
    *
-   * @param patterns FlightPath tool patterns
+   * @param patterns ctrlyoke tool patterns
    * @returns Qwen tool specifiers array (deduplicated)
    */
-  private convertFlightPathPatternsToQwenTools(patterns: string[]): string[] {
+  private convertCtrlYokePatternsToQwenTools(patterns: string[]): string[] {
     const qwenTools = new Set<string>();
 
     for (const pattern of patterns) {
@@ -184,10 +184,10 @@ export class QwenToolPermissionMapper
   }
 
   /**
-   * Convert a FlightPath shell pattern to a Qwen Bash specifier.
+   * Convert a ctrlyoke shell pattern to a Qwen Bash specifier.
    *
    * Qwen uses a space between command and argument glob (Bash(rm *)), while
-   * FlightPath uses a colon (shell(rm:*)). A bare "shell"/"shell(*)"/"shell(*:*)"
+   * ctrlyoke uses a colon (shell(rm:*)). A bare "shell"/"shell(*)"/"shell(*:*)"
    * with no specific command means "block all shell" → plain "Bash".
    *
    * @param qwenToolName The Qwen tool name (e.g. "Bash")

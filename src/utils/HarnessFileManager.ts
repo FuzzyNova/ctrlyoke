@@ -13,10 +13,10 @@ import {
   getHarnessUserAgentDirs,
   getHarnessSkillDirs,
   getHarnessUserSkillDirs,
-  getFlightPathAgentDir,
-  getFlightPathSkillDir,
-  getFlightPathUserAgentDir,
-  getFlightPathUserSkillDir,
+  getCtrlYokeAgentDir,
+  getCtrlYokeSkillDir,
+  getCtrlYokeUserAgentDir,
+  getCtrlYokeUserSkillDir,
   getAgentsWorkspaceAgentDir,
   getAgentsUserAgentDir,
   getAgentsWorkspaceSkillDir,
@@ -84,7 +84,7 @@ async function copyDir(src: string, dest: string): Promise<void> {
 }
 
 /**
- * Collect all agent locations across all harness workspace dirs, user dirs, and .flightpath/.
+ * Collect all agent locations across all harness workspace dirs, user dirs, and .ctrlyoke/.
  */
 async function collectAgentLocations(
   workspaceRoot: string
@@ -116,7 +116,7 @@ async function collectAgentLocations(
     }
     if (!(await isAccessibleDirectory(dir))) return;
     const ext =
-      targetId === "flightpath" ||
+      targetId === "ctrlyoke" ||
       targetId === "agents" ||
       targetId === "vscode"
         ? ".agent.md"
@@ -142,18 +142,18 @@ async function collectAgentLocations(
   const scannedWorkspace = new Set<string>();
   const scannedUser = new Set<string>();
 
-  // FlightPath workspace dir (first so it takes priority)
+  // ctrlyoke workspace dir (first so it takes priority)
   await scanAgentDir(
-    getFlightPathAgentDir(workspaceRoot),
-    "flightpath",
+    getCtrlYokeAgentDir(workspaceRoot),
+    "ctrlyoke",
     SETTING_SCOPES.WORKSPACE,
     scannedWorkspace
   );
 
-  // FlightPath user dir (~/.flightpath/agents)
+  // ctrlyoke user dir (~/.ctrlyoke/agents)
   await scanAgentDir(
-    getFlightPathUserAgentDir(),
-    "flightpath",
+    getCtrlYokeUserAgentDir(),
+    "ctrlyoke",
     SETTING_SCOPES.USER,
     scannedUser
   );
@@ -201,7 +201,7 @@ async function collectAgentLocations(
 }
 
 /**
- * Collect all skill locations across all harness workspace dirs, user dirs, and .flightpath/.
+ * Collect all skill locations across all harness workspace dirs, user dirs, and .ctrlyoke/.
  */
 async function collectSkillLocations(
   workspaceRoot: string
@@ -253,18 +253,18 @@ async function collectSkillLocations(
   const scannedWorkspace = new Set<string>();
   const scannedUser = new Set<string>();
 
-  // FlightPath workspace dir (first for priority)
+  // ctrlyoke workspace dir (first for priority)
   await scanSkillDir(
-    getFlightPathSkillDir(workspaceRoot),
-    "flightpath",
+    getCtrlYokeSkillDir(workspaceRoot),
+    "ctrlyoke",
     SETTING_SCOPES.WORKSPACE,
     scannedWorkspace
   );
 
-  // FlightPath user dir (~/.flightpath/skills)
+  // ctrlyoke user dir (~/.ctrlyoke/skills)
   await scanSkillDir(
-    getFlightPathUserSkillDir(),
-    "flightpath",
+    getCtrlYokeUserSkillDir(),
+    "ctrlyoke",
     SETTING_SCOPES.USER,
     scannedUser
   );
@@ -315,7 +315,7 @@ export class HarnessFileManager {
     type: "agent" | "skill"
   ): ManagedTargetDirectory[] {
     const targets: AnyTargetId[] = [
-      "flightpath",
+      "ctrlyoke",
       "agents",
       "vscode",
       ...getAllHarnessIds(),
@@ -414,10 +414,10 @@ export class HarnessFileManager {
   }
 
   /**
-   * Copy an agent/skill into .flightpath/agents or .flightpath/skills.
-   * @param scope "workspace" (default) copies to workspace .flightpath/; "user" copies to ~/.flightpath/.
+   * Copy an agent/skill into .ctrlyoke/agents or .ctrlyoke/skills.
+   * @param scope "workspace" (default) copies to workspace .ctrlyoke/; "user" copies to ~/.ctrlyoke/.
    */
-  static async importToFlightPath(
+  static async importToCtrlYoke(
     sourcePath: string,
     workspaceRoot: string,
     type: "agent" | "skill",
@@ -426,7 +426,7 @@ export class HarnessFileManager {
   ): Promise<void> {
     return HarnessFileManager.exportToHarness(
       sourcePath,
-      "flightpath",
+      "ctrlyoke",
       workspaceRoot,
       type,
       overwrite,
@@ -541,15 +541,15 @@ export class HarnessFileManager {
     type: "agent" | "skill",
     scope: SettingWriteScope = SETTING_SCOPES.WORKSPACE
   ): string {
-    if (harnessId === "flightpath") {
+    if (harnessId === "ctrlyoke") {
       if (scope === SETTING_SCOPES.USER) {
         return type === "agent"
-          ? getFlightPathUserAgentDir()
-          : getFlightPathUserSkillDir();
+          ? getCtrlYokeUserAgentDir()
+          : getCtrlYokeUserSkillDir();
       }
       return type === "agent"
-        ? getFlightPathAgentDir(workspaceRoot)
-        : getFlightPathSkillDir(workspaceRoot);
+        ? getCtrlYokeAgentDir(workspaceRoot)
+        : getCtrlYokeSkillDir(workspaceRoot);
     }
 
     if (harnessId === "agents") {

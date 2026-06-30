@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { WorkflowStateMachine } from "../../flightpath/WorkflowStateMachine";
+import { WorkflowStateMachine } from "../../core/WorkflowStateMachine";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,

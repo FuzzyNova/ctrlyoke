@@ -4,7 +4,7 @@ import {
   CLI_EVENT_TYPES,
   FINAL_STEP_PHASES,
 } from "../../types/DashboardConstants";
-import type { WorkingFile } from "../../types/FlightPathTypes";
+import type { WorkingFile } from "../../types/CtrlYokeTypes";
 import type { OutputExecutionTarget } from "../../types/OutputHistoryTypes";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
 import {
@@ -91,7 +91,7 @@ export class HistorySearchService {
 
     const historyRoot = path.join(
       workspaceFolderPath,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.HISTORY_DIR
     );
 
@@ -223,7 +223,7 @@ export class HistorySearchService {
   ): Promise<WorkflowMetadata> {
     const queueFilePath = path.join(
       workspaceFolderPath,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.QUEUE_DIR,
       `${workflowId}.flightpath.json`
     );

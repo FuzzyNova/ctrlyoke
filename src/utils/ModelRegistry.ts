@@ -31,7 +31,7 @@ import {
 } from "./ModelConstants";
 import { Log } from "./Log";
 import { retryWithBackoff } from "./RetryUtils";
-import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../flightpath/harness/shared/interfaces/ICliProvider";
+import { CLI_VERSION_CHECK_TIMEOUT_MS } from "../core/harness/shared/interfaces/ICliProvider";
 
 const execAsync = promisify(exec);
 

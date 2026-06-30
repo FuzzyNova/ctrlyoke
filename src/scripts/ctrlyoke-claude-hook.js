@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * FlightPath Claude Hook Handler
+ * ctrlyoke Claude Hook Handler
  *
  * This script is executed by Claude CLI when hook events occur.
  * It receives hook input JSON via stdin and writes a notification file
- * that FlightPath monitors for session discovery and completion detection.
+ * that ctrlyoke monitors for session discovery and completion detection.
  *
  * Supported hook events:
  * - SessionStart: Called when new session starts (provides session ID immediately)
  * - Stop: Called when execution completes (for completion detection)
  *
- * Usage (configured by FlightPath via --settings):
+ * Usage (configured by ctrlyoke via --settings):
  *   claude --settings '{"hooks":{"SessionStart":[...], "Stop":[...]}}' ...
  *
  * Hook input format (from Claude via stdin):
@@ -26,7 +26,7 @@
  *
  * Notification directory is passed as first command-line argument.
  *
- * Debug logging: All hook data logged to <workspace>/.flightpath/logs/flightpath-claude-hook-debug.log
+ * Debug logging: All hook data logged to <workspace>/.ctrlyoke/logs/ctrlyoke-claude-hook-debug.log
  */
 
 const fs = require("fs");
@@ -42,10 +42,10 @@ const {
   buildErrorNotifyFilePath,
   STANDARD_LOGICAL_EVENT_MAP,
   STANDARD_HANDLED_EVENTS,
-} = require("./flightpath-hook-utils");
+} = require("./ctrlyoke-hook-utils");
 
-const SCRIPT_NAME = "flightpath-claude-hook";
-const SCRIPT_PREFIX = "FlightPath Claude Hook";
+const SCRIPT_NAME = "ctrlyoke-claude-hook";
+const SCRIPT_PREFIX = "ctrlyoke Claude Hook";
 const HANDLED_EVENTS = new Set([...STANDARD_HANDLED_EVENTS, "StopFailure"]);
 const LOGICAL_EVENT_MAP = {
   ...STANDARD_LOGICAL_EVENT_MAP,

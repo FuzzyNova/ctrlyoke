@@ -1,9 +1,9 @@
 /**
  * MCP Dynamic Queue Extension Harness Tests
  *
- * Verifies that the FlightPath MCP server wires up correctly when a workflow
- * includes `mcpServers: ["flightpath"]`, and that the AI can call the
- * `flightpath_append_queue` tool to dynamically extend the queue.  The
+ * Verifies that the ctrlyoke MCP server wires up correctly when a workflow
+ * includes `mcpServers: ["ctrlyoke"]`, and that the AI can call the
+ * `ctrlyoke_append_queue` tool to dynamically extend the queue.  The
  * appended step must actually execute and produce a verifiable side effect.
  *
  * Run with:  npm run test:harness
@@ -20,7 +20,7 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { PromptFile } from "../../types/FlightPathTypes";
+import type { PromptFile } from "../../types/CtrlYokeTypes";
 import {
   HARNESS_TIMEOUT_MS,
   HARNESS_MODELS,
@@ -55,11 +55,11 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
   //
   // Workflow:
   //   Step 1   — AI writes an initial marker file (proves regular step ran).
-  //   finalStep pass 1 — AI calls flightpath_queue_status, finds no
+  //   finalStep pass 1 — AI calls ctrlyoke_queue_status, finds no
   //              "fp-appended-step" in completed steps, calls
-  //              flightpath_append_queue to add one.
+  //              ctrlyoke_append_queue to add one.
   //   Step 2   — (dynamically appended) AI writes the appended marker file.
-  //   finalStep pass 2 — AI calls flightpath_queue_status, finds
+  //   finalStep pass 2 — AI calls ctrlyoke_queue_status, finds
   //              "fp-appended-step" in completed steps, writes the
   //              final-pass-2 marker file.
   //
@@ -92,14 +92,14 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
       ],
       finalStep: {
         name: "fp-final-step",
-        mcpServers: ["flightpath"],
+        mcpServers: ["ctrlyoke"],
         prompt: [
-          "Call the tool 'flightpath_queue_status' (no parameters).",
+          "Call the tool 'ctrlyoke_queue_status' (no parameters).",
           "Examine the JSON response. Look for a completed step named 'fp-appended-step'.",
           "",
           `IF 'fp-appended-step' IS in the completed steps: run exactly \`echo FP_FINAL_PASS2 > "${finalPass2Path}"\` and say: "Second finalStep pass."`,
           "",
-          `IF 'fp-appended-step' is NOT in the completed steps: call 'flightpath_append_queue' with one step — name "fp-appended-step", prompt "Run exactly: echo FP_APPENDED > \\"${appendedPath}\\". Do not explain — just run it." Then say: "First finalStep pass: appended fp-appended-step."`,
+          `IF 'fp-appended-step' is NOT in the completed steps: call 'ctrlyoke_append_queue' with one step — name "fp-appended-step", prompt "Run exactly: echo FP_APPENDED > \\"${appendedPath}\\". Do not explain — just run it." Then say: "First finalStep pass: appended fp-appended-step."`,
           "",
           "Do nothing else.",
         ].join("\n"),
@@ -125,7 +125,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
       fs.existsSync(appendedFile),
       [
         "copilot-cli: appended step marker not created.",
-        "This means the finalStep did not call flightpath_append_queue,",
+        "This means the finalStep did not call ctrlyoke_append_queue,",
         "or the appended step did not execute.",
         `Expected file: ${appendedFile}`,
         `stdout: ${result.stdout}`,
@@ -144,11 +144,11 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
   });
 
   // -------------------------------------------------------------------------
-  // Test: AI extends the queue via the flightpath_append_queue MCP tool
+  // Test: AI extends the queue via the ctrlyoke_append_queue MCP tool
   // -------------------------------------------------------------------------
   //
   // Workflow:
-  //   Step 1 — AI calls flightpath_append_queue with a concrete prompt.
+  //   Step 1 — AI calls ctrlyoke_append_queue with a concrete prompt.
   //   Step 2 — (dynamically appended) AI runs a bash command that creates a
   //             marker file.
   //
@@ -168,12 +168,12 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
     const workflow: PromptFile = {
       harness: "copilot-cli" as any,
       model: HARNESS_MODELS["copilot-cli"],
-      mcpServers: ["flightpath"],
+      mcpServers: ["ctrlyoke"],
       steps: [
         {
           name: "trigger-mcp-append",
           prompt: [
-            "You have access to an MCP tool called `flightpath_append_queue`.",
+            "You have access to an MCP tool called `ctrlyoke_append_queue`.",
             "Call it now with a single step whose prompt is exactly:",
             `"Run the bash command: echo MCP_STEP_DONE > \\"${escapedPath}\\". Do not explain — just run it."`,
             "After calling the tool, say: 'Queue extended.'",
@@ -198,7 +198,7 @@ suite("MCP Dynamic Queue Extension Harness Tests", function () {
       fs.existsSync(mcpMarkerFile),
       [
         "copilot-cli: MCP marker file was not created.",
-        "This means either the AI did not call flightpath_append_queue,",
+        "This means either the AI did not call ctrlyoke_append_queue,",
         "or the appended step did not execute.",
         `Expected file: ${mcpMarkerFile}`,
         `stdout: ${result.stdout}`,

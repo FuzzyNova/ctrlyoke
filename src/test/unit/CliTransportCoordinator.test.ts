@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { CliTransportCoordinator } from "../../flightpath/harness/shared/CliTransportCoordinator";
-import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
+import { CliTransportCoordinator } from "../../core/harness/shared/CliTransportCoordinator";
+import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 import { MESSAGE_TYPES, SESSION_KINDS } from "../../types/DashboardConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";

@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { CliPromptRuntimeCoordinator } from "../../flightpath/harness/shared/CliPromptRuntimeCoordinator";
+import { CliPromptRuntimeCoordinator } from "../../core/harness/shared/CliPromptRuntimeCoordinator";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
-import { type PromptStep } from "../../types/FlightPathTypes";
+import { type PromptStep } from "../../types/CtrlYokeTypes";
 import { FAILURE_KINDS, HARNESS_IDS } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 

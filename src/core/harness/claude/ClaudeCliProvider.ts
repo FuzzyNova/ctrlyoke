@@ -27,7 +27,7 @@ import type {
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
-} from "../../../types/FlightPathTypes";
+} from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 /**
@@ -132,13 +132,13 @@ export class ClaudeCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      // Auto-approve FlightPath MCP tools only when the FlightPath server is included
+      // Auto-approve ctrlyoke MCP tools only when the ctrlyoke server is included
       // Claude uses mcp__servername pattern to match all tools from a server
       const mcpServersResolved =
         workflowContext?.resolvedProperties?.mcpServers ?? [];
-      if (mcpServersResolved.includes("flightpath")) {
-        args.push("--allowed-tools", "mcp__flightpath");
-        Log.debug("🔧 FlightPath MCP tools auto-approved");
+      if (mcpServersResolved.includes("ctrlyoke")) {
+        args.push("--allowed-tools", "mcp__ctrlyoke");
+        Log.debug("🔧 ctrlyoke MCP tools auto-approved");
       }
 
       // Auto-approve user-defined MCP server tools based on autoApprove config
@@ -268,7 +268,7 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
-   * Set up FlightPath notification hooks (Stop hook + user hooks) for interactive mode.
+   * Set up ctrlyoke notification hooks (Stop hook + user hooks) for interactive mode.
    * Writes hook settings to a temp file and returns ["--settings", path] for Claude CLI.
    * Uses unique filenames per prompt to avoid parallel workflow collisions.
    */
@@ -284,7 +284,7 @@ export class ClaudeCliProvider implements ICliProvider {
       extensionPath,
       "out",
       "scripts",
-      "flightpath-claude-hook.js"
+      "ctrlyoke-claude-hook.js"
     );
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
@@ -306,7 +306,7 @@ export class ClaudeCliProvider implements ICliProvider {
     }
     const tempDir = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.TEMP_DIR
     );
     await fs.mkdir(tempDir, { recursive: true });
@@ -343,7 +343,7 @@ export class ClaudeCliProvider implements ICliProvider {
 
   /**
    * Set up user-only hooks for headless execution.
-   * No FlightPath notification hooks are included since headless uses process-exit for completion.
+   * No ctrlyoke notification hooks are included since headless uses process-exit for completion.
    * Returns ["--settings", path] — CliIntegration prepends this to baseArgs so it appears
    * before --disallowedTools (which is variadic and would consume later flags).
    */
@@ -363,7 +363,7 @@ export class ClaudeCliProvider implements ICliProvider {
                 extensionPath,
                 "out",
                 "scripts",
-                "flightpath-claude-hook.js"
+                "ctrlyoke-claude-hook.js"
               ),
               this.notificationMonitor.getNotificationDirectory(workspaceRoot),
               workspaceRoot,
@@ -378,7 +378,7 @@ export class ClaudeCliProvider implements ICliProvider {
         : ClaudeNotificationMonitor.buildUserOnlyConfig(userHooks ?? []);
     const tempDir = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.TEMP_DIR
     );
     await fs.mkdir(tempDir, { recursive: true });
@@ -415,7 +415,7 @@ export class ClaudeCliProvider implements ICliProvider {
 
   /**
    * Delete hook settings files written for the previous prompt before building hooks for the next.
-   * Prevents .flightpath/temp/ from accumulating per-prompt settings files across a workflow.
+   * Prevents .ctrlyoke/temp/ from accumulating per-prompt settings files across a workflow.
    * Claude reads only the specific --settings file passed per prompt, so old files don't affect
    * behavior, but cleaning them avoids temp dir clutter between prompts.
    */
@@ -442,7 +442,7 @@ export class ClaudeCliProvider implements ICliProvider {
    *
    * Format: claude "prompt" -p --output-format stream-json --verbose [other args]
    *
-   * Handles both direct prompts and file references (e.g., "@.flightpath/temp/prompt.md")
+   * Handles both direct prompts and file references (e.g., "@.ctrlyoke/temp/prompt.md")
    *
    * @param baseArgs Base arguments array
    * @param prompt Prompt text or file reference
@@ -481,7 +481,7 @@ export class ClaudeCliProvider implements ICliProvider {
    *
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
-   * @param workingFilePath Active working file for this workflow (sets FLIGHTPATH_WORKING_FILE)
+   * @param workingFilePath Active working file for this workflow (sets CTRLYOKE_WORKING_FILE)
    * @returns CLI arguments array with --mcp-config, or null if MCP not supported
    */
   async getMcpConfigArgs(
@@ -498,7 +498,7 @@ export class ClaudeCliProvider implements ICliProvider {
       // Claude CLI requires "type": "stdio"
       let configJson: string;
       if (mcpServerPath && userServers && userServers.length > 0) {
-        // FlightPath server + user-defined servers
+        // ctrlyoke server + user-defined servers
         configJson = CliMcpConfigGenerator.generateJsonConfigWithUserServers(
           mcpServerPath,
           workspaceRoot,
@@ -508,7 +508,7 @@ export class ClaudeCliProvider implements ICliProvider {
           additionalEnv
         );
       } else if (mcpServerPath) {
-        // FlightPath server only
+        // ctrlyoke server only
         configJson = CliMcpConfigGenerator.generateJsonConfig(
           mcpServerPath,
           workspaceRoot,
@@ -517,7 +517,7 @@ export class ClaudeCliProvider implements ICliProvider {
           additionalEnv
         );
       } else if (userServers && userServers.length > 0) {
-        // User-defined servers only (no FlightPath server)
+        // User-defined servers only (no ctrlyoke server)
         configJson =
           CliMcpConfigGenerator.generateUserServersOnlyConfig(userServers);
       } else {

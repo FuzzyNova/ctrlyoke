@@ -1,7 +1,7 @@
 import { execFile } from "child_process";
 import * as path from "path";
 import { promisify } from "util";
-import type { McpServerConfig } from "../../../types/FlightPathTypes";
+import type { McpServerConfig } from "../../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
@@ -147,7 +147,7 @@ export class CliProviderUtils {
    * Get workspace directories for --add-dir arguments
    *
    * Collects all VS Code workspace folders plus any user-configured
-   * additional directories from `flightpath.cliAdditionalDirs` setting.
+   * additional directories from `ctrlyoke.cliAdditionalDirs` setting.
    *
    * @param workspaceRoot - Primary workspace root for resolving relative paths
    * @returns Array of absolute directory paths
@@ -216,44 +216,44 @@ export class CliProviderUtils {
 
     const mcpServers = workflowContext.resolvedProperties?.mcpServers;
 
-    // A McpServerConfig object with id === "flightpath" is treated as the built-in
-    // FlightPath server — it may carry a deniedTools list for per-tool access control.
-    const flightpathServerObj = (mcpServers ?? []).find(
+    // A McpServerConfig object with id === "ctrlyoke" is treated as the built-in
+    // ctrlyoke server — it may carry a deniedTools list for per-tool access control.
+    const ctrlyokeServerObj = (mcpServers ?? []).find(
       (s): s is McpServerConfig =>
-        typeof s === "object" && s !== null && s.id === "flightpath"
+        typeof s === "object" && s !== null && s.id === "ctrlyoke"
     );
-    const hasFlightpathServer =
-      (mcpServers != null && mcpServers.includes("flightpath")) ||
-      !!flightpathServerObj;
+    const hasCtrlYokeServer =
+      (mcpServers != null && mcpServers.includes("ctrlyoke")) ||
+      !!ctrlyokeServerObj;
 
-    // Extract user-defined server configs (objects with id !== "flightpath")
+    // Extract user-defined server configs (objects with id !== "ctrlyoke")
     const userServers = (mcpServers ?? []).filter(
       (s): s is McpServerConfig =>
-        typeof s === "object" && s !== null && s.id !== "flightpath"
+        typeof s === "object" && s !== null && s.id !== "ctrlyoke"
     );
 
-    // Trigger MCP config if "flightpath" is listed OR user-defined servers are present
-    if (!hasFlightpathServer && userServers.length === 0) {
+    // Trigger MCP config if "ctrlyoke" is listed OR user-defined servers are present
+    if (!hasCtrlYokeServer && userServers.length === 0) {
       return [];
     }
 
-    // Only include the FlightPath server path when "flightpath" is in the list
-    const mcpServerPath = hasFlightpathServer
+    // Only include the ctrlyoke server path when "ctrlyoke" is in the list
+    const mcpServerPath = hasCtrlYokeServer
       ? path.join(extensionPath, "out/mcp-server.js")
       : undefined;
 
-    // FlightPath-specific env vars — only relevant when the FlightPath server is included
+    // ctrlyoke-specific env vars — only relevant when the ctrlyoke server is included
     const additionalEnv: Record<string, string> | undefined =
-      hasFlightpathServer
+      hasCtrlYokeServer
         ? (() => {
             const dynamicQueueConfig =
               ConfigurationUtils.getDynamicQueueConfig();
             return {
-              FLIGHTPATH_MAX_QUEUE_SIZE:
+              CTRLYOKE_MAX_QUEUE_SIZE:
                 dynamicQueueConfig.maxQueueSize.toString(),
-              FLIGHTPATH_UNLIMITED_MODE:
+              CTRLYOKE_UNLIMITED_MODE:
                 dynamicQueueConfig.unlimitedMode.toString(),
-              FLIGHTPATH_DIAGNOSTIC_LOGS:
+              CTRLYOKE_DIAGNOSTIC_LOGS:
                 ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
             };
           })()
@@ -279,14 +279,14 @@ export class CliProviderUtils {
    * Build a process environment object for spawning CLI harness processes.
    *
    * Single source of truth for env construction: spreads `process.env` and
-   * conditionally injects `FLIGHTPATH_DIAGNOSTIC_LOGS` when diagnostic
+   * conditionally injects `CTRLYOKE_DIAGNOSTIC_LOGS` when diagnostic
    * logging is enabled. Providers may modify the returned object before use
    * (e.g. Claude deletes `CLAUDECODE`).
    */
   static buildProcessEnv(): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = { ...process.env };
     if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
-      env.FLIGHTPATH_DIAGNOSTIC_LOGS = "true";
+      env.CTRLYOKE_DIAGNOSTIC_LOGS = "true";
     }
     return env;
   }
@@ -301,10 +301,10 @@ export class CliProviderUtils {
    * Both CLIs auto-discover MCP from `.{tool}/settings.json` using the `mcpServers` key.
    * Config per server: { command: string, args?: string[], env?: Record<string, string>, trust?: boolean }
    *
-   * @param mcpServerPath FlightPath MCP server path (undefined if FlightPath server not requested)
+   * @param mcpServerPath ctrlyoke MCP server path (undefined if ctrlyoke server not requested)
    * @param workspaceRoot Workspace root directory
    * @param workingFilePath Active working file for this workflow
-   * @param additionalEnv Extra environment variables for the FlightPath MCP server
+   * @param additionalEnv Extra environment variables for the ctrlyoke MCP server
    * @param userServers User-defined MCP server configurations
    * @returns Object of server entries keyed by server name
    */
@@ -317,26 +317,26 @@ export class CliProviderUtils {
   ): Record<string, unknown> {
     const mcpServers: Record<string, unknown> = {};
 
-    // FlightPath server (when included in mcpServers list)
+    // ctrlyoke server (when included in mcpServers list)
     if (mcpServerPath) {
       const normalizedServerPath = mcpServerPath.replace(/\\/g, "/");
       const normalizedWorkspace = workspaceRoot.replace(/\\/g, "/");
 
       const env: Record<string, string> = {
-        FLIGHTPATH_WORKSPACE: normalizedWorkspace,
+        CTRLYOKE_WORKSPACE: normalizedWorkspace,
       };
       if (workingFilePath) {
-        env["FLIGHTPATH_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
+        env["CTRLYOKE_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
       }
       if (additionalEnv) {
         Object.assign(env, additionalEnv);
       }
 
-      mcpServers["flightpath"] = {
+      mcpServers["ctrlyoke"] = {
         command: "node",
         args: [normalizedServerPath],
         env,
-        trust: true, // FlightPath is the orchestrator — auto-approve its tools
+        trust: true, // ctrlyoke is the orchestrator — auto-approve its tools
       };
     }
 

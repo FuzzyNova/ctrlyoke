@@ -1,5 +1,5 @@
 /**
- * FlightPath MCP Server
+ * ctrlyoke MCP Server
  *
  * Provides queue management tools for Copilot CLI, Claude CLI, and Codex CLI.
  * Spawned as child process via stdio transport.
@@ -8,7 +8,7 @@
  *   node mcp-server.js
  *
  * Environment Variables:
- *   FLIGHTPATH_WORKSPACE - Workspace root directory (defaults to cwd)
+ *   CTRLYOKE_WORKSPACE - Workspace root directory (defaults to cwd)
  */
 
 // Use require with CJS paths - package.json has wildcard export "./*" mapping to "./dist/cjs/*"
@@ -28,8 +28,8 @@ import type {
   WorkflowStep,
   WorkingFile,
   WorkingFileRuntime,
-} from "./types/FlightPathTypes";
-import { isScriptStep } from "./types/FlightPathTypes";
+} from "./types/CtrlYokeTypes";
+import { isScriptStep } from "./types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   QUEUE_POSITION,
@@ -38,32 +38,32 @@ import {
 import { withFileLock } from "./utils/FileLockUtils";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
-const FLIGHTPATH_DIR = ".flightpath";
+const CTRLYOKE_DIR = ".ctrlyoke";
 const LOGS_DIR = "logs";
 const QUEUE_DIR = ".queue";
 const CAPABILITIES_FILE = "capabilities.json";
 
 // Initialize log file only when diagnostic logging is explicitly enabled.
-// FLIGHTPATH_DIAGNOSTIC_LOGS=true is passed by the extension when
-// flightpath.enableDiagnosticLogs is on. NODE_ENV=development enables it in dev.
-const workspaceRoot = process.env.FLIGHTPATH_WORKSPACE || process.cwd();
+// CTRLYOKE_DIAGNOSTIC_LOGS=true is passed by the extension when
+// ctrlyoke.enableDiagnosticLogs is on. NODE_ENV=development enables it in dev.
+const workspaceRoot = process.env.CTRLYOKE_WORKSPACE || process.cwd();
 const diagnosticLogsEnabled =
-  process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true" ||
+  process.env.CTRLYOKE_DIAGNOSTIC_LOGS === "true" ||
   process.env.NODE_ENV === "development";
 
 let logFile: string | null = null;
 if (diagnosticLogsEnabled) {
-  const logDir = path.join(workspaceRoot, FLIGHTPATH_DIR, LOGS_DIR);
+  const logDir = path.join(workspaceRoot, CTRLYOKE_DIR, LOGS_DIR);
   try {
     fsSync.mkdirSync(logDir, { recursive: true });
-    logFile = path.join(logDir, `flightpath-mcp-${Date.now()}.log`);
+    logFile = path.join(logDir, `ctrlyoke-mcp-${Date.now()}.log`);
   } catch {
     // Proceed without file logging if directory creation fails
   }
 }
 
 /**
- * Log to file (TUI captures stderr, so we write to .flightpath/logs/).
+ * Log to file (TUI captures stderr, so we write to .ctrlyoke/logs/).
  * No-op when diagnostic logging is disabled.
  */
 function log(...args: any[]) {
@@ -85,15 +85,15 @@ function log(...args: any[]) {
 }
 
 /**
- * FlightPath MCP Server
+ * ctrlyoke MCP Server
  * Provides tools for AI agents to read and extend workflow queues
  */
 /**
  * Read queue size limit from environment (set by the extension via MCP config env vars).
- * Falls back to 100 if not set. A value of 0 or FLIGHTPATH_UNLIMITED_MODE=true means no limit.
+ * Falls back to 100 if not set. A value of 0 or CTRLYOKE_UNLIMITED_MODE=true means no limit.
  */
 function getMaxQueueSize(): number {
-  const envValue = process.env.FLIGHTPATH_MAX_QUEUE_SIZE;
+  const envValue = process.env.CTRLYOKE_MAX_QUEUE_SIZE;
   if (envValue) {
     const parsed = parseInt(envValue, 10);
     if (!isNaN(parsed) && parsed > 0) {
@@ -104,33 +104,33 @@ function getMaxQueueSize(): number {
 }
 
 function isUnlimitedMode(): boolean {
-  return process.env.FLIGHTPATH_UNLIMITED_MODE === "true";
+  return process.env.CTRLYOKE_UNLIMITED_MODE === "true";
 }
 
-class FlightPathMCPServer {
+class CtrlYokeMCPServer {
   private server: InstanceType<typeof Server>;
   private workspaceRoot: string;
   private operationQueue: Promise<any> = Promise.resolve();
 
   constructor() {
-    this.workspaceRoot = process.env.FLIGHTPATH_WORKSPACE || process.cwd();
+    this.workspaceRoot = process.env.CTRLYOKE_WORKSPACE || process.cwd();
     log("MCP Server initializing...");
     log("Workspace root:", this.workspaceRoot);
     log("Environment variables:", {
-      FLIGHTPATH_WORKSPACE: process.env.FLIGHTPATH_WORKSPACE,
-      FLIGHTPATH_WORKING_FILE:
-        process.env.FLIGHTPATH_WORKING_FILE ||
+      CTRLYOKE_WORKSPACE: process.env.CTRLYOKE_WORKSPACE,
+      CTRLYOKE_WORKING_FILE:
+        process.env.CTRLYOKE_WORKING_FILE ||
         "(not set — will scan queue dir)",
-      FLIGHTPATH_MAX_QUEUE_SIZE:
-        process.env.FLIGHTPATH_MAX_QUEUE_SIZE || "(not set — default 100)",
-      FLIGHTPATH_UNLIMITED_MODE:
-        process.env.FLIGHTPATH_UNLIMITED_MODE || "(not set — default false)",
+      CTRLYOKE_MAX_QUEUE_SIZE:
+        process.env.CTRLYOKE_MAX_QUEUE_SIZE || "(not set — default 100)",
+      CTRLYOKE_UNLIMITED_MODE:
+        process.env.CTRLYOKE_UNLIMITED_MODE || "(not set — default false)",
       NODE_ENV: process.env.NODE_ENV,
     });
 
     this.server = new Server(
       {
-        name: "flightpath",
+        name: "ctrlyoke",
         version: "1.0.0",
       },
       {
@@ -151,17 +151,17 @@ class FlightPathMCPServer {
       return {
         tools: [
           {
-            name: "flightpath_queue_status",
+            name: "ctrlyoke_queue_status",
             description:
-              "Get comprehensive status of the current FlightPath workflow queue, including metadata and all prompts with their execution state",
+              "Get comprehensive status of the current ctrlyoke workflow queue, including metadata and all prompts with their execution state",
             inputSchema: {
               type: "object",
               properties: {},
             },
           },
           {
-            name: "flightpath_append_queue",
-            description: `Append prompts to the current FlightPath workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('${QUEUE_POSITION.NEXT}') or at end of queue ('${QUEUE_POSITION.END}'). Call flightpath_capabilities first to get valid harness IDs and model values.`,
+            name: "ctrlyoke_append_queue",
+            description: `Append prompts to the current ctrlyoke workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('${QUEUE_POSITION.NEXT}') or at end of queue ('${QUEUE_POSITION.END}'). Call ctrlyoke_capabilities first to get valid harness IDs and model values.`,
             inputSchema: {
               type: "object",
               properties: {
@@ -177,12 +177,12 @@ class FlightPathMCPServer {
                       model: {
                         type: "string",
                         description:
-                          "Model override for this prompt. Call flightpath_capabilities to get valid model values per harness.",
+                          "Model override for this prompt. Call ctrlyoke_capabilities to get valid model values per harness.",
                       },
                       harness: {
                         type: "string",
                         description:
-                          "Harness override for this prompt. If omitted, uses the workflow default. Call flightpath_capabilities to get installed harness IDs and their available models.",
+                          "Harness override for this prompt. If omitted, uses the workflow default. Call ctrlyoke_capabilities to get installed harness IDs and their available models.",
                       },
                       resumeSession: {
                         type: "boolean",
@@ -214,7 +214,7 @@ class FlightPathMCPServer {
             },
           },
           {
-            name: "flightpath_capabilities",
+            name: "ctrlyoke_capabilities",
             description:
               "Get available harnesses and their supported models on this machine. Call this before appending prompts with harness or model overrides to ensure you use valid values. Returns only harnesses that are installed and detected as available.",
             inputSchema: {
@@ -223,7 +223,7 @@ class FlightPathMCPServer {
             },
           },
           {
-            name: "flightpath_read_output",
+            name: "ctrlyoke_read_output",
             description:
               "Read the AI response text from completed prompts in the current workflow. Use this to inspect prior results before deciding what to add next.",
             inputSchema: {
@@ -239,18 +239,18 @@ class FlightPathMCPServer {
             },
           },
           {
-            name: "flightpath_global_status",
+            name: "ctrlyoke_global_status",
             description:
-              "Get the status of ALL FlightPath workflows currently in the workspace queue, not just the current one. Call this at the start of a session to understand what other agents are working on, avoid editing files they own, and ignore compile/test errors they may have caused. Returns name, execution state, harness, current step, and working file path for each workflow.",
+              "Get the status of ALL ctrlyoke workflows currently in the workspace queue, not just the current one. Call this at the start of a session to understand what other agents are working on, avoid editing files they own, and ignore compile/test errors they may have caused. Returns name, execution state, harness, current step, and working file path for each workflow.",
             inputSchema: {
               type: "object",
               properties: {},
             },
           },
           {
-            name: "flightpath_submit_commit_message",
+            name: "ctrlyoke_submit_commit_message",
             description:
-              "Submit the generated commit message to FlightPath. Call this tool with the complete commit message text once you have composed it. Only call this tool when explicitly instructed to do so.",
+              "Submit the generated commit message to ctrlyoke. Call this tool with the complete commit message text once you have composed it. Only call this tool when explicitly instructed to do so.",
             inputSchema: {
               type: "object",
               properties: {
@@ -278,12 +278,12 @@ class FlightPathMCPServer {
         try {
           let result;
           switch (name) {
-            case "flightpath_queue_status":
+            case "ctrlyoke_queue_status":
               log("Handling queue_status...");
               result = await this.handleQueueStatus();
               log("queue_status completed successfully");
               return result;
-            case "flightpath_append_queue":
+            case "ctrlyoke_append_queue":
               log("Handling append_queue...");
               // Queue the operation to prevent race conditions
               result = await this.queueOperation(() =>
@@ -292,22 +292,22 @@ class FlightPathMCPServer {
               log("append_queue completed successfully");
               log("Result:", JSON.stringify(result, null, 2));
               return result;
-            case "flightpath_capabilities":
+            case "ctrlyoke_capabilities":
               log("Handling capabilities...");
               result = await this.handleCapabilities();
               log("capabilities completed successfully");
               return result;
-            case "flightpath_read_output":
+            case "ctrlyoke_read_output":
               log("Handling read_output...");
               result = await this.handleReadOutput(args);
               log("read_output completed successfully");
               return result;
-            case "flightpath_global_status":
+            case "ctrlyoke_global_status":
               log("Handling global_status...");
               result = await this.handleGlobalStatus();
               log("global_status completed successfully");
               return result;
-            case "flightpath_submit_commit_message":
+            case "ctrlyoke_submit_commit_message":
               log("Handling submit_commit_message...");
               result = await this.handleSubmitCommitMessage(args);
               log("submit_commit_message completed successfully");
@@ -363,7 +363,7 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Handle flightpath_queue_status tool invocation
+   * Handle ctrlyoke_queue_status tool invocation
    * Returns comprehensive queue state including metadata and all prompts
    */
   private async handleQueueStatus() {
@@ -373,7 +373,7 @@ class FlightPathMCPServer {
 
     if (!workingFile) {
       throw new Error(
-        "No active FlightPath workflow found. Start a workflow in VS Code first."
+        "No active ctrlyoke workflow found. Start a workflow in VS Code first."
       );
     }
 
@@ -427,7 +427,7 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Handle flightpath_append_queue tool invocation
+   * Handle ctrlyoke_append_queue tool invocation
    * Appends prompts to the queue with position control
    */
   private async handleQueueAppend(args: any) {
@@ -474,7 +474,7 @@ class FlightPathMCPServer {
 
     if (!workingFile) {
       throw new Error(
-        "No active FlightPath workflow found. Start a workflow in VS Code first."
+        "No active ctrlyoke workflow found. Start a workflow in VS Code first."
       );
     }
 
@@ -664,13 +664,13 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Read and parse .flightpath/capabilities.json.
+   * Read and parse .ctrlyoke/capabilities.json.
    * Returns null if the file does not exist or cannot be parsed.
    */
   private async readCapabilities(): Promise<any | null> {
     const capabilitiesPath = path.join(
       this.workspaceRoot,
-      FLIGHTPATH_DIR,
+      CTRLYOKE_DIR,
       CAPABILITIES_FILE
     );
     try {
@@ -682,7 +682,7 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Handle flightpath_capabilities tool invocation.
+   * Handle ctrlyoke_capabilities tool invocation.
    * Returns available harnesses and their supported models.
    */
   private async handleCapabilities() {
@@ -720,7 +720,7 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Handle flightpath_read_output tool invocation.
+   * Handle ctrlyoke_read_output tool invocation.
    * Returns AI response text from completed prompts.
    */
   private async handleReadOutput(args: any) {
@@ -728,7 +728,7 @@ class FlightPathMCPServer {
 
     if (!workingFile) {
       throw new Error(
-        "No active FlightPath workflow found. Start a workflow in VS Code first."
+        "No active ctrlyoke workflow found. Start a workflow in VS Code first."
       );
     }
 
@@ -808,14 +808,14 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Handle flightpath_global_status tool invocation.
+   * Handle ctrlyoke_global_status tool invocation.
    * Returns the status of every workflow in the workspace queue — not just the
    * current one. Agents should call this at session start to understand what
    * other workflows are running so they can avoid file conflicts and ignore
    * errors caused by sibling workflows.
    */
   private async handleGlobalStatus() {
-    const queueDir = path.join(this.workspaceRoot, FLIGHTPATH_DIR, QUEUE_DIR);
+    const queueDir = path.join(this.workspaceRoot, CTRLYOKE_DIR, QUEUE_DIR);
     log("Scanning queue directory for all workflows:", queueDir);
 
     try {
@@ -898,8 +898,8 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Handle flightpath_submit_commit_message tool invocation.
-   * Writes the commit message to the output path specified by FLIGHTPATH_COMMIT_OUTPUT.
+   * Handle ctrlyoke_submit_commit_message tool invocation.
+   * Writes the commit message to the output path specified by CTRLYOKE_COMMIT_OUTPUT.
    * Used exclusively by CommitMessageGenerator to capture the AI-generated commit message
    * as a structured tool argument rather than parsing prose response text.
    */
@@ -909,13 +909,13 @@ class FlightPathMCPServer {
       throw new Error("message is required and cannot be empty");
     }
 
-    const outputPath = process.env.FLIGHTPATH_COMMIT_OUTPUT;
+    const outputPath = process.env.CTRLYOKE_COMMIT_OUTPUT;
     if (outputPath) {
       await fs.writeFile(outputPath, message.trim(), "utf8");
       log("Commit message written to:", outputPath);
     } else {
       log(
-        "FLIGHTPATH_COMMIT_OUTPUT not set — message captured but not persisted"
+        "CTRLYOKE_COMMIT_OUTPUT not set — message captured but not persisted"
       );
     }
 
@@ -933,14 +933,14 @@ class FlightPathMCPServer {
    * Find the active working file for this workflow execution.
    *
    * Lookup order:
-   * 1. FLIGHTPATH_WORKING_FILE env var — set per-workflow by the MCP config generator
+   * 1. CTRLYOKE_WORKING_FILE env var — set per-workflow by the MCP config generator
    *    so each AI session targets exactly its own queue file (multi-workflow safe).
-   * 2. Fallback: scan .flightpath/.queue/ and prefer files with executionState=running,
+   * 2. Fallback: scan .ctrlyoke/.queue/ and prefer files with executionState=running,
    *    then most recently modified (single-workflow fallback).
    */
   private async findActiveWorkingFile(): Promise<string | null> {
     // 1. Prefer the pinned file from the per-workflow MCP config
-    const pinnedFile = process.env.FLIGHTPATH_WORKING_FILE;
+    const pinnedFile = process.env.CTRLYOKE_WORKING_FILE;
     if (pinnedFile) {
       log("Using pinned working file:", pinnedFile);
       try {
@@ -955,7 +955,7 @@ class FlightPathMCPServer {
     }
 
     // 2. Scan the queue directory
-    const queueDir = path.join(this.workspaceRoot, FLIGHTPATH_DIR, QUEUE_DIR);
+    const queueDir = path.join(this.workspaceRoot, CTRLYOKE_DIR, QUEUE_DIR);
     log("Searching for working files in:", queueDir);
 
     try {
@@ -1045,7 +1045,7 @@ class FlightPathMCPServer {
    */
   async start() {
     log("===================================");
-    log("FlightPath MCP Server Starting");
+    log("ctrlyoke MCP Server Starting");
     log("Log file:", logFile);
     log("Workspace:", this.workspaceRoot);
     log("===================================");
@@ -1054,15 +1054,15 @@ class FlightPathMCPServer {
     log("Connecting server to transport...");
     await this.server.connect(transport);
     log("===================================");
-    log("FlightPath MCP Server STARTED");
+    log("ctrlyoke MCP Server STARTED");
     log("Listening for tool requests...");
     log("===================================");
   }
 }
 
 // Start server
-log("Initializing FlightPath MCP Server...");
-const server = new FlightPathMCPServer();
+log("Initializing ctrlyoke MCP Server...");
+const server = new CtrlYokeMCPServer();
 server.start().catch((error) => {
   log("FATAL ERROR: Failed to start MCP server");
   log("Error:", error);

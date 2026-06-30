@@ -11,7 +11,7 @@ import type {
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
-} from "../../../../types/FlightPathTypes";
+} from "../../../../types/CtrlYokeTypes";
 import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 import type { HarnessId } from "../../../../types/DashboardConstants";
 
@@ -138,7 +138,7 @@ export interface ICliProvider {
    * Build CLI arguments for headless mode
    * Handles both direct prompts and file references identically
    * @param baseArgs Base arguments array
-   * @param prompt Prompt text or file reference (e.g., "@.flightpath/temp/prompt.md")
+   * @param prompt Prompt text or file reference (e.g., "@.ctrlyoke/temp/prompt.md")
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[];
@@ -164,7 +164,7 @@ export interface ICliProvider {
    * Generate MCP server configuration arguments (optional)
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
-   * @param workingFilePath Active working file for this workflow (sets FLIGHTPATH_WORKING_FILE)
+   * @param workingFilePath Active working file for this workflow (sets CTRLYOKE_WORKING_FILE)
    * @returns CLI arguments array, or null if MCP not supported
    */
   getMcpConfigArgs?(
@@ -230,7 +230,7 @@ export interface ICliProvider {
    * Called by CliIntegration at the start of each prompt's hook setup phase.
    *
    * Providers that write per-prompt hook files (Copilot: .github/hooks/*.json,
-   * Claude: .flightpath/temp/claude-hook-settings-*.json) implement this to prevent
+   * Claude: .ctrlyoke/temp/claude-hook-settings-*.json) implement this to prevent
    * files from previous prompts accumulating and firing unintended hooks.
    *
    * Providers that use ref-counted settings.json (Codex, Gemini, Qwen) do not need
@@ -253,7 +253,7 @@ export interface ICliProvider {
   ): string[];
 
   /**
-   * Set up FlightPath notification hooks for interactive mode completion detection.
+   * Set up ctrlyoke notification hooks for interactive mode completion detection.
    * Called only in interactive mode (when workspaceRoot is defined).
    * Returns additional CLI args to append to baseArgs (e.g. ["--settings", path]).
    * Replaces the interactive-mode hook block that was previously inside buildCliArgs().

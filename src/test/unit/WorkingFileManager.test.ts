@@ -3,9 +3,9 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
-import { WorkingFileManager } from "../../flightpath/WorkingFileManager";
-import type { IWorkingFileQueueAccess } from "../../flightpath/WorkingFileManager";
-import type { PromptStep, WorkingFile } from "../../types/FlightPathTypes";
+import { WorkingFileManager } from "../../core/WorkingFileManager";
+import type { IWorkingFileQueueAccess } from "../../core/WorkingFileManager";
+import type { PromptStep, WorkingFile } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 
 // ─── Minimal mock for IWorkingFileQueueAccess ────────────────────────────────

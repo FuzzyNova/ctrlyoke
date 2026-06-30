@@ -2,7 +2,7 @@ import type { ExecutionState } from "./DashboardConstants";
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
-} from "./FlightPathTypes";
+} from "./CtrlYokeTypes";
 import type {
   OutputExecutionTarget,
   WorkspaceSnapshot,

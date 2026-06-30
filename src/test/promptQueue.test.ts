@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { PromptQueue } from "../flightpath/PromptQueue";
+import { PromptQueue } from "../core/PromptQueue";
 import {
   CONDITION_ACTIONS,
   EXECUTION_STATES,
@@ -8,7 +8,7 @@ import {
   STEP_STATUS,
   PROMPT_TERMINAL_STATUS,
 } from "../types/DashboardConstants";
-import { PromptStep, PromptFile } from "../types/FlightPathTypes";
+import { PromptStep, PromptFile } from "../types/CtrlYokeTypes";
 
 /**
  * Helper to wrap prompts array into PromptFile for tests

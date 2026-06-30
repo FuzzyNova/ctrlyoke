@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { PropertyResolver } from "../../utils/PropertyResolver";
-import { PromptFile, PromptStep } from "../../types/FlightPathTypes";
+import { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
 import { PERMISSION_MODES, HARNESS_IDS } from "../../types/DashboardConstants";
 
 suite("PropertyResolver Tests", () => {
@@ -180,7 +180,7 @@ suite("PropertyResolver Tests", () => {
     test("should use prompt-level mcpServers when specified", () => {
       const prompt: PromptStep = {
         prompt: "test",
-        mcpServers: ["flightpath"],
+        mcpServers: ["ctrlyoke"],
       };
       const workflow: PromptFile = {
         steps: [],
@@ -188,7 +188,7 @@ suite("PropertyResolver Tests", () => {
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.deepStrictEqual(resolved.mcpServers, ["flightpath"]);
+      assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]);
     });
 
     test("should use workflow-level mcpServers when prompt-level not specified", () => {
@@ -197,11 +197,11 @@ suite("PropertyResolver Tests", () => {
       };
       const workflow: PromptFile = {
         steps: [],
-        mcpServers: ["flightpath"],
+        mcpServers: ["ctrlyoke"],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.deepStrictEqual(resolved.mcpServers, ["flightpath"]);
+      assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]);
     });
 
     test("should default to empty array when neither prompt nor workflow specify mcpServers", () => {
@@ -223,7 +223,7 @@ suite("PropertyResolver Tests", () => {
       };
       const workflow: PromptFile = {
         steps: [],
-        mcpServers: ["flightpath"],
+        mcpServers: ["ctrlyoke"],
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
@@ -701,7 +701,7 @@ suite("PropertyResolver Tests", () => {
         // model: not specified - should use workflow
         agent: "code-reviewer", // Override
         // resumeSession: not specified - should use workflow
-        mcpServers: ["flightpath"], // Override
+        mcpServers: ["ctrlyoke"], // Override
         // endCondition: not specified - should use workflow
       };
 
@@ -724,7 +724,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.model, "opus"); // From workflow
       assert.strictEqual(resolved.agent, "code-reviewer"); // From prompt
       assert.strictEqual(resolved.resumeSession, true); // From workflow
-      assert.deepStrictEqual(resolved.mcpServers, ["flightpath"]); // From prompt
+      assert.deepStrictEqual(resolved.mcpServers, ["ctrlyoke"]); // From prompt
       assert.deepStrictEqual(resolved.endCondition, {
         script: "test.js",
         returns: "true",

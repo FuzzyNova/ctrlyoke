@@ -46,7 +46,7 @@ export class ScmCommitCommand {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders?.length) {
       void vscode.window.showErrorMessage(
-        "FlightPath: No workspace folder open."
+        "ctrlyoke: No workspace folder open."
       );
       return;
     }
@@ -63,7 +63,7 @@ export class ScmCommitCommand {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.SourceControl,
-          title: "FlightPath: Generating commit message...",
+          title: "ctrlyoke: Generating commit message...",
           cancellable: true,
         },
         async (_progress, token) => {
@@ -78,7 +78,7 @@ export class ScmCommitCommand {
             const diffResult = await this.generator.getDiff(cwd);
             if (!diffResult) {
               void vscode.window.showInformationMessage(
-                "FlightPath: No changes detected. Stage or modify files first."
+                "ctrlyoke: No changes detected. Stage or modify files first."
               );
               return;
             }
@@ -107,7 +107,7 @@ export class ScmCommitCommand {
 
             if (diffResult.truncated) {
               void vscode.window.showWarningMessage(
-                "FlightPath: Diff exceeded 8 KB and was truncated. Commit message may be incomplete."
+                "ctrlyoke: Diff exceeded 8 KB and was truncated. Commit message may be incomplete."
               );
             }
 
@@ -118,7 +118,7 @@ export class ScmCommitCommand {
 
             if (!diffResult.staged) {
               void vscode.window.showInformationMessage(
-                "FlightPath: Generated from unstaged changes. Remember to stage files before committing."
+                "ctrlyoke: Generated from unstaged changes. Remember to stage files before committing."
               );
             }
           } catch (err) {
@@ -130,7 +130,7 @@ export class ScmCommitCommand {
             }
             Log.error("Commit message generation failed", err);
             const message = err instanceof Error ? err.message : String(err);
-            void vscode.window.showErrorMessage(`FlightPath: ${message}`);
+            void vscode.window.showErrorMessage(`ctrlyoke: ${message}`);
           }
         }
       );

@@ -8,13 +8,13 @@ import {
 } from "../utils/ConfigurationUtils";
 import { CliAdapter } from "../platform/CliAdapter";
 import type { ResolvedCliConfig } from "../platform/CliAdapter";
-import { IntegrationFactory } from "../flightpath/IntegrationFactory";
-import { CliIntegration } from "../flightpath/harness/CliIntegration";
-import { WorkflowInstance } from "../flightpath/WorkflowInstance";
+import { IntegrationFactory } from "../core/IntegrationFactory";
+import { CliIntegration } from "../core/harness/CliIntegration";
+import { WorkflowInstance } from "../core/WorkflowInstance";
 import { Log } from "../utils/Log";
 import { EXECUTION_MODES, PERMISSION_MODES } from "../types/DashboardConstants";
 import type { HarnessId } from "../types/DashboardConstants";
-import { isScriptStep, type McpServerConfig } from "../types/FlightPathTypes";
+import { isScriptStep, type McpServerConfig } from "../types/CtrlYokeTypes";
 
 const execFileAsync = promisify(execFile);
 // ~200k tokens at ~4 bytes/token; leaves room for system prompt and instructions.
@@ -167,7 +167,7 @@ export class CommitMessageGenerator {
     );
     const tempDir = path.join(
       cwd,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.TEMP_DIR
     );
     const commitOutputPath = path.join(
@@ -191,27 +191,27 @@ export class CommitMessageGenerator {
     // The tool description already says "do not output as plain text", but an explicit instruction
     // in the prompt reinforces it and prevents the AI from outputting the message twice.
     const mcpInstruction = useMcpCapture
-      ? "\n\nSubmit the commit message using the `flightpath_submit_commit_message` tool. Do not output it as text."
+      ? "\n\nSubmit the commit message using the `ctrlyoke_submit_commit_message` tool. Do not output it as text."
       : "";
     const fullPrompt = `${commitPrompt}\n\n${diff}${instructionsSection}${mcpInstruction}`;
 
     const mcpServerConfig: McpServerConfig | undefined = useMcpCapture
       ? {
-          id: "flightpath-commit",
+          id: "ctrlyoke-commit",
           command: "node",
           args: [mcpServerPath.replace(/\\/g, "/")],
           env: {
-            FLIGHTPATH_WORKSPACE: cwd.replace(/\\/g, "/"),
-            FLIGHTPATH_COMMIT_OUTPUT: commitOutputPath.replace(/\\/g, "/"),
+            CTRLYOKE_WORKSPACE: cwd.replace(/\\/g, "/"),
+            CTRLYOKE_COMMIT_OUTPUT: commitOutputPath.replace(/\\/g, "/"),
           },
           autoApprove: true,
           // Deny all queue-management tools — the AI only needs submit_commit_message.
           deniedTools: [
-            "flightpath_queue_status",
-            "flightpath_append_queue",
-            "flightpath_capabilities",
-            "flightpath_read_output",
-            "flightpath_global_status",
+            "ctrlyoke_queue_status",
+            "ctrlyoke_append_queue",
+            "ctrlyoke_capabilities",
+            "ctrlyoke_read_output",
+            "ctrlyoke_global_status",
           ],
         }
       : undefined;
@@ -274,7 +274,7 @@ export class CommitMessageGenerator {
         ? detectorIntegration.getLastSpawnedCommand()
         : undefined;
 
-    // Primary path: read the commit message written by flightpath_submit_commit_message.
+    // Primary path: read the commit message written by ctrlyoke_submit_commit_message.
     if (useMcpCapture) {
       let mcpMessage: string | undefined;
       try {

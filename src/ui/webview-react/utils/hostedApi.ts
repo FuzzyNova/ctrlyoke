@@ -43,7 +43,7 @@ export async function hostedFetch<T>(
     }
   }
   if (token) {
-    headers["x-flightpath-token"] = token;
+    headers["x-ctrlyoke-token"] = token;
   }
   if (method === "PUT" || method === "POST") {
     headers["Content-Type"] = "application/json";

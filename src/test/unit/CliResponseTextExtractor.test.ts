@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { extractTextFromEvents } from "../../flightpath/harness/shared/CliResponseTextExtractor";
+import { extractTextFromEvents } from "../../core/harness/shared/CliResponseTextExtractor";
 import type { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 

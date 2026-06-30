@@ -6,7 +6,7 @@ import { OutputSection, EditorSection } from "./index";
  *
  * Renders the center panel containing Output and Editor sections.
  * Features:
- * - Background FlightPath logo visible when both panels are collapsed
+ * - Background ctrlyoke logo visible when both panels are collapsed
  * - Relative positioning for absolute logo positioning
  */
 export const CenterContentArea: React.FC = () => {

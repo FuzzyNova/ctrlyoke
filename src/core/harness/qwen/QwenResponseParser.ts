@@ -368,7 +368,7 @@ export class QwenResponseParser
    * Check if error is a Qwen Code CLI invalid session error
    *
    * Qwen Code CLI may reject invalid session IDs with specific error messages.
-   * When detected, FlightPath can retry without the resume flag to start a new session.
+   * When detected, ctrlyoke can retry without the resume flag to start a new session.
    *
    * @param error The error to check (Error object or string)
    * @returns True if this is a recoverable session error

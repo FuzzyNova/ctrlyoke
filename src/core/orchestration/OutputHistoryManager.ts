@@ -26,7 +26,7 @@ import {
   TIMELINE_EVENT_TYPES,
   type WorkflowTimelineEventDraft,
 } from "../../types/WorkflowTimelineTypes";
-import type { WorkflowRuntimeTransition } from "../../types/FlightPathTypes";
+import type { WorkflowRuntimeTransition } from "../../types/CtrlYokeTypes";
 
 /**
  * OutputHistoryManager
@@ -34,7 +34,7 @@ import type { WorkflowRuntimeTransition } from "../../types/FlightPathTypes";
  * RESPONSIBILITY: Workflow Output History Storage & Retrieval
  *
  * Manages per-run output history for workflows. Runs are stored as
- * manifest.json + events.jsonl timeline data under .flightpath/.history/<workflow-id>/.
+ * manifest.json + events.jsonl timeline data under .ctrlyoke/.history/<workflow-id>/.
  *
  * Key design decisions:
  * - The .history/<workflow-id>/ directory is the single source of truth
@@ -43,7 +43,7 @@ import type { WorkflowRuntimeTransition } from "../../types/FlightPathTypes";
  * - History is a self-contained snapshot (renders independently of current prompts)
  */
 export class OutputHistoryManager {
-  /** Absolute path to .flightpath/.history/ */
+  /** Absolute path to .ctrlyoke/.history/ */
   readonly historyBaseDir: string;
   private readonly timelineRecorder = new TimelineRecorder();
   private readonly timelineAdapter = new OutputHistoryTimelineAdapter(
@@ -57,7 +57,7 @@ export class OutputHistoryManager {
   constructor(private _workspaceFolderPath: string) {
     this.historyBaseDir = path.join(
       this._workspaceFolderPath,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.HISTORY_DIR
     );
   }

@@ -88,7 +88,7 @@ export function useStepContextMenu({
         : "Copy Prompt";
       const stepToggleLabel = step.enabled === false ? "Enable" : "Disable";
       const pasteDisabledTitle = isCLIManaged
-        ? "Read-only — workflow is running via FlightPath CLI"
+        ? "Read-only — workflow is running via ctrlyoke CLI"
         : executionState === EXECUTION_STATES.CANCELLING
           ? "Cannot paste steps while workflow is cancelling"
           : undefined;
@@ -165,7 +165,7 @@ export function useStepContextMenu({
             icon:
               step.enabled === false ? "codicon-check" : "codicon-circle-slash",
             disabled: isCLIManaged,
-            disabledTitle: "Read-only — workflow is running via FlightPath CLI",
+            disabledTitle: "Read-only — workflow is running via ctrlyoke CLI",
             onClick: () => {
               const enabled = step.enabled === false;
               const update = buildWorkflowStepEnabledUpdate(step, enabled);
@@ -183,7 +183,7 @@ export function useStepContextMenu({
             icon: "codicon-trash",
             disabled: isCLIManaged || isExecutionTargetLocked,
             disabledTitle: isCLIManaged
-              ? "Read-only — workflow is running via FlightPath CLI"
+              ? "Read-only — workflow is running via ctrlyoke CLI"
               : "Cannot delete the currently executing step",
             onClick: () =>
               sendMessage(MESSAGE_TYPES.DELETE_PROMPT, { index: deleteIndex }),
@@ -275,7 +275,7 @@ export function usePasteToEndContextMenu({
       const afterIndex = totalSteps - 1;
 
       const pasteDisabledTitle = isCLIManaged
-        ? "Read-only — workflow is running via FlightPath CLI"
+        ? "Read-only — workflow is running via ctrlyoke CLI"
         : executionState === EXECUTION_STATES.CANCELLING
           ? "Cannot paste steps while workflow is cancelling"
           : undefined;

@@ -1,12 +1,12 @@
-import type { WorkflowSummary } from "../types/FlightPathTypes";
+import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import type { CliOutput } from "../types/WebviewMessageTypes";
 
 /**
  * Platform-agnostic interface for pushing workflow state updates to the dashboard.
- * Implemented by FlightPathWebviewProvider (VS Code) and FlightPathServer (standalone).
+ * Implemented by CtrlYokeWebviewProvider (VS Code) and CtrlYokeServer (standalone).
  *
  * WorkflowOrchestrator depends only on this interface — never on the concrete
- * FlightPathWebviewProvider — so it can be reused in non-VS Code contexts.
+ * CtrlYokeWebviewProvider — so it can be reused in non-VS Code contexts.
  */
 export interface IDashboardProvider {
   // ── Workflow registry events ──────────────────────────────────────────────

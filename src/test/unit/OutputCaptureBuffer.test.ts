@@ -5,12 +5,12 @@ import {
   type OutputCaptureCallbacks,
   type PromptStartData,
   type PromptCompleteData,
-} from "../../flightpath/OutputCaptureBuffer";
-import { EXECUTION_STATES } from "../../types/FlightPathTypes";
+} from "../../core/OutputCaptureBuffer";
+import { EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import { FINAL_STEP_PHASES } from "../../types/DashboardConstants";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
-import type { PromptStep } from "../../types/FlightPathTypes";
+import type { PromptStep } from "../../types/CtrlYokeTypes";
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
 

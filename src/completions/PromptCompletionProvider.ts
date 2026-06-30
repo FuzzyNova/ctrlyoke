@@ -17,7 +17,7 @@ import {
 type TriggerChar = "@" | "#" | "~" | "$";
 
 /**
- * Provides context-aware completions for FlightPath prompt files
+ * Provides context-aware completions for ctrlyoke prompt files
  *
  * Features:
  * - Triggers on `@` character for full file references (CLI-native syntax)
@@ -28,7 +28,7 @@ type TriggerChar = "@" | "#" | "~" | "$";
  *
  * Syntax Reference (see docs/PROMPT_SYNTAX.md):
  * - @path/to/file.ts          → Full file (CLI handles natively)
- * - #selection:path:10-20     → Line range snippet (FlightPath XML)
+ * - #selection:path:10-20     → Line range snippet (ctrlyoke XML)
  * - #sym:symbolName           → Symbol reference (planned)
  */
 export class PromptCompletionProvider implements vscode.CompletionItemProvider {

@@ -20,10 +20,10 @@ function renderBar(overrides: Partial<BulkSelectionActionsBarProps> = {}) {
     availableActions: ["save", "delete", "setDefault"],
     getTargetsForScope: () => [
       HARNESS_IDS.CLAUDE_CLI,
-      SPECIAL_TARGET_IDS.FLIGHTPATH,
+      SPECIAL_TARGET_IDS.CTRLYOKE,
     ],
     getTargetLabel: (id) =>
-      id === SPECIAL_TARGET_IDS.FLIGHTPATH ? "FlightPath" : "Claude Code",
+      id === SPECIAL_TARGET_IDS.CTRLYOKE ? "ctrlyoke" : "Claude Code",
     getTargetDescription: (id, scope) => `${id}:${scope}`,
     defaultTargetId: HARNESS_IDS.CLAUDE_CLI,
     defaultScope: SETTING_SCOPES.WORKSPACE,

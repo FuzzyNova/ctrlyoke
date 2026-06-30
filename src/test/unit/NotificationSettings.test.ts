@@ -4,11 +4,11 @@ import {
   BROWSER_NOTIFICATION_MODES,
   NOTIFICATION_EVENT_MODES,
 } from "../../types/DashboardConstants";
-import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../../types/FlightPathSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
 suite("Notification settings defaults", () => {
   test("include the notifications group with phase 1 defaults", () => {
-    const notifications = FLIGHTPATH_SETTINGS_DEFAULTS.notifications;
+    const notifications = CTRLYOKE_SETTINGS_DEFAULTS.notifications;
 
     assert.strictEqual(notifications.vscode.enabled, true);
     assert.strictEqual(

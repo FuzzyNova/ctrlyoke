@@ -583,7 +583,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               {isCLIManaged && (
                 <span
                   className="text-xs px-1.5 py-px rounded uppercase font-semibold flex-shrink-0 bg-btn-bg text-btn-fg border border-btn-border"
-                  title="Workflow is being managed by the FlightPath CLI"
+                  title="Workflow is being managed by the ctrlyoke CLI"
                 >
                   CLI
                 </span>

@@ -165,7 +165,7 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
 };
 
 const SYNTAX_TOKEN_STYLES = `
-/* FlightPath - VS Code themed refractor tokens */
+/* ctrlyoke - VS Code themed refractor tokens */
 .fp-syntax {
   color: var(--vscode-editor-foreground, #d4d4d4);
 }

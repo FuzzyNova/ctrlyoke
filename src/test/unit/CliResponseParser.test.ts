@@ -3,7 +3,7 @@ import { suite, test } from "mocha";
 import {
   CliResponseParser,
   CliUsage,
-} from "../../flightpath/harness/shared/CliResponseParser";
+} from "../../core/harness/shared/CliResponseParser";
 
 suite("CliResponseParser", () => {
   suite("extractJsonObjectsFromStream", () => {

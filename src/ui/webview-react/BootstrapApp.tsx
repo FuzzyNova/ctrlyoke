@@ -94,7 +94,7 @@ export default function BootstrapApp() {
   if (!DashboardApp) {
     return (
       <div className="flex h-dvh w-full items-center justify-center bg-editor-bg text-foreground">
-        <div className="text-sm opacity-80">Connecting to FlightPath…</div>
+        <div className="text-sm opacity-80">Connecting to ctrlyoke…</div>
       </div>
     );
   }

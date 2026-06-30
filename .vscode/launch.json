@@ -7,8 +7,8 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--disable-extension=nhickster.flightpath",
-        "${workspaceFolder}/flightpath-test.code-workspace"
+        "--disable-extension=nhickster.ctrlyoke",
+        "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "npm: compile"
@@ -19,8 +19,8 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--disable-extension=nhickster.flightpath",
-        "${workspaceFolder}/flightpath-test.code-workspace"
+        "--disable-extension=nhickster.ctrlyoke",
+        "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "npm: compile:react-debug"
@@ -31,8 +31,8 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--disable-extension=nhickster.flightpath",
-        "${workspaceFolder}/flightpath-test.code-workspace"
+        "--disable-extension=nhickster.ctrlyoke",
+        "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "npm: compile:prod"
@@ -44,8 +44,8 @@
       "args": [
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--disable-extension=nhickster.flightpath",
-        "${workspaceFolder}/flightpath-test.code-workspace"
+        "--disable-extension=nhickster.ctrlyoke",
+        "${workspaceFolder}/ctrlyoke-test.code-workspace"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "npm: compile"

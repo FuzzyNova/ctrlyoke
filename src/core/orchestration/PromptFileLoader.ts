@@ -4,7 +4,7 @@ import { PromptFileParser } from "../PromptFileParser";
 import { PromptQueue } from "../PromptQueue";
 import { Log } from "../../utils/Log";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { PromptFile, EXECUTION_STATES } from "../../types/FlightPathTypes";
+import { PromptFile, EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import type { IDashboardSink } from "../../types/IDashboardSink";
 
 const WORKFLOW_PROPERTY_KEYS = [
@@ -64,7 +64,7 @@ export class PromptFileLoader {
 
       if (!promptFile || !promptFile.steps) {
         vscode.window.showErrorMessage(
-          "FlightPath: Failed to parse prompt file"
+          "ctrlyoke: Failed to parse prompt file"
         );
         return undefined;
       }
@@ -76,12 +76,12 @@ export class PromptFileLoader {
       if (!validation.valid) {
         const errors = validation.errors.join("\n");
         vscode.window.showErrorMessage(
-          `FlightPath: Validation failed:\n${errors}`
+          `ctrlyoke: Validation failed:\n${errors}`
         );
         return undefined;
       }
 
-      // Create working file in .flightpath/.queue/ directory
+      // Create working file in .ctrlyoke/.queue/ directory
       let workingFilePath: string | undefined;
       if (workspaceFolderPath) {
         try {
@@ -157,7 +157,7 @@ export class PromptFileLoader {
     } catch (error) {
       Log.error("Failed to load prompt file:", error);
       vscode.window.showErrorMessage(
-        `FlightPath: Failed to load file: ${error}`
+        `ctrlyoke: Failed to load file: ${error}`
       );
       return undefined;
     }

@@ -3,7 +3,7 @@ applyTo: "src/platform/**"
 ---
 
 <purpose>
-Keep core workflow/runtime code platform-agnostic. `PlatformAdapter` is intentionally a small workspace/UI bridge; config still lives in `FlightPathConfigService` / `ConfigurationUtils`, with CLI compatibility hooks layered on top.
+Keep core workflow/runtime code platform-agnostic. `PlatformAdapter` is intentionally a small workspace/UI bridge; config still lives in `CtrlYokeConfigService` / `ConfigurationUtils`, with CLI compatibility hooks layered on top.
 </purpose>
 
 <architecture>

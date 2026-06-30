@@ -9,8 +9,8 @@ import {
   ToolPermissionsOverride,
   UserHookConfig,
   HookEvent,
-} from "../types/FlightPathTypes";
-import { ToolPermissionConfig } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
+} from "../types/CtrlYokeTypes";
+import { ToolPermissionConfig } from "../core/harness/shared/interfaces/IToolPermissionMapper";
 import { ConfigurationUtils } from "./ConfigurationUtils";
 import {
   PERMISSION_MODES,
@@ -58,7 +58,7 @@ export interface ResolvedProperties {
   /** Controls injection of prior prompt outputs - undefined means no injection */
   priorContext?: PriorContext;
 
-  /** Extra CLI flags appended to FlightPath's standard argument set - undefined if not specified */
+  /** Extra CLI flags appended to ctrlyoke's standard argument set - undefined if not specified */
   additionalArgs?: string;
 
   /** Tool permission config - null means none (no permission flags injected) */
@@ -128,7 +128,7 @@ export class PropertyResolver {
    * Precedence order:
    * 1. promptHarness — prompt-level or explicit override
    * 2. workflowHarness — workflow-level default
-   * 3. VS Code setting (flightpath.harness)
+   * 3. VS Code setting (ctrlyoke.harness)
    */
   static resolveHarnessValue(
     promptHarness?: HarnessId,
@@ -147,7 +147,7 @@ export class PropertyResolver {
    * Precedence order:
    * 1. Prompt-level override (prompt.harness)
    * 2. Workflow-level default (workflow.harness)
-   * 3. VS Code setting (flightpath.harness)
+   * 3. VS Code setting (ctrlyoke.harness)
    *
    * @param prompt The prompt to resolve harness for
    * @param workflow The parent workflow file
@@ -198,7 +198,7 @@ export class PropertyResolver {
    * Precedence order:
    * 1. Prompt-level override (prompt.agent)
    * 2. Workflow-level default (workflow.agent)
-   * 3. VS Code setting (flightpath.defaultAgent)
+   * 3. VS Code setting (ctrlyoke.defaultAgent)
    *
    * Note: Both null and empty string are treated as explicit "no agent" and stop
    * further resolution. The resolved value remains undefined because downstream
@@ -233,7 +233,7 @@ export class PropertyResolver {
    * Precedence order:
    * 1. Prompt-level override (prompt.skills) - takes precedence, no merging
    * 2. Workflow-level default (workflow.skills)
-   * 3. VS Code setting (flightpath.defaultSkills)
+   * 3. VS Code setting (ctrlyoke.defaultSkills)
    *
    * Note: Prompt-level skills REPLACE workflow-level skills (prompt wins entirely).
    * Null and empty arrays are treated as explicit "no skills" and stop further
@@ -272,7 +272,7 @@ export class PropertyResolver {
    * Precedence order:
    * 1. Prompt-level override (prompt.resumeSession)
    * 2. Workflow-level default (workflow.resumeSession)
-   * 3. VS Code setting (flightpath.resumeExistingSession)
+   * 3. VS Code setting (ctrlyoke.resumeExistingSession)
    *
    * @param prompt The prompt to resolve resumeSession for
    * @param workflow The parent workflow file
@@ -353,7 +353,7 @@ export class PropertyResolver {
    *    - Array: use these servers
    *    - null: explicitly disabled — no servers
    *    - undefined: fall through to next tier
-   * 3. VS Code setting (flightpath.mcpServers)
+   * 3. VS Code setting (ctrlyoke.mcpServers)
    *
    * @param prompt The prompt to resolve mcpServers for
    * @param workflow The parent workflow file
@@ -470,7 +470,7 @@ export class PropertyResolver {
    * Precedence order:
    * 1. Prompt-level override (prompt.priorContext)
    * 2. Workflow-level default (workflow.priorContext)
-   * 3. VS Code setting (flightpath.priorContext)
+   * 3. VS Code setting (ctrlyoke.priorContext)
    *
    * @param prompt The prompt to resolve priorContext for
    * @param workflow The parent workflow file
@@ -509,7 +509,7 @@ export class PropertyResolver {
    *    - string: Use these args
    *    - null: Explicitly disabled — stop here, return undefined
    *    - undefined: Fall through to next tier
-   * 3. VS Code setting for the resolved harness (flightpath.<harness>AdditionalArgs)
+   * 3. VS Code setting for the resolved harness (ctrlyoke.<harness>AdditionalArgs)
    *
    * Empty string at any level is treated as "not set" — falls through to the next tier.
    *

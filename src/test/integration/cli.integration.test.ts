@@ -12,15 +12,15 @@ suite("CLI Integration Tests", () => {
   suiteSetup(async function () {
     this.timeout(30000); // Allow time for extension activation
 
-    // Find FlightPath extension (might not have publisher during development)
+    // Find ctrlyoke extension (might not have publisher during development)
     const allExtensions = vscode.extensions.all;
     const extension = allExtensions.find(
       (ext) =>
-        ext.id === "nhickster.flightpath" ||
-        ext.packageJSON.name === "flightpath"
+        ext.id === "nhickster.ctrlyoke" ||
+        ext.packageJSON.name === "ctrlyoke"
     );
 
-    assert.ok(extension, "FlightPath extension must be loaded");
+    assert.ok(extension, "ctrlyoke extension must be loaded");
 
     if (!extension.isActive) {
       await extension.activate();
@@ -31,27 +31,27 @@ suite("CLI Integration Tests", () => {
     const allExtensions = vscode.extensions.all;
     const extension = allExtensions.find(
       (ext) =>
-        ext.id === "nhickster.flightpath" ||
-        ext.packageJSON.name === "flightpath"
+        ext.id === "nhickster.ctrlyoke" ||
+        ext.packageJSON.name === "ctrlyoke"
     );
     assert.ok(extension, "Extension should be loaded");
     assert.strictEqual(extension.isActive, true, "Extension should be active");
   });
 
-  test("FlightPath commands should be registered", async () => {
+  test("ctrlyoke commands should be registered", async () => {
     const commands = await vscode.commands.getCommands();
 
-    const flightPathCommands = [
-      "flightpath.openPanel",
-      "flightpath.pause",
-      "flightpath.resume",
-      "flightpath.stop",
-      "flightpath.createPromptFile",
-      "flightpath.runFromContext",
-      "flightpath.loadFromContext",
+    const ctrlyokeCommands = [
+      "ctrlyoke.openPanel",
+      "ctrlyoke.pause",
+      "ctrlyoke.resume",
+      "ctrlyoke.stop",
+      "ctrlyoke.createPromptFile",
+      "ctrlyoke.runFromContext",
+      "ctrlyoke.loadFromContext",
     ];
 
-    for (const cmd of flightPathCommands) {
+    for (const cmd of ctrlyokeCommands) {
       assert.ok(commands.includes(cmd), `Command ${cmd} should be registered`);
     }
   });
@@ -62,7 +62,7 @@ suite("CLI Integration Tests", () => {
     // Verify extension activated by checking a core command is registered
     const commands = await vscode.commands.getCommands();
     assert.ok(
-      commands.includes("flightpath.openPanel"),
+      commands.includes("ctrlyoke.openPanel"),
       "Core command should be registered"
     );
   });
@@ -82,8 +82,8 @@ suite("CLI Integration Tests", () => {
     const allExtensions = vscode.extensions.all;
     const extension = allExtensions.find(
       (ext) =>
-        ext.id === "nhickster.flightpath" ||
-        ext.packageJSON.name === "flightpath"
+        ext.id === "nhickster.ctrlyoke" ||
+        ext.packageJSON.name === "ctrlyoke"
     );
     assert.ok(extension, "Extension should be loaded");
     assert.strictEqual(extension.isActive, true, "Extension should be active");

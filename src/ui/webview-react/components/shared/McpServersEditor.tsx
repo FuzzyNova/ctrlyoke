@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { McpServerConfig } from "@root/types/FlightPathTypes";
+import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "@root/types/WebviewMessageTypes";
 import { SETTING_SCOPES, type SettingWriteScope } from "@/types/messages";
 import { useMcpManagerStore } from "../../store/useMcpManagerStore";
@@ -17,34 +17,34 @@ interface ListedServer {
   isLegacy: boolean;
 }
 
-/** User-visible FlightPath MCP tools that can be selectively disabled. */
-const FLIGHTPATH_USER_TOOLS: {
+/** User-visible ctrlyoke MCP tools that can be selectively disabled. */
+const CTRLYOKE_USER_TOOLS: {
   id: string;
   label: string;
   description: string;
 }[] = [
   {
-    id: "flightpath_queue_status",
+    id: "ctrlyoke_queue_status",
     label: "Queue status",
     description: "Read this workflow's queue and execution state",
   },
   {
-    id: "flightpath_append_queue",
+    id: "ctrlyoke_append_queue",
     label: "Append to queue",
     description: "Add prompts after the current step or at the end",
   },
   {
-    id: "flightpath_capabilities",
+    id: "ctrlyoke_capabilities",
     label: "Capabilities",
     description: "List installed harnesses and their available models",
   },
   {
-    id: "flightpath_read_output",
+    id: "ctrlyoke_read_output",
     label: "Read output",
     description: "Read AI response text from completed steps",
   },
   {
-    id: "flightpath_global_status",
+    id: "ctrlyoke_global_status",
     label: "Global status",
     description: "List all workflows running in this workspace",
   },
@@ -54,38 +54,38 @@ function isMatchingServerEntry(entry: McpServerEntry, id: string): boolean {
   return typeof entry === "string" ? entry === id : entry.id === id;
 }
 
-function hasFlightpath(arr: McpServerEntry[]): boolean {
-  return arr.some((entry) => isMatchingServerEntry(entry, "flightpath"));
+function hasCtrlYoke(arr: McpServerEntry[]): boolean {
+  return arr.some((entry) => isMatchingServerEntry(entry, "ctrlyoke"));
 }
 
-/** Return the FlightPath entry as an McpServerConfig object, or undefined if not present. */
-function getFlightpathConfig(
+/** Return the ctrlyoke entry as an McpServerConfig object, or undefined if not present. */
+function getCtrlYokeConfig(
   arr: McpServerEntry[]
 ): McpServerConfig | undefined {
   return arr.find(
     (entry): entry is McpServerConfig =>
-      typeof entry === "object" && entry !== null && entry.id === "flightpath"
+      typeof entry === "object" && entry !== null && entry.id === "ctrlyoke"
   );
 }
 
-function getNonFlightpathEntries(arr: McpServerEntry[]): McpServerEntry[] {
-  return arr.filter((entry) => !isMatchingServerEntry(entry, "flightpath"));
+function getNonCtrlYokeEntries(arr: McpServerEntry[]): McpServerEntry[] {
+  return arr.filter((entry) => !isMatchingServerEntry(entry, "ctrlyoke"));
 }
 
 function buildArray(
-  includeFlightpath: boolean,
-  flightpathDeniedTools: string[],
+  includeCtrlYoke: boolean,
+  ctrlyokeDeniedTools: string[],
   serverEntries: McpServerEntry[]
 ): McpServerEntry[] {
   const result: McpServerEntry[] = [];
-  if (includeFlightpath) {
+  if (includeCtrlYoke) {
     result.push(
-      flightpathDeniedTools.length > 0
-        ? { id: "flightpath", deniedTools: flightpathDeniedTools }
-        : "flightpath"
+      ctrlyokeDeniedTools.length > 0
+        ? { id: "ctrlyoke", deniedTools: ctrlyokeDeniedTools }
+        : "ctrlyoke"
     );
   }
-  result.push(...getNonFlightpathEntries(serverEntries));
+  result.push(...getNonCtrlYokeEntries(serverEntries));
   return result;
 }
 
@@ -109,7 +109,7 @@ function buildListedServers(
   const enabledIds = new Set<string>();
   const configuredServers = new Map<string, McpServerConfig>();
 
-  for (const entry of getNonFlightpathEntries(entries)) {
+  for (const entry of getNonCtrlYokeEntries(entries)) {
     if (typeof entry === "string") {
       enabledIds.add(entry);
       continue;
@@ -227,10 +227,10 @@ function ServerDetails({ server }: { server: ListedServer }) {
 function McpServersPanel({
   value,
   rows,
-  flightpathEnabled,
-  flightpathDeniedTools,
-  onToggleFlightpath,
-  onToggleFlightpathTool,
+  ctrlyokeEnabled,
+  ctrlyokeDeniedTools,
+  onToggleCtrlYoke,
+  onToggleCtrlYokeTool,
   onToggleServer,
   expandedId,
   onExpandedIdChange,
@@ -242,10 +242,10 @@ function McpServersPanel({
 }: {
   value: McpServersValue;
   rows: ListedServer[];
-  flightpathEnabled: boolean;
-  flightpathDeniedTools: string[];
-  onToggleFlightpath?: () => void;
-  onToggleFlightpathTool?: (toolId: string) => void;
+  ctrlyokeEnabled: boolean;
+  ctrlyokeDeniedTools: string[];
+  onToggleCtrlYoke?: () => void;
+  onToggleCtrlYokeTool?: (toolId: string) => void;
   onToggleServer?: (serverId: string) => void;
   expandedId: string | null;
   onExpandedIdChange: (id: string | null) => void;
@@ -270,18 +270,18 @@ function McpServersPanel({
         </div>
         <div
           className={`flex flex-col rounded border transition-colors ${
-            flightpathEnabled
+            ctrlyokeEnabled
               ? "border-focus-border bg-editor-bg"
               : "border-panel-border"
           }`}
         >
           <button
             type="button"
-            onClick={readOnly ? undefined : onToggleFlightpath}
+            onClick={readOnly ? undefined : onToggleCtrlYoke}
             aria-label={
-              flightpathEnabled
-                ? "Disable FlightPath MCP server"
-                : "Enable FlightPath MCP server"
+              ctrlyokeEnabled
+                ? "Disable ctrlyoke MCP server"
+                : "Enable ctrlyoke MCP server"
             }
             disabled={readOnly}
             className={`flex items-start gap-2 px-2 py-1.5 text-left rounded-t transition-colors ${
@@ -290,28 +290,28 @@ function McpServersPanel({
           >
             <input
               type="checkbox"
-              checked={flightpathEnabled}
+              checked={ctrlyokeEnabled}
               readOnly
-              aria-label="FlightPath enabled"
+              aria-label="ctrlyoke enabled"
               className="mt-0.5 h-3 w-3 flex-shrink-0 accent-focus-border pointer-events-none"
               tabIndex={-1}
             />
             <span className="flex min-w-0 flex-col">
               <span className="text-xs font-medium text-foreground">
-                FlightPath
+                ctrlyoke
               </span>
               <span className="text-xxs text-description-fg">
-                {flightpathEnabled && flightpathDeniedTools.length > 0
-                  ? `${FLIGHTPATH_USER_TOOLS.length - flightpathDeniedTools.length} of ${FLIGHTPATH_USER_TOOLS.length} tools enabled`
+                {ctrlyokeEnabled && ctrlyokeDeniedTools.length > 0
+                  ? `${CTRLYOKE_USER_TOOLS.length - ctrlyokeDeniedTools.length} of ${CTRLYOKE_USER_TOOLS.length} tools enabled`
                   : "Dynamic queue extension"}
               </span>
             </span>
           </button>
 
-          {flightpathEnabled && (
+          {ctrlyokeEnabled && (
             <div className="flex flex-col gap-0.5 border-t border-panel-border px-2 pb-1.5">
-              {FLIGHTPATH_USER_TOOLS.map((tool) => {
-                const denied = flightpathDeniedTools.includes(tool.id);
+              {CTRLYOKE_USER_TOOLS.map((tool) => {
+                const denied = ctrlyokeDeniedTools.includes(tool.id);
                 return (
                   <button
                     key={tool.id}
@@ -319,7 +319,7 @@ function McpServersPanel({
                     onClick={
                       readOnly
                         ? undefined
-                        : () => onToggleFlightpathTool?.(tool.id)
+                        : () => onToggleCtrlYokeTool?.(tool.id)
                     }
                     disabled={readOnly}
                     title={tool.description}
@@ -508,7 +508,7 @@ function McpServersPanel({
 export const McpServersEditor: React.FC<{
   value: McpServersValue;
   onChange: (value: McpServersValue) => void;
-  /** Text shown in the Default mode button (e.g. "Default (FlightPath)"). Only relevant when showDefault is true. */
+  /** Text shown in the Default mode button (e.g. "Default (ctrlyoke)"). Only relevant when showDefault is true. */
   defaultLabel?: string;
   /**
    * When true (default): shows Default/Custom mode selector buttons.
@@ -566,10 +566,10 @@ export const McpServersEditor: React.FC<{
     [inheritedValue]
   );
 
-  const flightpathEnabled = hasFlightpath(currentArray);
-  const flightpathConfig = getFlightpathConfig(currentArray);
-  const flightpathDeniedTools = flightpathConfig?.deniedTools ?? [];
-  const serverEntries = getNonFlightpathEntries(currentArray);
+  const ctrlyokeEnabled = hasCtrlYoke(currentArray);
+  const ctrlyokeConfig = getCtrlYokeConfig(currentArray);
+  const ctrlyokeDeniedTools = ctrlyokeConfig?.deniedTools ?? [];
+  const serverEntries = getNonCtrlYokeEntries(currentArray);
 
   const managedServersById = useMemo(
     () => new Map((managedServers ?? []).map((server) => [server.id, server])),
@@ -598,22 +598,22 @@ export const McpServersEditor: React.FC<{
       return;
     }
 
-    onChange(["flightpath"]);
+    onChange(["ctrlyoke"]);
   };
 
-  const handleFlightpathToggle = () => {
+  const handleCtrlYokeToggle = () => {
     onChange(
-      buildArray(!flightpathEnabled, flightpathDeniedTools, serverEntries)
+      buildArray(!ctrlyokeEnabled, ctrlyokeDeniedTools, serverEntries)
     );
   };
 
-  const handleFlightpathToolToggle = (toolId: string) => {
-    const isDenied = flightpathDeniedTools.includes(toolId);
+  const handleCtrlYokeToolToggle = (toolId: string) => {
+    const isDenied = ctrlyokeDeniedTools.includes(toolId);
     const nextDenied = isDenied
-      ? flightpathDeniedTools.filter((tool) => tool !== toolId)
-      : [...flightpathDeniedTools, toolId];
+      ? ctrlyokeDeniedTools.filter((tool) => tool !== toolId)
+      : [...ctrlyokeDeniedTools, toolId];
 
-    onChange(buildArray(flightpathEnabled, nextDenied, serverEntries));
+    onChange(buildArray(ctrlyokeEnabled, nextDenied, serverEntries));
   };
 
   const handleToggleServer = (serverId: string) => {
@@ -624,8 +624,8 @@ export const McpServersEditor: React.FC<{
     if (isEnabled) {
       onChange(
         buildArray(
-          flightpathEnabled,
-          flightpathDeniedTools,
+          ctrlyokeEnabled,
+          ctrlyokeDeniedTools,
           serverEntries.filter(
             (entry) => !isMatchingServerEntry(entry, serverId)
           )
@@ -638,7 +638,7 @@ export const McpServersEditor: React.FC<{
     if (!managedServer) return;
 
     onChange(
-      buildArray(flightpathEnabled, flightpathDeniedTools, [
+      buildArray(ctrlyokeEnabled, ctrlyokeDeniedTools, [
         ...serverEntries.filter(
           (entry) => !isMatchingServerEntry(entry, serverId)
         ),
@@ -682,9 +682,9 @@ export const McpServersEditor: React.FC<{
           <McpServersPanel
             value={inheritedValue}
             rows={inheritedRows}
-            flightpathEnabled={hasFlightpath(inheritedArray)}
-            flightpathDeniedTools={
-              getFlightpathConfig(inheritedArray)?.deniedTools ?? []
+            ctrlyokeEnabled={hasCtrlYoke(inheritedArray)}
+            ctrlyokeDeniedTools={
+              getCtrlYokeConfig(inheritedArray)?.deniedTools ?? []
             }
             expandedId={expandedId}
             onExpandedIdChange={setExpandedId}
@@ -699,10 +699,10 @@ export const McpServersEditor: React.FC<{
         <McpServersPanel
           value={value}
           rows={currentRows}
-          flightpathEnabled={flightpathEnabled}
-          flightpathDeniedTools={flightpathDeniedTools}
-          onToggleFlightpath={handleFlightpathToggle}
-          onToggleFlightpathTool={handleFlightpathToolToggle}
+          ctrlyokeEnabled={ctrlyokeEnabled}
+          ctrlyokeDeniedTools={ctrlyokeDeniedTools}
+          onToggleCtrlYoke={handleCtrlYokeToggle}
+          onToggleCtrlYokeTool={handleCtrlYokeToolToggle}
           onToggleServer={handleToggleServer}
           expandedId={expandedId}
           onExpandedIdChange={setExpandedId}
@@ -722,10 +722,10 @@ export function buildMcpDefaultLabel(servers: McpServersValue): string {
   const entries = Array.isArray(servers) ? servers : [];
   if (entries.length === 0) return "Inherit (None)";
 
-  const hasFlightpathEntry = hasFlightpath(entries);
-  const customCount = getNonFlightpathEntries(entries).length;
+  const hasCtrlYokeEntry = hasCtrlYoke(entries);
+  const customCount = getNonCtrlYokeEntries(entries).length;
 
-  if (hasFlightpathEntry && customCount === 0) return "Inherit (FlightPath)";
-  if (hasFlightpathEntry) return `Inherit (FlightPath +${customCount})`;
+  if (hasCtrlYokeEntry && customCount === 0) return "Inherit (ctrlyoke)";
+  if (hasCtrlYokeEntry) return `Inherit (ctrlyoke +${customCount})`;
   return `Inherit (${customCount} server${customCount !== 1 ? "s" : ""})`;
 }

@@ -3,7 +3,7 @@ applyTo: "src/cli.ts,src/cli/**"
 ---
 
 <purpose>
-Standalone `flightpath` CLI entrypoint plus terminal-only formatting. `src/cli.ts` owns the `run`, `validate`, and `commit` commands; `src/cli/CliTerminalFormatter.ts` only renders headless streaming output.
+Standalone `ctrlyoke` CLI entrypoint plus terminal-only formatting. `src/cli.ts` owns the `run`, `validate`, and `commit` commands; `src/cli/CliTerminalFormatter.ts` only renders headless streaming output.
 </purpose>
 
 <architecture>
@@ -12,7 +12,7 @@ Standalone `flightpath` CLI entrypoint plus terminal-only formatting. `src/cli.t
 
 - `run` reuses the shared workflow engine. CLI-specific code is limited to runtime bootstrap, config/backends/overlay setup, adapter+shim wiring, terminal subscriptions, workflow locking, and exit-code mapping.
 - `validate` is intentionally lightweight: parse-only, no harness startup or `WorkflowInstance` execution.
-- `commit` is a separate path. It delegates to `src/git/CommitMessageGenerator` and `GitCommitter`, so queue execution, streaming subscriptions, and workflow lock changes usually should not affect `flightpath commit`.
+- `commit` is a separate path. It delegates to `src/git/CommitMessageGenerator` and `GitCommitter`, so queue execution, streaming subscriptions, and workflow lock changes usually should not affect `ctrlyoke commit`.
 
 ## Config flow
 
@@ -34,9 +34,9 @@ Standalone `flightpath` CLI entrypoint plus terminal-only formatting. `src/cli.t
 
 ## Interactive vs headless
 
-- Interactive mode is a passthrough for the underlying AI CLI TUI with only minimal FlightPath framing.
+- Interactive mode is a passthrough for the underlying AI CLI TUI with only minimal ctrlyoke framing.
 - Headless mode renders prompt boundaries/status via `CliTerminalFormatter`, but raw streaming chunks still go straight to `stdout`.
-- `--quiet` and `--json` must suppress decorative output. Diagnostics should go through `Log.initializeCli()` so logs land in `.flightpath/logs/` instead of contaminating terminal/JSON output.
+- `--quiet` and `--json` must suppress decorative output. Diagnostics should go through `Log.initializeCli()` so logs land in `.ctrlyoke/logs/` instead of contaminating terminal/JSON output.
 
 ## `CliTerminalFormatter` rules
 

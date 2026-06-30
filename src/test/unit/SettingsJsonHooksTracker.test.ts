@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 import * as crypto from "crypto";
-import { SettingsJsonHooksTracker } from "../../flightpath/harness/shared/SettingsJsonHooksTracker";
+import { SettingsJsonHooksTracker } from "../../core/harness/shared/SettingsJsonHooksTracker";
 
 function canonicalizeJson(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -126,7 +126,7 @@ suite("SettingsJsonHooksTracker", () => {
       {}
     );
 
-    // Settings should have both FlightPath and user hooks
+    // Settings should have both ctrlyoke and user hooks
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
     assert.strictEqual(settings.hooks.Stop.length, 2);
     assert.strictEqual(tracker.getActiveWorkflowCount(), 1);
@@ -221,7 +221,7 @@ suite("SettingsJsonHooksTracker", () => {
     await assert.rejects(fs.access(settingsPath), /ENOENT/);
   });
 
-  test("should remove codex hooks.json when FlightPath created it", async () => {
+  test("should remove codex hooks.json when ctrlyoke created it", async () => {
     const codexHooksPath = path.join(tmpDir, ".codex", "hooks.json");
     await fs.rm(codexHooksPath, { force: true });
 
@@ -244,7 +244,7 @@ suite("SettingsJsonHooksTracker", () => {
     await assert.rejects(fs.access(codexHooksPath), /ENOENT/);
   });
 
-  test("should auto-trust Codex hooks injected by FlightPath", async () => {
+  test("should auto-trust Codex hooks injected by ctrlyoke", async () => {
     const codexHooksPath = path.join(tmpDir, ".codex", "hooks.json");
     const tracker = SettingsJsonHooksTracker.getInstance("codex");
 
@@ -375,7 +375,7 @@ suite("SettingsJsonHooksTracker", () => {
     );
   });
 
-  test("should remap existing Codex hook state when FlightPath prepends hooks", async () => {
+  test("should remap existing Codex hook state when ctrlyoke prepends hooks", async () => {
     const codexDir = path.join(tmpDir, ".codex");
     const codexHooksPath = path.join(codexDir, "hooks.json");
     await fs.mkdir(codexDir, { recursive: true });
@@ -470,7 +470,7 @@ suite("SettingsJsonHooksTracker", () => {
       }
     );
 
-    // Order should be: FlightPath first, user hooks middle, baseline last
+    // Order should be: ctrlyoke first, user hooks middle, baseline last
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
     assert.strictEqual(settings.hooks.Stop.length, 3);
     assert.strictEqual(settings.hooks.Stop[0].hooks[0].command, "node fp.js");

@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { SessionResolver } from "../../utils/SessionResolver";
-import { PromptFile, PromptStep } from "../../types/FlightPathTypes";
+import { PromptFile, PromptStep } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   SESSION_ID_SENTINELS,

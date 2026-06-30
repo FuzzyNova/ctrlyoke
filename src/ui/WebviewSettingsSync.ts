@@ -41,18 +41,18 @@ import {
 import {
   McpServerConfig,
   ToolPermissionsOverride,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeWorkspaceFolder,
 } from "../platform/VsCodeWorkspaceRoot";
-import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
+import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { AgentDiscovery } from "../utils/AgentDiscovery";
 import type { AgentInfo } from "../utils/AgentDiscovery";
 import { SkillDiscovery } from "../utils/SkillDiscovery";
 import type { SkillInfo } from "../utils/SkillDiscovery";
-import { configService } from "../config/FlightPathConfigService";
+import { configService } from "../config/CtrlYokeConfigService";
 import type { DevStatus } from "../types/WebviewMessageTypes";
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 
@@ -577,7 +577,7 @@ export class WebviewSettingsSync {
     postMessage: PostMessageFn = this.postMessage
   ): Promise<void> {
     if (!key.startsWith(CONFIG_KEYS.EXTENSION_NAMESPACE)) {
-      Log.warn(`Rejected config read for non-flightpath key: ${key}`);
+      Log.warn(`Rejected config read for non-ctrlyoke key: ${key}`);
       return;
     }
 
@@ -596,7 +596,7 @@ export class WebviewSettingsSync {
 
   async handleUpdateConfig(key: string, value: unknown): Promise<void> {
     if (!key.startsWith(CONFIG_KEYS.EXTENSION_NAMESPACE)) {
-      Log.warn(`Rejected config write for non-flightpath key: ${key}`);
+      Log.warn(`Rejected config write for non-ctrlyoke key: ${key}`);
       return;
     }
 
@@ -609,7 +609,7 @@ export class WebviewSettingsSync {
   // ============================================================================
 
   /**
-   * Write capabilities.json to the workspace .flightpath/ directory.
+   * Write capabilities.json to the workspace .ctrlyoke/ directory.
    * Read by the MCP server (separate process) for harness/model validation.
    */
   private async writeCapabilities(
@@ -623,7 +623,7 @@ export class WebviewSettingsSync {
     const workspaceRoot = getVsCodeWorkspaceRoot();
     const capabilitiesPath = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.CAPABILITIES_FILE
     );
 
@@ -966,7 +966,7 @@ export class WebviewSettingsSync {
       scope === CONFIG_SCOPE.USER ? homedirFn() : getVsCodeWorkspaceRoot();
     const certsDir = path.join(
       baseDir,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.CERTS_DIR
     );
     await fs.mkdir(certsDir, { recursive: true });
@@ -990,7 +990,7 @@ export class WebviewSettingsSync {
     notAfterDate.setDate(notAfterDate.getDate() + 365);
 
     const pems = await generate(
-      [{ name: "commonName", value: "FlightPath Local CA" }],
+      [{ name: "commonName", value: "ctrlyoke Local CA" }],
       {
         notBeforeDate,
         notAfterDate,

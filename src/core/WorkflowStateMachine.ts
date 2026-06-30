@@ -1,4 +1,4 @@
-import { EXECUTION_STATES } from "../types/FlightPathTypes";
+import { EXECUTION_STATES } from "../types/CtrlYokeTypes";
 import {
   FINAL_STEP_PHASES,
   WORKFLOW_ATTEMPT_COMMANDS,
@@ -13,7 +13,7 @@ import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
   WorkflowRuntimeTransition,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 
 /**

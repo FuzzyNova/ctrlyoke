@@ -98,7 +98,7 @@ export function useWorkspaceEditorContextMenu({
         },
         { type: "divider" },
         {
-          label: "Add Selection to FlightPath",
+          label: "Add Selection to ctrlyoke",
           icon: "codicon-add",
           disabled: !hasSelection || !filePath,
           disabledTitle: !filePath ? "No file open" : "No text selected",
@@ -114,7 +114,7 @@ export function useWorkspaceEditorContextMenu({
           },
         },
         {
-          label: "Add File to FlightPath",
+          label: "Add File to ctrlyoke",
           icon: "codicon-add",
           disabled: !filePath,
           disabledTitle: "No file open",

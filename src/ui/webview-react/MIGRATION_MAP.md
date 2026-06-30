@@ -1,4 +1,4 @@
-# FlightPath Webview Migration Map
+# ctrlyoke Webview Migration Map
 
 **From**: Vanilla JS modules (`src/ui/webview/`)  
 **To**: React 19 + TypeScript (`src/ui/webview-react/`)

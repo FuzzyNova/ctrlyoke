@@ -11,13 +11,13 @@ src/ui/webview-react/coverage
 # Build artifacts
 package.json.backup
 
-# FlightPath temp files (prompt files for CLI execution)
-.flightpath/temp/
-.flightpath/.queue/
-.flightpath/logs/
-.flightpath/.history/
-.flightpath/.search-index/
-.flightpath/capabilities.json
+# ctrlyoke temp files (prompt files for CLI execution)
+.ctrlyoke/temp/
+.ctrlyoke/.queue/
+.ctrlyoke/logs/
+.ctrlyoke/.history/
+.ctrlyoke/.search-index/
+.ctrlyoke/capabilities.json
 manual-test/hooks/output/
 
 # VitePress build artifacts

@@ -1,10 +1,10 @@
 import type { IDashboardSink } from "../types/IDashboardSink";
-import type { FlightPathNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 import type {
   CliEvent,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
-import type { WorkflowStep } from "../types/FlightPathTypes";
+import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   FinalStepPhase,
   StepStatus,
@@ -300,7 +300,7 @@ export class WorkflowTaggedSink implements IDashboardSink {
     this.inner.sendStepUndoDataUpdated(target, workspaceSnapshot);
   }
 
-  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+  notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {
     this.inner.notifyNotificationEvent?.(event);
   }
 }

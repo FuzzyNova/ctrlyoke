@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { CliExecutionSession } from "../../flightpath/harness/shared/CliExecutionSession";
+import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import { FAILURE_KINDS } from "../../types/DashboardConstants";
 import type { CliResult, UniversalCliOutput } from "../../types/CliOutputTypes";
 

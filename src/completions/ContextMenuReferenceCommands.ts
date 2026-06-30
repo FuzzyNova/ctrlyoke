@@ -7,7 +7,7 @@ import {
   buildSymbolReference,
 } from "./ContextReferenceBuilder";
 import { toWorkspaceRelativeReferencePath } from "./WorkspaceReferencePaths";
-import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
+import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
 import { PROMPT_EDITOR_INSERT_MODES } from "../types/DashboardConstants";
 import type { PromptEditorInsertRequest } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
@@ -23,7 +23,7 @@ interface TimelineItemLike {
 }
 
 export class ContextMenuReferenceCommands {
-  constructor(private readonly webviewProvider: FlightPathWebviewProvider) {}
+  constructor(private readonly webviewProvider: CtrlYokeWebviewProvider) {}
 
   async addFileToPromptEditor(uri: vscode.Uri): Promise<void> {
     if (!uri) {
@@ -33,7 +33,7 @@ export class ContextMenuReferenceCommands {
     const relativePath = toWorkspaceRelativeReferencePath(uri);
     if (!relativePath) {
       void vscode.window.showWarningMessage(
-        "FlightPath: Selected file is outside the workspace."
+        "ctrlyoke: Selected file is outside the workspace."
       );
       return;
     }
@@ -49,7 +49,7 @@ export class ContextMenuReferenceCommands {
     const relativePath = toWorkspaceRelativeReferencePath(uri);
     if (!relativePath) {
       void vscode.window.showWarningMessage(
-        "FlightPath: Selected directory is outside the workspace."
+        "ctrlyoke: Selected directory is outside the workspace."
       );
       return;
     }
@@ -65,7 +65,7 @@ export class ContextMenuReferenceCommands {
     const relativePath = toWorkspaceRelativeReferencePath(uri);
     if (!relativePath) {
       void vscode.window.showWarningMessage(
-        "FlightPath: Selected file is outside the workspace."
+        "ctrlyoke: Selected file is outside the workspace."
       );
       return;
     }
@@ -96,7 +96,7 @@ export class ContextMenuReferenceCommands {
     const relativePath = toWorkspaceRelativeReferencePath(uri);
     if (!relativePath) {
       void vscode.window.showWarningMessage(
-        "FlightPath: Selected file is outside the workspace."
+        "ctrlyoke: Selected file is outside the workspace."
       );
       return;
     }
@@ -136,7 +136,7 @@ export class ContextMenuReferenceCommands {
 
     if (references.length === 0) {
       void vscode.window.showWarningMessage(
-        "FlightPath: No selected SCM resources are inside the workspace."
+        "ctrlyoke: No selected SCM resources are inside the workspace."
       );
       return;
     }
@@ -148,7 +148,7 @@ export class ContextMenuReferenceCommands {
     const commitHash = this.extractTimelineCommitHash(item);
     if (!commitHash) {
       void vscode.window.showWarningMessage(
-        "FlightPath: Could not resolve a commit hash from the selected timeline item."
+        "ctrlyoke: Could not resolve a commit hash from the selected timeline item."
       );
       return;
     }
@@ -202,7 +202,7 @@ export class ContextMenuReferenceCommands {
       );
     } catch (error) {
       Log.warn(
-        "FlightPath: Failed to resolve symbol for editor context",
+        "ctrlyoke: Failed to resolve symbol for editor context",
         error
       );
       return undefined;

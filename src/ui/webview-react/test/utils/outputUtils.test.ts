@@ -255,7 +255,7 @@ describe("generateMarkdownExport", () => {
 
   it("includes the header and metadata", () => {
     const md = generateMarkdownExport([], metadata);
-    expect(md).toContain("# FlightPath Execution Output");
+    expect(md).toContain("# ctrlyoke Execution Output");
     expect(md).toContain("my-workflow.flightpath.yaml");
     expect(md).toContain("completed");
     expect(md).toContain("2 of 2");

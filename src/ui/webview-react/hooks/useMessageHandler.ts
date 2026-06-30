@@ -1,5 +1,5 @@
 /**
- * FlightPath Message Handler Hook
+ * ctrlyoke Message Handler Hook
  *
  * Central message handler that routes messages from the extension to appropriate stores.
  * Migrated from vanilla JS message-router.js to React hook pattern.
@@ -1300,7 +1300,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const uiStore = useUiStore.getState();
     uiStore.openNewWorkflowModal({
       templates: message.templates || [],
-      workflowsDir: message.workflowsDir || ".flightpath/workflows",
+      workflowsDir: message.workflowsDir || ".ctrlyoke/workflows",
       defaultTemplateId: message.defaultTemplateId,
     });
   };
@@ -1514,7 +1514,7 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // WORKSPACE_INIT_REQUIRED - FlightPath not yet initialized; user must approve
+  // WORKSPACE_INIT_REQUIRED - ctrlyoke not yet initialized; user must approve
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKSPACE_INIT_REQUIRED] = () => {
     WebviewLog.debug("[startup] WORKSPACE_INIT_REQUIRED received");
@@ -2067,7 +2067,7 @@ function createMessageHandlers(): MessageHandlerMap {
 // ============================================================================
 
 /**
- * Hook to set up message handling for the FlightPath dashboard
+ * Hook to set up message handling for the ctrlyoke dashboard
  *
  * All message handlers are centralized in createMessageHandlers() function.
  * This hook sets up the message listener and provides a sendMessage helper.

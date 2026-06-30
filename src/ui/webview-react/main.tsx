@@ -10,7 +10,7 @@ import { installPerformanceProfiler } from "@utils/performanceProfiler";
 import "./styles/globals.css";
 
 const root = document.getElementById("root");
-window.__flightpathReactMounted = true;
+window.__ctrlyokeReactMounted = true;
 installPerformanceProfiler();
 if (!root) {
   WebviewLog.error("[main] root element not found");

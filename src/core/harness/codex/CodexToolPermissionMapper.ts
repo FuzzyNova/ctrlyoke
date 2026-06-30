@@ -9,7 +9,7 @@ import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 /**
  * Codex CLI Tool Permission Mapper
  *
- * Converts FlightPath's unified permission configuration into Codex CLI arguments.
+ * Converts ctrlyoke's unified permission configuration into Codex CLI arguments.
  *
  * Codex CLI uses mode-based permissions (no granular tool patterns):
  * - dangerouslyAllowAll → --dangerously-bypass-approvals-and-sandbox

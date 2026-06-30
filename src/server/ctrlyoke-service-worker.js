@@ -1,10 +1,10 @@
 self.addEventListener("message", (event) => {
   const data = event.data || {};
-  if (data.type === "__FLIGHTPATH_CLEAR_BADGE_MESSAGE_TYPE__") {
+  if (data.type === "__CTRLYOKE_CLEAR_BADGE_MESSAGE_TYPE__") {
     event.waitUntil(safeClearBadgeState());
     return;
   }
-  if (data.type === "__FLIGHTPATH_INCREMENT_BADGE_MESSAGE_TYPE__") {
+  if (data.type === "__CTRLYOKE_INCREMENT_BADGE_MESSAGE_TYPE__") {
     event.waitUntil(safeIncrementBadgeCount(data.eventId));
   }
 });
@@ -13,10 +13,10 @@ self.addEventListener("push", (event) => {
   const payload = event.data ? event.data.json() : {};
   event.waitUntil(
     Promise.all([
-      self.registration.showNotification(payload.title || "FlightPath", {
+      self.registration.showNotification(payload.title || "ctrlyoke", {
         body: payload.body || "Workflow update available",
-        icon: "__FLIGHTPATH_NOTIFICATION_ICON_PATH__",
-        badge: "__FLIGHTPATH_NOTIFICATION_BADGE_PATH__",
+        icon: "__CTRLYOKE_NOTIFICATION_ICON_PATH__",
+        badge: "__CTRLYOKE_NOTIFICATION_BADGE_PATH__",
         tag: payload.tag,
         data: { url: payload.url || "/" },
       }),
@@ -46,7 +46,7 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
-const BADGE_DB_NAME = "flightpath-notifications";
+const BADGE_DB_NAME = "ctrlyoke-notifications";
 const BADGE_STORE_NAME = "badge-state";
 const BADGE_STATE_KEY = "app";
 const MAX_SEEN_EVENT_IDS = 200;

@@ -4,14 +4,14 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 
 /**
  * Claude CLI Notification Monitor
  *
  * Hook configuration: JSON string passed via --settings flag
- * Notification directory: .flightpath/temp/claude-notifications/
- * Notification script: flightpath-claude-hook.js
+ * Notification directory: .ctrlyoke/temp/claude-notifications/
+ * Notification script: ctrlyoke-claude-hook.js
  *
  * Notification file format (standardized with Copilot):
  *   {sessionId}-start.json → { hookEvent: "SessionStart", sessionId, status: "started" }
@@ -34,13 +34,13 @@ export class ClaudeNotificationMonitor
     userPromptSubmit: "UserPromptSubmit",
     // Decision hook: Claude pipes the payload on stdin and reads stdout as the
     // allow/deny decision. Registered as a direct hook entry — not via the
-    // FlightPath notification script — so Claude handles the stdin/stdout
-    // contract natively without FlightPath interception.
+    // ctrlyoke notification script — so Claude handles the stdin/stdout
+    // contract natively without ctrlyoke interception.
     permissionRequest: "PermissionRequest",
   };
 
   /**
-   * Build a user-hooks-only Claude settings JSON string (no FlightPath notification entries).
+   * Build a user-hooks-only Claude settings JSON string (no ctrlyoke notification entries).
    * Used for headless mode where completion detection is process-exit based.
    */
   static buildUserOnlyConfig(userHooks: UserHookConfig[]): string {
@@ -62,7 +62,7 @@ export class ClaudeNotificationMonitor
    * Claude uses JSON string (not object) for --settings flag.
    * Configures both SessionStart and Stop hooks.
    *
-   * @param scriptPath Path to notification handler script (flightpath-claude-hook.js)
+   * @param scriptPath Path to notification handler script (ctrlyoke-claude-hook.js)
    * @param notifyDir Notification directory
    * @param workspaceRoot Workspace root directory (unused for Claude)
    * @returns Hook configuration as JSON string
@@ -72,13 +72,13 @@ export class ClaudeNotificationMonitor
     notifyDir: string,
     _workspaceRoot: string,
     userHooks?: UserHookConfig[],
-    flightpathEvents?: HookEvent[]
+    ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
       notifyDir
     );
-    const selectedEvents = flightpathEvents ?? ["sessionStart", "stop", "error"];
+    const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop", "error"];
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const hooks = this.buildCommandHooks(
       command,

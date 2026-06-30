@@ -46,7 +46,7 @@ export class OpenCodeToolPermissionMapper
 
   /**
    * OpenCode does not currently expose an interactive permission mode through
-   * FlightPath, so headless execution should not warn for limited permissions.
+   * ctrlyoke, so headless execution should not warn for limited permissions.
    */
   hasFullPermissions(_config: ToolPermissionConfig): boolean {
     return true;

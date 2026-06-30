@@ -3,7 +3,7 @@ import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
-import { WorkflowStep, WorkingFile } from "../../types/FlightPathTypes";
+import { WorkflowStep, WorkingFile } from "../../types/CtrlYokeTypes";
 import { EXECUTION_STATES } from "../../types/DashboardConstants";
 import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 
@@ -13,7 +13,7 @@ import type { PlatformAdapter } from "../../platform/PlatformAdapter";
  * RESPONSIBILITY: Session Persistence & Recovery
  *
  * Handles session management including:
- * - Auto-loading most recent session from .flightpath/.queue/
+ * - Auto-loading most recent session from .ctrlyoke/.queue/
  * - Discovering prompt files in workspace
  * - Finding and sorting working files by timestamp
  * - Session continuity after VS Code restart or crash
@@ -25,7 +25,7 @@ export class WorkspaceSessionManager {
   ) {}
 
   /**
-   * Auto-load the most recent workflow session from .flightpath/.queue/
+   * Auto-load the most recent workflow session from .ctrlyoke/.queue/
    * This enables seamless resume after VS Code restarts or crashes
    *
    * @param workspaceFolder Current workspace folder
@@ -52,21 +52,21 @@ export class WorkspaceSessionManager {
       );
 
       Log.debug(
-        `FlightPath: Auto-loaded recent session: ${workflowName} (${path.basename(workingFilePath)})`
+        `ctrlyoke: Auto-loaded recent session: ${workflowName} (${path.basename(workingFilePath)})`
       );
 
       // Optional: Show subtle notification (not intrusive)
       // vscode.window.showInformationMessage(
-      //   `FlightPath: Resumed session: ${workflowName}`
+      //   `ctrlyoke: Resumed session: ${workflowName}`
       // );
     } catch (error) {
-      Log.error("FlightPath: Failed to auto-load recent session:", error);
+      Log.error("ctrlyoke: Failed to auto-load recent session:", error);
       // Don't show error to user - just log and continue
     }
   }
 
   /**
-   * Resolve the current most-recent working file from .flightpath/.queue/.
+   * Resolve the current most-recent working file from .ctrlyoke/.queue/.
    * Reads queue metadata from disk each time so reconnecting clients always
    * use fresh recency data rather than a startup snapshot.
    */
@@ -76,7 +76,7 @@ export class WorkspaceSessionManager {
     try {
       const queueDir = path.join(
         workspaceFolderPath,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR
       );
       const workingFiles = await this.listWorkingFilesByRecency(queueDir);
@@ -86,7 +86,7 @@ export class WorkspaceSessionManager {
         return undefined;
       }
       Log.error(
-        "FlightPath: Failed to resolve most recent working file path:",
+        "ctrlyoke: Failed to resolve most recent working file path:",
         error
       );
       return undefined;
@@ -103,10 +103,10 @@ export class WorkspaceSessionManager {
     try {
       const promptFiles =
         await this.promptFileParser.discoverPromptFiles(workspaceFolderPath);
-      Log.debug(`FlightPath: Discovered ${promptFiles.length} prompt files`);
+      Log.debug(`ctrlyoke: Discovered ${promptFiles.length} prompt files`);
       return promptFiles;
     } catch (error) {
-      Log.error("FlightPath: Failed to discover prompt files:", error);
+      Log.error("ctrlyoke: Failed to discover prompt files:", error);
       return [];
     }
   }
@@ -115,7 +115,7 @@ export class WorkspaceSessionManager {
    * Read all working files in the queue directory, sorted by recency.
    * Uses lastModifiedAt when available, falling back to startedAt.
    *
-   * @param queueDir Path to .flightpath/.queue/ directory
+   * @param queueDir Path to .ctrlyoke/.queue/ directory
    */
   private async listWorkingFilesByRecency(queueDir: string): Promise<
     Array<{
@@ -179,7 +179,7 @@ export class WorkspaceSessionManager {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return [];
       }
-      Log.error("FlightPath: Failed to find most recent working file:", error);
+      Log.error("ctrlyoke: Failed to find most recent working file:", error);
       return [];
     }
   }
@@ -198,7 +198,7 @@ export class WorkspaceSessionManager {
   }
 
   /**
-   * Discover all available sessions in .flightpath/.queue
+   * Discover all available sessions in .ctrlyoke/.queue
    * Returns session metadata for UI display
    *
    * @param workspaceFolder Current workspace folder
@@ -215,7 +215,7 @@ export class WorkspaceSessionManager {
     try {
       const queueDir = path.join(
         workspaceFolderPath,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR
       );
 

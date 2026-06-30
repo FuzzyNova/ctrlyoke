@@ -51,7 +51,7 @@ export const WorkspaceViewerHeader: React.FC<WorkspaceViewerHeaderProps> = ({
   const workspaceRootName = workspacePath
     ? (workspacePath.split(/[/\\]/).filter(Boolean).pop() ?? workspacePath)
     : null;
-  const workspaceName = workspaceRootName ?? "FlightPath Workspace";
+  const workspaceName = workspaceRootName ?? "ctrlyoke Workspace";
   const explorerFileVisible =
     activeTab === "explorer" &&
     selectedFilePath !== null &&

@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { CliPromptPreparer } from "../../flightpath/harness/shared/CliPromptPreparer";
-import type { PromptSections } from "../../flightpath/HarnessIntegration";
-import type { PromptStep } from "../../types/FlightPathTypes";
+import { CliPromptPreparer } from "../../core/harness/shared/CliPromptPreparer";
+import type { PromptSections } from "../../core/HarnessIntegration";
+import type { PromptStep } from "../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
 
 function createSections(overrides?: Partial<PromptSections>): PromptSections {

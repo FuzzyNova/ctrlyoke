@@ -1,15 +1,15 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { WorkflowOrchestrator } from "./flightpath/WorkflowOrchestrator";
+import { WorkflowOrchestrator } from "./core/WorkflowOrchestrator";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { PromptPropertyCompletionProvider } from "./completions/PromptPropertyCompletionProvider";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 import { ContextMenuReferenceCommands } from "./completions/ContextMenuReferenceCommands";
-import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
+import { CtrlYokeWebviewProvider } from "./ui/CtrlYokeWebviewProvider";
 import { getVsCodeWorkspaceRoot } from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
-import { FlightPathHostedServer } from "./server/FlightPathHostedServer";
+import { CtrlYokeHostedServer } from "./server/CtrlYokeHostedServer";
 import {
   EXECUTION_STATES,
   GIT_CHANGE_KINDS,
@@ -32,7 +32,7 @@ import {
   getQueueStatus,
   appendToQueue,
   readQueueOutput,
-} from "./flightpath/QueueOperations";
+} from "./core/QueueOperations";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
@@ -40,15 +40,15 @@ import { Log } from "./utils/Log";
 import { saveIfDirty } from "./utils/FileSystemUtils";
 import { getErrorMessage } from "./utils/ErrorUtils";
 import { findWorkflowFilesInWorkspace } from "./utils/WorkflowFileDiscovery";
-import { WorkspaceInitializer } from "./flightpath/orchestration/WorkspaceInitializer";
+import { WorkspaceInitializer } from "./core/orchestration/WorkspaceInitializer";
 import { PATH_CONSTANTS } from "./utils/ConfigurationUtils";
 import {
   initPtyProcessManager,
   setPtyPostMessage,
   getPtyProcessManager,
-} from "./flightpath/harness/PtyProcessManager";
-import { FlightPathMcpServerProvider } from "./ui/FlightPathMcpServerProvider";
-import { configService } from "./config/FlightPathConfigService";
+} from "./core/harness/PtyProcessManager";
+import { CtrlYokeMcpServerProvider } from "./ui/CtrlYokeMcpServerProvider";
+import { configService } from "./config/CtrlYokeConfigService";
 import {
   createUserConfigBackend,
   createWorkspaceConfigBackend,
@@ -57,8 +57,8 @@ import { NotificationManager } from "./ui/NotificationManager";
 import { ScmCommitCommand } from "./scm/ScmCommitCommand";
 
 let workflowOrchestrator: WorkflowOrchestrator;
-let webviewProvider: FlightPathWebviewProvider;
-let hostedServer: FlightPathHostedServer | undefined;
+let webviewProvider: CtrlYokeWebviewProvider;
+let hostedServer: CtrlYokeHostedServer | undefined;
 let notificationManager: NotificationManager | undefined;
 
 /**
@@ -67,14 +67,14 @@ let notificationManager: NotificationManager | undefined;
  */
 function registerLanguageModelTools(context: vscode.ExtensionContext) {
   try {
-    // Tool 1: flightpath_queue_status (read operation)
-    const queueStatusTool = vscode.lm.registerTool("flightpath_queue_status", {
+    // Tool 1: ctrlyoke_queue_status (read operation)
+    const queueStatusTool = vscode.lm.registerTool("ctrlyoke_queue_status", {
       prepareInvocation: async (
         _parameters: unknown,
         _token: vscode.CancellationToken
       ) => {
         return {
-          invocationMessage: "Getting FlightPath queue status...",
+          invocationMessage: "Getting ctrlyoke queue status...",
         };
       },
       invoke: async (
@@ -85,7 +85,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           const promptQueue = workflowOrchestrator.getActivePromptQueue();
 
           if (!promptQueue) {
-            throw new Error("FlightPath queue not initialized");
+            throw new Error("ctrlyoke queue not initialized");
           }
 
           const queue = workflowOrchestrator.getQueueState(PANEL_CLIENT_ID);
@@ -103,14 +103,14 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
       },
     });
 
-    // Tool 2: flightpath_append_queue (write operation)
-    const queueAppendTool = vscode.lm.registerTool("flightpath_append_queue", {
+    // Tool 2: ctrlyoke_append_queue (write operation)
+    const queueAppendTool = vscode.lm.registerTool("ctrlyoke_append_queue", {
       prepareInvocation: async (
         _parameters: unknown,
         _token: vscode.CancellationToken
       ) => {
         return {
-          invocationMessage: "Appending prompts to FlightPath queue...",
+          invocationMessage: "Appending prompts to ctrlyoke queue...",
         };
       },
       invoke: async (parameters: unknown, _token: vscode.CancellationToken) => {
@@ -118,7 +118,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           const promptQueue = workflowOrchestrator.getActivePromptQueue();
 
           if (!promptQueue) {
-            throw new Error("FlightPath queue not initialized");
+            throw new Error("ctrlyoke queue not initialized");
           }
 
           // Validate parameters shape
@@ -176,14 +176,14 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
       },
     });
 
-    // Tool 3: flightpath_capabilities (read harness/model availability)
-    const capabilitiesTool = vscode.lm.registerTool("flightpath_capabilities", {
+    // Tool 3: ctrlyoke_capabilities (read harness/model availability)
+    const capabilitiesTool = vscode.lm.registerTool("ctrlyoke_capabilities", {
       prepareInvocation: async (
         _parameters: unknown,
         _token: vscode.CancellationToken
       ) => {
         return {
-          invocationMessage: "Getting FlightPath capabilities...",
+          invocationMessage: "Getting ctrlyoke capabilities...",
         };
       },
       invoke: async (
@@ -225,14 +225,14 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
       },
     });
 
-    // Tool 4: flightpath_read_output (read AI response from completed prompts)
-    const readOutputTool = vscode.lm.registerTool("flightpath_read_output", {
+    // Tool 4: ctrlyoke_read_output (read AI response from completed prompts)
+    const readOutputTool = vscode.lm.registerTool("ctrlyoke_read_output", {
       prepareInvocation: async (
         _parameters: unknown,
         _token: vscode.CancellationToken
       ) => {
         return {
-          invocationMessage: "Reading FlightPath prompt outputs...",
+          invocationMessage: "Reading ctrlyoke prompt outputs...",
         };
       },
       invoke: async (parameters: unknown, _token: vscode.CancellationToken) => {
@@ -240,7 +240,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           const promptQueue = workflowOrchestrator.getActivePromptQueue();
 
           if (!promptQueue) {
-            throw new Error("FlightPath queue not initialized");
+            throw new Error("ctrlyoke queue not initialized");
           }
 
           const params = parameters as Record<string, unknown> | null;
@@ -269,11 +269,11 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
       readOutputTool
     );
     Log.debug(
-      "FlightPath: Registered Language Model Tools (flightpath_queue_status, flightpath_append_queue, flightpath_capabilities, flightpath_read_output)"
+      "ctrlyoke: Registered Language Model Tools (ctrlyoke_queue_status, ctrlyoke_append_queue, ctrlyoke_capabilities, ctrlyoke_read_output)"
     );
   } catch (error) {
     Log.warn(
-      "FlightPath: Failed to register Language Model Tools (VS Code API may not be available):",
+      "ctrlyoke: Failed to register Language Model Tools (VS Code API may not be available):",
       error
     );
     // Don't throw - this is optional functionality
@@ -281,7 +281,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  Log.info("FlightPath: Extension activating...");
+  Log.info("ctrlyoke: Extension activating...");
   if (IS_DEV_MODE) {
     Log.debug(`🔧 Development mode enabled (Build: ${BUILD_DATE})`);
   }
@@ -313,12 +313,12 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize model registry (queries available Copilot models)
     // Run this early so models are available for IntelliSense
     initializeModelRegistry().catch((err) => {
-      Log.warn("FlightPath: Model registry initialization failed:", err);
+      Log.warn("ctrlyoke: Model registry initialization failed:", err);
     });
 
     // Initialize workspace and clean up orphaned temp files.
-    // If FlightPath has not yet been initialized in this workspace, defer
-    // initialization until the user approves via the "Initialize FlightPath"
+    // If ctrlyoke has not yet been initialized in this workspace, defer
+    // initialization until the user approves via the "Initialize ctrlyoke"
     // prompt in the dashboard.
     let pendingInitWorkspaceRoot: string | undefined;
     if (workspaceFolders && workspaceFolders.length > 0) {
@@ -331,7 +331,7 @@ export async function activate(context: vscode.ExtensionContext) {
             if (isNew) {
               vscode.window
                 .showInformationMessage(
-                  `FlightPath: Workspace initialized! A ${PATH_CONSTANTS.FLIGHTPATH_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
+                  `ctrlyoke: Workspace initialized! A ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directory has been created with your workflows, prompts, and scripts folders.`,
                   "Reveal Folder"
                 )
                 .then((choice) => {
@@ -339,7 +339,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     vscode.commands.executeCommand(
                       "revealFileInOS",
                       vscode.Uri.file(
-                        path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR)
+                        path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR)
                       )
                     );
                   }
@@ -347,7 +347,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
           })
           .catch((err) => {
-            Log.warn("FlightPath: Workspace initialization failed:", err);
+            Log.warn("ctrlyoke: Workspace initialization failed:", err);
           });
 
         // Clean up orphaned temp prompt files (from previous sessions)
@@ -355,7 +355,7 @@ export async function activate(context: vscode.ExtensionContext) {
         tempMgr.cleanupOrphanedFiles().then((count) => {
           if (count > 0) {
             Log.info(
-              `FlightPath: Cleaned up ${count} orphaned temp prompt file(s)`
+              `ctrlyoke: Cleaned up ${count} orphaned temp prompt file(s)`
             );
           }
         });
@@ -367,27 +367,27 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     // Register React webview provider (Phase 4 - unified provider)
-    webviewProvider = new FlightPathWebviewProvider(context);
+    webviewProvider = new CtrlYokeWebviewProvider(context);
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
-        "flightpath.dashboard",
+        "ctrlyoke.dashboard",
         webviewProvider,
         { webviewOptions: { retainContextWhenHidden: true } }
       )
     );
-    Log.debug("FlightPath: React webview provider registered");
+    Log.debug("ctrlyoke: React webview provider registered");
 
     // Initialize PTY process manager (must be after webviewProvider is created)
     const ptyManager = initPtyProcessManager((msg) =>
       webviewProvider.postMessagePublic(msg)
     );
     context.subscriptions.push(ptyManager);
-    Log.debug("FlightPath: PTY process manager initialized");
+    Log.debug("ctrlyoke: PTY process manager initialized");
 
-    // Initialize FlightPath orchestrator with React webview provider
+    // Initialize ctrlyoke orchestrator with React webview provider
     workflowOrchestrator = new WorkflowOrchestrator(context, webviewProvider);
 
-    // If FlightPath has not yet been initialized in this workspace, gate startup
+    // If ctrlyoke has not yet been initialized in this workspace, gate startup
     // behind an init prompt. Must be set before initialize() so the check is in
     // place when READY arrives.
     if (pendingInitWorkspaceRoot) {
@@ -434,19 +434,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register MCP server definition provider for injecting user-defined MCP
     // servers into VS Code's MCP subsystem during Copilot Chat workflow prompts.
-    // The "flightpath" built-in server is NOT managed here — LM tools are
+    // The "ctrlyoke" built-in server is NOT managed here — LM tools are
     // registered unconditionally via registerLanguageModelTools() above.
     if (typeof vscode.lm.registerMcpServerDefinitionProvider === "function") {
-      const mcpProvider = new FlightPathMcpServerProvider();
+      const mcpProvider = new CtrlYokeMcpServerProvider();
       context.subscriptions.push(
         vscode.lm.registerMcpServerDefinitionProvider(
-          "flightpath.workflowMcpProvider",
+          "ctrlyoke.workflowMcpProvider",
           mcpProvider
         )
       );
       context.subscriptions.push(mcpProvider);
       workflowOrchestrator.setMcpServerProvider(mcpProvider);
-      Log.debug("FlightPath: MCP server definition provider registered");
+      Log.debug("ctrlyoke: MCP server definition provider registered");
     }
 
     // Fire-and-forget: don't block activate() on initialization.
@@ -457,7 +457,7 @@ export async function activate(context: vscode.ExtensionContext) {
     workflowOrchestrator.initialize().catch((err) => {
       Log.error("Manager initialization failed:", err);
       vscode.window.showErrorMessage(
-        `FlightPath: Initialization failed: ${err}`
+        `ctrlyoke: Initialization failed: ${err}`
       );
     });
 
@@ -468,7 +468,7 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
 
-    // React to runtime workspace-folder changes. The resolved `.flightpath`
+    // React to runtime workspace-folder changes. The resolved `.ctrlyoke`
     // root is window-stable: the orchestrator, history, settings, and session
     // stack are all built against it at activation. The *first* folder change
     // restarts the extension host (VS Code does not fire this event in that
@@ -491,11 +491,11 @@ export async function activate(context: vscode.ExtensionContext) {
         const previousRoot = resolvedWorkspaceRoot;
         resolvedWorkspaceRoot = nextRoot;
         Log.warn(
-          `FlightPath: Resolved workspace root changed from "${previousRoot}" to "${nextRoot}". A window reload is required to relocate .flightpath.`
+          `ctrlyoke: Resolved workspace root changed from "${previousRoot}" to "${nextRoot}". A window reload is required to relocate .ctrlyoke.`
         );
         vscode.window
           .showWarningMessage(
-            "FlightPath: The workspace root changed. Reload the window to relocate the .flightpath directory.",
+            "ctrlyoke: The workspace root changed. Reload the window to relocate the .ctrlyoke directory.",
             "Reload Window"
           )
           .then((choice) => {
@@ -510,8 +510,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // Two triggers: @ for full file references, # for snippets (line ranges, selections)
     const promptCompletionProvider = new PromptCompletionProvider();
     const promptFilePatterns = [
-      { pattern: "**/*.{prompt,flightpath}.json" },
-      { pattern: "**/*.flightpath.{yaml,yml}" },
+      { pattern: "**/*.{prompt,ctrlyoke}.json" },
+      { pattern: "**/*.ctrlyoke.{yaml,yml}" },
       { pattern: "**/*.prompt.md" },
       { language: "prompt" }, // VS Code's prompt language (used by Copilot)
     ];
@@ -552,7 +552,7 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     Log.debug(
-      "FlightPath: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, ~, and $ triggers"
+      "ctrlyoke: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @, #, ~, and $ triggers"
     );
 
     // Register property key completion provider for YAML workflow files.
@@ -572,7 +572,7 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     Log.debug(
-      "FlightPath: Registered property key completion provider for YAML workflow files"
+      "ctrlyoke: Registered property key completion provider for YAML workflow files"
     );
 
     // Register link provider for prompt files (enables Ctrl+Click navigation)
@@ -583,11 +583,11 @@ export async function activate(context: vscode.ExtensionContext) {
         promptLinkProvider
       )
     );
-    Log.debug("FlightPath: Registered link provider for prompt files");
+    Log.debug("ctrlyoke: Registered link provider for prompt files");
 
     // Initialize completion helpers with config watcher
     initializeCompletionHelpers(context);
-    Log.debug("FlightPath: Initialized completion helpers with config watcher");
+    Log.debug("ctrlyoke: Initialized completion helpers with config watcher");
 
     // Register Language Model Tools (for VS Code Chat integration)
     registerLanguageModelTools(context);
@@ -595,10 +595,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register commands
     registerCommands(context);
 
-    Log.info("FlightPath: Extension activated successfully!");
+    Log.info("ctrlyoke: Extension activated successfully!");
   } catch (error) {
-    Log.error("FlightPath: Failed to activate extension:", error);
-    vscode.window.showErrorMessage(`FlightPath: Activation failed: ${error}`);
+    Log.error("ctrlyoke: Failed to activate extension:", error);
+    vscode.window.showErrorMessage(`ctrlyoke: Activation failed: ${error}`);
   }
 }
 
@@ -609,7 +609,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Open Panel command
   const openPanelCommand = vscode.commands.registerCommand(
-    "flightpath.openPanel",
+    "ctrlyoke.openPanel",
     async () => {
       await workflowOrchestrator.openPanel();
     }
@@ -617,7 +617,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Create Prompt File command
   const createPromptFileCommand = vscode.commands.registerCommand(
-    "flightpath.createPromptFile",
+    "ctrlyoke.createPromptFile",
     async () => {
       await workflowOrchestrator.createPromptFile();
     }
@@ -625,7 +625,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Pause execution command
   const pauseCommand = vscode.commands.registerCommand(
-    "flightpath.pause",
+    "ctrlyoke.pause",
     async () => {
       await workflowOrchestrator.pause();
     }
@@ -633,7 +633,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Resume execution command
   const resumeCommand = vscode.commands.registerCommand(
-    "flightpath.resume",
+    "ctrlyoke.resume",
     async () => {
       await workflowOrchestrator.resume();
     }
@@ -641,7 +641,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Stop execution command
   const stopCommand = vscode.commands.registerCommand(
-    "flightpath.stop",
+    "ctrlyoke.stop",
     async () => {
       await workflowOrchestrator.stop();
     }
@@ -649,15 +649,15 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Create End Condition Script command
   const createEndConditionScriptCommand = vscode.commands.registerCommand(
-    "flightpath.createEndConditionScript",
+    "ctrlyoke.createEndConditionScript",
     async () => {
       await workflowOrchestrator.createEndConditionScript();
     }
   );
 
-  // Import FlightPath Agents command
+  // Import ctrlyoke Agents command
   const importAgentsCommand = vscode.commands.registerCommand(
-    "flightpath.importAgents",
+    "ctrlyoke.importAgents",
     async () => {
       await workflowOrchestrator.importAgents();
     }
@@ -665,7 +665,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Import Workflow Templates command
   const importWorkflowTemplatesCommand = vscode.commands.registerCommand(
-    "flightpath.importWorkflowTemplates",
+    "ctrlyoke.importWorkflowTemplates",
     async () => {
       await workflowOrchestrator.importWorkflowTemplates();
     }
@@ -673,10 +673,10 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // New Workflow command (opens modal in dashboard)
   const newWorkflowCommand = vscode.commands.registerCommand(
-    "flightpath.newWorkflow",
+    "ctrlyoke.newWorkflow",
     async () => {
       // Focus the dashboard panel first
-      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+      await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
       // Then open the modal
       webviewProvider.openNewWorkflowModal();
     }
@@ -684,15 +684,15 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Create New Template command (QuickPick flow)
   const createNewTemplateCommand = vscode.commands.registerCommand(
-    "flightpath.createNewTemplate",
+    "ctrlyoke.createNewTemplate",
     async () => {
       await workflowOrchestrator.createNewTemplate();
     }
   );
 
-  // Queue with FlightPath command (context menu) - appends prompts to end of queue
+  // Queue with ctrlyoke command (context menu) - appends prompts to end of queue
   const queueFromContextCommand = vscode.commands.registerCommand(
-    "flightpath.queueFromContext",
+    "ctrlyoke.queueFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
         vscode.window.showErrorMessage("No file selected");
@@ -703,9 +703,9 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Queue Next With FlightPath command (context menu) - appends prompts after current position
+  // Queue Next With ctrlyoke command (context menu) - appends prompts after current position
   const queueNextFromContextCommand = vscode.commands.registerCommand(
-    "flightpath.queueNextFromContext",
+    "ctrlyoke.queueNextFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
         vscode.window.showErrorMessage("No file selected");
@@ -716,9 +716,9 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Run with FlightPath command (context menu) - runs using current harness
+  // Run with ctrlyoke command (context menu) - runs using current harness
   const runFromContextCommand = vscode.commands.registerCommand(
-    "flightpath.runFromContext",
+    "ctrlyoke.runFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
         vscode.window.showErrorMessage(
@@ -732,15 +732,15 @@ function registerCommands(context: vscode.ExtensionContext) {
         await workflowOrchestrator.executePromptFile(uri.fsPath);
       } catch (error) {
         vscode.window.showErrorMessage(
-          `Failed to execute FlightPath workflow: ${error}`
+          `Failed to execute ctrlyoke workflow: ${error}`
         );
       }
     }
   );
 
-  // Load in FlightPath command (context menu) - loads without executing
+  // Load in ctrlyoke command (context menu) - loads without executing
   const loadFromContextCommand = vscode.commands.registerCommand(
-    "flightpath.loadFromContext",
+    "ctrlyoke.loadFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
         vscode.window.showErrorMessage(
@@ -752,11 +752,11 @@ function registerCommands(context: vscode.ExtensionContext) {
       try {
         await saveIfDirty(uri.fsPath);
         await workflowOrchestrator.loadPromptFile(uri.fsPath);
-        // Open the FlightPath panel to show the loaded file
-        await vscode.commands.executeCommand("flightpath.dashboard.focus");
+        // Open the ctrlyoke panel to show the loaded file
+        await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
       } catch (error) {
         vscode.window.showErrorMessage(
-          `Failed to load FlightPath prompt file: ${error}`
+          `Failed to load ctrlyoke prompt file: ${error}`
         );
       }
     }
@@ -791,7 +791,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Select Prompt File command (for dashboard)
   const selectPromptFileCommand = vscode.commands.registerCommand(
-    "flightpath.selectPromptFile",
+    "ctrlyoke.selectPromptFile",
     async () => {
       const selectedPath = await pickWorkflowFile(
         "Select a prompt file to load"
@@ -805,7 +805,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Append Prompt File command (for dashboard Append button)
   const appendFromDashboardCommand = vscode.commands.registerCommand(
-    "flightpath.appendFromDashboard",
+    "ctrlyoke.appendFromDashboard",
     async () => {
       const selectedPath = await pickWorkflowFile(
         "Select a prompt file to append to queue"
@@ -818,9 +818,9 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Resume Session command - shows list of previous sessions from .flightpath/.queue
+  // Resume Session command - shows list of previous sessions from .ctrlyoke/.queue
   const resumeSessionCommand = vscode.commands.registerCommand(
-    "flightpath.resumeSession",
+    "ctrlyoke.resumeSession",
     async () => {
       await workflowOrchestrator.resumeSession();
     }
@@ -828,7 +828,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Edit Current Prompt File command (for dashboard)
   const editCurrentPromptFileCommand = vscode.commands.registerCommand(
-    "flightpath.editCurrentPromptFile",
+    "ctrlyoke.editCurrentPromptFile",
     async () => {
       await workflowOrchestrator.openCurrentPromptFile();
     }
@@ -836,7 +836,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Run command (for dashboard) - executes currently loaded file
   const runCommand = vscode.commands.registerCommand(
-    "flightpath.run",
+    "ctrlyoke.run",
     async () => {
       // Execute the currently loaded prompt file
       await workflowOrchestrator.executeLoadedPromptFile();
@@ -845,7 +845,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Show Output Panel command
   const showOutputPanelCommand = vscode.commands.registerCommand(
-    "flightpath.showOutputPanel",
+    "ctrlyoke.showOutputPanel",
     () => {
       vscode.commands.executeCommand("workbench.action.output.show");
     }
@@ -853,15 +853,15 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Create Draft Prompt command (for dashboard New button)
   const createDraftPromptCommand = vscode.commands.registerCommand(
-    "flightpath.createDraftPrompt",
+    "ctrlyoke.createDraftPrompt",
     async () => {
       await workflowOrchestrator.createDraftPrompt();
     }
   );
 
-  // Clear Workflow command (keyboard shortcut: Ctrl+Shift+N when FlightPath panel focused)
+  // Clear Workflow command (keyboard shortcut: Ctrl+Shift+N when ctrlyoke panel focused)
   const clearWorkflowCommand = vscode.commands.registerCommand(
-    "flightpath.clearWorkflow",
+    "ctrlyoke.clearWorkflow",
     () => {
       webviewProvider.handleClearWorkflow();
     }
@@ -869,7 +869,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Open File with Selection command (for clickable links in prompt files)
   const openFileWithSelectionCommand = vscode.commands.registerCommand(
-    "flightpath.openFileWithSelection",
+    "ctrlyoke.openFileWithSelection",
     async (args: { uri: string; startLine: number; endLine: number }) => {
       try {
         const fileUri = vscode.Uri.parse(args.uri);
@@ -900,7 +900,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   // stash (built from per-file git URIs). Any failure (e.g. Git extension disabled)
   // falls back to a generated diff document.
   const openGitChangeCommand = vscode.commands.registerCommand(
-    "flightpath.openGitChange",
+    "ctrlyoke.openGitChange",
     async (args: { ref: string; workspaceRoot?: string }) => {
       const workspaceRoot =
         args.workspaceRoot ??
@@ -908,7 +908,7 @@ function registerCommands(context: vscode.ExtensionContext) {
           ? getVsCodeWorkspaceRoot()
           : undefined);
       if (!workspaceRoot) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder open.");
+        vscode.window.showErrorMessage("ctrlyoke: No workspace folder open.");
         return;
       }
 
@@ -1004,7 +1004,7 @@ function registerCommands(context: vscode.ExtensionContext) {
           await openGeneratedDiff();
         } catch (fallbackError) {
           vscode.window.showErrorMessage(
-            `FlightPath: Failed to open git change: ${getErrorMessage(fallbackError)}`
+            `ctrlyoke: Failed to open git change: ${getErrorMessage(fallbackError)}`
           );
         }
       }
@@ -1012,7 +1012,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   );
 
   const addFileToPromptEditorCommand = vscode.commands.registerCommand(
-    "flightpath.addFileToPromptEditor",
+    "ctrlyoke.addFileToPromptEditor",
     async (uri: vscode.Uri) => {
       if (uri) {
         await saveIfDirty(uri.fsPath);
@@ -1022,14 +1022,14 @@ function registerCommands(context: vscode.ExtensionContext) {
   );
 
   const addDirectoryToPromptEditorCommand = vscode.commands.registerCommand(
-    "flightpath.addDirectoryToPromptEditor",
+    "ctrlyoke.addDirectoryToPromptEditor",
     async (uri: vscode.Uri) => {
       await contextMenuReferenceCommands.addDirectoryToPromptEditor(uri);
     }
   );
 
   const addSelectionToPromptEditorCommand = vscode.commands.registerCommand(
-    "flightpath.addSelectionToPromptEditor",
+    "ctrlyoke.addSelectionToPromptEditor",
     async (uri: vscode.Uri) => {
       if (uri) {
         await saveIfDirty(uri.fsPath);
@@ -1039,7 +1039,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   );
 
   const addSymbolToPromptEditorCommand = vscode.commands.registerCommand(
-    "flightpath.addSymbolToPromptEditor",
+    "ctrlyoke.addSymbolToPromptEditor",
     async (uri: vscode.Uri, lineNumber?: number) => {
       if (uri) {
         await saveIfDirty(uri.fsPath);
@@ -1052,7 +1052,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   );
 
   const addScmResourcesToPromptEditorCommand = vscode.commands.registerCommand(
-    "flightpath.addScmResourcesToPromptEditor",
+    "ctrlyoke.addScmResourcesToPromptEditor",
     async (...args: unknown[]) => {
       await contextMenuReferenceCommands.addScmResourcesToPromptEditor(...args);
     }
@@ -1060,7 +1060,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   const addTimelineCommitToPromptEditorCommand =
     vscode.commands.registerCommand(
-      "flightpath.addTimelineCommitToPromptEditor",
+      "ctrlyoke.addTimelineCommitToPromptEditor",
       async (item: unknown) => {
         await contextMenuReferenceCommands.addTimelineCommitToPromptEditor(
           item
@@ -1071,7 +1071,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const searchHistoryCommand = vscode.commands.registerCommand(
     VSCODE_COMMANDS.SEARCH_HISTORY,
     async () => {
-      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+      await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.OPEN_HISTORY_SEARCH,
       });
@@ -1091,23 +1091,23 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Initialize Workspace command (manual reinit for existing users)
   const initWorkspaceCommand = vscode.commands.registerCommand(
-    "flightpath.initWorkspace",
+    "ctrlyoke.initWorkspace",
     async () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) {
         vscode.window.showErrorMessage(
-          "FlightPath: No workspace folder open. Open a folder first."
+          "ctrlyoke: No workspace folder open. Open a folder first."
         );
         return;
       }
       try {
         await WorkspaceInitializer.reinitialize(getVsCodeWorkspaceRoot());
         vscode.window.showInformationMessage(
-          `FlightPath: Workspace initialized — ${PATH_CONSTANTS.FLIGHTPATH_DIR}/ directories and .gitignore are up to date.`
+          `ctrlyoke: Workspace initialized — ${PATH_CONSTANTS.CTRLYOKE_DIR}/ directories and .gitignore are up to date.`
         );
       } catch (err) {
         vscode.window.showErrorMessage(
-          `FlightPath: Workspace initialization failed: ${err}`
+          `ctrlyoke: Workspace initialization failed: ${err}`
         );
       }
     }
@@ -1115,7 +1115,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Server commands
   const enableServerCommand = vscode.commands.registerCommand(
-    "flightpath.enableServer",
+    "ctrlyoke.enableServer",
     async () => {
       if (hostedServer) return;
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
@@ -1130,7 +1130,7 @@ function registerCommands(context: vscode.ExtensionContext) {
           ? { certPath: tlsCfg.certPath, keyPath: tlsCfg.keyPath }
           : undefined;
       try {
-        hostedServer = new FlightPathHostedServer(
+        hostedServer = new CtrlYokeHostedServer(
           hub,
           webviewProvider,
           () => workflowOrchestrator,
@@ -1142,7 +1142,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         );
       } catch (err) {
         vscode.window.showErrorMessage(
-          `FlightPath: Failed to start server — ${err instanceof Error ? err.message : String(err)}`
+          `ctrlyoke: Failed to start server — ${err instanceof Error ? err.message : String(err)}`
         );
         return;
       }
@@ -1152,7 +1152,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       } catch (err) {
         hostedServer = undefined;
         vscode.window.showErrorMessage(
-          `FlightPath: Failed to bind server — ${err instanceof Error ? err.message : String(err)}`
+          `ctrlyoke: Failed to bind server — ${err instanceof Error ? err.message : String(err)}`
         );
         return;
       }
@@ -1167,30 +1167,30 @@ function registerCommands(context: vscode.ExtensionContext) {
         hostedServer?.updateThemeVars(vars)
       );
       webviewProvider.postMessage({ type: MESSAGE_TYPES.CAPTURE_THEME_VARS });
-      Log.info(`FlightPath: Hosted server started at ${url}`);
+      Log.info(`ctrlyoke: Hosted server started at ${url}`);
     }
   );
 
   const disableServerCommand = vscode.commands.registerCommand(
-    "flightpath.disableServer",
+    "ctrlyoke.disableServer",
     () => {
       hostedServer?.dispose();
       hostedServer = undefined;
       webviewProvider.setRunningServerUrl(undefined);
       webviewProvider.setThemeVarsCapturedCallback(undefined);
       webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STOPPED });
-      Log.info("FlightPath: Hosted server stopped");
+      Log.info("ctrlyoke: Hosted server stopped");
     }
   );
 
   const regenerateServerTokenCommand = vscode.commands.registerCommand(
-    "flightpath.regenerateServerToken",
+    "ctrlyoke.regenerateServerToken",
     async () => {
       await new ServerTokenStore(context.secrets).regenerate();
       webviewProvider.postMessage({
         type: MESSAGE_TYPES.SERVER_TOKEN_REGENERATED,
       });
-      Log.info("FlightPath: Server token regenerated");
+      Log.info("ctrlyoke: Server token regenerated");
     }
   );
 
@@ -1237,7 +1237,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Auto-start hosted server if enabled in config (must be after command registration)
   if (configService.get("server")?.enabled) {
-    void vscode.commands.executeCommand("flightpath.enableServer");
+    void vscode.commands.executeCommand("ctrlyoke.enableServer");
   }
 
   // Register development commands (only in dev mode)
@@ -1251,11 +1251,11 @@ function registerCommands(context: vscode.ExtensionContext) {
     });
   }
 
-  Log.debug("FlightPath: Commands registered successfully");
+  Log.debug("ctrlyoke: Commands registered successfully");
 }
 
 export async function deactivate(): Promise<void> {
-  Log.debug("FlightPath: Extension deactivating...");
+  Log.debug("ctrlyoke: Extension deactivating...");
 
   await getPtyProcessManager()?.gracefulShutdownAllAiCliSessions();
 
@@ -1266,5 +1266,5 @@ export async function deactivate(): Promise<void> {
     workflowOrchestrator.dispose();
   }
 
-  Log.debug("FlightPath: Extension deactivated");
+  Log.debug("ctrlyoke: Extension deactivated");
 }

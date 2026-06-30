@@ -56,7 +56,7 @@ const EXCLUDED_DIRS = new Set([
   "vendor",
   ".gradle",
   ".idea",
-  PATH_CONSTANTS.FLIGHTPATH_DIR,
+  PATH_CONSTANTS.CTRLYOKE_DIR,
   ".git",
 ]);
 

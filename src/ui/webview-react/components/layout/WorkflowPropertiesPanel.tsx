@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
-import type { ErrorBehavior } from "@root/types/FlightPathTypes";
+import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -699,7 +699,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         // Initialize from global default if set, otherwise use hardcoded defaults
         const globalDefault =
           useSettingsStore.getState().globalSettings.defaultPreCondition;
-        const defaultPreCondition: import("@root/types/FlightPathTypes").PreCondition =
+        const defaultPreCondition: import("@root/types/CtrlYokeTypes").PreCondition =
           globalDefault ?? {
             script: "",
             onFail: CONDITION_ACTIONS.SKIP_PROMPT,
@@ -725,7 +725,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
         .getState()
         .updateWorkflowProperty(
           "preCondition",
-          updated as import("@root/types/FlightPathTypes").PreCondition
+          updated as import("@root/types/CtrlYokeTypes").PreCondition
         );
       syncWorkflowPropertiesForUndo();
       vscode.postMessage({
@@ -1080,7 +1080,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                 <FormField
                   label="Additional Args"
                   htmlFor="settings-append-args"
-                  description="Extra CLI flags appended to FlightPath's standard argument set. Only applies to CLI harnesses."
+                  description="Extra CLI flags appended to ctrlyoke's standard argument set. Only applies to CLI harnesses."
                   setAsDefaultButton={
                     <SetAsDefaultButton
                       property="additionalArgs"
@@ -1370,7 +1370,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             <div className="flex-1 flex flex-col min-h-0">
               <FormField
                 label="MCP Servers"
-                description="MCP servers to attach to the harness for this workflow. Include FlightPath to enable dynamic queue extension. Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
+                description="MCP servers to attach to the harness for this workflow. Include ctrlyoke to enable dynamic queue extension. Add custom McpServerConfig entries for additional MCP servers. Set to None to explicitly disable MCP injection."
                 className="flex-1 min-h-0"
                 setAsDefaultButton={
                   <SetAsDefaultButton
@@ -1561,7 +1561,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
             <>
               <FormField
                 label="User Hooks"
-                description="User-defined hooks to run alongside FlightPath's completion-detection hooks. Supported events vary by harness."
+                description="User-defined hooks to run alongside ctrlyoke's completion-detection hooks. Supported events vary by harness."
                 setAsDefaultButton={
                   <SetAsDefaultButton
                     property="hooks"

@@ -3,7 +3,7 @@ applyTo: "src/test/**"
 ---
 
 <purpose>
-Mocha/TDD tests for FlightPath core logic and the VS Code extension host. This scope also includes the separate real-harness suite under `src/test/harness/**`; React webview tests live under `src/ui/webview-react/**` and use Vitest instead.
+Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This scope also includes the separate real-harness suite under `src/test/harness/**`; React webview tests live under `src/ui/webview-react/**` and use Vitest instead.
 </purpose>
 
 <entryPoints>
@@ -34,7 +34,7 @@ Mocha/TDD tests for FlightPath core logic and the VS Code extension host. This s
 
 - Tests execute from compiled `out/test`, not directly from `src/test`. Resolve fixture paths from `__dirname` accordingly instead of assuming `process.cwd()`.
 - Use repo-relative resolution only when the code under test truly depends on repository layout (for example compiled CLI paths or workspace-scoped config files).
-- Never hardcode absolute, OS-specific paths (e.g. `C:\dev\FlightPath\...`) in fixtures or assertions — the suite runs on Windows, macOS, and Linux. Use neutral relative forward-slash paths (`src/foo.ts`) or derive real paths via `os.tmpdir()`/`path.join`. Pure parser/string inputs that merely *represent* CLI output and never touch the filesystem may stay realistic.
+- Never hardcode absolute, OS-specific paths (e.g. `C:\dev\ctrlyoke\...`) in fixtures or assertions — the suite runs on Windows, macOS, and Linux. Use neutral relative forward-slash paths (`src/foo.ts`) or derive real paths via `os.tmpdir()`/`path.join`. Pure parser/string inputs that merely *represent* CLI output and never touch the filesystem may stay realistic.
 
 </pathAndFixtureGotchas>
 

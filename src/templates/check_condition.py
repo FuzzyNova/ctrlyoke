@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FlightPath End Condition Script Example
+ctrlyoke End Condition Script Example
 This script checks if tests pass or some condition is met
 """
 import sys

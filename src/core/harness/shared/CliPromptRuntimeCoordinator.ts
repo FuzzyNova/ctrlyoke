@@ -1,5 +1,5 @@
 import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
-import type { PromptStep } from "../../../types/FlightPathTypes";
+import type { PromptStep } from "../../../types/CtrlYokeTypes";
 import type { FailureKind, HarnessId } from "../../../types/DashboardConstants";
 import type { WorkflowWorkingFilePersistence } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";

@@ -23,8 +23,8 @@ function log(
     // captures startup failures before React fully connects.
     if (typeof window !== "undefined") {
       try {
-        window.__flightpathBootstrapLog?.(level, text);
-        if (window.__flightpathBootstrapLog) {
+        window.__ctrlyokeBootstrapLog?.(level, text);
+        if (window.__ctrlyokeBootstrapLog) {
           return;
         }
       } catch {

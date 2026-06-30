@@ -1,8 +1,8 @@
 import type {
-  FlightPathGlobalSettings,
-  PartialFlightPathSettings,
-} from "../types/FlightPathSettings";
-import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../types/FlightPathSettings";
+  CtrlYokeGlobalSettings,
+  PartialCtrlYokeSettings,
+} from "../types/CtrlYokeSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../types/CtrlYokeSettings";
 import {
   SETTING_SCOPES,
   type SettingScope,
@@ -17,7 +17,7 @@ export interface ResolvedSetting<T> {
 }
 
 export interface ConfigBackend {
-  getAll(): PartialFlightPathSettings;
+  getAll(): PartialCtrlYokeSettings;
   set<T>(path: string, value: T): Promise<void>;
 }
 
@@ -50,10 +50,10 @@ function deepMerge<T extends Record<string, unknown>>(
   return result;
 }
 
-export class FlightPathConfigService {
+export class CtrlYokeConfigService {
   private workspaceBackend?: ConfigBackend;
   private userBackend?: ConfigBackend;
-  private cliOverlay?: PartialFlightPathSettings;
+  private cliOverlay?: PartialCtrlYokeSettings;
   private listeners: Set<() => void> = new Set();
 
   setWorkspaceBackend(backend: ConfigBackend): void {
@@ -64,14 +64,14 @@ export class FlightPathConfigService {
     this.userBackend = backend;
   }
 
-  setCliOverlay(overlay: PartialFlightPathSettings): void {
+  setCliOverlay(overlay: PartialCtrlYokeSettings): void {
     this.cliOverlay = overlay;
   }
 
   /** Get a top-level setting with source tracking */
-  resolve<K extends keyof FlightPathGlobalSettings>(
+  resolve<K extends keyof CtrlYokeGlobalSettings>(
     key: K
-  ): ResolvedSetting<FlightPathGlobalSettings[K]> {
+  ): ResolvedSetting<CtrlYokeGlobalSettings[K]> {
     if (this.cliOverlay && key in this.cliOverlay) {
       return { value: this.getAll()[key], source: "cli" };
     }
@@ -85,9 +85,9 @@ export class FlightPathConfigService {
   }
 
   /** Get a top-level setting value (no source info) */
-  get<K extends keyof FlightPathGlobalSettings>(
+  get<K extends keyof CtrlYokeGlobalSettings>(
     key: K
-  ): FlightPathGlobalSettings[K] {
+  ): CtrlYokeGlobalSettings[K] {
     return this.getAll()[key];
   }
 
@@ -109,30 +109,30 @@ export class FlightPathConfigService {
   }
 
   /** Get all settings merged from all backends */
-  getAll(): FlightPathGlobalSettings {
-    let result: FlightPathGlobalSettings = {
-      ...FLIGHTPATH_SETTINGS_DEFAULTS,
-    } as FlightPathGlobalSettings;
+  getAll(): CtrlYokeGlobalSettings {
+    let result: CtrlYokeGlobalSettings = {
+      ...CTRLYOKE_SETTINGS_DEFAULTS,
+    } as CtrlYokeGlobalSettings;
 
     if (this.userBackend) {
       result = deepMerge(
         result as unknown as Record<string, unknown>,
         this.userBackend.getAll() as unknown as Record<string, unknown>
-      ) as unknown as FlightPathGlobalSettings;
+      ) as unknown as CtrlYokeGlobalSettings;
     }
 
     if (this.workspaceBackend) {
       result = deepMerge(
         result as unknown as Record<string, unknown>,
         this.workspaceBackend.getAll() as unknown as Record<string, unknown>
-      ) as unknown as FlightPathGlobalSettings;
+      ) as unknown as CtrlYokeGlobalSettings;
     }
 
     if (this.cliOverlay) {
       result = deepMerge(
         result as unknown as Record<string, unknown>,
         this.cliOverlay as unknown as Record<string, unknown>
-      ) as unknown as FlightPathGlobalSettings;
+      ) as unknown as CtrlYokeGlobalSettings;
     }
 
     return result;
@@ -211,4 +211,4 @@ export class FlightPathConfigService {
   }
 }
 
-export const configService = new FlightPathConfigService();
+export const configService = new CtrlYokeConfigService();

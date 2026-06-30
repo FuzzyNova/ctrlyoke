@@ -8,7 +8,7 @@ import {
   WorkflowStep,
   ScriptStep,
   isScriptStep,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
@@ -29,7 +29,7 @@ export class PromptFileParser {
   private loadSchemas(): void {
     try {
       // The bundled extension (esbuild, __dirname === out/) gets schemas copied to
-      // out/schemas/. The tsc-compiled test output (__dirname === out/flightpath/)
+      // out/schemas/. The tsc-compiled test output (__dirname === out/ctrlyoke/)
       // has no such copy, so fall back to the sibling out/schemas/ directory.
       const candidatePaths = [
         path.join(__dirname, "schemas", "prompt-schema.json"),
@@ -57,9 +57,9 @@ export class PromptFileParser {
     } catch (error) {
       Log.error("Failed to load JSON schema:", error);
       if (this.platform) {
-        this.platform.error("FlightPath: Failed to load validation schema");
+        this.platform.error("ctrlyoke: Failed to load validation schema");
       } else {
-        Log.error("FlightPath: Failed to load validation schema");
+        Log.error("ctrlyoke: Failed to load validation schema");
       }
     }
   }
@@ -116,11 +116,11 @@ export class PromptFileParser {
       Log.error(`Failed to parse file ${filePath}:`, error);
       if (this.platform) {
         this.platform.error(
-          `FlightPath: Failed to parse ${path.basename(filePath)}: ${error}`
+          `ctrlyoke: Failed to parse ${path.basename(filePath)}: ${error}`
         );
       } else {
         Log.error(
-          `FlightPath: Failed to parse ${path.basename(filePath)}: ${error}`
+          `ctrlyoke: Failed to parse ${path.basename(filePath)}: ${error}`
         );
       }
       return null;
@@ -155,11 +155,11 @@ export class PromptFileParser {
       Log.error(`Failed to read markdown prompt file ${filePath}:`, error);
       if (this.platform) {
         this.platform.error(
-          `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
+          `ctrlyoke: Failed to read ${path.basename(filePath)}: ${error}`
         );
       } else {
         Log.error(
-          `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
+          `ctrlyoke: Failed to read ${path.basename(filePath)}: ${error}`
         );
       }
       return null;
@@ -202,7 +202,7 @@ export class PromptFileParser {
           `Prompt file reference not found, using as literal text: "${trimmedPath}"`
         );
         this.platform?.warn(
-          `FlightPath: Could not find prompt file "${trimmedPath}". Using as literal prompt text.`
+          `ctrlyoke: Could not find prompt file "${trimmedPath}". Using as literal prompt text.`
         );
       }
 
@@ -233,7 +233,7 @@ export class PromptFileParser {
    * 1. Absolute paths
    * 2. Relative to prompt file's directory
    * 3. Relative to workspace root
-   * 4. Relative to .flightpath directory
+   * 4. Relative to .ctrlyoke directory
    *
    * @param filePath The file path to resolve
    * @param promptFilePath Path to the prompt file (for relative resolution)
@@ -266,14 +266,14 @@ export class PromptFileParser {
         return relativeToWorkspace;
       }
 
-      // Try in .flightpath directory
-      const relativeToFlightpath = path.resolve(
+      // Try in .ctrlyoke directory
+      const relativeToCtrlYoke = path.resolve(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         filePath
       );
-      if (await this.fileExists(relativeToFlightpath)) {
-        return relativeToFlightpath;
+      if (await this.fileExists(relativeToCtrlYoke)) {
+        return relativeToCtrlYoke;
       }
     }
 
@@ -471,7 +471,7 @@ export class PromptFileParser {
   async discoverPromptFiles(workspaceFolderPath: string): Promise<string[]> {
     const promptsDirPath = path.join(
       workspaceFolderPath,
-      PATH_CONSTANTS.FLIGHTPATH_DIR
+      PATH_CONSTANTS.CTRLYOKE_DIR
     );
 
     try {
@@ -479,7 +479,7 @@ export class PromptFileParser {
       return files;
     } catch (error) {
       Log.debug(
-        `FlightPath: Prompts directory ${promptsDirPath} not found or inaccessible`
+        `ctrlyoke: Prompts directory ${promptsDirPath} not found or inaccessible`
       );
       return [];
     }

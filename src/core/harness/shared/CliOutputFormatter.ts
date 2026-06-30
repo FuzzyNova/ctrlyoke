@@ -19,7 +19,7 @@ import { normalizeCliEvents } from "../../../utils/CliEventNormalizer";
 
 /**
  * Dashboard-ready output format.
- * Optimized structure for rendering in the FlightPath dashboard webview.
+ * Optimized structure for rendering in the ctrlyoke dashboard webview.
  * Events are preserved in chronological order.
  */
 export interface DashboardOutput {
@@ -119,7 +119,7 @@ export class CliOutputFormatter {
 
   /**
    * Format output as structured data for dashboard webview.
-   * Converts UniversalCliOutput to a format optimized for the FlightPath dashboard.
+   * Converts UniversalCliOutput to a format optimized for the ctrlyoke dashboard.
    * Events are passed through in chronological order.
    *
    * @param output - The universal CLI output to format

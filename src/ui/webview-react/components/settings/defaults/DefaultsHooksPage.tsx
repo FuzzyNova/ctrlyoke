@@ -3,7 +3,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import type { UserHookConfig } from "@root/types/FlightPathTypes";
+import type { UserHookConfig } from "@root/types/CtrlYokeTypes";
 import { HooksEditor } from "../../editor/HooksEditor";
 import { SettingInputRow } from "../../shared/SettingInputRow";
 

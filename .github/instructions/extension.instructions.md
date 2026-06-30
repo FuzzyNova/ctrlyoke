@@ -19,7 +19,7 @@ Keep them focused on startup/shutdown wiring, cross-subsystem handoff, and proce
 3. Workspace bootstrap happens before orchestrator creation:
    - initialized workspace: fire-and-forget `WorkspaceInitializer.initializeIfNeeded()` and `TempFileManager.cleanupOrphanedFiles()`
    - uninitialized workspace: capture `pendingInitWorkspaceRoot` only
-4. Create/register `FlightPathWebviewProvider` **before** PTY/orchestrator setup.
+4. Create/register `CtrlYokeWebviewProvider` **before** PTY/orchestrator setup.
 5. Initialize `PtyProcessManager` with the panel postMessage first, then create `WorkflowOrchestrator`.
 6. If workspace init is pending, call `workflowOrchestrator.setWorkspaceInitPending(...)` **before** `initialize()`.
 7. After both objects exist, wire cross-references:
@@ -27,7 +27,7 @@ Keep them focused on startup/shutdown wiring, cross-subsystem handoff, and proce
    - `webviewProvider.setHub(...)`
    - `setPtyPostMessage(hub.postMessage)` to upgrade PTY fan-out from panel-only to all dashboard clients
 8. Register `NotificationManager` as a hub client and share the orchestrator's `OutputHistoryManager` with the webview provider.
-9. Register `FlightPathMcpServerProvider` only when `vscode.lm.registerMcpServerDefinitionProvider` exists. This provider is only for user-defined MCP servers in `copilot-chat`; it does **not** represent the built-in `flightpath` tools.
+9. Register `CtrlYokeMcpServerProvider` only when `vscode.lm.registerMcpServerDefinitionProvider` exists. This provider is only for user-defined MCP servers in `copilot-chat`; it does **not** represent the built-in `ctrlyoke` tools.
 10. Call `workflowOrchestrator.initialize()` fire-and-forget. The webview is allowed to resolve before harness detection finishes.
 11. Only after core wiring: theme listener, completion/link providers, `initializeCompletionHelpers(context)`, LM tools, then command registration.
 
@@ -65,22 +65,22 @@ Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-ki
 
 - Never import `vscode` or extension-only helpers here.
 - Keep the local path constants in sync with `ConfigurationUtils.PATH_CONSTANTS`; they are duplicated on purpose to avoid a VS Code dependency.
-- Use file logging only (`FLIGHTPATH_DIAGNOSTIC_LOGS=true` or `NODE_ENV=development`). Do not write operational logs to stdout/stderr because stdout is the MCP transport and many TUIs capture stderr.
-- The first four tools mirror the LM tools from `extension.ts`; `flightpath_global_status` and `flightpath_submit_commit_message` are MCP-only.
+- Use file logging only (`CTRLYOKE_DIAGNOSTIC_LOGS=true` or `NODE_ENV=development`). Do not write operational logs to stdout/stderr because stdout is the MCP transport and many TUIs capture stderr.
+- The first four tools mirror the LM tools from `extension.ts`; `ctrlyoke_global_status` and `ctrlyoke_submit_commit_message` are MCP-only.
 - Active working file resolution is a two-step contract:
-  1. prefer `FLIGHTPATH_WORKING_FILE` so a harness session targets its exact workflow
-  2. otherwise scan `.flightpath/.queue/` and prefer running / recent files as a fallback
+  1. prefer `CTRLYOKE_WORKING_FILE` so a harness session targets its exact workflow
+  2. otherwise scan `.ctrlyoke/.queue/` and prefer running / recent files as a fallback
 - Queue appends are protected twice on purpose:
   - `operationQueue` serializes append requests within this process
   - `withFileLock(...)` protects the working file across processes
-- Append validation is best-effort against `.flightpath/capabilities.json`; that file is produced by the VS Code-side settings sync and may be absent early in workspace setup.
-- `flightpath_submit_commit_message` writes to `FLIGHTPATH_COMMIT_OUTPUT` when present; this is the structured capture path used by commit-message generation.
+- Append validation is best-effort against `.ctrlyoke/capabilities.json`; that file is produced by the VS Code-side settings sync and may be absent early in workspace setup.
+- `ctrlyoke_submit_commit_message` writes to `CTRLYOKE_COMMIT_OUTPUT` when present; this is the structured capture path used by commit-message generation.
 </mcpServer>
 
 <relatedFiles>
-- `src/ui/FlightPathWebviewProvider.ts` — panel shell and outbound UI transport
-- `src/ui/FlightPathMcpServerProvider.ts` — dynamic MCP definitions for `copilot-chat`
-- `src/flightpath/WorkflowOrchestrator.ts` — main lifecycle owner created by `activate()`
-- `src/flightpath/QueueOperations.ts` — shared queue/read/append logic mirrored by LM tools
+- `src/ui/CtrlYokeWebviewProvider.ts` — panel shell and outbound UI transport
+- `src/ui/CtrlYokeMcpServerProvider.ts` — dynamic MCP definitions for `copilot-chat`
+- `src/core/WorkflowOrchestrator.ts` — main lifecycle owner created by `activate()`
+- `src/core/QueueOperations.ts` — shared queue/read/append logic mirrored by LM tools
 - `src/scm/ScmCommitCommand.ts` — SCM command implementation registered from `extension.ts`
 </relatedFiles>

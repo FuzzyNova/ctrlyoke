@@ -20,11 +20,11 @@ import type {
   McpServerConfig,
   PreCondition,
   UserHookConfig,
-} from "./FlightPathTypes";
+} from "./CtrlYokeTypes";
 
 type CliAdditionalArgsHarnessId = Exclude<HarnessId, "copilot-chat">;
 
-export interface FlightPathGlobalSettings {
+export interface CtrlYokeGlobalSettings {
   // General (format/template/behavior toggles)
   general: {
     defaultFormat: "yaml" | "json";
@@ -144,7 +144,7 @@ export interface FlightPathGlobalSettings {
   };
 
   // Notifications
-  notifications: FlightPathNotificationSettings;
+  notifications: CtrlYokeNotificationSettings;
 
   // Commit message generation
   commit: {
@@ -157,7 +157,7 @@ export interface FlightPathGlobalSettings {
   enableDiagnosticLogs: boolean;
 }
 
-export interface FlightPathNotificationSettings {
+export interface CtrlYokeNotificationSettings {
   vscode: {
     enabled: boolean;
   };
@@ -193,19 +193,19 @@ export interface TerminalShortcut {
   sequence: string;
 }
 
-/** Partial version of FlightPathGlobalSettings for config file contents (3-level deep partial) */
-export type PartialFlightPathSettings = {
-  [K in keyof FlightPathGlobalSettings]?: FlightPathGlobalSettings[K] extends object
+/** Partial version of CtrlYokeGlobalSettings for config file contents (3-level deep partial) */
+export type PartialCtrlYokeSettings = {
+  [K in keyof CtrlYokeGlobalSettings]?: CtrlYokeGlobalSettings[K] extends object
     ? {
-        [J in keyof FlightPathGlobalSettings[K]]?: FlightPathGlobalSettings[K][J] extends object
-          ? Partial<FlightPathGlobalSettings[K][J]>
-          : FlightPathGlobalSettings[K][J];
+        [J in keyof CtrlYokeGlobalSettings[K]]?: CtrlYokeGlobalSettings[K][J] extends object
+          ? Partial<CtrlYokeGlobalSettings[K][J]>
+          : CtrlYokeGlobalSettings[K][J];
       }
-    : FlightPathGlobalSettings[K];
+    : CtrlYokeGlobalSettings[K];
 };
 
 /** Default values for all settings */
-export const FLIGHTPATH_SETTINGS_DEFAULTS: FlightPathGlobalSettings = {
+export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
   general: {
     defaultFormat: "yaml",
     defaultTemplate: "blank",

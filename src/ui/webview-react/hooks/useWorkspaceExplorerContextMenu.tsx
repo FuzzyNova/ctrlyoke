@@ -52,7 +52,7 @@ export function useWorkspaceExplorerContextMenu({
     null
   );
 
-  const handleAddToFlightPath = useCallback((entry: WorkspaceEntry) => {
+  const handleAddToCtrlYoke = useCallback((entry: WorkspaceEntry) => {
     const ref =
       entry.kind === "directory"
         ? buildDirRef(entry.path)
@@ -101,8 +101,8 @@ export function useWorkspaceExplorerContextMenu({
     (x: number, y: number, entry: WorkspaceEntry) => {
       const addLabel =
         entry.kind === "file"
-          ? "Add File to FlightPath"
-          : "Add Directory to FlightPath";
+          ? "Add File to ctrlyoke"
+          : "Add Directory to ctrlyoke";
 
       setContextMenu({
         x,
@@ -147,7 +147,7 @@ export function useWorkspaceExplorerContextMenu({
             icon: "codicon-add",
             disabled: false,
             onClick: () => {
-              handleAddToFlightPath(entry);
+              handleAddToCtrlYoke(entry);
             },
           },
           { type: "divider" },
@@ -167,7 +167,7 @@ export function useWorkspaceExplorerContextMenu({
         ],
       });
     },
-    [clipboard, handleAddToFlightPath, handleDelete, handlePaste]
+    [clipboard, handleAddToCtrlYoke, handleDelete, handlePaste]
   );
 
   const explorerContextMenuPortal = contextMenu ? (

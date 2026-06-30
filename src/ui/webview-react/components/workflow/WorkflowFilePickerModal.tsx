@@ -175,7 +175,7 @@ export const WorkflowFilePickerModal: React.FC<
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="workflow, prompt, .flightpath"
+            placeholder="workflow, prompt, .ctrlyoke"
             className="w-full rounded border border-input-border bg-input-bg px-3 py-2 text-input-fg placeholder:text-input-placeholder focus:outline-none focus:ring-1 focus:ring-focus-border"
           />
         </div>

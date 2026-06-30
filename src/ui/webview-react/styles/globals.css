@@ -1,5 +1,5 @@
 /* ============================================================================
-   FlightPath React Dashboard - Global Styles
+   ctrlyoke React Dashboard - Global Styles
    ============================================================================
    This file provides:
    1. Tailwind CSS imports
@@ -302,7 +302,7 @@ button .codicon {
 /* ============================================================================
    Custom Icon Styles
    ============================================================================
-   FlightPath-specific icons use CSS masks for VS Code theme compatibility
+   ctrlyoke-specific icons use CSS masks for VS Code theme compatibility
    ============================================================================ */
 .custom-icon {
   display: inline-block;

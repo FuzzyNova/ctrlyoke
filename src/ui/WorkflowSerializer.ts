@@ -16,11 +16,11 @@ import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { readJsonFile } from "../utils/FileSystemUtils";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import type { TemplateManager } from "../flightpath/TemplateManager";
-import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
-import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
+import type { TemplateManager } from "../core/TemplateManager";
+import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import type { PostMessageFn } from "./WebviewSettingsSync";
-import type { WorkingFile } from "../types/FlightPathTypes";
+import type { WorkingFile } from "../types/CtrlYokeTypes";
 
 /**
  * WorkflowSerializer
@@ -80,10 +80,10 @@ export class WorkflowSerializer {
     const workflowsDir = vscode.workspace.workspaceFolders?.length
       ? path.join(
           getVsCodeWorkspaceRoot(),
-          PATH_CONSTANTS.FLIGHTPATH_DIR,
+          PATH_CONSTANTS.CTRLYOKE_DIR,
           PATH_CONSTANTS.WORKFLOWS_DIR
         )
-      : path.join(PATH_CONSTANTS.FLIGHTPATH_DIR, PATH_CONSTANTS.WORKFLOWS_DIR);
+      : path.join(PATH_CONSTANTS.CTRLYOKE_DIR, PATH_CONSTANTS.WORKFLOWS_DIR);
 
     try {
       const rawContent = await fs.readFile(workingFilePath, "utf-8");
@@ -97,7 +97,7 @@ export class WorkflowSerializer {
           workingFile.workflowName ||
           path
             .basename(workingFilePath)
-            .replace(/\.flightpath\.(ya?ml|json)$/i, "");
+            .replace(/\.ctrlyoke\.(ya?ml|json)$/i, "");
         const name =
           rawName
             .toLowerCase()
@@ -295,9 +295,9 @@ export class WorkflowSerializer {
 
   async handleExportOutput(content: string, fileName?: string): Promise<void> {
     try {
-      let baseName = fileName || "flightpath-output";
+      let baseName = fileName || "ctrlyoke-output";
       baseName = baseName
-        .replace(/\.flightpath\.(ya?ml|json)$/i, "")
+        .replace(/\.ctrlyoke\.(ya?ml|json)$/i, "")
         .replace(/\.prompt\.md$/i, "");
       if (!baseName.endsWith(".md")) {
         baseName += ".md";
@@ -310,7 +310,7 @@ export class WorkflowSerializer {
       if (workspaceRoot) {
         const outputDir = path.join(
           workspaceRoot,
-          PATH_CONSTANTS.FLIGHTPATH_DIR,
+          PATH_CONSTANTS.CTRLYOKE_DIR,
           "output"
         );
         await fs.mkdir(outputDir, { recursive: true });
@@ -356,7 +356,7 @@ export class WorkflowSerializer {
     try {
       const templates = await this.templateManager.getAvailableTemplates();
       const workflowsDir = path.join(
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.WORKFLOWS_DIR
       );
       const defaultTemplateId = ConfigurationUtils.getDefaultWorkflowTemplate();
@@ -442,7 +442,7 @@ export class WorkflowSerializer {
           if (manager) {
             await manager.loadPromptFile(fp);
             if (runAfter) {
-              vscode.commands.executeCommand("flightpath.run");
+              vscode.commands.executeCommand("ctrlyoke.run");
             }
           }
         });
@@ -458,7 +458,7 @@ export class WorkflowSerializer {
   }
 
   handleCreateNewTemplate(): void {
-    vscode.commands.executeCommand("flightpath.createNewTemplate");
+    vscode.commands.executeCommand("ctrlyoke.createNewTemplate");
   }
 
   async handleBrowseTemplateFile(
@@ -555,7 +555,7 @@ export class WorkflowSerializer {
 
       const queueDir = path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR
       );
 
@@ -701,7 +701,7 @@ export class WorkflowSerializer {
   ): Promise<boolean> {
     const pm = postMessage ?? this.postMessage;
     const confirm = await vscode.window.showWarningMessage(
-      "Delete all workflow history files from .flightpath/.queue?",
+      "Delete all workflow history files from .ctrlyoke/.queue?",
       { modal: true },
       "Delete All"
     );
@@ -720,12 +720,12 @@ export class WorkflowSerializer {
 
       const queueDir = path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR
       );
       const historyDir = path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.HISTORY_DIR
       );
 
@@ -781,12 +781,12 @@ export class WorkflowSerializer {
 
       const queueDir = path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR
       );
       const historyBaseDir = path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.HISTORY_DIR
       );
 

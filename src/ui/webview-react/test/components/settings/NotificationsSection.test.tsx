@@ -4,12 +4,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { NotificationsSection } from "@components/settings/NotificationsSection";
 import { useUiStore } from "@store/uiStore";
 import { SETTING_SCOPES } from "@/types/messages";
-import { FLIGHTPATH_SETTINGS_DEFAULTS } from "@root/types/FlightPathSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
 function createSettings(): FullGlobalSettings {
   return {
-    settings: FLIGHTPATH_SETTINGS_DEFAULTS,
+    settings: CTRLYOKE_SETTINGS_DEFAULTS,
     sources: {},
   };
 }

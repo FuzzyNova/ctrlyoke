@@ -2,14 +2,14 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
-import { HistorySearchService } from "../../flightpath/orchestration/HistorySearchService";
-import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
+import { HistorySearchService } from "../../core/orchestration/HistorySearchService";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   CLI_EVENT_TYPES,
   EXECUTION_STATES,
   FINAL_STEP_PHASES,
 } from "../../types/DashboardConstants";
-import type { WorkingFile } from "../../types/FlightPathTypes";
+import type { WorkingFile } from "../../types/CtrlYokeTypes";
 import type { CliEvent } from "../../types/WebviewMessageTypes";
 import {
   TIMELINE_EVENT_TYPES,
@@ -31,7 +31,7 @@ suite("HistorySearchService", () => {
     await fs.mkdir(
       path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR
       ),
       { recursive: true }
@@ -39,7 +39,7 @@ suite("HistorySearchService", () => {
     await fs.mkdir(
       path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.HISTORY_DIR
       ),
       { recursive: true }
@@ -54,7 +54,7 @@ suite("HistorySearchService", () => {
     const workflowId = "demo-2026-06-09T17-00-00";
     await writeWorkingFile(workflowId, {
       workflowName: "Demo Workflow",
-      originalFile: "C:\\dev\\FlightPath\\demo.flightpath.yaml",
+      originalFile: "C:\\dev\\ctrlyoke\\demo.flightpath.yaml",
     });
 
     await createRun(workflowId, 1, 1000, [
@@ -92,7 +92,7 @@ suite("HistorySearchService", () => {
       results[0]?.workflowFilePath,
       path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR,
         `${workflowId}.flightpath.json`
       )
@@ -253,7 +253,7 @@ suite("HistorySearchService", () => {
 
     const documentsPath = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.SEARCH_INDEX_DIR,
       "documents.jsonl"
     );
@@ -291,7 +291,7 @@ suite("HistorySearchService", () => {
     await fs.writeFile(
       path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR,
         `${workflowId}.flightpath.json`
       ),
@@ -308,7 +308,7 @@ suite("HistorySearchService", () => {
   ): Promise<string> {
     const historyDir = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.HISTORY_DIR,
       workflowId
     );

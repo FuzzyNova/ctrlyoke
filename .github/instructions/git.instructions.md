@@ -21,14 +21,14 @@ Do not turn this folder into a second workspace-viewer git service. The hosted w
 
 **Execution model**
 
-- Commit generation must reuse normal FlightPath harness plumbing: `CliAdapter` + `IntegrationFactory` + `WorkflowInstance`.
+- Commit generation must reuse normal ctrlyoke harness plumbing: `CliAdapter` + `IntegrationFactory` + `WorkflowInstance`.
 - This run is intentionally headless and one-shot: `resumeSession: false`, quiet mode, and explicit suppression of inherited `mcpServers`, `agent`, `skills`, `additionalArgs`, and `hooks`.
 - Resolve harness/model/prompt through the commit-specific `ConfigurationUtils` getters, with fallback to the normal harness when no commit harness override is set.
 
 **Capture flow**
 
-- Preferred capture path is the `flightpath_submit_commit_message` MCP tool exposed by `src/mcp-server.ts`.
-- The temporary capture file lives under `.flightpath/temp/` in the workspace and should remain best-effort cleanup only.
+- Preferred capture path is the `ctrlyoke_submit_commit_message` MCP tool exposed by `src/mcp-server.ts`.
+- The temporary capture file lives under `.ctrlyoke/temp/` in the workspace and should remain best-effort cleanup only.
 - If MCP capture is unavailable or unused, fall back to the executed prompt step's `_runtime.responseText` and keep sanitization narrowly focused on removing wrapper noise, not rewriting the message.
 
 **Cross-file contracts**
@@ -41,7 +41,7 @@ Do not turn this folder into a second workspace-viewer git service. The hosted w
 <commitMessageGenerationTracker>
 - This is a passive in-memory singleton, not persistence and not history.
 - Writers currently live outside `src/git/`: `ScmCommitCommand` and `HostedWorkspaceViewerService`.
-- Readers/subscribers include `FlightPathWebviewProvider` and `WebviewSettingsSync`, and the record shape is mirrored in webview message types. Change the interface, producers, and consumers together.
+- Readers/subscribers include `CtrlYokeWebviewProvider` and `WebviewSettingsSync`, and the record shape is mirrored in webview message types. Change the interface, producers, and consumers together.
 </commitMessageGenerationTracker>
 
 <gitCommitter>

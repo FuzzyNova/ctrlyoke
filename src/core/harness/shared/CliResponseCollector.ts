@@ -3,7 +3,7 @@ import type {
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
 import { FAILURE_KINDS } from "../../../types/DashboardConstants";
-import type { FailureKind } from "../../../types/FlightPathTypes";
+import type { FailureKind } from "../../../types/CtrlYokeTypes";
 import { Log } from "../../../utils/Log";
 import { sanitizeTerminalOutput } from "../../../utils/TerminalOutputSanitizer";
 import { CliOutputFormatter } from "./CliOutputFormatter";

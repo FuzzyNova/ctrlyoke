@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
 /**
- * FlightPath Copilot CLI Hook Handler
+ * ctrlyoke Copilot CLI Hook Handler
  *
  * This script is executed by Copilot CLI when hook events occur.
  * It receives hook input JSON via stdin and writes a notification file
- * that FlightPath monitors for session discovery and completion detection.
+ * that ctrlyoke monitors for session discovery and completion detection.
  *
- * Notification file format mirrors flightpath-claude-hook.js for consistency:
+ * Notification file format mirrors ctrlyoke-claude-hook.js for consistency:
  * - SessionStart: {sessionId}-start.json  → { hookEvent: "SessionStart", sessionId, status: "started" }
  * - SessionEnd:   {sessionId}-stop.json   → { hookEvent: "Stop", sessionId, status: "completed" }
  *
  * Using the same format as Claude's hook allows NotificationMonitorBase to share
  * all monitoring logic (waitForSessionStart, monitorForCompletion, cleanupNotificationFiles).
  *
- * Usage (configured by FlightPath via .github/hooks/*.json):
+ * Usage (configured by ctrlyoke via .github/hooks/*.json):
  * {
  *   "version": 1,
  *   "hooks": {
@@ -27,7 +27,7 @@
  * {
  *   "sessionId": "970deee9-5760-4843-a2a3-8067d1dc79ea",
  *   "timestamp": 1772552070055,
- *   "cwd": "C:\\dev\\FlightPath",
+ *   "cwd": "C:\\dev\\ctrlyoke",
  *   "source": "new",          // sessionStart only
  *   "initialPrompt": "...",   // sessionStart only
  *   "reason": "complete"      // agentStop only
@@ -37,7 +37,7 @@
  * - argv[2]: Notification directory
  * - argv[3]: Hook type (sessionStart | agentStop)
  *
- * Debug logging: All hook data logged to <workspace>/.flightpath/logs/flightpath-copilot-hook-debug.log
+ * Debug logging: All hook data logged to <workspace>/.ctrlyoke/logs/ctrlyoke-copilot-hook-debug.log
  */
 
 const fs = require("fs");
@@ -50,10 +50,10 @@ const {
   ensureNotifyDir,
   buildNotifyFilePath,
   buildErrorNotifyFilePath,
-} = require("./flightpath-hook-utils");
+} = require("./ctrlyoke-hook-utils");
 
-const SCRIPT_NAME = "flightpath-copilot-hook";
-const SCRIPT_PREFIX = "FlightPath Copilot Hook";
+const SCRIPT_NAME = "ctrlyoke-copilot-hook";
+const SCRIPT_PREFIX = "ctrlyoke Copilot Hook";
 
 function main() {
   const notifyDir = process.argv[2];
@@ -139,8 +139,8 @@ function main() {
     ) {
       ensureNotifyDir(notifyDir, debugLog);
 
-      // Use same file naming convention as flightpath-claude-hook.js:
-      //   sessionStart → {runId|sessionId}-start.json  (runId when FLIGHTPATH_RUN_ID set)
+      // Use same file naming convention as ctrlyoke-claude-hook.js:
+      //   sessionStart → {runId|sessionId}-start.json  (runId when CTRLYOKE_RUN_ID set)
       //   agentStop    → {sessionId}-stop.json
       //   errorOccurred → {sessionId}-error.json
       const notifyFile =

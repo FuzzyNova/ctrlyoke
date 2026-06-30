@@ -10,7 +10,7 @@
  * - Retry and status types (RetryState, StatusMessage, etc.)
  *
  * Used by:
- * - Extension: src/ui/FlightPathWebviewProvider.ts
+ * - Extension: src/ui/CtrlYokeWebviewProvider.ts
  * - React webview: src/ui/webview-react/store/workflowStore.ts
  * - React webview: src/ui/webview-react/components/**
  */
@@ -42,11 +42,11 @@ import type {
   ToolPermissionsOverride,
   UserHookConfig,
   WorkflowStep,
-} from "./FlightPathTypes";
+} from "./CtrlYokeTypes";
 import type {
-  FlightPathGlobalSettings,
+  CtrlYokeGlobalSettings,
   TerminalSettings,
-} from "./FlightPathSettings";
+} from "./CtrlYokeSettings";
 import type {
   CliEvent as CliOutputEvent,
   UniversalCliOutput,
@@ -94,7 +94,7 @@ export type {
   WorkflowStep,
   ScriptStep,
   PreCondition,
-} from "./FlightPathTypes";
+} from "./CtrlYokeTypes";
 
 // ============================================================================
 // MESSAGE TYPE HELPERS - Extract literal types from MESSAGE_TYPES constants
@@ -257,7 +257,7 @@ export interface EndConditionConfig {
 
 /**
  * Prompt item shape (used in workflowStore and throughout webview)
- * Matches FlightPathTypes.PromptStep
+ * Matches CtrlYokeTypes.PromptStep
  */
 export interface PromptStep {
   /** Step type discriminant — defaults to "prompt" when absent */
@@ -879,11 +879,11 @@ export interface GlobalSettingsUpdatedMessage {
 export type SettingSource = SettingScope;
 
 export interface FullGlobalSettings {
-  settings: FlightPathGlobalSettings;
+  settings: CtrlYokeGlobalSettings;
   sources: Record<string, SettingSource>;
 }
 
-export type { TerminalSettings } from "./FlightPathSettings";
+export type { TerminalSettings } from "./CtrlYokeSettings";
 
 /** Webview → Extension: request full settings payload */
 export interface GlobalSettingsLoadRequestMessage {
@@ -1326,7 +1326,7 @@ export interface McpRegistrySearchResultMessage {
 
 /** A single location where an agent or skill file exists on disk */
 export interface ManagedFileLocation {
-  /** The target ID for this location (harness ID or special dir like "flightpath", "agents", "vscode") */
+  /** The target ID for this location (harness ID or special dir like "ctrlyoke", "agents", "vscode") */
   harnessId: AnyTargetId;
   /** Whether this copy lives in a workspace dir or a user-level (~/) dir */
   scope: SettingWriteScope;
@@ -1374,9 +1374,9 @@ export interface ExportToHarnessMessage {
   scope: SettingWriteScope;
 }
 
-/** Webview → Extension: copy a file into .flightpath/agents or .flightpath/skills */
-export interface ImportToFlightPathMessage {
-  type: typeof MESSAGE_TYPES.IMPORT_TO_FLIGHTPATH;
+/** Webview → Extension: copy a file into .ctrlyoke/agents or .ctrlyoke/skills */
+export interface ImportToCtrlYokeMessage {
+  type: typeof MESSAGE_TYPES.IMPORT_TO_CTRLYOKE;
   sourcePath: string;
   fileType: "agent" | "skill";
   overwrite?: boolean;

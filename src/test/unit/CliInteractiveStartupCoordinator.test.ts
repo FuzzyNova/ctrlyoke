@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { CliInteractiveStartupCoordinator } from "../../flightpath/harness/shared/CliInteractiveStartupCoordinator";
+import { CliInteractiveStartupCoordinator } from "../../core/harness/shared/CliInteractiveStartupCoordinator";
 import { INTERACTIVE_ABORT_KINDS } from "../../types/DashboardConstants";
 
 suite("CliInteractiveStartupCoordinator", () => {

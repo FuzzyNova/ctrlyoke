@@ -11,7 +11,7 @@ import {
   WorkflowStep,
   isScriptStep,
   PromptRuntimeMetadata,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import {
   PROMPT_TERMINAL_STATUS,
   STEP_STATUS,
@@ -23,7 +23,7 @@ import {
  * are owned by WorkflowStateMachine and projected onto QueueState by getState().
  */
 type InternalQueueState = Omit<QueueState, keyof WorkflowRuntimeState>;
-import type { WorkingFile } from "../types/FlightPathTypes";
+import type { WorkingFile } from "../types/CtrlYokeTypes";
 import {
   QUEUE_POSITION,
   type QueuePosition,
@@ -115,7 +115,7 @@ export class PromptQueue {
 
   /**
    * Extract workflow name from file path
-   * Strips FlightPath-specific extensions (.flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md)
+   * Strips ctrlyoke-specific extensions (.flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md)
    *
    * @param filePath - Full file path
    * @returns Workflow name without extensions
@@ -127,7 +127,7 @@ export class PromptQueue {
    */
   static extractWorkflowName(filePath: string): string {
     const fileName = path.basename(filePath);
-    // Remove FlightPath extensions: .flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md
+    // Remove ctrlyoke extensions: .flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md
     return fileName.replace(/\.(flightpath\.(json|yaml|yml)|prompt\.md)$/, "");
   }
 
@@ -314,7 +314,7 @@ export class PromptQueue {
 
   /**
    * Restore queue state from a working file (including runtime state)
-   * This is used when resuming a previous session from .flightpath/.queue
+   * This is used when resuming a previous session from .ctrlyoke/.queue
    * @param workingFilePath Path to the working file
    */
   async restoreFromWorkingFile(
@@ -866,7 +866,7 @@ export class PromptQueue {
       // Invalid JSON - log error and continue with current queue
       Log.error("Failed to reload queue - invalid JSON", error as Error);
       Log.error(
-        "FlightPath: Queue file has invalid JSON. Continuing with current queue."
+        "ctrlyoke: Queue file has invalid JSON. Continuing with current queue."
       );
       return -1;
     }
@@ -916,7 +916,7 @@ export class PromptQueue {
         `Queue size limit reached: ${newQueueSize} > ${maxQueueSize}. Cannot add ${newPrompts.length} new prompts.`
       );
       Log.warn(
-        `FlightPath: Queue limit reached (${this.state.steps.length}/${maxQueueSize} prompts). Cannot add more prompts. Consider increasing maxQueueSize in settings.`
+        `ctrlyoke: Queue limit reached (${this.state.steps.length}/${maxQueueSize} prompts). Cannot add more prompts. Consider increasing maxQueueSize in settings.`
       );
       return -1;
     }

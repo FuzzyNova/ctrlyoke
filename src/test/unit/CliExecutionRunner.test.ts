@@ -1,15 +1,15 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { FAILURE_KINDS } from "../../types/DashboardConstants";
-import { CliLogMonitor } from "../../flightpath/harness/CliLogMonitor";
-import { CliExecutionSession } from "../../flightpath/harness/shared/CliExecutionSession";
+import { CliLogMonitor } from "../../core/harness/CliLogMonitor";
+import { CliExecutionSession } from "../../core/harness/shared/CliExecutionSession";
 import {
   CliExecutionRunner,
   type InteractiveInjectContext,
-} from "../../flightpath/harness/shared/CliExecutionRunner";
-import { CliFailureTracker } from "../../flightpath/harness/shared/CliFailureTracker";
-import { CliInteractiveStartupCoordinator } from "../../flightpath/harness/shared/CliInteractiveStartupCoordinator";
-import type { ICliProvider } from "../../flightpath/harness/shared/interfaces/ICliProvider";
+} from "../../core/harness/shared/CliExecutionRunner";
+import { CliFailureTracker } from "../../core/harness/shared/CliFailureTracker";
+import { CliInteractiveStartupCoordinator } from "../../core/harness/shared/CliInteractiveStartupCoordinator";
+import type { ICliProvider } from "../../core/harness/shared/interfaces/ICliProvider";
 
 function createProvider(options?: {
   supportsSessionStart?: boolean;

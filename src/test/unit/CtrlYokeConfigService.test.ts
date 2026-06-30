@@ -4,18 +4,18 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test, setup, teardown } from "mocha";
 import {
-  FlightPathConfigService,
+  CtrlYokeConfigService,
   type ConfigBackend,
-} from "../../config/FlightPathConfigService";
+} from "../../config/CtrlYokeConfigService";
 import { FileConfigBackend } from "../../config/FileConfigBackend";
-import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../../types/FlightPathSettings";
-import type { PartialFlightPathSettings } from "../../types/FlightPathSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
+import type { PartialCtrlYokeSettings } from "../../types/CtrlYokeSettings";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeBackend(data: PartialFlightPathSettings): ConfigBackend {
+function makeBackend(data: PartialCtrlYokeSettings): ConfigBackend {
   return {
     getAll: () => data,
     set: async (_path: string, _value: unknown) => {},
@@ -23,33 +23,33 @@ function makeBackend(data: PartialFlightPathSettings): ConfigBackend {
 }
 
 // ---------------------------------------------------------------------------
-// FlightPathConfigService tests
+// CtrlYokeConfigService tests
 // ---------------------------------------------------------------------------
 
-suite("FlightPathConfigService", () => {
-  let service: FlightPathConfigService;
+suite("CtrlYokeConfigService", () => {
+  let service: CtrlYokeConfigService;
 
   setup(() => {
-    service = new FlightPathConfigService();
+    service = new CtrlYokeConfigService();
   });
 
   test("returns all defaults when no backends are set", () => {
     const all = service.getAll();
     assert.strictEqual(
       all.defaults.harness,
-      FLIGHTPATH_SETTINGS_DEFAULTS.defaults.harness
+      CTRLYOKE_SETTINGS_DEFAULTS.defaults.harness
     );
     assert.strictEqual(
       all.execution.mode,
-      FLIGHTPATH_SETTINGS_DEFAULTS.execution.mode
+      CTRLYOKE_SETTINGS_DEFAULTS.execution.mode
     );
     assert.strictEqual(
       all.queue.maxSize,
-      FLIGHTPATH_SETTINGS_DEFAULTS.queue.maxSize
+      CTRLYOKE_SETTINGS_DEFAULTS.queue.maxSize
     );
     assert.strictEqual(
       all.enableDiagnosticLogs,
-      FLIGHTPATH_SETTINGS_DEFAULTS.enableDiagnosticLogs
+      CTRLYOKE_SETTINGS_DEFAULTS.enableDiagnosticLogs
     );
   });
 
@@ -66,7 +66,7 @@ suite("FlightPathConfigService", () => {
     // Other defaults should still be present
     assert.strictEqual(
       all.execution.mode,
-      FLIGHTPATH_SETTINGS_DEFAULTS.execution.mode
+      CTRLYOKE_SETTINGS_DEFAULTS.execution.mode
     );
   });
 
@@ -100,11 +100,11 @@ suite("FlightPathConfigService", () => {
     // scriptTimeout should still come from defaults
     assert.strictEqual(
       all.execution.scriptTimeout,
-      FLIGHTPATH_SETTINGS_DEFAULTS.execution.scriptTimeout
+      CTRLYOKE_SETTINGS_DEFAULTS.execution.scriptTimeout
     );
     assert.strictEqual(
       all.execution.closeTerminalOnComplete,
-      FLIGHTPATH_SETTINGS_DEFAULTS.execution.closeTerminalOnComplete
+      CTRLYOKE_SETTINGS_DEFAULTS.execution.closeTerminalOnComplete
     );
   });
 
@@ -113,8 +113,8 @@ suite("FlightPathConfigService", () => {
       const result = service.resolve("defaults");
       assert.strictEqual(result.source, "default");
       assert.strictEqual(
-        (result.value as typeof FLIGHTPATH_SETTINGS_DEFAULTS.defaults).harness,
-        FLIGHTPATH_SETTINGS_DEFAULTS.defaults.harness
+        (result.value as typeof CTRLYOKE_SETTINGS_DEFAULTS.defaults).harness,
+        CTRLYOKE_SETTINGS_DEFAULTS.defaults.harness
       );
     });
 
@@ -125,7 +125,7 @@ suite("FlightPathConfigService", () => {
       const result = service.resolve("defaults");
       assert.strictEqual(result.source, "user");
       assert.strictEqual(
-        (result.value as typeof FLIGHTPATH_SETTINGS_DEFAULTS.defaults).harness,
+        (result.value as typeof CTRLYOKE_SETTINGS_DEFAULTS.defaults).harness,
         "claude-cli"
       );
     });
@@ -140,7 +140,7 @@ suite("FlightPathConfigService", () => {
       const result = service.resolve("defaults");
       assert.strictEqual(result.source, "workspace");
       assert.strictEqual(
-        (result.value as typeof FLIGHTPATH_SETTINGS_DEFAULTS.defaults).harness,
+        (result.value as typeof CTRLYOKE_SETTINGS_DEFAULTS.defaults).harness,
         "codex-cli"
       );
     });
@@ -153,7 +153,7 @@ suite("FlightPathConfigService", () => {
       const result = service.resolve("defaults");
       assert.strictEqual(result.source, "cli");
       assert.strictEqual(
-        (result.value as typeof FLIGHTPATH_SETTINGS_DEFAULTS.defaults).harness,
+        (result.value as typeof CTRLYOKE_SETTINGS_DEFAULTS.defaults).harness,
         "gemini-cli"
       );
     });
@@ -167,7 +167,7 @@ suite("FlightPathConfigService", () => {
   });
 
   test("getNested returns default for unset nested key", () => {
-    const defaultMode = FLIGHTPATH_SETTINGS_DEFAULTS.execution.mode;
+    const defaultMode = CTRLYOKE_SETTINGS_DEFAULTS.execution.mode;
     assert.strictEqual(service.getNested("execution.mode"), defaultMode);
   });
 

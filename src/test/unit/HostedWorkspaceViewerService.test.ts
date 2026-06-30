@@ -29,8 +29,8 @@ suite("HostedWorkspaceViewerService", () => {
   }
 
   function configureGitIdentity(cwd: string): void {
-    runGit(cwd, "config", "user.name", "FlightPath Test");
-    runGit(cwd, "config", "user.email", "flightpath@example.com");
+    runGit(cwd, "config", "user.name", "ctrlyoke Test");
+    runGit(cwd, "config", "user.email", "ctrlyoke@example.com");
   }
 
   function commitFile(

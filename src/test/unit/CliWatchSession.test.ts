@@ -4,8 +4,8 @@ import { suite, test } from "mocha";
 import {
   getHistoryRunTimestamp,
   isNewerHistoryRunPath,
-} from "../../flightpath/orchestration/CliWatchSession";
-import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
+} from "../../core/orchestration/CliWatchSession";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 
 suite("CliWatchSession run selection helpers", () => {
   test("extracts run timestamps from legacy files, timeline manifests, and run directories", () => {

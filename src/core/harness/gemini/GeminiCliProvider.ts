@@ -26,7 +26,7 @@ import type {
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
-} from "../../../types/FlightPathTypes";
+} from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 /**
@@ -101,7 +101,7 @@ export class GeminiCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      Log.debug("🔧 FlightPath MCP config written for Gemini");
+      Log.debug("🔧 ctrlyoke MCP config written for Gemini");
     }
 
     // Parallel workflow isolation: restrict MCP server access so prompts in
@@ -162,7 +162,7 @@ export class GeminiCliProvider implements ICliProvider {
   }
 
   /**
-   * Set up FlightPath notification hooks (AfterAgent + user hooks) for interactive mode.
+   * Set up ctrlyoke notification hooks (AfterAgent + user hooks) for interactive mode.
    * Merges hooks into .gemini/settings.json and pre-trusts them in trusted_hooks.json.
    * Returns [] — Gemini auto-discovers hooks from settings.json (no CLI args needed).
    */
@@ -178,7 +178,7 @@ export class GeminiCliProvider implements ICliProvider {
       extensionPath,
       "out",
       "scripts",
-      "flightpath-gemini-hook.js"
+      "ctrlyoke-gemini-hook.js"
     );
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
@@ -198,26 +198,26 @@ export class GeminiCliProvider implements ICliProvider {
     if (hookConfig.type !== "json") {
       throw new Error("Unexpected hook config type for Gemini CLI");
     }
-    const flightpathHooksSection = (
+    const ctrlyokeHooksSection = (
       hookConfig.config as Record<string, unknown>
     )["hooks"] as Record<string, unknown[]>;
-    const wrappedFlightpathEvents = [
+    const wrappedCtrlYokeEvents = [
       ...new Set<HookEvent>([
         "sessionStart",
         "stop",
         ...enabledNotificationHookEvents,
       ]),
     ];
-    const hookKeys = this.buildTrustedHookKeys(flightpathHooksSection);
+    const hookKeys = this.buildTrustedHookKeys(ctrlyokeHooksSection);
 
     const workflowKey = workingFilePath ?? workspaceRoot;
     await this.registerHooksInSettings(
       workspaceRoot,
       workflowKey,
-      flightpathHooksSection,
+      ctrlyokeHooksSection,
       hookKeys,
       userHooks,
-      wrappedFlightpathEvents
+      wrappedCtrlYokeEvents
     );
     Log.debug(`🔔 Configured AfterAgent hook for Gemini completion detection`);
     return [];
@@ -225,7 +225,7 @@ export class GeminiCliProvider implements ICliProvider {
 
   /**
    * Set up user-only hooks for headless execution.
-   * No FlightPath notification hooks are included since headless uses process-exit for completion.
+   * No ctrlyoke notification hooks are included since headless uses process-exit for completion.
    * Returns [] — Gemini auto-discovers hooks from settings.json (no CLI args needed).
    */
   async buildHeadlessUserHookArgs(
@@ -237,7 +237,7 @@ export class GeminiCliProvider implements ICliProvider {
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const workflowKey = workingFilePath ?? workspaceRoot;
-    const flightpathHooksSection =
+    const ctrlyokeHooksSection =
       enabledNotificationHookEvents.length > 0
         ? (() => {
             const hookConfig = this.notificationMonitor.buildHookConfig(
@@ -245,7 +245,7 @@ export class GeminiCliProvider implements ICliProvider {
                 extensionPath,
                 "out",
                 "scripts",
-                "flightpath-gemini-hook.js"
+                "ctrlyoke-gemini-hook.js"
               ),
               this.notificationMonitor.getNotificationDirectory(workspaceRoot),
               workspaceRoot,
@@ -263,8 +263,8 @@ export class GeminiCliProvider implements ICliProvider {
     await this.registerHooksInSettings(
       workspaceRoot,
       workflowKey,
-      flightpathHooksSection,
-      this.buildTrustedHookKeys(flightpathHooksSection),
+      ctrlyokeHooksSection,
+      this.buildTrustedHookKeys(ctrlyokeHooksSection),
       userHooks,
       enabledNotificationHookEvents
     );
@@ -295,26 +295,26 @@ export class GeminiCliProvider implements ICliProvider {
    * Shared helper: merge hooks into .gemini/settings.json and pre-trust them.
    *
    * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
-   * Pass an empty flightpathHooksSection + undefined hookKey for headless (user-only) mode.
+   * Pass an empty ctrlyokeHooksSection + undefined hookKey for headless (user-only) mode.
    */
   private async registerHooksInSettings(
     workspaceRoot: string,
     workflowKey: string,
-    flightpathHooksSection: Record<string, unknown[]>,
-    flightpathHookKeys: string[],
+    ctrlyokeHooksSection: Record<string, unknown[]>,
+    ctrlyokeHookKeys: string[],
     userHooks: UserHookConfig[] | undefined,
-    wrappedFlightpathEvents: HookEvent[] = []
+    wrappedCtrlYokeEvents: HookEvent[] = []
   ): Promise<void> {
     const workflowUserHooks = this.buildUserHooksSection(
       userHooks,
-      wrappedFlightpathEvents
+      wrappedCtrlYokeEvents
     );
 
     await GeminiCliProvider.mcpTracker.withLock(async () => {
       await GeminiCliProvider.hooksTracker.registerWorkflow(
         workflowKey,
         workspaceRoot,
-        flightpathHooksSection,
+        ctrlyokeHooksSection,
         workflowUserHooks
       );
     });
@@ -334,9 +334,9 @@ export class GeminiCliProvider implements ICliProvider {
     if (!trustedHooks[workspaceRoot]) {
       trustedHooks[workspaceRoot] = [];
     }
-    for (const flightpathHookKey of flightpathHookKeys) {
-      if (!trustedHooks[workspaceRoot].includes(flightpathHookKey)) {
-        trustedHooks[workspaceRoot].push(flightpathHookKey);
+    for (const ctrlyokeHookKey of ctrlyokeHookKeys) {
+      if (!trustedHooks[workspaceRoot].includes(ctrlyokeHookKey)) {
+        trustedHooks[workspaceRoot].push(ctrlyokeHookKey);
       }
     }
 
@@ -359,13 +359,13 @@ export class GeminiCliProvider implements ICliProvider {
 
   private buildUserHooksSection(
     userHooks?: UserHookConfig[],
-    wrappedFlightpathEvents: HookEvent[] = []
+    wrappedCtrlYokeEvents: HookEvent[] = []
   ): Record<string, unknown[]> {
     const section: Record<string, unknown[]> = {};
     for (const uh of userHooks ?? []) {
       if (
         uh.event === "permissionRequest" &&
-        wrappedFlightpathEvents.includes("permissionRequest")
+        wrappedCtrlYokeEvents.includes("permissionRequest")
       ) {
         continue;
       }

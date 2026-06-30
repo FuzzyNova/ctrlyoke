@@ -3,14 +3,14 @@ import { suite, test } from "mocha";
 import {
   WorkflowExecutor,
   WorkflowExecutionContext,
-} from "../../flightpath/WorkflowExecutor";
-import { PromptQueue } from "../../flightpath/PromptQueue";
-import { EndConditionEvaluator } from "../../flightpath/EndConditionEvaluator";
-import { EndConditionHandler } from "../../flightpath/EndConditionHandler";
-import { HarnessIntegration } from "../../flightpath/HarnessIntegration";
-import { HarnessStatus } from "../../flightpath/HarnessIntegration";
+} from "../../core/WorkflowExecutor";
+import { PromptQueue } from "../../core/PromptQueue";
+import { EndConditionEvaluator } from "../../core/EndConditionEvaluator";
+import { EndConditionHandler } from "../../core/EndConditionHandler";
+import { HarnessIntegration } from "../../core/HarnessIntegration";
+import { HarnessStatus } from "../../core/HarnessIntegration";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
-import { PromptStep, PromptFile } from "../../types/FlightPathTypes";
+import { PromptStep, PromptFile } from "../../types/CtrlYokeTypes";
 import {
   HARNESS_IDS,
   EXECUTION_STATES,
@@ -316,7 +316,7 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     queue.loadPrompts({
       steps: [{ prompt: "queue-1" }],
-      finalStep: { prompt: "final-loop", mcpServers: ["flightpath"] },
+      finalStep: { prompt: "final-loop", mcpServers: ["ctrlyoke"] },
     });
 
     await executor.execute(integration, makeContext(integration));

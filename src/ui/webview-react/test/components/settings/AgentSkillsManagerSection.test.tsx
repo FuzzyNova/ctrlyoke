@@ -33,9 +33,9 @@ function createManagedFile(name: string): ManagedFile {
     type: HARNESS_FILE_TYPES.SKILL,
     locations: [
       {
-        harnessId: SPECIAL_TARGET_IDS.FLIGHTPATH,
+        harnessId: SPECIAL_TARGET_IDS.CTRLYOKE,
         scope: SETTING_SCOPES.USER,
-        path: `C:\\repo\\.flightpath\\skills\\${name}`,
+        path: `C:\\repo\\.ctrlyoke\\skills\\${name}`,
       },
       {
         harnessId: HARNESS_IDS.CLAUDE_CLI,
@@ -53,9 +53,9 @@ const TARGET_DIRECTORIES: ManagedTargetDirectory[] = [
     path: "C:\\Users\\test\\.claude\\skills",
   },
   {
-    harnessId: SPECIAL_TARGET_IDS.FLIGHTPATH,
+    harnessId: SPECIAL_TARGET_IDS.CTRLYOKE,
     scope: SETTING_SCOPES.USER,
-    path: "C:\\repo\\.flightpath\\skills",
+    path: "C:\\repo\\.ctrlyoke\\skills",
   },
 ];
 
@@ -114,7 +114,7 @@ describe("AgentSkillsManagerSection", () => {
         files: [
           {
             name: "skill-a",
-            sourcePath: "C:\\repo\\.flightpath\\skills\\skill-a",
+            sourcePath: "C:\\repo\\.ctrlyoke\\skills\\skill-a",
           },
         ],
       })
@@ -195,9 +195,9 @@ describe("AgentSkillsManagerSection", () => {
           type: HARNESS_FILE_TYPES.AGENT,
           locations: [
             {
-              harnessId: SPECIAL_TARGET_IDS.FLIGHTPATH,
+              harnessId: SPECIAL_TARGET_IDS.CTRLYOKE,
               scope: SETTING_SCOPES.USER,
-              path: "C:\\repo\\.flightpath\\agents\\agent-a.agent.md",
+              path: "C:\\repo\\.ctrlyoke\\agents\\agent-a.agent.md",
             },
           ],
         },

@@ -5,7 +5,7 @@ import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { TempFileCategory } from "../types/DashboardConstants";
 
 /**
- * TempFileManager - Manages temporary prompt files in .flightpath/temp/
+ * TempFileManager - Manages temporary prompt files in .ctrlyoke/temp/
  *
  * Handles:
  * - Creating temp directory structure
@@ -19,7 +19,7 @@ import { TempFileCategory } from "../types/DashboardConstants";
  * - Graceful failures: Never throw on cleanup
  */
 export class TempFileManager {
-  private readonly TEMP_DIR_NAME = PATH_CONSTANTS.FLIGHTPATH_DIR;
+  private readonly TEMP_DIR_NAME = PATH_CONSTANTS.CTRLYOKE_DIR;
   private readonly TEMP_SUBDIR_NAME = PATH_CONSTANTS.TEMP_DIR;
   private readonly PROMPT_EXTENSION = ".prompt.md";
   private readonly MCP_CONFIG_PREFIX = "mcp-config";
@@ -46,7 +46,7 @@ export class TempFileManager {
 
   /**
    * Ensure temp directory exists
-   * Creates .flightpath/temp/ if needed
+   * Creates .ctrlyoke/temp/ if needed
    */
   async ensureTempDir(): Promise<void> {
     try {
@@ -110,7 +110,7 @@ export class TempFileManager {
    *               <timestamp>-<basename>-<step>.3.prompt.md
    *
    * @param chunks Array of prompt text chunks
-   * @param originalFilePath Optional path to original .flightpath file
+   * @param originalFilePath Optional path to original .ctrlyoke file
    * @param stepNumber Optional step number for multi-step workflows (1-indexed)
    * @returns Array of absolute file paths
    */
@@ -398,7 +398,7 @@ export class TempFileManager {
    * - Non-alphanumeric chars → hyphens
    * - Strip leading/trailing hyphens
    *
-   * @param originalFilePath Path to original .flightpath or .prompt file
+   * @param originalFilePath Path to original .ctrlyoke or .prompt file
    * @returns Sanitized basename suitable for temp file naming
    */
   private sanitizeBasename(originalFilePath: string): string {
@@ -421,7 +421,7 @@ export class TempFileManager {
    * Used when sending @file references to CLI
    *
    * @param absolutePath Absolute path to temp file
-   * @returns Workspace-relative path (e.g., ".flightpath/temp/prompt-xxx.txt")
+   * @returns Workspace-relative path (e.g., ".ctrlyoke/temp/prompt-xxx.txt")
    */
   getRelativePath(absolutePath: string): string {
     return path.relative(this.workspaceRoot, absolutePath);

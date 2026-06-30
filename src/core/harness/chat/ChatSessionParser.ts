@@ -338,7 +338,7 @@ export class ChatSessionParser {
         const textContent =
           typeof item.value === "string" ? item.value : item.value.join("\n");
         // Filter VS Code code-fence artifacts: text items that are only ``` markers
-        // These bracket the interactive diff view in the chat UI and are meaningless in FlightPath output
+        // These bracket the interactive diff view in the chat UI and are meaningless in ctrlyoke output
         if (textContent.trim() && !/^[`\s]+$/.test(textContent.trim())) {
           events.push({
             type: CLI_EVENT_TYPES.TEXT,

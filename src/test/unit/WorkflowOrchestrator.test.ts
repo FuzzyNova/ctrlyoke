@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { WorkflowOrchestrator } from "../../flightpath/WorkflowOrchestrator";
+import { WorkflowOrchestrator } from "../../core/WorkflowOrchestrator";
 import {
   EXECUTION_STATES,
   MESSAGE_TYPES,
@@ -83,11 +83,11 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     internal.viewerRegistry = new Map<string, string | null>();
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
     internal.currentWorkspaceFolder = {
-      uri: { fsPath: "C:\\dev\\FlightPath" },
+      uri: { fsPath: "C:\\dev\\ctrlyoke" },
     };
     internal.workspaceSessionManager = {
       getMostRecentWorkingFilePath: async () =>
-        "C:\\dev\\FlightPath\\.flightpath\\.queue\\recent.flightpath.json",
+        "C:\\dev\\ctrlyoke\\.ctrlyoke\\.queue\\recent.flightpath.json",
     };
 
     let loaded: { filePath: string; clientId: string } | undefined;
@@ -105,7 +105,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
 
     assert.deepStrictEqual(loaded, {
       filePath:
-        "C:\\dev\\FlightPath\\.flightpath\\.queue\\recent.flightpath.json",
+        "C:\\dev\\ctrlyoke\\.ctrlyoke\\.queue\\recent.flightpath.json",
       clientId: "browser:1",
     });
     assert.deepStrictEqual(sent, [
@@ -124,7 +124,7 @@ suite("WorkflowOrchestrator handleClientReady", () => {
     ]);
     internal.PANEL_CLIENT_ID = PANEL_CLIENT_ID;
     internal.currentWorkspaceFolder = {
-      uri: { fsPath: "C:\\dev\\FlightPath" },
+      uri: { fsPath: "C:\\dev\\ctrlyoke" },
     };
     internal.workspaceSessionManager = {
       getMostRecentWorkingFilePath: async () => undefined,
@@ -239,8 +239,8 @@ suite("WorkflowOrchestrator loadWorkflowForClient path matching", () => {
     const internal = orchestrator as any;
 
     const nativePath =
-      "c:\\dev\\FlightPath\\.flightpath\\.queue\\wf.flightpath.json";
-    const routePath = "c:/dev/FlightPath/.flightpath/.queue/wf.flightpath.json";
+      "c:\\dev\\ctrlyoke\\.ctrlyoke\\.queue\\wf.flightpath.json";
+    const routePath = "c:/dev/ctrlyoke/.ctrlyoke/.queue/wf.flightpath.json";
 
     const liveInstance = {
       id: "live-1",

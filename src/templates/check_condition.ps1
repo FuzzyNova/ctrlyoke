@@ -1,4 +1,4 @@
-# FlightPath End Condition Script Example
+# ctrlyoke End Condition Script Example
 # This script checks if tests pass or some condition is met
 
 # Example: Check if file exists

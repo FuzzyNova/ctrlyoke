@@ -10,9 +10,9 @@ import type {
   CliEvent,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
-import type { WorkflowStep } from "../types/FlightPathTypes";
+import type { WorkflowStep } from "../types/CtrlYokeTypes";
 import type { WorkspaceSnapshot } from "../types/OutputHistoryTypes";
-import type { FlightPathNotificationEvent } from "./notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "./notifications/CompletionNotificationFactory";
 
 /**
  * PostMessageDashboardSink
@@ -399,7 +399,7 @@ export class PostMessageDashboardSink implements IDashboardSink {
     });
   }
 
-  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+  notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {
     this.send({
       type: MESSAGE_TYPES.NOTIFICATION_EVENT,
       event,

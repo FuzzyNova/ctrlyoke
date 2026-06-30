@@ -1,9 +1,9 @@
 ---
-applyTo: "src/flightpath/*.ts"
+applyTo: "src/core/*.ts"
 ---
 
 <purpose>
-Top-level FlightPath core orchestration only: workflow registry, per-workflow runtime state, execution loop, working-file persistence, parsing, validation, and shared queue operations. This file does **not** cover `src/flightpath/orchestration/**` helpers or `src/flightpath/harness/**` implementations.
+Top-level ctrlyoke core orchestration only: workflow registry, per-workflow runtime state, execution loop, working-file persistence, parsing, validation, and shared queue operations. This file does **not** cover `src/core/orchestration/**` helpers or `src/core/harness/**` implementations.
 </purpose>
 
 <boundaries>
@@ -12,7 +12,7 @@ Top-level FlightPath core orchestration only: workflow registry, per-workflow ru
 - `WorkflowInstance` owns one workflow's runtime state and composes queue, executor, history, watchers, and execution integrations.
 - `WorkflowStateMachine` is the **only** owner of execution status/timing/attempt state.
 - `PromptQueue` owns queue topology/runtime metadata, but delegates status transitions to `WorkflowStateMachine`.
-- `WorkingFileManager` is the only place that should write `.flightpath/.queue/*.flightpath.json`.
+- `WorkingFileManager` is the only place that should write `.ctrlyoke/.queue/*.flightpath.json`.
 
 </boundaries>
 
@@ -61,10 +61,10 @@ Top-level FlightPath core orchestration only: workflow registry, per-workflow ru
 - `PromptFileParser` validates against the bundled schema in `out/schemas`, but the editable source of truth is `schemas/`.
 - Parsing normalizes both queue steps and `finalStep`; either can be a prompt step or `type: "script"` step.
 - Workflow-level execution properties (`harness`, `model`, `agent`, `skills`, `mcpServers`, `hooks`, `priorContext`, `additionalArgs`, `toolPermissions`, etc.) are copied onto the normalized `PromptFile` and then resolved per step later by `PropertyResolver`.
-- Prompt values that look like file paths are resolved relative to prompt file directory, workspace root, then `.flightpath/`.
+- Prompt values that look like file paths are resolved relative to prompt file directory, workspace root, then `.ctrlyoke/`.
 
 - `EndConditionHandler` owns retry orchestration and stays iterative/callback-based to avoid circular executor dependencies.
-- `EndConditionEvaluator` is security-sensitive: canonicalize paths before boundary checks, allow workspace-root and `~/.flightpath/scripts`, and never replace `isWithinDirectory(...)` with naive prefix checks.
+- `EndConditionEvaluator` is security-sensitive: canonicalize paths before boundary checks, allow workspace-root and `~/.ctrlyoke/scripts`, and never replace `isWithinDirectory(...)` with naive prefix checks.
 - If end-condition script resolution fails, evaluator deliberately falls back to treating the value as a direct shell command.
 
 </parsingAndValidation>

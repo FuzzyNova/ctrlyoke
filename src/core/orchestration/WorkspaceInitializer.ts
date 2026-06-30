@@ -4,7 +4,7 @@ import { Log } from "../../utils/Log";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 const GITIGNORE_CONTENT = [
-  "# FlightPath runtime directories — generated at runtime, do not commit...unless you really want to",
+  "# ctrlyoke runtime directories — generated at runtime, do not commit...unless you really want to",
   `${PATH_CONSTANTS.HISTORY_DIR}/`,
   `${PATH_CONSTANTS.SEARCH_INDEX_DIR}/`,
   `${PATH_CONSTANTS.QUEUE_DIR}/`,
@@ -29,17 +29,17 @@ const USER_DIRECTORIES = [
 
 export class WorkspaceInitializer {
   /**
-   * Returns true if FlightPath has already been initialized in this workspace.
+   * Returns true if ctrlyoke has already been initialized in this workspace.
    * A workspace is considered initialized when:
-   *   - A `.flightpath/` directory already exists (previously initialized), OR
+   *   - A `.ctrlyoke/` directory already exists (previously initialized), OR
    *   - A `.flightpath.yaml`, `.flightpath.yml`, or `.flightpath.json` file exists
-   *     at the workspace root (committed FlightPath workflow files — implicit opt-in).
+   *     at the workspace root (committed ctrlyoke workflow files — implicit opt-in).
    *
    * This check is synchronous and cheap (fs.existsSync only).
    */
   static isInitialized(workspaceRoot: string): boolean {
     if (
-      fs.existsSync(path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR))
+      fs.existsSync(path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR))
     ) {
       return true;
     }
@@ -51,30 +51,30 @@ export class WorkspaceInitializer {
   }
 
   /**
-   * Initialize the .flightpath workspace directory if it doesn't exist.
+   * Initialize the .ctrlyoke workspace directory if it doesn't exist.
    * Creates the directory scaffold and .gitignore on first run.
    * Idempotent: safe to call on every activation.
    * @returns true if the workspace was newly initialized, false if it already existed
    */
   static async initializeIfNeeded(workspaceRoot: string): Promise<boolean> {
-    const flightpathDir = path.join(
+    const ctrlyokeDir = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR
+      PATH_CONSTANTS.CTRLYOKE_DIR
     );
-    const isNew = !fs.existsSync(flightpathDir);
+    const isNew = !fs.existsSync(ctrlyokeDir);
 
     for (const dir of USER_DIRECTORIES) {
-      await fs.promises.mkdir(path.join(flightpathDir, dir), {
+      await fs.promises.mkdir(path.join(ctrlyokeDir, dir), {
         recursive: true,
       });
     }
 
-    const gitignorePath = path.join(flightpathDir, ".gitignore");
+    const gitignorePath = path.join(ctrlyokeDir, ".gitignore");
     await WorkspaceInitializer.ensureGitignore(gitignorePath);
 
     if (isNew) {
       Log.info(
-        `FlightPath: Initialized .flightpath workspace directory at ${flightpathDir}`
+        `ctrlyoke: Initialized .ctrlyoke workspace directory at ${ctrlyokeDir}`
       );
     }
 
@@ -87,7 +87,7 @@ export class WorkspaceInitializer {
    */
   static async reinitialize(workspaceRoot: string): Promise<void> {
     await WorkspaceInitializer.initializeIfNeeded(workspaceRoot);
-    Log.info("FlightPath: Workspace re-initialized");
+    Log.info("ctrlyoke: Workspace re-initialized");
   }
 
   private static async ensureGitignore(gitignorePath: string): Promise<void> {

@@ -13,7 +13,7 @@ import {
 
 type NodePtyModule = typeof import("node-pty");
 const NODE_PTY_UNAVAILABLE_MESSAGE =
-  "Embedded terminal support is unavailable because the node-pty native module could not be loaded. Reinstall FlightPath or switch CLI execution mode to headless.";
+  "Embedded terminal support is unavailable because the node-pty native module could not be loaded. Reinstall ctrlyoke or switch CLI execution mode to headless.";
 
 // ---------------------------------------------------------------------------
 // Windows shell resolution

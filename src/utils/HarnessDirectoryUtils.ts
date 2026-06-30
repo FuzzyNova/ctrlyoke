@@ -125,45 +125,45 @@ export function getHarnessUserSkillDirs(harnessId: HarnessId): string[] {
 }
 
 /**
- * Returns the FlightPath-exclusive agent directory (absolute path).
+ * Returns the ctrlyoke-exclusive agent directory (absolute path).
  */
-export function getFlightPathAgentDir(workspaceRoot: string): string {
+export function getCtrlYokeAgentDir(workspaceRoot: string): string {
   return path.join(
     workspaceRoot,
-    PATH_CONSTANTS.FLIGHTPATH_DIR,
+    PATH_CONSTANTS.CTRLYOKE_DIR,
     PATH_CONSTANTS.AGENTS_DIR
   );
 }
 
 /**
- * Returns the FlightPath-exclusive skill directory (absolute path).
+ * Returns the ctrlyoke-exclusive skill directory (absolute path).
  */
-export function getFlightPathSkillDir(workspaceRoot: string): string {
+export function getCtrlYokeSkillDir(workspaceRoot: string): string {
   return path.join(
     workspaceRoot,
-    PATH_CONSTANTS.FLIGHTPATH_DIR,
+    PATH_CONSTANTS.CTRLYOKE_DIR,
     PATH_CONSTANTS.SKILLS_DIR
   );
 }
 
 /**
- * Returns the user-level FlightPath agent directory (~/.flightpath/agents).
+ * Returns the user-level ctrlyoke agent directory (~/.ctrlyoke/agents).
  */
-export function getFlightPathUserAgentDir(): string {
+export function getCtrlYokeUserAgentDir(): string {
   return path.join(
     os.homedir(),
-    PATH_CONSTANTS.FLIGHTPATH_DIR,
+    PATH_CONSTANTS.CTRLYOKE_DIR,
     PATH_CONSTANTS.AGENTS_DIR
   );
 }
 
 /**
- * Returns the user-level FlightPath skill directory (~/.flightpath/skills).
+ * Returns the user-level ctrlyoke skill directory (~/.ctrlyoke/skills).
  */
-export function getFlightPathUserSkillDir(): string {
+export function getCtrlYokeUserSkillDir(): string {
   return path.join(
     os.homedir(),
-    PATH_CONSTANTS.FLIGHTPATH_DIR,
+    PATH_CONSTANTS.CTRLYOKE_DIR,
     PATH_CONSTANTS.SKILLS_DIR
   );
 }

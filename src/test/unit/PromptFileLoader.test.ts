@@ -3,11 +3,11 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, afterEach } from "mocha";
-import { PromptFileParser } from "../../flightpath/PromptFileParser";
-import { PromptFileLoader } from "../../flightpath/orchestration/PromptFileLoader";
-import { PromptQueue } from "../../flightpath/PromptQueue";
+import { PromptFileParser } from "../../core/PromptFileParser";
+import { PromptFileLoader } from "../../core/orchestration/PromptFileLoader";
+import { PromptQueue } from "../../core/PromptQueue";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
-import { WorkflowStep, isScriptStep } from "../../types/FlightPathTypes";
+import { WorkflowStep, isScriptStep } from "../../types/CtrlYokeTypes";
 
 suite("PromptFileLoader Tests", () => {
   const tempDirs: string[] = [];
@@ -132,7 +132,7 @@ suite("PromptFileLoader Tests", () => {
         "test-property-sync.flightpath.yaml"
       );
       const workspaceRoot = await fs.mkdtemp(
-        path.join(os.tmpdir(), "flightpath-prop-sync-")
+        path.join(os.tmpdir(), "ctrlyoke-prop-sync-")
       );
       tempDirs.push(workspaceRoot);
 
@@ -174,7 +174,7 @@ suite("PromptFileLoader Tests", () => {
         assert.strictEqual(loaded.model, "claude-sonnet-4.5");
         assert.strictEqual(loaded.agent, "test-agent");
         assert.strictEqual(loaded.resumeSession, false);
-        assert.deepStrictEqual(loaded.mcpServers, ["flightpath"]);
+        assert.deepStrictEqual(loaded.mcpServers, ["ctrlyoke"]);
         assert.strictEqual(loaded.additionalArgs, "--max-turns 5");
         assert.deepStrictEqual(loaded.vars, {
           testEnv: "staging",
@@ -206,7 +206,7 @@ suite("PromptFileLoader Tests", () => {
           retryDelayMs: 5000,
         });
         assert.deepStrictEqual(loaded.preCondition, {
-          script: "manual-test/.flightpath/scripts/always_true.py",
+          script: "manual-test/.ctrlyoke/scripts/always_true.py",
           returns: "true",
           compareSource: "auto",
           timeout: 10000,
@@ -214,7 +214,7 @@ suite("PromptFileLoader Tests", () => {
           onFail: "skipPrompt",
         });
         assert.deepStrictEqual(loaded.endCondition, {
-          script: "manual-test/.flightpath/scripts/always_true.py",
+          script: "manual-test/.ctrlyoke/scripts/always_true.py",
           returns: "true",
           compareSource: "auto",
           timeout: 30000,
@@ -235,7 +235,7 @@ suite("PromptFileLoader Tests", () => {
         assert.deepStrictEqual(loaded.finalStep, {
           type: "script",
           name: "final-cleanup-script",
-          script: "manual-test/.flightpath/scripts/always_true.py",
+          script: "manual-test/.ctrlyoke/scripts/always_true.py",
           returns: "true",
           compareSource: "auto",
           timeout: 10000,
@@ -272,7 +272,7 @@ suite("PromptFileLoader Tests", () => {
         onError: "continue",
       });
       assert.deepStrictEqual(stepWithAllProperties.preCondition, {
-        script: "manual-test/.flightpath/scripts/always_true.py",
+        script: "manual-test/.ctrlyoke/scripts/always_true.py",
         returns: "true",
         compareSource: "stdout",
         timeout: 15000,
@@ -280,7 +280,7 @@ suite("PromptFileLoader Tests", () => {
         onFail: "stopWorkflow",
       });
       assert.deepStrictEqual(stepWithAllProperties.endCondition, {
-        script: "manual-test/.flightpath/scripts/always_true.py",
+        script: "manual-test/.ctrlyoke/scripts/always_true.py",
         returns: "true",
         compareSource: "stdout",
         timeout: 45000,

@@ -15,7 +15,7 @@ import {
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
 } from "../types/DashboardConstants";
-import type { McpServerConfig } from "../types/FlightPathTypes";
+import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import { Log } from "./Log";
 import {
   getClaudeUserConfigPath,

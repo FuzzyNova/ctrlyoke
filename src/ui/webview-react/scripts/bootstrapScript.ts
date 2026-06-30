@@ -14,20 +14,20 @@ type BootstrapLogEntry = {
 type VsCodeApiLike = {
   postMessage?: (message: unknown) => void;
 };
-type FlightPathBootstrapWindow = Window &
+type CtrlYokeBootstrapWindow = Window &
   typeof globalThis & {
     vscodeApi?: VsCodeApiLike;
     acquireVsCodeApi?: () => VsCodeApiLike;
-    __flightpathBootstrapLogInstalled?: boolean;
-    __flightpathBootstrapLogQueue?: BootstrapLogEntry[];
-    __flightpathBootstrapLog?: (
+    __ctrlyokeBootstrapLogInstalled?: boolean;
+    __ctrlyokeBootstrapLogQueue?: BootstrapLogEntry[];
+    __ctrlyokeBootstrapLog?: (
       level: BootstrapLogLevel,
       message: string
     ) => void;
-    __flightpathFlushBootstrapLogs?: () => void;
+    __ctrlyokeFlushBootstrapLogs?: () => void;
   };
 
-const flightpathWindow = window as FlightPathBootstrapWindow;
+const ctrlyokeWindow = window as CtrlYokeBootstrapWindow;
 
 function formatUnknownError(error: unknown): string {
   if (error instanceof Error) {
@@ -45,7 +45,7 @@ function writeConsole(level: BootstrapLogLevel, message: string): void {
 }
 
 function tryPostBootstrapLog(entry: BootstrapLogEntry): boolean {
-  const api = flightpathWindow.vscodeApi;
+  const api = ctrlyokeWindow.vscodeApi;
   if (!api || typeof api.postMessage !== "function") {
     return false;
   }
@@ -58,14 +58,14 @@ function tryPostBootstrapLog(entry: BootstrapLogEntry): boolean {
 }
 
 function installBootstrapLogger(): void {
-  if (flightpathWindow.__flightpathBootstrapLogInstalled) {
+  if (ctrlyokeWindow.__ctrlyokeBootstrapLogInstalled) {
     return;
   }
 
-  flightpathWindow.__flightpathBootstrapLogInstalled = true;
+  ctrlyokeWindow.__ctrlyokeBootstrapLogInstalled = true;
   const queue =
-    flightpathWindow.__flightpathBootstrapLogQueue ??
-    (flightpathWindow.__flightpathBootstrapLogQueue = []);
+    ctrlyokeWindow.__ctrlyokeBootstrapLogQueue ??
+    (ctrlyokeWindow.__ctrlyokeBootstrapLogQueue = []);
 
   const enqueueOrPost = (level: BootstrapLogLevel, message: string): void => {
     const prefixedMessage = `[bootstrap] ${message}`;
@@ -84,8 +84,8 @@ function installBootstrapLogger(): void {
     writeConsole(level, entry.message);
   };
 
-  flightpathWindow.__flightpathBootstrapLog = enqueueOrPost;
-  flightpathWindow.__flightpathFlushBootstrapLogs = () => {
+  ctrlyokeWindow.__ctrlyokeBootstrapLog = enqueueOrPost;
+  ctrlyokeWindow.__ctrlyokeFlushBootstrapLogs = () => {
     if (queue.length === 0) {
       return;
     }
@@ -115,19 +115,19 @@ function installBootstrapLogger(): void {
 
 installBootstrapLogger();
 
-if (typeof flightpathWindow.acquireVsCodeApi !== "function") {
-  if (!flightpathWindow.vscodeApi) {
-    flightpathWindow.__flightpathBootstrapLog?.(
+if (typeof ctrlyokeWindow.acquireVsCodeApi !== "function") {
+  if (!ctrlyokeWindow.vscodeApi) {
+    ctrlyokeWindow.__ctrlyokeBootstrapLog?.(
       __fpLogLevels__.WARN,
       "window.acquireVsCodeApi is unavailable before React bootstrap"
     );
   }
-} else if (!flightpathWindow.vscodeApi) {
+} else if (!ctrlyokeWindow.vscodeApi) {
   try {
-    flightpathWindow.vscodeApi = flightpathWindow.acquireVsCodeApi();
-    flightpathWindow.__flightpathFlushBootstrapLogs?.();
+    ctrlyokeWindow.vscodeApi = ctrlyokeWindow.acquireVsCodeApi();
+    ctrlyokeWindow.__ctrlyokeFlushBootstrapLogs?.();
   } catch (error) {
-    flightpathWindow.__flightpathBootstrapLog?.(
+    ctrlyokeWindow.__ctrlyokeBootstrapLog?.(
       __fpLogLevels__.ERROR,
       `acquireVsCodeApi() threw: ${formatUnknownError(error)}`
     );

@@ -197,7 +197,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               disabled={isCLIManaged}
               title={
                 isCLIManaged
-                  ? "Read-only — workflow is running via FlightPath CLI"
+                  ? "Read-only — workflow is running via ctrlyoke CLI"
                   : "Cancel editing and return to new prompt mode"
               }
             >
@@ -211,7 +211,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               disabled={isCLIManaged || !hasContent || isPromptBeingSent}
               title={
                 isCLIManaged
-                  ? "Read-only — workflow is running via FlightPath CLI"
+                  ? "Read-only — workflow is running via ctrlyoke CLI"
                   : isPromptBeingSent
                     ? "Cannot update a prompt that is currently being sent"
                     : isPromptCompleted
@@ -229,7 +229,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               disabled={isCLIManaged || isPromptActivelyRunning}
               title={
                 isCLIManaged
-                  ? "Read-only — workflow is running via FlightPath CLI"
+                  ? "Read-only — workflow is running via ctrlyoke CLI"
                   : isFinalStepMode
                     ? "Disable final step"
                     : isPromptActivelyRunning
@@ -254,7 +254,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               disabled={isCLIManaged || !hasContent}
               title={
                 isCLIManaged
-                  ? "Read-only — workflow is running via FlightPath CLI"
+                  ? "Read-only — workflow is running via ctrlyoke CLI"
                   : queueButtonTooltip
               }
             >
@@ -268,7 +268,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               disabled={isCLIManaged || !hasContent}
               title={
                 isCLIManaged
-                  ? "Read-only — workflow is running via FlightPath CLI"
+                  ? "Read-only — workflow is running via ctrlyoke CLI"
                   : runButtonTooltip
               }
             >

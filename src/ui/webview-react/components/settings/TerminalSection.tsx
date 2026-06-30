@@ -11,7 +11,7 @@ import type {
   SettingSource,
   SettingWriteScope,
 } from "@root/types/WebviewMessageTypes";
-import type { TerminalShortcut } from "@root/types/FlightPathSettings";
+import type { TerminalShortcut } from "@root/types/CtrlYokeSettings";
 import { CustomSelect } from "../shared/CustomSelect";
 import { SettingInputRow } from "../shared/SettingInputRow";
 import { SettingToggleRow } from "../shared/SettingToggleRow";
@@ -745,7 +745,7 @@ export function TerminalSection({
             options={CONTROL_BAR_OPTIONS}
           />
           <p className="text-xs text-description-fg mt-1">
-            Auto shows the bar for touch browsers connected to the FlightPath
+            Auto shows the bar for touch browsers connected to the ctrlyoke
             server.
           </p>
         </SettingInputRow>

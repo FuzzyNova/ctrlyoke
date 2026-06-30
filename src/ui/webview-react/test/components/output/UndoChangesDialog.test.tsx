@@ -49,7 +49,7 @@ describe("UndoChangesDialog", () => {
       <UndoChangesDialog
         mode="undo"
         target={queueTarget}
-        workspacePath="C:/dev/FlightPath"
+        workspacePath="C:/dev/ctrlyoke"
         requestId="workflow-undo-test"
         onClose={vi.fn()}
         workflowEntries={[

@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { suite, test, teardown } from "mocha";
-import { WorkspaceInitializer } from "../../flightpath/orchestration/WorkspaceInitializer";
+import { WorkspaceInitializer } from "../../core/orchestration/WorkspaceInitializer";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 suite("WorkspaceInitializer", () => {
@@ -30,7 +30,7 @@ suite("WorkspaceInitializer", () => {
     assert.strictEqual(wasInitialized, true);
     const gitignorePath = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       ".gitignore"
     );
     const gitignoreContent = await fs.promises.readFile(gitignorePath, "utf8");
@@ -46,12 +46,12 @@ suite("WorkspaceInitializer", () => {
 
   test("appends missing generated .gitignore entries without removing user entries", async () => {
     const workspaceRoot = createWorkspace();
-    const flightpathDir = path.join(
+    const ctrlyokeDir = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR
+      PATH_CONSTANTS.CTRLYOKE_DIR
     );
-    const gitignorePath = path.join(flightpathDir, ".gitignore");
-    await fs.promises.mkdir(flightpathDir, { recursive: true });
+    const gitignorePath = path.join(ctrlyokeDir, ".gitignore");
+    await fs.promises.mkdir(ctrlyokeDir, { recursive: true });
     await fs.promises.writeFile(gitignorePath, "custom-entry\nlogs/\n", "utf8");
 
     await WorkspaceInitializer.reinitialize(workspaceRoot);

@@ -3,7 +3,7 @@ import {
   PromptStep,
   WorkflowStep,
   HarnessId,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import { SESSION_ID_SENTINELS } from "../types/DashboardConstants";
 import { PropertyResolver } from "./PropertyResolver";
 import { Log } from "./Log";
@@ -296,7 +296,7 @@ export class SessionResolver {
    * Applies three-tier precedence (using PropertyResolver):
    * 1. Prompt-level resumeSession setting (highest priority)
    * 2. Workflow-level resumeSession setting
-   * 3. Global flightpath.resumeExistingSession setting (lowest priority)
+   * 3. Global ctrlyoke.resumeExistingSession setting (lowest priority)
    *
    * @param prompt The prompt to check
    * @param workflow Workflow file for workflow-level defaults (optional)

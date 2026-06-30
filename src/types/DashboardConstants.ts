@@ -1,5 +1,5 @@
 /**
- * Shared constants for FlightPath Dashboard
+ * Shared constants for ctrlyoke Dashboard
  * SINGLE SOURCE OF TRUTH for all message types, states, and status values
  * Used by both TypeScript extension code AND JavaScript webview code
  */
@@ -88,7 +88,7 @@ export const MESSAGE_TYPES = {
   CHANGE_EXECUTION_MODE: "changeExecutionMode",
   CHANGE_MCP_SERVERS: "changeMcpServers",
   CHANGE_RESUME_SESSION: "changeResumeSession",
-  OPEN_SETTINGS: "openSettings", // Open VS Code settings for FlightPath
+  OPEN_SETTINGS: "openSettings", // Open VS Code settings for ctrlyoke
   OPEN_VSCODE_MCP_BROWSER: "openVscodeMcpBrowser", // Webview -> Extension: Open VS Code's native MCP server browser
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
@@ -183,7 +183,7 @@ export const MESSAGE_TYPES = {
 
   // VS Code-hosted server — Webview → Extension
   REGENERATE_SERVER_TOKEN: "regenerateServerToken", // Request token regeneration
-  GENERATE_SERVER_CERT: "generateServerCert", // Request self-signed cert generation → .flightpath/certs/
+  GENERATE_SERVER_CERT: "generateServerCert", // Request self-signed cert generation → .ctrlyoke/certs/
 
   // VS Code-hosted server — Extension → Webview
   SERVER_CERT_GENERATED: "serverCertGenerated", // Cert generated; settings updated with new paths
@@ -214,7 +214,7 @@ export const MESSAGE_TYPES = {
   REMOVE_WORKFLOW_HISTORY: "removeWorkflowHistory", // Remove single history entry: { filePath }
 
   // MCP Manager — Webview ↔ Extension
-  REQUEST_MCP_REGISTRY_SERVERS: "requestMcpRegistryServers", // Webview -> Extension: Load merged workspace+user FlightPath MCP registry
+  REQUEST_MCP_REGISTRY_SERVERS: "requestMcpRegistryServers", // Webview -> Extension: Load merged workspace+user ctrlyoke MCP registry
   SAVE_MCP_REGISTRY_SERVER: "saveMcpRegistryServer", // Webview -> Extension: Save one MCP registry entry { server, scope }
   DELETE_MCP_REGISTRY_SERVER: "deleteMcpRegistryServer", // Webview -> Extension: Delete one MCP registry entry { id, scope }
   REQUEST_MCP_LOCAL_SCAN: "requestMcpLocalScan", // Webview -> Extension: Scan local harness MCP configs for manager import
@@ -229,7 +229,7 @@ export const MESSAGE_TYPES = {
   REQUEST_HARNESS_FILES: "requestHarnessFiles", // Webview -> Extension: { fileType: "agent" | "skill" }
   HARNESS_FILES_RESULT: "harnessFilesResult", // Extension -> Webview: { files: ManagedFile[] }
   EXPORT_TO_HARNESS: "exportToHarness", // Webview -> Extension: { sourcePath, harnessId, fileType, overwrite? }
-  IMPORT_TO_FLIGHTPATH: "importToFlightPath", // Webview -> Extension: { sourcePath, fileType, overwrite? }
+  IMPORT_TO_CTRLYOKE: "importToCtrlYoke", // Webview -> Extension: { sourcePath, fileType, overwrite? }
   DELETE_FROM_HARNESS: "deleteFromHarness", // Webview -> Extension: { name, harnessId, fileType }
   SYNC_ALL_TO_HARNESS: "syncAllToHarness", // Webview -> Extension: { files, targetHarnessId, fileType }
   DELETE_ALL_FROM_HARNESS: "deleteAllFromHarness", // Webview -> Extension: { harnessId, fileType }
@@ -287,10 +287,10 @@ export const MESSAGE_TYPES = {
 
   // Startup lifecycle — Extension → Webview
   STARTUP_COMPLETE: "startupComplete", // Extension → Webview: startup sequence done (with or without auto-load)
-  WORKSPACE_INIT_REQUIRED: "workspaceInitRequired", // Extension → Webview: FlightPath not yet initialized in this workspace
+  WORKSPACE_INIT_REQUIRED: "workspaceInitRequired", // Extension → Webview: ctrlyoke not yet initialized in this workspace
 
   // Workspace trust — Webview → Extension
-  INITIALIZE_WORKSPACE: "initializeWorkspace", // Webview → Extension: user approved FlightPath initialization
+  INITIALIZE_WORKSPACE: "initializeWorkspace", // Webview → Extension: user approved ctrlyoke initialization
 
   // First-install layout tip — Extension ↔ Webview
   SHOW_LAYOUT_TIP: "showLayoutTip", // Extension → Webview: show first-install panel placement tip (first install only)
@@ -360,8 +360,8 @@ export type BrowserNotificationMode =
   (typeof BROWSER_NOTIFICATION_MODES)[keyof typeof BROWSER_NOTIFICATION_MODES];
 
 export const SERVICE_WORKER_BADGE_MESSAGE_TYPES = {
-  INCREMENT_NOTIFICATION_BADGE: "flightpath:incrementNotificationBadge",
-  CLEAR_NOTIFICATION_BADGE: "flightpath:clearNotificationBadge",
+  INCREMENT_NOTIFICATION_BADGE: "ctrlyoke:incrementNotificationBadge",
+  CLEAR_NOTIFICATION_BADGE: "ctrlyoke:clearNotificationBadge",
 } as const;
 
 export type ServiceWorkerBadgeMessageType =
@@ -385,10 +385,10 @@ export const HOSTED_ICON_FILES = {
 
 export const HOSTED_ICON_PATHS = {
   APP_ICON_PNG: `/${HOSTED_ICON_FILES.APP_ICON_PNG}`,
-  // Dynamic SVG routes — served by FlightPathHostedServer with configurable colors.
+  // Dynamic SVG routes — served by CtrlYokeHostedServer with configurable colors.
   APP_ICON_SVG: `/app-icon.svg`,
   FAVICON_PNG: `/${HOSTED_ICON_FILES.FAVICON_PNG}`,
-  // Dynamic SVG route — served by FlightPathHostedServer with configurable colors.
+  // Dynamic SVG route — served by CtrlYokeHostedServer with configurable colors.
   FAVICON_SVG: `/favicon.svg`,
   APPLE_TOUCH_ICON_PNG: `/${HOSTED_ICON_FILES.APPLE_TOUCH_ICON_PNG}`,
 } as const;
@@ -1219,8 +1219,8 @@ export type SettingWriteScope = Exclude<
 export const DISCOVERY_SOURCES = {
   USER: "user",
   WORKSPACE: "workspace",
-  /** Files found in the .flightpath/agents/ dir — FlightPath-exclusive, not scraped by harnesses */
-  WORKSPACE_FLIGHTPATH: "workspace-flightpath",
+  /** Files found in the .ctrlyoke/agents/ dir — ctrlyoke-exclusive, not scraped by harnesses */
+  WORKSPACE_CTRLYOKE: "workspace-ctrlyoke",
 } as const;
 
 export type DiscoverySource =
@@ -1255,7 +1255,7 @@ export type FooterPicker = (typeof FOOTER_PICKERS)[keyof typeof FOOTER_PICKERS];
 // SPECIAL TARGET IDS - Non-harness targets in the harness file manager
 // ============================================================================
 export const SPECIAL_TARGET_IDS = {
-  FLIGHTPATH: "flightpath",
+  CTRLYOKE: "ctrlyoke",
   VSCODE: "vscode",
   AGENTS: "agents",
 } as const;
@@ -1272,11 +1272,11 @@ export type FinalStepPhase =
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
 /**
  * All valid target IDs for the file manager — harness IDs plus special dirs.
- * "flightpath" → .flightpath/agents|skills (workspace) or ~/.flightpath/agents|skills (user)
+ * "ctrlyoke" → .ctrlyoke/agents|skills (workspace) or ~/.ctrlyoke/agents|skills (user)
  * "agents"     → .agents|.agents/skills (workspace) or ~/.agents|~/.agents/skills (user)
  * "vscode"     → VS Code user prompts dir (user-only; Windows/macOS/Linux variants)
  */
-export type AnyTargetId = HarnessId | "flightpath" | "vscode" | "agents";
+export type AnyTargetId = HarnessId | "ctrlyoke" | "vscode" | "agents";
 export type StatusMessageSeverity =
   (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
 export type ActionType = (typeof ACTION_TYPES)[keyof typeof ACTION_TYPES];
@@ -1324,15 +1324,15 @@ export type RetryPromptPlaceholder =
 
 // VS Code command IDs registered by the extension
 export const VSCODE_COMMANDS = {
-  ENABLE_SERVER: "flightpath.enableServer",
-  DISABLE_SERVER: "flightpath.disableServer",
-  REGENERATE_SERVER_TOKEN: "flightpath.regenerateServerToken",
-  SEARCH_HISTORY: "flightpath.searchHistory",
-  GENERATE_COMMIT_MESSAGE: "flightpath.generateCommitMessage",
-  CANCEL_COMMIT_MESSAGE_GENERATION: "flightpath.cancelCommitMessageGeneration",
+  ENABLE_SERVER: "ctrlyoke.enableServer",
+  DISABLE_SERVER: "ctrlyoke.disableServer",
+  REGENERATE_SERVER_TOKEN: "ctrlyoke.regenerateServerToken",
+  SEARCH_HISTORY: "ctrlyoke.searchHistory",
+  GENERATE_COMMIT_MESSAGE: "ctrlyoke.generateCommitMessage",
+  CANCEL_COMMIT_MESSAGE_GENERATION: "ctrlyoke.cancelCommitMessageGeneration",
 } as const;
 
-// Built-in VS Code Git extension command IDs that FlightPath invokes to open
+// Built-in VS Code Git extension command IDs that ctrlyoke invokes to open
 // native diff UI (verified against the vscode.git extension command surface).
 // `git.viewCommit` resolves its first arg to a repository, so invoke it as
 // executeCommand(VIEW_COMMIT, Uri.file(workspaceRoot), commitHash).
@@ -1345,5 +1345,5 @@ export const VSCODE_GIT_COMMANDS = {
 
 // VS Code context keys set by the extension (used in package.json `when` clauses)
 export const VSCODE_CONTEXT_KEYS = {
-  GENERATING_COMMIT_MESSAGE: "flightpath.generatingCommitMessage",
+  GENERATING_COMMIT_MESSAGE: "ctrlyoke.generatingCommitMessage",
 } as const;

@@ -24,8 +24,8 @@ export function setRuntimeMode(mode: RunnerId): void {
 }
 
 /**
- * Returns true when the current process is the standalone FlightPath CLI
- * binary (i.e. `flightpath run`), false when running inside the VS Code
+ * Returns true when the current process is the standalone ctrlyoke CLI
+ * binary (i.e. `ctrlyoke run`), false when running inside the VS Code
  * extension host.
  */
 export function isCli(): boolean {

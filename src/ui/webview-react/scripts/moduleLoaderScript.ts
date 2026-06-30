@@ -1,6 +1,6 @@
 // Dynamically imports the Vite bundle entry point with watchdog reload timers.
 // __fpModuleSrc__ is injected as a const in the wrapping <script type="module">
-// by FlightPathWebviewProvider._getHtmlForWebview before this IIFE runs.
+// by CtrlYokeWebviewProvider._getHtmlForWebview before this IIFE runs.
 // No imports; compiled as a standalone IIFE.
 declare const __fpModuleSrc__: string;
 declare const __fpLogLevels__: {
@@ -10,14 +10,14 @@ declare const __fpLogLevels__: {
 
 type ModuleLoaderWindow = Window &
   typeof globalThis & {
-    __flightpathStandalone?: boolean;
-    __flightpathReactMounted?: boolean;
-    __flightpathPanelHandshakeDone?: boolean;
-    __flightpathBootstrapLog?: (level: string, message: string) => void;
-    __flightpathFlushBootstrapLogs?: () => void;
+    __ctrlyokeStandalone?: boolean;
+    __ctrlyokeReactMounted?: boolean;
+    __ctrlyokePanelHandshakeDone?: boolean;
+    __ctrlyokeBootstrapLog?: (level: string, message: string) => void;
+    __ctrlyokeFlushBootstrapLogs?: () => void;
   };
 
-const flightpathWindow = window as ModuleLoaderWindow;
+const ctrlyokeWindow = window as ModuleLoaderWindow;
 
 function formatUnknownError(error: unknown): string {
   if (error instanceof Error) {
@@ -28,7 +28,7 @@ function formatUnknownError(error: unknown): string {
 
 function log(level: string, message: string): void {
   const fullMessage = `[moduleLoader] ${message}`;
-  const logger = flightpathWindow.__flightpathBootstrapLog;
+  const logger = ctrlyokeWindow.__ctrlyokeBootstrapLog;
   if (typeof logger === "function") {
     logger(level, fullMessage);
     return;
@@ -43,12 +43,12 @@ function log(level: string, message: string): void {
 const moduleTimeoutMs = 30_000;
 const handshakeTimeoutMs = 20_000;
 const recoveryCooldownMs = 10_000;
-const recoverySessionKey = "flightpath-panel-module-recovery-at";
-const handshakeSessionKey = "flightpath-panel-handshake-reload-at";
+const recoverySessionKey = "ctrlyoke-panel-module-recovery-at";
+const handshakeSessionKey = "ctrlyoke-panel-handshake-reload-at";
 
 // Fires if the Vite bundle never mounts React (import failure, CSP block, etc.).
 const timer = window.setTimeout(function () {
-  if (!flightpathWindow.__flightpathReactMounted) {
+  if (!ctrlyokeWindow.__ctrlyokeReactMounted) {
     const now = Date.now();
     let lastRecoveryAt = 0;
     try {
@@ -78,11 +78,11 @@ const timer = window.setTimeout(function () {
 
 // Fires if React mounted but the extension never completed the READY handshake.
 // Skip standalone browser clients; their WebSocket bridge owns reconnects.
-if (!flightpathWindow.__flightpathStandalone) {
+if (!ctrlyokeWindow.__ctrlyokeStandalone) {
   window.setTimeout(function () {
     if (
-      flightpathWindow.__flightpathReactMounted &&
-      !flightpathWindow.__flightpathPanelHandshakeDone
+      ctrlyokeWindow.__ctrlyokeReactMounted &&
+      !ctrlyokeWindow.__ctrlyokePanelHandshakeDone
     ) {
       const now = Date.now();
       let lastAt = 0;
@@ -110,7 +110,7 @@ if (!flightpathWindow.__flightpathStandalone) {
 void import(__fpModuleSrc__)
   .then(function () {
     window.clearTimeout(timer);
-    flightpathWindow.__flightpathFlushBootstrapLogs?.();
+    ctrlyokeWindow.__ctrlyokeFlushBootstrapLogs?.();
   })
   .catch(function (error: unknown) {
     window.clearTimeout(timer);

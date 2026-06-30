@@ -51,7 +51,7 @@ describe("WorkspaceViewerModal — visibility", () => {
   it("renders nothing when isOpen is false", () => {
     render(<WorkspaceViewerModal />);
 
-    expect(screen.queryByText("FlightPath Workspace")).not.toBeInTheDocument();
+    expect(screen.queryByText("ctrlyoke Workspace")).not.toBeInTheDocument();
   });
 
   it("renders the modal when isOpen is true", () => {
@@ -152,12 +152,12 @@ describe("WorkspaceViewerModal — header title", () => {
     });
     useSettingsStore
       .getState()
-      .updateGlobalSetting("workspaceRoot", "C:\\dev\\FlightPath");
+      .updateGlobalSetting("workspaceRoot", "C:\\dev\\ctrlyoke");
 
     render(<WorkspaceViewerModal />);
 
     expect(screen.getByText("index.ts")).toBeInTheDocument();
-    expect(screen.getByText("FlightPath/src/index.ts")).toBeInTheDocument();
+    expect(screen.getByText("ctrlyoke/src/index.ts")).toBeInTheDocument();
     expect(screen.getByTitle("Unsaved changes")).toBeInTheDocument();
   });
 
@@ -169,12 +169,12 @@ describe("WorkspaceViewerModal — header title", () => {
     });
     useSettingsStore
       .getState()
-      .updateGlobalSetting("workspaceRoot", "C:\\dev\\FlightPath");
+      .updateGlobalSetting("workspaceRoot", "C:\\dev\\ctrlyoke");
 
     render(<WorkspaceViewerModal />);
 
     expect(screen.getByText("fileA.ts")).toBeInTheDocument();
-    expect(screen.getByText("FlightPath/src/fileA.ts")).toBeInTheDocument();
+    expect(screen.getByText("ctrlyoke/src/fileA.ts")).toBeInTheDocument();
   });
 });
 

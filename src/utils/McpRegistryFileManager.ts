@@ -5,12 +5,12 @@ import {
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
 } from "../types/DashboardConstants";
-import type { McpServerConfig } from "../types/FlightPathTypes";
+import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import type { ManagedMcpServer } from "../types/WebviewMessageTypes";
 import { Log } from "./Log";
 import {
-  getFlightpathUserMcpRegistryPath,
-  getFlightpathWorkspaceMcpRegistryPath,
+  getCtrlYokeUserMcpRegistryPath,
+  getCtrlYokeWorkspaceMcpRegistryPath,
 } from "./McpConfigPaths";
 
 function isStringArray(value: unknown): value is string[] {
@@ -126,7 +126,7 @@ export class McpRegistryFileManager {
       if (!registryPath) return;
       for (const server of servers) {
         const managedLocation = {
-          targetId: SPECIAL_TARGET_IDS.FLIGHTPATH,
+          targetId: SPECIAL_TARGET_IDS.CTRLYOKE,
           scope,
           path: registryPath,
         };
@@ -232,12 +232,12 @@ export class McpRegistryFileManager {
 
   private getScopePath(scope: SettingWriteScope): string | null {
     if (scope === SETTING_SCOPES.USER) {
-      return getFlightpathUserMcpRegistryPath();
+      return getCtrlYokeUserMcpRegistryPath();
     }
     if (!this.workspaceRoot) {
       return null;
     }
-    return getFlightpathWorkspaceMcpRegistryPath(this.workspaceRoot);
+    return getCtrlYokeWorkspaceMcpRegistryPath(this.workspaceRoot);
   }
 }
 

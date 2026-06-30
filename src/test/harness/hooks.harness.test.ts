@@ -21,7 +21,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { spawnSync } from "child_process";
-import type { PromptFile } from "../../types/FlightPathTypes";
+import type { PromptFile } from "../../types/CtrlYokeTypes";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -142,11 +142,11 @@ interface HookRecord {
 interface HarnessRunResult {
   /** true if the harness binary was not installed (exit code 3) */
   skipped: boolean;
-  /** exit code from flightpath CLI */
+  /** exit code from ctrlyoke CLI */
   exitCode: number | null;
-  /** stdout output from flightpath CLI */
+  /** stdout output from ctrlyoke CLI */
   stdout: string;
-  /** stderr output from flightpath CLI */
+  /** stderr output from ctrlyoke CLI */
   stderr: string;
   /** hook records written by the recorder script */
   records: HookRecord[];
@@ -198,7 +198,7 @@ function buildWorkflow(harness: HarnessId, recorderScript: string): PromptFile {
 }
 
 /**
- * Invoke the FlightPath CLI for a single harness and return structured results.
+ * Invoke the ctrlyoke CLI for a single harness and return structured results.
  */
 function runHarness(
   harness: HarnessId,
@@ -259,7 +259,7 @@ function runHarness(
     }
   }
 
-  // Diagnostic: dump settings file and FlightPath log on failure
+  // Diagnostic: dump settings file and ctrlyoke log on failure
   if (records.length === 0) {
     const qwenSettings = path.join(tmpDir, ".qwen", "settings.json");
     if (fs.existsSync(qwenSettings)) {
@@ -269,8 +269,8 @@ function runHarness(
     } else {
       console.log(`  [diag] .qwen/settings.json NOT FOUND at: ${qwenSettings}`);
     }
-    // Print FlightPath log if available
-    const fpLogsDir = path.join(tmpDir, ".flightpath", "logs");
+    // Print ctrlyoke log if available
+    const fpLogsDir = path.join(tmpDir, ".ctrlyoke", "logs");
     if (fs.existsSync(fpLogsDir)) {
       const logFiles = fs
         .readdirSync(fpLogsDir)
@@ -282,7 +282,7 @@ function runHarness(
           .filter((l) => /hook|qwen|setting/i.test(l));
         if (lines.length > 0) {
           console.log(
-            `  [diag] FlightPath log (hook-related):\n${lines.slice(0, 30).join("\n")}`
+            `  [diag] ctrlyoke log (hook-related):\n${lines.slice(0, 30).join("\n")}`
           );
         }
       }

@@ -10,7 +10,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { spawnSync } from "child_process";
-import type { PromptFile } from "../../../types/FlightPathTypes";
+import type { PromptFile } from "../../../types/CtrlYokeTypes";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -61,7 +61,7 @@ export const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
 export interface RunResult {
   /** true when exit code 3 (harness binary not installed). */
   skipped: boolean;
-  /** Raw exit code from the flightpath CLI process. */
+  /** Raw exit code from the ctrlyoke CLI process. */
   exitCode: number | null;
   stdout: string;
   stderr: string;
@@ -72,7 +72,7 @@ export interface RunResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Serialise `workflow` to disk then invoke the FlightPath CLI in headless mode.
+ * Serialise `workflow` to disk then invoke the ctrlyoke CLI in headless mode.
  *
  * @param workflow   PromptFile object to execute.
  * @param tmpDir     Working directory for the run; workflow JSON is written here.

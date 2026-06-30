@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import {
   EndConditionEvaluator,
   EvaluationResult,
-} from "../flightpath/EndConditionEvaluator";
+} from "../core/EndConditionEvaluator";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
 suite("EndConditionEvaluator Tests", () => {
@@ -33,9 +33,9 @@ suite("EndConditionEvaluator Tests", () => {
   suite("parseScriptCommand - Tokenization", () => {
     test("splits simple space-separated command", () => {
       const { scriptPath, args } = EndConditionEvaluator.parseScriptCommand(
-        ".flightpath/scripts/check.py 5"
+        ".ctrlyoke/scripts/check.py 5"
       );
-      assert.strictEqual(scriptPath, ".flightpath/scripts/check.py");
+      assert.strictEqual(scriptPath, ".ctrlyoke/scripts/check.py");
       assert.deepStrictEqual(args, ["5"]);
     });
 
@@ -436,7 +436,7 @@ suite("EndConditionEvaluator Tests", () => {
 
   suite("isWithinDirectory - Boundary Security", () => {
     test("should accept exact directory match", () => {
-      const dir = path.join("C:", "dev", "FlightPath");
+      const dir = path.join("C:", "dev", "ctrlyoke");
       assert.strictEqual(
         EndConditionEvaluator.isWithinDirectory(dir, dir),
         true
@@ -444,7 +444,7 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should accept immediate child path", () => {
-      const dir = path.join("C:", "dev", "FlightPath");
+      const dir = path.join("C:", "dev", "ctrlyoke");
       const child = path.join(dir, "scripts", "check.py");
       assert.strictEqual(
         EndConditionEvaluator.isWithinDirectory(child, dir),
@@ -453,7 +453,7 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should accept deeply nested child path", () => {
-      const dir = path.join("C:", "dev", "FlightPath");
+      const dir = path.join("C:", "dev", "ctrlyoke");
       const child = path.join(dir, "a", "b", "c", "d.js");
       assert.strictEqual(
         EndConditionEvaluator.isWithinDirectory(child, dir),
@@ -462,9 +462,9 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should reject sibling path sharing same prefix (CVE bypass)", () => {
-      // C:\dev\FlightPath-evil must NOT pass the check for C:\dev\FlightPath
-      const workspace = path.join("C:", "dev", "FlightPath");
-      const sibling = path.join("C:", "dev", "FlightPath-evil", "payload.ps1");
+      // C:\dev\ctrlyoke-evil must NOT pass the check for C:\dev\ctrlyoke
+      const workspace = path.join("C:", "dev", "ctrlyoke");
+      const sibling = path.join("C:", "dev", "ctrlyoke-evil", "payload.ps1");
       assert.strictEqual(
         EndConditionEvaluator.isWithinDirectory(sibling, workspace),
         false
@@ -472,7 +472,7 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should reject parent directory", () => {
-      const workspace = path.join("C:", "dev", "FlightPath");
+      const workspace = path.join("C:", "dev", "ctrlyoke");
       const parent = path.join("C:", "dev");
       assert.strictEqual(
         EndConditionEvaluator.isWithinDirectory(parent, workspace),
@@ -481,7 +481,7 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should reject root directory", () => {
-      const workspace = path.join("C:", "dev", "FlightPath");
+      const workspace = path.join("C:", "dev", "ctrlyoke");
       assert.strictEqual(
         EndConditionEvaluator.isWithinDirectory(path.sep, workspace),
         false
@@ -489,7 +489,7 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("should reject completely unrelated path", () => {
-      const workspace = path.join("C:", "dev", "FlightPath");
+      const workspace = path.join("C:", "dev", "ctrlyoke");
       const unrelated = path.join("C:", "tmp", "evil.sh");
       assert.strictEqual(
         EndConditionEvaluator.isWithinDirectory(unrelated, workspace),
@@ -526,9 +526,9 @@ suite("EndConditionEvaluator Tests", () => {
       );
     });
 
-    test("should end with .flightpath/scripts", () => {
+    test("should end with .ctrlyoke/scripts", () => {
       const dir = EndConditionEvaluator.getUserHomeScriptsDir();
-      const expectedSuffix = path.join(".flightpath", "scripts");
+      const expectedSuffix = path.join(".ctrlyoke", "scripts");
       assert.ok(
         dir.endsWith(expectedSuffix),
         `Expected dir to end with "${expectedSuffix}", got: "${dir}"`

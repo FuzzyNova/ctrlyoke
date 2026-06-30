@@ -1,19 +1,19 @@
-// FlightPath OpenCode Completion Plugin
+// ctrlyoke OpenCode Completion Plugin
 //
-// Source: src/scripts/flightpath-opencode-plugin.ts
-// Deployed by FlightPath to: .opencode/plugin/flightpath-completion-hook.ts
+// Source: src/scripts/ctrlyoke-opencode-plugin.ts
+// Deployed by ctrlyoke to: .opencode/plugin/ctrlyoke-completion-hook.ts
 //
 // OpenCode only loads .ts plugins (not .js). This file must remain TypeScript
 // with ESM import/export syntax.
 //
-// FlightPath injects environment variables into the OpenCode process:
-//   FLIGHTPATH_NOTIFY_DIR      — absolute path to the notification directory
-//   FLIGHTPATH_RUN_ID          — per-run UUID for collision-free start file naming
-//   FLIGHTPATH_WORKSPACE_ROOT  — workspace root directory
+// ctrlyoke injects environment variables into the OpenCode process:
+//   CTRLYOKE_NOTIFY_DIR      — absolute path to the notification directory
+//   CTRLYOKE_RUN_ID          — per-run UUID for collision-free start file naming
+//   CTRLYOKE_WORKSPACE_ROOT  — workspace root directory
 //
 // User hooks are loaded at startup from a JSON sidecar file written alongside
-// this plugin by FlightPath's deployCompletionPlugin():
-//   {workspaceRoot}/.opencode/plugin/flightpath-hooks.json
+// this plugin by ctrlyoke's deployCompletionPlugin():
+//   {workspaceRoot}/.opencode/plugin/ctrlyoke-hooks.json
 //   Format: [{ "event": "stop"|"sessionStart"|..., "command": "node ..." }, ...]
 //
 // Plugin behaviour:
@@ -35,19 +35,19 @@
 //    start file writing.
 //
 // Diagnostic logging:
-//  - Enabled when FLIGHTPATH_DIAGNOSTIC_LOGS=true
-//  - Logs written to .flightpath/logs/flightpath-opencode-plugin-debug.log
+//  - Enabled when CTRLYOKE_DIAGNOSTIC_LOGS=true
+//  - Logs written to .ctrlyoke/logs/ctrlyoke-opencode-plugin-debug.log
 
 import { writeFileSync, readFileSync, mkdirSync, appendFileSync } from "fs";
 import { execSync, spawnSync } from "child_process";
 import path from "path";
 
-const NOTIFY_DIR: string | undefined = process.env.FLIGHTPATH_NOTIFY_DIR;
-const RUN_ID: string | undefined = process.env.FLIGHTPATH_RUN_ID;
+const NOTIFY_DIR: string | undefined = process.env.CTRLYOKE_NOTIFY_DIR;
+const RUN_ID: string | undefined = process.env.CTRLYOKE_RUN_ID;
 const workspaceRoot: string =
-  process.env.FLIGHTPATH_WORKSPACE_ROOT || process.cwd();
+  process.env.CTRLYOKE_WORKSPACE_ROOT || process.cwd();
 const ENABLED_HOOK_EVENTS = new Set(
-  (process.env.FLIGHTPATH_NOTIFY_HOOK_EVENTS ?? "")
+  (process.env.CTRLYOKE_NOTIFY_HOOK_EVENTS ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean)
@@ -80,7 +80,7 @@ const mainSessions = new Set<string>();
 const startFilesWritten = new Set<string>();
 let hookArtifactCounter = 0;
 
-// Load user hooks from the sidecar JSON file written by FlightPath alongside this plugin.
+// Load user hooks from the sidecar JSON file written by ctrlyoke alongside this plugin.
 // Format: [{ event: "stop"|"sessionStart"|"preToolUse"|"postToolUse"|"userPromptSubmit", command: string }]
 interface UserHook {
   event: string;
@@ -92,7 +92,7 @@ try {
     workspaceRoot,
     ".opencode",
     "plugin",
-    "flightpath-hooks.json"
+    "ctrlyoke-hooks.json"
   );
   _userHooks = JSON.parse(readFileSync(hooksPath, "utf-8")) as UserHook[];
 } catch {
@@ -159,12 +159,12 @@ function _runDecisionUserHook(
 // Diagnostic logging — derive logs dir from NOTIFY_DIR (interactive) or workspaceRoot (headless).
 const _logsDir = NOTIFY_DIR
   ? path.resolve(NOTIFY_DIR, "..", "..", "logs")
-  : path.join(workspaceRoot, ".flightpath", "logs");
+  : path.join(workspaceRoot, ".ctrlyoke", "logs");
 let _logPath: string | null = null;
 try {
-  if (process.env.FLIGHTPATH_DIAGNOSTIC_LOGS === "true" && _logsDir) {
+  if (process.env.CTRLYOKE_DIAGNOSTIC_LOGS === "true" && _logsDir) {
     mkdirSync(_logsDir, { recursive: true });
-    _logPath = path.join(_logsDir, "flightpath-opencode-plugin-debug.log");
+    _logPath = path.join(_logsDir, "ctrlyoke-opencode-plugin-debug.log");
   }
 } catch (_e) {}
 
@@ -179,8 +179,8 @@ function _debugLog(message: string, data?: unknown): void {
   } catch (_e) {}
 }
 
-export const FlightPathHook = async (_hookContext: unknown) => {
-  _debugLog("🚀 FlightPath OpenCode plugin loaded", {
+export const CtrlYokeHook = async (_hookContext: unknown) => {
+  _debugLog("🚀 ctrlyoke OpenCode plugin loaded", {
     notifyDir: NOTIFY_DIR,
     runId: RUN_ID,
     workspaceRoot,
@@ -259,11 +259,11 @@ export const FlightPathHook = async (_hookContext: unknown) => {
     return {
       runId: RUN_ID,
       timestamp: Date.now(),
-      workflowId: process.env.FLIGHTPATH_WORKFLOW_ID || "",
-      workflowName: process.env.FLIGHTPATH_WORKFLOW_NAME || "",
-      promptIndex: parseInt(process.env.FLIGHTPATH_PROMPT_INDEX || "0", 10),
-      promptName: process.env.FLIGHTPATH_PROMPT_NAME || "",
-      harnessId: process.env.FLIGHTPATH_HARNESS_ID || "",
+      workflowId: process.env.CTRLYOKE_WORKFLOW_ID || "",
+      workflowName: process.env.CTRLYOKE_WORKFLOW_NAME || "",
+      promptIndex: parseInt(process.env.CTRLYOKE_PROMPT_INDEX || "0", 10),
+      promptName: process.env.CTRLYOKE_PROMPT_NAME || "",
+      harnessId: process.env.CTRLYOKE_HARNESS_ID || "",
     };
   }
 

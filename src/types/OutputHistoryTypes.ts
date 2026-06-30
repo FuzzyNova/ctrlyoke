@@ -7,7 +7,7 @@ import {
 import type {
   WorkflowRuntimeCommand,
   WorkflowRuntimeState,
-} from "./FlightPathTypes";
+} from "./CtrlYokeTypes";
 import { CliOutput, UndoFileInstruction } from "./WebviewMessageTypes";
 import type { StatusMessage } from "./WebviewMessageTypes";
 import type { UnifiedDiffHunk } from "./CliOutputTypes";

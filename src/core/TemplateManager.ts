@@ -61,7 +61,7 @@ interface ParsedTemplateMeta {
 }
 
 /**
- * Manages workflow templates for FlightPath
+ * Manages workflow templates for ctrlyoke
  * - Loads built-in and custom templates
  * - Extracts variables from template content
  * - Creates workflow files from templates
@@ -210,7 +210,7 @@ export class TemplateManager {
     if (!workspaceFolder) return null;
     return path.join(
       workspaceFolder.uri.fsPath,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.TEMPLATES_DIR
     );
   }
@@ -263,7 +263,7 @@ export class TemplateManager {
       }
     }
 
-    // Discover custom templates from .flightpath/templates/
+    // Discover custom templates from .ctrlyoke/templates/
     const customTemplates = await this.discoverCustomTemplates();
     templates.push(...customTemplates);
 
@@ -486,7 +486,7 @@ export class TemplateManager {
   }
 
   /**
-   * Discover custom templates from .flightpath/templates/
+   * Discover custom templates from .ctrlyoke/templates/
    */
   private async discoverCustomTemplates(): Promise<TemplateInfo[]> {
     const customPath = this.getCustomTemplatesPath();

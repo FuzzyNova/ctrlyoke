@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { QueueState, EXECUTION_STATES } from "../types/FlightPathTypes";
-import { HarnessStatus } from "../flightpath/HarnessIntegration";
+import { QueueState, EXECUTION_STATES } from "../types/CtrlYokeTypes";
+import { HarnessStatus } from "../core/HarnessIntegration";
 
 /**
  * Detailed status from harness integration
@@ -21,7 +21,7 @@ export class StatusBarManager {
       vscode.StatusBarAlignment.Left,
       100
     );
-    this.statusBarItem.command = "flightpath.openPanel";
+    this.statusBarItem.command = "ctrlyoke.openPanel";
     this.updateStatusBar();
     context.subscriptions.push(this.statusBarItem);
   }
@@ -33,8 +33,8 @@ export class StatusBarManager {
     state?: QueueState,
     copilotStatus?: HarnessDetailedStatus
   ): void {
-    let text = "$(compass) FlightPath";
-    let tooltip = "FlightPath - Click to open";
+    let text = "$(compass) ctrlyoke";
+    let tooltip = "ctrlyoke - Click to open";
     let backgroundColor: vscode.ThemeColor | undefined;
 
     if (state) {
@@ -42,32 +42,32 @@ export class StatusBarManager {
 
       switch (state.status) {
         case EXECUTION_STATES.RUNNING:
-          text = `$(compass-dot) FlightPath ${progress.current}/${progress.total}`;
-          tooltip = `FlightPath - Running (${progress.percentage}% complete)`;
+          text = `$(compass-dot) ctrlyoke ${progress.current}/${progress.total}`;
+          tooltip = `ctrlyoke - Running (${progress.percentage}% complete)`;
           backgroundColor = new vscode.ThemeColor(
             "statusBarItem.prominentBackground"
           );
           break;
 
         case EXECUTION_STATES.PAUSING:
-          text = `$(debug-pause) FlightPath ${progress.current}/${progress.total}`;
-          tooltip = "FlightPath - Pausing after the current step";
+          text = `$(debug-pause) ctrlyoke ${progress.current}/${progress.total}`;
+          tooltip = "ctrlyoke - Pausing after the current step";
           backgroundColor = new vscode.ThemeColor(
             "statusBarItem.warningBackground"
           );
           break;
 
         case EXECUTION_STATES.PAUSED:
-          text = `$(debug-pause) FlightPath ${progress.current}/${progress.total}`;
-          tooltip = "FlightPath - Paused (click to resume)";
+          text = `$(debug-pause) ctrlyoke ${progress.current}/${progress.total}`;
+          tooltip = "ctrlyoke - Paused (click to resume)";
           backgroundColor = new vscode.ThemeColor(
             "statusBarItem.warningBackground"
           );
           break;
 
         case EXECUTION_STATES.COMPLETED:
-          text = `$(check) FlightPath Complete`;
-          tooltip = "FlightPath - Workflow completed successfully";
+          text = `$(check) ctrlyoke Complete`;
+          tooltip = "ctrlyoke - Workflow completed successfully";
           backgroundColor = new vscode.ThemeColor(
             "statusBarItem.prominentBackground"
           );
@@ -79,8 +79,8 @@ export class StatusBarManager {
           break;
 
         case EXECUTION_STATES.ERROR:
-          text = `$(error) FlightPath Error`;
-          tooltip = "FlightPath - Execution failed (click for details)";
+          text = `$(error) ctrlyoke Error`;
+          tooltip = "ctrlyoke - Execution failed (click for details)";
           backgroundColor = new vscode.ThemeColor(
             "statusBarItem.errorBackground"
           );
@@ -119,30 +119,30 @@ export class StatusBarManager {
     switch (copilotStatus.initializationStatus) {
       case HarnessStatus.Initializing:
         return {
-          text: "$(compass) FlightPath - Initializing...",
-          tooltip: "FlightPath - Checking Copilot availability...",
+          text: "$(compass) ctrlyoke - Initializing...",
+          tooltip: "ctrlyoke - Checking Copilot availability...",
         };
       case HarnessStatus.Waiting:
         return {
-          text: `$(compass) FlightPath - Waiting for Copilot (${copilotStatus.pollingAttempts}/${copilotStatus.maxPollingAttempts})`,
-          tooltip: "FlightPath - Waiting for GitHub Copilot to activate...",
+          text: `$(compass) ctrlyoke - Waiting for Copilot (${copilotStatus.pollingAttempts}/${copilotStatus.maxPollingAttempts})`,
+          tooltip: "ctrlyoke - Waiting for GitHub Copilot to activate...",
         };
       case HarnessStatus.Ready:
         return {
-          text: "$(compass-active) FlightPath - Ready",
+          text: "$(compass-active) ctrlyoke - Ready",
           tooltip:
-            "FlightPath - Ready to execute workflows with Copilot automation",
+            "ctrlyoke - Ready to execute workflows with Copilot automation",
         };
       case HarnessStatus.Unavailable:
         return {
-          text: "$(warning) FlightPath - Setup Required",
+          text: "$(warning) ctrlyoke - Setup Required",
           tooltip:
-            "FlightPath - Copilot automation unavailable. Click to retry detection.",
+            "ctrlyoke - Copilot automation unavailable. Click to retry detection.",
         };
       default:
         return {
-          text: "$(compass) FlightPath",
-          tooltip: "FlightPath - Click to open",
+          text: "$(compass) ctrlyoke",
+          tooltip: "ctrlyoke - Click to open",
         };
     }
   }

@@ -3,7 +3,7 @@ import * as path from "path";
 import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
-import { configService } from "../config/FlightPathConfigService";
+import { configService } from "../config/CtrlYokeConfigService";
 import {
   getRecentCommits,
   getGitTrackedFiles,
@@ -297,7 +297,7 @@ export async function getFileCompletions(
       documentation:
         `**Directory structure attachment**\n\n` +
         `Insert: \`${buildDirectoryReference(dirPath)}\`\n\n` +
-        `FlightPath will attach a file tree of this directory.\n\n` +
+        `ctrlyoke will attach a file tree of this directory.\n\n` +
         `_No file contents, just structure._`,
       sortText: `0_${dirPath.split(path.sep).length}_0_${dirPath}`,
       filterText: `${dirPath} ${dirName}`,
@@ -372,7 +372,7 @@ async function getSymbolCompletions(
           `Type: ${symbolKindName}\n\n` +
           `Location: \`${relativePath}:${startLine}-${endLine}\`\n\n` +
           `Insert: \`${buildSymbolReference(relativePath, symbol.name, startLine, endLine)}\`\n\n` +
-          `_FlightPath will attach this symbol's recorded line range._`,
+          `_ctrlyoke will attach this symbol's recorded line range._`,
         sortText: symbol.name,
         filterText: `${symbol.name} ${relativePath}`,
       };

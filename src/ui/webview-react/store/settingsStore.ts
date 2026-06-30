@@ -24,7 +24,7 @@ import type {
   PreCondition,
   TerminalSettings,
 } from "@root/types/WebviewMessageTypes";
-import type { EndCondition, ErrorBehavior } from "@root/types/FlightPathTypes";
+import type { EndCondition, ErrorBehavior } from "@root/types/CtrlYokeTypes";
 
 /**
  * Model option for dropdowns

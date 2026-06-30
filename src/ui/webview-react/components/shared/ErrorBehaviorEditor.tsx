@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CustomSelect } from "./CustomSelect";
-import type { ErrorBehavior } from "@root/types/FlightPathTypes";
+import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 
 const ERROR_ACTION_OPTIONS = [
   { value: "stop", label: "Stop Workflow" },
@@ -68,7 +68,7 @@ export function ErrorBehaviorEditor({
         <label
           htmlFor={`${idPrefix}-on-error`}
           className="text-xs font-semibold uppercase text-description-fg"
-          title="What FlightPath should do when the harness itself fails."
+          title="What ctrlyoke should do when the harness itself fails."
         >
           On Harness Error
         </label>

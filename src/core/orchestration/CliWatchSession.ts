@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { WorkflowSummary, EXECUTION_STATES } from "../../types/FlightPathTypes";
+import { WorkflowSummary, EXECUTION_STATES } from "../../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
 import { LOCK_STATUS } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
@@ -238,7 +238,7 @@ export class CliWatchSession implements vscode.Disposable {
   private setupHistoryWatcher(): void {
     const historyDir = path.join(
       this.workspaceFolderPath,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.HISTORY_DIR,
       this.workflowId
     );

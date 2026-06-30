@@ -4,7 +4,7 @@ import type {
   ExecutionMode,
   PermissionMode,
 } from "../types/DashboardConstants";
-import { configService } from "../config/FlightPathConfigService";
+import { configService } from "../config/CtrlYokeConfigService";
 
 export interface ResolvedCliConfig {
   harness: string;
@@ -53,7 +53,7 @@ export interface ResolvedCliConfig {
 
 /**
  * Node.js CLI implementation of PlatformAdapter.
- * Used by the standalone flightpath CLI binary.
+ * Used by the standalone ctrlyoke CLI binary.
  */
 export class CliAdapter implements PlatformAdapter {
   constructor(private readonly config: ResolvedCliConfig) {}

@@ -4,14 +4,14 @@ import {
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import type { HookEvent, UserHookConfig } from "../../../types/FlightPathTypes";
+import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
 
 /**
  * Gemini CLI Notification Monitor
  *
  * Hook configuration: Written to .gemini/settings.json in workspace (no --settings flag).
- * Notification directory: .flightpath/temp/gemini-notifications/
- * Notification script: flightpath-gemini-hook.js
+ * Notification directory: .ctrlyoke/temp/gemini-notifications/
+ * Notification script: ctrlyoke-gemini-hook.js
  *
  * Gemini uses AfterAgent (not Stop) as the completion event.
  * The hook script normalizes AfterAgent → hookEvent: "Stop" so
@@ -45,13 +45,13 @@ export class GeminiNotificationMonitor
     notifyDir: string,
     _workspaceRoot: string,
     userHooks?: UserHookConfig[],
-    flightpathEvents?: HookEvent[]
+    ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
     const command = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
       notifyDir
     );
-    const selectedEvents = flightpathEvents ?? ["sessionStart", "stop"];
+    const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop"];
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const hooks = this.buildCommandHooks(
       command,

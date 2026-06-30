@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "FlightPath Global Settings",
-  "description": "Configuration schema for .flightpath/settings.json",
+  "title": "ctrlyoke Global Settings",
+  "description": "Configuration schema for .ctrlyoke/settings.json",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -337,7 +337,7 @@
         },
         "autoDeleteTempFiles": {
           "type": "boolean",
-          "description": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .flightpath/temp/ for debugging."
+          "description": "Automatically delete categorized prompt temp files after execution. Set to false to retain files in .ctrlyoke/temp/ for debugging."
         }
       }
     },
@@ -484,7 +484,7 @@
       "properties": {
         "showCliOutput": {
           "type": "boolean",
-          "description": "Show CLI output in the FlightPath panel."
+          "description": "Show CLI output in the ctrlyoke panel."
         },
         "showCliCommand": {
           "type": "boolean",
@@ -535,20 +535,20 @@
     },
     "server": {
       "type": "object",
-      "description": "FlightPath hosted server settings.",
+      "description": "ctrlyoke hosted server settings.",
       "additionalProperties": false,
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Whether the FlightPath hosted server is enabled."
+          "description": "Whether the ctrlyoke hosted server is enabled."
         },
         "port": {
           "type": "number",
-          "description": "Port for the FlightPath hosted server."
+          "description": "Port for the ctrlyoke hosted server."
         },
         "standalonePort": {
           "type": "number",
-          "description": "Port for the standalone (non-extension) FlightPath server."
+          "description": "Port for the standalone (non-extension) ctrlyoke server."
         },
         "theme": {
           "type": "string",

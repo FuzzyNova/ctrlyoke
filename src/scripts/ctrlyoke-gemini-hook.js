@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * FlightPath Gemini Hook Handler
+ * ctrlyoke Gemini Hook Handler
  *
  * This script is executed by Gemini CLI when hook events occur.
  * It receives hook input JSON via stdin and writes a notification file
- * that FlightPath monitors for session discovery and completion detection.
+ * that ctrlyoke monitors for session discovery and completion detection.
  *
  * Supported hook events:
  * - SessionStart: Called when new session starts (provides session ID immediately)
  * - AfterAgent: Called when execution completes (normalized to "Stop" in notification)
  * - Notification: Gemini's system alert hook; ToolPermission alerts are treated
- *   as FlightPath permission-request events
+ *   as ctrlyoke permission-request events
  *
- * Usage (configured by FlightPath via .gemini/settings.json):
+ * Usage (configured by ctrlyoke via .gemini/settings.json):
  *   { "hooks": { "SessionStart": [...], "AfterAgent": [...] } }
  *
  * Hook input format (from Gemini via stdin):
@@ -27,7 +27,7 @@
  *
  * Notification directory is passed as first command-line argument.
  *
- * Debug logging: All hook data logged to <workspace>/.flightpath/logs/flightpath-gemini-hook-debug.log
+ * Debug logging: All hook data logged to <workspace>/.ctrlyoke/logs/ctrlyoke-gemini-hook-debug.log
  */
 
 const fs = require("fs");
@@ -40,10 +40,10 @@ const {
   requireSessionId,
   ensureNotifyDir,
   buildNotifyFilePath,
-} = require("./flightpath-hook-utils");
+} = require("./ctrlyoke-hook-utils");
 
-const SCRIPT_NAME = "flightpath-gemini-hook";
-const SCRIPT_PREFIX = "FlightPath Gemini Hook";
+const SCRIPT_NAME = "ctrlyoke-gemini-hook";
+const SCRIPT_PREFIX = "ctrlyoke Gemini Hook";
 
 function main() {
   const notifyDir = process.argv[2];

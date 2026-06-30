@@ -6,7 +6,7 @@ import {
   isScriptStep,
   ScriptRuntimeOutput,
   type FailureKind,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import { TypedEmitter } from "../utils/TypedEmitter";
 import {
@@ -30,7 +30,7 @@ import {
   PriorContextItemType,
 } from "../types/DashboardConstants";
 import type { InlinePriorContextRef } from "../utils/FileReferenceParser";
-import type { FlightPathNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
+import type { CtrlYokeNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
 
 /**
  * Minimal container for VS Code-style disposable subscriptions.
@@ -219,7 +219,7 @@ export abstract class HarnessIntegration {
 
   // Event emitter for hook notification events (fired by HookEventMonitor during execution)
   protected notificationEventEmitter =
-    new TypedEmitter<FlightPathNotificationEvent>();
+    new TypedEmitter<CtrlYokeNotificationEvent>();
   public readonly onNotificationEvent = this.notificationEventEmitter.event;
 
   constructor(

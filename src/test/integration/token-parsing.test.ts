@@ -1,8 +1,8 @@
 import * as assert from "assert";
-import { CliIntegration } from "../../flightpath/harness/CliIntegration";
-import { CopilotCliProvider } from "../../flightpath/harness/copilot/CopilotCliProvider";
-import { ClaudeCliProvider } from "../../flightpath/harness/claude/ClaudeCliProvider";
-import { OpenCodeCliProvider } from "../../flightpath/harness/opencode/OpenCodeCliProvider";
+import { CliIntegration } from "../../core/harness/CliIntegration";
+import { CopilotCliProvider } from "../../core/harness/copilot/CopilotCliProvider";
+import { ClaudeCliProvider } from "../../core/harness/claude/ClaudeCliProvider";
+import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 import { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import * as vscode from "vscode";
 

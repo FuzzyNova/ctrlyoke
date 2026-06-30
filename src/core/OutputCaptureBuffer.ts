@@ -1,7 +1,7 @@
 import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
-import type { WorkflowStep, PromptStep } from "../types/FlightPathTypes";
-import { isScriptStep } from "../types/FlightPathTypes";
-import { EXECUTION_STATES } from "../types/FlightPathTypes";
+import type { WorkflowStep, PromptStep } from "../types/CtrlYokeTypes";
+import { isScriptStep } from "../types/CtrlYokeTypes";
+import { EXECUTION_STATES } from "../types/CtrlYokeTypes";
 import { FINAL_STEP_PHASES } from "../types/DashboardConstants";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import { normalizeCliEvents } from "../utils/CliEventNormalizer";

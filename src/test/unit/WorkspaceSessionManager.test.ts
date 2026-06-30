@@ -3,18 +3,18 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { WorkspaceSessionManager } from "../../flightpath/orchestration/WorkspaceSessionManager";
-import { PromptFileParser } from "../../flightpath/PromptFileParser";
+import { WorkspaceSessionManager } from "../../core/orchestration/WorkspaceSessionManager";
+import { PromptFileParser } from "../../core/PromptFileParser";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 suite("WorkspaceSessionManager", () => {
   test("uses lastModifiedAt instead of filename order for recent session discovery", async () => {
     const workspaceRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), "flightpath-workspace-session-manager-")
+      path.join(os.tmpdir(), "ctrlyoke-workspace-session-manager-")
     );
     const queueDir = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.QUEUE_DIR
     );
     await fs.mkdir(queueDir, { recursive: true });

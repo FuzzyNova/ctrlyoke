@@ -2,8 +2,8 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { PromptFileParser } from "../flightpath/PromptFileParser";
-import type { PromptStep } from "../types/FlightPathTypes";
+import { PromptFileParser } from "../core/PromptFileParser";
+import type { PromptStep } from "../types/CtrlYokeTypes";
 
 suite("PromptFileParser Tests", () => {
   let parser: PromptFileParser;
@@ -101,7 +101,7 @@ suite("PromptFileParser Tests", () => {
 
     test("should preserve errorBehavior in parsed result", async () => {
       const tempDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), "flightpath-parser-error-behavior-")
+        path.join(os.tmpdir(), "ctrlyoke-parser-error-behavior-")
       );
       const filePath = path.join(tempDir, "error-behavior.flightpath.json");
 
@@ -145,7 +145,7 @@ suite("PromptFileParser Tests", () => {
 
     test("should reject invalid errorBehavior values", async () => {
       const tempDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), "flightpath-parser-error-behavior-invalid-")
+        path.join(os.tmpdir(), "ctrlyoke-parser-error-behavior-invalid-")
       );
       const filePath = path.join(tempDir, "invalid-error-behavior.flightpath.json");
 
@@ -186,7 +186,7 @@ suite("PromptFileParser Tests", () => {
 
     test("should preserve enabled on prompt steps, script steps, and finalStep", async () => {
       const tempDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), "flightpath-parser-enabled-")
+        path.join(os.tmpdir(), "ctrlyoke-parser-enabled-")
       );
       const filePath = path.join(tempDir, "enabled.flightpath.json");
 

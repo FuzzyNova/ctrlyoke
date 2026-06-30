@@ -38,7 +38,7 @@ DONE: <one-line summary of what was accomplished>
 
 ### If Gaps Remain
 
-First call `flightpath_append_queue` with specific, actionable prompts for each gap. Each queued prompt should:
+First call `ctrlyoke_append_queue` with specific, actionable prompts for each gap. Each queued prompt should:
 
 - Reference the exact files that need changes
 - Describe precisely what is missing or wrong

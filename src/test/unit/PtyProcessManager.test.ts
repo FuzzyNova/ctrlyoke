@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { SHELL_KINDS } from "../../types/DashboardConstants";
-import { resolveShellKind } from "../../flightpath/harness/PtyProcessManager";
+import { resolveShellKind } from "../../core/harness/PtyProcessManager";
 
 suite("PtyProcessManager", () => {
   test("should classify common shell executables", () => {

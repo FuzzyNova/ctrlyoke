@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as path from "path";
-import { OpenCodeNotificationMonitor } from "../../flightpath/harness/opencode/OpenCodeNotificationMonitor";
+import { OpenCodeNotificationMonitor } from "../../core/harness/opencode/OpenCodeNotificationMonitor";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 suite("OpenCodeNotificationMonitor", () => {
@@ -20,15 +20,15 @@ suite("OpenCodeNotificationMonitor", () => {
     assert.deepStrictEqual(config, { type: "none" });
   });
 
-  test("should resolve the notification directory under .flightpath temp", () => {
-    const workspaceRoot = path.join("C:", "dev", "FlightPath");
+  test("should resolve the notification directory under .ctrlyoke temp", () => {
+    const workspaceRoot = path.join("C:", "dev", "ctrlyoke");
     const notifyDir = monitor.getNotificationDirectory(workspaceRoot);
 
     assert.strictEqual(
       notifyDir,
       path.join(
         workspaceRoot,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.TEMP_DIR,
         "opencode-notifications"
       )

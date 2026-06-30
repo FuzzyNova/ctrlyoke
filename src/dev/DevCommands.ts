@@ -11,7 +11,7 @@
  * In production builds, this module is not imported and the code is eliminated
  * by esbuild's dead code elimination.
  *
- * Entry point: a single `flightpath.devMenu` command declared in package.json
+ * Entry point: a single `ctrlyoke.devMenu` command declared in package.json
  * that shows a QuickPick menu listing all dev tools. Individual commands are
  * registered programmatically (no package.json entries) and are accessible
  * from the menu or via executeCommand in tests.
@@ -624,11 +624,11 @@ async function testChatAgentSelection(): Promise<void> {
  */
 async function testCopilotAutomation(): Promise<boolean> {
   const testMessage =
-    "Hello Copilot! This is an automated test message from FlightPath using editor chat. Please respond with 'Test received' if you can see this.";
+    "Hello Copilot! This is an automated test message from ctrlyoke using editor chat. Please respond with 'Test received' if you can see this.";
 
   try {
     Log.info(
-      "🚀 FlightPath: Starting Copilot automation test (Editor Chat approach)..."
+      "🚀 ctrlyoke: Starting Copilot automation test (Editor Chat approach)..."
     );
 
     // Get chat window location from settings
@@ -693,10 +693,10 @@ async function testCopilotAutomation(): Promise<boolean> {
     await vscode.commands.executeCommand("workbench.action.chat.submit");
 
     // Success!
-    Log.info("✅ FlightPath: Automation test completed successfully!");
+    Log.info("✅ ctrlyoke: Automation test completed successfully!");
 
     const response = await vscode.window.showInformationMessage(
-      "🎉 FlightPath: Automation test completed! Check the editor or chat panel for the test message. Did it work?",
+      "🎉 ctrlyoke: Automation test completed! Check the editor or chat panel for the test message. Did it work?",
       "Yes, it worked!",
       "No, it failed",
       "Run again"
@@ -706,7 +706,7 @@ async function testCopilotAutomation(): Promise<boolean> {
       return await testCopilotAutomation();
     } else if (response === "Yes, it worked!") {
       vscode.window.showInformationMessage(
-        "🎉 Excellent! FlightPath Copilot automation is feasible. The editor chat approach can be used."
+        "🎉 Excellent! ctrlyoke Copilot automation is feasible. The editor chat approach can be used."
       );
       return true;
     } else {
@@ -716,11 +716,11 @@ async function testCopilotAutomation(): Promise<boolean> {
       return false;
     }
   } catch (error) {
-    Log.error("❌ FlightPath: Automation test failed:", error);
+    Log.error("❌ ctrlyoke: Automation test failed:", error);
 
     await vscode.window
       .showErrorMessage(
-        `FlightPath Test Failed: ${error}. This may indicate automation won't work in this VS Code version.`,
+        `ctrlyoke Test Failed: ${error}. This may indicate automation won't work in this VS Code version.`,
         "View Error Details"
       )
       .then((selection) => {
@@ -803,7 +803,7 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
   } else {
     // Create a temporary document to show the commands
     const doc = await vscode.workspace.openTextDocument({
-      content: `FlightPath: ${title} (${filteredCommands.length} found)\n\n${filteredCommands.join("\n")}`,
+      content: `ctrlyoke: ${title} (${filteredCommands.length} found)\n\n${filteredCommands.join("\n")}`,
       language: "plaintext",
     });
     await vscode.window.showTextDocument(doc);
@@ -815,7 +815,7 @@ ${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
  *
  * This allows updating ModelConstants.ts without manual copy-paste:
  * 1. Run extension (F5)
- * 2. Run "FlightPath: Export Discovered Models" command
+ * 2. Run "ctrlyoke: Export Discovered Models" command
  * 3. Run: npm run sync-models -- --import
  */
 async function exportDiscoveredModels(): Promise<void> {
@@ -827,7 +827,7 @@ async function exportDiscoveredModels(): Promise<void> {
 
   if (chatModels.length === 0) {
     vscode.window.showWarningMessage(
-      "No models discovered yet. Wait for extension to initialize or run 'FlightPath: Retry Copilot Detection'."
+      "No models discovered yet. Wait for extension to initialize or run 'ctrlyoke: Retry Copilot Detection'."
     );
     return;
   }
@@ -875,7 +875,7 @@ async function exportDiscoveredModels(): Promise<void> {
       await vscode.window.showTextDocument(doc);
     } else if (action === "Run Sync") {
       // Open terminal and run sync command
-      const terminal = vscode.window.createTerminal("FlightPath Sync");
+      const terminal = vscode.window.createTerminal("ctrlyoke Sync");
       terminal.show();
       terminal.sendText("npm run sync-models -- --import");
     }
@@ -893,7 +893,7 @@ async function exportDiscoveredModels(): Promise<void> {
  * dev/reference/vscode-css-vars.json so we can inspect which variables are
  * actually available (and what their values are) in the active theme.
  *
- * Usage: run "FlightPath: Dump CSS Variables" from the command palette (dev only).
+ * Usage: run "ctrlyoke: Dump CSS Variables" from the command palette (dev only).
  */
 async function dumpVsCodeCssVariables(
   context: vscode.ExtensionContext
@@ -905,7 +905,7 @@ async function dumpVsCodeCssVariables(
   }
 
   const panel = vscode.window.createWebviewPanel(
-    "flightpath.cssVarDump",
+    "ctrlyoke.cssVarDump",
     "Dumping CSS Vars…",
     { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
     { enableScripts: true, localResourceRoots: [] }
@@ -1000,10 +1000,10 @@ export function registerDevCommands(
   context: vscode.ExtensionContext,
   handlers: DevCommandHandlers = {}
 ): void {
-  Log.info("🔧 FlightPath: Registering development commands...");
+  Log.info("🔧 ctrlyoke: Registering development commands...");
 
   // Set context key so the devMenu command is visible in the command palette
-  vscode.commands.executeCommand("setContext", "flightpath.devMode", true);
+  vscode.commands.executeCommand("setContext", "ctrlyoke.devMode", true);
 
   // ── Individual dev commands ──────────────────────────────────────────────
   // These are registered programmatically (no package.json entries required).
@@ -1012,7 +1012,7 @@ export function registerDevCommands(
   // Test Copilot Automation command - feasibility test (legacy POC)
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      "flightpath.test.copilotAutomation",
+      "ctrlyoke.test.copilotAutomation",
       async () => {
         await testCopilotAutomation();
       }
@@ -1022,7 +1022,7 @@ export function registerDevCommands(
   // Test File Attachment command
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      "flightpath.test.fileAttachment",
+      "ctrlyoke.test.fileAttachment",
       async () => {
         await testFileAttachment();
       }
@@ -1032,7 +1032,7 @@ export function registerDevCommands(
   // Test Chat Model Selection command
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      "flightpath.test.chatModelSelection",
+      "ctrlyoke.test.chatModelSelection",
       async () => {
         await testChatModelSelection();
       }
@@ -1042,7 +1042,7 @@ export function registerDevCommands(
   // Test Chat Agent Selection command
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      "flightpath.test.chatAgentSelection",
+      "ctrlyoke.test.chatAgentSelection",
       async () => {
         await testChatAgentSelection();
       }
@@ -1051,7 +1051,7 @@ export function registerDevCommands(
 
   // List all available chat commands (debugging tool)
   context.subscriptions.push(
-    vscode.commands.registerCommand("flightpath.listChatCommands", async () => {
+    vscode.commands.registerCommand("ctrlyoke.listChatCommands", async () => {
       await listAndDisplayCommands(
         "Available Chat Commands",
         (cmd) =>
@@ -1066,7 +1066,7 @@ export function registerDevCommands(
 
   // List all available VS Code commands (debugging tool)
   context.subscriptions.push(
-    vscode.commands.registerCommand("flightpath.listAllCommands", async () => {
+    vscode.commands.registerCommand("ctrlyoke.listAllCommands", async () => {
       await listAndDisplayCommands(
         "All Available VS Code Commands",
         undefined,
@@ -1077,7 +1077,7 @@ export function registerDevCommands(
 
   // Debug: Show current document language ID
   context.subscriptions.push(
-    vscode.commands.registerCommand("flightpath.showLanguageId", () => {
+    vscode.commands.registerCommand("ctrlyoke.showLanguageId", () => {
       const editor = vscode.window.activeTextEditor;
       if (editor) {
         const doc = editor.document;
@@ -1094,7 +1094,7 @@ export function registerDevCommands(
   // Export Discovered Models command (for sync-models.mjs)
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      "flightpath.exportDiscoveredModels",
+      "ctrlyoke.exportDiscoveredModels",
       async () => {
         await exportDiscoveredModels();
       }
@@ -1103,7 +1103,7 @@ export function registerDevCommands(
 
   // Dump all --vscode-* CSS variables from active theme to a JSON file
   context.subscriptions.push(
-    vscode.commands.registerCommand("flightpath.dumpCssVars", async () => {
+    vscode.commands.registerCommand("ctrlyoke.dumpCssVars", async () => {
       await dumpVsCodeCssVariables(context);
     })
   );
@@ -1111,7 +1111,7 @@ export function registerDevCommands(
   if (handlers.sendTestNotification) {
     context.subscriptions.push(
       vscode.commands.registerCommand(
-        "flightpath.dev.sendTestNotification",
+        "ctrlyoke.dev.sendTestNotification",
         async () => {
           await handlers.sendTestNotification?.();
         }
@@ -1122,7 +1122,7 @@ export function registerDevCommands(
   // ── Dev menu (single palette-visible entry) ─────────────────────────────
   // Shows a QuickPick that dispatches to any of the individual dev commands.
   context.subscriptions.push(
-    vscode.commands.registerCommand("flightpath.devMenu", async () => {
+    vscode.commands.registerCommand("ctrlyoke.devMenu", async () => {
       const items: Array<{
         label: string;
         description: string;
@@ -1131,50 +1131,50 @@ export function registerDevCommands(
         {
           label: "$(beaker) Test Copilot Automation",
           description: "Feasibility test for chat automation (legacy POC)",
-          command: "flightpath.test.copilotAutomation",
+          command: "ctrlyoke.test.copilotAutomation",
         },
         {
           label: "$(paperclip) Test File Attachment",
           description: "Test github.copilot.chat.attachFile command",
-          command: "flightpath.test.fileAttachment",
+          command: "ctrlyoke.test.fileAttachment",
         },
         {
           label: "$(symbol-enum) Test Chat Model Selection",
           description: "Test workbench.action.chat.changeModel",
-          command: "flightpath.test.chatModelSelection",
+          command: "ctrlyoke.test.chatModelSelection",
         },
         {
           label: "$(hubot) Test Chat Agent Selection",
           description: "Test programmatic agent selection",
-          command: "flightpath.test.chatAgentSelection",
+          command: "ctrlyoke.test.chatAgentSelection",
         },
         {
           label: "$(list-filter) List Chat Commands",
           description:
             "Dump Copilot/chat commands → dev/reference/CHAT_COMMANDS.md",
-          command: "flightpath.listChatCommands",
+          command: "ctrlyoke.listChatCommands",
         },
         {
           label: "$(list-unordered) List All VS Code Commands",
           description: "Dump all commands → dev/reference/VSCODE_COMMANDS.md",
-          command: "flightpath.listAllCommands",
+          command: "ctrlyoke.listAllCommands",
         },
         {
           label: "$(symbol-text) Show Language ID",
           description: "Show language ID of the active editor document",
-          command: "flightpath.showLanguageId",
+          command: "ctrlyoke.showLanguageId",
         },
         {
           label: "$(export) Export Discovered Models",
           description:
             "Write discovered models to scripts/discovered-models.json",
-          command: "flightpath.exportDiscoveredModels",
+          command: "ctrlyoke.exportDiscoveredModels",
         },
         {
           label: "$(symbol-color) Dump CSS Variables",
           description:
             "Write all --vscode-* CSS vars → dev/reference/vscode-css-vars.json",
-          command: "flightpath.dumpCssVars",
+          command: "ctrlyoke.dumpCssVars",
         },
         ...(handlers.sendTestNotification
           ? [
@@ -1182,14 +1182,14 @@ export function registerDevCommands(
                 label: "$(bell) Send Test Notification",
                 description:
                   "Trigger a browser/push + VS Code notification test event",
-                command: "flightpath.dev.sendTestNotification",
+                command: "ctrlyoke.dev.sendTestNotification",
               },
             ]
           : []),
       ];
 
       const picked = await vscode.window.showQuickPick(items, {
-        title: "FlightPath Developer Tools",
+        title: "ctrlyoke Developer Tools",
         placeHolder: "Select a dev tool to run…",
         matchOnDescription: true,
       });
@@ -1200,5 +1200,5 @@ export function registerDevCommands(
     })
   );
 
-  Log.info("🔧 FlightPath: Development commands registered");
+  Log.info("🔧 ctrlyoke: Development commands registered");
 }

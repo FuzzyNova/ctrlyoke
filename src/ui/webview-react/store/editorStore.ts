@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
-import type { ErrorBehavior } from "@root/types/FlightPathTypes";
+import type { ErrorBehavior } from "@root/types/CtrlYokeTypes";
 import type { PromptStep } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
 import type {
@@ -1001,7 +1001,7 @@ export const useEditorStore = create<
     };
 
     // Merge under "editorState" key to coexist with other vscode state consumers
-    // (e.g. uiStore's Zustand persist storage uses "flightpath-ui-state" key).
+    // (e.g. uiStore's Zustand persist storage uses "ctrlyoke-ui-state" key).
     const root = vscode.getState() ?? {};
     vscode.setState({ ...root, editorState });
   },

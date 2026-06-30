@@ -121,8 +121,8 @@ export function ServerSection({
 
   const generatedCertLocation =
     activeScope === SETTING_SCOPES.USER
-      ? "~/.flightpath/certs/"
-      : ".flightpath/certs/";
+      ? "~/.ctrlyoke/certs/"
+      : ".ctrlyoke/certs/";
 
   const [showQr, setShowQr] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -177,7 +177,7 @@ export function ServerSection({
         {!isStandalone && (
           <SettingToggleRow
             label="Enable on launch"
-            description="Automatically start the hosted server when FlightPath activates."
+            description="Automatically start the hosted server when ctrlyoke activates."
             checked={server.enabled}
             onChange={(value) => onUpdate("server.enabled", value)}
             path="server.enabled"
@@ -300,10 +300,10 @@ export function ServerSection({
 
             <div className="mt-2 space-y-1 text-xs text-description-fg italic">
               <p>
-                FlightPath uses the token in this link instead of a user login.
+                ctrlyoke uses the token in this link instead of a user login.
                 Treat the link like a password and share it only with people you
                 trust. Select the QR code button next to the link to open
-                FlightPath on your phone, then choose{" "}
+                ctrlyoke on your phone, then choose{" "}
                 <em>Add to Home Screen</em> or <em>Install app</em> in your
                 browser.
               </p>
@@ -336,7 +336,7 @@ export function ServerSection({
         {!isStandalone && (
           <SettingInputRow
             label="Standalone port"
-            description="Port used by the flightpath server CLI command (headless mode, no VS Code required)."
+            description="Port used by the ctrlyoke server CLI command (headless mode, no VS Code required)."
             id="server-standalone-port"
             path="server.standalonePort"
             {...rowProps}
@@ -504,7 +504,7 @@ export function ServerSection({
                   {certDownloadUrl && !certFlash && (
                     <a
                       href={certDownloadUrl}
-                      download="flightpath.cer"
+                      download="ctrlyoke.cer"
                       className="inline-flex items-center gap-1 text-xs text-description-fg hover:text-foreground"
                       title="Download the server certificate for manual installation on iOS"
                     >
@@ -566,7 +566,7 @@ export function ServerSection({
                 <code>{generatedCertLocation}</code>
                 {activeScope === SETTING_SCOPES.WORKSPACE
                   ? " in the current workspace and gitignored."
-                  : " in your user FlightPath folder."}{" "}
+                  : " in your user ctrlyoke folder."}{" "}
                 Browsers will show a warning on first visit — click proceed to
                 continue. Changes take effect on server restart.
                 <br />
@@ -594,7 +594,7 @@ export function ServerSection({
           </h3>
           <a
             href={certDownloadUrl}
-            download="flightpath.cer"
+            download="ctrlyoke.cer"
             className="text-xs text-description-fg hover:text-foreground underline"
             title="Download the server certificate for manual installation on iOS"
           >

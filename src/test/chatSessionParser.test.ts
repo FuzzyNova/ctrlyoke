@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import { ChatSessionParser } from "../flightpath/harness/chat/ChatSessionParser";
+import { ChatSessionParser } from "../core/harness/chat/ChatSessionParser";
 import { CLI_EVENT_TYPES } from "../types/DashboardConstants";
 
 suite("ChatSessionParser Tests", () => {
@@ -12,7 +12,7 @@ suite("ChatSessionParser Tests", () => {
   setup(() => {
     parser = new ChatSessionParser();
     // Create temp directory for test session files
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "flightpath-test-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctrlyoke-test-"));
   });
 
   teardown(() => {

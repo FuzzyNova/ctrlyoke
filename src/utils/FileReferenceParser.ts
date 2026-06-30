@@ -1,11 +1,11 @@
 /**
  * Single source of truth for parsing file references from prompt text
  *
- * FlightPath supports multiple reference syntaxes:
+ * ctrlyoke supports multiple reference syntaxes:
  * 1. @path → Full file (CLI-native, no line ranges)
  * 2. @"path with spaces/file" → Full file with quoted path (for paths containing spaces)
  * 3. @path/to/directory/ → Directory structure (trailing slash)
- * 4. #selection:path:line-line → Line range snippet (FlightPath XML)
+ * 4. #selection:path:line-line → Line range snippet (ctrlyoke XML)
  * 5. #selection:"path with spaces":line-line → Line range with quoted path
  * 6. #sym:path:SymbolName:line-line → Symbol reference with an encoded line range
  * 7. #sym:"path with spaces":SymbolName:line-line → Quoted-path symbol reference

@@ -3,7 +3,7 @@ import * as path from "path";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 
 /**
- * Provides clickable links for FlightPath context references
+ * Provides clickable links for ctrlyoke context references
  *
  * Supported patterns:
  * - @path/to/file.ts       → Open file
@@ -223,7 +223,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const fileUri = vscode.Uri.file(absolutePath);
 
       const commandUri = vscode.Uri.parse(
-        `command:flightpath.openFileWithSelection?${encodeURIComponent(
+        `command:ctrlyoke.openFileWithSelection?${encodeURIComponent(
           JSON.stringify({ uri: fileUri.toString(), startLine, endLine })
         )}`
       );
@@ -278,7 +278,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
         const range = new vscode.Range(startPos, endPos);
 
         const commandUri = vscode.Uri.parse(
-          `command:flightpath.openGitChange?${encodeURIComponent(
+          `command:ctrlyoke.openGitChange?${encodeURIComponent(
             JSON.stringify({ ref: ref.toLowerCase() })
           )}`
         );
@@ -317,7 +317,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const fileUri = vscode.Uri.file(absolutePath);
 
       const commandUri = vscode.Uri.parse(
-        `command:flightpath.openFileWithSelection?${encodeURIComponent(
+        `command:ctrlyoke.openFileWithSelection?${encodeURIComponent(
           JSON.stringify({
             uri: fileUri.toString(),
             startLine,

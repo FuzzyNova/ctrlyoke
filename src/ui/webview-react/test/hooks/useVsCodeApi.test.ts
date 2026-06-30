@@ -9,7 +9,7 @@ import { useVsCodeApi, getVsCodeApi } from "@hooks/useVsCodeApi";
 
 beforeEach(() => {
   window.vscodeApi = window.acquireVsCodeApi?.();
-  delete window.__flightpathFlushBootstrapLogs;
+  delete window.__ctrlyokeFlushBootstrapLogs;
 });
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ describe("useVsCodeApi", () => {
 
   it("flushes buffered bootstrap logs when the API resolves", () => {
     const flushMock = vi.fn();
-    window.__flightpathFlushBootstrapLogs = flushMock;
+    window.__ctrlyokeFlushBootstrapLogs = flushMock;
 
     renderHook(() => useVsCodeApi());
 

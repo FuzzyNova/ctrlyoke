@@ -1340,8 +1340,8 @@ export function findContextReferenceMatches(
     directoryQuoted: /@"([^"]+\/)"(?![\w])/g,
     // Include alphanumerics in the boundary check so the engine cannot
     // backtrack to a partial extension when the complete path ends in `/`.
-    // Without this, `@.flightpath/.history/` also matched a truncated file
-    // reference such as `@.flightpath/.histor`.
+    // Without this, `@.ctrlyoke/.history/` also matched a truncated file
+    // reference such as `@.ctrlyoke/.histor`.
     fullFile: /@([^\s@#"]+\.[a-zA-Z0-9]+)(?![a-zA-Z0-9/])/g,
     directory: /@([^\s@#"]+\/)/g,
     lineRangeQuoted: /#selection:"([^"]+)":(\d+)-(\d+)/g,

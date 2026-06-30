@@ -74,11 +74,11 @@ export class WebPushService {
 
   constructor(
     workspaceRoot: string,
-    private readonly vapidSubject: string = "mailto:flightpath@example.com" //TODO: update this with a valid support email when we get one
+    private readonly vapidSubject: string = "mailto:ctrlyoke@example.com" //TODO: update this with a valid support email when we get one
   ) {
     this.notificationsDir = path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.NOTIFICATIONS_DIR
     );
     this.vapidKeysPath = path.join(

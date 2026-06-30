@@ -29,7 +29,7 @@
 !out/templates/**
 !out/schemas/**
 !out/scripts/*.js
-!out/scripts/flightpath-opencode-plugin.ts
+!out/scripts/ctrlyoke-opencode-plugin.ts
 !out/server/standalone-shim.js
 !out/ui/webview-scripts/*.js
 !out/ui/webview-react/index.html

@@ -7,11 +7,11 @@
  */
 export interface PlatformAdapter {
   /**
-   * Get the directory that contains the `.flightpath` folder for the current
+   * Get the directory that contains the `.ctrlyoke` folder for the current
    * workspace. The value is window-stable (resolved once per window session).
    *
    * VS Code: resolved by `WorkspaceRootResolver` in this order —
-   *   1. the `flightpath.workspaceDirectory` setting, if set;
+   *   1. the `ctrlyoke.workspaceDirectory` setting, if set;
    *   2. the `.code-workspace` file's directory, when one is open on disk;
    *   3. the first workspace folder (single-folder case);
    *   4. `process.cwd()` when no folder is open.
@@ -74,7 +74,7 @@ export interface PlatformAdapter {
 
   /**
    * Optional: Focus the dashboard/output panel.
-   * VS Code: executes "flightpath.focusDashboard" command
+   * VS Code: executes "ctrlyoke.focusDashboard" command
    * CLI: no-op (undefined)
    */
   focusDashboard?(): void;

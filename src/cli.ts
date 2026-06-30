@@ -8,8 +8,8 @@ import { access } from "fs/promises";
 import { CliAdapter } from "./platform/CliAdapter";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
 import { registerCliAdapter } from "./platform/vscode-shim";
-import { IntegrationFactory } from "./flightpath/IntegrationFactory";
-import { WorkflowInstance } from "./flightpath/WorkflowInstance";
+import { IntegrationFactory } from "./core/IntegrationFactory";
+import { WorkflowInstance } from "./core/WorkflowInstance";
 import {
   EXECUTION_STATES,
   STEP_STATUS,
@@ -23,14 +23,14 @@ import type {
   HarnessId,
   PermissionMode,
 } from "./types/DashboardConstants";
-import { isScriptStep } from "./types/FlightPathTypes";
-import { configService } from "./config/FlightPathConfigService";
+import { isScriptStep } from "./types/CtrlYokeTypes";
+import { configService } from "./config/CtrlYokeConfigService";
 import {
   createUserConfigBackend,
   createWorkspaceConfigBackend,
 } from "./config/FileConfigBackend";
-import type { PartialFlightPathSettings } from "./types/FlightPathSettings";
-import type { QueueState, WorkflowRunnerLock } from "./types/FlightPathTypes";
+import type { PartialCtrlYokeSettings } from "./types/CtrlYokeSettings";
+import type { QueueState, WorkflowRunnerLock } from "./types/CtrlYokeTypes";
 import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
 import { WorkflowLockManager } from "./utils/WorkflowLockManager";
@@ -46,7 +46,7 @@ const version = typeof VERSION !== "undefined" ? VERSION : "0.0.0-dev";
 const program = new Command();
 
 program
-  .name("flightpath")
+  .name("ctrlyoke")
   .description("Execute AI-powered workflow automation from the command line")
   .version(version);
 
@@ -232,7 +232,7 @@ async function runCommand(
   const resolvedFile = file ? path.resolve(file) : undefined;
   const workingDir = options.cwd ?? process.cwd();
 
-  // Redirect all Log.* output to .flightpath/logs/flightpath-<timestamp>.log.
+  // Redirect all Log.* output to .ctrlyoke/logs/ctrlyoke-<timestamp>.log.
   // Must be called before any component code that calls Log.debug/info/etc.,
   // so that diagnostic messages never pollute the terminal output.
   Log.initializeCli(workingDir, options.verbose);
@@ -275,7 +275,7 @@ async function runCommand(
   };
 
   // Initialize config service with file-based backends so that settings from
-  // ~/.flightpath/settings.json and <workspace>/.flightpath/settings.json are
+  // ~/.ctrlyoke/settings.json and <workspace>/.ctrlyoke/settings.json are
   // resolved before applying the CLI overlay below.
   const userBackend = createUserConfigBackend();
   const workspaceBackend = createWorkspaceConfigBackend(workingDir);
@@ -283,7 +283,7 @@ async function runCommand(
   configService.setWorkspaceBackend(workspaceBackend);
 
   // Build CLI overlay from explicitly provided flags only (not Commander defaults).
-  const overlay: PartialFlightPathSettings = {};
+  const overlay: PartialCtrlYokeSettings = {};
   // --harness: only include when not the default (copilot-cli)
   if (options.harness && options.harness !== HARNESS_IDS.COPILOT_CLI) {
     overlay.defaults = { harness: options.harness as HarnessId };
@@ -364,15 +364,15 @@ async function runCommand(
 
   if (!options.quiet && !options.json) {
     if (executionMode === EXECUTION_MODES.INTERACTIVE) {
-      // FlightPath header minimal so it doesn't clutter the user's session.
+      // ctrlyoke header minimal so it doesn't clutter the user's session.
       console.log(
         chalk.dim(
-          `FlightPath v${version} — starting ${chalk.yellow(config.harness)} in interactive mode…`
+          `ctrlyoke v${version} — starting ${chalk.yellow(config.harness)} in interactive mode…`
         )
       );
       console.log();
     } else {
-      console.log(chalk.bold(`FlightPath CLI v${version}`));
+      console.log(chalk.bold(`ctrlyoke CLI v${version}`));
       console.log(chalk.dim("━".repeat(52)));
       console.log();
       console.log(
@@ -608,7 +608,7 @@ async function validateCommand(file: string): Promise<void> {
   }
 
   try {
-    const { PromptFileParser } = await import("./flightpath/PromptFileParser");
+    const { PromptFileParser } = await import("./core/PromptFileParser");
     const parser = new PromptFileParser();
     const result = await parser.parsePromptFile(resolvedFile);
     if (result) {
@@ -647,7 +647,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
   configService.setWorkspaceBackend(workspaceBackend);
 
   if (options.model) {
-    const overlay: PartialFlightPathSettings = {
+    const overlay: PartialCtrlYokeSettings = {
       commit: { model: options.model },
     };
     configService.setCliOverlay(overlay);
@@ -689,7 +689,7 @@ async function commitCommand(options: CommitCommandOptions): Promise<void> {
 
   if (options.printOnly) {
     // Pipe-friendly: only the message goes to stdout.
-    //   git commit -m "$(flightpath commit --print-only)"
+    //   git commit -m "$(ctrlyoke commit --print-only)"
     console.log(message);
     return;
   }

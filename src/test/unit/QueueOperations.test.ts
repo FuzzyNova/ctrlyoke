@@ -1,10 +1,10 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { PromptQueue } from "../../flightpath/PromptQueue";
+import { PromptQueue } from "../../core/PromptQueue";
 import {
   getQueueStatus,
   appendToQueue,
-} from "../../flightpath/QueueOperations";
+} from "../../core/QueueOperations";
 import {
   EXECUTION_STATES,
   QUEUE_POSITION,
@@ -26,7 +26,7 @@ suite("QueueOperations", () => {
       const queue = new PromptQueue();
       const status = getQueueStatus(
         queue,
-        "/workspace/.flightpath/.queue/my-workflow-2024-12-23T15-30-00.flightpath.json"
+        "/workspace/.ctrlyoke/.queue/my-workflow-2024-12-23T15-30-00.flightpath.json"
       );
       assert.strictEqual(status.metadata.workflowName, "my-workflow");
     });
@@ -35,7 +35,7 @@ suite("QueueOperations", () => {
       const queue = new PromptQueue();
       const status = getQueueStatus(
         queue,
-        "C:\\Users\\dev\\.flightpath\\.queue\\build-and-test-2025-01-01T00-00-00.flightpath.json"
+        "C:\\Users\\dev\\.ctrlyoke\\.queue\\build-and-test-2025-01-01T00-00-00.flightpath.json"
       );
       assert.strictEqual(status.metadata.workflowName, "build-and-test");
     });

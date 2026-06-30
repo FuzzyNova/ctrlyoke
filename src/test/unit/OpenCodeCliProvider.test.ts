@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
-import { OpenCodeCliProvider } from "../../flightpath/harness/opencode/OpenCodeCliProvider";
+import { OpenCodeCliProvider } from "../../core/harness/opencode/OpenCodeCliProvider";
 
 suite("OpenCodeCliProvider", () => {
   test("writes a temporary plugin gitignore and cleans plugin artifacts after a run", async () => {
@@ -24,7 +24,7 @@ suite("OpenCodeCliProvider", () => {
           extensionPath,
           "out",
           "scripts",
-          "flightpath-opencode-plugin.ts"
+          "ctrlyoke-opencode-plugin.ts"
         ),
         "export default {};\n",
         "utf-8"
@@ -46,13 +46,13 @@ suite("OpenCodeCliProvider", () => {
       );
 
       const pluginDir = path.join(workspaceRoot, ".opencode", "plugin");
-      const pluginPath = path.join(pluginDir, "flightpath-completion-hook.ts");
-      const sidecarPath = path.join(pluginDir, "flightpath-hooks.json");
+      const pluginPath = path.join(pluginDir, "ctrlyoke-completion-hook.ts");
+      const sidecarPath = path.join(pluginDir, "ctrlyoke-hooks.json");
       const gitignorePath = path.join(pluginDir, ".gitignore");
 
       const gitignoreContent = await fs.readFile(gitignorePath, "utf-8");
-      assert.ok(gitignoreContent.includes("flightpath-completion-hook.ts"));
-      assert.ok(gitignoreContent.includes("flightpath-hooks.json"));
+      assert.ok(gitignoreContent.includes("ctrlyoke-completion-hook.ts"));
+      assert.ok(gitignoreContent.includes("ctrlyoke-hooks.json"));
       await fs.access(pluginPath);
       await fs.access(sidecarPath);
 
@@ -95,7 +95,7 @@ suite("OpenCodeCliProvider", () => {
           extensionPath,
           "out",
           "scripts",
-          "flightpath-opencode-plugin.ts"
+          "ctrlyoke-opencode-plugin.ts"
         ),
         "export default {};\n",
         "utf-8"

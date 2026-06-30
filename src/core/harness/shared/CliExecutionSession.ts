@@ -2,8 +2,8 @@ import type {
   CliResult,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
-import type { FailureKind } from "../../../types/FlightPathTypes";
-import type { PromptStep } from "../../../types/FlightPathTypes";
+import type { FailureKind } from "../../../types/CtrlYokeTypes";
+import type { PromptStep } from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import type { CollectedHeadlessResponse } from "./CliResponseCollector";

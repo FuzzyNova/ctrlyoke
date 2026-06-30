@@ -1,6 +1,6 @@
 {
-  "name": "flightpath",
-  "displayName": "FlightPath",
+  "name": "ctrlyoke",
+  "displayName": "ctrlyoke",
   "description": "Run multi-step AI coding workflows across 7 harnesses (Copilot, Claude, Codex, Gemini, Qwen, OpenCode) with sequential execution, end-condition validation, and a live dashboard.",
   "version": "0.1.0",
   "publisher": "fuzzynova",
@@ -8,11 +8,11 @@
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/FuzzyNova/flightpath"
+    "url": "https://github.com/FuzzyNova/ctrlyoke"
   },
-  "homepage": "https://flightpath.dev",
+  "homepage": "https://ctrlyoke.dev",
   "bugs": {
-    "url": "https://github.com/FuzzyNova/flightpath/issues"
+    "url": "https://github.com/FuzzyNova/ctrlyoke/issues"
   },
   "engines": {
     "vscode": "^1.104.0"
@@ -47,459 +47,459 @@
   ],
   "main": "./out/extension.js",
   "bin": {
-    "flightpath-mcp": "./out/mcp-server.js",
-    "flightpath": "./out/cli.js"
+    "ctrlyoke-mcp": "./out/mcp-server.js",
+    "ctrlyoke": "./out/cli.js"
   },
   "contributes": {
     "configuration": {
-      "title": "FlightPath",
+      "title": "ctrlyoke",
       "properties": {
-        "flightpath.workspaceDirectory": {
+        "ctrlyoke.workspaceDirectory": {
           "type": "string",
           "default": "",
           "scope": "window",
-          "markdownDescription": "Directory that contains the `.flightpath` folder for this workspace. Leave empty to auto-detect: the folder of the `.code-workspace` file when one is open, otherwise the first workspace folder. Accepts an absolute path or a path relative to the workspace file. Supports `${workspaceFolder}` and `${workspaceFolder:Name}`."
+          "markdownDescription": "Directory that contains the `.ctrlyoke` folder for this workspace. Leave empty to auto-detect: the folder of the `.code-workspace` file when one is open, otherwise the first workspace folder. Accepts an absolute path or a path relative to the workspace file. Supports `${workspaceFolder}` and `${workspaceFolder:Name}`."
         }
       }
     },
     "mcpServerDefinitionProviders": [
       {
-        "id": "flightpath.workflowMcpProvider",
-        "label": "FlightPath Workflow MCPs"
+        "id": "ctrlyoke.workflowMcpProvider",
+        "label": "ctrlyoke Workflow MCPs"
       }
     ],
     "commands": [
       {
-        "command": "flightpath.openPanel",
-        "title": "Open FlightPath Panel",
-        "category": "FlightPath"
+        "command": "ctrlyoke.openPanel",
+        "title": "Open ctrlyoke Panel",
+        "category": "ctrlyoke"
       },
       {
-        "command": "flightpath.createPromptFile",
+        "command": "ctrlyoke.createPromptFile",
         "title": "Create Prompt File",
-        "category": "FlightPath"
+        "category": "ctrlyoke"
       },
       {
-        "command": "flightpath.pause",
+        "command": "ctrlyoke.pause",
         "title": "Pause Execution",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(debug-pause)"
       },
       {
-        "command": "flightpath.resume",
+        "command": "ctrlyoke.resume",
         "title": "Resume Execution",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(debug-continue)"
       },
       {
-        "command": "flightpath.stop",
+        "command": "ctrlyoke.stop",
         "title": "Stop Execution",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "flightpath.devMenu",
+        "command": "ctrlyoke.devMenu",
         "title": "Developer Tools",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(beaker)"
       },
       {
-        "command": "flightpath.createEndConditionScript",
+        "command": "ctrlyoke.createEndConditionScript",
         "title": "Create End Condition Script",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(new-file)"
       },
       {
-        "command": "flightpath.importAgents",
-        "title": "Import FlightPath Agents",
-        "category": "FlightPath",
+        "command": "ctrlyoke.importAgents",
+        "title": "Import ctrlyoke Agents",
+        "category": "ctrlyoke",
         "icon": "$(hubot)"
       },
       {
-        "command": "flightpath.importWorkflowTemplates",
+        "command": "ctrlyoke.importWorkflowTemplates",
         "title": "Import Workflow Templates",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(file-code)"
       },
       {
-        "command": "flightpath.newWorkflow",
+        "command": "ctrlyoke.newWorkflow",
         "title": "New Workflow from Template",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(new-file)"
       },
       {
-        "command": "flightpath.createNewTemplate",
+        "command": "ctrlyoke.createNewTemplate",
         "title": "Create New Custom Template",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(file-add)"
       },
       {
-        "command": "flightpath.runFromContext",
-        "title": "Run with FlightPath",
-        "category": "FlightPath",
+        "command": "ctrlyoke.runFromContext",
+        "title": "Run with ctrlyoke",
+        "category": "ctrlyoke",
         "icon": "$(send)"
       },
       {
-        "command": "flightpath.loadFromContext",
-        "title": "Load in FlightPath",
-        "category": "FlightPath",
+        "command": "ctrlyoke.loadFromContext",
+        "title": "Load in ctrlyoke",
+        "category": "ctrlyoke",
         "icon": "$(file-symlink-file)"
       },
       {
-        "command": "flightpath.selectPromptFile",
+        "command": "ctrlyoke.selectPromptFile",
         "title": "Select Prompt File",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(file)"
       },
       {
-        "command": "flightpath.resumeSession",
+        "command": "ctrlyoke.resumeSession",
         "title": "Resume Session",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(history)"
       },
       {
-        "command": "flightpath.run",
+        "command": "ctrlyoke.run",
         "title": "Run",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(play)"
       },
       {
-        "command": "flightpath.showOutputPanel",
+        "command": "ctrlyoke.showOutputPanel",
         "title": "Show Output Panel",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(output)"
       },
       {
-        "command": "flightpath.createDraftPrompt",
+        "command": "ctrlyoke.createDraftPrompt",
         "title": "New Draft Prompt",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(new-file)"
       },
       {
-        "command": "flightpath.queueFromContext",
-        "title": "Queue with FlightPath",
-        "category": "FlightPath",
+        "command": "ctrlyoke.queueFromContext",
+        "title": "Queue with ctrlyoke",
+        "category": "ctrlyoke",
         "icon": "$(add)"
       },
       {
-        "command": "flightpath.queueNextFromContext",
-        "title": "Queue Next with FlightPath",
-        "category": "FlightPath",
+        "command": "ctrlyoke.queueNextFromContext",
+        "title": "Queue Next with ctrlyoke",
+        "category": "ctrlyoke",
         "icon": "$(insert)"
       },
       {
-        "command": "flightpath.clearWorkflow",
+        "command": "ctrlyoke.clearWorkflow",
         "title": "New Blank Workflow",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(add)"
       },
       {
-        "command": "flightpath.appendFromDashboard",
+        "command": "ctrlyoke.appendFromDashboard",
         "title": "Queue Prompt File",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(insert)"
       },
       {
-        "command": "flightpath.initWorkspace",
+        "command": "ctrlyoke.initWorkspace",
         "title": "Initialize Workspace",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(folder-opened)"
       },
       {
-        "command": "flightpath.addFileToPromptEditor",
-        "title": "Add File to FlightPath",
-        "category": "FlightPath"
+        "command": "ctrlyoke.addFileToPromptEditor",
+        "title": "Add File to ctrlyoke",
+        "category": "ctrlyoke"
       },
       {
-        "command": "flightpath.addDirectoryToPromptEditor",
-        "title": "Add Directory to FlightPath",
-        "category": "FlightPath"
+        "command": "ctrlyoke.addDirectoryToPromptEditor",
+        "title": "Add Directory to ctrlyoke",
+        "category": "ctrlyoke"
       },
       {
-        "command": "flightpath.addSelectionToPromptEditor",
-        "title": "Add Selection to FlightPath",
-        "category": "FlightPath"
+        "command": "ctrlyoke.addSelectionToPromptEditor",
+        "title": "Add Selection to ctrlyoke",
+        "category": "ctrlyoke"
       },
       {
-        "command": "flightpath.addSymbolToPromptEditor",
-        "title": "Add Symbol to FlightPath",
-        "category": "FlightPath"
+        "command": "ctrlyoke.addSymbolToPromptEditor",
+        "title": "Add Symbol to ctrlyoke",
+        "category": "ctrlyoke"
       },
       {
-        "command": "flightpath.addScmResourcesToPromptEditor",
-        "title": "Add File to FlightPath",
-        "category": "FlightPath"
+        "command": "ctrlyoke.addScmResourcesToPromptEditor",
+        "title": "Add File to ctrlyoke",
+        "category": "ctrlyoke"
       },
       {
-        "command": "flightpath.addTimelineCommitToPromptEditor",
-        "title": "Add Commit to FlightPath",
-        "category": "FlightPath"
+        "command": "ctrlyoke.addTimelineCommitToPromptEditor",
+        "title": "Add Commit to ctrlyoke",
+        "category": "ctrlyoke"
       },
       {
-        "command": "flightpath.searchHistory",
-        "title": "Search FlightPath History",
-        "category": "FlightPath",
+        "command": "ctrlyoke.searchHistory",
+        "title": "Search ctrlyoke History",
+        "category": "ctrlyoke",
         "icon": "$(search)"
       },
       {
-        "command": "flightpath.generateCommitMessage",
-        "title": "Generate Commit Message with FlightPath",
-        "category": "FlightPath",
+        "command": "ctrlyoke.generateCommitMessage",
+        "title": "Generate Commit Message with ctrlyoke",
+        "category": "ctrlyoke",
         "icon": {
           "light": "images/ctrlyoke-icon-light.svg",
           "dark": "images/ctrlyoke-icon-dark.svg"
         }
       },
       {
-        "command": "flightpath.cancelCommitMessageGeneration",
+        "command": "ctrlyoke.cancelCommitMessageGeneration",
         "title": "Cancel Commit Message Generation",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(stop-circle)"
       }
     ],
     "keybindings": [
       {
-        "command": "flightpath.clearWorkflow",
+        "command": "ctrlyoke.clearWorkflow",
         "key": "ctrl+shift+n",
         "mac": "cmd+shift+n",
-        "when": "focusedView == 'flightpath.dashboard'"
+        "when": "focusedView == 'ctrlyoke.dashboard'"
       },
       {
-        "command": "flightpath.newWorkflow",
+        "command": "ctrlyoke.newWorkflow",
         "key": "ctrl+shift+t",
         "mac": "cmd+shift+t",
-        "when": "focusedView == 'flightpath.dashboard'"
+        "when": "focusedView == 'ctrlyoke.dashboard'"
       },
       {
-        "command": "flightpath.selectPromptFile",
+        "command": "ctrlyoke.selectPromptFile",
         "key": "ctrl+shift+l",
         "mac": "cmd+shift+l",
-        "when": "focusedView == 'flightpath.dashboard'"
+        "when": "focusedView == 'ctrlyoke.dashboard'"
       },
       {
-        "command": "flightpath.appendFromDashboard",
+        "command": "ctrlyoke.appendFromDashboard",
         "key": "ctrl+shift+q",
         "mac": "cmd+shift+q",
-        "when": "focusedView == 'flightpath.dashboard'"
+        "when": "focusedView == 'ctrlyoke.dashboard'"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "flightpath.openPanel"
+          "command": "ctrlyoke.openPanel"
         },
         {
-          "command": "flightpath.createPromptFile"
+          "command": "ctrlyoke.createPromptFile"
         },
         {
-          "command": "flightpath.resumeSession"
+          "command": "ctrlyoke.resumeSession"
         },
         {
-          "command": "flightpath.pause"
+          "command": "ctrlyoke.pause"
         },
         {
-          "command": "flightpath.resume"
+          "command": "ctrlyoke.resume"
         },
         {
-          "command": "flightpath.stop"
+          "command": "ctrlyoke.stop"
         },
         {
-          "command": "flightpath.devMenu",
-          "when": "flightpath.devMode"
+          "command": "ctrlyoke.devMenu",
+          "when": "ctrlyoke.devMode"
         },
         {
-          "command": "flightpath.createEndConditionScript"
+          "command": "ctrlyoke.createEndConditionScript"
         },
         {
-          "command": "flightpath.importAgents"
+          "command": "ctrlyoke.importAgents"
         },
         {
-          "command": "flightpath.importWorkflowTemplates"
+          "command": "ctrlyoke.importWorkflowTemplates"
         },
         {
-          "command": "flightpath.runFromContext",
+          "command": "ctrlyoke.runFromContext",
           "when": "false"
         },
         {
-          "command": "flightpath.loadFromContext",
+          "command": "ctrlyoke.loadFromContext",
           "when": "false"
         },
         {
-          "command": "flightpath.queueFromContext",
+          "command": "ctrlyoke.queueFromContext",
           "when": "false"
         },
         {
-          "command": "flightpath.queueNextFromContext",
+          "command": "ctrlyoke.queueNextFromContext",
           "when": "false"
         },
         {
-          "command": "flightpath.addFileToPromptEditor",
+          "command": "ctrlyoke.addFileToPromptEditor",
           "when": "false"
         },
         {
-          "command": "flightpath.addDirectoryToPromptEditor",
+          "command": "ctrlyoke.addDirectoryToPromptEditor",
           "when": "false"
         },
         {
-          "command": "flightpath.addSelectionToPromptEditor",
+          "command": "ctrlyoke.addSelectionToPromptEditor",
           "when": "false"
         },
         {
-          "command": "flightpath.addSymbolToPromptEditor",
+          "command": "ctrlyoke.addSymbolToPromptEditor",
           "when": "false"
         },
         {
-          "command": "flightpath.addScmResourcesToPromptEditor",
+          "command": "ctrlyoke.addScmResourcesToPromptEditor",
           "when": "false"
         },
         {
-          "command": "flightpath.addTimelineCommitToPromptEditor",
+          "command": "ctrlyoke.addTimelineCommitToPromptEditor",
           "when": "false"
         },
         {
-          "command": "flightpath.generateCommitMessage",
-          "when": "!flightpath.generatingCommitMessage"
+          "command": "ctrlyoke.generateCommitMessage",
+          "when": "!ctrlyoke.generatingCommitMessage"
         },
         {
-          "command": "flightpath.cancelCommitMessageGeneration",
-          "when": "flightpath.generatingCommitMessage"
+          "command": "ctrlyoke.cancelCommitMessageGeneration",
+          "when": "ctrlyoke.generatingCommitMessage"
         }
       ],
       "explorer/context": [
         {
-          "command": "flightpath.createPromptFile",
+          "command": "ctrlyoke.createPromptFile",
           "when": "explorerResourceIsFolder",
           "group": "2_workspace"
         },
         {
-          "command": "flightpath.runFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "flightpath@1"
+          "command": "ctrlyoke.runFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "ctrlyoke@1"
         },
         {
-          "command": "flightpath.loadFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "flightpath@2"
+          "command": "ctrlyoke.loadFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "ctrlyoke@2"
         },
         {
-          "command": "flightpath.queueFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "flightpath@3"
+          "command": "ctrlyoke.queueFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "ctrlyoke@3"
         },
         {
-          "command": "flightpath.queueNextFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "flightpath@4"
+          "command": "ctrlyoke.queueNextFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "ctrlyoke@4"
         },
         {
-          "command": "flightpath.addFileToPromptEditor",
+          "command": "ctrlyoke.addFileToPromptEditor",
           "when": "resourceScheme == file && !explorerResourceIsFolder",
-          "group": "flightpath@5"
+          "group": "ctrlyoke@5"
         },
         {
-          "command": "flightpath.addDirectoryToPromptEditor",
+          "command": "ctrlyoke.addDirectoryToPromptEditor",
           "when": "explorerResourceIsFolder",
-          "group": "flightpath@5"
+          "group": "ctrlyoke@5"
         }
       ],
       "editor/title": [
         {
-          "command": "flightpath.runFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "command": "ctrlyoke.runFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "navigation"
         },
         {
-          "command": "flightpath.queueFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "command": "ctrlyoke.queueFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "navigation@2"
         },
         {
-          "command": "flightpath.queueNextFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "command": "ctrlyoke.queueNextFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "navigation@3"
         }
       ],
       "editor/title/context": [
         {
-          "command": "flightpath.runFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "flightpath@1"
+          "command": "ctrlyoke.runFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "ctrlyoke@1"
         },
         {
-          "command": "flightpath.loadFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "flightpath@2"
+          "command": "ctrlyoke.loadFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "ctrlyoke@2"
         },
         {
-          "command": "flightpath.queueFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "flightpath@3"
+          "command": "ctrlyoke.queueFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "ctrlyoke@3"
         },
         {
-          "command": "flightpath.queueNextFromContext",
-          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
-          "group": "flightpath@4"
+          "command": "ctrlyoke.queueNextFromContext",
+          "when": "resourceFilename =~ /\\.(ctrlyoke\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "ctrlyoke@4"
         },
         {
-          "command": "flightpath.addFileToPromptEditor",
+          "command": "ctrlyoke.addFileToPromptEditor",
           "when": "resourceScheme == file",
-          "group": "flightpath@5"
+          "group": "ctrlyoke@5"
         }
       ],
       "editor/context": [
         {
-          "command": "flightpath.addSelectionToPromptEditor",
+          "command": "ctrlyoke.addSelectionToPromptEditor",
           "when": "editorHasSelection && resourceScheme == file",
-          "group": "2_flightpath@1"
+          "group": "2_ctrlyoke@1"
         },
         {
-          "command": "flightpath.addSymbolToPromptEditor",
+          "command": "ctrlyoke.addSymbolToPromptEditor",
           "when": "!editorHasSelection && resourceScheme == file",
-          "group": "2_flightpath@2"
+          "group": "2_ctrlyoke@2"
         }
       ],
       "editor/lineNumber/context": [
         {
-          "command": "flightpath.addSelectionToPromptEditor",
+          "command": "ctrlyoke.addSelectionToPromptEditor",
           "when": "editorHasSelection && resourceScheme == file",
-          "group": "2_flightpath@1"
+          "group": "2_ctrlyoke@1"
         },
         {
-          "command": "flightpath.addSymbolToPromptEditor",
+          "command": "ctrlyoke.addSymbolToPromptEditor",
           "when": "!editorHasSelection && resourceScheme == file",
-          "group": "2_flightpath@2"
+          "group": "2_ctrlyoke@2"
         }
       ],
       "scm/resourceState/context": [
         {
-          "command": "flightpath.addScmResourcesToPromptEditor",
+          "command": "ctrlyoke.addScmResourcesToPromptEditor",
           "when": "scmProvider == git",
-          "group": "2_flightpath"
+          "group": "2_ctrlyoke"
         }
       ],
       "scm/resourceFolder/context": [
         {
-          "command": "flightpath.addScmResourcesToPromptEditor",
+          "command": "ctrlyoke.addScmResourcesToPromptEditor",
           "when": "scmProvider == git",
-          "group": "2_flightpath"
+          "group": "2_ctrlyoke"
         }
       ],
       "timeline/item/context": [
         {
-          "command": "flightpath.addTimelineCommitToPromptEditor",
+          "command": "ctrlyoke.addTimelineCommitToPromptEditor",
           "when": "timelineItem =~ /git:file:commit\\b/",
-          "group": "2_flightpath"
+          "group": "2_ctrlyoke"
         }
       ],
       "scm/title": [
         {
-          "command": "flightpath.generateCommitMessage",
-          "when": "scmProvider == git && !flightpath.generatingCommitMessage",
+          "command": "ctrlyoke.generateCommitMessage",
+          "when": "scmProvider == git && !ctrlyoke.generatingCommitMessage",
           "group": "navigation@-1"
         },
         {
-          "command": "flightpath.cancelCommitMessageGeneration",
-          "when": "scmProvider == git && flightpath.generatingCommitMessage",
+          "command": "ctrlyoke.cancelCommitMessageGeneration",
+          "when": "scmProvider == git && ctrlyoke.generatingCommitMessage",
           "group": "navigation@-1"
         }
       ]
@@ -507,28 +507,28 @@
     "viewsContainers": {
       "panel": [
         {
-          "id": "flightpath",
-          "title": "FlightPath",
+          "id": "ctrlyoke",
+          "title": "ctrlyoke",
           "icon": "images/ctrlyoke-sidebar-icon.svg"
         }
       ]
     },
     "views": {
-      "flightpath": [
+      "ctrlyoke": [
         {
           "type": "webview",
-          "id": "flightpath.dashboard",
-          "name": "FlightPath",
+          "id": "ctrlyoke.dashboard",
+          "name": "ctrlyoke",
           "icon": "images/ctrlyoke-icon.svg"
         }
       ]
     },
     "languageModelTools": [
       {
-        "name": "flightpath_queue_status",
-        "toolReferenceName": "flightpath_queue_status",
-        "displayName": "FlightPath Queue Status",
-        "modelDescription": "Get comprehensive status of the current FlightPath workflow queue, including metadata and all prompts with their execution state",
+        "name": "ctrlyoke_queue_status",
+        "toolReferenceName": "ctrlyoke_queue_status",
+        "displayName": "ctrlyoke Queue Status",
+        "modelDescription": "Get comprehensive status of the current ctrlyoke workflow queue, including metadata and all prompts with their execution state",
         "canBeReferencedInPrompt": true,
         "tags": [
           "queue",
@@ -541,10 +541,10 @@
         }
       },
       {
-        "name": "flightpath_append_queue",
-        "toolReferenceName": "flightpath_append_queue",
-        "displayName": "FlightPath Append Queue",
-        "modelDescription": "Append prompts to the current FlightPath workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('next') or at end of queue ('end').",
+        "name": "ctrlyoke_append_queue",
+        "toolReferenceName": "ctrlyoke_append_queue",
+        "displayName": "ctrlyoke Append Queue",
+        "modelDescription": "Append prompts to the current ctrlyoke workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('next') or at end of queue ('end').",
         "canBeReferencedInPrompt": true,
         "tags": [
           "queue",
@@ -599,10 +599,10 @@
         }
       },
       {
-        "name": "flightpath_capabilities",
-        "toolReferenceName": "flightpath_capabilities",
-        "displayName": "FlightPath Capabilities",
-        "modelDescription": "Get the available FlightPath harnesses and their supported models",
+        "name": "ctrlyoke_capabilities",
+        "toolReferenceName": "ctrlyoke_capabilities",
+        "displayName": "ctrlyoke Capabilities",
+        "modelDescription": "Get the available ctrlyoke harnesses and their supported models",
         "canBeReferencedInPrompt": true,
         "tags": [
           "harness",
@@ -615,10 +615,10 @@
         }
       },
       {
-        "name": "flightpath_read_output",
-        "toolReferenceName": "flightpath_read_output",
-        "displayName": "FlightPath Read Output",
-        "modelDescription": "Read AI response output from completed prompts in the FlightPath workflow queue",
+        "name": "ctrlyoke_read_output",
+        "toolReferenceName": "ctrlyoke_read_output",
+        "displayName": "ctrlyoke Read Output",
+        "modelDescription": "Read AI response output from completed prompts in the ctrlyoke workflow queue",
         "canBeReferencedInPrompt": true,
         "tags": [
           "queue",
@@ -648,7 +648,7 @@
       },
       {
         "fileMatch": [
-          "**/.flightpath/settings.json"
+          "**/.ctrlyoke/settings.json"
         ],
         "url": "./schemas/settings-schema.json"
       }

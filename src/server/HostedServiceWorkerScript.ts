@@ -6,16 +6,16 @@ import {
 } from "../types/DashboardConstants";
 
 const CLEAR_BADGE_MESSAGE_TYPE_PLACEHOLDER =
-  "__FLIGHTPATH_CLEAR_BADGE_MESSAGE_TYPE__";
+  "__CTRLYOKE_CLEAR_BADGE_MESSAGE_TYPE__";
 const INCREMENT_BADGE_MESSAGE_TYPE_PLACEHOLDER =
-  "__FLIGHTPATH_INCREMENT_BADGE_MESSAGE_TYPE__";
+  "__CTRLYOKE_INCREMENT_BADGE_MESSAGE_TYPE__";
 const NOTIFICATION_ICON_PATH_PLACEHOLDER =
-  "__FLIGHTPATH_NOTIFICATION_ICON_PATH__";
+  "__CTRLYOKE_NOTIFICATION_ICON_PATH__";
 const NOTIFICATION_BADGE_PATH_PLACEHOLDER =
-  "__FLIGHTPATH_NOTIFICATION_BADGE_PATH__";
+  "__CTRLYOKE_NOTIFICATION_BADGE_PATH__";
 const SERVICE_WORKER_TEMPLATE_CANDIDATE_PATHS = [
-  path.join(__dirname, "server", "flightpath-service-worker.js"),
-  path.join(__dirname, "flightpath-service-worker.js"),
+  path.join(__dirname, "server", "ctrlyoke-service-worker.js"),
+  path.join(__dirname, "ctrlyoke-service-worker.js"),
 ];
 
 let cachedTemplate: string | undefined;

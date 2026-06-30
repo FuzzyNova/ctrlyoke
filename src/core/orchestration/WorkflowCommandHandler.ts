@@ -51,7 +51,7 @@ export class WorkflowCommandHandler {
   async createPromptFile(): Promise<void> {
     try {
       if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder found");
+        vscode.window.showErrorMessage("ctrlyoke: No workspace folder found");
         return;
       }
 
@@ -90,7 +90,7 @@ export class WorkflowCommandHandler {
       // Create prompts directory if it doesn't exist
       const promptsDirPath = path.join(
         this.currentWorkspaceFolder.uri.fsPath,
-        PATH_CONSTANTS.FLIGHTPATH_DIR
+        PATH_CONSTANTS.CTRLYOKE_DIR
       );
 
       // Ensure directory exists
@@ -107,9 +107,9 @@ export class WorkflowCommandHandler {
       // Create example content based on file extension
       let exampleContent: string;
       if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
-        exampleContent = this.createExampleFlightPathYAML();
+        exampleContent = this.createExampleCtrlYokeYAML();
       } else if (fileName.endsWith(".json")) {
-        exampleContent = this.createExampleFlightPathJSON();
+        exampleContent = this.createExampleCtrlYokeJSON();
       } else if (fileName.endsWith(".md")) {
         exampleContent = this.createExampleMarkdownPrompt();
       } else {
@@ -126,11 +126,11 @@ export class WorkflowCommandHandler {
       // Open file in editor (respects openPromptsInSecondGroup setting)
       await this.openPromptFile(filePath);
 
-      vscode.window.showInformationMessage(`FlightPath: Created ${fileName}`);
+      vscode.window.showInformationMessage(`ctrlyoke: Created ${fileName}`);
     } catch (error) {
-      Log.error("FlightPath: Failed to create prompt file:", error);
+      Log.error("ctrlyoke: Failed to create prompt file:", error);
       vscode.window.showErrorMessage(
-        `FlightPath: Failed to create prompt file: ${error}`
+        `ctrlyoke: Failed to create prompt file: ${error}`
       );
     }
   }
@@ -144,7 +144,7 @@ export class WorkflowCommandHandler {
   > {
     try {
       if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder found");
+        vscode.window.showErrorMessage("ctrlyoke: No workspace folder found");
         return undefined;
       }
 
@@ -157,7 +157,7 @@ export class WorkflowCommandHandler {
       // Create prompts directory
       const promptsDir = path.join(
         this.currentWorkspaceFolder.uri.fsPath,
-        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.PROMPTS_DIR
       );
 
@@ -185,13 +185,13 @@ export class WorkflowCommandHandler {
         });
       }
 
-      Log.info(`FlightPath: Created draft prompt: ${fileName}`);
+      Log.info(`ctrlyoke: Created draft prompt: ${fileName}`);
 
       return { filePath, fileName };
     } catch (error) {
-      Log.error("FlightPath: Failed to create draft prompt:", error);
+      Log.error("ctrlyoke: Failed to create draft prompt:", error);
       vscode.window.showErrorMessage(
-        `FlightPath: Failed to create draft prompt: ${error}`
+        `ctrlyoke: Failed to create draft prompt: ${error}`
       );
       return undefined;
     }
@@ -231,7 +231,7 @@ export class WorkflowCommandHandler {
         ],
         {
           placeHolder: "Select the type of end condition script to create",
-          title: "FlightPath: Create End Condition Script",
+          title: "ctrlyoke: Create End Condition Script",
         }
       );
 
@@ -267,7 +267,7 @@ export class WorkflowCommandHandler {
         );
       }
     } catch (error) {
-      Log.error("FlightPath: Error creating end condition script:", error);
+      Log.error("ctrlyoke: Error creating end condition script:", error);
       vscode.window.showErrorMessage(
         `❌ Failed to create end condition script: ${error}`
       );
@@ -275,7 +275,7 @@ export class WorkflowCommandHandler {
   }
 
   /**
-   * Open FlightPath panel/dashboard
+   * Open ctrlyoke panel/dashboard
    * Shows warning and retry if harness is unavailable
    *
    * @param getHarnessStatus Callback to get current harness status
@@ -292,7 +292,7 @@ export class WorkflowCommandHandler {
       harnessStatus.initializationStatus === HARNESS_STATUS_STRINGS.UNAVAILABLE
     ) {
       const action = await vscode.window.showWarningMessage(
-        "FlightPath: HarnessId automation is unavailable. Would you like to retry detection?",
+        "ctrlyoke: HarnessId automation is unavailable. Would you like to retry detection?",
         "Retry Detection",
         "Continue Anyway"
       );
@@ -303,11 +303,11 @@ export class WorkflowCommandHandler {
       }
     }
 
-    // Focus the FlightPath dashboard panel
+    // Focus the ctrlyoke dashboard panel
     try {
-      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+      await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
     } catch (error) {
-      Log.error("Failed to focus FlightPath dashboard:", error);
+      Log.error("Failed to focus ctrlyoke dashboard:", error);
       throw error; // Let caller handle fallback
     }
   }
@@ -320,18 +320,18 @@ export class WorkflowCommandHandler {
   async openCurrentPromptFile(currentFilePath?: string): Promise<void> {
     if (!currentFilePath) {
       vscode.window.showWarningMessage(
-        "FlightPath: No prompt file loaded. Use 'Select' button to choose a file first."
+        "ctrlyoke: No prompt file loaded. Use 'Select' button to choose a file first."
       );
       return;
     }
 
     try {
       await this.openPromptFile(currentFilePath);
-      Log.info(`FlightPath: Opened prompt file: ${currentFilePath}`);
+      Log.info(`ctrlyoke: Opened prompt file: ${currentFilePath}`);
     } catch (error) {
-      Log.error("FlightPath: Failed to open prompt file:", error);
+      Log.error("ctrlyoke: Failed to open prompt file:", error);
       vscode.window.showErrorMessage(
-        `FlightPath: Failed to open file: ${error}`
+        `ctrlyoke: Failed to open file: ${error}`
       );
     }
   }
@@ -397,15 +397,15 @@ export class WorkflowCommandHandler {
         await vscode.window.showTextDocument(document);
       }
     } catch (error) {
-      Log.error("FlightPath: Failed to open prompt file:", error);
+      Log.error("ctrlyoke: Failed to open prompt file:", error);
     }
   }
 
   /**
-   * Create example FlightPath YAML content
+   * Create example ctrlyoke YAML content
    */
-  private createExampleFlightPathYAML(): string {
-    return `# FlightPath Workflow
+  private createExampleCtrlYokeYAML(): string {
+    return `# ctrlyoke Workflow
 # Multi-step AI automation with validation
 
 steps:
@@ -434,9 +434,9 @@ steps:
   }
 
   /**
-   * Create example FlightPath JSON content
+   * Create example ctrlyoke JSON content
    */
-  private createExampleFlightPathJSON(): string {
+  private createExampleCtrlYokeJSON(): string {
     return JSON.stringify(
       {
         steps: [

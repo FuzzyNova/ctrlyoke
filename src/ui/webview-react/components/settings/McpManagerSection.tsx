@@ -34,7 +34,7 @@ import {
   type HarnessId,
   type SettingWriteScope,
 } from "@root/types/DashboardConstants";
-import type { McpServerConfig } from "@root/types/FlightPathTypes";
+import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import type {
   LocalMcpServerEntry,
   ManagedMcpServer,
@@ -274,7 +274,7 @@ function decodeTarget(encoded: string): {
 }
 
 function getExportTargetLabel(id: AnyTargetId): string {
-  if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) return "FlightPath";
+  if (id === SPECIAL_TARGET_IDS.CTRLYOKE) return "ctrlyoke";
   if (id === SPECIAL_TARGET_IDS.VSCODE) return "VS Code";
   if (id in HARNESS_INFO) {
     return HARNESS_INFO[id as keyof typeof HARNESS_INFO].shortName;
@@ -286,10 +286,10 @@ function getExportTargetDescription(
   id: AnyTargetId,
   scope: SettingWriteScope
 ): string {
-  if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+  if (id === SPECIAL_TARGET_IDS.CTRLYOKE) {
     return scope === SETTING_SCOPES.WORKSPACE
-      ? ".flightpath/mcp/servers.json"
-      : "~/.flightpath/mcp/servers.json";
+      ? ".ctrlyoke/mcp/servers.json"
+      : "~/.ctrlyoke/mcp/servers.json";
   }
   if (id === SPECIAL_TARGET_IDS.VSCODE) {
     return scope === SETTING_SCOPES.WORKSPACE
@@ -426,12 +426,12 @@ function sortResolvedLocations(
   locations: ResolvedServerLocation[]
 ): ResolvedServerLocation[] {
   return [...locations].sort((a, b) => {
-    if (a.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH) {
-      return b.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH
+    if (a.targetId === SPECIAL_TARGET_IDS.CTRLYOKE) {
+      return b.targetId === SPECIAL_TARGET_IDS.CTRLYOKE
         ? a.scope.localeCompare(b.scope)
         : -1;
     }
-    if (b.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+    if (b.targetId === SPECIAL_TARGET_IDS.CTRLYOKE) {
       return 1;
     }
     const labelCompare = getExportTargetLabel(a.targetId).localeCompare(
@@ -751,7 +751,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
       .get(id)
       ?.locations.some(
         (location) =>
-          location.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+          location.targetId === SPECIAL_TARGET_IDS.CTRLYOKE &&
           location.scope === scope
       ) ?? false;
 
@@ -832,7 +832,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
 
   const handleConfirmDeleteTarget = () => {
     if (!deleteTargetState || deleteTargetState.ids.length === 0) return;
-    if (deleteTargetState.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+    if (deleteTargetState.targetId === SPECIAL_TARGET_IDS.CTRLYOKE) {
       for (const id of deleteTargetState.ids) {
         deleteServer(id, deleteTargetState.scope);
       }
@@ -847,7 +847,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   };
 
   const handleSaveAll = (id: AnyTargetId, scope: SettingWriteScope) => {
-    if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+    if (id === SPECIAL_TARGET_IDS.CTRLYOKE) {
       for (const server of selectedServers) {
         addOrUpdateServer(server.config, scope);
       }
@@ -864,12 +864,12 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
     id: AnyTargetId,
     scope: SettingWriteScope
   ) => {
-    if (id === SPECIAL_TARGET_IDS.FLIGHTPATH) {
+    if (id === SPECIAL_TARGET_IDS.CTRLYOKE) {
       const ids = selectedServers
         .filter((server) =>
           server.locations.some(
             (location) =>
-              location.targetId === SPECIAL_TARGET_IDS.FLIGHTPATH &&
+              location.targetId === SPECIAL_TARGET_IDS.CTRLYOKE &&
               location.scope === scope
           )
         )
@@ -930,9 +930,9 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
   const getMcpTargetsForScope = (scope: SettingWriteScope): AnyTargetId[] =>
     scope === SETTING_SCOPES.WORKSPACE
       ? hasWorkspaceRoot
-        ? [...EXPORT_TARGET_IDS, SPECIAL_TARGET_IDS.FLIGHTPATH]
+        ? [...EXPORT_TARGET_IDS, SPECIAL_TARGET_IDS.CTRLYOKE]
         : []
-      : [...EXPORT_TARGET_IDS, SPECIAL_TARGET_IDS.FLIGHTPATH];
+      : [...EXPORT_TARGET_IDS, SPECIAL_TARGET_IDS.CTRLYOKE];
 
   return (
     <div className="space-y-4">
@@ -941,7 +941,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           MCP Manager
         </h3>
         <p className="text-xs text-description-fg">
-          Manage the FlightPath MCP registry in the active {activeScope} scope,
+          Manage the ctrlyoke MCP registry in the active {activeScope} scope,
           import servers from local configs or the MCP registry, and push or
           remove individual exported copies in external harness configs.
         </p>
@@ -1007,7 +1007,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 targetId: location.targetId,
                 scope: location.scope,
                 path: location.path,
-                sourceLabel: "FlightPath Registry",
+                sourceLabel: "ctrlyoke Registry",
               }));
             const harnessLocations = localLocationsById.get(server.id) ?? [];
             const allLocations = sortResolvedLocations([
@@ -1048,7 +1048,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                       onCancel={handleCancelEdit}
                       submitLabel={`Save to ${formatScopeLabel(activeScope)}`}
                       title={`Edit ${server.displayName}`}
-                      subtitle={`Saving to the ${activeScope} FlightPath registry`}
+                      subtitle={`Saving to the ${activeScope} ctrlyoke registry`}
                       autoFocus
                     />
                   </div>
@@ -1204,7 +1204,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
                 }}
                 submitLabel={`Add to ${formatScopeLabel(activeScope)}`}
                 title="Add MCP server"
-                subtitle={`Save to the ${activeScope} FlightPath registry`}
+                subtitle={`Save to the ${activeScope} ctrlyoke registry`}
                 autoFocus
               />
             ) : (
@@ -1271,7 +1271,7 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
           <div className="space-y-2 rounded border border-panel-border bg-editor-bg p-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-xs text-description-fg">
-                Import local MCP entries into the {activeScope} FlightPath
+                Import local MCP entries into the {activeScope} ctrlyoke
                 registry. After installing a server via VS Code or another tool,
                 click{" "}
                 <span className="font-medium text-foreground">Scan again</span>{" "}

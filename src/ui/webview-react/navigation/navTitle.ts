@@ -4,7 +4,7 @@
  */
 import type { Route } from "./route";
 
-const APP_NAME = "FlightPath";
+const APP_NAME = "ctrlyoke";
 
 function basename(p: string): string {
   return p.split("/").filter(Boolean).pop() ?? p;

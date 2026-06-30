@@ -15,8 +15,8 @@ import type { CollectedHeadlessResponse } from "./CliResponseCollector";
 import type { InteractiveSessionDiscovery } from "./CliInteractiveStartupCoordinator";
 import type { ICliProvider } from "./interfaces/ICliProvider";
 import { HookEventMonitor } from "./HookEventMonitor";
-import type { FlightPathNotificationEvent } from "../../../ui/notifications/CompletionNotificationFactory";
-import { configService } from "../../../config/FlightPathConfigService";
+import type { CtrlYokeNotificationEvent } from "../../../ui/notifications/CompletionNotificationFactory";
+import { configService } from "../../../config/CtrlYokeConfigService";
 
 interface CliExecutionTransportCoordinator {
   executeStandaloneInteractiveProcess(
@@ -96,7 +96,7 @@ export interface CliExecutionRunnerDeps {
     onResponseComplete: (response: string) => void;
     logResponse: (response: string, statistics?: string) => void;
     onContextWindowUpdate?: (used: number, size: number) => void;
-    onNotificationEvent?: (event: FlightPathNotificationEvent) => void;
+    onNotificationEvent?: (event: CtrlYokeNotificationEvent) => void;
   };
 }
 
@@ -341,14 +341,14 @@ export class CliExecutionRunner {
 
     const runId = crypto.randomUUID();
     const headlessEnv: Record<string, string> = {
-      FLIGHTPATH_RUN_ID: runId,
+      CTRLYOKE_RUN_ID: runId,
       ...hookEnv,
     };
     if (notifyDir) {
-      headlessEnv.FLIGHTPATH_NOTIFY_DIR = notifyDir;
+      headlessEnv.CTRLYOKE_NOTIFY_DIR = notifyDir;
     }
     if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
-      headlessEnv.FLIGHTPATH_DIAGNOSTIC_LOGS = "true";
+      headlessEnv.CTRLYOKE_DIAGNOSTIC_LOGS = "true";
     }
 
     const hookMonitor =
@@ -469,27 +469,27 @@ export class CliExecutionRunner {
 
     const ctx = session.workflowContext;
     const env: Record<string, string> = {
-      FLIGHTPATH_NOTIFY_HOOK_EVENTS: enabledEvents.join(","),
+      CTRLYOKE_NOTIFY_HOOK_EVENTS: enabledEvents.join(","),
     };
 
     if (ctx?.instanceId) {
-      env.FLIGHTPATH_WORKFLOW_ID = ctx.instanceId;
+      env.CTRLYOKE_WORKFLOW_ID = ctx.instanceId;
     }
     if (ctx?.workflowName) {
-      env.FLIGHTPATH_WORKFLOW_NAME = ctx.workflowName;
+      env.CTRLYOKE_WORKFLOW_NAME = ctx.workflowName;
     }
     if (ctx !== undefined) {
-      env.FLIGHTPATH_PROMPT_INDEX = String(ctx.promptIndex);
+      env.CTRLYOKE_PROMPT_INDEX = String(ctx.promptIndex);
       const promptName = ctx.allPrompts[ctx.promptIndex]?.name;
       if (promptName) {
-        env.FLIGHTPATH_PROMPT_NAME = promptName;
+        env.CTRLYOKE_PROMPT_NAME = promptName;
       }
     }
     const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
     if (workspaceRoot) {
-      env.FLIGHTPATH_WORKSPACE_ROOT = workspaceRoot;
+      env.CTRLYOKE_WORKSPACE_ROOT = workspaceRoot;
     }
-    env.FLIGHTPATH_HARNESS_ID = this.deps.provider.config.harnessId;
+    env.CTRLYOKE_HARNESS_ID = this.deps.provider.config.harnessId;
     return env;
   }
 
@@ -536,11 +536,11 @@ export class CliExecutionRunner {
 
       const runId = crypto.randomUUID();
       const terminalEnv: Record<string, string> = {
-        FLIGHTPATH_RUN_ID: runId,
+        CTRLYOKE_RUN_ID: runId,
         ...this.buildHookEnvVars(session),
       };
       if (ConfigurationUtils.isDiagnosticLogsEnabled()) {
-        terminalEnv.FLIGHTPATH_DIAGNOSTIC_LOGS = "true";
+        terminalEnv.CTRLYOKE_DIAGNOSTIC_LOGS = "true";
       }
 
       const workspaceRoot = this.deps.runtimeState.getWorkspaceRoot();
@@ -550,7 +550,7 @@ export class CliExecutionRunner {
           this.deps.provider.notificationMonitor.getNotificationDirectory(
             workspaceRoot
           );
-        terminalEnv.FLIGHTPATH_NOTIFY_DIR = notifyDir;
+        terminalEnv.CTRLYOKE_NOTIFY_DIR = notifyDir;
       }
 
       const hookMonitor =

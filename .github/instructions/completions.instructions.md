@@ -15,7 +15,7 @@ Prompt-file completion and navigation layer. This directory owns VS Code complet
 </architecture>
 
 <registration>
-`src/extension.ts` registers the same `PromptCompletionProvider` four times for `@`, `#`, `~`, and `$` on prompt files (`*.{prompt,flightpath}.json`, `*.flightpath.{yaml,yml}`, `*.prompt.md`, and `prompt` language). `PromptLinkProvider` uses the same selector set.
+`src/extension.ts` registers the same `PromptCompletionProvider` four times for `@`, `#`, `~`, and `$` on prompt files (`*.{prompt,ctrlyoke}.json`, `*.ctrlyoke.{yaml,yml}`, `*.prompt.md`, and `prompt` language). `PromptLinkProvider` uses the same selector set.
 
 If you add a new trigger or reference form, update all of these together:
 - `extension.ts` registration
@@ -42,7 +42,7 @@ Model completions are JSON/JSONC-only and replace the entire quoted model value 
 - git refs cache: 10s
 - cache invalidation comes from `initializeCompletionHelpers(context)` subscribing to `configService`
 
-`flightpath.respectGitignoreForCompletions=true` switches file discovery to `git ls-files --cached --others --exclude-standard`; do not try to emulate gitignore with `findFiles()`.
+`ctrlyoke.respectGitignoreForCompletions=true` switches file discovery to `git ls-files --cached --others --exclude-standard`; do not try to emulate gitignore with `findFiles()`.
 
 `getPromptFileCompletions()` is webview-only for lone prompt-file paths like `./foo.prompt.md`; VS Code `@/#/~/$` completion does not use it.
 </completionHelpers>
@@ -58,7 +58,7 @@ Its property lists are hand-maintained, not schema-derived. If workflow step fie
 </yamlWorkflowKeys>
 
 <referenceContracts>
-All emitted references must stay workspace-relative and use forward slashes. Paths with spaces are quoted; directory refs always keep a trailing slash because that is how FlightPath distinguishes structure-only attachment from file attachment.
+All emitted references must stay workspace-relative and use forward slashes. Paths with spaces are quoted; directory refs always keep a trailing slash because that is how ctrlyoke distinguishes structure-only attachment from file attachment.
 
 Quoted-path support must remain symmetric across:
 - `ContextReferenceBuilder`

@@ -26,7 +26,7 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { PromptFile } from "../../types/FlightPathTypes";
+import type { PromptFile } from "../../types/CtrlYokeTypes";
 import {
   HARNESS_TIMEOUT_MS,
   HARNESS_MODELS,

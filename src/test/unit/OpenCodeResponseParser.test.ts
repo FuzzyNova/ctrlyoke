@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { OpenCodeResponseParser } from "../../flightpath/harness/opencode/OpenCodeResponseParser";
+import { OpenCodeResponseParser } from "../../core/harness/opencode/OpenCodeResponseParser";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 
 suite("OpenCodeResponseParser", () => {

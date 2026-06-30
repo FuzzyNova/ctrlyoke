@@ -1,8 +1,8 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import type * as vscode from "vscode";
-import { CopilotChatIntegration } from "../../flightpath/harness/chat/CopilotChatIntegration";
-import type { PromptStep } from "../../types/FlightPathTypes";
+import { CopilotChatIntegration } from "../../core/harness/chat/CopilotChatIntegration";
+import type { PromptStep } from "../../types/CtrlYokeTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("CopilotChatIntegration", () => {

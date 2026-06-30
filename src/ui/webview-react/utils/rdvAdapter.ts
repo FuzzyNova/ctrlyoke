@@ -1,5 +1,5 @@
 /**
- * Adapter from FlightPath's internal UnifiedDiffHunk format to react-diff-view's HunkData format.
+ * Adapter from ctrlyoke's internal UnifiedDiffHunk format to react-diff-view's HunkData format.
  *
  * Two entry points:
  *  - toRdvHunks()              — structured patch (e.g. from Claude) → HunkData[]

@@ -11,12 +11,12 @@ type HookStateEntry = {
 };
 
 type WorkflowHookLayers = {
-  flightpath: Record<string, unknown[]>;
+  ctrlyoke: Record<string, unknown[]>;
   userHooks: Record<string, unknown[]>;
 };
 
 /**
- * Manages FlightPath hook injection into settings.json / hooks.json.
+ * Manages ctrlyoke hook injection into settings.json / hooks.json.
  *
  * Parallel safety: hooks injected by workflow A are preserved until A unregisters,
  * regardless of other workflows. Original hooks restored only on last unregister.
@@ -28,17 +28,17 @@ type WorkflowHookLayers = {
 export class SettingsJsonHooksTracker {
   private static instances = new Map<string, SettingsJsonHooksTracker>();
 
-  /** Original hooks section before any FlightPath workflow touched it. */
+  /** Original hooks section before any ctrlyoke workflow touched it. */
   private baselineHooksSection: Record<string, unknown> | null | undefined =
     undefined;
 
-  /** Whether the target settings/hooks file existed before FlightPath touched it. */
+  /** Whether the target settings/hooks file existed before ctrlyoke touched it. */
   private baselineFileExisted: boolean | undefined = undefined;
 
   /** Path to a temporary .gitignore we wrote to hide newly-created settings files from git. */
   private gitignorePath: string | undefined;
 
-  /** Per-workflow FlightPath hooks + user hooks, keyed by workflowKey. */
+  /** Per-workflow ctrlyoke hooks + user hooks, keyed by workflowKey. */
   private workflowHooks = new Map<string, WorkflowHookLayers>();
 
   /** Original-case settingsPath from first registerWorkflow call, used for true-case path resolution. */
@@ -82,7 +82,7 @@ export class SettingsJsonHooksTracker {
   async registerWorkflow(
     workflowKey: string,
     workspaceRoot: string,
-    flightpathHooks: Record<string, unknown[]>,
+    ctrlyokeHooks: Record<string, unknown[]>,
     workflowUserHooks: Record<string, unknown[]>
   ): Promise<void> {
     const settingsPath = path.join(
@@ -101,7 +101,7 @@ export class SettingsJsonHooksTracker {
 
     // Track this workflow's hooks
     this.workflowHooks.set(workflowKey, {
-      flightpath: flightpathHooks,
+      ctrlyoke: ctrlyokeHooks,
       userHooks: workflowUserHooks,
     });
 
@@ -167,7 +167,7 @@ export class SettingsJsonHooksTracker {
       // File doesn't exist — write it
     }
     const content = [
-      "# FlightPath temp files (auto-managed, do not commit)",
+      "# ctrlyoke temp files (auto-managed, do not commit)",
       this.settingsFile,
       ".gitignore",
       "",
@@ -219,7 +219,7 @@ export class SettingsJsonHooksTracker {
       allEvents.add(key);
     }
     for (const wfHooks of this.workflowHooks.values()) {
-      for (const key of Object.keys(wfHooks.flightpath)) {
+      for (const key of Object.keys(wfHooks.ctrlyoke)) {
         allEvents.add(key);
       }
       for (const key of Object.keys(wfHooks.userHooks)) {
@@ -227,12 +227,12 @@ export class SettingsJsonHooksTracker {
       }
     }
 
-    // Merge: FlightPath first, workflow user hooks middle, baseline last
+    // Merge: ctrlyoke first, workflow user hooks middle, baseline last
     const mergedHooks: Record<string, unknown[]> = {};
     for (const event of allEvents) {
       const eventGroups: unknown[] = [];
       for (const wfHooks of this.workflowHooks.values()) {
-        for (const group of wfHooks.flightpath[event] ?? []) {
+        for (const group of wfHooks.ctrlyoke[event] ?? []) {
           eventGroups.push(group);
         }
 
@@ -427,7 +427,7 @@ export class SettingsJsonHooksTracker {
       allEvents.add(key);
     }
     for (const wfHooks of this.workflowHooks.values()) {
-      for (const key of Object.keys(wfHooks.flightpath)) {
+      for (const key of Object.keys(wfHooks.ctrlyoke)) {
         allEvents.add(key);
       }
       for (const key of Object.keys(wfHooks.userHooks)) {
@@ -438,7 +438,7 @@ export class SettingsJsonHooksTracker {
     for (const event of allEvents) {
       let groupIndex = 0;
       for (const wfHooks of this.workflowHooks.values()) {
-        for (const group of wfHooks.flightpath[event] ?? []) {
+        for (const group of wfHooks.ctrlyoke[event] ?? []) {
           this.addCodexTrustedState(
             mergedState,
             settingsPathVariants,

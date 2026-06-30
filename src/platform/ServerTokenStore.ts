@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 
-export const SERVER_TOKEN_SECRET_KEY = "flightpath.server.token";
+export const SERVER_TOKEN_SECRET_KEY = "ctrlyoke.server.token";
 
 export interface SecretStore {
   get(key: string): Thenable<string | undefined>;

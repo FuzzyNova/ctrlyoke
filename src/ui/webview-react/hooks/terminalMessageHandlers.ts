@@ -1,5 +1,5 @@
 /**
- * Terminal message handlers for the FlightPath dashboard.
+ * Terminal message handlers for the ctrlyoke dashboard.
  *
  * Handles all PTY/xterm-related messages: output routing, session lifecycle,
  * and tab switching. Isolated here because terminal handlers have a unique
@@ -113,7 +113,7 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
     if (clientId) {
       // Signal the HTML-level handshake watchdog that the extension connection
       // succeeded so it does not reload the panel unnecessarily.
-      window.__flightpathPanelHandshakeDone = true;
+      window.__ctrlyokePanelHandshakeDone = true;
       // Reset the fresh-page flag so future RECONNECT messages (e.g. on the
       // next extension host restart) correctly schedule the retained-context
       // reload watchdog.

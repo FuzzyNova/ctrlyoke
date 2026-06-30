@@ -44,7 +44,7 @@ describe("createPromptStep", () => {
       agent: "myagent.md",
       resumeSession: true,
       sessionId: "abc-123",
-      mcpServers: ["flightpath"],
+      mcpServers: ["ctrlyoke"],
       hooks: [{ event: "stop", command: "npm test" }],
     };
     const item = createPromptStep(raw, 1);
@@ -54,7 +54,7 @@ describe("createPromptStep", () => {
     expect(item.agent).toBe("myagent.md");
     expect(item.resumeSession).toBe(true);
     expect(item.sessionId).toBe("abc-123");
-    expect(item.mcpServers).toEqual(["flightpath"]);
+    expect(item.mcpServers).toEqual(["ctrlyoke"]);
     expect(item.hooks).toEqual([{ event: "stop", command: "npm test" }]);
   });
 

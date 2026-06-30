@@ -1,9 +1,9 @@
 import { STEP_TYPES } from "@root/types/DashboardConstants";
-import type { WorkflowStep as PersistedWorkflowStep } from "@root/types/FlightPathTypes";
+import type { WorkflowStep as PersistedWorkflowStep } from "@root/types/CtrlYokeTypes";
 import {
   parseClipboardWorkflowStep,
   serializeWorkflowStepForClipboard,
-} from "../../../flightpath/WorkflowStepSanitizer";
+} from "../../../core/WorkflowStepSanitizer";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
 import type { WorkflowStep } from "@store/workflowStore";
 

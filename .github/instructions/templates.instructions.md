@@ -8,15 +8,15 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 </purpose>
 
 <entryPoints>
-- `src/flightpath/TemplateManager.ts` owns built-in workflow IDs, `_templateMeta` parsing, placeholder extraction/replacement, and workflow creation.
-- `src/flightpath/orchestration/TemplateImporter.ts` uses `agents/manifest.json` and `workflows/manifest.json` to populate the import UI and copy files into a workspace.
+- `src/core/TemplateManager.ts` owns built-in workflow IDs, `_templateMeta` parsing, placeholder extraction/replacement, and workflow creation.
+- `src/core/orchestration/TemplateImporter.ts` uses `agents/manifest.json` and `workflows/manifest.json` to populate the import UI and copy files into a workspace.
 </entryPoints>
 
 <workflowTemplates>
 - Built-in workflow files here are YAML; `TemplateManager` treats them as the source of truth for built-ins (`simple-feature`, `fix-tests`, `full-feature`, `spec-driven-loop`). `blank` is special-cased in code and has no file here.
-- Workspace custom templates are discovered separately from `.flightpath/templates/*.flightpath.json` as `custom:<name>` IDs. Do not assume files under `src/templates/workflows/` cover all available templates.
+- Workspace custom templates are discovered separately from `.ctrlyoke/templates/*.flightpath.json` as `custom:<name>` IDs. Do not assume files under `src/templates/workflows/` cover all available templates.
 - `_templateMeta` is authoring-only metadata for the picker UI; `createWorkflow()` strips it before writing the real workflow file.
-- `spec-driven-loop` is the canonical example of `finalStep` orchestration: it relies on `agent`, `mcpServers: [flightpath]`, and `priorContext: all` together.
+- `spec-driven-loop` is the canonical example of `finalStep` orchestration: it relies on `agent`, `mcpServers: [ctrlyoke]`, and `priorContext: all` together.
 </workflowTemplates>
 
 <templateVariables>

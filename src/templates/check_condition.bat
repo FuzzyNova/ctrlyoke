@@ -1,5 +1,5 @@
 @echo off
-REM FlightPath End Condition Script Example
+REM ctrlyoke End Condition Script Example
 REM This script checks if tests pass or some condition is met
 
 REM Example: Check if file exists

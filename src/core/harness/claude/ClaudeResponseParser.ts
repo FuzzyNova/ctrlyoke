@@ -593,7 +593,7 @@ export class ClaudeResponseParser
    * - "Session IDs must be in UUID format"
    * - "No conversation found with session ID"
    *
-   * When detected, FlightPath can retry without the resume flag to start a new session.
+   * When detected, ctrlyoke can retry without the resume flag to start a new session.
    *
    * @param error The error to check (Error object or string)
    * @returns True if this is a recoverable Claude CLI session error

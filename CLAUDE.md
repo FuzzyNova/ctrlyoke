@@ -1,6 +1,5 @@
 <!-- AUTO-GENERATED — run `npm run generate-agent-files` to update -->
-
-# FlightPath Project Memory
+# ctrlyoke Project Memory
 
 ## Core Project Context
 
@@ -12,33 +11,37 @@ Always read the main project instructions:
 
 The `.github/instructions/` directory contains detailed implementation guidelines organized by file scope. Read the relevant file before modifying code in that area.
 
-| File Pattern                                  | Instruction File                         |
-| --------------------------------------------- | ---------------------------------------- |
-| `src/completions/**`                          | completions.instructions.md              |
-| `src/config/**`                               | config.instructions.md                   |
-| `src/dev/**`                                  | dev.instructions.md                      |
-| `src/extension.ts, src/mcp-server.ts`         | extension.instructions.md                |
-| `src/flightpath/harness/chat/**`              | flightpath-chat.instructions.md          |
-| `src/flightpath/harness/CliIntegration.ts`, `src/flightpath/harness/CliLogMonitor.ts`, `src/flightpath/harness/PtyProcessManager.ts` | harness-integrations.instructions.md |
-| `src/flightpath/harness/shared/**`            | harness-shared.instructions.md           |
-| `src/flightpath/harness/{copilot,claude,codex,opencode,qwen,gemini}/**` | harness-cli-providers.instructions.md |
-| `src/cli.ts,src/cli/**`                       | flightpath-cli-binary.instructions.md    |
-| `src/flightpath/*.ts`                         | flightpath-core.instructions.md          |
-| `src/flightpath/orchestration/**`             | flightpath-orchestration.instructions.md |
-| `src/git/**`                                  | git.instructions.md                      |
-| `src/platform/**`                             | platform.instructions.md                 |
-| `src/scm/**`                                  | scm.instructions.md                      |
-| `src/scripts/**`                              | scripts.instructions.md                  |
-| `src/server/**`                               | server.instructions.md                   |
-| `src/templates/**`                            | templates.instructions.md                |
-| `src/test/**`                                 | test.instructions.md                     |
-| `src/types/**`                                | types.instructions.md                    |
-| `src/types/{DashboardConstants.ts,FlightPathTypes.ts,WorkflowContextTypes.ts,FlightPathSettings.ts,CliOutputTypes.ts,IDashboardSink.ts}` | types-core.instructions.md |
-| `src/types/{WebviewMessageTypes.ts,OutputHistoryTypes.ts,WorkflowTimelineTypes.ts}` | types-webview-history.instructions.md |
-| `src/types/{HostedWorkspaceViewerTypes.ts,IconColorDefaults.ts}` | types-hosted.instructions.md |
-| `src/ui/**` (excl. `src/ui/webview-react/**`) | ui.instructions.md                       |
-| `src/utils/**`                                | utils.instructions.md                    |
-| `src/ui/webview-react/**`                     | webview-react.instructions.md            |
+| File Pattern                                                                                                                                                             | Instruction File                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| `src/core/harness/chat/**`                                                                                                                                               | chat.instructions.md                     |
+| `src/cli.ts,src/cli/**`                                                                                                                                                  | cli-binary.instructions.md               |
+| `src/completions/**`                                                                                                                                                     | completions.instructions.md              |
+| `src/config/**`                                                                                                                                                          | config.instructions.md                   |
+| `src/core/*.ts`                                                                                                                                                          | core.instructions.md                     |
+| `src/dev/**`                                                                                                                                                             | dev.instructions.md                      |
+| `src/extension.ts, src/mcp-server.ts`                                                                                                                                    | extension.instructions.md                |
+| `src/git/**`                                                                                                                                                             | git.instructions.md                      |
+| `src/core/harness/copilot/**, src/core/harness/claude/**, src/core/harness/codex/**, src/core/harness/opencode/**, src/core/harness/qwen/**, src/core/harness/gemini/**` | harness-cli-providers.instructions.md    |
+| `src/core/harness/CliIntegration.ts, src/core/harness/CliLogMonitor.ts, src/core/harness/PtyProcessManager.ts`                                                           | harness-integrations.instructions.md     |
+| `src/core/harness/shared/**`                                                                                                                                             | harness-shared.instructions.md           |
+| `src/core/orchestration/**`                                                                                                                                              | orchestration.instructions.md            |
+| `src/platform/**`                                                                                                                                                        | platform.instructions.md                 |
+| `src/scm/**`                                                                                                                                                             | scm.instructions.md                      |
+| `src/scripts/**`                                                                                                                                                         | scripts.instructions.md                  |
+| `src/server/**`                                                                                                                                                          | server.instructions.md                   |
+| `src/templates/**`                                                                                                                                                       | templates.instructions.md                |
+| `src/test/**`                                                                                                                                                            | test.instructions.md                     |
+| `src/types/{DashboardConstants.ts,CtrlYokeTypes.ts,WorkflowContextTypes.ts,CtrlYokeSettings.ts,CliOutputTypes.ts,IDashboardSink.ts}`                                     | types-core.instructions.md               |
+| `src/types/{HostedWorkspaceViewerTypes.ts,IconColorDefaults.ts}`                                                                                                         | types-hosted.instructions.md             |
+| `src/types/{WebviewMessageTypes.ts,OutputHistoryTypes.ts,WorkflowTimelineTypes.ts}`                                                                                      | types-webview-history.instructions.md    |
+| `src/types/**`                                                                                                                                                           | types.instructions.md                    |
+| `src/ui/**` (excl. `src/ui/webview-react/**`)                                                                                                                            | ui.instructions.md                       |
+| `src/utils/**`                                                                                                                                                           | utils.instructions.md                    |
+| `src/ui/webview-react/components/**` (excl. `src/ui/webview-react/components/workspace-viewer/**`)                                                                       | webview-react-components.instructions.md |
+| `src/ui/webview-react/hooks/**`                                                                                                                                          | webview-react-hooks.instructions.md      |
+| `src/ui/webview-react/store/**`                                                                                                                                          | webview-react-store.instructions.md      |
+| `src/ui/webview-react/components/workspace-viewer/**`                                                                                                                    | webview-react-workspace.instructions.md  |
+| `src/ui/webview-react/**`                                                                                                                                                | webview-react.instructions.md            |
 
 ### How to Use
 
@@ -51,14 +54,11 @@ The `.github/instructions/` directory contains detailed implementation guideline
 ### Example
 
 ```
-Working on src/flightpath/WorkflowOrchestrator.ts?
-→ Read: .github/instructions/flightpath-core.instructions.md
+Working on src/core/WorkflowOrchestrator.ts?
+→ Read: .github/instructions/core.instructions.md
 
-Working on src/flightpath/harness/CliIntegration.ts?
+Working on src/core/harness/CliIntegration.ts?
 → Read: .github/instructions/harness-integrations.instructions.md
-
-Working on src/flightpath/harness/qwen/QwenCliProvider.ts?
-→ Read: .github/instructions/harness-cli-providers.instructions.md
 ```
 
 ## Project Status

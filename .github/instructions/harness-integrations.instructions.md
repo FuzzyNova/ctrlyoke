@@ -1,5 +1,5 @@
 ---
-applyTo: "src/flightpath/harness/CliIntegration.ts, src/flightpath/harness/CliLogMonitor.ts, src/flightpath/harness/PtyProcessManager.ts"
+applyTo: "src/core/harness/CliIntegration.ts, src/core/harness/CliLogMonitor.ts, src/core/harness/PtyProcessManager.ts"
 ---
 
 <purpose>

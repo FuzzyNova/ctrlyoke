@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { ResumeAttachmentResolver } from "../../utils/ResumeAttachmentResolver";
-import type { PromptStep } from "../../types/FlightPathTypes";
+import type { PromptStep } from "../../types/CtrlYokeTypes";
 
 suite("ResumeAttachmentResolver", () => {
   test("should resolve full attachments when not resuming", () => {

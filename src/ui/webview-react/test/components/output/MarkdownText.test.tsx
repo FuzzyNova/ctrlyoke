@@ -103,17 +103,17 @@ describe("MarkdownText", () => {
     render(
       <MarkdownText>
         {
-          "[useDesktopLayout.ts](/abs/path/c:/dev/FlightPath/src/ui/webview-react/hooks/useDesktopLayout.ts:143)"
+          "[useDesktopLayout.ts](/abs/path/c:/dev/ctrlyoke/src/ui/webview-react/hooks/useDesktopLayout.ts:143)"
         }
       </MarkdownText>
     );
 
     const fileBtn = await screen.findByTitle(
-      /Open C:\/dev\/FlightPath\/src\/ui\/webview-react\/hooks\/useDesktopLayout\.ts:143/
+      /Open C:\/dev\/ctrlyoke\/src\/ui\/webview-react\/hooks\/useDesktopLayout\.ts:143/
     );
     await user.click(fileBtn);
     expect(openFile).toHaveBeenCalledWith(
-      "C:/dev/FlightPath/src/ui/webview-react/hooks/useDesktopLayout.ts",
+      "C:/dev/ctrlyoke/src/ui/webview-react/hooks/useDesktopLayout.ts",
       143
     );
   });
@@ -126,17 +126,17 @@ describe("MarkdownText", () => {
     render(
       <MarkdownText>
         {
-          "[ContextExpander.ts](/c:/dev/FlightPath/src/utils/ContextExpander.ts)"
+          "[ContextExpander.ts](/c:/dev/ctrlyoke/src/utils/ContextExpander.ts)"
         }
       </MarkdownText>
     );
 
     const fileBtn = await screen.findByTitle(
-      /Open C:\/dev\/FlightPath\/src\/utils\/ContextExpander\.ts/
+      /Open C:\/dev\/ctrlyoke\/src\/utils\/ContextExpander\.ts/
     );
     await user.click(fileBtn);
     expect(openFile).toHaveBeenCalledWith(
-      "C:/dev/FlightPath/src/utils/ContextExpander.ts"
+      "C:/dev/ctrlyoke/src/utils/ContextExpander.ts"
     );
   });
 

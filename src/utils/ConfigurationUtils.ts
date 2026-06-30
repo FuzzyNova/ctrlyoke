@@ -5,15 +5,15 @@ import {
   McpServerConfig,
   PreCondition,
   UserHookConfig,
-} from "../types/FlightPathTypes";
-import type { TerminalSettings } from "../types/FlightPathSettings";
+} from "../types/CtrlYokeTypes";
+import type { TerminalSettings } from "../types/CtrlYokeSettings";
 import {
   HARNESS_IDS,
   DEFAULT_MODELS,
   type HarnessId,
   type PermissionMode,
 } from "../types/DashboardConstants";
-import { configService } from "../config/FlightPathConfigService";
+import { configService } from "../config/CtrlYokeConfigService";
 
 /**
  * Configuration key constants (single source of truth for configService.get/set key strings)
@@ -63,7 +63,7 @@ export const CONFIG_KEYS = {
   UI_SHOW_HEADLESS_PERMISSION_WARNING: "ui.showHeadlessPermissionWarning",
   UI_AUTO_FOCUS_OUTPUT_ON_EXECUTION: "ui.autoFocusOutputOnExecution",
   UI_OUTPUT_VIRTUALIZATION_ROW_THRESHOLD: "ui.outputVirtualizationRowThreshold",
-  EXTENSION_NAMESPACE: "flightpath.",
+  EXTENSION_NAMESPACE: "ctrlyoke.",
 } as const;
 
 /**
@@ -78,46 +78,46 @@ export const CONFIG_SCOPE = {
  * Path constants (single source of truth for directory names)
  */
 export const PATH_CONSTANTS = {
-  /** Root FlightPath directory name (default: ".flightpath") */
-  FLIGHTPATH_DIR: ".flightpath",
+  /** Root ctrlyoke directory name (default: ".ctrlyoke") */
+  CTRLYOKE_DIR: ".ctrlyoke",
 
-  /** Queue directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Queue directory name (subdirectory of CTRLYOKE_DIR) */
   QUEUE_DIR: ".queue",
 
-  /** Scripts directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Scripts directory name (subdirectory of CTRLYOKE_DIR) */
   SCRIPTS_DIR: "scripts",
 
-  /** Prompts directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Prompts directory name (subdirectory of CTRLYOKE_DIR) */
   PROMPTS_DIR: "prompts",
 
-  /** Templates directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Templates directory name (subdirectory of CTRLYOKE_DIR) */
   TEMPLATES_DIR: "templates",
 
-  /** Workflows directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Workflows directory name (subdirectory of CTRLYOKE_DIR) */
   WORKFLOWS_DIR: "workflows",
 
-  /** Temp directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Temp directory name (subdirectory of CTRLYOKE_DIR) */
   TEMP_DIR: "temp",
 
-  /** Logs directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Logs directory name (subdirectory of CTRLYOKE_DIR) */
   LOGS_DIR: "logs",
 
-  /** History directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** History directory name (subdirectory of CTRLYOKE_DIR) */
   HISTORY_DIR: ".history",
 
-  /** Persistent search index directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Persistent search index directory name (subdirectory of CTRLYOKE_DIR) */
   SEARCH_INDEX_DIR: ".search-index",
 
-  /** Agents directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Agents directory name (subdirectory of CTRLYOKE_DIR) */
   AGENTS_DIR: "agents",
 
-  /** Skills directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Skills directory name (subdirectory of CTRLYOKE_DIR) */
   SKILLS_DIR: "skills",
 
-  /** Certs directory name (subdirectory of FLIGHTPATH_DIR) — gitignored */
+  /** Certs directory name (subdirectory of CTRLYOKE_DIR) — gitignored */
   CERTS_DIR: "certs",
 
-  /** Notifications directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** Notifications directory name (subdirectory of CTRLYOKE_DIR) */
   NOTIFICATIONS_DIR: "notifications",
 
   /** Capabilities file name (written by extension, read by MCP server) */
@@ -129,7 +129,7 @@ export const PATH_CONSTANTS = {
   /** Persisted VAPID key pair file (inside NOTIFICATIONS_DIR) */
   VAPID_KEYS_FILE: "vapid-keys.json",
 
-  /** MCP directory name (subdirectory of FLIGHTPATH_DIR) */
+  /** MCP directory name (subdirectory of CTRLYOKE_DIR) */
   MCP_DIR: "mcp",
 
   /** Workspace MCP server registry file name (inside MCP_DIR) */
@@ -137,7 +137,7 @@ export const PATH_CONSTANTS = {
 } as const;
 
 /**
- * Configuration utility functions for FlightPath settings.
+ * Configuration utility functions for ctrlyoke settings.
  * Centralizes all settings access for consistency and testability.
  */
 export const ConfigurationUtils = {
@@ -179,7 +179,7 @@ export const ConfigurationUtils = {
 
   /**
    * Check if diagnostic file logging is enabled.
-   * When true, FlightPath writes log files to .flightpath/logs/ in production builds.
+   * When true, ctrlyoke writes log files to .ctrlyoke/logs/ in production builds.
    * Dev builds always write log files regardless of this setting.
    */
   isDiagnosticLogsEnabled(): boolean {
@@ -436,7 +436,7 @@ export const ConfigurationUtils = {
 
   /**
    * Check if categorized temp prompt files should be deleted after execution.
-   * Returns false when the user wants to inspect files in .flightpath/temp/ for debugging.
+   * Returns false when the user wants to inspect files in .ctrlyoke/temp/ for debugging.
    */
   shouldAutoDeleteTempFiles(): boolean {
     return configService.get(CONFIG_KEYS.EXECUTION).autoDeleteTempFiles;
@@ -708,7 +708,7 @@ export const ConfigurationUtils = {
   // ============================================================
 
   /**
-   * Get a FlightPath configuration value by dot-notation path
+   * Get a ctrlyoke configuration value by dot-notation path
    * @param key The setting path (dot-notation, e.g. "execution.mode")
    * @param defaultValue The default value if setting is not defined
    * @returns The configuration value
@@ -722,7 +722,7 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Update a FlightPath configuration setting
+   * Update a ctrlyoke configuration setting
    * @param key The setting path (dot-notation, e.g. "execution.mode")
    * @param value The new value
    * @param _target Ignored — always writes to user scope via config service

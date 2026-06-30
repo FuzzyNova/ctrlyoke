@@ -151,7 +151,7 @@ export {
   type McpRegistrySearchResultMessage,
 } from "@root/types/WebviewMessageTypes";
 
-// Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, PreCondition, and helpers from FlightPathTypes
+// Re-export WorkflowSummary, PriorContext, McpServerConfig, ToolPermissionsOverride, PreCondition, and helpers from CtrlYokeTypes
 export type {
   WorkflowSummary,
   PriorContext,
@@ -159,8 +159,8 @@ export type {
   ToolPermissionsOverride,
   PreCondition,
   ToolPermissionMode,
-} from "@root/types/FlightPathTypes";
-export { workflowDisplayStep } from "@root/types/FlightPathTypes";
+} from "@root/types/CtrlYokeTypes";
+export { workflowDisplayStep } from "@root/types/CtrlYokeTypes";
 export type {
   HistorySearchIndexState,
   HistorySearchQuery,

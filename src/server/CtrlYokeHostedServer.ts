@@ -5,17 +5,17 @@ import { createServer as createHttpsServer } from "https";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import type { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
+import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
-import type { WorkflowSummary, WorkflowStep } from "../types/FlightPathTypes";
+import type { WorkflowSummary, WorkflowStep } from "../types/CtrlYokeTypes";
 import type {
   CliEvent,
   CliOutput,
   UndoExecutionTarget,
 } from "../types/WebviewMessageTypes";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
-import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
+import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
 import {
   BROWSER_NOTIFICATION_MODES,
   HOSTED_ICON_FILES,
@@ -35,14 +35,14 @@ import { PostMessageDashboardSink } from "../ui/PostMessageDashboardSink";
 import { findWorkflowFilesInWorkspace } from "../utils/WorkflowFileDiscovery";
 import { getGitTrackedFiles } from "../utils/GitUtils";
 import { Log } from "../utils/Log";
-import { configService } from "../config/FlightPathConfigService";
+import { configService } from "../config/CtrlYokeConfigService";
 import { createHostedHarnessStatusUpdate } from "./HostedServerMessageFactory";
 import {
   buildPromptCompletionNotification,
   buildTestNotificationEvent,
   buildWorkflowCompletionNotification,
   isWorkflowCompletionTransition,
-  type FlightPathNotificationEvent,
+  type CtrlYokeNotificationEvent,
 } from "../ui/notifications/CompletionNotificationFactory";
 import { buildHostedServiceWorkerScript } from "./HostedServiceWorkerScript";
 import {
@@ -59,7 +59,7 @@ import type {
   WorkspaceGitRefDiffResponse,
 } from "../types/HostedWorkspaceViewerTypes";
 
-export class FlightPathHostedServer
+export class CtrlYokeHostedServer
   implements IDashboardProvider, IDashboardSink
 {
   private static readonly SOCKET_HEARTBEAT_INTERVAL_MS = 30000;
@@ -96,7 +96,7 @@ export class FlightPathHostedServer
 
   constructor(
     private hub: DashboardBroadcastHub,
-    private webviewProvider: FlightPathWebviewProvider,
+    private webviewProvider: CtrlYokeWebviewProvider,
     private readonly getOrchestrator: () => WorkflowOrchestrator,
     private port: number,
     private workspaceRoot: string,
@@ -120,12 +120,12 @@ export class FlightPathHostedServer
     // Prevent unhandled 'error' crashes before listen() registers its handler.
     // listen() adds its own once-handler on top of this permanent fallback.
     this.httpServer.on("error", (err: NodeJS.ErrnoException) => {
-      Log.warn(`FlightPath server error: ${err.message}`);
+      Log.warn(`ctrlyoke server error: ${err.message}`);
     });
     this.wss = new WebSocketServer({ server: this.httpServer, path: "/ws" });
     // ws re-emits httpServer errors onto wss — add a handler to prevent crashes.
     this.wss.on("error", (err: Error) => {
-      Log.warn(`FlightPath WebSocket server error: ${err.message}`);
+      Log.warn(`ctrlyoke WebSocket server error: ${err.message}`);
     });
     this.app.use(express.json({ limit: "64kb" }));
     this.setupRoutes();
@@ -481,7 +481,7 @@ export class FlightPathHostedServer
     this.sink.sendStepUndoDataUpdated(target, workspaceSnapshot);
   }
 
-  notifyNotificationEvent(event: FlightPathNotificationEvent): void {
+  notifyNotificationEvent(event: CtrlYokeNotificationEvent): void {
     void this.dispatchCompletionNotification(event);
   }
 
@@ -522,14 +522,14 @@ export class FlightPathHostedServer
         res.setHeader("Content-Type", "application/x-x509-ca-cert");
         res.setHeader(
           "Content-Disposition",
-          'attachment; filename="flightpath.cer"'
+          'attachment; filename="ctrlyoke.cer"'
         );
         res.send(cert);
       } catch {
         res.status(404).send("Certificate not found");
       }
     });
-    this.app.get("/flightpath-service-worker.js", (_req, res) => {
+    this.app.get("/ctrlyoke-service-worker.js", (_req, res) => {
       this.setNoStore(res);
       res.type("application/javascript").send(buildHostedServiceWorkerScript());
     });
@@ -1147,7 +1147,7 @@ export class FlightPathHostedServer
       `<link rel="apple-touch-icon" sizes="180x180" href="${HOSTED_ICON_PATHS.APPLE_TOUCH_ICON_PNG}${iconColorParam}" />`,
       // Enable standalone PWA mode and set the title shown under the home screen icon.
       `<meta name="apple-mobile-web-app-capable" content="yes" />`,
-      `<meta name="apple-mobile-web-app-title" content="FlightPath" />`,
+      `<meta name="apple-mobile-web-app-title" content="ctrlyoke" />`,
     ].join("");
     return html.replace(
       "</head>",
@@ -1205,7 +1205,7 @@ export class FlightPathHostedServer
   }
 
   private requestHasValidToken(req: express.Request): boolean {
-    const headerToken = req.get("x-flightpath-token");
+    const headerToken = req.get("x-ctrlyoke-token");
     if (headerToken === this.token) {
       return true;
     }
@@ -1219,8 +1219,8 @@ export class FlightPathHostedServer
     } = configService.getAll().server;
     const iconColorParam = `?bg=${iconBgColor.replace("#", "")}&fg=${iconFgColor.replace("#", "")}`;
     return {
-      name: "FlightPath",
-      short_name: "FlightPath",
+      name: "ctrlyoke",
+      short_name: "ctrlyoke",
       display: "standalone",
       start_url: `/?token=${this.token}`,
       scope: "/",
@@ -1254,7 +1254,7 @@ export class FlightPathHostedServer
   }
 
   private async dispatchCompletionNotification(
-    event: FlightPathNotificationEvent | undefined
+    event: CtrlYokeNotificationEvent | undefined
   ): Promise<void> {
     if (!event) {
       return;
@@ -1405,7 +1405,7 @@ export class FlightPathHostedServer
           }
         }
       }
-    }, FlightPathHostedServer.NEW_CONNECTION_LIVENESS_PROBE_GRACE_MS);
+    }, CtrlYokeHostedServer.NEW_CONNECTION_LIVENESS_PROBE_GRACE_MS);
   }
 
   private setupHeartbeat(): void {
@@ -1436,7 +1436,7 @@ export class FlightPathHostedServer
           }
         }
       }
-    }, FlightPathHostedServer.SOCKET_HEARTBEAT_INTERVAL_MS);
+    }, CtrlYokeHostedServer.SOCKET_HEARTBEAT_INTERVAL_MS);
   }
 
   private sendInitialState(ws: WebSocket): void {

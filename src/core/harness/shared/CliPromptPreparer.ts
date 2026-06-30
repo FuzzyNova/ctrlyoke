@@ -2,7 +2,7 @@ import type {
   PriorContext,
   PromptStep,
   WorkflowStep,
-} from "../../../types/FlightPathTypes";
+} from "../../../types/CtrlYokeTypes";
 import type { WorkflowContext } from "../../../types/WorkflowContextTypes";
 import {
   PromptFileSplitter,

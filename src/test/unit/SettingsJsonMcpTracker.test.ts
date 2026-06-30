@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
-import { SettingsJsonMcpTracker } from "../../flightpath/harness/shared/SettingsJsonMcpTracker";
+import { SettingsJsonMcpTracker } from "../../core/harness/shared/SettingsJsonMcpTracker";
 
 suite("SettingsJsonMcpTracker", () => {
   let tmpDir: string;
@@ -21,10 +21,10 @@ suite("SettingsJsonMcpTracker", () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  test("should remove settings.json when FlightPath created it for MCP", async () => {
+  test("should remove settings.json when ctrlyoke created it for MCP", async () => {
     const tracker = SettingsJsonMcpTracker.getInstance("qwen");
     await tracker.registerServers("wf-1", tmpDir, {
-      flightpath: { command: "node", args: ["server.js"] },
+      ctrlyoke: { command: "node", args: ["server.js"] },
     });
 
     JSON.parse(await fs.readFile(settingsPath, "utf-8"));
@@ -40,7 +40,7 @@ suite("SettingsJsonMcpTracker", () => {
 
     const tracker = SettingsJsonMcpTracker.getInstance("qwen");
     await tracker.registerServers("wf-1", tmpDir, {
-      flightpath: { command: "node", args: ["server.js"] },
+      ctrlyoke: { command: "node", args: ["server.js"] },
     });
 
     await tracker.unregisterWorkflow("wf-1", tmpDir);

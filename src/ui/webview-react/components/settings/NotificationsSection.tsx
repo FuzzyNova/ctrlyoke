@@ -180,9 +180,9 @@ export function NotificationsSection({
           />
           <div className="mt-1 space-y-1 text-xs text-description-fg">
             <p>
-              Browser notifications deliver FlightPath alerts through the hosted
+              Browser notifications deliver ctrlyoke alerts through the hosted
               dashboard, including on your phone. Choose a mode here, then open
-              FlightPath on your phone and allow notifications there.
+              ctrlyoke on your phone and allow notifications there.
             </p>
             <p>
               Phone notifications require HTTPS.
@@ -210,8 +210,8 @@ export function NotificationsSection({
           <div className="space-y-2 rounded border border-panel-border p-3">
             {iosBlocksBrowserNotifications ? (
               <p className="text-xs text-description-fg">
-                Browser notifications on iPhone and iPad require FlightPath to
-                be added to the Home Screen first. After adding, open FlightPath
+                Browser notifications on iPhone and iPad require ctrlyoke to
+                be added to the Home Screen first. After adding, open ctrlyoke
                 from the Home Screen
                 {notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH
                   ? " and then enable push notifications here."
@@ -395,7 +395,7 @@ export function NotificationsSection({
           Noise control
         </h4>
         <SettingToggleRow
-          label="Only notify when FlightPath is not focused"
+          label="Only notify when ctrlyoke is not focused"
           description="Suppress notifications while the VS Code window or hosted dashboard is focused."
           checked={notif.onlyWhenWindowUnfocused}
           onChange={(value) =>

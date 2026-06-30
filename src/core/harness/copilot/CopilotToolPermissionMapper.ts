@@ -9,7 +9,7 @@ import { PERMISSION_MODES } from "../../../types/DashboardConstants";
 /**
  * Copilot CLI Tool Permission Mapper
  *
- * Converts FlightPath's unified tool permission configuration into Copilot CLI arguments.
+ * Converts ctrlyoke's unified tool permission configuration into Copilot CLI arguments.
  *
  * Tool pattern format (user-friendly):
  * - shell(git:*) - Shell commands matching pattern

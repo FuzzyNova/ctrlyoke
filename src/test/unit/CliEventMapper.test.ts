@@ -3,7 +3,7 @@ import { suite, test } from "mocha";
 import {
   CliEventMapper,
   ToolClassification,
-} from "../../flightpath/harness/shared/CliEventMapper";
+} from "../../core/harness/shared/CliEventMapper";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 
 suite("CliEventMapper", () => {

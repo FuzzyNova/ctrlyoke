@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { STEP_TYPES, PROMPT_PROPERTIES } from "../types/DashboardConstants";
 
 /**
- * Provides YAML property key completions for FlightPath workflow files.
+ * Provides YAML property key completions for ctrlyoke workflow files.
  *
  * When editing a prompt item block in a .flightpath.yaml file, this provider
  * offers context-aware property key suggestions:
@@ -30,14 +30,14 @@ export class PromptPropertyCompletionProvider
       key: PROMPT_PROPERTIES.SCRIPT,
       detail: "Shell command or script path (required)",
       documentation:
-        "Shell command or path to script file to execute. Resolved relative to workspace root or `.flightpath/`.",
+        "Shell command or path to script file to execute. Resolved relative to workspace root or `.ctrlyoke/`.",
       insertSnippet: `${PROMPT_PROPERTIES.SCRIPT}: `,
     },
     {
       key: "timeout",
       detail: "Timeout in milliseconds",
       documentation:
-        "Timeout in milliseconds. Defaults to the `flightpath.scriptTimeout` extension setting.",
+        "Timeout in milliseconds. Defaults to the `ctrlyoke.scriptTimeout` extension setting.",
       insertSnippet: "timeout: ",
     },
     {
@@ -89,7 +89,7 @@ export class PromptPropertyCompletionProvider
       key: "name",
       detail: "Display label (optional)",
       documentation:
-        "Human-readable label shown in the FlightPath dashboard. " +
+        "Human-readable label shown in the ctrlyoke dashboard. " +
         "If omitted, the dashboard shows a truncated preview of the prompt or script.",
       insertSnippet: "name: ",
     },
@@ -155,7 +155,7 @@ export class PromptPropertyCompletionProvider
       key: PROMPT_PROPERTIES.MCP_SERVERS,
       detail: "MCP servers to attach",
       documentation:
-        'List of MCP server identifiers to attach for this step (e.g., `["flightpath"]`).',
+        'List of MCP server identifiers to attach for this step (e.g., `["ctrlyoke"]`).',
       insertSnippet: `${PROMPT_PROPERTIES.MCP_SERVERS}:\n  - `,
     },
     {

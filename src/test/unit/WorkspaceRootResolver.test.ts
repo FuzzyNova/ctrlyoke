@@ -6,7 +6,7 @@ import {
 } from "../../platform/WorkspaceRootResolver";
 
 /**
- * Pure-function tests for the `.flightpath` root resolver. These intentionally
+ * Pure-function tests for the `.ctrlyoke` root resolver. These intentionally
  * do not touch the `vscode` module — the VS Code binding lives in
  * `VsCodeWorkspaceRoot.ts` and just gathers these inputs from live workspace
  * state.

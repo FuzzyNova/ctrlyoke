@@ -10,19 +10,19 @@ interface VsCodeApi {
 declare global {
   interface Window {
     vscodeApi?: VsCodeApi;
-    __flightpathStandalone?: boolean;
-    __flightpathReactMounted?: boolean;
+    __ctrlyokeStandalone?: boolean;
+    __ctrlyokeReactMounted?: boolean;
     /** Set to true when CLIENT_ID_ASSIGNED arrives; used by the HTML handshake watchdog. */
-    __flightpathPanelHandshakeDone?: boolean;
-    __flightpathBootstrapLog?: (level: string, message: string) => void;
-    __flightpathFlushBootstrapLogs?: () => void;
+    __ctrlyokePanelHandshakeDone?: boolean;
+    __ctrlyokeBootstrapLog?: (level: string, message: string) => void;
+    __ctrlyokeFlushBootstrapLogs?: () => void;
     acquireVsCodeApi?: () => VsCodeApi;
   }
 }
 
-/** True when the UI is served by FlightPathHostedServer (browser tab), not the VS Code panel. */
+/** True when the UI is served by CtrlYokeHostedServer (browser tab), not the VS Code panel. */
 export const isStandalone =
-  typeof window !== "undefined" && !!window.__flightpathStandalone;
+  typeof window !== "undefined" && !!window.__ctrlyokeStandalone;
 
 let vscodeApi: VsCodeApi | undefined;
 
@@ -31,7 +31,7 @@ function flushBootstrapLogs(): void {
     return;
   }
   try {
-    window.__flightpathFlushBootstrapLogs?.();
+    window.__ctrlyokeFlushBootstrapLogs?.();
   } catch {
     // Best-effort flush only.
   }
@@ -67,7 +67,7 @@ export function useVsCodeApi(): VsCodeApi {
   useEffect(() => {
     const resolvedApi = resolveVsCodeApi();
     if (!resolvedApi) {
-      console.error("FlightPath: window.vscodeApi is undefined!");
+      console.error("ctrlyoke: window.vscodeApi is undefined!");
       throw new Error(
         "VS Code API not available - window.vscodeApi is undefined"
       );
@@ -78,7 +78,7 @@ export function useVsCodeApi(): VsCodeApi {
   }, [api]);
 
   if (!api) {
-    console.error("FlightPath: api is undefined in useVsCodeApi hook");
+    console.error("ctrlyoke: api is undefined in useVsCodeApi hook");
     throw new Error("VS Code API not available");
   }
 

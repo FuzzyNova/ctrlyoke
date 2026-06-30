@@ -20,7 +20,7 @@ import { isWorkflowRunning, isWorkflowActive } from "../utils/status";
 
 /**
  * Webview-local WorkflowStep union: uses WebviewMessageTypes.PromptStep
- * to avoid _runtime type incompatibility with FlightPathTypes.PromptStep.
+ * to avoid _runtime type incompatibility with CtrlYokeTypes.PromptStep.
  */
 export type WorkflowStep = PromptStep | ScriptStep;
 

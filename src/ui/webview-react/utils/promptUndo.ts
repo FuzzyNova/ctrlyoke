@@ -77,7 +77,7 @@ function resolveEventUndoInstruction(
 
 /**
  * Compare two file paths for equality, tolerating the mismatch between
- * absolute CLI event paths (`C:\dev\FlightPath\manual-test\temp.txt`) and
+ * absolute CLI event paths (`C:\dev\ctrlyoke\manual-test\temp.txt`) and
  * workspace-relative snapshot paths (`manual-test/temp.txt`).
  */
 export function sameFilePath(a: string, b: string): boolean {

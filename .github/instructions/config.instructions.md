@@ -7,7 +7,7 @@ Platform-agnostic settings resolution for shared core code. `src/config/` owns t
 </purpose>
 
 <architecture>
-- `FlightPathConfigService` is the singleton merge layer. Priority order is: defaults → user file → workspace file → CLI overlay.
+- `CtrlYokeConfigService` is the singleton merge layer. Priority order is: defaults → user file → workspace file → CLI overlay.
 - `FileConfigBackend` is the current persistence backend. `ConfigBackend` intentionally stays tiny (`getAll` + `set`) so other storage backends can plug in without changing merge logic.
 - Merge semantics are recursive for plain objects; arrays and primitives replace lower-priority values wholesale.
 </architecture>
@@ -21,14 +21,14 @@ Platform-agnostic settings resolution for shared core code. `src/config/` owns t
 </nonObviousBehavior>
 
 <crossFileRelationships>
-- `src/types/FlightPathSettings.ts` is the schema/defaults source of truth. Changes here usually require config-layer updates.
+- `src/types/CtrlYokeSettings.ts` is the schema/defaults source of truth. Changes here usually require config-layer updates.
 - `src/utils/ConfigurationUtils.ts` is the preferred accessor layer for the rest of the app. If a setting gains new behavior, add/update a helper there instead of spreading raw `configService.get(...)` calls.
 - `src/ui/WebviewSettingsSync.ts` depends directly on `configService.getAll()`, `getNested()`, `set()`, and `getLeafSources()` for the global settings drawer.
 - `src/extension.ts` and `src/cli.ts` must initialize config backends before code that depends on resolved settings (for example logging startup decisions).
 </crossFileRelationships>
 
 <changeChecklist>
-- When adding/changing a setting, update the type and default in `FlightPathSettings.ts`, then verify the accessor path in `ConfigurationUtils` and any webview/settings sync code that exposes it.
-- If you add a deeper nested settings object, verify `PartialFlightPathSettings` is still permissive enough for sparse file writes and CLI overlays.
+- When adding/changing a setting, update the type and default in `CtrlYokeSettings.ts`, then verify the accessor path in `ConfigurationUtils` and any webview/settings sync code that exposes it.
+- If you add a deeper nested settings object, verify `PartialCtrlYokeSettings` is still permissive enough for sparse file writes and CLI overlays.
 - Preserve atomic writes in `FileConfigBackend`; interrupted writes must not leave `settings.json` truncated.
 </changeChecklist>

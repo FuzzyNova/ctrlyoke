@@ -371,7 +371,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
           const captured = entry.inputCapture.accumulate(input);
           if (captured) {
             // TODO: emit ad-hoc prompt capture event for Output tab attribution
-            WebviewLog.debug("[FlightPath] Ad-hoc prompt captured:", captured);
+            WebviewLog.debug("[ctrlyoke] Ad-hoc prompt captured:", captured);
           }
         });
       }
@@ -506,7 +506,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({
       });
       const captured = entry.inputCapture.accumulate(input);
       if (captured) {
-        WebviewLog.debug("[FlightPath] Ad-hoc prompt captured:", captured);
+        WebviewLog.debug("[ctrlyoke] Ad-hoc prompt captured:", captured);
       }
     });
     // Becoming controller: restore fit-to-container sizing.

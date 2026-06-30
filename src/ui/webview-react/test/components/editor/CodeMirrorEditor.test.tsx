@@ -127,12 +127,12 @@ describe("CodeMirrorEditor orphaned mouse-selection guard", () => {
 
 describe("CodeMirrorEditor context reference parsing", () => {
   it("treats a dotted path with a trailing slash only as a directory", () => {
-    expect(findContextReferenceMatches("@.flightpath/.history/")).toEqual([
+    expect(findContextReferenceMatches("@.ctrlyoke/.history/")).toEqual([
       {
         from: 0,
-        to: "@.flightpath/.history/".length,
+        to: "@.ctrlyoke/.history/".length,
         type: "directory",
-        path: ".flightpath/.history/",
+        path: ".ctrlyoke/.history/",
       },
     ]);
   });

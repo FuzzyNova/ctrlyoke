@@ -9,7 +9,7 @@ import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { configService } from "../../../config/FlightPathConfigService";
+import { configService } from "../../../config/CtrlYokeConfigService";
 import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
@@ -20,7 +20,7 @@ import type {
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
-} from "../../../types/FlightPathTypes";
+} from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 /**
@@ -43,7 +43,7 @@ import type { ResolvedProperties } from "../../../utils/PropertyResolver";
  *
  * Interactive execution (with plugin for completion detection):
  *   opencode --prompt "prompt text" -m provider/model [-s sessionId]
- *   (plugin file written to .opencode/plugin/flightpath-completion-hook.js beforehand)
+ *   (plugin file written to .opencode/plugin/ctrlyoke-completion-hook.js beforehand)
  *
  * Session management:
  *   -s <sessionId> — resume existing session (both modes)
@@ -136,7 +136,7 @@ export class OpenCodeCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      Log.debug("🔧 FlightPath MCP config written for OpenCode");
+      Log.debug("🔧 ctrlyoke MCP config written for OpenCode");
     }
 
     // Headless mode: add "run" subcommand and "--format json"
@@ -176,7 +176,7 @@ export class OpenCodeCliProvider implements ICliProvider {
 
     // Deploy the completion plugin for interactive mode (always) and for
     // headless mode when user hooks are configured. In headless mode the plugin
-    // fires user hook commands via native OpenCode events; FLIGHTPATH_NOTIFY_DIR
+    // fires user hook commands via native OpenCode events; CTRLYOKE_NOTIFY_DIR
     // is only set in interactive mode so notification file writing is skipped.
     const userHooks = workflowContext?.resolvedProperties?.hooks ?? undefined;
     const hasUserHooks = (userHooks?.length ?? 0) > 0;
@@ -241,12 +241,12 @@ export class OpenCodeCliProvider implements ICliProvider {
    * There is no --mcp-config CLI flag. The file is auto-detected at startup.
    *
    * Written to {workspaceRoot}/.opencode/opencode.json (merged with existing config).
-   * Supports FlightPath server, user-defined MCP servers, or both.
+   * Supports ctrlyoke server, user-defined MCP servers, or both.
    * Config format (opencode uses "mcp" key with "type": "local"):
    * {
    *   "$schema": "https://opencode.ai/config.json",
    *   "mcp": {
-   *     "flightpath": {
+   *     "ctrlyoke": {
    *       "type": "local",
    *       "command": ["node", "/path/to/mcp-server.js"],
    *       "environment": { ... }
@@ -259,10 +259,10 @@ export class OpenCodeCliProvider implements ICliProvider {
    *   }
    * }
    *
-   * @param mcpServerPath Absolute path to MCP server executable (undefined when FlightPath server not requested)
+   * @param mcpServerPath Absolute path to MCP server executable (undefined when ctrlyoke server not requested)
    * @param workspaceRoot Workspace root directory
    * @param workingFilePath Active working file for this workflow
-   * @param additionalEnv Extra environment variables for the FlightPath MCP server
+   * @param additionalEnv Extra environment variables for the ctrlyoke MCP server
    * @param userServers User-defined MCP server configurations
    * @returns Empty array (config file is auto-detected by filename, no CLI args needed)
    */
@@ -295,24 +295,24 @@ export class OpenCodeCliProvider implements ICliProvider {
         // No existing config — start fresh
       }
 
-      // Build the MCP servers object, merging FlightPath + user-defined servers
+      // Build the MCP servers object, merging ctrlyoke + user-defined servers
       const mcpEntries: Record<string, unknown> = {
         ...(existingConfig.mcp as Record<string, unknown> | undefined),
       };
 
-      // FlightPath server (when included in mcpServers list)
+      // ctrlyoke server (when included in mcpServers list)
       if (mcpServerPath) {
         const normalizedServerPath = mcpServerPath.replace(/\\/g, "/");
         const env: Record<string, string> = {
-          FLIGHTPATH_WORKSPACE: normalizedWorkspaceRoot,
+          CTRLYOKE_WORKSPACE: normalizedWorkspaceRoot,
         };
         if (workingFilePath) {
-          env["FLIGHTPATH_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
+          env["CTRLYOKE_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
         }
         if (additionalEnv) {
           Object.assign(env, additionalEnv);
         }
-        mcpEntries["flightpath"] = {
+        mcpEntries["ctrlyoke"] = {
           type: "local",
           command: ["node", normalizedServerPath],
           environment: env,
@@ -401,7 +401,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       )
     ).then((results) => results.some(Boolean));
     if (!hasRemainingManagedArtifacts) {
-      await this.deleteFlightPathGitignore(gitignorePath);
+      await this.deleteCtrlYokeGitignore(gitignorePath);
     }
   }
 
@@ -457,13 +457,13 @@ export class OpenCodeCliProvider implements ICliProvider {
   }
 
   /**
-   * Deploy the FlightPath completion plugin to .opencode/plugin/ before launching the TUI.
+   * Deploy the ctrlyoke completion plugin to .opencode/plugin/ before launching the TUI.
    *
-   * Always copies the static flightpath-opencode-plugin.ts file (fully type-checked,
+   * Always copies the static ctrlyoke-opencode-plugin.ts file (fully type-checked,
    * no code generation). When user hooks are configured, a JSON sidecar file is written
    * alongside the plugin — the plugin reads this at startup to discover what commands to run.
    *
-   * Sidecar format: {workspaceRoot}/.opencode/plugin/flightpath-hooks.json
+   * Sidecar format: {workspaceRoot}/.opencode/plugin/ctrlyoke-hooks.json
    *   [{"event":"stop","command":"node ./my-script.js"}, ...]
    *
    * @param workspaceRoot Workspace root directory
@@ -485,7 +485,7 @@ export class OpenCodeCliProvider implements ICliProvider {
         extensionPath,
         "out",
         "scripts",
-        "flightpath-opencode-plugin.ts"
+        "ctrlyoke-opencode-plugin.ts"
       );
       const sidecarPath =
         this.notificationMonitor.getPluginHooksFilePath(workspaceRoot);
@@ -530,9 +530,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     }
 
     const content = [
-      "# FlightPath temp files (auto-managed, do not commit)",
-      "flightpath-completion-hook.ts",
-      "flightpath-hooks.json",
+      "# ctrlyoke temp files (auto-managed, do not commit)",
+      "ctrlyoke-completion-hook.ts",
+      "ctrlyoke-hooks.json",
       ".gitignore",
       "",
     ].join("\n");
@@ -541,12 +541,12 @@ export class OpenCodeCliProvider implements ICliProvider {
       .catch(() => {});
   }
 
-  private async deleteFlightPathGitignore(
+  private async deleteCtrlYokeGitignore(
     gitignorePath: string
   ): Promise<void> {
     try {
       const content = await fs.promises.readFile(gitignorePath, "utf-8");
-      if (content.startsWith("# FlightPath temp files")) {
+      if (content.startsWith("# ctrlyoke temp files")) {
         await fs.promises.unlink(gitignorePath).catch(() => {});
       }
     } catch {

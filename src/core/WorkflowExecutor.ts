@@ -13,8 +13,8 @@ import {
   HarnessId,
   type WorkflowAttemptTarget,
   type PreConditionAction,
-} from "../types/FlightPathTypes";
-import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
+} from "../types/CtrlYokeTypes";
+import type { CtrlYokeMcpServerProvider } from "../ui/CtrlYokeMcpServerProvider";
 import { WorkflowContext } from "../types/WorkflowContextTypes";
 import {
   EXECUTION_MODES,
@@ -134,7 +134,7 @@ export interface WorkflowExecutionContext {
     snapshot: WorkspaceSnapshot
   ) => void;
   /** MCP server provider for injecting user-defined MCP servers into VS Code's MCP subsystem (chat harness only) */
-  mcpServerProvider?: FlightPathMcpServerProvider;
+  mcpServerProvider?: CtrlYokeMcpServerProvider;
   /**
    * Spawn a PTY session for interactive script execution.
    * Wraps the script in a shell so PTY interactive input works correctly.
@@ -147,7 +147,7 @@ export interface WorkflowExecutionContext {
     stepName: string;
     /** Signed step index used as the CLI output slot. */
     stepIndex: number;
-    /** Raw script string from the step definition (e.g. ".flightpath/scripts/check.py arg"). */
+    /** Raw script string from the step definition (e.g. ".ctrlyoke/scripts/check.py arg"). */
     script: string;
     /** Working directory for the script process. */
     cwd: string;
@@ -175,7 +175,7 @@ type PromptFailureDisposition =
   | { outcome: "stop" };
 
 /**
- * Drives the sequential execution loop for a FlightPath workflow.
+ * Drives the sequential execution loop for a ctrlyoke workflow.
  *
  * The outer loop has two phases:
  *   1. **Queue phase** — drains normal prompts via `promptQueue.hasNext()`.

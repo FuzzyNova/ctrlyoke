@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { setup, suite, teardown, test } from "mocha";
-import { TimelineRecorder } from "../../flightpath/orchestration/TimelineRecorder";
+import { TimelineRecorder } from "../../core/orchestration/TimelineRecorder";
 import {
   EXECUTION_STATES,
   FINAL_STEP_PHASES,

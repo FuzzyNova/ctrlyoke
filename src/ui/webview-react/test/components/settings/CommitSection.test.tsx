@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { CommitSection } from "@components/settings/CommitSection";
 import { useSettingsStore } from "@store/settingsStore";
 import { SETTING_SCOPES } from "@/types/messages";
-import { FLIGHTPATH_SETTINGS_DEFAULTS } from "@root/types/FlightPathSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "@root/types/CtrlYokeSettings";
 import type { FullGlobalSettings } from "@root/types/WebviewMessageTypes";
 
 function createSettings(): FullGlobalSettings {
   return {
-    settings: FLIGHTPATH_SETTINGS_DEFAULTS,
+    settings: CTRLYOKE_SETTINGS_DEFAULTS,
     sources: {},
   };
 }
@@ -48,7 +48,7 @@ describe("CommitSection", () => {
     act(() => {
       useSettingsStore.getState().setLastCommitMessageGeneration({
         source: "workspace-viewer",
-        workingDirectory: "c:\\dev\\FlightPath",
+        workingDirectory: "c:\\dev\\ctrlyoke",
         commands: ["git diff --cached", "git diff"],
         output: "diff --git a/src/foo.ts b/src/foo.ts",
         staged: false,
@@ -66,7 +66,7 @@ describe("CommitSection", () => {
         (_, element) => element?.textContent === "git diff --cached\ngit diff"
       )
     ).toBeInTheDocument();
-    expect(screen.getByText(/c:\\dev\\FlightPath/i)).toBeInTheDocument();
+    expect(screen.getByText(/c:\\dev\\ctrlyoke/i)).toBeInTheDocument();
     expect(
       screen.getByText(
         "Used working tree diff plus generated hunks for untracked files."

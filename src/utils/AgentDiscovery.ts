@@ -5,7 +5,7 @@ import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
 import {
   getHarnessAgentDirs,
-  getFlightPathAgentDir,
+  getCtrlYokeAgentDir,
   getVSCodeUserAgentDirs,
   getVSCodeVariant,
   isWSL,
@@ -40,7 +40,7 @@ export interface AgentInfo {
  * 1. User prompts directory: %APPDATA%\Code\User\prompts\ (Windows), ~/Library/Application Support/Code/User/prompts/ (macOS), or $XDG_CONFIG_HOME/Code/User/prompts/ (Linux)
  * 2. Workspace .github/agents/ (Copilot-style agents)
  * 3. Workspace .claude/agents/ (Claude-style agents)
- * 4. Workspace .flightpath/agents/ (FlightPath-exclusive agents — not scraped by any harness)
+ * 4. Workspace .ctrlyoke/agents/ (ctrlyoke-exclusive agents — not scraped by any harness)
  *
  * AGENT COMPATIBILITY: ✅ ALL PROVIDERS SUPPORTED
  * - Agents now work with ALL harnesses (Copilot CLI, Claude CLI, Codex CLI, Chat)
@@ -84,13 +84,13 @@ export class AgentDiscovery {
           }
         }
 
-        // 4. Discover from workspace .flightpath/agents/ (FlightPath-exclusive agents)
-        // Agents placed here are only discovered by FlightPath — no harness scrapes this
+        // 4. Discover from workspace .ctrlyoke/agents/ (ctrlyoke-exclusive agents)
+        // Agents placed here are only discovered by ctrlyoke — no harness scrapes this
         // directory, preventing duplicate context injection when using harness-native dirs.
-        const fpDir = getFlightPathAgentDir(workspaceRoot);
+        const fpDir = getCtrlYokeAgentDir(workspaceRoot);
         const fpAgents = await this.discoverAgentsInDirectory(
           fpDir,
-          DISCOVERY_SOURCES.WORKSPACE_FLIGHTPATH
+          DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE
         );
         agents.push(...fpAgents);
       }

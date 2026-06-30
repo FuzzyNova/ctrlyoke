@@ -1,7 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import type { WorkflowStep, WorkingFile } from "../types/FlightPathTypes";
-import type { FinalStepRuntimeState } from "../types/FlightPathTypes";
+import type { WorkflowStep, WorkingFile } from "../types/CtrlYokeTypes";
+import type { FinalStepRuntimeState } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   HARNESS_IDS,
@@ -51,7 +51,7 @@ export interface IWorkingFileQueueAccess {
 }
 
 /**
- * Manages working file (.flightpath/.queue/*.flightpath.json) persistence.
+ * Manages working file (.ctrlyoke/.queue/*.flightpath.json) persistence.
  *
  * Extracted from PromptQueue to separate file I/O concerns from queue state management.
  * All serialized operations go through an internal operation queue to prevent races.
@@ -68,7 +68,7 @@ export class WorkingFileManager {
   // ==================== Pure File Operations ====================
 
   /**
-   * Generate working file path in .flightpath/.queue/ directory
+   * Generate working file path in .ctrlyoke/.queue/ directory
    */
   private async generateWorkingFilePath(
     originalFilePath: string,
@@ -84,7 +84,7 @@ export class WorkingFileManager {
       .substring(0, 19);
     const queueDir = path.join(
       workspaceFolderPath,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.QUEUE_DIR
     );
 
@@ -300,7 +300,7 @@ export class WorkingFileManager {
       });
     } catch (error) {
       Log.error(
-        `FlightPath: Failed to update working file: ${getErrorMessage(error)}`
+        `ctrlyoke: Failed to update working file: ${getErrorMessage(error)}`
       );
       // Don't throw - this is a background operation
     }

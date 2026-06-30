@@ -33,7 +33,7 @@ export interface SplitContext {
 /**
  * ContextExpander - Unified context expansion utility
  *
- * Handles all FlightPath context reference expansion:
+ * Handles all ctrlyoke context reference expansion:
  * - @path/to/file (full file)
  * - @path/to/dir/ (directory listing)
  * - #file:path (full file)

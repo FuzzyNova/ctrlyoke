@@ -49,7 +49,7 @@ export class VsCodeAdapter implements PlatformAdapter {
   }
 
   focusDashboard(): void {
-    vscode.commands.executeCommand("flightpath.dashboard.focus");
+    vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
   }
 
   /**

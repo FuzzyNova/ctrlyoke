@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { McpServerConfig } from "@root/types/FlightPathTypes";
+import type { McpServerConfig } from "@root/types/CtrlYokeTypes";
 import { CustomSelect } from "./CustomSelect";
 
 export type McpServerFormTab = "stdio" | "remote";

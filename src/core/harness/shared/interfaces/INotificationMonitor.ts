@@ -4,7 +4,7 @@ import { Log } from "../../../../utils/Log";
 import type {
   HookEvent,
   UserHookConfig,
-} from "../../../../types/FlightPathTypes";
+} from "../../../../types/CtrlYokeTypes";
 
 /**
  * Notification monitoring configuration
@@ -106,7 +106,7 @@ export interface INotificationMonitor {
     notifyDir: string,
     workspaceRoot: string,
     userHooks?: UserHookConfig[],
-    flightpathEvents?: HookEvent[]
+    ctrlyokeEvents?: HookEvent[]
   ): HookConfig;
 
   /**
@@ -131,7 +131,7 @@ export interface INotificationMonitor {
    *
    * @param config Monitoring configuration
    * @param startTime Execution start time
-   * @param runId Per-run ID set via FLIGHTPATH_RUN_ID env var; when provided, the
+   * @param runId Per-run ID set via CTRLYOKE_RUN_ID env var; when provided, the
    *   hook writes {runId}-start.json and this method does a direct lookup instead
    *   of a wildcard scan — eliminating the parallel-workflow race.
    * @param onCancel Cancellation callback
@@ -202,7 +202,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
     notifyDir: string,
     workspaceRoot: string,
     userHooks?: UserHookConfig[],
-    flightpathEvents?: HookEvent[]
+    ctrlyokeEvents?: HookEvent[]
   ): HookConfig;
 
   abstract getNotificationDirectory(workspaceRoot: string): string;
@@ -404,7 +404,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
 
       if (runId) {
         // Direct lookup — no wildcard scan, no parallel-workflow race.
-        // The hook wrote {runId}-start.json because FLIGHTPATH_RUN_ID was set in its env.
+        // The hook wrote {runId}-start.json because CTRLYOKE_RUN_ID was set in its env.
         const file = path.join(config.directory, `${runId}-start.json`);
         if (await this.isFileNewerThan(file, startTime)) {
           const data = await this.readNotificationFile(file);
@@ -429,7 +429,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
           }
         }
       } else {
-        // Wildcard scan — fallback path for harnesses that don't set FLIGHTPATH_RUN_ID.
+        // Wildcard scan — fallback path for harnesses that don't set CTRLYOKE_RUN_ID.
         // isFileNewerThan guards against stale files but parallel-workflow safety
         // depends on non-overlapping start times.
         const files = await this.findNotificationFiles(
@@ -512,7 +512,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
    * Codex's matcher-based `{ matcher, hooks: [...] }` via `createCodexCommandHookGroup`).
    *
    * Handles:
-   *   - Main FlightPath event hooks (with optional permissionRequest encoding)
+   *   - Main ctrlyoke event hooks (with optional permissionRequest encoding)
    *   - Appending user-defined hooks (skipping permissionRequest if already registered)
    *
    * Returns the hooks record; callers serialize it as json-string or json.

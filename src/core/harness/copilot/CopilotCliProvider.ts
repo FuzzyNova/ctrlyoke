@@ -30,7 +30,7 @@ import type {
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
-} from "../../../types/FlightPathTypes";
+} from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 /**
@@ -81,7 +81,7 @@ export class CopilotCliProvider implements ICliProvider {
 
   /** Hook files created for both interactive and headless mode (cleaned up after workflow). */
   private hookFilePaths: string[] = [];
-  /** Path to temporary .gitignore written in .github/hooks/ to hide FlightPath files from git. */
+  /** Path to temporary .gitignore written in .github/hooks/ to hide ctrlyoke files from git. */
   private hooksDirGitignorePath: string | undefined;
   private enablePromptModeRepoHooksForHeadlessRun = false;
 
@@ -152,12 +152,12 @@ export class CopilotCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      // Auto-approve FlightPath MCP tools only when the FlightPath server is included
+      // Auto-approve ctrlyoke MCP tools only when the ctrlyoke server is included
       const mcpServersResolved =
         workflowContext?.resolvedProperties?.mcpServers ?? [];
-      if (mcpServersResolved.includes("flightpath")) {
-        args.push("--allow-tool", "flightpath");
-        Log.debug("🔧 FlightPath MCP tools auto-approved");
+      if (mcpServersResolved.includes("ctrlyoke")) {
+        args.push("--allow-tool", "ctrlyoke");
+        Log.debug("🔧 ctrlyoke MCP tools auto-approved");
       }
 
       // Auto-approve user-defined MCP server tools based on autoApprove config
@@ -278,7 +278,7 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Set up FlightPath notification hooks (sessionEnd + user hooks) for interactive mode.
+   * Set up ctrlyoke notification hooks (sessionEnd + user hooks) for interactive mode.
    *
    * Creates a uniquely-named hook file per prompt in `.github/hooks/` so that
    * parallel workflows don't interfere with each other. Copilot auto-discovers
@@ -299,7 +299,7 @@ export class CopilotCliProvider implements ICliProvider {
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
     const hookScriptPath = path.join(
       extensionPath,
-      "out/scripts/flightpath-copilot-hook.js"
+      "out/scripts/ctrlyoke-copilot-hook.js"
     );
     const hookConfig = this.notificationMonitor.buildHookConfig(
       hookScriptPath,
@@ -326,7 +326,7 @@ export class CopilotCliProvider implements ICliProvider {
 
   /**
    * Create a hook file with only user-defined hooks for headless execution.
-   * No FlightPath notification hooks are needed since headless uses process-exit for completion.
+   * No ctrlyoke notification hooks are needed since headless uses process-exit for completion.
    *
    * @returns CLI arguments array (empty — Copilot auto-discovers hooks from .github/hooks/)
    */
@@ -353,7 +353,7 @@ export class CopilotCliProvider implements ICliProvider {
               extensionPath,
               "out",
               "scripts",
-              "flightpath-copilot-hook.js"
+              "ctrlyoke-copilot-hook.js"
             ),
             this.notificationMonitor.getNotificationDirectory(workspaceRoot),
             workspaceRoot,
@@ -436,7 +436,7 @@ export class CopilotCliProvider implements ICliProvider {
 
   /**
    * Delete the temporary .gitignore if no concurrent workflows still have
-   * flightpath hook files on disk. Called after getAdditionalCleanupFilePaths()
+   * ctrlyoke hook files on disk. Called after getAdditionalCleanupFilePaths()
    * has already removed this workflow's own hook files.
    *
    * Does not rely on hooksDirGitignorePath being set: even when a concurrent
@@ -448,16 +448,16 @@ export class CopilotCliProvider implements ICliProvider {
     try {
       const files = await fs.readdir(hookDir);
       const hasOtherHookFiles = files.some(
-        (f) => f.startsWith("flightpath-") && f.endsWith(".json")
+        (f) => f.startsWith("ctrlyoke-") && f.endsWith(".json")
       );
       if (hasOtherHookFiles) {
         return; // Concurrent workflow still active — leave gitignore in place
       }
-      // No flightpath hook files remain. Delete the gitignore only if it's ours.
+      // No ctrlyoke hook files remain. Delete the gitignore only if it's ours.
       if (files.includes(".gitignore")) {
         const gitignorePath =
           this.hooksDirGitignorePath ?? path.join(hookDir, ".gitignore");
-        await this.deleteFlightPathGitignore(gitignorePath);
+        await this.deleteCtrlYokeGitignore(gitignorePath);
       }
       this.hooksDirGitignorePath = undefined;
     } catch {
@@ -467,15 +467,15 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Delete a .gitignore only if it was written by FlightPath (identified by
+   * Delete a .gitignore only if it was written by ctrlyoke (identified by
    * our magic header comment). Leaves user-owned gitignore files untouched.
    */
-  private async deleteFlightPathGitignore(
+  private async deleteCtrlYokeGitignore(
     gitignorePath: string
   ): Promise<void> {
     try {
       const content = await fs.readFile(gitignorePath, "utf-8");
-      if (content.startsWith("# FlightPath temp files")) {
+      if (content.startsWith("# ctrlyoke temp files")) {
         await fs.unlink(gitignorePath).catch(() => {});
       }
     } catch {
@@ -522,7 +522,7 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Write a temporary .gitignore to .github/hooks/ to prevent FlightPath hook files
+   * Write a temporary .gitignore to .github/hooks/ to prevent ctrlyoke hook files
    * from appearing as untracked in git. The .gitignore hides itself too so git never
    * sees either file. No-op if a .gitignore already exists there (user-owned file).
    */
@@ -538,8 +538,8 @@ export class CopilotCliProvider implements ICliProvider {
       // File doesn't exist — write it
     }
     const content = [
-      "# FlightPath temp files (auto-managed, do not commit)",
-      "flightpath-*.json",
+      "# ctrlyoke temp files (auto-managed, do not commit)",
+      "ctrlyoke-*.json",
       ".gitignore",
       "",
     ].join("\n");
@@ -550,14 +550,14 @@ export class CopilotCliProvider implements ICliProvider {
   /**
    * Build a unique hook filename for a prompt.
    *
-   * Format: `flightpath-<stem>-p<promptIndex>.json`
+   * Format: `ctrlyoke-<stem>-p<promptIndex>.json`
    * where stem is derived from the working file basename (already contains a
    * timestamp and workflow name), or falls back to a timestamp.
    *
    * Examples:
-   * - `flightpath-1774891046-my-workflow-p0.json`
-   * - `flightpath-1774891046-my-workflow-p1.json`
-   * - `flightpath-1774891200-p0.json` (fallback when no workingFilePath)
+   * - `ctrlyoke-1774891046-my-workflow-p0.json`
+   * - `ctrlyoke-1774891046-my-workflow-p1.json`
+   * - `ctrlyoke-1774891200-p0.json` (fallback when no workingFilePath)
    */
   private static buildHookFileName(
     promptIndex: number,
@@ -573,7 +573,7 @@ export class CopilotCliProvider implements ICliProvider {
     }
     // Sanitize: keep alphanumeric, hyphens, underscores only
     const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
-    return `flightpath-${safeStem}-p${promptIndex}.json`;
+    return `ctrlyoke-${safeStem}-p${promptIndex}.json`;
   }
 
   /**
@@ -582,7 +582,7 @@ export class CopilotCliProvider implements ICliProvider {
    * Copilot requires --prompt flag to specify prompts.
    * Format: copilot --output-format json --prompt "..." [other args]
    *
-   * Handles both direct prompts and file references (e.g., "@.flightpath/temp/prompt.md")
+   * Handles both direct prompts and file references (e.g., "@.ctrlyoke/temp/prompt.md")
    *
    * @param baseArgs Base arguments array
    * @param prompt Prompt text or file reference
@@ -615,7 +615,7 @@ export class CopilotCliProvider implements ICliProvider {
    *
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
-   * @param workingFilePath Active working file for this workflow (sets FLIGHTPATH_WORKING_FILE)
+   * @param workingFilePath Active working file for this workflow (sets CTRLYOKE_WORKING_FILE)
    * @returns CLI arguments array with --additional-mcp-config, or null if MCP not supported
    */
   async getMcpConfigArgs(
@@ -627,7 +627,7 @@ export class CopilotCliProvider implements ICliProvider {
   ): Promise<string[] | null> {
     try {
       // Generate MCP config JSON using shared utility
-      // Copilot CLI requires "type": "local" and "tools" field for FlightPath server;
+      // Copilot CLI requires "type": "local" and "tools" field for ctrlyoke server;
       // user servers need "type": "local"/"http"/"sse" and "tools": ["*"]
       const copilotUserServerConfig = {
         stdioType: "local",

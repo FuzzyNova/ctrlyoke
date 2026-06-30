@@ -32,7 +32,7 @@ import {
   PreCondition,
   ToolPermissionsOverride,
   ErrorBehavior,
-} from "../types/FlightPathTypes";
+} from "../types/CtrlYokeTypes";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
   ACTION_TYPES,
@@ -72,7 +72,7 @@ import type {
   OutputExecutionTarget,
   UndoExecutionTarget,
 } from "../types/OutputHistoryTypes";
-import type { FlightPathMcpServerProvider } from "../ui/FlightPathMcpServerProvider";
+import type { CtrlYokeMcpServerProvider } from "../ui/CtrlYokeMcpServerProvider";
 import {
   OutputCaptureBuffer,
   type OutputCaptureCallbacks,
@@ -162,7 +162,7 @@ export class WorkflowInstance {
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
 
   /** MCP server provider for injecting user-defined MCP servers (chat harness only) */
-  mcpServerProvider?: FlightPathMcpServerProvider;
+  mcpServerProvider?: CtrlYokeMcpServerProvider;
 
   /** Per-workflow dashboard sink (wrapped with WorkflowTaggedSink to inject workflowId) */
   private readonly dashboardSink: IDashboardSink | undefined;
@@ -829,7 +829,7 @@ export class WorkflowInstance {
     let historyFilePath = "";
 
     try {
-      Log.info(`FlightPath: Executing loaded prompt file: ${filePath}`);
+      Log.info(`ctrlyoke: Executing loaded prompt file: ${filePath}`);
 
       // Pre-flight: use the DETECTOR singleton (already initialized at startup).
       // If the harness is still initializing or polling, wait until it settles
@@ -847,7 +847,7 @@ export class WorkflowInstance {
         detailedStatus.initializationStatus === HarnessStatus.Waiting
       ) {
         Log.info(
-          `FlightPath: Harness not ready (${detailedStatus.initializationStatus}), waiting for status change…`
+          `ctrlyoke: Harness not ready (${detailedStatus.initializationStatus}), waiting for status change…`
         );
         await new Promise<void>((resolve) => {
           let settled = false;
@@ -867,7 +867,7 @@ export class WorkflowInstance {
 
       if (detailedStatus.initializationStatus !== HarnessStatus.Ready) {
         const errorMessage = detailedStatus.message || "Harness is unavailable";
-        Log.error(`FlightPath: Harness not ready: ${errorMessage}`);
+        Log.error(`ctrlyoke: Harness not ready: ${errorMessage}`);
         const preflightStepCount = this.promptQueue.getState().steps.length;
         if (this.dashboardSink && preflightStepCount > 0) {
           this.dashboardSink.updateExecutionStarted(
@@ -913,20 +913,20 @@ export class WorkflowInstance {
       if (!continueFromCurrent && !isAppendContinuation) {
         if (isRestartFromBeginning) {
           Log.debug(
-            `FlightPath: Queue in ${executionState} state, restarting from beginning`
+            `ctrlyoke: Queue in ${executionState} state, restarting from beginning`
           );
           await this.promptQueue.restart();
         }
       } else if (isAppendContinuation) {
         Log.debug(
-          `FlightPath: Append continuation — skipping restart, continuing from step ${prevCompletedCount}`
+          `ctrlyoke: Append continuation — skipping restart, continuing from step ${prevCompletedCount}`
         );
         if (executionState === EXECUTION_STATES.IDLE) {
           await this.promptQueue.restoreCompletedSteps(prevCompletedCount);
         }
       } else {
         Log.debug(
-          `FlightPath: Continuing from current position (append mode), preserving history`
+          `ctrlyoke: Continuing from current position (append mode), preserving history`
         );
       }
 
@@ -1146,7 +1146,7 @@ export class WorkflowInstance {
             Log.warn("Failed to finalize history run on early error:", err)
           );
       }
-      this.platform.error(`FlightPath: Execution failed: ${error}`);
+      this.platform.error(`ctrlyoke: Execution failed: ${error}`);
     }
   }
 

@@ -1,19 +1,19 @@
 import * as vscode from "vscode";
-import type { McpServerConfig } from "../types/FlightPathTypes";
+import type { McpServerConfig } from "../types/CtrlYokeTypes";
 
 /**
  * Dynamically injects user-defined MCP servers into VS Code's MCP subsystem
- * for the duration of a FlightPath workflow prompt.
+ * for the duration of a ctrlyoke workflow prompt.
  *
  * Only used for the copilot-chat harness. CLI harnesses use CliMcpConfigGenerator
  * to pass --mcp-config flags instead.
  *
- * The "flightpath" built-in server is not managed here — FlightPath's LM tools
- * (flightpath_append_queue, flightpath_queue_status, etc.) are registered
+ * The "ctrlyoke" built-in server is not managed here — ctrlyoke's LM tools
+ * (ctrlyoke_append_queue, ctrlyoke_queue_status, etc.) are registered
  * unconditionally at activation via registerLanguageModelTools() and are always
  * available to Copilot Chat regardless of mcpServers.
  */
-export class FlightPathMcpServerProvider
+export class CtrlYokeMcpServerProvider
   implements vscode.McpServerDefinitionProvider
 {
   private activeServers: McpServerConfig[] = [];
@@ -22,7 +22,7 @@ export class FlightPathMcpServerProvider
 
   /**
    * Called by WorkflowExecutor when a chat prompt starts.
-   * Filters out the "flightpath" shorthand — only user-defined McpServerConfig
+   * Filters out the "ctrlyoke" shorthand — only user-defined McpServerConfig
    * objects are injected here.
    */
   setActiveServers(servers: McpServerConfig[]): void {

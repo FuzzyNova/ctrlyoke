@@ -1,5 +1,5 @@
 import type { ResolvedProperties } from "./PropertyResolver";
-import type { UserHookConfig, EndCondition } from "../types/FlightPathTypes";
+import type { UserHookConfig, EndCondition } from "../types/CtrlYokeTypes";
 
 /**
  * Handles `{{varName}}` substitution for CLI variable injection.

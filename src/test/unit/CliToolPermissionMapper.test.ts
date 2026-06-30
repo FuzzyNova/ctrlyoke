@@ -3,7 +3,7 @@ import { suite, test } from "mocha";
 import {
   CliToolPermissionMapper,
   COPILOT_TO_CLAUDE_MAP,
-} from "../../flightpath/harness/shared/CliToolPermissionMapper";
+} from "../../core/harness/shared/CliToolPermissionMapper";
 
 suite("CliToolPermissionMapper", () => {
   // ──────────────────────────────────────────────────────────────────────────

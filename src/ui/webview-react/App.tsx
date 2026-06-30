@@ -552,7 +552,7 @@ function App() {
               groupRef={mobile.mobileCenterGroupRef}
               orientation="vertical"
               className="flex-1"
-              id="flightpath-mobile-layout"
+              id="ctrlyoke-mobile-layout"
             >
               <Panel
                 panelRef={mobile.mobileOutputRef}
@@ -764,7 +764,7 @@ function App() {
           groupRef={desktop.horizontalGroupRef}
           orientation="horizontal"
           className="flex-1"
-          id="flightpath-main-layout"
+          id="ctrlyoke-main-layout"
           onLayoutChange={() => {
             if (!desktop.horizontalInitializedRef.current || !uiLayoutReady) {
               return;
@@ -828,7 +828,7 @@ function App() {
                 groupRef={desktop.verticalGroupRef}
                 orientation="vertical"
                 className="h-full"
-                id="flightpath-vertical-layout"
+                id="ctrlyoke-vertical-layout"
               >
                 <Panel
                   panelRef={desktop.outputRef}

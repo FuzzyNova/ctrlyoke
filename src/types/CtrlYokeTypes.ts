@@ -17,7 +17,7 @@ import {
   type FailureKind,
 } from "./DashboardConstants";
 export type { HarnessId, HookEvent, FailureKind };
-import { ToolPermissionMode } from "../flightpath/harness/shared/interfaces/IToolPermissionMapper";
+import { ToolPermissionMode } from "../core/harness/shared/interfaces/IToolPermissionMapper";
 export type { ToolPermissionMode };
 
 /**
@@ -61,7 +61,7 @@ export interface McpServerConfig {
   headers?: Record<string, string>;
   /**
    * Tool names from this server to deny at execution time.
-   * Use bare tool names without the `mcp__serverid__` prefix (e.g. `["flightpath_append_queue"]`).
+   * Use bare tool names without the `mcp__serverid__` prefix (e.g. `["ctrlyoke_append_queue"]`).
    * Translated to `mcp__<id>__<tool>` deny patterns and merged into the harness permission args.
    * Supported on harnesses that accept tool deny patterns (e.g. Claude CLI `--disallowedTools`).
    */
@@ -69,7 +69,7 @@ export interface McpServerConfig {
 }
 
 /**
- * A user-defined hook to run alongside FlightPath's built-in hooks.
+ * A user-defined hook to run alongside ctrlyoke's built-in hooks.
  */
 export interface UserHookConfig {
   /** Logical hook event name. Unsupported events for the active harness are silently skipped. */
@@ -139,11 +139,11 @@ export interface ExecutionProperties {
 
   /**
    * MCP servers to attach for this prompt/workflow.
-   * - string[]: server IDs (e.g., "flightpath") or McpServerConfig objects
+   * - string[]: server IDs (e.g., "ctrlyoke") or McpServerConfig objects
    * - null: explicitly disable inherited MCP servers
    * - undefined: inherit from workflow/settings
    *
-   * Include "flightpath" to enable dynamic queue extension via FlightPath's MCP server.
+   * Include "ctrlyoke" to enable dynamic queue extension via ctrlyoke's MCP server.
    */
   mcpServers?: (string | McpServerConfig)[] | null;
 
@@ -169,8 +169,8 @@ export interface ExecutionProperties {
    *  See PriorContext type for valid values. Omitting the field = no injection. */
   priorContext?: PriorContext;
 
-  /** Extra CLI flags appended to FlightPath's standard argument set.
-   * FlightPath continues to manage model, permissions, workspace dirs, and session flags normally.
+  /** Extra CLI flags appended to ctrlyoke's standard argument set.
+   * ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally.
    * Tokens are injected before the tool permission args. Applies only to CLI harnesses; ignored for copilot-chat.
    * Example: "--effort high --max-turns 10"
    *
@@ -197,7 +197,7 @@ export interface ExecutionProperties {
   errorBehavior?: ErrorBehavior | null;
 
   /**
-   * User-defined hooks to run alongside FlightPath's completion-detection hooks.
+   * User-defined hooks to run alongside ctrlyoke's completion-detection hooks.
    * Supported events vary by harness; unsupported events are silently ignored.
    * - undefined: inherit from workflow/settings
    * - null or []: explicitly no hooks
@@ -304,7 +304,7 @@ export interface WorkflowAttemptTransition {
 
 /**
  * Working file format - same schema as PromptFile with optional runtime metadata
- * Stored in .flightpath/.queue/ directory
+ * Stored in .ctrlyoke/.queue/ directory
  */
 export interface WorkingFile extends PromptFile {
   originalFile?: string; // Path to original prompt file (undefined for ephemeral/dashboard-created workflows)
@@ -522,7 +522,7 @@ export interface WorkflowSummary {
   totalSteps: number;
   startedAt?: number;
   completedAt?: number;
-  /** Set to "cli" when the workflow is being executed by the FlightPath CLI. Undefined means vscode-managed. */
+  /** Set to "cli" when the workflow is being executed by the ctrlyoke CLI. Undefined means vscode-managed. */
   managedBy?: RunnerId;
 }
 

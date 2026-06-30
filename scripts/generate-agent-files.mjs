@@ -87,7 +87,7 @@ const HEADER =
 
 function generateContent(table) {
   return `${HEADER}
-# FlightPath Project Memory
+# ctrlyoke Project Memory
 
 ## Core Project Context
 
@@ -112,10 +112,10 @@ ${table}
 ### Example
 
 \`\`\`
-Working on src/flightpath/WorkflowOrchestrator.ts?
-→ Read: .github/instructions/flightpath-core.instructions.md
+Working on src/core/WorkflowOrchestrator.ts?
+→ Read: .github/instructions/core.instructions.md
 
-Working on src/flightpath/harness/CliIntegration.ts?
+Working on src/core/harness/CliIntegration.ts?
 → Read: .github/instructions/harness-integrations.instructions.md
 \`\`\`
 

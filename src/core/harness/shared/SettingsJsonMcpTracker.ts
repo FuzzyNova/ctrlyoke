@@ -44,7 +44,7 @@ class AsyncMutex {
  *    another workflow still needs them.
  * 2. **Scoped access** — each prompt gets `--allowed-mcp-server-names` with only
  *    its explicitly configured servers plus any pre-existing baseline servers.
- * 3. **Baseline preservation** — servers configured outside FlightPath are never
+ * 3. **Baseline preservation** — servers configured outside ctrlyoke are never
  *    removed and are always included in allowed lists.
  * 4. **Idempotent adds** — if a server already exists in settings.json (from another
  *    workflow or manually configured), it's not re-written.
@@ -99,19 +99,19 @@ export class SettingsJsonMcpTracker {
   /** Async mutex for serializing all read-modify-write operations on settings.json. */
   private readonly mutex = new AsyncMutex();
 
-  /** MCP server names that existed before FlightPath modified anything. */
+  /** MCP server names that existed before ctrlyoke modified anything. */
   private baselineServers = new Set<string>();
 
   /** Whether baseline capture has completed for this workspace. */
   private baselineCapturedForWorkspace: string | undefined;
 
-  /** Whether the project settings.json existed before FlightPath touched it. */
+  /** Whether the project settings.json existed before ctrlyoke touched it. */
   private baselineProjectSettingsFileExisted = false;
 
   /** Whether the project settings.json originally had an mcpServers property. */
   private baselineProjectHadMcpServers = false;
 
-  /** Reference count per FlightPath-managed server name. */
+  /** Reference count per ctrlyoke-managed server name. */
   private refCounts = new Map<string, number>();
 
   /** Per-workflow tracking: which server names each workflow registered. */
@@ -152,7 +152,7 @@ export class SettingsJsonMcpTracker {
    * Capture pre-existing MCP server names from project and user-level settings.
    *
    * Reads both `{workspaceRoot}/.{tool}/settings.json` and `~/.{tool}/settings.json`
-   * to discover all servers configured before FlightPath runs. These servers are
+   * to discover all servers configured before ctrlyoke runs. These servers are
    * always included in `--allowed-mcp-server-names` and never removed by cleanup.
    *
    * Called lazily on first use per workspace root. Thread-safe (idempotent).
@@ -390,7 +390,7 @@ export class SettingsJsonMcpTracker {
   /**
    * Get the `--allowed-mcp-server-names` values for a prompt.
    *
-   * Returns `undefined` when no FlightPath-managed servers are active (no
+   * Returns `undefined` when no ctrlyoke-managed servers are active (no
    * restriction needed). Otherwise returns baseline servers plus the prompt's
    * explicitly configured server names.
    *
@@ -398,7 +398,7 @@ export class SettingsJsonMcpTracker {
    * @returns Array of allowed names, or undefined to skip the flag entirely
    */
   getAllowedServerNames(promptServerNames: string[]): string[] | undefined {
-    // If no FlightPath-managed servers are active, don't restrict
+    // If no ctrlyoke-managed servers are active, don't restrict
     if (this.refCounts.size === 0) {
       return undefined;
     }
@@ -409,7 +409,7 @@ export class SettingsJsonMcpTracker {
   }
 
   /**
-   * Whether any FlightPath-managed servers are currently registered.
+   * Whether any ctrlyoke-managed servers are currently registered.
    * Used to decide if `--allowed-mcp-server-names` is needed.
    */
   hasActiveManagedServers(): boolean {

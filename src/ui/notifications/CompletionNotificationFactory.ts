@@ -16,10 +16,10 @@ import {
 import type {
   WorkflowSummary,
   WorkflowStep,
-} from "../../types/FlightPathTypes";
-import type { FlightPathNotificationSettings } from "../../types/FlightPathSettings";
+} from "../../types/CtrlYokeTypes";
+import type { CtrlYokeNotificationSettings } from "../../types/CtrlYokeSettings";
 
-export interface FlightPathNotificationEvent {
+export interface CtrlYokeNotificationEvent {
   id: string;
   kind: NotificationKind;
   severity: CompletionNotificationSeverity;
@@ -37,11 +37,11 @@ export interface FlightPathNotificationEvent {
   toolName?: string;
 }
 
-/** @deprecated Use FlightPathNotificationEvent */
-export type CompletionNotificationEvent = FlightPathNotificationEvent;
+/** @deprecated Use CtrlYokeNotificationEvent */
+export type CompletionNotificationEvent = CtrlYokeNotificationEvent;
 
 /**
- * Raw artifact written by a hook script when FLIGHTPATH_NOTIFY_HOOK_EVENTS is set.
+ * Raw artifact written by a hook script when CTRLYOKE_NOTIFY_HOOK_EVENTS is set.
  * File naming: `{runId}-hook-{timestamp}-{pid}.json`
  */
 export interface HookArtifact {
@@ -62,7 +62,7 @@ export interface HookArtifact {
 
 interface WorkflowNotificationInput {
   summary: WorkflowSummary;
-  settings: FlightPathNotificationSettings;
+  settings: CtrlYokeNotificationSettings;
   url?: string;
 }
 
@@ -75,7 +75,7 @@ interface PromptNotificationInput {
     duration?: number;
     message?: string;
   };
-  settings: FlightPathNotificationSettings;
+  settings: CtrlYokeNotificationSettings;
   url?: string;
 }
 
@@ -89,9 +89,9 @@ export function buildTestNotificationEvent(
     kind: COMPLETION_NOTIFICATION_KINDS.WORKFLOW,
     severity: COMPLETION_NOTIFICATION_SEVERITY.INFO,
     workflowId: "test",
-    title: "FlightPath - Test Notification",
+    title: "ctrlyoke - Test Notification",
     body: "Developer test notification",
-    tag: `flightpath-${eventId}`,
+    tag: `ctrlyoke-${eventId}`,
     url,
   };
 }
@@ -135,8 +135,8 @@ export function buildWorkflowCompletionNotification(
   }
 
   const title = isFailure
-    ? "FlightPath - Workflow Failed"
-    : "FlightPath - Workflow Complete";
+    ? "ctrlyoke - Workflow Failed"
+    : "ctrlyoke - Workflow Complete";
   const body = buildWorkflowBody(summary, settings, state);
 
   return {
@@ -148,7 +148,7 @@ export function buildWorkflowCompletionNotification(
     workflowId: summary.id,
     title,
     body,
-    tag: `flightpath-workflow-${summary.id}`,
+    tag: `ctrlyoke-workflow-${summary.id}`,
     url,
   };
 }
@@ -176,8 +176,8 @@ export function buildPromptCompletionNotification(
 
   const step = steps?.[stepIndex];
   const title = isFailure
-    ? "FlightPath - Prompt Failed"
-    : "FlightPath - Prompt Complete";
+    ? "ctrlyoke - Prompt Failed"
+    : "ctrlyoke - Prompt Complete";
   const body = buildPromptBody(
     summary,
     step,
@@ -197,14 +197,14 @@ export function buildPromptCompletionNotification(
     stepIndex,
     title,
     body,
-    tag: `flightpath-prompt-${summary.id}-${stepIndex}`,
+    tag: `ctrlyoke-prompt-${summary.id}-${stepIndex}`,
     url,
   };
 }
 
 function buildWorkflowBody(
   summary: WorkflowSummary,
-  settings: FlightPathNotificationSettings,
+  settings: CtrlYokeNotificationSettings,
   state: ExecutionState
 ): string {
   const parts: string[] = [];
@@ -237,7 +237,7 @@ function buildPromptBody(
   step: WorkflowStep | undefined,
   stepIndex: number,
   stepStatus: { duration?: number; message?: string },
-  settings: FlightPathNotificationSettings,
+  settings: CtrlYokeNotificationSettings,
   isFailure: boolean
 ): string {
   const parts: string[] = [];
@@ -266,7 +266,7 @@ function buildPromptBody(
 
 function getWorkflowDisplayName(
   summary: WorkflowSummary,
-  settings: FlightPathNotificationSettings
+  settings: CtrlYokeNotificationSettings
 ): string | undefined {
   if (!settings.includeWorkflowName) {
     return undefined;
@@ -290,7 +290,7 @@ function getWorkflowDisplayName(
 function getPromptDisplayName(
   step: WorkflowStep | undefined,
   stepIndex: number,
-  settings: FlightPathNotificationSettings
+  settings: CtrlYokeNotificationSettings
 ): string {
   if (settings.includePromptName && step?.name?.trim()) {
     return `step ${stepIndex + 1} "${step.name}"`;
@@ -324,14 +324,14 @@ function formatDurationSeconds(seconds: number): string {
 }
 
 /**
- * Builds a FlightPathNotificationEvent for a hook event artifact, or returns
+ * Builds a CtrlYokeNotificationEvent for a hook event artifact, or returns
  * null if the settings have the event disabled.
  */
 export function buildHookNotificationEvent(
   artifact: HookArtifact,
-  settings: FlightPathNotificationSettings,
+  settings: CtrlYokeNotificationSettings,
   url?: string
-): FlightPathNotificationEvent | null {
+): CtrlYokeNotificationEvent | null {
   if (!settings.events.hookEvents[artifact.hookEvent]) {
     return null;
   }
@@ -339,7 +339,7 @@ export function buildHookNotificationEvent(
   const meta = HOOK_EVENT_METADATA.find((m) => m.event === artifact.hookEvent);
   const label = meta?.label ?? artifact.hookEvent;
 
-  const titleParts = ["FlightPath -", label];
+  const titleParts = ["ctrlyoke -", label];
   const bodyParts: string[] = [];
 
   if (settings.includeWorkflowName && artifact.workflowName) {
@@ -361,7 +361,7 @@ export function buildHookNotificationEvent(
     workflowId: artifact.workflowId,
     title: titleParts.join(" "),
     body: bodyParts.join(" - ") || label,
-    tag: `flightpath-hook-${artifact.workflowId}-${artifact.hookEvent}`,
+    tag: `ctrlyoke-hook-${artifact.workflowId}-${artifact.hookEvent}`,
     url,
     hookEvent: artifact.hookEvent,
     harnessId: artifact.harnessId,

@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { CodexResponseParser } from "../../flightpath/harness/codex/CodexResponseParser";
+import { CodexResponseParser } from "../../core/harness/codex/CodexResponseParser";
 import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { TextData } from "../../types/CliOutputTypes";
 

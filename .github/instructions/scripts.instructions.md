@@ -8,14 +8,14 @@ Runtime hook scripts used by CLI harnesses for session start/stop detection, too
 
 <buildAndDeployment>
 - `src/scripts/*` is copied verbatim to `out/scripts/*` by the `copy-scripts` esbuild plugin. Do not add imports that require bundling, path rewriting, or transpilation.
-- All stdin-based hooks stay plain CommonJS and depend only on Node built-ins plus `flightpath-hook-utils.js`.
-- `flightpath-opencode-plugin.ts` is the exception: OpenCode only loads `.ts` plugins, so this file must remain TypeScript + ESM and is deployed verbatim to `.opencode/plugin/flightpath-completion-hook.ts`.
+- All stdin-based hooks stay plain CommonJS and depend only on Node built-ins plus `ctrlyoke-hook-utils.js`.
+- `ctrlyoke-opencode-plugin.ts` is the exception: OpenCode only loads `.ts` plugins, so this file must remain TypeScript + ESM and is deployed verbatim to `.opencode/plugin/ctrlyoke-completion-hook.ts`.
 </buildAndDeployment>
 
 <notificationFlow>
 - There are two outputs: start/stop files for each harness notification monitor, and optional `{runId}-hook-*.json` artifacts for `HookEventMonitor`.
-- `FLIGHTPATH_RUN_ID` is the important anti-race contract: start files use `{runId}-start.json` when available so parallel workflows can do direct lookups instead of wildcard scans.
-- Hook artifacts are opt-in. `CliExecutionRunner` sets `FLIGHTPATH_NOTIFY_HOOK_EVENTS` plus workflow/prompt metadata env vars, and `flightpath-hook-utils.js` turns those into artifact payloads consumed by `CompletionNotificationFactory`.
+- `CTRLYOKE_RUN_ID` is the important anti-race contract: start files use `{runId}-start.json` when available so parallel workflows can do direct lookups instead of wildcard scans.
+- Hook artifacts are opt-in. `CliExecutionRunner` sets `CTRLYOKE_NOTIFY_HOOK_EVENTS` plus workflow/prompt metadata env vars, and `ctrlyoke-hook-utils.js` turns those into artifact payloads consumed by `CompletionNotificationFactory`.
 - Keep the shared start/stop schema aligned across harnesses (`hookEvent`, `sessionId`, `status`, `timestamp`) so `NotificationMonitorBase` subclasses can reuse the same polling logic.
 </notificationFlow>
 
@@ -30,13 +30,13 @@ Runtime hook scripts used by CLI harnesses for session start/stop detection, too
 </harnessSpecificGotchas>
 
 <debugLogging>
-- Normal debug logging is opt-in via `FLIGHTPATH_DIAGNOSTIC_LOGS=true`; `initializeLogger()` must stay best-effort and never break hook execution.
+- Normal debug logging is opt-in via `CTRLYOKE_DIAGNOSTIC_LOGS=true`; `initializeLogger()` must stay best-effort and never break hook execution.
 - Codex and Qwen also write a minimal unconditional invocation entry before diagnostics are checked.
 - OpenCode keeps its own logger because it runs as a plugin, not a spawned stdin script.
 </debugLogging>
 
 <guidelines>
-- Prefer extending `flightpath-hook-utils.js` rather than re-implementing stdin parsing, decision-hook forwarding, artifact writing, or logger setup in each script.
+- Prefer extending `ctrlyoke-hook-utils.js` rather than re-implementing stdin parsing, decision-hook forwarding, artifact writing, or logger setup in each script.
 - These scripts are integration glue, not business-logic hosts: keep them tiny, synchronous, and tolerant of malformed input. Fatal argument/parse errors should `console.error(...)` + `process.exit(1)`, not throw.
 - Preserve the current write pattern (`fs.writeFileSync`) for notification/artifact files; monitors poll for complete files and then delete them.
 - When adding a new harness, decide first whether it follows the stdin-hook model or the OpenCode-style plugin model; the deployment/wiring contract lives in the corresponding `*CliProvider`, not inside the script.

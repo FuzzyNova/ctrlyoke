@@ -26,7 +26,7 @@ import type {
   WorkflowStep,
   McpServerConfig,
   UserHookConfig,
-} from "../../../types/FlightPathTypes";
+} from "../../../types/CtrlYokeTypes";
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 /**
@@ -142,7 +142,7 @@ export class QwenCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      Log.debug("🔧 FlightPath MCP config written for Qwen");
+      Log.debug("🔧 ctrlyoke MCP config written for Qwen");
     }
 
     // Parallel workflow isolation: restrict MCP server access so prompts in
@@ -222,7 +222,7 @@ export class QwenCliProvider implements ICliProvider {
   }
 
   /**
-   * Set up FlightPath notification hooks (Stop hook + user hooks) for interactive mode.
+   * Set up ctrlyoke notification hooks (Stop hook + user hooks) for interactive mode.
    * Merges hooks into .qwen/settings.json and pre-trusts them in trusted_hooks.json.
    * Hooks are enabled by default in Qwen — no CLI flag needed.
    */
@@ -238,7 +238,7 @@ export class QwenCliProvider implements ICliProvider {
       extensionPath,
       "out",
       "scripts",
-      "flightpath-qwen-hook.js"
+      "ctrlyoke-qwen-hook.js"
     );
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
@@ -256,10 +256,10 @@ export class QwenCliProvider implements ICliProvider {
         ]),
       ]
     );
-    const flightpathHooksSection = (
+    const ctrlyokeHooksSection = (
       hookConfig as { type: string; config: { hooks: Record<string, unknown> } }
     ).config.hooks as Record<string, unknown[]>;
-    const wrappedFlightpathEvents = [
+    const wrappedCtrlYokeEvents = [
       ...new Set<HookEvent>([
         "sessionStart",
         "userPromptSubmit",
@@ -267,18 +267,18 @@ export class QwenCliProvider implements ICliProvider {
         ...enabledNotificationHookEvents,
       ]),
     ];
-    const flightpathHookKeys = this.buildTrustedHookKeys(
-      flightpathHooksSection
+    const ctrlyokeHookKeys = this.buildTrustedHookKeys(
+      ctrlyokeHooksSection
     );
 
     const workflowKey = workingFilePath ?? workspaceRoot;
     await this.registerHooksInSettings(
       workspaceRoot,
       workflowKey,
-      flightpathHooksSection,
-      flightpathHookKeys,
+      ctrlyokeHooksSection,
+      ctrlyokeHookKeys,
       userHooks,
-      wrappedFlightpathEvents
+      wrappedCtrlYokeEvents
     );
     Log.debug(`🔔 Configured Stop hook for Qwen completion detection`);
     return [];
@@ -286,7 +286,7 @@ export class QwenCliProvider implements ICliProvider {
 
   /**
    * Set up user-only hooks for headless execution.
-   * No FlightPath notification hooks are included since headless uses process-exit for completion.
+   * No ctrlyoke notification hooks are included since headless uses process-exit for completion.
    * Hooks are enabled by default in Qwen — no CLI flag needed.
    */
   async buildHeadlessUserHookArgs(
@@ -298,7 +298,7 @@ export class QwenCliProvider implements ICliProvider {
     enabledNotificationHookEvents: HookEvent[]
   ): Promise<string[]> {
     const workflowKey = workingFilePath ?? workspaceRoot;
-    const flightpathHooksSection =
+    const ctrlyokeHooksSection =
       enabledNotificationHookEvents.length > 0
         ? (
             this.notificationMonitor.buildHookConfig(
@@ -306,7 +306,7 @@ export class QwenCliProvider implements ICliProvider {
                 extensionPath,
                 "out",
                 "scripts",
-                "flightpath-qwen-hook.js"
+                "ctrlyoke-qwen-hook.js"
               ),
               this.notificationMonitor.getNotificationDirectory(workspaceRoot),
               workspaceRoot,
@@ -321,8 +321,8 @@ export class QwenCliProvider implements ICliProvider {
     await this.registerHooksInSettings(
       workspaceRoot,
       workflowKey,
-      flightpathHooksSection,
-      this.buildTrustedHookKeys(flightpathHooksSection),
+      ctrlyokeHooksSection,
+      this.buildTrustedHookKeys(ctrlyokeHooksSection),
       userHooks,
       enabledNotificationHookEvents
     );
@@ -353,19 +353,19 @@ export class QwenCliProvider implements ICliProvider {
    * Shared helper: merge hooks into .qwen/settings.json and pre-trust them.
    *
    * Uses SettingsJsonHooksTracker for parallel-safe ref-counted hook management.
-   * Pass an empty flightpathHooksSection + undefined flightpathHookKey for headless (user-only) mode.
+   * Pass an empty ctrlyokeHooksSection + undefined ctrlyokeHookKey for headless (user-only) mode.
    */
   private async registerHooksInSettings(
     workspaceRoot: string,
     workflowKey: string,
-    flightpathHooksSection: Record<string, unknown[]>,
-    flightpathHookKeys: string[],
+    ctrlyokeHooksSection: Record<string, unknown[]>,
+    ctrlyokeHookKeys: string[],
     userHooks: UserHookConfig[] | undefined,
-    wrappedFlightpathEvents: HookEvent[] = []
+    wrappedCtrlYokeEvents: HookEvent[] = []
   ): Promise<void> {
     const workflowUserHooks = this.buildUserHooksSection(
       userHooks,
-      wrappedFlightpathEvents
+      wrappedCtrlYokeEvents
     );
 
     // Register hooks via ref-counted tracker under shared mutex
@@ -373,7 +373,7 @@ export class QwenCliProvider implements ICliProvider {
       await QwenCliProvider.hooksTracker.registerWorkflow(
         workflowKey,
         workspaceRoot,
-        flightpathHooksSection,
+        ctrlyokeHooksSection,
         workflowUserHooks
       );
     });
@@ -393,9 +393,9 @@ export class QwenCliProvider implements ICliProvider {
     if (!trustedHooks[workspaceRoot]) {
       trustedHooks[workspaceRoot] = [];
     }
-    for (const flightpathHookKey of flightpathHookKeys) {
-      if (!trustedHooks[workspaceRoot].includes(flightpathHookKey)) {
-        trustedHooks[workspaceRoot].push(flightpathHookKey);
+    for (const ctrlyokeHookKey of ctrlyokeHookKeys) {
+      if (!trustedHooks[workspaceRoot].includes(ctrlyokeHookKey)) {
+        trustedHooks[workspaceRoot].push(ctrlyokeHookKey);
       }
     }
 
@@ -418,13 +418,13 @@ export class QwenCliProvider implements ICliProvider {
 
   private buildUserHooksSection(
     userHooks?: UserHookConfig[],
-    wrappedFlightpathEvents: HookEvent[] = []
+    wrappedCtrlYokeEvents: HookEvent[] = []
   ): Record<string, unknown[]> {
     const section: Record<string, unknown[]> = {};
     for (const uh of userHooks ?? []) {
       if (
         uh.event === "permissionRequest" &&
-        wrappedFlightpathEvents.includes("permissionRequest")
+        wrappedCtrlYokeEvents.includes("permissionRequest")
       ) {
         continue;
       }
@@ -537,7 +537,7 @@ export class QwenCliProvider implements ICliProvider {
    * Qwen CLI expects the prompt as a positional argument.
    * Format: qwen "prompt" --output-format stream-json [other args]
    *
-   * Handles both direct prompts and file references (e.g., "@.flightpath/temp/prompt.md")
+   * Handles both direct prompts and file references (e.g., "@.ctrlyoke/temp/prompt.md")
    *
    * @param baseArgs Base arguments array
    * @param prompt Prompt text or file reference

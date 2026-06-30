@@ -639,7 +639,7 @@ export const useWorkspaceViewerStore = create<
       },
     }),
     {
-      name: "flightpath-workspace-viewer-state",
+      name: "ctrlyoke-workspace-viewer-state",
       skipHydration: true,
       storage: createJSONStorage(() => vsCodeRawStorage),
       partialize: (state) => ({

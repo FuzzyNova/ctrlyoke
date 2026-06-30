@@ -12,7 +12,7 @@ const STARTUP_TIMEOUT_MS = 8000;
  * Full-screen semi-transparent overlay shown immediately on first render.
  *
  * - Normal startup: shows a spinner until STARTUP_COMPLETE arrives (or 8-second safety timeout).
- * - Uninitialized workspace: shows an "Initialize FlightPath" prompt instead of the spinner.
+ * - Uninitialized workspace: shows an "Initialize ctrlyoke" prompt instead of the spinner.
  *   The safety timeout is suppressed so the init button stays visible indefinitely.
  * - First install layout preference: after init, shows a panel placement choice (step 2).
  *   The safety timeout is also suppressed here.
@@ -64,10 +64,10 @@ export const StartupOverlay: React.FC = () => {
       aria-live="polite"
       aria-label={
         workspaceInitRequired
-          ? "Initialize FlightPath in this workspace"
+          ? "Initialize ctrlyoke in this workspace"
           : showLayoutPreference
-            ? "Choose where to dock the FlightPath panel"
-            : "Loading FlightPath…"
+            ? "Choose where to dock the ctrlyoke panel"
+            : "Loading ctrlyoke…"
       }
     >
       {workspaceInitRequired ? (
@@ -78,11 +78,11 @@ export const StartupOverlay: React.FC = () => {
             aria-hidden="true"
           />
           <span className="text-sm font-medium text-foreground select-none">
-            Initialize FlightPath here?
+            Initialize ctrlyoke here?
           </span>
           <span className="text-xs text-description-fg select-none leading-relaxed">
-            FlightPath will create a{" "}
-            <code className="font-mono">.flightpath/</code> directory in this
+            ctrlyoke will create a{" "}
+            <code className="font-mono">.ctrlyoke/</code> directory in this
             workspace to store session history and runtime working files.
           </span>
           <button
@@ -97,7 +97,7 @@ export const StartupOverlay: React.FC = () => {
               })
             }
           >
-            Initialize FlightPath
+            Initialize ctrlyoke
           </button>
         </div>
       ) : showLayoutPreference ? (
@@ -135,8 +135,8 @@ const LayoutPreferenceStep: React.FC<{ onChoose: (show: boolean) => void }> = ({
         One quick tip
       </span>
       <span className="text-xs text-description-fg select-none leading-relaxed">
-        FlightPath lives in the bottom panel by default. On smaller screens it
-        can feel cramped — drag the FlightPath tab to the sidebar for more
+        ctrlyoke lives in the bottom panel by default. On smaller screens it
+        can feel cramped — drag the ctrlyoke tab to the sidebar for more
         vertical space.
       </span>
       <button
@@ -150,7 +150,7 @@ const LayoutPreferenceStep: React.FC<{ onChoose: (show: boolean) => void }> = ({
         Got it
       </button>
       <span className="text-xs text-description-fg opacity-70 select-none leading-relaxed">
-        You can always move it back by dragging the FlightPath tab to whichever
+        You can always move it back by dragging the ctrlyoke tab to whichever
         panel you prefer.
       </span>
     </div>

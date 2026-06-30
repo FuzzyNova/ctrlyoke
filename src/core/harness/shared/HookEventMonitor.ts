@@ -2,10 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   buildHookNotificationEvent,
-  type FlightPathNotificationEvent,
+  type CtrlYokeNotificationEvent,
   type HookArtifact,
 } from "../../../ui/notifications/CompletionNotificationFactory";
-import { configService } from "../../../config/FlightPathConfigService";
+import { configService } from "../../../config/CtrlYokeConfigService";
 import { Log } from "../../../utils/Log";
 
 const POLL_INTERVAL_MS = 500;
@@ -13,7 +13,7 @@ const POLL_INTERVAL_MS = 500;
 interface HookEventMonitorOptions {
   runId: string;
   notifyDir: string;
-  onEvent: (event: FlightPathNotificationEvent) => void;
+  onEvent: (event: CtrlYokeNotificationEvent) => void;
 }
 
 /**
@@ -21,10 +21,10 @@ interface HookEventMonitorOptions {
  *
  * Polls the notify directory every 500 ms for hook artifact files matching
  * `{runId}-hook-*.json` — written by hook scripts when
- * `FLIGHTPATH_NOTIFY_HOOK_EVENTS` lists the event.
+ * `CTRLYOKE_NOTIFY_HOOK_EVENTS` lists the event.
  *
  * On each poll cycle the monitor reads every matching file, parses the
- * HookArtifact payload, deletes the file, builds a FlightPathNotificationEvent
+ * HookArtifact payload, deletes the file, builds a CtrlYokeNotificationEvent
  * (respecting current notification settings), and fires the `onEvent` callback.
  */
 export class HookEventMonitor {

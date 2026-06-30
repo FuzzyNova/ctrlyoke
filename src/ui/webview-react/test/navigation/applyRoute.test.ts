@@ -3,7 +3,7 @@ import { applyRoute, isApplyingRoute } from "@/navigation/applyRoute";
 import { MESSAGE_TYPES } from "@/types/messages";
 import { useUiStore } from "@store/uiStore";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import type { WorkflowSummary } from "@root/types/FlightPathTypes";
+import type { WorkflowSummary } from "@root/types/CtrlYokeTypes";
 
 function fakeVsCode() {
   return { postMessage: vi.fn() };
@@ -114,12 +114,12 @@ describe("applyRoute — workflow", () => {
     useUiStore.getState().setLoadedWorkflows([
       {
         id: "w1",
-        workingFilePath: "c:\\dev\\proj\\.flightpath\\.queue\\m.flightpath.json",
+        workingFilePath: "c:\\dev\\proj\\.ctrlyoke\\.queue\\m.flightpath.json",
       } as unknown as WorkflowSummary,
     ]);
     const api = fakeVsCode();
     applyRoute(
-      { workflow: "c:/dev/proj/.flightpath/.queue/m.flightpath.json" },
+      { workflow: "c:/dev/proj/.ctrlyoke/.queue/m.flightpath.json" },
       api
     );
     expect(api.postMessage).toHaveBeenCalledWith({

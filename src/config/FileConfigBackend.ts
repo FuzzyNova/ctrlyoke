@@ -2,11 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as chokidar from "chokidar";
-import type { ConfigBackend } from "./FlightPathConfigService";
-import type { PartialFlightPathSettings } from "../types/FlightPathSettings";
+import type { ConfigBackend } from "./CtrlYokeConfigService";
+import type { PartialCtrlYokeSettings } from "../types/CtrlYokeSettings";
 
 export class FileConfigBackend implements ConfigBackend {
-  private cache?: PartialFlightPathSettings;
+  private cache?: PartialCtrlYokeSettings;
   private watcher?: chokidar.FSWatcher;
 
   constructor(
@@ -20,7 +20,7 @@ export class FileConfigBackend implements ConfigBackend {
   }
 
   /** Load and parse the config file. Returns {} if file doesn't exist or is invalid JSON. */
-  getAll(): PartialFlightPathSettings {
+  getAll(): PartialCtrlYokeSettings {
     if (this.cache !== undefined) {
       return this.cache;
     }
@@ -77,7 +77,7 @@ export class FileConfigBackend implements ConfigBackend {
     }
   }
 
-  private load(): PartialFlightPathSettings {
+  private load(): PartialCtrlYokeSettings {
     let content: string;
     try {
       content = fs.readFileSync(this.configPath, "utf-8");
@@ -86,18 +86,18 @@ export class FileConfigBackend implements ConfigBackend {
       return {};
     }
     try {
-      return JSON.parse(content) as PartialFlightPathSettings;
+      return JSON.parse(content) as PartialCtrlYokeSettings;
     } catch {
       // File exists but contains invalid JSON (e.g. interrupted prior write).
       // Log to stderr so the user/developer can diagnose the issue.
       console.warn(
-        `[FlightPath] Settings file has invalid JSON and will be treated as empty: ${this.configPath}`
+        `[ctrlyoke] Settings file has invalid JSON and will be treated as empty: ${this.configPath}`
       );
       return {};
     }
   }
 
-  private async save(data: PartialFlightPathSettings): Promise<void> {
+  private async save(data: PartialCtrlYokeSettings): Promise<void> {
     const dir = path.dirname(this.configPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -144,19 +144,19 @@ export class FileConfigBackend implements ConfigBackend {
   }
 }
 
-/** Create a FileConfigBackend for the user global config (~/.flightpath/settings.json) */
+/** Create a FileConfigBackend for the user global config (~/.ctrlyoke/settings.json) */
 export function createUserConfigBackend(
   onChanged?: () => void
 ): FileConfigBackend {
-  const configPath = path.join(os.homedir(), ".flightpath", "settings.json");
+  const configPath = path.join(os.homedir(), ".ctrlyoke", "settings.json");
   return new FileConfigBackend(configPath, onChanged);
 }
 
-/** Create a FileConfigBackend for a workspace config (<workspaceRoot>/.flightpath/settings.json) */
+/** Create a FileConfigBackend for a workspace config (<workspaceRoot>/.ctrlyoke/settings.json) */
 export function createWorkspaceConfigBackend(
   workspaceRoot: string,
   onChanged?: () => void
 ): FileConfigBackend {
-  const configPath = path.join(workspaceRoot, ".flightpath", "settings.json");
+  const configPath = path.join(workspaceRoot, ".ctrlyoke", "settings.json");
   return new FileConfigBackend(configPath, onChanged);
 }

@@ -22,12 +22,12 @@ export interface PerformanceProfiler {
 
 declare global {
   interface Window {
-    flightpathProfiler?: PerformanceProfiler;
+    ctrlyokeProfiler?: PerformanceProfiler;
   }
 }
 
 const LOG_PREFIX = "[FP-perf]";
-const STORAGE_KEY = "flightpath.profiler.enabled";
+const STORAGE_KEY = "ctrlyoke.profiler.enabled";
 const DEFAULT_STATE: PerformanceProfilerState = {
   enabled: false,
   slowThresholdMs: 200,
@@ -289,11 +289,11 @@ export function createProfilerRenderHandler(
 }
 
 export function installPerformanceProfiler(): void {
-  if (typeof window === "undefined" || window.flightpathProfiler) {
+  if (typeof window === "undefined" || window.ctrlyokeProfiler) {
     return;
   }
 
-  window.flightpathProfiler = {
+  window.ctrlyokeProfiler = {
     enable: (options) => {
       setProfilingEnabled(true, options);
     },

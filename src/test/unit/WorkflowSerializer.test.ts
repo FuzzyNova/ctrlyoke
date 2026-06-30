@@ -4,7 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { suite, test } from "mocha";
 import { WorkflowSerializer } from "../../ui/WorkflowSerializer";
-import { configService } from "../../config/FlightPathConfigService";
+import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
 import { MESSAGE_TYPES } from "../../types/DashboardConstants";
 
@@ -52,7 +52,7 @@ suite("WorkflowSerializer", () => {
   suite("handleSaveWorkflow", () => {
     test("should persist errorBehavior at workflow and step level", async () => {
       const tempDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), "flightpath-serializer-")
+        path.join(os.tmpdir(), "ctrlyoke-serializer-")
       );
       const workingFilePath = path.join(tempDir, "input.flightpath.json");
       const outputPath = path.join(tempDir, "saved.flightpath.json");

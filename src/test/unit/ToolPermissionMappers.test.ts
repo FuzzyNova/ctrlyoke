@@ -1,12 +1,12 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { CopilotToolPermissionMapper } from "../../flightpath/harness/copilot/CopilotToolPermissionMapper";
-import { ClaudeToolPermissionMapper } from "../../flightpath/harness/claude/ClaudeToolPermissionMapper";
-import { CodexToolPermissionMapper } from "../../flightpath/harness/codex/CodexToolPermissionMapper";
-import { OpenCodeToolPermissionMapper } from "../../flightpath/harness/opencode/OpenCodeToolPermissionMapper";
-import { QwenToolPermissionMapper } from "../../flightpath/harness/qwen/QwenToolPermissionMapper";
-import { GeminiToolPermissionMapper } from "../../flightpath/harness/gemini/GeminiToolPermissionMapper";
-import type { ToolPermissionConfig } from "../../flightpath/harness/shared/interfaces/IToolPermissionMapper";
+import { CopilotToolPermissionMapper } from "../../core/harness/copilot/CopilotToolPermissionMapper";
+import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeToolPermissionMapper";
+import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
+import { OpenCodeToolPermissionMapper } from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
+import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
+import { GeminiToolPermissionMapper } from "../../core/harness/gemini/GeminiToolPermissionMapper";
+import type { ToolPermissionConfig } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
 // ─── helpers ────────────────────────────────────────────────────────────────

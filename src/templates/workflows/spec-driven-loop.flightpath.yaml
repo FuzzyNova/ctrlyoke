@@ -38,7 +38,7 @@ finalStep:
   name: orchestrate
   agent: spec-orchestrator
   mcpServers:
-    - flightpath
+    - ctrlyoke
   priorContext: all
   prompt: |
     Compare all work completed so far against the original specification:
@@ -52,6 +52,6 @@ finalStep:
     If the implementation is complete and meets all requirements, output exactly:
     DONE: <brief one-line summary of what was completed>
 
-    If more work is needed, first use the flightpath_append_queue tool to add specific,
+    If more work is needed, first use the ctrlyoke_append_queue tool to add specific,
     actionable follow-up prompts addressing only the remaining gaps. Then output:
     CONTINUING: <brief summary of what still needs to be done>

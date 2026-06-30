@@ -23,7 +23,7 @@ import {
 import type {
   PromptCompleteData,
   PromptStartData,
-} from "../flightpath/WorkflowInstance";
+} from "../core/WorkflowInstance";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
@@ -143,7 +143,7 @@ function renderDiffBlock(data: FileEditData): void {
 
 /**
  * Chalk-based terminal renderer for CliEvent arrays.
- * Used by the standalone flightpath CLI to stream structured output to stdout.
+ * Used by the standalone ctrlyoke CLI to stream structured output to stdout.
  */
 export class CliTerminalFormatter {
   /**

@@ -14,7 +14,7 @@ import {
 import {
   getPtyProcessManager,
   ptyPostMessage,
-} from "../flightpath/harness/PtyProcessManager";
+} from "../core/harness/PtyProcessManager";
 import type {
   CliEvent,
   CliOutput,
@@ -33,21 +33,21 @@ import type {
   UndoRecord,
   OutputExecutionTarget,
 } from "../types/OutputHistoryTypes";
-import type { WorkflowStep } from "../types/FlightPathTypes";
-import { TemplateManager } from "../flightpath/TemplateManager";
+import type { WorkflowStep } from "../types/CtrlYokeTypes";
+import { TemplateManager } from "../core/TemplateManager";
 import { Log } from "../utils/Log";
 import { onModelsLoaded } from "../utils/ModelRegistry";
-import { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
-import type { WorkflowSummary } from "../types/FlightPathTypes";
+import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
+import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
-import { workflowDisplayStep } from "../types/FlightPathTypes";
-import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
+import { workflowDisplayStep } from "../types/CtrlYokeTypes";
+import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import { configService } from "../config/FlightPathConfigService";
+import { configService } from "../config/CtrlYokeConfigService";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
 import { WebviewMessageRouter } from "./WebviewMessageRouter";
-import { HistorySearchService } from "../flightpath/orchestration/HistorySearchService";
+import { HistorySearchService } from "../core/orchestration/HistorySearchService";
 import type { IDashboardProvider } from "./IDashboardProvider";
 import type { IDashboardSink } from "../types/IDashboardSink";
 import type { PostMessageFn } from "./WebviewSettingsSync";
@@ -63,14 +63,14 @@ export type { CliOutput } from "../types/WebviewMessageTypes";
 export type { HarnessStatus } from "./WebviewSettingsSync";
 
 /**
- * Unified FlightPath WebviewViewProvider (React UI)
+ * Unified ctrlyoke WebviewViewProvider (React UI)
  *
  * Lifecycle & HTML generation, public update API, and coordination hub.
  * Message routing delegated to WebviewMessageRouter.
  * Settings/config management delegated to WebviewSettingsSync.
  * Save/export/template/history delegated to WorkflowSerializer.
  */
-export class FlightPathWebviewProvider
+export class CtrlYokeWebviewProvider
   implements vscode.WebviewViewProvider, IDashboardProvider, IDashboardSink
 {
   private view?: vscode.WebviewView;
@@ -933,7 +933,7 @@ export class FlightPathWebviewProvider
 
   /**
    * Unregister a browser WebSocket client from the viewer registry.
-   * Called by FlightPathHostedServer when a WebSocket connection closes so
+   * Called by CtrlYokeHostedServer when a WebSocket connection closes so
    * retired instances are freed when no clients are viewing them.
    *
    * When a browser client was the controller, release the slot to undefined and
@@ -1024,7 +1024,7 @@ export class FlightPathWebviewProvider
         this.outputHistoryManager.getRunStates(workflowId),
       ]);
       Log.debug(
-        `[FlightPathWebviewProvider] loadOutputHistoryForWorkflow: sending ${runs.length} runs, timestamps: ${JSON.stringify(runTimestamps)}`
+        `[CtrlYokeWebviewProvider] loadOutputHistoryForWorkflow: sending ${runs.length} runs, timestamps: ${JSON.stringify(runTimestamps)}`
       );
 
       this.postMessage({
@@ -1077,7 +1077,7 @@ export class FlightPathWebviewProvider
 
   /**
    * Wire up a callback for when the webview captures CSS theme vars.
-   * Used by FlightPathHostedServer to forward theme vars to browser clients.
+   * Used by CtrlYokeHostedServer to forward theme vars to browser clients.
    */
   public setThemeVarsCapturedCallback(
     cb: ((vars: Record<string, string>) => void) | undefined
@@ -1101,7 +1101,7 @@ export class FlightPathWebviewProvider
       return;
     }
 
-    await vscode.commands.executeCommand("flightpath.dashboard.focus");
+    await vscode.commands.executeCommand("ctrlyoke.dashboard.focus");
 
     if (!this.view || !this.panelReady) {
       this.pendingPromptEditorInsertQueue.push(request);
@@ -1268,7 +1268,7 @@ export class FlightPathWebviewProvider
       postMessage: broadcastAwarePostMessage,
       sendTestNotification: async () => {
         await vscode.commands.executeCommand(
-          "flightpath.dev.sendTestNotification"
+          "ctrlyoke.dev.sendTestNotification"
         );
       },
     });

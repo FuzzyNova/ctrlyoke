@@ -5,7 +5,7 @@ import {
   HarnessStatus,
   refToPriorContext,
   type PriorContextItem,
-} from "../../flightpath/HarnessIntegration";
+} from "../../core/HarnessIntegration";
 import {
   PromptStep,
   ScriptStep,
@@ -13,7 +13,7 @@ import {
   PromptFile,
   PriorContext,
   ScriptRuntimeOutput,
-} from "../../types/FlightPathTypes";
+} from "../../types/CtrlYokeTypes";
 import { PropertyResolver } from "../../utils/PropertyResolver";
 import {
   PRIOR_CONTEXT_ITEM_TYPES,

@@ -33,7 +33,7 @@ import { BaseToolBuilder } from "../shared/BaseToolBuilder";
  * **Log Format:**
  * - Location: `~/.qwen/projects/<sanitized-workspace-path>/chats/`
  * - File naming: `<session-id>.jsonl` (e.g., `uuid-123-abc.jsonl`)
- * - Sanitization: `C:\dev\FlightPath` → `c--dev-flightpath`
+ * - Sanitization: `C:\dev\ctrlyoke` → `c--dev-ctrlyoke`
  *
  * **Event Types:**
  * 1. `system`      - Telemetry/context; subtype `"at_command"` or `"ui_telemetry"`
@@ -711,8 +711,8 @@ export class QwenLogParser extends BaseLogParser {
    * - Lowercases the path
    * - Replaces all path separators (/ \ :) with dashes
    * - Strips any remaining non-alphanumeric, non-dash characters
-   * - Example: `/home/user/dev/FlightPath` → `-home-user-dev-flightpath`
-   * - Windows: `C:\dev\FlightPath` → `c--dev-flightpath`
+   * - Example: `/home/user/dev/ctrlyoke` → `-home-user-dev-ctrlyoke`
+   * - Windows: `C:\dev\ctrlyoke` → `c--dev-ctrlyoke`
    */
   private getQwenProjectDirectory(): string | null {
     // Use stored workspaceRoot (set by CliIntegration) or fall back to process.cwd()
@@ -724,7 +724,7 @@ export class QwenLogParser extends BaseLogParser {
 
     // Sanitize workspace path for Qwen's naming convention.
     // All path separators (/ \ :) become dashes; other non-alphanumeric chars are stripped.
-    // Example: /home/user/dev/FlightPath → -home-user-dev-flightpath
+    // Example: /home/user/dev/ctrlyoke → -home-user-dev-ctrlyoke
     const sanitizedPath = workspacePath
       .toLowerCase()
       .replace(/[:\\/]/g, "-")

@@ -54,7 +54,7 @@ export interface IResponseParser {
    * Check if an error is a recoverable session error that should trigger retry without resume flag
    *
    * Some harnesses (e.g., Claude CLI) reject invalid session IDs with specific error messages.
-   * When detected, FlightPath can retry the same prompt without the --resume flag to start a new session.
+   * When detected, ctrlyoke can retry the same prompt without the --resume flag to start a new session.
    *
    * @param error The error to check (Error object or string)
    * @returns True if this is a recoverable session error (retry without resume), false otherwise

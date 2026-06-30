@@ -7,7 +7,7 @@ import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
 import {
   getHarnessSkillDirs,
-  getFlightPathSkillDir,
+  getCtrlYokeSkillDir,
 } from "./HarnessDirectoryUtils";
 import {
   HARNESS_IDS,
@@ -30,7 +30,7 @@ export interface SkillInfo {
   /** Source location of the skill */
   source: Exclude<
     DiscoverySource,
-    typeof DISCOVERY_SOURCES.WORKSPACE_FLIGHTPATH
+    typeof DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE
   >;
 }
 
@@ -47,7 +47,7 @@ export interface SkillInfo {
  *   3. ~/.agents/skills/<skill-name>/SKILL.md       (Codex $HOME user skills)
  *
  * Workspace-level (relative to current workspace folder):
- *   4. .flightpath/skills/<skill-name>/SKILL.md     (FlightPath-exclusive skills — not scraped by any harness)
+ *   4. .ctrlyoke/skills/<skill-name>/SKILL.md     (ctrlyoke-exclusive skills — not scraped by any harness)
  *   5. .claude/skills/<skill-name>/SKILL.md         (Claude Code workspace skills)
  *   6. .github/skills/<skill-name>/SKILL.md         (Copilot workspace skills)
  *   7. .agents/skills/<skill-name>/SKILL.md         (Codex $CWD workspace skills)
@@ -106,10 +106,10 @@ export class SkillDiscovery {
       if (workspaceFolder) {
         const workspaceRoot = workspaceFolder.uri.fsPath;
 
-        // 4. <workspace>/.flightpath/skills/ (FlightPath-exclusive skills)
+        // 4. <workspace>/.ctrlyoke/skills/ (ctrlyoke-exclusive skills)
         skills.push(
           ...(await this.discoverInPath(
-            getFlightPathSkillDir(workspaceRoot),
+            getCtrlYokeSkillDir(workspaceRoot),
             DISCOVERY_SOURCES.WORKSPACE,
             scannedPaths
           ))

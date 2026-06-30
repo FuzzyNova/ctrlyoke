@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
-import { CliSessionResolverAdapter } from "../../flightpath/harness/shared/CliSessionResolverAdapter";
-import { type PromptFile, type PromptStep } from "../../types/FlightPathTypes";
+import { CliSessionResolverAdapter } from "../../core/harness/shared/CliSessionResolverAdapter";
+import { type PromptFile, type PromptStep } from "../../types/CtrlYokeTypes";
 import { HARNESS_IDS } from "../../types/DashboardConstants";
 import type { WorkflowContext } from "../../types/WorkflowContextTypes";
 import { Log } from "../../utils/Log";

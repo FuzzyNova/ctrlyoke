@@ -14,9 +14,9 @@ import {
   PERMISSION_MODES,
   type SettingWriteScope,
 } from "../../types/DashboardConstants";
-import { configService } from "../../config/FlightPathConfigService";
+import { configService } from "../../config/CtrlYokeConfigService";
 import { CONFIG_KEYS } from "../../utils/ConfigurationUtils";
-import { FLIGHTPATH_SETTINGS_DEFAULTS } from "../../types/FlightPathSettings";
+import { CTRLYOKE_SETTINGS_DEFAULTS } from "../../types/CtrlYokeSettings";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -74,11 +74,11 @@ suite("WebviewSettingsSync", () => {
 
       try {
         configService.getAll = (() => ({
-          ...FLIGHTPATH_SETTINGS_DEFAULTS,
+          ...CTRLYOKE_SETTINGS_DEFAULTS,
           notifications: {
-            ...FLIGHTPATH_SETTINGS_DEFAULTS.notifications,
+            ...CTRLYOKE_SETTINGS_DEFAULTS.notifications,
             browser: {
-              ...FLIGHTPATH_SETTINGS_DEFAULTS.notifications.browser,
+              ...CTRLYOKE_SETTINGS_DEFAULTS.notifications.browser,
               mode: "push",
             },
           },
@@ -122,7 +122,7 @@ suite("WebviewSettingsSync", () => {
       });
     }
 
-    test("should save generated certs to the user FlightPath folder when scope is user", async () => {
+    test("should save generated certs to the user ctrlyoke folder when scope is user", async () => {
       const originalGet = configService.get.bind(configService);
       const originalSet = configService.set.bind(configService);
 
@@ -148,13 +148,13 @@ suite("WebviewSettingsSync", () => {
 
         const expectedCertPath = path.join(
           homeDir,
-          ".flightpath",
+          ".ctrlyoke",
           "certs",
           "cert.pem"
         );
         const expectedKeyPath = path.join(
           homeDir,
-          ".flightpath",
+          ".ctrlyoke",
           "certs",
           "key.pem"
         );
@@ -178,7 +178,7 @@ suite("WebviewSettingsSync", () => {
         );
         assert.match(
           cert.subject,
-          /CN=FlightPath Local CA/,
+          /CN=ctrlyoke Local CA/,
           "generated certificate should preserve the expected common name"
         );
         assert.match(
@@ -206,7 +206,7 @@ suite("WebviewSettingsSync", () => {
               scope: "user",
             },
           ],
-          "user-scoped cert generation should save paths under ~/.flightpath/certs and persist them to user settings"
+          "user-scoped cert generation should save paths under ~/.ctrlyoke/certs and persist them to user settings"
         );
       } finally {
         configService.get = originalGet;
@@ -214,7 +214,7 @@ suite("WebviewSettingsSync", () => {
       }
     });
 
-    test("should save generated certs to the workspace FlightPath folder when scope is workspace", async () => {
+    test("should save generated certs to the workspace ctrlyoke folder when scope is workspace", async () => {
       const originalGet = configService.get.bind(configService);
       const originalSet = configService.set.bind(configService);
       const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
@@ -247,13 +247,13 @@ suite("WebviewSettingsSync", () => {
         const workspaceFsPath = vscode.Uri.file(workspaceRoot).fsPath;
         const expectedCertPath = path.join(
           workspaceFsPath,
-          ".flightpath",
+          ".ctrlyoke",
           "certs",
           "cert.pem"
         );
         const expectedKeyPath = path.join(
           workspaceFsPath,
-          ".flightpath",
+          ".ctrlyoke",
           "certs",
           "key.pem"
         );
@@ -274,7 +274,7 @@ suite("WebviewSettingsSync", () => {
               scope: "workspace",
             },
           ],
-          "workspace-scoped cert generation should save paths under the workspace .flightpath/certs directory and persist them to workspace settings"
+          "workspace-scoped cert generation should save paths under the workspace .ctrlyoke/certs directory and persist them to workspace settings"
         );
       } finally {
         Object.defineProperty(vscode.workspace, "workspaceFolders", {
@@ -308,7 +308,7 @@ suite("WebviewSettingsSync", () => {
         skills: ["skill-one", "skill-two"],
         resumeSession: true,
         sessionId: "abc-123",
-        mcpServers: ["flightpath"],
+        mcpServers: ["ctrlyoke"],
         hooks: [{ type: "postToolUse", command: "echo done" }],
         errorBehavior: { onError: "retry", maxRetries: 3, retryDelayMs: 2000 },
         endCondition: {
@@ -382,7 +382,7 @@ suite("WebviewSettingsSync", () => {
       );
       assert.deepStrictEqual(
         props.mcpServers,
-        ["flightpath"],
+        ["ctrlyoke"],
         "mcpServers should be loaded from working file"
       );
       assert.deepStrictEqual(
@@ -550,7 +550,7 @@ suite("WebviewSettingsSync", () => {
 
       await router.route({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
-        filePath: "/workspace/.flightpath/.queue/my-workflow.flightpath.json",
+        filePath: "/workspace/.ctrlyoke/.queue/my-workflow.flightpath.json",
       });
 
       assert.ok(
@@ -585,7 +585,7 @@ suite("WebviewSettingsSync", () => {
 
       await router.route({
         type: MESSAGE_TYPES.LOAD_WORKFLOW,
-        filePath: "/workspace/.flightpath/.queue/my-workflow.flightpath.json",
+        filePath: "/workspace/.ctrlyoke/.queue/my-workflow.flightpath.json",
       });
 
       assert.strictEqual(
@@ -776,9 +776,9 @@ suite("WebviewSettingsSync", () => {
         },
         {
           property: PROMPT_PROPERTIES.MCP_SERVERS,
-          value: ["flightpath"],
+          value: ["ctrlyoke"],
           expectedKey: CONFIG_KEYS.DEFAULTS_MCP_SERVERS,
-          expectedValue: ["flightpath"],
+          expectedValue: ["ctrlyoke"],
         },
         {
           property: PROMPT_PROPERTIES.HOOKS,

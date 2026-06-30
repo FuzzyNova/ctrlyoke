@@ -6,7 +6,7 @@ import { suite, test } from "mocha";
 import {
   NotificationMonitorBase,
   type HookConfig,
-} from "../../flightpath/harness/shared/interfaces/INotificationMonitor";
+} from "../../core/harness/shared/interfaces/INotificationMonitor";
 
 class TestNotificationMonitor extends NotificationMonitorBase {
   buildHookConfig(): HookConfig {
@@ -21,7 +21,7 @@ class TestNotificationMonitor extends NotificationMonitorBase {
 suite("NotificationMonitorBase", () => {
   test("detects harness error notification files and cleans them up", async () => {
     const tempDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "flightpath-notify-")
+      path.join(os.tmpdir(), "ctrlyoke-notify-")
     );
     const monitor = new TestNotificationMonitor();
     const sessionId = "session-123";

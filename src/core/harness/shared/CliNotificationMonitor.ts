@@ -207,8 +207,8 @@ export class CliNotificationMonitor {
   /**
    * Get workspace-specific notification directory
    *
-   * Uses pattern: {workspace}/.flightpath/temp/{cli}-notifications/
-   * This prevents conflicts when multiple VS Code instances run FlightPath.
+   * Uses pattern: {workspace}/.ctrlyoke/temp/{cli}-notifications/
+   * This prevents conflicts when multiple VS Code instances run ctrlyoke.
    *
    * @param workspaceRoot Workspace root directory
    * @param cliName CLI name (e.g., "claude", "codex")
@@ -220,7 +220,7 @@ export class CliNotificationMonitor {
   ): string {
     return path.join(
       workspaceRoot,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.TEMP_DIR,
       `${cliName}-notifications`
     );
