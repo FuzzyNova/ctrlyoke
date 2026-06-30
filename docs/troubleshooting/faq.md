@@ -1,12 +1,12 @@
 # FAQ
 
-## Does FlightPath require VS Code?
+## Does ctrlyoke require VS Code?
 
-The extension does, but the standalone `flightpath` CLI does not.
+The extension does, but the standalone `ctrlyoke` CLI does not.
 
 ## Do I have to use Copilot?
 
-No. FlightPath supports multiple harnesses. Copilot CLI is only the default.
+No. ctrlyoke supports multiple harnesses. Copilot CLI is only the default.
 
 ## Can I run scripts without any AI step?
 

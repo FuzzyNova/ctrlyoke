@@ -1,7 +1,7 @@
-# FlightPath Commercial License
+# ctrlyoke Commercial License
 
 **Licensor:** Fuzzy Nova
-**Product:** FlightPath VS Code Extension and companion binaries
+**Product:** ctrlyoke VS Code Extension and companion binaries
 **Effective Date:** June 26, 2026
 **Version:** 1.0
 
@@ -13,7 +13,7 @@ By installing, accessing, or using the Software, You agree to be bound by this L
 
 **"Licensor"** means Fuzzy Nova.
 
-**"Software"** means the FlightPath VS Code extension, the compiled extension binary (VSIX), companion CLI and MCP server binaries, source code made available at the canonical repository, documentation, schemas, templates, and any updates or new versions released by Licensor.
+**"Software"** means the ctrlyoke VS Code extension, the compiled extension binary (VSIX), companion CLI and MCP server binaries, source code made available at the canonical repository, documentation, schemas, templates, and any updates or new versions released by Licensor.
 
 **"Free Tier"** means the capabilities available without a Pro License, as described in the current documentation and the VS Code Marketplace listing.
 
@@ -157,7 +157,7 @@ Licensor may provide support, updates, bug fixes, or future features at its sole
 
 ## 10. Privacy and Data Processing
 
-Your use of the Software may involve the collection, transmission, storage, or processing of data, including telemetry, license validation data, configuration data, diagnostics, and usage information, as described in Licensor's Privacy Policy at [flightpath.dev/privacy](https://flightpath.dev/privacy) or any successor URL. The Privacy Policy is incorporated by reference into this License.
+Your use of the Software may involve the collection, transmission, storage, or processing of data, including telemetry, license validation data, configuration data, diagnostics, and usage information, as described in Licensor's Privacy Policy at [ctrlyoke.dev/privacy](https://ctrlyoke.dev/privacy) or any successor URL. The Privacy Policy is incorporated by reference into this License.
 
 ## 11. Patent Rights
 
@@ -215,7 +215,7 @@ Licensor may update this License for future versions of the Software. The versio
 
 ### (f) Contact
 
-Licensing inquiries: `licensing@flightpath.dev`
+Licensing inquiries: `licensing@ctrlyoke.dev`
 
 ### (g) Dispute resolution; arbitration
 

@@ -36,7 +36,7 @@ const features = [
   },
   {
     title: "CLI + MCP server",
-    body: "flightpath run executes any workflow headlessly. The MCP server exposes your workflows as tools other AI agents can queue.",
+    body: "ctrlyoke run executes any workflow headlessly. The MCP server exposes your workflows as tools other AI agents can queue.",
     icon: ">_",
   },
   {
@@ -50,12 +50,12 @@ const steps = [
   {
     number: "1",
     title: "Write",
-    body: "Define steps, prompts, and end conditions in a .flightpath.yaml file. Supports YAML, JSON, and prompt Markdown.",
+    body: "Define steps, prompts, and end conditions in a .ctrlyoke.yaml file. Supports YAML, JSON, and prompt Markdown.",
   },
   {
     number: "2",
     title: "Run",
-    body: "FlightPath drives your AI harness step by step, streaming output to the dashboard and log files in real time.",
+    body: "ctrlyoke drives your AI harness step by step, streaming output to the dashboard and log files in real time.",
   },
   {
     number: "3",
@@ -65,7 +65,7 @@ const steps = [
 ];
 ---
 
-<Layout title="FlightPath — AI workflow automation for VS Code">
+<Layout title="ctrlyoke — AI workflow automation for VS Code">
 
   <!-- Hero -->
   <section class="relative overflow-hidden border-b border-white/5 bg-brand-950 px-6 py-24 md:py-36">
@@ -79,7 +79,7 @@ const steps = [
         Run your AI coding<br />assistant, hands-free
       </h1>
       <p class="mx-auto mb-10 max-w-2xl text-lg text-slate-400 md:text-xl">
-        FlightPath turns Copilot, Claude, Codex, and more into structured, step-by-step
+        ctrlyoke turns Copilot, Claude, Codex, and more into structured, step-by-step
         workflows — validated at each stage, resumable from any state, and running while
         you do something else.
       </p>
@@ -113,7 +113,7 @@ const steps = [
           <span class="h-3 w-3 rounded-full bg-red-500/60"></span>
           <span class="h-3 w-3 rounded-full bg-yellow-500/60"></span>
           <span class="h-3 w-3 rounded-full bg-green-500/60"></span>
-          <span class="ml-2 text-xs text-slate-500">implement-feature.flightpath.yaml</span>
+          <span class="ml-2 text-xs text-slate-500">implement-feature.ctrlyoke.yaml</span>
         </div>
         <pre class="overflow-x-auto p-6 text-sm leading-relaxed"><code class="text-slate-300"><span class="text-sky-400">name</span><span class="text-slate-500">:</span> Implement auth service
 <span class="text-sky-400">harness</span><span class="text-slate-500">:</span> claude-cli
@@ -203,11 +203,11 @@ const steps = [
     <div class="mx-auto max-w-4xl">
       <div class="overflow-hidden rounded-2xl border border-sky-400/15 bg-gradient-to-br from-brand-800 to-brand-900 p-10 md:p-14">
         <div class="mb-4 inline-flex items-center gap-2 rounded-full bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-sky-400">
-          FlightPath Pro
+          ctrlyoke Pro
         </div>
         <h2 class="mb-4 text-3xl font-bold text-white md:text-4xl">Code from anywhere</h2>
         <p class="mb-8 max-w-xl text-lg text-slate-300">
-          FlightPath Pro unlocks the remote dashboard — open your running workflows in any
+          ctrlyoke Pro unlocks the remote dashboard — open your running workflows in any
           browser, on any device, from anywhere on your network. Start a long task, close
           your laptop, check in from your phone.
         </p>
@@ -261,7 +261,7 @@ const steps = [
                 <span>or install the CLI</span>
               </div>
               <div class="rounded-lg border border-white/8 bg-brand-900 px-6 py-3 font-mono text-sm text-slate-300">
-                npm install -g flightpath
+                npm install -g ctrlyoke
               </div>
             </>
           )

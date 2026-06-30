@@ -23,7 +23,7 @@ finalStep:
 | `skills`          | string[] or `null`  | Skill names                                      |
 | `resumeSession`   | boolean             | Default session behavior                         |
 | `sessionId`       | string or number    | Exact session, step reference, or `"finalStep"`  |
-| `mcpServers`      | array or `null`     | Include `"flightpath"` for dynamic queue support |
+| `mcpServers`      | array or `null`     | Include `"ctrlyoke"` for dynamic queue support |
 | `hooks`           | array or `null`     | User-defined harness hook commands               |
 | `endCondition`    | object or `null`    | Post-step validation defaults                    |
 | `preCondition`    | object or `null`    | Pre-step gating defaults                         |
@@ -80,4 +80,4 @@ Prompt steps also accept the execution fields listed in the workflow-level table
 - `allowedTools`: allow-list patterns
 - `deniedTools`: deny-list patterns
 
-Use `passthrough` when you want FlightPath to omit its permission flags and rely on the harness's own local configuration.
+Use `passthrough` when you want ctrlyoke to omit its permission flags and rely on the harness's own local configuration.

@@ -1,6 +1,6 @@
 # Harness overview
 
-Harnesses are the reason FlightPath can keep one workflow model while talking to very different AI assistants.
+Harnesses are the reason ctrlyoke can keep one workflow model while talking to very different AI assistants.
 
 ## At a glance
 
@@ -16,7 +16,7 @@ Harnesses are the reason FlightPath can keep one workflow model while talking to
 
 ## Choosing a starting harness
 
-- Start with **`copilot-cli`** if you want the path FlightPath is built around by default.
+- Start with **`copilot-cli`** if you want the path ctrlyoke is built around by default.
 - Use **`claude-cli`** if your team already works in Claude Code.
 - Use **`copilot-chat`** if you want a VS Code-native experience and do not need the standalone CLI.
 - Reach for the other CLI harnesses when they already match your preferred assistant or hosting model.

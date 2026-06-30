@@ -1,13 +1,13 @@
 # Settings
 
-FlightPath's current global configuration schema lives in `.flightpath/settings.json`.
+ctrlyoke's current global configuration schema lives in `.ctrlyoke/settings.json`.
 
 ## Where settings come from
 
 The core config model is defined in:
 
 - `schemas/settings-schema.json`
-- `src/types/FlightPathSettings.ts`
+- `src/types/CtrlYokeSettings.ts`
 
 These settings apply to both the extension and the standalone CLI where relevant.
 
@@ -89,4 +89,4 @@ Current defaults include:
 - `workflow.resumeExistingSession: false`
 - `workflow.priorContext: "none"`
 
-See `src/types/FlightPathSettings.ts` for the full default object.
+See `src/types/CtrlYokeSettings.ts` for the full default object.

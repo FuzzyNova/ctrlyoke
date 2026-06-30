@@ -1,12 +1,12 @@
 # Context references
 
-FlightPath prompt files support structured references that help you attach the right project context without pasting everything manually.
+ctrlyoke prompt files support structured references that help you attach the right project context without pasting everything manually.
 
 ## File and directory references
 
 ```text
 @src/extension.ts
-@src/flightpath/
+@src/ctrlyoke/
 @"path with spaces/file.ts"
 ```
 
@@ -18,7 +18,7 @@ FlightPath prompt files support structured references that help you attach the r
 
 ```text
 #selection:src/cli.ts:45-103
-#sym:src/flightpath/WorkflowExecutor.ts:runLoop:88
+#sym:src/ctrlyoke/WorkflowExecutor.ts:runLoop:88
 ```
 
 - `#selection:` attaches a line range
@@ -45,7 +45,7 @@ $allFinalStep
 $step:1,3-5
 ```
 
-These let a prompt pull prior FlightPath output into the prompt text.
+These let a prompt pull prior ctrlyoke output into the prompt text.
 
 ## Tips
 

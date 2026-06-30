@@ -1,6 +1,6 @@
 # Prompt Markdown format
 
-`.prompt.md` is the lightest-weight way to use FlightPath. The file body is the prompt.
+`.prompt.md` is the lightest-weight way to use ctrlyoke. The file body is the prompt.
 
 ## Example
 

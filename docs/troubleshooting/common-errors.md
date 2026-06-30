@@ -1,6 +1,6 @@
 # Common errors
 
-## The workflow file validates in my head, but FlightPath refuses to run it
+## The workflow file validates in my head, but ctrlyoke refuses to run it
 
 Check the schema shape first. Multi-step workflows use `steps`, not `prompts`.
 
@@ -27,11 +27,11 @@ Confirm that the step includes:
 
 ```yaml
 mcpServers:
-  - flightpath
+  - ctrlyoke
 ```
 
 Without the built-in server, the harness cannot call the queue tools.
 
 ## The CLI finished, but I wanted an interactive session
 
-Use `--interactive` on `flightpath run`, or make sure stdin and stdout are attached to a TTY so the CLI does not auto-select headless mode.
+Use `--interactive` on `ctrlyoke run`, or make sure stdin and stdout are attached to a TTY so the CLI does not auto-select headless mode.

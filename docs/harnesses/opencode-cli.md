@@ -5,7 +5,7 @@
 ## Good fit
 
 - Provider-flexible environments that already use OpenCode
-- Workflows where you want FlightPath orchestration without switching assistant tooling
+- Workflows where you want ctrlyoke orchestration without switching assistant tooling
 
 ## Notes
 

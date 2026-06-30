@@ -1,6 +1,6 @@
 # Codex CLI
 
-`codex-cli` lets FlightPath drive Codex-based workflows from the same schema used by the other CLI harnesses.
+`codex-cli` lets ctrlyoke drive Codex-based workflows from the same schema used by the other CLI harnesses.
 
 ## Good fit
 
@@ -9,7 +9,7 @@
 
 ## Notes
 
-- The standalone `flightpath` CLI currently documents `codex-cli` in its `run` command help alongside `copilot-cli` and `claude-cli`.
+- The standalone `ctrlyoke` CLI currently documents `codex-cli` in its `run` command help alongside `copilot-cli` and `claude-cli`.
 - Global settings include Codex-specific defaults for sandbox mode and approval policy.
 
 ## Example

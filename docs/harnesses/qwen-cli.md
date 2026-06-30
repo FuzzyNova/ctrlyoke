@@ -1,11 +1,11 @@
 # Qwen CLI
 
-`qwen-cli` runs FlightPath workflows against Qwen Code while preserving the same step model, session controls, and validation hooks.
+`qwen-cli` runs ctrlyoke workflows against Qwen Code while preserving the same step model, session controls, and validation hooks.
 
 ## Good fit
 
 - Teams that already use Qwen Code directly
-- Workflows where you want the FlightPath queue, history, and script gating on top of Qwen
+- Workflows where you want the ctrlyoke queue, history, and script gating on top of Qwen
 
 ## Example
 

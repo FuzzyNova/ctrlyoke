@@ -1,11 +1,11 @@
 # Gemini CLI
 
-`gemini-cli` integrates Gemini-based coding workflows into the same FlightPath runtime.
+`gemini-cli` integrates Gemini-based coding workflows into the same ctrlyoke runtime.
 
 ## Good fit
 
 - Teams already using Gemini CLI
-- Workflows that need Gemini while still benefiting from FlightPath features such as script gates and queue replay
+- Workflows that need Gemini while still benefiting from ctrlyoke features such as script gates and queue replay
 
 ## Example
 
@@ -14,5 +14,5 @@ harness: gemini-cli
 model: gemini-2.5-pro
 
 steps:
-  - prompt: Explain the architecture of @src/flightpath/ and identify the most coupled area.
+  - prompt: Explain the architecture of @src/ctrlyoke/ and identify the most coupled area.
 ```

@@ -3,13 +3,13 @@ import { defineConfig } from "vitepress";
 const base = process.env.DOCS_BASE ?? "/docs/";
 
 export default defineConfig({
-  title: "FlightPath",
+  title: "ctrlyoke",
   description: "AI workflow automation for VS Code and the command line.",
   base,
   cleanUrls: true,
   lastUpdated: true,
   themeConfig: {
-    logo: "/flightpath-icon.svg",
+    logo: "/ctrlyoke-icon.svg",
     nav: [
       { text: "Guide", link: "/guide/" },
       { text: "Harnesses", link: "/harnesses/" },
@@ -17,7 +17,7 @@ export default defineConfig({
       { text: "Reference", link: "/reference/workflow-schema" },
       { text: "CLI", link: "/cli/" },
       { text: "Pro", link: "/pro/" },
-      { text: "GitHub", link: "https://github.com/FuzzyNova/flightpath" },
+      { text: "GitHub", link: "https://github.com/FuzzyNova/ctrlyoke" },
     ],
     sidebar: {
       "/guide/": [
@@ -85,14 +85,14 @@ export default defineConfig({
           text: "CLI",
           items: [
             { text: "Overview", link: "/cli/" },
-            { text: "flightpath", link: "/cli/flightpath" },
-            { text: "flightpath-mcp", link: "/cli/flightpath-mcp" },
+            { text: "ctrlyoke", link: "/cli/ctrlyoke" },
+            { text: "ctrlyoke-mcp", link: "/cli/ctrlyoke-mcp" },
           ],
         },
       ],
       "/pro/": [
         {
-          text: "FlightPath Pro",
+          text: "ctrlyoke Pro",
           items: [{ text: "Overview & activation", link: "/pro/" }],
         },
       ],
@@ -117,14 +117,14 @@ export default defineConfig({
       provider: "local",
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/FuzzyNova/flightpath" },
+      { icon: "github", link: "https://github.com/FuzzyNova/ctrlyoke" },
     ],
     editLink: {
-      pattern: "https://github.com/FuzzyNova/flightpath/edit/main/docs/:path",
+      pattern: "https://github.com/FuzzyNova/ctrlyoke/edit/main/docs/:path",
       text: "Edit this page on GitHub",
     },
     footer: {
-      message: "Source-available under the FlightPath Commercial License.",
+      message: "Source-available under the ctrlyoke Commercial License.",
       copyright: "Copyright © Fuzzy Nova",
     },
   },

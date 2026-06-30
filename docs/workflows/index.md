@@ -1,11 +1,11 @@
 # Workflow files
 
-FlightPath supports three file formats:
+ctrlyoke supports three file formats:
 
 | Format   | Extension                             | Best use                             |
 | -------- | ------------------------------------- | ------------------------------------ |
-| YAML     | `.flightpath.yaml`, `.flightpath.yml` | Multi-step workflows written by hand |
-| JSON     | `.flightpath.json`                    | Generated workflows and automation   |
+| YAML     | `.ctrlyoke.yaml`, `.ctrlyoke.yml` | Multi-step workflows written by hand |
+| JSON     | `.ctrlyoke.json`                    | Generated workflows and automation   |
 | Markdown | `.prompt.md`                          | Single prompt files                  |
 
 ## Current schema shape

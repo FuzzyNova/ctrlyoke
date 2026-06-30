@@ -1,18 +1,18 @@
-# `flightpath`
+# `ctrlyoke`
 
 The standalone CLI currently exposes two commands:
 
 ```text
-flightpath run [file]
-flightpath validate <file>
+ctrlyoke run [file]
+ctrlyoke validate <file>
 ```
 
-## `flightpath run`
+## `ctrlyoke run`
 
 Run a prompt or workflow file:
 
 ```bash
-flightpath run my-workflow.flightpath.yaml
+ctrlyoke run my-workflow.ctrlyoke.yaml
 ```
 
 ### Important options
@@ -42,15 +42,15 @@ flightpath run my-workflow.flightpath.yaml
 ### Examples
 
 ```bash
-flightpath run review.flightpath.yaml --harness claude-cli --model sonnet
-flightpath run lint-fix.prompt.md --prompt "Fix the lint errors" --headless
-flightpath run build.flightpath.json --json --quiet
+ctrlyoke run review.ctrlyoke.yaml --harness claude-cli --model sonnet
+ctrlyoke run lint-fix.prompt.md --prompt "Fix the lint errors" --headless
+ctrlyoke run build.ctrlyoke.json --json --quiet
 ```
 
-## `flightpath validate`
+## `ctrlyoke validate`
 
 Validate a workflow file without running it:
 
 ```bash
-flightpath validate my-workflow.flightpath.yaml
+ctrlyoke validate my-workflow.ctrlyoke.yaml
 ```

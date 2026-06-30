@@ -1,17 +1,17 @@
 # MCP tools
 
-FlightPath exposes built-in tools for workflows and chat integrations that need to inspect or extend the active queue.
+ctrlyoke exposes built-in tools for workflows and chat integrations that need to inspect or extend the active queue.
 
 ## Built-in tool list
 
 | Tool                      | Purpose                                         |
 | ------------------------- | ----------------------------------------------- |
-| `flightpath_queue_status` | Return queue metadata and step state            |
-| `flightpath_append_queue` | Append prompts to the current queue             |
-| `flightpath_capabilities` | Return available harnesses and supported models |
-| `flightpath_read_output`  | Read output from completed prompts              |
+| `ctrlyoke_queue_status` | Return queue metadata and step state            |
+| `ctrlyoke_append_queue` | Append prompts to the current queue             |
+| `ctrlyoke_capabilities` | Return available harnesses and supported models |
+| `ctrlyoke_read_output`  | Read output from completed prompts              |
 
-## `flightpath_append_queue`
+## `ctrlyoke_append_queue`
 
 This tool accepts:
 
@@ -25,4 +25,4 @@ Use it when the harness discovers follow-up work during a run.
 ## When these tools are available
 
 - as language model tools in the extension
-- through the built-in FlightPath MCP server when you include `"flightpath"` in `mcpServers`
+- through the built-in ctrlyoke MCP server when you include `"ctrlyoke"` in `mcpServers`

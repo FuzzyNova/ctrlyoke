@@ -8,17 +8,17 @@
 
 ## Install the extension
 
-Install **FlightPath** from the VS Code Marketplace or clone the repository and run the extension locally during development.
+Install **ctrlyoke** from the VS Code Marketplace or clone the repository and run the extension locally during development.
 
 After install, open the panel:
 
 ```text
-Command Palette → FlightPath: Open FlightPath Panel
+Command Palette → ctrlyoke: Open ctrlyoke Panel
 ```
 
 ## Install a harness
 
-FlightPath does not bundle AI assistants. It orchestrates harnesses that you already have installed.
+ctrlyoke does not bundle AI assistants. It orchestrates harnesses that you already have installed.
 
 | Harness        | What you need                                |
 | -------------- | -------------------------------------------- |
@@ -34,16 +34,16 @@ Start with `copilot-cli` or `claude-cli` unless you already know you need anothe
 
 ## Initialize a workspace
 
-FlightPath expects a workspace-level `.flightpath` folder for drafts, templates, scripts, runtime files, and logs.
+ctrlyoke expects a workspace-level `.ctrlyoke` folder for drafts, templates, scripts, runtime files, and logs.
 
 ```text
-Command Palette → FlightPath: Initialize Workspace
+Command Palette → ctrlyoke: Initialize Workspace
 ```
 
 That creates the standard directory structure and makes it easier to keep workflows, scripts, and supporting files organized.
 
 ## Optional: install the standalone CLI
 
-The repository also builds a standalone `flightpath` binary entry point. Once installed, it can execute the same workflow files outside VS Code.
+The repository also builds a standalone `ctrlyoke` binary entry point. Once installed, it can execute the same workflow files outside VS Code.
 
 See [CLI overview](/cli/) for usage.

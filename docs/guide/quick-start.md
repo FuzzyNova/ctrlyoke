@@ -2,15 +2,15 @@
 
 This walkthrough gets a basic workflow running with the current schema and the default `copilot-cli` harness.
 
-## 1. Open the FlightPath panel
+## 1. Open the ctrlyoke panel
 
 ```text
-Command Palette → FlightPath: Open FlightPath Panel
+Command Palette → ctrlyoke: Open ctrlyoke Panel
 ```
 
 ## 2. Create a workflow file
 
-Create `hello.flightpath.yaml` in your workspace:
+Create `hello.ctrlyoke.yaml` in your workspace:
 
 ```yaml
 harness: copilot-cli
@@ -33,13 +33,13 @@ steps:
 
 Use one of these entry points:
 
-- `FlightPath: Load in FlightPath` from the file context menu
-- `FlightPath: Select Prompt File` from the panel
-- `FlightPath: Run with FlightPath` if you want to load and start in one step
+- `ctrlyoke: Load in ctrlyoke` from the file context menu
+- `ctrlyoke: Select Prompt File` from the panel
+- `ctrlyoke: Run with ctrlyoke` if you want to load and start in one step
 
 ## 4. Run the workflow
 
-Click **Run** in the panel. FlightPath sends the first step to the active harness, waits for completion, stores the runtime metadata, and then advances to the next step.
+Click **Run** in the panel. ctrlyoke sends the first step to the active harness, waits for completion, stores the runtime metadata, and then advances to the next step.
 
 ## 5. Add validation when you are ready
 

@@ -9,7 +9,7 @@ interface Props {
 
 const {
   title,
-  description = "FlightPath orchestrates AI coding assistants through structured, step-by-step workflows — validated, resumable, and hands-free.",
+  description = "ctrlyoke orchestrates AI coding assistants through structured, step-by-step workflows — validated, resumable, and hands-free.",
 } = Astro.props;
 ---
 
@@ -20,35 +20,35 @@ const {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <title>{title}</title>
-    <link rel="icon" type="image/svg+xml" href="/flightpath-icon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/ctrlyoke-icon.svg" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:site_name" content="FlightPath" />
+    <meta property="og:site_name" content="ctrlyoke" />
     <meta name="twitter:card" content="summary_large_image" />
-    {/* Pre-launch: no index until FlightPath ships (controlled by LAUNCHED in src/config.ts). */}
+    {/* Pre-launch: no index until ctrlyoke ships (controlled by LAUNCHED in src/config.ts). */}
     {!LAUNCHED && <meta name="robots" content="noindex" />}
   </head>
   <body class="bg-brand-950 text-slate-100 antialiased">
     {
       !LAUNCHED && (
         <a
-          href="https://github.com/FuzzyNova/flightpath"
+          href="https://github.com/FuzzyNova/ctrlyoke"
           class="block border-b border-sky-400/20 bg-sky-400/10 px-4 py-2 text-center text-sm text-sky-200 hover:bg-sky-400/15 transition-colors"
         >
-          🚧 FlightPath is in active development and not yet released — follow progress on GitHub →
+          🚧 ctrlyoke is in active development and not yet released — follow progress on GitHub →
         </a>
       )
     }
     <header class="sticky top-0 z-50 border-b border-white/5 bg-brand-950/90 backdrop-blur-sm">
       <nav class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <a href="/" class="flex items-center gap-2.5 font-semibold text-white">
-          <img src="/flightpath-icon.svg" alt="" class="h-7 w-7" />
-          FlightPath
+          <img src="/ctrlyoke-icon.svg" alt="" class="h-7 w-7" />
+          ctrlyoke
         </a>
         <div class="hidden items-center gap-6 text-sm text-slate-400 md:flex">
           <a href="/docs/" class="hover:text-white transition-colors">Docs</a>
           <a href="/pricing/" class="hover:text-white transition-colors">Pricing</a>
-          <a href="https://github.com/FuzzyNova/flightpath" class="hover:text-white transition-colors">GitHub</a>
+          <a href="https://github.com/FuzzyNova/ctrlyoke" class="hover:text-white transition-colors">GitHub</a>
         </div>
         <Cta
           href={MARKETPLACE_URL}
@@ -68,8 +68,8 @@ const {
         <div class="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
           <div class="flex flex-col gap-3">
             <a href="/" class="flex items-center gap-2 font-semibold text-white">
-              <img src="/flightpath-icon.svg" alt="" class="h-6 w-6" />
-              FlightPath
+              <img src="/ctrlyoke-icon.svg" alt="" class="h-6 w-6" />
+              ctrlyoke
             </a>
             <p class="text-sm text-slate-500">AI workflow automation for VS Code.</p>
             <p class="text-sm text-slate-500">By <a href="https://fuzzno.com" class="hover:text-slate-300 transition-colors">Fuzzy Nova</a>.</p>
@@ -83,9 +83,9 @@ const {
             </div>
             <div class="flex flex-col gap-3">
               <span class="font-medium text-slate-300">Resources</span>
-              <a href="https://github.com/FuzzyNova/flightpath" class="text-slate-500 hover:text-slate-300 transition-colors">GitHub</a>
-              <a href="https://github.com/FuzzyNova/flightpath/issues" class="text-slate-500 hover:text-slate-300 transition-colors">Issues</a>
-              <a href="mailto:support@flightpath.dev" class="text-slate-500 hover:text-slate-300 transition-colors">Support</a>
+              <a href="https://github.com/FuzzyNova/ctrlyoke" class="text-slate-500 hover:text-slate-300 transition-colors">GitHub</a>
+              <a href="https://github.com/FuzzyNova/ctrlyoke/issues" class="text-slate-500 hover:text-slate-300 transition-colors">Issues</a>
+              <a href="mailto:support@ctrlyoke.dev" class="text-slate-500 hover:text-slate-300 transition-colors">Support</a>
             </div>
             <div class="flex flex-col gap-3">
               <span class="font-medium text-slate-300">Legal</span>

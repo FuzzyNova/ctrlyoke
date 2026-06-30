@@ -11,7 +11,7 @@ model: claude-sonnet-4.5
 steps:
   - name: inspect
     prompt: |
-      Inspect @src/flightpath/ and identify the biggest reliability risk.
+      Inspect @src/ctrlyoke/ and identify the biggest reliability risk.
 
   - name: verify-workspace
     type: script

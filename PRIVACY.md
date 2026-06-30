@@ -1,13 +1,13 @@
 # Privacy Policy
 
 **Controller:** Fuzzy Nova
-**Product:** FlightPath VS Code extension and companion CLI / MCP server binaries
+**Product:** ctrlyoke VS Code extension and companion CLI / MCP server binaries
 **Effective Date:** June 26, 2026
 **Version:** 1.0
 
 ## 1. Scope
 
-This Privacy Policy explains how Fuzzy Nova collects, uses, discloses, and protects information when you use the FlightPath VS Code extension and companion binaries (the **Software**), visit [flightpath.dev](https://flightpath.dev), or contact us for support, sales, billing, or security matters.
+This Privacy Policy explains how Fuzzy Nova collects, uses, discloses, and protects information when you use the ctrlyoke VS Code extension and companion binaries (the **Software**), visit [ctrlyoke.dev](https://ctrlyoke.dev), or contact us for support, sales, billing, or security matters.
 
 This Privacy Policy does not cover third-party AI services, tools, or platforms that you connect to through the Software, including GitHub Copilot, Claude, Codex, Gemini, or others. Those services are governed by their own privacy policies and terms.
 
@@ -63,13 +63,13 @@ We receive order metadata such as your email address, product information, order
 
 ### 3.4 Support and communications
 
-If you contact us by email at `privacy@flightpath.dev`, `support@flightpath.dev`, `billing@flightpath.dev`, `security@flightpath.dev`, `sales@flightpath.dev`, or `hello@fuzzno.com`, we receive your email address and the contents of your message.
+If you contact us by email at `privacy@ctrlyoke.dev`, `support@ctrlyoke.dev`, `billing@ctrlyoke.dev`, `security@ctrlyoke.dev`, `sales@ctrlyoke.dev`, or `hello@fuzzno.com`, we receive your email address and the contents of your message.
 
 Email is hosted on **Google Workspace**. Public bug reports or discussions on GitHub are governed by GitHub's privacy policy and are visible to others.
 
 ### 3.5 Website data
 
-Our website, [flightpath.dev](https://flightpath.dev), is hosted on **Netlify**. Netlify may process standard server and security logs, including IP addresses and request metadata, to operate and secure the site.
+Our website, [ctrlyoke.dev](https://ctrlyoke.dev), is hosted on **Netlify**. Netlify may process standard server and security logs, including IP addresses and request metadata, to operate and secure the site.
 
 ## 4. How We Use Information
 
@@ -95,7 +95,7 @@ Where applicable law requires a legal basis for processing, we rely on one or mo
 
 ## 6. Sharing and Sub-Processors
 
-We use trusted vendors to help operate FlightPath. These providers process data on our behalf or as independent providers under their own terms, as applicable:
+We use trusted vendors to help operate ctrlyoke. These providers process data on our behalf or as independent providers under their own terms, as applicable:
 
 | Sub-processor | Purpose | Data categories |
 | --- | --- | --- |
@@ -148,7 +148,7 @@ Depending on where you live, you may have rights to:
 - withdraw consent where processing is based on consent
 - receive a copy of certain data in a portable format
 
-To exercise these rights, contact us at `privacy@flightpath.dev`. We may need to verify your identity before acting on your request.
+To exercise these rights, contact us at `privacy@ctrlyoke.dev`. We may need to verify your identity before acting on your request.
 
 Because some information is held by our vendors, we may need to coordinate with them to fulfill your request.
 
@@ -158,7 +158,7 @@ We do not sell personal information and do not share personal information for cr
 
 ## 11. Children
 
-FlightPath is a professional developer tool and is not directed to children. We do not knowingly collect personal data from children under the age of thirteen (13). If you believe a child has provided us personal data, please contact us at `privacy@flightpath.dev`.
+ctrlyoke is a professional developer tool and is not directed to children. We do not knowingly collect personal data from children under the age of thirteen (13). If you believe a child has provided us personal data, please contact us at `privacy@ctrlyoke.dev`.
 
 ## 12. Security
 
@@ -166,9 +166,9 @@ We use reasonable administrative, technical, and organizational safeguards desig
 
 ## 13. Changes to This Policy
 
-We may update this Privacy Policy from time to time. If we make material changes, we will update the effective date above and may provide additional notice on [flightpath.dev](https://flightpath.dev) or within the Software.
+We may update this Privacy Policy from time to time. If we make material changes, we will update the effective date above and may provide additional notice on [ctrlyoke.dev](https://ctrlyoke.dev) or within the Software.
 
 ## 14. Contact
 
-**Privacy inquiries:** `privacy@flightpath.dev`
+**Privacy inquiries:** `privacy@ctrlyoke.dev`
 **Business operator:** Fuzzy Nova — `hello@fuzzno.com`

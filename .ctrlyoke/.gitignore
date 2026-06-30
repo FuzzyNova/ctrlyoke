@@ -1,4 +1,4 @@
-# FlightPath runtime directories — generated at runtime, do not commit...unless you really want to
+# ctrlyoke runtime directories — generated at runtime, do not commit...unless you really want to
 .history/
 .queue/
 logs/

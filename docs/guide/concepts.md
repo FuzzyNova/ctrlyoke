@@ -2,9 +2,9 @@
 
 ## Harness
 
-A **harness** is the execution strategy FlightPath uses to talk to an AI assistant. The term covers both CLI-backed integrations and the Copilot Chat window integration.
+A **harness** is the execution strategy ctrlyoke uses to talk to an AI assistant. The term covers both CLI-backed integrations and the Copilot Chat window integration.
 
-FlightPath currently supports:
+ctrlyoke currently supports:
 
 - `copilot-cli`
 - `claude-cli`
@@ -16,7 +16,7 @@ FlightPath currently supports:
 
 ## Workflow
 
-A workflow is a `.flightpath.yaml`, `.flightpath.json`, or `.prompt.md` file that describes work to run. YAML and JSON support multi-step automation. Markdown prompt files are the simplest one-step format.
+A workflow is a `.ctrlyoke.yaml`, `.ctrlyoke.json`, or `.prompt.md` file that describes work to run. YAML and JSON support multi-step automation. Markdown prompt files are the simplest one-step format.
 
 ## Step
 
@@ -33,18 +33,18 @@ Prompt steps default to type `prompt`, so the `type` field is optional unless yo
 
 `finalStep` runs after the queue completes. It is useful for review passes, post-processing, or dynamic queue extension loops.
 
-If the final step has `mcpServers: ["flightpath"]` and appends more prompts, FlightPath runs the new queue items and then executes the final step again.
+If the final step has `mcpServers: ["ctrlyoke"]` and appends more prompts, ctrlyoke runs the new queue items and then executes the final step again.
 
 ## Session
 
-A session is the underlying conversation or thread maintained by a harness. FlightPath can:
+A session is the underlying conversation or thread maintained by a harness. ctrlyoke can:
 
 - start a new session
 - resume the immediately previous session with `resumeSession: true`
 - resume a specific earlier step with `sessionId: 1`
 - resume an exact harness session ID string
 
-Session reuse is provider-aware. FlightPath does not try to resume a Claude session in Copilot or the other way around.
+Session reuse is provider-aware. ctrlyoke does not try to resume a Claude session in Copilot or the other way around.
 
 ## Context references
 
@@ -57,7 +57,7 @@ Prompts can include structured references that the prompt editor understands:
 | `#selection:path/to/file.ts:10-25`          | Attach a line range            |
 | `#sym:path/to/file.ts:SymbolName:42`        | Attach a symbol definition     |
 | `~diff`, `~staged`, `~stash:0`, `~<commit>` | Attach git change context      |
-| `$previous`, `$all`, `$step:1`              | Inject prior FlightPath output |
+| `$previous`, `$all`, `$step:1`              | Inject prior ctrlyoke output |
 
 ## End conditions and pre-conditions
 

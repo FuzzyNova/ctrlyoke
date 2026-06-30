@@ -1,6 +1,6 @@
 # Guide
 
-Use this section for the shortest path from install to a working FlightPath run.
+Use this section for the shortest path from install to a working ctrlyoke run.
 
 ## Recommended order
 
@@ -11,7 +11,7 @@ Use this section for the shortest path from install to a working FlightPath run.
 
 ## What you will learn
 
-- Which parts of FlightPath run inside VS Code and which run in a terminal
+- Which parts of ctrlyoke run inside VS Code and which run in a terminal
 - How harnesses, steps, final steps, and sessions fit together
 - How to write a workflow that uses the current `steps`-based schema
 - Where to look when a workflow does not behave the way you expect

@@ -4,11 +4,11 @@ Dynamic queue extension lets a workflow add more work while it is already runnin
 
 ## Enable it
 
-Add the built-in FlightPath MCP server:
+Add the built-in ctrlyoke MCP server:
 
 ```yaml
 mcpServers:
-  - flightpath
+  - ctrlyoke
 ```
 
 ## What it provides
@@ -21,11 +21,11 @@ The built-in server exposes queue tools that let the harness:
 
 ## Typical pattern
 
-Use `flightpath` in the `finalStep` so the harness can review the current run, append follow-up tasks, and loop until it decides the queue is complete.
+Use `ctrlyoke` in the `finalStep` so the harness can review the current run, append follow-up tasks, and loop until it decides the queue is complete.
 
 ```yaml
 finalStep:
   prompt: Review the implementation and append any missing follow-up work.
   mcpServers:
-    - flightpath
+    - ctrlyoke
 ```

@@ -1,5 +1,5 @@
 /**
- * Single pre-launch switch for the FlightPath site.
+ * Single pre-launch switch for the ctrlyoke site.
  *
  * While `LAUNCHED` is `false`:
  *  - Install / Buy CTAs render as disabled "Coming soon" controls (see components/Cta.astro)
@@ -12,7 +12,7 @@ export const LAUNCHED = false;
 
 /** VS Code Marketplace listing — live once the extension is published. */
 export const MARKETPLACE_URL =
-  "https://marketplace.visualstudio.com/items?itemName=fuzzynova.flightpath";
+  "https://marketplace.visualstudio.com/items?itemName=fuzzynova.ctrlyoke";
 
 /** Lemon Squeezy checkout URL — set at launch (see PRO_LICENSE_PLAN.md). */
 export const CHECKOUT_URL = "#";

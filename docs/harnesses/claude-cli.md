@@ -1,6 +1,6 @@
 # Claude CLI
 
-`claude-cli` runs FlightPath workflows through Claude Code while keeping the same workflow file format used elsewhere.
+`claude-cli` runs ctrlyoke workflows through Claude Code while keeping the same workflow file format used elsewhere.
 
 ## Why use it
 

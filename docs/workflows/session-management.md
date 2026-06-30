@@ -39,4 +39,4 @@ The schema also supports `sessionId: "finalStep"` to resume the most recent fina
 
 ## Provider-aware behavior
 
-FlightPath does not blindly reuse sessions across harnesses. If a later step switches harness, the session resume logic only reuses compatible sessions.
+ctrlyoke does not blindly reuse sessions across harnesses. If a later step switches harness, the session resume logic only reuses compatible sessions.

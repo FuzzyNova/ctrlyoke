@@ -11,7 +11,7 @@ model: sonnet
 steps:
   - name: analyze
     prompt: |
-      Inspect @src/flightpath/ and identify the highest-risk
+      Inspect @src/ctrlyoke/ and identify the highest-risk
       maintainability issue in this module.
 
   - name: implement
@@ -57,4 +57,4 @@ finalStep:
 
 ## After the first run
 
-Open the working file under `.flightpath/.queue/` if you want to inspect persisted runtime metadata such as the resolved harness, model, session ID, and timestamps.
+Open the working file under `.ctrlyoke/.queue/` if you want to inspect persisted runtime metadata such as the resolved harness, model, session ID, and timestamps.

@@ -9,6 +9,6 @@ Use this section when a workflow does not start, does not resume, or does not sa
 
 ## Useful places to inspect
 
-- `.flightpath/logs/` for runtime and hook logs
-- `.flightpath/.queue/` for working files and runner state
-- `.flightpath/.history/` for per-run output history
+- `.ctrlyoke/logs/` for runtime and hook logs
+- `.ctrlyoke/.queue/` for working files and runner state
+- `.ctrlyoke/.history/` for per-run output history
