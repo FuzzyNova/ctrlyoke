@@ -762,9 +762,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
  */
 function getWorkflowNameFromPath(filePath: string): string {
   const fileName = filePath.split(/[/\\]/).pop() || filePath;
-  // Remove .working.yaml, .working.json, .flightpath.yaml, etc.
+  // Remove .working.yaml, .working.json, .ctrlyoke.yaml, etc.
   return fileName
     .replace(/\.working\.(yaml|yml|json)$/i, "")
-    .replace(/\.flightpath\.(yaml|yml|json)$/i, "")
+    .replace(/\.ctrlyoke\.(yaml|yml|json)$/i, "")
     .replace(/\.(yaml|yml|json)$/i, "");
 }

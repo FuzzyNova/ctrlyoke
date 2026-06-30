@@ -40,7 +40,7 @@ Keep the command surface focused on a few categories:
 1. Run extension (`F5`)
 2. Run command: **ctrlyoke: Export Discovered Models** → writes `scripts/discovered-models.json`
 3. `npm run sync-models -- --import` → updates `src/utils/ModelConstants.ts`
-4. `npm run sync-models` → syncs `package.json` enums and `schemas/prompt-schema.json`
+4. `npm run sync-models` → syncs `package.json` enums and `schemas/workflow-schema.json`
 5. `npm run generate-schema` → regenerates YAML schema from JSON
 6. Commit all updated files
 </modelUpdateWorkflow>

@@ -54,7 +54,7 @@ suite("HistorySearchService", () => {
     const workflowId = "demo-2026-06-09T17-00-00";
     await writeWorkingFile(workflowId, {
       workflowName: "Demo Workflow",
-      originalFile: "C:\\dev\\ctrlyoke\\demo.flightpath.yaml",
+      originalFile: "C:\\dev\\ctrlyoke\\demo.ctrlyoke.yaml",
     });
 
     await createRun(workflowId, 1, 1000, [
@@ -94,7 +94,7 @@ suite("HistorySearchService", () => {
         workspaceRoot,
         PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR,
-        `${workflowId}.flightpath.json`
+        `${workflowId}.ctrlyoke.json`
       )
     );
     assert.strictEqual(results[0]?.matchType, "status");
@@ -293,7 +293,7 @@ suite("HistorySearchService", () => {
         workspaceRoot,
         PATH_CONSTANTS.CTRLYOKE_DIR,
         PATH_CONSTANTS.QUEUE_DIR,
-        `${workflowId}.flightpath.json`
+        `${workflowId}.ctrlyoke.json`
       ),
       JSON.stringify({ ...workingFile, ...overrides }, null, 2),
       "utf8"

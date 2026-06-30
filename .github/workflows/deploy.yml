@@ -1,8 +1,8 @@
 name: Deploy Site to Netlify
 
-# Production deploy of flightpath.dev (landing + docs). Path-filtered so routine
+# Production deploy of ctrlyoke.dev (landing + docs). Path-filtered so routine
 # extension commits don't redeploy the site. Requires NETLIFY_AUTH_TOKEN and
-# NETLIFY_SITE_ID repo secrets (the flightpath.dev Netlify site).
+# NETLIFY_SITE_ID repo secrets (the ctrlyoke.dev Netlify site).
 on:
   push:
     branches: [main]

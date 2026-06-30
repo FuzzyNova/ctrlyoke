@@ -131,10 +131,10 @@ export class WorkspaceSessionManager {
       // Read directory contents
       const entries = await fs.readdir(queueDir, { withFileTypes: true });
 
-      // Filter to .flightpath.json files
+      // Filter to .ctrlyoke.json files
       const workingFiles = entries
         .filter(
-          (entry) => entry.isFile() && entry.name.endsWith(".flightpath.json")
+          (entry) => entry.isFile() && entry.name.endsWith(".ctrlyoke.json")
         )
         .map((entry) => entry.name);
 
@@ -188,12 +188,12 @@ export class WorkspaceSessionManager {
    * Extract workflow name from working file filename
    * Removes timestamp and extension
    *
-   * @param filename Working file filename (e.g., "workflow-2024-12-22T15-30-00.flightpath.json")
+   * @param filename Working file filename (e.g., "workflow-2024-12-22T15-30-00.ctrlyoke.json")
    * @returns Workflow name (e.g., "workflow")
    */
   private extractWorkflowName(filename: string): string {
     return filename
-      .replace(/\.flightpath\.json$/, "")
+      .replace(/\.ctrlyoke\.json$/, "")
       .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
   }
 

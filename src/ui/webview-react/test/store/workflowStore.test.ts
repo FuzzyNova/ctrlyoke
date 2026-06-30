@@ -58,7 +58,7 @@ beforeEach(() => {
 describe("loadWorkflow", () => {
   it("sets fileName, workflowName, and prompts", () => {
     store().loadWorkflow({
-      fileName: "test.flightpath.yaml",
+      fileName: "test.ctrlyoke.yaml",
       workflowName: "My Workflow",
       steps: [
         makePrompt({ prompt: "Step 1" }),
@@ -66,7 +66,7 @@ describe("loadWorkflow", () => {
       ],
     });
 
-    expect(store().fileName).toBe("test.flightpath.yaml");
+    expect(store().fileName).toBe("test.ctrlyoke.yaml");
     expect(store().workflowName).toBe("My Workflow");
     expect(store().steps).toHaveLength(2);
     expect((store().steps[0] as any).prompt).toBe("Step 1");
@@ -74,7 +74,7 @@ describe("loadWorkflow", () => {
 
   it("sets totalSteps to prompts length", () => {
     store().loadWorkflow({
-      fileName: "wf.flightpath.yaml",
+      fileName: "wf.ctrlyoke.yaml",
       steps: [makePrompt(), makePrompt(), makePrompt()],
     });
     expect(store().totalSteps).toBe(3);
@@ -82,7 +82,7 @@ describe("loadWorkflow", () => {
 
   it("defaults all prompts to PENDING status", () => {
     store().loadWorkflow({
-      fileName: "wf.flightpath.yaml",
+      fileName: "wf.ctrlyoke.yaml",
       steps: [makePrompt(), makePrompt()],
     });
     for (const p of store().steps) {
@@ -92,7 +92,7 @@ describe("loadWorkflow", () => {
 
   it("applies results status to prompts", () => {
     store().loadWorkflow({
-      fileName: "wf.flightpath.yaml",
+      fileName: "wf.ctrlyoke.yaml",
       steps: [makePrompt(), makePrompt()],
       results: [{ status: STEP_STATUS.COMPLETED }, {}],
     });

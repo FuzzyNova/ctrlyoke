@@ -18,8 +18,8 @@ suite("CompletionNotificationFactory", () => {
     const event = buildWorkflowCompletionNotification({
       summary: {
         id: "wf-1",
-        workflowName: "refactor.flightpath.yaml",
-        filePath: "C:/dev/ctrlyoke/refactor.flightpath.yaml",
+        workflowName: "refactor.ctrlyoke.yaml",
+        filePath: "C:/dev/ctrlyoke/refactor.ctrlyoke.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
         currentStep: 4,
         totalSteps: 4,
@@ -31,7 +31,7 @@ suite("CompletionNotificationFactory", () => {
 
     assert.ok(event);
     assert.strictEqual(event?.title, "ctrlyoke - Workflow Complete");
-    assert.match(event?.body ?? "", /refactor\.flightpath\.yaml/);
+    assert.match(event?.body ?? "", /refactor\.ctrlyoke\.yaml/);
     assert.strictEqual(event?.url, "http://localhost:4747/?token=test");
   });
 
@@ -51,7 +51,7 @@ suite("CompletionNotificationFactory", () => {
       summary: {
         id: "wf-2",
         workflowName: "compile",
-        filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
+        filePath: "C:/dev/ctrlyoke/compile.ctrlyoke.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
         currentStep: 2,
         totalSteps: 2,
@@ -74,7 +74,7 @@ suite("CompletionNotificationFactory", () => {
         {
           id: "wf-2",
           workflowName: "compile",
-          filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
+          filePath: "C:/dev/ctrlyoke/compile.ctrlyoke.yaml",
           executionState: EXECUTION_STATES.RUNNING,
           currentStep: 1,
           totalSteps: 2,
@@ -82,7 +82,7 @@ suite("CompletionNotificationFactory", () => {
         {
           id: "wf-2",
           workflowName: "compile",
-          filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
+          filePath: "C:/dev/ctrlyoke/compile.ctrlyoke.yaml",
           executionState: EXECUTION_STATES.COMPLETED,
           currentStep: 2,
           totalSteps: 2,
@@ -95,7 +95,7 @@ suite("CompletionNotificationFactory", () => {
       isWorkflowCompletionTransition(undefined, {
         id: "wf-2",
         workflowName: "compile",
-        filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
+        filePath: "C:/dev/ctrlyoke/compile.ctrlyoke.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
         currentStep: 2,
         totalSteps: 2,
@@ -108,7 +108,7 @@ suite("CompletionNotificationFactory", () => {
         {
           id: "wf-2",
           workflowName: "compile",
-          filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
+          filePath: "C:/dev/ctrlyoke/compile.ctrlyoke.yaml",
           executionState: EXECUTION_STATES.COMPLETED,
           currentStep: 2,
           totalSteps: 2,
@@ -116,7 +116,7 @@ suite("CompletionNotificationFactory", () => {
         {
           id: "wf-2",
           workflowName: "compile",
-          filePath: "C:/dev/ctrlyoke/compile.flightpath.yaml",
+          filePath: "C:/dev/ctrlyoke/compile.ctrlyoke.yaml",
           executionState: EXECUTION_STATES.COMPLETED,
           currentStep: 2,
           totalSteps: 2,
@@ -131,7 +131,7 @@ suite("CompletionNotificationFactory", () => {
       summary: {
         id: "wf-3",
         workflowName: "lint",
-        filePath: "C:/dev/ctrlyoke/lint.flightpath.yaml",
+        filePath: "C:/dev/ctrlyoke/lint.ctrlyoke.yaml",
         executionState: EXECUTION_STATES.RUNNING,
         currentStep: 1,
         totalSteps: 3,

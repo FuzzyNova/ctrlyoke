@@ -2,7 +2,7 @@
 /**
  * Strip development-only commands from package.json for production builds
  *
- * This script removes commands with category "FlightPath Test" from package.json
+ * This script removes commands with category "ctrlyoke Test" from package.json
  * before publishing. It's called during `vscode:prepublish`.
  *
  * Usage:
@@ -20,19 +20,19 @@ const __dirname = path.dirname(__filename);
 const packageJsonPath = path.join(__dirname, "..", "package.json");
 const backupPath = path.join(__dirname, "..", "package.json.backup");
 
-const DEV_COMMAND_CATEGORIES = ["FlightPath Test"];
+const DEV_COMMAND_CATEGORIES = ["ctrlyoke Test"];
 
 // List of dev command IDs to remove (as a fallback if category isn't used)
 const DEV_COMMAND_IDS = [
-  "flightpath.test.copilotAutomation",
-  "flightpath.test.fileAttachment",
-  "flightpath.test.chatModelSelection",
-  "flightpath.test.chatAgentSelection",
-  "flightpath.listChatCommands",
-  "flightpath.listAllCommands",
-  "flightpath.investigateChatLogs",
-  "flightpath.exportDiscoveredModels",
-  "flightpath.showLanguageId",
+  "ctrlyoke.test.copilotAutomation",
+  "ctrlyoke.test.fileAttachment",
+  "ctrlyoke.test.chatModelSelection",
+  "ctrlyoke.test.chatAgentSelection",
+  "ctrlyoke.listChatCommands",
+  "ctrlyoke.listAllCommands",
+  "ctrlyoke.investigateChatLogs",
+  "ctrlyoke.exportDiscoveredModels",
+  "ctrlyoke.showLanguageId",
 ];
 
 function stripDevCommands() {

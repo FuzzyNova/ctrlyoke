@@ -1,17 +1,17 @@
-# FlightPath vscode.lm API Integration for Sub-Agents
+# ctrlyoke vscode.lm API Integration for Sub-Agents
 
 ## Objective
 
-Implement VS Code Language Model API integration to enable AI-powered sub-agents within FlightPath workflows. This will primarily be used for intelligent end condition evaluation where an AI agent analyzes Copilot Chat outputs to determine workflow completion status.
+Implement VS Code Language Model API integration to enable AI-powered sub-agents within ctrlyoke workflows. This will primarily be used for intelligent end condition evaluation where an AI agent analyzes Copilot Chat outputs to determine workflow completion status.
 
 <context>
-This is a **future enhancement** for FlightPath that complements the main Copilot Chat automation. The primary use case is enabling AI-powered end condition evaluation:
+This is a **future enhancement** for ctrlyoke that complements the main Copilot Chat automation. The primary use case is enabling AI-powered end condition evaluation:
 
-1. User executes FlightPath workflow through enhanced Copilot Chat automation
+1. User executes ctrlyoke workflow through enhanced Copilot Chat automation
 2. Copilot Chat generates response to workflow step
 3. **AI Sub-Agent** (using vscode.lm) analyzes the response
 4. Sub-agent determines if end condition is met or if workflow should continue
-5. FlightPath proceeds to next step or completes workflow
+5. ctrlyoke proceeds to next step or completes workflow
 
 This enables more sophisticated workflow control than simple script-based end conditions.
 </context>
@@ -47,7 +47,7 @@ This enables more sophisticated workflow control than simple script-based end co
 
 ### Phase 1: Core vscode.lm Integration
 
-**New File**: `src/flightpath/SubAgentManager.ts`
+**New File**: `src/core/SubAgentManager.ts`
 
 **Key Components**:
 
@@ -61,10 +61,10 @@ This enables more sophisticated workflow control than simple script-based end co
 
 **New Files**:
 
-- `src/flightpath/subagents/CodeQualityAgent.ts` - Evaluates code quality and completeness
-- `src/flightpath/subagents/ErrorAnalysisAgent.ts` - Analyzes error messages and solutions
-- `src/flightpath/subagents/TaskCompletionAgent.ts` - Determines if specific tasks are complete
-- `src/flightpath/subagents/WorkflowOrchestratorAgent.ts` - Makes high-level workflow decisions
+- `src/core/subagents/CodeQualityAgent.ts` - Evaluates code quality and completeness
+- `src/core/subagents/ErrorAnalysisAgent.ts` - Analyzes error messages and solutions
+- `src/core/subagents/TaskCompletionAgent.ts` - Determines if specific tasks are complete
+- `src/core/subagents/WorkflowOrchestratorAgent.ts` - Makes high-level workflow decisions
 
 ### Phase 3: Integration Points
 
@@ -182,7 +182,7 @@ export class EndConditionSubAgent extends BaseSubAgent {
   ): Promise<EndConditionResult> {
     const messages = [
       vscode.LanguageModelChatMessage.User(`
-                You are an AI workflow evaluator for FlightPath. Analyze the Copilot Chat response 
+                You are an AI workflow evaluator for ctrlyoke. Analyze the Copilot Chat response 
                 and determine if the workflow step has been completed successfully.
                 
                 Expected Outcome: ${expectedOutcome}
@@ -226,17 +226,17 @@ export class EndConditionSubAgent extends BaseSubAgent {
 ### Custom Tool Registration
 
 ```typescript
-export class FlightPathTools {
+export class CtrlYokeTools {
   static registerAll(context: vscode.ExtensionContext): void {
     // File analysis tool
     context.subscriptions.push(
-      vscode.lm.registerTool("flightpath_analyzeFile", new FileAnalysisTool())
+      vscode.lm.registerTool("ctrlyoke_analyzeFile", new FileAnalysisTool())
     );
 
     // Code validation tool
     context.subscriptions.push(
       vscode.lm.registerTool(
-        "flightpath_validateCode",
+        "ctrlyoke_validateCode",
         new CodeValidationTool()
       )
     );
@@ -244,7 +244,7 @@ export class FlightPathTools {
     // Workspace inspection tool
     context.subscriptions.push(
       vscode.lm.registerTool(
-        "flightpath_inspectWorkspace",
+        "ctrlyoke_inspectWorkspace",
         new WorkspaceInspectionTool()
       )
     );
@@ -314,7 +314,7 @@ export class FileAnalysisTool implements vscode.LanguageModelTool<FileAnalysisPa
 
 - [ ] Uses existing Copilot subscription without additional API costs
 - [ ] Proper error handling and circuit breakers prevent workflow failures
-- [ ] Tool calling works reliably with registered FlightPath tools
+- [ ] Tool calling works reliably with registered ctrlyoke tools
 - [ ] Memory usage remains reasonable with conversation context
 - [ ] TypeScript strict mode compliance with comprehensive interfaces
 
@@ -353,12 +353,12 @@ export class FileAnalysisTool implements vscode.LanguageModelTool<FileAnalysisPa
 - Multi-agent orchestration for complex decisions
 - Learning and adaptation based on workflow outcomes
 
-**Integration with Main FlightPath**:
+**Integration with Main ctrlyoke**:
 
 - Complements (doesn't replace) enhanced Copilot Chat automation
 - Plugs into existing EndConditionEvaluator architecture
 - Maintains backward compatibility with script-based end conditions
 - Uses same workflow configuration files with enhanced syntax
 
-This sub-agent system will transform FlightPath from simple automation into intelligent workflow orchestration while preserving all existing functionality and user experience patterns.
+This sub-agent system will transform ctrlyoke from simple automation into intelligent workflow orchestration while preserving all existing functionality and user experience patterns.
 </instructions>

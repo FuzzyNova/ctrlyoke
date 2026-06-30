@@ -122,9 +122,9 @@ export function getQueueStatus(
   if (workingFilePath || state.workingFilePath) {
     const filePath = workingFilePath || state.workingFilePath!;
     const fileName = filePath.split(/[/\\]/).pop() || "";
-    // Remove timestamp and extension: "workflow-2024-12-23T15-30-00.flightpath.json" -> "workflow"
+    // Remove timestamp and extension: "workflow-2024-12-23T15-30-00.ctrlyoke.json" -> "workflow"
     workflowName = fileName
-      .replace(/\.flightpath\.json$/, "")
+      .replace(/\.ctrlyoke\.json$/, "")
       .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
   }
 

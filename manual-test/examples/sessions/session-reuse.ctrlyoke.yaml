@@ -29,7 +29,7 @@ steps:
       - Test validation (invalid references, cross-harness, etc.)
       - Test workflow-level precedence
 
-      Use Mocha test framework matching FlightPath conventions.
+      Use Mocha test framework matching ctrlyoke conventions.
     # No sessionId → Starts new session (Session 1)
     # This is the first prompt, so it creates the initial context
 
@@ -43,7 +43,7 @@ steps:
       - Comprehensive error handling
       - TypeScript strict mode compliance
 
-      Create src/flightpath/orchestration/PromptSessionResolver.ts
+      Create src/ctrlyoke/orchestration/PromptSessionResolver.ts
     # No sessionId, resumeSession: true (workflow default)
     # Auto-resumes from write-tests
     # Copilot has full context of the test requirements
@@ -76,10 +76,10 @@ steps:
       Update documentation to reflect the new PromptSessionResolver:
 
       1. Add implementation note to docs/SESSION_MANAGEMENT.md
-      2. Update .github/instructions/flightpath-core.instructions.md
+      2. Update .github/instructions/ctrlyoke-core.instructions.md
       3. Add code examples showing session resolution in action
 
-      Keep documentation style consistent with existing FlightPath docs.
+      Keep documentation style consistent with existing ctrlyoke docs.
     # Auto-resumes - complete context for accurate documentation
 
 # Why Single Session Works Here:

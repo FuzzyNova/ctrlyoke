@@ -7,7 +7,7 @@ model: gpt-5-mini
 steps:
   - name: remember-info
     prompt: |
-      We are testing FlightPath session management. Remember: My favorite color is orange.
+      We are testing ctrlyoke session management. Remember: My favorite color is orange.
     resumeSession: false
 
   - name: recall-info

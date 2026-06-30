@@ -59,18 +59,18 @@ describe("getWorkflowName", () => {
     expect(getWorkflowName("")).toBe(DEFAULT_WORKFLOW_NAME);
   });
 
-  it("strips .flightpath.yaml extension", () => {
-    expect(getWorkflowName("/path/to/my-workflow.flightpath.yaml")).toBe(
+  it("strips .ctrlyoke.yaml extension", () => {
+    expect(getWorkflowName("/path/to/my-workflow.ctrlyoke.yaml")).toBe(
       "my-workflow"
     );
   });
 
-  it("strips .flightpath.json extension", () => {
-    expect(getWorkflowName("/path/to/feature.flightpath.json")).toBe("feature");
+  it("strips .ctrlyoke.json extension", () => {
+    expect(getWorkflowName("/path/to/feature.ctrlyoke.json")).toBe("feature");
   });
 
-  it("strips .flightpath.yml extension", () => {
-    expect(getWorkflowName("/path/to/task.flightpath.yml")).toBe("task");
+  it("strips .ctrlyoke.yml extension", () => {
+    expect(getWorkflowName("/path/to/task.ctrlyoke.yml")).toBe("task");
   });
 
   it("strips .prompt.md extension", () => {
@@ -78,7 +78,7 @@ describe("getWorkflowName", () => {
   });
 
   it("handles Windows backslash separators", () => {
-    expect(getWorkflowName("C:\\Users\\dev\\feature.flightpath.json")).toBe(
+    expect(getWorkflowName("C:\\Users\\dev\\feature.ctrlyoke.json")).toBe(
       "feature"
     );
   });

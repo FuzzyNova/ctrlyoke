@@ -493,7 +493,7 @@ async function runCommand(
     if (cliWorkingFilePath) {
       const workflowId = path
         .basename(cliWorkingFilePath)
-        .replace(/\.flightpath\.json$/, "");
+        .replace(/\.ctrlyoke\.json$/, "");
       const lock: WorkflowRunnerLock = {
         runner: "cli",
         pid: process.pid,

@@ -64,7 +64,7 @@ The panel opens in the bottom tab area of VS Code.
 Panel → New Workflow from Template
 ```
 
-**Manually** — create a `.flightpath.yaml` file in your workspace.
+**Manually** — create a `.ctrlyoke.yaml` file in your workspace.
 
 **Simple single prompt** — create a `.prompt.md` file:
 
@@ -87,8 +87,8 @@ All three formats validate against the same JSON Schema with full IntelliSense i
 
 | Format   | Extension                              | Best for                            |
 | -------- | -------------------------------------- | ----------------------------------- |
-| YAML     | `.flightpath.yaml` / `.flightpath.yml` | Multi-step workflows, human editing |
-| JSON     | `.flightpath.json`                     | Programmatic generation, CI/CD      |
+| YAML     | `.ctrlyoke.yaml` / `.ctrlyoke.yml` | Multi-step workflows, human editing |
+| JSON     | `.ctrlyoke.json`                     | Programmatic generation, CI/CD      |
 | Markdown | `.prompt.md`                           | Single prompts                      |
 
 ### Multi-step YAML workflow

@@ -46,8 +46,8 @@ export function GeneralSection({
           value={general.defaultFormat}
           onChange={(v) => onUpdate("general.defaultFormat", v)}
           options={[
-            { value: "yaml", label: "YAML (.flightpath.yaml)" },
-            { value: "json", label: "JSON (.flightpath.json)" },
+            { value: "yaml", label: "YAML (.ctrlyoke.yaml)" },
+            { value: "json", label: "JSON (.ctrlyoke.json)" },
           ]}
         />
       </SettingInputRow>

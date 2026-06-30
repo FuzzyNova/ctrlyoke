@@ -1,6 +1,6 @@
-# FlightPath Manual Testing Examples
+# ctrlyoke Manual Testing Examples
 
-This directory contains sample code files that can be referenced in FlightPath prompts for testing file attachment features.
+This directory contains sample code files that can be referenced in ctrlyoke prompts for testing file attachment features.
 
 ## Files
 

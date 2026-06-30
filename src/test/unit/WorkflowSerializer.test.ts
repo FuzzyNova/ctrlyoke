@@ -54,8 +54,8 @@ suite("WorkflowSerializer", () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-serializer-")
       );
-      const workingFilePath = path.join(tempDir, "input.flightpath.json");
-      const outputPath = path.join(tempDir, "saved.flightpath.json");
+      const workingFilePath = path.join(tempDir, "input.ctrlyoke.json");
+      const outputPath = path.join(tempDir, "saved.ctrlyoke.json");
       const messages: any[] = [];
 
       try {

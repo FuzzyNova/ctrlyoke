@@ -19,7 +19,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 
 **Working files** (in `.ctrlyoke/.queue/`):
 
-- `<name>.flightpath.json` — live working copy with `_runtime` blocks per step (harness, sessionId, responseText, timestamps).
+- `<name>.ctrlyoke.json` — live working copy with `_runtime` blocks per step (harness, sessionId, responseText, timestamps).
 - `<name>.runner.json` — runner lock; a stale file with a dead PID can cause false "already running" errors — safe to delete.
 
 **History files** (in `.ctrlyoke/.history/<name>-<timestamp>/run-<timestamp>/`):
@@ -67,7 +67,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 
 <architecture>
 ## Architecture at a glance
-1. Prompt files (`.flightpath.yaml/.yml/.json`, `.prompt.md`) are parsed and validated by `PromptFileParser` against `schemas/prompt-schema.json`.
+1. Prompt files (`.ctrlyoke.yaml/.yml/.json`, `.prompt.md`) are parsed and validated by `PromptFileParser` against `schemas/workflow-schema.json`.
 2. `WorkflowOrchestrator` manages harness integrations and shared services.
 3. `WorkflowInstance`, `WorkflowExecutor`, `WorkflowStateMachine`, `PromptQueue`, and end-condition classes run the workflow lifecycle.
 4. `src/core/harness/` adapts the core engine to CLI harnesses, shared CLI services, and Copilot Chat.
@@ -100,7 +100,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 - `src/config/CtrlYokeConfigService.ts` — platform-agnostic config hierarchy
 - `src/utils/ConfigurationUtils.ts` — VS Code settings access
 - `src/utils/ModelConstants.ts` — model lists and display metadata
-- `schemas/prompt-schema.json` — prompt schema source
+- `schemas/workflow-schema.json` — prompt schema source
 </singleSourcesOfTruth>
 
 <agentGuidance>

@@ -19,7 +19,7 @@ const cwd = resolve(process.cwd());
 const patterns = [
   "manual-test/**/*.{json,md}",
   "src/templates/**/*.{json,md}",
-  ".flightpath/**/*.{json,md}",
+  ".ctrlyoke/**/*.{json,md}",
 ];
 
 let totalFiles = 0;

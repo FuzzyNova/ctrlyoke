@@ -13,7 +13,7 @@ model: claude-haiku-4.5
 steps:
   - name: run-script
     type: script
-    script: manual-test/.flightpath/scripts/always_true.py
+    script: manual-test/.ctrlyoke/scripts/always_true.py
     returns: "true"
     timeout: 10000
 

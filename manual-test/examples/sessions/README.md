@@ -1,6 +1,6 @@
 # Session Management Examples
 
-This directory contains example workflows demonstrating FlightPath's session management capabilities.
+This directory contains example workflows demonstrating ctrlyoke's session management capabilities.
 
 ## Overview
 
@@ -13,7 +13,7 @@ Session management allows you to control conversation continuity across prompts:
 
 ## Example Workflows
 
-### 1. multi-session.flightpath.yaml
+### 1. multi-session.ctrlyoke.yaml
 
 **Purpose:** Demonstrates using different sessions for different workflow phases
 
@@ -34,13 +34,13 @@ Session management allows you to control conversation continuity across prompts:
 **Run This Example:**
 
 ```
-Command Palette → FlightPath: Take Off
-Select: manual-test/session-examples/multi-session.flightpath.yaml
+Command Palette → ctrlyoke: Take Off
+Select: manual-test/session-examples/multi-session.ctrlyoke.yaml
 ```
 
 ---
 
-### 2. session-reuse.flightpath.yaml
+### 2. session-reuse.ctrlyoke.yaml
 
 **Purpose:** Demonstrates multiple prompts sharing a single continuous session
 
@@ -61,13 +61,13 @@ Select: manual-test/session-examples/multi-session.flightpath.yaml
 **Run This Example:**
 
 ```
-Command Palette → FlightPath: Take Off
-Select: manual-test/session-examples/session-reuse.flightpath.yaml
+Command Palette → ctrlyoke: Take Off
+Select: manual-test/session-examples/session-reuse.ctrlyoke.yaml
 ```
 
 ---
 
-### 3. cross-harness.flightpath.yaml
+### 3. cross-harness.ctrlyoke.yaml
 
 **Purpose:** Demonstrates validation warnings with mixed harnesss
 
@@ -89,15 +89,15 @@ Select: manual-test/session-examples/session-reuse.flightpath.yaml
 **Run This Example:**
 
 ```
-Command Palette → FlightPath: Take Off
-Select: manual-test/session-examples/cross-harness.flightpath.yaml
+Command Palette → ctrlyoke: Take Off
+Select: manual-test/session-examples/cross-harness.ctrlyoke.yaml
 ```
 
 **Expected Warnings:**
 
 - Cross-harness session references generate warnings
 - Invalid session formats trigger errors
-- FlightPath falls back gracefully (no fatal errors)
+- ctrlyoke falls back gracefully (no fatal errors)
 
 ---
 
@@ -167,7 +167,7 @@ After running a workflow, check the working file to verify session continuity:
 
 ```bash
 # View working file
-cat .flightpath/.working/multi-session.working.yaml
+cat .ctrlyoke/.working/multi-session.working.yaml
 ```
 
 **Expected Structure:**
@@ -216,7 +216,7 @@ prompts:
 
 **Check:**
 
-1. Working file exists: `.flightpath/.working/<workflow>.working.yaml`
+1. Working file exists: `.ctrlyoke/.working/<workflow>.working.yaml`
 2. Previous prompt has `_runtime.sessionId`
 3. Harnesss match (Copilot → Copilot, not Copilot → Claude)
 4. Session ID format valid for harness
@@ -224,13 +224,13 @@ prompts:
 **Debug:**
 
 ```
-View → Output → Select "FlightPath" channel
+View → Output → Select "ctrlyoke" channel
 Look for: "Session resolved: ..." messages
 ```
 
 ### Cross-Harness Warnings
 
-**Expected:** FlightPath warns when session reference crosses harnesss
+**Expected:** ctrlyoke warns when session reference crosses harnesss
 
 **Behavior:** Gracefully falls back to new session (workflow continues)
 

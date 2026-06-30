@@ -43,8 +43,8 @@ export function truncate(str: string, maxLen: number): string {
  * @returns Workflow name without extension, or DEFAULT_WORKFLOW_NAME if no path
  *
  * @example
- * getWorkflowName("/path/to/my-workflow.flightpath.yaml") // "my-workflow"
- * getWorkflowName("C:\\Users\\dev\\feature.flightpath.json") // "feature"
+ * getWorkflowName("/path/to/my-workflow.ctrlyoke.yaml") // "my-workflow"
+ * getWorkflowName("C:\\Users\\dev\\feature.ctrlyoke.json") // "feature"
  * getWorkflowName("/path/prompt.prompt.md") // "prompt"
  * getWorkflowName(null) // DEFAULT_WORKFLOW_NAME
  */
@@ -54,8 +54,8 @@ export function getWorkflowName(filePath: string | null | undefined): string {
   // Get last segment (handles both / and \ separators)
   const fileName = filePath.split(/[/\\]/).pop() || "";
 
-  // Remove ctrlyoke extensions: .flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md
-  return fileName.replace(/\.(flightpath\.(json|yaml|yml)|prompt\.md)$/, "");
+  // Remove ctrlyoke extensions: .ctrlyoke.json, .ctrlyoke.yaml, .ctrlyoke.yml, .prompt.md
+  return fileName.replace(/\.(ctrlyoke\.(json|yaml|yml)|prompt\.md)$/, "");
 }
 
 /**

@@ -3,7 +3,7 @@
 /**
  * Generate YAML schema from JSON schema
  *
- * This script auto-generates schemas/prompt-schema.yaml from schemas/prompt-schema.json
+ * This script auto-generates schemas/workflow-schema.yaml from schemas/workflow-schema.json
  * Ensures single source of truth for validation schema
  */
 
@@ -16,8 +16,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const rootDir = path.join(__dirname, "..");
-const jsonSchemaPath = path.join(rootDir, "schemas", "prompt-schema.json");
-const yamlSchemaPath = path.join(rootDir, "schemas", "prompt-schema.yaml");
+const jsonSchemaPath = path.join(rootDir, "schemas", "workflow-schema.json");
+const yamlSchemaPath = path.join(rootDir, "schemas", "workflow-schema.yaml");
 
 try {
   // Read JSON schema
@@ -34,7 +34,7 @@ try {
   // Write YAML schema
   fs.writeFileSync(yamlSchemaPath, yamlSchema, "utf8");
 
-  console.log("✅ Generated schemas/prompt-schema.yaml from JSON schema");
+  console.log("✅ Generated schemas/workflow-schema.yaml from JSON schema");
 } catch (error) {
   console.error("❌ Failed to generate YAML schema:", error.message);
   process.exit(1);

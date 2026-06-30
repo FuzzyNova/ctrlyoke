@@ -1,5 +1,5 @@
 """
-Example Python file for testing FlightPath file attachment features.
+Example Python file for testing ctrlyoke file attachment features.
 This file demonstrates common Python patterns.
 """
 

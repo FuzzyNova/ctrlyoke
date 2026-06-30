@@ -1,10 +1,10 @@
 # Workflow Properties Examples
 
-This directory contains example workflows demonstrating the workflow-level properties feature in FlightPath.
+This directory contains example workflows demonstrating the workflow-level properties feature in ctrlyoke.
 
 ## Examples Overview
 
-### 1. Shared End Condition (`shared-end-condition.flightpath.yaml`)
+### 1. Shared End Condition (`shared-end-condition.ctrlyoke.yaml`)
 
 **Use Case:** Ensure all implementation prompts pass tests before proceeding
 
@@ -23,7 +23,7 @@ This directory contains example workflows demonstrating the workflow-level prope
 
 ---
 
-### 2. Shared Harness/Model (`shared-harness-model.flightpath.yaml`)
+### 2. Shared Harness/Model (`shared-harness-model.ctrlyoke.yaml`)
 
 **Use Case:** Reproducible code review workflow with consistent AI configuration
 
@@ -42,7 +42,7 @@ This directory contains example workflows demonstrating the workflow-level prope
 
 ---
 
-### 3. Mixed Precedence (`mixed-precedence.flightpath.yaml`)
+### 3. Mixed Precedence (`mixed-precedence.ctrlyoke.yaml`)
 
 **Use Case:** Demonstrates all three precedence levels (prompt > workflow > settings)
 
@@ -65,12 +65,12 @@ This directory contains example workflows demonstrating the workflow-level prope
 
 ### Running an Example
 
-1. **Open in FlightPath:**
+1. **Open in ctrlyoke:**
    - Right-click the workflow file
-   - Select **"Run with FlightPath"**
+   - Select **"Run with ctrlyoke"**
 
 2. **Review Configuration:**
-   - Open FlightPath dashboard
+   - Open ctrlyoke dashboard
    - Click Settings icon to view workflow properties
    - See how workflow-level defaults are applied
 
@@ -184,7 +184,7 @@ prompts:
 
 - **[Workflow Properties Guide](../docs/WORKFLOW_PROPERTIES.md)** - Complete feature documentation
 - **[End Conditions Guide](../docs/END_CONDITIONS.md)** - Validation script reference
-- **[Custom Agents](../docs/FLIGHTPATH_CUSTOM_TEMPLATES.md)** - Creating specialized agents
+- **[Custom Agents](../docs/CTRLYOKE_CUSTOM_TEMPLATES.md)** - Creating specialized agents
 - **[Prompt Syntax](../docs/PROMPT_SYNTAX.md)** - Writing effective prompts
 
 ---

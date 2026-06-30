@@ -52,7 +52,7 @@ This creates the `.ctrlyoke/` directory structure in your workspace root:
 
 **From scratch:**
 
-Create a file ending in `.flightpath.yaml` anywhere in your workspace:
+Create a file ending in `.ctrlyoke.yaml` anywhere in your workspace:
 
 ```yaml
 harness: copilot-cli
@@ -80,7 +80,7 @@ Analyze #file:src/app.ts and suggest improvements.
 
 **From the Explorer:**
 
-Right-click any `.flightpath.yaml`, `.flightpath.json`, or `.prompt.md` file and select **Run with ctrlyoke**.
+Right-click any `.ctrlyoke.yaml`, `.ctrlyoke.json`, or `.prompt.md` file and select **Run with ctrlyoke**.
 
 **From the ctrlyoke panel:**
 
@@ -96,7 +96,7 @@ The dashboard shows live output from the AI as each step executes. Use the **Pau
 
 Three formats are supported. All share the same JSON Schema and the same fields.
 
-**YAML** (`.flightpath.yaml`) — recommended for multi-step workflows:
+**YAML** (`.ctrlyoke.yaml`) — recommended for multi-step workflows:
 
 ```yaml
 harness: claude-cli
@@ -118,7 +118,7 @@ prompts:
     resumeSession: true
 ```
 
-**JSON** (`.flightpath.json`) — for programmatic generation or CI/CD:
+**JSON** (`.ctrlyoke.json`) — for programmatic generation or CI/CD:
 
 ```json
 {
@@ -233,7 +233,7 @@ Delete the stale runner file at `.ctrlyoke/.queue/<name>.runner.json` if the PID
 
 **Output is missing or incomplete**
 
-Open `.ctrlyoke/.queue/<name>.flightpath.json` — this is the live working copy of the workflow. Each step's `_runtime` block contains `sessionId`, `startedAt`, `completedAt`, and `responseText` for diagnosis.
+Open `.ctrlyoke/.queue/<name>.ctrlyoke.json` — this is the live working copy of the workflow. Each step's `_runtime` block contains `sessionId`, `startedAt`, `completedAt`, and `responseText` for diagnosis.
 
 ---
 

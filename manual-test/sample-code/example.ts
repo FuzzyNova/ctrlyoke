@@ -1,5 +1,5 @@
 /**
- * Example TypeScript file for testing FlightPath file attachment features.
+ * Example TypeScript file for testing ctrlyoke file attachment features.
  * This file demonstrates common TypeScript patterns.
  */
 

@@ -1,17 +1,17 @@
-# FlightPath Manual Testing Workspace
+# ctrlyoke Manual Testing Workspace
 
-This directory contains test files for manually testing the FlightPath extension. When you press **F5** to debug FlightPath, the `flightpath-test.code-workspace` opens in the Extension Development Host window with the project root directory (giving you access to these tests and the ability to use FlightPath on FlightPath itself).
+This directory contains test files for manually testing the ctrlyoke extension. When you press **F5** to debug ctrlyoke, the `ctrlyoke-test.code-workspace` opens in the Extension Development Host window with the project root directory (giving you access to these tests and the ability to use ctrlyoke on ctrlyoke itself).
 
 ## Quick Start
 
-1. Press **F5** in VS Code to start debugging FlightPath
-2. The Extension Development Host window opens with the `flightpath-test.code-workspace` (root directory)
-3. FlightPath extension is active and ready to test
-4. Run tests by right-clicking test files → "Run with FlightPath"
+1. Press **F5** in VS Code to start debugging ctrlyoke
+2. The Extension Development Host window opens with the `ctrlyoke-test.code-workspace` (root directory)
+3. ctrlyoke extension is active and ready to test
+4. Run tests by right-clicking test files → "Run with ctrlyoke"
 
 ## Test Philosophy
 
-**Test FlightPath, not LLMs.** All prompts are designed to be simple enough that any model can complete them. If a test fails, it should indicate a FlightPath bug, not an LLM limitation.
+**Test ctrlyoke, not LLMs.** All prompts are designed to be simple enough that any model can complete them. If a test fails, it should indicate a ctrlyoke bug, not an LLM limitation.
 
 **Model defaults.** Most tests omit the `model` field to use your default selection. Only tests that specifically verify model-switching functionality specify models.
 
@@ -34,23 +34,23 @@ Good manual tests share these characteristics:
 - Simple verification: "Did the file get updated?" not "Is the architecture improved?"
 - Explicit success criteria in the prompt
 
-### 3. Tests FlightPath, Not AI Capabilities 🎯
+### 3. Tests ctrlyoke, Not AI Capabilities 🎯
 
 - **Good**: "Set counter.txt to 5" (tests file operations and end conditions)
-- **Bad**: "Refactor this codebase" (tests AI, not FlightPath)
+- **Bad**: "Refactor this codebase" (tests AI, not ctrlyoke)
 - Focus on mechanical operations: read file, write number, respond with text
 
 ### Examples of Good Tests
 
-✅ `new-chat-session-test.flightpath.json` - Simple question/answer to verify session isolation
-✅ `retry-counter-test.flightpath.json` - Mechanical file update with clear validation
-✅ `dynamic-queue-basic-example.flightpath.json` - Simple tool calls with explicit instructions
-✅ `workflow-properties-test.flightpath.yaml` - Tests edge cases with simple prompts
-✅ `yaml-format-test.flightpath.yaml` - Just verifies YAML parsing works
+✅ `new-chat-session-test.ctrlyoke.json` - Simple question/answer to verify session isolation
+✅ `retry-counter-test.ctrlyoke.json` - Mechanical file update with clear validation
+✅ `dynamic-queue-basic-example.ctrlyoke.json` - Simple tool calls with explicit instructions
+✅ `workflow-properties-test.ctrlyoke.yaml` - Tests edge cases with simple prompts
+✅ `yaml-format-test.ctrlyoke.yaml` - Just verifies YAML parsing works
 
 ### Examples of Bad Tests
 
-❌ "Analyze FlightPath architecture and suggest improvements" - Too complex, slow, no clear pass/fail
+❌ "Analyze ctrlyoke architecture and suggest improvements" - Too complex, slow, no clear pass/fail
 ❌ "Review the code and provide detailed feedback" - Subjective, tests AI quality
 ❌ Using real implementation tasks in tests - Unpredictable, slow, hard to validate
 ❌ Multi-stage workflows that modify code - Takes too long, unclear success criteria
@@ -66,7 +66,7 @@ This directory contains both **tests** and **examples**:
 
 When creating new files:
 
-- If it tests a specific FlightPath feature with clear pass/fail → Root directory
+- If it tests a specific ctrlyoke feature with clear pass/fail → Root directory
 - If it demonstrates best practices or complex workflows → `examples/` subdirectory
 
 ---
@@ -78,40 +78,40 @@ When creating new files:
 | File                                     | Tests                                   | Duration |
 | ---------------------------------------- | --------------------------------------- | -------- |
 | `simple-prompt-test.prompt.md`           | Markdown format, basic execution        | 5 sec    |
-| `yaml-format-test.flightpath.yaml`       | YAML parsing, multi-line strings        | 5 sec    |
-| `yaml-multi-step-test.flightpath.yaml`   | YAML multi-step with session continuity | 10 sec   |
-| `.flightpath/simple.prompt.md`           | Simple prompt in .flightpath directory  | 5 sec    |
-| `.flightpath/multi-step.flightpath.json` | Multi-step with model switching         | 15 sec   |
+| `yaml-format-test.ctrlyoke.yaml`       | YAML parsing, multi-line strings        | 5 sec    |
+| `yaml-multi-step-test.ctrlyoke.yaml`   | YAML multi-step with session continuity | 10 sec   |
+| `.ctrlyoke/simple.prompt.md`           | Simple prompt in .ctrlyoke directory  | 5 sec    |
+| `.ctrlyoke/multi-step.ctrlyoke.json` | Multi-step with model switching         | 15 sec   |
 
 ### Session Management Tests
 
 | File                                    | Tests                                        | Duration |
 | --------------------------------------- | -------------------------------------------- | -------- |
-| `new-chat-session-test.flightpath.json` | Session isolation with `newChatSession` flag | 10 sec   |
-| `session-resume-test.flightpath.yaml`   | Context preservation across prompts          | 10 sec   |
+| `new-chat-session-test.ctrlyoke.json` | Session isolation with `newChatSession` flag | 10 sec   |
+| `session-resume-test.ctrlyoke.yaml`   | Context preservation across prompts          | 10 sec   |
 
 ### Retry Mechanism Tests
 
 | File                                        | Tests                            | Duration |
 | ------------------------------------------- | -------------------------------- | -------- |
-| `retry-counter-test.flightpath.json`        | Basic retry with file validation | 15 sec   |
-| `retry-multi-step-test.flightpath.json`     | Multi-step workflow with retries | 30 sec   |
-| `retry-max-exhaustion-test.flightpath.json` | Max retries exhaustion behavior  | 15 sec   |
-| `retry-timeout-error-test.flightpath.json`  | Timeout doesn't trigger retry    | 10 sec   |
-| `script-error-test.flightpath.json`         | Script crash error handling      | 10 sec   |
+| `retry-counter-test.ctrlyoke.json`        | Basic retry with file validation | 15 sec   |
+| `retry-multi-step-test.ctrlyoke.json`     | Multi-step workflow with retries | 30 sec   |
+| `retry-max-exhaustion-test.ctrlyoke.json` | Max retries exhaustion behavior  | 15 sec   |
+| `retry-timeout-error-test.ctrlyoke.json`  | Timeout doesn't trigger retry    | 10 sec   |
+| `script-error-test.ctrlyoke.json`         | Script crash error handling      | 10 sec   |
 
 ### Advanced Features
 
 | File                                          | Tests                                    | Duration |
 | --------------------------------------------- | ---------------------------------------- | -------- |
-| `workflow-properties-test.flightpath.yaml`    | Property inheritance and precedence      | 15 sec   |
-| `test-property-sync.flightpath.yaml`          | Property sync to dashboard UI            | 10 sec   |
-| `dynamic-queue-basic-example.flightpath.json` | Dynamic queue extension via MCP tools    | 20 sec   |
+| `workflow-properties-test.ctrlyoke.yaml`    | Property inheritance and precedence      | 15 sec   |
+| `test-property-sync.ctrlyoke.yaml`          | Property sync to dashboard UI            | 10 sec   |
+| `dynamic-queue-basic-example.ctrlyoke.json` | Dynamic queue extension via MCP tools    | 20 sec   |
 | `attachment-test.prompt.md`                   | All attachment types (@, #file, #sym)    | 10 sec   |
-| `prompt-links-test.flightpath.json`           | Clickable links (Ctrl+Click navigation)  | UI Test  |
-| `precondition-test.flightpath.yaml`           | preCondition pass/skip/always-run gating | 15 sec   |
-| `script-step-test.flightpath.yaml`            | scriptStep executes without AI           | 10 sec   |
-| `end-condition-continue-test.flightpath.yaml` | endCondition onFail: "continue" advances | 10 sec   |
+| `prompt-links-test.ctrlyoke.json`           | Clickable links (Ctrl+Click navigation)  | UI Test  |
+| `precondition-test.ctrlyoke.yaml`           | preCondition pass/skip/always-run gating | 15 sec   |
+| `script-step-test.ctrlyoke.yaml`            | scriptStep executes without AI           | 10 sec   |
+| `end-condition-continue-test.ctrlyoke.yaml` | endCondition onFail: "continue" advances | 10 sec   |
 
 ---
 
@@ -121,7 +121,7 @@ When creating new files:
 
 **File:** `simple-prompt-test.prompt.md`
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:** LLM responds with "4" (tests basic execution)
 
@@ -129,11 +129,11 @@ When creating new files:
 
 ### 2. Session Continuity
 
-**File:** `session-resume-test.flightpath.yaml`
+**File:** `session-resume-test.ctrlyoke.yaml`
 
 **Setup:** None required
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
@@ -145,7 +145,7 @@ When creating new files:
 
 ### 3. Counter Retry Test
 
-**File:** `retry-counter-test.flightpath.json`
+**File:** `retry-counter-test.ctrlyoke.json`
 
 **Setup:**
 
@@ -153,7 +153,7 @@ When creating new files:
 echo 0 > counter.txt
 ```
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
@@ -166,7 +166,7 @@ echo 0 > counter.txt
 
 ### 4. Multi-Step Retry Workflow
 
-**File:** `retry-multi-step-test.flightpath.json`
+**File:** `retry-multi-step-test.ctrlyoke.json`
 
 **Setup:**
 
@@ -174,7 +174,7 @@ echo 0 > counter.txt
 echo 0 > multi-step-counter.txt
 ```
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
@@ -187,9 +187,9 @@ echo 0 > multi-step-counter.txt
 
 ### 5. Max Retries Exhaustion
 
-**File:** `retry-max-exhaustion-test.flightpath.json`
+**File:** `retry-max-exhaustion-test.ctrlyoke.json`
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
@@ -202,9 +202,9 @@ echo 0 > multi-step-counter.txt
 
 ### 6. Workflow Properties Test
 
-**File:** `workflow-properties-test.flightpath.yaml`
+**File:** `workflow-properties-test.ctrlyoke.yaml`
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
@@ -217,17 +217,17 @@ echo 0 > multi-step-counter.txt
 
 ### 7. Dynamic Queue Extension
 
-**File:** `dynamic-queue-basic-example.flightpath.json`
+**File:** `dynamic-queue-basic-example.ctrlyoke.json`
 
 **Test:**
 
-1. Enable setting: `flightpath.enableDynamicQueue`
-2. Right-click → "Run with FlightPath"
+1. Enable setting: `ctrlyoke.enableDynamicQueue`
+2. Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
-- First prompt calls `flightpath_append_queue` tool to add 2 new prompts
-- Second prompt calls `flightpath_queue_status` to verify queue state
+- First prompt calls `ctrlyoke_append_queue` tool to add 2 new prompts
+- Second prompt calls `ctrlyoke_queue_status` to verify queue state
 - Dynamically added prompts execute automatically
 
 ---
@@ -236,7 +236,7 @@ echo 0 > multi-step-counter.txt
 
 **File:** `attachment-test.prompt.md`
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
@@ -249,9 +249,9 @@ echo 0 > multi-step-counter.txt
 
 ### 9. preCondition Gating
 
-**File:** `precondition-test.flightpath.yaml`
+**File:** `precondition-test.ctrlyoke.yaml`
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
@@ -263,9 +263,9 @@ echo 0 > multi-step-counter.txt
 
 ### 10. Script Step Execution
 
-**File:** `script-step-test.flightpath.yaml`
+**File:** `script-step-test.ctrlyoke.yaml`
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
@@ -276,9 +276,9 @@ echo 0 > multi-step-counter.txt
 
 ### 11. End Condition `onFail: "continue"`
 
-**File:** `end-condition-continue-test.flightpath.yaml`
+**File:** `end-condition-continue-test.ctrlyoke.yaml`
 
-**Test:** Right-click → "Run with FlightPath"
+**Test:** Right-click → "Run with ctrlyoke"
 
 **Expected:**
 
@@ -290,7 +290,7 @@ echo 0 > multi-step-counter.txt
 
 ## End Condition Scripts
 
-Located in `.flightpath/scripts/`:
+Located in `.ctrlyoke/scripts/`:
 
 | Script                   | Purpose                       | Returns        |
 | ------------------------ | ----------------------------- | -------------- |
@@ -311,7 +311,7 @@ Located in `.flightpath/scripts/`:
 ```json
 {
   "endCondition": {
-    "script": "manual-test/.flightpath/scripts/check_counter.py",
+    "script": "manual-test/.ctrlyoke/scripts/check_counter.py",
     "returns": "true",
     "maxRetries": 3,
     "onFail": "retry",
@@ -397,7 +397,7 @@ echo 0 > multi-step-counter.txt
 
 ### Test: Clickable Context References
 
-**File:** `prompt-links-test.flightpath.json`
+**File:** `prompt-links-test.ctrlyoke.json`
 
 **Test Steps:**
 
@@ -423,7 +423,7 @@ echo 0 > multi-step-counter.txt
 
 ## Examples Directory
 
-The `examples/` subdirectory contains **educational examples** demonstrating advanced FlightPath patterns. These are NOT tests - they are detailed workflows showing best practices.
+The `examples/` subdirectory contains **educational examples** demonstrating advanced ctrlyoke patterns. These are NOT tests - they are detailed workflows showing best practices.
 
 - **workflow-properties/** - Property inheritance patterns
 - **sessions/** - Session management strategies (multi-session, cross-harness, session reuse)
@@ -439,7 +439,7 @@ See `examples/README.md` for details.
 1. **Keep it simple**: Can the test run in under 30 seconds?
 2. **Clear validation**: Is there an obvious pass/fail indicator?
 3. **Model-agnostic**: Can free models complete this test?
-4. **Test FlightPath**: Does this test a FlightPath feature, not AI quality?
+4. **Test ctrlyoke**: Does this test a ctrlyoke feature, not AI quality?
 
 ### Creating a New Test
 
@@ -464,7 +464,7 @@ steps:
 {
   "prompt": "Instructions here",
   "endCondition": {
-    "script": "manual-test/.flightpath/scripts/validate.py",
+    "script": "manual-test/.ctrlyoke/scripts/validate.py",
     "returns": "true",
     "onFail": "retry",
     "maxRetries": 3,
@@ -475,7 +475,7 @@ steps:
 
 ### Adding End Condition Scripts
 
-Create in `.flightpath/scripts/`:
+Create in `.ctrlyoke/scripts/`:
 
 ```python
 import sys
@@ -485,7 +485,7 @@ print('true' if valid else 'false')
 sys.exit(0)
 ```
 
-Test: `echo "test" | python manual-test/.flightpath/scripts/validate.py`
+Test: `echo "test" | python manual-test/.ctrlyoke/scripts/validate.py`
 
 ---
 

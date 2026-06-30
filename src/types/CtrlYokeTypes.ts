@@ -515,7 +515,7 @@ export interface WorkflowSummary {
   id: string;
   workflowName: string;
   filePath: string;
-  workingFilePath?: string; // Path to .flightpath.json working file (for dedup with recent workflows list)
+  workingFilePath?: string; // Path to .ctrlyoke.json working file (for dedup with recent workflows list)
   executionState: ExecutionState;
   /** 0-indexed: index of the next prompt to execute (mirrors PromptQueue.state.currentIndex) */
   currentStep: number;

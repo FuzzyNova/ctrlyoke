@@ -3,7 +3,7 @@
     {
       "prompt": "This is step 1 of a multi-step workflow with retries.\n\nPlease read @multi-step-counter.txt and set the value to 5.\n\nThe file should contain ONLY the number 5, nothing else.",
       "endCondition": {
-        "script": "manual-test/.flightpath/scripts/check_counter_value.py 5",
+        "script": "manual-test/.ctrlyoke/scripts/check_counter_value.py 5",
         "returns": "true",
         "maxRetries": 3,
         "timeout": 10000,
@@ -14,7 +14,7 @@
     {
       "prompt": "This is step 2 of a multi-step workflow.\n\nPlease read @multi-step-counter.txt and multiply the value by 2.\n\nThe file should contain ONLY the resulting number, nothing else.",
       "endCondition": {
-        "script": "manual-test/.flightpath/scripts/check_counter_value.py 10",
+        "script": "manual-test/.ctrlyoke/scripts/check_counter_value.py 10",
         "returns": "true",
         "maxRetries": 3,
         "timeout": 10000,
@@ -25,7 +25,7 @@
     {
       "prompt": "This is step 3 (final step) of a multi-step workflow.\n\nPlease read @multi-step-counter.txt and add 5 to the value.\n\nThe file should contain ONLY the resulting number, nothing else.",
       "endCondition": {
-        "script": "manual-test/.flightpath/scripts/check_counter_value.py 15",
+        "script": "manual-test/.ctrlyoke/scripts/check_counter_value.py 15",
         "returns": "true",
         "maxRetries": 3,
         "timeout": 10000,

@@ -4,7 +4,7 @@ import { STEP_TYPES, PROMPT_PROPERTIES } from "../types/DashboardConstants";
 /**
  * Provides YAML property key completions for ctrlyoke workflow files.
  *
- * When editing a prompt item block in a .flightpath.yaml file, this provider
+ * When editing a prompt item block in a .ctrlyoke.yaml file, this provider
  * offers context-aware property key suggestions:
  *
  * - Default (AI prompt step): offers all AI-specific properties
@@ -205,8 +205,8 @@ export class PromptPropertyCompletionProvider
     if (
       document.languageId !== "yaml" &&
       document.languageId !== "yml" &&
-      !document.fileName.endsWith(".flightpath.yaml") &&
-      !document.fileName.endsWith(".flightpath.yml")
+      !document.fileName.endsWith(".ctrlyoke.yaml") &&
+      !document.fileName.endsWith(".ctrlyoke.yml")
     ) {
       return undefined;
     }

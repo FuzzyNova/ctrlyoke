@@ -20,7 +20,7 @@ Disk/UI-facing orchestration helpers for workflow loading, session recovery, his
 - `PromptFileLoader` is the bridge from parsed prompt file → queue working file. After `createWorkingFile(...)`, it copies workflow-level execution properties from the source file, then fills remaining defaults from settings so the in-memory `PromptFile` and on-disk working file stay aligned.
 - Reload mode matters: `replace` restores an existing session, `merge` appends new steps from disk, and `auto` chooses based on current runtime state. Use merge paths for MCP/dynamic-queue extension; do not clear and rebuild queue state manually.
 - `PromptFileWatcher` watches the working file, not the source workflow. It only reloads while `RUNNING`, `PAUSED`, or `CANCELLING` so completed/error dashboard views stay stable.
-- `WorkspaceSessionManager` treats `.ctrlyoke/.queue/*.flightpath.json` as the resume source of truth and sorts sessions by `lastModifiedAt` first, then `startedAt`.
+- `WorkspaceSessionManager` treats `.ctrlyoke/.queue/*.ctrlyoke.json` as the resume source of truth and sorts sessions by `lastModifiedAt` first, then `startedAt`.
 
 </workingFilesAndSessions>
 

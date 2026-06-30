@@ -51,7 +51,7 @@ export interface IWorkingFileQueueAccess {
 }
 
 /**
- * Manages working file (.ctrlyoke/.queue/*.flightpath.json) persistence.
+ * Manages working file (.ctrlyoke/.queue/*.ctrlyoke.json) persistence.
  *
  * Extracted from PromptQueue to separate file I/O concerns from queue state management.
  * All serialized operations go through an internal operation queue to prevent races.
@@ -99,7 +99,7 @@ export class WorkingFileManager {
         .replace(/^-+|-+$/g, "") || "workflow";
     return path.join(
       queueDir,
-      `${sanitizedFileName}-${timestamp}.flightpath.json`
+      `${sanitizedFileName}-${timestamp}.ctrlyoke.json`
     );
   }
 

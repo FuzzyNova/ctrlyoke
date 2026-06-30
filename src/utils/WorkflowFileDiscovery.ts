@@ -9,16 +9,16 @@ export interface WorkflowFileEntry {
 }
 
 const WORKFLOW_FILE_NAMES = new Set([
-  "flightpath.json",
-  "flightpath.yaml",
-  "flightpath.yml",
+  "ctrlyoke.json",
+  "ctrlyoke.yaml",
+  "ctrlyoke.yml",
   "prompt.md",
 ]);
 
 const WORKFLOW_FILE_SUFFIXES = [
-  ".flightpath.json",
-  ".flightpath.yaml",
-  ".flightpath.yml",
+  ".ctrlyoke.json",
+  ".ctrlyoke.yaml",
+  ".ctrlyoke.yml",
   ".prompt.md",
 ];
 

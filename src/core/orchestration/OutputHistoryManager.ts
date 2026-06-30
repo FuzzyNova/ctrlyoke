@@ -69,14 +69,14 @@ export class OutputHistoryManager {
 
   /**
    * Extract workflow ID from working file path.
-   * "workflow-2024-01-21T10-30-00.flightpath.json" → "workflow-2024-01-21T10-30-00"
+   * "workflow-2024-01-21T10-30-00.ctrlyoke.json" → "workflow-2024-01-21T10-30-00"
    */
   static extractWorkflowId(workingFilePath: string): string {
     const basename = path.basename(workingFilePath);
     return basename
-      .replace(/\.flightpath\.json$/, "")
-      .replace(/\.flightpath\.yaml$/, "")
-      .replace(/\.flightpath\.yml$/, "");
+      .replace(/\.ctrlyoke\.json$/, "")
+      .replace(/\.ctrlyoke\.yaml$/, "")
+      .replace(/\.ctrlyoke\.yml$/, "");
   }
 
   /** Get absolute path to a history file */

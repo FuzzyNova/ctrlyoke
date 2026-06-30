@@ -333,7 +333,7 @@ export class ClaudeCliProvider implements ICliProvider {
   ): string {
     let stem: string;
     if (workingFilePath) {
-      stem = path.basename(workingFilePath).replace(/\.flightpath\.json$/i, "");
+      stem = path.basename(workingFilePath).replace(/\.ctrlyoke\.json$/i, "");
     } else {
       stem = String(Date.now());
     }

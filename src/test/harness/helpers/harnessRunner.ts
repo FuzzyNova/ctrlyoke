@@ -87,7 +87,7 @@ export function runWorkflowFile(
   vars?: Record<string, string>,
   timeoutMs: number = HARNESS_TIMEOUT_MS
 ): RunResult {
-  const workflowFile = path.join(tmpDir, `${label}-test.flightpath.json`);
+  const workflowFile = path.join(tmpDir, `${label}-test.ctrlyoke.json`);
   fs.writeFileSync(workflowFile, JSON.stringify(workflow, null, 2));
 
   const varArgs: string[] = [];

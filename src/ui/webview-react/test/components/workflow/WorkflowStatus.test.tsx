@@ -52,7 +52,7 @@ describe("WorkflowStatus — empty state", () => {
 describe("WorkflowStatus — loaded state", () => {
   beforeEach(() => {
     useWorkflowStore.setState({
-      fileName: "/workspace/my-workflow.flightpath.yaml",
+      fileName: "/workspace/my-workflow.ctrlyoke.yaml",
       workflowName: "My Workflow",
     });
   });
@@ -64,7 +64,7 @@ describe("WorkflowStatus — loaded state", () => {
 
   it("falls back to file stem when workflowName is empty", () => {
     useWorkflowStore.setState({
-      fileName: "/workspace/my-workflow.flightpath.yaml",
+      fileName: "/workspace/my-workflow.ctrlyoke.yaml",
       workflowName: "",
     });
     render(<WorkflowStatus />);
@@ -142,7 +142,7 @@ describe("WorkflowStatus — loaded state", () => {
   it("keeps the active pausing workflow in the Running Workflows section when loadedWorkflows is stale", async () => {
     const user = userEvent.setup();
     useWorkflowStore.setState({
-      fileName: "/workspace/pausing.flightpath.json",
+      fileName: "/workspace/pausing.ctrlyoke.json",
       workflowName: "Pausing Workflow",
       executionState: EXECUTION_STATES.PAUSING,
       currentStep: 0,
@@ -150,7 +150,7 @@ describe("WorkflowStatus — loaded state", () => {
     });
     useUiStore.setState({
       activeWorkflowId: "workflow-pausing",
-      activeWorkflowWorkingFilePath: "/workspace/pausing.flightpath.json",
+      activeWorkflowWorkingFilePath: "/workspace/pausing.ctrlyoke.json",
       loadedWorkflows: [],
     });
 
@@ -276,7 +276,7 @@ describe("WorkflowStatus — loaded state", () => {
         {
           id: "workflow-1",
           workflowName: "Running Workflow",
-          filePath: "/workspace/running.flightpath.yaml",
+          filePath: "/workspace/running.ctrlyoke.yaml",
           executionState: EXECUTION_STATES.RUNNING,
           currentStep: 0,
           totalSteps: 1,
@@ -288,7 +288,7 @@ describe("WorkflowStatus — loaded state", () => {
       activeTerminalWorkflows: [
         {
           workflowId: "workflow-1",
-          workingFilePath: "/workspace/running.flightpath.yaml",
+          workingFilePath: "/workspace/running.ctrlyoke.yaml",
         },
       ],
     });
@@ -315,7 +315,7 @@ describe("WorkflowStatus — loaded state", () => {
       activeTerminalWorkflows: [
         {
           workflowId: "workflow-1",
-          workingFilePath: "/workspace/my-workflow.flightpath.yaml",
+          workingFilePath: "/workspace/my-workflow.ctrlyoke.yaml",
         },
       ],
     });
@@ -324,7 +324,7 @@ describe("WorkflowStatus — loaded state", () => {
     setRecentWorkflows([
       {
         workflowName: "Completed Workflow",
-        filePath: "/workspace/my-workflow.flightpath.yaml",
+        filePath: "/workspace/my-workflow.ctrlyoke.yaml",
         executionState: EXECUTION_STATES.COMPLETED,
       },
     ]);

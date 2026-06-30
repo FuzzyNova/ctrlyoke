@@ -114,12 +114,12 @@ describe("applyRoute — workflow", () => {
     useUiStore.getState().setLoadedWorkflows([
       {
         id: "w1",
-        workingFilePath: "c:\\dev\\proj\\.ctrlyoke\\.queue\\m.flightpath.json",
+        workingFilePath: "c:\\dev\\proj\\.ctrlyoke\\.queue\\m.ctrlyoke.json",
       } as unknown as WorkflowSummary,
     ]);
     const api = fakeVsCode();
     applyRoute(
-      { workflow: "c:/dev/proj/.ctrlyoke/.queue/m.flightpath.json" },
+      { workflow: "c:/dev/proj/.ctrlyoke/.queue/m.ctrlyoke.json" },
       api
     );
     expect(api.postMessage).toHaveBeenCalledWith({
@@ -131,9 +131,9 @@ describe("applyRoute — workflow", () => {
   it("treats a separator-only difference as already active (no-op)", () => {
     useUiStore
       .getState()
-      .setActiveWorkflowWorkingFilePath("c:\\dev\\proj\\m.flightpath.json");
+      .setActiveWorkflowWorkingFilePath("c:\\dev\\proj\\m.ctrlyoke.json");
     const api = fakeVsCode();
-    applyRoute({ workflow: "c:/dev/proj/m.flightpath.json" }, api);
+    applyRoute({ workflow: "c:/dev/proj/m.ctrlyoke.json" }, api);
     expect(api.postMessage).not.toHaveBeenCalled();
   });
 });

@@ -233,5 +233,5 @@ echo '{"steps":[{"prompt":"Test"},{"prompt":"Test"}],"position":"next"}' | \
   node out/mcp-server.js
 
 # Check logs
-tail -f .flightpath/logs/mcp-server-*.log
+tail -f .ctrlyoke/logs/mcp-server-*.log
 ```

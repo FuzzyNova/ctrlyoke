@@ -40,9 +40,9 @@
   },
   "activationEvents": [
     "onStartupFinished",
-    "workspaceContains:**/*.flightpath.yaml",
-    "workspaceContains:**/*.flightpath.yml",
-    "workspaceContains:**/*.flightpath.json",
+    "workspaceContains:**/*.ctrlyoke.yaml",
+    "workspaceContains:**/*.ctrlyoke.yml",
+    "workspaceContains:**/*.ctrlyoke.json",
     "workspaceContains:**/*.prompt.md"
   ],
   "main": "./out/extension.js",
@@ -642,9 +642,9 @@
     "jsonValidation": [
       {
         "fileMatch": [
-          "**/*.flightpath.json"
+          "**/*.ctrlyoke.json"
         ],
-        "url": "./schemas/prompt-schema.json"
+        "url": "./schemas/workflow-schema.json"
       },
       {
         "fileMatch": [
@@ -656,10 +656,10 @@
     "yamlValidation": [
       {
         "fileMatch": [
-          "**/*.flightpath.yaml",
-          "**/*.flightpath.yml"
+          "**/*.ctrlyoke.yaml",
+          "**/*.ctrlyoke.yml"
         ],
-        "url": "./schemas/prompt-schema.yaml"
+        "url": "./schemas/workflow-schema.yaml"
       }
     ]
   },

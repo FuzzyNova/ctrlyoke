@@ -12,7 +12,7 @@ interface WorkflowFilesResponse {
   isGitRepo?: boolean;
 }
 
-const WORKFLOW_PATH_PLACEHOLDER = "path/to/workflow.flightpath.yaml";
+const WORKFLOW_PATH_PLACEHOLDER = "path/to/workflow.ctrlyoke.yaml";
 
 function normalizeWorkflowPath(filePath: string): string {
   return filePath.trim().replace(/\\/g, "/");

@@ -565,9 +565,9 @@ export class CopilotCliProvider implements ICliProvider {
   ): string {
     let stem: string;
     if (workingFilePath) {
-      // Working file is like "1774891046-my-workflow.flightpath.json"
+      // Working file is like "1774891046-my-workflow.ctrlyoke.json"
       // Strip extensions to get "1774891046-my-workflow"
-      stem = path.basename(workingFilePath).replace(/\.flightpath\.json$/i, "");
+      stem = path.basename(workingFilePath).replace(/\.ctrlyoke\.json$/i, "");
     } else {
       stem = String(Date.now());
     }

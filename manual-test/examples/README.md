@@ -1,6 +1,6 @@
-# FlightPath Examples
+# ctrlyoke Examples
 
-This directory contains **educational examples** demonstrating FlightPath features. These are NOT tests - they are detailed, well-documented workflows showing best practices and advanced features.
+This directory contains **educational examples** demonstrating ctrlyoke features. These are NOT tests - they are detailed, well-documented workflows showing best practices and advanced features.
 
 ## Directory Structure
 

@@ -14,7 +14,7 @@ Runtime code reads the built copies from `out/templates/`, never `src/templates/
 
 <workflowTemplates>
 - Built-in workflow files here are YAML; `TemplateManager` treats them as the source of truth for built-ins (`simple-feature`, `fix-tests`, `full-feature`, `spec-driven-loop`). `blank` is special-cased in code and has no file here.
-- Workspace custom templates are discovered separately from `.ctrlyoke/templates/*.flightpath.json` as `custom:<name>` IDs. Do not assume files under `src/templates/workflows/` cover all available templates.
+- Workspace custom templates are discovered separately from `.ctrlyoke/templates/*.ctrlyoke.json` as `custom:<name>` IDs. Do not assume files under `src/templates/workflows/` cover all available templates.
 - `_templateMeta` is authoring-only metadata for the picker UI; `createWorkflow()` strips it before writing the real workflow file.
 - `spec-driven-loop` is the canonical example of `finalStep` orchestration: it relies on `agent`, `mcpServers: [ctrlyoke]`, and `priorContext: all` together.
 </workflowTemplates>

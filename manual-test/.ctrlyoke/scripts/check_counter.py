@@ -11,7 +11,7 @@ import os
 
 def check_counter(target_value: int) -> bool:
     """Check if counter.txt contains the target value."""
-    # Get the path to counter.txt (one level up from .flightpath/scripts/)
+    # Get the path to counter.txt (one level up from .ctrlyoke/scripts/)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     counter_file = os.path.join(script_dir, "..", "..", "counter.txt")
     

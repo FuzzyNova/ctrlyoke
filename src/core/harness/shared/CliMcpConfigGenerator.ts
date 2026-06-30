@@ -182,7 +182,7 @@ export class CliMcpConfigGenerator {
     filenamePrefix: string
   ): string {
     const configSuffix = workingFilePath
-      ? path.basename(workingFilePath, ".flightpath.json")
+      ? path.basename(workingFilePath, ".ctrlyoke.json")
       : "default";
     return path.join(
       workspaceRoot,

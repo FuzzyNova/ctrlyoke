@@ -1,4 +1,4 @@
-# FlightPath Copilot Chat Integration Implementation
+# ctrlyoke Copilot Chat Integration Implementation
 
 ## ✅ PROVEN FEASIBILITY
 
@@ -17,21 +17,21 @@ A proof-of-concept implementation in `extension.ts` (lines 9-98, function `testC
 - Clear delay: **300ms** (ensures selection completes)
 - Type delay: **500ms** (allows typing to complete before submission)
 
-This proves that **zero-interaction automation is achievable** - users can truly "press go and leave" while FlightPath executes multi-prompt workflows automatically.
+This proves that **zero-interaction automation is achievable** - users can truly "press go and leave" while ctrlyoke executes multi-prompt workflows automatically.
 
 ## Objective
 
-Replace the stub implementation in `CopilotIntegration.ts` with the proven Copilot Chat automation approach. Enable FlightPath's automated prompt workflows to seamlessly integrate with Copilot Chat through direct command-based automation, eliminating manual paste steps entirely.
+Replace the stub implementation in `CopilotIntegration.ts` with the proven Copilot Chat automation approach. Enable ctrlyoke's automated prompt workflows to seamlessly integrate with Copilot Chat through direct command-based automation, eliminating manual paste steps entirely.
 
 <context>
-FlightPath is a VS Code extension that automates GitHub Copilot through structured JSON prompt workflows. The current CopilotIntegration.ts contains a stub implementation (lines 69-71) that falls back to clipboard copying and manual chat opening.
+ctrlyoke is a VS Code extension that automates GitHub Copilot through structured JSON prompt workflows. The current CopilotIntegration.ts contains a stub implementation (lines 69-71) that falls back to clipboard copying and manual chat opening.
 
 **PROVEN AUTOMATION APPROACH**: The proof-of-concept test in `extension.ts:testCopilotAutomation()` successfully validated direct chat automation using VS Code commands.
 
-Current FlightPath workflow:
+Current ctrlyoke workflow:
 
-1. User executes `flightpath.takeOff` command
-2. FlightPathManager loads .flightpath.json or .prompt.json files
+1. User executes `ctrlyoke.takeOff` command
+2. CtrlYokeManager loads .ctrlyoke.json or .prompt.json files
 3. PromptQueue processes prompts sequentially with end condition validation
 4. CopilotIntegration.sendPrompt() needs real implementation for automated execution
 
@@ -41,7 +41,7 @@ Architecture details available in .github/copilot-instructions.md (automatically
 <requirements>
 ### Primary Requirements
 1. **Replace Stub Implementation**: Transform the current fallback implementation into enhanced Copilot Chat automation
-2. **Maintain Workflow Automation**: Preserve FlightPath's core value proposition of automated prompt sequences
+2. **Maintain Workflow Automation**: Preserve ctrlyoke's core value proposition of automated prompt sequences
 3. **Context Awareness**: Properly format workspace context, files, and selections using Copilot Chat syntax
 4. **User Guidance**: Provide clear instructions and progress tracking for manual paste workflow steps
 5. **Error Handling**: Graceful degradation with clear user feedback when Copilot Chat is unavailable
@@ -69,7 +69,7 @@ Architecture details available in .github/copilot-instructions.md (automatically
 
 ### Phase 1: Direct Command Automation (Primary - PROVEN)
 
-**File**: `src/flightpath/CopilotIntegration.ts`
+**File**: `src/core/CopilotIntegration.ts`
 
 **Key Changes** (Based on validated proof-of-concept):
 
@@ -90,7 +90,7 @@ Architecture details available in .github/copilot-instructions.md (automatically
 
 ### Phase 2: Workflow Management Enhancement (Secondary)
 
-**Files**: `FlightPathManager.ts`, `StatusBarManager.ts`
+**Files**: `CtrlYokeManager.ts`, `StatusBarManager.ts`
 
 **Features**:
 
@@ -101,7 +101,7 @@ Architecture details available in .github/copilot-instructions.md (automatically
 
 ### Phase 3: Integration Points
 
-**Files**: `FlightPathManager.ts`, `PromptQueue.ts`
+**Files**: `CtrlYokeManager.ts`, `PromptQueue.ts`
 
 **Updates**:
 
@@ -172,15 +172,15 @@ Architecture details available in .github/copilot-instructions.md (automatically
 
 ### Step 4: Chat Participant Implementation
 
-1. Create FlightPathChatParticipant class
+1. Create CtrlYokeChatParticipant class
 2. Register participant in extension activation
 3. Implement command handlers for workflow control
 4. Add progress streaming to chat interface
 
 ### Step 5: Integration and Testing
 
-1. Update FlightPathManager for dual execution modes
-2. Test with existing .flightpath.json workflows
+1. Update CtrlYokeManager for dual execution modes
+2. Test with existing .ctrlyoke.json workflows
 3. Validate end condition script compatibility
 4. Performance testing with large context files
    </implementation_strategy>
@@ -330,7 +330,7 @@ private async sendPromptWithEnhancedClipboard(prompt: PromptItem): Promise<boole
 
     // Show helpful notification with workflow progress
     const action = await vscode.window.showInformationMessage(
-        'FlightPath: Prompt ready! Paste (Ctrl+V) and press Enter to continue workflow.',
+        'ctrlyoke: Prompt ready! Paste (Ctrl+V) and press Enter to continue workflow.',
         { modal: false },
         'Continue Workflow',
         'Preview Prompt',
@@ -340,7 +340,7 @@ private async sendPromptWithEnhancedClipboard(prompt: PromptItem): Promise<boole
     if (action === 'Preview Prompt') {
         // Show the formatted prompt in a preview document
         const doc = await vscode.workspace.openTextDocument({
-            content: `FlightPath Copilot Chat Prompt:\n\n${chatPrompt}`,
+            content: `ctrlyoke Copilot Chat Prompt:\n\n${chatPrompt}`,
             language: 'markdown'
         });
         await vscode.window.showTextDocument(doc, { preview: true });
@@ -362,13 +362,13 @@ private async trackWorkflowProgress(
   // Update status bar with progress
   const progress = `${workflowStep}/${totalSteps}`;
   vscode.window.setStatusBarMessage(
-    `FlightPath: Step ${progress} - Waiting for Copilot Chat response...`,
+    `ctrlyoke: Step ${progress} - Waiting for Copilot Chat response...`,
     5000
   );
 
   // Show progress notification
   const action = await vscode.window.showInformationMessage(
-    `FlightPath Workflow Progress (${progress}): Ready for next step?`,
+    `ctrlyoke Workflow Progress (${progress}): Ready for next step?`,
     'Continue', 'Pause', 'Stop'
   );
 
@@ -421,12 +421,12 @@ private async formatContextForCopilotChat(context: ContextConfig): Promise<strin
 
 ### Functional Requirements (✅ Core Automation PROVEN in POC)
 
-- [ ] **Zero-Interaction Automation**: FlightPath workflows execute with NO manual paste/enter steps required ✅ VALIDATED
+- [ ] **Zero-Interaction Automation**: ctrlyoke workflows execute with NO manual paste/enter steps required ✅ VALIDATED
 - [ ] **Multi-Strategy Implementation**: Primary direct automation (proven) with fallback chain for maximum reliability
 - [ ] **True Workflow Automation**: Sequential prompt execution with automatic submission and progression ✅ VALIDATED
 - [ ] **Context Awareness**: Workspace files, selections, and context properly formatted with Copilot Chat syntax
 - [ ] **End Condition Integration**: Scripts can evaluate responses and automatically trigger next workflow steps
-- [ ] **Backward Compatibility**: Existing .flightpath.json and .prompt.json workflows continue to work unchanged
+- [ ] **Backward Compatibility**: Existing .ctrlyoke.json and .prompt.json workflows continue to work unchanged
 
 ### Technical Requirements (✅ Command Sequence PROVEN)
 
@@ -547,7 +547,7 @@ async sendPrompt(prompt: PromptItem): Promise<boolean> {
 
 - Test all automation strategies across different VS Code versions
 - Validate command availability detection logic
-- Test with existing .flightpath.json workflow files
+- Test with existing .ctrlyoke.json workflow files
 - Verify end condition script integration works with automated responses
 - Performance test with large context and long workflow chains
 - Test error handling and fallback mechanisms
@@ -555,16 +555,16 @@ async sendPrompt(prompt: PromptItem): Promise<boolean> {
 **Architecture Integration**:
 
 - Follow existing SOLID principles and separation of concerns
-- Maintain compatibility with existing FlightPathManager and PromptQueue
+- Maintain compatibility with existing CtrlYokeManager and PromptQueue
 - Use dependency injection for testability of different automation strategies
 - Implement proper error boundaries and user feedback mechanisms
 
 **Success Definition**:
 
-Transform FlightPath into a true "set-and-forget AI workflow orchestrator" where users can:
+Transform ctrlyoke into a true "set-and-forget AI workflow orchestrator" where users can:
 
-1. Load a .flightpath.json file with multiple prompts
-2. Execute `flightpath.takeOff` command
+1. Load a .ctrlyoke.json file with multiple prompts
+2. Execute `ctrlyoke.takeOff` command
 3. Walk away from computer
 4. Return to completed workflow with all prompts executed and end conditions evaluated
 

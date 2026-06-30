@@ -49,7 +49,7 @@ Model completions are JSON/JSONC-only and replace the entire quoted model value 
 
 <yamlWorkflowKeys>
 `PromptPropertyCompletionProvider` is narrowly scoped to YAML workflow editing:
-- only activates in `.flightpath.yaml` / `.flightpath.yml`
+- only activates in `.ctrlyoke.yaml` / `.ctrlyoke.yml`
 - only offers keys inside `steps:` list items
 - branches on whether the current item contains `type: script`
 - also owns `type: prompt | script` enum-value completions

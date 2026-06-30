@@ -246,7 +246,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const customTemplates = templates.filter((t) => !t.isBuiltIn);
 
   // Path preview
-  const fileExt = format === "json" ? ".flightpath.json" : ".flightpath.yaml";
+  const fileExt = format === "json" ? ".ctrlyoke.json" : ".ctrlyoke.yaml";
   const pathPreview = filename.trim()
     ? `${workflowsDir}/${filename.trim()}${fileExt}`
     : `${workflowsDir}/`;

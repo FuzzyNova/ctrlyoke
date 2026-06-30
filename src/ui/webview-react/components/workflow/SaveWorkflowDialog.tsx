@@ -7,8 +7,8 @@ import { MESSAGE_TYPES } from "../../types/messages";
 /**
  * SaveWorkflowDialog
  *
- * Modal dialog for saving the current workflow as a .flightpath.yaml or
- * .flightpath.json file. Runtime fields (_runtime, status, id, etc.) are
+ * Modal dialog for saving the current workflow as a .ctrlyoke.yaml or
+ * .ctrlyoke.json file. Runtime fields (_runtime, status, id, etc.) are
  * stripped by the extension before writing.
  *
  * Flow:
@@ -31,7 +31,7 @@ export const SaveWorkflowDialog: React.FC = () => {
   function applyFormat(p: string, fmt: "yaml" | "json"): string {
     const target = `.ctrlyoke.${fmt}`;
     return p
-      .replace(/\.flightpath\.(yaml|yml|json)$/i, target)
+      .replace(/\.ctrlyoke\.(yaml|yml|json)$/i, target)
       .replace(/\.(yaml|yml|json)$/i, target);
   }
 
@@ -63,8 +63,8 @@ export const SaveWorkflowDialog: React.FC = () => {
 
   const validate = useCallback((p: string): string | null => {
     if (!p.trim()) return "File path cannot be empty.";
-    if (!p.match(/\.(flightpath\.(yaml|yml|json)|prompt\.md)$/i)) {
-      return "Path must end with .flightpath.yaml, .flightpath.yml, or .flightpath.json.";
+    if (!p.match(/\.(ctrlyoke\.(yaml|yml|json)|prompt\.md)$/i)) {
+      return "Path must end with .ctrlyoke.yaml, .ctrlyoke.yml, or .ctrlyoke.json.";
     }
     return null;
   }, []);

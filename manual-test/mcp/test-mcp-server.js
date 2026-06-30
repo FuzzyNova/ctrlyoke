@@ -2,13 +2,13 @@
  * Test MCP Server
  *
  * A minimal MCP server with a single tool `test_mcp` that returns "passed".
- * Use this to verify MCP server attachment is working in FlightPath workflows.
+ * Use this to verify MCP server attachment is working in ctrlyoke workflows.
  *
  * Usage (mcpServers in workflow):
  *   mcpServers:
  *     - id: test-mcp
  *       command: node
- *       args: [".flightpath/scripts/test-mcp-server.js"]
+ *       args: [".ctrlyoke/scripts/test-mcp-server.js"]
  */
 
 "use strict";

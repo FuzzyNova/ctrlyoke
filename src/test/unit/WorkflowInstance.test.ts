@@ -253,7 +253,7 @@ suite("WorkflowInstance runtime transitions", () => {
     const tempDir = await fs.mkdtemp(
       path.join(os.tmpdir(), "ctrlyoke-stale-running-")
     );
-    const workingFilePath = path.join(tempDir, "stale.flightpath.json");
+    const workingFilePath = path.join(tempDir, "stale.ctrlyoke.json");
 
     try {
       await fs.writeFile(
@@ -772,7 +772,7 @@ suite("WorkflowInstance eager working file creation", () => {
       initialProperties: { model: "sonnet" },
     });
 
-    resolveCreate("mock-working-file.flightpath.json");
+    resolveCreate("mock-working-file.ctrlyoke.json");
     await Promise.all([firstEnsure, secondEnsure]);
 
     assert.strictEqual(createCallCount, 1);
@@ -799,10 +799,10 @@ suite("WorkflowInstance append-and-continue", () => {
 
       const baseSourcePath = path.join(
         tempWorkspace,
-        "base-workflow.flightpath.yaml"
+        "base-workflow.ctrlyoke.yaml"
       );
       const workingFilePath = await instance.promptQueue.createWorkingFile(
-        "base-workflow.flightpath.yaml",
+        "base-workflow.ctrlyoke.yaml",
         [{ prompt: "base prompt" }],
         tempWorkspace,
         baseSourcePath
@@ -850,7 +850,7 @@ suite("WorkflowInstance append-and-continue", () => {
 
       const appendPath = path.join(
         tempWorkspace,
-        "append-workflow.flightpath.yaml"
+        "append-workflow.ctrlyoke.yaml"
       );
       await fs.writeFile(
         appendPath,

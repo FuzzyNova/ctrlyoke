@@ -225,7 +225,7 @@ export class HistorySearchService {
       workspaceFolderPath,
       PATH_CONSTANTS.CTRLYOKE_DIR,
       PATH_CONSTANTS.QUEUE_DIR,
-      `${workflowId}.flightpath.json`
+      `${workflowId}.ctrlyoke.json`
     );
 
     try {

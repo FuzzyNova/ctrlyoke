@@ -1,11 +1,11 @@
 # Cross-Harness Session Examples
 #
-# Demonstrates how FlightPath handles session management with mixed harnesss.
+# Demonstrates how ctrlyoke handles session management with mixed harnesss.
 # This file shows validation warnings and limitations when switching harnesss.
 #
 # Key Concepts:
 # - Sessions are harness-specific (Copilot sessions don't work with Claude)
-# - FlightPath validates session references and warns about incompatibilities
+# - ctrlyoke validates session references and warns about incompatibilities
 # - Each harness has different session ID formats
 
 steps:
@@ -17,7 +17,7 @@ steps:
     harness: copilot-cli
     model: claude-sonnet-4.5
     prompt: |
-      Analyze the session management implementation in FlightPath.
+      Analyze the session management implementation in ctrlyoke.
       Focus on the SessionResolver architecture.
     # Creates Copilot CLI session (UUID format)
     # Example sessionId: "550e8400-e29b-41d4-a716-446655440000"
@@ -28,7 +28,7 @@ steps:
     prompt: |
       Based on the analysis, implement session validation logic.
     sessionId: 1 # ⚠️ WARNING: References Copilot session from prompt 1
-    # FlightPath behavior:
+    # ctrlyoke behavior:
     # 1. Detects harness mismatch (copilot-cli → claude-cli)
     # 2. Logs warning: "Session reference incompatible with harness change"
     # 3. Ignores sessionId, starts new Claude session instead
@@ -92,7 +92,7 @@ steps:
     model: claude-sonnet-4.5
     prompt: "Review with Copilot"
     sessionId: "thread_abc123xyz789" # ⚠️ Invalid format for Copilot
-    # FlightPath behavior:
+    # ctrlyoke behavior:
     # 1. Validates session ID format against harness
     # 2. Detects "thread_xxx" format incompatible with copilot-cli
     # 3. Logs error: "Invalid session ID format for copilot-cli"
@@ -140,13 +140,13 @@ steps:
 #    - Codex CLI: Thread ID ("thread_abc123xyz789")
 #
 # 2. Cross-harness session references are invalid:
-#    - FlightPath detects and warns
+#    - ctrlyoke detects and warns
 #    - Gracefully falls back to new session
 #    - Workflow continues (no fatal error)
 #
 # 3. Format validation prevents errors:
 #    - Each harness expects specific format
-#    - FlightPath validates before passing to CLI
+#    - ctrlyoke validates before passing to CLI
 #    - Invalid formats trigger new session
 #
 # 4. Best practice for mixed harnesss:

@@ -239,7 +239,7 @@ export class TemplateManager {
       if (id === "blank") continue;
       const templatePath = path.join(
         this.getBuiltInTemplatesPath(),
-        `${id}.flightpath.yaml`
+        `${id}.ctrlyoke.yaml`
       );
       try {
         const content = await fs.promises.readFile(templatePath, "utf-8");
@@ -285,14 +285,14 @@ export class TemplateManager {
         throw new Error("No workspace folder available");
       }
       const filename = templateId.substring(7); // Remove "custom:" prefix
-      const templatePath = path.join(customPath, `${filename}.flightpath.json`);
+      const templatePath = path.join(customPath, `${filename}.ctrlyoke.json`);
       return await fs.promises.readFile(templatePath, "utf-8");
     }
 
     // Built-in template (source is .yaml)
     const templatePath = path.join(
       this.getBuiltInTemplatesPath(),
-      `${templateId}.flightpath.yaml`
+      `${templateId}.ctrlyoke.yaml`
     );
     return await fs.promises.readFile(templatePath, "utf-8");
   }
@@ -397,7 +397,7 @@ export class TemplateManager {
     const parsed = jsYaml.load(substituted) as Record<string, unknown>;
     delete parsed["_templateMeta"];
     let workflowContent: string;
-    const ext = format === "json" ? ".flightpath.json" : ".flightpath.yaml";
+    const ext = format === "json" ? ".ctrlyoke.json" : ".ctrlyoke.yaml";
 
     if (format === "json") {
       workflowContent = JSON.stringify(parsed, null, 2);
@@ -444,7 +444,7 @@ export class TemplateManager {
       await fs.promises.mkdir(customPath, { recursive: true });
     }
 
-    const fullPath = path.join(customPath, `${templateName}.flightpath.json`);
+    const fullPath = path.join(customPath, `${templateName}.ctrlyoke.json`);
 
     if (await this.pathExists(fullPath)) {
       throw new Error(`Template already exists: ${templateName}`);
@@ -499,9 +499,9 @@ export class TemplateManager {
     try {
       const files = await fs.promises.readdir(customPath);
       for (const file of files) {
-        if (file.endsWith(".flightpath.json")) {
+        if (file.endsWith(".ctrlyoke.json")) {
           const fullPath = path.join(customPath, file);
-          const name = file.replace(".flightpath.json", "");
+          const name = file.replace(".ctrlyoke.json", "");
 
           try {
             const content = await fs.promises.readFile(fullPath, "utf-8");

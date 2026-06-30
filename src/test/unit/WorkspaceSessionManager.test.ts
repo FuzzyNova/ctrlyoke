@@ -21,7 +21,7 @@ suite("WorkspaceSessionManager", () => {
 
     try {
       await fs.writeFile(
-        path.join(queueDir, "older-name.flightpath.json"),
+        path.join(queueDir, "older-name.ctrlyoke.json"),
         JSON.stringify({
           workflowName: "older-name",
           startedAt: 100,
@@ -30,7 +30,7 @@ suite("WorkspaceSessionManager", () => {
         })
       );
       await fs.writeFile(
-        path.join(queueDir, "newer-name.flightpath.json"),
+        path.join(queueDir, "newer-name.ctrlyoke.json"),
         JSON.stringify({
           workflowName: "newer-name",
           startedAt: 200,
@@ -50,7 +50,7 @@ suite("WorkspaceSessionManager", () => {
 
       assert.strictEqual(
         mostRecentPath,
-        path.join(queueDir, "older-name.flightpath.json")
+        path.join(queueDir, "older-name.ctrlyoke.json")
       );
       assert.strictEqual(sessions[0]?.label, "⏸ older-name");
       assert.strictEqual(sessions[1]?.label, "⏸ newer-name");

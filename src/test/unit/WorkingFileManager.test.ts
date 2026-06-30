@@ -164,8 +164,8 @@ suite("WorkingFileManager", () => {
       // File should exist
       await assert.doesNotReject(() => fs.access(wfPath));
       assert.ok(
-        wfPath.endsWith(".flightpath.json"),
-        `Expected .flightpath.json extension: ${wfPath}`
+        wfPath.endsWith(".ctrlyoke.json"),
+        `Expected .ctrlyoke.json extension: ${wfPath}`
       );
     });
 
@@ -226,7 +226,7 @@ suite("WorkingFileManager", () => {
       tempPaths.push(wfPath);
 
       const fileName = path.basename(wfPath);
-      // Format: <sanitized-name>-YYYY-MM-DDTHH-MM-SS.flightpath.json
+      // Format: <sanitized-name>-YYYY-MM-DDTHH-MM-SS.ctrlyoke.json
       assert.ok(
         /\d{4}-\d{2}-\d{2}T/.test(fileName),
         `Expected timestamp in filename: ${fileName}`

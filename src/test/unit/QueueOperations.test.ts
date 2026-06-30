@@ -22,11 +22,11 @@ async function requestQueueStop(queue: PromptQueue): Promise<void> {
 suite("QueueOperations", () => {
   // ──────────────────────────────────────────────────────────────────────────
   suite("getQueueStatus — workflow name extraction", () => {
-    test("extracts name from timestamped .flightpath.json path", () => {
+    test("extracts name from timestamped .ctrlyoke.json path", () => {
       const queue = new PromptQueue();
       const status = getQueueStatus(
         queue,
-        "/workspace/.ctrlyoke/.queue/my-workflow-2024-12-23T15-30-00.flightpath.json"
+        "/workspace/.ctrlyoke/.queue/my-workflow-2024-12-23T15-30-00.ctrlyoke.json"
       );
       assert.strictEqual(status.metadata.workflowName, "my-workflow");
     });
@@ -35,7 +35,7 @@ suite("QueueOperations", () => {
       const queue = new PromptQueue();
       const status = getQueueStatus(
         queue,
-        "C:\\Users\\dev\\.ctrlyoke\\.queue\\build-and-test-2025-01-01T00-00-00.flightpath.json"
+        "C:\\Users\\dev\\.ctrlyoke\\.queue\\build-and-test-2025-01-01T00-00-00.ctrlyoke.json"
       );
       assert.strictEqual(status.metadata.workflowName, "build-and-test");
     });

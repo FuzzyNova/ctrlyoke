@@ -207,7 +207,7 @@ function runHarness(
 ): HarnessRunResult {
   const outputFile = path.join(tmpDir, `${harness}-hooks.jsonl`);
   const outputFileArg = outputFile.replace(/\\/g, "/");
-  const workflowFile = path.join(tmpDir, `${harness}-test.flightpath.json`);
+  const workflowFile = path.join(tmpDir, `${harness}-test.ctrlyoke.json`);
   const harnessCwd = harness === "copilot-cli" ? REPO_ROOT : tmpDir;
 
   const workflow = buildWorkflow(harness, recorderScript);

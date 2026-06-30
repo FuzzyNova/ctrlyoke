@@ -19,7 +19,7 @@ steps:
 
   - name: analyze-security
     prompt: |
-      Analyze the FlightPath codebase for potential security vulnerabilities.
+      Analyze the ctrlyoke codebase for potential security vulnerabilities.
 
       Focus on:
       - Input validation and sanitization

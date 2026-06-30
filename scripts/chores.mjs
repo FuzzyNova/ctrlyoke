@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * FlightPath Developer Chores Automation
+ * ctrlyoke Developer Chores Automation
  *
- * Automates common maintenance tasks for FlightPath development.
+ * Automates common maintenance tasks for ctrlyoke development.
  *
  * Usage:
  *   npm run chores                    # Interactive mode
@@ -241,7 +241,7 @@ async function syncModels() {
     if (!fs.existsSync(discoveredModelsPath)) {
       logWarning("No discovered-models.json found");
       logInfo(
-        "Run 'FlightPath: Export Discovered Models' command in VS Code first"
+        "Run 'ctrlyoke: Export Discovered Models' command in VS Code first"
       );
       logInfo("See CHORES.md section 2 for full workflow");
       return;
@@ -259,7 +259,7 @@ async function syncModels() {
     logInfo("Files updated:");
     logInfo("  - src/utils/ModelConstants.ts");
     logInfo("  - package.json");
-    logInfo("  - schemas/prompt-schema.json");
+    logInfo("  - schemas/workflow-schema.json");
     console.log();
     logInfo("Note: YAML schema will be auto-generated on next compile");
   } catch (error) {
@@ -307,7 +307,7 @@ async function runAllChecks() {
  */
 function showHelp() {
   console.log(`
-${colors.bright}FlightPath Developer Chores${colors.reset}
+${colors.bright}ctrlyoke Developer Chores${colors.reset}
 
 ${colors.cyan}Usage:${colors.reset}
   npm run chores                    Interactive mode (coming soon)

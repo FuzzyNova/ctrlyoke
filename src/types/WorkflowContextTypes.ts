@@ -21,7 +21,7 @@ export interface WorkflowContext {
   workflowName?: string;
   /** Workflow instance UUID — matches activeWorkflowId in the webview for PTY session keying. */
   instanceId?: string;
-  /** Path to the .flightpath.json working file (sets CTRLYOKE_WORKING_FILE for MCP). */
+  /** Path to the .ctrlyoke.json working file (sets CTRLYOKE_WORKING_FILE for MCP). */
   workingFilePath?: string;
   resolvedProperties?: ResolvedProperties;
   workflowFile?: PromptFile;

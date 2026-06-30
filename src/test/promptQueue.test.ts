@@ -416,7 +416,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       queue.loadPrompts(createPromptFile(samplePrompts));
       const workingFilePath = await queue.createWorkingFile(
-        "test.flightpath.json",
+        "test.ctrlyoke.json",
         samplePrompts,
         workspaceFolder.uri.fsPath
       );

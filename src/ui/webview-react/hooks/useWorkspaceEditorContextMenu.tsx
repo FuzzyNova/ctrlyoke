@@ -11,7 +11,7 @@ import { useEditorStore } from "@store/editorStore";
 import { writeClipboardText } from "@utils/stepClipboard";
 import { MESSAGE_TYPES, PROMPT_EDITOR_INSERT_MODES } from "@/types/messages";
 
-const PROMPT_FILE_RE = /\.(flightpath\.(yaml|yml|json)|prompt\.md)$/i;
+const PROMPT_FILE_RE = /\.(ctrlyoke\.(yaml|yml|json)|prompt\.md)$/i;
 
 function isPromptFile(path: string | null): boolean {
   return path ? PROMPT_FILE_RE.test(path) : false;

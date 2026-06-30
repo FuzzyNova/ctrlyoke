@@ -1,4 +1,4 @@
-# FlightPath VS Code Extension Development Environment Setup
+# ctrlyoke VS Code Extension Development Environment Setup
 
 ## 🎯 PROJECT STATUS: Phase 1 & 2 COMPLETE ✅
 
@@ -9,22 +9,22 @@
 - ✅ **JSON Schema Validation**: Working validation for prompt files with IntelliSense
 - ✅ **Build System**: Fast esbuild pipeline with watch mode and problem matchers
 - ✅ **Type Definitions**: Core interfaces and architecture planned
-- ✅ **Example Files**: Sample workflows in `.flightpath/examples/`
+- ✅ **Example Files**: Sample workflows in `.ctrlyoke/examples/`
 
-**Next Phase**: Implement core components (FlightPathManager, PromptQueue, CopilotIntegration, UI)
+**Next Phase**: Implement core components (CtrlYokeManager, PromptQueue, CopilotIntegration, UI)
 
 ---
 
 ## Context
 
-You are setting up a development environment for **FlightPath**, a VS Code extension that orchestrates GitHub Copilot through automated prompt sequences. This extension enables developers to create structured workflow automation using JSON-based prompt files with programmable end conditions.
+You are setting up a development environment for **ctrlyoke**, a VS Code extension that orchestrates GitHub Copilot through automated prompt sequences. This extension enables developers to create structured workflow automation using JSON-based prompt files with programmable end conditions.
 
 **Project Vision:**
 
 - Automated GitHub Copilot chat interaction
 - Structured prompt queues using JSON format
 - Script-based end conditions for workflow validation
-- User-configurable prompt files in `.flightpath/` directory
+- User-configurable prompt files in `.ctrlyoke/` directory
 - Simple UI with file selection and "Take Off" execution button
 - Context-aware prompt generation capabilities
 
@@ -32,7 +32,7 @@ You are setting up a development environment for **FlightPath**, a VS Code exten
 
 - Windows with PowerShell
 - Existing MCP (Model Context Protocol) configuration
-- VS Code workspace at `c:\dev\FlightPath`
+- VS Code workspace at `c:\dev\ctrlyoke`
 - Experience with advanced AI tooling integration
 
 ## Requirements
@@ -50,10 +50,10 @@ You are setting up a development environment for **FlightPath**, a VS Code exten
 ### Core Extension Features
 
 - GitHub Copilot Chat API integration for automated messaging
-- JSON-based prompt file parsing (`.prompt.json`, `.flightpath.json`)
+- JSON-based prompt file parsing (`.prompt.json`, `.ctrlyoke.json`)
 - Queue management system with state persistence
 - Script execution system for end condition validation
-- File system monitoring for `.flightpath/` directory changes
+- File system monitoring for `.ctrlyoke/` directory changes
 - Simple webview UI for file selection and execution control
 - Command palette integration for quick access
 
@@ -80,7 +80,7 @@ You are setting up a development environment for **FlightPath**, a VS Code exten
 ### Project Structure
 
 ```
-FlightPath/
+ctrlyoke/
 ├── .vscode/
 │   ├── launch.json          # Extension debugging configuration
 │   ├── tasks.json           # Build and development tasks
@@ -88,20 +88,20 @@ FlightPath/
 │   └── mcp.json             # Existing MCP configuration (preserved)
 ├── src/
 │   ├── extension.ts         # Extension activation and registration
-│   ├── flightpath/
-│   │   ├── FlightPathManager.ts      # Main orchestration controller
+│   ├── ctrlyoke/
+│   │   ├── CtrlYokeManager.ts      # Main orchestration controller
 │   │   ├── PromptQueue.ts            # Queue management and execution
 │   │   ├── EndConditionEvaluator.ts  # Script execution and validation
 │   │   ├── CopilotIntegration.ts     # GitHub Copilot Chat API interface
 │   │   └── PromptFileParser.ts       # JSON prompt file parsing
 │   ├── ui/
-│   │   ├── FlightPathPanel.ts        # WebView provider for main UI
-│   │   ├── PromptFileProvider.ts     # Tree view for .flightpath files
+│   │   ├── CtrlYokePanel.ts        # WebView provider for main UI
+│   │   ├── PromptFileProvider.ts     # Tree view for .ctrlyoke files
 │   │   └── StatusBarManager.ts       # Status bar integration
 │   ├── schemas/
-│   │   └── prompt-schema.json        # Unified JSON schema for both .prompt.json and .flightpath.json
+│   │   └── workflow-schema.json        # Unified JSON schema for both .prompt.json and .ctrlyoke.json
 │   ├── types/
-│   │   ├── FlightPathTypes.ts        # Core type definitions
+│   │   ├── CtrlYokeTypes.ts        # Core type definitions
 │   │   └── CopilotTypes.ts           # Copilot integration types
 │   └── utils/
 │       ├── FileSystemUtils.ts        # File operations and monitoring
@@ -110,20 +110,20 @@ FlightPath/
 ├── test/
 │   ├── suite/
 │   │   ├── extension.test.ts         # Extension integration tests
-│   │   ├── flightpath.test.ts        # Core functionality tests
+│   │   ├── ctrlyoke.test.ts        # Core functionality tests
 │   │   └── ui.test.ts                # UI component tests
 │   └── fixtures/                     # Test data and mock files
 ├── resources/
 │   ├── webview/
-│   │   ├── flightpath-panel.html     # Main UI HTML
+│   │   ├── ctrlyoke-panel.html     # Main UI HTML
 │   │   ├── styles.css                # UI styling
 │   │   └── main.js                   # WebView JavaScript
 │   └── icons/                        # Extension icons and assets
-├── .flightpath/
+├── .ctrlyoke/
 │   ├── examples/
 │   │   ├── simple-prompt.prompt.json # Single prompt example
-│   │   ├── debug-workflow.flightpath.json # Multi-step workflow
-│   │   └── context-aware.flightpath.json # Context-aware examples
+│   │   ├── debug-workflow.ctrlyoke.json # Multi-step workflow
+│   │   └── context-aware.ctrlyoke.json # Context-aware examples
 │   └── schemas/                      # User-facing schema documentation
 ├── package.json                      # Extension manifest and dependencies
 ├── tsconfig.json                     # TypeScript configuration
@@ -136,7 +136,7 @@ FlightPath/
 
 ### Component Architecture
 
-#### FlightPathManager (Core Controller)
+#### CtrlYokeManager (Core Controller)
 
 - Orchestrates entire workflow execution
 - Manages queue state and persistence
@@ -186,15 +186,15 @@ npm install -g yo generator-code @vscode/vsce eslint prettier
 
 ```powershell
 # Navigate to project directory
-cd c:\dev\FlightPath
+cd c:\dev\ctrlyoke
 
 # Initialize extension using Yeoman generator (this will prompt for user input)
 npx --package yo --package generator-code -- yo code
 
 # IMPORTANT: You'll need to manually select these options when prompted:
 # ? What type of extension do you want to create? → New Extension (TypeScript)
-# ? What's the name of your extension? → FlightPath
-# ? What's the identifier of your extension? → flightpath
+# ? What's the name of your extension? → ctrlyoke
+# ? What's the identifier of your extension? → ctrlyoke
 # ? What's the description of your extension? → Automate GitHub Copilot with structured prompt workflows
 # ? Initialize a git repository? → Yes
 # ? Bundle the source code with webpack? → No (we'll use esbuild)
@@ -365,8 +365,8 @@ main().catch((e) => {
 
 ```json
 {
-  "name": "flightpath",
-  "displayName": "FlightPath",
+  "name": "ctrlyoke",
+  "displayName": "ctrlyoke",
   "description": "Automate GitHub Copilot with structured prompt workflows",
   "version": "0.1.0",
   "engines": {
@@ -376,62 +376,62 @@ main().catch((e) => {
   "activationEvents": [
     "onStartupFinished",
     "workspaceContains:**/*.prompt.json",
-    "workspaceContains:**/*.flightpath.json"
+    "workspaceContains:**/*.ctrlyoke.json"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "flightpath.takeOff",
+        "command": "ctrlyoke.takeOff",
         "title": "Take Off",
-        "category": "FlightPath",
+        "category": "ctrlyoke",
         "icon": "$(rocket)"
       },
       {
-        "command": "flightpath.openPanel",
-        "title": "Open FlightPath Panel",
-        "category": "FlightPath"
+        "command": "ctrlyoke.openPanel",
+        "title": "Open ctrlyoke Panel",
+        "category": "ctrlyoke"
       },
       {
-        "command": "flightpath.createPromptFile",
+        "command": "ctrlyoke.createPromptFile",
         "title": "Create Prompt File",
-        "category": "FlightPath"
+        "category": "ctrlyoke"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "flightpath.takeOff"
+          "command": "ctrlyoke.takeOff"
         },
         {
-          "command": "flightpath.openPanel"
+          "command": "ctrlyoke.openPanel"
         },
         {
-          "command": "flightpath.createPromptFile"
+          "command": "ctrlyoke.createPromptFile"
         }
       ],
       "explorer/context": [
         {
-          "command": "flightpath.createPromptFile",
+          "command": "ctrlyoke.createPromptFile",
           "when": "explorerResourceIsFolder",
           "group": "2_workspace"
         }
       ]
     },
     "configuration": {
-      "title": "FlightPath",
+      "title": "ctrlyoke",
       "properties": {
-        "flightpath.promptsDirectory": {
+        "ctrlyoke.promptsDirectory": {
           "type": "string",
-          "default": ".flightpath",
+          "default": ".ctrlyoke",
           "description": "Directory containing prompt files relative to workspace root"
         },
-        "flightpath.scriptTimeout": {
+        "ctrlyoke.scriptTimeout": {
           "type": "number",
           "default": 30000,
           "description": "Timeout for end condition scripts in milliseconds"
         },
-        "flightpath.enableContextAwareness": {
+        "ctrlyoke.enableContextAwareness": {
           "type": "boolean",
           "default": true,
           "description": "Enable context-aware prompt generation"
@@ -440,8 +440,8 @@ main().catch((e) => {
     },
     "jsonValidation": [
       {
-        "fileMatch": ["**/*.prompt.json", "**/*.flightpath.json"],
-        "url": "./schemas/prompt-schema.json"
+        "fileMatch": ["**/*.prompt.json", "**/*.ctrlyoke.json"],
+        "url": "./schemas/workflow-schema.json"
       }
     ]
   },
@@ -483,12 +483,12 @@ main().catch((e) => {
 
 ### Phase 4: JSON Schema Definition
 
-8. **Create Prompt Schema** (`src/schemas/prompt-schema.json`):
+8. **Create Prompt Schema** (`src/schemas/workflow-schema.json`):
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "FlightPath Prompt Schema",
+  "title": "ctrlyoke Prompt Schema",
   "type": "object",
   "oneOf": [
     {
@@ -580,7 +580,7 @@ main().catch((e) => {
 
 ### Example Prompt Files
 
-**`.flightpath/examples/simple-prompt.prompt.json`**:
+**`.ctrlyoke/examples/simple-prompt.prompt.json`**:
 
 ```json
 {
@@ -596,7 +596,7 @@ main().catch((e) => {
 }
 ```
 
-**`.flightpath/examples/debug-workflow.flightpath.json`**:
+**`.ctrlyoke/examples/debug-workflow.ctrlyoke.json`**:
 
 ```json
 {
@@ -631,7 +631,7 @@ main().catch((e) => {
 
 ### Core Type Definitions
 
-**`src/types/FlightPathTypes.ts`**:
+**`src/types/CtrlYokeTypes.ts`**:
 
 ```typescript
 export interface PromptFile {
@@ -679,9 +679,9 @@ export interface PromptResult {
 ### ✅ Functional Requirements (Foundation)
 
 - [x] **Extension Structure Created**: Complete VS Code extension scaffold with modern tooling
-- [x] **JSON Schema Validation**: Working validation for `.prompt.json` and `.flightpath.json` files
-- [x] **Example Files Created**: Sample prompt files in `.flightpath/examples/` directory
-- [x] **Command Registration**: FlightPath commands registered in VS Code (placeholder implementations)
+- [x] **JSON Schema Validation**: Working validation for `.prompt.json` and `.ctrlyoke.json` files
+- [x] **Example Files Created**: Sample prompt files in `.ctrlyoke/examples/` directory
+- [x] **Command Registration**: ctrlyoke commands registered in VS Code (placeholder implementations)
 - [x] **Type Definitions**: Core TypeScript interfaces for extension architecture
 
 ### ✅ Technical Requirements (Build & Development)
@@ -705,12 +705,12 @@ export interface PromptResult {
 
 ### Pending Implementation Requirements
 
-- [ ] **FlightPathManager**: Main orchestration controller
+- [ ] **CtrlYokeManager**: Main orchestration controller
 - [ ] **PromptQueue**: Queue management and execution engine
 - [ ] **CopilotIntegration**: GitHub Copilot Chat API interface (stub implementation)
 - [ ] **EndConditionEvaluator**: Script execution and validation system
 - [ ] **PromptFileParser**: JSON prompt file parsing logic
-- [ ] **File System Monitoring**: `.flightpath/` directory change detection
+- [ ] **File System Monitoring**: `.ctrlyoke/` directory change detection
 - [ ] **WebView UI**: Simple panel for file selection and "Take Off" button
 - [ ] **Status Bar Integration**: Real-time execution status display
 - [ ] **Error Handling**: Robust error boundaries and user feedback
@@ -720,7 +720,7 @@ export interface PromptResult {
 ### Integration Requirements (Phase 2)
 
 - [ ] GitHub Copilot Chat API integration established (stub implementation acceptable)
-- [ ] File system monitoring works for `.flightpath/` directory changes
+- [ ] File system monitoring works for `.ctrlyoke/` directory changes
 - [ ] Script execution framework operational (with safety constraints)
 - [ ] WebView UI communicates properly with extension backend
 - [ ] Extension state persists across VS Code restarts
@@ -751,8 +751,8 @@ export interface PromptResult {
 4. **✅ Configure Build System**: esbuild with watch mode and problem matchers working
 5. **✅ Set up JSON Schemas**: Validation schemas created for prompt files with IntelliSense support
 6. **✅ Configure Development Workflow**: VS Code debugging, testing, and code quality tools setup
-7. **✅ Create Example Files**: Sample prompt files created in `.flightpath/examples/` directory
-8. **✅ Update Package Manifest**: FlightPath-specific commands, menus, and configuration added
+7. **✅ Create Example Files**: Sample prompt files created in `.ctrlyoke/examples/` directory
+8. **✅ Update Package Manifest**: ctrlyoke-specific commands, menus, and configuration added
 9. **✅ Create Type Definitions**: Core TypeScript interfaces defined
 10. **✅ Test Foundation**: TypeScript compiles, esbuild works, extension structure verified
 
@@ -762,13 +762,13 @@ export interface PromptResult {
 
 **Ready to implement - foundation is complete!**
 
-1. **FlightPathManager.ts**: Main orchestration controller
+1. **CtrlYokeManager.ts**: Main orchestration controller
    - Coordinate between UI, queue, and integrations
    - Handle extension lifecycle and state management
    - Implement command handlers for VS Code integration
 
 2. **PromptFileParser.ts**: JSON prompt file parsing
-   - Load and validate `.prompt.json` and `.flightpath.json` files
+   - Load and validate `.prompt.json` and `.ctrlyoke.json` files
    - Use existing JSON schemas for validation
    - Transform files into `PromptFile` and `PromptItem` interfaces
 
@@ -785,7 +785,7 @@ export interface PromptResult {
    - Context-aware prompt generation
 
 5. **FileSystemUtils.ts**: File operations and monitoring
-   - Watch `.flightpath/` directory for changes
+   - Watch `.ctrlyoke/` directory for changes
    - File discovery and enumeration
    - Safe file operations with error handling
 
@@ -796,14 +796,14 @@ export interface PromptResult {
 
 ### Phase 2C: User Interface (Priority 3)
 
-7. **FlightPathPanel.ts**: WebView provider for main UI
+7. **CtrlYokePanel.ts**: WebView provider for main UI
    - Simple file selection interface
    - "Take Off" execution button
    - Real-time status and progress display
 
 8. **StatusBarManager.ts**: Status bar integration
    - Show current execution status
-   - Quick access to FlightPath panel
+   - Quick access to ctrlyoke panel
    - Progress indicators
 
 ### Phase 2D: Testing & Polish (Priority 4)
@@ -820,4 +820,4 @@ export interface PromptResult {
 
 **The foundation is rock-solid and ready for Phase 2 implementation!**
 
-This setup creates a production-ready foundation for building the FlightPath extension with modern best practices, robust architecture, and extensible design patterns focused on JSON-based prompt management.
+This setup creates a production-ready foundation for building the ctrlyoke extension with modern best practices, robust architecture, and extensible design patterns focused on JSON-based prompt management.

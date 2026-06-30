@@ -820,7 +820,7 @@ class CtrlYokeMCPServer {
 
     try {
       const files = await fs.readdir(queueDir);
-      const queueFiles = files.filter((f) => f.endsWith(".flightpath.json"));
+      const queueFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
       log("Found queue files:", queueFiles.length);
 
       const workflows = await Promise.all(
@@ -961,7 +961,7 @@ class CtrlYokeMCPServer {
     try {
       const files = await fs.readdir(queueDir);
       log("Files found:", files.length);
-      const queueFiles = files.filter((f) => f.endsWith(".flightpath.json"));
+      const queueFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
       log("Queue files found:", queueFiles.length, queueFiles);
 
       if (queueFiles.length === 0) {

@@ -20,7 +20,7 @@ steps:
 
       Please respond with: "Step 1 executed - preCondition passed as expected."
     preCondition:
-      script: manual-test/.flightpath/scripts/always_true.py
+      script: manual-test/.ctrlyoke/scripts/always_true.py
       returns: "true"
 
   - name: precondition-fails
@@ -30,7 +30,7 @@ steps:
       If you are seeing this, the preCondition was not evaluated correctly.
       Please respond with: "ERROR - this step should have been skipped."
     preCondition:
-      script: manual-test/.flightpath/scripts/always_false.py
+      script: manual-test/.ctrlyoke/scripts/always_false.py
       returns: "true"
 
   - name: confirm-step

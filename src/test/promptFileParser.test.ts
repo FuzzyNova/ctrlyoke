@@ -38,7 +38,7 @@ suite("PromptFileParser Tests", () => {
 
   suite("parsePromptFile - JSON Format", () => {
     test("should parse single prompt format", async () => {
-      const filePath = path.join(fixturesPath, "single.flightpath.json");
+      const filePath = path.join(fixturesPath, "single.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);
 
       assert.ok(result, "Result should not be null");
@@ -55,7 +55,7 @@ suite("PromptFileParser Tests", () => {
     });
 
     test("should parse multiple prompts format", async () => {
-      const filePath = path.join(fixturesPath, "multi.flightpath.json");
+      const filePath = path.join(fixturesPath, "multi.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);
 
       assert.ok(result, "Result should not be null");
@@ -73,13 +73,13 @@ suite("PromptFileParser Tests", () => {
 
     test("should return null for invalid JSON", async () => {
       // Test error handling for non-existent files
-      const filePath = path.join(fixturesPath, "nonexistent.flightpath.json");
+      const filePath = path.join(fixturesPath, "nonexistent.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);
       assert.strictEqual(result, null);
     });
 
     test("should normalize single prompt to prompts array", async () => {
-      const filePath = path.join(fixturesPath, "single.flightpath.json");
+      const filePath = path.join(fixturesPath, "single.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);
 
       assert.ok(result);
@@ -88,7 +88,7 @@ suite("PromptFileParser Tests", () => {
     });
 
     test("should preserve endCondition in parsed result", async () => {
-      const filePath = path.join(fixturesPath, "single.flightpath.json");
+      const filePath = path.join(fixturesPath, "single.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
@@ -103,7 +103,7 @@ suite("PromptFileParser Tests", () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-parser-error-behavior-")
       );
-      const filePath = path.join(tempDir, "error-behavior.flightpath.json");
+      const filePath = path.join(tempDir, "error-behavior.ctrlyoke.json");
 
       try {
         await fs.writeFile(
@@ -147,7 +147,7 @@ suite("PromptFileParser Tests", () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-parser-error-behavior-invalid-")
       );
-      const filePath = path.join(tempDir, "invalid-error-behavior.flightpath.json");
+      const filePath = path.join(tempDir, "invalid-error-behavior.ctrlyoke.json");
 
       try {
         await fs.writeFile(
@@ -175,7 +175,7 @@ suite("PromptFileParser Tests", () => {
     });
 
     test("should keep resumeSession undefined when not explicitly set (uses global setting at execution time)", async () => {
-      const filePath = path.join(fixturesPath, "multi.flightpath.json");
+      const filePath = path.join(fixturesPath, "multi.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
@@ -188,7 +188,7 @@ suite("PromptFileParser Tests", () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-parser-enabled-")
       );
-      const filePath = path.join(tempDir, "enabled.flightpath.json");
+      const filePath = path.join(tempDir, "enabled.ctrlyoke.json");
 
       try {
         await fs.writeFile(
@@ -285,8 +285,8 @@ suite("PromptFileParser Tests", () => {
     });
 
     test("should preserve prompt text as-is when not a file path", async () => {
-      // The single.flightpath.json contains a regular prompt - it should be preserved
-      const filePath = path.join(fixturesPath, "single.flightpath.json");
+      // The single.ctrlyoke.json contains a regular prompt - it should be preserved
+      const filePath = path.join(fixturesPath, "single.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
@@ -402,16 +402,16 @@ suite("PromptFileParser Tests", () => {
 
   suite("isPromptFile Detection", () => {
     // Test the isPromptFile method indirectly through expected behavior
-    test("should accept .flightpath.json files", async () => {
-      const filePath = path.join(fixturesPath, "single.flightpath.json");
+    test("should accept .ctrlyoke.json files", async () => {
+      const filePath = path.join(fixturesPath, "single.ctrlyoke.json");
       const result = await parser.parsePromptFile(filePath);
-      assert.ok(result, "Should parse .flightpath.json files");
+      assert.ok(result, "Should parse .ctrlyoke.json files");
     });
 
-    test("should accept .flightpath.yaml files", async () => {
-      const filePath = path.join(fixturesPath, "single.flightpath.yaml");
+    test("should accept .ctrlyoke.yaml files", async () => {
+      const filePath = path.join(fixturesPath, "single.ctrlyoke.yaml");
       const result = await parser.parsePromptFile(filePath);
-      assert.ok(result, "Should parse .flightpath.yaml files");
+      assert.ok(result, "Should parse .ctrlyoke.yaml files");
     });
 
     test("should accept .prompt.md files", async () => {

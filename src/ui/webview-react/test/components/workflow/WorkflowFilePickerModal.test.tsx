@@ -19,8 +19,8 @@ describe("WorkflowFilePickerModal", () => {
     hostedFetchMock.mockResolvedValueOnce({
       files: [
         {
-          path: "C:\\dev\\ctrlyoke\\flows\\example.flightpath.yaml",
-          relativePath: "flows\\example.flightpath.yaml",
+          path: "C:\\dev\\ctrlyoke\\flows\\example.ctrlyoke.yaml",
+          relativePath: "flows\\example.ctrlyoke.yaml",
         },
       ],
     });
@@ -39,7 +39,7 @@ describe("WorkflowFilePickerModal", () => {
       expect(hostedFetchMock).toHaveBeenCalledWith("/api/workflow-files")
     );
     expect(
-      await screen.findByText("flows/example.flightpath.yaml")
+      await screen.findByText("flows/example.ctrlyoke.yaml")
     ).toBeInTheDocument();
   });
 
@@ -60,13 +60,13 @@ describe("WorkflowFilePickerModal", () => {
     );
 
     const pathInput = screen.getByPlaceholderText(
-      "path/to/workflow.flightpath.yaml"
+      "path/to/workflow.ctrlyoke.yaml"
     );
-    await user.type(pathInput, "flows\\nested\\example.flightpath.yaml");
+    await user.type(pathInput, "flows\\nested\\example.ctrlyoke.yaml");
     await user.click(screen.getByRole("button", { name: "Load File" }));
 
     expect(onSelect).toHaveBeenCalledWith(
-      "flows/nested/example.flightpath.yaml"
+      "flows/nested/example.ctrlyoke.yaml"
     );
   });
 });

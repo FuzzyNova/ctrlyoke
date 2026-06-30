@@ -1,11 +1,11 @@
 # Property Sync Test
 #
-# PURPOSE: Visual verification that ALL FlightPath properties sync correctly
+# PURPOSE: Visual verification that ALL ctrlyoke properties sync correctly
 # to the dashboard UI. Covers every property in the schema at both the
 # workflow level and individual step level.
 #
 # HOW TO USE:
-#   1. Run with FlightPath (right-click → "Run with FlightPath")
+#   1. Run with ctrlyoke (right-click → "Run with ctrlyoke")
 #   2. Watch each step load in the dashboard
 #   3. Click each step's properties drawer and verify the values match the
 #      descriptions in each prompt
@@ -24,7 +24,7 @@ skills:
   - "favoriteColor"
 resumeSession: false
 mcpServers:
-  - "flightpath"
+  - "ctrlyoke"
 additionalArgs: "--max-turns 5"
 
 vars:
@@ -54,7 +54,7 @@ errorBehavior:
   retryDelayMs: 5000
 
 endCondition:
-  script: manual-test/.flightpath/scripts/always_true.py
+  script: manual-test/.ctrlyoke/scripts/always_true.py
   returns: "true"
   compareSource: auto
   timeout: 30000
@@ -73,7 +73,7 @@ endCondition:
     Please fix and try again.
 
 preCondition:
-  script: manual-test/.flightpath/scripts/always_true.py
+  script: manual-test/.ctrlyoke/scripts/always_true.py
   returns: "true"
   compareSource: auto
   timeout: 10000
@@ -173,7 +173,7 @@ steps:
         command: "echo step-level userPromptSubmit hook"
 
     preCondition:
-      script: manual-test/.flightpath/scripts/always_true.py
+      script: manual-test/.ctrlyoke/scripts/always_true.py
       returns: "true"
       compareSource: stdout
       timeout: 15000
@@ -184,7 +184,7 @@ steps:
       onError: continue
 
     endCondition:
-      script: manual-test/.flightpath/scripts/always_true.py
+      script: manual-test/.ctrlyoke/scripts/always_true.py
       returns: "true"
       compareSource: stdout
       timeout: 45000
@@ -220,7 +220,7 @@ steps:
         Additional Args: --max-turns 5
 
       MCP SERVERS
-        mcpServers:     flightpath
+        mcpServers:     ctrlyoke
 
       TOOL PERMISSIONS
         Mode:           custom
@@ -297,7 +297,7 @@ steps:
 finalStep:
   type: script
   name: final-cleanup-script
-  script: manual-test/.flightpath/scripts/always_true.py
+  script: manual-test/.ctrlyoke/scripts/always_true.py
   returns: "true"
   compareSource: auto
   timeout: 10000

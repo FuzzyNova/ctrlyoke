@@ -150,7 +150,7 @@ function makeContext(
 ): WorkflowExecutionContext {
   return {
     workspaceFolderPath: process.cwd(),
-    currentPromptFilePath: "workflow.flightpath.yaml",
+    currentPromptFilePath: "workflow.ctrlyoke.yaml",
     shouldShowCliCommand: false,
     showCliOutput: false,
     dynamicQueueConfig: {

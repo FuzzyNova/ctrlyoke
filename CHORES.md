@@ -95,13 +95,13 @@ This workflow discovers new models available in GitHub Copilot Chat and updates 
 
    This updates:
    - `package.json` settings enums
-   - `schemas/prompt-schema.json` model examples
+   - `schemas/workflow-schema.json` model examples
 
 5. **Verify changes**:
    - Check `src/utils/ModelConstants.ts`
    - Check `package.json` settings
-   - Check `schemas/prompt-schema.json`
-   - Check `schemas/prompt-schema.yaml`
+   - Check `schemas/workflow-schema.json`
+   - Check `schemas/workflow-schema.yaml`
 
    **Note**: The YAML schema is auto-generated during the next `npm run compile`.
 
@@ -229,7 +229,7 @@ Ensures model definitions are consistent across:
 
 - `src/utils/ModelConstants.ts` (source of truth)
 - `package.json` (settings enums)
-- `schemas/prompt-schema.json` (validation examples)
+- `schemas/workflow-schema.json` (validation examples)
 
 ```bash
 # Check if models are in sync

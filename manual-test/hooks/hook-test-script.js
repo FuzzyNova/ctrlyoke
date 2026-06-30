@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Manual hook recorder script for testing FlightPath hook delivery.
+ * Manual hook recorder script for testing ctrlyoke hook delivery.
  *
  * Usage (in a workflow hooks array):
  *   command: node manual-test/hooks/hook-test-script.js <event>

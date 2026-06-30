@@ -32,7 +32,7 @@ export class WorkspaceInitializer {
    * Returns true if ctrlyoke has already been initialized in this workspace.
    * A workspace is considered initialized when:
    *   - A `.ctrlyoke/` directory already exists (previously initialized), OR
-   *   - A `.flightpath.yaml`, `.flightpath.yml`, or `.flightpath.json` file exists
+   *   - A `.ctrlyoke.yaml`, `.ctrlyoke.yml`, or `.ctrlyoke.json` file exists
    *     at the workspace root (committed ctrlyoke workflow files — implicit opt-in).
    *
    * This check is synchronous and cheap (fs.existsSync only).
@@ -44,9 +44,9 @@ export class WorkspaceInitializer {
       return true;
     }
     return (
-      fs.existsSync(path.join(workspaceRoot, ".flightpath.yaml")) ||
-      fs.existsSync(path.join(workspaceRoot, ".flightpath.yml")) ||
-      fs.existsSync(path.join(workspaceRoot, ".flightpath.json"))
+      fs.existsSync(path.join(workspaceRoot, ".ctrlyoke.yaml")) ||
+      fs.existsSync(path.join(workspaceRoot, ".ctrlyoke.yml")) ||
+      fs.existsSync(path.join(workspaceRoot, ".ctrlyoke.json"))
     );
   }
 

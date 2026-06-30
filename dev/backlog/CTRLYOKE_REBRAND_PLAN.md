@@ -17,7 +17,7 @@
 | **CLI binary** | **`ctrlyoke`** + **`ctrlyoke-mcp`** | `ctrlyoke run` / `validate` / `commit` read cleanly (the rebrand doc's CLI-ergonomics win). |
 | **VS Code command namespace** | **`ctrlyoke.*`** | e.g. `ctrlyoke.openPanel`, `ctrlyoke.run`. User-facing churn is fine pre-release. |
 | **Config namespace / setting** | **`ctrlyoke.workspaceDirectory`** | Single `CONFIG_NAMESPACE` constant. |
-| **Workflow file extension** | **`.workflow.yml` / `.workflow.json`** (NOT `.ctrlyoke.*`) | Decoupled from the product name per the decision in `rebrand-naming.md` §"Decision". Tracked here as a coordinated workstream ([§6](#6-workstream-f--workflow-file-extension)) because it touches the same `package.json` activation/validation surfaces. |
+| **Workflow file extension** | **`.ctrlyoke.yml` / `.ctrlyoke.yaml` / `.ctrlyoke.json`** *(brand-coupled — SUPERSEDES the earlier `.workflow.*` decouple decision, June 30 2026)* | Reversed the `rebrand-naming.md` decouple after a sanity check: `.workflow.*` is a maximally-generic word (GitHub-Actions association) and, because the VS Code extension claims files by **global glob** (`activationEvents`/`jsonValidation`/`yamlValidation`/menu `when`), a generic extension would over-claim and schema-validate unrelated `*.workflow.yml` files. A branded namespace self-identifies shared/downloaded workflow files that live outside `.ctrlyoke/`, and claims cleanly with zero false-positives. The decouple's only upside (rebrand durability) is moot: this is the one and only rebrand — `ctrlyoke.dev`/`.com` + `controlyoke.*` are owned and the mark is TM-cleared. |
 | **Wordmark (text)** | **lowercase `ctrlyoke`** everywhere it's written | Matches package/CLI/domain (all forced lowercase); zero "how do I capitalize it" overhead. The keycap styling lives **only in the logo**, never in the text wordmark. Pronounced **"control-yoke"** — the `ctrl` keycap reinforces the pronunciation. |
 | **PascalCase identifier root** | **`CtrlYoke`** | `FlightPathConfigService` → `CtrlYokeConfigService`, etc. |
 | **Publisher** | **Keep `fuzzynova`** (resolved) | Fuzzy Nova is the studio (a DBA to Nathan); unaffected by the product rename. `package.json publisher` stays `fuzzynova`; marketplace item → `fuzzynova.ctrlyoke`. |
@@ -42,7 +42,7 @@ Apply these as **case-sensitive** replacements. Do **not** run a blanket case-in
 | `flightpath-mcp` | `ctrlyoke-mcp` | CLI bin, docs |
 | `flightpath-<harness>-hook` | `ctrlyoke-<harness>-hook` | hook script filenames + log filenames |
 | `flightpath.dev` | `ctrlyoke.dev` | site/domain |
-| `*.flightpath.yaml/yml/json` | `*.workflow.yaml/yml/json` | **separate extension decision — [§6](#6-workstream-f--workflow-file-extension)** |
+| `*.flightpath.yaml/yml/json` | `*.ctrlyoke.yaml/yml/json` | **separate extension decision — [§6](#6-workstream-f--workflow-file-extension)** |
 
 > **PascalCase note:** `FlightPath` maps to **`CtrlYoke`** when it is a code identifier (class, type, file name: `CtrlYokeConfigService`, `CtrlYokeTypes`), but to the **lowercase brand `ctrlyoke`** in user-facing display strings (`displayName`, command titles, UI labels, docs prose). The `category` shown in the VS Code command palette becomes `ctrlyoke`. Decide per occurrence; do not auto-map.
 
@@ -130,14 +130,15 @@ The single highest-density branding file. All of these change:
 
 ## 6. Workstream F — Workflow file extension
 
-Independent brand decision (`rebrand-naming.md`): `*.flightpath.{yaml,yml,json}` → `*.workflow.{yaml,yml,json}`. Coordinate with [§3](#3-workstream-a--packagejson-extension-manifest) and [§7](#7-workstream-g--schemas):
+Brand-coupled per the revised [§0](#0-brand-name-decisions-resolve-before-starting) decision: `*.flightpath.{yaml,yml,json}` → `*.ctrlyoke.{yaml,yml,json}`. Coordinate with [§3](#3-workstream-a--packagejson-extension-manifest) and [§7](#7-workstream-g--schemas):
 
-- `package.json` `activationEvents`, `jsonValidation.fileMatch`, `yamlValidation.fileMatch`, and all the `menus[*].when` regexes (`resourceFilename =~ /\.(flightpath\.(yaml|yml|json)|prompt\.md)$/`).
-- File discovery / parsing: `WorkflowFileDiscovery.ts`, `PromptFileParser.ts`, `PromptFileLoader.ts`, `promptPathUtils.ts`, `WorkflowSerializer.ts`, and the `scripts/migrate-prompt-syntax.mjs` glob.
-- **All `manual-test/*.flightpath.{yaml,json}` fixtures** (~25 files) → `*.workflow.*`, plus the docs that reference the extension.
+- `package.json` `activationEvents`, `jsonValidation.fileMatch`, `yamlValidation.fileMatch`, and all the `menus[*].when` regexes (`resourceFilename =~ /\.(flightpath\.(yaml|yml|json)|prompt\.md)$/` → `ctrlyoke\.(...)`).
+- File discovery / parsing: `WorkflowFileDiscovery.ts` (incl. `WORKFLOW_FILE_NAMES`/`WORKFLOW_FILE_SUFFIXES`), `PromptFileParser.ts`, `PromptFileLoader.ts`, `promptPathUtils.ts`, `WorkflowSerializer.ts`, and the `scripts/migrate-prompt-syntax.mjs` glob.
+- **All `manual-test/*.flightpath.{yaml,json}` fixtures**, `src/test/fixtures/prompts/*`, `src/templates/workflows/*`, and committed `.ctrlyoke/workflows/*` → `*.ctrlyoke.*` (rename files + every string/regex reference), plus the docs that reference the extension.
 - `.prompt.md` files are unaffected (already brand-neutral).
+- Note: this means the working-file path reads `.ctrlyoke/.queue/<name>.ctrlyoke.json` (runtime dir + branded extension) — repetitive but unambiguous.
 
-> Keep this a **separate commit/PR** from the brand rename even though it lands in the same files — it's a different decision and easier to review/revert in isolation.
+> Keep this a **separate commit/PR** from the brand rename even though it lands in the same files — it's a different decision and easier to review/revert in isolation. Since the extension is now also `ctrlyoke`, this is mechanically the same `flightpath → ctrlyoke` swap, but kept as its own commit for reviewability.
 
 ---
 
@@ -259,7 +260,7 @@ No runtime back-compat shim — pre-release.
 2. **`src/flightpath/` directory: rename to `src/core/`** (NOT `ctrlyoke`). Naming a subdirectory after the product was always a smell, and keeping `flightpath/` post-rebrand leaves the *abandoned* brand as a top-level source dir (worse than either rename). `core` is accurate — the workflow engine + runtime/harness/orchestration layers, vs. the `ui`/`cli`/`server`/`mcp-server` adapters — brand-neutral, and future-proof against any later rename. **Do it as part of the rebrand**, not a follow-up: imports are already being rewritten, so folding it in is nearly free and avoids shipping a stale dir or paying the churn twice. *(Plus the `FlightPath*`-prefixed file renames in [§4](#4-workstream-b--source-identifiers-classes-types-files).)*
    **Mechanics:** `git mv src/flightpath src/core` → rewrite all `flightpath/` → `core/` import paths → update the `CLAUDE.md` routing table (`src/flightpath/**` → `src/core/**`) and any `tsconfig`/lint/`knip` globs → rename the brand-carrying `flightpath-*.instructions.md` files (e.g. `flightpath-core` → `core`) and the routing-table references in the same pass ([§11](#11-workstream-m--docs-instructions-and-project-memory)).
 3. **`prompt-schema.*` → `workflow-schema.*`: yes, rename** for consistency with the `.workflow.*` extension ([§7](#7-workstream-g--schemas)).
-4. **Sequencing: two PRs.** PR 1 = brand rename (FlightPath → ctrlyoke, everything except the file extension). PR 2 = workflow file-extension change (`.flightpath.*` → `.workflow.*`, [§6](#6-workstream-f--workflow-file-extension)). Independent; easier to review/revert separately.
+4. **Sequencing: two PRs.** PR 1 = brand rename (FlightPath → ctrlyoke, everything except the file extension). PR 2 = workflow file-extension change (`.flightpath.*` → `.ctrlyoke.*`, [§6](#6-workstream-f--workflow-file-extension)). Independent; easier to review/revert separately.
 
 ---
 
@@ -273,6 +274,6 @@ No runtime back-compat shim — pre-release.
 6. **Tests** — update fixtures/assertions; `npm run typecheck` then `npm test` / `npm run test:ui` / `npm run test:harness`.
 7. **Docs / landing / instructions** ([§11](#11-workstream-m--docs-instructions-and-project-memory)).
 8. **Repo + CI + domain** ([§10](#10-workstream-l--repo--ci)) — last, coordinated with marketplace.
-9. **Extension rename `.workflow.*`** ([§6](#6-workstream-f--workflow-file-extension)) — separate PR.
+9. **Extension rename `.ctrlyoke.*`** ([§6](#6-workstream-f--workflow-file-extension)) — separate PR.
 
 **Verification gates:** `npm run typecheck` → `npm run lint` → full test suites → manual smoke (init a workspace, confirm `.ctrlyoke/` is created, run a `.workflow.yaml`, confirm hooks fire and logs land in `.ctrlyoke/logs/`). Grep `flightpath|FlightPath|FLIGHTPATH` should return only intentional historical references (`dev/implemented/`, `dev/research/`, CHANGELOG history).

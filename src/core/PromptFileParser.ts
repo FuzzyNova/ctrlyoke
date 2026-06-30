@@ -32,15 +32,15 @@ export class PromptFileParser {
       // out/schemas/. The tsc-compiled test output (__dirname === out/ctrlyoke/)
       // has no such copy, so fall back to the sibling out/schemas/ directory.
       const candidatePaths = [
-        path.join(__dirname, "schemas", "prompt-schema.json"),
-        path.join(__dirname, "..", "schemas", "prompt-schema.json"),
+        path.join(__dirname, "schemas", "workflow-schema.json"),
+        path.join(__dirname, "..", "schemas", "workflow-schema.json"),
       ];
       const promptSchemaPath = candidatePaths.find((candidate) =>
         require("fs").existsSync(candidate)
       );
       if (!promptSchemaPath) {
         throw new Error(
-          `prompt-schema.json not found in any of: ${candidatePaths.join(", ")}`
+          `workflow-schema.json not found in any of: ${candidatePaths.join(", ")}`
         );
       }
 
@@ -66,7 +66,7 @@ export class PromptFileParser {
 
   /**
    * Parse and validate a prompt file
-   * Supports .flightpath.yaml/.yml, .flightpath.json, and .prompt.md files
+   * Supports .ctrlyoke.yaml/.yml, .ctrlyoke.json, and .prompt.md files
    */
   async parsePromptFile(filePath: string): Promise<PromptFile | null> {
     try {
@@ -95,7 +95,7 @@ export class PromptFileParser {
           );
         }
       } else if (ext === ".json") {
-        // Parse JSON (.flightpath.json only, .prompt.json removed)
+        // Parse JSON (.ctrlyoke.json only, .prompt.json removed)
         parsed = JSON.parse(content);
       } else {
         throw new Error(
@@ -516,9 +516,9 @@ export class PromptFileParser {
    */
   private isPromptFile(filename: string): boolean {
     return (
-      filename.endsWith(".flightpath.json") ||
-      filename.endsWith(".flightpath.yaml") ||
-      filename.endsWith(".flightpath.yml") ||
+      filename.endsWith(".ctrlyoke.json") ||
+      filename.endsWith(".ctrlyoke.yaml") ||
+      filename.endsWith(".ctrlyoke.yml") ||
       filename.endsWith(".prompt.md")
     );
   }

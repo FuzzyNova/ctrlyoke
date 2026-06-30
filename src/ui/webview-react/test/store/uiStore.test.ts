@@ -133,14 +133,14 @@ describe("history search state", () => {
           matchType: "response",
           matchSnippet: "needle found here",
           matchContext: "Prompt 1",
-          workflowFilePath: "C:\\workflow.flightpath.yaml",
+          workflowFilePath: "C:\\workflow.ctrlyoke.yaml",
         },
       ],
       true
     );
     store().setPendingHistorySearchNavigation({
       workflowId: "wf-1",
-      workflowFilePath: "C:\\workflow.flightpath.yaml",
+      workflowFilePath: "C:\\workflow.ctrlyoke.yaml",
       runIndex: 1,
       findQuery: "needle",
       target: { kind: "queue", stepIndex: 0 },
@@ -152,7 +152,7 @@ describe("history search state", () => {
     expect(store().historySearchLoading).toBe(true);
     expect(store().pendingHistorySearchNavigation).toEqual({
       workflowId: "wf-1",
-      workflowFilePath: "C:\\workflow.flightpath.yaml",
+      workflowFilePath: "C:\\workflow.ctrlyoke.yaml",
       runIndex: 1,
       findQuery: "needle",
       target: { kind: "queue", stepIndex: 0 },
@@ -187,7 +187,7 @@ describe("history search state", () => {
 describe("save workflow dialog", () => {
   it("opens with data and closes", () => {
     store().openSaveWorkflowDialog({
-      defaultPath: "/workspace/wf.flightpath.yaml",
+      defaultPath: "/workspace/wf.ctrlyoke.yaml",
       defaultFormat: "yaml",
       workflowsDir: ".ctrlyoke/workflows",
     });

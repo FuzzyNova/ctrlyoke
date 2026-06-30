@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Simple test script for FlightPath end condition retry testing
+ * Simple test script for ctrlyoke end condition retry testing
  *
  * This script checks if a file contains JSDoc documentation.
  * It demonstrates the retry mechanism by:

@@ -43,7 +43,7 @@ function makePrompt(overrides: Partial<PromptStep> = {}): PromptStep {
 
 function loadWorkflow(steps: PromptStep[]) {
   store().loadWorkflow({
-    fileName: "test.flightpath.yaml",
+    fileName: "test.ctrlyoke.yaml",
     workflowName: "Test",
     steps,
   });

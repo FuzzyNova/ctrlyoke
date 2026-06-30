@@ -5,11 +5,11 @@
  *
  * This script reads model constants from ModelConstants.ts and updates:
  * 1. package.json enum arrays for settings:
- *    - flightpath.copilotCliModel (uses COPILOT_CLI_MODEL_IDS - smaller set)
- *    - flightpath.copilotChatModel (uses COPILOT_MODELS keys - full set)
- *    - flightpath.claudeCliModel (uses CLAUDE_CLI_MODELS - Claude models)
- *    - flightpath.codexCliModel (uses CODEX_CLI_MODELS - Codex models)
- * 2. prompt-schema.json model examples (combines all models for autocomplete)
+ *    - ctrlyoke.copilotCliModel (uses COPILOT_CLI_MODEL_IDS - smaller set)
+ *    - ctrlyoke.copilotChatModel (uses COPILOT_MODELS keys - full set)
+ *    - ctrlyoke.claudeCliModel (uses CLAUDE_CLI_MODELS - Claude models)
+ *    - ctrlyoke.codexCliModel (uses CODEX_CLI_MODELS - Codex models)
+ * 2. workflow-schema.json model examples (combines all models for autocomplete)
  *
  * IMPORTANT: Different providers support different model sets!
  * - Copilot CLI models come from `copilot help config` (smaller subset)
@@ -25,7 +25,7 @@
  *
  * Workflow for updating Chat models:
  *   1. Run extension (F5)
- *   2. Run "FlightPath: Export Discovered Models" command
+ *   2. Run "ctrlyoke: Export Discovered Models" command
  *   3. Run: npm run sync-models -- --import
  *   4. Run: npm run sync-models (to update package.json and schema)
  *
@@ -46,7 +46,7 @@ const ROOT_DIR = resolve(__dirname, "..");
 const MODEL_CONSTANTS_PATH = resolve(ROOT_DIR, "src/utils/ModelConstants.ts");
 const PACKAGE_JSON_PATH = resolve(ROOT_DIR, "package.json");
 const DISCOVERED_MODELS_PATH = resolve(__dirname, "discovered-models.json");
-const SCHEMA_PATH = resolve(ROOT_DIR, "schemas/prompt-schema.json");
+const SCHEMA_PATH = resolve(ROOT_DIR, "schemas/workflow-schema.json");
 
 /**
  * Parse COPILOT_MODELS (Chat models - full set) from ModelConstants.ts
@@ -318,10 +318,10 @@ function updatePackageJson(
 
   // Map setting keys to their model lists
   const settingsMap = {
-    "flightpath.copilotCliModel": cliModels,
-    "flightpath.copilotChatModel": chatModels,
-    "flightpath.claudeCliModel": claudeModels,
-    "flightpath.codexCliModel": codexModels,
+    "ctrlyoke.copilotCliModel": cliModels,
+    "ctrlyoke.copilotChatModel": chatModels,
+    "ctrlyoke.claudeCliModel": claudeModels,
+    "ctrlyoke.codexCliModel": codexModels,
   };
 
   let needsUpdate = false;
@@ -376,7 +376,7 @@ function updatePackageJson(
 }
 
 /**
- * Update model examples in prompt-schema.json
+ * Update model examples in workflow-schema.json
  * Combines all models from all providers for autocomplete
  */
 function updateSchema(
@@ -391,7 +391,7 @@ function updateSchema(
   },
   checkOnly = false
 ) {
-  console.log("\nUpdating prompt-schema.json...");
+  console.log("\nUpdating workflow-schema.json...");
 
   const content = readFileSync(SCHEMA_PATH, "utf-8");
   const schema = JSON.parse(content);
@@ -439,7 +439,7 @@ function updateSchema(
 
       // Write back with 2-space indentation
       writeFileSync(SCHEMA_PATH, JSON.stringify(schema, null, 2) + "\n");
-      console.log("  ✓ prompt-schema.json updated");
+      console.log("  ✓ workflow-schema.json updated");
     }
   } else {
     console.log("  ✓ Schema examples already in sync");
@@ -491,7 +491,7 @@ async function discoverFromCli() {
 /**
  * Import models from discovered-models.json and update ModelConstants.ts
  *
- * This reads the JSON file exported by the "FlightPath: Export Discovered Models"
+ * This reads the JSON file exported by the "ctrlyoke: Export Discovered Models"
  * command and updates:
  * - COPILOT_MODELS object (chat models with display names)
  * - COPILOT_CLI_MODEL_IDS array (CLI-supported subset)
@@ -502,8 +502,8 @@ function importDiscoveredModels() {
   if (!existsSync(DISCOVERED_MODELS_PATH)) {
     console.error("❌ discovered-models.json not found!");
     console.log("\nTo generate this file:");
-    console.log("  1. Run the FlightPath extension (F5)");
-    console.log('  2. Run command: "FlightPath: Export Discovered Models"');
+    console.log("  1. Run the ctrlyoke extension (F5)");
+    console.log('  2. Run command: "ctrlyoke: Export Discovered Models"');
     console.log("  3. Then run: npm run sync-models -- --import");
     process.exit(1);
   }
@@ -616,7 +616,7 @@ async function main() {
   const discover = args.includes("--discover");
   const importModels = args.includes("--import");
 
-  console.log("FlightPath Model Sync\n");
+  console.log("ctrlyoke Model Sync\n");
 
   if (discover) {
     await discoverFromCli();

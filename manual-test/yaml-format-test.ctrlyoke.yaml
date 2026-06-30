@@ -1,10 +1,10 @@
 # YAML Format Test
-# Tests that FlightPath correctly parses YAML workflows
+# Tests that ctrlyoke correctly parses YAML workflows
 
 steps:
   - name: test-yaml
     prompt: |
-      This is a FlightPath YAML test. Reply with "YAML parsing successful" if you receive this.
+      This is a ctrlyoke YAML test. Reply with "YAML parsing successful" if you receive this.
 
       This tests multi-line string support using literal block scalar (|).
 

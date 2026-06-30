@@ -63,21 +63,21 @@ export class WorkflowCommandHandler {
         prompt: "Enter prompt file name",
         placeHolder:
           defaultFormat === "yaml"
-            ? "my-workflow.flightpath.yaml"
-            : "my-workflow.flightpath.json",
+            ? "my-workflow.ctrlyoke.yaml"
+            : "my-workflow.ctrlyoke.json",
         validateInput: (value) => {
           if (!value) {
             return "File name is required";
           }
           const validExtensions = [
-            ".flightpath.yaml",
-            ".flightpath.yml",
-            ".flightpath.json",
+            ".ctrlyoke.yaml",
+            ".ctrlyoke.yml",
+            ".ctrlyoke.json",
             ".prompt.md",
           ];
           const isValid = validExtensions.some((ext) => value.endsWith(ext));
           if (!isValid) {
-            return "File must end with .flightpath.yaml, .flightpath.yml, .flightpath.json, or .prompt.md";
+            return "File must end with .ctrlyoke.yaml, .ctrlyoke.yml, .ctrlyoke.json, or .prompt.md";
           }
           return null;
         },
@@ -367,7 +367,7 @@ export class WorkflowCommandHandler {
       await vscode.window.showTextDocument(doc);
 
       vscode.window.showInformationMessage(
-        `✅ Created custom template: ${templateName.trim()}.flightpath.json`
+        `✅ Created custom template: ${templateName.trim()}.ctrlyoke.json`
       );
     } catch (error) {
       const errorMsg = getErrorMessage(error);

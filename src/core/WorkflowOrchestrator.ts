@@ -2437,7 +2437,7 @@ export class WorkflowOrchestrator {
     // Derive the working file path from the lock path
     const workingFilePath = lockFilePath.replace(
       /\.runner\.json$/,
-      ".flightpath.json"
+      ".ctrlyoke.json"
     );
 
     // Check if there is already an active CliWatchSession for this workflow

@@ -115,20 +115,20 @@ export class PromptQueue {
 
   /**
    * Extract workflow name from file path
-   * Strips ctrlyoke-specific extensions (.flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md)
+   * Strips ctrlyoke-specific extensions (.ctrlyoke.json, .ctrlyoke.yaml, .ctrlyoke.yml, .prompt.md)
    *
    * @param filePath - Full file path
    * @returns Workflow name without extensions
    *
    * @example
-   * PromptQueue.extractWorkflowName("/path/to/my-workflow.flightpath.yaml") // "my-workflow"
-   * PromptQueue.extractWorkflowName("C:\\Users\\dev\\feature.flightpath.json") // "feature"
+   * PromptQueue.extractWorkflowName("/path/to/my-workflow.ctrlyoke.yaml") // "my-workflow"
+   * PromptQueue.extractWorkflowName("C:\\Users\\dev\\feature.ctrlyoke.json") // "feature"
    * PromptQueue.extractWorkflowName("/path/prompt.prompt.md") // "prompt"
    */
   static extractWorkflowName(filePath: string): string {
     const fileName = path.basename(filePath);
-    // Remove ctrlyoke extensions: .flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md
-    return fileName.replace(/\.(flightpath\.(json|yaml|yml)|prompt\.md)$/, "");
+    // Remove ctrlyoke extensions: .ctrlyoke.json, .ctrlyoke.yaml, .ctrlyoke.yml, .prompt.md
+    return fileName.replace(/\.(ctrlyoke\.(json|yaml|yml)|prompt\.md)$/, "");
   }
 
   /**
@@ -802,7 +802,7 @@ export class PromptQueue {
 
   /**
    * Reload prompt file and merge new prompts into queue
-   * @param filePath Path to the .flightpath.json file
+   * @param filePath Path to the .ctrlyoke.json file
    * @param parser PromptFileParser instance for reloading
    * @param maxQueueSize Maximum allowed queue size (0 = unlimited)
    * @returns Number of new prompts added, or -1 if reload failed

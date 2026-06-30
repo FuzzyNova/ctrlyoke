@@ -1155,7 +1155,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
     // Same filename pattern as CopilotCliProvider.buildHookFileName()
     const stem = workingFilePath
-      ? path.basename(workingFilePath).replace(/\.flightpath\.json$/i, "")
+      ? path.basename(workingFilePath).replace(/\.ctrlyoke\.json$/i, "")
       : String(Date.now());
     const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
     const hookFileName = `ctrlyoke-${safeStem}-p${promptIndex}.json`;

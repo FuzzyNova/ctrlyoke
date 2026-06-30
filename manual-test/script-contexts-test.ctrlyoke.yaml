@@ -20,14 +20,14 @@ steps:
   # Writes to both stdout and stderr so all three fields appear in priorContext XML.
   - name: script-auto
     type: script
-    script: manual-test/.flightpath/scripts/forward.js auto-stdout auto-stderr 0
+    script: manual-test/.ctrlyoke/scripts/forward.js auto-stdout auto-stderr 0
     returns: "true"
     timeout: 10000
 
   # compareSource stdout: stdout must equal "stdout-match"; exit 0 required by stdout mode
   - name: script-stdout
     type: script
-    script: manual-test/.flightpath/scripts/forward.js stdout-match x 0
+    script: manual-test/.ctrlyoke/scripts/forward.js stdout-match x 0
     compareSource: stdout
     returns: stdout-match
     timeout: 10000
@@ -36,7 +36,7 @@ steps:
   # Intentionally exits 1 to prove exit code is not evaluated in stderr mode.
   - name: script-stderr
     type: script
-    script: manual-test/.flightpath/scripts/forward.js x stderr-match 1
+    script: manual-test/.ctrlyoke/scripts/forward.js x stderr-match 1
     compareSource: stderr
     returns: stderr-match
     onFail: continue
@@ -45,7 +45,7 @@ steps:
   # compareSource exitCode: exit code must equal 42; stdout/stderr are ignored
   - name: script-exitcode
     type: script
-    script: manual-test/.flightpath/scripts/forward.js x x 42
+    script: manual-test/.ctrlyoke/scripts/forward.js x x 42
     compareSource: exitCode
     returns: "42"
     onFail: continue
@@ -59,7 +59,7 @@ steps:
       ERROR: This step should be skipped (preCondition auto exit 1).
       Please respond with: "ERROR - step was not skipped."
     preCondition:
-      script: manual-test/.flightpath/scripts/forward.js x x 1
+      script: manual-test/.ctrlyoke/scripts/forward.js x x 1
       returns: "true"
       onFail: skipPrompt
 
@@ -69,7 +69,7 @@ steps:
       ERROR: This step should be skipped (preCondition stdout mismatch).
       Please respond with: "ERROR - step was not skipped."
     preCondition:
-      script: manual-test/.flightpath/scripts/forward.js wrong x 0
+      script: manual-test/.ctrlyoke/scripts/forward.js wrong x 0
       compareSource: stdout
       returns: right
       onFail: skipPrompt
@@ -80,7 +80,7 @@ steps:
       ERROR: This step should be skipped (preCondition stderr mismatch).
       Please respond with: "ERROR - step was not skipped."
     preCondition:
-      script: manual-test/.flightpath/scripts/forward.js x wrong-err 0
+      script: manual-test/.ctrlyoke/scripts/forward.js x wrong-err 0
       compareSource: stderr
       returns: right-err
       onFail: skipPrompt
@@ -91,7 +91,7 @@ steps:
       ERROR: This step should be skipped (preCondition exitCode mismatch).
       Please respond with: "ERROR - step was not skipped."
     preCondition:
-      script: manual-test/.flightpath/scripts/forward.js x x 2
+      script: manual-test/.ctrlyoke/scripts/forward.js x x 2
       compareSource: exitCode
       returns: "0"
       onFail: skipPrompt
@@ -114,9 +114,9 @@ steps:
       "compareSource coverage verified. [list each step name with its output tag values]"
     priorContext: [1, 2, 3, 4]
     preCondition:
-      script: manual-test/.flightpath/scripts/forward.js pass x 0
+      script: manual-test/.ctrlyoke/scripts/forward.js pass x 0
       returns: "true"
     endCondition:
-      script: manual-test/.flightpath/scripts/forward.js x x 0
+      script: manual-test/.ctrlyoke/scripts/forward.js x x 0
       compareSource: exitCode
       returns: "0"

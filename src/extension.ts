@@ -561,8 +561,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const promptPropertyCompletionProvider =
       new PromptPropertyCompletionProvider();
     const yamlWorkflowPatterns = [
-      { pattern: "**/*.flightpath.yaml" },
-      { pattern: "**/*.flightpath.yml" },
+      { pattern: "**/*.ctrlyoke.yaml" },
+      { pattern: "**/*.ctrlyoke.yml" },
     ];
     context.subscriptions.push(
       vscode.languages.registerCompletionItemProvider(

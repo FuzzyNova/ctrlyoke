@@ -55,7 +55,7 @@ suite("TempFileManager", () => {
 
     test("filename includes workflow basename when originalFilePath provided", async () => {
       manager = freshManager();
-      const origPath = "/some/path/my-workflow.flightpath.json";
+      const origPath = "/some/path/my-workflow.ctrlyoke.json";
       const filePath = await manager.createPromptFile("prompt text", origPath);
       createdFiles.push(filePath);
       const fileName = path.basename(filePath);
@@ -69,7 +69,7 @@ suite("TempFileManager", () => {
       manager = freshManager();
       const filePath = await manager.createPromptFile(
         "step prompt",
-        "/path/workflow.flightpath.json",
+        "/path/workflow.ctrlyoke.json",
         3
       );
       createdFiles.push(filePath);

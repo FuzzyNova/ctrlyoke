@@ -100,14 +100,14 @@ describe("FILE_SELECTED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
-        fileName: "test.flightpath.yaml",
+        fileName: "test.ctrlyoke.yaml",
         workflowName: "My Workflow",
         steps: [makePrompt("Step 1"), makePrompt("Step 2")],
       });
     });
 
     const wf = useWorkflowStore.getState();
-    expect(wf.fileName).toBe("test.flightpath.yaml");
+    expect(wf.fileName).toBe("test.ctrlyoke.yaml");
     expect(wf.workflowName).toBe("My Workflow");
     expect(wf.steps).toHaveLength(2);
     expect((wf.steps[0] as any).prompt).toBe("Step 1");
@@ -118,7 +118,7 @@ describe("FILE_SELECTED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
-        fileName: "test.flightpath.yaml",
+        fileName: "test.ctrlyoke.yaml",
         steps: [makePrompt("Step 1")],
       });
     });
@@ -131,7 +131,7 @@ describe("FILE_SELECTED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
-        fileName: "test.flightpath.yaml",
+        fileName: "test.ctrlyoke.yaml",
         steps: [makePrompt("Step 1")],
       });
     });
@@ -147,7 +147,7 @@ describe("FILE_SELECTED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
-        fileName: "new.flightpath.yaml",
+        fileName: "new.ctrlyoke.yaml",
         steps: [makePrompt("Step 1")],
       });
     });
@@ -160,7 +160,7 @@ describe("FILE_SELECTED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
-        fileName: "test.flightpath.yaml",
+        fileName: "test.ctrlyoke.yaml",
         steps: [makePrompt("Step 1")],
         workflowProperties: {
           harness: "claude-cli",
@@ -186,7 +186,7 @@ describe("FILE_SELECTED", () => {
     postMessageMock.mockClear();
     useUiStore.getState().setPendingHistorySearchNavigation({
       workflowId: "wf-1",
-      workflowFilePath: "C:\\history.flightpath.yaml",
+      workflowFilePath: "C:\\history.ctrlyoke.yaml",
       runIndex: 2,
       findQuery: "needle",
       target: { kind: "queue", stepIndex: 0 },
@@ -196,7 +196,7 @@ describe("FILE_SELECTED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
-        fileName: "history.flightpath.yaml",
+        fileName: "history.ctrlyoke.yaml",
         steps: [makePrompt("Step 1")],
       });
     });
@@ -225,7 +225,7 @@ describe("FILE_SELECTED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.FILE_SELECTED, {
-        fileName: "workflow-b.flightpath.yaml",
+        fileName: "workflow-b.ctrlyoke.yaml",
         steps: [makePrompt("Workflow B Step 1")],
       });
     });
@@ -252,7 +252,7 @@ describe("SESSION_RESTORED", () => {
 
     act(() => {
       dispatch(MESSAGE_TYPES.SESSION_RESTORED, {
-        fileName: "test.flightpath.yaml",
+        fileName: "test.ctrlyoke.yaml",
         steps: [makePrompt("Step 1")],
         results: [],
         executionState: EXECUTION_STATES.IDLE,
@@ -291,7 +291,7 @@ describe("INIT", () => {
     act(() => {
       dispatch(MESSAGE_TYPES.INIT, {
         data: {
-          fileName: "init.flightpath.yaml",
+          fileName: "init.ctrlyoke.yaml",
           workflowName: "Init Workflow",
           steps: [makePrompt("Init Step")],
           executionState: EXECUTION_STATES.IDLE,
@@ -299,7 +299,7 @@ describe("INIT", () => {
       });
     });
 
-    expect(useWorkflowStore.getState().fileName).toBe("init.flightpath.yaml");
+    expect(useWorkflowStore.getState().fileName).toBe("init.ctrlyoke.yaml");
     expect(useWorkflowStore.getState().steps).toHaveLength(1);
   });
 
@@ -519,7 +519,7 @@ describe("STARTUP_COMPLETE", () => {
     useUiStore
       .getState()
       .setActiveWorkflowWorkingFilePath(
-        "c:/dev/ctrlyoke/.ctrlyoke/.queue/example.flightpath.json"
+        "c:/dev/ctrlyoke/.ctrlyoke/.queue/example.ctrlyoke.json"
       );
 
     renderHook(() => useMessageHandler());
@@ -655,7 +655,7 @@ describe("NOTIFICATION_EVENT", () => {
         event: {
           id: "workflow:wf-1:completed",
           title: "ctrlyoke - Workflow Timed Out",
-          body: "refactor.flightpath.yaml - completed 2 of 4 prompts before timeout",
+          body: "refactor.ctrlyoke.yaml - completed 2 of 4 prompts before timeout",
           severity: "warning",
           tag: "workflow:wf-1",
           kind: "workflow",
@@ -666,7 +666,7 @@ describe("NOTIFICATION_EVENT", () => {
 
     expect(useUiStore.getState().toast).toEqual({
       message:
-        "refactor.flightpath.yaml - completed 2 of 4 prompts before timeout",
+        "refactor.ctrlyoke.yaml - completed 2 of 4 prompts before timeout",
       type: "warning",
       visible: true,
     });
@@ -776,7 +776,7 @@ describe("OUTPUT_HISTORY_LOADED", () => {
     act(() => {
       useUiStore.getState().setPendingHistorySearchNavigation({
         workflowId: "wf-1",
-        workflowFilePath: "C:\\history.flightpath.yaml",
+        workflowFilePath: "C:\\history.ctrlyoke.yaml",
         runIndex: 1,
         findQuery: "needle",
         target: { kind: "queue", stepIndex: 0 },
@@ -839,7 +839,7 @@ describe("history search messages", () => {
             matchType: "response",
             matchSnippet: "needle found here",
             matchContext: "Prompt 1",
-            workflowFilePath: "C:\\history.flightpath.yaml",
+            workflowFilePath: "C:\\history.ctrlyoke.yaml",
           },
         ],
         hasMore: false,
@@ -866,7 +866,7 @@ describe("history search messages", () => {
             matchType: "prompt",
             matchSnippet: "stale result",
             matchContext: "Prompt 2",
-            workflowFilePath: "C:\\stale.flightpath.yaml",
+            workflowFilePath: "C:\\stale.ctrlyoke.yaml",
           },
         ],
         hasMore: false,
@@ -888,7 +888,7 @@ describe("active workflow summaries", () => {
           {
             id: "wf-pausing",
             workflowName: "Pausing workflow",
-            filePath: "C:\\wf-pausing.flightpath.json",
+            filePath: "C:\\wf-pausing.ctrlyoke.json",
             executionState: EXECUTION_STATES.PAUSING,
             currentStep: 1,
             totalSteps: 3,
@@ -896,7 +896,7 @@ describe("active workflow summaries", () => {
           {
             id: "wf-complete",
             workflowName: "Completed workflow",
-            filePath: "C:\\wf-complete.flightpath.json",
+            filePath: "C:\\wf-complete.ctrlyoke.json",
             executionState: EXECUTION_STATES.COMPLETED,
             currentStep: 3,
             totalSteps: 3,
@@ -918,7 +918,7 @@ describe("active workflow summaries", () => {
         summary: {
           id: "wf-pausing",
           workflowName: "Pausing workflow",
-          filePath: "C:\\wf-pausing.flightpath.json",
+          filePath: "C:\\wf-pausing.ctrlyoke.json",
           executionState: EXECUTION_STATES.PAUSING,
           currentStep: 1,
           totalSteps: 3,

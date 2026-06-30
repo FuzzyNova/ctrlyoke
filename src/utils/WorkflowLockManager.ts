@@ -26,13 +26,13 @@ const STALE_HEARTBEAT_MS = 30_000;
 export class WorkflowLockManager {
   /**
    * Derive the lock file path from a working file path.
-   * "workflow-name.flightpath.json" → "workflow-name.runner.json"
+   * "workflow-name.ctrlyoke.json" → "workflow-name.runner.json"
    */
   static getLockPath(workingFilePath: string): string {
     const dir = path.dirname(workingFilePath);
     const base = path
       .basename(workingFilePath)
-      .replace(/\.flightpath\.json$/, "");
+      .replace(/\.ctrlyoke\.json$/, "");
     return path.join(dir, `${base}.runner.json`);
   }
 
@@ -156,7 +156,7 @@ export class WorkflowLockManager {
   /**
    * Normalize stale locks on extension startup.
    *
-   * Scans all *.flightpath.json files in queueDir. For each file whose
+   * Scans all *.ctrlyoke.json files in queueDir. For each file whose
    * _runtime.executionState is "running":
    *   - "none" or "stale" lock  → writes "stopped" to _runtime.executionState,
    *     cleans up any stale lock file
@@ -176,7 +176,7 @@ export class WorkflowLockManager {
       return activeCli;
     }
 
-    const workingFiles = entries.filter((f) => f.endsWith(".flightpath.json"));
+    const workingFiles = entries.filter((f) => f.endsWith(".ctrlyoke.json"));
 
     for (const fileName of workingFiles) {
       const workingFilePath = path.join(queueDir, fileName);

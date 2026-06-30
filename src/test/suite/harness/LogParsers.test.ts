@@ -306,7 +306,7 @@ suite("ClaudeLogParser", () => {
               {
                 tool_use_id: "toolu_01Q3NwTz2ifw5qBLKtrZ4zta",
                 type: "tool_result",
-                content: "Found 13 files\nschemas/prompt-schema.yaml\n...",
+                content: "Found 13 files\nschemas/workflow-schema.yaml\n...",
               },
             ],
           },
@@ -314,8 +314,8 @@ suite("ClaudeLogParser", () => {
           toolUseResult: {
             mode: "files_with_matches",
             filenames: [
-              "schemas/prompt-schema.yaml",
-              "schemas/prompt-schema.json",
+              "schemas/workflow-schema.yaml",
+              "schemas/workflow-schema.json",
             ],
             numFiles: 13,
           },

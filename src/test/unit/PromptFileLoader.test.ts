@@ -129,7 +129,7 @@ suite("PromptFileLoader Tests", () => {
       const manualWorkflowPath = path.join(
         repoRoot,
         "manual-test",
-        "test-property-sync.flightpath.yaml"
+        "test-property-sync.ctrlyoke.yaml"
       );
       const workspaceRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-prop-sync-")
@@ -318,7 +318,7 @@ suite("PromptFileLoader Tests", () => {
       assert.strictEqual(dashboardUpdates.length, 1);
       assert.strictEqual(
         dashboardUpdates[0].fileName,
-        "test-property-sync.flightpath.yaml"
+        "test-property-sync.ctrlyoke.yaml"
       );
       assert.deepStrictEqual(
         dashboardUpdates[0].steps,

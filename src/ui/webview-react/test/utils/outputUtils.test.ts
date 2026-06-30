@@ -247,7 +247,7 @@ describe("generateDiffLines", () => {
 
 describe("generateMarkdownExport", () => {
   const metadata = {
-    fileName: "my-workflow.flightpath.yaml",
+    fileName: "my-workflow.ctrlyoke.yaml",
     executionState: "completed",
     currentStep: 2,
     totalSteps: 2,
@@ -256,7 +256,7 @@ describe("generateMarkdownExport", () => {
   it("includes the header and metadata", () => {
     const md = generateMarkdownExport([], metadata);
     expect(md).toContain("# ctrlyoke Execution Output");
-    expect(md).toContain("my-workflow.flightpath.yaml");
+    expect(md).toContain("my-workflow.ctrlyoke.yaml");
     expect(md).toContain("completed");
     expect(md).toContain("2 of 2");
   });

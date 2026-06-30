@@ -66,7 +66,7 @@ export class TempFileManager {
    * - Multi-step workflow: <timestamp>-<original-filename>-<step>.prompt.md
    *
    * @param promptText The full prompt text (with expanded context)
-   * @param originalFilePath Optional path to original .flightpath.json or .prompt.md file
+   * @param originalFilePath Optional path to original .ctrlyoke.json or .prompt.md file
    * @param stepNumber Optional step number for multi-step workflows (1-indexed)
    * @returns Absolute path to temp file
    */
@@ -171,10 +171,10 @@ export class TempFileManager {
    * File naming: `<ts>-<sanitized-name>[-<step>].<category>[.<part>].prompt.md`
    *
    * Examples:
-   *   createCategoryFile(content, 'agent', 'path/to/my-flow.flightpath.yaml', 1, 2)
+   *   createCategoryFile(content, 'agent', 'path/to/my-flow.ctrlyoke.yaml', 1, 2)
    *   → "1234567890-my-flow-1.agent.2.prompt.md"
    *
-   *   createCategoryFile(content, 'skills', 'path/to/my-flow.flightpath.yaml', 1)
+   *   createCategoryFile(content, 'skills', 'path/to/my-flow.ctrlyoke.yaml', 1)
    *   → "1234567890-my-flow-1.skills.prompt.md"
    *
    * @param content File content to write
@@ -405,7 +405,7 @@ export class TempFileManager {
     const originalBasename = path.basename(originalFilePath);
     return (
       originalBasename
-        .replace(/\.flightpath\.(json|yaml|yml)$/, "")
+        .replace(/\.ctrlyoke\.(json|yaml|yml)$/, "")
         .replace(/\.prompt\.(json|md)$/, "")
         .toLowerCase()
         // Strip ISO-style datetime suffix appended by generateWorkingFilePath

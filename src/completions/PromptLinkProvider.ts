@@ -92,9 +92,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   private isPromptFile(document: vscode.TextDocument): boolean {
     const fileName = path.basename(document.fileName);
     return (
-      fileName.endsWith(".flightpath.json") ||
-      fileName.endsWith(".flightpath.yaml") ||
-      fileName.endsWith(".flightpath.yml") ||
+      fileName.endsWith(".ctrlyoke.json") ||
+      fileName.endsWith(".ctrlyoke.yaml") ||
+      fileName.endsWith(".ctrlyoke.yml") ||
       fileName.endsWith(".prompt.md") ||
       document.languageId === "prompt" ||
       document.languageId === "markdown" ||

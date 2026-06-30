@@ -103,7 +103,7 @@ export class WorkflowSerializer {
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-+|-+$/g, "") || "workflow";
-        defaultPath = path.join(workflowsDir, `${name}.flightpath.yaml`);
+        defaultPath = path.join(workflowsDir, `${name}.ctrlyoke.yaml`);
       }
 
       const defaultFormat: "yaml" | "json" = defaultPath
@@ -570,7 +570,7 @@ export class WorkflowSerializer {
       }
 
       const files = await fs.readdir(queueDir);
-      const workflowFiles = files.filter((f) => f.endsWith(".flightpath.json"));
+      const workflowFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
 
       // Build a fast lookup set of working file paths that are currently active
       // in memory. Used below to normalize stale active states from disk.
@@ -632,7 +632,7 @@ export class WorkflowSerializer {
               filePath,
               workflowName:
                 workingFile.workflowName ||
-                file.replace(".flightpath.json", ""),
+                file.replace(".ctrlyoke.json", ""),
               executionState,
               startedAt: workingFile.startedAt || 0,
               lastModifiedAt: lastModified,
@@ -732,7 +732,7 @@ export class WorkflowSerializer {
       try {
         const files = await fs.readdir(queueDir);
         const workflowFiles = files.filter((f) =>
-          f.endsWith(".flightpath.json")
+          f.endsWith(".ctrlyoke.json")
         );
 
         for (const file of workflowFiles) {
@@ -767,7 +767,7 @@ export class WorkflowSerializer {
   }
 
   /**
-   * Handle REMOVE_WORKFLOW_HISTORY: delete the .flightpath.json working file and associated
+   * Handle REMOVE_WORKFLOW_HISTORY: delete the .ctrlyoke.json working file and associated
    * .history/<workflowId>/ directory for a single entry.
    */
   async handleRemoveWorkflowHistory(filePath: string): Promise<void> {
@@ -793,14 +793,14 @@ export class WorkflowSerializer {
       const stem = path
         .basename(filePath)
         .replace(/\.working\.(yaml|yml|json)$/i, "")
-        .replace(/\.flightpath\.(yaml|yml|json)$/i, "")
+        .replace(/\.ctrlyoke\.(yaml|yml|json)$/i, "")
         .replace(/\.(yaml|yml|json)$/i, "");
 
       const files = await fs.readdir(queueDir).catch(() => [] as string[]);
       const candidates = files.filter(
         (f) =>
-          (f === `${stem}.flightpath.json` || f.startsWith(`${stem}.`)) &&
-          f.endsWith(".flightpath.json")
+          (f === `${stem}.ctrlyoke.json` || f.startsWith(`${stem}.`)) &&
+          f.endsWith(".ctrlyoke.json")
       );
 
       for (const candidate of candidates) {
@@ -814,8 +814,8 @@ export class WorkflowSerializer {
           );
 
         const workflowId = candidate
-          .replace(/\.flightpath\.json$/, "")
-          .replace(/\.flightpath\.yaml$/, "");
+          .replace(/\.ctrlyoke\.json$/, "")
+          .replace(/\.ctrlyoke\.yaml$/, "");
         const historyDir = path.join(historyBaseDir, workflowId);
         await fs
           .rm(historyDir, { recursive: true, force: true })
