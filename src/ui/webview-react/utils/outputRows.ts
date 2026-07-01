@@ -578,7 +578,8 @@ function estimateMarkdownBlockHeight(
     }
   );
   const headingCount = (proseText.match(/^#{1,6}\s+/gm) ?? []).length;
-  const bulletCount = (proseText.match(/^\s*(?:[-*+]|\d+\.)\s+/gm) ?? []).length;
+  const bulletCount = (proseText.match(/^\s*(?:[-*+]|\d+\.)\s+/gm) ?? [])
+    .length;
   const codeFenceCount = Math.floor(
     (proseText.match(/^```/gm) ?? []).length / 2
   );

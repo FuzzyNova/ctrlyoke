@@ -103,7 +103,7 @@ npx astro add netlify
 
 > **No Astro Netlify adapter.** Because we ship a static marketing site and deploy the built `landing/dist` via the Netlify CLI, **skip `npx astro add netlify`** — that adapter is for SSR / native Netlify builds. Astro's default static output is what we deploy.
 
-> **Build order matters.** Run `build:landing` **before** `build:docs`: `astro build` cleans `landing/dist`, and `build:docs` copies VitePress output into `landing/dist/docs`, so docs must be copied *after* the Astro build. Fix the Phase 2.2 ordering to `build:landing && build:docs` (the current `build:docs && build:landing` would let Astro wipe the copied docs).
+> **Build order matters.** Run `build:landing` **before** `build:docs`: `astro build` cleans `landing/dist`, and `build:docs` copies VitePress output into `landing/dist/docs`, so docs must be copied _after_ the Astro build. Fix the Phase 2.2 ordering to `build:landing && build:docs` (the current `build:docs && build:landing` would let Astro wipe the copied docs).
 
 Three files under `.github/workflows/`:
 
@@ -116,7 +116,7 @@ on:
   workflow_call:
     inputs:
       deploy-args:
-        description: 'Extra args passed to netlify deploy (e.g. --prod or --alias=branch-name)'
+        description: "Extra args passed to netlify deploy (e.g. --prod or --alias=branch-name)"
         required: true
         type: string
     secrets:
@@ -133,8 +133,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -158,12 +158,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'landing/**'
-      - 'docs/**'
-      - 'netlify.toml'
-      - '.github/workflows/deploy.yml'
-      - '.github/workflows/deploy-preview.yml'
-      - '.github/workflows/_netlify-deploy.yml'
+      - "landing/**"
+      - "docs/**"
+      - "netlify.toml"
+      - ".github/workflows/deploy.yml"
+      - ".github/workflows/deploy-preview.yml"
+      - ".github/workflows/_netlify-deploy.yml"
 
 jobs:
   deploy:
@@ -184,10 +184,10 @@ on:
   push:
     branches-ignore: [main]
     paths:
-      - 'landing/**'
-      - 'docs/**'
-      - 'netlify.toml'
-      - '.github/workflows/_netlify-deploy.yml'
+      - "landing/**"
+      - "docs/**"
+      - "netlify.toml"
+      - ".github/workflows/_netlify-deploy.yml"
 
 jobs:
   deploy-preview:
@@ -212,7 +212,7 @@ This trio **replaces** the legacy `.github/workflows/docs-deploy.yml` (which pus
 | Section                   | Purpose                                                                                                           |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **Hero**                  | Headline + subhead + primary CTA ("Install for VS Code" → marketplace link)                                       |
-| **Problem / Solution**    | 1-sentence pitch: "AI coding assistants are powerful but manual. ctrlyoke turns them into automated workflows." |
+| **Problem / Solution**    | 1-sentence pitch: "AI coding assistants are powerful but manual. ctrlyoke turns them into automated workflows."   |
 | **Key Features**          | 4–6 cards: multi-harness support, YAML workflows, end conditions, session resumption, MCP integration, CLI binary |
 | **Harness Grid**          | Logos/icons for all 7 supported harnesses (Copilot, Claude, Codex, OpenCode, Qwen, Gemini, Copilot Chat)          |
 | **How It Works**          | 3-step visual: Write workflow → Run → Validate. Animated or static code snippet showing a `.ctrlyoke.yaml`        |

@@ -24,7 +24,7 @@ Key roles:
 - **`WorkflowSerializer`** owns workflow save/export/history flows and strips runtime-only working-file data by explicit allowlists before writing YAML/JSON.
 - **`NotificationManager`** is just another hub client; notification payload construction lives in `notifications/CompletionNotificationFactory.ts` so browser and VS Code notifications share wording/rules.
 - **`CtrlYokeMcpServerProvider`** applies only to the `copilot-chat` harness and only for user-defined stdio MCP servers. The built-in `ctrlyoke` MCP server is registered elsewhere and should not be handled here.
-</architecture>
+  </architecture>
 
 <terminology>
 **Critical:** "Provider" has been renamed to "harness" throughout the codebase

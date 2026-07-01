@@ -110,7 +110,9 @@ export function ErrorBehaviorEditor({
               onChange={(event) => setMaxRetriesInput(event.target.value)}
               onBlur={() => {
                 const parsed = parseInt(maxRetriesInput, 10);
-                const nextValue = Number.isNaN(parsed) ? 1 : Math.max(1, parsed);
+                const nextValue = Number.isNaN(parsed)
+                  ? 1
+                  : Math.max(1, parsed);
                 setMaxRetriesInput(String(nextValue));
                 onChange({
                   ...resolvedValue,
@@ -141,7 +143,9 @@ export function ErrorBehaviorEditor({
               onChange={(event) => setRetryDelayInput(event.target.value)}
               onBlur={() => {
                 const parsed = parseInt(retryDelayInput, 10);
-                const nextValue = Number.isNaN(parsed) ? 0 : Math.max(0, parsed);
+                const nextValue = Number.isNaN(parsed)
+                  ? 0
+                  : Math.max(0, parsed);
                 setRetryDelayInput(String(nextValue));
                 onChange({
                   ...resolvedValue,

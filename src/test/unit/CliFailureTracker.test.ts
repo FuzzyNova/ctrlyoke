@@ -31,7 +31,10 @@ suite("CliFailureTracker", () => {
       "CLI process exited unexpectedly while waiting for SessionStart hook (exit code 0)"
     );
     assert.strictEqual(tracker.wasLastFailureProcessExit(), true);
-    assert.strictEqual(tracker.getLastFailureKind(), FAILURE_KINDS.PROCESS_EXIT);
+    assert.strictEqual(
+      tracker.getLastFailureKind(),
+      FAILURE_KINDS.PROCESS_EXIT
+    );
     assert.strictEqual(tracker.getLastFailureMessage(), reason);
   });
 

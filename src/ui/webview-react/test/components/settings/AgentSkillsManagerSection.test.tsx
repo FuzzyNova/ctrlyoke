@@ -102,8 +102,12 @@ describe("AgentSkillsManagerSection", () => {
     sendMessageMock.mockClear();
 
     await user.click(screen.getByRole("checkbox", { name: "Select skill-b" }));
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[0]);
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[1]);
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[0]
+    );
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[1]
+    );
 
     expect(sendMessageMock).toHaveBeenCalledWith(
       MESSAGE_TYPES.SYNC_ALL_TO_HARNESS,
@@ -132,13 +136,17 @@ describe("AgentSkillsManagerSection", () => {
     sendMessageMock.mockClear();
 
     await user.click(screen.getByRole("checkbox", { name: "Select skill-b" }));
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[0]);
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[0]
+    );
     await user.click(
       screen
         .getAllByRole("button", { name: "Delete" })
         .find((button) => button.className.includes("block w-full text-left"))!
     );
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Delete" })[1]);
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Delete" })[1]
+    );
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" })
     );
@@ -172,7 +180,9 @@ describe("AgentSkillsManagerSection", () => {
     sendMessageMock.mockClear();
 
     await user.click(screen.getByRole("checkbox", { name: "Select skill-b" }));
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[0]);
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[0]
+    );
     await user.click(screen.getByRole("button", { name: "Set Default" }));
     await user.click(screen.getByRole("button", { name: "Set as Default" }));
 
@@ -209,12 +219,12 @@ describe("AgentSkillsManagerSection", () => {
       requestFiles: vi.fn(),
     });
 
-    render(
-      <AgentSkillsManagerSection activeScope={SETTING_SCOPES.USER} />
-    );
+    render(<AgentSkillsManagerSection activeScope={SETTING_SCOPES.USER} />);
     const bulkBar = screen.getByText(/Select all \(1\/1\)/).closest("div")!;
 
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[0]);
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[0]
+    );
     expect(screen.queryByRole("button", { name: "Set Default" })).toBeNull();
   });
 });

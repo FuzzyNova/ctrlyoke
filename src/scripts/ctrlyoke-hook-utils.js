@@ -357,9 +357,7 @@ const STANDARD_HANDLED_EVENTS = new Set(
  */
 function logInvocation(scriptName, notifyDir) {
   try {
-    const logsDir = notifyDir
-      ? path.join(notifyDir, "..", "..", "logs")
-      : null;
+    const logsDir = notifyDir ? path.join(notifyDir, "..", "..", "logs") : null;
     const logFile = logsDir
       ? path.join(logsDir, `${scriptName}-debug.log`)
       : path.join(os.tmpdir(), `${scriptName}-invocations.log`);
@@ -404,7 +402,13 @@ function requireNotifyDir(scriptPrefix, debugLog) {
  * @param {string} scriptPrefix - Prefix for console.error messages
  * @param {function} debugLog - Logger returned by initializeLogger or createLogger
  */
-function requireSessionId(sessionId, hookEvent, hookInput, scriptPrefix, debugLog) {
+function requireSessionId(
+  sessionId,
+  hookEvent,
+  hookInput,
+  scriptPrefix,
+  debugLog
+) {
   if (!sessionId) {
     const errorMsg = `Missing session_id in ${hookEvent} hook input`;
     debugLog("❌ ERROR: " + errorMsg, { hookInput });
@@ -478,7 +482,12 @@ function buildErrorNotifyFilePath(notifyDir, sessionId) {
  * @param {string} eventLabel - Event name for debug logging (e.g. "PermissionRequest")
  * @param {function} debugLog - Logger returned by initializeLogger or createLogger
  */
-function dispatchPermissionRequest(encodedDecisionHook, hookInput, eventLabel, debugLog) {
+function dispatchPermissionRequest(
+  encodedDecisionHook,
+  hookInput,
+  eventLabel,
+  debugLog
+) {
   if (encodedDecisionHook) {
     const decisionHookCommand = Buffer.from(
       encodedDecisionHook,

@@ -362,6 +362,8 @@ describe("OutputRow auto-expand on hidden active match", () => {
     );
 
     expect(container).toHaveTextContent("[12:03:21] Warning: Stopped by user");
-    expect(container).not.toHaveTextContent("[12:03:21] Error: Stopped by user");
+    expect(container).not.toHaveTextContent(
+      "[12:03:21] Error: Stopped by user"
+    );
   });
 });

@@ -77,7 +77,7 @@ return ranked `HistorySearchResult[]`.
 ```typescript
 export interface HistorySearchResult {
   workflowId: string;
-  workflowName: string;   // from WorkingFile.workflowName in queue file
+  workflowName: string; // from WorkingFile.workflowName in queue file
   runId: number;
   runIndex: number; // 0 = most recent, for LOAD_RUN_HISTORY
   startedAt: number;
@@ -153,9 +153,9 @@ the queue file as the authoritative source.
 Add to `src/types/DashboardConstants.ts`:
 
 ```typescript
-MESSAGE_TYPES.SEARCH_HISTORY;        // webview -> extension
+MESSAGE_TYPES.SEARCH_HISTORY; // webview -> extension
 MESSAGE_TYPES.SEARCH_HISTORY_RESULTS; // extension -> webview
-MESSAGE_TYPES.OPEN_HISTORY_SEARCH;   // extension -> webview
+MESSAGE_TYPES.OPEN_HISTORY_SEARCH; // extension -> webview
 ```
 
 Suggested payloads:

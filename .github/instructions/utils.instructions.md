@@ -14,7 +14,7 @@ This folder has a few important seams:
 - **Prompt/context expansion pipeline:** `FileReferenceParser` parses `@`, `#selection`, `#sym`, `~`, and inline `$...` refs; `AttachmentBuilders` and `ContextExpander` turn the non-native ones into XML/context payloads; `PriorContextPreviewBuilder` must stay aligned with the live injection format by using the same builder path as runtime execution.
 - **Discovery and file-management helpers:** `HarnessDirectoryUtils` is the single source of truth for where harness/user/workspace agent and skill files live. `AgentDiscovery`, `SkillDiscovery`, and `HarnessFileManager` should build on it rather than re-encoding paths or extensions.
 - **MCP config stack:** `McpConfigPaths` knows where each harness stores MCP config, `McpDiscoveryUtils` reads external configs plus the public registry, `McpRegistryFileManager` manages ctrlyoke's own registry files, and `HarnessMcpExporter` projects the same server definition into each harness's native file format. Keep those responsibilities separate.
-</architecture>
+  </architecture>
 
 <criticalPatterns>
 - Preserve **`null` vs `undefined` inheritance semantics** in resolver-style utilities. In this codebase, `null` usually means “explicitly disable inherited value” while `undefined` means “keep inheriting/fall back”.

@@ -194,9 +194,9 @@ describe("GenericToolCallOutput", () => {
       />
     );
 
+    expect(screen.getByText(/exec\(input: .*\.{3}\)$/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/exec\(input: .*\.{3}\)$/i)
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/exec\(input: .*\.{6}\)$/i)).not.toBeInTheDocument();
+      screen.queryByText(/exec\(input: .*\.{6}\)$/i)
+    ).not.toBeInTheDocument();
   });
 });

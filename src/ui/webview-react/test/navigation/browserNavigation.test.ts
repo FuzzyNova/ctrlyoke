@@ -63,11 +63,7 @@ describe("setupBrowserNavigation", () => {
   });
 
   it("keeps an explicit initial workflow URL canonicalized to that workflow", () => {
-    window.history.replaceState(
-      {},
-      "",
-      "/?token=t&workflow=src/old.yaml"
-    );
+    window.history.replaceState({}, "", "/?token=t&workflow=src/old.yaml");
     cleanup = setupBrowserNavigation();
 
     useUiStore.getState().setActiveWorkflowWorkingFilePath("src/old.yaml");

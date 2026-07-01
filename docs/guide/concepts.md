@@ -50,13 +50,13 @@ Session reuse is provider-aware. ctrlyoke does not try to resume a Claude sessio
 
 Prompts can include structured references that the prompt editor understands:
 
-| Syntax                                      | Purpose                        |
-| ------------------------------------------- | ------------------------------ |
-| `@path/to/file.ts`                          | Attach a full file             |
-| `@path/to/dir/`                             | Attach a directory tree        |
-| `#selection:path/to/file.ts:10-25`          | Attach a line range            |
-| `#sym:path/to/file.ts:SymbolName:42`        | Attach a symbol definition     |
-| `~diff`, `~staged`, `~stash:0`, `~<commit>` | Attach git change context      |
+| Syntax                                      | Purpose                      |
+| ------------------------------------------- | ---------------------------- |
+| `@path/to/file.ts`                          | Attach a full file           |
+| `@path/to/dir/`                             | Attach a directory tree      |
+| `#selection:path/to/file.ts:10-25`          | Attach a line range          |
+| `#sym:path/to/file.ts:SymbolName:42`        | Attach a symbol definition   |
+| `~diff`, `~staged`, `~stash:0`, `~<commit>` | Attach git change context    |
 | `$previous`, `$all`, `$step:1`              | Inject prior ctrlyoke output |
 
 ## End conditions and pre-conditions

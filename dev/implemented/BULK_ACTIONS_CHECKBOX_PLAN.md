@@ -33,7 +33,7 @@ This has two problems:
 1. **No partial operations.** You can't export/delete/promote just a subset —
    it's everything or nothing.
 2. **Doesn't generalize to "Set Default".** Skills (`defaults.skills`) and MCP
-   servers (`defaults.mcpServers`) both support *multiple* defaults, so "make
+   servers (`defaults.mcpServers`) both support _multiple_ defaults, so "make
    exactly these N items the defaults" is a natural bulk operation — but it
    doesn't fit the save/delete-to-a-location shape (no scope/target needed).
 
@@ -55,11 +55,11 @@ Replace the single dropdown-bar with a standard **checkbox-selection** pattern:
 
 ## Affected Components
 
-| File | Change |
-| --- | --- |
-| `src/ui/webview-react/components/shared/BulkLocationActionsBar.tsx` | Replaced by new `BulkSelectionActionsBar.tsx` (or heavily reworked in place) |
-| `src/ui/webview-react/components/settings/AgentSkillsManagerSection.tsx` | Add selection state, row checkboxes, header checkbox, wire new bar |
-| `src/ui/webview-react/components/settings/McpManagerSection.tsx` | Same |
+| File                                                                     | Change                                                                       |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `src/ui/webview-react/components/shared/BulkLocationActionsBar.tsx`      | Replaced by new `BulkSelectionActionsBar.tsx` (or heavily reworked in place) |
+| `src/ui/webview-react/components/settings/AgentSkillsManagerSection.tsx` | Add selection state, row checkboxes, header checkbox, wire new bar           |
+| `src/ui/webview-react/components/settings/McpManagerSection.tsx`         | Same                                                                         |
 
 ---
 
@@ -71,8 +71,8 @@ Each section owns a `selectedIds: Set<string>` (keyed by `file.name` for
 agents/skills, `server.id` for MCP).
 
 - **Default**: all current items selected (preserves the existing one-click
-  "apply to everything" behavior — users opt *out* by unchecking rather than
-  opt *in*).
+  "apply to everything" behavior — users opt _out_ by unchecking rather than
+  opt _in_).
 - When the underlying list changes (items added/removed via discovery, save,
   delete, etc.), reconcile: drop ids no longer present, and add newly-appeared
   ids as selected (keep the "default = everything" property stable rather than
@@ -85,6 +85,7 @@ agents/skills, `server.id` for MCP).
 ### Row UI
 
 Add a checkbox as the first element of:
+
 - `FileRow`'s row 1 (before the title), in `AgentSkillsManagerSection.tsx`.
 - The MCP server row's title row, in `McpManagerSection.tsx`.
 
@@ -138,12 +139,12 @@ Submit button disabled when `selectedCount === 0`.
 
 ### "Set Default" semantics
 
-- **Skills**: replace `defaults.skills` with the `name`s of every *checked*
+- **Skills**: replace `defaults.skills` with the `name`s of every _checked_
   skill row.
-- **MCP**: replace `defaults.mcpServers` with the configs of every *checked*
+- **MCP**: replace `defaults.mcpServers` with the configs of every _checked_
   managed server (reuse `upsertDefaultServer`/existing default-array helpers).
 - For both: any existing default entries that don't correspond to a
-  currently-*visible* managed item are preserved as-is (don't silently drop
+  currently-_visible_ managed item are preserved as-is (don't silently drop
   defaults for items not in the current list/scope — only the visible/checked
   set is reconciled). This avoids surprising data loss if defaults reference
   items from another scope not currently shown.
@@ -160,7 +161,7 @@ Same operations as today, but scoped to `items.filter(i => selectedIds.has(key(i
   given file type, so partial delete must use one of these implementations:
   - call the existing per-file delete path once per selected file, or
   - add a new explicit bulk-selected delete message/handler for agents/skills.
-  Do not reuse `deleteAll` for partial selection; that would over-delete.
+    Do not reuse `deleteAll` for partial selection; that would over-delete.
 - MCP "Save (to)" → `exportToHarness(selectedConfigs, targetId, scope)`, or for
   FlightPath target, `addOrUpdateServer` per selected server.
 - MCP "Delete (from)" → existing delete-all flow (harness or FlightPath),

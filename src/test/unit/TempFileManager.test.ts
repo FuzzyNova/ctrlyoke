@@ -180,10 +180,7 @@ suite("TempFileManager", () => {
       );
       const rel = manager.getRelativePath(abs);
       assert.ok(!path.isAbsolute(rel), "result should be relative");
-      assert.ok(
-        rel.includes(".ctrlyoke"),
-        "should contain .ctrlyoke segment"
-      );
+      assert.ok(rel.includes(".ctrlyoke"), "should contain .ctrlyoke segment");
     });
   });
 });

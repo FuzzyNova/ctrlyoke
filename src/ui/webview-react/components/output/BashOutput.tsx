@@ -8,10 +8,7 @@ import {
   buildCollapsedOutputPreview,
   formatCollapsedOutputToggleLabel,
 } from "@utils/outputTruncation";
-import {
-  highlightText,
-  type RowFindDecoration,
-} from "@utils/outputFind";
+import { highlightText, type RowFindDecoration } from "@utils/outputFind";
 import {
   TOOL_CALL_TERMINAL,
   TOOL_CALL_LINE,

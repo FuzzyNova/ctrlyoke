@@ -12,11 +12,11 @@
 
 **Chosen architecture: Lemon Squeezy (storefront / Merchant of Record) + Keygen (licensing), with offline cryptographic licensing and air-gapped activation supported from launch.**
 
-| Concern | Owner | Why |
-| ------- | ----- | --- |
-| Checkout, payment, **global tax/VAT (Merchant of Record)**, receipts, refunds | **Lemon Squeezy** | Already have an account; mature MoR; we own no payment/tax liability |
-| License issuance, **Ed25519-signed offline license files**, machine/device limits, expiry, revocation, air-gapped activation | **Keygen** | Purpose-built licensing; offline crypto is its core competency, not a bolt-on |
-| Glue (purchase → license) | **Netlify Function** | We're already deploying the site on Netlify ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)); one serverless webhook handler |
+| Concern                                                                                                                      | Owner                | Why                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Checkout, payment, **global tax/VAT (Merchant of Record)**, receipts, refunds                                                | **Lemon Squeezy**    | Already have an account; mature MoR; we own no payment/tax liability                                                         |
+| License issuance, **Ed25519-signed offline license files**, machine/device limits, expiry, revocation, air-gapped activation | **Keygen**           | Purpose-built licensing; offline crypto is its core competency, not a bolt-on                                                |
+| Glue (purchase → license)                                                                                                    | **Netlify Function** | We're already deploying the site on Netlify ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)); one serverless webhook handler |
 
 **Activation model: license key now, user accounts as a later UX layer.** A pasted Keygen license key (or imported license file) at launch; "Sign in with ctrlyoke" device-code flow added later when the hosted dashboard becomes a paid cloud product. Both sit behind a single `LicenseService` interface, so Phase 2 is an internal swap.
 
@@ -24,11 +24,11 @@
 
 ### Why this architecture
 
-1. **Local feature gating needs an *entitlement*, not an *identity*.** Unlocking Pro inside the extension requires verifiable proof of purchase. A user-account system only earns its keep when there are server-side resources to protect (the hosted dashboard). Until then, accounts are infrastructure maintained for no functional gain.
+1. **Local feature gating needs an _entitlement_, not an _identity_.** Unlocking Pro inside the extension requires verifiable proof of purchase. A user-account system only earns its keep when there are server-side resources to protect (the hosted dashboard). Until then, accounts are infrastructure maintained for no functional gain.
 2. **Offline-verifiable beats phone-home.** Keygen issues license files cryptographically signed with **Ed25519** (optionally AES-256-GCM encrypted) carrying a tamper-proof snapshot of the entitlement + expiry, verifiable against an embedded public key **with no network**. This delivers the things we want: enterprise/airgapped support, privacy (no per-check call-home), resilience when our backend is down, and zero per-check latency.
 3. **Lemon Squeezy alone can't do this; neither can any payment processor.** LS license keys are online-validated strings — no signed offline artifact, no grace, no air-gapped story. That's not a knock on LS; it's just not a licensing system. Pairing a checkout (LS) with a licensing system (Keygen) is the standard way to get both.
 4. **Keygen does hybrid online + offline from one integration**, so supporting air-gapped enterprise customers costs consumer users nothing — normal online activation and offline license files come from the same vendor and the same `LicenseService`.
-5. **Buy, don't build the crypto.** Signing a token yourself is ~50 lines, but the *lifecycle* — issuance on purchase, revocation on refund/chargeback, seat/device limits, expiry/refresh, re-download portal — is the real cost. Keygen provides the lifecycle and the crypto.
+5. **Buy, don't build the crypto.** Signing a token yourself is ~50 lines, but the _lifecycle_ — issuance on purchase, revocation on refund/chargeback, seat/device limits, expiry/refresh, re-download portal — is the real cost. Keygen provides the lifecycle and the crypto.
 
 ### Why support air-gapped/enterprise from the start (not later)
 
@@ -55,7 +55,7 @@ The license **format** you issue is painful to migrate. Launching on simple onli
 - Standard warranty disclaimer, liability limit, termination, patent/notice terms.
 - **No forced open-source conversion** (no BSL-style Change Date).
 
-> **Replace the current placeholder.** `LICENSE` currently contains **Elastic License 2.0**. ELv2 is correctly source-available and *does* protect the license-key gate, but it grants **everyone — including large enterprises — free commercial use**, so it does **not** deliver the revenue threshold. Swap it for the custom EULA before launch.
+> **Replace the current placeholder.** `LICENSE` currently contains **Elastic License 2.0**. ELv2 is correctly source-available and _does_ protect the license-key gate, but it grants **everyone — including large enterprises — free commercial use**, so it does **not** deliver the revenue threshold. Swap it for the custom EULA before launch.
 
 > **Not legal advice.** Have an attorney draft/review the final EULA — the revenue clause only matters if it is enforceable and clean.
 
@@ -70,14 +70,14 @@ The license **format** you issue is painful to migrate. Launching on simple onli
 
 ### Support & feedback model (layered)
 
-| Channel | Audience | Tool |
-| ------- | -------- | ---- |
-| **Public GitHub Issues** (main repo — source is public) | Community bug reports, dedup, transparency | GitHub (free) |
-| **Private support inbox** `support@ctrlyoke.dev` | Pro / Enterprise (the tier promises email support); enterprises won't post internal usage publicly and want an SLA | Plain / Pylon / Help Scout |
-| **Auto crash/error reporting** (later) | Telemetry, not user-filed | Sentry (ties into 2.2 telemetry) |
-| **Public roadmap / feature voting** (optional, later) | Demand signal | Canny / Featurebase |
+| Channel                                                 | Audience                                                                                                           | Tool                             |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| **Public GitHub Issues** (main repo — source is public) | Community bug reports, dedup, transparency                                                                         | GitHub (free)                    |
+| **Private support inbox** `support@ctrlyoke.dev`        | Pro / Enterprise (the tier promises email support); enterprises won't post internal usage publicly and want an SLA | Plain / Pylon / Help Scout       |
+| **Auto crash/error reporting** (later)                  | Telemetry, not user-filed                                                                                          | Sentry (ties into 2.2 telemetry) |
+| **Public roadmap / feature voting** (optional, later)   | Demand signal                                                                                                      | Canny / Featurebase              |
 
-The non-obvious addition for a commercial product: a **private** support path for paying customers *alongside* the public tracker — enterprises specifically do not want bug reports (which can reveal what they're building) sitting on public GitHub. The public/private split also doesn't force the source decision: even a closed-source product can run a code-less public "issues-only" repo, so the bug-tracker benefit is available independent of source visibility.
+The non-obvious addition for a commercial product: a **private** support path for paying customers _alongside_ the public tracker — enterprises specifically do not want bug reports (which can reveal what they're building) sitting on public GitHub. The public/private split also doesn't force the source decision: even a closed-source product can run a code-less public "issues-only" repo, so the bug-tracker benefit is available independent of source visibility.
 
 ---
 
@@ -148,7 +148,7 @@ Create `src/license/LicenseService.ts`. Single interface; Keygen is its Phase-1 
 export interface Entitlement {
   tier: "free" | "pro";
   features: ReadonlySet<string>;
-  expiresAt: number | null;       // epoch ms; null = perpetual
+  expiresAt: number | null; // epoch ms; null = perpetual
   licenseId?: string;
   source?: "online" | "offline-file";
 }
@@ -159,10 +159,16 @@ export interface LicenseService {
   isPro(context: vscode.ExtensionContext): Promise<boolean>;
 
   /** Online: activate a pasted key with Keygen, then cache the signed license file. */
-  activateWithKey(key: string, context: vscode.ExtensionContext): Promise<Entitlement>;
+  activateWithKey(
+    key: string,
+    context: vscode.ExtensionContext
+  ): Promise<Entitlement>;
 
   /** Air-gapped: import a signed (.lic) license file blob, verify offline, cache. No network. */
-  importLicenseFile(blob: string, context: vscode.ExtensionContext): Promise<Entitlement>;
+  importLicenseFile(
+    blob: string,
+    context: vscode.ExtensionContext
+  ): Promise<Entitlement>;
 
   /** Refresh the cached signed file from Keygen when online and near expiry. */
   refresh(context: vscode.ExtensionContext): Promise<void>;
@@ -180,14 +186,15 @@ Implementation notes:
 
 - **Embed** the Keygen account **public key** as a build constant; verify the cached license file's Ed25519 signature locally on every `getEntitlement()`.
 - **Storage:** license key + signed license file in `context.secrets` (`vscode.SecretStorage`) — they are bearer credentials.
-- **Offline grace:** if the cached file is past `expiry` *and* the network is unreachable, honor the last-known entitlement for a bounded window (e.g. 14 days) before downgrading to free. Never hard-fail a paying user for being offline.
-- **Fail open to *free*, never crash:** any verification error → free tier + non-blocking notice. Pro absence must never break core functionality.
+- **Offline grace:** if the cached file is past `expiry` _and_ the network is unreachable, honor the last-known entitlement for a bounded window (e.g. 14 days) before downgrading to free. Never hard-fail a paying user for being offline.
+- **Fail open to _free_, never crash:** any verification error → free tier + non-blocking notice. Pro absence must never break core functionality.
 - **Feature keys are single-sourced** in `DashboardConstants.ts` (`PRO_FEATURES.HOSTED_DASHBOARD`, etc.) — no hardcoded strings at gate sites.
 - Use the official **`@keygen-sh/*`** verification approach / examples for the offline signature + decryption path; do not hand-roll crypto.
 
 ### 1.5 Activation flows (both shipped at launch)
 
 **Online (consumer default):**
+
 ```
 "ctrlyoke: Activate Pro License"
   → InputBox: paste Keygen license key
@@ -197,6 +204,7 @@ Implementation notes:
 ```
 
 **Air-gapped / enterprise (no network on the dev machine):**
+
 ```
 "ctrlyoke: Activate Offline (Air-Gapped) License"
   → user obtains a signed license file on a connected device (Keygen portal/admin),
@@ -217,23 +225,23 @@ Add **"ctrlyoke: Deactivate Pro License"** and a Free/Pro status surface (status
 - **Free — localhost only (`127.0.0.1`):** anyone can open the browser dashboard on the same machine and experience it for real.
 - **Pro — remote / LAN / on-the-go:** binding to `0.0.0.0`, the LAN IP selector, QR-to-phone, and HTTPS-for-mobile-push in `ServerSection.tsx`. This is the "code from anywhere" magic — the part that costs the most to support and is hardest to replicate.
 
-| Capability | Free | Pro |
-| ---------- | ---- | --- |
-| All 7 harnesses | ✅ | ✅ |
-| Core workflow execution (YAML/JSON/MD), **unlimited steps** | ✅ | ✅ |
-| End conditions, pre-conditions, error/retry behavior | ✅ | ✅ |
-| VS Code dashboard | ✅ | ✅ |
-| Completion / hook notifications | ✅ | ✅ |
-| MCP manager + MCP server integration | ✅ | ✅ |
-| Agent & Skills manager | ✅ | ✅ |
-| AI commit message generation | ✅ | ✅ |
-| CLI binary, templates, output history | ✅ | ✅ |
-| **Hosted dashboard — localhost (`127.0.0.1`)** | ✅ | ✅ |
-| **Hosted dashboard — remote / LAN / on-the-go** (`0.0.0.0`, LAN IP, QR-to-phone, mobile-push HTTPS) | ⏱️ trial | ✅ |
-| **Custom hooks** (user-defined pre/post execution) | ❌ | ✅ |
-| **Air-gapped / offline activation** (enterprise) | ❌ | ✅ |
-| Custom icon color (cosmetic "thank-you" perk) | ❌ | ✅ |
-| All future Pro features | ❌ | ✅ |
+| Capability                                                                                          | Free     | Pro |
+| --------------------------------------------------------------------------------------------------- | -------- | --- |
+| All 7 harnesses                                                                                     | ✅       | ✅  |
+| Core workflow execution (YAML/JSON/MD), **unlimited steps**                                         | ✅       | ✅  |
+| End conditions, pre-conditions, error/retry behavior                                                | ✅       | ✅  |
+| VS Code dashboard                                                                                   | ✅       | ✅  |
+| Completion / hook notifications                                                                     | ✅       | ✅  |
+| MCP manager + MCP server integration                                                                | ✅       | ✅  |
+| Agent & Skills manager                                                                              | ✅       | ✅  |
+| AI commit message generation                                                                        | ✅       | ✅  |
+| CLI binary, templates, output history                                                               | ✅       | ✅  |
+| **Hosted dashboard — localhost (`127.0.0.1`)**                                                      | ✅       | ✅  |
+| **Hosted dashboard — remote / LAN / on-the-go** (`0.0.0.0`, LAN IP, QR-to-phone, mobile-push HTTPS) | ⏱️ trial | ✅  |
+| **Custom hooks** (user-defined pre/post execution)                                                  | ❌       | ✅  |
+| **Air-gapped / offline activation** (enterprise)                                                    | ❌       | ✅  |
+| Custom icon color (cosmetic "thank-you" perk)                                                       | ❌       | ✅  |
+| All future Pro features                                                                             | ❌       | ✅  |
 
 **Remote-access trial.** New users get a **14-day, full-featured trial of remote access** — no card, no account — so they can taste coding on the go before deciding. When it lapses, the server keeps running on **localhost for free**; remote binding shows a friendly upsell. The trial start timestamp lives in `globalState`; it flows through the same `LicenseService`, so an activated license simply supersedes the trial.
 
@@ -254,7 +262,7 @@ Design goal: **a one-person company must not be answering enterprise sales email
 - **Price for self-serve:** target **~$2k–$5k/yr** — within corporate-card range so it clears without procurement. Above ~$10k, buyers expect POs/sales; staying under keeps it zero-touch.
 - **Self-serve legal:** publish **click-through** Terms + a standard **DPA** + a **trust/security page** so legal teams can self-serve their review without a custom MSA. This removes the most common reason an enterprise purchase stalls.
 
-**What stays manual (kept rare by design):** the subset of enterprises that *require* a PO/invoice/net-terms or a signed custom MSA/DPA/security questionnaire cannot be fully automated. Mitigate by (a) pricing within corporate-card range, (b) the click-through legal + DPA + trust page above, and (c) a single **"Need an invoice or PO? email sales@ctrlyoke.dev"** fallback — and even those invoices can be issued semi-automatically via LS/Stripe. Most mid-market buys never touch the inbox.
+**What stays manual (kept rare by design):** the subset of enterprises that _require_ a PO/invoice/net-terms or a signed custom MSA/DPA/security questionnaire cannot be fully automated. Mitigate by (a) pricing within corporate-card range, (b) the click-through legal + DPA + trust page above, and (c) a single **"Need an invoice or PO? email sales@ctrlyoke.dev"** fallback — and even those invoices can be issued semi-automatically via LS/Stripe. Most mid-market buys never touch the inbox.
 
 **Open choice — flat vs. size-tiered:** a single **flat unlimited** site license is simplest and fully zero-touch (recommended at launch); **size-tiered** enterprise pricing (≤500 / ≤2,000 / unlimited devs) captures more from the largest orgs but adds checkout complexity and edges toward "talk to sales." Add tiers later if data warrants.
 

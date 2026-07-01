@@ -150,8 +150,7 @@ function main() {
               notifyDir,
               sessionId,
               hookType === "sessionStart"
-            )) ||
-        path.join(notifyDir, `${hookType}-${Date.now()}.json`);
+            )) || path.join(notifyDir, `${hookType}-${Date.now()}.json`);
 
       const notifyData = {
         timestamp: Date.now(),

@@ -18,12 +18,13 @@ Prompt-file completion and navigation layer. This directory owns VS Code complet
 `src/extension.ts` registers the same `PromptCompletionProvider` four times for `@`, `#`, `~`, and `$` on prompt files (`*.{prompt,ctrlyoke}.json`, `*.ctrlyoke.{yaml,yml}`, `*.prompt.md`, and `prompt` language). `PromptLinkProvider` uses the same selector set.
 
 If you add a new trigger or reference form, update all of these together:
+
 - `extension.ts` registration
 - `PromptCompletionProvider` trigger routing/context checks
 - `CompletionHelpers` / `ContextReferenceBuilder`
 - `PromptLinkProvider`
 - `src/ui/WebviewMessageRouter.ts` if the dashboard should support it too
-</registration>
+  </registration>
 
 <promptCompletionProvider>
 `PromptCompletionProvider` is intentionally context-gated:
@@ -61,6 +62,7 @@ Its property lists are hand-maintained, not schema-derived. If workflow step fie
 All emitted references must stay workspace-relative and use forward slashes. Paths with spaces are quoted; directory refs always keep a trailing slash because that is how ctrlyoke distinguishes structure-only attachment from file attachment.
 
 Quoted-path support must remain symmetric across:
+
 - `ContextReferenceBuilder`
 - `PromptLinkProvider` regexes
 - `ContextMenuReferenceCommands`

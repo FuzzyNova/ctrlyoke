@@ -188,10 +188,7 @@ export function useOutputNavigation({
           pending.rowIndex
         );
         if (revealResult.foundMark) {
-          if (
-            revealResult.rowKey &&
-            revealResult.rowViewportOffsetPx != null
-          ) {
+          if (revealResult.rowKey && revealResult.rowViewportOffsetPx != null) {
             setCurrentScrollTarget(
               {
                 kind: "row",
@@ -270,154 +267,148 @@ export function useOutputNavigation({
     schedulePendingNavigationStabilization,
   ]);
 
-  const navigationController: OutputNavigationController = useMemo(
-    () => {
-      const scrollToRowIndex = (
-        rowIndex: number,
-        options?: OutputNavigationOptions
-      ) => {
-        if (rowIndex === undefined || !outputRef.current) {
-          return;
-        }
+  const navigationController: OutputNavigationController = useMemo(() => {
+    const scrollToRowIndex = (
+      rowIndex: number,
+      options?: OutputNavigationOptions
+    ) => {
+      if (rowIndex === undefined || !outputRef.current) {
+        return;
+      }
 
-        const align = options?.align ?? "start";
-        const revealActiveFindMatch = options?.revealActiveFindMatch ?? false;
-        const requestedBehavior = options?.behavior ?? "auto";
-        const behavior =
-          requestedBehavior === "smooth" ? "auto" : requestedBehavior;
-        const row = rows[rowIndex];
-        if (!row?.target) {
-          return;
-        }
-        if (row) {
-          const rowSize = rowLayout.rowSizesByKey.get(row.key);
-          const viewportOffsetPx =
-            align === "end"
-              ? Math.max(0, outputRef.current.clientHeight - (rowSize ?? 0))
-              : align === "center"
-                ? Math.max(
-                    0,
-                    outputRef.current.clientHeight / 2 - (rowSize ?? 0) / 2
-                  )
-                : 0;
-          setCurrentScrollTarget(
-            {
-              kind: "row",
-              rowKey: row.key,
-              viewportOffsetPx,
-            },
-            "navigation"
-          );
-        } else {
-          autoscrollEnabledRef.current = false;
-        }
-        isProgrammaticScrollRef.current = true;
-        const startedAt = performance.now();
-        pendingNavigationRef.current = {
-          rowIndex,
-          align,
-          revealActiveFindMatch,
-          targetKind: row.target.kind,
-          targetIndex: row.target.index,
-          requestedBehavior,
-          effectiveBehavior: behavior,
-          startedAt,
-          lastMeasuredVersion: measurementVersionRef.current,
-          lastMeasurementChangeAt: startedAt,
-          attempts: 0,
-        };
-        setNavigationPendingRowIndex(rowIndex);
+      const align = options?.align ?? "start";
+      const revealActiveFindMatch = options?.revealActiveFindMatch ?? false;
+      const requestedBehavior = options?.behavior ?? "auto";
+      const behavior =
+        requestedBehavior === "smooth" ? "auto" : requestedBehavior;
+      const row = rows[rowIndex];
+      if (!row?.target) {
+        return;
+      }
+      if (row) {
+        const rowSize = rowLayout.rowSizesByKey.get(row.key);
+        const viewportOffsetPx =
+          align === "end"
+            ? Math.max(0, outputRef.current.clientHeight - (rowSize ?? 0))
+            : align === "center"
+              ? Math.max(
+                  0,
+                  outputRef.current.clientHeight / 2 - (rowSize ?? 0) / 2
+                )
+              : 0;
+        setCurrentScrollTarget(
+          {
+            kind: "row",
+            rowKey: row.key,
+            viewportOffsetPx,
+          },
+          "navigation"
+        );
+      } else {
+        autoscrollEnabledRef.current = false;
+      }
+      isProgrammaticScrollRef.current = true;
+      const startedAt = performance.now();
+      pendingNavigationRef.current = {
+        rowIndex,
+        align,
+        revealActiveFindMatch,
+        targetKind: row.target.kind,
+        targetIndex: row.target.index,
+        requestedBehavior,
+        effectiveBehavior: behavior,
+        startedAt,
+        lastMeasuredVersion: measurementVersionRef.current,
+        lastMeasurementChangeAt: startedAt,
+        attempts: 0,
+      };
+      setNavigationPendingRowIndex(rowIndex);
 
-        if (!isOutputVirtualized) {
-          const rowElement = findRenderedRowElement(
+      if (!isOutputVirtualized) {
+        const rowElement = findRenderedRowElement(outputRef.current, rowIndex);
+        const top =
+          rowElement != null
+            ? getRowScopedScrollTop(outputRef.current, rowElement, align)
+            : getEstimatedRowScopedScrollTop(
+                outputRef.current,
+                rowLayout.rowStartsByIndex[rowIndex] ?? 0,
+                rowLayout.rowSizesByKey.get(rows[rowIndex]?.key ?? ""),
+                align
+              );
+        outputRef.current.scrollTo({ top, behavior });
+        if (rowElement) {
+          lastScrollTopRef.current = top;
+        }
+        if (revealActiveFindMatch) {
+          const revealResult = revealActiveFindMatchInRow(
             outputRef.current,
             rowIndex
           );
-          const top =
-            rowElement != null
-              ? getRowScopedScrollTop(outputRef.current, rowElement, align)
-              : getEstimatedRowScopedScrollTop(
-                  outputRef.current,
-                  rowLayout.rowStartsByIndex[rowIndex] ?? 0,
-                  rowLayout.rowSizesByKey.get(rows[rowIndex]?.key ?? ""),
-                  align
-                );
-          outputRef.current.scrollTo({ top, behavior });
-          if (rowElement) {
-            lastScrollTopRef.current = top;
-          }
-          if (revealActiveFindMatch) {
-            const revealResult = revealActiveFindMatchInRow(
-              outputRef.current,
-              rowIndex
+          if (
+            revealResult.foundMark &&
+            revealResult.rowKey &&
+            revealResult.rowViewportOffsetPx != null
+          ) {
+            setCurrentScrollTarget(
+              {
+                kind: "row",
+                rowKey: revealResult.rowKey,
+                viewportOffsetPx: revealResult.rowViewportOffsetPx,
+              },
+              "navigation-find-match"
             );
-            if (
-              revealResult.foundMark &&
-              revealResult.rowKey &&
-              revealResult.rowViewportOffsetPx != null
-            ) {
-              setCurrentScrollTarget(
-                {
-                  kind: "row",
-                  rowKey: revealResult.rowKey,
-                  viewportOffsetPx: revealResult.rowViewportOffsetPx,
-                },
-                "navigation-find-match"
-              );
-            }
           }
-          finalizePendingNavigation();
+        }
+        finalizePendingNavigation();
+        return;
+      }
+
+      rowVirtualizer.scrollToIndex(rowIndex, { align, behavior });
+      schedulePendingNavigationStabilization();
+    };
+
+    return {
+      scrollToRowIndex,
+      scrollToTarget: (
+        target: OutputMessageTarget,
+        options?: OutputNavigationOptions
+      ) => {
+        const targetKey = `${target.kind}:${target.index}`;
+        const rowIndex = firstRowIndexByTarget.get(targetKey);
+        if (rowIndex === undefined) {
           return;
         }
 
-        rowVirtualizer.scrollToIndex(rowIndex, { align, behavior });
-        schedulePendingNavigationStabilization();
-      };
+        scrollToRowIndex(rowIndex, options);
+      },
+      getTargetScrollFraction: (target: OutputMessageTarget) => {
+        const rowIndex = firstRowIndexByTarget.get(
+          `${target.kind}:${target.index}`
+        );
+        const totalSize = Math.max(1, rowLayout.totalSize);
+        if (rowIndex === undefined || totalSize <= 0) {
+          return null;
+        }
 
-      return {
-        scrollToRowIndex,
-        scrollToTarget: (
-          target: OutputMessageTarget,
-          options?: OutputNavigationOptions
-        ) => {
-          const targetKey = `${target.kind}:${target.index}`;
-          const rowIndex = firstRowIndexByTarget.get(targetKey);
-          if (rowIndex === undefined) {
-            return;
-          }
-
-          scrollToRowIndex(rowIndex, options);
-        },
-        getTargetScrollFraction: (target: OutputMessageTarget) => {
-          const rowIndex = firstRowIndexByTarget.get(
-            `${target.kind}:${target.index}`
-          );
-          const totalSize = Math.max(1, rowLayout.totalSize);
-          if (rowIndex === undefined || totalSize <= 0) {
-            return null;
-          }
-
-          return rowLayout.rowStartsByIndex[rowIndex] / totalSize;
-        },
-      };
-    },
-    [
-      autoscrollEnabledRef,
-      finalizePendingNavigation,
-      firstRowIndexByTarget,
-      isOutputVirtualized,
-      isProgrammaticScrollRef,
-      lastScrollTopRef,
-      measurementVersionRef,
-      outputRef,
-      pendingNavigationRef,
-      rowLayout,
-      rowVirtualizer,
-      rows,
-      schedulePendingNavigationStabilization,
-      setCurrentScrollTarget,
-    ]
-  );
+        return rowLayout.rowStartsByIndex[rowIndex] / totalSize;
+      },
+    };
+  }, [
+    autoscrollEnabledRef,
+    finalizePendingNavigation,
+    firstRowIndexByTarget,
+    isOutputVirtualized,
+    isProgrammaticScrollRef,
+    lastScrollTopRef,
+    measurementVersionRef,
+    outputRef,
+    pendingNavigationRef,
+    rowLayout,
+    rowVirtualizer,
+    rows,
+    schedulePendingNavigationStabilization,
+    setCurrentScrollTarget,
+  ]);
 
   useEffect(() => {
     setActiveOutputNavigationController(navigationController);

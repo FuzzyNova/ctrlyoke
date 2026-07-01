@@ -203,10 +203,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
   // Derive estimated line count for summary badge (cheap, no diff computation).
   const estimatedLineCount = useMemo(() => {
     if (externalHunks !== undefined) {
-      return externalHunks.reduce(
-        (sum, h) => sum + h.changes.length,
-        0
-      );
+      return externalHunks.reduce((sum, h) => sum + h.changes.length, 0);
     }
     const normalizedPatch = normalizeStructuredPatch(structuredPatch);
     if (normalizedPatch.length > 0) {
@@ -229,7 +226,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
   } => {
     if (!isExpanded) return { baseHunks: [], diffType: "modify" };
     if (externalHunks !== undefined) {
-      return { baseHunks: externalHunks, diffType: externalDiffType ?? "modify" };
+      return {
+        baseHunks: externalHunks,
+        diffType: externalDiffType ?? "modify",
+      };
     }
     const normalizedPatch = normalizeStructuredPatch(structuredPatch);
     if (normalizedPatch.length > 0) {
@@ -240,7 +240,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
       return { baseHunks: result.hunks, diffType: result.diffType };
     }
     return { baseHunks: [], diffType: "modify" };
-  }, [isExpanded, externalHunks, externalDiffType, structuredPatch, oldContent, newContent]);
+  }, [
+    isExpanded,
+    externalHunks,
+    externalDiffType,
+    structuredPatch,
+    oldContent,
+    newContent,
+  ]);
 
   useEffect(() => {
     if (expandedGaps !== undefined) return;

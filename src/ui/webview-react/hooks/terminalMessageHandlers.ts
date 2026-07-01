@@ -390,7 +390,9 @@ export function registerTerminalHandlers(handlers: MessageHandlerMap): void {
   // workflow this client is currently viewing.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.ACTIVE_TERMINAL_WORKFLOWS] = (message: any) => {
-    const workflows = Array.isArray(message?.workflows) ? message.workflows : [];
+    const workflows = Array.isArray(message?.workflows)
+      ? message.workflows
+      : [];
     useTerminalStore.getState().setActiveTerminalWorkflows(workflows);
   };
 

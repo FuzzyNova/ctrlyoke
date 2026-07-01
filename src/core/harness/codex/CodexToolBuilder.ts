@@ -108,7 +108,8 @@ export class CodexToolBuilder {
       }
 
       let extractedPath = "unknown";
-      extractedPath = ApplyPatchParser.extractFirstPath(patchInput) ?? "unknown";
+      extractedPath =
+        ApplyPatchParser.extractFirstPath(patchInput) ?? "unknown";
       const structuredPatch = ApplyPatchParser.parse(patchInput);
       Log.debug(
         `[CodexToolBuilder] apply_patch initiated - file=${extractedPath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
@@ -342,7 +343,10 @@ export class CodexToolBuilder {
     // Codex currently serializes helper arguments with JSON-style quoted keys
     // (`{"command":"..."}`), while older/test payloads used JavaScript-style
     // bare keys (`{command:"..."}`). Accept both forms.
-    const re = new RegExp(`(?:["']${escapedKey}["']|${escapedKey})\\s*:\\s*`, "g");
+    const re = new RegExp(
+      `(?:["']${escapedKey}["']|${escapedKey})\\s*:\\s*`,
+      "g"
+    );
     let match: RegExpExecArray | null;
     while ((match = re.exec(src)) !== null) {
       const quoteIdx = match.index + match[0].length;

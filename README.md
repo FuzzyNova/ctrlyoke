@@ -85,11 +85,11 @@ Focus on input validation and authentication logic.
 
 All three formats validate against the same JSON Schema with full IntelliSense in VS Code.
 
-| Format   | Extension                              | Best for                            |
-| -------- | -------------------------------------- | ----------------------------------- |
+| Format   | Extension                          | Best for                            |
+| -------- | ---------------------------------- | ----------------------------------- |
 | YAML     | `.ctrlyoke.yaml` / `.ctrlyoke.yml` | Multi-step workflows, human editing |
-| JSON     | `.ctrlyoke.json`                     | Programmatic generation, CI/CD      |
-| Markdown | `.prompt.md`                           | Single prompts                      |
+| JSON     | `.ctrlyoke.json`                   | Programmatic generation, CI/CD      |
+| Markdown | `.prompt.md`                       | Single prompts                      |
 
 ### Multi-step YAML workflow
 
@@ -143,7 +143,7 @@ Properties follow a three-tier precedence: **prompt-level → workflow-level →
 | `skills`          | `string[]`                              | Skill file names; content injected into the prompt                              |
 | `resumeSession`   | `boolean`                               | Continue the previous prompt's conversation session                             |
 | `sessionId`       | `string \| number`                      | Resume a session by ID or by prior prompt index                                 |
-| `mcpServers`      | `(string \| McpServerConfig)[] \| null` | MCP servers to inject; `"ctrlyoke"` enables dynamic queue extension           |
+| `mcpServers`      | `(string \| McpServerConfig)[] \| null` | MCP servers to inject; `"ctrlyoke"` enables dynamic queue extension             |
 | `hooks`           | `UserHookConfig[]`                      | Shell commands to run at harness lifecycle events                               |
 | `endCondition`    | `EndCondition`                          | Validation script with retry configuration                                      |
 | `priorContext`    | `string \| number[]`                    | Inject prior prompt outputs: `none`, `previous`, `all`, or index array          |
@@ -272,23 +272,23 @@ The ctrlyoke panel opens in the VS Code bottom panel area and contains:
 
 ## Commands
 
-| Command                                   | Description                                           |
-| ----------------------------------------- | ----------------------------------------------------- |
-| `ctrlyoke: Open ctrlyoke Panel`       | Open the dashboard in the bottom panel                |
+| Command                                 | Description                                           |
+| --------------------------------------- | ----------------------------------------------------- |
+| `ctrlyoke: Open ctrlyoke Panel`         | Open the dashboard in the bottom panel                |
 | `ctrlyoke: New Workflow from Template`  | Create a workflow from a built-in or custom template  |
 | `ctrlyoke: New Blank Workflow`          | Clear the dashboard and start with an empty workflow  |
 | `ctrlyoke: New Draft Prompt`            | Create a draft `.prompt.md` file                      |
 | `ctrlyoke: Create Prompt File`          | Create a new prompt file in a folder                  |
-| `ctrlyoke: Run with ctrlyoke`         | Run a prompt file (Explorer / editor context menu)    |
-| `ctrlyoke: Load in ctrlyoke`          | Load a prompt file into the dashboard without running |
-| `ctrlyoke: Queue with ctrlyoke`       | Append prompts to the end of the active queue         |
-| `ctrlyoke: Queue Next with ctrlyoke`  | Insert prompts immediately after the current position |
+| `ctrlyoke: Run with ctrlyoke`           | Run a prompt file (Explorer / editor context menu)    |
+| `ctrlyoke: Load in ctrlyoke`            | Load a prompt file into the dashboard without running |
+| `ctrlyoke: Queue with ctrlyoke`         | Append prompts to the end of the active queue         |
+| `ctrlyoke: Queue Next with ctrlyoke`    | Insert prompts immediately after the current position |
 | `ctrlyoke: Pause Execution`             | Pause a running workflow                              |
 | `ctrlyoke: Resume Execution`            | Resume a paused workflow                              |
 | `ctrlyoke: Stop Execution`              | Stop and reset the workflow                           |
 | `ctrlyoke: Resume Session`              | Resume from a saved session                           |
-| `ctrlyoke: Initialize Workspace`        | Set up `.ctrlyoke/` directory structure             |
-| `ctrlyoke: Import ctrlyoke Agents`    | Import agent files into the workspace                 |
+| `ctrlyoke: Initialize Workspace`        | Set up `.ctrlyoke/` directory structure               |
+| `ctrlyoke: Import ctrlyoke Agents`      | Import agent files into the workspace                 |
 | `ctrlyoke: Import Workflow Templates`   | Import example workflow templates                     |
 | `ctrlyoke: Create End Condition Script` | Scaffold a validation script                          |
 | `ctrlyoke: Create New Custom Template`  | Save the current workflow as a reusable template      |
@@ -307,7 +307,7 @@ All settings use the `ctrlyoke.` prefix.
 | `harness`                  | `copilot-cli` | Active harness                                              |
 | `cliExecutionMode`         | `interactive` | `interactive` (terminal) or `headless` (background process) |
 | `scriptTimeout`            | `30`          | End condition script timeout in seconds (range: 5–300)      |
-| `promptsDirectory`         | `.ctrlyoke` | Base directory for workflows and scripts                    |
+| `promptsDirectory`         | `.ctrlyoke`   | Base directory for workflows and scripts                    |
 | `maxPromptExecutionTime`   | `10800`       | Max seconds per prompt; -1 = unlimited                      |
 | `maxWorkflowExecutionTime` | `86400`       | Max seconds per workflow; -1 = unlimited                    |
 
@@ -341,12 +341,12 @@ All settings use the `ctrlyoke.` prefix.
 
 ### MCP and dynamic queue
 
-| Setting                  | Default | Description                                                                                                   |
-| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------- |
+| Setting                  | Default | Description                                                                                                 |
+| ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------- |
 | `mcpServers`             | `[]`    | Default MCP servers for workflow prompts. Include `"ctrlyoke"` to enable dynamic queue extension by default |
-| `maxQueueSize`           | `100`   | Maximum prompts allowed in the dynamic queue (range: 1–1000)                                                  |
-| `unlimitedMode`          | `false` | Remove queue size and execution time limits                                                                   |
-| `notifyOnQueueExtension` | `true`  | Show a notification when the AI appends prompts to the queue                                                  |
+| `maxQueueSize`           | `100`   | Maximum prompts allowed in the dynamic queue (range: 1–1000)                                                |
+| `unlimitedMode`          | `false` | Remove queue size and execution time limits                                                                 |
+| `notifyOnQueueExtension` | `true`  | Show a notification when the AI appends prompts to the queue                                                |
 
 ### Hooks
 
@@ -371,12 +371,12 @@ All settings use the `ctrlyoke.` prefix.
 
 ### Output and history
 
-| Setting                | Default | Description                                            |
-| ---------------------- | ------- | ------------------------------------------------------ |
-| `showCliOutput`        | `true`  | Show CLI output in the Output panel                    |
-| `showCliCommand`       | `false` | Show the full CLI invocation in the dashboard          |
+| Setting                | Default | Description                                          |
+| ---------------------- | ------- | ---------------------------------------------------- |
+| `showCliOutput`        | `true`  | Show CLI output in the Output panel                  |
+| `showCliCommand`       | `false` | Show the full CLI invocation in the dashboard        |
 | `saveOutputHistory`    | `true`  | Save per-run output history in `.ctrlyoke/.history/` |
-| `maxHistoryRuns`       | `-1`    | Max history entries per workflow (-1 = keep all)       |
+| `maxHistoryRuns`       | `-1`    | Max history entries per workflow (-1 = keep all)     |
 | `enableDiagnosticLogs` | `false` | Write diagnostic logs to `.ctrlyoke/logs/`           |
 
 ### Copilot Chat harness

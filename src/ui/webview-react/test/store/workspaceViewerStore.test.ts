@@ -157,7 +157,12 @@ describe("setCommitHistory", () => {
 describe("appendCommitHistory", () => {
   it("appends new commits to existing history", () => {
     store().setCommitHistory([sampleCommit], true, "main", false);
-    const extra = { ...sampleCommit, hash: "def456", shortHash: "def456", subject: "fix: bug" };
+    const extra = {
+      ...sampleCommit,
+      hash: "def456",
+      shortHash: "def456",
+      subject: "fix: bug",
+    };
     store().appendCommitHistory([extra], false);
     expect(store().commitHistory).toHaveLength(2);
     expect(store().commitHistoryHasMore).toBe(false);

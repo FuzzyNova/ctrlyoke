@@ -113,10 +113,7 @@ export class Log {
     );
     try {
       fs.mkdirSync(logDir, { recursive: true });
-      this.cliLogFilePath = path.join(
-        logDir,
-        `ctrlyoke-cli-${Date.now()}.log`
-      );
+      this.cliLogFilePath = path.join(logDir, `ctrlyoke-cli-${Date.now()}.log`);
       fs.writeFileSync(this.cliLogFilePath, ""); // create / truncate
       this.cleanupOldLogs(logDir);
     } catch {

@@ -93,11 +93,7 @@ export class CopilotNotificationMonitor
 
     // Map logical event names to Copilot's native event names
     const eventMap = CopilotNotificationMonitor.EVENT_MAP;
-    const selectedEvents = ctrlyokeEvents ?? [
-      "sessionStart",
-      "stop",
-      "error",
-    ];
+    const selectedEvents = ctrlyokeEvents ?? ["sessionStart", "stop", "error"];
     const permissionRequestHook = userHooks?.find(
       (hook) => hook.event === "permissionRequest"
     );

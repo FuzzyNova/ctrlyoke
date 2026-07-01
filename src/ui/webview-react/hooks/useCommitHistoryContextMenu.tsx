@@ -39,18 +39,15 @@ export function useCommitHistoryContextMenu({
     }
   }, []);
 
-  const handleAddToCtrlYoke = useCallback(
-    (commit: WorkspaceCommitLogEntry) => {
-      const editorStore = useEditorStore.getState();
-      editorStore.preparePromptEditorForInsert();
-      editorStore.enqueuePromptEditorInsert({
-        requestId: `commit-history-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        references: [buildGitReference(commit.hash)],
-        mode: PROMPT_EDITOR_INSERT_MODES.APPEND,
-      });
-    },
-    []
-  );
+  const handleAddToCtrlYoke = useCallback((commit: WorkspaceCommitLogEntry) => {
+    const editorStore = useEditorStore.getState();
+    editorStore.preparePromptEditorForInsert();
+    editorStore.enqueuePromptEditorInsert({
+      requestId: `commit-history-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      references: [buildGitReference(commit.hash)],
+      mode: PROMPT_EDITOR_INSERT_MODES.APPEND,
+    });
+  }, []);
 
   const handleCheckoutCommit = useCallback(
     async (commit: WorkspaceCommitLogEntry) => {

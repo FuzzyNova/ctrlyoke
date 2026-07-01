@@ -223,7 +223,8 @@ export function useDesktopLayout({
         (promptsCollapsed ? collapsedPct : 0) -
         (settingsCollapsed ? collapsedPct : 0);
       const expandedTotalPct =
-        (promptsCollapsed ? 0 : stepsPct) + (settingsCollapsed ? 0 : settingsPct);
+        (promptsCollapsed ? 0 : stepsPct) +
+        (settingsCollapsed ? 0 : settingsPct);
       const scale =
         expandedTotalPct > 0
           ? Math.max(0, availableExpandedPct) / expandedTotalPct
@@ -488,7 +489,11 @@ export function useDesktopLayout({
     // Collapse the settings panel so the layout is solvable; the resulting store
     // change re-runs the settings sync below.
     const store = useUiStore.getState();
-    if (!store.stepsCollapsed && !store.settingsCollapsed && !canFitBothSidebars()) {
+    if (
+      !store.stepsCollapsed &&
+      !store.settingsCollapsed &&
+      !canFitBothSidebars()
+    ) {
       store.setSettingsCollapsed(true);
       return;
     }
@@ -514,8 +519,7 @@ export function useDesktopLayout({
   // re-runs the sibling's sync effect, which applies the now-solvable layout.
   useEffect(() => {
     if (!uiLayoutReady) return;
-    const justExpanded =
-      prevSettingsCollapsedRef.current && !settingsCollapsed;
+    const justExpanded = prevSettingsCollapsedRef.current && !settingsCollapsed;
     prevSettingsCollapsedRef.current = settingsCollapsed;
     if (isMobile) return;
     if (
@@ -531,8 +535,7 @@ export function useDesktopLayout({
 
   useEffect(() => {
     if (!uiLayoutReady) return;
-    const justExpanded =
-      prevPromptsCollapsedRef.current && !promptsCollapsed;
+    const justExpanded = prevPromptsCollapsedRef.current && !promptsCollapsed;
     prevPromptsCollapsedRef.current = promptsCollapsed;
     if (isMobile) return;
     if (

@@ -238,9 +238,7 @@ export function getWSLWindowsAppDataDirs(
   const windowsMountBase = "/mnt/c/Users";
 
   const addCandidates = (appDataRoaming: string) => {
-    const candidates = [
-      path.join(appDataRoaming, variant, ...subPathSegments),
-    ];
+    const candidates = [path.join(appDataRoaming, variant, ...subPathSegments)];
     if (variant !== "Code") {
       candidates.push(path.join(appDataRoaming, "Code", ...subPathSegments));
     }

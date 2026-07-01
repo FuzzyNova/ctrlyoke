@@ -178,15 +178,15 @@ Context references in the prompt text itself (`@path/to/file`, `#sym:path:symbol
 
 ## Files Changed (Summary)
 
-| File                                                    | Change                                                                           |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `schemas/prompt-schema.json`                            | Add `rawPromptMode` boolean to `executionProperties` definition                  |
-| `src/types/CtrlYokeTypes.ts`                            | Add `rawPromptMode?: boolean` to `ExecutionProperties`                           |
-| `src/utils/PropertyResolver.ts`                         | Add to `ResolvedProperties`, add `resolveRawPromptMode()`, wire into `resolve()` |
-| `src/core/PromptFileParser.ts`                          | Copy `rawPromptMode` in `buildPromptStep()` and `copyWorkflowLevelProperties()`  |
-| `src/core/harness/shared/CliPromptPreparer.ts`          | Add early-return guard + `prepareRawPrompt()` method                             |
-| `src/core/harness/chat/CopilotChatIntegration.ts`       | Audit + add guard if it has its own prep path                                    |
-| `schemas/prompt-schema.yaml`                            | Regenerated via `npm run generate-schema` (do not hand-edit)                     |
+| File                                              | Change                                                                           |
+| ------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `schemas/prompt-schema.json`                      | Add `rawPromptMode` boolean to `executionProperties` definition                  |
+| `src/types/CtrlYokeTypes.ts`                      | Add `rawPromptMode?: boolean` to `ExecutionProperties`                           |
+| `src/utils/PropertyResolver.ts`                   | Add to `ResolvedProperties`, add `resolveRawPromptMode()`, wire into `resolve()` |
+| `src/core/PromptFileParser.ts`                    | Copy `rawPromptMode` in `buildPromptStep()` and `copyWorkflowLevelProperties()`  |
+| `src/core/harness/shared/CliPromptPreparer.ts`    | Add early-return guard + `prepareRawPrompt()` method                             |
+| `src/core/harness/chat/CopilotChatIntegration.ts` | Audit + add guard if it has its own prep path                                    |
+| `schemas/prompt-schema.yaml`                      | Regenerated via `npm run generate-schema` (do not hand-edit)                     |
 
 ## Windows / node-pty Character Limit Analysis
 

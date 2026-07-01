@@ -8,7 +8,9 @@ vi.mock("@hooks/useElementNarrow", () => ({
   useElementNarrow: vi.fn(() => [vi.fn(), false] as const),
 }));
 
-function createState(overrides: Partial<OutputFindState> = {}): OutputFindState {
+function createState(
+  overrides: Partial<OutputFindState> = {}
+): OutputFindState {
   return {
     isOpen: false,
     query: "",
@@ -47,7 +49,12 @@ describe("OutputFindBar", () => {
 
     const { rerender } = render(
       <OutputFindBar
-        state={createState({ isOpen: true, query: "alpha", matchCount: 2, currentMatch: 1 })}
+        state={createState({
+          isOpen: true,
+          query: "alpha",
+          matchCount: 2,
+          currentMatch: 1,
+        })}
         onQueryChange={vi.fn()}
         onNavigate={vi.fn()}
         onToggleCaseSensitive={vi.fn()}

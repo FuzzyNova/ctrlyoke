@@ -13,10 +13,7 @@ import {
   type StepStatus,
   HOOK_EVENT_METADATA,
 } from "../../types/DashboardConstants";
-import type {
-  WorkflowSummary,
-  WorkflowStep,
-} from "../../types/CtrlYokeTypes";
+import type { WorkflowSummary, WorkflowStep } from "../../types/CtrlYokeTypes";
 import type { CtrlYokeNotificationSettings } from "../../types/CtrlYokeSettings";
 
 export interface CtrlYokeNotificationEvent {

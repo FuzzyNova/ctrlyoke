@@ -128,15 +128,17 @@ describe("useOutputFind", () => {
       ({
         externalRequest,
       }: {
-        externalRequest:
-          | { query: string; preferredTarget?: typeof target }
-          | null;
+        externalRequest: {
+          query: string;
+          preferredTarget?: typeof target;
+        } | null;
       }) => useOutputFind(rows, onRevealMatch, externalRequest),
       {
         initialProps: {
-          externalRequest: null as
-            | { query: string; preferredTarget?: typeof target }
-            | null,
+          externalRequest: null as {
+            query: string;
+            preferredTarget?: typeof target;
+          } | null,
         },
       }
     );

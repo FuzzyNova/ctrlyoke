@@ -452,7 +452,9 @@ export class CliLogMonitor {
                 }
 
                 const sessionIdFromNotification =
-                  this.deps.notificationMonitor!.extractSessionId?.(result.data);
+                  this.deps.notificationMonitor!.extractSessionId?.(
+                    result.data
+                  );
 
                 await resolveFailure({
                   failureKind: FAILURE_KINDS.HARNESS_ERROR,

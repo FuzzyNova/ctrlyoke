@@ -154,7 +154,9 @@ export function BulkSelectionActionsBar({
             <ActionDropdown
               label={scope === SETTING_SCOPES.WORKSPACE ? "Workspace" : "User"}
               items={scopeItems}
-              onSelect={(value) => handleScopeChange(value as SettingWriteScope)}
+              onSelect={(value) =>
+                handleScopeChange(value as SettingWriteScope)
+              }
               className="shrink-0 max-w-full"
             />
 

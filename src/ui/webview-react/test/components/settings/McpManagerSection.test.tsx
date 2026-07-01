@@ -109,16 +109,25 @@ describe("McpManagerSection", () => {
 
   it("saves only selected servers to the ctrlyoke registry", async () => {
     const user = userEvent.setup();
-    renderSection([createManagedServer("server-a"), createManagedServer("server-b")]);
+    renderSection([
+      createManagedServer("server-a"),
+      createManagedServer("server-b"),
+    ]);
     const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
 
     sendMessageMock.mockClear();
 
     await user.click(screen.getByRole("checkbox", { name: "Select server-b" }));
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[0]);
-    await user.click(within(bulkBar).getByRole("button", { name: "Claude Code" }));
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[0]
+    );
+    await user.click(
+      within(bulkBar).getByRole("button", { name: "Claude Code" })
+    );
     await user.click(screen.getByRole("button", { name: /ctrlyoke/ }));
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[1]);
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[1]
+    );
 
     expect(sendMessageMock).toHaveBeenCalledWith(
       MESSAGE_TYPES.SAVE_MCP_REGISTRY_SERVER,
@@ -135,18 +144,27 @@ describe("McpManagerSection", () => {
 
   it("deletes only selected servers from the ctrlyoke registry", async () => {
     const user = userEvent.setup();
-    renderSection([createManagedServer("server-a"), createManagedServer("server-b")]);
+    renderSection([
+      createManagedServer("server-a"),
+      createManagedServer("server-b"),
+    ]);
     const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
 
     sendMessageMock.mockClear();
 
     await user.click(screen.getByRole("checkbox", { name: "Select server-b" }));
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[0]);
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[0]
+    );
     const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
     await user.click(deleteButtons[deleteButtons.length - 1]);
-    await user.click(within(bulkBar).getByRole("button", { name: "Claude Code" }));
+    await user.click(
+      within(bulkBar).getByRole("button", { name: "Claude Code" })
+    );
     await user.click(screen.getByRole("button", { name: /ctrlyoke/ }));
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Delete" })[1]);
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Delete" })[1]
+    );
     const confirmButtons = screen.getAllByRole("button", { name: "Delete" });
     await user.click(confirmButtons[confirmButtons.length - 1]);
 
@@ -161,17 +179,24 @@ describe("McpManagerSection", () => {
 
   it("preserves non-visible default MCP entries when bulk set default runs", async () => {
     const user = userEvent.setup();
-    useSettingsStore.getState().updateGlobalSetting("mcpServers", [
-      "legacy-server",
-      { id: "server-b", command: "npx", args: ["server-b"] },
+    useSettingsStore
+      .getState()
+      .updateGlobalSetting("mcpServers", [
+        "legacy-server",
+        { id: "server-b", command: "npx", args: ["server-b"] },
+      ]);
+    renderSection([
+      createManagedServer("server-a"),
+      createManagedServer("server-b"),
     ]);
-    renderSection([createManagedServer("server-a"), createManagedServer("server-b")]);
     const bulkBar = screen.getByText(/Select all \(2\/2\)/).closest("div")!;
 
     sendMessageMock.mockClear();
 
     await user.click(screen.getByRole("checkbox", { name: "Select server-b" }));
-    await user.click(within(bulkBar).getAllByRole("button", { name: "Save" })[0]);
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[0]
+    );
     await user.click(screen.getByRole("button", { name: "Set Default" }));
     await user.click(screen.getByRole("button", { name: "Set as Default" }));
 

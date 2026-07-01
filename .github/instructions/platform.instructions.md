@@ -35,4 +35,4 @@ Keep the shim minimal and compatibility-focused:
 - `window.createTerminal()` should keep throwing so accidental VS Code-terminal usage fails fast in CLI mode;
 - `workspace.fs` / `openTextDocument` should remain backed by Node fs so shared file helpers behave predictably;
 - `registerCliAdapter()` / `unregisterCliAdapter()` exist to bridge legacy config reads, not to replace the newer CLI overlay path.
-</vscodeShim>
+  </vscodeShim>

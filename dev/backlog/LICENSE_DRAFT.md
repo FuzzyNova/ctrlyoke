@@ -10,7 +10,7 @@
 
 ---
 
-## Plain-Language Summary *(not part of the license)*
+## Plain-Language Summary _(not part of the license)_
 
 - You may use FlightPath for free, personally or commercially, as long as your organization is below the revenue and headcount thresholds below.
 - Individuals at large organizations (above $10M revenue or 250 employees) must have a Pro license — either purchased personally, or covered by their employer's enterprise license. A personal Pro license is sufficient; you do not need your employer to buy an enterprise license.
@@ -61,6 +61,7 @@ Subject to the terms and conditions of this License, Licensor grants You a limit
 The Free Tier rights in Section 2(a)–(b) are granted at no charge, subject to the following:
 
 **(a) Eligible users.** The Free Tier is available to:
+
 - Individual persons acting in their personal capacity; and
 - Organizations whose **total annual gross revenue does not exceed ten million US dollars (USD $10,000,000)** AND who employ **fewer than two hundred fifty (250) persons** (counting full-time, part-time, and contract workers).
 
@@ -82,7 +83,7 @@ You may not, and may not permit others to:
 
 **(c) Circumvent licensing.** Circumvent, disable, or defeat the Software's license verification mechanisms, or use Pro Tier capabilities without a valid, unrevoked Pro License.
 
-**(d) Offer as a hosted service.** Offer the Software's workflow orchestration capabilities as a hosted or managed service to third parties. (Using the Software's local and LAN-accessible server features to automate your own development workflows is permitted; providing those capabilities *to others* as a service is not.)
+**(d) Offer as a hosted service.** Offer the Software's workflow orchestration capabilities as a hosted or managed service to third parties. (Using the Software's local and LAN-accessible server features to automate your own development workflows is permitted; providing those capabilities _to others_ as a service is not.)
 
 **(e) Misrepresent license status.** Represent that the Software is "open source" or governed by an OSI-approved open-source license. The Software is **source-available** under this commercial license only.
 
@@ -172,7 +173,7 @@ You may not use or export the Software in violation of applicable export laws an
 
 **(f) Contact.** Licensing inquiries: `admin@fuzzno.com`
 
-**(g) Dispute resolution; arbitration.** *[ATTORNEY TO ADVISE — consider whether to include mandatory binding arbitration and a class action waiver. Rationale for inclusion: a class action from a large user base is existential for a solo-operated product in a way a single arbitration is not; mandatory arbitration is standard in many commercial software licenses. Tradeoffs: some users react negatively to arbitration clauses; may not be enforceable in all jurisdictions (notably the EU and Quebec). Attorney should advise on scope (e.g., carve-out for injunctive relief), applicable rules (AAA, JAMS), location, and whether a class action waiver is appropriate here. PLACEHOLDER — do not ship without attorney decision.]*
+**(g) Dispute resolution; arbitration.** _[ATTORNEY TO ADVISE — consider whether to include mandatory binding arbitration and a class action waiver. Rationale for inclusion: a class action from a large user base is existential for a solo-operated product in a way a single arbitration is not; mandatory arbitration is standard in many commercial software licenses. Tradeoffs: some users react negatively to arbitration clauses; may not be enforceable in all jurisdictions (notably the EU and Quebec). Attorney should advise on scope (e.g., carve-out for injunctive relief), applicable rules (AAA, JAMS), location, and whether a class action waiver is appropriate here. PLACEHOLDER — do not ship without attorney decision.]_
 
 ---
 
@@ -205,7 +206,7 @@ The following are the open points that need attorney judgment — the draft abov
 
 These are distinct from the EULA questions above and pair with [`PRIVACY_POLICY_DRAFT.md`](PRIVACY_POLICY_DRAFT.md). FlightPath has **two separate data flows** with different legal bases; please confirm both are correctly characterized and adequately disclosed.
 
-**Bucket A — Contract-necessary data (not optional).** Required to deliver paid Pro features the customer purchased; we believe the lawful basis is *performance of a contract*, not consent.
+**Bucket A — Contract-necessary data (not optional).** Required to deliver paid Pro features the customer purchased; we believe the lawful basis is _performance of a contract_, not consent.
 
 15. **License activation data** — online activation/refresh through Keygen processes a **machine fingerprint, license key, and IP address**, bound to the purchaser. Confirm this is correctly framed as contract-necessary (not telemetry/consent), and that the offline signed-license path (which avoids the network call entirely) is the right default to minimize this collection.
 16. **Payment data** — checkout is handled by Lemon Squeezy as merchant of record (name, email, billing country, payment metadata). Confirm whether Lemon Squeezy acting as MoR changes our controller/processor characterization and what we must disclose vs. what they disclose.
@@ -215,7 +216,7 @@ These are distinct from the EULA questions above and pair with [`PRIVACY_POLICY_
 
 18. **Lawful basis for telemetry** — is respecting the VS Code `telemetry.telemetryLevel` setting sufficient consent under GDPR/ePrivacy, or do we additionally need an explicit in-app notice/opt-in? Does the anonymized-by-design payload change the analysis?
 19. **"Anonymous" claim** — can we accurately call the telemetry "anonymous" (vs. "pseudonymous") given the reporter auto-attaches a VS Code machine ID, extension/VS Code version, and OS platform? Advise on the defensible term to use in the policy and marketplace copy.
-20. **Disclosure placement** — confirm the README + marketplace disclosure text in [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md) is adequate, and whether the privacy policy must be live *before* the first telemetry-enabled build ships (RELEASE_CHECKLIST Phase 5 currently gates the policy on purchase metadata regardless).
+20. **Disclosure placement** — confirm the README + marketplace disclosure text in [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md) is adequate, and whether the privacy policy must be live _before_ the first telemetry-enabled build ships (RELEASE_CHECKLIST Phase 5 currently gates the policy on purchase metadata regardless).
 
 **Cross-cutting.**
 

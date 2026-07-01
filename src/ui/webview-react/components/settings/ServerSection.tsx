@@ -303,9 +303,8 @@ export function ServerSection({
                 ctrlyoke uses the token in this link instead of a user login.
                 Treat the link like a password and share it only with people you
                 trust. Select the QR code button next to the link to open
-                ctrlyoke on your phone, then choose{" "}
-                <em>Add to Home Screen</em> or <em>Install app</em> in your
-                browser.
+                ctrlyoke on your phone, then choose <em>Add to Home Screen</em>{" "}
+                or <em>Install app</em> in your browser.
               </p>
               <p>
                 Regenerate the token if this link is exposed or someone should

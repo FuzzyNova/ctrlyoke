@@ -220,7 +220,8 @@ export function revealActiveFindMatchInRow(
   const rowRect = rowElement.getBoundingClientRect();
   const markRect = activeMark.getBoundingClientRect();
   const markFullyVisible =
-    markRect.top >= containerRect.top && markRect.bottom <= containerRect.bottom;
+    markRect.top >= containerRect.top &&
+    markRect.bottom <= containerRect.bottom;
 
   if (!markFullyVisible) {
     const delta =

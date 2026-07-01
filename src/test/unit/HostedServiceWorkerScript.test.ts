@@ -39,8 +39,6 @@ const badge = "__CTRLYOKE_NOTIFICATION_BADGE_PATH__";
 
     assert.match(rendered, /self\.addEventListener\("push"/);
     assert.ok(!rendered.includes("__CTRLYOKE_CLEAR_BADGE_MESSAGE_TYPE__"));
-    assert.ok(
-      !rendered.includes("__CTRLYOKE_INCREMENT_BADGE_MESSAGE_TYPE__")
-    );
+    assert.ok(!rendered.includes("__CTRLYOKE_INCREMENT_BADGE_MESSAGE_TYPE__"));
   });
 });

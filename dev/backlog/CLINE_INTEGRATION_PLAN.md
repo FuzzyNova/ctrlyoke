@@ -469,12 +469,7 @@ export class ClineNotificationMonitor implements INotificationMonitor {
   }
 
   getNotificationDirectory(workspaceRoot: string): string {
-    return path.join(
-      workspaceRoot,
-      ".ctrlyoke",
-      "temp",
-      "cline-notifications"
-    );
+    return path.join(workspaceRoot, ".ctrlyoke", "temp", "cline-notifications");
   }
 }
 ```
@@ -496,7 +491,7 @@ export class ClineNotificationMonitor implements INotificationMonitor {
 
 **Mapping Table:**
 
-| ctrlyoke Setting       | Cline Mapping                  |
+| ctrlyoke Setting      | Cline Mapping                  |
 | --------------------- | ------------------------------ |
 | `dangerouslyAllowAll` | `--yolo`                       |
 | `allowAll`            | `--auto-approve-all`           |

@@ -46,7 +46,11 @@ suite("WebviewSettingsSync", () => {
 
   afterEach(async () => {
     if (originalNavigatorDescriptor) {
-      Object.defineProperty(globalThis, "navigator", originalNavigatorDescriptor);
+      Object.defineProperty(
+        globalThis,
+        "navigator",
+        originalNavigatorDescriptor
+      );
     }
     for (const p of tempPaths.splice(0)) {
       try {

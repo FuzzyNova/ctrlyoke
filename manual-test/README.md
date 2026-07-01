@@ -75,25 +75,25 @@ When creating new files:
 
 ### Basic Format Tests
 
-| File                                     | Tests                                   | Duration |
-| ---------------------------------------- | --------------------------------------- | -------- |
-| `simple-prompt-test.prompt.md`           | Markdown format, basic execution        | 5 sec    |
-| `yaml-format-test.ctrlyoke.yaml`       | YAML parsing, multi-line strings        | 5 sec    |
-| `yaml-multi-step-test.ctrlyoke.yaml`   | YAML multi-step with session continuity | 10 sec   |
-| `.ctrlyoke/simple.prompt.md`           | Simple prompt in .ctrlyoke directory  | 5 sec    |
+| File                                 | Tests                                   | Duration |
+| ------------------------------------ | --------------------------------------- | -------- |
+| `simple-prompt-test.prompt.md`       | Markdown format, basic execution        | 5 sec    |
+| `yaml-format-test.ctrlyoke.yaml`     | YAML parsing, multi-line strings        | 5 sec    |
+| `yaml-multi-step-test.ctrlyoke.yaml` | YAML multi-step with session continuity | 10 sec   |
+| `.ctrlyoke/simple.prompt.md`         | Simple prompt in .ctrlyoke directory    | 5 sec    |
 | `.ctrlyoke/multi-step.ctrlyoke.json` | Multi-step with model switching         | 15 sec   |
 
 ### Session Management Tests
 
-| File                                    | Tests                                        | Duration |
-| --------------------------------------- | -------------------------------------------- | -------- |
+| File                                  | Tests                                        | Duration |
+| ------------------------------------- | -------------------------------------------- | -------- |
 | `new-chat-session-test.ctrlyoke.json` | Session isolation with `newChatSession` flag | 10 sec   |
 | `session-resume-test.ctrlyoke.yaml`   | Context preservation across prompts          | 10 sec   |
 
 ### Retry Mechanism Tests
 
-| File                                        | Tests                            | Duration |
-| ------------------------------------------- | -------------------------------- | -------- |
+| File                                      | Tests                            | Duration |
+| ----------------------------------------- | -------------------------------- | -------- |
 | `retry-counter-test.ctrlyoke.json`        | Basic retry with file validation | 15 sec   |
 | `retry-multi-step-test.ctrlyoke.json`     | Multi-step workflow with retries | 30 sec   |
 | `retry-max-exhaustion-test.ctrlyoke.json` | Max retries exhaustion behavior  | 15 sec   |
@@ -102,12 +102,12 @@ When creating new files:
 
 ### Advanced Features
 
-| File                                          | Tests                                    | Duration |
-| --------------------------------------------- | ---------------------------------------- | -------- |
+| File                                        | Tests                                    | Duration |
+| ------------------------------------------- | ---------------------------------------- | -------- |
 | `workflow-properties-test.ctrlyoke.yaml`    | Property inheritance and precedence      | 15 sec   |
 | `test-property-sync.ctrlyoke.yaml`          | Property sync to dashboard UI            | 10 sec   |
 | `dynamic-queue-basic-example.ctrlyoke.json` | Dynamic queue extension via MCP tools    | 20 sec   |
-| `attachment-test.prompt.md`                   | All attachment types (@, #file, #sym)    | 10 sec   |
+| `attachment-test.prompt.md`                 | All attachment types (@, #file, #sym)    | 10 sec   |
 | `prompt-links-test.ctrlyoke.json`           | Clickable links (Ctrl+Click navigation)  | UI Test  |
 | `precondition-test.ctrlyoke.yaml`           | preCondition pass/skip/always-run gating | 15 sec   |
 | `script-step-test.ctrlyoke.yaml`            | scriptStep executes without AI           | 10 sec   |

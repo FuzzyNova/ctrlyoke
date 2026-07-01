@@ -2,10 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { HunkTokens, TokenNode } from "react-diff-view";
 import { markFindTokens } from "@utils/rdvFindTokens";
 
-function tokens(
-  old: TokenNode[][],
-  next: TokenNode[][]
-): HunkTokens {
+function tokens(old: TokenNode[][], next: TokenNode[][]): HunkTokens {
   return { old, new: next };
 }
 

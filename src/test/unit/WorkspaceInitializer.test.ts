@@ -46,10 +46,7 @@ suite("WorkspaceInitializer", () => {
 
   test("appends missing generated .gitignore entries without removing user entries", async () => {
     const workspaceRoot = createWorkspace();
-    const ctrlyokeDir = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR
-    );
+    const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
     const gitignorePath = path.join(ctrlyokeDir, ".gitignore");
     await fs.promises.mkdir(ctrlyokeDir, { recursive: true });
     await fs.promises.writeFile(gitignorePath, "custom-entry\nlogs/\n", "utf8");

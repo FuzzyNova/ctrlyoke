@@ -219,7 +219,9 @@ export const CtrlYokeHook = async (_hookContext: unknown) => {
     }
   }
 
-  function _resolveSessionId(properties: Record<string, unknown>): string | null {
+  function _resolveSessionId(
+    properties: Record<string, unknown>
+  ): string | null {
     const directSessionId =
       typeof properties.sessionID === "string"
         ? properties.sessionID

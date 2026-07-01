@@ -743,7 +743,10 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
           return (
             <code className="bg-code-block text-code-inline-fg rounded px-1 py-0.5 font-mono">
               {codeFindHighlight
-                ? highlightCodeText(getNodeText(codeChildren), codeFindHighlight)
+                ? highlightCodeText(
+                    getNodeText(codeChildren),
+                    codeFindHighlight
+                  )
                 : codeChildren}
             </code>
           );
@@ -783,14 +786,15 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
   const remarkPlugins = useMemo(() => {
     if (!highlightQuery?.trim()) return REMARK_PLUGINS;
 
-    const highlightPlugin: PluginTuple<[HighlightMatchesOptions], Root, Root> = [
-      remarkHighlightMatches,
-      {
-        query: highlightQuery,
-        caseSensitive: highlightCaseSensitive,
-        activeIndex: highlightActiveIndex,
-      },
-    ];
+    const highlightPlugin: PluginTuple<[HighlightMatchesOptions], Root, Root> =
+      [
+        remarkHighlightMatches,
+        {
+          query: highlightQuery,
+          caseSensitive: highlightCaseSensitive,
+          activeIndex: highlightActiveIndex,
+        },
+      ];
 
     return [...REMARK_PLUGINS, highlightPlugin];
   }, [highlightQuery, highlightCaseSensitive, highlightActiveIndex]);

@@ -11,15 +11,15 @@
 
 ## Migrate vs. create-fresh — at a glance
 
-| Area | Prior state (FlightPath) | This cutover |
-| --- | --- | --- |
-| Domain + DNS (Cloudflare) | `flightpath.dev` live, DNS → Netlify | **Migrate** — stand up `ctrlyoke.dev`, 301 old → new |
-| Netlify site | hosting `flightpath.dev` | **Migrate** — repoint primary domain to `ctrlyoke.dev` |
-| Google Workspace inboxes | 6 product inboxes `@flightpath.dev` | **Migrate** — recreate `@ctrlyoke.dev`, old → forwarders |
-| GitHub repo | `FuzzyNova/flightpath` | **Migrate** — rename to `FuzzyNova/ctrlyoke` |
-| VS Code Marketplace | not yet published | **Create fresh** — publish `fuzzynova.ctrlyoke` |
-| Lemon Squeezy | **never created** | **Create fresh** under ctrlyoke |
-| Keygen | **never created** | **Create fresh** under ctrlyoke |
+| Area                      | Prior state (FlightPath)             | This cutover                                             |
+| ------------------------- | ------------------------------------ | -------------------------------------------------------- |
+| Domain + DNS (Cloudflare) | `flightpath.dev` live, DNS → Netlify | **Migrate** — stand up `ctrlyoke.dev`, 301 old → new     |
+| Netlify site              | hosting `flightpath.dev`             | **Migrate** — repoint primary domain to `ctrlyoke.dev`   |
+| Google Workspace inboxes  | 6 product inboxes `@flightpath.dev`  | **Migrate** — recreate `@ctrlyoke.dev`, old → forwarders |
+| GitHub repo               | `FuzzyNova/flightpath`               | **Migrate** — rename to `FuzzyNova/ctrlyoke`             |
+| VS Code Marketplace       | not yet published                    | **Create fresh** — publish `fuzzynova.ctrlyoke`          |
+| Lemon Squeezy             | **never created**                    | **Create fresh** under ctrlyoke                          |
+| Keygen                    | **never created**                    | **Create fresh** under ctrlyoke                          |
 
 > **Decisions carried over from the rebrand plan:** keep `flightpath.dev` as a **permanent 301 redirect**, and keep `@flightpath.dev` inboxes as **forwarders during a short overlap**. Publisher stays **`fuzzynova`** (studio identity, unaffected).
 

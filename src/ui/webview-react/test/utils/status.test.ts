@@ -225,9 +225,9 @@ describe("getWorkflowExecutionControls", () => {
   });
 
   it("blocks run when no workflow file is loaded", () => {
-    expect(
-      getControls(EXECUTION_STATES.IDLE, { hasFile: false }).canRun
-    ).toBe(false);
+    expect(getControls(EXECUTION_STATES.IDLE, { hasFile: false }).canRun).toBe(
+      false
+    );
   });
 
   it("allows pause and stop while running", () => {

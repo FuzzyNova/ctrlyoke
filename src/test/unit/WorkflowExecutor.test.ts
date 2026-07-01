@@ -458,7 +458,10 @@ suite("WorkflowExecutor finalStep phase 2", () => {
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.STOPPED);
     assert.strictEqual(captureCalls.length, 1);
     assert.strictEqual(captureCalls[0].stepIndex, 0);
-    assert.strictEqual(captureCalls[0].output.response, "partial response before stop");
+    assert.strictEqual(
+      captureCalls[0].output.response,
+      "partial response before stop"
+    );
     assert.strictEqual(captureCalls[0].output.errorMessage, undefined);
 
     assert.deepStrictEqual(statusCalls, [
@@ -794,10 +797,16 @@ suite("WorkflowExecutor finalStep phase 2", () => {
 
     await executor.execute(integration, makeContext(integration));
 
-    assert.deepStrictEqual(integration.sentPrompts, ["first-step", "second-step"]);
+    assert.deepStrictEqual(integration.sentPrompts, [
+      "first-step",
+      "second-step",
+    ]);
     assert.strictEqual(queue.getState().status, EXECUTION_STATES.COMPLETED);
     assert.strictEqual(queue.getState().results[0].status, STEP_STATUS.FAILED);
-    assert.strictEqual(queue.getState().results[1].status, STEP_STATUS.COMPLETED);
+    assert.strictEqual(
+      queue.getState().results[1].status,
+      STEP_STATUS.COMPLETED
+    );
   });
 
   test("retries the same step when errorBehavior.onError is retry", async () => {

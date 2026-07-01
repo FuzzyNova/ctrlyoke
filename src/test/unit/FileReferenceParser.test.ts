@@ -180,7 +180,9 @@ suite("FileReferenceParser", () => {
     });
 
     test("parses #sym: reference with method syntax (parentheses)", () => {
-      const refs = parseSymbolReferences("#sym:src/class.ts:handleClick():100-125");
+      const refs = parseSymbolReferences(
+        "#sym:src/class.ts:handleClick():100-125"
+      );
       assert.strictEqual(refs.length, 1);
       assert.strictEqual(refs[0].symbolName, "handleClick()");
       assert.strictEqual(refs[0].startLine, 100);

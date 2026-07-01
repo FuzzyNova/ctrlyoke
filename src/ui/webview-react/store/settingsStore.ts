@@ -184,7 +184,11 @@ interface SettingsState {
   selectedDisplayIp: string | null;
 
   // Last generated self-signed cert metadata (generatedAt/expiresAt are ISO strings)
-  lastCertGenerated: { generatedAt: string; expiresAt: string; sans: string[] } | null;
+  lastCertGenerated: {
+    generatedAt: string;
+    expiresAt: string;
+    sans: string[];
+  } | null;
 
   // Incremented each time a cert is actually generated — drives the flash without triggering on settings load
   certFlashCount: number;
@@ -253,7 +257,9 @@ interface SettingsActions {
   setSelectedDisplayIp: (ip: string | null) => void;
 
   // Cert / token feedback signals
-  setLastCertGenerated: (info: { generatedAt: string; expiresAt: string; sans: string[] } | null) => void;
+  setLastCertGenerated: (
+    info: { generatedAt: string; expiresAt: string; sans: string[] } | null
+  ) => void;
   bumpCertFlashCount: () => void;
   setLastTokenRegenerated: (timestamp: number | null) => void;
   bumpTokenFlashCount: () => void;
@@ -511,9 +517,12 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setSelectedDisplayIp: (ip) => set({ selectedDisplayIp: ip }),
 
     setLastCertGenerated: (info) => set({ lastCertGenerated: info }),
-    bumpCertFlashCount: () => set((s) => ({ certFlashCount: s.certFlashCount + 1 })),
-    setLastTokenRegenerated: (timestamp) => set({ lastTokenRegenerated: timestamp }),
-    bumpTokenFlashCount: () => set((s) => ({ tokenFlashCount: s.tokenFlashCount + 1 })),
+    bumpCertFlashCount: () =>
+      set((s) => ({ certFlashCount: s.certFlashCount + 1 })),
+    setLastTokenRegenerated: (timestamp) =>
+      set({ lastTokenRegenerated: timestamp }),
+    bumpTokenFlashCount: () =>
+      set((s) => ({ tokenFlashCount: s.tokenFlashCount + 1 })),
 
     setDevStatus: (dev) => set({ dev }),
 

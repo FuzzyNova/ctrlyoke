@@ -119,7 +119,11 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         mainLabel={
           <span className="flex items-center gap-1.5">
             <i className={`codicon codicon-add py-0.5 ${btnSizes.icon}`} />
-            <span className={compactUntilLg ? "hidden lg:inline" : "hidden sm:inline"}>
+            <span
+              className={
+                compactUntilLg ? "hidden lg:inline" : "hidden sm:inline"
+              }
+            >
               New
             </span>
           </span>

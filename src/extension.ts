@@ -456,9 +456,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // arrives before init completes, auto-load is deferred until init finishes.
     workflowOrchestrator.initialize().catch((err) => {
       Log.error("Manager initialization failed:", err);
-      vscode.window.showErrorMessage(
-        `ctrlyoke: Initialization failed: ${err}`
-      );
+      vscode.window.showErrorMessage(`ctrlyoke: Initialization failed: ${err}`);
     });
 
     // Re-capture theme vars when VS Code theme changes
@@ -926,7 +924,8 @@ function registerCommands(context: vscode.ExtensionContext) {
             (await getWorkingTreeDiff(workspaceRoot)).trim() ||
             "No uncommitted changes in working tree.";
         } else if (ref === GIT_CHANGE_KINDS.STAGED) {
-          content = (await getStagedDiff(workspaceRoot)).trim() || "No staged changes.";
+          content =
+            (await getStagedDiff(workspaceRoot)).trim() || "No staged changes.";
         } else if (stashIndex !== null) {
           content = await getStashDiff(workspaceRoot, stashIndex);
         } else {
@@ -950,9 +949,7 @@ function registerCommands(context: vscode.ExtensionContext) {
             };
           }>("vscode.git")
           ?.exports.getAPI(1);
-        const files = gitApi
-          ? await getStashFiles(workspaceRoot, index)
-          : [];
+        const files = gitApi ? await getStashFiles(workspaceRoot, index) : [];
         if (!gitApi || files.length === 0) {
           // No git API, or nothing tracked in the stash — the generated diff
           // still surfaces untracked-only stashes as text.

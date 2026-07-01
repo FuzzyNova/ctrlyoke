@@ -4,19 +4,19 @@ These are the main user-facing commands registered by the extension.
 
 ## Core workflow commands
 
-| Command                             | What it does              |
-| ----------------------------------- | ------------------------- |
+| Command                         | What it does              |
+| ------------------------------- | ------------------------- |
 | `ctrlyoke: Open ctrlyoke Panel` | Open the panel UI         |
-| `ctrlyoke: Run`                   | Start the loaded workflow |
-| `ctrlyoke: Pause Execution`       | Pause the current run     |
-| `ctrlyoke: Resume Execution`      | Resume a paused run       |
-| `ctrlyoke: Stop Execution`        | Stop the current run      |
-| `ctrlyoke: Show Output Panel`     | Open the output panel     |
+| `ctrlyoke: Run`                 | Start the loaded workflow |
+| `ctrlyoke: Pause Execution`     | Pause the current run     |
+| `ctrlyoke: Resume Execution`    | Resume a paused run       |
+| `ctrlyoke: Stop Execution`      | Stop the current run      |
+| `ctrlyoke: Show Output Panel`   | Open the output panel     |
 
 ## Workflow authoring commands
 
-| Command                                  | What it does                               |
-| ---------------------------------------- | ------------------------------------------ |
+| Command                                | What it does                               |
+| -------------------------------------- | ------------------------------------------ |
 | `ctrlyoke: Create Prompt File`         | Create a new prompt file                   |
 | `ctrlyoke: New Draft Prompt`           | Create a draft prompt                      |
 | `ctrlyoke: New Workflow from Template` | Start from a template                      |
@@ -26,20 +26,20 @@ These are the main user-facing commands registered by the extension.
 
 ## Queue and session commands
 
-| Command                                  | What it does                                |
-| ---------------------------------------- | ------------------------------------------- |
+| Command                              | What it does                                |
+| ------------------------------------ | ------------------------------------------- |
 | `ctrlyoke: Queue with ctrlyoke`      | Append a prompt file to the queue           |
 | `ctrlyoke: Queue Next with ctrlyoke` | Insert a prompt file after the current step |
-| `ctrlyoke: Queue Prompt File`          | Queue a prompt file from the dashboard      |
-| `ctrlyoke: Resume Session`             | Resume a prior session                      |
+| `ctrlyoke: Queue Prompt File`        | Queue a prompt file from the dashboard      |
+| `ctrlyoke: Resume Session`           | Resume a prior session                      |
 
 ## Workspace and helper commands
 
-| Command                                   | What it does                                        |
-| ----------------------------------------- | --------------------------------------------------- |
+| Command                                 | What it does                                      |
+| --------------------------------------- | ------------------------------------------------- |
 | `ctrlyoke: Initialize Workspace`        | Create the standard `.ctrlyoke` workspace folders |
-| `ctrlyoke: Create End Condition Script` | Create a validation script template                 |
-| `ctrlyoke: Import ctrlyoke Agents`    | Import bundled agents                               |
+| `ctrlyoke: Create End Condition Script` | Create a validation script template               |
+| `ctrlyoke: Import ctrlyoke Agents`      | Import bundled agents                             |
 
 ## Prompt editor context commands
 

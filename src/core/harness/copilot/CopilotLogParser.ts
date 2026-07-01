@@ -97,10 +97,7 @@ export class CopilotLogParser extends BaseLogParser {
    */
 
   /** Tracks in-flight tool calls across streaming events for extractStructuredEventsFromEvent. */
-  private pendingStreamingTools = new Map<
-    string,
-    CopilotPendingTool
-  >();
+  private pendingStreamingTools = new Map<string, CopilotPendingTool>();
 
   /**
    * Extract complete response from Copilot log events
@@ -144,10 +141,7 @@ export class CopilotLogParser extends BaseLogParser {
     let contextWindowSize: number | undefined;
 
     // Track pending tool calls to associate execution_start with execution_complete
-    const pendingTools = new Map<
-      string,
-      CopilotPendingTool
-    >();
+    const pendingTools = new Map<string, CopilotPendingTool>();
 
     for (const event of events as CopilotProviderEvent[]) {
       const timestamp = event.timestamp

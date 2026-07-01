@@ -32,7 +32,7 @@ Keep the command surface focused on a few categories:
 - **Reference artifact generation**: command dumps go to `dev/reference/`; discovered models go to `scripts/discovered-models.json`.
 - **Dashboard dev actions**: build/test/restart actions stream `DEV_BUILD_*` / `DEV_RESTARTING` / `DEV_COMMAND_UNAVAILABLE` messages back to the UI.
 - **Optional notification testing**: `ctrlyoke.dev.sendTestNotification` only exists when a handler is injected from `extension.ts`; keep server/notification dependencies out of `DevCommands.ts` itself.
-</highValueCommands>
+  </highValueCommands>
 
 <modelUpdateWorkflow>
 `ctrlyoke.exportDiscoveredModels` is the front door for refreshing checked-in model lists:
@@ -43,7 +43,7 @@ Keep the command surface focused on a few categories:
 4. `npm run sync-models` → syncs `package.json` enums and `schemas/workflow-schema.json`
 5. `npm run generate-schema` → regenerates YAML schema from JSON
 6. Commit all updated files
-</modelUpdateWorkflow>
+   </modelUpdateWorkflow>
 
 <conventions>
 - Never register dev commands outside the `IS_DEV_MODE` guard.

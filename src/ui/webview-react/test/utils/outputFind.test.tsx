@@ -3,10 +3,7 @@ import { render, screen } from "@testing-library/react";
 import type { CliOutput } from "@/types/cliEvents";
 import { CLI_EVENT_TYPES } from "@/types/cliEvents";
 import { FINAL_STEP_PHASES } from "@/types/messages";
-import {
-  findOutputMatches,
-  highlightText,
-} from "@utils/outputFind";
+import { findOutputMatches, highlightText } from "@utils/outputFind";
 import type { OutputRenderRow } from "@utils/outputRows";
 
 const target = { kind: FINAL_STEP_PHASES.QUEUE, index: 0 } as const;
@@ -21,7 +18,10 @@ function makePromptRow(text: string, key = "prompt-1"): OutputRenderRow {
   };
 }
 
-function makePlainResponseRow(text: string, key = "response-1"): OutputRenderRow {
+function makePlainResponseRow(
+  text: string,
+  key = "response-1"
+): OutputRenderRow {
   return {
     key,
     rowKind: "plain-response",
@@ -103,7 +103,9 @@ function makeStatsRow(key = "stats-1"): OutputRenderRow {
 describe("outputFind", () => {
   describe("findOutputMatches", () => {
     it("returns empty for an empty query", () => {
-      expect(findOutputMatches([makePromptRow("hello")], "", false)).toEqual([]);
+      expect(findOutputMatches([makePromptRow("hello")], "", false)).toEqual(
+        []
+      );
     });
 
     it("finds a single match in a prompt row", () => {
@@ -140,9 +142,9 @@ describe("outputFind", () => {
     });
 
     it("returns an empty array when no matches exist", () => {
-      expect(findOutputMatches([makePromptRow("hello")], "missing", false)).toEqual(
-        []
-      );
+      expect(
+        findOutputMatches([makePromptRow("hello")], "missing", false)
+      ).toEqual([]);
     });
 
     it("finds matches in structured bash command rows", () => {
@@ -244,7 +246,9 @@ describe("outputFind", () => {
     });
 
     it("wraps matching text in a mark element", () => {
-      render(<>{highlightText("find me", [{ start: 5, end: 7, active: false }])}</>);
+      render(
+        <>{highlightText("find me", [{ start: 5, end: 7, active: false }])}</>
+      );
 
       const mark = screen.getByText("me");
       expect(mark.tagName).toBe("MARK");
@@ -253,12 +257,13 @@ describe("outputFind", () => {
 
     it("marks the active match with data-find-active", () => {
       render(
-        <>
-          {highlightText("find me", [{ start: 5, end: 7, active: true }])}
-        </>
+        <>{highlightText("find me", [{ start: 5, end: 7, active: true }])}</>
       );
 
-      expect(screen.getByText("me")).toHaveAttribute("data-find-active", "true");
+      expect(screen.getByText("me")).toHaveAttribute(
+        "data-find-active",
+        "true"
+      );
       expect(screen.getByText("me")).toHaveClass(
         "bg-find-match",
         "ring-find-match-border"

@@ -1322,7 +1322,11 @@ export class CodexLogParser extends BaseLogParser {
     // Newer Codex models wrap every action in an `exec` tool whose input is a
     // JavaScript snippet driving sandbox helpers (shell_command / apply_patch).
     if (toolName === "exec" && typeof input === "string") {
-      return CodexToolBuilder.buildExecInitiatedEvents(input, callId, timestamp);
+      return CodexToolBuilder.buildExecInitiatedEvents(
+        input,
+        callId,
+        timestamp
+      );
     }
 
     // Legacy format: input is a plain value or a JSON string of tool arguments.
@@ -1518,5 +1522,4 @@ export class CodexLogParser extends BaseLogParser {
       return null;
     }
   }
-
 }

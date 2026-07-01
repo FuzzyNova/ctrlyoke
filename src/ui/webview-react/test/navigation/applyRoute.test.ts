@@ -89,7 +89,10 @@ describe("applyRoute — workflow", () => {
     useUiStore
       .getState()
       .setLoadedWorkflows([
-        { id: "w1", workingFilePath: "src/m.yaml" } as unknown as WorkflowSummary,
+        {
+          id: "w1",
+          workingFilePath: "src/m.yaml",
+        } as unknown as WorkflowSummary,
       ]);
     const api = fakeVsCode();
     applyRoute({ workflow: "src/m.yaml" }, api);

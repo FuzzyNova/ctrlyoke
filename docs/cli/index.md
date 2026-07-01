@@ -2,9 +2,9 @@
 
 ctrlyoke ships with two command-line entry points:
 
-| Command          | Purpose                                  |
-| ---------------- | ---------------------------------------- |
-| `ctrlyoke`     | Execute or validate workflow files       |
+| Command        | Purpose                                |
+| -------------- | -------------------------------------- |
+| `ctrlyoke`     | Execute or validate workflow files     |
 | `ctrlyoke-mcp` | Run the standalone ctrlyoke MCP server |
 
 ## What the CLI shares with the extension

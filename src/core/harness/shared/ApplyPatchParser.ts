@@ -236,7 +236,9 @@ export class ApplyPatchParser {
   }
 
   static extractFirstPath(patchInput: string): string | undefined {
-    const fileMatch = patchInput.match(/\*\*\* (?:Add|Update|Delete) File: (.+)/);
+    const fileMatch = patchInput.match(
+      /\*\*\* (?:Add|Update|Delete) File: (.+)/
+    );
     return fileMatch?.[1]?.trim();
   }
 }

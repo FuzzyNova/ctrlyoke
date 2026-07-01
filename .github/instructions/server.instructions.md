@@ -20,7 +20,7 @@ Key supporting pieces:
 - `WebPushService` — VAPID keys + push subscription persistence under `.ctrlyoke/notifications/`
 - `HostedServiceWorkerScript` — injects `DashboardConstants` values into the raw service-worker template at request time
 - `PngIconService` — shared in-memory colorized PNG renderer for hosted app icons
-</architecture>
+  </architecture>
 
 <authAndTransport>
 - HTML, manifest, API routes, SPA fallback, and WebSocket connections require the server token.
@@ -36,7 +36,7 @@ Key supporting pieces:
 - It opens `/ws?token=...`, sends `READY`, buffers inbound messages until React posts its own `READY`, and re-sends the latest `READY` after reconnects so the new socket gets targeted replay.
 - Per-tab state is isolated with `sessionStorage` tab IDs and `localStorage` keys derived from that tab ID; do not collapse this to a single global browser state.
 - Theme updates bypass React: the shim applies `THEME_VARS_UPDATED` directly to `:root` and `body` classes to avoid startup flashes and dark-mode mismatches.
-</browserBridge>
+  </browserBridge>
 
 <htmlAndAssets>
 `CtrlYokeHostedServer.buildHtml()` is the browser-only patch layer over the Vite output.
@@ -45,7 +45,7 @@ Key supporting pieces:
 - Keep the standalone shim injection, CSP rewrite, theme-style injection, manifest link, and hosted icon links together in this method.
 - Icon URLs intentionally get `bg`/`fg` query params for cache busting when hosted icon colors change.
 - `resolveWebviewDist()` assumes runtime `__dirname` is `out/`; keep hosted asset lookups relative to that output layout.
-</htmlAndAssets>
+  </htmlAndAssets>
 
 <workspaceViewer>
 `HostedWorkspaceViewerService` is the security boundary for browser file/Git access.
@@ -55,7 +55,7 @@ Key supporting pieces:
 - Git commands use `execFile`, never shell strings. Paths passed to Git are normalized to forward slashes with `toGitPath()`.
 - The service owns directory tree/file read-save plus delete/copy/move, SCM status/diff/stage/unstage/discard, push/pull, and browser-side commit-message generation.
 - `generateCommitMessage()` reuses `src/git/CommitMessageGenerator.ts` and records provenance through `commitMessageGenerationTracker`; keep that path aligned with the SCM commit-message flow instead of inventing a browser-only implementation.
-</workspaceViewer>
+  </workspaceViewer>
 
 <notifications>
 - Hosted completion notifications are deduped per server instance via `notifiedEventIds` before broadcasting or sending push.

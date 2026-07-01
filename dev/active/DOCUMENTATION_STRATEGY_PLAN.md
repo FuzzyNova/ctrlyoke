@@ -30,14 +30,14 @@
 
 ctrlyoke is a VS Code extension (publisher: `fuzzynova`) that automates AI coding assistants — GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini — through structured YAML/JSON workflow files. The product surface area includes:
 
-| Surface                                                | Notes                                            |
-| ------------------------------------------------------ | ------------------------------------------------ |
-| VS Code Extension                                      | Published/to be published on VS Code Marketplace |
-| `ctrlyoke-mcp` CLI binary                               | Standalone MCP server for queue management       |
-| `ctrlyoke` CLI binary                                   | CLI adapter for direct workflow execution        |
-| `.ctrlyoke.yaml` / `.ctrlyoke.json` / `.prompt.md`      | Workflow file formats with JSON Schema           |
-| Owner's existing website                               | Already exists                                   |
-| GitHub repository                                      | Public, `github.com/FuzzyNova/ctrlyoke`          |
+| Surface                                            | Notes                                            |
+| -------------------------------------------------- | ------------------------------------------------ |
+| VS Code Extension                                  | Published/to be published on VS Code Marketplace |
+| `ctrlyoke-mcp` CLI binary                          | Standalone MCP server for queue management       |
+| `ctrlyoke` CLI binary                              | CLI adapter for direct workflow execution        |
+| `.ctrlyoke.yaml` / `.ctrlyoke.json` / `.prompt.md` | Workflow file formats with JSON Schema           |
+| Owner's existing website                           | Already exists                                   |
+| GitHub repository                                  | Public, `github.com/FuzzyNova/ctrlyoke`          |
 
 ### Documentation Goals
 

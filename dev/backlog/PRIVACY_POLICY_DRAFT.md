@@ -12,7 +12,7 @@
 
 ---
 
-## Plain-Language Summary *(not part of the policy)*
+## Plain-Language Summary _(not part of the policy)_
 
 - FlightPath runs locally in your editor. **We never collect your prompts, code, file paths, workspace names, or AI output.**
 - If you buy **Pro**, we process the minimum data needed to sell you a license and verify it (your email and payment details via our payment provider; a machine identifier and license key to activate Pro on your computer).
@@ -28,7 +28,7 @@ This policy explains what data Fuzzy Nova collects when you use the FlightPath V
 
 ---
 
-## 2. What We Do *Not* Collect
+## 2. What We Do _Not_ Collect
 
 The Software runs locally and orchestrates AI coding harnesses on your own machine. We have designed it so that the following **never leave your machine to us**:
 
@@ -43,7 +43,7 @@ The Software runs locally and orchestrates AI coding harnesses on your own machi
 
 ## 3. Data We Process
 
-### 3.1 Anonymous Usage Telemetry *(lawful basis: consent / legitimate interest — see §6)*
+### 3.1 Anonymous Usage Telemetry _(lawful basis: consent / legitimate interest — see §6)_
 
 The Software uses Microsoft's `@vscode/extension-telemetry` library, which **honors your VS Code `telemetry.telemetryLevel` setting**. If you have telemetry disabled in VS Code, the Software sends us nothing.
 
@@ -52,12 +52,12 @@ When enabled, we collect only non-identifying operational data, such as:
 - Harness identifier (e.g. which AI CLI was used) and execution mode
 - Counts and durations (step counts, elapsed time, token counts)
 - Boolean feature flags (whether a feature was enabled)
-- Outcome and error *type* names (never error messages, which may contain user data)
+- Outcome and error _type_ names (never error messages, which may contain user data)
 - Standard environment metadata automatically added by the library: a VS Code machine identifier, extension version, VS Code version, and OS platform
 
 We use this to understand which features and harnesses are used, prioritize fixes, and decide where to invest. Telemetry is processed by **Azure Application Insights** (Microsoft).
 
-### 3.2 Pro License & Activation Data *(lawful basis: performance of a contract)*
+### 3.2 Pro License & Activation Data _(lawful basis: performance of a contract)_
 
 If you purchase and activate a Pro license, we process the minimum data needed to issue and verify it:
 
@@ -66,15 +66,15 @@ If you purchase and activate a Pro license, we process the minimum data needed t
 
 License verification is provided by **Keygen**. Where you use the **offline signed-license file**, activation is verified locally on your machine and this data is **not** transmitted to us or Keygen.
 
-### 3.3 Purchase & Billing Data *(lawful basis: performance of a contract / legal obligation)*
+### 3.3 Purchase & Billing Data _(lawful basis: performance of a contract / legal obligation)_
 
 Purchases are handled by our payment provider, **Lemon Squeezy** (acting as merchant of record). They collect and process your name, email address, billing country, and payment details under their own privacy policy. We receive order metadata (such as your email, product, and order ID) to issue and support your license. We do not receive or store full payment-card numbers.
 
-### 3.4 Support Data *(lawful basis: legitimate interest)*
+### 3.4 Support Data _(lawful basis: legitimate interest)_
 
 If you email `support@flightpath.dev`, `billing@flightpath.dev`, `security@flightpath.dev`, or `sales@flightpath.dev`, we receive the contents of your message and your email address. Support email is hosted on **Google Workspace**. Public bug reports filed on our GitHub repository are governed by GitHub's privacy policy and are visible to anyone.
 
-### 3.5 Website Data *(lawful basis: legitimate interest)*
+### 3.5 Website Data _(lawful basis: legitimate interest)_
 
 The `flightpath.dev` website and its checkout/license functions are hosted on **Netlify**, which processes standard server logs (including IP addresses) to serve and secure the site.
 
@@ -84,13 +84,13 @@ The `flightpath.dev` website and its checkout/license functions are hosted on **
 
 We rely on the following vendors to operate FlightPath. Each processes data only as needed to provide its service:
 
-| Sub-processor | Purpose | Data categories |
-| --- | --- | --- |
-| Microsoft Azure Application Insights | Anonymous usage telemetry | Telemetry events, machine/version/OS metadata |
-| Keygen | Pro license issuance & verification | License key, machine identifier, IP (online activation only) |
-| Lemon Squeezy | Payments & merchant of record | Name, email, billing country, payment metadata |
-| Netlify | Website & license webhook hosting | Server logs, IP addresses |
-| Google Workspace | Business & support email | Email content and addresses |
+| Sub-processor                        | Purpose                             | Data categories                                              |
+| ------------------------------------ | ----------------------------------- | ------------------------------------------------------------ |
+| Microsoft Azure Application Insights | Anonymous usage telemetry           | Telemetry events, machine/version/OS metadata                |
+| Keygen                               | Pro license issuance & verification | License key, machine identifier, IP (online activation only) |
+| Lemon Squeezy                        | Payments & merchant of record       | Name, email, billing country, payment metadata               |
+| Netlify                              | Website & license webhook hosting   | Server logs, IP addresses                                    |
+| Google Workspace                     | Business & support email            | Email content and addresses                                  |
 
 ---
 
@@ -126,13 +126,13 @@ We **do not sell your personal data**, and we do not use it for third-party adve
 
 ## 8. International Transfers
 
-Our sub-processors may process data in the United States and other countries. Where required, transfers rely on appropriate safeguards such as Standard Contractual Clauses. *[ATTORNEY TO CONFIRM mechanism and any required disclosures.]*
+Our sub-processors may process data in the United States and other countries. Where required, transfers rely on appropriate safeguards such as Standard Contractual Clauses. _[ATTORNEY TO CONFIRM mechanism and any required disclosures.]_
 
 ---
 
 ## 9. Children
 
-FlightPath is a professional developer tool and is not directed to children. We do not knowingly collect personal data from children under [16/13 — align with EULA]. *[ATTORNEY TO CONFIRM age and consistency with EULA #11.]*
+FlightPath is a professional developer tool and is not directed to children. We do not knowingly collect personal data from children under [16/13 — align with EULA]. _[ATTORNEY TO CONFIRM age and consistency with EULA #11.]_
 
 ---
 
@@ -163,4 +163,4 @@ These mirror and extend the "Data Collection & Privacy" questions in [`LICENSE_D
 8. **Retention windows** — confirm we can publish the specific windows in §7 and that they match our sub-processor agreements.
 9. **Children's age threshold** — set the correct age and align with EULA #11 (§9).
 10. **Acceptance & versioning** — should the privacy policy be referenced from the EULA and from a first-run notice? Coordinate with EULA #9 (first-run acceptance).
-11. **Launch gating** — confirm this policy must be live before *any* purchase-metadata or telemetry collection begins (RELEASE_CHECKLIST Phase 5).
+11. **Launch gating** — confirm this policy must be live before _any_ purchase-metadata or telemetry collection begins (RELEASE_CHECKLIST Phase 5).

@@ -192,24 +192,24 @@ The script runs in an isolated child process. The `returns` value is compared ag
 
 ## Command Reference
 
-| Command                                  | What It Does                                          |
-| ---------------------------------------- | ----------------------------------------------------- |
-| `ctrlyoke: Open ctrlyoke Panel`      | Open the dashboard sidebar                            |
+| Command                                | What It Does                                        |
+| -------------------------------------- | --------------------------------------------------- |
+| `ctrlyoke: Open ctrlyoke Panel`        | Open the dashboard sidebar                          |
 | `ctrlyoke: Initialize Workspace`       | Create `.ctrlyoke/` directory structure             |
-| `ctrlyoke: New Workflow from Template` | Create a workflow from a built-in template            |
-| `ctrlyoke: Create Prompt File`         | Create a new workflow file                            |
+| `ctrlyoke: New Workflow from Template` | Create a workflow from a built-in template          |
+| `ctrlyoke: Create Prompt File`         | Create a new workflow file                          |
 | `ctrlyoke: New Draft Prompt`           | Create a draft `.prompt.md` in `.ctrlyoke/prompts/` |
-| `ctrlyoke: Run` (editor title bar)     | Run the active workflow file                          |
-| `ctrlyoke: Pause Execution`            | Pause after the current step completes                |
-| `ctrlyoke: Resume Execution`           | Resume a paused workflow                              |
-| `ctrlyoke: Stop Execution`             | Stop and reset the current workflow                   |
-| `ctrlyoke: Resume Session`             | Reconnect to an interrupted session                   |
+| `ctrlyoke: Run` (editor title bar)     | Run the active workflow file                        |
+| `ctrlyoke: Pause Execution`            | Pause after the current step completes              |
+| `ctrlyoke: Resume Execution`           | Resume a paused workflow                            |
+| `ctrlyoke: Stop Execution`             | Stop and reset the current workflow                 |
+| `ctrlyoke: Resume Session`             | Reconnect to an interrupted session                 |
 | `ctrlyoke: Show Output Panel`          | Open the ctrlyoke output log                        |
 
 Right-click context menu on workflow files:
 
-| Action                     | Effect                                  |
-| -------------------------- | --------------------------------------- |
+| Action                   | Effect                                  |
+| ------------------------ | --------------------------------------- |
 | Run with ctrlyoke        | Load and immediately run the file       |
 | Load in ctrlyoke         | Load without running (edit first)       |
 | Queue with ctrlyoke      | Append to the current workflow queue    |

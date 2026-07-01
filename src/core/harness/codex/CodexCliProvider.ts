@@ -424,9 +424,9 @@ export class CodexCliProvider implements ICliProvider {
       throw new Error("Unexpected hook config type for Codex CLI");
     }
 
-    const ctrlyokeHooksSection = (
-      hookConfig.config as Record<string, unknown>
-    )["hooks"] as Record<string, unknown[]>;
+    const ctrlyokeHooksSection = (hookConfig.config as Record<string, unknown>)[
+      "hooks"
+    ] as Record<string, unknown[]>;
 
     const workflowUserHooks = this.buildUserHooksSection(
       userHooks,

@@ -516,15 +516,15 @@ LAUNCH (not yet shipped) — gated on:
 
 ## Estimated Timeline
 
-| Milestone                  | Items                                                                  | Target          |
-| -------------------------- | ---------------------------------------------------------------------- | --------------- |
-| **Engine MVP** ✅          | Core engine + 1.1, 1.2, 1.4, 1.7, 2.1, 2.6, pre-conditions (all built) | Done            |
-| **v0.1.0 Launch**          | 0.A landing page, 0.B Pro licensing, Tier 0 publish checklist          | Next up         |
-| **v0.1.x Rapid UX**        | 1.3 (ready), 1.5, 1.6                                                   | After launch    |
-| **v0.2.0 Polish & DX**     | 1.8, 2.2 (telemetry), 2.5                                              | Following       |
-| **v0.3.0 Project Context** | 2.3 + 2.4 + 2.8 (docs site expansion)                                  | Later           |
-| **v0.4.0 Power Features**  | 3.1 + 3.2 + 3.3                                                        | Later           |
-| **v0.5.0 Platform & Pro+** | 4.1 + 4.2 (Pro+ tiers) + 4.3                                           | Later           |
+| Milestone                  | Items                                                                  | Target       |
+| -------------------------- | ---------------------------------------------------------------------- | ------------ |
+| **Engine MVP** ✅          | Core engine + 1.1, 1.2, 1.4, 1.7, 2.1, 2.6, pre-conditions (all built) | Done         |
+| **v0.1.0 Launch**          | 0.A landing page, 0.B Pro licensing, Tier 0 publish checklist          | Next up      |
+| **v0.1.x Rapid UX**        | 1.3 (ready), 1.5, 1.6                                                  | After launch |
+| **v0.2.0 Polish & DX**     | 1.8, 2.2 (telemetry), 2.5                                              | Following    |
+| **v0.3.0 Project Context** | 2.3 + 2.4 + 2.8 (docs site expansion)                                  | Later        |
+| **v0.4.0 Power Features**  | 3.1 + 3.2 + 3.3                                                        | Later        |
+| **v0.5.0 Platform & Pro+** | 4.1 + 4.2 (Pro+ tiers) + 4.3                                           | Later        |
 
 _Dates removed: the prior timeline asserted a May 12, 2026 release that never happened. Pre-release — prioritize quality and the launch blockers over a schedule._
 
@@ -543,11 +543,11 @@ _Dates removed: the prior timeline asserted a May 12, 2026 release that never ha
 
 ### Launch Blockers (must land before publish)
 
-| Document                                            | Status      | Roadmap Item |
-| --------------------------------------------------- | ----------- | ------------ |
-| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)     | 📝 PLANNING | 0.A / 2.8    |
-| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)       | 📝 PLANNING | 0.B / 4.2    |
-| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)               | 🔄 PARTIAL  | Tier 0       |
+| Document                                       | Status      | Roadmap Item |
+| ---------------------------------------------- | ----------- | ------------ |
+| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) | 📝 PLANNING | 0.A / 2.8    |
+| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)   | 📝 PLANNING | 0.B / 4.2    |
+| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)           | 🔄 PARTIAL  | Tier 0       |
 
 ### Backlog (not yet started)
 

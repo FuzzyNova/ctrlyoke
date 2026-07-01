@@ -51,13 +51,13 @@ parallel groups (not a full DAG).
 
 ## Distinction from Existing Parallel Workflows
 
-| Feature                                          | Existing                                | This Plan                    |
-| ------------------------------------------------ | --------------------------------------- | ---------------------------- |
+| Feature                                          | Existing                              | This Plan                    |
+| ------------------------------------------------ | ------------------------------------- | ---------------------------- |
 | Multiple workflows running at once               | Yes — separate `.ctrlyoke.yaml` files | —                            |
-| Multiple prompts running at once within one file | No                                      | Yes                          |
-| Shared workflow context (vars, harness, model)   | No — each file is independent           | Yes                          |
-| Synthesis step after parallel group completes    | Manual external orchestration           | Native                       |
-| Dashboard view                                   | One tab per workflow                    | One workflow, grouped output |
+| Multiple prompts running at once within one file | No                                    | Yes                          |
+| Shared workflow context (vars, harness, model)   | No — each file is independent         | Yes                          |
+| Synthesis step after parallel group completes    | Manual external orchestration         | Native                       |
+| Dashboard view                                   | One tab per workflow                  | One workflow, grouped output |
 
 ---
 
@@ -617,16 +617,16 @@ runtime step type that the TypeScript model deliberately does not have. Update o
 
 | File                                                                                       | Change                                                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schemas/workflow-schema.json`                                                              | Add `parallelGroup` to new `workflowStepsItem` definition used in `steps` array only (not `finalStep`)                                                                                     |
+| `schemas/workflow-schema.json`                                                             | Add `parallelGroup` to new `workflowStepsItem` definition used in `steps` array only (not `finalStep`)                                                                                     |
 | `src/types/CtrlYokeTypes.ts`                                                               | Add `ParallelGroupRange` interface; add `groups?` to `PromptFile` and `QueueState`; `WorkflowStep` and `PromptFile.steps` type **unchanged**                                               |
 | `src/types/DashboardConstants.ts`                                                          | Add `PARALLEL_GROUP_STATUS` and, if needed, a property-key constant for `parallel`; do **not** add `STEP_TYPES.PARALLEL`                                                                   |
 | `src/types/WebviewMessageTypes.ts`                                                         | Add `groups` to file/session/steps messages and optional terminal metadata (`stepIndex`, `parallelGroupId` or `isParallelStep`)                                                            |
-| `src/core/PromptFileParser.ts`                                                              | Parse `parallel:` groups directly into flat `steps` + `groups`; validate inherited/effective constraint collisions                                                                         |
-| `src/core/PromptQueue.ts`                                                                   | Store and persist `groups`; add `getGroupForStep()` / `isGroupStart()` helpers; add index-specific completion/skip/send APIs for concurrent group execution                                |
-| `src/core/WorkflowExecutor.ts`                                                              | Phase 1 sequential group drain, then Phase 2 fan-out after indexed queue APIs and response parking are parallel-safe                                                                       |
-| `src/core/WorkflowInstance.ts`                                                              | Add parallel-only integration acquisition/cleanup keyed by execution target instead of harness ID                                                                                          |
-| `src/core/IntegrationFactory.ts`                                                            | No factory interface changes expected — `createForExecution(harness)` already creates isolated instances when called                                                                       |
-| `src/core/harness/PtyProcessManager.ts`                                                     | Tag parallel step sessions with their flat step index as `promptNumber` and expose enough metadata for replay/debugging (`stepIndex`, group ID if added)                                   |
+| `src/core/PromptFileParser.ts`                                                             | Parse `parallel:` groups directly into flat `steps` + `groups`; validate inherited/effective constraint collisions                                                                         |
+| `src/core/PromptQueue.ts`                                                                  | Store and persist `groups`; add `getGroupForStep()` / `isGroupStart()` helpers; add index-specific completion/skip/send APIs for concurrent group execution                                |
+| `src/core/WorkflowExecutor.ts`                                                             | Phase 1 sequential group drain, then Phase 2 fan-out after indexed queue APIs and response parking are parallel-safe                                                                       |
+| `src/core/WorkflowInstance.ts`                                                             | Add parallel-only integration acquisition/cleanup keyed by execution target instead of harness ID                                                                                          |
+| `src/core/IntegrationFactory.ts`                                                           | No factory interface changes expected — `createForExecution(harness)` already creates isolated instances when called                                                                       |
+| `src/core/harness/PtyProcessManager.ts`                                                    | Tag parallel step sessions with their flat step index as `promptNumber` and expose enough metadata for replay/debugging (`stepIndex`, group ID if added)                                   |
 | `src/types/IDashboardSink.ts` / `src/ui/PostMessageDashboardSink.ts`                       | Thread `groups` through file selected, session restored, steps extended, reset, start-position, and reorder messages                                                                       |
 | `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`                            | Use `groups` from `QueueState` to render parallel group wrappers                                                                                                                           |
 | `src/ui/webview-react/components/prompts/ParallelGroupPanel.tsx`                           | **New component**: parallel group wrapper with header, failFast toggle, drag-and-drop                                                                                                      |

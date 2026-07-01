@@ -1302,7 +1302,10 @@ suite("CodexLogParser", () => {
             type: "custom_tool_call_output",
             call_id: "call_exec_shell",
             output: [
-              { type: "input_text", text: "Script completed\nWall time 1s\nOutput:\n" },
+              {
+                type: "input_text",
+                text: "Script completed\nWall time 1s\nOutput:\n",
+              },
               {
                 type: "input_text",
                 text: "Exit code: 0\nWall time: 1s\nOutput:\nall tests passed\n",
@@ -1331,7 +1334,10 @@ suite("CodexLogParser", () => {
       const bashEvents = response.events.filter(
         (e) => e.type === CLI_EVENT_TYPES.BASH_COMMAND
       );
-      assert.ok(bashEvents.length >= 2, "expected INITIATED + COMPLETED bash events");
+      assert.ok(
+        bashEvents.length >= 2,
+        "expected INITIATED + COMPLETED bash events"
+      );
       assert.strictEqual(
         (bashEvents[0].data as { command?: string }).command,
         "npm test"

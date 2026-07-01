@@ -48,7 +48,7 @@ Important `extension.ts` conventions:
   - dev commands are last and stay behind `IS_DEV_MODE`
 - Shared command IDs, context keys, queue positions, execution states, and message types belong in `src/types/DashboardConstants.ts`, not as new literals here.
 - `ScmCommitCommand` is instantiated once inside `registerCommands()` and owns SCM-specific UX; `extension.ts` should only register/delegate to it.
-</extensionPatterns>
+  </extensionPatterns>
 
 <deactivation>
 `deactivate()` is intentionally small:
@@ -75,7 +75,7 @@ Do not duplicate cleanup already handled by `context.subscriptions`; PTY hard-ki
   - `withFileLock(...)` protects the working file across processes
 - Append validation is best-effort against `.ctrlyoke/capabilities.json`; that file is produced by the VS Code-side settings sync and may be absent early in workspace setup.
 - `ctrlyoke_submit_commit_message` writes to `CTRLYOKE_COMMIT_OUTPUT` when present; this is the structured capture path used by commit-message generation.
-</mcpServer>
+  </mcpServer>
 
 <relatedFiles>
 - `src/ui/CtrlYokeWebviewProvider.ts` — panel shell and outbound UI transport

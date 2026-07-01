@@ -819,8 +819,7 @@ export const FAILURE_KINDS = {
   UNKNOWN: "unknown",
 } as const;
 
-export type FailureKind =
-  (typeof FAILURE_KINDS)[keyof typeof FAILURE_KINDS];
+export type FailureKind = (typeof FAILURE_KINDS)[keyof typeof FAILURE_KINDS];
 
 // ============================================================================
 // TERMINAL SESSION STATUS - Status values for terminal sessions

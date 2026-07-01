@@ -72,7 +72,7 @@ Scoping the `.flightpath` location to the active editor breaks down immediately:
   rebuilding that stack while workflows are running.
 
 The location must be **stable for the whole window session**. Active-file scoping may later
-be used only for resolving `@file` references *inside* a prompt (via
+be used only for resolving `@file` references _inside_ a prompt (via
 `workspace.getWorkspaceFolder(uri)`), never for the `.flightpath` location.
 
 ---
@@ -115,17 +115,17 @@ This matches the agreed fallback: **`.code-workspace` file dir when one exists, 
 
 There is a **chicken-and-egg** constraint: the location of `.flightpath` cannot live inside
 `.flightpath/settings.json`, because we need the location to find that file.
-`extension.ts:297-305` wires up the file-config backend *using* the workspace root.
+`extension.ts:297-305` wires up the file-config backend _using_ the workspace root.
 
 So the location setting is **bootstrap config** and must be a genuine VS Code setting read
 via `vscode.workspace.getConfiguration("flightpath")` — **re-introducing** a
 `contributes.configuration` block (currently `package.json` has none; everything was moved
 to the file-based config). The layering becomes:
 
-| Layer | Stores | Read via |
-| --- | --- | --- |
-| Native VS Code setting | **where** `.flightpath` lives | `vscode.workspace.getConfiguration` |
-| `.flightpath/settings.json` (`FlightPathSettings.ts`) | **behavior** once located | `FlightPathConfigService` (unchanged) |
+| Layer                                                 | Stores                        | Read via                              |
+| ----------------------------------------------------- | ----------------------------- | ------------------------------------- |
+| Native VS Code setting                                | **where** `.flightpath` lives | `vscode.workspace.getConfiguration`   |
+| `.flightpath/settings.json` (`FlightPathSettings.ts`) | **behavior** once located     | `FlightPathConfigService` (unchanged) |
 
 The CLI binary does **not** need the VS Code setting — it already has the equivalent escape
 hatch via `ResolvedCliConfig.cwd` (`--cwd`), so `CliAdapter.getWorkspaceRoot()` stays
@@ -145,7 +145,7 @@ resolution layers split cleanly:
   exclusively from `CliAdapter.getWorkspaceRoot()` (`config.cwd ?? process.cwd()`), honoring
   `--cwd`.
 
-Two shared modules that *are* bundled into the CLI (`Log`, `AttachmentBuilders`) therefore do
+Two shared modules that _are_ bundled into the CLI (`Log`, `AttachmentBuilders`) therefore do
 **not** import the binding. Instead they receive the root from their caller:
 
 - `Log.initialize(context, workspaceRoot?)` — the extension entry point passes the resolved
@@ -199,7 +199,7 @@ Add a `contributes.configuration` block:
 }
 ```
 
-> Note: the value is the directory that *contains* `.flightpath` (the workspace root), not
+> Note: the value is the directory that _contains_ `.flightpath` (the workspace root), not
 > the `.flightpath` folder itself — consistent with how `workspaceRoot` is used everywhere
 > today (`path.join(workspaceRoot, PATH_CONSTANTS.FLIGHTPATH_DIR)`).
 
@@ -211,7 +211,7 @@ principle). Today `VsCodeAdapter.getWorkspaceRoot()` (`VsCodeAdapter.ts:13`) har
 
 - Add a `WorkspaceRootResolver` helper (new file under `src/platform/` or `src/utils/`)
   implementing the resolution order. Pure function of `{ setting, workspaceFile,
-  workspaceFolders }` so it is unit-testable without the `vscode` module.
+workspaceFolders }` so it is unit-testable without the `vscode` module.
 - `VsCodeAdapter.getWorkspaceRoot()` delegates to it.
 - `CliAdapter.getWorkspaceRoot()` unchanged (`config.cwd ?? process.cwd()`).
 - Keep the `PlatformAdapter.getWorkspaceRoot()` contract; update its doc comment
@@ -264,16 +264,16 @@ resolved root, not from the harness `cwd`.
 
 ## Files Touched
 
-| File | Change |
-| --- | --- |
-| `package.json` | Add `contributes.configuration` with `flightpath.workspaceDirectory` (window scope) |
-| `src/platform/WorkspaceRootResolver.ts` *(new)* | Pure resolver implementing the order above |
-| `src/platform/VsCodeAdapter.ts` | `getWorkspaceRoot()` delegates to resolver |
-| `src/platform/PlatformAdapter.ts` | Update `getWorkspaceRoot()` doc comment |
-| `src/extension.ts` | Use resolver at all `[0]` sites; add `onDidChangeWorkspaceFolders` |
-| `src/flightpath/WorkflowOrchestrator.ts` | Resolve `currentWorkspaceFolder` via resolver |
-| `src/ui/WorkflowSerializer.ts`, `src/ui/WebviewSettingsSync.ts`, `src/scm/ScmCommitCommand.ts`, `src/completions/PromptLinkProvider.ts`, `src/utils/AttachmentBuilders.ts`, `src/utils/Log.ts`, `src/dev/DevCommands.ts` | Replace direct `workspaceFolders[0]` reads |
-| `src/test/**` | Unit tests for the resolver; orchestration tests for changed call sites |
+| File                                                                                                                                                                                                                     | Change                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `package.json`                                                                                                                                                                                                           | Add `contributes.configuration` with `flightpath.workspaceDirectory` (window scope) |
+| `src/platform/WorkspaceRootResolver.ts` _(new)_                                                                                                                                                                          | Pure resolver implementing the order above                                          |
+| `src/platform/VsCodeAdapter.ts`                                                                                                                                                                                          | `getWorkspaceRoot()` delegates to resolver                                          |
+| `src/platform/PlatformAdapter.ts`                                                                                                                                                                                        | Update `getWorkspaceRoot()` doc comment                                             |
+| `src/extension.ts`                                                                                                                                                                                                       | Use resolver at all `[0]` sites; add `onDidChangeWorkspaceFolders`                  |
+| `src/flightpath/WorkflowOrchestrator.ts`                                                                                                                                                                                 | Resolve `currentWorkspaceFolder` via resolver                                       |
+| `src/ui/WorkflowSerializer.ts`, `src/ui/WebviewSettingsSync.ts`, `src/scm/ScmCommitCommand.ts`, `src/completions/PromptLinkProvider.ts`, `src/utils/AttachmentBuilders.ts`, `src/utils/Log.ts`, `src/dev/DevCommands.ts` | Replace direct `workspaceFolders[0]` reads                                          |
+| `src/test/**`                                                                                                                                                                                                            | Unit tests for the resolver; orchestration tests for changed call sites             |
 
 ---
 

@@ -672,7 +672,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         style={{
           top: dropdownTop,
           left: !isMobile && dropdownWidth !== null ? dropdownLeft : undefined,
-          width: !isMobile && dropdownWidth !== null ? dropdownWidth : undefined,
+          width:
+            !isMobile && dropdownWidth !== null ? dropdownWidth : undefined,
           bottom: 0,
           clipPath:
             isDropdownOpen && !isEditing

@@ -62,7 +62,9 @@ export function setupBrowserNavigation(): () => void {
   // Hand the deep-linked workflow to READY (sent by a later App effect that
   // reads this via getState()), avoiding a default-workflow flash.
   if (initialRoute.workflow) {
-    useUiStore.getState().setActiveWorkflowWorkingFilePath(initialRoute.workflow);
+    useUiStore
+      .getState()
+      .setActiveWorkflowWorkingFilePath(initialRoute.workflow);
   }
 
   // Canonicalize the entry URL and stamp it as index 0.

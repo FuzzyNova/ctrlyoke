@@ -114,9 +114,7 @@ describe("WorkspaceDiffPane commit details section", () => {
 
     render(<WorkspaceDiffPane />);
 
-    expect(
-      screen.queryByTitle("Show commit details")
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Show commit details")).not.toBeInTheDocument();
   });
 
   it("shows the subject when collapsed and reveals body/metadata when expanded", async () => {

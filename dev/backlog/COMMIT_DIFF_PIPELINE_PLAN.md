@@ -19,7 +19,7 @@ modes:
    `ContentPreviewModal` with `language: "diff"`.
 4. `ContentPreviewModal` renders it as a `<pre>` block — **raw unified-diff text, not a
    rendered diff** — and its "Open in Editor" button sends `EXPORT_CONTENT_PREVIEW`,
-   which opens the raw diff text as a throwaway untitled document (it does *not* open a
+   which opens the raw diff text as a throwaway untitled document (it does _not_ open a
    real VS Code diff of the change).
 
 Two things are wrong:
@@ -28,7 +28,7 @@ Two things are wrong:
   `react-diff-view`) used everywhere else in the output, but git-ref previews bypass it.
 - **VS Code mode shouldn't use an in-app modal at all.** The workspace viewer (and its
   `WorkspaceDiffPane`) is **browser-only** — in VS Code we should open the change in the
-  editor's *native* diff UI, not a webview `<pre>`.
+  editor's _native_ diff UI, not a webview `<pre>`.
 
 > Note: the existing `ctrlyoke.openGitChange` command (`extension.ts`) already opens a
 > generated diff in an untitled `language: "diff"` document — same raw-text shortcoming,
@@ -40,16 +40,16 @@ Two things are wrong:
 
 Branch on `isStandalone` at the click site instead of always posting one message:
 
-| Mode | What clicking a `~<ref>` link does |
-| --- | --- |
-| **VS Code** (`isStandalone === false`) | Bypass the modal entirely. Invoke a **native VS Code diff** command — including stash, via `vscode.changes`. No `ContentPreviewModal`. |
-| **Browser** (`isStandalone === true`) | Open the workspace viewer to its **Source Control tab** (`activeTab: "sourceControl"`) and render the diff in `WorkspaceDiffPane`, extended to show **multi-file** diffs, with a **Download** button in the pane header. No `ContentPreviewModal`. |
+| Mode                                   | What clicking a `~<ref>` link does                                                                                                                                                                                                                 |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **VS Code** (`isStandalone === false`) | Bypass the modal entirely. Invoke a **native VS Code diff** command — including stash, via `vscode.changes`. No `ContentPreviewModal`.                                                                                                             |
+| **Browser** (`isStandalone === true`)  | Open the workspace viewer to its **Source Control tab** (`activeTab: "sourceControl"`) and render the diff in `WorkspaceDiffPane`, extended to show **multi-file** diffs, with a **Download** button in the pane header. No `ContentPreviewModal`. |
 
 After this change, `ContentPreviewModal` is **no longer used for git diffs** in either
 mode. (It stays for `$prior-context` XML previews — see "ContentPreviewModal" below.)
 
 **Why a pane (not a modal) in the browser:** clicking an `@file` link in the prompt
-editor *already* opens the workspace viewer (`openToFile` → `isOpen: true`, explorer
+editor _already_ opens the workspace viewer (`openToFile` → `isOpen: true`, explorer
 tab) rather than a modal. A `~git` link opening the same viewer's Source Control tab is
 the **consistent** behavior; a separate git-only modal would be the odd one out. The
 pane is also persistent/non-blocking, which suits multi-file diffs better than a
@@ -68,12 +68,12 @@ not by keeping the modal alive.
 **SCM resource**, not a commit. Verified against the `vscode.git` extension source
 (`extensions/git/src/commands.ts`) and the public commands reference, the mapping is:
 
-| Ref | VS Code command | Notes | Status |
-| --- | --- | --- | --- |
-| `~<hash>` (commit) | **`git.viewCommit`** | `viewCommit(repository, historyItemId)`, registered `{ repository: true }`. The wrapper resolves `args[0]` to a repo via `model.getRepository()`, so invoke as `executeCommand("git.viewCommit", Uri.file(workspaceRoot), hash)`. Opens the native multi-file commit viewer. | ✅ done |
-| `~diff` (working tree) | `git.viewChanges` | `viewChanges(repository)` — pass the repo Uri. | ✅ done |
-| `~staged` | `git.viewStagedChanges` | `viewStagedChanges(repository)` — pass the repo Uri. | ✅ done |
-| `~stash:N` | **`vscode.changes`** | No built-in per-index stash command, so build the native multi-file diff ourselves (see below). | ✅ done |
+| Ref                    | VS Code command         | Notes                                                                                                                                                                                                                                                                        | Status  |
+| ---------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `~<hash>` (commit)     | **`git.viewCommit`**    | `viewCommit(repository, historyItemId)`, registered `{ repository: true }`. The wrapper resolves `args[0]` to a repo via `model.getRepository()`, so invoke as `executeCommand("git.viewCommit", Uri.file(workspaceRoot), hash)`. Opens the native multi-file commit viewer. | ✅ done |
+| `~diff` (working tree) | `git.viewChanges`       | `viewChanges(repository)` — pass the repo Uri.                                                                                                                                                                                                                               | ✅ done |
+| `~staged`              | `git.viewStagedChanges` | `viewStagedChanges(repository)` — pass the repo Uri.                                                                                                                                                                                                                         | ✅ done |
+| `~stash:N`             | **`vscode.changes`**    | No built-in per-index stash command, so build the native multi-file diff ourselves (see below).                                                                                                                                                                              | ✅ done |
 
 `git.viewCommit`/`viewChanges`/`viewStagedChanges` are implemented in
 `ctrlyoke.openGitChange` (`extension.ts`), native-first with a generated-diff-document
@@ -84,7 +84,7 @@ already route through `ctrlyoke.openGitChange`.
 
 ### Native stash diff — `vscode.changes` ✅ implemented
 
-`git.stashView` only shows a stash *quick-pick* (no index argument), so for `~stash:N`
+`git.stashView` only shows a stash _quick-pick_ (no index argument), so for `~stash:N`
 we open the native multi-file diff editor directly with the **public** `vscode.changes`
 command — the same UI the other refs get, no raw text. Implemented in
 `ctrlyoke.openGitChange` (`extension.ts`) as `openNativeStashDiff()`:
@@ -92,16 +92,29 @@ command — the same UI the other refs get, no raw text. Implemented in
 ```typescript
 // vscode.changes(title, resourceList: [resourceUri, originalUri, modifiedUri][])
 const gitApi = vscode.extensions
-  .getExtension<{ getAPI(v: 1): { toGitUri(uri: vscode.Uri, ref: string): vscode.Uri } }>("vscode.git")
+  .getExtension<{
+    getAPI(v: 1): { toGitUri(uri: vscode.Uri, ref: string): vscode.Uri };
+  }>("vscode.git")
   ?.exports.getAPI(1);
 const files = gitApi ? await getStashFiles(workspaceRoot, index) : []; // git stash show --name-only
-if (!gitApi || files.length === 0) { await openGeneratedDiff(); return; }
+if (!gitApi || files.length === 0) {
+  await openGeneratedDiff();
+  return;
+}
 const stashRef = `stash@{${index}}`;
 const resources = files.map((rel) => {
   const fileUri = vscode.Uri.joinPath(repoUri, rel);
-  return [fileUri, gitApi.toGitUri(fileUri, `${stashRef}^`), gitApi.toGitUri(fileUri, stashRef)];
+  return [
+    fileUri,
+    gitApi.toGitUri(fileUri, `${stashRef}^`),
+    gitApi.toGitUri(fileUri, stashRef),
+  ];
 });
-await vscode.commands.executeCommand(VSCODE_GIT_COMMANDS.CHANGES, `Git Stash #${index}`, resources);
+await vscode.commands.executeCommand(
+  VSCODE_GIT_COMMANDS.CHANGES,
+  `Git Stash #${index}`,
+  resources
+);
 ```
 
 `vscode.changes` and `API.toGitUri(uri, ref)` are confirmed public API.
@@ -122,7 +135,10 @@ Today (`src/ui/webview-react/components/editor/CodeMirrorEditor.tsx`, ~line 1747
 ```typescript
 if (type === "git") {
   const gitRef = target.getAttribute("data-git-ref");
-  vscode.postMessage({ type: MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW, ref: gitRef });
+  vscode.postMessage({
+    type: MESSAGE_TYPES.REQUEST_GIT_CHANGE_PREVIEW,
+    ref: gitRef,
+  });
   return true;
 }
 ```
@@ -175,12 +191,14 @@ text, not old/new full-file content.
 Plan:
 
 - **New store state** in `workspaceViewerStore`:
+
   ```typescript
   // A rendered diff can be either a single working-tree file (existing) or a
   // multi-file git ref (new).
   diffFiles: ParsedDiffFile[] | null;   // null = single-file mode (existing path)
   diffRefLabel: string | null;          // e.g. "Commit abc1234" for the pane header
   ```
+
   where `ParsedDiffFile` carries `{ path, oldPath?, language, hunks }` (hunks already in
   the `react-diff-view` shape).
 
@@ -224,6 +242,7 @@ unified diff.
 ## Implementation Phases
 
 ### Phase 1 — Browser multi-file diff pane
+
 - [ ] `workspaceGitRefDiff(ref)` in `hostedApi.ts` + `GET /api/workspace-viewer/git-ref-diff` route + `HostedWorkspaceViewerService.getGitRefDiff()` (reuses `GitUtils` dispatch)
 - [ ] Store: `diffFiles`, `diffRefLabel`, `openToGitRef(ref)` (sets `activeTab: "sourceControl"`), clearing wired into `clearDiff`/`close`/`reset`
 - [ ] Client diff parsing: unified text → `ParsedDiffFile[]` via `parseDiff` + existing rdv adapter (factor a small `parseUnifiedDiffToFiles()` helper, likely in `rdvAdapter.ts`)
@@ -232,12 +251,14 @@ unified diff.
 - [ ] `CodeMirrorEditor.openContextReferenceLink()`: `isStandalone` branch → `openToGitRef` (replaces the interim `REQUEST_GIT_CHANGE_PREVIEW` browser branch)
 
 ### Phase 2 — VS Code native diff ✅ DONE
+
 - [x] `ctrlyoke.openGitChange` rewritten to invoke native commands (`git.viewCommit`/`git.viewChanges`/`git.viewStagedChanges`) with a generated-diff fallback; command IDs added as `VSCODE_GIT_COMMANDS`
 - [x] `CodeMirrorEditor.openContextReferenceLink()`: VS Code branch posts `OPEN_GIT_CHANGE` (→ native); browser branch keeps `REQUEST_GIT_CHANGE_PREVIEW` (modal) until Phase 1 lands
 - [x] Raw-text untitled-doc behavior is now fallback-only, not the default
 - [x] **Native stash:** `GitUtils.getStashFiles(root, index)` + `~stash:N` branch in `ctrlyoke.openGitChange` using `vscode.changes` + `toGitUri`; added `CHANGES` to `VSCODE_GIT_COMMANDS`
 
 ### Phase 3 — Cleanup
+
 - [ ] Delete `REQUEST_GIT_CHANGE_PREVIEW`/`GIT_CHANGE_PREVIEW_RESULT` + `buildGitChangeContent` + the `buildGitPreviewTitle` git branch (keep `$prior-context` path)
 - [ ] `ContentPreviewModal`: drop the `"diff"` language branch if XML is the only remaining consumer (verify no other sender)
 - [ ] Update `dev/reference/VSCODE_COMMANDS.md` / `CHAT_COMMANDS.md` notes if the command surface changes

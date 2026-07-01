@@ -63,9 +63,7 @@ export class PromptFileLoader {
       const promptFile = await this.promptFileParser.parsePromptFile(filePath);
 
       if (!promptFile || !promptFile.steps) {
-        vscode.window.showErrorMessage(
-          "ctrlyoke: Failed to parse prompt file"
-        );
+        vscode.window.showErrorMessage("ctrlyoke: Failed to parse prompt file");
         return undefined;
       }
 
@@ -156,9 +154,7 @@ export class PromptFileLoader {
       return workingFilePath;
     } catch (error) {
       Log.error("Failed to load prompt file:", error);
-      vscode.window.showErrorMessage(
-        `ctrlyoke: Failed to load file: ${error}`
-      );
+      vscode.window.showErrorMessage(`ctrlyoke: Failed to load file: ${error}`);
       return undefined;
     }
   }

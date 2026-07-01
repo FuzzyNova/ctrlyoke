@@ -96,9 +96,7 @@ interface TerminalActions {
   resumeSession: (workflowId: string, sessionId: string) => void;
 
   /** Replace the global active-terminal set (ACTIVE_TERMINAL_WORKFLOWS broadcast) */
-  setActiveTerminalWorkflows: (
-    workflows: ActiveTerminalWorkflowRef[]
-  ) => void;
+  setActiveTerminalWorkflows: (workflows: ActiveTerminalWorkflowRef[]) => void;
 }
 
 const initialState: TerminalState = {

@@ -119,8 +119,7 @@ class CtrlYokeMCPServer {
     log("Environment variables:", {
       CTRLYOKE_WORKSPACE: process.env.CTRLYOKE_WORKSPACE,
       CTRLYOKE_WORKING_FILE:
-        process.env.CTRLYOKE_WORKING_FILE ||
-        "(not set — will scan queue dir)",
+        process.env.CTRLYOKE_WORKING_FILE || "(not set — will scan queue dir)",
       CTRLYOKE_MAX_QUEUE_SIZE:
         process.env.CTRLYOKE_MAX_QUEUE_SIZE || "(not set — default 100)",
       CTRLYOKE_UNLIMITED_MODE:

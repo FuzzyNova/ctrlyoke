@@ -537,7 +537,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
       EXECUTION_STATES.COMPLETED
     );
 
-    assert.strictEqual((await manager.getRunsForWorkflow(workflowId)).length, 3);
+    assert.strictEqual(
+      (await manager.getRunsForWorkflow(workflowId)).length,
+      3
+    );
 
     // Delete the newest run (index 0) — the accidental-restart recovery case.
     const remaining = await manager.deleteRun(workflowId, 0);
@@ -567,7 +570,10 @@ suite("OutputHistoryManager timeline-backed storage", () => {
 
     const remaining = await manager.deleteRun(workflowId, 5);
     assert.strictEqual(remaining, 1);
-    assert.strictEqual((await manager.getRunsForWorkflow(workflowId)).length, 1);
+    assert.strictEqual(
+      (await manager.getRunsForWorkflow(workflowId)).length,
+      1
+    );
   });
 });
 

@@ -541,9 +541,7 @@ export class OpenCodeCliProvider implements ICliProvider {
       .catch(() => {});
   }
 
-  private async deleteCtrlYokeGitignore(
-    gitignorePath: string
-  ): Promise<void> {
+  private async deleteCtrlYokeGitignore(gitignorePath: string): Promise<void> {
     try {
       const content = await fs.promises.readFile(gitignorePath, "utf-8");
       if (content.startsWith("# ctrlyoke temp files")) {

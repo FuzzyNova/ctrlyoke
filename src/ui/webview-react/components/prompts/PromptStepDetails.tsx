@@ -130,47 +130,43 @@ export const PromptStepDetails: React.FC<PromptStepDetailsProps> = ({
       )}
 
       {/* Compact stats — for terminal prompts: [duration] [sessionId {copy}] */}
-      {showCompactStats &&
-        (sessionId || durationSeconds !== undefined) && (
-          <div
-            className={`mt-0.5 flex items-center gap-1 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
-          >
-            {[
-              durationSeconds !== undefined ? (
-                <span key="dur">{durationSeconds.toFixed(1)}s</span>
-              ) : null,
-              sessionId ? (
-                <span
-                  key="session"
-                  className="inline-flex items-center gap-0.5"
+      {showCompactStats && (sessionId || durationSeconds !== undefined) && (
+        <div
+          className={`mt-0.5 flex items-center gap-1 text-xxs opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+        >
+          {[
+            durationSeconds !== undefined ? (
+              <span key="dur">{durationSeconds.toFixed(1)}s</span>
+            ) : null,
+            sessionId ? (
+              <span key="session" className="inline-flex items-center gap-0.5">
+                <span>{sessionId.slice(-6)}</span>
+                <button
+                  type="button"
+                  className="icon-btn py-0 px-0.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleCopySessionId();
+                  }}
+                  title="Copy session ID"
+                  aria-label="Copy session ID"
                 >
-                  <span>{sessionId.slice(-6)}</span>
-                  <button
-                    type="button"
-                    className="icon-btn py-0 px-0.5"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleCopySessionId();
-                    }}
-                    title="Copy session ID"
-                    aria-label="Copy session ID"
-                  >
-                    <i
-                      className={`codicon text-xxs ${copied ? "codicon-check" : "codicon-copy"}`}
-                    />
-                  </button>
-                </span>
-              ) : null,
-            ]
-              .filter(Boolean)
-              .map((part, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <span className="opacity-40">·</span>}
-                  {part}
-                </React.Fragment>
-              ))}
-          </div>
-        )}
+                  <i
+                    className={`codicon text-xxs ${copied ? "codicon-check" : "codicon-copy"}`}
+                  />
+                </button>
+              </span>
+            ) : null,
+          ]
+            .filter(Boolean)
+            .map((part, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <span className="opacity-40">·</span>}
+                {part}
+              </React.Fragment>
+            ))}
+        </div>
+      )}
 
       {/* End condition result */}
       {details?.endConditionResult && (

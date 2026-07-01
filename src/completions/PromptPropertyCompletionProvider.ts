@@ -183,8 +183,7 @@ export class PromptPropertyCompletionProvider
       detail: "Harness/session failure policy",
       documentation:
         "Controls what happens when the harness itself fails. `onError` supports `stop`, `retry`, or `continue`. `maxRetries` and `retryDelayMs` apply when retry is selected.",
-      insertSnippet:
-        `${PROMPT_PROPERTIES.ERROR_BEHAVIOR}:\n  onError: stop`,
+      insertSnippet: `${PROMPT_PROPERTIES.ERROR_BEHAVIOR}:\n  onError: stop`,
     },
     {
       key: "allowDynamicExtension",

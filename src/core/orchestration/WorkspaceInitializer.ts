@@ -38,9 +38,7 @@ export class WorkspaceInitializer {
    * This check is synchronous and cheap (fs.existsSync only).
    */
   static isInitialized(workspaceRoot: string): boolean {
-    if (
-      fs.existsSync(path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR))
-    ) {
+    if (fs.existsSync(path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR))) {
       return true;
     }
     return (
@@ -57,10 +55,7 @@ export class WorkspaceInitializer {
    * @returns true if the workspace was newly initialized, false if it already existed
    */
   static async initializeIfNeeded(workspaceRoot: string): Promise<boolean> {
-    const ctrlyokeDir = path.join(
-      workspaceRoot,
-      PATH_CONSTANTS.CTRLYOKE_DIR
-    );
+    const ctrlyokeDir = path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR);
     const isNew = !fs.existsSync(ctrlyokeDir);
 
     for (const dir of USER_DIRECTORIES) {

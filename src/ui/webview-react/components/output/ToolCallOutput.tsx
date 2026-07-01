@@ -107,11 +107,7 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
             success === undefined ? "pending" : success ? "success" : "error"
           }
         />{" "}
-        {queryContent ?? (
-          <>
-            Web search: &ldquo;{query}&rdquo;
-          </>
-        )}
+        {queryContent ?? <>Web search: &ldquo;{query}&rdquo;</>}
       </span>
     </div>
     {error && (
@@ -176,7 +172,8 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       expansion: resolvedExpansion,
     });
   const showCollapsedParamsIndicator =
-    !resolvedRenderPlan.params.isExpanded && resolvedRenderPlan.params.canToggle;
+    !resolvedRenderPlan.params.isExpanded &&
+    resolvedRenderPlan.params.canToggle;
   const summaryAlreadySignalsTruncation = params.includes("...");
   const showSummaryEllipsis =
     showCollapsedParamsIndicator && !summaryAlreadySignalsTruncation;
@@ -256,7 +253,7 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
             `${name}(${params})${showSummaryEllipsis ? "..." : ""}`
           )}
         </span>
-      {resolvedRenderPlan.params.canToggle && (
+        {resolvedRenderPlan.params.canToggle && (
           <button
             type="button"
             className="text-bash-expand-link text-[length:var(--fp-output-font-size-sm)] cursor-pointer bg-transparent border-0 p-0 font-inherit hover:underline shrink-0"

@@ -108,7 +108,9 @@ suite("WorkflowSerializer", () => {
         });
         assert.strictEqual(saved.steps[0]._runtime, undefined);
         assert.ok(
-          messages.some((message) => message.type === MESSAGE_TYPES.WORKFLOW_SAVED)
+          messages.some(
+            (message) => message.type === MESSAGE_TYPES.WORKFLOW_SAVED
+          )
         );
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });

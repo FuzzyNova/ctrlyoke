@@ -175,11 +175,7 @@ suite("CodexCliProvider", () => {
       const workspaceRoot = await fs.mkdtemp(
         path.join(os.tmpdir(), "codex-hook-args-")
       );
-      const workingFilePath = path.join(
-        workspaceRoot,
-        ".ctrlyoke",
-        "wf.json"
-      );
+      const workingFilePath = path.join(workspaceRoot, ".ctrlyoke", "wf.json");
 
       try {
         const args = await provider.buildNotificationHookArgs(

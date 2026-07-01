@@ -155,7 +155,7 @@ async function evaluateFileAccess(
     allowedExternalFileRoots: string[];
     mustExist?: boolean;
   }
-): Promise<FileAccessDecision>
+): Promise<FileAccessDecision>;
 ```
 
 Use this helper anywhere ctrlyoke reads or opens user-referenced files. Do not
@@ -359,21 +359,21 @@ Document:
 
 ## Files Likely Changed
 
-| File | Change |
-| --- | --- |
-| `schemas/settings-schema.json` | Add `permissions.allowedExternalFileRoots` and `ui.confirmExternalFileLinks` |
-| `schemas/settings-schema.yaml` | Regenerated via `npm run generate-schema` |
-| `src/types/CtrlYokeSettings.ts` | Add settings types and defaults |
-| `src/types/WebviewMessageTypes.ts` | Include settings payload fields if needed |
-| `src/utils/ConfigurationUtils.ts` | Add config keys and helpers |
-| `src/utils/FileAccessPolicy.ts` | New shared path access policy helper |
-| `src/utils/ContextExpander.ts` | Enforce policy for file reads and external refs |
-| `src/completions/PromptLinkProvider.ts` | Resolve trusted absolute refs and route untrusted refs through confirmation |
-| `src/ui/WebviewMessageRouter.ts` | Enforce policy for `OPEN_FILE` and trust-folder flow |
-| `src/ui/WebviewSettingsSync.ts` | Sync new settings to webview |
-| `src/ui/webview-react/store/settingsStore.ts` | Add webview defaults/types |
-| `src/ui/webview-react/components/settings/GeneralSection.tsx` | Add settings UI |
-| `src/test/**` | Policy, expander, router/link-provider tests |
+| File                                                          | Change                                                                       |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `schemas/settings-schema.json`                                | Add `permissions.allowedExternalFileRoots` and `ui.confirmExternalFileLinks` |
+| `schemas/settings-schema.yaml`                                | Regenerated via `npm run generate-schema`                                    |
+| `src/types/CtrlYokeSettings.ts`                               | Add settings types and defaults                                              |
+| `src/types/WebviewMessageTypes.ts`                            | Include settings payload fields if needed                                    |
+| `src/utils/ConfigurationUtils.ts`                             | Add config keys and helpers                                                  |
+| `src/utils/FileAccessPolicy.ts`                               | New shared path access policy helper                                         |
+| `src/utils/ContextExpander.ts`                                | Enforce policy for file reads and external refs                              |
+| `src/completions/PromptLinkProvider.ts`                       | Resolve trusted absolute refs and route untrusted refs through confirmation  |
+| `src/ui/WebviewMessageRouter.ts`                              | Enforce policy for `OPEN_FILE` and trust-folder flow                         |
+| `src/ui/WebviewSettingsSync.ts`                               | Sync new settings to webview                                                 |
+| `src/ui/webview-react/store/settingsStore.ts`                 | Add webview defaults/types                                                   |
+| `src/ui/webview-react/components/settings/GeneralSection.tsx` | Add settings UI                                                              |
+| `src/test/**`                                                 | Policy, expander, router/link-provider tests                                 |
 
 ## Testing
 

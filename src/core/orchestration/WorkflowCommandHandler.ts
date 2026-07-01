@@ -330,9 +330,7 @@ export class WorkflowCommandHandler {
       Log.info(`ctrlyoke: Opened prompt file: ${currentFilePath}`);
     } catch (error) {
       Log.error("ctrlyoke: Failed to open prompt file:", error);
-      vscode.window.showErrorMessage(
-        `ctrlyoke: Failed to open file: ${error}`
-      );
+      vscode.window.showErrorMessage(`ctrlyoke: Failed to open file: ${error}`);
     }
   }
 

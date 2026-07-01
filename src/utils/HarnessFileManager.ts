@@ -116,9 +116,7 @@ async function collectAgentLocations(
     }
     if (!(await isAccessibleDirectory(dir))) return;
     const ext =
-      targetId === "ctrlyoke" ||
-      targetId === "agents" ||
-      targetId === "vscode"
+      targetId === "ctrlyoke" || targetId === "agents" || targetId === "vscode"
         ? ".agent.md"
         : (HARNESS_AGENT_EXTENSION[targetId as HarnessId] ?? ".agent.md");
     const files = await fs.promises.readdir(dir).catch(() => [] as string[]);

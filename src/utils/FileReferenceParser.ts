@@ -149,7 +149,8 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
 export function parseSymbolReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
 
-  const quotedRegex = /#sym:"([^"]+)":([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)-(\d+)/g;
+  const quotedRegex =
+    /#sym:"([^"]+)":([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)-(\d+)/g;
   let match;
 
   while ((match = quotedRegex.exec(prompt)) !== null) {
@@ -162,7 +163,8 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
     });
   }
 
-  const plainRegex = /#sym:([^:]+):([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)-(\d+)/g;
+  const plainRegex =
+    /#sym:([^:]+):([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)-(\d+)/g;
 
   while ((match = plainRegex.exec(prompt)) !== null) {
     const [, filePath, symbolName, startLine, endLine] = match;

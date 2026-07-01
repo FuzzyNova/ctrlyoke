@@ -7,15 +7,15 @@ on:
   push:
     branches: [main]
     paths:
-      - 'landing/**'
-      - 'docs/**'
-      - 'scripts/merge-docs-into-landing.mjs'
-      - 'netlify.toml'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/deploy.yml'
-      - '.github/workflows/deploy-preview.yml'
-      - '.github/workflows/_netlify-deploy.yml'
+      - "landing/**"
+      - "docs/**"
+      - "scripts/merge-docs-into-landing.mjs"
+      - "netlify.toml"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy.yml"
+      - ".github/workflows/deploy-preview.yml"
+      - ".github/workflows/_netlify-deploy.yml"
 
 jobs:
   deploy:

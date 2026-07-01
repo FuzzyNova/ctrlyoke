@@ -98,7 +98,10 @@ describe("WorkspaceCommitHistoryPane", () => {
   });
 
   it("shows the current branch name in the header", () => {
-    useWorkspaceViewerStore.setState({ currentBranch: "main", detached: false });
+    useWorkspaceViewerStore.setState({
+      currentBranch: "main",
+      detached: false,
+    });
     render(
       <WorkspaceCommitHistoryPane onLoadMore={vi.fn()} onRefresh={vi.fn()} />
     );
@@ -159,7 +162,12 @@ describe("WorkspaceCommitHistoryPane", () => {
   });
 
   it("dims commits that are ahead of the detached HEAD", () => {
-    const head = { ...commit, hash: "head", shortHash: "head000", isHead: true };
+    const head = {
+      ...commit,
+      hash: "head",
+      shortHash: "head000",
+      isHead: true,
+    };
     const ahead = {
       ...commit,
       hash: "ahead",
@@ -203,8 +211,6 @@ describe("WorkspaceCommitHistoryPane", () => {
 
     // Regression guard: the confirm dialog must use the elevated z-layer so it
     // is not hidden behind the full-screen workspace viewer (z-workspace-viewer).
-    expect(
-      document.querySelector(".z-viewer-modal")
-    ).not.toBeNull();
+    expect(document.querySelector(".z-viewer-modal")).not.toBeNull();
   });
 });

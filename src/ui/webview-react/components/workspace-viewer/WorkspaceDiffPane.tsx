@@ -68,9 +68,10 @@ export const WorkspaceDiffPane: React.FC = () => {
         // "Commit abc1234" — we only have the short hash label
         // find the full hash from the commit history if available
         const shortHash = refLabel.replace("Commit ", "");
-        const fullHash = store.commitHistory.find(
-          (c) => c.shortHash === shortHash || c.hash.startsWith(shortHash)
-        )?.hash ?? shortHash;
+        const fullHash =
+          store.commitHistory.find(
+            (c) => c.shortHash === shortHash || c.hash.startsWith(shortHash)
+          )?.hash ?? shortHash;
         ref = `~${fullHash}`;
       }
       const { unifiedDiff } = await workspaceGitRefDiff(ref);
@@ -139,7 +140,11 @@ export const WorkspaceDiffPane: React.FC = () => {
             <button
               onClick={() => setCommitDetailsExpanded((v) => !v)}
               className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs text-editor-fg hover:bg-list-hover-bg transition-colors"
-              title={commitDetailsExpanded ? "Hide commit details" : "Show commit details"}
+              title={
+                commitDetailsExpanded
+                  ? "Hide commit details"
+                  : "Show commit details"
+              }
             >
               <i
                 className={`codicon codicon-chevron-right text-xs flex-shrink-0 transition-transform duration-150 ${commitDetailsExpanded ? "rotate-90" : ""}`}

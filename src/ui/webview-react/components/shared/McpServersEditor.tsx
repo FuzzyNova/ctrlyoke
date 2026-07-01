@@ -59,9 +59,7 @@ function hasCtrlYoke(arr: McpServerEntry[]): boolean {
 }
 
 /** Return the ctrlyoke entry as an McpServerConfig object, or undefined if not present. */
-function getCtrlYokeConfig(
-  arr: McpServerEntry[]
-): McpServerConfig | undefined {
+function getCtrlYokeConfig(arr: McpServerEntry[]): McpServerConfig | undefined {
   return arr.find(
     (entry): entry is McpServerConfig =>
       typeof entry === "object" && entry !== null && entry.id === "ctrlyoke"
@@ -602,9 +600,7 @@ export const McpServersEditor: React.FC<{
   };
 
   const handleCtrlYokeToggle = () => {
-    onChange(
-      buildArray(!ctrlyokeEnabled, ctrlyokeDeniedTools, serverEntries)
-    );
+    onChange(buildArray(!ctrlyokeEnabled, ctrlyokeDeniedTools, serverEntries));
   };
 
   const handleCtrlYokeToolToggle = (toolId: string) => {

@@ -1763,7 +1763,10 @@ export class WorkflowExecutor {
     const initTimestampMs = attempt.startedAt;
     const rawTextOutput = integration.rawTextOutput || undefined;
 
-    if (target.kind === FINAL_STEP_PHASES.QUEUE && signedStepIndex !== undefined) {
+    if (
+      target.kind === FINAL_STEP_PHASES.QUEUE &&
+      signedStepIndex !== undefined
+    ) {
       context.dashboardProvider?.updateCliStreamingChunk(signedStepIndex, "");
     }
     this.emitStreamingPlaceholder(
@@ -2292,7 +2295,10 @@ export class WorkflowExecutor {
     signedStepIndex: number,
     runIndex: number,
     attemptIndex: number,
-    failureKind: typeof FAILURE_KINDS.PROCESS_EXIT | typeof FAILURE_KINDS.HARNESS_ERROR | typeof FAILURE_KINDS.TIMEOUT,
+    failureKind:
+      | typeof FAILURE_KINDS.PROCESS_EXIT
+      | typeof FAILURE_KINDS.HARNESS_ERROR
+      | typeof FAILURE_KINDS.TIMEOUT,
     resolvedProperties?: ResolvedProperties
   ): Promise<PromptFailureDisposition> {
     const runtime = this.getRuntime();
@@ -2320,12 +2326,7 @@ export class WorkflowExecutor {
       const maxRetries = errorBehavior.maxRetries ?? 0;
 
       runtime.failAttempt(target, attemptIndex, failureReason);
-      runtime.scheduleRetry(
-        target,
-        nextAttemptIndex,
-        retryCount,
-        maxRetries
-      );
+      runtime.scheduleRetry(target, nextAttemptIndex, retryCount, maxRetries);
 
       await this.trackStatusMessage(
         context,
@@ -2405,7 +2406,8 @@ export class WorkflowExecutor {
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
         startedAt:
-          this.promptQueue.getFinalStepRuntime()?.startedAt ?? attemptTimestampMs,
+          this.promptQueue.getFinalStepRuntime()?.startedAt ??
+          attemptTimestampMs,
         completedAt: Date.now(),
       });
       return { outcome: "continue" };
@@ -2429,7 +2431,8 @@ export class WorkflowExecutor {
         loopCount: target.loopIndex,
         status: STEP_STATUS.FAILED,
         startedAt:
-          this.promptQueue.getFinalStepRuntime()?.startedAt ?? attemptTimestampMs,
+          this.promptQueue.getFinalStepRuntime()?.startedAt ??
+          attemptTimestampMs,
         completedAt: Date.now(),
       });
     }

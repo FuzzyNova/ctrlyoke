@@ -198,9 +198,9 @@ export class GeminiCliProvider implements ICliProvider {
     if (hookConfig.type !== "json") {
       throw new Error("Unexpected hook config type for Gemini CLI");
     }
-    const ctrlyokeHooksSection = (
-      hookConfig.config as Record<string, unknown>
-    )["hooks"] as Record<string, unknown[]>;
+    const ctrlyokeHooksSection = (hookConfig.config as Record<string, unknown>)[
+      "hooks"
+    ] as Record<string, unknown[]>;
     const wrappedCtrlYokeEvents = [
       ...new Set<HookEvent>([
         "sessionStart",

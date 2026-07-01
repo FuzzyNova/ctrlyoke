@@ -981,10 +981,10 @@ function App() {
           </Panel>
         </Group>
 
-          {/* Global drawers - scoped below the header inside the main content area */}
-          <GlobalSettingsDrawer />
-          <HistorySearchDrawer />
-        </div>
+        {/* Global drawers - scoped below the header inside the main content area */}
+        <GlobalSettingsDrawer />
+        <HistorySearchDrawer />
+      </div>
 
       {/* Startup overlay — covers full layout (header + content) until STARTUP_COMPLETE arrives */}
       <StartupOverlay />

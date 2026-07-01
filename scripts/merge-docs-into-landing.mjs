@@ -19,11 +19,15 @@ const landingDist = resolve(root, "landing/dist");
 const dest = resolve(landingDist, "docs");
 
 if (!existsSync(src)) {
-  console.error(`[merge-docs] VitePress build not found at ${src}\n  Run "npm run docs:build" first.`);
+  console.error(
+    `[merge-docs] VitePress build not found at ${src}\n  Run "npm run docs:build" first.`
+  );
   process.exit(1);
 }
 if (!existsSync(landingDist)) {
-  console.error(`[merge-docs] landing/dist not found at ${landingDist}\n  Build the landing site first ("npm run build:landing"). Run "npm run build:site" to do both in order.`);
+  console.error(
+    `[merge-docs] landing/dist not found at ${landingDist}\n  Build the landing site first ("npm run build:landing"). Run "npm run build:site" to do both in order.`
+  );
   process.exit(1);
 }
 

@@ -210,9 +210,9 @@ export function NotificationsSection({
           <div className="space-y-2 rounded border border-panel-border p-3">
             {iosBlocksBrowserNotifications ? (
               <p className="text-xs text-description-fg">
-                Browser notifications on iPhone and iPad require ctrlyoke to
-                be added to the Home Screen first. After adding, open ctrlyoke
-                from the Home Screen
+                Browser notifications on iPhone and iPad require ctrlyoke to be
+                added to the Home Screen first. After adding, open ctrlyoke from
+                the Home Screen
                 {notif.browser.mode === BROWSER_NOTIFICATION_MODES.PUSH
                   ? " and then enable push notifications here."
                   : " to enable notifications."}

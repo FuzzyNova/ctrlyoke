@@ -201,10 +201,7 @@ export class ContextMenuReferenceCommands {
         symbol.range.end.line + 1
       );
     } catch (error) {
-      Log.warn(
-        "ctrlyoke: Failed to resolve symbol for editor context",
-        error
-      );
+      Log.warn("ctrlyoke: Failed to resolve symbol for editor context", error);
       return undefined;
     }
   }

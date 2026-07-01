@@ -8,11 +8,7 @@
  */
 
 import { PromptQueue } from "./PromptQueue";
-import {
-  PromptStep,
-  EndCondition,
-  isScriptStep,
-} from "../types/CtrlYokeTypes";
+import { PromptStep, EndCondition, isScriptStep } from "../types/CtrlYokeTypes";
 import {
   EXECUTION_STATES,
   QUEUE_POSITION,

@@ -203,14 +203,14 @@ Enhancements worth adding to the MCP server:
 
 ## Recommendation
 
-| Enhancement                          | Priority         | Complexity                             |
-| ------------------------------------ | ---------------- | -------------------------------------- |
-| `--var key=value` CLI substitution   | **High**         | Low — PropertyResolver extension       |
-| Richer `--json` output schema        | **High**         | Low — output is already collected      |
-| Workflow-level `vars:` defaults      | Medium           | Low — schema + PropertyResolver        |
-| Python/JS SDK                        | Low              | Medium — build after standalone server |
-| MCP server `ctrlyoke_run_workflow`   | Medium           | Low — wraps existing CLI logic         |
-| YAML `if/when/loop` constructs       | **Do not build** | —                                      |
+| Enhancement                        | Priority         | Complexity                             |
+| ---------------------------------- | ---------------- | -------------------------------------- |
+| `--var key=value` CLI substitution | **High**         | Low — PropertyResolver extension       |
+| Richer `--json` output schema      | **High**         | Low — output is already collected      |
+| Workflow-level `vars:` defaults    | Medium           | Low — schema + PropertyResolver        |
+| Python/JS SDK                      | Low              | Medium — build after standalone server |
+| MCP server `ctrlyoke_run_workflow` | Medium           | Low — wraps existing CLI logic         |
+| YAML `if/when/loop` constructs     | **Do not build** | —                                      |
 
 The two high-priority items together give power users everything they need for the
 multi-repo batch, CI/CD, and conditional chaining use cases, with tools they already know.

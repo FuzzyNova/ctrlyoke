@@ -39,7 +39,9 @@ function areOutputMessageTargetsEqual(
   left: OutputMessageTarget | undefined,
   right: OutputMessageTarget | null | undefined
 ): boolean {
-  return !!left && !!right && left.kind === right.kind && left.index === right.index;
+  return (
+    !!left && !!right && left.kind === right.kind && left.index === right.index
+  );
 }
 
 function getInitialMatchIndex(
@@ -144,7 +146,7 @@ export function useOutputFind(
       const nextQuery =
         typeof request === "string"
           ? request
-          : request?.query ?? stateRef.current.query;
+          : (request?.query ?? stateRef.current.query);
       setState((previous) => ({
         ...previous,
         isOpen: true,
@@ -221,7 +223,7 @@ export function useOutputFind(
   }, [matches, state.currentMatch]);
 
   const activeMatch =
-    state.currentMatch > 0 ? matches[state.currentMatch - 1] ?? null : null;
+    state.currentMatch > 0 ? (matches[state.currentMatch - 1] ?? null) : null;
 
   useEffect(() => {
     if (externalRequest?.query.trim()) {

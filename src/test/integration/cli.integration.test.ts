@@ -16,8 +16,7 @@ suite("CLI Integration Tests", () => {
     const allExtensions = vscode.extensions.all;
     const extension = allExtensions.find(
       (ext) =>
-        ext.id === "nhickster.ctrlyoke" ||
-        ext.packageJSON.name === "ctrlyoke"
+        ext.id === "nhickster.ctrlyoke" || ext.packageJSON.name === "ctrlyoke"
     );
 
     assert.ok(extension, "ctrlyoke extension must be loaded");
@@ -31,8 +30,7 @@ suite("CLI Integration Tests", () => {
     const allExtensions = vscode.extensions.all;
     const extension = allExtensions.find(
       (ext) =>
-        ext.id === "nhickster.ctrlyoke" ||
-        ext.packageJSON.name === "ctrlyoke"
+        ext.id === "nhickster.ctrlyoke" || ext.packageJSON.name === "ctrlyoke"
     );
     assert.ok(extension, "Extension should be loaded");
     assert.strictEqual(extension.isActive, true, "Extension should be active");
@@ -82,8 +80,7 @@ suite("CLI Integration Tests", () => {
     const allExtensions = vscode.extensions.all;
     const extension = allExtensions.find(
       (ext) =>
-        ext.id === "nhickster.ctrlyoke" ||
-        ext.packageJSON.name === "ctrlyoke"
+        ext.id === "nhickster.ctrlyoke" || ext.packageJSON.name === "ctrlyoke"
     );
     assert.ok(extension, "Extension should be loaded");
     assert.strictEqual(extension.isActive, true, "Extension should be active");

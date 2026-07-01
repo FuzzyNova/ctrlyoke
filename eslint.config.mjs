@@ -8,7 +8,10 @@ import { resolve } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const TAILWIND_CONFIG = resolve(__dirname, "src/ui/webview-react/tailwind.config.js");
+const TAILWIND_CONFIG = resolve(
+  __dirname,
+  "src/ui/webview-react/tailwind.config.js"
+);
 
 export default [
   {

@@ -10,7 +10,8 @@
 Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.workflow.yml` / `*.workflow.json`.
 
 **Why:**
-- **Most source-accurate name** — the engine is `WorkflowOrchestrator` / `WorkflowInstance` / `WorkflowExecutor` / `WorkflowStateMachine`; the schema models a *workflow of steps*.
+
+- **Most source-accurate name** — the engine is `WorkflowOrchestrator` / `WorkflowInstance` / `WorkflowExecutor` / `WorkflowStateMachine`; the schema models a _workflow of steps_.
 - **Self-documenting** — the file literally says what it is.
 - **Future-proof** — a later product rename never has to touch workflow files; they stay `workflow.yml/json` regardless of the brand.
 
@@ -19,6 +20,7 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 ---
 
 ## Legend
+
 - ⭐ **Top contender** — user-verified available (no USPTO / domain conflict found)
 - ~~strikethrough~~ — **clear conflict** (reason noted)
 - plain — candidate, not fully vetted
@@ -28,19 +30,19 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 
 ## ⭐ Top contenders (verified available)
 
-| Name | Origin |
-| --- | --- |
-| ⭐ **yokerun** | yoke (harness) + run; runny-yolk pun; CLI-friendly short form of yokerunner (fallback) |
-| ⭐ **harpsicode** | harpsichord + code |
-| ⭐ **harnesser** | one who harnesses (the AI harnesses) |
-| ⭐ **sequince** | misspelled "sequence" (runs a sequence of steps); also evokes "sequins" — **close second / fallback; weaker mark, see note** |
-| ⭐ **ctrlyoke** | "control yoke" = an aircraft's steering control (aviation heritage) + yoke/harness metaphor; `ctrl`-key styling |
+| Name              | Origin                                                                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| ⭐ **yokerun**    | yoke (harness) + run; runny-yolk pun; CLI-friendly short form of yokerunner (fallback)                                       |
+| ⭐ **harpsicode** | harpsichord + code                                                                                                           |
+| ⭐ **harnesser**  | one who harnesses (the AI harnesses)                                                                                         |
+| ⭐ **sequince**   | misspelled "sequence" (runs a sequence of steps); also evokes "sequins" — **close second / fallback; weaker mark, see note** |
+| ⭐ **ctrlyoke**   | "control yoke" = an aircraft's steering control (aviation heritage) + yoke/harness metaphor; `ctrl`-key styling              |
 
-> **ctrlyoke note:** `ctrlyoke.dev/.com` **and** `controlyoke.dev/.com` all available — grab all four, redirect the full-word/`.com` forms to `.dev` (kills the typo/phonetic leak that sank ctrlpath). No TM. "Control yoke" is generic only for *aircraft parts*; for **software** it's an **arbitrary** mark → strongly protectable (Apple-for-computers logic), no need to rely on stylization. Unifies both core metaphors: aviation control (yoke = flight control) + harness (yoke = team harness). **Now the front-runner** — also wins on CLI ergonomics: `ctrlyoke run` / `validate` / `commit` all read cleanly, whereas `yokerun run` stutters and `yokerun validate/commit` fights the "run" in the name.
+> **ctrlyoke note:** `ctrlyoke.dev/.com` **and** `controlyoke.dev/.com` all available — grab all four, redirect the full-word/`.com` forms to `.dev` (kills the typo/phonetic leak that sank ctrlpath). No TM. "Control yoke" is generic only for _aircraft parts_; for **software** it's an **arbitrary** mark → strongly protectable (Apple-for-computers logic), no need to rely on stylization. Unifies both core metaphors: aviation control (yoke = flight control) + harness (yoke = team harness). **Now the front-runner** — also wins on CLI ergonomics: `ctrlyoke run` / `validate` / `commit` all read cleanly, whereas `yokerun run` stutters and `yokerun validate/commit` fights the "run" in the name.
 
 > **Eliminated since last pass (June 27):** ~~coductor~~ (coductor.com taken) · ~~codeyoke~~ (popular YouTube channel — brand/SEO collision) · ~~sequincer~~ (taken — MIDI music software).
 
-> **sequince note (close second):** `.com`/`.dev` available, no direct TM hit. **But weaker than ctrlyoke as a mark:** USPTO treats an intentional misspelling of a *descriptive* term as still descriptive (TMEP 1209.03(j); cf. "Lite"/"Kwik"), and "sequence" describes a sequence-runner → likely descriptive, hard to protect without acquired distinctiveness. Also revives the **spell-on-hearing leak** that sank flowCMD — the natural spelling "sequence" is taken/crowded, so word-of-mouth traffic bleeds away. ctrlyoke avoids both (arbitrary = strong mark; owns `controlyoke.*` too). Note: proper-spelled "sequence" is taken with many marks.
+> **sequince note (close second):** `.com`/`.dev` available, no direct TM hit. **But weaker than ctrlyoke as a mark:** USPTO treats an intentional misspelling of a _descriptive_ term as still descriptive (TMEP 1209.03(j); cf. "Lite"/"Kwik"), and "sequence" describes a sequence-runner → likely descriptive, hard to protect without acquired distinctiveness. Also revives the **spell-on-hearing leak** that sank flowCMD — the natural spelling "sequence" is taken/crowded, so word-of-mouth traffic bleeds away. ctrlyoke avoids both (arbitrary = strong mark; owns `controlyoke.*` too). Note: proper-spelled "sequence" is taken with many marks.
 
 ---
 
@@ -68,6 +70,7 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 ## Fuzz / Nova family
 
 **Available / candidates:**
+
 - FuzzControl (available; set aside)
 - FuzzFlow (available)
 - Workfuzz (available)
@@ -80,6 +83,7 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 - ⚠️ Fuzzter (available but **sounds identical to "fuzzer"** — avoid)
 
 **Conflicts:**
+
 - ~~FuzzCode~~ (USPTO + domain available, BUT near-collision with **fuzzycode.dev** — an active kids' coding platform — plus a strong "fuzzer" association; abandoned)
 - ~~NovaCode~~ (not available)
 - ~~Fuzzo~~ ~~Fuzzon~~ ~~Fuzzar~~ ~~Fuzzova~~ (all taken)
@@ -90,11 +94,13 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 ## Control / flow / path / plan (direction mostly abandoned)
 
 **Candidates:**
+
 - flowCMD / FlowController / FlowCommander (available) — ⚠️ rejected: "C-M-D vs command" pronunciation ambiguity; "sounds like a plumbing product"
 - stepctrl, stepcontrol (available) — ⚠️ `control` is a recurring crowded/near-miss word
 - Path coinages: Volopath, Avipath, Arcpath, Trekpath, Lumapath, Cuepath, Steerpath, Relaypath, Fuzzpath, Novapath
 
 **Conflicts:**
+
 - ~~ctrlpath~~ (phonetic collision with **controlpath.dev** — an active TypeScript dev tool; "ctrl path" = "control path")
 - ~~ctrlplan / controlplan~~ ("control plane" — ubiquitous devops term, many TMs; `plan` vs `plane` too close)
 - ~~flowctrl~~ (flowctrl.dev owned)
@@ -105,11 +111,13 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 ## Plan / map / route / navigation
 
 **Candidates:**
+
 - Novaplan, Cueplan, Voloplan, Planweave, Planforge
 - Cuemap, Cueroute, Coursemap, Runmap
 - Cairn, Sextant, Lodestar, Rhumb (single-word, navigation theme)
 
 **Conflicts:**
+
 - ~~arcplan~~ (BI software) ~~arcmap~~ (Esri GIS) ~~roadmap~~ ~~mindmap~~ ~~compass~~ (MongoDB +) ~~atlas~~ ~~pathfinder~~ ~~waypoint~~ (HashiCorp) — all taken
 
 ---
@@ -117,6 +125,7 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 ## Step / sequence
 
 **Candidates:**
+
 - stepctrl, stepcontrol (available)
 - Stepwright, Stepforge, Steplane, Steprunner
 - Ordo, Sequon, Seqforge, Seqplan, Runsteps
@@ -124,6 +133,7 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 - Trajix
 
 **Conflicts:**
+
 - ~~cadence~~ (Temporal/Uber workflow engine) ~~stepwise~~ ~~stepladder~~ (fintech) ~~stepway~~ (Dacia) ~~stride~~ (Atlassian/health) ~~codex~~ (OpenAI) ~~echelon~~ (Peloton rival) ~~loom~~ (Loom video) ~~stanza~~ — all taken
 
 ---
@@ -131,11 +141,13 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 ## Harness / agent / driver — single words
 
 **Candidates:**
+
 - Harnix, Agentwright, Operative, Handler, Tradecraft
 - Tack, Bridle, Musher, Teamster, Drover, Mahout, Jockey, Dray
 - Yokova, Harnova, Coharness, Harnessworks
 
 **Conflicts:**
+
 - ~~Yoke~~ (alone — many collisions incl. an IaC tool)
 - ~~Wrangler~~ (Jeep TM + data-wrangler tools) ~~Conductor / Conduktor~~ (Netflix Conductor workflow engine / Kafka tool) ~~Maestro~~ (mobile-testing framework) ~~Agentforce~~ (Salesforce) ~~AgentKit~~ (OpenAI) ~~Agency~~ ~~Rig~~ — all taken / generic
 
@@ -171,6 +183,7 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 ## Agent recommendation pass — June 27, 2026
 
 **Current-list favorites:**
+
 - **coductor** — strongest overall fit; short, CLI-friendly, and maps to conducting multi-step AI coding workflows across harnesses.
 - **codeyoke** — distinctive and harness-relevant, though "yoke" is less immediately familiar.
 - **Harnix** — good coined single-word shape; less descriptive than coductor.
@@ -183,6 +196,7 @@ Workflow files move **from** `*.flightpath.yml` / `*.flightpath.json` **to** `*.
 - **FuzzFlow** — workable, but "flow" remains crowded and less distinctive.
 
 **Current-list names to down-rank:**
+
 - **harpsicode** — clever but too whimsical and hard to explain.
 - **harnesser** — awkward as a product name.
 - **yokerunner** — memorable but too punny; the "yoke" metaphor has to carry too much.

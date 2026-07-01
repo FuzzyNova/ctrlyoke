@@ -669,7 +669,8 @@ const StructuredEventContent = memo<StructuredEventContentProps>(
             content={highlightText(
               !data.result.success && data.result.error
                 ? data.result.error
-                : data.result.output || (data.result.success ? "Success" : "Failed"),
+                : data.result.output ||
+                    (data.result.success ? "Success" : "Failed"),
               getFieldMatches("toolContent")
             )}
           />
@@ -1023,190 +1024,185 @@ function OutputRowComponent({
   bashExpansion,
   onBashExpansionChange,
 }: OutputRowProps) {
-    const rowSearchSegments = getOutputRowSearchSegments(row);
-    const getFieldMatches = (field: string, occurrence = 0) => {
-      const segment = rowSearchSegments.filter((entry) => entry.field === field)[
-        occurrence
-      ];
-      return segment
-        ? sliceDecorationMatches(findDecorations, segment.start, segment.end)
-        : [];
-    };
-    const isActiveRow = activeFindMatch?.rowKey === row.key;
-    let content: React.ReactNode;
-    switch (row.rowKind) {
-      case "history-banner":
-        content = (
-          <HistoryBannerRowView row={row} onBackToLive={onBackToLive} />
-        );
-        break;
-      case "step-anchor":
-        content = <div className="h-px" aria-hidden="true" />;
-        break;
-      case "final-step-label":
-        content = (
-          <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
-            {row.label}
-          </div>
-        );
-        break;
-      case "status":
-        content = (
-          <StatusMessage
-            message={highlightText(row.status.message, getFieldMatches("status"))}
-            severity={row.status.severity}
-            timestamp={row.status.timestamp}
-            timestampMs={row.status.timestampMs}
-          />
-        );
-        break;
-      case "cli-header":
-        content = (
-          <CliHeaderRowView
-            row={row}
-            isExecutionActive={isExecutionActive}
-            stepLabelContent={highlightText(
-              row.stepLabel,
-              getFieldMatches("header", 0)
-            )}
-            stepNameContent={
-              row.stepName
-                ? highlightText(row.stepName, getFieldMatches("header", 1))
-                : undefined
-            }
-            onPromptUndo={onPromptUndo}
-            onPromptRedo={onPromptRedo}
-          />
-        );
-        break;
-      case "prompt":
-        content = (
-          <div
-            className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-[var(--fg-primary)]`}
-          >
-            {highlightText(row.text, getFieldMatches("prompt"))}
-          </div>
-        );
-        break;
-      case "cli-command":
-        content = (
-          <div
-            className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] whitespace-pre-wrap [overflow-wrap:anywhere]`}
-          >
-            {highlightText(
-              formatCliCommandDisplay(
-                row.command,
-                row.workingDirectory,
-                row.wasInjected
-              ),
-              getFieldMatches("command")
-            )}
-          </div>
-        );
-        break;
-      case "error":
-        {
-          const isWarning = isUserStoppedMessage(row.errorMessage);
-          const borderClass = isWarning
-            ? "border-l-severity-warning text-warning-fg"
-            : "border-l-severity-error text-error-fg";
-          const label = isWarning ? "Warning" : "Error";
-        content = (
-          <div
-            className={`${OUTPUT_BLOCK_BASE} ${borderClass}`}
-          >
-            {row.timestamp && (
-              <span className="opacity-70">[{row.timestamp}] </span>
-            )}
-            {label}: {highlightText(row.errorMessage, getFieldMatches("error"))}
-          </div>
-        );
-        break;
-        }
-      case "plain-response": {
-        const responseMatches = getFieldMatches("response");
-        content = (
-          <TextOutput
-            text={row.text}
-            raw={row.rawTextOutput}
-            animated={row.animated}
-            content={
-              row.rawTextOutput
-                ? highlightText(row.text, responseMatches)
-                : undefined
-            }
-            findQuery={row.rawTextOutput ? undefined : findQuery}
-            findCaseSensitive={findCaseSensitive}
-            highlightActiveIndex={responseMatches.findIndex(
-              (match) => match.active
-            )}
-          />
-        );
-        break;
-      }
-      case "structured-event":
-        content = (
-          <StructuredEventContent
-            row={row}
-            findDecorations={findDecorations}
-            findQuery={findQuery}
-            findCaseSensitive={findCaseSensitive}
-            activeFindMatch={activeFindMatch}
-            onFileUndo={
-              onFileUndo ? (request) => onFileUndo(row, request) : undefined
-            }
-            onDiffCollapsedChange={onDiffCollapsedChange}
-            onDiffGapExpand={onDiffGapExpand}
-            onToolCallExpansionChange={onToolCallExpansionChange}
-            bashExpansion={bashExpansion}
-            onBashExpansionChange={onBashExpansionChange}
-          />
-        );
-        if (row.diff) {
-          content = (
-            <div id={row.diff.key} data-diff-anchor="true">
-              {content}
-            </div>
-          );
-        }
-        break;
-      case "stats":
-        content = <StatsRowView row={row} />;
-        break;
+  const rowSearchSegments = getOutputRowSearchSegments(row);
+  const getFieldMatches = (field: string, occurrence = 0) => {
+    const segment = rowSearchSegments.filter((entry) => entry.field === field)[
+      occurrence
+    ];
+    return segment
+      ? sliceDecorationMatches(findDecorations, segment.start, segment.end)
+      : [];
+  };
+  const isActiveRow = activeFindMatch?.rowKey === row.key;
+  let content: React.ReactNode;
+  switch (row.rowKind) {
+    case "history-banner":
+      content = <HistoryBannerRowView row={row} onBackToLive={onBackToLive} />;
+      break;
+    case "step-anchor":
+      content = <div className="h-px" aria-hidden="true" />;
+      break;
+    case "final-step-label":
+      content = (
+        <div className="px-3 pt-2 text-[length:var(--fp-output-font-size-xs)] uppercase tracking-wide text-description-fg">
+          {row.label}
+        </div>
+      );
+      break;
+    case "status":
+      content = (
+        <StatusMessage
+          message={highlightText(row.status.message, getFieldMatches("status"))}
+          severity={row.status.severity}
+          timestamp={row.status.timestamp}
+          timestampMs={row.status.timestampMs}
+        />
+      );
+      break;
+    case "cli-header":
+      content = (
+        <CliHeaderRowView
+          row={row}
+          isExecutionActive={isExecutionActive}
+          stepLabelContent={highlightText(
+            row.stepLabel,
+            getFieldMatches("header", 0)
+          )}
+          stepNameContent={
+            row.stepName
+              ? highlightText(row.stepName, getFieldMatches("header", 1))
+              : undefined
+          }
+          onPromptUndo={onPromptUndo}
+          onPromptRedo={onPromptRedo}
+        />
+      );
+      break;
+    case "prompt":
+      content = (
+        <div
+          className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-[var(--fg-primary)]`}
+        >
+          {highlightText(row.text, getFieldMatches("prompt"))}
+        </div>
+      );
+      break;
+    case "cli-command":
+      content = (
+        <div
+          className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)] whitespace-pre-wrap [overflow-wrap:anywhere]`}
+        >
+          {highlightText(
+            formatCliCommandDisplay(
+              row.command,
+              row.workingDirectory,
+              row.wasInjected
+            ),
+            getFieldMatches("command")
+          )}
+        </div>
+      );
+      break;
+    case "error": {
+      const isWarning = isUserStoppedMessage(row.errorMessage);
+      const borderClass = isWarning
+        ? "border-l-severity-warning text-warning-fg"
+        : "border-l-severity-error text-error-fg";
+      const label = isWarning ? "Warning" : "Error";
+      content = (
+        <div className={`${OUTPUT_BLOCK_BASE} ${borderClass}`}>
+          {row.timestamp && (
+            <span className="opacity-70">[{row.timestamp}] </span>
+          )}
+          {label}: {highlightText(row.errorMessage, getFieldMatches("error"))}
+        </div>
+      );
+      break;
     }
-
-    const isCliGroupRow =
-      row.rowKind === "cli-header" ||
-      row.rowKind === "prompt" ||
-      row.rowKind === "cli-command" ||
-      row.rowKind === "error" ||
-      row.rowKind === "plain-response" ||
-      row.rowKind === "structured-event" ||
-      row.rowKind === "stats";
-
-    if (!isCliGroupRow) {
-      if (!isActiveRow) {
-        return <>{content}</>;
-      }
-      return <div className="rounded-sm ring-1 ring-focus-border">{content}</div>;
+    case "plain-response": {
+      const responseMatches = getFieldMatches("response");
+      content = (
+        <TextOutput
+          text={row.text}
+          raw={row.rawTextOutput}
+          animated={row.animated}
+          content={
+            row.rawTextOutput
+              ? highlightText(row.text, responseMatches)
+              : undefined
+          }
+          findQuery={row.rawTextOutput ? undefined : findQuery}
+          findCaseSensitive={findCaseSensitive}
+          highlightActiveIndex={responseMatches.findIndex(
+            (match) => match.active
+          )}
+        />
+      );
+      break;
     }
+    case "structured-event":
+      content = (
+        <StructuredEventContent
+          row={row}
+          findDecorations={findDecorations}
+          findQuery={findQuery}
+          findCaseSensitive={findCaseSensitive}
+          activeFindMatch={activeFindMatch}
+          onFileUndo={
+            onFileUndo ? (request) => onFileUndo(row, request) : undefined
+          }
+          onDiffCollapsedChange={onDiffCollapsedChange}
+          onDiffGapExpand={onDiffGapExpand}
+          onToolCallExpansionChange={onToolCallExpansionChange}
+          bashExpansion={bashExpansion}
+          onBashExpansionChange={onBashExpansionChange}
+        />
+      );
+      if (row.diff) {
+        content = (
+          <div id={row.diff.key} data-diff-anchor="true">
+            {content}
+          </div>
+        );
+      }
+      break;
+    case "stats":
+      content = <StatsRowView row={row} />;
+      break;
+  }
 
-    return (
-      <div
-        className={[
-          "bg-[var(--bg-primary)] px-[var(--spacing-md)] overflow-x-hidden",
-          isActiveRow ? "rounded-sm ring-1 ring-focus-border" : "",
-          row.groupStart ? "pt-[var(--spacing-sm)]" : "",
-          row.groupEnd
-            ? "pb-[var(--spacing-sm)] border-b border-[var(--border-color)]"
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        {content}
-      </div>
-    );
+  const isCliGroupRow =
+    row.rowKind === "cli-header" ||
+    row.rowKind === "prompt" ||
+    row.rowKind === "cli-command" ||
+    row.rowKind === "error" ||
+    row.rowKind === "plain-response" ||
+    row.rowKind === "structured-event" ||
+    row.rowKind === "stats";
+
+  if (!isCliGroupRow) {
+    if (!isActiveRow) {
+      return <>{content}</>;
+    }
+    return <div className="rounded-sm ring-1 ring-focus-border">{content}</div>;
+  }
+
+  return (
+    <div
+      className={[
+        "bg-[var(--bg-primary)] px-[var(--spacing-md)] overflow-x-hidden",
+        isActiveRow ? "rounded-sm ring-1 ring-focus-border" : "",
+        row.groupStart ? "pt-[var(--spacing-sm)]" : "",
+        row.groupEnd
+          ? "pb-[var(--spacing-sm)] border-b border-[var(--border-color)]"
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {content}
+    </div>
+  );
 }
 
 export const OutputRow = memo(OutputRowComponent);

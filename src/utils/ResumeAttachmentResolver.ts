@@ -57,7 +57,11 @@ export class ResumeAttachmentResolver {
       if (!runtime?.completedAt) {
         continue;
       }
-      if (params.harness && runtime.harness && runtime.harness !== params.harness) {
+      if (
+        params.harness &&
+        runtime.harness &&
+        runtime.harness !== params.harness
+      ) {
         continue;
       }
       if (params.resolvedSessionId) {

@@ -18,7 +18,9 @@ describe("ErrorBehaviorEditor", () => {
 
     await user.click(screen.getAllByRole("button")[0]);
     await user.click(
-      screen.getAllByText("Retry Step")[0].closest("button") as HTMLButtonElement
+      screen
+        .getAllByText("Retry Step")[0]
+        .closest("button") as HTMLButtonElement
     );
 
     expect(onChange).toHaveBeenCalledWith({

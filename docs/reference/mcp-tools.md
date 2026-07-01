@@ -4,8 +4,8 @@ ctrlyoke exposes built-in tools for workflows and chat integrations that need to
 
 ## Built-in tool list
 
-| Tool                      | Purpose                                         |
-| ------------------------- | ----------------------------------------------- |
+| Tool                    | Purpose                                         |
+| ----------------------- | ----------------------------------------------- |
 | `ctrlyoke_queue_status` | Return queue metadata and step state            |
 | `ctrlyoke_append_queue` | Append prompts to the current queue             |
 | `ctrlyoke_capabilities` | Return available harnesses and supported models |

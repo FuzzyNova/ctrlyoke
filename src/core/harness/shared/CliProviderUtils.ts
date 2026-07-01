@@ -243,21 +243,18 @@ export class CliProviderUtils {
       : undefined;
 
     // ctrlyoke-specific env vars — only relevant when the ctrlyoke server is included
-    const additionalEnv: Record<string, string> | undefined =
-      hasCtrlYokeServer
-        ? (() => {
-            const dynamicQueueConfig =
-              ConfigurationUtils.getDynamicQueueConfig();
-            return {
-              CTRLYOKE_MAX_QUEUE_SIZE:
-                dynamicQueueConfig.maxQueueSize.toString(),
-              CTRLYOKE_UNLIMITED_MODE:
-                dynamicQueueConfig.unlimitedMode.toString(),
-              CTRLYOKE_DIAGNOSTIC_LOGS:
-                ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
-            };
-          })()
-        : undefined;
+    const additionalEnv: Record<string, string> | undefined = hasCtrlYokeServer
+      ? (() => {
+          const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+          return {
+            CTRLYOKE_MAX_QUEUE_SIZE: dynamicQueueConfig.maxQueueSize.toString(),
+            CTRLYOKE_UNLIMITED_MODE:
+              dynamicQueueConfig.unlimitedMode.toString(),
+            CTRLYOKE_DIAGNOSTIC_LOGS:
+              ConfigurationUtils.isDiagnosticLogsEnabled().toString(),
+          };
+        })()
+      : undefined;
 
     const mcpArgs = await getMcpConfigArgs(
       mcpServerPath,

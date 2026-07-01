@@ -35,21 +35,25 @@ The directory currently still contains one file, `ScmCommitCommand.ts`, instanti
 - `getGitInputBox()` must stay defensive and optional; message generation still succeeds without a Git input box.
 - The Source Control toolbar buttons are driven by `package.json` `when` clauses keyed off `VSCODE_CONTEXT_KEYS.GENERATING_COMMIT_MESSAGE`, so any new active state must keep that context key accurate.
 - Do not let SCM input-box targeting and diff generation drift to different repositories if multi-root support is ever added.
-</scmCommitCommand>
+  </scmCommitCommand>
 
 <keyPatterns>
 **Keep it orchestration-only**
 - No prompt building, diff parsing, harness selection, or response extraction in `src/scm/`.
 
 **Single in-flight operation**
+
 - `activeAbortController` is the only active-state source; do not add overlapping generations.
 
 **UI state must unwind in `finally`**
+
 - Never leave `VSCODE_CONTEXT_KEYS.GENERATING_COMMIT_MESSAGE` or the abort controller set after failures.
 
 **Reuse shared constants and shared records**
+
 - Use `DashboardConstants` command/context keys and keep tracker writes in sync with `CommitMessageGenerationRecord`.
 
 **Test control-flow branches**
+
 - If SCM behavior changes, cover cancellation, no workspace, no diff, missing Git extension/input box, and tracker writes. `HostedWorkspaceViewerService` tests already cover the shared generator contract from the non-SCM path; SCM tests should focus on VS Code integration and context-key behavior.
-</keyPatterns>
+  </keyPatterns>

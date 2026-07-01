@@ -125,9 +125,7 @@ describe("MarkdownText", () => {
 
     render(
       <MarkdownText>
-        {
-          "[ContextExpander.ts](/c:/dev/ctrlyoke/src/utils/ContextExpander.ts)"
-        }
+        {"[ContextExpander.ts](/c:/dev/ctrlyoke/src/utils/ContextExpander.ts)"}
       </MarkdownText>
     );
 
@@ -148,9 +146,7 @@ describe("MarkdownText", () => {
 
   it("injects VS Code find-match theme styles for markdown marks", () => {
     render(
-      <MarkdownText highlightQuery="alpha">
-        alpha beta alpha
-      </MarkdownText>
+      <MarkdownText highlightQuery="alpha">alpha beta alpha</MarkdownText>
     );
 
     const style = document.getElementById("fp-find-highlight");
@@ -162,9 +158,7 @@ describe("MarkdownText", () => {
 
   it("highlights all occurrences of the find query", () => {
     const { container } = render(
-      <MarkdownText highlightQuery="alpha">
-        alpha beta alpha gamma
-      </MarkdownText>
+      <MarkdownText highlightQuery="alpha">alpha beta alpha gamma</MarkdownText>
     );
 
     const marks = container.querySelectorAll("mark");
@@ -194,8 +188,7 @@ describe("MarkdownText", () => {
     expect(mark?.textContent).toBe("bold");
     const strong = await screen.findByText((_, element) => {
       return (
-        element?.tagName === "STRONG" &&
-        element.textContent === "bold text"
+        element?.tagName === "STRONG" && element.textContent === "bold text"
       );
     });
     expect(strong).toBeInTheDocument();

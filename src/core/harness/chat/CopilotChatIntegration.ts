@@ -2,10 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { getVsCodeWorkspaceRoot } from "../../../platform/VsCodeWorkspaceRoot";
-import {
-  PromptStep,
-  type UserHookConfig,
-} from "../../../types/CtrlYokeTypes";
+import { PromptStep, type UserHookConfig } from "../../../types/CtrlYokeTypes";
 import {
   HARNESS_IDS,
   TEMP_FILE_CATEGORIES,
@@ -821,7 +818,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
       // Step 4: Submit once, then verify via session file (no re-submitting).
       // Use raw prompt text (without XML) for session file matching; pass the
       // full chatPrompt so the one guarded recovery submit can re-paste it.
-      const submitSuccess = await this.submitWithRetry(rawPromptText, chatPrompt);
+      const submitSuccess = await this.submitWithRetry(
+        rawPromptText,
+        chatPrompt
+      );
 
       if (!submitSuccess) {
         if (this.isCancelling) {

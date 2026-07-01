@@ -19,4 +19,4 @@ See the narrower companion instruction files for the important gotchas by sub-ar
 - `types-core.instructions.md` — workflow/core/shared runtime contracts
 - `types-webview-history.instructions.md` — webview message contracts plus history/timeline types
 - `types-hosted.instructions.md` — hosted workspace viewer and generated icon defaults
-</subareas>
+  </subareas>

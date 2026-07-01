@@ -146,12 +146,14 @@ Expected excluded runtime asset:
 **Status:** DECISION MADE — awaiting attorney review
 
 Decisions recorded (June 2026):
+
 - **Custom commercial EULA** — not Elastic-2.0, not BSL. Source-available; bespoke terms.
 - **Source-available** — public repo, visible source, governed by the custom EULA. Code visibility builds trust for a tool that drives AI over user codebases; Pro protection comes from legal terms + Keygen's offline crypto, not source secrecy.
 - **Commercial threshold** — $10M USD annual revenue OR 250 employees (Docker's line). Organizations above this threshold must purchase Pro licenses even for free-tier features.
 - **Pro licensing at launch** — Keygen offline Ed25519-signed licenses via Lemon Squeezy storefront. See [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
 
 Open:
+
 - [ ] Attorney reviews and finalizes [`LICENSE_DRAFT.md`](LICENSE_DRAFT.md).
 - [ ] Replace `LICENSE` with final custom EULA text.
 - [ ] Update `package.json#license` to `SEE LICENSE IN LICENSE.md`.
@@ -276,22 +278,22 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 
 ## Summary Checklist
 
-| Item | Status | Notes |
-| --- | --- | --- |
-| Populate `CHANGELOG.md` for `0.1.0` | DONE | Current changelog has a full entry |
-| Build release VSIX | DONE | `ctrlyoke-0.1.0.vsix` exists |
-| Test package on Linux | DONE | User-reported complete |
-| Test package on macOS | DONE | User-reported complete |
-| Fix VSIX allowlist / webview assets | DONE | `.vscodeignore` is allowlist-based |
-| Marketplace metadata | MOSTLY DONE | Publisher/repo identity still open |
-| README harness coverage | DONE | All seven harnesses listed |
-| README/package VS Code version consistency | DONE | Both say 1.104.0 |
-| Business email/support identity | DONE | `support@ctrlyoke.dev`, DNS/DKIM/DMARC configured |
-| Publisher identity | DONE | `fuzzynova`, repo at FuzzyNova/ctrlyoke |
-| License/commercial terms | DECISION MADE | Custom EULA (source-available, $10M threshold); draft at `LICENSE_DRAFT.md`; needs attorney |
-| Final `vsce ls` package inspection | OPEN | Run immediately before publish |
-| Marketplace publish | OPEN | Blocked on identity decision |
-| npm CLI publish | DEFERRED | Separate packaging decision |
+| Item                                       | Status        | Notes                                                                                       |
+| ------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------- |
+| Populate `CHANGELOG.md` for `0.1.0`        | DONE          | Current changelog has a full entry                                                          |
+| Build release VSIX                         | DONE          | `ctrlyoke-0.1.0.vsix` exists                                                                |
+| Test package on Linux                      | DONE          | User-reported complete                                                                      |
+| Test package on macOS                      | DONE          | User-reported complete                                                                      |
+| Fix VSIX allowlist / webview assets        | DONE          | `.vscodeignore` is allowlist-based                                                          |
+| Marketplace metadata                       | MOSTLY DONE   | Publisher/repo identity still open                                                          |
+| README harness coverage                    | DONE          | All seven harnesses listed                                                                  |
+| README/package VS Code version consistency | DONE          | Both say 1.104.0                                                                            |
+| Business email/support identity            | DONE          | `support@ctrlyoke.dev`, DNS/DKIM/DMARC configured                                           |
+| Publisher identity                         | DONE          | `fuzzynova`, repo at FuzzyNova/ctrlyoke                                                     |
+| License/commercial terms                   | DECISION MADE | Custom EULA (source-available, $10M threshold); draft at `LICENSE_DRAFT.md`; needs attorney |
+| Final `vsce ls` package inspection         | OPEN          | Run immediately before publish                                                              |
+| Marketplace publish                        | OPEN          | Blocked on identity decision                                                                |
+| npm CLI publish                            | DEFERRED      | Separate packaging decision                                                                 |
 
 ---
 

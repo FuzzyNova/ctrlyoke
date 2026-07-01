@@ -889,7 +889,11 @@ export class WebviewSettingsSync {
     const allSettings = configService.getAll();
     const sources = configService.getLeafSources();
 
-    let certMeta: { generatedAt: string; expiresAt: string; sans: string[] } | null = null;
+    let certMeta: {
+      generatedAt: string;
+      expiresAt: string;
+      sans: string[];
+    } | null = null;
     const certPath = allSettings.server?.tls?.certPath;
     if (certPath && allSettings.server?.tls?.enabled) {
       try {

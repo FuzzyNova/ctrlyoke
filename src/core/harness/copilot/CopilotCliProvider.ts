@@ -470,9 +470,7 @@ export class CopilotCliProvider implements ICliProvider {
    * Delete a .gitignore only if it was written by ctrlyoke (identified by
    * our magic header comment). Leaves user-owned gitignore files untouched.
    */
-  private async deleteCtrlYokeGitignore(
-    gitignorePath: string
-  ): Promise<void> {
+  private async deleteCtrlYokeGitignore(gitignorePath: string): Promise<void> {
     try {
       const content = await fs.readFile(gitignorePath, "utf-8");
       if (content.startsWith("# ctrlyoke temp files")) {

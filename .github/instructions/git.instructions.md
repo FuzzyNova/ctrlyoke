@@ -36,7 +36,7 @@ Do not turn this folder into a second workspace-viewer git service. The hosted w
 - `generateMessage()` returns `{ message, prompt, cliCommand? }`; `prompt` and `cliCommand` are consumed for provenance, not just debugging.
 - Current writers are `ScmCommitCommand` and `HostedWorkspaceViewerService`; CLI `commitCommand` also calls the generator directly.
 - Preserve `AbortSignal -> instance.stop()` wiring and listener cleanup.
-</commitMessageGenerator>
+  </commitMessageGenerator>
 
 <commitMessageGenerationTracker>
 - This is a passive in-memory singleton, not persistence and not history.

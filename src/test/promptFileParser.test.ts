@@ -116,7 +116,12 @@ suite("PromptFileParser Tests", () => {
                 retryDelayMs: 1000,
               },
               hooks: [{ event: "error", command: "echo hook" }],
-              steps: [{ prompt: "Test prompt", errorBehavior: { onError: "continue" } }],
+              steps: [
+                {
+                  prompt: "Test prompt",
+                  errorBehavior: { onError: "continue" },
+                },
+              ],
             },
             null,
             2
@@ -147,7 +152,10 @@ suite("PromptFileParser Tests", () => {
       const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), "ctrlyoke-parser-error-behavior-invalid-")
       );
-      const filePath = path.join(tempDir, "invalid-error-behavior.ctrlyoke.json");
+      const filePath = path.join(
+        tempDir,
+        "invalid-error-behavior.ctrlyoke.json"
+      );
 
       try {
         await fs.writeFile(

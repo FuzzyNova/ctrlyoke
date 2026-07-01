@@ -235,10 +235,7 @@ export class CtrlYokeTools {
 
     // Code validation tool
     context.subscriptions.push(
-      vscode.lm.registerTool(
-        "ctrlyoke_validateCode",
-        new CodeValidationTool()
-      )
+      vscode.lm.registerTool("ctrlyoke_validateCode", new CodeValidationTool())
     );
 
     // Workspace inspection tool

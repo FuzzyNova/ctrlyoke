@@ -512,7 +512,9 @@ export const UndoRedoControl: React.FC<UndoRedoControlProps> = ({
   const redoDisabled = !canRedo || editingDisabled;
   const chevronDisabled = historyEntries.length === 0 || editingDisabled;
   const historyChevronVisibilityClass =
-    showHistoryChevronOnDesktopOnly === "lg" ? "hidden lg:flex" : "hidden sm:flex";
+    showHistoryChevronOnDesktopOnly === "lg"
+      ? "hidden lg:flex"
+      : "hidden sm:flex";
 
   const getDebugDetails = useCallback(
     (

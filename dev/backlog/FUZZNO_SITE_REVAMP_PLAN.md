@@ -43,7 +43,7 @@ Evolve `fuzzno.com` from a single-game splash page into a professional **softwar
 
 - **Do not** modify, rebuild, or move the Nibiru game (`/nibiru/**`) or its highscores Netlify Function / blobs wiring.
 - **Do not** change the Netlify deploy mechanism or move the repo.
-- No blog/CMS, no e-commerce, no ctrlyoke license/checkout logic — those live on `ctrlyoke.dev`. This site only *links* to ctrlyoke.
+- No blog/CMS, no e-commerce, no ctrlyoke license/checkout logic — those live on `ctrlyoke.dev`. This site only _links_ to ctrlyoke.
 
 ---
 
@@ -62,29 +62,34 @@ Evolve `fuzzno.com` from a single-game splash page into a professional **softwar
 ## Work Plan
 
 ### 1. Information architecture & copy
-- [ ] Rewrite the tagline. Current "games & interactive experiences" no longer covers developer tools. Options (Nathan to pick — see Open Decisions): *"an independent software studio"*, *"games & developer tools"*, *"we build games and tools for builders"*.
+
+- [ ] Rewrite the tagline. Current "games & interactive experiences" no longer covers developer tools. Options (Nathan to pick — see Open Decisions): _"an independent software studio"_, _"games & developer tools"_, _"we build games and tools for builders"_.
 - [ ] Add a one- or two-sentence studio intro under the hero establishing what Fuzzy Nova is.
 - [ ] Restructure the body from a single link into a **Projects grid** of cards:
-  - **ctrlyoke** — short line e.g. *"Automate your AI coding assistants — a VS Code extension."* Primary button → `https://ctrlyoke.dev` (external, `rel="noopener"`). Tag it as a developer tool.
-  - **Nibiru** — short line e.g. *"A rhythm-driven Unity game."* Button → `/nibiru`. Tag it as a game.
+  - **ctrlyoke** — short line e.g. _"Automate your AI coding assistants — a VS Code extension."_ Primary button → `https://ctrlyoke.dev` (external, `rel="noopener"`). Tag it as a developer tool.
+  - **Nibiru** — short line e.g. _"A rhythm-driven Unity game."_ Button → `/nibiru`. Tag it as a game.
 - [ ] Add a **footer**: `© {year} Fuzzy Nova`, contact (`hello@fuzzno.com`), link to `ctrlyoke.dev`, and the GitHub org if you want it public.
 
 ### 2. Visual design
+
 - [ ] Keep the dark theme, logo, and brand accent (currently `#4444aa`/`#aaaaff`), but elevate from one centered splash to a clean multi-section layout (hero → projects grid → footer).
 - [ ] Responsive card grid (1 column mobile, 2 columns desktop).
 - [ ] Keep `DPComic` for the display heading, but use a clean body font (`system-ui` or Inter) for intro/card/footer copy so longer text reads professionally. Right now `DPComic` is only on the `h1`, which is fine — just don't push the comic font into body copy.
 - [ ] Optional: small per-project thumbnail/icon (a Nibiru icon already exists at `nibiru/TemplateData/NibiruIcon*.png`; use or supply a ctrlyoke mark).
 
 ### 3. SEO & share metadata (biggest "professional" lever)
+
 - [ ] Add `<meta name="description">`, canonical URL, and **OpenGraph + Twitter card** tags so `fuzzno.com` produces a proper preview when shared. This is the cheapest, highest-impact polish — a bare link preview is the main thing that reads "hobby" today.
 - [ ] Add a share/OG image (studio logo on brand background).
 - [ ] Add `robots.txt` and a minimal `sitemap.xml`.
 
 ### 4. Cross-linking
+
 - [ ] `fuzzno.com` → `ctrlyoke.dev` via the ctrlyoke card + footer (this plan).
 - [ ] Reciprocal `ctrlyoke.dev` → `fuzzno.com` ("operated by Fuzzy Nova") is owned by the **ctrlyoke landing page plan**, not this one. Just make sure the ctrlyoke card here points at the production domain.
 
 ### 5. Deploy (no workflow changes required)
+
 - [ ] None needed — the existing GitHub Actions deploy (`deploy.yml` → `_netlify-deploy.yml`, `--dir=.`) already publishes to production on push to `main`, and `deploy-preview.yml` gives every branch a preview URL. As long as the revamp stays static, the workflows and secrets are untouched.
 - [ ] Use a **branch + preview deploy** to review the revamp before merging: push the work to a non-`main` branch, open the `--alias=<branch>` preview URL, confirm the new landing content, share-metadata preview, and the **untouched** `/nibiru` route + highscores, then merge to `main` for the `--prod` deploy.
 

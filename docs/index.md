@@ -36,8 +36,8 @@ It ships in two forms:
 | Surface           | What it is                                                                                                  |
 | ----------------- | ----------------------------------------------------------------------------------------------------------- |
 | VS Code extension | Dashboard UI, prompt editor, embedded terminal, schema validation, and harness orchestration inside VS Code |
-| `ctrlyoke` CLI  | Headless or interactive workflow execution from a terminal or CI job                                        |
-| `ctrlyoke-mcp`  | Standalone MCP server used for queue inspection and queue extension                                         |
+| `ctrlyoke` CLI    | Headless or interactive workflow execution from a terminal or CI job                                        |
+| `ctrlyoke-mcp`    | Standalone MCP server used for queue inspection and queue extension                                         |
 
 ## Where to start
 

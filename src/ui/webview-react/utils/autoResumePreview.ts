@@ -33,7 +33,9 @@ export function getAutoResumePreview(
     if (runtime?.harness === harness && runtime?.sessionId) {
       return {
         resumable: true,
-        stepLabel: step.name ? `Step ${i + 1} ("${step.name}")` : `Step ${i + 1}`,
+        stepLabel: step.name
+          ? `Step ${i + 1} ("${step.name}")`
+          : `Step ${i + 1}`,
       };
     }
   }

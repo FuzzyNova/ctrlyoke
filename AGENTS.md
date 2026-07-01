@@ -1,4 +1,5 @@
 <!-- AUTO-GENERATED — run `npm run generate-agent-files` to update -->
+
 # ctrlyoke Project Memory
 
 ## Core Project Context

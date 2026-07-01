@@ -306,8 +306,6 @@ describe("parseUnifiedDiffToFiles", () => {
   });
 
   it("does not throw on malformed / binary-only input", () => {
-    expect(() =>
-      parseUnifiedDiffToFiles("not a real diff")
-    ).not.toThrow();
+    expect(() => parseUnifiedDiffToFiles("not a real diff")).not.toThrow();
   });
 });

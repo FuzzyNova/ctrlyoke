@@ -97,13 +97,13 @@ Where applicable law requires a legal basis for processing, we rely on one or mo
 
 We use trusted vendors to help operate ctrlyoke. These providers process data on our behalf or as independent providers under their own terms, as applicable:
 
-| Sub-processor | Purpose | Data categories |
-| --- | --- | --- |
-| Microsoft Azure Application Insights | Telemetry processing | Telemetry events, machine/version/OS metadata |
-| Keygen | License issuance and verification | License key, license status, machine identifier, IP address during online activation |
-| Lemon Squeezy | Payments and merchant of record | Name, email address, billing country, payment metadata |
-| Netlify | Website and infrastructure hosting | Server logs, IP addresses, request metadata |
-| Google Workspace | Business and support email | Email addresses and message content |
+| Sub-processor                        | Purpose                            | Data categories                                                                      |
+| ------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------ |
+| Microsoft Azure Application Insights | Telemetry processing               | Telemetry events, machine/version/OS metadata                                        |
+| Keygen                               | License issuance and verification  | License key, license status, machine identifier, IP address during online activation |
+| Lemon Squeezy                        | Payments and merchant of record    | Name, email address, billing country, payment metadata                               |
+| Netlify                              | Website and infrastructure hosting | Server logs, IP addresses, request metadata                                          |
+| Google Workspace                     | Business and support email         | Email addresses and message content                                                  |
 
 We may also disclose information:
 

@@ -65,8 +65,6 @@ describe("WorkflowFilePickerModal", () => {
     await user.type(pathInput, "flows\\nested\\example.ctrlyoke.yaml");
     await user.click(screen.getByRole("button", { name: "Load File" }));
 
-    expect(onSelect).toHaveBeenCalledWith(
-      "flows/nested/example.ctrlyoke.yaml"
-    );
+    expect(onSelect).toHaveBeenCalledWith("flows/nested/example.ctrlyoke.yaml");
   });
 });

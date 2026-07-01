@@ -116,9 +116,7 @@ export class NotificationManager implements DashboardClient {
     this.showNotification(event);
   }
 
-  private showNotification(
-    event: CtrlYokeNotificationEvent | undefined
-  ): void {
+  private showNotification(event: CtrlYokeNotificationEvent | undefined): void {
     if (!event) {
       return;
     }

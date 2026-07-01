@@ -8,7 +8,7 @@
 
 **Yes, in a lean form.** The workspace viewer's source control pane (`WorkspaceSourceControlPane.tsx`)
 currently shows staged/unstaged files and a commit/push/pull box
-(`WorkspaceCommitArea.tsx`), but there's no way to see what was *already* committed
+(`WorkspaceCommitArea.tsx`), but there's no way to see what was _already_ committed
 without leaving ctrlyoke. Common needs that come up constantly during workflow-driven
 development:
 
@@ -24,12 +24,14 @@ graph rendering, no branch management UI, no merge/rebase tooling.
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Lightweight, linear list of recent commits on the current branch (hash, message, author, relative date)
 - "View Diff" on a commit reuses the existing `~<hash>` content-preview pipeline — no new diff UI
 - Right-click menu mirroring `useWorkspaceExplorerContextMenu.tsx`'s ergonomics: copy info, add to ctrlyoke, checkout (detach)
 - Clear indication when the workspace is in a detached HEAD state, with a one-click way back
 
 **Non-Goals (explicitly out of scope):**
+
 - Branch graph / commit graph visualization
 - Branch creation, merging, rebasing, cherry-pick, revert UI
 - Stash management
@@ -76,15 +78,15 @@ never bounds and the column grows instead of scrolling.
 ### Height split — 50/50 with empty-fill
 
 Baseline is 50/50 (`flex-1 basis-0` on both regions). To get the "stretch to fill when
-the sibling is empty" behavior **without** a resize handle, collapse the *empty* region
+the sibling is empty" behavior **without** a resize handle, collapse the _empty_ region
 to its natural height so the other consumes the slack:
 
-| State | Files region | History region |
-| --- | --- | --- |
-| both have content | `flex-1` (≈50%) | `flex-1` (≈50%) |
-| no changes/staged | `flex-none` (header + "No changes") | `flex-1` (fills up) |
-| empty history (new repo) | `flex-1` (fills down) | `flex-none` (header + empty note) |
-| both empty | `flex-none` | `flex-none` |
+| State                    | Files region                        | History region                    |
+| ------------------------ | ----------------------------------- | --------------------------------- |
+| both have content        | `flex-1` (≈50%)                     | `flex-1` (≈50%)                   |
+| no changes/staged        | `flex-none` (header + "No changes") | `flex-1` (fills up)               |
+| empty history (new repo) | `flex-1` (fills down)               | `flex-none` (header + empty note) |
+| both empty               | `flex-none`                         | `flex-none`                       |
 
 Concretely, with `filesEmpty = staged.length === 0 && changed.length === 0` and
 `historyEmpty = commitHistory.length === 0`, each region gets `flex-1 basis-0 min-h-0`
@@ -189,18 +191,31 @@ async checkoutBranch(branch: string): Promise<{ branch: string }> {
 ### Frontend API — `src/ui/webview-react/utils/hostedApi.ts`
 
 ```typescript
-export async function workspaceCommitLog(skip = 0, limit = 30): Promise<WorkspaceCommitLogResponse> {
+export async function workspaceCommitLog(
+  skip = 0,
+  limit = 30
+): Promise<WorkspaceCommitLogResponse> {
   return hostedFetch<WorkspaceCommitLogResponse>(
     `/api/workspace-viewer/commit-log?skip=${skip}&limit=${limit}`
   );
 }
 
-export async function workspaceCheckoutCommit(req: WorkspaceCheckoutCommitRequest): Promise<{ detached: boolean }> {
-  return hostedFetch("/api/workspace-viewer/checkout-commit", { method: "POST", body: JSON.stringify(req) });
+export async function workspaceCheckoutCommit(
+  req: WorkspaceCheckoutCommitRequest
+): Promise<{ detached: boolean }> {
+  return hostedFetch("/api/workspace-viewer/checkout-commit", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
 }
 
-export async function workspaceCheckoutBranch(req: WorkspaceCheckoutBranchRequest): Promise<{ branch: string }> {
-  return hostedFetch("/api/workspace-viewer/checkout-branch", { method: "POST", body: JSON.stringify(req) });
+export async function workspaceCheckoutBranch(
+  req: WorkspaceCheckoutBranchRequest
+): Promise<{ branch: string }> {
+  return hostedFetch("/api/workspace-viewer/checkout-branch", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
 }
 ```
 
@@ -261,15 +276,15 @@ and renders via the existing `StepContextMenu` component (no new menu primitive 
 
 Menu items for a right-clicked commit:
 
-| Item | Action | Notes |
-| --- | --- | --- |
-| **Copy Hash** | Copy full SHA to clipboard | `navigator.clipboard.writeText(commit.hash)` |
-| **Copy Message** | Copy subject line to clipboard | |
-| *(divider)* | | |
-| **View Diff** | `openToGitRef(commit.hash)` (browser) / `OPEN_GIT_CHANGE` (VS Code) | Shared git-ref pipeline — see "Viewing a Commit's Diff" above and `COMMIT_DIFF_PIPELINE_PLAN.md` |
-| **Add Commit to ctrlyoke** | Insert `~<hash>` via `enqueuePromptEditorInsert` | See below — the same `~<hash>` reference the VS Code timeline command produces |
-| *(divider)* | | |
-| **Checkout Commit (Detach HEAD)** | Confirm via `Modal` (reuse the discard-confirmation pattern), then `workspaceCheckoutCommit({ hash })`, refresh status/log | Disabled (with `disabledTitle`) if `commit.isHead && !detached` |
+| Item                              | Action                                                                                                                     | Notes                                                                                            |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Copy Hash**                     | Copy full SHA to clipboard                                                                                                 | `navigator.clipboard.writeText(commit.hash)`                                                     |
+| **Copy Message**                  | Copy subject line to clipboard                                                                                             |                                                                                                  |
+| _(divider)_                       |                                                                                                                            |                                                                                                  |
+| **View Diff**                     | `openToGitRef(commit.hash)` (browser) / `OPEN_GIT_CHANGE` (VS Code)                                                        | Shared git-ref pipeline — see "Viewing a Commit's Diff" above and `COMMIT_DIFF_PIPELINE_PLAN.md` |
+| **Add Commit to ctrlyoke**        | Insert `~<hash>` via `enqueuePromptEditorInsert`                                                                           | See below — the same `~<hash>` reference the VS Code timeline command produces                   |
+| _(divider)_                       |                                                                                                                            |                                                                                                  |
+| **Checkout Commit (Detach HEAD)** | Confirm via `Modal` (reuse the discard-confirmation pattern), then `workspaceCheckoutCommit({ hash })`, refresh status/log | Disabled (with `disabledTitle`) if `commit.isHead && !detached`                                  |
 
 ### "Add Commit to ctrlyoke" details
 
@@ -314,7 +329,7 @@ small banner above the commit list:
 ⚠ Detached HEAD at abc1234        [Return to main]
 ```
 
-"Return to `<branch>`" needs *some* branch name — capture the branch ctrlyoke was on
+"Return to `<branch>`" needs _some_ branch name — capture the branch ctrlyoke was on
 before the checkout in the store (`previousBranch`, set when `checkoutCommit` succeeds)
 and fall back to a manual branch-name prompt if unavailable (e.g. user detached via
 terminal in a prior session and just opened the panel).

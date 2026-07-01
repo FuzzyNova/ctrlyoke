@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       deploy-args:
-        description: 'Extra args passed to netlify deploy (e.g. --prod or --alias=branch-name)'
+        description: "Extra args passed to netlify deploy (e.g. --prod or --alias=branch-name)"
         required: true
         type: string
     secrets:
@@ -21,8 +21,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       # Root install provides VitePress (a root devDep) for the docs build.
       # build:landing installs the landing project's own deps via `npm --prefix landing ci`.

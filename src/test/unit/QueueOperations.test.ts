@@ -1,10 +1,7 @@
 import * as assert from "assert";
 import { suite, test } from "mocha";
 import { PromptQueue } from "../../core/PromptQueue";
-import {
-  getQueueStatus,
-  appendToQueue,
-} from "../../core/QueueOperations";
+import { getQueueStatus, appendToQueue } from "../../core/QueueOperations";
 import {
   EXECUTION_STATES,
   QUEUE_POSITION,

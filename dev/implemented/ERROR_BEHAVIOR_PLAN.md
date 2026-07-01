@@ -945,10 +945,10 @@ classification explicit.
 5. [x] `flightpath-opencode-plugin.ts`: handle `session.error` event, write error file
 6. [x] `OpenCodeNotificationMonitor`: scan for error files alongside stop files
 7. [x] Map the logical user hook/notification event `error` to Claude `StopFailure`, Copilot
-   `errorOccurred`, and OpenCode `session.error`
+       `errorOccurred`, and OpenCode `session.error`
 8. [ ] `ClaudeNotificationMonitor`/`CopilotNotificationMonitor`: tighten log fallback to session-level only
 9. [x] Leave Codex/Qwen/Gemini on process-exit/timeout fallback — no changes needed; they
-   inherit Phase 2's structured classification automatically
+       inherit Phase 2's structured classification automatically
 
 This is the smallest safe implementation slice that fixes the known blind spots without
 adding broad false-positive log parsing.
@@ -956,7 +956,7 @@ adding broad false-positive log parsing.
 ### Phase 4 - WorkflowExecutor routing
 
 1. [x] Move process exit off the cancel path — change `wasLastFailureProcessExit()` branch to
-   route through `errorBehavior` instead of calling `runtime.cancelAttempt()` + stop
+       route through `errorBehavior` instead of calling `runtime.cancelAttempt()` + stop
 2. [x] Wire `wasLastFailureHarnessError()` as a new route (same policy lookup)
 3. [x] Wire timeout (`failureKind: "timeout"`) as a new route
 4. [x] Keep `userCancelled` on the existing cancellation path — unchanged
@@ -967,21 +967,21 @@ adding broad false-positive log parsing.
 ### Phase 5 - UI
 
 1. [x] Add workflow-level `errorBehavior` editing in the Validation section of
-   `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx`
+       `src/ui/webview-react/components/layout/WorkflowPropertiesPanel.tsx`
 2. [x] Add prompt-level `errorBehavior` editing in the Validation section of
-   `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`
+       `src/ui/webview-react/components/editor/PropertiesDrawer.tsx`
 3. [x] Add global default `errorBehavior` editing in the Validation section of
-   `src/ui/webview-react/components/settings/defaults/DefaultsValidationPage.tsx`
+       `src/ui/webview-react/components/settings/defaults/DefaultsValidationPage.tsx`
 4. [x] Use the existing nullable execution-property pattern in `PropertiesDrawer.tsx`:
-   dropdown options should include inherit / explicit none / custom behavior, matching the
-   workflow-inheritance semantics already used for `endCondition` and `preCondition`
+       dropdown options should include inherit / explicit none / custom behavior, matching the
+       workflow-inheritance semantics already used for `endCondition` and `preCondition`
 5. [x] Show `maxRetries` and `retryDelayMs` only when the selected `onError` value is `retry`
 6. [x] Keep workflow/default-level controls simpler: `onError` selector always visible, with
-   `maxRetries` and `retryDelayMs` conditionally rendered under it when `retry` is selected
+       `maxRetries` and `retryDelayMs` conditionally rendered under it when `retry` is selected
 7. [x] Add status messaging for retry and continue outcomes where the current Validation UI
-   already surfaces execution/attempt state
+       already surfaces execution/attempt state
 8. [x] Do not add bespoke error controls to `NotificationsSection.tsx` or `HooksEditor.tsx`;
-   the new logical `error` hook event should appear there through `HOOK_EVENT_METADATA`
+       the new logical `error` hook event should appear there through `HOOK_EVENT_METADATA`
 
 ---
 

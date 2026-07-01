@@ -31,7 +31,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 
 **Crash investigation**: a VS Code "crash" a few seconds after a workflow completes is usually an **extension-host V8 heap OOM** (the ext host is a Node UtilityProcess), not a webview/GPU crash — the tell is the ctrlyoke session log stopping dead mid-line with no error written. Minidumps land in `%APPDATA%\Code\Crashpad\reports\*.dmp`; scan them for ASCII strings (`electron.v8-oom.is_heap_oom=1`, `CALL_AND_RETRY_LAST`) to confirm — no symbol server needed. A single large allocation on an already-large heap (not a slow leak) is the typical shape.
 
-**Temp prompt files**: prompt files under `.ctrlyoke/temp/` are deleted by `TempFileManager` as soon as the turn that consumed them completes. Never try to re-read a temp file that was referenced in an *earlier* turn — it will 404. Infer intent from the changes already made instead of re-fetching the source.
+**Temp prompt files**: prompt files under `.ctrlyoke/temp/` are deleted by `TempFileManager` as soon as the turn that consumed them completes. Never try to re-read a temp file that was referenced in an _earlier_ turn — it will 404. Infer intent from the changes already made instead of re-fetching the source.
 </debugging>
 
 <commonCommands>

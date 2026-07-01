@@ -2,11 +2,11 @@
 
 ctrlyoke supports three file formats:
 
-| Format   | Extension                             | Best use                             |
-| -------- | ------------------------------------- | ------------------------------------ |
+| Format   | Extension                         | Best use                             |
+| -------- | --------------------------------- | ------------------------------------ |
 | YAML     | `.ctrlyoke.yaml`, `.ctrlyoke.yml` | Multi-step workflows written by hand |
-| JSON     | `.ctrlyoke.json`                    | Generated workflows and automation   |
-| Markdown | `.prompt.md`                          | Single prompt files                  |
+| JSON     | `.ctrlyoke.json`                  | Generated workflows and automation   |
+| Markdown | `.prompt.md`                      | Single prompt files                  |
 
 ## Current schema shape
 

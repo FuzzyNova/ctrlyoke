@@ -16,10 +16,7 @@ import type {
   OutputRenderRow,
   StructuredEventRow,
 } from "@utils/outputRows";
-import type {
-  OutputFindMatch,
-  RowFindDecoration,
-} from "@utils/outputFind";
+import type { OutputFindMatch, RowFindDecoration } from "@utils/outputFind";
 import type { ToolCallExpansionSection } from "@utils/toolCallLayout";
 import {
   OutputScrollSeekPlaceholder,
@@ -121,7 +118,9 @@ function renderOutputRow(
       findDecorations={props.findDecorations?.get(row.key)}
       findQuery={props.findQuery}
       findCaseSensitive={props.findCaseSensitive}
-      activeFindMatch={props.activeMatch?.rowKey === row.key ? props.activeMatch : null}
+      activeFindMatch={
+        props.activeMatch?.rowKey === row.key ? props.activeMatch : null
+      }
       isExecutionActive={props.isExecutionActive}
       onBackToLive={props.onBackToLive}
       onPromptUndo={props.onPromptUndo}

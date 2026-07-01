@@ -267,9 +267,7 @@ export class QwenCliProvider implements ICliProvider {
         ...enabledNotificationHookEvents,
       ]),
     ];
-    const ctrlyokeHookKeys = this.buildTrustedHookKeys(
-      ctrlyokeHooksSection
-    );
+    const ctrlyokeHookKeys = this.buildTrustedHookKeys(ctrlyokeHooksSection);
 
     const workflowKey = workingFilePath ?? workspaceRoot;
     await this.registerHooksInSettings(

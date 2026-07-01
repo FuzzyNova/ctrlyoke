@@ -353,6 +353,8 @@ describe("CliOutput", () => {
     render(<CliOutput output={output} stepIndex={0} attemptIndex={0} />);
 
     expect(screen.getByText("Warning: Stopped by user")).toBeInTheDocument();
-    expect(screen.queryByText("Error: Stopped by user")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Error: Stopped by user")
+    ).not.toBeInTheDocument();
   });
 });

@@ -28,10 +28,7 @@ export interface SkillInfo {
   /** Description parsed from frontmatter */
   description: string;
   /** Source location of the skill */
-  source: Exclude<
-    DiscoverySource,
-    typeof DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE
-  >;
+  source: Exclude<DiscoverySource, typeof DISCOVERY_SOURCES.WORKSPACE_CTRLYOKE>;
 }
 
 /**

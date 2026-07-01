@@ -4,8 +4,7 @@ import { WebviewLog } from "@utils/logger";
 
 const PANEL_RECONNECT_RELOAD_DELAY_MS = 1500;
 const PANEL_RECONNECT_RELOAD_COOLDOWN_MS = 10000;
-const PANEL_RECONNECT_RELOAD_SESSION_KEY =
-  "ctrlyoke-panel-reconnect-reload-at";
+const PANEL_RECONNECT_RELOAD_SESSION_KEY = "ctrlyoke-panel-reconnect-reload-at";
 
 let panelReconnectReloadTimer: number | undefined;
 

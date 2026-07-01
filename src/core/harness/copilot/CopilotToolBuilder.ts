@@ -125,7 +125,10 @@ export class CopilotToolBuilder {
       completionData?.result?.content ||
       completionData?.result?.detailedContent;
 
-    if (classifiedType === CLI_EVENT_TYPES.FILE_EDIT && toolName === "apply_patch") {
+    if (
+      classifiedType === CLI_EVENT_TYPES.FILE_EDIT &&
+      toolName === "apply_patch"
+    ) {
       const patchText =
         completionData?.result?.detailedContent ||
         completionData?.result?.content ||
@@ -187,9 +190,7 @@ export class CopilotToolBuilder {
       | undefined;
     const command = (normalizedArgs.command ??
       normalizedArgs.cmd ??
-      normalizedArgs.script) as
-      | string
-      | undefined;
+      normalizedArgs.script) as string | undefined;
     const query = normalizedArgs.query as string | undefined;
 
     if (classifiedType === CLI_EVENT_TYPES.FILE_EDIT) {

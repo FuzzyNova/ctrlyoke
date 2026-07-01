@@ -56,10 +56,7 @@ suite("EndConditionEvaluator Tests", () => {
         'node "C:\\my dir\\check.js" "arg with spaces"'
       );
       assert.strictEqual(scriptPath, "node");
-      assert.deepStrictEqual(args, [
-        "C:\\my dir\\check.js",
-        "arg with spaces",
-      ]);
+      assert.deepStrictEqual(args, ["C:\\my dir\\check.js", "arg with spaces"]);
     });
 
     test("does not treat backslashes as escapes (Windows paths)", () => {
@@ -86,9 +83,8 @@ suite("EndConditionEvaluator Tests", () => {
     });
 
     test("keeps an empty quoted argument", () => {
-      const { scriptPath, args } = EndConditionEvaluator.parseScriptCommand(
-        'node check.js ""'
-      );
+      const { scriptPath, args } =
+        EndConditionEvaluator.parseScriptCommand('node check.js ""');
       assert.strictEqual(scriptPath, "node");
       assert.deepStrictEqual(args, ["check.js", ""]);
     });

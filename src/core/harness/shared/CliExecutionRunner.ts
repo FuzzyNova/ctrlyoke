@@ -241,7 +241,9 @@ export class CliExecutionRunner {
       const focused =
         this.deps.transportCoordinator.writeToCurrentPtySession(focusIn);
       if (!focused) {
-        Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
+        Log.warn(
+          "⚠️ Inject mode: PTY session not active — TUI may have exited"
+        );
         return { injected: false };
       }
       await this.delay(CliExecutionRunner.INJECT_FOCUS_SETTLE_DELAY_MS);
@@ -251,7 +253,9 @@ export class CliExecutionRunner {
       const promptWritten =
         this.deps.transportCoordinator.writeToCurrentPtySession(chunk);
       if (!promptWritten) {
-        Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
+        Log.warn(
+          "⚠️ Inject mode: PTY session not active — TUI may have exited"
+        );
         return { injected: false };
       }
       await this.delay(CliExecutionRunner.INJECT_CHUNK_DELAY_MS);
@@ -268,7 +272,9 @@ export class CliExecutionRunner {
         this.deps.transportCoordinator.writeToCurrentPtySession(submit);
 
       if (!submitWritten) {
-        Log.warn("⚠️ Inject mode: PTY session not active — TUI may have exited");
+        Log.warn(
+          "⚠️ Inject mode: PTY session not active — TUI may have exited"
+        );
         return { injected: false };
       }
 

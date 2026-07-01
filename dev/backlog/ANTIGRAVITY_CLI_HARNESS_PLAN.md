@@ -26,11 +26,11 @@ Re-ran `agy` locally (now **1.0.14**, up from 1.0.8) and re-checked the docs/cha
 
 1. **Headless resume bug is FIXED (1.0.9).** The 1.0.9 changelog explicitly fixes "headless print mode resumption (`--conversation`/`-c` `-p ...`) … dump[ing] the entire historical conversation transcript instead of only printing the newly generated response." Since we ship against ≥1.0.14, the A.4 "keep only the final turn" workaround is **no longer required** — require `agy >= 1.0.9` instead. (Still worth a defensive guard, but not the primary path.)
 
-2. **Headless `-p` still emits ZERO bytes in a non-TTY pipe — re-confirmed on 1.0.14.** `echo … | agy -p "…"` exits `0` with empty stdout/stderr; the process tears down (`Language server shutting down`) without running the turn. This is now the **single biggest implementation risk**. ctrlyoke spawns via `PtyProcessManager` (a real pty), which is a *different* context than a plain pipe, so it may work — but this MUST be verified empirically inside ctrlyoke's pty spawn before building on `--print`. If `-p` proves pty-dependent and unreliable, the fallback is interactive (`-i`) + `Stop` hook for *all* runs, not just interactive ones. **Do this verification first.**
+2. **Headless `-p` still emits ZERO bytes in a non-TTY pipe — re-confirmed on 1.0.14.** `echo … | agy -p "…"` exits `0` with empty stdout/stderr; the process tears down (`Language server shutting down`) without running the turn. This is now the **single biggest implementation risk**. ctrlyoke spawns via `PtyProcessManager` (a real pty), which is a _different_ context than a plain pipe, so it may work — but this MUST be verified empirically inside ctrlyoke's pty spawn before building on `--print`. If `-p` proves pty-dependent and unreliable, the fallback is interactive (`-i`) + `Stop` hook for _all_ runs, not just interactive ones. **Do this verification first.**
 
 3. **New flags: `--project` / `--new-project` (1.0.12).** `agy` now has an explicit project concept. Project-scoped permission config in `~/.gemini/config/projects/<id>.json` **takes precedence** over global `~/.gemini/antigravity-cli/settings.json` (1.0.12). Default is `default-cli-project`. ctrlyoke can ignore these for v1 (let agy default), but be aware permission/MCP resolution is now project-aware.
 
-4. **MCP workspace path is genuinely unsettled — do NOT hard-assume `.agents/mcp_config.json` loads.** Open issue [#60](https://github.com/google-antigravity/antigravity-cli/issues/60) reports a project-local `mcp_config.json` is *discovered but silently ignored* (only HOME-level config spawns servers); the 1.0.14 changelog says it "Fixed an MCP configuration path mismatch in the CLI and permission manager." Community guides say workspace `.agents/mcp_config.json` works; the issue used `.antigravitycli/` (a different/wrong path). **Net: verify on 1.0.14 that `.agents/mcp_config.json` actually spawns a server before relying on it; if not, fall back to the global `~/.gemini/config/mcp_config.json`** (this file exists locally and is the confirmed global path). MCP is the area most likely to need a global-file fallback that breaks per-workflow isolation.
+4. **MCP workspace path is genuinely unsettled — do NOT hard-assume `.agents/mcp_config.json` loads.** Open issue [#60](https://github.com/google-antigravity/antigravity-cli/issues/60) reports a project-local `mcp_config.json` is _discovered but silently ignored_ (only HOME-level config spawns servers); the 1.0.14 changelog says it "Fixed an MCP configuration path mismatch in the CLI and permission manager." Community guides say workspace `.agents/mcp_config.json` works; the issue used `.antigravitycli/` (a different/wrong path). **Net: verify on 1.0.14 that `.agents/mcp_config.json` actually spawns a server before relying on it; if not, fall back to the global `~/.gemini/config/mcp_config.json`** (this file exists locally and is the confirmed global path). MCP is the area most likely to need a global-file fallback that breaks per-workflow isolation.
 
 5. **Hook payload carries `conversationId` AND `transcriptPath` AND `artifactDirectoryPath`.** Per the docs, `PreToolUse`/`Stop` deliver tool-call details, **step index, conversation ID, workspace paths, transcript path, and artifact directory path** on stdin. Consequence: **in interactive mode the session ID comes straight from the hook payload — no glog parsing needed.** The `AntigravityLogParser` glog scrape is only needed for the **headless** path (where no hook fires). This narrows the log parser's job; consider deferring it if headless session-ID can come from `cache/last_conversations.json` alone.
 
@@ -105,7 +105,7 @@ This is the most important finding for the parser design. `agy` does **not** wri
 - `history.jsonl` — appends `{display, timestamp, workspace, conversationId, type}` per input
 - `log/cli-<datetime>.log` — verbose **glog text** (`I0618 17:00:37.265854 ... server.go:839] ...`)
 
-**Consequence**: there is no way to extract a rich per-tool/diff/token timeline from agy's *stored* conversations the way `GeminiLogParser` does. The dashboard will show the **plain-text response** plus session/completion state — not the structured tool/diff/thinking event stream. Treat that as an accepted limitation for v1.
+**Consequence**: there is no way to extract a rich per-tool/diff/token timeline from agy's _stored_ conversations the way `GeminiLogParser` does. The dashboard will show the **plain-text response** plus session/completion state — not the structured tool/diff/thinking event stream. Treat that as an accepted limitation for v1.
 
 > 🔎 **Possible richer path (research item)**: agy's hooks deliver a `transcriptPath` on stdin — "the filepath of the current session log" (see A.6). If that transcript is a parseable JSON/JSONL turn log, a future `AntigravityLogParser` could read it for tool/diff events. Capture a real hook payload and inspect `transcriptPath` before deciding v1 is plain-text-only forever.
 
@@ -118,7 +118,7 @@ The "session ID" is the conversation UUID (`8ab91287-cfd4-4e25-8405-8d48b9d8a8e3
 
 Resume with `--continue`/`-c` (most recent) or `--conversation <uuid>` (specific).
 
-> ✅ **Resume bug FIXED in 1.0.9 (resolved as of 1.0.14).** Previously, `--conversation <id> -p` (headless resume) dumped the *entire* historical transcript instead of only the new response. The 1.0.9 changelog fixes this. **Action: require `agy >= 1.0.9`** (trivially satisfied at 1.0.14) rather than the old "keep only the final turn" parser workaround. A defensive last-turn guard is still cheap insurance but no longer load-bearing.
+> ✅ **Resume bug FIXED in 1.0.9 (resolved as of 1.0.14).** Previously, `--conversation <id> -p` (headless resume) dumped the _entire_ historical transcript instead of only the new response. The 1.0.9 changelog fixes this. **Action: require `agy >= 1.0.9`** (trivially satisfied at 1.0.14) rather than the old "keep only the final turn" parser workaround. A defensive last-turn guard is still cheap insurance but no longer load-bearing.
 
 ### A.5 Headless output format = plain text (and currently fragile)
 
@@ -134,18 +134,18 @@ With no `--output-format` flag, `agy --print "..."` is expected to print the mod
 - **Event names (Claude-style)**: `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStop`, `SessionStart`, `SessionEnd`, `UserPromptSubmit`, `PreCompact`, `Notification`. (Gemini's `BeforeTool` → Antigravity's `PreToolUse`; tool name `run_shell_command` → `run_command`.)
 - **I/O contract**: the hook script receives a **JSON object on stdin** — including `toolCall` details, **step index, `conversationId`, `workspacePaths`, `transcriptPath`** (path to the current session log), and an **artifact directory path** — and prints a **JSON object on stdout** with `{"decision": "allow" | "deny" | "ask"}`.
 
-> **1.0.14 update**: the hook payload carries `conversationId` directly. That means **in interactive mode the session ID is available from the hook itself — no glog log parsing required** for the `-i` path. The `AntigravityLogParser` (A.3/B.1) is therefore only needed for the *headless* path's session ID, and even there `cache/last_conversations.json` may suffice — consider deferring/simplifying the log parser accordingly.
+> **1.0.14 update**: the hook payload carries `conversationId` directly. That means **in interactive mode the session ID is available from the hook itself — no glog log parsing required** for the `-i` path. The `AntigravityLogParser` (A.3/B.1) is therefore only needed for the _headless_ path's session ID, and even there `cache/last_conversations.json` may suffice — consider deferring/simplifying the log parser accordingly.
 
 This is essentially Claude's hook contract, so `AntigravityNotificationMonitor` and `ctrlyoke-antigravity-hook.js` should be **cloned from the Claude implementations**, not Gemini's. ctrlyoke's logical→native event map becomes:
 
-| ctrlyoke logical | Antigravity native |
-| ------------------ | ------------------ |
-| `stop`             | `Stop`             |
-| `sessionStart`     | `SessionStart`     |
-| `preToolUse`       | `PreToolUse`       |
-| `postToolUse`      | `PostToolUse`      |
-| `userPromptSubmit` | `UserPromptSubmit` |
-| `permissionRequest`| `PreToolUse` (decision `allow`/`deny`/`ask`) |
+| ctrlyoke logical    | Antigravity native                           |
+| ------------------- | -------------------------------------------- |
+| `stop`              | `Stop`                                       |
+| `sessionStart`      | `SessionStart`                               |
+| `preToolUse`        | `PreToolUse`                                 |
+| `postToolUse`       | `PostToolUse`                                |
+| `userPromptSubmit`  | `UserPromptSubmit`                           |
+| `permissionRequest` | `PreToolUse` (decision `allow`/`deny`/`ask`) |
 
 ### A.7 Completion detection
 
@@ -160,10 +160,11 @@ This is essentially Claude's hook contract, so `AntigravityNotificationMonitor` 
   - Global: `~/.gemini/config/mcp_config.json` ← **confirmed present locally** and the reliable path.
   - **Workspace: `.agents/mcp_config.json`** (community guides; consistent with the `.agents/` hooks dir) ← ctrlyoke would write this per-workflow, then clean it up.
   - Format: `{ "mcpServers": { "<name>": { "command", "args", "env", "disabled" } } }`.
-  - **Remote servers use `serverUrl`** (NOT Gemini's `httpUrl`/`url` — silent failure if wrong). **No per-server `timeout`** key ("no longer supported"); **no inline comments**. (A *global* MCP launch timeout exists as a setting since 1.0.7, with `-1` to disable — not a per-server field.)
+  - **Remote servers use `serverUrl`** (NOT Gemini's `httpUrl`/`url` — silent failure if wrong). **No per-server `timeout`** key ("no longer supported"); **no inline comments**. (A _global_ MCP launch timeout exists as a setting since 1.0.7, with `-1` to disable — not a per-server field.)
   - Migration helper: `agy plugin import gemini`.
 
-  > ⚠️ **1.0.14 caveat — verify workspace MCP loading before relying on it.** Open issue [#60](https://github.com/google-antigravity/antigravity-cli/issues/60) reported a project-local `mcp_config.json` being *discovered but silently ignored* (the reporter used the path `.antigravitycli/mcp_config.json`; only HOME-level config spawned servers), and the **1.0.14 changelog claims it "Fixed an MCP configuration path mismatch in the CLI and permission manager."** Because of this churn, **do not assume `.agents/mcp_config.json` loads** — write it, start a server, and confirm it actually spawns on the shipped agy version. **Fallback if it doesn't:** write to the global `~/.gemini/config/mcp_config.json` (reliable but breaks per-workflow isolation — would need careful namespacing + teardown of ctrlyoke's entries). This is the one MCP decision that can't be finalized from docs alone.
+  > ⚠️ **1.0.14 caveat — verify workspace MCP loading before relying on it.** Open issue [#60](https://github.com/google-antigravity/antigravity-cli/issues/60) reported a project-local `mcp_config.json` being _discovered but silently ignored_ (the reporter used the path `.antigravitycli/mcp_config.json`; only HOME-level config spawned servers), and the **1.0.14 changelog claims it "Fixed an MCP configuration path mismatch in the CLI and permission manager."** Because of this churn, **do not assume `.agents/mcp_config.json` loads** — write it, start a server, and confirm it actually spawns on the shipped agy version. **Fallback if it doesn't:** write to the global `~/.gemini/config/mcp_config.json` (reliable but breaks per-workflow isolation — would need careful namespacing + teardown of ctrlyoke's entries). This is the one MCP decision that can't be finalized from docs alone.
+
 - **Config dir rename**: agy's workspace config dir is **`.agents/`** (not `.gemini/`) — relevant for MCP/hooks injection and `cleanupWorkspaceArtifacts`. Skills: global `~/.gemini/skills/`, CLI-specific `~/.gemini/antigravity-cli/skills/`; workspace agents under `.agents/`.
 - `--sandbox` available but not needed for ctrlyoke.
 
@@ -171,16 +172,16 @@ This is essentially Claude's hook contract, so `AntigravityNotificationMonitor` 
 
 Antigravity is a **hybrid** — Claude-style flags **and** Claude-style hooks, but plain-text headless output and opaque stored conversations:
 
-| Concern | Model it on | Notes |
-| --- | --- | --- |
-| CLI flags / invocation | **Claude** | `--print`, `-c`/`--conversation`, `--dangerously-skip-permissions`, `--add-dir`, `--model` |
-| Headless completion | **Codex/Claude exit-based** | process-exit; plain-text stdout |
-| Response parsing | **plain text** | clone the simplest text parser; NO stream-json, NO structured stdout events |
-| Session ID + logs | **custom** | parse `~/.gemini/antigravity-cli/log/cli-*.log` + `cache/last_conversations.json`; NOT `GeminiLogParser` |
-| Interactive hooks | **Claude** | Claude-style events in `.agents/hooks.json`; JSON stdin/stdout `{decision}` |
-| MCP | **Gemini-ish (workspace file)** | write `.agents/mcp_config.json`; `serverUrl` not `httpUrl`; cleanup after run |
-| Permission gating (`custom`) | **Claude hook** | `PreToolUse` → `{"decision":"deny"\|"ask"}` |
-| Tool/diff/token timeline | **none (v1)** | not in stdout/stored DB; maybe via hook `transcriptPath` later (A.3) |
+| Concern                      | Model it on                     | Notes                                                                                                    |
+| ---------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| CLI flags / invocation       | **Claude**                      | `--print`, `-c`/`--conversation`, `--dangerously-skip-permissions`, `--add-dir`, `--model`               |
+| Headless completion          | **Codex/Claude exit-based**     | process-exit; plain-text stdout                                                                          |
+| Response parsing             | **plain text**                  | clone the simplest text parser; NO stream-json, NO structured stdout events                              |
+| Session ID + logs            | **custom**                      | parse `~/.gemini/antigravity-cli/log/cli-*.log` + `cache/last_conversations.json`; NOT `GeminiLogParser` |
+| Interactive hooks            | **Claude**                      | Claude-style events in `.agents/hooks.json`; JSON stdin/stdout `{decision}`                              |
+| MCP                          | **Gemini-ish (workspace file)** | write `.agents/mcp_config.json`; `serverUrl` not `httpUrl`; cleanup after run                            |
+| Permission gating (`custom`) | **Claude hook**                 | `PreToolUse` → `{"decision":"deny"\|"ask"}`                                                              |
+| Tool/diff/token timeline     | **none (v1)**                   | not in stdout/stored DB; maybe via hook `transcriptPath` later (A.3)                                     |
 
 ---
 
@@ -190,7 +191,7 @@ Follow `ADDING_NEW_CLI_HARNESS.md` for the layer-by-layer mechanics. Below are o
 
 ### B.1 Harness directory — `src/core/harness/antigravity/`
 
-#### [NEW] `AntigravityCliProvider.ts`  (model on `ClaudeCliProvider.ts`)
+#### [NEW] `AntigravityCliProvider.ts` (model on `ClaudeCliProvider.ts`)
 
 ```ts
 config = {
@@ -199,8 +200,8 @@ config = {
   displayName: "Antigravity CLI",
   terminalName: "Antigravity",
   installHint: "Install via: agy install (or from the Antigravity website)",
-  shouldStreamHeadlessOutput: true,   // plain-text stream
-  usesInteractiveNotificationMonitor: true,  // Claude-style Stop hook (A.6)
+  shouldStreamHeadlessOutput: true, // plain-text stream
+  usesInteractiveNotificationMonitor: true, // Claude-style Stop hook (A.6)
 };
 ```
 
@@ -213,7 +214,7 @@ config = {
 - `formatFileReference()` → same as Claude (no prefix) until proven otherwise.
 - **MCP (in scope, A.8)**: write `.agents/mcp_config.json` in the workspace via a tracker (model on `SettingsJsonMcpTracker`, but new file path `.agents/mcp_config.json` and the `serverUrl` key for remote servers — **not** `httpUrl`). Implement `cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath)` to remove/restore `.agents/mcp_config.json` and the ctrlyoke hook entries. No `--mcp-config` CLI arg exists, so `getMcpConfigArgs()` returns `[]` after writing the file.
 
-#### [NEW] `AntigravityResponseParser.ts`  (plain-text)
+#### [NEW] `AntigravityResponseParser.ts` (plain-text)
 
 Clone the **plain-text** parser shape, not Gemini's stream-json one.
 
@@ -222,7 +223,7 @@ Clone the **plain-text** parser shape, not Gemini's stream-json one.
 - `processStreamingChunk(chunk)` → return `chunk` (plain passthrough).
 - `parseTokenCounts(output)` → likely `undefined` (no token line in plain-text stdout; revisit if one appears).
 
-#### [NEW] `AntigravityLogParser.ts`  (custom — extends `BaseLogParser`)
+#### [NEW] `AntigravityLogParser.ts` (custom — extends `BaseLogParser`)
 
 > **1.0.14 scope reduction**: interactive mode now gets `conversationId` straight from the hook payload (A.6), so the glog scrape is only the **headless** path's session-ID source — and even there, `cache/last_conversations.json[workspaceAbsPath]` may be enough on its own. Build the `last_conversations.json` read first; only add the glog-line parsing below if that cache proves unreliable (e.g. stale under parallel workflows).
 
@@ -239,7 +240,7 @@ Clone the **plain-text** parser shape, not Gemini's stream-json one.
 
 Because the rich event stream is unavailable (A.3), this parser only provides **session ID + completion**, not tool/diff/token events.
 
-#### [NEW] `AntigravityNotificationMonitor.ts`  (model on **Claude's** monitor)
+#### [NEW] `AntigravityNotificationMonitor.ts` (model on **Claude's** monitor)
 
 agy's hooks are Claude-style (A.6), so clone `ClaudeNotificationMonitor`:
 
@@ -254,7 +255,7 @@ agy's hooks are Claude-style (A.6), so clone `ClaudeNotificationMonitor`:
 - `allowAll` → `[]` (no native allow-list flag).
 - `custom` → no CLI flag; enforce via a `PreToolUse` hook returning `{"decision":"deny"|"ask"}` (A.8). For v1, `[]` + a TODO is acceptable if hook-based gating is deferred.
 
-#### [NEW] Hook script — `src/scripts/ctrlyoke-antigravity-hook.js`  (clone Claude's)
+#### [NEW] Hook script — `src/scripts/ctrlyoke-antigravity-hook.js` (clone Claude's)
 
 Now **in scope**. agy's hook I/O matches Claude's contract: JSON on stdin (incl. `toolCall.args`, `workspacePaths`, `transcriptPath`), JSON on stdout. Clone `ctrlyoke-claude-hook.js`, using `initializeLogger` + `readStdinJson` from `ctrlyoke-hook-utils`, writing the notification file to `argv[2]`. For permission-gating events, emit `{"decision": ...}`; for `Stop`, write the completion notification file.
 
@@ -368,7 +369,7 @@ Remove Gemini from: `harnessRunner.ts`, `hooks.harness.test.ts`, `ModelConstants
 - [ ] Comment cleanups (C.7)
 - [ ] Test removals / re-point to Qwen (C.8)
 - [ ] Docs / scripts / dictionary (C.9)
-- [ ] **Note**: removing Gemini does *not* free agy's MCP/skills dirs — agy reuses `~/.gemini/`. Don't delete `~/.gemini/`-related path handling that Antigravity now depends on.
+- [ ] **Note**: removing Gemini does _not_ free agy's MCP/skills dirs — agy reuses `~/.gemini/`. Don't delete `~/.gemini/`-related path handling that Antigravity now depends on.
 
 ### Verification
 
@@ -382,9 +383,9 @@ Remove Gemini from: `harnessRunner.ts`, `hooks.harness.test.ts`, `ModelConstants
 
 ## Estimated Effort
 
-**6–8 hours** *once the two research blockers are resolved* (headless `-p` viability under node-pty, and workspace MCP loading). The plain-text parser + exit-based headless completion are simpler than Gemini's stream-json, but the Claude-style hooks, the `.agents/mcp_config.json` writer/cleanup, and the hook script bring it back to par. The Gemini removal is mechanical but touches ~20 `src` files — lean on `npm run typecheck` to find every site.
+**6–8 hours** _once the two research blockers are resolved_ (headless `-p` viability under node-pty, and workspace MCP loading). The plain-text parser + exit-based headless completion are simpler than Gemini's stream-json, but the Claude-style hooks, the `.agents/mcp_config.json` writer/cleanup, and the hook script bring it back to par. The Gemini removal is mechanical but touches ~20 `src` files — lean on `npm run typecheck` to find every site.
 
-Lowest-risk sequencing: **(0)** **resolve the headless `-p` pty question first** (A.5) — it determines whether step 1 is even viable; **(1)** ship headless (`--print` + exit + `last_conversations.json` session ID) *if* `-p` works under pty, else go straight to interactive `-i` + `Stop` hook as the primary path; **(2)** add/confirm the Claude-style `Stop` hook (interactive mode + session ID from `conversationId` payload); **(3)** add MCP via `.agents/mcp_config.json` *after confirming it loads*, with global-file fallback; **(4)** remove Gemini last (so a working harness exists before the old one is deleted).
+Lowest-risk sequencing: **(0)** **resolve the headless `-p` pty question first** (A.5) — it determines whether step 1 is even viable; **(1)** ship headless (`--print` + exit + `last_conversations.json` session ID) _if_ `-p` works under pty, else go straight to interactive `-i` + `Stop` hook as the primary path; **(2)** add/confirm the Claude-style `Stop` hook (interactive mode + session ID from `conversationId` payload); **(3)** add MCP via `.agents/mcp_config.json` _after confirming it loads_, with global-file fallback; **(4)** remove Gemini last (so a working harness exists before the old one is deleted).
 
 ---
 

@@ -282,12 +282,12 @@ The tracker should require both:
 
 ## Relationship to Continuation Mode
 
-|                          | Session-Level Follow-up Tracking          | Continuation Mode (inject)               |
-| ------------------------ | ----------------------------------------- | ---------------------------------------- |
-| **Who sends the prompt** | User or harness, outside ctrlyoke         | ctrlyoke                                 |
-| **Ownership of the turn**| Observed after the fact                   | Fully owned by ctrlyoke                  |
-| **Tracking fidelity**    | Best-effort, session-level observation    | Full                                     |
-| **Best for**             | Manual TUI use, async harness continuation| Workflow-driven follow-up execution      |
+|                           | Session-Level Follow-up Tracking           | Continuation Mode (inject)          |
+| ------------------------- | ------------------------------------------ | ----------------------------------- |
+| **Who sends the prompt**  | User or harness, outside ctrlyoke          | ctrlyoke                            |
+| **Ownership of the turn** | Observed after the fact                    | Fully owned by ctrlyoke             |
+| **Tracking fidelity**     | Best-effort, session-level observation     | Full                                |
+| **Best for**              | Manual TUI use, async harness continuation | Workflow-driven follow-up execution |
 
 The two features are complementary:
 

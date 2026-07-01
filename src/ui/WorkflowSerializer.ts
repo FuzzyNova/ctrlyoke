@@ -631,8 +631,7 @@ export class WorkflowSerializer {
             return {
               filePath,
               workflowName:
-                workingFile.workflowName ||
-                file.replace(".ctrlyoke.json", ""),
+                workingFile.workflowName || file.replace(".ctrlyoke.json", ""),
               executionState,
               startedAt: workingFile.startedAt || 0,
               lastModifiedAt: lastModified,
@@ -731,9 +730,7 @@ export class WorkflowSerializer {
 
       try {
         const files = await fs.readdir(queueDir);
-        const workflowFiles = files.filter((f) =>
-          f.endsWith(".ctrlyoke.json")
-        );
+        const workflowFiles = files.filter((f) => f.endsWith(".ctrlyoke.json"));
 
         for (const file of workflowFiles) {
           await fs.unlink(path.join(queueDir, file));

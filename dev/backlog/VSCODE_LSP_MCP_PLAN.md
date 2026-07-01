@@ -144,13 +144,13 @@ This enables the dashboard to show diagnostic trend across a workflow run and gi
 
 ## What to Skip
 
-| Capability                                          | Why skip                                                                                 |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Generic VS Code command executor (`executeCommand`) | Security surface. No workflow automation value. Community tools cover it.                |
-| Hover / go-to-definition / find-references          | No value for autonomous agent workflows. Community tools cover it.                       |
-| Full LSP bridge (20+ tools)                         | Solved problem. Direct users to `vscode-mcp/vscode-mcp-server` or `CJL.lsp-mcp`.         |
+| Capability                                          | Why skip                                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Generic VS Code command executor (`executeCommand`) | Security surface. No workflow automation value. Community tools cover it.              |
+| Hover / go-to-definition / find-references          | No value for autonomous agent workflows. Community tools cover it.                     |
+| Full LSP bridge (20+ tools)                         | Solved problem. Direct users to `vscode-mcp/vscode-mcp-server` or `CJL.lsp-mcp`.       |
 | Workspace file system tools                         | Already covered by CLI harnesses' native file access and ctrlyoke's `ContextExpander`. |
-| Debug session tools                                 | Out of scope for prompt workflow automation.                                             |
+| Debug session tools                                 | Out of scope for prompt workflow automation.                                           |
 
 ---
 

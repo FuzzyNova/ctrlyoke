@@ -552,7 +552,8 @@ button .codicon {
   }
   .fp-list-row-selected,
   .fp-list-row-selected:focus {
-    outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder));
+    outline: 1px solid
+      var(--vscode-list-focusOutline, var(--vscode-focusBorder));
     outline-offset: -1px;
   }
 
