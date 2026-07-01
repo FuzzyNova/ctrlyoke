@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to FlightPath will be documented in this file.
+All notable changes to ctrlyoke will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -21,10 +21,10 @@ Initial release.
 - IntelliSense completions for `@file`, `#file:`, and `#sym:` references with gitignore-aware filtering
 - Output history with run selector and persistent per-run snapshots
 - Workflow templates: blank, simple-feature, fix-tests, and full-feature
-- Multi-format workflow files: `.flightpath.yaml`, `.flightpath.json`, `.prompt.md` with unified JSON Schema validation
+- Multi-format workflow files: `.ctrlyoke.yaml`, `.ctrlyoke.json`, `.prompt.md` with unified JSON Schema validation
 - Status bar showing real-time execution state
-- Standalone CLI binary (`flightpath run`, `flightpath validate`)
-- MCP server binary (`flightpath-mcp`) for tool-based queue operations from AI assistants
+- Standalone CLI binary (`ctrlyoke run`, `ctrlyoke validate`)
+- MCP server binary (`ctrlyoke-mcp`) for tool-based queue operations from AI assistants
 - Variable substitution with `--var key=value` flag and `{{varName}}` placeholders in workflows
 - Per-prompt session management with three-tier resolution (prompt > workflow > global)
 - Side-by-side diff view for comparing AI-generated changes
