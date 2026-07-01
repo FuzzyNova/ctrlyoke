@@ -9,7 +9,7 @@
 **Yes, in a lean form.** The workspace viewer's source control pane (`WorkspaceSourceControlPane.tsx`)
 currently shows staged/unstaged files and a commit/push/pull box
 (`WorkspaceCommitArea.tsx`), but there's no way to see what was *already* committed
-without leaving FlightPath. Common needs that come up constantly during workflow-driven
+without leaving ctrlyoke. Common needs that come up constantly during workflow-driven
 development:
 
 - "What did the last few commits actually change?" (sanity-check before/after a workflow run)
@@ -26,7 +26,7 @@ graph rendering, no branch management UI, no merge/rebase tooling.
 **Goals:**
 - Lightweight, linear list of recent commits on the current branch (hash, message, author, relative date)
 - "View Diff" on a commit reuses the existing `~<hash>` content-preview pipeline — no new diff UI
-- Right-click menu mirroring `useWorkspaceExplorerContextMenu.tsx`'s ergonomics: copy info, add to FlightPath, checkout (detach)
+- Right-click menu mirroring `useWorkspaceExplorerContextMenu.tsx`'s ergonomics: copy info, add to ctrlyoke, checkout (detach)
 - Clear indication when the workspace is in a detached HEAD state, with a one-click way back
 
 **Non-Goals (explicitly out of scope):**
@@ -204,7 +204,7 @@ export async function workspaceCheckoutBranch(req: WorkspaceCheckoutBranchReques
 }
 ```
 
-Routes added in `FlightPathHostedServer.ts` `setupRoutes()` follow the exact same
+Routes added in `CtrlYokeHostedServer.ts` `setupRoutes()` follow the exact same
 try/catch/`requireToken`/`Log.error` shape as the existing `/commit`, `/push`, `/pull`
 handlers (lines ~860-910).
 
@@ -217,7 +217,7 @@ commitHistoryLoading: boolean;
 commitHistoryHasMore: boolean;
 currentBranch: string | null;
 detached: boolean;
-previousBranch: string | null; // branch FlightPath was on before checkoutCommit, for the "Return to <branch>" banner
+previousBranch: string | null; // branch ctrlyoke was on before checkoutCommit, for the "Return to <branch>" banner
 
 // actions
 setCommitHistory(commits, hasMore, currentBranch, detached): void;
@@ -267,16 +267,16 @@ Menu items for a right-clicked commit:
 | **Copy Message** | Copy subject line to clipboard | |
 | *(divider)* | | |
 | **View Diff** | `openToGitRef(commit.hash)` (browser) / `OPEN_GIT_CHANGE` (VS Code) | Shared git-ref pipeline — see "Viewing a Commit's Diff" above and `COMMIT_DIFF_PIPELINE_PLAN.md` |
-| **Add Commit to FlightPath** | Insert `~<hash>` via `enqueuePromptEditorInsert` | See below — the same `~<hash>` reference the VS Code timeline command produces |
+| **Add Commit to ctrlyoke** | Insert `~<hash>` via `enqueuePromptEditorInsert` | See below — the same `~<hash>` reference the VS Code timeline command produces |
 | *(divider)* | | |
 | **Checkout Commit (Detach HEAD)** | Confirm via `Modal` (reuse the discard-confirmation pattern), then `workspaceCheckoutCommit({ hash })`, refresh status/log | Disabled (with `disabledTitle`) if `commit.isHead && !detached` |
 
-### "Add Commit to FlightPath" details
+### "Add Commit to ctrlyoke" details
 
-FlightPath already has a fully-wired `~<hash>` git reference type: it's recognized by
+ctrlyoke already has a fully-wired `~<hash>` git reference type: it's recognized by
 the prompt editor's completions/decorations (`CodeMirrorEditor.tsx`), expanded into a
 full diff attachment by `ContextExpander.expandGitChanges()` via `getCommitDiff()`, and
-is exactly what the existing `flightpath.addTimelineCommitToPromptEditor` VS Code
+is exactly what the existing `ctrlyoke.addTimelineCommitToPromptEditor` VS Code
 command inserts via `ContextMenuReferenceCommands.addTimelineCommitToPromptEditor()` →
 `buildGitReference(hash)` (`src/completions/ContextReferenceBuilder.ts`, returns
 `` `~${hash}` ``).
@@ -314,7 +314,7 @@ small banner above the commit list:
 ⚠ Detached HEAD at abc1234        [Return to main]
 ```
 
-"Return to `<branch>`" needs *some* branch name — capture the branch FlightPath was on
+"Return to `<branch>`" needs *some* branch name — capture the branch ctrlyoke was on
 before the checkout in the store (`previousBranch`, set when `checkoutCommit` succeeds)
 and fall back to a manual branch-name prompt if unavailable (e.g. user detached via
 terminal in a prior session and just opened the panel).
@@ -343,7 +343,7 @@ and source control files.
 ### Phase 2 — Context menu actions
 
 - [ ] Add `@root/completions` alias to `vite.config.ts`
-- [ ] `useCommitHistoryContextMenu.tsx` (Copy Hash, Copy Message, View Diff, Add Commit to FlightPath)
+- [ ] `useCommitHistoryContextMenu.tsx` (Copy Hash, Copy Message, View Diff, Add Commit to ctrlyoke)
 - [ ] Wire context menu into `WorkspaceCommitHistoryPane.tsx` rows
 
 ### Phase 3 — Checkout / detached HEAD
@@ -368,7 +368,7 @@ and source control files.
 - `src/test/server/HostedWorkspaceViewerService.test.ts` (or sibling): `getCommitLog` pagination/`hasMore`/`isHead`/`pushed` (including `pushed` against a fake upstream), `checkoutCommit`/`checkoutBranch` happy + error paths
 - `src/test/unit/GitUtils.test.ts` (or sibling): `getRecentCommits` with `skip`
 - `src/ui/webview-react/test/store/workspaceViewerStore.test.ts`: new state/actions, `close()`/`reset()` cleanup
-- `src/ui/webview-react/test/components/workspace-viewer/WorkspaceCommitHistoryPane.test.tsx`: renders commits, load-more, detached banner, context menu wiring, "View Diff" and "Add Commit to FlightPath" dispatch the expected message/store calls
+- `src/ui/webview-react/test/components/workspace-viewer/WorkspaceCommitHistoryPane.test.tsx`: renders commits, load-more, detached banner, context menu wiring, "View Diff" and "Add Commit to ctrlyoke" dispatch the expected message/store calls
 - Manual: verify detached HEAD checkout + return-to-branch round trip doesn't desync `sourceControlFiles`/diff state (mirrors the existing "refresh-after-mutation" gotcha)
 
 ---

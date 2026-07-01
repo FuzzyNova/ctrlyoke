@@ -2,13 +2,13 @@
 
 **Status**: Planning  
 **Date**: December 19, 2025  
-**Purpose**: Extend FlightPath's workflow template system to support setup scripts that dynamically generate workflow content
+**Purpose**: Extend ctrlyoke's workflow template system to support setup scripts that dynamically generate workflow content
 
 ---
 
 ## Executive Summary
 
-FlightPath's template system currently supports simple `{variable}` replacement for creating workflows. This design adds **optional setup scripts** that can analyze the workspace and programmatically generate workflow content, enabling powerful templates like:
+ctrlyoke's template system currently supports simple `{variable}` replacement for creating workflows. This design adds **optional setup scripts** that can analyze the workspace and programmatically generate workflow content, enabling powerful templates like:
 
 - **Generate Repository Instructions**: Analyzes directory structure, creates AGENTS.md prompts for each relevant directory
 - **Component Test Generator**: Discovers React components, generates test prompts for each
@@ -45,7 +45,7 @@ User flow:
 1. Select template from dropdown
 2. Fill variable form (`{featureDescription}`)
 3. Enter workflow filename
-4. Create → workflow saved to `.flightpath/workflows/`
+4. Create → workflow saved to `.ctrlyoke/workflows/`
 
 ### Enhanced Template System
 
@@ -86,7 +86,7 @@ Setup scripts receive context via **command-line arguments**:
 ```bash
 node scripts/analyze-repo-for-agents.js \
   --workspace-root "/path/to/workspace" \
-  --template-path "/path/to/template.flightpath.json" \
+  --template-path "/path/to/template.ctrlyoke.json" \
   --settings-json '{"createClaudeMdSymlinks":false,...}'
 ```
 
@@ -94,11 +94,11 @@ node scripts/analyze-repo-for-agents.js \
 
 - `--workspace-root`: Absolute path to workspace folder
 - `--template-path`: Absolute path to template file
-- `--settings-json`: JSON string of relevant FlightPath settings
+- `--settings-json`: JSON string of relevant ctrlyoke settings
 
 **Environment variables**:
 
-- `FLIGHTPATH_SETUP=true`: Indicates script is running in FlightPath context
+- `CTRLYOKE_SETUP=true`: Indicates script is running in ctrlyoke context
 - Standard Node.js environment
 
 ### Script Output
@@ -201,7 +201,7 @@ type SetupScriptOutput =
 
 ### Template File
 
-`.flightpath/templates/generate-agents-md.flightpath.json`:
+`.ctrlyoke/templates/generate-agents-md.ctrlyoke.json`:
 
 ```json
 {
@@ -267,7 +267,7 @@ async function findCandidateDirectories(rootDir) {
     "dist",
     "out",
     "build",
-    ".flightpath",
+    ".ctrlyoke",
     ".github",
     ".vscode",
     "coverage",
@@ -480,9 +480,9 @@ Template: Generate Repository Instructions
 
 Workflow name:
 ┌──────────────────────────────────┐
-│ generate-agents-md               │.flightpath.json
+│ generate-agents-md               │.ctrlyoke.json
 └──────────────────────────────────┘
-📁 .flightpath/workflows/generate-agents-md.flightpath.json
+📁 .ctrlyoke/workflows/generate-agents-md.ctrlyoke.json
 
                    [Cancel] [Create] [Create & Run]
 ```
@@ -521,7 +521,7 @@ Template: Component Tests
 
 Workflow name:
 ┌──────────────────────────────────┐
-│ test-user-profile                │.flightpath.json
+│ test-user-profile                │.ctrlyoke.json
 └──────────────────────────────────┘
 
                    [Cancel] [Create] [Create & Run]
@@ -634,7 +634,7 @@ class TemplateManager {
     return new Promise((resolve, reject) => {
       const options: any = {
         cwd: this.getWorkspaceRoot(),
-        env: { ...process.env, FLIGHTPATH_SETUP: "true" },
+        env: { ...process.env, CTRLYOKE_SETUP: "true" },
       };
 
       if (timeout !== null) {
@@ -670,7 +670,7 @@ class TemplateManager {
 
   private getSetupScriptTimeout(): number | null {
     const timeout = vscode.workspace
-      .getConfiguration("flightpath")
+      .getConfiguration("ctrlyoke")
       .get<number>("templateSetupScriptTimeout");
 
     // 0 means no timeout
@@ -678,7 +678,7 @@ class TemplateManager {
   }
 
   private getRelevantSettings(): Record<string, any> {
-    const config = vscode.workspace.getConfiguration("flightpath");
+    const config = vscode.workspace.getConfiguration("ctrlyoke");
     return {
       createClaudeMdSymlinks: config.get("createClaudeMdSymlinks"),
       disableCopilotAgentsMd: config.get("disableCopilotAgentsMd"),
@@ -773,7 +773,7 @@ interface SetupScriptProgressMessage {
 
 ```json
 {
-  "flightpath.templateSetupScriptTimeout": {
+  "ctrlyoke.templateSetupScriptTimeout": {
     "type": "number",
     "default": 120000,
     "description": "Maximum execution time for template setup scripts in milliseconds. Set to 0 for no timeout.",
@@ -799,7 +799,7 @@ interface SetupScriptProgressMessage {
 **Setup scripts have full workspace access** because:
 
 1. They need to analyze repository structure (read files)
-2. They generate workflow files (write to `.flightpath/workflows/`)
+2. They generate workflow files (write to `.ctrlyoke/workflows/`)
 3. Running in same security context as extension itself
 
 **Risks**:
@@ -915,7 +915,7 @@ interface SetupScriptProgressMessage {
 
 **AGENTS.md Setup Script**:
 
-- [ ] Run on FlightPath repository (12+ directories expected)
+- [ ] Run on ctrlyoke repository (12+ directories expected)
 - [ ] Run on minimal repository (should gracefully handle empty result)
 - [ ] Run on very large repository (1000+ directories, test timeout)
 - [ ] Verify symlink instructions include correct OS-specific commands
@@ -945,7 +945,7 @@ interface SetupScriptProgressMessage {
 
 ### Phase 3: AGENTS.md Template
 
-- [ ] Create `generate-agents-md.flightpath.json` template
+- [ ] Create `generate-agents-md.ctrlyoke.json` template
 - [ ] Implement `analyze-repo-for-agents.js` setup script
 - [ ] Copy to built-in templates directory
 - [ ] Test on various repository structures
@@ -1038,7 +1038,7 @@ Show live progress bar in UI.
 
 ## Conclusion
 
-Template setup scripts transform FlightPath from a simple variable-replacement system into a **programmable workflow generation platform**. This enables:
+Template setup scripts transform ctrlyoke from a simple variable-replacement system into a **programmable workflow generation platform**. This enables:
 
 1. **Intelligent automation**: Workflows adapt to repository structure
 2. **Reduced manual work**: Scripts do the tedious discovery/analysis

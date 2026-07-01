@@ -2,11 +2,11 @@
 
 ## Overview
 
-Add a first-class `type: "workflow"` step to FlightPath: a queue item that runs another
+Add a first-class `type: "workflow"` step to ctrlyoke: a queue item that runs another
 workflow file as a sub-workflow — no AI interaction of its own. The sub-workflow executes
 fully (all its queue steps, its finalStep) before the parent workflow advances to the next
 step. This is distinct from the planned `type: "script"` step: a workflow step orchestrates
-an entire FlightPath workflow, not a shell command.
+an entire ctrlyoke workflow, not a shell command.
 
 The webview shows only one workflow at a time. When a workflow step is active, the webview
 switches to the child workflow, with a breadcrumb/back button so the user can navigate back to
@@ -20,7 +20,7 @@ the parent. Running a workflow step does not open a new panel — it replaces th
   into separate workflow files and compose them from a parent workflow.
 - **Conditional branching via composition** — Chain specialized workflows: implement → test
   → report, each in its own file.
-- **Library of atomic workflows** — A team maintains a `.flightpath/workflows/` directory
+- **Library of atomic workflows** — A team maintains a `.ctrlyoke/workflows/` directory
   of reusable building blocks that any project workflow can reference.
 - **Replacing deeply nested workarounds** — Currently a workflow can only flatten everything
   into one sequential list. Sub-workflows enable logical grouping without cramming everything
@@ -35,7 +35,7 @@ the parent. Running a workflow step does not open a new panel — it replaces th
 ```json
 "workflowStep": {
   "type": "object",
-  "description": "A workflow step that executes another FlightPath workflow file inline.",
+  "description": "A workflow step that executes another ctrlyoke workflow file inline.",
   "properties": {
     "type": {
       "type": "string",
@@ -49,7 +49,7 @@ the parent. Running a workflow step does not open a new panel — it replaces th
     },
     "workflow": {
       "type": "string",
-      "description": "Path to the workflow file to run. Resolved relative to workspace root or .flightpath/workflows/."
+      "description": "Path to the workflow file to run. Resolved relative to workspace root or .ctrlyoke/workflows/."
     },
     "continueOnFailure": {
       "type": "boolean",
@@ -76,7 +76,7 @@ the parent. Running a workflow step does not open a new panel — it replaces th
 
 ---
 
-## Type System Changes (`src/types/FlightPathTypes.ts`)
+## Type System Changes (`src/types/CtrlYokeTypes.ts`)
 
 ```typescript
 /** New workflow step */
@@ -120,7 +120,7 @@ if (isWorkflowStep(step)) {
 ### `executeWorkflowStep(step, stepIndex, context)`
 
 1. Emit `STEP_STATUS_CHANGED` → `"running"` for the parent step at `stepIndex`.
-2. Resolve the sub-workflow file path (workspace-relative → `.flightpath/workflows/`-relative).
+2. Resolve the sub-workflow file path (workspace-relative → `.ctrlyoke/workflows/`-relative).
 3. **Circular reference check** — traverse the parent chain (tracked in `WorkflowExecutionContext`)
    and fail immediately if the target path already appears (prevents infinite loops).
 4. Parse the sub-workflow file via `PromptFileParser`.
@@ -141,7 +141,7 @@ if (isWorkflowStep(step)) {
 ### Depth limit
 
 To prevent accidental infinite nesting (e.g., A → B → C → … → Z), enforce a hard depth
-limit of **5 levels** (configurable via `flightpath.maxWorkflowDepth`). Attempting to exceed
+limit of **5 levels** (configurable via `ctrlyoke.maxWorkflowDepth`). Attempting to exceed
 it fails the step immediately with a clear error message.
 
 ### No `PropertyResolver` bypass — not applicable
@@ -177,7 +177,7 @@ completes, it pops back. The user can also manually navigate back (read-only vie
 A breadcrumb bar renders at the top of the workflow panel when `navigationStack.length > 1`:
 
 ```
-parent-workflow.flightpath.yaml  >  setup.flightpath.yaml  >  test-loop.flightpath.yaml
+parent-workflow.ctrlyoke.yaml  >  setup.ctrlyoke.yaml  >  test-loop.ctrlyoke.yaml
          ↑ clickable                       ↑ clickable               (current)
 ```
 
@@ -200,7 +200,7 @@ In the parent's prompt list, the workflow step renders as:
 
 ```
 [workflow icon]  Run setup workflow               Workflow
-                 setup.flightpath.yaml
+                 setup.ctrlyoke.yaml
 ```
 
 - No harness/model badge
@@ -252,7 +252,7 @@ CONTINUE_ON_FAILURE: "continueOnFailure", // shared with scriptStep
 ## YAML Authoring UX
 
 ```yaml
-# parent.flightpath.yaml
+# parent.ctrlyoke.yaml
 harness: claude-cli
 
 steps:
@@ -262,11 +262,11 @@ steps:
 
   - name: Run setup
     type: workflow
-    workflow: .flightpath/workflows/setup.flightpath.yaml
+    workflow: .ctrlyoke/workflows/setup.ctrlyoke.yaml
 
   - name: Run test suite
     type: workflow
-    workflow: test-and-fix.flightpath.yaml
+    workflow: test-and-fix.ctrlyoke.yaml
     continueOnFailure: true # test failures are non-blocking
 
   - name: Ship it
@@ -283,7 +283,7 @@ steps:
 
 finalStep:
   type: workflow
-  workflow: .flightpath/workflows/post-build-checks.flightpath.yaml
+  workflow: .ctrlyoke/workflows/post-build-checks.ctrlyoke.yaml
 ```
 
 ---
@@ -312,18 +312,18 @@ finalStep:
 | File                                                              | Change                                                                                                                  |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `schemas/prompt-schema.json`                                      | Add `workflowStep` definition; `promptItem` becomes `oneOf` with three variants                                         |
-| `src/types/FlightPathTypes.ts`                                    | Add `WorkflowStep`, expand `WorkflowStepItem` union, add `isWorkflowStep()` guard                                       |
+| `src/types/CtrlYokeTypes.ts`                                      | Add `WorkflowStep`, expand `WorkflowStepItem` union, add `isWorkflowStep()` guard                                       |
 | `src/types/DashboardConstants.ts`                                 | Add `WORKFLOW` to `STEP_TYPES`; add `CHILD_WORKFLOW_STARTED`, `CHILD_WORKFLOW_COMPLETED` message types                  |
-| `src/flightpath/WorkflowExecutor.ts`                              | Route `isWorkflowStep` to `executeWorkflowStep()`; add `depth` and `ancestorPaths` to context                           |
-| `src/flightpath/WorkflowOrchestrator.ts`                          | Add `createChildInstance()` — creates a WorkflowInstance tagged with parent metadata                                    |
-| `src/flightpath/WorkflowInstance.ts`                              | Add `parentInstanceId?`, `parentStepIndex?`, `depth` fields                                                             |
-| `src/flightpath/PromptFileParser.ts`                              | Validate `workflowStep` via AJV; type narrowing after parse                                                             |
+| `src/core/WorkflowExecutor.ts`                                    | Route `isWorkflowStep` to `executeWorkflowStep()`; add `depth` and `ancestorPaths` to context                           |
+| `src/core/WorkflowOrchestrator.ts`                                | Add `createChildInstance()` — creates a WorkflowInstance tagged with parent metadata                                    |
+| `src/core/WorkflowInstance.ts`                                    | Add `parentInstanceId?`, `parentStepIndex?`, `depth` fields                                                             |
+| `src/core/PromptFileParser.ts`                                    | Validate `workflowStep` via AJV; type narrowing after parse                                                             |
 | `src/ui/webview-react/store/uiStore.ts`                           | Add `navigationStack: string[]`; push/pop on child workflow events                                                      |
 | `src/ui/webview-react/store/workflowStore.ts`                     | Handle `CHILD_WORKFLOW_STARTED` / `CHILD_WORKFLOW_COMPLETED`; register child workflow state                             |
 | `src/ui/webview-react/components/prompts/PromptItem.tsx`          | Render workflow step variant (workflow icon, Workflow badge, file preview); show "Running sub-workflow (N/M)"           |
 | `src/ui/webview-react/components/workflow/WorkflowBreadcrumb.tsx` | New component: breadcrumb bar shown when `navigationStack.length > 1`                                                   |
 | `src/ui/webview-react/components/prompts/PromptEditor.tsx`        | Add `type: workflow` to Step Type selector; show workflow path field; hide all AI settings                              |
-| `src/ui/FlightPathWebviewProvider.ts`                             | Handle `CHILD_WORKFLOW_STARTED` / `CHILD_WORKFLOW_COMPLETED`; pass child workflow state to webview                      |
+| `src/ui/CtrlYokeWebviewProvider.ts`                               | Handle `CHILD_WORKFLOW_STARTED` / `CHILD_WORKFLOW_COMPLETED`; pass child workflow state to webview                      |
 | `src/completions/`                                                | Offer `workflow` step type; suppress AI completions when `type: workflow`; offer `workflow` path field with file picker |
 
 ---

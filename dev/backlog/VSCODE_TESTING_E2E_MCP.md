@@ -22,9 +22,9 @@ ExTester (`vscode-extension-tester`, maintained by Red Hat) is the closest thing
 - Switch frame context into a webview iframe and query DOM elements inside it
 - Assert on webview content, click buttons, fill inputs
 
-### Why it's attractive for FlightPath
+### Why it's attractive for ctrlyoke
 
-The FlightPath dashboard (sidebar webview) is the primary UI surface. ExTester could:
+The ctrlyoke dashboard (sidebar webview) is the primary UI surface. ExTester could:
 
 - Verify the webview renders after a workflow file is loaded
 - Assert button states (Run enabled/disabled, Undo enabled/disabled)
@@ -41,7 +41,7 @@ The FlightPath dashboard (sidebar webview) is the primary UI surface. ExTester c
 
 **Slow CI.** First run downloads VS Code + ChromeDriver (~500MB total, cached after). Each test suite launch starts a full Electron process (5-10 seconds). Parallelisation is not straightforward.
 
-**Webview message timing.** FlightPath's webview is driven by a message protocol (extension → webview via `postMessage`). ExTester has no awareness of this channel — you're asserting on DOM state that only becomes correct after messages have been processed. Combined with the iframe timing issue, this makes assertions on dynamic content (prompt list length, step statuses) genuinely hard to make non-flaky.
+**Webview message timing.** ctrlyoke's webview is driven by a message protocol (extension → webview via `postMessage`). ExTester has no awareness of this channel — you're asserting on DOM state that only becomes correct after messages have been processed. Combined with the iframe timing issue, this makes assertions on dynamic content (prompt list length, step statuses) genuinely hard to make non-flaky.
 
 ### Verdict
 
@@ -55,7 +55,7 @@ Revisit if there are regression bugs that unit tests consistently miss due to th
 
 ### The idea
 
-Build a VS Code extension (or add to the existing FlightPath extension) that exposes an MCP server. An AI agent (Claude Code) connects to it and can issue commands, inspect extension state, and exercise the message protocol — without needing DOM access.
+Build a VS Code extension (or add to the existing ctrlyoke extension) that exposes an MCP server. An AI agent (Claude Code) connects to it and can issue commands, inspect extension state, and exercise the message protocol — without needing DOM access.
 
 This is the "message contract testing" approach: instead of asserting on rendered pixels, assert on what the extension _does_ when the webview sends it a specific message.
 
@@ -69,13 +69,13 @@ This is the "message contract testing" approach: instead of asserting on rendere
 
 ### What VS Code APIs would be needed
 
-FlightPath already has `@modelcontextprotocol/sdk` as a dependency (it runs a stdio MCP server for queue management). The extension already knows how to run an MCP server. The missing pieces for UI automation are:
+ctrlyoke already has `@modelcontextprotocol/sdk` as a dependency (it runs a stdio MCP server for queue management). The extension already knows how to run an MCP server. The missing pieces for UI automation are:
 
 **Command execution** — straightforward:
 
 ```typescript
-vscode.commands.executeCommand("flightpath.run");
-vscode.commands.executeCommand("workbench.action.openSettings", "flightpath");
+vscode.commands.executeCommand("ctrlyoke.run");
+vscode.commands.executeCommand("workbench.action.openSettings", "ctrlyoke");
 ```
 
 Expose via MCP tool: `execute_vscode_command(command: string, args?: unknown[])`.
@@ -128,11 +128,11 @@ The extension MCP tool `get_webview_state()` waits for the next snapshot and ret
 Combined with `send_webview_message()` and `execute_vscode_command()`, an AI agent could run a full undo/redo scenario:
 
 ```
-1. execute_vscode_command("flightpath.loadWorkflow", ["/path/to/test.flightpath.yaml"])
+1. execute_vscode_command("ctrlyoke.loadWorkflow", ["/path/to/test.ctrlyoke.yaml"])
 2. get_webview_state() → { promptCount: 1, canUndo: false }
 3. send_webview_message("QUEUE_PROMPT", { text: "new prompt" })
 4. get_webview_state() → { promptCount: 2, canUndo: true, undoDepth: 1 }
-5. execute_vscode_command("flightpath.undo")  // or send keyboard shortcut
+5. execute_vscode_command("ctrlyoke.undo")  // or send keyboard shortcut
 6. get_webview_state() → { promptCount: 1, canUndo: false }
    ✓ Undo worked correctly
 ```
@@ -143,13 +143,13 @@ No DOM access required. No iframe timing fragility. No ChromeDriver.
 
 **Minimal viable version (1-2 days):**
 
-- Add 3 MCP tools to the existing FlightPath MCP server (or a new dev-only server): `execute_vscode_command`, `get_queue_state`, `send_webview_message`
+- Add 3 MCP tools to the existing ctrlyoke MCP server (or a new dev-only server): `execute_vscode_command`, `get_queue_state`, `send_webview_message`
 - Add `get_webview_state` by wiring a simple state-reporter into the webview (behind a dev flag)
 - Write a handful of "scenario scripts" that Claude Code can run via these tools
 
 **Full version (1 week):**
 
-- Proper MCP server in a separate VS Code extension (doesn't require FlightPath-specific code)
+- Proper MCP server in a separate VS Code extension (doesn't require ctrlyoke-specific code)
 - Richer webview state snapshot (accessibility tree excerpt, visible element list)
 - Documented protocol so any Claude Code session can pick up and run test scenarios
 - CI integration: launch VS Code in headless Electron, connect MCP, run scenarios, exit
@@ -162,21 +162,21 @@ No DOM access required. No iframe timing fragility. No ChromeDriver.
 
 3. **Exploratory testing** — an AI agent can be told "test the undo/redo feature" and improvise a test plan using the available MCP tools, without a pre-written script.
 
-4. **Works with the existing architecture** — no changes to how FlightPath runs. The MCP channel is a thin observability layer, not a replacement for the real UI.
+4. **Works with the existing architecture** — no changes to how ctrlyoke runs. The MCP channel is a thin observability layer, not a replacement for the real UI.
 
-### Relationship to FlightPath's existing MCP server
+### Relationship to ctrlyoke's existing MCP server
 
-FlightPath already ships `src/mcp-server.ts` (a stdio server for queue management). The automation MCP server would be separate — either:
+ctrlyoke already ships `src/mcp-server.ts` (a stdio server for queue management). The automation MCP server would be separate — either:
 
 - A second server in the same extension (different stdio process)
 - A standalone VS Code extension that any project can use
 - A dev-only server registered in `DevCommands.ts` (stripped from production builds)
 
-The standalone extension approach is the most reusable and aligns with the "side project" framing — it would be useful to anyone building VS Code extensions with webviews, not just FlightPath.
+The standalone extension approach is the most reusable and aligns with the "side project" framing — it would be useful to anyone building VS Code extensions with webviews, not just ctrlyoke.
 
 ### References
 
-- FlightPath MCP server: `src/mcp-server.ts`
+- ctrlyoke MCP server: `src/mcp-server.ts`
 - Dev-only commands pattern: `src/dev/DevCommands.ts` (stripped at `IS_DEV_MODE = false`)
 - VS Code webview message API: `WebviewView.webview.postMessage()`, `onDidReceiveMessage`
 - MCP SDK already in deps: `@modelcontextprotocol/sdk`

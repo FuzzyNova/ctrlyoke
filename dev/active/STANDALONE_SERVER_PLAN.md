@@ -1,4 +1,4 @@
-# Standalone FlightPath Server Plan
+# Standalone ctrlyoke Server Plan
 
 ## Overview
 
@@ -6,13 +6,13 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 
 1. **VS Code-Hosted Server** — an HTTP/WebSocket server started _inside_ the running VS Code extension process via an "Enable Server" button in the webview. The live `WorkflowOrchestrator` instance is the server backend. Browser tabs connect as additional clients alongside the existing VS Code sidebar panel. All VS Code capabilities remain available (file pickers, Copilot Chat harness, settings integration) because the server _is_ the extension.
 
-2. **Standalone Server** (`flightpath server` CLI subcommand) — a fully independent Node.js process with no VS Code dependency. Useful for headless/CI scenarios and remote access where VS Code is not running. The only exclusions are capabilities that are inherently VS Code-specific (file pickers, Copilot Chat harness).
+2. **Standalone Server** (`ctrlyoke server` CLI subcommand) — a fully independent Node.js process with no VS Code dependency. Useful for headless/CI scenarios and remote access where VS Code is not running. The only exclusions are capabilities that are inherently VS Code-specific (file pickers, Copilot Chat harness).
 
-`IDashboardProvider` and the hosted browser transport are already implemented in the current codebase. The remaining work is now almost entirely on the standalone side: removing the last VS Code-only seams from orchestration, adding the `flightpath server` CLI subcommand, and reusing the hosted server's token/TLS/browser shim behavior in a plain Node.js process.
+`IDashboardProvider` and the hosted browser transport are already implemented in the current codebase. The remaining work is now almost entirely on the standalone side: removing the last VS Code-only seams from orchestration, adding the `ctrlyoke server` CLI subcommand, and reusing the hosted server's token/TLS/browser shim behavior in a plain Node.js process.
 
 ## Mode Comparison
 
-| Feature                    | `flightpath run` (CLI) | VS Code-Hosted Server   | `flightpath server` (standalone) | VS Code Extension |
+| Feature                    | `ctrlyoke run` (CLI) | VS Code-Hosted Server   | `ctrlyoke server` (standalone) | VS Code Extension |
 | -------------------------- | ---------------------- | ----------------------- | -------------------------------- | ----------------- |
 | Parallel workflows         | No — single run        | **Yes**                 | **Yes**                          | **Yes**           |
 | Full dashboard webview     | No — terminal output   | **Yes**                 | **Yes**                          | **Yes**           |
@@ -44,16 +44,16 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 ### Already in place
 
 - `src/ui/IDashboardProvider.ts`, `src/types/IDashboardSink.ts`, and `src/ui/DashboardBroadcastHub.ts` are in place and already driving multi-client fanout.
-- `src/flightpath/WorkflowOrchestrator.ts` and `src/flightpath/WorkflowInstance.ts` already publish through the shared dashboard hub instead of treating the VS Code webview as a special sink.
-- `src/server/FlightPathHostedServer.ts` is implemented (now ~1,500 lines) and already serves the Vite webview bundle over HTTP plus WebSocket, with token-gated HTML/API access (`requireToken` middleware), TLS support (`https.createServer` via an optional `tlsConfig`), a configurable `bindAddress`, and browser push-notification plumbing (`WebPushService`).
+- `src/core/WorkflowOrchestrator.ts` and `src/core/WorkflowInstance.ts` already publish through the shared dashboard hub instead of treating the VS Code webview as a special sink.
+- `src/server/CtrlYokeHostedServer.ts` is implemented (now ~1,500 lines) and already serves the Vite webview bundle over HTTP plus WebSocket, with token-gated HTML/API access (`requireToken` middleware), TLS support (`https.createServer` via an optional `tlsConfig`), a configurable `bindAddress`, and browser push-notification plumbing (`WebPushService`).
 - `src/server/standalone-shim.js` is implemented and already handles per-tab state, reconnects, READY replay, theme var application, and pre-React message buffering.
-- `src/ui/FlightPathWebviewProvider.ts` already exposes `routeExternalMessage(...)` and browser-client registration hooks, so hosted browser clients reuse the existing router instead of needing a separate hosted-server router class.
-- `src/extension.ts` already registers `flightpath.enableServer`, `flightpath.disableServer`, and `flightpath.regenerateServerToken`, auto-starts the hosted server when `server.enabled` is true, and forwards theme recapture events on color-theme changes.
+- `src/ui/CtrlYokeWebviewProvider.ts` already exposes `routeExternalMessage(...)` and browser-client registration hooks, so hosted browser clients reuse the existing router instead of needing a separate hosted-server router class.
+- `src/extension.ts` already registers `ctrlyoke.enableServer`, `ctrlyoke.disableServer`, and `ctrlyoke.regenerateServerToken`, auto-starts the hosted server when `server.enabled` is true, and forwards theme recapture events on color-theme changes.
 - `DashboardConstants.ts`, `useMessageHandler.ts`, `settingsStore.ts`, and `ServerSection.tsx` already handle `SERVER_STARTED`, `SERVER_STOPPED`, theme capture messages, token regeneration, available LAN IPs, TLS certificate download, and browser-side QR display.
-- `FlightPathConfigService` + file-backed config are already in place, and `FlightPathGlobalSettings` already includes `server.port`, `server.standalonePort`, `server.bindAddress`, `server.theme`, and `server.tls`.
+- `CtrlYokeConfigService` + file-backed config are already in place, and `CtrlYokeSettings` already includes `server.port`, `server.standalonePort`, `server.bindAddress`, `server.theme`, and `server.tls`.
 - `express`, `ws`, `qrcode`, `selfsigned`, and the server static-file copy step in `esbuild.js` are already present in the repo, so the hosted-server runtime plumbing is no longer theoretical.
-- **New since the April audit — `src/server/HostedWorkspaceViewerService.ts` (~890 lines) is a fully vscode-free workspace-viewer backend.** Its constructor takes only `workspaceRoot: string` (no `vscode.ExtensionContext`, no adapter) and it implements file tree listing, file read/write, copy/move, git status, file diff, stage/unstage/discard, commit/push/pull, commit log (`getCommitLog`), and git-ref diffs (`getGitRefDiff`). `FlightPathHostedServer.ts` mounts all of this behind token-gated `/api/workspace-viewer/*` routes (`tree`, `file`, `entry`, `copy`, `move`, `status`, `diff`, `git-ref-diff`, `commit-log`, `stage`, `unstage`, `discard`, `commit`, `push`, `pull`, …). This is effectively a ready-made backend for Phase 6/7's workspace-viewer feature parity — `FlightPathServer` can construct the same service from `cwd` and reuse the same route handlers nearly verbatim.
-- **`OPEN_GIT_CHANGE` is now marked legacy** in `DashboardConstants.ts`. The browser path for viewing a commit/ref diff (`~<hash>` references, commit history "View Diff") goes through `workspaceViewerStore.openToGitRef()` → `GET /api/workspace-viewer/git-ref-diff` → `HostedWorkspaceViewerService.getGitRefDiff()`, which is vscode-free end-to-end. Only the VS Code-native diff editor path still uses `OPEN_GIT_CHANGE` → `flightpath.openGitChange`.
+- **New since the April audit — `src/server/HostedWorkspaceViewerService.ts` (~890 lines) is a fully vscode-free workspace-viewer backend.** Its constructor takes only `workspaceRoot: string` (no `vscode.ExtensionContext`, no adapter) and it implements file tree listing, file read/write, copy/move, git status, file diff, stage/unstage/discard, commit/push/pull, commit log (`getCommitLog`), and git-ref diffs (`getGitRefDiff`). `CtrlYokeHostedServer.ts` mounts all of this behind token-gated `/api/workspace-viewer/*` routes (`tree`, `file`, `entry`, `copy`, `move`, `status`, `diff`, `git-ref-diff`, `commit-log`, `stage`, `unstage`, `discard`, `commit`, `push`, `pull`, …). This is effectively a ready-made backend for Phase 6/7's workspace-viewer feature parity — `CtrlYokeServer` can construct the same service from `cwd` and reuse the same route handlers nearly verbatim.
+- **`OPEN_GIT_CHANGE` is now marked legacy** in `DashboardConstants.ts`. The browser path for viewing a commit/ref diff (`~<hash>` references, commit history "View Diff") goes through `workspaceViewerStore.openToGitRef()` → `GET /api/workspace-viewer/git-ref-diff` → `HostedWorkspaceViewerService.getGitRefDiff()`, which is vscode-free end-to-end. Only the VS Code-native diff editor path still uses `OPEN_GIT_CHANGE` → `ctrlyoke.openGitChange`.
 - **`src/completions/ContextReferenceBuilder.ts` is now fully vscode-free.** The one vscode-dependent helper (`toWorkspaceRelativeReferencePath`, used only by `ContextMenuReferenceCommands.ts`) was split into `src/completions/WorkspaceReferencePaths.ts`. The `@`/`#`/`~` reference-syntax builders (including `buildGitReference()`) are reusable as-is by any future standalone completion/router code.
 
 ### Still missing before implementation
@@ -61,7 +61,7 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 **VS Code-hosted server (Phases 2–4):**
 
 - Implemented. The hosted browser server, shim, tokenized URL flow, TLS support, theme forwarding, and webview/store wiring are already working in the extension.
-- `HostedServerRouter.ts` is no longer needed as a separate concept; `FlightPathWebviewProvider.routeExternalMessage(...)` is the routing seam.
+- `HostedServerRouter.ts` is no longer needed as a separate concept; `CtrlYokeWebviewProvider.routeExternalMessage(...)` is the routing seam.
 - The remaining work in this document should be treated as **standalone-server implementation**, not hosted-server implementation.
 
 **Standalone server (Phases 5–10):**
@@ -69,8 +69,8 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - `WorkflowOrchestrator` still hard-codes `new VsCodeAdapter(this.context)` (5 call sites) — blocks standalone reuse.
 - `PromptFileWatcher` and `CliWatchSession` still call `vscode.workspace.createFileSystemWatcher()` directly (4 watcher instances total); `PlatformAdapter` has no `createFileWatcher()` seam yet.
 - `WebviewSettingsSync` still uses `vscode.workspace.workspaceFolders` directly (7 occurrences) for agent/skill/workspace discovery.
-- `src/cli.ts` now exposes `run`, `validate`, and `commit`; there is still no `flightpath server` subcommand.
-- `StandaloneServerAdapter`, `FlightPathServer`, `WebSocketMessageRouter`, `CompletionService`, and `ServerFileWatcher` do not exist yet.
+- `src/cli.ts` now exposes `run`, `validate`, and `commit`; there is still no `ctrlyoke server` subcommand.
+- `StandaloneServerAdapter`, `CtrlYokeServer`, `WebSocketMessageRouter`, `CompletionService`, and `ServerFileWatcher` do not exist yet.
 - `fast-glob`, `ignore`, and `vscode-jsonrpc` are still not installed; the first two are needed once standalone file/symbol completions are added.
 - `src/ui/webview-react/utils/vsCodeStateStorage.ts` has not been renamed/wrapped as a platform-neutral `webviewStateStorage` helper yet.
 - The standalone launch UX does not exist yet: no terminal URL banner, no OSC-8 clickable link output, no terminal QR code, and no standalone token-persistence story outside VS Code secret storage.
@@ -82,7 +82,7 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 
 ### Standalone CLI UX Requirements
 
-- `flightpath server` must ship as a subcommand of the existing npm CLI binary (`bin.flightpath -> out/cli.js`), not as a second executable.
+- `ctrlyoke server` must ship as a subcommand of the existing npm CLI binary (`bin.ctrlyoke -> out/cli.js`), not as a second executable.
 - The command should default from config where possible: `server.standalonePort`, `server.bindAddress`, `server.tls`, and standalone theme choice.
 - It should accept CLI overrides for the server settings that make sense outside VS Code: at minimum port, bind address, TLS enablement/cert/key paths, optional auto-open, and explicit token behavior.
 - On successful startup it should print:
@@ -101,18 +101,18 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 
 ```
 VS Code Extension Process (running normally)
-  ├── FlightPathWebviewProvider  — existing VS Code sidebar panel
+  ├── CtrlYokeWebviewProvider  — existing VS Code sidebar panel
   ├── WorkflowOrchestrator       — already running, manages all workflows
   │     └── notifyX() → Dashboard broadcast hub (Phase 1 target state)
-  ├── FlightPathWebviewProvider  — implements IDashboardProvider (VS Code panel)
-  └── FlightPathHostedServer     — NEW: implements IDashboardProvider (HTTP + WS)
+  ├── CtrlYokeWebviewProvider  — implements IDashboardProvider (VS Code panel)
+  └── CtrlYokeHostedServer     — NEW: implements IDashboardProvider (HTTP + WS)
         ├── HTTP: serves React app assets (same Vite bundle)
         └── WS: browser tabs connect here, receive same orchestrator events
 ```
 
 After Phase 1, the orchestrator and workflow instances publish through the shared broadcast hub so the VS Code panel and hosted browser tabs see identical live state.
 
-Since `FlightPathHostedServer` runs inside the extension process, its hosted router can still invoke VS Code commands/services directly; it just needs a callable router surface rather than a fake webview re-dispatch command.
+Since `CtrlYokeHostedServer` runs inside the extension process, its hosted router can still invoke VS Code commands/services directly; it just needs a callable router surface rather than a fake webview re-dispatch command.
 
 ### Standalone Server
 
@@ -120,8 +120,8 @@ Since `FlightPathHostedServer` runs inside the extension process, its hosted rou
 Browser (1..N tabs)
   ↕ HTTP (React app assets)
   ↕ WebSocket (bidirectional, same MESSAGE_TYPES protocol as VS Code)
-Standalone FlightPath Server (Node.js — no VS Code)
-  ├── FlightPathServer        — HTTP + WS, connection registry, broadcast
+Standalone ctrlyoke Server (Node.js — no VS Code)
+  ├── CtrlYokeServer        — HTTP + WS, connection registry, broadcast
   ├── StandaloneServerAdapter — PlatformAdapter impl (modeled on CliAdapter)
   ├── WorkflowOrchestrator    — REUSED unchanged (after IDashboardProvider refactor)
   └── CliIntegration + CLI harnesses (copilot-cli, claude-cli, codex-cli — unchanged)
@@ -131,7 +131,7 @@ Standalone FlightPath Server (Node.js — no VS Code)
 
 One server instance = one `WorkflowOrchestrator` managing all parallel workflows. Multiple browser tabs connect as separate WebSocket clients but observe the **same orchestrator state**. When any orchestrator event fires (workflow added, step advance, state change), the server broadcasts to **all connected tabs**.
 
-This mirrors VS Code behavior: opening the FlightPath sidebar in multiple panels shows the same state.
+This mirrors VS Code behavior: opening the ctrlyoke sidebar in multiple panels shows the same state.
 
 ### Key Insight: The Shim Pattern
 
@@ -151,13 +151,13 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | ------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `IDashboardProvider` interface  | `src/ui/IDashboardProvider.ts`           | Already present; both server implementations plug into this surface                                                          |
 | `IDashboardSink` interface      | `src/types/IDashboardSink.ts`            | Existing live step/output sink; needs a broadcast-capable implementation before hosted tabs can mirror the sidebar           |
-| `WorkflowOrchestrator` registry | `src/flightpath/WorkflowOrchestrator.ts` | Shared provider/sink fanout is already in place; the remaining issue is adapter/watcher construction for non-VS Code runtime |
+| `WorkflowOrchestrator` registry | `src/core/WorkflowOrchestrator.ts` | Shared provider/sink fanout is already in place; the remaining issue is adapter/watcher construction for non-VS Code runtime |
 | `WebviewMessageRouter`          | `src/ui/WebviewMessageRouter.ts`         | Hosted server can reuse its logic only after exposing a direct callable entrypoint and preserving per-connection replies     |
 | `PlatformAdapter` interface     | `src/platform/PlatformAdapter.ts`        | `StandaloneServerAdapter` is the third implementation; this seam also needs file-watcher support                             |
 | `vscode-shim` alias             | `esbuild.js` CLI bundle                  | Standalone server bundle uses the same `alias: { vscode: 'src/platform/vscode-shim.ts' }`                                    |
 | Commander.js subcommands        | `src/cli.ts`                             | `run`, `validate`, and `commit` exist today; `server` still needs to be added as a subcommand                                |
 | `setRuntimeMode`                | `src/cli.ts` line 27                     | Standalone server calls `setRuntimeMode(RUNNER_IDS.SERVER)` — `RUNNER_IDS.SERVER` already exists in `DashboardConstants.ts`  |
-| `HostedWorkspaceViewerService` + `/api/workspace-viewer/*` | `src/server/HostedWorkspaceViewerService.ts`, `src/server/FlightPathHostedServer.ts` | Already vscode-free (constructed from `workspaceRoot: string` alone); `FlightPathServer` (Phase 6) can construct the same service and mount the same routes verbatim for file tree, git status/diff/stage/commit/push/pull, commit history, and git-ref diffs |
+| `HostedWorkspaceViewerService` + `/api/workspace-viewer/*` | `src/server/HostedWorkspaceViewerService.ts`, `src/server/CtrlYokeHostedServer.ts` | Already vscode-free (constructed from `workspaceRoot: string` alone); `CtrlYokeServer` (Phase 6) can construct the same service and mount the same routes verbatim for file tree, git status/diff/stage/commit/push/pull, commit history, and git-ref diffs |
 
 ---
 
@@ -171,7 +171,7 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | `src/ui/StatusBarManager.ts`                  | VS Code status bar — no equivalent needed       |
 | `src/completions/PromptCompletionProvider.ts` | VS Code IntelliSense in text editor             |
 | `src/completions/PromptLinkProvider.ts`       | VS Code document links — CodeMirror has its own |
-| `src/flightpath/harness/chat/`                | Automates VS Code's Copilot Chat UI             |
+| `src/core/harness/chat/`                | Automates VS Code's Copilot Chat UI             |
 | `src/completions/ContextMenuReferenceCommands.ts` | Explorer/SCM/Timeline right-click commands — no equivalent UI surface in a browser-only server |
 | `src/completions/WorkspaceReferencePaths.ts`  | `toWorkspaceRelativeReferencePath()` — only consumer is `ContextMenuReferenceCommands.ts` above |
 
@@ -179,20 +179,20 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 
 | File                                                | VS Code API Used                                                             | Server Approach                                                                                                        |
 | --------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `src/ui/FlightPathWebviewProvider.ts`               | `vscode.WebviewView`, `webview.postMessage()`, `notifyX()` methods           | Replaced by `FlightPathServer` + WebSocket broadcast                                                                   |
-| `src/flightpath/WorkflowOrchestrator.ts`            | `vscode.ExtensionContext`, `VsCodeAdapter`, primary-provider assumptions     | Finish provider fanout, add a broadcast sink for `WorkflowInstance`, and inject adapter/context cleanly for server use |
-| `src/ui/WebviewMessageRouter.ts`                    | 14 `vscode.commands.executeCommand()` calls (incl. legacy `flightpath.openGitChange`) + webview-local reply channel | Hosted server needs a callable router wrapper; standalone needs a WebSocket router with per-connection replies. Most ref/commit-diff traffic already bypasses this via `/api/workspace-viewer/git-ref-diff` |
+| `src/ui/CtrlYokeWebviewProvider.ts`               | `vscode.WebviewView`, `webview.postMessage()`, `notifyX()` methods           | Replaced by `CtrlYokeServer` + WebSocket broadcast                                                                   |
+| `src/core/WorkflowOrchestrator.ts`            | `vscode.ExtensionContext`, `VsCodeAdapter`, primary-provider assumptions     | Finish provider fanout, add a broadcast sink for `WorkflowInstance`, and inject adapter/context cleanly for server use |
+| `src/ui/WebviewMessageRouter.ts`                    | 14 `vscode.commands.executeCommand()` calls (incl. legacy `ctrlyoke.openGitChange`) + webview-local reply channel | Hosted server needs a callable router wrapper; standalone needs a WebSocket router with per-connection replies. Most ref/commit-diff traffic already bypasses this via `/api/workspace-viewer/git-ref-diff` |
 | `src/ui/WebviewSettingsSync.ts`                     | `vscode.workspace.workspaceFolders`, command execution, `ConfigurationUtils` | Move workspace discovery behind adapter/constructor inputs; keep settings reads routed through `ConfigurationUtils`    |
-| `src/utils/ConfigurationUtils.ts`                   | `vscode.workspace.getConfiguration()`                                        | **Done** — now reads from `FlightPathConfigService` (file-based config). No VS Code dependency remaining.              |
-| `src/flightpath/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                                 | `chokidar` (already in dependencies)                                                                                   |
-| `src/flightpath/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` (multiple watchers)             | Same watcher abstraction; inject adapter into constructor                                                              |
+| `src/utils/ConfigurationUtils.ts`                   | `vscode.workspace.getConfiguration()`                                        | **Done** — now reads from `CtrlYokeConfigService` (file-based config). No VS Code dependency remaining.              |
+| `src/core/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                                 | `chokidar` (already in dependencies)                                                                                   |
+| `src/core/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` (multiple watchers)             | Same watcher abstraction; inject adapter into constructor                                                              |
 | `src/completions/CompletionHelpers.ts`              | `vscode.workspace.findFiles()`, Git extension                                | Node.js `fs` + `fast-glob` + `ignore`                                                                                  |
 
 ### Already Platform-Agnostic (zero or minimal changes)
 
-- `src/flightpath/PromptQueue.ts` / `WorkflowExecutor.ts`
-- `src/flightpath/PromptFileParser.ts` / `EndConditionEvaluator.ts`
-- `src/flightpath/harness/CliIntegration.ts` + all CLI harnesses
+- `src/core/PromptQueue.ts` / `WorkflowExecutor.ts`
+- `src/core/PromptFileParser.ts` / `EndConditionEvaluator.ts`
+- `src/core/harness/CliIntegration.ts` + all CLI harnesses
 - `src/ui/webview-react/**` — React components and most stores are reusable, but the browser storage backend must not assume VS Code's `getState()` / `setState()` semantics
 - `src/types/**` — MESSAGE_TYPES, EXECUTION_STATES, WorkflowSummary, etc.
 - `src/completions/ContextReferenceBuilder.ts` — pure `@`/`#`/`~` reference-syntax builders, fully vscode-free as of the `WorkspaceReferencePaths.ts` split
@@ -207,12 +207,12 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 **Completed**
 
 - `src/ui/IDashboardProvider.ts` already exists.
-- `FlightPathWebviewProvider` already `implements IDashboardProvider`.
+- `CtrlYokeWebviewProvider` already `implements IDashboardProvider`.
 - `DashboardBroadcastHub` now single-sources fanout across `IDashboardProvider` + `IDashboardSink`.
 - `WorkflowOrchestrator` now publishes registry/CLI-watch updates through the hub and passes the hub into `WorkflowInstance` as the dashboard sink.
 - `src/types/IDashboardSink.ts` already exists for the finer-grained `WorkflowInstance` update surface.
 - `WebviewMessageRouter` now supports scoped reply callbacks so targeted bootstrap/request-response traffic can stay client-local.
-- `FlightPathWebviewProvider.routeExternalMessage(...)` now exposes the hosted-server routing seam directly.
+- `CtrlYokeWebviewProvider.routeExternalMessage(...)` now exposes the hosted-server routing seam directly.
 - `RUNNER_IDS.SERVER` and hosted-server message types now exist.
 
 **Still deferred**
@@ -234,7 +234,7 @@ Status: implemented in the current repo. The details below are retained as refer
 
 **Implemented files**
 
-- `src/server/FlightPathHostedServer.ts`
+- `src/server/CtrlYokeHostedServer.ts`
 
 Starts an Express + WebSocket server inside the running VS Code extension process. The live `WorkflowOrchestrator` remains the backend; browser tabs are additional `IDashboardProvider` consumers alongside the VS Code sidebar panel.
 
@@ -296,7 +296,7 @@ function captureThemeVars() {
 }
 ```
 
-The extension stores the snapshot in `FlightPathHostedServer`. On theme change (`vscode.window.onDidChangeActiveColorTheme`), re-trigger capture by posting a `CAPTURE_THEME_VARS` message to the VS Code webview, then broadcast the new vars to all connected browser clients as `THEME_VARS_UPDATED`. Browser clients apply the vars via the shim:
+The extension stores the snapshot in `CtrlYokeHostedServer`. On theme change (`vscode.window.onDidChangeActiveColorTheme`), re-trigger capture by posting a `CAPTURE_THEME_VARS` message to the VS Code webview, then broadcast the new vars to all connected browser clients as `THEME_VARS_UPDATED`. Browser clients apply the vars via the shim:
 
 ```javascript
 // In standalone-shim.js
@@ -308,19 +308,19 @@ case 'themeVarsUpdated':
 
 When a new browser client connects, inject the cached vars as an inline `<style>:root { ... }</style>` block in the served HTML (before `standalone-shim.js`). This gives the browser client the exact same theme as the VS Code sidebar — custom themes included — with live updates on theme change. **Phase 4 static CSS files are only needed for the standalone server.**
 
-#### `FlightPathHostedServer` design
+#### `CtrlYokeHostedServer` design
 
 ```typescript
-// src/server/FlightPathHostedServer.ts
+// src/server/CtrlYokeHostedServer.ts
 import express from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import { createServer, Server } from "http";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
-import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
+import type { CtrlYokeWebviewProvider } from "../ui/CtrlYokeWebviewProvider";
 import { DashboardBroadcastHub } from "../ui/DashboardBroadcastHub";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 
-export class FlightPathHostedServer implements IDashboardProvider {
+export class CtrlYokeHostedServer implements IDashboardProvider {
   private app = express();
   private httpServer: Server;
   private wss: WebSocketServer;
@@ -330,7 +330,7 @@ export class FlightPathHostedServer implements IDashboardProvider {
 
   constructor(
     private hub: DashboardBroadcastHub,
-    private webviewProvider: FlightPathWebviewProvider,
+    private webviewProvider: CtrlYokeWebviewProvider,
     port: number
   ) {
     this.port = port;
@@ -449,7 +449,7 @@ export class FlightPathHostedServer implements IDashboardProvider {
 
 #### `HostedServerRouter.ts`
 
-Not needed as a separate file — `FlightPathWebviewProvider.routeExternalMessage(message, reply)` is the callable entrypoint. Each WebSocket client passes its own `reply` callback, giving per-connection request/response without any shared state.
+Not needed as a separate file — `CtrlYokeWebviewProvider.routeExternalMessage(message, reply)` is the callable entrypoint. Each WebSocket client passes its own `reply` callback, giving per-connection request/response without any shared state.
 
 #### `WebviewSettingsSync` — wire up actual start/stop
 
@@ -458,10 +458,10 @@ This is now implemented. `WebviewSettingsSync` persists `server.enabled`, `Webvi
 ```typescript
 // extension.ts — preferred: extension owns the server lifetime
 context.subscriptions.push(
-  vscode.commands.registerCommand("flightpath.enableServer", async () => {
+  vscode.commands.registerCommand("ctrlyoke.enableServer", async () => {
     if (hostedServer) return; // already running
     const port = configService.get("server").port ?? 3000;
-    hostedServer = new FlightPathHostedServer(
+    hostedServer = new CtrlYokeHostedServer(
       broadcastHub,
       webviewProvider,
       port
@@ -469,7 +469,7 @@ context.subscriptions.push(
     const url = hostedServer.listen();
     webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STARTED, url });
   }),
-  vscode.commands.registerCommand("flightpath.disableServer", async () => {
+  vscode.commands.registerCommand("ctrlyoke.disableServer", async () => {
     hostedServer?.dispose();
     hostedServer = undefined;
     webviewProvider.postMessage({ type: MESSAGE_TYPES.SERVER_STOPPED });
@@ -495,7 +495,7 @@ This is also implemented: the webview captures theme vars, the router forwards `
 #### Hosted-server completion checklist
 
 - [x] `express` / `ws` runtime and typings are installed
-- [x] `flightpath.enableServer` / `flightpath.disableServer` are registered in `extension.ts`
+- [x] `ctrlyoke.enableServer` / `ctrlyoke.disableServer` are registered in `extension.ts`
 - [x] `SERVER_STARTED`, `SERVER_STOPPED`, `THEME_VARS_CAPTURED`, `THEME_VARS_UPDATED`, and `CAPTURE_THEME_VARS` exist in `DashboardConstants.ts`
 - [x] `settingsStore` tracks `serverUrl`, available LAN IPs, and selected display IP
 - [x] `useMessageHandler` handles hosted-server lifecycle and theme-capture messages
@@ -521,7 +521,7 @@ This file already exists and is already shared by the hosted server. Standalone 
 (function () {
   const workspaceKey =
     new URLSearchParams(location.search).get("workspaceKey") || "default";
-  const stateKey = `flightpath:${workspaceKey}:webviewState`;
+  const stateKey = `ctrlyoke:${workspaceKey}:webviewState`;
   let _state = JSON.parse(localStorage.getItem(stateKey) || "{}");
   const ws = new WebSocket(`ws://${location.host}/ws`);
   const pending = [];
@@ -657,23 +657,23 @@ export class StandaloneServerAdapter implements PlatformAdapter {
 
 ### Phase 6 — HTTP / WebSocket Server (standalone)
 
-**New file:** `src/server/FlightPathServer.ts`
+**New file:** `src/server/CtrlYokeServer.ts`
 
-`FlightPathServer` implements `IDashboardProvider` — it is the server-side equivalent of `FlightPathWebviewProvider`.
+`CtrlYokeServer` implements `IDashboardProvider` — it is the server-side equivalent of `CtrlYokeWebviewProvider`.
 
 ```typescript
 import express from "express";
 import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "http";
-import { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
+import { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { StandaloneServerAdapter } from "./StandaloneServerAdapter";
 import type { IDashboardProvider } from "../ui/IDashboardProvider";
-import type { WorkflowSummary } from "../types/FlightPathTypes";
+import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
 import { setRuntimeMode } from "../utils/RuntimeMode";
 import { RUNNER_IDS } from "../types/DashboardConstants";
 
-export class FlightPathServer implements IDashboardProvider {
+export class CtrlYokeServer implements IDashboardProvider {
   private app = express();
   private httpServer = createServer(this.app);
   private wss = new WebSocketServer({ server: this.httpServer });
@@ -691,7 +691,7 @@ export class FlightPathServer implements IDashboardProvider {
   }
 
   // ── IDashboardProvider implementation ─────────────────────────────────────
-  // These mirror the notify* methods in FlightPathWebviewProvider
+  // These mirror the notify* methods in CtrlYokeWebviewProvider
 
   notifyWorkflowAdded(summary: WorkflowSummary) {
     this.broadcast({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
@@ -766,7 +766,7 @@ export class FlightPathServer implements IDashboardProvider {
 
   private sendInitialState(ws: WebSocket) {
     const send = (msg: unknown) => ws.send(JSON.stringify(msg));
-    // Mirror FlightPathWebviewProvider's READY → INIT handshake
+    // Mirror CtrlYokeWebviewProvider's READY → INIT handshake
     // Send settings, workflow summaries, active workflow state
     this.settingsSync.sendToClient(send);
     send({
@@ -779,7 +779,7 @@ export class FlightPathServer implements IDashboardProvider {
 
   listen() {
     this.httpServer.listen(this.config.port, "127.0.0.1", () => {
-      console.log(`FlightPath server at http://localhost:${this.config.port}`);
+      console.log(`ctrlyoke server at http://localhost:${this.config.port}`);
       if (this.config.open) open(`http://localhost:${this.config.port}`);
     });
   }
@@ -788,7 +788,7 @@ export class FlightPathServer implements IDashboardProvider {
 
 **Webview dist path:** Vite outputs to `out/ui/webview-react/` (confirmed in `vite.config.ts` line 44).
 
-> **Reference implementation note:** the sketch above predates `FlightPathHostedServer.ts` growing into its current ~1,500-line form. The actual hosted server (`src/server/FlightPathHostedServer.ts`) is a much more accurate reference for `FlightPathServer`'s shape — it implements both `IDashboardProvider` and `IDashboardSink`, takes `(hub, webviewProvider, getOrchestrator, port, workspaceRoot, token, bindAddress, tlsConfig?)`, wires `express.json()`, a `requireToken` middleware, `WebSocketServer` with a heartbeat interval, TLS via `https.createServer`, and constructs a `HostedWorkspaceViewerService(workspaceRoot)` for the `/api/workspace-viewer/*` routes. `FlightPathServer` should follow this pattern directly — including constructing its own `HostedWorkspaceViewerService` and re-mounting the same workspace-viewer routes — rather than the original minimal sketch.
+> **Reference implementation note:** the sketch above predates `CtrlYokeHostedServer.ts` growing into its current ~1,500-line form. The actual hosted server (`src/server/CtrlYokeHostedServer.ts`) is a much more accurate reference for `CtrlYokeServer`'s shape — it implements both `IDashboardProvider` and `IDashboardSink`, takes `(hub, webviewProvider, getOrchestrator, port, workspaceRoot, token, bindAddress, tlsConfig?)`, wires `express.json()`, a `requireToken` middleware, `WebSocketServer` with a heartbeat interval, TLS via `https.createServer`, and constructs a `HostedWorkspaceViewerService(workspaceRoot)` for the `/api/workspace-viewer/*` routes. `CtrlYokeServer` should follow this pattern directly — including constructing its own `HostedWorkspaceViewerService` and re-mounting the same workspace-viewer routes — rather than the original minimal sketch.
 
 ---
 
@@ -802,10 +802,10 @@ Handles all webview → server messages. The existing `WebviewMessageRouter.ts` 
 
 | Message Type           | VS Code Handler                                 | Server Handler                          |
 | ---------------------- | ----------------------------------------------- | --------------------------------------- |
-| `RUN`                  | `executeCommand("flightpath.run")`              | `orchestrator.run(filePath)`            |
-| `PAUSE`                | `executeCommand("flightpath.pause")`            | `orchestrator.pause()`                  |
-| `RESUME`               | `executeCommand("flightpath.resume")`           | `orchestrator.resume()`                 |
-| `STOP`                 | `executeCommand("flightpath.stop")`             | `orchestrator.stop()`                   |
+| `RUN`                  | `executeCommand("ctrlyoke.run")`              | `orchestrator.run(filePath)`            |
+| `PAUSE`                | `executeCommand("ctrlyoke.pause")`            | `orchestrator.pause()`                  |
+| `RESUME`               | `executeCommand("ctrlyoke.resume")`           | `orchestrator.resume()`                 |
+| `STOP`                 | `executeCommand("ctrlyoke.stop")`             | `orchestrator.stop()`                   |
 | `PAUSE_WORKFLOW`       | `orchestrator.pauseWorkflow(id)`                | Same — direct call                      |
 | `RESUME_WORKFLOW`      | `orchestrator.resumeWorkflow(id)`               | Same — direct call                      |
 | `STOP_WORKFLOW`        | `orchestrator.stopWorkflow(id)`                 | Same — direct call                      |
@@ -813,14 +813,14 @@ Handles all webview → server messages. The existing `WebviewMessageRouter.ts` 
 | `GET_WORKFLOWS_LIST`   | `orchestrator.getWorkflowSummaries()`           | Same — direct call                      |
 | `LOAD_WORKFLOW`        | `executeCommand + file load`                    | `orchestrator.loadWorkflow(filePath)`   |
 | `GET_RECENT_WORKFLOWS` | History service                                 | Same — direct call                      |
-| `SELECT_FILE`          | `executeCommand("flightpath.selectPromptFile")` | Respond with no-op or path input prompt |
+| `SELECT_FILE`          | `executeCommand("ctrlyoke.selectPromptFile")` | Respond with no-op or path input prompt |
 | `EDIT_FILE`            | Opens VS Code editor                            | no-op                                   |
 | `SHOW_OUTPUT`          | Reveals Output panel                            | no-op                                   |
-| `OPEN_GIT_CHANGE`      | `executeCommand("flightpath.openGitChange")` (legacy) | **Largely superseded** — ref/commit diffs already go through `workspaceViewerStore.openToGitRef()` → `GET /api/workspace-viewer/git-ref-diff`, backed by the vscode-free `HostedWorkspaceViewerService.getGitRefDiff()`. Mount the same route/service for standalone; only a single-file VS Code diff-editor fallback (if any callers remain) needs no-op/OS-open handling |
+| `OPEN_GIT_CHANGE`      | `executeCommand("ctrlyoke.openGitChange")` (legacy) | **Largely superseded** — ref/commit diffs already go through `workspaceViewerStore.openToGitRef()` → `GET /api/workspace-viewer/git-ref-diff`, backed by the vscode-free `HostedWorkspaceViewerService.getGitRefDiff()`. Mount the same route/service for standalone; only a single-file VS Code diff-editor fallback (if any callers remain) needs no-op/OS-open handling |
 | `revealInExplorer`     | VS Code explorer                                | `open` / `xdg-open` (OS)                |
 | All other messages     | Platform-agnostic                               | Same implementation                     |
 
-All the non-`executeCommand` handlers in `WebviewMessageRouter` (`EXECUTE_PROMPT`, `UPDATE_PROMPT`, `REORDER_PROMPTS`, `UNDO_PROMPT_CHANGES`, etc.) are called on the orchestrator/instance directly and can be ported verbatim. Likewise, the entire `/api/workspace-viewer/*` family (tree, file read/write, status, diff, stage/unstage/discard, commit/push/pull, commit log, git-ref diff) is already implemented as plain Express routes in `FlightPathHostedServer.ts` and can be re-mounted on `FlightPathServer` against the same `HostedWorkspaceViewerService`.
+All the non-`executeCommand` handlers in `WebviewMessageRouter` (`EXECUTE_PROMPT`, `UPDATE_PROMPT`, `REORDER_PROMPTS`, `UNDO_PROMPT_CHANGES`, etc.) are called on the orchestrator/instance directly and can be ported verbatim. Likewise, the entire `/api/workspace-viewer/*` family (tree, file read/write, status, diff, stage/unstage/discard, commit/push/pull, commit log, git-ref diff) is already implemented as plain Express routes in `CtrlYokeHostedServer.ts` and can be re-mounted on `CtrlYokeServer` against the same `HostedWorkspaceViewerService`.
 
 > **Future refactor (Phase 8):** Extract an abstract `BaseMessageRouter` from `WebviewMessageRouter` containing all platform-agnostic handlers. `WebviewMessageRouter` and `WebSocketMessageRouter` extend it, each providing only their transport/command differences. This eliminates duplication but is not required for the initial implementation.
 
@@ -897,7 +897,7 @@ Results cached per file by `mtime`. No new dependencies.
 **Option B (opt-in) — User-supplied LSP server:**
 
 ```yaml
-# .flightpath/server.config.yaml
+# .ctrlyoke/server.config.yaml
 symbolLanguageServer:
   command: "typescript-language-server"
   args: ["--stdio"]
@@ -947,7 +947,7 @@ Add an optional `createFileWatcher(pattern)` method to `PlatformAdapter` — `Vs
 
 ---
 
-### Phase 10 — CLI Integration (`flightpath server`) (standalone)
+### Phase 10 — CLI Integration (`ctrlyoke server`) (standalone)
 
 Add `server` as a Commander.js subcommand in `src/cli.ts`, following the same pattern as `run`:
 
@@ -955,7 +955,7 @@ Add `server` as a Commander.js subcommand in `src/cli.ts`, following the same pa
 // src/cli.ts
 program
   .command("server")
-  .description("Start the FlightPath browser dashboard")
+  .description("Start the ctrlyoke browser dashboard")
   .option("-p, --port <port>", "Port to listen on", "3000")
   .option("-d, --cwd <path>", "Workspace root directory")
   .option("--theme <light|dark>", "Default theme", "dark")
@@ -976,8 +976,8 @@ program
   )
   .option("--allow-all-tools", "Dangerously allow all tools")
   .action(async (options) => {
-    const { FlightPathServer } = await import("./server/FlightPathServer");
-    const server = new FlightPathServer(resolveServerConfig(options));
+    const { CtrlYokeServer } = await import("./server/CtrlYokeServer");
+    const server = new CtrlYokeServer(resolveServerConfig(options));
     server.listen();
   });
 ```
@@ -1005,22 +1005,22 @@ src/server/
 │   ├── vscode-default-dark.css        ← Full --vscode-* definitions (Phase 4)
 │   └── vscode-default-light.css       ← Full --vscode-* definitions (Phase 4)
 │   # ── VS Code-hosted server ──────────────────────────────────────────────
-├── FlightPathHostedServer.ts          ← HTTP + WS inside the extension; implements IDashboardProvider (Phase 2)
+├── CtrlYokeHostedServer.ts          ← HTTP + WS inside the extension; implements IDashboardProvider (Phase 2)
 │   # ── Standalone server ────────────────────────────────────────────────
-├── FlightPathServer.ts                ← Standalone HTTP + WS; implements IDashboardProvider (Phase 6)
+├── CtrlYokeServer.ts                ← Standalone HTTP + WS; implements IDashboardProvider (Phase 6)
 ├── StandaloneServerAdapter.ts         ← PlatformAdapter impl (Phase 5)
 ├── WebSocketMessageRouter.ts          ← Routes webview messages (standalone only) (Phase 7)
 ├── CompletionService.ts               ← File/dir/symbol completions (Phase 8)
 ├── LspSymbolClient.ts                 ← (optional) LSP stdio client (Phase 8)
 └── ServerFileWatcher.ts               ← chokidar-based file watcher (Phase 9)
 
-src/cli/ServerCommand.ts               ← resolveServerConfig() for `flightpath server` (Phase 10)
+src/cli/ServerCommand.ts               ← resolveServerConfig() for `ctrlyoke server` (Phase 10)
 src/cli.ts                             ← Add program.command('server') block (Phase 10)
 
-src/flightpath/WorkflowOrchestrator.ts ← Finish provider fanout and stop primary-provider-only routing (Phase 1)
-src/flightpath/WorkflowInstance.ts     ← Use the shared broadcast sink instead of first-provider casting (Phase 1)
-src/ui/FlightPathWebviewProvider.ts    ← Reuse existing provider implementation + expose hosted-router entrypoint (Phase 2)
-src/extension.ts                       ← Update: register flightpath.enableServer command (Phase 2)
+src/core/WorkflowOrchestrator.ts ← Finish provider fanout and stop primary-provider-only routing (Phase 1)
+src/core/WorkflowInstance.ts     ← Use the shared broadcast sink instead of first-provider casting (Phase 1)
+src/ui/CtrlYokeWebviewProvider.ts    ← Reuse existing provider implementation + expose hosted-router entrypoint (Phase 2)
+src/extension.ts                       ← Update: register ctrlyoke.enableServer command (Phase 2)
 src/platform/PlatformAdapter.ts        ← Update: add optional createFileWatcher() (Phase 9)
 ```
 
@@ -1138,15 +1138,15 @@ Standalone mode changes the storage model. The VS Code sidebar can persist throu
 | Zustand persisted UI state (`uiStore`)          | `vscode.getState()` / `vscode.setState()` via the webview state storage adapter    | `localStorage` through the shim, scoped by `workspaceKey`                                                   |
 | Prompt editor webview state (`editorStore`)     | Existing root webview state object                                                 | Same shim contract, backed by scoped `localStorage`                                                         |
 | Workspace viewer unsaved drafts (`fileDrafts`)  | Persisted through the shared webview state storage adapter                         | Persisted through scoped `localStorage`, so closing/reopening a browser tab does not lose unsaved edits     |
-| Live workflow/orchestrator state                | Extension/orchestrator memory plus `.flightpath/.queue` and `.flightpath/.history` | Server/orchestrator memory plus `.flightpath/.queue` and `.flightpath/.history`; never browser localStorage |
-| Recent workflow list / server-level preferences | VS Code context/global state or FlightPath config service                          | File-backed storage, likely `.flightpath/server-state.json` or `~/.flightpath/server-state.json`            |
+| Live workflow/orchestrator state                | Extension/orchestrator memory plus `.ctrlyoke/.queue` and `.ctrlyoke/.history` | Server/orchestrator memory plus `.ctrlyoke/.queue` and `.ctrlyoke/.history`; never browser localStorage |
+| Recent workflow list / server-level preferences | VS Code context/global state or ctrlyoke config service                            | File-backed storage, likely `.ctrlyoke/server-state.json` or `~/.ctrlyoke/server-state.json`            |
 | Auth token / TLS secrets                        | VS Code secret/global storage + config                                             | Server-side token file or ephemeral CLI token; never browser localStorage                                   |
 
 Implementation requirements:
 
 1. Rename or wrap `src/ui/webview-react/utils/vsCodeStateStorage.ts` as a platform-neutral helper such as `webviewStateStorage.ts`. The helper may still call `window.vscodeApi.getState()` / `setState()`, but the name should reflect the abstraction rather than VS Code specifically.
 2. Update `src/server/standalone-shim.js` so `getState()` / `setState()` read and write `localStorage`, not `sessionStorage`, in standalone mode.
-3. Scope the key by workspace identity. `FlightPathServer` should inject a stable `workspaceKey` into the served HTML or query string. A good default is a hash of the canonical workspace root plus server instance identity where needed.
+3. Scope the key by workspace identity. `CtrlYokeServer` should inject a stable `workspaceKey` into the served HTML or query string. A good default is a hash of the canonical workspace root plus server instance identity where needed.
 4. Keep storage values client-local. Browser storage is for UI layout, prompt/editor draft state, and workspace viewer unsaved file drafts. It is not an authoritative source for workflows, run history, source-control status, token secrets, or files on disk.
 5. Add a `storageVersion` field inside the persisted root object. The first standalone release can start at version `1`; future migrations can clear or transform stale draft formats safely.
 6. Add tests for both storage modes: VS Code-style shim state and standalone browser `localStorage` state. At minimum, cover `uiStore`, `editorStore`, and `workspaceViewerStore.fileDrafts`.
@@ -1163,17 +1163,17 @@ Implementation requirements:
 
 ### Track 2 — VS Code-Hosted Server (delivers browser access without leaving VS Code)
 
-4. **Hosted server reference implementation** — complete; treat `FlightPathHostedServer`, `standalone-shim.js`, and the extension/UI wiring as the baseline to copy from rather than future work
+4. **Hosted server reference implementation** — complete; treat `CtrlYokeHostedServer`, `standalone-shim.js`, and the extension/UI wiring as the baseline to copy from rather than future work
 
 ### Track 3 — Standalone Server (headless / CI / no VS Code)
 
 5. **`StandaloneServerAdapter`** (Phase 5) — mirror `CliAdapter`; always `cliExecutionMode: "headless"` unless we explicitly decide to support an interactive server-shell mode
-6. **`FlightPathServer`** (Phase 6) — HTTP + WS, connection registry, broadcast hub wiring, targeted initial-state sync, and reuse of the existing hosted HTML/shim/token behavior
+6. **`CtrlYokeServer`** (Phase 6) — HTTP + WS, connection registry, broadcast hub wiring, targeted initial-state sync, and reuse of the existing hosted HTML/shim/token behavior
 7. **Browser storage backend** — update `standalone-shim.js` to use workspace-scoped `localStorage`, rename/wrap the React storage helper away from `vsCodeStateStorage`, and verify `uiStore`, `editorStore`, and `workspaceViewerStore.fileDrafts` persist correctly outside VS Code
 8. **`WebSocketMessageRouter`** (Phase 7) — all message handlers; replace VS Code command execution with direct orchestrator/service calls while keeping reply scoping correct
 9. **`CompletionService`** (Phase 8) — file/dir completions with `fast-glob` + `ignore`; regex symbol heuristic
 10. **`ServerFileWatcher`** + `PlatformAdapter.createFileWatcher()` seam (Phase 9) — chokidar, verify every watcher construction path
-11. **`flightpath server` CLI command** (Phase 10) — `program.command('server')` + `resolveServerConfig()` + `RUNNER_IDS.SERVER`
+11. **`ctrlyoke server` CLI command** (Phase 10) — `program.command('server')` + `resolveServerConfig()` + `RUNNER_IDS.SERVER`
 12. **Standalone launch UX** — print tokenized local/LAN URLs, OSC-8 clickable links, terminal QR code, and HTTPS certificate guidance when applicable
 13. **Manual testing** — standalone first: launch from npm-installed CLI, open browser and phone clients, verify token gating, reconnects, TLS, parallel workflows, watch mode, completions, and unsaved workspace viewer draft recovery after browser tab close/reopen
 
@@ -1183,7 +1183,7 @@ Implementation requirements:
 
 1. **`WorkflowOrchestrator` construction strategy**: do the full adapter-first constructor refactor up front, or add a standalone-specific factory that progressively peels away `VsCodeAdapter` assumptions?
 
-2. **Standalone token persistence**: should `flightpath server` generate a fresh token per launch, persist one in `~/.flightpath`, accept `--token`, or support both persisted and ephemeral modes?
+2. **Standalone token persistence**: should `ctrlyoke server` generate a fresh token per launch, persist one in `~/.ctrlyoke`, accept `--token`, or support both persisted and ephemeral modes?
 
 3. **Standalone CLI surface**: which `ServerSection` settings become first-class CLI flags for v1? At minimum this likely includes `--port`, `--bind-address`, `--https`, `--cert`, `--key`, `--open`, and maybe `--theme`.
 
@@ -1192,7 +1192,7 @@ Implementation requirements:
    - **B**: small `GET /api/files?q=...` endpoint + inline picker in the dashboard
    - **C**: future drag-and-drop UX
 
-5. **Recent workflow history storage**: VS Code stores this in `context.globalState`. The standalone server needs a file-based equivalent (for example `.flightpath/.history/recent.json` in the workspace or `~/.flightpath/history.json`).
+5. **Recent workflow history storage**: VS Code stores this in `context.globalState`. The standalone server needs a file-based equivalent (for example `.ctrlyoke/.history/recent.json` in the workspace or `~/.ctrlyoke/history.json`).
 
 6. **Standalone theme model**: should browser clients use a static light/dark theme from config/CLI, or should the server eventually support per-client theme preference independent of the process default?
 

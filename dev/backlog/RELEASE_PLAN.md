@@ -1,4 +1,4 @@
-# FlightPath v0.1.0 Release Plan
+# ctrlyoke v0.1.0 Release Plan
 
 **Created:** March 11, 2026
 **Updated:** June 25, 2026
@@ -13,20 +13,20 @@ This plan was refreshed against the current repository state on June 19, 2026.
 
 The original critical testing work is complete:
 
-- [x] Release package built: `flightpath-0.1.0.vsix` exists at repo root.
+- [x] Release package built: `ctrlyoke-0.1.0.vsix` exists at repo root.
 - [x] Release package has been installed and used on macOS.
 - [x] Release package has been installed and used on Linux.
 - [x] Dashboard/webview works from the packaged VSIX on tested platforms.
-- [x] Platform-sensitive runtime areas have been exercised in real use: PTY execution, file paths, file watching, `.flightpath/` workspace state, prompt execution, and packaged webview assets.
+- [x] Platform-sensitive runtime areas have been exercised in real use: PTY execution, file paths, file watching, `.ctrlyoke/` workspace state, prompt execution, and packaged webview assets.
 
 Codebase-backed release facts:
 
 - `package.json` version is `0.1.0`.
 - `package.json` publisher is `fuzzynova`.
-- `package.json` repository/homepage/bugs URLs point to `https://github.com/FuzzyNova/flightpath` and `https://flightpath.dev`.
+- `package.json` repository/homepage/bugs URLs point to `https://github.com/FuzzyNova/ctrlyoke` and `https://ctrlyoke.dev`.
 - `package.json` license is `Elastic-2.0` (placeholder — to be replaced with custom commercial EULA before launch; see §2.3).
 - `package.json` has current marketplace metadata: improved description, categories, keywords, and gallery banner.
-- `package.json` contributes both bins: `flightpath-mcp` and `flightpath`, but `.vscodeignore` intentionally excludes `out/cli.js` from the VSIX.
+- `package.json` contributes both bins: `ctrlyoke-mcp` and `ctrlyoke`, but `.vscodeignore` intentionally excludes `out/cli.js` from the VSIX.
 - `.vscodeignore` is now allowlist-based and includes the extension bundle, MCP server, webview assets, schemas, templates, runtime scripts, `resvg.wasm`, and `node-pty`.
 - `CHANGELOG.md` has a populated `[0.1.0] - 2026-05-12` release entry.
 - `README.md` documents all seven harnesses: `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli`, and `copilot-chat`.
@@ -37,7 +37,7 @@ Related launch/business planning now lives in [`RELEASE_CHECKLIST.md`](RELEASE_C
 
 ## Release Decision
 
-**Identity decision: made (June 2026).** Publisher is `fuzzynova`, GitHub org is `FuzzyNova/flightpath`, product domain is `flightpath.dev`, support inbox is `support@flightpath.dev`. All `package.json` fields and README updated.
+**Identity decision: made (June 2026).** Publisher is `fuzzynova`, GitHub org is `FuzzyNova/ctrlyoke`, product domain is `ctrlyoke.dev`, support inbox is `support@ctrlyoke.dev`. All `package.json` fields and README updated.
 
 **License decision: made (June 2026).** Custom commercial EULA (source-available, $10M revenue / 250-employee threshold), not Elastic-2.0. Pro licensing via Keygen at launch. Draft at [`LICENSE_DRAFT.md`](LICENSE_DRAFT.md); requires attorney review before publish.
 
@@ -49,7 +49,7 @@ Related launch/business planning now lives in [`RELEASE_CHECKLIST.md`](RELEASE_C
 
 **Status:** DONE
 
-- [x] Built `flightpath-0.1.0.vsix`.
+- [x] Built `ctrlyoke-0.1.0.vsix`.
 - [x] Installed the VSIX locally.
 - [x] Used the packaged extension on macOS.
 - [x] Used the packaged extension on Linux.
@@ -89,8 +89,8 @@ Already present in `package.json`:
 Still open:
 
 - [ ] Decide publisher: current `nhickster` vs. long-term business publisher.
-- [ ] Update repository/homepage/bugs URLs if moving to `fuzzynova/flightpath`.
-- [ ] Update support/contact URLs after `support@flightpath.dev` exists.
+- [ ] Update repository/homepage/bugs URLs if moving to `fuzzynova/ctrlyoke`.
+- [ ] Update support/contact URLs after `support@ctrlyoke.dev` exists.
 
 ### 1.4 VSIX Contents
 
@@ -129,10 +129,10 @@ Expected excluded runtime asset:
 - [x] Complete Phase 0 of [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): business email, support inbox, vendor ownership, and publisher identity.
 - [x] Publisher: `fuzzynova` (VS Code Marketplace publisher created under `admin@fuzzno.com`).
 - [x] `package.json#publisher` → `fuzzynova`
-- [x] `package.json#repository.url` → `https://github.com/FuzzyNova/flightpath`
-- [x] `package.json#homepage` → `https://flightpath.dev`
-- [x] `package.json#bugs.url` → `https://github.com/FuzzyNova/flightpath/issues`
-- [x] README support section updated with `support@flightpath.dev` and `flightpath.dev`
+- [x] `package.json#repository.url` → `https://github.com/FuzzyNova/ctrlyoke`
+- [x] `package.json#homepage` → `https://ctrlyoke.dev`
+- [x] `package.json#bugs.url` → `https://github.com/FuzzyNova/ctrlyoke/issues`
+- [x] README support section updated with `support@ctrlyoke.dev` and `ctrlyoke.dev`
 
 ### 2.2 README Requirements Mismatch
 
@@ -155,7 +155,7 @@ Open:
 - [ ] Attorney reviews and finalizes [`LICENSE_DRAFT.md`](LICENSE_DRAFT.md).
 - [ ] Replace `LICENSE` with final custom EULA text.
 - [ ] Update `package.json#license` to `SEE LICENSE IN LICENSE.md`.
-- [ ] Publish `flightpath.dev/terms` (web-facing copy + plain-language summary).
+- [ ] Publish `ctrlyoke.dev/terms` (web-facing copy + plain-language summary).
 
 ### 2.4 Final Package Inspection
 
@@ -174,7 +174,7 @@ Confirm:
 - [ ] `out/mcp-server.js` is included.
 - [ ] `out/cli.js` is not included.
 - [ ] `node_modules/node-pty/` is included.
-- [ ] `.flightpath/`, `.agents/`, local logs, prompts, test logs, and dev-only files are not included.
+- [ ] `.ctrlyoke/`, `.agents/`, local logs, prompts, test logs, and dev-only files are not included.
 - [ ] The generated VSIX version is `0.1.0`.
 
 ---
@@ -201,7 +201,7 @@ npx vsce publish
 If publishing from the already-built VSIX instead:
 
 ```bash
-npx vsce publish --packagePath flightpath-0.1.0.vsix
+npx vsce publish --packagePath ctrlyoke-0.1.0.vsix
 ```
 
 ### 3.3 Post-Publish Verification
@@ -211,7 +211,7 @@ npx vsce publish --packagePath flightpath-0.1.0.vsix
 - [ ] Confirm CHANGELOG tab shows `0.1.0`.
 - [ ] Install from the Marketplace into a clean VS Code profile.
 - [ ] Run one simple workflow from the Marketplace install.
-- [ ] Confirm dev-only command `FlightPath: Developer Tools` is hidden unless `flightpath.devMode` is set.
+- [ ] Confirm dev-only command `ctrlyoke: Developer Tools` is hidden unless `ctrlyoke.devMode` is set.
 
 ---
 
@@ -220,8 +220,8 @@ npx vsce publish --packagePath flightpath-0.1.0.vsix
 These are not hard blockers now that package testing is complete, but they are high-value before broad announcement.
 
 - [ ] Add at least one dashboard screenshot or GIF to `images/` and README.
-- [ ] Add `flightpath.dev` links after the landing page exists.
-- [ ] Add `support@flightpath.dev` after the inbox exists.
+- [ ] Add `ctrlyoke.dev` links after the landing page exists.
+- [ ] Add `support@ctrlyoke.dev` after the inbox exists.
 - [ ] Add a short Known Issues section if carrying known harness-specific rough edges into v0.1.0.
 - [ ] Confirm README install/setup instructions match the published Marketplace path.
 
@@ -231,7 +231,7 @@ These are not hard blockers now that package testing is complete, but they are h
 
 - [ ] Tag `v0.1.0`.
 - [ ] Create GitHub Release from the `CHANGELOG.md` entry.
-- [ ] Attach the final `flightpath-0.1.0.vsix`.
+- [ ] Attach the final `ctrlyoke-0.1.0.vsix`.
 - [ ] Make sure the GitHub release URL matches the canonical repository decision.
 
 ---
@@ -240,8 +240,8 @@ These are not hard blockers now that package testing is complete, but they are h
 
 The codebase currently has a CLI entrypoint:
 
-- `package.json#bin.flightpath` -> `./out/cli.js`
-- `package.json#bin.flightpath-mcp` -> `./out/mcp-server.js`
+- `package.json#bin.ctrlyoke` -> `./out/cli.js`
+- `package.json#bin.ctrlyoke-mcp` -> `./out/mcp-server.js`
 - `.vscodeignore` excludes `out/cli.js` from the VSIX.
 
 The npm CLI package should be treated as a separate release decision, not a blocker for the VS Code Marketplace release.
@@ -251,15 +251,15 @@ Open decisions:
 - [ ] Decide single root package vs. dedicated CLI package.
 - [ ] If using the root package for npm, add a `files` allowlist so npm does not publish the full extension repo unintentionally.
 - [ ] If using a dedicated CLI package, create a separate package folder and publish pipeline.
-- [ ] Confirm the `flightpath` npm package name is available or choose a scoped package.
+- [ ] Confirm the `ctrlyoke` npm package name is available or choose a scoped package.
 - [ ] Test with:
 
 ```bash
 npm run build:prod
 npm pack --dry-run
 npm pack
-npm install -g ./flightpath-0.1.0.tgz
-flightpath --help
+npm install -g ./ctrlyoke-0.1.0.tgz
+ctrlyoke --help
 ```
 
 Recommended: defer npm publishing until after the extension Marketplace release unless a standalone CLI launch is required for v0.1.0.
@@ -279,15 +279,15 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 | Item | Status | Notes |
 | --- | --- | --- |
 | Populate `CHANGELOG.md` for `0.1.0` | DONE | Current changelog has a full entry |
-| Build release VSIX | DONE | `flightpath-0.1.0.vsix` exists |
+| Build release VSIX | DONE | `ctrlyoke-0.1.0.vsix` exists |
 | Test package on Linux | DONE | User-reported complete |
 | Test package on macOS | DONE | User-reported complete |
 | Fix VSIX allowlist / webview assets | DONE | `.vscodeignore` is allowlist-based |
 | Marketplace metadata | MOSTLY DONE | Publisher/repo identity still open |
 | README harness coverage | DONE | All seven harnesses listed |
 | README/package VS Code version consistency | DONE | Both say 1.104.0 |
-| Business email/support identity | DONE | `support@flightpath.dev`, DNS/DKIM/DMARC configured |
-| Publisher identity | DONE | `fuzzynova`, repo at FuzzyNova/flightpath |
+| Business email/support identity | DONE | `support@ctrlyoke.dev`, DNS/DKIM/DMARC configured |
+| Publisher identity | DONE | `fuzzynova`, repo at FuzzyNova/ctrlyoke |
 | License/commercial terms | DECISION MADE | Custom EULA (source-available, $10M threshold); draft at `LICENSE_DRAFT.md`; needs attorney |
 | Final `vsce ls` package inspection | OPEN | Run immediately before publish |
 | Marketplace publish | OPEN | Blocked on identity decision |

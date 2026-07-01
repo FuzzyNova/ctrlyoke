@@ -1,9 +1,9 @@
-# FlightPath Documentation Strategy Plan
+# ctrlyoke Documentation Strategy Plan
 
 > **Status:** Active — Infrastructure ready, content pending  
 > **Date:** March 2026  
 > **Updated:** March 2026 — `docs/` cleaned and empty; `dev/` folder convention established  
-> **Scope:** Public-facing documentation for the FlightPath VS Code extension, companion CLI binaries (`flightpath-mcp`, `flightpath`), and YAML/JSON workflow file format.
+> **Scope:** Public-facing documentation for the ctrlyoke VS Code extension, companion CLI binaries (`ctrlyoke-mcp`, `ctrlyoke`), and YAML/JSON workflow file format.
 
 ---
 
@@ -28,16 +28,16 @@
 
 ### Project Context
 
-FlightPath is a VS Code extension (publisher: `nhickster`) that automates AI coding assistants — GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini — through structured YAML/JSON workflow files. The product surface area includes:
+ctrlyoke is a VS Code extension (publisher: `fuzzynova`) that automates AI coding assistants — GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini — through structured YAML/JSON workflow files. The product surface area includes:
 
 | Surface                                                | Notes                                            |
 | ------------------------------------------------------ | ------------------------------------------------ |
 | VS Code Extension                                      | Published/to be published on VS Code Marketplace |
-| `flightpath-mcp` CLI binary                            | Standalone MCP server for queue management       |
-| `flightpath` CLI binary                                | CLI adapter for direct workflow execution        |
-| `.flightpath.yaml` / `.flightpath.json` / `.prompt.md` | Workflow file formats with JSON Schema           |
+| `ctrlyoke-mcp` CLI binary                               | Standalone MCP server for queue management       |
+| `ctrlyoke` CLI binary                                   | CLI adapter for direct workflow execution        |
+| `.ctrlyoke.yaml` / `.ctrlyoke.json` / `.prompt.md`      | Workflow file formats with JSON Schema           |
 | Owner's existing website                               | Already exists                                   |
-| GitHub repository                                      | Public, `github.com/nhickster/flightpath`        |
+| GitHub repository                                      | Public, `github.com/FuzzyNova/ctrlyoke`          |
 
 ### Documentation Goals
 
@@ -52,7 +52,7 @@ FlightPath is a VS Code extension (publisher: `nhickster`) that automates AI cod
 
 ## 2. Documentation Types
 
-FlightPath needs four distinct documentation layers, each with a different primary delivery mechanism:
+ctrlyoke needs four distinct documentation layers, each with a different primary delivery mechanism:
 
 ### Layer 1 — Marketplace Page (README.md)
 
@@ -74,7 +74,7 @@ FlightPath needs four distinct documentation layers, each with a different prima
 
 ### Layer 4 — CLI Help Text
 
-**Primary audience:** A developer running `flightpath --help` in a terminal.  
+**Primary audience:** A developer running `ctrlyoke --help` in a terminal.  
 **Key question answered:** "What flags are available? What does this command do?"  
 **Delivery:** Built into the CLI binary, cross-referenced to hosted docs.
 
@@ -101,10 +101,10 @@ These are essentially free to implement and highly valuable:
 **Settings descriptions** (`package.json → contributes.configuration.properties`)
 
 ```json
-"flightpath.harness": {
+"ctrlyoke.harness": {
   "type": "string",
   "description": "Active harness to use for AI execution. Options: copilot-cli, claude-cli, codex-cli, copilot-chat.",
-  "markdownDescription": "Active **harness** for AI execution. See [harness documentation](https://docs.flightpath.dev/harnesses) for details."
+  "markdownDescription": "Active **harness** for AI execution. See [harness documentation](https://docs.ctrlyoke.dev/harnesses) for details."
 }
 ```
 
@@ -114,7 +114,7 @@ The `markdownDescription` variant (instead of `description`) renders with links 
 The `detail` field on a command appears as a subtitle in the Command Palette. Use it for a one-sentence description of what the command does.
 
 **JSON Schema hover docs**  
-Since FlightPath already has `schemas/prompt-schema.json`, the completions provider and YAML language server provide inline hover documentation for every property. This is already partially implemented. Every `description` field in the JSON Schema becomes tooltip text inside `.flightpath.yaml` files. This is high-value contextual documentation that requires no external site.
+Since ctrlyoke already has `schemas/workflow-schema.json`, the completions provider and YAML language server provide inline hover documentation for every property. This is already partially implemented. Every `description` field in the JSON Schema becomes tooltip text inside `.ctrlyoke.yaml` files. This is high-value contextual documentation that requires no external site.
 
 ### Well-Documented Extension Examples to Reference
 
@@ -126,7 +126,7 @@ Since FlightPath already has `schemas/prompt-schema.json`, the completions provi
 | **REST Client**                     | Comprehensive README with GIFs and tables covering all features      | Self-contained in README when features are enumerable |
 | **Tabnine / GitHub Copilot**        | Marketplace page is intentionally brief with strong CTA to website   | The "landing page" approach                           |
 
-**Takeaway for FlightPath:** The Marketplace README should be a polished landing page (install + first workflow in 5 minutes), not a comprehensive reference. All depth belongs on the hosted docs site.
+**Takeaway for ctrlyoke:** The Marketplace README should be a polished landing page (install + first workflow in 5 minutes), not a comprehensive reference. All depth belongs on the hosted docs site.
 
 ---
 
@@ -141,18 +141,18 @@ Since FlightPath already has `schemas/prompt-schema.json`, the completions provi
 | `npm`                    | docs.npmjs.com                               | Very detailed, with examples       | npm's `--help` is surprisingly comprehensive |
 | `docker`                 | docs.docker.com                              | Comprehensive man-page style       | Each subcommand has its own `--help` page    |
 
-### Patterns Applicable to FlightPath CLI
+### Patterns Applicable to ctrlyoke CLI
 
 **`--help` output principles:**
 
 - Every command and flag should have a one-line description.
 - Commands that accept file paths should state the accepted formats.
 - Include 1–2 usage examples at the bottom.
-- End with a pointer to hosted docs: `For full documentation, see: https://docs.flightpath.dev/cli`
+- End with a pointer to hosted docs: `For full documentation, see: https://docs.ctrlyoke.dev/cli`
 
 **Man pages:** Unless the CLI is distributed via a package manager that installs man pages (e.g., Homebrew), man pages are overkill. Skip for now.
 
-**Auto-generation from command definitions:** If `flightpath` CLI is built with a framework like `commander` or `yargs`, there are tools that can auto-generate markdown documentation from the command tree. The package `commander-to-markdown` and `yargs-to-cli` exist for this. Check current CLI implementation to determine feasibility.
+**Auto-generation from command definitions:** If `ctrlyoke` CLI is built with a framework like `commander` or `yargs`, there are tools that can auto-generate markdown documentation from the command tree. The package `commander-to-markdown` and `yargs-to-cli` exist for this. Check current CLI implementation to determine feasibility.
 
 **Hosted CLI reference:** A dedicated page per CLI command (`/docs/cli/run`, `/docs/cli/queue`, etc.) is the cleanest approach and allows full examples and cross-links.
 
@@ -191,7 +191,7 @@ python:
     - requirements: docs/requirements.txt # mkdocs, mkdocs-material, etc.
 ```
 
-**Pros for FlightPath:**
+**Pros for ctrlyoke:**
 
 - ✅ Free for public projects
 - ✅ Built-in versioning (show docs for v0.1, v0.2, etc.)
@@ -200,7 +200,7 @@ python:
 - ✅ Respectable brand name; developers know ReadTheDocs
 - ✅ PDF/ePub export available
 
-**Cons for FlightPath:**
+**Cons for ctrlyoke:**
 
 - ❌ Tool is Python-centric — the MkDocs path works but feels like a workaround
 - ❌ Theming is more limited than VitePress/Docusaurus without heavy customization
@@ -267,7 +267,7 @@ jobs:
       - uses: actions/deploy-pages@v4
 ```
 
-**Pros for FlightPath:**
+**Pros for ctrlyoke:**
 
 - ✅ **Zero ongoing cost**, fully controlled
 - ✅ Docs live in the same repo as the code — commits, PRs, and tags automatically include doc changes
@@ -275,21 +275,21 @@ jobs:
 - ✅ Built-in full-text local search (zero config)
 - ✅ Algolia DocSearch integration available for free for public OSS projects
 - ✅ Custom domain via CNAME file (no account changes)
-- ✅ Already familiar stack (Vite, TypeScript) — FlightPath's webview uses Vite
+- ✅ Already familiar stack (Vite, TypeScript) — ctrlyoke's webview uses Vite
 - ✅ Beautiful default theme with minimal configuration
 - ✅ Fast build times (Vite — millisecond HMR in dev mode)
 - ✅ Dark mode built in
 - ✅ Sidebar is code-configured, making it easy to maintain in PRs
 - ✅ Code blocks have syntax highlighting, line highlighting, line numbers, diff highlighting
 
-**Cons for FlightPath:**
+**Cons for ctrlyoke:**
 
 - ❌ No native versioning (can version manually by publishing different branches, but it requires setup)
 - ❌ Documentation in the same repo adds to the repo's scope slightly
 - ❌ Search is local/client-side unless Algolia is added (still excellent, just not server-side)
 - ❌ Does not auto-build like ReadTheDocs — the GitHub Actions workflow must be set up
 
-**Best for:** TypeScript/JavaScript projects, developer tools, extensions, libraries. **This is the natural fit for FlightPath.**
+**Best for:** TypeScript/JavaScript projects, developer tools, extensions, libraries. **This is the natural fit for ctrlyoke.**
 
 ---
 
@@ -315,7 +315,7 @@ Docusaurus is a React-based static site generator by Meta. It is highly configur
 
 - Heavier — more dependencies, slower cold builds
 - More configuration overhead to get started vs. VitePress's "zero config" approach
-- React ecosystem (FlightPath's webview is already React, but the docs need no interactivity)
+- React ecosystem (ctrlyoke's webview is already React, but the docs need no interactivity)
 - Default theme requires more theming work to look polished out of the box
 - Overkill for a single developer maintaining a single-product extension at early-stage
 
@@ -325,7 +325,7 @@ Docusaurus is a React-based static site generator by Meta. It is highly configur
 - You want a **blog** alongside the docs
 - You have multiple contributors and need a plugin ecosystem
 
-**For FlightPath currently:** Docusaurus's added complexity is not justified until the project has significant version churn requiring published simultaneous versions.
+**For ctrlyoke currently:** Docusaurus's added complexity is not justified until the project has significant version churn requiring published simultaneous versions.
 
 ---
 
@@ -334,7 +334,7 @@ Docusaurus is a React-based static site generator by Meta. It is highly configur
 If the existing website already has a domain (e.g., `yoursite.com`), the docs can be served at `docs.yoursite.com` by:
 
 1. Setting up GitHub Pages to deploy to the custom domain
-2. Adding a CNAME DNS record at your domain registrar: `docs → nhickster.github.io` (or whatever)
+2. Adding a CNAME DNS record at your domain registrar: `docs → fuzzynova.github.io` (or whatever)
 3. Setting `CNAME` file in the docs build output
 
 This works identically for both VitePress and Docusaurus, and means the docs are on a professional custom domain from day one at no extra cost.
@@ -355,7 +355,7 @@ GitBook is a hosted documentation platform. You write content in their web edito
 - ❌ No AI features on free plan
 - ❌ Platform lock-in (docs are in GitBook's database unless Git Sync is used)
 
-**Verdict for FlightPath:** GitBook's free tier is just barely viable (single user public docs on a `.gitbook.io` subdomain). The moment custom domain or any collaboration is needed, the cost jumps dramatically. **Not recommended** given that free alternatives (VitePress + GitHub Pages) are superior in every way for this use case.
+**Verdict for ctrlyoke:** GitBook's free tier is just barely viable (single user public docs on a `.gitbook.io` subdomain). The moment custom domain or any collaboration is needed, the cost jumps dramatically. **Not recommended** given that free alternatives (VitePress + GitHub Pages) are superior in every way for this use case.
 
 ---
 
@@ -372,7 +372,7 @@ Mintlify is a premium AI-powered docs platform targeted at developer tools/API c
 - ❌ **No team collaboration** on free plan
 - Pro plan is **$300/month** — a steep jump
 
-**Verdict for FlightPath:** Mintlify's Hobby plan is surprisingly generous (free + custom domain), and the output looks exceptional. It is worth evaluating as an alternative to VitePress if visual polish is a priority and the project remains single-author. However, the pricing cliff at the first seat means it is risky to build on if the project grows. **Viable secondary option** but not the primary recommendation.
+**Verdict for ctrlyoke:** Mintlify's Hobby plan is surprisingly generous (free + custom domain), and the output looks exceptional. It is worth evaluating as an alternative to VitePress if visual polish is a priority and the project remains single-author. However, the pricing cliff at the first seat means it is risky to build on if the project grows. **Viable secondary option** but not the primary recommendation.
 
 ---
 
@@ -405,7 +405,7 @@ Mintlify is a premium AI-powered docs platform targeted at developer tools/API c
 
 1. **Zero cost, forever.** No pricing cliffs, no ads, no account upgrades required. The entire docs infrastructure is markdown files in the repo + a GitHub Actions workflow.
 
-2. **Same ecosystem.** FlightPath's webview is already built with Vite. The team (currently one person) is deeply familiar with the Vite/Node.js toolchain. VitePress is configured in TypeScript and integrates naturally.
+2. **Same ecosystem.** ctrlyoke's webview is already built with Vite. The team (currently one person) is deeply familiar with the Vite/Node.js toolchain. VitePress is configured in TypeScript and integrates naturally.
 
 3. **Docs-as-code without friction.** Docs live in the repo root (`/docs/`), version with the code, appear in PRs alongside code changes, and get tagged with releases. This is how modern open-source projects work.
 
@@ -423,7 +423,7 @@ Non-Python project fitting a Python-native tool creates unnecessary complexity. 
 
 #### Why not Docusaurus
 
-Right tool, wrong scale. Docusaurus is better when there's complex versioning, a plugin ecosystem, or multiple contributors. At FlightPath's current stage (pre-release, single author), the added configuration overhead doesn't pay off. This is a decision to revisit at v1.0 if docs grow substantially.
+Right tool, wrong scale. Docusaurus is better when there's complex versioning, a plugin ecosystem, or multiple contributors. At ctrlyoke's current stage (pre-release, single author), the added configuration overhead doesn't pay off. This is a decision to revisit at v1.0 if docs grow substantially.
 
 #### Why not GitBook or Mintlify
 
@@ -431,7 +431,7 @@ GitBook's free tier has the custom domain locked behind the paid plan. Mintlify'
 
 #### Future Upgrade Path
 
-If FlightPath eventually needs versioned docs (maintaining docs for v0.x and v1.x simultaneously), migrating from VitePress to Docusaurus is straightforward — both use Markdown files, and the content is 1:1 transferable. The migration can happen when the complexity is needed, not before.
+If ctrlyoke eventually needs versioned docs (maintaining docs for v0.x and v1.x simultaneously), migrating from VitePress to Docusaurus is straightforward — both use Markdown files, and the content is 1:1 transferable. The migration can happen when the complexity is needed, not before.
 
 ---
 
@@ -442,7 +442,7 @@ If FlightPath eventually needs versioned docs (maintaining docs for v0.x and v1.
 **Current state as of March 2026:** `docs/` is empty and ready for VitePress. Internal developer docs have been moved to `dev/` following the backlog → active → implemented → research → reference convention.
 
 ```
-flightpath/
+ctrlyoke/
 ├── docs/                          # VitePress root (currently empty — ready to scaffold)
 │   ├── .vitepress/
 │   │   ├── config.ts              # Nav, sidebar, theme config
@@ -483,12 +483,12 @@ flightpath/
 │   │   ├── workflow-schema.md     # Full property list (hand-maintained initially)
 │   │   ├── settings.md            # All VS Code settings documented
 │   │   ├── commands.md            # All command palette commands
-│   │   └── mcp-tools.md           # flightpath_queue_status, flightpath_append_queue
+│   │   └── mcp-tools.md           # ctrlyoke_queue_status, ctrlyoke_append_queue
 │   │
 │   ├── cli/                       # CLI binary documentation
 │   │   ├── index.md               # CLI overview
-│   │   ├── flightpath.md          # flightpath run + flightpath validate commands
-│   │   └── flightpath-mcp.md      # MCP server usage
+│   │   ├── ctrlyoke.md            # ctrlyoke run + ctrlyoke validate commands
+│   │   └── ctrlyoke-mcp.md        # MCP server usage
 │   │
 │   ├── examples/                  # Example workflows
 │   │   ├── index.md
@@ -527,7 +527,7 @@ sidebar: [
   {
     text: "Getting Started",
     items: [
-      { text: "What is FlightPath?", link: "/guide/" },
+      { text: "What is ctrlyoke?", link: "/guide/" },
       { text: "Installation", link: "/guide/installation" },
       { text: "Quick Start", link: "/guide/quick-start" },
       { text: "Your First Workflow", link: "/guide/your-first-workflow" },
@@ -576,8 +576,8 @@ sidebar: [
     text: "CLI",
     items: [
       { text: "Overview", link: "/cli/" },
-      { text: "flightpath", link: "/cli/flightpath" },
-      { text: "flightpath-mcp", link: "/cli/flightpath-mcp" },
+      { text: "ctrlyoke", link: "/cli/ctrlyoke" },
+      { text: "ctrlyoke-mcp", link: "/cli/ctrlyoke-mcp" },
     ],
   },
   {
@@ -598,7 +598,7 @@ The `README.md` shown on the VS Code Marketplace is a **first impression**, not 
 ### Recommended README Structure
 
 ```markdown
-# FlightPath — AI Workflow Automation for VS Code
+# ctrlyoke — AI Workflow Automation for VS Code
 
 > Automate GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini
 > with structured prompting workflows. Run multi-step AI tasks sequentially, validate
@@ -617,7 +617,7 @@ Link out to full docs for anything beyond basics.]
 
 ## 📋 Workflow Example
 
-[A short, realistic .flightpath.yaml example with syntax highlighting.
+[A short, realistic .ctrlyoke.yaml example with syntax highlighting.
 Show exactly what a user would type.]
 
 ## 🔧 Harnesses (AI Backends)
@@ -666,11 +666,11 @@ The goal is: **install → understand in 2 minutes → see value → link to mor
 
 ### The Opportunity
 
-FlightPath already has `/schemas/prompt-schema.json` — a machine-readable definition of every workflow property. This is the single source of truth for the format and should drive documentation, not be duplicated by hand.
+ctrlyoke already has `/schemas/workflow-schema.json` — a machine-readable definition of every workflow property. This is the single source of truth for the format and should drive documentation, not be duplicated by hand.
 
 ### Approach 1: Auto-Generate Markdown from JSON Schema (Recommended)
 
-Use `@adobe/jsonschema2md` (npm) to convert `prompt-schema.json` into structured Markdown automatically:
+Use `@adobe/jsonschema2md` (npm) to convert `workflow-schema.json` into structured Markdown automatically:
 
 ```bash
 npm install -D @adobe/jsonschema2md
@@ -701,7 +701,7 @@ A hand-maintained `reference/workflow-schema.md` with a table per section (top-l
 
 Start with **Approach 3** (hand-maintained) for launch, with a plan to automate via Approach 1 once the schema stabilizes. The schema is still evolving pre-release, and auto-generated docs would need frequent regeneration during that period.
 
-Include a prominent note in the docs page: "This page reflects schema version X.Y. The canonical schema with full validation is `schemas/prompt-schema.json` in the repository."
+Include a prominent note in the docs page: "This page reflects schema version X.Y. The canonical schema with full validation is `schemas/workflow-schema.json` in the repository."
 
 ---
 
@@ -714,12 +714,12 @@ Include a prominent note in the docs page: "This page reflects schema version X.
 ### `--help` Contents (per command)
 
 ```
-flightpath run <workflow-file>
+ctrlyoke run <workflow-file>
 
   Execute a prompt or workflow file.
 
   Arguments:
-    workflow-file   Path to a .flightpath.yaml, .flightpath.json, or .prompt.md file
+    workflow-file   Path to a .ctrlyoke.yaml, .ctrlyoke.json, or .prompt.md file
 
   Options:
     -H, --harness <id>      AI harness: copilot-cli (default), claude-cli, codex-cli,
@@ -739,21 +739,21 @@ flightpath run <workflow-file>
     -h, --help              Show this help message
 
   Examples:
-    flightpath run .flightpath/workflows/refactor.flightpath.yaml
-    flightpath run my-prompt.prompt.md --harness claude-cli
-    flightpath run workflow.yaml --headless --json
+    ctrlyoke run .ctrlyoke/workflows/refactor.ctrlyoke.yaml
+    ctrlyoke run my-prompt.prompt.md --harness claude-cli
+    ctrlyoke run workflow.yaml --headless --json
 
-  Documentation: https://docs.yoursite.com/cli/flightpath
+  Documentation: https://docs.yoursite.com/cli/ctrlyoke
 ```
 
 The CLI also exposes a `validate` command:
 
 ```
-flightpath validate <file>
+ctrlyoke validate <file>
 
   Validate a prompt file without executing it.
 
-  Documentation: https://docs.yoursite.com/cli/flightpath
+  Documentation: https://docs.yoursite.com/cli/ctrlyoke
 ```
 
 **Rules for `--help` text:**
@@ -793,7 +793,7 @@ Each CLI page should include:
 
    ```bash
    npx vitepress init
-   # Choose docs/ as the root, set site title to "FlightPath"
+   # Choose docs/ as the root, set site title to "ctrlyoke"
    ```
 
 3. **Add npm scripts to package.json:**
@@ -902,7 +902,7 @@ Watch for these doc rot patterns:
 
 - Settings listed in docs that no longer exist in `package.json`
 - Harness IDs in docs that differ from `DashboardConstants.HARNESS_IDS`
-- Schema properties documented that are not in `schemas/prompt-schema.json`
+- Schema properties documented that are not in `schemas/workflow-schema.json`
 - CLI flags documented that are not in the CLI implementation
 
 **Mitigation:** Create a simple CI check script (`scripts/validate-docs.js`) that reads `package.json` settings and compares against docs. Run it in the GitHub Actions pipeline.

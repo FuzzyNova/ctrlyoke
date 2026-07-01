@@ -2,7 +2,7 @@
 
 ## Background
 
-A header refactor broke a test because `getByText("FlightPath Workspace")` stopped matching when
+A header refactor broke a test because `getByText("ctrlyoke Workspace")` stopped matching when
 the label became `"Workspace: {name}"`. The fix exposed two separate problems:
 
 1. **Test query strategy** — `getByText` on composite/interpolated strings is fragile. The right

@@ -1,7 +1,7 @@
 # VS Code Language Model API — Feature Research
 
 **Date:** 2026-03-24
-**Purpose:** Research `vscode.lm` capabilities and how they could enhance FlightPath's prompt editor with an "Improve Prompt" button, smart completions, and other AI-powered features.
+**Purpose:** Research `vscode.lm` capabilities and how they could enhance ctrlyoke's prompt editor with an "Improve Prompt" button, smart completions, and other AI-powered features.
 
 ---
 
@@ -55,7 +55,7 @@ const tokenCount = await model.countTokens(messages, cancellationToken);
 The webview (`CodeMirrorEditor.tsx`, React components) **cannot** call `vscode.lm` directly. All LM requests must be:
 
 1. Triggered by the webview via `vscode.postMessage({ type: 'SOME_REQUEST', ... })`
-2. Handled in the extension host (e.g., `FlightPathWebviewProvider.ts`)
+2. Handled in the extension host (e.g., `CtrlYokeWebviewProvider.ts`)
 3. Results streamed back via `panel.webview.postMessage({ type: 'SOME_RESPONSE', chunk: '...' })`
 
 This is the same pattern already used for completions (`REQUEST_COMPLETIONS` / `COMPLETIONS_RESPONSE`).
@@ -75,7 +75,7 @@ Call `vscode.lm` directly from the extension host using whichever free Copilot m
 ```
 User clicks "Improve Prompt"
   → webview postMessage({ type: 'IMPROVE_PROMPT_REQUEST', prompt: currentText })
-  → FlightPathWebviewProvider receives message
+  → CtrlYokeWebviewProvider receives message
   → selectChatModels({ vendor: 'copilot', family: 'gpt-4o-mini' })
   → sendRequest([system context, user prompt], {}, token)
   → stream chunks back: postMessage({ type: 'IMPROVE_PROMPT_CHUNK', chunk })
@@ -103,21 +103,21 @@ Return ONLY the improved prompt text with no explanation or preamble.
 
 ### Option B — Configured Harness (Headless Mode)
 
-Instead of `vscode.lm`, route the improvement request through a user-selected FlightPath harness in headless mode.
+Instead of `vscode.lm`, route the improvement request through a user-selected ctrlyoke harness in headless mode.
 
 **Flow:**
 
 ```
 User clicks "Improve Prompt"
-  → FlightPathManager.runHeadless(improvePromptHarness, systemPrompt + currentText)
+  → CtrlYokeManager.runHeadless(improvePromptHarness, systemPrompt + currentText)
   → Returns improved text when complete
   → Webview replaces editor content
 ```
 
 **Settings required:**
 
-- `flightpath.improvePromptHarness` — harness ID to use (e.g., `claude-cli`, `copilot-cli`)
-- `flightpath.improvePromptModel` — model override for the improve harness
+- `ctrlyoke.improvePromptHarness` — harness ID to use (e.g., `claude-cli`, `copilot-cli`)
+- `ctrlyoke.improvePromptModel` — model override for the improve harness
 - A "Improve Prompt settings" gear icon next to the button to open these settings
 
 **Tradeoffs vs Option A:**
@@ -236,7 +236,7 @@ COUNT_TOKENS_REQUEST: 'countTokensRequest',
 COUNT_TOKENS_RESPONSE: 'countTokensResponse',
 ```
 
-### New Extension-Side Handler (in `FlightPathWebviewProvider.ts`)
+### New Extension-Side Handler (in `CtrlYokeWebviewProvider.ts`)
 
 A new `LmFeatureHandler` class (or methods added to the existing webview provider) that:
 
@@ -248,26 +248,26 @@ A new `LmFeatureHandler` class (or methods added to the existing webview provide
 ### New Settings (in `package.json` + `ConfigurationUtils.ts`)
 
 ```jsonc
-"flightpath.improvePromptEnabled": {
+"ctrlyoke.improvePromptEnabled": {
   "type": "boolean",
   "default": true,
   "description": "Show an 'Improve Prompt' button in the prompt editor."
 },
-"flightpath.improvePromptSource": {
+"ctrlyoke.improvePromptSource": {
   "type": "string",
   "enum": ["vscode-lm", "harness"],
   "default": "vscode-lm",
   "description": "Whether to use VS Code's built-in language models or a configured harness for prompt improvement."
 },
-"flightpath.improvePromptHarness": {
+"ctrlyoke.improvePromptHarness": {
   "type": "string",
   "description": "Harness to use for prompt improvement when source is 'harness'."
 },
-"flightpath.improvePromptModel": {
+"ctrlyoke.improvePromptModel": {
   "type": "string",
   "description": "Model override for the prompt improvement harness."
 },
-"flightpath.lmInlineCompletions": {
+"ctrlyoke.lmInlineCompletions": {
   "type": "boolean",
   "default": false,
   "description": "Enable AI-powered inline completions in the prompt editor (experimental)."
@@ -287,7 +287,7 @@ A new `LmFeatureHandler` class (or methods added to the existing webview provide
 | 5        | Inline ghost text completions (Option A)      | High       | Medium     |
 | 6        | "Explain Prompt" hints                        | Low        | Low-Medium |
 
-Start with the "Improve Prompt" button — it has the clearest UX, the most obvious value for FlightPath users who iterate on prompts, and the infrastructure it builds (vscode.lm request/stream/response pipeline) directly enables every other feature on this list.
+Start with the "Improve Prompt" button — it has the clearest UX, the most obvious value for ctrlyoke users who iterate on prompts, and the infrastructure it builds (vscode.lm request/stream/response pipeline) directly enables every other feature on this list.
 
 ---
 

@@ -6,10 +6,10 @@
 
 ## Summary
 
-History search currently scans `.flightpath/.history/**/events.jsonl` on every query and
+History search currently scans `.ctrlyoke/.history/**/events.jsonl` on every query and
 returns at most 50 matches. That keeps the write path simple, but it makes larger
 workspaces slow and prevents true result counts, paging, and infinite scroll. Build a
-persistent, machine-local search index under `.flightpath/.search-index/` so the UI can
+persistent, machine-local search index under `.ctrlyoke/.search-index/` so the UI can
 query indexed records instead of reparsing history files for every keystroke.
 
 The index is runtime data and must remain gitignored, just like `.history/`, `.queue/`,
@@ -32,8 +32,8 @@ The index is runtime data and must remain gitignored, just like `.history/`, `.q
 - Cloud/shared index sync.
 - Searching live in-memory output before it is persisted to timeline storage.
 - Fuzzy ranking as the first implementation.
-- Indexing arbitrary workspace files outside FlightPath history.
-- Making `.flightpath/.history/` itself tracked or portable.
+- Indexing arbitrary workspace files outside ctrlyoke history.
+- Making `.ctrlyoke/.history/` itself tracked or portable.
 
 ---
 
@@ -42,7 +42,7 @@ The index is runtime data and must remain gitignored, just like `.history/`, `.q
 Use a dedicated runtime directory:
 
 ```text
-.flightpath/.search-index/
+.ctrlyoke/.search-index/
 ├── manifest.json
 ├── documents.jsonl
 └── terms.jsonl              optional phase 2
@@ -107,12 +107,12 @@ rebuild validation more expensive.
 
 ## Service Design
 
-Add `HistorySearchIndexService` in `src/flightpath/orchestration/`.
+Add `HistorySearchIndexService` in `src/core/orchestration/`.
 
 Responsibilities:
 
 - Own index directory paths via `PATH_CONSTANTS.SEARCH_INDEX_DIR`.
-- Build/rebuild the document index from `.flightpath/.history`.
+- Build/rebuild the document index from `.ctrlyoke/.history`.
 - Incrementally index a run when its manifest/event file changes.
 - Load the persisted index into memory once per extension process.
 - Serve search queries with paging and true counts.
@@ -178,7 +178,7 @@ If document filtering is still too slow, add a substring-friendly index:
   `includes`.
 - For 2-character queries, either scan the document list or maintain bigram postings.
 
-Avoid generic full-text token indexes for the first pass because FlightPath needs
+Avoid generic full-text token indexes for the first pass because ctrlyoke needs
 substring matches across paths, commands, snippets, tool names, and diffs.
 
 ---
@@ -210,7 +210,7 @@ Practical integration points:
 
 Rebuild when:
 
-- `.flightpath/.search-index/manifest.json` is missing.
+- `.ctrlyoke/.search-index/manifest.json` is missing.
 - `schemaVersion` differs.
 - `documents.jsonl` is unreadable or contains invalid JSONL.
 - A source run manifest has a newer `lastUpdatedAt`, `eventCount`, or file mtime than
@@ -219,7 +219,7 @@ Rebuild when:
 
 Rebuild behavior:
 
-- Write into `.flightpath/.search-index/rebuild-<timestamp>/`.
+- Write into `.ctrlyoke/.search-index/rebuild-<timestamp>/`.
 - Validate record count and manifest.
 - Atomically swap files into place where possible.
 - Remove old rebuild directories opportunistically.
@@ -269,7 +269,7 @@ Add webview tests for:
 
 ## Migration Plan
 
-1. Add path constant and gitignore entry for `.flightpath/.search-index/`.
+1. Add path constant and gitignore entry for `.ctrlyoke/.search-index/`.
 2. Add `HistorySearchIndexService` with full rebuild and in-memory query support.
 3. Extend message/result types for paging and counts.
 4. Update `HistorySearchService` to delegate to the index with fallback.
@@ -287,5 +287,5 @@ Add webview tests for:
   need trigram postings?
 - Should `text` be stored verbatim in the index, or should we cap indexed text and accept
   source-event reads for long snippets?
-- Do we need explicit commands such as "Rebuild FlightPath Search Index" and "Clear
-  FlightPath Search Index"?
+- Do we need explicit commands such as "Rebuild ctrlyoke Search Index" and "Clear
+  ctrlyoke Search Index"?

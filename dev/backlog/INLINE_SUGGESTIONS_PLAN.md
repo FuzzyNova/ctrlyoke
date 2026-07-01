@@ -51,19 +51,19 @@ The package is small (~200 lines), has no dependencies beyond CodeMirror 6, and 
 
 ```jsonc
 // package.json → contributes.configuration.properties
-"flightpath.inlineSuggestionsEnabled": {
+"ctrlyoke.inlineSuggestionsEnabled": {
   "type": "boolean",
   "default": false,
   "description": "Enable AI-powered inline ghost text suggestions in the prompt editor (experimental)."
 },
-"flightpath.inlineSuggestionsDelay": {
+"ctrlyoke.inlineSuggestionsDelay": {
   "type": "number",
   "default": 600,
   "minimum": 200,
   "maximum": 3000,
   "description": "Milliseconds to wait after typing stops before fetching an inline suggestion."
 },
-"flightpath.inlineSuggestionsModel": {
+"ctrlyoke.inlineSuggestionsModel": {
   "type": "string",
   "default": "",
   "description": "Model override for inline suggestions (e.g., 'gpt-4o-mini'). Empty = auto-select fastest available."
@@ -98,7 +98,7 @@ LM_INLINE_COMPLETION_RESPONSE: 'lmInlineCompletionResponse',
 
 ---
 
-### Step 4: Create extension-side LM suggestion handler (FlightPathWebviewProvider.ts)
+### Step 4: Create extension-side LM suggestion handler (CtrlYokeWebviewProvider.ts)
 
 Add a new method or handler class that:
 
@@ -122,7 +122,7 @@ Add a new method or handler class that:
 6. Manages a `CancellationTokenSource` — cancels the previous request if a new one arrives before the old one completes
 
 ```typescript
-// In FlightPathWebviewProvider.ts
+// In CtrlYokeWebviewProvider.ts
 private inlineCompletionCts: vscode.CancellationTokenSource | null = null;
 
 private async handleInlineCompletionRequest(
@@ -261,7 +261,7 @@ This uses VS Code's built-in `editorGhostText-foreground` color token, so it aut
 
 ### Step 7: Read settings at webview init
 
-The `FlightPathWebviewProvider` should send the inline suggestion settings to the webview on load (same pattern as other settings). The webview can use these to:
+The `CtrlYokeWebviewProvider` should send the inline suggestion settings to the webview on load (same pattern as other settings). The webview can use these to:
 
 - Conditionally add the `inlineSuggestion` extension to the editor
 - Pass the configured `delay` value
@@ -284,7 +284,7 @@ fetchFn: async (state: EditorState): Promise<string> => {
 User types → pauses (delay ms)
   → inlineSuggestion fetchFn called
   → postMessage({ type: 'lmInlineCompletionRequest', text, cursorPosition, seq })
-  → FlightPathWebviewProvider receives message
+  → CtrlYokeWebviewProvider receives message
   → selectChatModels({ vendor: 'copilot', family: 'gpt-4o-mini' })
   → sendRequest([continuation prompt], {}, token)
   → collect response text
@@ -304,7 +304,7 @@ User types → pauses (delay ms)
 | `package.json`                                                | Modify | Add 3 new settings                                                               |
 | `src/utils/ConfigurationUtils.ts`                             | Modify | Add 3 getter methods                                                             |
 | `src/types/DashboardConstants.ts`                             | Modify | Add 2 new message types                                                          |
-| `src/ui/FlightPathWebviewProvider.ts`                         | Modify | Add `handleInlineCompletionRequest` method + message handler                     |
+| `src/ui/CtrlYokeWebviewProvider.ts`                           | Modify | Add `handleInlineCompletionRequest` method + message handler                     |
 | `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Modify | Import + add `inlineSuggestion` extension, add CSS, add `inlineCompletionSeqRef` |
 | `src/ui/webview-react/types/messages.ts`                      | Check  | May need to add types for new message payloads                                   |
 | `package.json`                                                | Modify | Add `codemirror-extension-inline-suggestion` dependency                          |
@@ -335,7 +335,7 @@ A simple toggle in the webview footer or settings panel:
 [⚡] Inline Suggestions  ○ Off  ● On
 ```
 
-- Toggles `flightpath.inlineSuggestionsEnabled`
+- Toggles `ctrlyoke.inlineSuggestionsEnabled`
 - Visual indicator (lightning bolt icon) shows when active
 - Could be placed next to the token counter (when implemented)
 

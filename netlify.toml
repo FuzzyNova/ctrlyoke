@@ -1,4 +1,4 @@
-# NOTE: flightpath.dev deploys via GitHub Actions + netlify-cli (see LANDING_PAGE_PLAN.md
+# NOTE: ctrlyoke.dev deploys via GitHub Actions + netlify-cli (see LANDING_PAGE_PLAN.md
 # §2.3) because free-tier Netlify does not run native builds for org-owned repos. The
 # Action builds the site and runs `netlify deploy --dir=landing/dist`, so the [build]
 # command below is NOT used for production — it is kept only so a native Netlify build

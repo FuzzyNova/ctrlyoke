@@ -7,8 +7,8 @@ Write a handoff file so a fresh session can pick up exactly where we left off.
 
 ## File location
 
-- `/handoff` (no argument) → `.flightpath/.handoff.md`
-- `/handoff <name>` (e.g. `/handoff auth-refactor`) → `.flightpath/.handoff-$ARGUMENTS.md`
+- `/handoff` (no argument) → `.ctrlyoke/.handoff.md`
+- `/handoff <name>` (e.g. `/handoff auth-refactor`) → `.ctrlyoke/.handoff-$ARGUMENTS.md`
 
 This lets multiple concurrent sessions each have their own handoff without colliding.
 

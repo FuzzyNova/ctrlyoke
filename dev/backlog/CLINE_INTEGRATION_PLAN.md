@@ -3,20 +3,20 @@
 **Date:** March 19, 2026  
 **Status:** Ready for Implementation  
 **Cline CLI Version:** 3.74.0  
-**Target FlightPath Version:** 1.2.0
+**Target ctrlyoke Version:** 1.2.0
 
 ---
 
 ## Executive Summary
 
-This plan outlines the implementation of **Cline CLI** as a first-class harness in FlightPath. Cline is an AI coding assistant CLI that provides structured JSON output, session management via task IDs, and MCP server support. It is architecturally similar to Claude Code and Codex, supporting real-time streaming and tool execution.
+This plan outlines the implementation of **Cline CLI** as a first-class harness in ctrlyoke. Cline is an AI coding assistant CLI that provides structured JSON output, session management via task IDs, and MCP server support. It is architecturally similar to Claude Code and Codex, supporting real-time streaming and tool execution.
 
 **Key Architectural Decisions:**
 
 1. **Completion Detection:** Process exit (headless) + log file monitoring (interactive)
 2. **Output Format:** `--json` for structured JSONL output
 3. **Session Management:** Task ID extraction from `task_started` events, task storage fallback
-4. **Permission Model:** Mode-based (`--yolo`, `--auto-approve-all`) — mapped from FlightPath's settings
+4. **Permission Model:** Mode-based (`--yolo`, `--auto-approve-all`) — mapped from ctrlyoke's settings
 5. **MCP Integration:** Native `cline mcp add` command for MCP server configuration
 
 **Estimated Effort:** 20-30 hours (Phase 1 MVP)  
@@ -255,7 +255,7 @@ cline --continue "Pick up where we left off"
 
 **Deliverables:**
 
-- ✅ 5 provider files in `src/flightpath/harness/cline/`
+- ✅ 5 provider files in `src/core/harness/cline/`
 - ✅ JSONL parser for real-time output
 - ✅ Task ID extraction from stdout
 - ✅ Process-exit completion detection
@@ -281,7 +281,7 @@ cline --continue "Pick up where we left off"
 ### 5.1 Directory Structure
 
 ```
-src/flightpath/harness/cline/
+src/core/harness/cline/
 ├── ClineCliProvider.ts           # Main provider descriptor
 ├── ClineResponseParser.ts        # JSONL parser, task ID extraction
 ├── ClineNotificationMonitor.ts   # Process exit detection (headless)
@@ -327,7 +327,7 @@ export class ClineCliProvider implements ICliProvider {
 - [ ] Implement `checkAvailability()` via `cline --version`
 - [ ] Implement `getVersion()` via `cline --version`
 
-**Reference:** `src/flightpath/harness/claude/ClaudeCliProvider.ts`
+**Reference:** `src/core/harness/claude/ClaudeCliProvider.ts`
 
 ---
 
@@ -431,9 +431,9 @@ export class ClineResponseParser extends ResponseParserBase {
 - [ ] Extract `tool_result` events as tool results
 - [ ] Extract usage statistics from final chunk
 - [ ] Handle `api_req_started` events for model info
-- [ ] Map Cline event format to FlightPath `CliEvent` interface
+- [ ] Map Cline event format to ctrlyoke `CliEvent` interface
 
-**Reference:** `src/flightpath/harness/claude/ClaudeResponseParser.ts`
+**Reference:** `src/core/harness/claude/ClaudeResponseParser.ts`
 
 ---
 
@@ -471,7 +471,7 @@ export class ClineNotificationMonitor implements INotificationMonitor {
   getNotificationDirectory(workspaceRoot: string): string {
     return path.join(
       workspaceRoot,
-      ".flightpath",
+      ".ctrlyoke",
       "temp",
       "cline-notifications"
     );
@@ -486,17 +486,17 @@ export class ClineNotificationMonitor implements INotificationMonitor {
 - [ ] Implement `getNotificationDirectory()`
 - [ ] Handle cancellation via `onCancel` callback
 
-**Reference:** `src/flightpath/harness/codex/CodexNotificationMonitor.ts`
+**Reference:** `src/core/harness/codex/CodexNotificationMonitor.ts`
 
 ---
 
 #### Step 4: ClineToolPermissionMapper.ts (1-2 hours)
 
-**Purpose:** Convert FlightPath's permission settings to Cline CLI arguments
+**Purpose:** Convert ctrlyoke's permission settings to Cline CLI arguments
 
 **Mapping Table:**
 
-| FlightPath Setting    | Cline Mapping                  |
+| ctrlyoke Setting       | Cline Mapping                  |
 | --------------------- | ------------------------------ |
 | `dangerouslyAllowAll` | `--yolo`                       |
 | `allowAll`            | `--auto-approve-all`           |
@@ -537,7 +537,7 @@ export class ClineToolPermissionMapper extends ToolPermissionMapperBase {
 - [ ] Implement `hasFullPermissions()` for headless mode safety check
 - [ ] Handle `custom` mode (no CLI flag, interactive approval)
 
-**Reference:** `src/flightpath/harness/claude/ClaudeToolPermissionMapper.ts`
+**Reference:** `src/core/harness/claude/ClaudeToolPermissionMapper.ts`
 
 ---
 
@@ -646,13 +646,13 @@ export class ClineLogParser implements ILogParser {
 - [ ] Implement `watchLogFile()` for task storage file watching
 - [ ] Implement `extractResponse()` to build `UniversalCliOutput` from task events
 
-**Reference:** `src/flightpath/harness/claude/ClaudeLogParser.ts`
+**Reference:** `src/core/harness/claude/ClaudeLogParser.ts`
 
 ---
 
 #### Step 6: Add Harness Enum Value (30 min)
 
-**File:** `src/types/FlightPathTypes.ts`
+**File:** `src/types/CtrlYokeTypes.ts`
 
 ```typescript
 export enum Harness {
@@ -682,7 +682,7 @@ export const HARNESS_IDS = {
 
 #### Step 7: Integration Factory Registration (1 hour)
 
-**File:** `src/flightpath/IntegrationFactory.ts`
+**File:** `src/core/IntegrationFactory.ts`
 
 ```typescript
 import { ClineCliProvider } from "./harness/cline/ClineCliProvider";
@@ -718,7 +718,7 @@ export class IntegrationFactory {
 
 ```json
 {
-  "flightpath.clineCliModel": {
+  "ctrlyoke.clineCliModel": {
     "type": "string",
     "default": "",
     "description": "Default model for Cline CLI (e.g., anthropic/claude-sonnet-4-5). Leave empty to use Cline's configured default.",
@@ -759,7 +759,7 @@ export const CLINE_CLI_MODELS = [
 **Tool Calls:**
 
 - [ ] `cline task "create a file" --json --yolo` parses tool_use events
-- [ ] Tool calls mapped to FlightPath `CliEvent` interface
+- [ ] Tool calls mapped to ctrlyoke `CliEvent` interface
 - [ ] Tool results captured correctly
 
 **Session Resumption:**
@@ -769,7 +769,7 @@ export const CLINE_CLI_MODELS = [
 
 **Settings:**
 
-- [ ] `flightpath.clineCliModel` setting respected
+- [ ] `ctrlyoke.clineCliModel` setting respected
 - [ ] YOLO mode (`--yolo`) applied for `dangerouslyAllowAll`
 - [ ] Auto-approve mode (`--auto-approve-all`) applied for `allowAll`
 
@@ -976,9 +976,9 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 
 **Files:**
 
-- `src/flightpath/harness/cline/ClineResponseParser.test.ts`
-- `src/flightpath/harness/cline/ClineLogParser.test.ts`
-- `src/flightpath/harness/cline/ClineToolPermissionMapper.test.ts`
+- `src/core/harness/cline/ClineResponseParser.test.ts`
+- `src/core/harness/cline/ClineLogParser.test.ts`
+- `src/core/harness/cline/ClineToolPermissionMapper.test.ts`
 
 **Test Fixtures:**
 
@@ -994,7 +994,7 @@ export class ClineTuiStreamProcessor extends TuiStreamProcessor {
 **Manual Test Workflows:**
 
 ```yaml
-# test-cline-simple.flightpath.yaml
+# test-cline-simple.ctrlyoke.yaml
 harness: cline-cli
 model: anthropic/claude-sonnet-4-5
 steps:
@@ -1005,7 +1005,7 @@ steps:
 ```
 
 ```yaml
-# test-cline-tool-calls.flightpath.yaml
+# test-cline-tool-calls.ctrlyoke.yaml
 harness: cline-cli
 model: anthropic/claude-sonnet-4-5
 toolPermissions:
@@ -1018,7 +1018,7 @@ steps:
 ```
 
 ```yaml
-# test-cline-session-resume.flightpath.yaml
+# test-cline-session-resume.ctrlyoke.yaml
 harness: cline-cli
 steps:
   - prompt: "My favorite color is blue."
@@ -1085,7 +1085,7 @@ steps:
   "ts": 1773930855667,
   "type": "say",
   "say": "completion_result",
-  "text": "Hello! I'm Cline, ready to help you with your FlightPath project.",
+  "text": "Hello! I'm Cline, ready to help you with your ctrlyoke project.",
   "modelInfo": {...},
   "conversationHistoryIndex": 0
 }
@@ -1315,10 +1315,10 @@ export class ClineLogParser implements ILogParser {
 
 - **Cline CLI GitHub:** https://github.com/cline/cline
 - **Cline CLI Version:** 3.74.0 (as of March 2026)
-- **FlightPath Harness Guide:** `docs/ADDING_NEW_CLI_HARNESS.md`
-- **Claude Integration:** `src/flightpath/harness/claude/` (reference implementation)
-- **Codex Integration:** `src/flightpath/harness/codex/` (reference implementation)
-- **OpenCode Integration:** `src/flightpath/harness/opencode/` (reference implementation)
+- **ctrlyoke Harness Guide:** `docs/ADDING_NEW_CLI_HARNESS.md`
+- **Claude Integration:** `src/core/harness/claude/` (reference implementation)
+- **Codex Integration:** `src/core/harness/codex/` (reference implementation)
+- **OpenCode Integration:** `src/core/harness/opencode/` (reference implementation)
 
 ---
 

@@ -1,4 +1,4 @@
-# FlightPath Extension — Strategic Roadmap
+# ctrlyoke Extension — Strategic Roadmap
 
 **Last updated:** June 12, 2026  
 **Current version:** 0.1.0 (unreleased — preparing the first VS Code Marketplace publish)  
@@ -8,13 +8,13 @@
 
 ## Executive Summary
 
-FlightPath is a VS Code extension that automates AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini) through structured YAML/JSON prompt workflows. The core engine is fully functional: multi-harness CLI/Chat execution, parallel workflow execution, per-prompt session management, dynamic queue extension, React webview dashboard with CodeMirror 6 editor, script-based end conditions, agent injection, a standalone CLI binary, stale-state recovery, an embedded terminal, and mobile-responsive layout are all working.
+ctrlyoke is a VS Code extension that automates AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini) through structured YAML/JSON prompt workflows. The core engine is fully functional: multi-harness CLI/Chat execution, parallel workflow execution, per-prompt session management, dynamic queue extension, React webview dashboard with CodeMirror 6 editor, script-based end conditions, agent injection, a standalone CLI binary, stale-state recovery, an embedded terminal, and mobile-responsive layout are all working.
 
-**FlightPath has not shipped yet.** The engine is feature-complete and a large number of post-MVP features are already implemented in the codebase — completion notifications (1.1), backtick context suppression (1.2), workflow favorites (1.4), SCM commit message button (1.7), inline prior context (2.6), pre-conditions, and the full error-behavior subsystem (2.1) — but nothing has been published to the VS Code Marketplace or npm. The architecture is clean and SOLID-compliant, making new features straightforward to add.
+**ctrlyoke has not shipped yet.** The engine is feature-complete and a large number of post-MVP features are already implemented in the codebase — completion notifications (1.1), backtick context suppression (1.2), workflow favorites (1.4), SCM commit message button (1.7), inline prior context (2.6), pre-conditions, and the full error-behavior subsystem (2.1) — but nothing has been published to the VS Code Marketplace or npm. The architecture is clean and SOLID-compliant, making new features straightforward to add.
 
 **Recommended next focus — the launch path.** The remaining work before a public launch is no longer core features; it is the go-to-market layer:
 
-1. **Landing page + docs site** at `flightpath.dev` ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md))
+1. **Landing page + docs site** at `ctrlyoke.dev` ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md))
 2. **Pro licensing / monetization model** — now split into its own plan ([`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)) because the long-term licensing model (license key vs. user accounts) is a strategic decision that should be settled before launch, not after.
 3. **Marketplace publish mechanics** — the Tier 0 checklist below (publisher setup, production VSIX verification, CHANGELOG, listing polish, npm package).
 
@@ -30,13 +30,13 @@ See [Tier 0](#tier-0--launch-blockers) for the remaining ship blockers.
 - **Composition-based CLI architecture**: Single `CliIntegration` class + `ICliProvider` interface; zero core changes needed to add new harnesses
 - **Parallel workflow execution**: `WorkflowInstance` (self-contained execution unit) + `WorkflowOrchestrator` (multi-workflow registry); per-workflow pause/resume/cancel; configurable concurrency
 - **Per-prompt session management**: Three-tier session ID resolution (prompt > workflow > global), session persistence across restarts
-- **Dynamic queue extension**: Copilot can autonomously extend workflows by modifying `.flightpath.yaml`/`.flightpath.json` files at runtime
+- **Dynamic queue extension**: Copilot can autonomously extend workflows by modifying `.ctrlyoke.yaml`/`.ctrlyoke.json` files at runtime
 - **End condition evaluation**: Script-based validation with retry logic, timeout protection, and template variables
 - **Workflow-level properties**: Three-tier precedence (prompt > workflow > global settings) for harness, model, agent, end conditions
-- **Agent injection**: `AgentExpander.ts` reads agent file content and wraps in `<agentInstructions>` XML; supports workspace-relative, `.flightpath/`-relative, and absolute paths
+- **Agent injection**: `AgentExpander.ts` reads agent file content and wraps in `<agentInstructions>` XML; supports workspace-relative, `.ctrlyoke/`-relative, and absolute paths
 - **Final prompt**: `finalStep` field on `PromptFile` runs once after all queue items complete
-- **Multi-format support**: `.flightpath.yaml`, `.flightpath.json`, `.prompt.md` with unified JSON schema (AJV validation)
-- **MCP server entrypoint**: `flightpath-mcp` binary for tool-based queue operations
+- **Multi-format support**: `.ctrlyoke.yaml`, `.ctrlyoke.json`, `.prompt.md` with unified JSON schema (AJV validation)
+- **MCP server entrypoint**: `ctrlyoke-mcp` binary for tool-based queue operations
 - **Stale state recovery**: `WorkflowLockManager` with atomic writes, PID probing, 30s heartbeat, and `normalizeStaleLocks` on startup
 - **Standalone CLI binary**: `src/cli.ts` with Commander (`run`, `validate` commands); `PlatformAdapter`/`CliAdapter`/`VsCodeAdapter`; `out/cli.js` esbuild target
 - **Variable substitution**: `--var key=value` CLI flag; `{{varName}}` placeholders in workflow YAML; workflow-level `vars:` defaults; env var injection for end condition scripts
@@ -47,7 +47,7 @@ See [Tier 0](#tier-0--launch-blockers) for the remaining ship blockers.
 - **Live context window**: Tracks token usage and context state during execution
 - **Global settings**: Extension settings panel integrated into the dashboard
 - **Inline prior context (2.6)**: `$previous`, `$all`, `$step:N` prior-context references injected into subsequent steps without requiring `resumeSession`
-- **Completion notifications (1.1)**: VS Code toast on workflow complete/error; `flightpath.notifications.onComplete` setting
+- **Completion notifications (1.1)**: VS Code toast on workflow complete/error; `ctrlyoke.notifications.onComplete` setting
 - **Backtick context suppression (1.2)**: Context expansion skips `@path`, `#sym:`, etc. inside triple-backtick fenced blocks
 - **Workflow favorites (1.4)**: Star button persists `isFavorite` in working file; favorites sort to the top of the workflow list
 - **SCM commit message button (1.7)**: VS Code Source Control panel button generates a commit message via staged diff and active harness
@@ -83,8 +83,8 @@ See [Tier 0](#tier-0--launch-blockers) for the remaining ship blockers.
 
 ### Schema & Tooling (shipped)
 
-- **Unified schema pipeline**: `prompt-schema.json` → auto-generated YAML schema → AJV runtime validation
-- **Model sync workflow**: `sync-models.mjs` syncs `ModelConstants.ts` ↔ `package.json` ↔ `prompt-schema.json`
+- **Unified schema pipeline**: `workflow-schema.json` → auto-generated YAML schema → AJV runtime validation
+- **Model sync workflow**: `sync-models.mjs` syncs `ModelConstants.ts` ↔ `package.json` ↔ `workflow-schema.json`
 - **Build-time dev/prod split**: `IS_DEV_MODE` flag with esbuild dead code elimination strips dev commands from production
 
 ---
@@ -108,11 +108,11 @@ See [Tier 0](#tier-0--launch-blockers) for the remaining ship blockers.
 
 ## Tier 0 — Launch Blockers
 
-_FlightPath has **not** been published yet. This section is the remaining path to the first public release. The engineering MVP is done; the open work is the go-to-market layer (landing page, licensing model) plus the mechanical publish checklist. Prior drafts of this roadmap incorrectly marked these "shipped" — treat every item below as **needs verification before publish**, since the publish was never actually executed. See [`RELEASE_PLAN.md`](RELEASE_PLAN.md) for the full checklist._
+_ctrlyoke has **not** been published yet. This section is the remaining path to the first public release. The engineering MVP is done; the open work is the go-to-market layer (landing page, licensing model) plus the mechanical publish checklist. Prior drafts of this roadmap incorrectly marked these "shipped" — treat every item below as **needs verification before publish**, since the publish was never actually executed. See [`RELEASE_PLAN.md`](RELEASE_PLAN.md) for the full checklist._
 
 **The two strategic blockers (do these first):**
 
-- **0.A — Landing page + docs site** ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md)): `flightpath.dev` marketing page, published VitePress docs, pricing page. The homepage is the extension's primary first impression outside the Marketplace.
+- **0.A — Landing page + docs site** ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md), [`../active/DOCUMENTATION_STRATEGY_PLAN.md`](../active/DOCUMENTATION_STRATEGY_PLAN.md)): `ctrlyoke.dev` marketing page, published VitePress docs, pricing page. The homepage is the extension's primary first impression outside the Marketplace.
 - **0.B — Pro licensing model** ([`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)): Decide and implement the monetization model. **This was previously folded into the landing-page plan and has now been split out** because the choice between a simple pasted license key and a full user-account/sign-in model is a long-term architectural decision that affects the extension, the website, and the backend. It must be settled before launch so the free/Pro gating ships in v0.1.0.
 
 **The mechanical publish checklist (do after the strategic blockers):**
@@ -145,7 +145,7 @@ Run `npm run package`, install the VSIX locally via **Extensions: Install from V
 
 **Status: NEEDS VERIFICATION**
 
-FlightPath has primarily been developed and tested on Windows. macOS is the primary platform for VS Code users. Key risks: `node-pty` native binaries differ per architecture, Homebrew CLI paths may not be in `PATH`, `chokidar` uses FSEvents on macOS. Test on Apple Silicon (arm64) if possible.
+ctrlyoke has primarily been developed and tested on Windows. macOS is the primary platform for VS Code users. Key risks: `node-pty` native binaries differ per architecture, Homebrew CLI paths may not be in `PATH`, `chokidar` uses FSEvents on macOS. Test on Apple Silicon (arm64) if possible.
 
 ---
 
@@ -153,7 +153,7 @@ FlightPath has primarily been developed and tested on Windows. macOS is the prim
 
 **Status: NOT DONE — this is the actual ship gate**
 
-Create or verify the Azure DevOps publisher account (`nhickster`), generate a PAT, run `vsce login nhickster`, verify `vsce ls` output shows the correct file inclusion/exclusion, then `vsce publish` (and `ovsx publish` for Open VSX).
+Create or verify the Azure DevOps publisher account (`fuzzynova`), generate a PAT, run `vsce login fuzzynova`, verify `vsce ls` output shows the correct file inclusion/exclusion, then `vsce publish` (and `ovsx publish` for Open VSX).
 
 ---
 
@@ -173,7 +173,7 @@ Create or verify the Azure DevOps publisher account (`nhickster`), generate a PA
 
 **Status: NEEDS VERIFICATION**
 
-The `flightpath` CLI (`out/cli.js`) ships separately from the VSIX. Decide on single vs. separate `package.json` structure, add `files` field, test with `npm pack --dry-run`, publish to npm.
+The `ctrlyoke` CLI (`out/cli.js`) ships separately from the VSIX. Decide on single vs. separate `package.json` structure, add `files` field, test with `npm pack --dry-run`, publish to npm.
 
 ---
 
@@ -203,7 +203,7 @@ _Under 1 week each. High impact, low risk. Ship in the weeks immediately after v
 
 New `rawPromptMode: true` execution property that bypasses the entire context expansion and categorized temp file pipeline. The prompt is sent verbatim — no `@path` expansion, no agent/skills injection, no prior context wrapping.
 
-**Why it matters:** Users who manage their own context references, or who are debugging FlightPath sessions (where the debug prompt contains raw FlightPath instruction strings), need a clean passthrough. Also a trust signal for skeptical users.
+**Why it matters:** Users who manage their own context references, or who are debugging ctrlyoke sessions (where the debug prompt contains raw ctrlyoke instruction strings), need a clean passthrough. Also a trust signal for skeptical users.
 
 **Dependencies:** ✅ Backtick suppression (1.2) is done — 1.3 is ready to implement now.
 
@@ -227,7 +227,7 @@ Replace the plain `<input>` in `ScriptConditionEditor` with a single-line CodeMi
 
 **Priority: MEDIUM** | **Effort: 2–3 days** | **Doc: [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md)**
 
-A **Preview** button on each prompt card in the dashboard shows the fully resolved CLI command, prompt text, and temp file content for that step — without executing. Also exposes `flightpath run --dry-run` on the CLI.
+A **Preview** button on each prompt card in the dashboard shows the fully resolved CLI command, prompt text, and temp file content for that step — without executing. Also exposes `ctrlyoke run --dry-run` on the CLI.
 
 **Why it matters:** Currently users must run a workflow and dig through logs to understand what was actually sent to the AI. Preview mode makes prompt debugging immediate and transparent.
 
@@ -241,9 +241,9 @@ A **Preview** button on each prompt card in the dashboard shows the fully resolv
 
 #### 1.8 BMAD Workflow Templates
 
-**Priority: MEDIUM** | **Effort: 2–3 days** | **Doc: [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)**
+**Priority: MEDIUM** | **Effort: 2–3 days** | **Doc: [`BMAD_FOR_CTRLYOKE.md`](BMAD_FOR_CTRLYOKE.md)**
 
-BMAD (Breakthrough Method of Agile AI-Driven Development) maps directly onto FlightPath's workflow model. Add self-contained agent prompt files (`analyst`, `pm`, `architect`, `developer`, `qa`) and workflow templates (Quick Flow, Full Method, Brownfield). Zero core changes — purely new template content.
+BMAD (Breakthrough Method of Agile AI-Driven Development) maps directly onto ctrlyoke's workflow model. Add self-contained agent prompt files (`analyst`, `pm`, `architect`, `developer`, `qa`) and workflow templates (Quick Flow, Full Method, Brownfield). Zero core changes — purely new template content.
 
 **Why it matters:** Opinionated "best practice" multi-agent workflow out of the box. Demonstrates the full power of multi-step orchestration to new users. High discoverability in README and marketplace listing.
 
@@ -279,7 +279,7 @@ Opt-in anonymous usage telemetry via `@vscode/extension-telemetry` (Azure Applic
 
 Templates currently require manual `{placeholder}` replacement. Setup scripts run automatically when a template is instantiated, auto-populating variables by inspecting the repository (directory structure, detected framework, repo name). Extends `WorkflowTemplate` type with `setupScript?: string`.
 
-**Why it matters:** Closes the gap between "I imported a template" and "this workflow is ready to run on my codebase." Makes FlightPath feel intelligent rather than generic.
+**Why it matters:** Closes the gap between "I imported a template" and "this workflow is ready to run on my codebase." Makes ctrlyoke feel intelligent rather than generic.
 
 ---
 
@@ -292,7 +292,7 @@ Two subsystems:
 - **`AgentsFileResolver`**: Walk parent directories to find `AGENTS.md` files and inject discovered content as `<projectInstructions>` XML into CLI prompts (same discovery pattern as CLAUDE.md/GEMINI.md)
 - **`GenerateAgentsWorkflow` command**: Multi-prompt workflow template that analyzes the directory tree and generates a comprehensive `AGENTS.md`, validated by an end condition script
 
-**Why it matters:** AGENTS.md is becoming the standard project context file for AI coding assistants (GitHub, Anthropic, Google all support it). FlightPath should be the tool that generates and leverages these files.
+**Why it matters:** AGENTS.md is becoming the standard project context file for AI coding assistants (GitHub, Anthropic, Google all support it). ctrlyoke should be the tool that generates and leverages these files.
 
 **Dependencies:** Template setup scripts (2.3) makes the generation workflow more robust.
 
@@ -335,7 +335,7 @@ VitePress site in `docs-site/` with:
 
 - Marketing homepage (hero section, feature highlights, harness logos, demo GIF)
 - Getting Started guide
-- Workflow Reference (schema auto-generated from `prompt-schema.json`)
+- Workflow Reference (schema auto-generated from `workflow-schema.json`)
 - Harness Configuration, CLI Reference, MCP Reference
 - Tutorials
 - Deployed to GitHub Pages via GitHub Actions on push to main
@@ -372,11 +372,11 @@ A new step type (`type: workflow`) that invokes another workflow file as a sub-s
 
 **Priority: MEDIUM** | **Effort: 2–3 weeks**
 
-The `flightpath-mcp` binary exists but MCP tool coverage may be incomplete. Harden the MCP interface to turn FlightPath into a platform other AI assistants can drive directly:
+The `ctrlyoke-mcp` binary exists but MCP tool coverage may be incomplete. Harden the MCP interface to turn ctrlyoke into a platform other AI assistants can drive directly:
 
 - Complete tool surface: `queue_workflow`, `get_status`, `pause`, `resume`, `cancel`, `get_output`, `list_runs`
 - Token-based authentication
-- MCP tool schema validation against `prompt-schema.json`
+- MCP tool schema validation against `workflow-schema.json`
 - Integration tests and usage guide for Claude Desktop, Cursor, and other MCP clients
 
 ---
@@ -385,7 +385,7 @@ The `flightpath-mcp` binary exists but MCP tool coverage may be incomplete. Hard
 
 **Priority: LOW** | **Effort: 1–2 weeks** | **Doc: [`CLINE_INTEGRATION_PLAN.md`](CLINE_INTEGRATION_PLAN.md)**
 
-Add `cline-cli` harness. Expands FlightPath's coverage to the popular open-source Cline agent. Follows the established `ICliProvider` composition pattern — no core changes.
+Add `cline-cli` harness. Expands ctrlyoke's coverage to the popular open-source Cline agent. Follows the established `ICliProvider` composition pattern — no core changes.
 
 ---
 
@@ -409,7 +409,7 @@ Detect and record when users type follow-up commands or additional prompts in th
 
 **Priority: LOW** | **Effort: unknown** | **Doc: [`INLINE_SUGGESTIONS_PLAN.md`](INLINE_SUGGESTIONS_PLAN.md)**
 
-Surface AI-generated inline suggestions in the editor, driven by FlightPath workflow outputs — a tighter loop between workflow execution and code editing.
+Surface AI-generated inline suggestions in the editor, driven by ctrlyoke workflow outputs — a tighter loop between workflow execution and code editing.
 
 ---
 
@@ -439,7 +439,7 @@ _Longer-term or requiring external decisions before implementation._
 
 **Priority: SPECULATIVE** | **Effort: 2–4 weeks**
 
-`FlightPath: Generate Workflow from Description` command — natural language description → `.flightpath.yaml` with appropriate prompts, end conditions, and agent assignments. Schema-validated before saving.
+`ctrlyoke: Generate Workflow from Description` command — natural language description → `.ctrlyoke.yaml` with appropriate prompts, end conditions, and agent assignments. Schema-validated before saving.
 
 **Dependencies:** AGENTS.md generation (2.4), template setup scripts (2.3), stable schema.
 
@@ -471,7 +471,7 @@ Pre-conditions:
 
 Actions:
 
-- `vsce login nhickster`
+- `vsce login fuzzynova`
 - `vsce publish`
 - Open VSX Registry publish (`ovsx publish`) for VSCodium users
 - Request VS Code Marketplace featured listing via GitHub issue on `microsoft/vscode-discussions`
@@ -556,7 +556,7 @@ _Dates removed: the prior timeline asserted a May 12, 2026 release that never ha
 | [`RAW_PROMPT_MODE_PLAN.md`](RAW_PROMPT_MODE_PLAN.md)                         | NOT_IMPLEMENTED | 1.3          |
 | [`SCRIPT_FIELD_COMPLETIONS_PLAN.md`](SCRIPT_FIELD_COMPLETIONS_PLAN.md)       | NOT_IMPLEMENTED | 1.5          |
 | [`DRY_RUN_PREVIEW_PLAN.md`](DRY_RUN_PREVIEW_PLAN.md)                         | NOT_IMPLEMENTED | 1.6          |
-| [`BMAD_FOR_FLIGHTPATH.md`](BMAD_FOR_FLIGHTPATH.md)                           | NOT_IMPLEMENTED | 1.8          |
+| [`BMAD_FOR_CTRLYOKE.md`](BMAD_FOR_CTRLYOKE.md)                               | NOT_IMPLEMENTED | 1.8          |
 | [`TELEMETRY_PLAN.md`](TELEMETRY_PLAN.md)                                     | NOT_IMPLEMENTED | 2.2          |
 | [`TEMPLATE_SETUP_SCRIPTS.md`](TEMPLATE_SETUP_SCRIPTS.md)                     | NOT_IMPLEMENTED | 2.3          |
 | [`AGENTS_MD_GENERATION.md`](AGENTS_MD_GENERATION.md)                         | NOT_IMPLEMENTED | 2.4          |

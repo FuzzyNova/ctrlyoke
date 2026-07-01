@@ -2,19 +2,19 @@
 
 ## Overview
 
-When FlightPath completes a prompt in interactive mode, the CLI TUI often stays open.
+When ctrlyoke completes a prompt in interactive mode, the CLI TUI often stays open.
 Users can then type directly into that terminal, or the harness can auto-continue later
-after an async subagent completes. Today both cases are largely invisible to FlightPath:
+after an async subagent completes. Today both cases are largely invisible to ctrlyoke:
 the original prompt completes, the per-prompt monitor shuts down, and any later activity
 in the still-live session is no longer tracked.
 
 This plan changes the design from "keep the prompt monitor alive longer" to a
 **session-level watcher** that attaches to the live interactive session after prompt
-completion and keeps observing that session until the PTY actually ends or FlightPath
+completion and keeps observing that session until the PTY actually ends or ctrlyoke
 reclaims it.
 
 See also: `CONTINUATION_MODE_PLAN.md`. That plan is still the right answer for
-FlightPath-originated follow-up prompts. This plan covers activity that FlightPath
+ctrlyoke-originated follow-up prompts. This plan covers activity that ctrlyoke
 does not dispatch itself:
 
 - the user typing directly into the TUI
@@ -28,13 +28,13 @@ does not dispatch itself:
 
 Current behavior:
 
-1. FlightPath sends prompt N
+1. ctrlyoke sends prompt N
 2. Completion detected for prompt N
 3. Prompt-scoped log monitoring stops
 4. Terminal remains open
 5. User types another prompt directly in the TUI
 6. Harness responds
-7. **FlightPath sees none of it**
+7. **ctrlyoke sees none of it**
 
 Missing features:
 
@@ -47,7 +47,7 @@ Missing features:
 
 This is a different but related bug. In interactive mode, Copilot CLI can end its top-level
 turn, fire a completion-like hook, then later resume automatically when a subagent finishes.
-From FlightPath's perspective the session looked done, but the TUI was actually still alive
+From ctrlyoke's perspective the session looked done, but the TUI was actually still alive
 and still capable of producing more output.
 
 Copilot's hook surface is richer than Claude's here:
@@ -62,7 +62,7 @@ Copilot's hook surface is richer than Claude's here:
 - `Stop`
 
 That means the fix is not just "track manual follow-ups". We also need to determine which
-hooks actually fire in the async-subagent resume path so FlightPath stops treating the first
+hooks actually fire in the async-subagent resume path so ctrlyoke stops treating the first
 top-level stop as definitive session death.
 
 ---
@@ -81,7 +81,7 @@ Instead, add a separate **session-level watcher** with these properties:
 - can outlive any single prompt execution
 - stops when:
   - the PTY exits
-  - FlightPath starts a new run that takes ownership of the session
+  - ctrlyoke starts a new run that takes ownership of the session
   - the terminal is explicitly closed
   - an inactivity timeout expires, if we choose to add one
 
@@ -118,7 +118,7 @@ Initial target:
 - create observed session-turn records outside the dispatch queue
 - surface them in output history / dashboard as tracked session activity
 - record prompt text, response text, timestamps, token stats, and session ID
-- visually distinguish them from FlightPath-dispatched prompts
+- visually distinguish them from ctrlyoke-dispatched prompts
 
 Queue/editor integration can be considered later if replay / undo / re-run becomes necessary.
 
@@ -177,7 +177,7 @@ function isHumanPrompt(event: ClaudeProviderEvent): boolean {
 Additional guards:
 
 - only consider events after the watcher's current offset / timestamp
-- suppress prompts FlightPath injected itself in continuation inject mode
+- suppress prompts ctrlyoke injected itself in continuation inject mode
 - require the watcher to correlate a prompt boundary with subsequent assistant output
 
 ### 4. Capture the observed turn
@@ -241,12 +241,12 @@ Possible outcomes:
 
 ## Edge Cases & Challenges
 
-### Race: terminal follow-up vs FlightPath-dispatched prompt
+### Race: terminal follow-up vs ctrlyoke-dispatched prompt
 
-If the user types in the terminal while FlightPath is about to resume or restart the session:
+If the user types in the terminal while ctrlyoke is about to resume or restart the session:
 
 - the session log remains authoritative
-- snapshot the session watcher's last processed offset before FlightPath reclaims the PTY
+- snapshot the session watcher's last processed offset before ctrlyoke reclaims the PTY
 - drain any intervening events before shutdown / restart
 
 ### Session reuse with `--resume`
@@ -258,12 +258,12 @@ If the same session log keeps growing across resumed runs:
 
 ### Inject mode overlap
 
-Injected FlightPath prompts can look like manual terminal prompts in the log.
+Injected ctrlyoke prompts can look like manual terminal prompts in the log.
 
 Mitigation:
 
 - maintain a short-lived "pending inject" correlation marker
-- when the matching user/log event appears, attribute it to FlightPath dispatch, not manual follow-up
+- when the matching user/log event appears, attribute it to ctrlyoke dispatch, not manual follow-up
 
 ### finalStep interaction
 
@@ -284,8 +284,8 @@ The tracker should require both:
 
 |                          | Session-Level Follow-up Tracking          | Continuation Mode (inject)               |
 | ------------------------ | ----------------------------------------- | ---------------------------------------- |
-| **Who sends the prompt** | User or harness, outside FlightPath       | FlightPath                               |
-| **Ownership of the turn**| Observed after the fact                   | Fully owned by FlightPath                |
+| **Who sends the prompt** | User or harness, outside ctrlyoke         | ctrlyoke                                 |
+| **Ownership of the turn**| Observed after the fact                   | Fully owned by ctrlyoke                  |
 | **Tracking fidelity**    | Best-effort, session-level observation    | Full                                     |
 | **Best for**             | Manual TUI use, async harness continuation| Workflow-driven follow-up execution      |
 
@@ -293,7 +293,7 @@ The two features are complementary:
 
 - user types in terminal → tracked by session watcher
 - harness auto-continues later → tracked by session watcher
-- FlightPath sends next prompt via inject mode → tracked as a normal dispatched prompt
+- ctrlyoke sends next prompt via inject mode → tracked as a normal dispatched prompt
 
 ---
 

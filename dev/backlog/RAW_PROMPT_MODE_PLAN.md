@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add a new `rawPromptMode` execution property that bypasses FlightPath's entire context expansion and categorized temp file pipeline. When enabled, the prompt text is sent verbatim to the harness — no `@path`/`#sym:`/`#selection:` expansion, no categorized temp files, no agent/skills injection, no prior context wrapping. The prompt is sent inline (if it qualifies as a simple prompt) or via a single bare temp file with no instruction wrapper.
+Add a new `rawPromptMode` execution property that bypasses ctrlyoke's entire context expansion and categorized temp file pipeline. When enabled, the prompt text is sent verbatim to the harness — no `@path`/`#sym:`/`#selection:` expansion, no categorized temp files, no agent/skills injection, no prior context wrapping. The prompt is sent inline (if it qualifies as a simple prompt) or via a single bare temp file with no instruction wrapper.
 
 ## Relationship to Backtick Context Suppression
 
@@ -24,9 +24,9 @@ Implement backtick suppression first — it is the more broadly useful primitive
 
 Three distinct use cases drive this feature:
 
-1. **Bypass context building**: Users who manage their own context references and don't want FlightPath touching the prompt text. (Note: for inline prompts, backtick wrapping the whole prompt is equivalent and requires no schema config.)
-2. **FlightPath self-debugging**: When debugging a FlightPath session (e.g. "debug this output I got from prompt A"), the debug prompt itself contains raw FlightPath instruction strings (`using these attachment excerpts @...`). Without raw mode, FlightPath would attempt to re-expand those references, corrupting the debug prompt.
-3. **Trust skeptics**: Some users distrust harness wrappers that "modify the prompt." Raw mode gives them a verifiable pass-through while still using FlightPath for automation.
+1. **Bypass context building**: Users who manage their own context references and don't want ctrlyoke touching the prompt text. (Note: for inline prompts, backtick wrapping the whole prompt is equivalent and requires no schema config.)
+2. **ctrlyoke self-debugging**: When debugging a ctrlyoke session (e.g. "debug this output I got from prompt A"), the debug prompt itself contains raw ctrlyoke instruction strings (`using these attachment excerpts @...`). Without raw mode, ctrlyoke would attempt to re-expand those references, corrupting the debug prompt.
+3. **Trust skeptics**: Some users distrust harness wrappers that "modify the prompt." Raw mode gives them a verifiable pass-through while still using ctrlyoke for automation.
 
 ## Schema Changes
 
@@ -37,13 +37,13 @@ Add `rawPromptMode` to the `executionProperties` definition's `properties` block
 ```json
 "rawPromptMode": {
   "type": "boolean",
-  "description": "When true, bypass all FlightPath context expansion (no @path/@sym/#selection expansion, no agent/skills injection, no prior context wrapping, no categorized temp files). The prompt text is sent verbatim to the harness — inline if short and safe, otherwise via a single raw temp file. Incompatible with agent, skills, mcpServers (flightpath), and priorContext; those fields are ignored when rawPromptMode is true."
+  "description": "When true, bypass all ctrlyoke context expansion (no @path/@sym/#selection expansion, no agent/skills injection, no prior context wrapping, no categorized temp files). The prompt text is sent verbatim to the harness — inline if short and safe, otherwise via a single raw temp file. Incompatible with agent, skills, mcpServers (ctrlyoke), and priorContext; those fields are ignored when rawPromptMode is true."
 }
 ```
 
 ## Type System Changes
 
-### `src/types/FlightPathTypes.ts`
+### `src/types/CtrlYokeTypes.ts`
 
 Add to `ExecutionProperties` interface:
 
@@ -83,7 +83,7 @@ private static resolveRawPromptMode(
 
 ## Parser Changes
 
-### `src/flightpath/PromptFileParser.ts`
+### `src/core/PromptFileParser.ts`
 
 Add `rawPromptMode` copying in both:
 
@@ -94,7 +94,7 @@ Follow the exact pattern used by `resumeSession`.
 
 ## Core Logic Changes
 
-### `src/flightpath/harness/shared/CliPromptPreparer.ts`
+### `src/core/harness/shared/CliPromptPreparer.ts`
 
 This is the primary bypass point. The goal is to short-circuit `preparePrompt()` before it calls `buildPromptSections()` (which triggers context expansion, agent/skills expansion, and temp file creation).
 
@@ -137,11 +137,11 @@ Key properties of `prepareRawPrompt()`:
 - **Single temp file, no instruction wrapper** — the file reference uses the harness's natural `@file` syntax with no preamble text.
 - **No excerpt/categorized file splitting** — one file, raw content.
 
-### `src/flightpath/HarnessIntegration.ts`
+### `src/core/HarnessIntegration.ts`
 
 No changes required to the base class. The bypass happens upstream in `CliPromptPreparer` before `buildPromptSections()` is called. `isSimplePrompt()` is already accessible via the `deps` injection on `CliPromptPreparer`.
 
-### `src/flightpath/harness/chat/CopilotChatIntegration.ts`
+### `src/core/harness/chat/CopilotChatIntegration.ts`
 
 If `CopilotChatIntegration` has its own prompt preparation path that calls `buildPromptSections()` or similar, the same `rawPromptMode` guard should be added there. Audit this file during implementation.
 
@@ -166,33 +166,33 @@ if (ignored.length > 0) {
 }
 ```
 
-`Log.warn` should surface in the FlightPath output channel so the user sees it during execution — verify this is the case during implementation, and if not, use the appropriate output-visible call.
+`Log.warn` should surface in the ctrlyoke output channel so the user sees it during execution — verify this is the case during implementation, and if not, use the appropriate output-visible call.
 
 ### Text-level references → no warning
 
 Context references in the prompt text itself (`@path/to/file`, `#sym:path:symbol`, `#selection:path:N-N`) are intentionally left unexpanded in raw mode — that's the point. Do **not** scan the prompt text for these patterns and warn about them. A user writing `@src/foo.ts` in a rawPromptMode prompt knows it will be passed through verbatim; a warning here would be actively wrong.
 
-## Compatibility with `mcpServers: ["flightpath"]`
+## Compatibility with `mcpServers: ["ctrlyoke"]`
 
-`rawPromptMode` is **fully compatible** with `mcpServers: ["flightpath"]`. The FlightPath MCP server is attached via a generated config file passed as a CLI argument — it does not inject any instructions into the prompt text. The AI discovers the MCP server's tools and their built-in descriptions through the MCP protocol itself. Raw mode skips the prompt instruction wrapper but leaves the MCP config attachment untouched.
+`rawPromptMode` is **fully compatible** with `mcpServers: ["ctrlyoke"]`. The ctrlyoke MCP server is attached via a generated config file passed as a CLI argument — it does not inject any instructions into the prompt text. The AI discovers the MCP server's tools and their built-in descriptions through the MCP protocol itself. Raw mode skips the prompt instruction wrapper but leaves the MCP config attachment untouched.
 
 ## Files Changed (Summary)
 
 | File                                                    | Change                                                                           |
 | ------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `schemas/prompt-schema.json`                            | Add `rawPromptMode` boolean to `executionProperties` definition                  |
-| `src/types/FlightPathTypes.ts`                          | Add `rawPromptMode?: boolean` to `ExecutionProperties`                           |
+| `src/types/CtrlYokeTypes.ts`                            | Add `rawPromptMode?: boolean` to `ExecutionProperties`                           |
 | `src/utils/PropertyResolver.ts`                         | Add to `ResolvedProperties`, add `resolveRawPromptMode()`, wire into `resolve()` |
-| `src/flightpath/PromptFileParser.ts`                    | Copy `rawPromptMode` in `buildPromptStep()` and `copyWorkflowLevelProperties()`  |
-| `src/flightpath/harness/shared/CliPromptPreparer.ts`    | Add early-return guard + `prepareRawPrompt()` method                             |
-| `src/flightpath/harness/chat/CopilotChatIntegration.ts` | Audit + add guard if it has its own prep path                                    |
+| `src/core/PromptFileParser.ts`                          | Copy `rawPromptMode` in `buildPromptStep()` and `copyWorkflowLevelProperties()`  |
+| `src/core/harness/shared/CliPromptPreparer.ts`          | Add early-return guard + `prepareRawPrompt()` method                             |
+| `src/core/harness/chat/CopilotChatIntegration.ts`       | Audit + add guard if it has its own prep path                                    |
 | `schemas/prompt-schema.yaml`                            | Regenerated via `npm run generate-schema` (do not hand-edit)                     |
 
 ## Windows / node-pty Character Limit Analysis
 
 ### Why the 32767-char limit still applies
 
-FlightPath no longer uses VS Code's built-in terminal (`vscode.window.createTerminal` + `terminal.sendText()`). Interactive mode now spawns the AI CLI via node-pty (`PtyProcessManager.spawnPty()`). On Windows, `CliTransportCoordinator.startInteractiveProcess()` builds shell args as:
+ctrlyoke no longer uses VS Code's built-in terminal (`vscode.window.createTerminal` + `terminal.sendText()`). Interactive mode now spawns the AI CLI via node-pty (`PtyProcessManager.spawnPty()`). On Windows, `CliTransportCoordinator.startInteractiveProcess()` builds shell args as:
 
 ```typescript
 ["-NoProfile", "-Command", String(tuiCommand)];
@@ -222,7 +222,7 @@ The prompt is built (temp files written or inline text chosen) **before** the ex
 | > 300 chars, ≤ 32,767 chars | Any         | Single bare temp file — no instruction wrapper                                                                          |
 | > 32,767 chars              | Any         | Single bare temp file (same as above — the temp file path on the command line is short; only the file content is large) |
 
-The temp file path (`@.flightpath/temp/<timestamp>-<name>.prompt.md`) is always short enough to fit on the command line, regardless of how long the file's content is. So for rawPromptMode, a prompt of any length is handled safely: short + safe chars → inline, anything else → one bare temp file.
+The temp file path (`@.ctrlyoke/temp/<timestamp>-<name>.prompt.md`) is always short enough to fit on the command line, regardless of how long the file's content is. So for rawPromptMode, a prompt of any length is handled safely: short + safe chars → inline, anything else → one bare temp file.
 
 There is no distinct "> 32767 chars" error case because the long content goes into a file, not onto the command line. The 32767 limit only constrains what can be passed **inline**, and we cap inline at 300 chars by design.
 

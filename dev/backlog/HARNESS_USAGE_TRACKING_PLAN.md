@@ -8,12 +8,12 @@
 
 ## Executive Summary
 
-FlightPath can provide a useful unified usage display, but the implementation should use different collection strategies per harness:
+ctrlyoke can provide a useful unified usage display, but the implementation should use different collection strategies per harness:
 
 1. **Claude Code:** use status-line JSON for live quota windows when a Claude session is running; parse local transcripts for observed token/cost history; enterprise/admin APIs are opt-in only.
 2. **Codex CLI:** parse local session JSONL `token_count` events for both observed tokens and last-known rate-limit windows; no standalone `codex status` command exists in the checked version.
 3. **GitHub Copilot CLI:** use CLI session surfaces and JSON/session output for observed usage; personal monthly AI credit balance appears in GitHub/Copilot UI and CLI TUI surfaces, but no documented personal REST/GraphQL quota API was found.
-4. **All other harnesses:** start with FlightPath-observed token usage only.
+4. **All other harnesses:** start with ctrlyoke-observed token usage only.
 
 The MVP should be **observed usage plus last-known provider quota**. It should not try to fabricate exact remaining quota when the provider only exposes session-local or UI-only data.
 
@@ -36,7 +36,7 @@ Confirmed surfaces:
 
 Implementation implications:
 
-- Add a **Claude status-line collector**. Generate a tiny status-line script/command that writes the JSON payload to a FlightPath temp file. Use it only for live sessions FlightPath starts or sessions where the user opts in.
+- Add a **Claude status-line collector**. Generate a tiny status-line script/command that writes the JSON payload to a ctrlyoke temp file. Use it only for live sessions ctrlyoke starts or sessions where the user opts in.
 - Parse `rate_limits` from the status-line payload for provider quota:
   - `five_hour.used_percentage`
   - `five_hour.resets_at`
@@ -76,7 +76,7 @@ Implementation implications:
 
 - Add a **Codex session-log collector** that tails the current run's rollout file and extracts the newest `token_count` event.
 - Treat `rate_limits.primary` and `rate_limits.secondary` as **last-known provider quota**, not an always-fresh global status. It updates when Codex emits token-count events.
-- Use `codex exec --json` / FlightPath's existing Codex parser for FlightPath-launched run token usage.
+- Use `codex exec --json` / ctrlyoke's existing Codex parser for ctrlyoke-launched run token usage.
 - Do not shell out to `codex exec "/status"` as a quota probe by default; that would likely consume model quota and still may not produce stable machine-readable status.
 - Consider a later optional investigation of `logs_2.sqlite`, but prefer rollout JSONL first because it already contains the needed rate-limit fields.
 
@@ -114,7 +114,7 @@ Confidence: high for CLI TUI/session surfaces; high that documented REST APIs ar
 
 ### Existing VS Code Extensions
 
-Searches for VS Code extensions around "Copilot quota", "Copilot usage", "premium requests", "Claude usage", and "Codex status" did not find a mature unified quota panel. Absence of evidence is not proof none exists, but FlightPath still has a strong product reason to own this because harness choice is already part of workflow execution.
+Searches for VS Code extensions around "Copilot quota", "Copilot usage", "premium requests", "Claude usage", and "Codex status" did not find a mature unified quota panel. Absence of evidence is not proof none exists, but ctrlyoke still has a strong product reason to own this because harness choice is already part of workflow execution.
 
 ---
 
@@ -124,17 +124,17 @@ Add a compact **Usage** surface near existing harness controls:
 
 - Footer harness picker chip: `63% 5h`, `24% week`, `observed only`, `needs auth`, or `stale`.
 - Settings drawer usage cards with details per harness.
-- Command: `FlightPath: Refresh Harness Usage`.
-- Optional command: `FlightPath: Open Provider Usage Dashboard`.
+- Command: `ctrlyoke: Refresh Harness Usage`.
+- Optional command: `ctrlyoke: Open Provider Usage Dashboard`.
 
 Each harness card should show:
 
 - provider display name
-- data source: `provider-live`, `provider-log`, `flightpath-observed`, `enterprise-api`, or `unavailable`
+- data source: `provider-live`, `provider-log`, `ctrlyoke-observed`, `enterprise-api`, or `unavailable`
 - freshness timestamp
 - active windows, if known
 - reset time, if known
-- observed FlightPath token totals for today/week/month
+- observed ctrlyoke token totals for today/week/month
 - last safe error code
 
 Usage lookup must never block workflow execution.
@@ -149,7 +149,7 @@ Create a normalized usage contract in `src/types/UsageTypes.ts`:
 export type HarnessUsageSource =
   | "provider-live"
   | "provider-log"
-  | "flightpath-observed"
+  | "ctrlyoke-observed"
   | "enterprise-api"
   | "unavailable";
 
@@ -204,14 +204,14 @@ Important: model multiple windows. Claude exposes five-hour and seven-day window
 
 ### 1. HarnessUsageService
 
-Add `HarnessUsageService` under `src/flightpath/orchestration/` or `src/flightpath/harness/shared/usage/`.
+Add `HarnessUsageService` under `src/core/orchestration/` or `src/core/harness/shared/usage/`.
 
 Responsibilities:
 
 - maintain an in-memory cache keyed by harness ID
 - debounce refreshes
 - expose `refreshHarnessUsage(harnessId)` and `refreshAllHarnessUsage()`
-- merge provider snapshots with FlightPath-observed token stats
+- merge provider snapshots with ctrlyoke-observed token stats
 - emit dashboard updates
 - avoid writing account-specific details to logs
 
@@ -240,9 +240,9 @@ Adapters:
 
 ### 3. Observed Usage Store
 
-Persist a small workspace-local rollup in `.flightpath/.usage/observed-usage.json`.
+Persist a small workspace-local rollup in `.ctrlyoke/.usage/observed-usage.json`.
 
-This is not a quota source. It records what FlightPath launched or safely observed locally.
+This is not a quota source. It records what ctrlyoke launched or safely observed locally.
 
 ### 4. Webview Messages
 
@@ -270,7 +270,7 @@ export interface HarnessUsageUpdatedMessage {
 - [ ] Add `UsageTypes.ts`
 - [ ] Add `ObservedHarnessUsageStore`
 - [ ] Record token stats after each prompt/finalStep completion
-- [ ] Render usage cards showing FlightPath-observed totals
+- [ ] Render usage cards showing ctrlyoke-observed totals
 - [ ] Add tests for rollup bucketing, corrupt-file recovery, and stale snapshots
 
 ### Phase 2: Claude And Codex Provider Signals
@@ -312,7 +312,7 @@ Non-negotiables:
 Potential setting:
 
 ```json
-"flightpath.usageTracking": {
+"ctrlyoke.usageTracking": {
   "enabled": true,
   "providerRefreshEnabled": true,
   "persistObservedUsage": true,
@@ -325,8 +325,8 @@ Potential setting:
 ## Open Questions Left
 
 1. Can Copilot `/statusline ai-credits ai-used` be captured as structured data, or only as TUI text?
-2. Does Codex guarantee `token_count.rate_limits` rollout events as a stable contract, or should FlightPath treat this as best-effort internal parsing?
-3. Should Claude status-line capture be enabled automatically for FlightPath-started Claude sessions, or only after user opt-in?
+2. Does Codex guarantee `token_count.rate_limits` rollout events as a stable contract, or should ctrlyoke treat this as best-effort internal parsing?
+3. Should Claude status-line capture be enabled automatically for ctrlyoke-started Claude sessions, or only after user opt-in?
 4. Should observed usage be workspace-local only, or should users be able to opt into a user-level aggregate across workspaces?
 
 ---

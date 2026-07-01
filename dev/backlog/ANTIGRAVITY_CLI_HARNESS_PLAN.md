@@ -1,4 +1,4 @@
-# Replace Gemini with Antigravity CLI (`agy`) in FlightPath
+# Replace Gemini with Antigravity CLI (`agy`) in ctrlyoke
 
 **Harness ID**: `antigravity-cli`
 **Binary**: `agy` (**v1.0.14** observed/re-verified; original research was v1.0.8)
@@ -10,7 +10,7 @@
 
 ## Background
 
-Google has deprecated the Gemini CLI; `gemini` no longer works in FlightPath (it errors when invoked) and is being replaced by **Antigravity (`agy`)** as Google's primary AI coding CLI. Unlike the original plan (which kept Gemini alongside Antigravity), Nathan has decided to **remove Gemini support outright** — there is no reason to keep a broken harness. This document covers both halves:
+Google has deprecated the Gemini CLI; `gemini` no longer works in ctrlyoke (it errors when invoked) and is being replaced by **Antigravity (`agy`)** as Google's primary AI coding CLI. Unlike the original plan (which kept Gemini alongside Antigravity), Nathan has decided to **remove Gemini support outright** — there is no reason to keep a broken harness. This document covers both halves:
 
 - **Part A** — research findings from running `agy` locally (replaces the old speculative "Open Questions").
 - **Part B** — add the `antigravity-cli` harness.
@@ -26,9 +26,9 @@ Re-ran `agy` locally (now **1.0.14**, up from 1.0.8) and re-checked the docs/cha
 
 1. **Headless resume bug is FIXED (1.0.9).** The 1.0.9 changelog explicitly fixes "headless print mode resumption (`--conversation`/`-c` `-p ...`) … dump[ing] the entire historical conversation transcript instead of only printing the newly generated response." Since we ship against ≥1.0.14, the A.4 "keep only the final turn" workaround is **no longer required** — require `agy >= 1.0.9` instead. (Still worth a defensive guard, but not the primary path.)
 
-2. **Headless `-p` still emits ZERO bytes in a non-TTY pipe — re-confirmed on 1.0.14.** `echo … | agy -p "…"` exits `0` with empty stdout/stderr; the process tears down (`Language server shutting down`) without running the turn. This is now the **single biggest implementation risk**. FlightPath spawns via `PtyProcessManager` (a real pty), which is a *different* context than a plain pipe, so it may work — but this MUST be verified empirically inside FlightPath's pty spawn before building on `--print`. If `-p` proves pty-dependent and unreliable, the fallback is interactive (`-i`) + `Stop` hook for *all* runs, not just interactive ones. **Do this verification first.**
+2. **Headless `-p` still emits ZERO bytes in a non-TTY pipe — re-confirmed on 1.0.14.** `echo … | agy -p "…"` exits `0` with empty stdout/stderr; the process tears down (`Language server shutting down`) without running the turn. This is now the **single biggest implementation risk**. ctrlyoke spawns via `PtyProcessManager` (a real pty), which is a *different* context than a plain pipe, so it may work — but this MUST be verified empirically inside ctrlyoke's pty spawn before building on `--print`. If `-p` proves pty-dependent and unreliable, the fallback is interactive (`-i`) + `Stop` hook for *all* runs, not just interactive ones. **Do this verification first.**
 
-3. **New flags: `--project` / `--new-project` (1.0.12).** `agy` now has an explicit project concept. Project-scoped permission config in `~/.gemini/config/projects/<id>.json` **takes precedence** over global `~/.gemini/antigravity-cli/settings.json` (1.0.12). Default is `default-cli-project`. FlightPath can ignore these for v1 (let agy default), but be aware permission/MCP resolution is now project-aware.
+3. **New flags: `--project` / `--new-project` (1.0.12).** `agy` now has an explicit project concept. Project-scoped permission config in `~/.gemini/config/projects/<id>.json` **takes precedence** over global `~/.gemini/antigravity-cli/settings.json` (1.0.12). Default is `default-cli-project`. ctrlyoke can ignore these for v1 (let agy default), but be aware permission/MCP resolution is now project-aware.
 
 4. **MCP workspace path is genuinely unsettled — do NOT hard-assume `.agents/mcp_config.json` loads.** Open issue [#60](https://github.com/google-antigravity/antigravity-cli/issues/60) reports a project-local `mcp_config.json` is *discovered but silently ignored* (only HOME-level config spawns servers); the 1.0.14 changelog says it "Fixed an MCP configuration path mismatch in the CLI and permission manager." Community guides say workspace `.agents/mcp_config.json` works; the issue used `.antigravitycli/` (a different/wrong path). **Net: verify on 1.0.14 that `.agents/mcp_config.json` actually spawns a server before relying on it; if not, fall back to the global `~/.gemini/config/mcp_config.json`** (this file exists locally and is the confirmed global path). MCP is the area most likely to need a global-file fallback that breaks per-workflow isolation.
 
@@ -67,7 +67,7 @@ Subcommands: changelog, help, install, models, plugin/plugins, update
 
 > **1.0.14 update**: `--new-project` and `--project` were added in 1.0.12. The rest of the flag surface is unchanged from 1.0.8 — still **no `--output-format`, `--stream-json`, `--session-id`, or `--mcp-config`.**
 
-**There is NO `--output-format`, NO `--stream-json`, NO `--session-id`, NO `--mcp-config` flag.** This is the critical departure from Gemini (which FlightPath drives with `--prompt ... --output-format stream-json --session-id <id>`).
+**There is NO `--output-format`, NO `--stream-json`, NO `--session-id`, NO `--mcp-config` flag.** This is the critical departure from Gemini (which ctrlyoke drives with `--prompt ... --output-format stream-json --session-id <id>`).
 
 ### A.2 It's a Gemini fork that runs Claude models
 
@@ -124,7 +124,7 @@ Resume with `--continue`/`-c` (most recent) or `--conversation <uuid>` (specific
 
 With no `--output-format` flag, `agy --print "..."` is expected to print the model's response as **plain text** to stdout. In local testing under a piped (non-TTY) stdout, `--print` exited `0` with **zero bytes** even though the log showed a conversation was created and `streamGenerateContent` was called. Likely causes: print mode needs a TTY, or quota/`--print-timeout` interaction. The parser must tolerate empty stdout gracefully.
 
-> ⚠️ **Re-confirmed on 1.0.14 (2026-06-30) — still empty in non-TTY.** `echo … | agy -p "…"` again exits `0` with zero bytes; the cli.log shows the language server shutting down without running the turn. This did **not** improve across six releases, so treat "`-p` needs a real pty" as the working hypothesis. **This is the #1 verification item and must be done before any implementation:** spawn `agy -p` through FlightPath's `PtyProcessManager` (node-pty allocates a real pty, unlike a shell pipe) and confirm non-empty stdout. If it stays empty even under node-pty, the headless path is not viable and the harness must drive **interactive `-i` + `Stop` hook for every run** (the hook payload carries the response transcript and `conversationId`). Plan for that contingency rather than discovering it mid-build. (Note: `winpty` cannot be used to test this from a non-console shell — it errors `stdin is not a tty`; the test has to run from FlightPath's own pty or a real terminal.)
+> ⚠️ **Re-confirmed on 1.0.14 (2026-06-30) — still empty in non-TTY.** `echo … | agy -p "…"` again exits `0` with zero bytes; the cli.log shows the language server shutting down without running the turn. This did **not** improve across six releases, so treat "`-p` needs a real pty" as the working hypothesis. **This is the #1 verification item and must be done before any implementation:** spawn `agy -p` through ctrlyoke's `PtyProcessManager` (node-pty allocates a real pty, unlike a shell pipe) and confirm non-empty stdout. If it stays empty even under node-pty, the headless path is not viable and the harness must drive **interactive `-i` + `Stop` hook for every run** (the hook payload carries the response transcript and `conversationId`). Plan for that contingency rather than discovering it mid-build. (Note: `winpty` cannot be used to test this from a non-console shell — it errors `stdin is not a tty`; the test has to run from ctrlyoke's own pty or a real terminal.)
 
 ### A.6 Hooks — Claude-style events (verified via official docs)
 
@@ -136,9 +136,9 @@ With no `--output-format` flag, `agy --print "..."` is expected to print the mod
 
 > **1.0.14 update**: the hook payload carries `conversationId` directly. That means **in interactive mode the session ID is available from the hook itself — no glog log parsing required** for the `-i` path. The `AntigravityLogParser` (A.3/B.1) is therefore only needed for the *headless* path's session ID, and even there `cache/last_conversations.json` may suffice — consider deferring/simplifying the log parser accordingly.
 
-This is essentially Claude's hook contract, so `AntigravityNotificationMonitor` and `flightpath-antigravity-hook.js` should be **cloned from the Claude implementations**, not Gemini's. FlightPath's logical→native event map becomes:
+This is essentially Claude's hook contract, so `AntigravityNotificationMonitor` and `ctrlyoke-antigravity-hook.js` should be **cloned from the Claude implementations**, not Gemini's. ctrlyoke's logical→native event map becomes:
 
-| FlightPath logical | Antigravity native |
+| ctrlyoke logical | Antigravity native |
 | ------------------ | ------------------ |
 | `stop`             | `Stop`             |
 | `sessionStart`     | `SessionStart`     |
@@ -154,18 +154,18 @@ This is essentially Claude's hook contract, so `AntigravityNotificationMonitor` 
 
 ### A.8 Permissions, MCP, dirs (verified)
 
-- **Permissions**: `--dangerously-skip-permissions` → FlightPath `dangerouslyAllowAll`. No `--allow-tools`/`--deny-tools` flags exist, so `allowAll`/`custom` either degrade to "prompt normally" **or** are enforced via a `PreToolUse` hook returning `{"decision":"deny"|"ask"}` (the Antigravity-native way to gate tools). Recommend the hook approach for `custom` mode.
+- **Permissions**: `--dangerously-skip-permissions` → ctrlyoke `dangerouslyAllowAll`. No `--allow-tools`/`--deny-tools` flags exist, so `allowAll`/`custom` either degrade to "prompt normally" **or** are enforced via a `PreToolUse` hook returning `{"decision":"deny"|"ask"}` (the Antigravity-native way to gate tools). Recommend the hook approach for `custom` mode.
 - `--add-dir <dir>` (repeatable) for extra workspace roots.
 - **MCP — supported (in scope), but the workspace path needs empirical confirmation on 1.0.14.** There is no `--mcp-config` flag, but agy reads MCP config from files:
   - Global: `~/.gemini/config/mcp_config.json` ← **confirmed present locally** and the reliable path.
-  - **Workspace: `.agents/mcp_config.json`** (community guides; consistent with the `.agents/` hooks dir) ← FlightPath would write this per-workflow, then clean it up.
+  - **Workspace: `.agents/mcp_config.json`** (community guides; consistent with the `.agents/` hooks dir) ← ctrlyoke would write this per-workflow, then clean it up.
   - Format: `{ "mcpServers": { "<name>": { "command", "args", "env", "disabled" } } }`.
   - **Remote servers use `serverUrl`** (NOT Gemini's `httpUrl`/`url` — silent failure if wrong). **No per-server `timeout`** key ("no longer supported"); **no inline comments**. (A *global* MCP launch timeout exists as a setting since 1.0.7, with `-1` to disable — not a per-server field.)
   - Migration helper: `agy plugin import gemini`.
 
-  > ⚠️ **1.0.14 caveat — verify workspace MCP loading before relying on it.** Open issue [#60](https://github.com/google-antigravity/antigravity-cli/issues/60) reported a project-local `mcp_config.json` being *discovered but silently ignored* (the reporter used the path `.antigravitycli/mcp_config.json`; only HOME-level config spawned servers), and the **1.0.14 changelog claims it "Fixed an MCP configuration path mismatch in the CLI and permission manager."** Because of this churn, **do not assume `.agents/mcp_config.json` loads** — write it, start a server, and confirm it actually spawns on the shipped agy version. **Fallback if it doesn't:** write to the global `~/.gemini/config/mcp_config.json` (reliable but breaks per-workflow isolation — would need careful namespacing + teardown of FlightPath's entries). This is the one MCP decision that can't be finalized from docs alone.
+  > ⚠️ **1.0.14 caveat — verify workspace MCP loading before relying on it.** Open issue [#60](https://github.com/google-antigravity/antigravity-cli/issues/60) reported a project-local `mcp_config.json` being *discovered but silently ignored* (the reporter used the path `.antigravitycli/mcp_config.json`; only HOME-level config spawned servers), and the **1.0.14 changelog claims it "Fixed an MCP configuration path mismatch in the CLI and permission manager."** Because of this churn, **do not assume `.agents/mcp_config.json` loads** — write it, start a server, and confirm it actually spawns on the shipped agy version. **Fallback if it doesn't:** write to the global `~/.gemini/config/mcp_config.json` (reliable but breaks per-workflow isolation — would need careful namespacing + teardown of ctrlyoke's entries). This is the one MCP decision that can't be finalized from docs alone.
 - **Config dir rename**: agy's workspace config dir is **`.agents/`** (not `.gemini/`) — relevant for MCP/hooks injection and `cleanupWorkspaceArtifacts`. Skills: global `~/.gemini/skills/`, CLI-specific `~/.gemini/antigravity-cli/skills/`; workspace agents under `.agents/`.
-- `--sandbox` available but not needed for FlightPath.
+- `--sandbox` available but not needed for ctrlyoke.
 
 ### A.9 Net architecture decision
 
@@ -188,7 +188,7 @@ Antigravity is a **hybrid** — Claude-style flags **and** Claude-style hooks, b
 
 Follow `ADDING_NEW_CLI_HARNESS.md` for the layer-by-layer mechanics. Below are only the Antigravity-specific decisions and deltas.
 
-### B.1 Harness directory — `src/flightpath/harness/antigravity/`
+### B.1 Harness directory — `src/core/harness/antigravity/`
 
 #### [NEW] `AntigravityCliProvider.ts`  (model on `ClaudeCliProvider.ts`)
 
@@ -208,10 +208,10 @@ config = {
 - `buildInteractiveArgs(baseArgs, text)` → `["--prompt-interactive", text, ...baseArgs]`.
 - Model: `--model "<label>"` when set and not `MODEL_NONE` (label per `agy models`, A.2).
 - Resume: `--conversation <uuid>` when a sessionId exists and `resumeSession` is on; else omit (or `-c` for "continue most recent").
-- `--add-dir` for extra workspace dirs if FlightPath passes any.
+- `--add-dir` for extra workspace dirs if ctrlyoke passes any.
 - `checkAvailability()` / `getVersion()` → `CliProviderUtils.checkCliAvailability("agy --version")`.
 - `formatFileReference()` → same as Claude (no prefix) until proven otherwise.
-- **MCP (in scope, A.8)**: write `.agents/mcp_config.json` in the workspace via a tracker (model on `SettingsJsonMcpTracker`, but new file path `.agents/mcp_config.json` and the `serverUrl` key for remote servers — **not** `httpUrl`). Implement `cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath)` to remove/restore `.agents/mcp_config.json` and the FlightPath hook entries. No `--mcp-config` CLI arg exists, so `getMcpConfigArgs()` returns `[]` after writing the file.
+- **MCP (in scope, A.8)**: write `.agents/mcp_config.json` in the workspace via a tracker (model on `SettingsJsonMcpTracker`, but new file path `.agents/mcp_config.json` and the `serverUrl` key for remote servers — **not** `httpUrl`). Implement `cleanupWorkspaceArtifacts(workspaceRoot, workingFilePath)` to remove/restore `.agents/mcp_config.json` and the ctrlyoke hook entries. No `--mcp-config` CLI arg exists, so `getMcpConfigArgs()` returns `[]` after writing the file.
 
 #### [NEW] `AntigravityResponseParser.ts`  (plain-text)
 
@@ -244,8 +244,8 @@ Because the rich event stream is unavailable (A.3), this parser only provides **
 agy's hooks are Claude-style (A.6), so clone `ClaudeNotificationMonitor`:
 
 - `EVENT_MAP` = identity-ish Claude mapping: `stop→Stop`, `sessionStart→SessionStart`, `preToolUse→PreToolUse`, `postToolUse→PostToolUse`, `userPromptSubmit→UserPromptSubmit`, `permissionRequest→PreToolUse`.
-- `buildHookConfig()` → write Claude-shaped hook entries into **workspace `.agents/hooks.json`** (preferred over global `~/.gemini/config/hooks.json` for parallel-workflow isolation + clean teardown). The hook command runs `flightpath-antigravity-hook.js <notifyDir>`.
-- `getNotificationDirectory()` → `.flightpath/temp/antigravity-notifications/`.
+- `buildHookConfig()` → write Claude-shaped hook entries into **workspace `.agents/hooks.json`** (preferred over global `~/.gemini/config/hooks.json` for parallel-workflow isolation + clean teardown). The hook command runs `ctrlyoke-antigravity-hook.js <notifyDir>`.
+- `getNotificationDirectory()` → `.ctrlyoke/temp/antigravity-notifications/`.
 - **Headless**: still exit-based (process-exit), no hook needed; the `Stop` hook is for interactive mode.
 
 #### [NEW] `AntigravityToolPermissionMapper.ts`
@@ -254,26 +254,26 @@ agy's hooks are Claude-style (A.6), so clone `ClaudeNotificationMonitor`:
 - `allowAll` → `[]` (no native allow-list flag).
 - `custom` → no CLI flag; enforce via a `PreToolUse` hook returning `{"decision":"deny"|"ask"}` (A.8). For v1, `[]` + a TODO is acceptable if hook-based gating is deferred.
 
-#### [NEW] Hook script — `src/scripts/flightpath-antigravity-hook.js`  (clone Claude's)
+#### [NEW] Hook script — `src/scripts/ctrlyoke-antigravity-hook.js`  (clone Claude's)
 
-Now **in scope**. agy's hook I/O matches Claude's contract: JSON on stdin (incl. `toolCall.args`, `workspacePaths`, `transcriptPath`), JSON on stdout. Clone `flightpath-claude-hook.js`, using `initializeLogger` + `readStdinJson` from `flightpath-hook-utils`, writing the notification file to `argv[2]`. For permission-gating events, emit `{"decision": ...}`; for `Stop`, write the completion notification file.
+Now **in scope**. agy's hook I/O matches Claude's contract: JSON on stdin (incl. `toolCall.args`, `workspacePaths`, `transcriptPath`), JSON on stdout. Clone `ctrlyoke-claude-hook.js`, using `initializeLogger` + `readStdinJson` from `ctrlyoke-hook-utils`, writing the notification file to `argv[2]`. For permission-gating events, emit `{"decision": ...}`; for `Stop`, write the completion notification file.
 
 ### B.2 Type, wiring, settings, UI, schema layers
 
 Mechanical — follow `ADDING_NEW_CLI_HARNESS.md` exactly, substituting `antigravity`/`ANTIGRAVITY_CLI`/`AntigravityCli`. Specific values:
 
 - **`DashboardConstants.ts`**: `HARNESS_IDS.ANTIGRAVITY_CLI = "antigravity-cli"`; `HARNESS_INFO`/`HARNESS_DISPLAY_NAMES` → `{ name: "Antigravity CLI", shortName: "Antigravity" }`; `HARNESS_DEFAULT_MODELS` → observed default (`Claude Sonnet 4.6 (Thinking)`); `ANTIGRAVITY_CLI_MODELS` list spans **Gemini, Claude, and GPT-OSS families** (A.2 — now includes `GPT-OSS 120B (Medium)`), values = exact `agy models` labels.
-- **`FlightPathTypes.ts`**: `Harness.AntigravityCli = "antigravity-cli"`.
+- **`CtrlYokeTypes.ts`**: `Harness.AntigravityCli = "antigravity-cli"`.
 - **`IntegrationFactory.ts`** / **`WorkflowOrchestrator.ts`**: factory method, switch case, field, construction, registration, init, `getIntegrationForHarness`, `setWorkflowName`, display label `[Harness.AntigravityCli]: "Antigravity CLI"`.
 - **`ConfigurationUtils.ts`**: `antigravityCliModel` / `antigravityCliAdditionalArgs` keys, `normalizeHarness`, `getAntigravityCliModel()`, `getModelForHarness` case.
 - **`ModelConstants.ts`**: `ANTIGRAVITY_CLI_MODELS`, `ANTIGRAVITY_CLI_MODEL_LABELS`, type, `isAntigravityCliModel`, `getModelDisplayName` case, and a `getAntigravityModelName` / context-window helper if the provider needs one.
-- **`FlightPathSettings.ts`**: default model in `FLIGHTPATH_SETTINGS_DEFAULTS.defaults.models["antigravity-cli"]`.
+- **`CtrlYokeSettings.ts`**: default model in `CTRLYOKE_SETTINGS_DEFAULTS.defaults.models["antigravity-cli"]`.
 - **`SessionValidator.ts`**: add `case HARNESS_IDS.ANTIGRAVITY_CLI` (UUID v4 — same validation as Gemini used).
 - **`HarnessDirectoryUtils.ts`**: agent/skill dirs (verified, A.8): workspace agents under `.agents/`; global skills `~/.gemini/skills/`; CLI-specific skills `~/.gemini/antigravity-cli/skills/`. Do **not** assume `.antigravity/`.
 - **`cli.ts`**: add `antigravity-cli` to the `--harness` description string.
-- **`package.json`**: harness enum + description, `flightpath.antigravityCliModel` (order 450), `flightpath.antigravityCliAdditionalArgs` (order 451).
+- **`package.json`**: harness enum + description, `ctrlyoke.antigravityCliModel` (order 450), `ctrlyoke.antigravityCliAdditionalArgs` (order 451).
 - **UI**: `WebviewSettingsSync.ts`, `HarnessDropdown.tsx` (display name + `CLI_HARNESSES`), `settingsStore.ts`, `HarnessIcon.tsx` (add an Antigravity icon).
-- **Schemas**: `prompt-schema.json` + `settings-schema.json` enums/properties, then `npm run generate-schema`.
+- **Schemas**: `workflow-schema.json` + `settings-schema.json` enums/properties, then `npm run generate-schema`.
 - **`scripts/sync-models.mjs`**: add an `antigravityModels` block parallel to (replacing) the Gemini one.
 - **Docs**: `.github/copilot-instructions.md` harness + debug-log table; `docs/harnesses/antigravity-cli.md` (+ index/installation/concepts/settings).
 - **Tests**: `harnessRunner.ts` union + default model; `hooks.harness.test.ts` only if hooks land; **`AntigravityResponseParser.test.ts`** + **`AntigravityLogParser.test.ts`** (plain-text parse, empty-stdout tolerance, UUID extraction from glog lines, `last_conversations.json` fallback).
@@ -286,15 +286,15 @@ Delete Gemini everywhere it was added (the inverse of `ADDING_NEW_CLI_HARNESS.md
 
 ### C.1 Delete files
 
-- `src/flightpath/harness/gemini/` (whole dir: `GeminiCliProvider.ts`, `GeminiResponseParser.ts`, `GeminiNotificationMonitor.ts`, `GeminiToolPermissionMapper.ts`, `GeminiLogParser.ts`)
-- `src/scripts/flightpath-gemini-hook.js`
+- `src/core/harness/gemini/` (whole dir: `GeminiCliProvider.ts`, `GeminiResponseParser.ts`, `GeminiNotificationMonitor.ts`, `GeminiToolPermissionMapper.ts`, `GeminiLogParser.ts`)
+- `src/scripts/ctrlyoke-gemini-hook.js`
 - `docs/harnesses/gemini-cli.md`
 
 ### C.2 Type layer
 
-- `FlightPathTypes.ts` — remove `Harness.GeminiCli`.
+- `CtrlYokeTypes.ts` — remove `Harness.GeminiCli`.
 - `DashboardConstants.ts` — remove `HARNESS_IDS.GEMINI_CLI`, its `HARNESS_INFO`/`HARNESS_DISPLAY_NAMES`/`HARNESS_DEFAULT_MODELS` entries, and `GEMINI_CLI_MODELS` (13 refs).
-- `FlightPathSettings.ts` — remove `"gemini-cli"` default model.
+- `CtrlYokeSettings.ts` — remove `"gemini-cli"` default model.
 
 ### C.3 Wiring layer
 
@@ -308,7 +308,7 @@ Delete Gemini everywhere it was added (the inverse of `ADDING_NEW_CLI_HARNESS.md
 - `SessionValidator.ts` — remove `case HARNESS_IDS.GEMINI_CLI` + doc lines (2 refs).
 - `HarnessDirectoryUtils.ts` — remove all 5 `GEMINI_CLI` agent/skill/extension entries; update the "Codex, Gemini, Qwen…" comment.
 - `cli.ts` — drop `gemini-cli` from the `--harness` description.
-- `package.json` — remove `gemini-cli` from harness enum/enumDescriptions/markdownDescription and delete `flightpath.geminiCliModel` + `flightpath.geminiCliAdditionalArgs`.
+- `package.json` — remove `gemini-cli` from harness enum/enumDescriptions/markdownDescription and delete `ctrlyoke.geminiCliModel` + `ctrlyoke.geminiCliAdditionalArgs`.
 
 ### C.5 UI layer
 
@@ -320,9 +320,9 @@ Delete Gemini everywhere it was added (the inverse of `ADDING_NEW_CLI_HARNESS.md
 
 ### C.6 Schemas
 
-- `schemas/prompt-schema.json` — remove `"gemini-cli"` from harness enum.
+- `schemas/workflow-schema.json` — remove `"gemini-cli"` from harness enum.
 - `schemas/settings-schema.json` — remove from `defaults.harness`, `models`, `additionalArgs`.
-- Run `npm run generate-schema` to regenerate `schemas/prompt-schema.yaml`.
+- Run `npm run generate-schema` to regenerate `schemas/workflow-schema.yaml`.
 
 ### C.7 Shared infra — comments only (no logic change)
 
@@ -331,11 +331,11 @@ These mention Gemini in comments/lists but the code is generic; just update the 
 
 ### C.8 Tests
 
-Remove Gemini from: `harnessRunner.ts`, `hooks.harness.test.ts`, `ModelConstants.test.ts` (11 refs), `ToolPermissionMappers.test.ts`, `HarnessToolPermissionMappers.test.ts`, `FlightPathConfigService.test.ts` (6 refs), `SettingsJsonHooksTracker.test.ts`, `WorkflowInstance.test.ts`. Where a test needs a representative "settings.json hook" harness and Gemini was the example, switch it to Qwen (which uses the same mechanism).
+Remove Gemini from: `harnessRunner.ts`, `hooks.harness.test.ts`, `ModelConstants.test.ts` (11 refs), `ToolPermissionMappers.test.ts`, `HarnessToolPermissionMappers.test.ts`, `CtrlYokeConfigService.test.ts` (6 refs), `SettingsJsonHooksTracker.test.ts`, `WorkflowInstance.test.ts`. Where a test needs a representative "settings.json hook" harness and Gemini was the example, switch it to Qwen (which uses the same mechanism).
 
 ### C.9 Docs / misc
 
-`.github/copilot-instructions.md` (harness + debug-log table), `docs/harnesses/index.md`, `docs/guide/installation.md`, `docs/guide/concepts.md`, `docs/reference/settings.md`, `docs/.vitepress/config.mts`, `README.md`, `QUICK_START.md`, `CHANGELOG.md` (add a removal entry), `scripts/discovered-models.json` (drop Gemini models), `scripts/sync-models.mjs` (remove the `geminiModels` block — superseded by `antigravityModels`), `src/ui/webview-react/static/dictionaries/en_US/en_US.dic` (remove "gemini" if present), `dev/reference/old-vscode-flightpath-settings.json` (historical — leave or note).
+`.github/copilot-instructions.md` (harness + debug-log table), `docs/harnesses/index.md`, `docs/guide/installation.md`, `docs/guide/concepts.md`, `docs/reference/settings.md`, `docs/.vitepress/config.mts`, `README.md`, `QUICK_START.md`, `CHANGELOG.md` (add a removal entry), `scripts/discovered-models.json` (drop Gemini models), `scripts/sync-models.mjs` (remove the `geminiModels` block — superseded by `antigravityModels`), `src/ui/webview-react/static/dictionaries/en_US/en_US.dic` (remove "gemini" if present), `dev/reference/old-vscode-flightpath-settings.json` (historical filename — leave as-is).
 
 > Leave historical planning docs under `dev/implemented/` and `dev/research/` (e.g. `GEMINI_INTEGRATION_PLAN.md`) **as-is** — they are a record of past work, not live config.
 
@@ -345,7 +345,7 @@ Remove Gemini from: `harnessRunner.ts`, `hooks.harness.test.ts`, `ModelConstants
 
 ### Research (do first, while authenticated in a TTY)
 
-- [ ] **(#1 blocker)** `agy -p "hello"` under FlightPath's `PtyProcessManager` (node-pty) spawn → confirm plain-text stdout is **non-empty**. Re-confirmed empty in a plain pipe on 1.0.14 (A.5); if it's also empty under node-pty, switch the whole design to `-i` + `Stop` hook. **Do not start implementation until this is answered.**
+- [ ] **(#1 blocker)** `agy -p "hello"` under ctrlyoke's `PtyProcessManager` (node-pty) spawn → confirm plain-text stdout is **non-empty**. Re-confirmed empty in a plain pipe on 1.0.14 (A.5); if it's also empty under node-pty, switch the whole design to `-i` + `Stop` hook. **Do not start implementation until this is answered.**
 - [ ] **Verify workspace MCP actually loads**: write `.agents/mcp_config.json` with one local server, start agy, confirm the server spawns on 1.0.14. If not, fall back to global `~/.gemini/config/mcp_config.json` (A.8 / issue #60).
 - [ ] `agy models` (authenticated TTY) → confirm exact label strings for the Gemini + Claude + **GPT-OSS** model list (A.2)
 - [ ] Capture a real `.agents/hooks.json` `Stop`/`PreToolUse` payload → confirm `conversationId`, `transcriptPath`, `workspacePaths`, `toolCall`, artifact-dir field names (A.6) — and whether workspace `.agents/hooks.json` is honored or only global `~/.gemini/config/hooks.json` fires
@@ -353,8 +353,8 @@ Remove Gemini from: `harnessRunner.ts`, `hooks.harness.test.ts`, `ModelConstants
 
 ### Add Antigravity
 
-- [ ] `src/flightpath/harness/antigravity/` — `AntigravityCliProvider`, `AntigravityResponseParser` (plain-text), `AntigravityLogParser` (custom glog), `AntigravityNotificationMonitor` (Claude-style `Stop` hook + headless exit), `AntigravityToolPermissionMapper`
-- [ ] `src/scripts/flightpath-antigravity-hook.js` (clone Claude's)
+- [ ] `src/core/harness/antigravity/` — `AntigravityCliProvider`, `AntigravityResponseParser` (plain-text), `AntigravityLogParser` (custom glog), `AntigravityNotificationMonitor` (Claude-style `Stop` hook + headless exit), `AntigravityToolPermissionMapper`
+- [ ] `src/scripts/ctrlyoke-antigravity-hook.js` (clone Claude's)
 - [ ] MCP: `.agents/mcp_config.json` writer/tracker (`serverUrl`, no `timeout`) + `cleanupWorkspaceArtifacts`
 - [ ] Type/wiring/settings/UI/schema layers per Part B.2
 - [ ] `npm run generate-schema`

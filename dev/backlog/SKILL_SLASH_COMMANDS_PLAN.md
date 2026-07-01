@@ -2,17 +2,17 @@
 
 ## Problem
 
-FlightPath currently has two gaps around skill invocation:
+ctrlyoke currently has two gaps around skill invocation:
 
-1. Pure slash-command prompts bypass prompt assembly, so attached FlightPath skills are not introduced when the prompt is only `/commit`, `/review`, or similar.
-2. Slash-prefixed FlightPath skill syntax collides with harness-native command parsing. A leading token like `/fp:commit` can fail before the model ever sees the attached skill context.
+1. Pure slash-command prompts bypass prompt assembly, so attached ctrlyoke skills are not introduced when the prompt is only `/commit`, `/review`, or similar.
+2. Slash-prefixed ctrlyoke skill syntax collides with harness-native command parsing. A leading token like `/fp:commit` can fail before the model ever sees the attached skill context.
 
 That creates incorrect behavior and unclear UX:
 
 - `/commit` should remain native harness territory.
-- FlightPath needs an explicit syntax for attached skills that does not get interpreted as a harness slash command.
-- The editor should help users discover FlightPath skill invocations with dropdown completions.
-- Prompt files and the webview editor should make the explicit FlightPath skill syntax clickable so users can open the referenced skill file directly.
+- ctrlyoke needs an explicit syntax for attached skills that does not get interpreted as a harness slash command.
+- The editor should help users discover ctrlyoke skill invocations with dropdown completions.
+- Prompt files and the webview editor should make the explicit ctrlyoke skill syntax clickable so users can open the referenced skill file directly.
 
 ---
 
@@ -20,21 +20,21 @@ That creates incorrect behavior and unclear UX:
 
 Adopt a two-namespace model:
 
-- Plain `/...` remains harness-native and is never reinterpreted by FlightPath.
-- `/skill:<skill-name>` becomes the explicit FlightPath skill invocation syntax.
+- Plain `/...` remains harness-native and is never reinterpreted by ctrlyoke.
+- `/skill:<skill-name>` becomes the explicit ctrlyoke skill invocation syntax.
 
 That keeps behavior deterministic:
 
 - `/commit` means "let the harness handle `/commit`."
-- `/skill:commit` means "resolve the FlightPath-discoverable skill `commit`, attach it, and rewrite the prompt text before send."
+- `/skill:commit` means "resolve the ctrlyoke-discoverable skill `commit`, attach it, and rewrite the prompt text before send."
 
-The completion dropdown should be a FlightPath skill insertion helper only:
+The completion dropdown should be a ctrlyoke skill insertion helper only:
 
-- typing `/` shows discovered FlightPath skills
+- typing `/` shows discovered ctrlyoke skills
 - selecting an item inserts `/skill:<skill-name>`
 - the dropdown does not attempt to enumerate native harness slash commands
 
-This plan does not recommend auto-converting `/commit` into a FlightPath attachment when the active harness lacks that skill. That would make identical prompt text behave differently by harness in a way that is hard to explain and harder to debug.
+This plan does not recommend auto-converting `/commit` into a ctrlyoke attachment when the active harness lacks that skill. That would make identical prompt text behave differently by harness in a way that is hard to explain and harder to debug.
 
 ---
 
@@ -46,7 +46,7 @@ This plan does not recommend auto-converting `/commit` into a FlightPath attachm
 - Add clickable links for `/skill:<skill-name>` in:
   - the webview `CodeMirrorEditor`
   - VS Code prompt files via `PromptLinkProvider`
-- Use `SkillDiscovery` and harness-specific skill directories to tell whether a skill is native to the current harness or FlightPath-only.
+- Use `SkillDiscovery` and harness-specific skill directories to tell whether a skill is native to the current harness or ctrlyoke-only.
 
 ---
 
@@ -56,10 +56,10 @@ This plan does not recommend auto-converting `/commit` into a FlightPath attachm
 
 - `/commit`
   - Native harness command or native harness skill invocation.
-  - FlightPath passes it through unchanged.
+  - ctrlyoke passes it through unchanged.
 - `/skill:commit`
-  - Explicit FlightPath skill reference.
-  - FlightPath resolves skill `commit`, attaches it through the normal skill prompt path, and rewrites the token before send.
+  - Explicit ctrlyoke skill reference.
+  - ctrlyoke resolves skill `commit`, attaches it through the normal skill prompt path, and rewrites the token before send.
 
 ### Rewrite behavior
 
@@ -74,7 +74,7 @@ This rewrite should happen only in the outgoing prompt text. The editor content 
 
 ### Editor completions
 
-When the user types `/`, the dropdown should show only FlightPath-discovered skills.
+When the user types `/`, the dropdown should show only ctrlyoke-discovered skills.
 
 Selection behavior:
 
@@ -91,7 +91,7 @@ Suggested labels:
 
 Suggested details:
 
-- `FlightPath skill`
+- `ctrlyoke skill`
 - skill source and short description when available
 
 ### Linking behavior
@@ -104,16 +104,16 @@ Suggested details:
 
 ## Design
 
-### 1. Distinguish native slash commands from FlightPath skill references
+### 1. Distinguish native slash commands from ctrlyoke skill references
 
-Introduce a small parsing utility for FlightPath skill tokens:
+Introduce a small parsing utility for ctrlyoke skill tokens:
 
 - native form: `/[a-zA-Z0-9:_-]+`
-- FlightPath form: `/skill:<skill-name>`
+- ctrlyoke form: `/skill:<skill-name>`
 
 The parser should not try to interpret arbitrary slash text beyond those forms. It only needs to:
 
-- detect whether the current token is a FlightPath skill token
+- detect whether the current token is a ctrlyoke skill token
 - extract the skill name for `/skill:<skill-name>`
 - leave plain `/...` tokens entirely alone
 
@@ -125,10 +125,10 @@ This logic should be shared by:
 
 ### 2. Add a harness-aware skill resolution layer
 
-`SkillDiscovery.ts` already discovers skills across FlightPath and harness directories. The next step is to expose enough metadata to answer:
+`SkillDiscovery.ts` already discovers skills across ctrlyoke and harness directories. The next step is to expose enough metadata to answer:
 
 - is skill `X` installed in the active harness's native search paths?
-- is skill `X` only available through FlightPath discovery?
+- is skill `X` only available through ctrlyoke discovery?
 - what concrete `SKILL.md` path should `/skill:X` open and attach?
 
 Recommended extension to discovery output:
@@ -142,7 +142,7 @@ Suggested helpers:
 findSkillByName(skills, name)
 findSkillForHarness(skills, name, harnessId)
 isSkillNativeToHarness(skill, harnessId, workspaceRoot?)
-resolveFlightPathSkillInvocation(skills, name, harnessId)
+resolveCtrlYokeSkillInvocation(skills, name, harnessId)
 ```
 
 Those helpers should use `HarnessDirectoryUtils` as the single source of truth for harness skill directories.
@@ -170,12 +170,12 @@ This avoids harness parser conflicts while preserving readable inline semantics.
 `CodeMirrorEditor.tsx` currently routes `@`, `#`, `~`, and `$` to extension-backed completions. Skill-token completions should follow the same general pattern:
 
 - detect the most recent `/` token when the cursor is in prompt mode
-- if token starts with `/skill:`, request FlightPath skill completions
-- otherwise, when the token starts with `/`, request the same FlightPath skill completions and insert `/skill:<skill-name>` on selection
+- if token starts with `/skill:`, request ctrlyoke skill completions
+- otherwise, when the token starts with `/`, request the same ctrlyoke skill completions and insert `/skill:<skill-name>` on selection
 
 The dropdown should be interpreted as:
 
-- "insert a FlightPath skill invocation here"
+- "insert a ctrlyoke skill invocation here"
 
 It should not be interpreted as:
 
@@ -194,7 +194,7 @@ Recommended scope:
 
 Tooltip example:
 
-- `Open FlightPath skill commit`
+- `Open ctrlyoke skill commit`
 
 ### 6. Webview editor links
 
@@ -216,7 +216,7 @@ Add skill-token completion helpers in `src/completions/CompletionHelpers.ts` or 
 
 Responsibilities:
 
-- return FlightPath-discovered skill completions
+- return ctrlyoke-discovered skill completions
 - support both `/` and `/skill:` trigger contexts
 - filter and sort by typed prefix
 - expose plain completion items consumable by both VS Code and webview surfaces
@@ -225,7 +225,7 @@ Recommended data shape:
 
 ```ts
 interface SkillTokenCompletionItem extends PlainCompletionItem {
-  commandType: "flightpathSkill";
+  commandType: "ctrlyokeSkill";
   skillName: string;
 }
 ```
@@ -263,7 +263,7 @@ The dropdown should not depend on curated native slash-command lists. That avoid
    - which file `/skill:<skill-name>` resolves to
 
 4. Add skill-token completion helpers on the extension side:
-   - discovered FlightPath skill completions
+   - discovered ctrlyoke skill completions
    - support insertion as `/skill:<skill>`
 
 5. Update `CodeMirrorEditor.tsx`:
@@ -295,8 +295,8 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 | `src/completions/PromptCompletionProvider.ts`                 | Modify                   | Add `/` trigger support for prompt-file completions if desired in VS Code editors |
 | `src/completions/PromptLinkProvider.ts`                       | Modify                   | Add `/skill:<skill>` document links                                               |
 | `src/ui/webview-react/components/editor/CodeMirrorEditor.tsx` | Modify                   | Add `/skill:` completions and link decoration/click handling                      |
-| `src/flightpath/harness/shared/CliPromptPreparer.ts`          | Modify                   | Treat `/skill:` as attachable skill syntax and rewrite it before send             |
-| `src/flightpath/HarnessIntegration.ts`                        | Maybe modify             | Shared parser/helper hooks if prompt assembly should own `/skill:` extraction     |
+| `src/core/harness/shared/CliPromptPreparer.ts`                 | Modify                   | Treat `/skill:` as attachable skill syntax and rewrite it before send             |
+| `src/core/HarnessIntegration.ts`                               | Maybe modify             | Shared parser/helper hooks if prompt assembly should own `/skill:` extraction     |
 | `src/types/DashboardConstants.ts`                             | Maybe modify             | Add message constants or skill-token metadata constants                           |
 | `src/types/WebviewMessageTypes.ts`                            | Maybe modify             | Add or extend completion/open-skill message payload types                         |
 
@@ -308,12 +308,12 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 
 - `SkillDiscovery` helper tests
   - skill native to Claude but not Copilot
-  - FlightPath-only skill
+  - ctrlyoke-only skill
   - multiple discovered copies with precedence
 
 - completion helper tests
-  - `/` shows FlightPath-discovered skills only
-  - `/skill:c` filters to matching FlightPath skills
+  - `/` shows ctrlyoke-discovered skills only
+  - `/skill:c` filters to matching ctrlyoke skills
   - selected item inserts `/skill:<skill>`
 
 - `PromptLinkProvider` tests
@@ -346,7 +346,7 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 2. Should the rewrite phrase always be `use the attached skill "<name>"`, or should it vary by sentence position, for example `the attached skill "<name>"` when the token follows `using`?
 3. If both workflow properties and `/skill:` add the same skill, should deduplication happen by name only or by resolved file path?
 4. Should `/skill:` be allowed multiple times in one prompt, and if so, should repeated entries preserve order or collapse to a set?
-5. Should the completion UI expose when a similarly named native harness skill also exists, for example detail text like `Native Claude skill also available`, or should the UI stay intentionally FlightPath-only?
+5. Should the completion UI expose when a similarly named native harness skill also exists, for example detail text like `Native Claude skill also available`, or should the UI stay intentionally ctrlyoke-only?
 
 ---
 
@@ -362,7 +362,7 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 ### Phase 2
 
 - Add VS Code editor skill-token completions in `PromptCompletionProvider`
-- Add optional UI hints when a plain `/skill` collides with a FlightPath skill of the same name
+- Add optional UI hints when a plain `/skill` collides with a ctrlyoke skill of the same name
 
 ### Phase 3
 
@@ -372,9 +372,9 @@ The dropdown should not depend on curated native slash-command lists. That avoid
 
 ## Non-Goals
 
-- Auto-rewriting plain `/commit` into a FlightPath skill token
-- Using slash-prefixed FlightPath skill syntax that can be interpreted as a native harness command
-- Attaching FlightPath skills automatically just because a harness lacks a native skill with that name
+- Auto-rewriting plain `/commit` into a ctrlyoke skill token
+- Using slash-prefixed ctrlyoke skill syntax that can be interpreted as a native harness command
+- Attaching ctrlyoke skills automatically just because a harness lacks a native skill with that name
 - Maintaining curated native slash-command catalogs for each harness
 - Linking plain native slash commands to arbitrary files
 - Full slash-command introspection from external CLIs at runtime

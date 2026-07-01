@@ -30,7 +30,7 @@ Two things are wrong:
   `WorkspaceDiffPane`) is **browser-only** — in VS Code we should open the change in the
   editor's *native* diff UI, not a webview `<pre>`.
 
-> Note: the existing `flightpath.openGitChange` command (`extension.ts`) already opens a
+> Note: the existing `ctrlyoke.openGitChange` command (`extension.ts`) already opens a
 > generated diff in an untitled `language: "diff"` document — same raw-text shortcoming,
 > just in an editor tab instead of a modal. This plan supersedes it.
 
@@ -76,18 +76,18 @@ not by keeping the modal alive.
 | `~stash:N` | **`vscode.changes`** | No built-in per-index stash command, so build the native multi-file diff ourselves (see below). | ✅ done |
 
 `git.viewCommit`/`viewChanges`/`viewStagedChanges` are implemented in
-`flightpath.openGitChange` (`extension.ts`), native-first with a generated-diff-document
+`ctrlyoke.openGitChange` (`extension.ts`), native-first with a generated-diff-document
 fallback on any failure (older VS Code / Git extension disabled). Command IDs are
 single-sourced as `VSCODE_GIT_COMMANDS` in `DashboardConstants.ts`. This also upgrades
 the `PromptLinkProvider` markdown hover links and the `OPEN_GIT_CHANGE` message, which
-already route through `flightpath.openGitChange`.
+already route through `ctrlyoke.openGitChange`.
 
 ### Native stash diff — `vscode.changes` ✅ implemented
 
 `git.stashView` only shows a stash *quick-pick* (no index argument), so for `~stash:N`
 we open the native multi-file diff editor directly with the **public** `vscode.changes`
 command — the same UI the other refs get, no raw text. Implemented in
-`flightpath.openGitChange` (`extension.ts`) as `openNativeStashDiff()`:
+`ctrlyoke.openGitChange` (`extension.ts`) as `openNativeStashDiff()`:
 
 ```typescript
 // vscode.changes(title, resourceList: [resourceUri, originalUri, modifiedUri][])
@@ -136,7 +136,7 @@ if (type === "git") {
     // Browser: open the diff pane to this ref (see store action below)
     useWorkspaceViewerStore.getState().openToGitRef(gitRef);
   } else {
-    // VS Code: native diff, no modal (routes to flightpath.openGitChange)
+    // VS Code: native diff, no modal (routes to ctrlyoke.openGitChange)
     vscode.postMessage({ type: MESSAGE_TYPES.OPEN_GIT_CHANGE, ref: gitRef });
   }
   return true;
@@ -153,7 +153,7 @@ view's "View Diff" action calls the **same** two helpers (`openToGitRef` /
 
 ### 2. VS Code side — native diff command
 
-The VS Code branch posts `OPEN_GIT_CHANGE`, which routes through `flightpath.openGitChange`
+The VS Code branch posts `OPEN_GIT_CHANGE`, which routes through `ctrlyoke.openGitChange`
 (reused, not a new message) to invoke the native commands per the mapping table above
 instead of building a `language: "diff"` document. All four ref kinds are done —
 commit/diff/staged via the dedicated git commands, and stash via `vscode.changes` +
@@ -206,7 +206,7 @@ Plan:
   - **Download** reuses the browser blob-download approach already in
     `ContentPreviewModal.handleExport` (build a `Blob` from the raw unified diff, anchor
     `a.download`); factor that into a shared `downloadTextFile()` util so the modal and
-    the pane single-source it. Filename e.g. `flightpath-<ref>.diff`.
+    the pane single-source it. Filename e.g. `ctrlyoke-<ref>.diff`.
 
 - `clearDiff()` also clears `diffFiles`/`diffRefLabel`; `close()`/`reset()` likewise.
 
@@ -232,10 +232,10 @@ unified diff.
 - [ ] `CodeMirrorEditor.openContextReferenceLink()`: `isStandalone` branch → `openToGitRef` (replaces the interim `REQUEST_GIT_CHANGE_PREVIEW` browser branch)
 
 ### Phase 2 — VS Code native diff ✅ DONE
-- [x] `flightpath.openGitChange` rewritten to invoke native commands (`git.viewCommit`/`git.viewChanges`/`git.viewStagedChanges`) with a generated-diff fallback; command IDs added as `VSCODE_GIT_COMMANDS`
+- [x] `ctrlyoke.openGitChange` rewritten to invoke native commands (`git.viewCommit`/`git.viewChanges`/`git.viewStagedChanges`) with a generated-diff fallback; command IDs added as `VSCODE_GIT_COMMANDS`
 - [x] `CodeMirrorEditor.openContextReferenceLink()`: VS Code branch posts `OPEN_GIT_CHANGE` (→ native); browser branch keeps `REQUEST_GIT_CHANGE_PREVIEW` (modal) until Phase 1 lands
 - [x] Raw-text untitled-doc behavior is now fallback-only, not the default
-- [x] **Native stash:** `GitUtils.getStashFiles(root, index)` + `~stash:N` branch in `flightpath.openGitChange` using `vscode.changes` + `toGitUri`; added `CHANGES` to `VSCODE_GIT_COMMANDS`
+- [x] **Native stash:** `GitUtils.getStashFiles(root, index)` + `~stash:N` branch in `ctrlyoke.openGitChange` using `vscode.changes` + `toGitUri`; added `CHANGES` to `VSCODE_GIT_COMMANDS`
 
 ### Phase 3 — Cleanup
 - [ ] Delete `REQUEST_GIT_CHANGE_PREVIEW`/`GIT_CHANGE_PREVIEW_RESULT` + `buildGitChangeContent` + the `buildGitPreviewTitle` git branch (keep `$prior-context` path)

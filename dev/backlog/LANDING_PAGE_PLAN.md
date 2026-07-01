@@ -1,15 +1,15 @@
-# FlightPath Landing Page Plan
+# ctrlyoke Landing Page Plan
 
 **Created:** May 21, 2026  
 **Status:** IN PROGRESS — site, docs, and deploy pipeline implemented; DNS + first production deploy + testing pending. (Updated June 26, 2026.)  
-**Domain:** flightpath.dev (purchased, hosted on Netlify)
+**Domain:** ctrlyoke.dev (purchased, hosted on Netlify)
 **Launch dependency:** business email, support inboxes, vendor account ownership, and publisher identity are tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
 
 ---
 
 ## Overview
 
-This document covers everything needed to ship `flightpath.dev`: the marketing landing page, the published VitePress docs, and the pricing page. The goal at release is a single perpetual license SKU that unlocks power-user features, with a clean free tier that still delivers real value.
+This document covers everything needed to ship `ctrlyoke.dev`: the marketing landing page, the published VitePress docs, and the pricing page. The goal at release is a single perpetual license SKU that unlocks power-user features, with a clean free tier that still delivers real value.
 
 > **Scope note:** The **Pro licensing model** (provider choice, the extension `LicenseService`, entitlement verification, activation flow, tier gating, and the license-key-vs-accounts decision) used to live here in Phase 5. It has been **split out into [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)**. This document now owns only the **website surface** (marketing page, docs, pricing page, checkout link). The chosen direction is: pasted license key at launch, user accounts/sign-in as a later UX layer — see the Decision Record in `PRO_LICENSE_PLAN.md`.
 
@@ -22,11 +22,11 @@ The plan below is largely **implemented**. What exists in the repo today:
 - **Architecture:** Option B (monorepo) — `landing/` Astro 5 + Tailwind (+ `@tailwindcss/typography`), `output: "static"`.
 - **Pages** (`landing/src/pages/`): `index.astro` (hero, YAML snippet, harness grid, features, how-it-works, Pro callout, install CTA), `pricing.astro` (Free vs Pro + FAQ), `terms.astro` + `privacy.astro` (render the **canonical root `LICENSE.md` / `PRIVACY.md`** directly — single source of truth), shared `layouts/Layout.astro`.
 - **Pre-launch mode:** single `LAUNCHED` flag in `landing/src/config.ts` + `components/Cta.astro` → Install/Buy CTAs render as disabled "Coming soon", a pre-launch banner shows, and the site is `noindex`. Flip `LAUNCHED` to `true` at launch (and set `CHECKOUT_URL`) to reverse all of it.
-- **Docs:** VitePress `base: '/docs/'` (default), logo at `docs/public/flightpath-icon.svg`, `docs/pro/index.md` (+ Pro nav/sidebar). Merged into the landing output by `scripts/merge-docs-into-landing.mjs`.
+- **Docs:** VitePress `base: '/docs/'` (default), logo at `docs/public/ctrlyoke-icon.svg`, `docs/pro/index.md` (+ Pro nav/sidebar). Merged into the landing output by `scripts/merge-docs-into-landing.mjs`.
 - **Build:** root scripts `build:site` → `build:landing` → `build:docs` (order matters; see §2.3); `netlify.toml` updated.
 - **Deploy:** `.github/workflows/{deploy,deploy-preview,_netlify-deploy}.yml` (GitHub Actions + `netlify-cli`); legacy `docs-deploy.yml` retired. Netlify site created; `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` secrets added.
 
-**Still pending:** point `flightpath.dev` DNS at Netlify · first production deploy via push + verify the Action is green · test all live routes and the pre-launch state · `/changelog/` page · `ls-webhook` Netlify Function (tracked in `PRO_LICENSE_PLAN.md`) · set `[DATE]` in the legal docs and flip `LAUNCHED` at launch. The per-phase sections and the **Phase 7 checklist** below carry the detail.
+**Still pending:** point `ctrlyoke.dev` DNS at Netlify · first production deploy via push + verify the Action is green · test all live routes and the pre-launch state · `/changelog/` page · `ls-webhook` Netlify Function (tracked in `PRO_LICENSE_PLAN.md`) · set `[DATE]` in the legal docs and flip `LAUNCHED` at launch. The per-phase sections and the **Phase 7 checklist** below carry the detail.
 
 ---
 
@@ -36,18 +36,18 @@ The plan below is largely **implemented**. What exists in the repo today:
 
 All content lives on one domain (better SEO, simpler Netlify config):
 
-| URL                         | Content                                                                   |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `flightpath.dev/`           | Marketing landing page (Astro)                                            |
-| `flightpath.dev/docs/`      | VitePress docs (built separately, merged)                                 |
-| `flightpath.dev/pricing/`   | Pro licensing page                                                        |
-| `flightpath.dev/changelog/` | CHANGELOG surfaced on the web (can be auto-generated from `CHANGELOG.md`) |
+| URL                       | Content                                                                   |
+| ------------------------- | ------------------------------------------------------------------------- |
+| `ctrlyoke.dev/`           | Marketing landing page (Astro)                                            |
+| `ctrlyoke.dev/docs/`      | VitePress docs (built separately, merged)                                 |
+| `ctrlyoke.dev/pricing/`   | Pro licensing page                                                        |
+| `ctrlyoke.dev/changelog/` | CHANGELOG surfaced on the web (can be auto-generated from `CHANGELOG.md`) |
 
 ### 1.2 Repository Structure
 
 Create a new repo (or monorepo subfolder `landing/`) for the Astro site. The existing `docs/` VitePress site builds separately and its output is merged into the Astro dist at deploy time.
 
-Option A — **Separate repo**: `flightpath-landing` → deploys to `flightpath.dev`  
+Option A — **Separate repo**: `ctrlyoke-landing` → deploys to `ctrlyoke.dev`  
 Option B — **Monorepo**: add `landing/` alongside `docs/` in this repo, with one Netlify site
 
 **Recommendation: Option B (monorepo).** Keeps the docs and landing page in sync with extension releases. One repo, one Netlify deploy, one CI pipeline. **✅ Implemented — `landing/` lives in this repo.**
@@ -99,7 +99,7 @@ npx astro add netlify
 
 ### 2.3 Deploy via GitHub Actions (Netlify CLI)
 
-**Why Actions and not Netlify's native Git integration:** free-tier Netlify does **not** offer native auto-build/deploy for **organization-owned** repos (`FuzzyNova/flightpath`) — that is gated behind a paid Netlify plan. So, exactly like the `FuzzyNova/fuzzno` site, we deploy from CI using the Netlify CLI with a personal `NETLIFY_AUTH_TOKEN` and the site's `NETLIFY_SITE_ID`. This mirrors fuzzno's proven three-file pattern, with two monorepo adaptations: **(1)** a build step (Astro + VitePress), and **(2)** `paths:` filters so routine extension commits don't redeploy the site.
+**Why Actions and not Netlify's native Git integration:** free-tier Netlify does **not** offer native auto-build/deploy for **organization-owned** repos (`FuzzyNova/ctrlyoke`) — that is gated behind a paid Netlify plan. So, exactly like the `FuzzyNova/fuzzno` site, we deploy from CI using the Netlify CLI with a personal `NETLIFY_AUTH_TOKEN` and the site's `NETLIFY_SITE_ID`. This mirrors fuzzno's proven three-file pattern, with two monorepo adaptations: **(1)** a build step (Astro + VitePress), and **(2)** `paths:` filters so routine extension commits don't redeploy the site.
 
 > **No Astro Netlify adapter.** Because we ship a static marketing site and deploy the built `landing/dist` via the Netlify CLI, **skip `npx astro add netlify`** — that adapter is for SSR / native Netlify builds. Astro's default static output is what we deploy.
 
@@ -199,9 +199,9 @@ jobs:
       NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
 ```
 
-**Repo secrets to add** (FlightPath repo → Settings → Secrets): `NETLIFY_AUTH_TOKEN` (personal access token) and `NETLIFY_SITE_ID` (the **flightpath.dev** Netlify site's API ID — a distinct site/token from fuzzno's).
+**Repo secrets to add** (ctrlyoke repo → Settings → Secrets): `NETLIFY_AUTH_TOKEN` (personal access token) and `NETLIFY_SITE_ID` (the **ctrlyoke.dev** Netlify site's API ID — a distinct site/token from fuzzno's).
 
-This trio **replaces** the legacy `.github/workflows/docs-deploy.yml` (which pushed VitePress to GitHub Pages at base `/flightpath/`); delete it once the new site deploy is green.
+This trio **replaces** the legacy `.github/workflows/docs-deploy.yml` (which pushed VitePress to GitHub Pages at base `/ctrlyoke/`); delete it once the new site deploy is green.
 
 ---
 
@@ -212,12 +212,12 @@ This trio **replaces** the legacy `.github/workflows/docs-deploy.yml` (which pus
 | Section                   | Purpose                                                                                                           |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **Hero**                  | Headline + subhead + primary CTA ("Install for VS Code" → marketplace link)                                       |
-| **Problem / Solution**    | 1-sentence pitch: "AI coding assistants are powerful but manual. FlightPath turns them into automated workflows." |
+| **Problem / Solution**    | 1-sentence pitch: "AI coding assistants are powerful but manual. ctrlyoke turns them into automated workflows." |
 | **Key Features**          | 4–6 cards: multi-harness support, YAML workflows, end conditions, session resumption, MCP integration, CLI binary |
 | **Harness Grid**          | Logos/icons for all 7 supported harnesses (Copilot, Claude, Codex, OpenCode, Qwen, Gemini, Copilot Chat)          |
-| **How It Works**          | 3-step visual: Write workflow → Run → Validate. Animated or static code snippet showing a `.flightpath.yaml`      |
+| **How It Works**          | 3-step visual: Write workflow → Run → Validate. Animated or static code snippet showing a `.ctrlyoke.yaml`        |
 | **Pro Callout**           | Brief teaser of Pro features with link to `/pricing/`                                                             |
-| **Install / Get Started** | VS Code marketplace badge + `npm install -g flightpath` snippet                                                   |
+| **Install / Get Started** | VS Code marketplace badge + `npm install -g ctrlyoke` snippet                                                     |
 | **Footer**                | Links to docs, GitHub, pricing, changelog                                                                         |
 
 ### 3.2 Design Tokens
@@ -225,7 +225,7 @@ This trio **replaces** the legacy `.github/workflows/docs-deploy.yml` (which pus
 Mirror the VS Code webview dashboard's visual language:
 
 - Dark mode by default, light mode optional
-- Accent color: match the FlightPath icon/brand color
+- Accent color: match the ctrlyoke icon/brand color
 - Font: system-ui or Inter (via Fontsource)
 - Code blocks: use CodeMirror or Shiki (Astro has native Shiki integration)
 
@@ -237,11 +237,11 @@ The existing `docs/` structure is solid and ships as-is. Minor additions needed 
 
 ### 4.1 Docs Additions Needed
 
-- [ ] `docs/guide/installation.md` — confirm CLI install instructions are up to date (`npm install -g flightpath`)
+- [ ] `docs/guide/installation.md` — confirm CLI install instructions are up to date (`npm install -g ctrlyoke`)
 - [ ] `docs/changelog.md` — add as a redirect target or mirrored page
 - [x] `docs/pro/index.md` — Pro features overview, "Who needs a license?", and activation instructions
 - [x] Update `docs/.vitepress/config.mts` — `base: '/docs/'` (already default)
-- [x] Add `docs/.vitepress/config.mts` → `themeConfig.logo` (+ `socialLinks` already present); added Pro nav/sidebar entry; logo at `docs/public/flightpath-icon.svg`
+- [x] Add `docs/.vitepress/config.mts` → `themeConfig.logo` (+ `socialLinks` already present); added Pro nav/sidebar entry; logo at `docs/public/ctrlyoke-icon.svg`
 
 ### 4.2 VitePress Base Path
 
@@ -262,7 +262,7 @@ The tier structure, `LicenseService`, entitlement verification, activation flow,
 - **Storefront / MoR:** **Lemon Squeezy** (existing account) — checkout, payment, global tax.
 - **Licensing:** **Keygen** — issues **Ed25519-signed license files** verified **offline** in the extension (no per-request phone-home); supports **air-gapped / enterprise** activation from launch.
 - **Glue:** a **Netlify Function** (this site's deploy) receives the Lemon Squeezy `order_created` webhook and creates the Keygen license.
-- **Later:** "Sign in with FlightPath" device-code flow as a UX layer over the **same** `LicenseService`, when the hosted dashboard becomes a paid cloud product.
+- **Later:** "Sign in with ctrlyoke" device-code flow as a UX layer over the **same** `LicenseService`, when the hosted dashboard becomes a paid cloud product.
 - **Pricing:** **$59 USD** perpetual, one-time; activates on up to 10 machines.
 
 The website's licensing responsibilities are the **pricing page** (below), the **Lemon Squeezy checkout link**, and **hosting the webhook function** that bridges Lemon Squeezy → Keygen.
@@ -271,7 +271,7 @@ The website's licensing responsibilities are the **pricing page** (below), the *
 
 ## Phase 6 — Pricing Page
 
-Route: `flightpath.dev/pricing/`
+Route: `ctrlyoke.dev/pricing/`
 
 ### 6.1 Layout
 
@@ -317,22 +317,22 @@ _New users get a **14-day free trial of remote access** — no card, no account.
 - [ ] Complete Phase 0 business email and account ownership setup in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)
 - [x] Create `landing/` Astro project in repo root (Astro 5 + Tailwind)
 - [x] Configure dual build + `/docs/` merge — root `build:site` script (`build:landing` → `build:docs` → `scripts/merge-docs-into-landing.mjs`); `netlify.toml` updated
-- [x] Add the three Netlify deploy workflows (§2.3, mirror `FuzzyNova/fuzzno`) and retire the legacy `docs-deploy.yml`. **Still TODO before first deploy:** create the flightpath.dev Netlify site and add `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` repo secrets, then confirm the first deploy is green
-- [x] `base: '/docs/'` in `docs/.vitepress/config.mts` (already the default; old `DOCS_BASE=/flightpath/` override retired with `docs-deploy.yml`)
-- [ ] **Point `flightpath.dev` DNS to Netlify** ← next step
+- [x] Add the three Netlify deploy workflows (§2.3, mirror `FuzzyNova/fuzzno`) and retire the legacy `docs-deploy.yml`. **Still TODO before first deploy:** create the ctrlyoke.dev Netlify site and add `NETLIFY_AUTH_TOKEN` + `NETLIFY_SITE_ID` repo secrets, then confirm the first deploy is green
+- [x] `base: '/docs/'` in `docs/.vitepress/config.mts` (already the default; old `DOCS_BASE=/ctrlyoke/` override retired with `docs-deploy.yml`)
+- [ ] **Point `ctrlyoke.dev` DNS to Netlify** ← next step
 - [x] Write landing page hero + features sections
 - [x] Add harness icon grid (`landing/public/icons/harnesses/`)
 - [x] Write pricing page (Free vs Pro columns + FAQ)
 - [x] Add `/terms` + `/privacy` pages (render canonical root `LICENSE.md` / `PRIVACY.md`)
 - [x] Pre-launch mode — `LAUNCHED` flag (`landing/src/config.ts`) gates disabled "Coming soon" CTAs, a banner, and `noindex`
 - [ ] Wire pricing-page checkout to Lemon Squeezy — **deferred:** disabled pre-launch; set `CHECKOUT_URL` and flip `LAUNCHED` at launch
-- [x] Publish `support@flightpath.dev` as the support path on the site/docs (README/marketplace tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) Phase 0.3)
+- [x] Publish `support@ctrlyoke.dev` as the support path on the site/docs (README/marketplace tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) Phase 0.3)
 - [ ] Add Netlify Function `ls-webhook` (Lemon Squeezy `order_created` → create Keygen license); details in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)
 - [x] Add `docs/pro/index.md` (activation instructions)
 - [x] Add `docs/.vitepress/config.mts` logo + social links
 - [ ] **Push to `main` for the first production deploy; confirm the Action is green, then test all live routes + the pre-launch state**
 
-> **Extension-side licensing tasks** (provider setup, `LicenseService`, "Activate Pro License" command, gating `FlightPathHostedServer` / SCM commit / MCP, step-limit enforcement) are tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md), not here.
+> **Extension-side licensing tasks** (provider setup, `LicenseService`, "Activate Pro License" command, gating `CtrlYokeHostedServer` / SCM commit / MCP, step-limit enforcement) are tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md), not here.
 
 ### Post-Launch (Nice to Have)
 

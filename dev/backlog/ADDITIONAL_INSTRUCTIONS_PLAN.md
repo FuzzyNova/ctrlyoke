@@ -6,7 +6,7 @@ Add `additionalInstructions` as a new three-tier execution property that injects
 
 ## Background
 
-FlightPath workflows often need a small number of cross-cutting behavioral rules that apply to every step. The current options are:
+ctrlyoke workflows often need a small number of cross-cutting behavioral rules that apply to every step. The current options are:
 
 - **Agent file** (`.agent.md`) — full-featured, but heavyweight. Requires creating a file on disk, referencing it in every workflow, and maintaining it separately. For a single instruction like "respond in British English" it's overkill.
 - **Repeating the instruction in every prompt** — violates DRY and makes workflows hard to maintain.
@@ -16,7 +16,7 @@ FlightPath workflows often need a small number of cross-cutting behavioral rules
 
 ### Compelling Use Cases
 
-- **Perpetual workflows:** `"Before ending your turn, always append a new prompt to the FlightPath queue using the flightpath MCP server."` Combined with `mcpServers: [flightpath]`, this creates self-extending workflows without hardcoding the instruction in every step.
+- **Perpetual workflows:** `"Before ending your turn, always append a new prompt to the ctrlyoke queue using the ctrlyoke MCP server."` Combined with `mcpServers: [ctrlyoke]`, this creates self-extending workflows without hardcoding the instruction in every step.
 - **Language/tone:** `"Always respond in British English."`
 - **Scope constraints:** `"You are working in a monorepo. Never touch files outside the packages/api/ directory."`
 - **Project-specific rules:** Injecting house-style conventions without a full agent file.
@@ -44,7 +44,7 @@ Three-state semantics follow the `additionalArgs` pattern exactly:
 
 1. Prompt-level `additionalInstructions` (highest — `null` here suppresses all instructions for this prompt)
 2. Workflow-level `additionalInstructions`
-3. Global VS Code setting `flightpath.additionalInstructions`
+3. Global VS Code setting `ctrlyoke.additionalInstructions`
 
 **Empty string handling:** Treat `""` the same as `undefined` — fall through to the next tier. A blank string is never injected.
 
@@ -54,7 +54,7 @@ Three-state semantics follow the `additionalArgs` pattern exactly:
 
 ## Schema Changes
 
-File: `schemas/prompt-schema.json`
+File: `schemas/workflow-schema.json`
 
 Add the field to the `executionProperties` definition (shared by workflow root and per-prompt items via `$ref`):
 
@@ -67,13 +67,13 @@ Add the field to the `executionProperties` definition (shared by workflow root a
 
 Because `executionProperties` is referenced by both the workflow root properties and the `promptItem` definition via `allOf`, adding it to `executionProperties` covers both tiers in a single change. No separate per-prompt addition needed.
 
-After editing `schemas/prompt-schema.json`, run `npm run generate-schema` to regenerate the YAML schema.
+After editing `schemas/workflow-schema.json`, run `npm run generate-schema` to regenerate the YAML schema.
 
 ---
 
 ## Type Changes
 
-File: `src/types/FlightPathTypes.ts`
+File: `src/types/CtrlYokeTypes.ts`
 
 Add to the `ExecutionProperties` interface alongside `additionalArgs`:
 
@@ -143,7 +143,7 @@ additionalInstructions: this.resolveAdditionalInstructions(prompt, workflow),
 
 ## Injection in CliPromptPreparer
 
-File: `src/flightpath/harness/shared/CliPromptPreparer.ts`
+File: `src/core/harness/shared/CliPromptPreparer.ts`
 
 ### Where it fits in the assembly order
 
@@ -196,7 +196,7 @@ For the simple inline path (no temp files), prepend the XML block directly to th
 Add to `contributes.configuration.properties`:
 
 ```json
-"flightpath.additionalInstructions": {
+"ctrlyoke.additionalInstructions": {
   "type": "string",
   "default": "",
   "markdownDescription": "Default instruction text injected into every prompt across all workflows, wrapped in `<additionalInstructions>` XML tags. Override or suppress per-workflow or per-prompt using the `additionalInstructions` YAML field. Leave blank to disable."
@@ -300,7 +300,7 @@ Check `src/ui/webview-react/stores/` for the settings store — it likely uses a
 
 ## CopilotChatIntegration
 
-File: `src/flightpath/harness/chat/CopilotChatIntegration.ts`
+File: `src/core/harness/chat/CopilotChatIntegration.ts`
 
 The chat harness builds typed temp files and attaches them to the VS Code chat panel. Follow the existing pattern for the `.context.prompt.md` category file:
 

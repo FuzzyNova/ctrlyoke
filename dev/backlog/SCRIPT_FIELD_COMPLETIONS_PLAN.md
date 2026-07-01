@@ -325,8 +325,8 @@ Run `npm run compile` if router/type changes touch extension-side compilation in
 
 - Detect package manager from lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`) and sort matching commands first.
 - Discover nested workspace packages from npm/pnpm/yarn workspaces.
-- Add completions for local `.flightpath/scripts/*` files.
-- Add variable completions for `FLIGHTPATH_VAR_*` if workflow vars are present.
+- Add completions for local `.ctrlyoke/scripts/*` files.
+- Add variable completions for `CTRLYOKE_VAR_*` if workflow vars are present.
 - Add shell-specific filtering based on the configured terminal shell.
 - Add snippets for common validation patterns like `npm test && npm run lint`.
 - Surface package script descriptions if the project adopts a convention for comments or metadata.

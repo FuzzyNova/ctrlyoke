@@ -53,7 +53,7 @@ parallel groups (not a full DAG).
 
 | Feature                                          | Existing                                | This Plan                    |
 | ------------------------------------------------ | --------------------------------------- | ---------------------------- |
-| Multiple workflows running at once               | Yes — separate `.flightpath.yaml` files | —                            |
+| Multiple workflows running at once               | Yes — separate `.ctrlyoke.yaml` files | —                            |
 | Multiple prompts running at once within one file | No                                      | Yes                          |
 | Shared workflow context (vars, harness, model)   | No — each file is independent           | Yes                          |
 | Synthesis step after parallel group completes    | Manual external orchestration           | Native                       |
@@ -141,7 +141,7 @@ Worse than Option A: verbose (must repeat `group` and `parallel` on each step), 
      "most recent" session of the harness type, which is the same session. Emit a clear error
      naming the conflicting steps.
    - **Multiple steps with the same explicit `sessionId`** — same collision. Emit a clear error.
-2. **Dynamic queue extension (`mcpServers: ["flightpath"]`)** — if a parallel step tries to
+2. **Dynamic queue extension (`mcpServers: ["ctrlyoke"]`)** — if a parallel step tries to
    append more steps to the queue mid-execution, the ordering semantics are undefined.
    Disallow at parse time.
 3. **Nested `parallel` groups** — do not allow `parallel` inside `parallel`. Flat groups
@@ -289,7 +289,7 @@ flattened at the runtime layer) was considered and rejected because:
    distinction that exists only to represent nesting that we don't want at runtime anyway.
    The parser is the only place that sees the `parallel:` key — it can immediately flatten.
 
-2. **`PromptFile` IS the working file.** Working files (`.flightpath/.queue/*.json`) are
+2. **`PromptFile` IS the working file.** Working files (`.ctrlyoke/.queue/*.json`) are
    persisted `PromptFile` instances. If `PromptFile.steps` was nested, working files would
    store nested groups, requiring an expand step on every reload. With flat + `groups`,
    the working file is already in execution-ready form.
@@ -564,7 +564,7 @@ sessions. This works identically in headless mode (no terminal shown) and intera
 
 ## Schema Changes
 
-### `schemas/prompt-schema.json`
+### `schemas/workflow-schema.json`
 
 Add a queue-only `workflowStepsItem` definition that accepts either a normal
 `workflowStep` or a schema-only `parallelGroup`. Keep `finalStep` referencing
@@ -617,16 +617,16 @@ runtime step type that the TypeScript model deliberately does not have. Update o
 
 | File                                                                                       | Change                                                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schemas/prompt-schema.json`                                                               | Add `parallelGroup` to new `workflowStepsItem` definition used in `steps` array only (not `finalStep`)                                                                                     |
-| `src/types/FlightPathTypes.ts`                                                             | Add `ParallelGroupRange` interface; add `groups?` to `PromptFile` and `QueueState`; `WorkflowStep` and `PromptFile.steps` type **unchanged**                                               |
+| `schemas/workflow-schema.json`                                                              | Add `parallelGroup` to new `workflowStepsItem` definition used in `steps` array only (not `finalStep`)                                                                                     |
+| `src/types/CtrlYokeTypes.ts`                                                               | Add `ParallelGroupRange` interface; add `groups?` to `PromptFile` and `QueueState`; `WorkflowStep` and `PromptFile.steps` type **unchanged**                                               |
 | `src/types/DashboardConstants.ts`                                                          | Add `PARALLEL_GROUP_STATUS` and, if needed, a property-key constant for `parallel`; do **not** add `STEP_TYPES.PARALLEL`                                                                   |
 | `src/types/WebviewMessageTypes.ts`                                                         | Add `groups` to file/session/steps messages and optional terminal metadata (`stepIndex`, `parallelGroupId` or `isParallelStep`)                                                            |
-| `src/flightpath/PromptFileParser.ts`                                                       | Parse `parallel:` groups directly into flat `steps` + `groups`; validate inherited/effective constraint collisions                                                                         |
-| `src/flightpath/PromptQueue.ts`                                                            | Store and persist `groups`; add `getGroupForStep()` / `isGroupStart()` helpers; add index-specific completion/skip/send APIs for concurrent group execution                                |
-| `src/flightpath/WorkflowExecutor.ts`                                                       | Phase 1 sequential group drain, then Phase 2 fan-out after indexed queue APIs and response parking are parallel-safe                                                                       |
-| `src/flightpath/WorkflowInstance.ts`                                                       | Add parallel-only integration acquisition/cleanup keyed by execution target instead of harness ID                                                                                          |
-| `src/flightpath/IntegrationFactory.ts`                                                     | No factory interface changes expected — `createForExecution(harness)` already creates isolated instances when called                                                                       |
-| `src/flightpath/harness/PtyProcessManager.ts`                                              | Tag parallel step sessions with their flat step index as `promptNumber` and expose enough metadata for replay/debugging (`stepIndex`, group ID if added)                                   |
+| `src/core/PromptFileParser.ts`                                                              | Parse `parallel:` groups directly into flat `steps` + `groups`; validate inherited/effective constraint collisions                                                                         |
+| `src/core/PromptQueue.ts`                                                                   | Store and persist `groups`; add `getGroupForStep()` / `isGroupStart()` helpers; add index-specific completion/skip/send APIs for concurrent group execution                                |
+| `src/core/WorkflowExecutor.ts`                                                              | Phase 1 sequential group drain, then Phase 2 fan-out after indexed queue APIs and response parking are parallel-safe                                                                       |
+| `src/core/WorkflowInstance.ts`                                                              | Add parallel-only integration acquisition/cleanup keyed by execution target instead of harness ID                                                                                          |
+| `src/core/IntegrationFactory.ts`                                                            | No factory interface changes expected — `createForExecution(harness)` already creates isolated instances when called                                                                       |
+| `src/core/harness/PtyProcessManager.ts`                                                     | Tag parallel step sessions with their flat step index as `promptNumber` and expose enough metadata for replay/debugging (`stepIndex`, group ID if added)                                   |
 | `src/types/IDashboardSink.ts` / `src/ui/PostMessageDashboardSink.ts`                       | Thread `groups` through file selected, session restored, steps extended, reset, start-position, and reorder messages                                                                       |
 | `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx`                            | Use `groups` from `QueueState` to render parallel group wrappers                                                                                                                           |
 | `src/ui/webview-react/components/prompts/ParallelGroupPanel.tsx`                           | **New component**: parallel group wrapper with header, failFast toggle, drag-and-drop                                                                                                      |
@@ -649,8 +649,8 @@ runtime step type that the TypeScript model deliberately does not have. Update o
 
 ### Phase 1 — Schema + Parsing + Sequential Fallback
 
-1. **Add `ParallelGroupRange` to `FlightPathTypes.ts` and update schema**
-   - Add `ParallelGroupRange` interface to `FlightPathTypes.ts`:
+1. **Add `ParallelGroupRange` to `CtrlYokeTypes.ts` and update schema**
+   - Add `ParallelGroupRange` interface to `CtrlYokeTypes.ts`:
      ```typescript
      interface ParallelGroupRange {
        startIndex: number; // inclusive flat index of first step in group
@@ -686,7 +686,7 @@ runtime step type that the TypeScript model deliberately does not have. Update o
        `resumeSession` is effective true (two steps cannot resume the same session
        simultaneously)
      - Reject nested parallel groups
-     - Reject effective `mcpServers` containing `"flightpath"` (dynamic queue extension),
+     - Reject effective `mcpServers` containing `"ctrlyoke"` (dynamic queue extension),
        including workflow-level inheritance unless the step explicitly sets `mcpServers: null`
      - Reject `priorContext` number arrays referencing steps within the same group
        (numbers are 1-based prompt numbers; group ranges are 0-based)
@@ -831,7 +831,7 @@ runtime step type that the TypeScript model deliberately does not have. Update o
    steps use sequential integers in the global step sequence (e.g., steps 2, 3, 4 for a
    3-step parallel group), the synthesis step can use `priorContext: [2, 3, 4]` with the
    existing integer-index system — no schema or runtime changes needed. The temp file
-   alternative (`@.flightpath/temp/output.md`) remains available if users prefer it, but
+   alternative (`@.ctrlyoke/temp/output.md`) remains available if users prefer it, but
    `priorContext` integer arrays work out of the box.
 
 2. **Headless vs interactive mode for parallel steps:** Both modes are supported. The
@@ -902,8 +902,8 @@ same-harness replacement must be disabled for sessions marked as parallel steps.
 `PromptQueue`. Clean separation makes adding parallel group state straightforward.
 
 ✅ / ⚠️ **Harness lifecycle**: `IntegrationFactory.createForExecution(harness)` creates an
-isolated integration when called (verified in `src/flightpath/IntegrationFactory.ts` and
-`src/flightpath/VsCodeIntegrationFactory.ts`). However, `WorkflowInstance` currently caches
+isolated integration when called (verified in `src/core/IntegrationFactory.ts` and
+`src/core/VsCodeIntegrationFactory.ts`). However, `WorkflowInstance` currently caches
 execution integrations by harness ID within a run. Phase 2 must add a parallel-only path that
 calls the factory once per parallel prompt step and tracks those integrations by execution
 target, not by harness.
@@ -967,7 +967,7 @@ those risks by flattening and displaying groups while executing grouped steps se
 4. **Nested parallel groups are disallowed in Phase 1**. Flat groups only to keep
    complexity manageable.
 
-5. **Dynamic queue extension (`mcpServers: ["flightpath"]`) is disallowed** within
+5. **Dynamic queue extension (`mcpServers: ["ctrlyoke"]`) is disallowed** within
    parallel groups to avoid undefined ordering semantics.
 
 6. **`priorContext` referencing steps within the same parallel group is disallowed**
@@ -1035,7 +1035,7 @@ those risks by flattening and displaying groups while executing grouped steps se
    together. Individual step edits inside a group remain normal step edits; group boundary
    edits update the companion `groups` array in the same store transaction.
 
-3. ✅ **CLI binary support:** The `flightpath` CLI binary uses the same execution engine.
+3. ✅ **CLI binary support:** The `ctrlyoke` CLI binary uses the same execution engine.
    Parallel groups work identically in CLI mode (headless only, no terminal). Output remains
    flat-step-index keyed; CLI text/log output should include the step number/name so concurrent
    output is attributable.

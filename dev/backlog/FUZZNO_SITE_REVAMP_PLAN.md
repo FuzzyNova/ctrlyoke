@@ -3,13 +3,13 @@
 **Target repo:** `C:\dev\fuzzno` → `github.com/FuzzyNova/fuzzno` → deploys to **fuzzno.com** on Netlify
 **Status:** PLANNING
 **Created:** June 26, 2026
-**Portability note:** This plan lives in the FlightPath backlog but is written to be **carried over to the `fuzzno` workspace** and handed to an agent there. It is self-contained — it does not depend on any FlightPath repo files. The only cross-reference is the external URL `flightpath.dev`.
+**Portability note:** This plan lives in the ctrlyoke backlog but is written to be **carried over to the `fuzzno` workspace** and handed to an agent there. It is self-contained — it does not depend on any ctrlyoke repo files. The only cross-reference is the external URL `ctrlyoke.dev`.
 
 ---
 
 ## Purpose
 
-Evolve `fuzzno.com` from a single-game splash page into a professional **software-studio** site that presents Fuzzy Nova's portfolio under one brand: the **Nibiru** game and the **FlightPath** developer tool (`flightpath.dev`). The site should read like the home of a small but serious studio that ships both games and developer tooling — not a one-game portfolio.
+Evolve `fuzzno.com` from a single-game splash page into a professional **software-studio** site that presents Fuzzy Nova's portfolio under one brand: the **Nibiru** game and the **ctrlyoke** developer tool (`ctrlyoke.dev`). The site should read like the home of a small but serious studio that ships both games and developer tooling — not a one-game portfolio.
 
 ---
 
@@ -32,7 +32,7 @@ Evolve `fuzzno.com` from a single-game splash page into a professional **softwar
 
 1. Reposition Fuzzy Nova as an **independent software studio** spanning games **and** developer tools.
 2. Replace the single project link with a **projects/products grid** holding two first-class entries:
-   - **FlightPath** — developer tool, primary outbound CTA to `https://flightpath.dev`.
+   - **ctrlyoke** — developer tool, primary outbound CTA to `https://ctrlyoke.dev`.
    - **Nibiru** — game, links to `/nibiru` (unchanged).
 3. Add the polish that signals "professional studio": real intro copy, social/share metadata, a footer with contact, and consistent visual language.
 4. Keep the site **fast, static, and low-maintenance**, and leave the **Nibiru game and its highscores function completely untouched**.
@@ -43,7 +43,7 @@ Evolve `fuzzno.com` from a single-game splash page into a professional **softwar
 
 - **Do not** modify, rebuild, or move the Nibiru game (`/nibiru/**`) or its highscores Netlify Function / blobs wiring.
 - **Do not** change the Netlify deploy mechanism or move the repo.
-- No blog/CMS, no e-commerce, no FlightPath license/checkout logic — those live on `flightpath.dev`. This site only *links* to FlightPath.
+- No blog/CMS, no e-commerce, no ctrlyoke license/checkout logic — those live on `ctrlyoke.dev`. This site only *links* to ctrlyoke.
 
 ---
 
@@ -55,7 +55,7 @@ Evolve `fuzzno.com` from a single-game splash page into a professional **softwar
 - The site is a handful of sections; a framework adds toolchain weight for no real gain.
 - Fast by default — good Core Web Vitals with no JS.
 
-**Alternative (note, don't default to it):** adopt **Astro** for visual/component parity with `flightpath.dev` (which the FlightPath landing plan builds in Astro). Only worth it if you intend to share components/design tokens across both sites. Tradeoff: introduces a build step and a `package.json` build pipeline that Netlify must run, and risks disturbing the working static + function setup. **Defer unless cross-site component sharing becomes a real need.**
+**Alternative (note, don't default to it):** adopt **Astro** for visual/component parity with `ctrlyoke.dev` (which the ctrlyoke landing plan builds in Astro). Only worth it if you intend to share components/design tokens across both sites. Tradeoff: introduces a build step and a `package.json` build pipeline that Netlify must run, and risks disturbing the working static + function setup. **Defer unless cross-site component sharing becomes a real need.**
 
 ---
 
@@ -65,15 +65,15 @@ Evolve `fuzzno.com` from a single-game splash page into a professional **softwar
 - [ ] Rewrite the tagline. Current "games & interactive experiences" no longer covers developer tools. Options (Nathan to pick — see Open Decisions): *"an independent software studio"*, *"games & developer tools"*, *"we build games and tools for builders"*.
 - [ ] Add a one- or two-sentence studio intro under the hero establishing what Fuzzy Nova is.
 - [ ] Restructure the body from a single link into a **Projects grid** of cards:
-  - **FlightPath** — short line e.g. *"Automate your AI coding assistants — a VS Code extension."* Primary button → `https://flightpath.dev` (external, `rel="noopener"`). Tag it as a developer tool.
+  - **ctrlyoke** — short line e.g. *"Automate your AI coding assistants — a VS Code extension."* Primary button → `https://ctrlyoke.dev` (external, `rel="noopener"`). Tag it as a developer tool.
   - **Nibiru** — short line e.g. *"A rhythm-driven Unity game."* Button → `/nibiru`. Tag it as a game.
-- [ ] Add a **footer**: `© {year} Fuzzy Nova`, contact (`hello@fuzzno.com`), link to `flightpath.dev`, and the GitHub org if you want it public.
+- [ ] Add a **footer**: `© {year} Fuzzy Nova`, contact (`hello@fuzzno.com`), link to `ctrlyoke.dev`, and the GitHub org if you want it public.
 
 ### 2. Visual design
 - [ ] Keep the dark theme, logo, and brand accent (currently `#4444aa`/`#aaaaff`), but elevate from one centered splash to a clean multi-section layout (hero → projects grid → footer).
 - [ ] Responsive card grid (1 column mobile, 2 columns desktop).
 - [ ] Keep `DPComic` for the display heading, but use a clean body font (`system-ui` or Inter) for intro/card/footer copy so longer text reads professionally. Right now `DPComic` is only on the `h1`, which is fine — just don't push the comic font into body copy.
-- [ ] Optional: small per-project thumbnail/icon (a Nibiru icon already exists at `nibiru/TemplateData/NibiruIcon*.png`; use or supply a FlightPath mark).
+- [ ] Optional: small per-project thumbnail/icon (a Nibiru icon already exists at `nibiru/TemplateData/NibiruIcon*.png`; use or supply a ctrlyoke mark).
 
 ### 3. SEO & share metadata (biggest "professional" lever)
 - [ ] Add `<meta name="description">`, canonical URL, and **OpenGraph + Twitter card** tags so `fuzzno.com` produces a proper preview when shared. This is the cheapest, highest-impact polish — a bare link preview is the main thing that reads "hobby" today.
@@ -81,8 +81,8 @@ Evolve `fuzzno.com` from a single-game splash page into a professional **softwar
 - [ ] Add `robots.txt` and a minimal `sitemap.xml`.
 
 ### 4. Cross-linking
-- [ ] `fuzzno.com` → `flightpath.dev` via the FlightPath card + footer (this plan).
-- [ ] Reciprocal `flightpath.dev` → `fuzzno.com` ("operated by Fuzzy Nova") is owned by the **FlightPath landing page plan**, not this one. Just make sure the FlightPath card here points at the production domain.
+- [ ] `fuzzno.com` → `ctrlyoke.dev` via the ctrlyoke card + footer (this plan).
+- [ ] Reciprocal `ctrlyoke.dev` → `fuzzno.com` ("operated by Fuzzy Nova") is owned by the **ctrlyoke landing page plan**, not this one. Just make sure the ctrlyoke card here points at the production domain.
 
 ### 5. Deploy (no workflow changes required)
 - [ ] None needed — the existing GitHub Actions deploy (`deploy.yml` → `_netlify-deploy.yml`, `--dir=.`) already publishes to production on push to `main`, and `deploy-preview.yml` gives every branch a preview URL. As long as the revamp stays static, the workflows and secrets are untouched.
@@ -92,8 +92,8 @@ Evolve `fuzzno.com` from a single-game splash page into a professional **softwar
 
 ## Acceptance Criteria
 
-- `fuzzno.com` presents Fuzzy Nova as a studio with **both** FlightPath and Nibiru as first-class projects.
-- FlightPath card links to `https://flightpath.dev`; Nibiru still loads at `/nibiru` with working highscores.
+- `fuzzno.com` presents Fuzzy Nova as a studio with **both** ctrlyoke and Nibiru as first-class projects.
+- ctrlyoke card links to `https://ctrlyoke.dev`; Nibiru still loads at `/nibiru` with working highscores.
 - Sharing `fuzzno.com` yields a proper title + description + image preview.
 - No changes to `nibiru/**`, `netlify/functions/**`, or the `netlify.toml` redirects for highscores.
 - Site remains static and deploys via the existing GitHub Actions → Netlify CLI workflows with no workflow edits and no new failures.
@@ -105,4 +105,4 @@ Evolve `fuzzno.com` from a single-game splash page into a professional **softwar
 1. **Tagline wording** — pick from the options above or supply your own.
 2. **Static vs Astro** — recommendation is static; confirm you don't want cross-site component sharing yet.
 3. **Public contact / GitHub org link in footer** — include `hello@fuzzno.com`? Link the GitHub org publicly?
-4. **FlightPath positioning line** — confirm the one-liner used on the card matches the messaging on `flightpath.dev`.
+4. **ctrlyoke positioning line** — confirm the one-liner used on the card matches the messaging on `ctrlyoke.dev`.

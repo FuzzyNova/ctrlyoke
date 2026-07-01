@@ -218,7 +218,7 @@ The rendering is intentionally not abstracted into a wrapper component. Each dro
 
 ## Broader Error Handling Gap (Out of Scope for This Plan)
 
-The current FlightPath error surface has three tiers:
+The current ctrlyoke error surface has three tiers:
 
 | Tier                | Mechanism                                                       | User-visible result                            |
 | ------------------- | --------------------------------------------------------------- | ---------------------------------------------- |

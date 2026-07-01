@@ -6,14 +6,14 @@
 
 ## Is This Worth Building?
 
-**Yes.** The core problem is real: when multiple FlightPath workflows run in the same
+**Yes.** The core problem is real: when multiple ctrlyoke workflows run in the same
 checkout, agents share a filesystem. One agent's test run produces errors the other
 caused; `npm install` from one workflow modifies `package-lock.json` while another reads
 it; a compile error in the wrong file derails the wrong agent. Worktree isolation
 eliminates this class of problem entirely by giving each workflow its own branch and
 working directory.
 
-The `flightpath_global_status` MCP tool (already added) provides situational awareness
+The `ctrlyoke_global_status` MCP tool (already added) provides situational awareness
 for agents that _want_ to share a workspace. Worktree support is for agents that should
 be _isolated_ from each other — different concerns, different branches, no interference.
 
@@ -28,8 +28,8 @@ worktree do not appear in another until explicitly merged.
 
 ```
 C:\dev\FlightPath\           ← main checkout (branch: main)
-C:\dev\FlightPath\.flightpath\worktrees\ui-work\   ← worktree A (branch: ui-work)
-C:\dev\FlightPath\.flightpath\worktrees\backend\   ← worktree B (branch: backend)
+C:\dev\FlightPath\.ctrlyoke\worktrees\ui-work\   ← worktree A (branch: ui-work)
+C:\dev\FlightPath\.ctrlyoke\worktrees\backend\   ← worktree B (branch: backend)
 ```
 
 The harness CLI (`claude`, `gh copilot`, etc.) is launched with its `cwd` set to the
@@ -44,13 +44,13 @@ branch name string. This controls the entire lifecycle.
 
 ### Mode A — Managed / Ephemeral (`worktree: true` or `worktree: auto`)
 
-FlightPath owns the full lifecycle:
+ctrlyoke owns the full lifecycle:
 
-1. **On workflow start**: run `git worktree add .flightpath/worktrees/<workflow-name>-<timestamp> -b flightpath/<workflow-name>-<timestamp>`
-2. **During execution**: harness `cwd` = worktree path; `FLIGHTPATH_WORKSPACE` env var keeps
+1. **On workflow start**: run `git worktree add .ctrlyoke/worktrees/<workflow-name>-<timestamp> -b ctrlyoke/<workflow-name>-<timestamp>`
+2. **During execution**: harness `cwd` = worktree path; `CTRLYOKE_WORKSPACE` env var keeps
    pointing to the main workspace so working files, logs, and history stay centralized
 3. **On workflow complete**: attempt auto-merge back to the branch the main checkout is on
-4. **Merge succeeded**: run `git worktree remove .flightpath/worktrees/<name>` and delete
+4. **Merge succeeded**: run `git worktree remove .ctrlyoke/worktrees/<name>` and delete
    the branch — clean slate
 5. **Merge conflict**: leave worktree in place, post a VS Code notification with the path
    and instructions. The user resolves manually; the worktree is marked `orphaned` in the
@@ -62,13 +62,13 @@ automated.
 
 ### Mode B — Named / Persistent (`worktree: ui-work`)
 
-The user (or FlightPath on first use) owns the worktree. FlightPath checks if a worktree
+The user (or ctrlyoke on first use) owns the worktree. ctrlyoke checks if a worktree
 for the given name already exists; if not, it creates one with that branch name (lazy
 creation). No auto-merge, no auto-remove. The user decides when to merge and when to
 delete.
 
 ```
-worktree: ui-work     ← branch name; worktree at .flightpath/worktrees/ui-work/
+worktree: ui-work     ← branch name; worktree at .ctrlyoke/worktrees/ui-work/
 ```
 
 Multiple workflow runs with the same name reuse the same worktree. This is Nathan's
@@ -100,7 +100,7 @@ worktree: ui-work
 Step-level `worktree` overrides are not in scope for Phase 1. All steps in a workflow
 run in the same worktree. This avoids complex mid-workflow cwd switching.
 
-### Schema addition to `schemas/prompt-schema.json`
+### Schema addition to `schemas/workflow-schema.json`
 
 Add `worktree` to `executionProperties` alongside `harness`, `model`, etc.:
 
@@ -110,7 +110,7 @@ Add `worktree` to `executionProperties` alongside `harness`, `model`, etc.:
     { "type": "boolean" },
     { "type": "string", "minLength": 1 }
   ],
-  "description": "Run this workflow in a git worktree. true/\"auto\": FlightPath creates a timestamped branch and worktree, attempts auto-merge on completion, and removes it. A branch name string (e.g. \"ui-work\"): uses that named branch/worktree (creates it on first use, no auto-merge)."
+  "description": "Run this workflow in a git worktree. true/\"auto\": ctrlyoke creates a timestamped branch and worktree, attempts auto-merge on completion, and removes it. A branch name string (e.g. \"ui-work\"): uses that named branch/worktree (creates it on first use, no auto-merge)."
 }
 ```
 
@@ -121,13 +121,13 @@ Add `worktree` to `executionProperties` alongside `harness`, `model`, etc.:
 ### New: `WorktreeManager`
 
 Extracted class following the same pattern as `WorkspaceSessionManager`. Lives at
-`src/flightpath/orchestration/WorktreeManager.ts`.
+`src/core/orchestration/WorktreeManager.ts`.
 
 ```typescript
 interface WorktreeInfo {
   branchName: string;
   worktreePath: string;
-  managed: boolean; // true = auto mode (FlightPath created it, will clean up)
+  managed: boolean; // true = auto mode (ctrlyoke created it, will clean up)
   workflowName: string;
   createdAt: number;
 }
@@ -151,7 +151,7 @@ class WorktreeManager {
   // Attempt merge back to current HEAD branch, return result
   async mergeAndCleanup(info: WorktreeInfo): Promise<MergeResult>;
 
-  // List all FlightPath-managed worktrees (branch name starts with "flightpath/")
+  // List all ctrlyoke-managed worktrees (branch name starts with "ctrlyoke/")
   async listManagedWorktrees(): Promise<WorktreeInfo[]>;
 
   // Remove a worktree (used after successful merge, or user-initiated cleanup)
@@ -180,11 +180,11 @@ WorkflowInstance
 workspace folder. No changes to harness-specific code — the `cwd` is already passed
 through as a parameter in `CliExecutionRunner`.
 
-### `FLIGHTPATH_WORKSPACE` stays the same
+### `CTRLYOKE_WORKSPACE` stays the same
 
-The MCP server and all FlightPath state (`.flightpath/.queue/`, `.flightpath/logs/`,
-`.flightpath/.history/`) stay anchored to the **main workspace root**, not the worktree.
-The existing `FLIGHTPATH_WORKSPACE` env var already ensures this — it's set to the main
+The MCP server and all ctrlyoke state (`.ctrlyoke/.queue/`, `.ctrlyoke/logs/`,
+`.ctrlyoke/.history/`) stay anchored to the **main workspace root**, not the worktree.
+The existing `CTRLYOKE_WORKSPACE` env var already ensures this — it's set to the main
 workspace root before the harness CLI spawns. No changes needed to the MCP server or
 working file path resolution.
 
@@ -224,8 +224,8 @@ After a managed workflow completes, `WorktreeManager.mergeAndCleanup()` runs:
 **VS Code notification on conflict:**
 
 ```
-FlightPath: Workflow "ui-refactor" completed but merge to main has conflicts.
-Worktree left at: .flightpath/worktrees/ui-refactor-2026-04-26/
+ctrlyoke: Workflow "ui-refactor" completed but merge to main has conflicts.
+Worktree left at: .ctrlyoke/worktrees/ui-refactor-2026-04-26/
 Conflicting files: src/ui/Dashboard.tsx, src/ui/StatusBar.tsx
 [Open Worktree] [Dismiss]
 ```
@@ -236,12 +236,12 @@ The working file records `state: "conflict"` so the dashboard can show a warning
 
 ## `.gitignore` Requirement
 
-`.flightpath/worktrees/` must be in `.gitignore`. If not present when the first
+`.ctrlyoke/worktrees/` must be in `.gitignore`. If not present when the first
 auto-managed worktree is created, `WorktreeManager` appends it automatically (same
-pattern as how the extension ensures `.flightpath/` exists).
+pattern as how the extension ensures `.ctrlyoke/` exists).
 
 Note: git worktrees _are_ functional when placed inside the repo directory as long as
-the path is gitignored. The `.flightpath/` directory is already runtime-only.
+the path is gitignored. The `.ctrlyoke/` directory is already runtime-only.
 
 ---
 
@@ -253,8 +253,8 @@ Show a "worktree" badge on workflows running in a worktree:
 
 ```
 ▶ ui-refactor   [claude-cli] [sonnet]  ● running
-  Branch: flightpath/ui-refactor-2026-04-26
-  Worktree: .flightpath/worktrees/ui-refactor-2026-04-26/
+  Branch: ctrlyoke/ui-refactor-2026-04-26
+  Worktree: .ctrlyoke/worktrees/ui-refactor-2026-04-26/
 ```
 
 For named worktrees: `Branch: ui-work` with no timestamp.
@@ -273,9 +273,9 @@ No structural changes needed.
 
 ---
 
-## `flightpath_global_status` integration
+## `ctrlyoke_global_status` integration
 
-The existing `flightpath_global_status` MCP tool (already implemented) returns all
+The existing `ctrlyoke_global_status` MCP tool (already implemented) returns all
 workflows. When worktree support lands, include the `worktree` field in each workflow's
 status payload so agents know which branch their sibling is working on:
 
@@ -284,8 +284,8 @@ status payload so agents know which branch their sibling is working on:
   "workflowName": "ui-refactor",
   "executionState": "running",
   "worktree": {
-    "branchName": "flightpath/ui-refactor-2026-04-26",
-    "worktreePath": ".flightpath/worktrees/ui-refactor-2026-04-26",
+    "branchName": "ctrlyoke/ui-refactor-2026-04-26",
+    "worktreePath": ".ctrlyoke/worktrees/ui-refactor-2026-04-26",
     "managed": true,
     "state": "active"
   }
@@ -298,17 +298,17 @@ status payload so agents know which branch their sibling is working on:
 
 | File                                                            | Change                                                                                      |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `schemas/prompt-schema.json`                                    | Add `worktree` to `executionProperties`                                                     |
-| `src/types/FlightPathTypes.ts`                                  | Add `worktree?: string \| boolean` to `PromptFile`; add `worktree?` to `WorkingFileRuntime` |
-| `src/flightpath/orchestration/WorktreeManager.ts`               | **New class** — git worktree lifecycle                                                      |
-| `src/flightpath/WorkflowOrchestrator.ts`                        | Instantiate `WorktreeManager`; call before/after workflow execution                         |
-| `src/flightpath/WorkflowInstance.ts`                            | Store `WorktreeInfo` on instance; propagate to `WorkflowExecutionContext`                   |
-| `src/flightpath/WorkflowExecutor.ts`                            | Pass `worktreePath` from context to `CliIntegration` as `cwd`                               |
-| `src/flightpath/harness/CliIntegration.ts`                      | Accept optional `cwd` override; pass to `CliExecutionRunner`                                |
-| `src/flightpath/harness/shared/CliExecutionRunner.ts`           | Use provided `cwd` over workspace folder when set                                           |
-| `src/flightpath/harness/chat/CopilotChatIntegration.ts`         | Accept `cwd` override for consistency                                                       |
-| `src/mcp-server.ts`                                             | Add `worktree` field to `flightpath_global_status` response (already added tool)            |
-| `src/flightpath/orchestration/WorkspaceSessionManager.ts`       | Include worktree info in `discoverSessions()` detail                                        |
+| `schemas/workflow-schema.json`                                  | Add `worktree` to `executionProperties`                                                     |
+| `src/types/CtrlYokeTypes.ts`                                    | Add `worktree?: string \| boolean` to `PromptFile`; add `worktree?` to `WorkingFileRuntime` |
+| `src/core/orchestration/WorktreeManager.ts`                     | **New class** — git worktree lifecycle                                                      |
+| `src/core/WorkflowOrchestrator.ts`                              | Instantiate `WorktreeManager`; call before/after workflow execution                         |
+| `src/core/WorkflowInstance.ts`                                  | Store `WorktreeInfo` on instance; propagate to `WorkflowExecutionContext`                   |
+| `src/core/WorkflowExecutor.ts`                                  | Pass `worktreePath` from context to `CliIntegration` as `cwd`                               |
+| `src/core/harness/CliIntegration.ts`                            | Accept optional `cwd` override; pass to `CliExecutionRunner`                                |
+| `src/core/harness/shared/CliExecutionRunner.ts`                 | Use provided `cwd` over workspace folder when set                                           |
+| `src/core/harness/chat/CopilotChatIntegration.ts`               | Accept `cwd` override for consistency                                                       |
+| `src/mcp-server.ts`                                             | Add `worktree` field to `ctrlyoke_global_status` response (already added tool)              |
+| `src/core/orchestration/WorkspaceSessionManager.ts`             | Include worktree info in `discoverSessions()` detail                                        |
 | `src/ui/webview-react/components/layout/WorkflowStepsPanel.tsx` | Show worktree badge on workflow header                                                      |
 | `src/test/unit/WorktreeManager.test.ts`                         | **New** — unit tests for create, resolve, merge, cleanup                                    |
 | `src/test/unit/WorkflowOrchestrator.test.ts`                    | Tests for worktree lifecycle integration                                                    |
@@ -333,7 +333,7 @@ status payload so agents know which branch their sibling is working on:
 4. **`WorkflowOrchestrator` wiring**: on workflow start, if `worktree` is a string name,
    call `resolveNamedWorktree()` and store result on `WorkflowInstance`
 
-5. **`.gitignore` guard**: `WorktreeManager` ensures `.flightpath/worktrees/` is gitignored
+5. **`.gitignore` guard**: `WorktreeManager` ensures `.ctrlyoke/worktrees/` is gitignored
    before creating the first worktree
 
 6. **Tests**: `WorktreeManager.test.ts` covering the named mode
@@ -360,29 +360,29 @@ No auto-merge, no auto-remove — user owns the branch lifecycle.
 
 13. **Workflow card badge** showing branch name and merge state
 
-14. **`flightpath_global_status` response** enriched with worktree metadata
+14. **`ctrlyoke_global_status` response** enriched with worktree metadata
 
 15. **`discoverSessions()`** includes worktree info in session detail
 
-16. **Optional**: a FlightPath command `FlightPath: Manage Worktrees` that lists all
+16. **Optional**: a ctrlyoke command `ctrlyoke: Manage Worktrees` that lists all
     managed worktrees with their state and offers "Remove" / "Open in VS Code" actions
 
 ---
 
 ## Design Decisions
 
-### Why `.flightpath/worktrees/` instead of a sibling directory?
+### Why `.ctrlyoke/worktrees/` instead of a sibling directory?
 
 Sibling directories (`../repo-ui-work/`) are the most common convention, but they're
 harder to clean up, pollute the parent directory, and break when the user's workspace is
 mounted inside a container or at a non-standard path. Keeping worktrees inside
-`.flightpath/` (which is already gitignored and runtime-owned) makes them clearly owned
-by FlightPath and trivially removable with the entire `.flightpath/` directory.
+`.ctrlyoke/` (which is already gitignored and runtime-owned) makes them clearly owned
+by ctrlyoke and trivially removable with the entire `.ctrlyoke/` directory.
 
 ### Why not reuse Claude's `--worktree` flag?
 
 Claude Code's `--worktree` flag does the same `git worktree add` and sets the session cwd
-— but it only works for the `claude-cli` harness. FlightPath needs worktree support that
+— but it only works for the `claude-cli` harness. ctrlyoke needs worktree support that
 works uniformly across all seven harnesses (`copilot-cli`, `claude-cli`, `codex-cli`,
 `opencode-cli`, `qwen-cli`, `gemini-cli`, `copilot-chat`). Implementing it in
 `WorktreeManager` gives all harnesses the feature for free.
@@ -421,7 +421,7 @@ This is a `WorkflowExecutionContext` field that already flows to `EndConditionHa
    Worktrees are effectively meaningless for `copilot-chat`. Document this limitation
    and emit a warning if `worktree` is set with `harness: copilot-chat`.
 
-4. **`FLIGHTPATH_WORKSPACE` in MCP env vars**: The extension sets `FLIGHTPATH_WORKSPACE`
+4. **`CTRLYOKE_WORKSPACE` in MCP env vars**: The extension sets `CTRLYOKE_WORKSPACE`
    when spawning the MCP server. For worktree workflows, this should still point to the
-   main workspace root (not the worktree path) so all FlightPath state is centralized.
+   main workspace root (not the worktree path) so all ctrlyoke state is centralized.
    Verify this is the case when threading `worktreePath` through the execution context.

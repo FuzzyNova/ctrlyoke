@@ -2,7 +2,7 @@
 
 ## Problem
 
-Users have no way to inspect what FlightPath will actually send to the AI before running a
+Users have no way to inspect what ctrlyoke will actually send to the AI before running a
 workflow. This makes debugging prompt construction opaque:
 
 - What does the prompt look like after `{{var}}` substitution?
@@ -30,8 +30,8 @@ interactively before running.
 ### 2. CLI — `--dry-run` Flag
 
 ```bash
-flightpath run workflow.yaml --dry-run
-flightpath run workflow.yaml --dry-run --var "target=auth"
+ctrlyoke run workflow.yaml --dry-run
+ctrlyoke run workflow.yaml --dry-run --var "target=auth"
 ```
 
 Outputs the resolved command and prompt for each step to stdout (formatted or `--json`).
@@ -50,7 +50,7 @@ would do if it ran that step right now:
 Harness:  claude-cli
 Model:    claude-sonnet-4-5
 Session:  (new session)
-Agent:    .flightpath/agents/senior-dev.agent.md
+Agent:    .ctrlyoke/agents/senior-dev.agent.md
 ```
 
 ### Full CLI Command
@@ -64,7 +64,7 @@ The exact string that would be passed to `spawn()`, including:
 
 ```
 claude --model claude-sonnet-4-5 --dangerously-skip-permissions \
-  --prompt-file /tmp/flightpath-abc123.md
+  --prompt-file /tmp/ctrlyoke-abc123.md
 ```
 
 ### Temp File Content
@@ -95,7 +95,7 @@ For short prompts that go inline (≤ 300 chars), show the inline argument value
 ### End Condition (if set)
 
 ```
-Script:      .flightpath/scripts/tests-pass.js
+Script:      .ctrlyoke/scripts/tests-pass.js
 Returns:     "true"
 Max retries: 3
 ```

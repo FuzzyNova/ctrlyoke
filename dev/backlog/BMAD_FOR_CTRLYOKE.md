@@ -1,10 +1,10 @@
-# BMAD for FlightPath
+# BMAD for ctrlyoke
 
-This document outlines how FlightPath can leverage and customize the [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) (BMM) for fully automated workflow execution.
+This document outlines how ctrlyoke can leverage and customize the [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) (BMM) for fully automated workflow execution.
 
 ## Overview
 
-**Goal**: Create FlightPath prompt queue templates that automate BMAD workflows end-to-end, requiring only the initial user input (project description, feature request, etc.) and then running autonomously through all phases.
+**Goal**: Create ctrlyoke prompt queue templates that automate BMAD workflows end-to-end, requiring only the initial user input (project description, feature request, etc.) and then running autonomously through all phases.
 
 **Problem with Current BMAD**: While BMAD provides excellent structure, the interactive nature creates friction:
 
@@ -13,7 +13,7 @@ This document outlines how FlightPath can leverage and customize the [BMAD Metho
 3. Agents wait for menu selection before executing
 4. Fresh chat requirements mean manual context switching
 
-**FlightPath Solution**: Pre-built `.flightpath.json` templates that:
+**ctrlyoke Solution**: Pre-built `.ctrlyoke.json` templates that:
 
 1. Embed full agent instructions (no stub loading failures)
 2. Force YOLO mode by default (no approval pauses)
@@ -63,11 +63,11 @@ Stock BMAD's `workflow.xml` defines two execution modes:
 - **normal**: Full user interaction at all decision points
 - **#yolo**: Skip all confirmations and elicitation, produce all output automatically
 
-**FlightPath BMAD removes this distinction entirely.** Autonomous execution is the only mode—no "YOLO" flag needed. The rewritten workflow engine assumes non-interactive execution by default.
+**ctrlyoke BMAD removes this distinction entirely.** Autonomous execution is the only mode—no "YOLO" flag needed. The rewritten workflow engine assumes non-interactive execution by default.
 
 ---
 
-## FlightPath BMAD Templates
+## ctrlyoke BMAD Templates
 
 ### Template Design Principles
 
@@ -83,7 +83,7 @@ Stock BMAD's `workflow.xml` defines two execution modes:
 
 Based on `quick-flow-brownfield.yaml`:
 
-| Phase  | Workflow              | Agent   | FlightPath Prompt          |
+| Phase  | Workflow              | Agent   | ctrlyoke Prompt            |
 | ------ | --------------------- | ------- | -------------------------- |
 | Prereq | document-project      | analyst | Prompt 1 (if undocumented) |
 | 1      | tech-spec             | pm      | Prompt 2                   |
@@ -125,7 +125,7 @@ Based on `quick-flow-brownfield.yaml`:
 
 Based on `method-brownfield.yaml`:
 
-| Phase  | Workflow                        | Agent     | FlightPath Prompt          |
+| Phase  | Workflow                        | Agent     | ctrlyoke Prompt            |
 | ------ | ------------------------------- | --------- | -------------------------- |
 | Prereq | document-project                | analyst   | Prompt 0 (if undocumented) |
 | 1      | prd                             | pm        | Prompt 1                   |
@@ -137,7 +137,7 @@ Based on `method-brownfield.yaml`:
 
 ---
 
-## FlightPath-Optimized Agent Format
+## ctrlyoke-Optimized Agent Format
 
 ### Problem with Current Chatmodes
 
@@ -156,7 +156,7 @@ Current BMAD chatmodes are stubs like:
 
 ### Solution: Inline Full Agent Content
 
-For FlightPath, we create **self-contained prompt files** that embed the full agent definition:
+For ctrlyoke, we create **self-contained prompt files** that embed the full agent definition:
 
 ```markdown
 <!-- prompts/bmad/dev-story.prompt.md -->
@@ -190,7 +190,7 @@ Architecture: #file:docs/bmad/architecture.md
 
 ### Key Differences from Stock BMAD
 
-| Aspect         | Stock BMAD                           | FlightPath BMAD                   |
+| Aspect         | Stock BMAD                           | ctrlyoke BMAD                     |
 | -------------- | ------------------------------------ | --------------------------------- |
 | Agent loading  | Stub → manual load                   | Full content embedded             |
 | Execution mode | Interactive (default), YOLO (opt-in) | Autonomous only (no toggle)       |
@@ -214,8 +214,8 @@ Architecture: #file:docs/bmad/architecture.md
    - `dev.prompt.md`
 
 3. **Create workflow templates**:
-   - `quick-flow-brownfield.flightpath.json`
-   - `method-brownfield.flightpath.json`
+   - `quick-flow-brownfield.ctrlyoke.json`
+   - `method-brownfield.ctrlyoke.json`
 
 ### Phase 2: End Conditions
 
@@ -236,7 +236,7 @@ console.log(prdComplete ? "true" : "false");
 
 ### Phase 3: Dynamic Queue Extension
 
-Leverage FlightPath's dynamic queue feature to:
+Leverage ctrlyoke's dynamic queue feature to:
 
 1. Read `sprint-status.yaml` to discover pending stories
 2. Dynamically add `dev-story` prompts for each story
@@ -246,7 +246,7 @@ Leverage FlightPath's dynamic queue feature to:
 
 ## Distribution Options
 
-### Option A: Internal to FlightPath Repo
+### Option A: Internal to ctrlyoke Repo
 
 ```
 prompts/
@@ -261,8 +261,8 @@ prompts/
       create-architecture.prompt.md
       ...
     templates/
-      quick-flow-brownfield.flightpath.json
-      method-brownfield.flightpath.json
+      quick-flow-brownfield.ctrlyoke.json
+      method-brownfield.ctrlyoke.json
 scripts/
   bmad/
     check-prd-complete.js
@@ -275,12 +275,12 @@ scripts/
 
 ### Option B: Fork BMAD-METHOD
 
-Create `FlightPath-BMAD` fork with:
+Create `ctrlyoke-BMAD` fork with:
 
 1. Modified agents (autonomous by default, no menu waits)
 2. Simplified workflow engine (remove YOLO/normal mode distinction)
-3. FlightPath-compatible workflow structure
-4. Pre-built `.flightpath.json` templates
+3. ctrlyoke-compatible workflow structure
+4. Pre-built `.ctrlyoke.json` templates
 
 **Pros**: Full BMAD ecosystem, community updates
 **Cons**: Fork maintenance overhead
@@ -289,9 +289,9 @@ Create `FlightPath-BMAD` fork with:
 
 Propose to BMAD-METHOD upstream:
 
-- New `flightpath/` module alongside `bmm/`
-- CLI command: `npx bmad-method install --module=flightpath`
-- Generates FlightPath templates from existing workflows
+- New `ctrlyoke/` module alongside `bmm/`
+- CLI command: `npx bmad-method install --module=ctrlyoke`
+- Generates ctrlyoke templates from existing workflows
 
 **Pros**: Official integration, community benefit
 **Cons**: Requires upstream buy-in
@@ -300,17 +300,17 @@ Propose to BMAD-METHOD upstream:
 
 ## Template Variables
 
-FlightPath templates use single-brace placeholders (`{variable}`) that are filled in when the user runs the template via `FlightPath: New Workflow from Template`. The user is prompted for each declared variable before the workflow file is created.
+ctrlyoke templates use single-brace placeholders (`{variable}`) that are filled in when the user runs the template via `ctrlyoke: New Workflow from Template`. The user is prompted for each declared variable before the workflow file is created.
 
 | Variable               | Source                         | Example                             |
 | ---------------------- | ------------------------------ | ----------------------------------- |
-| `{projectName}`        | User input or config.yaml      | `FlightPath`                        |
+| `{projectName}`        | User input or config.yaml      | `ctrlyoke`                          |
 | `{featureDescription}` | User input (first prompt)      | `Add retry logic to end conditions` |
 | `{storyFile}`          | Parsed from sprint-status.yaml | `story-epic1-1.md`                  |
 | `{epicNum}`            | Current epic number            | `1`                                 |
 | `{storyNum}`           | Current story number           | `1`                                 |
 
-Variables are declared in `TemplateManager.ts` as part of the template manifest. See `src/templates/workflows/full-feature.flightpath.yaml` for a working example using `{featureDescription}` and `{planDocument}`.
+Variables are declared in `TemplateManager.ts` as part of the template manifest. See `src/templates/workflows/full-feature.ctrlyoke.yaml` for a working example using `{featureDescription}` and `{planDocument}`.
 
 ---
 
@@ -326,9 +326,9 @@ Variables are declared in `TemplateManager.ts` as part of the template manifest.
    Add retry logic to end condition validation with configurable max retries.
    ```
 
-2. User runs: `FlightPath: Take Off` → selects `bmad-quick-flow.flightpath.json`
+2. User runs: `ctrlyoke: Take Off` → selects `bmad-quick-flow.ctrlyoke.json`
 
-3. FlightPath executes:
+3. ctrlyoke executes:
    - **Prompt 1**: PM agent creates tech-spec
    - **End condition**: Verify `tech-spec.md` exists
    - **Prompt 2**: SM agent creates sprint plan
@@ -349,7 +349,7 @@ Variables are declared in `TemplateManager.ts` as part of the template manifest.
 
 1. **Variable injection**: How should user input (feature description) flow through the template?
    - Option A: First prompt captures it, saves to file, subsequent prompts reference
-   - Option B: Template has `{{FEATURE_DESCRIPTION}}` placeholder, FlightPath prompts at start
+   - Option B: Template has `{{FEATURE_DESCRIPTION}}` placeholder, ctrlyoke prompts at start
 
 2. **Failure handling**: What if a workflow step fails validation?
    - Use `maxRetries` with `retryPrompt` including error context
@@ -357,7 +357,7 @@ Variables are declared in `TemplateManager.ts` as part of the template manifest.
 
 3. **Story iteration**: How to dynamically add dev-story prompts?
    - Use `allowDynamicExtension: true` on final prompt
-   - Copilot reads sprint-status.yaml and modifies .flightpath.json
+   - Copilot reads sprint-status.yaml and modifies .ctrlyoke.json
 
 4. **BMAD version sync**: How to track upstream BMAD changes?
    - Option A: Pin to specific BMAD version, manual updates
@@ -367,7 +367,7 @@ Variables are declared in `TemplateManager.ts` as part of the template manifest.
 
 ## Related Documentation
 
-- [FlightPath Queue Extension](../QUEUE_APPEND_FEATURE.md) - Queue append and dynamic extension
+- [ctrlyoke Queue Extension](../QUEUE_APPEND_FEATURE.md) - Queue append and dynamic extension
 - [BMAD Quick Start](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/src/modules/bmm/docs/quick-start.md)
 - [BMAD Scale Adaptive System](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/src/modules/bmm/docs/scale-adaptive-system.md)
 
@@ -638,5 +638,5 @@ BMAD was evaluated for this project and subsequently removed. The reference file
 
 **Future Work areas that were identified:**
 
-- Create FlightPath prompt templates that apply BMAD's structured thinking techniques (pre-mortem analysis, first-principles, dependency mapping) to architecture review and PRD validation workflows
+- Create ctrlyoke prompt templates that apply BMAD's structured thinking techniques (pre-mortem analysis, first-principles, dependency mapping) to architecture review and PRD validation workflows
 - Use BMAD's test engineering knowledge fragments to inform end condition validation scripts and test quality assessment workflows

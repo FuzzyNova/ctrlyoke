@@ -1,10 +1,10 @@
-# FlightPath Pro Licensing Plan
+# ctrlyoke Pro Licensing Plan
 
 **Created:** June 12, 2026
 **Status:** PLANNING
 **Roadmap item:** 0.B (launch blocker) / 4.2 (Pro tier)
 **Split from:** [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) Phase 5 (Pro Licensing) — moved here so the long-term model is decided on its own merits.
-**Launch dependency:** create the `flightpath.dev` business email/support identity and vendor account ownership first; tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
+**Launch dependency:** create the `ctrlyoke.dev` business email/support identity and vendor account ownership first; tracked in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
 
 ---
 
@@ -18,7 +18,7 @@
 | License issuance, **Ed25519-signed offline license files**, machine/device limits, expiry, revocation, air-gapped activation | **Keygen** | Purpose-built licensing; offline crypto is its core competency, not a bolt-on |
 | Glue (purchase → license) | **Netlify Function** | We're already deploying the site on Netlify ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)); one serverless webhook handler |
 
-**Activation model: license key now, user accounts as a later UX layer.** A pasted Keygen license key (or imported license file) at launch; "Sign in with FlightPath" device-code flow added later when the hosted dashboard becomes a paid cloud product. Both sit behind a single `LicenseService` interface, so Phase 2 is an internal swap.
+**Activation model: license key now, user accounts as a later UX layer.** A pasted Keygen license key (or imported license file) at launch; "Sign in with ctrlyoke" device-code flow added later when the hosted dashboard becomes a paid cloud product. Both sit behind a single `LicenseService` interface, so Phase 2 is an internal swap.
 
 **License model: source-available under a custom commercial EULA with an enterprise revenue threshold** ($10M revenue / 250 employees). See [License & Commercial Terms](#license--commercial-terms).
 
@@ -51,7 +51,7 @@ The license **format** you issue is painful to migrate. Launching on simple onli
 - **Free use for individuals and small businesses.**
 - **Commercial-use threshold:** organizations above **$10M USD annual revenue OR 250 employees** (Docker's exact line — already recognized by enterprise legal teams) must purchase Pro licenses for commercial use — **even if they only use free/local features and never need the server.** This is the enterprise-compliance capture; it is **contractual, not technically enforced** (honor-system, like Unity/Docker).
 - **No circumventing the license key** / no unlocking Pro features without a license — the legal backstop for the freemium gate (ELv2 already has this clause; we keep the equivalent).
-- **Optional anti-SaaS-resale** clause (no offering FlightPath to third parties as a competing hosted service).
+- **Optional anti-SaaS-resale** clause (no offering ctrlyoke to third parties as a competing hosted service).
 - Standard warranty disclaimer, liability limit, termination, patent/notice terms.
 - **No forced open-source conversion** (no BSL-style Change Date).
 
@@ -63,7 +63,7 @@ The license **format** you issue is painful to migrate. Launching on simple onli
 
 - `LICENSE` / `LICENSE.md` in the repo — the canonical text.
 - `package.json` → `"license": "SEE LICENSE IN LICENSE.md"` (custom license; not a standard SPDX id once it diverges from ELv2).
-- `flightpath.dev/terms` — web-facing copy + plain-language summary.
+- `ctrlyoke.dev/terms` — web-facing copy + plain-language summary.
 - `docs/pro/index.md` — a "Who needs a license?" explainer with the threshold in plain language.
 - VS Code Marketplace listing + README — one line: _"Free for individuals and small businesses; organizations over $10M revenue or 250 employees require a Pro license."_
 - Optional first-run/about notice in the extension linking to the terms.
@@ -73,7 +73,7 @@ The license **format** you issue is painful to migrate. Launching on simple onli
 | Channel | Audience | Tool |
 | ------- | -------- | ---- |
 | **Public GitHub Issues** (main repo — source is public) | Community bug reports, dedup, transparency | GitHub (free) |
-| **Private support inbox** `support@flightpath.dev` | Pro / Enterprise (the tier promises email support); enterprises won't post internal usage publicly and want an SLA | Plain / Pylon / Help Scout |
+| **Private support inbox** `support@ctrlyoke.dev` | Pro / Enterprise (the tier promises email support); enterprises won't post internal usage publicly and want an SLA | Plain / Pylon / Help Scout |
 | **Auto crash/error reporting** (later) | Telemetry, not user-filed | Sentry (ties into 2.2 telemetry) |
 | **Public roadmap / feature voting** (optional, later) | Demand signal | Canny / Featurebase |
 
@@ -116,7 +116,7 @@ The non-obvious addition for a commercial product: a **private** support path fo
 
 ### 1.1 Roles
 
-- **Lemon Squeezy** — one product (**FlightPath Pro**, perpetual). Used purely as storefront + MoR. We do **not** use LS's native license keys; Keygen issues the real license. Disable/ignore LS key generation, or use LS custom fulfillment to deliver the Keygen key.
+- **Lemon Squeezy** — one product (**ctrlyoke Pro**, perpetual). Used purely as storefront + MoR. We do **not** use LS's native license keys; Keygen issues the real license. Disable/ignore LS key generation, or use LS custom fulfillment to deliver the Keygen key.
 - **Keygen** — one **Policy** (perpetual Pro, Ed25519 scheme, encrypted license files, machine activation limit = 10). Licenses are created per purchase via the webhook.
 - **Netlify Function** — `netlify/functions/ls-webhook.ts`: verify LS HMAC signature, on `order_created` call Keygen `POST /v1/licenses`, then deliver the key to the buyer.
 
@@ -189,7 +189,7 @@ Implementation notes:
 
 **Online (consumer default):**
 ```
-"FlightPath: Activate Pro License"
+"ctrlyoke: Activate Pro License"
   → InputBox: paste Keygen license key
   → activateWithKey(): Keygen activate (registers this machine, respects 3-machine limit)
   → download + cache signed license file for offline verification
@@ -198,7 +198,7 @@ Implementation notes:
 
 **Air-gapped / enterprise (no network on the dev machine):**
 ```
-"FlightPath: Activate Offline (Air-Gapped) License"
+"ctrlyoke: Activate Offline (Air-Gapped) License"
   → user obtains a signed license file on a connected device (Keygen portal/admin),
     transfers via USB or QR
   → import via file picker or paste, or "Scan QR" for fully offline transfer
@@ -206,11 +206,11 @@ Implementation notes:
   → cache + unlock; zero network calls
 ```
 
-Add **"FlightPath: Deactivate Pro License"** and a Free/Pro status surface (status bar / footer). Reference Keygen's [air-gapped activation example](https://github.com/keygen-sh/air-gapped-activation-example) for the QR/USB machine-file flow.
+Add **"ctrlyoke: Deactivate Pro License"** and a Free/Pro status surface (status bar / footer). Reference Keygen's [air-gapped activation example](https://github.com/keygen-sh/air-gapped-activation-example) for the QR/USB machine-file flow.
 
 ### 1.6 Tier Structure
 
-> **Gating philosophy: gate by _reach_, not by _limits_.** No step caps, no workflow-count caps, no concurrency caps — usage limits feel punitive, are trivially circumvented (split the workflow), and generate bad launch reviews. The entire **local** product is free and fully functional. Pro unlocks the one capability with the highest willingness-to-pay and the highest support cost: **using FlightPath remotely / on the go.**
+> **Gating philosophy: gate by _reach_, not by _limits_.** No step caps, no workflow-count caps, no concurrency caps — usage limits feel punitive, are trivially circumvented (split the workflow), and generate bad launch reviews. The entire **local** product is free and fully functional. Pro unlocks the one capability with the highest willingness-to-pay and the highest support cost: **using ctrlyoke remotely / on the go.**
 
 **The key split — the hosted dashboard server, gated by reach:**
 
@@ -241,20 +241,20 @@ Add **"FlightPath: Deactivate Pro License"** and a Free/Pro status surface (stat
 
 - **Perpetual, one-time** — matches VS Code-extension buyer expectations; lowest support/churn.
 - Target **$59 USD** one-time (validate against comparable extensions).
-- Activates on up to **10 machines** (enforced by Keygen machine limits, not LS). FlightPath is a developer tool; 10 machines is appropriate for a developer who works across a work desktop, home machine, laptop, and VMs.
+- Activates on up to **10 machines** (enforced by Keygen machine limits, not LS). ctrlyoke is a developer tool; 10 machines is appropriate for a developer who works across a work desktop, home machine, laptop, and VMs.
 - Subscription "Pro+" / Teams is a Phase-2 concern (roadmap 4.2), not launch.
 
 ### 1.7.1 Enterprise SKU (self-serve site license)
 
 Design goal: **a one-person company must not be answering enterprise sales emails.** The Enterprise SKU is therefore **self-serve and auto-fulfilled by the same pipeline**, not a "contact us" funnel.
 
-- **Product:** a second Lemon Squeezy product — **FlightPath Enterprise**, an **annual subscription**, flat price for **unlimited internal seats** (a site license). Individual Pro stays **perpetual**; Enterprise is **annual** because enterprises budget yearly and the recurring revenue + SLA justify it.
+- **Product:** a second Lemon Squeezy product — **ctrlyoke Enterprise**, an **annual subscription**, flat price for **unlimited internal seats** (a site license). Individual Pro stays **perpetual**; Enterprise is **annual** because enterprises budget yearly and the recurring revenue + SLA justify it.
 - **Fulfillment — identical webhook → Keygen path.** The Netlify function routes by LS `product_id`/`variant_id` to a Keygen **Enterprise policy** with **unlimited machine activations** and an **annual expiry**. Purchase → license auto-issued → key delivered. **Zero email.** "Unlimited seats" is one field on the Keygen policy.
 - **Renewals / cancellation:** the webhook also handles LS subscription events (`subscription_payment_success` → extend the Keygen license expiry; `subscription_cancelled` / `subscription_expired` → let it lapse). LS handles recurring billing + tax automatically.
 - **Price for self-serve:** target **~$2k–$5k/yr** — within corporate-card range so it clears without procurement. Above ~$10k, buyers expect POs/sales; staying under keeps it zero-touch.
 - **Self-serve legal:** publish **click-through** Terms + a standard **DPA** + a **trust/security page** so legal teams can self-serve their review without a custom MSA. This removes the most common reason an enterprise purchase stalls.
 
-**What stays manual (kept rare by design):** the subset of enterprises that *require* a PO/invoice/net-terms or a signed custom MSA/DPA/security questionnaire cannot be fully automated. Mitigate by (a) pricing within corporate-card range, (b) the click-through legal + DPA + trust page above, and (c) a single **"Need an invoice or PO? email sales@flightpath.dev"** fallback — and even those invoices can be issued semi-automatically via LS/Stripe. Most mid-market buys never touch the inbox.
+**What stays manual (kept rare by design):** the subset of enterprises that *require* a PO/invoice/net-terms or a signed custom MSA/DPA/security questionnaire cannot be fully automated. Mitigate by (a) pricing within corporate-card range, (b) the click-through legal + DPA + trust page above, and (c) a single **"Need an invoice or PO? email sales@ctrlyoke.dev"** fallback — and even those invoices can be issued semi-automatically via LS/Stripe. Most mid-market buys never touch the inbox.
 
 **Open choice — flat vs. size-tiered:** a single **flat unlimited** site license is simplest and fully zero-touch (recommended at launch); **size-tiered** enterprise pricing (≤500 / ≤2,000 / unlimited devs) captures more from the largest orgs but adds checkout complexity and edges toward "talk to sales." Add tiers later if data warrants.
 
@@ -264,15 +264,15 @@ Gate each Pro capability through `await licenseService.isPro(context)` (or a fea
 
 - **Remote bind** — `src/server/**`: allow `127.0.0.1`/loopback unconditionally; gate `bindAddress: "0.0.0.0"` (and any non-loopback bind) behind Pro/trial. When unlicensed, fall back to localhost and surface an upsell rather than failing.
 - **Remote-only UI affordances** in `ServerSection.tsx`: LAN IP selector, QR-to-phone, mobile-push/HTTPS-for-remote flows — disabled with upsell when not Pro/trial.
-- **Custom hooks** — the user-defined `ExecutionProperties.hooks` execution path (harness command building). FlightPath's own internal completion/notification hooks are **not** affected.
+- **Custom hooks** — the user-defined `ExecutionProperties.hooks` execution path (harness command building). ctrlyoke's own internal completion/notification hooks are **not** affected.
 - **Air-gapped activation command** — offline activation is itself a Pro capability.
 - **Custom icon color** — `server.iconBgColor` / `server.iconFgColor` writes in `ServerSection.tsx` — Pro perk.
 
-Each blocked gate shows a friendly upsell linking to `flightpath.dev/pricing/` — never a silent failure. **Free stays genuinely free:** notifications, the MCP manager + integration, the agent/skills manager, AI commit messages, the CLI, and the entire local dashboard are never gated.
+Each blocked gate shows a friendly upsell linking to `ctrlyoke.dev/pricing/` — never a silent failure. **Free stays genuinely free:** notifications, the MCP manager + integration, the agent/skills manager, AI commit messages, the CLI, and the entire local dashboard are never gated.
 
 ### 1.9 Website / docs coupling
 
-The pricing page, LS checkout link, and customer portal live on `flightpath.dev` ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) Phase 6). This plan owns extension-side activation, verification, gating, **and the Netlify webhook function**. `docs/pro/index.md` documents both the online and air-gapped activation steps.
+The pricing page, LS checkout link, and customer portal live on `ctrlyoke.dev` ([`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) Phase 6). This plan owns extension-side activation, verification, gating, **and the Netlify webhook function**. `docs/pro/index.md` documents both the online and air-gapped activation steps.
 
 ---
 
@@ -291,10 +291,10 @@ Nothing in Phase 1 hardcodes "key" assumptions outside `activateWithKey()` / `im
 
 ## Implementation Order (Phase 1)
 
-0. Complete Phase 0 business email and account ownership setup in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): `support@flightpath.dev`, vendor owner emails, GitHub/publisher identity, and DNS/email authentication.
+0. Complete Phase 0 business email and account ownership setup in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md): `support@ctrlyoke.dev`, vendor owner emails, GitHub/publisher identity, and DNS/email authentication.
 1. `LicenseService` interface + `Entitlement` type + `PRO_FEATURES` constants (`DashboardConstants.ts`).
 2. **Keygen** account: product, perpetual-Pro **Policy** (Ed25519, encrypted files, 3-machine limit); copy the **account public key** into the extension build config.
-3. **Lemon Squeezy** product **FlightPath Pro** (perpetual, $59); webhook → Netlify; HMAC secret in Netlify env.
+3. **Lemon Squeezy** product **ctrlyoke Pro** (perpetual, $59); webhook → Netlify; HMAC secret in Netlify env.
 4. **Netlify Function** `ls-webhook`: verify LS signature, create Keygen license (idempotent on order ID), deliver key; handle refund → revoke.
 5. Extension: `activateWithKey()` (online activate + cache signed file), offline `getEntitlement()` verify (Ed25519 + expiry), `refresh()`, offline-grace logic.
 6. Extension: `importLicenseFile()` + **"Activate Offline (Air-Gapped) License"** command (file/paste + optional QR).
@@ -303,8 +303,8 @@ Nothing in Phase 1 hardcodes "key" assumptions outside `activateWithKey()` / `im
 9. Remote-access **trial**: 14-day timer in `globalState`; remote bind + remote UI allowed during the trial; upsell on lapse; license supersedes trial.
 10. Production-build verification of the **unlicensed** path (roadmap Tier 0.2).
 11. `docs/pro/index.md` (online + air-gapped activation); pricing-page wiring with `LANDING_PAGE_PLAN.md`.
-12. **Replace `LICENSE`** (ELv2 → custom commercial EULA, lawyer-reviewed); wire `package.json` license field, `flightpath.dev/terms`, README + Marketplace blurb; stand up the `support@flightpath.dev` inbox.
-13. **Enterprise SKU (self-serve):** second LS product (annual subscription); Keygen Enterprise policy (unlimited activations, annual expiry); webhook routing by `product_id` + LS subscription-event handling (renew/extend, cancel/lapse); publish click-through Terms + DPA + trust page; `sales@flightpath.dev` PO fallback.
+12. **Replace `LICENSE`** (ELv2 → custom commercial EULA, lawyer-reviewed); wire `package.json` license field, `ctrlyoke.dev/terms`, README + Marketplace blurb; stand up the `support@ctrlyoke.dev` inbox.
+13. **Enterprise SKU (self-serve):** second LS product (annual subscription); Keygen Enterprise policy (unlimited activations, annual expiry); webhook routing by `product_id` + LS subscription-event handling (renew/extend, cancel/lapse); publish click-through Terms + DPA + trust page; `sales@ctrlyoke.dev` PO fallback.
 
 ---
 

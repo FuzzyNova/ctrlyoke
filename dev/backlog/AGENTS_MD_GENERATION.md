@@ -2,7 +2,7 @@
 
 **Status**: Planning  
 **Date**: December 19, 2025  
-**Purpose**: Standardize FlightPath on AGENTS.md with hierarchical concatenation, replacing Copilot's broken single-file approach
+**Purpose**: Standardize ctrlyoke on AGENTS.md with hierarchical concatenation, replacing Copilot's broken single-file approach
 
 **Related Documents**:
 
@@ -13,7 +13,7 @@
 
 ## Executive Summary
 
-FlightPath will implement a complete AGENTS.md instruction system that:
+ctrlyoke will implement a complete AGENTS.md instruction system that:
 
 1. **Disables Copilot's native AGENTS.md loading** (which only returns nearest file, not parent hierarchy)
 2. **Manually injects all parent AGENTS.md files** in root → file order (mimicking Codex/Claude behavior)
@@ -21,7 +21,7 @@ FlightPath will implement a complete AGENTS.md instruction system that:
 4. **Uses XML formatting** for clear instruction attribution and parseability
 5. **Supports optional CLAUDE.md symlinks** for cross-tool compatibility
 
-**Key Architectural Decision**: AGENTS.md generation is implemented as FlightPath's **first scripted template** (see TEMPLATE_SETUP_SCRIPTS.md), leveraging the template setup script system rather than a standalone command.
+**Key Architectural Decision**: AGENTS.md generation is implemented as ctrlyoke's **first scripted template** (see TEMPLATE_SETUP_SCRIPTS.md), leveraging the template setup script system rather than a standalone command.
 
 ---
 
@@ -29,7 +29,7 @@ FlightPath will implement a complete AGENTS.md instruction system that:
 
 ### Phase 1: Generate Workflow (via Scripted Template)
 
-1. User opens FlightPath dashboard
+1. User opens ctrlyoke dashboard
 2. Clicks **"New Workflow"** button
 3. Selects **"Generate Repository Instructions"** from template dropdown
 4. Setup script executes automatically:
@@ -42,7 +42,7 @@ FlightPath will implement a complete AGENTS.md instruction system that:
 6. User enters workflow filename (pre-filled: `generate-agents-md`)
 7. User clicks "Create" or "Create & Run"
 8. Workflow opens in editor for review/customization (if "Create")
-9. User runs workflow with **"FlightPath: Take Off"** (or already running if "Create & Run")
+9. User runs workflow with **"ctrlyoke: Take Off"** (or already running if "Create & Run")
 
 ### Phase 2: Execute Workflow
 
@@ -55,11 +55,11 @@ FlightPath will implement a complete AGENTS.md instruction system that:
 
 ### Phase 3: Enable Hierarchical Injection
 
-1. User enables FlightPath settings:
-   - `flightpath.disableCopilotAgentsMd`: `true` (blocks Copilot's native loading)
-   - `flightpath.attachAgentsHierarchy`: `true` (enables FlightPath's manual injection)
+1. User enables ctrlyoke settings:
+   - `ctrlyoke.disableCopilotAgentsMd`: `true` (blocks Copilot's native loading)
+   - `ctrlyoke.attachAgentsHierarchy`: `true` (enables ctrlyoke's manual injection)
 2. When sending prompts to Copilot CLI:
-   - FlightPath discovers all AGENTS.md files from file's directory → root
+   - ctrlyoke discovers all AGENTS.md files from file's directory → root
    - Wraps each in `<projectInstructions source="...">` XML tags
    - Prepends to prompt text in root → file order
    - Adds `--no-custom-instructions` flag to Copilot CLI command
@@ -85,7 +85,7 @@ These systems work together but can be used independently:
 
 #### Built-in Template: "Generate Repository Instructions"
 
-**Template file**: `src/templates/workflows/generate-agents-md.flightpath.json`
+**Template file**: `src/templates/workflows/generate-agents-md.ctrlyoke.json`
 
 ```json
 {
@@ -164,7 +164,7 @@ export class AgentsFileResolver {
    * Get relative path for XML source attribution
    * @param filePath Absolute path to AGENTS.md
    * @param workspaceRoot Workspace root path
-   * @returns Relative path like "/src/flightpath/AGENTS.md"
+   * @returns Relative path like "/src/core/AGENTS.md"
    */
   static getRelativePath(filePath: string, workspaceRoot: string): string;
 }
@@ -187,8 +187,8 @@ The `.github/instructions/` directory contains detailed implementation guideline
 All TypeScript source code follows strict mode with comprehensive error handling...
 </projectInstructions>
 
-<projectInstructions source="/src/flightpath/AGENTS.md">
-## FlightPath Core Module
+<projectInstructions source="/src/core/AGENTS.md">
+## ctrlyoke Core Module
 
 This directory contains the orchestration layer...
 </projectInstructions>
@@ -207,7 +207,7 @@ This directory contains the orchestration layer...
 
 ## Prompt Templates (for Setup Script)
 
-#### 3. CopilotCliProvider (`src/flightpath/harness/copilot/CopilotCliProvider.ts`)
+#### 3. CopilotCliProvider (`src/core/harness/copilot/CopilotCliProvider.ts`)
 
 **Changes**:
 
@@ -232,7 +232,7 @@ private buildCliArgs(
 
 **B) No changes to prompt building** - injection happens in CliIntegration
 
-#### 4. HarnessIntegration (`src/flightpath/HarnessIntegration.ts`)
+#### 4. HarnessIntegration (`src/core/HarnessIntegration.ts`)
 
 **Changes**:
 
@@ -325,7 +325,7 @@ private async getPromptContextPath(prompt: PromptItem): Promise<string | null> {
 // Register new command
 context.subscriptions.push(
   vscode.commands.registerCommand(
-    "flightpath.generateAgentsWorkflow",
+    "ctrlyoke.generateAgentsWorkflow",
     async () => {
       // Quick input for symlink preference
       const createSymlinks = await vscode.window.showQuickPick(
@@ -345,7 +345,7 @@ context.subscriptions.push(
 
       // Update setting to remember choice
       await vscode.workspace
-        .getConfiguration("flightpath")
+        .getConfiguration("ctrlyoke")
         .update(
           "createClaudeMdSymlinks",
           createSymlinks.value,
@@ -367,9 +367,9 @@ context.subscriptions.push(
       // Save workflow file
       const workflowPath = path.join(
         workspaceFolder.uri.fsPath,
-        ".flightpath",
+        ".ctrlyoke",
         "workflows",
-        "generate-agents-md.flightpath.json"
+        "generate-agents-md.ctrlyoke.json"
       );
 
       await fs.mkdir(path.dirname(workflowPath), { recursive: true });
@@ -384,7 +384,7 @@ context.subscriptions.push(
       await vscode.window.showTextDocument(doc);
 
       vscode.window.showInformationMessage(
-        `Generated AGENTS.md workflow. Review and run with "FlightPath: Take Off"`
+        `Generated AGENTS.md workflow. Review and run with "ctrlyoke: Take Off"`
       );
     }
   )
@@ -404,7 +404,7 @@ export class ConfigurationUtils {
    */
   static shouldDisableCopilotAgentsMd(): boolean {
     return vscode.workspace
-      .getConfiguration("flightpath")
+      .getConfiguration("ctrlyoke")
       .get<boolean>("disableCopilotAgentsMd", false);
   }
 
@@ -413,7 +413,7 @@ export class ConfigurationUtils {
    */
   static shouldAttachAgentsHierarchy(): boolean {
     return vscode.workspace
-      .getConfiguration("flightpath")
+      .getConfiguration("ctrlyoke")
       .get<boolean>("attachAgentsHierarchy", false);
   }
 
@@ -422,7 +422,7 @@ export class ConfigurationUtils {
    */
   static shouldCreateClaudeMdSymlinks(): boolean {
     return vscode.workspace
-      .getConfiguration("flightpath")
+      .getConfiguration("ctrlyoke")
       .get<boolean>("createClaudeMdSymlinks", false);
   }
 }
@@ -437,19 +437,19 @@ export class ConfigurationUtils {
   "contributes": {
     "configuration": {
       "properties": {
-        "flightpath.disableCopilotAgentsMd": {
+        "ctrlyoke.disableCopilotAgentsMd": {
           "type": "boolean",
           "default": false,
-          "description": "Disable Copilot's native AGENTS.md instruction loading. Enable this when using flightpath.attachAgentsHierarchy for full control over instruction concatenation.",
+          "description": "Disable Copilot's native AGENTS.md instruction loading. Enable this when using ctrlyoke.attachAgentsHierarchy for full control over instruction concatenation.",
           "order": 50
         },
-        "flightpath.attachAgentsHierarchy": {
+        "ctrlyoke.attachAgentsHierarchy": {
           "type": "boolean",
           "default": false,
           "description": "Automatically attach all parent AGENTS.md files when sending prompts (mimics Codex/Claude concatenation behavior). Requires disableCopilotAgentsMd to be enabled.",
           "order": 51
         },
-        "flightpath.createClaudeMdSymlinks": {
+        "ctrlyoke.createClaudeMdSymlinks": {
           "type": "boolean",
           "default": false,
           "description": "Automatically create CLAUDE.md symlinks alongside AGENTS.md files for cross-tool compatibility",
@@ -459,9 +459,9 @@ export class ConfigurationUtils {
     },
     "commands": [
       {
-        "command": "flightpath.generateAgentsWorkflow",
+        "command": "ctrlyoke.generateAgentsWorkflow",
         "title": "Generate Repository Instructions Workflow",
-        "category": "FlightPath"
+        "category": "ctrlyoke"
       }
     ]
   }
@@ -512,7 +512,7 @@ Proceed with analysis and generate AGENTS.md if appropriate.
 
 **Variables**:
 
-- `{dirPath}`: Relative path from workspace root (e.g., `src/flightpath/cli`)
+- `{dirPath}`: Relative path from workspace root (e.g., `src/core/cli`)
 - `{workspaceRoot}`: Absolute workspace root path
 - `{symlinkInstructions}`: (If enabled) "Also create a CLAUDE.md symlink: `New-Item -ItemType SymbolicLink -Path CLAUDE.md -Target AGENTS.md` (Windows) or `ln -s AGENTS.md CLAUDE.md` (Unix)"
 - `{childAgentsFiles}`: (For intermediate directories) "Existing AGENTS.md files in subdirectories:\n- {list of child AGENTS.md paths}"
@@ -593,7 +593,7 @@ Proceed with creating root-level AGENTS.md.
 
 ### Phase 2: AGENTS.md Setup Script & Template
 
-- [ ] Create template: `src/templates/workflows/generate-agents-md.flightpath.json`
+- [ ] Create template: `src/templates/workflows/generate-agents-md.ctrlyoke.json`
   ```json
   {
     "name": "Generate Repository Instructions",
@@ -612,7 +612,7 @@ Proceed with creating root-level AGENTS.md.
   - [ ] Handle error cases gracefully
   - [ ] Add progress logging to stderr
 - [ ] Test setup script execution
-  - [ ] Test on FlightPath repository (12+ directories expected)
+  - [ ] Test on ctrlyoke repository (12+ directories expected)
   - [ ] Test on minimal repository (should output error mode)
   - [ ] Test on very large repository (verify timeout handling)
   - [ ] Verify prompt structure and ordering
@@ -630,11 +630,11 @@ Proceed with creating root-level AGENTS.md.
 
 ### Phase 4: CLI Integration for Injection
 
-- [ ] Modify `src/flightpath/harness/copilot/CopilotCliProvider.ts`
+- [ ] Modify `src/core/harness/copilot/CopilotCliProvider.ts`
   - [ ] Add `--no-custom-instructions` flag logic in `buildCliArgs()`
   - [ ] Test flag behavior with Copilot CLI
 
-- [ ] Modify `src/flightpath/HarnessIntegration.ts`
+- [ ] Modify `src/core/HarnessIntegration.ts`
   - [ ] Add `getAgentsHierarchyContent()` method
   - [ ] Add `getPromptContextPath()` method
   - [ ] Integrate into `HarnessIntegration.ts` prompt building (alongside context/agent expansion)
@@ -829,7 +829,7 @@ Proceed with creating root-level AGENTS.md.
 ### Manual Testing Checklist
 
 - [ ] Test template in New Workflow modal
-- [ ] Verify setup script generates workflow for FlightPath repository
+- [ ] Verify setup script generates workflow for ctrlyoke repository
 - [ ] Review generated prompts for clarity and correctness
 - [ ] Run workflow and verify AGENTS.md content quality
 - [ ] Test with all three CLI providers (Copilot, Claude, Codex)
@@ -878,7 +878,7 @@ Proceed with creating root-level AGENTS.md.
 ### 5. Multi-Root Workspace Support
 
 **Feature**: Setup script detects multi-root workspace, prompts user to select folder  
-**Feature**: Allow users to define custom prompt templates in `.flightpath/templates/agents-prompts/`
+**Feature**: Allow users to define custom prompt templates in `.ctrlyoke/templates/agents-prompts/`
 **Use Case**: Organization-specific instruction formats and standards
 
 ---
@@ -909,12 +909,12 @@ Proceed with creating root-level AGENTS.md.
 
 ## Conclusion
 
-This implementation provides FlightPath users with a comprehensive, standardized approach to repository instructions through two independent but complementary systems:
+This implementation provides ctrlyoke users with a comprehensive, standardized approach to repository instructions through two independent but complementary systems:
 
 **Generation System** (via scripted template):
 
 1. **Automated workflow creation** based on repository structure
-2. **First example** of FlightPath's powerful setup script system
+2. **First example** of ctrlyoke's powerful setup script system
 3. **User control** through reviewable generated workflows
 4. **Cross-tool compatibility** via CLAUDE.md symlinks
 
@@ -932,7 +932,7 @@ This implementation provides FlightPath users with a comprehensive, standardized
 - Enable users to customize the generation logic by copying and modifying the template
 - Set the pattern for future intelligent workflow generators
 
-The workflow-based approach fits FlightPath's philosophy of transparent, reproducible automation while giving users full visibility and control over the process.
+The workflow-based approach fits ctrlyoke's philosophy of transparent, reproducible automation while giving users full visibility and control over the process.
 
 ```
 

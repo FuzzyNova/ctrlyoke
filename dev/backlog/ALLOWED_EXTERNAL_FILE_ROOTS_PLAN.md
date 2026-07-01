@@ -2,7 +2,7 @@
 
 ## Problem
 
-FlightPath is safest when prompt references and output file links stay inside the
+ctrlyoke is safest when prompt references and output file links stay inside the
 workspace. That default boundary prevents AI-generated text from opening arbitrary
 local files and keeps prompt attachment behavior predictable.
 
@@ -12,7 +12,7 @@ lives outside the workspace:
 - Harness session logs, e.g. Codex sessions under a user profile directory
 - System or application logs under platform-specific log directories
 - Temporary repro files outside the repo
-- FlightPath developer artifacts copied into a scratch directory
+- ctrlyoke developer artifacts copied into a scratch directory
 
 Users need a controlled way to attach and open these files without turning every
 absolute path emitted by an AI into a trusted file operation.
@@ -76,7 +76,7 @@ Add to `schemas/settings-schema.json` under `permissions`:
 ```json
 "allowedExternalFileRoots": {
   "type": "array",
-  "description": "Absolute directory paths outside the workspace that FlightPath may read for prompt attachments and open from file links. Workspace files are always allowed.",
+  "description": "Absolute directory paths outside the workspace that ctrlyoke may read for prompt attachments and open from file links. Workspace files are always allowed.",
   "items": {
     "type": "string"
   },
@@ -105,7 +105,7 @@ generated YAML schema.
 
 Update:
 
-- `src/types/FlightPathSettings.ts`
+- `src/types/CtrlYokeSettings.ts`
   - `permissions.allowedExternalFileRoots: string[]`
   - `ui.confirmExternalFileLinks: boolean`
   - Defaults: `[]` and `true`
@@ -158,7 +158,7 @@ async function evaluateFileAccess(
 ): Promise<FileAccessDecision>
 ```
 
-Use this helper anywhere FlightPath reads or opens user-referenced files. Do not
+Use this helper anywhere ctrlyoke reads or opens user-referenced files. Do not
 duplicate path containment logic in UI/router/expander files.
 
 ## Prompt Attachment Flow
@@ -257,7 +257,7 @@ instead of always joining with the workspace root.
 
 For trusted external refs:
 
-- Link directly to the absolute file URI or the `flightpath.openFileWithSelection`
+- Link directly to the absolute file URI or the `ctrlyoke.openFileWithSelection`
   command.
 - Tooltip should make the external nature obvious:
   `Open external file C:/Users/me/.codex/sessions/session.jsonl`.
@@ -277,7 +277,7 @@ Add a section to the Settings drawer, likely under "File Management" or
   - List current roots
   - Add folder button using `showOpenDialog({ canSelectFolders: true })`
   - Remove button per root
-  - Short description: "FlightPath may read prompt attachments and open file links
+  - Short description: "ctrlyoke may read prompt attachments and open file links
     under these directories. Workspace files are always allowed."
 
 - `Confirm external file links`
@@ -289,7 +289,7 @@ webview store.
 
 ## Harness Permission Alignment
 
-FlightPath can embed external file content into prompt XML after reading it itself.
+ctrlyoke can embed external file content into prompt XML after reading it itself.
 That does not require the harness to have file-system access to the external path.
 
 However, direct full-file `@absolute/path` references passed to a harness do require
@@ -301,7 +301,7 @@ the harness to read that path. For split context:
 - If direct external refs are ever passed through, warn if the active harness sandbox
   does not include the same root.
 
-This avoids a confusing case where FlightPath trusts the path but Codex/Claude cannot
+This avoids a confusing case where ctrlyoke trusts the path but Codex/Claude cannot
 read it because their sandbox is narrower.
 
 ## Implementation Plan
@@ -363,7 +363,7 @@ Document:
 | --- | --- |
 | `schemas/settings-schema.json` | Add `permissions.allowedExternalFileRoots` and `ui.confirmExternalFileLinks` |
 | `schemas/settings-schema.yaml` | Regenerated via `npm run generate-schema` |
-| `src/types/FlightPathSettings.ts` | Add settings types and defaults |
+| `src/types/CtrlYokeSettings.ts` | Add settings types and defaults |
 | `src/types/WebviewMessageTypes.ts` | Include settings payload fields if needed |
 | `src/utils/ConfigurationUtils.ts` | Add config keys and helpers |
 | `src/utils/FileAccessPolicy.ts` | New shared path access policy helper |
