@@ -20,7 +20,7 @@ import {
 suite("ModelConstants", () => {
   suite("getModelDisplayName", () => {
     test("returns display name for known Copilot model", () => {
-      assert.strictEqual(getModelDisplayName("gpt-4o"), "GPT-4o");
+      assert.strictEqual(getModelDisplayName("gpt-4o-mini"), "GPT-4o Mini");
     });
 
     test("returns display name for another known model", () => {
@@ -48,7 +48,7 @@ suite("ModelConstants", () => {
 
   suite("isKnownCopilotModel", () => {
     test("returns true for known model", () => {
-      assert.strictEqual(isKnownCopilotModel("gpt-4o"), true);
+      assert.strictEqual(isKnownCopilotModel("gpt-4o-mini"), true);
     });
 
     test("returns true for auto", () => {
@@ -113,8 +113,30 @@ suite("ModelConstants", () => {
   });
 
   suite("getClaudeContextWindowSize", () => {
-    test("returns 200k for sonnet model", () => {
-      assert.strictEqual(getClaudeContextWindowSize("sonnet"), 200_000);
+    test("returns 1M for bare sonnet (resolves to Sonnet 5)", () => {
+      assert.strictEqual(getClaudeContextWindowSize("sonnet"), 1_000_000);
+    });
+
+    test("returns 1M for sonnet-5.x", () => {
+      assert.strictEqual(
+        getClaudeContextWindowSize("claude-sonnet-5"),
+        1_000_000
+      );
+    });
+
+    test("returns 200k for sonnet-4.x", () => {
+      assert.strictEqual(
+        getClaudeContextWindowSize("claude-sonnet-4"),
+        200_000
+      );
+      assert.strictEqual(
+        getClaudeContextWindowSize("claude-sonnet-4.5"),
+        200_000
+      );
+      assert.strictEqual(
+        getClaudeContextWindowSize("claude-sonnet-4.6"),
+        200_000
+      );
     });
 
     test("returns 1M for [1m] variant", () => {
@@ -123,6 +145,10 @@ suite("ModelConstants", () => {
 
     test("returns 1M for model containing '1m' substring", () => {
       assert.strictEqual(getClaudeContextWindowSize("opus[1m]"), 1_000_000);
+    });
+
+    test("returns 1M for opus", () => {
+      assert.strictEqual(getClaudeContextWindowSize("opus"), 1_000_000);
     });
 
     test("returns 200k for haiku", () => {

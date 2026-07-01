@@ -34,24 +34,21 @@
 export const COPILOT_MODELS: Record<string, string> = {
   "claude-sonnet-4.6": "Claude Sonnet 4.6",
   "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
-  "gpt-5.2-codex": "GPT 5.2 Codex",
+  "gemini-3.5-flash": "Gemini 3.5 Flash",
   "gpt-5.3-codex": "GPT 5.3 Codex",
   "gpt-5.4-mini": "GPT 5.4 Mini",
   "gpt-5.4": "GPT 5.4",
+  "mai-code-1-flash-picker": "Mai Code 1 Flash Picker",
   "gpt-5-mini": "GPT-5 Mini",
   "gpt-4o-mini": "GPT-4o Mini",
-  "copilot-fast": "Copilot Fast",
-  "gpt-4o": "GPT-4o",
-  "grok-code-fast-1": "Grok Code Fast",
-  "claude-sonnet-4": "Claude Sonnet 4",
   "claude-sonnet-4.5": "Claude Sonnet 4.5",
   "claude-haiku-4.5": "Claude Haiku 4.5",
   "gemini-3-flash-preview": "Gemini 3 Flash Preview",
   "gemini-2.5-pro": "Gemini 2.5 Pro",
-  "gpt-4.1": "GPT-4.1",
   "oswe-vscode-prime": "Raptor Mini",
-  "gpt-5.2": "GPT 5.2",
   auto: "Auto",
+  "copilot-utility-small": "Copilot Utility Small",
+  "copilot-utility": "Copilot Utility",
 };
 
 /**
@@ -60,27 +57,27 @@ export const COPILOT_MODELS: Record<string, string> = {
  * This list comes from `copilot help config` output.
  * Update this when new CLI models become available.
  *
- * Last updated: 2026-04-26
- * Command: ctrlyoke: Export Discovered Models → cliModelIds
+ * Last updated: 2026-07-01
+ * Command: npm run sync-models -- --discover
  */
 export const COPILOT_CLI_MODEL_IDS = [
+  "claude-sonnet-5",
   "claude-sonnet-4.6",
   "claude-sonnet-4.5",
   "claude-haiku-4.5",
+  "claude-fable-5",
+  "claude-opus-4.8",
+  "claude-opus-4.8-fast",
   "claude-opus-4.7",
   "claude-opus-4.6",
-  "claude-opus-4.6-fast",
   "claude-opus-4.5",
-  "claude-sonnet-4",
-  "gpt-5.4",
   "gpt-5.5",
+  "gpt-5.4",
   "gpt-5.3-codex",
-  "gpt-5.2-codex",
-  "gpt-5.2",
-  "gpt-5.1",
   "gpt-5.4-mini",
   "gpt-5-mini",
-  "gpt-4.1",
+  "gemini-3.1-pro-preview",
+  "gemini-3.5-flash",
 ] as const;
 
 /**
@@ -118,13 +115,7 @@ export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
  *
  * See: https://docs.openai.com/codex
  */
-export const CODEX_CLI_MODELS = [
-  "gpt-5.5",
-  "gpt-5.4",
-  "gpt-5.4-mini",
-  "gpt-5.3-codex",
-  "gpt-5.2",
-] as const;
+export const CODEX_CLI_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"] as const;
 
 /**
  * Codex CLI model display names
@@ -133,8 +124,6 @@ export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
   "gpt-5.5": "GPT 5.5",
   "gpt-5.4": "GPT 5.4",
   "gpt-5.4-mini": "GPT 5.4 Mini",
-  "gpt-5.3-codex": "GPT 5.3 Codex",
-  "gpt-5.2": "GPT 5.2",
 };
 
 /**
@@ -181,19 +170,23 @@ export function isKnownCopilotModel(modelId: string): boolean {
  * Falls back to 128k for unknown/unlisted models via getCopilotContextWindowSize().
  */
 const COPILOT_CLI_CONTEXT_WINDOW_SIZES: Record<string, number> = {
-  // Claude models
+  // Claude models — sonnet now defaults to a 1M token window; only the
+  // sonnet-4.x line and haiku remain on the older 200k window.
   "claude-haiku-4.5": 200_000,
   "claude-sonnet-4": 144_000,
   "claude-sonnet-4.5": 200_000,
   "claude-sonnet-4.6": 200_000,
+  "claude-sonnet-5": 1_000_000,
   "claude-opus-4.5": 200_000,
   "claude-opus-4.6": 200_000,
-  "claude-opus-4.6-fast": 200_000,
   "claude-opus-4.7": 200_000,
+  "claude-opus-4.8": 200_000,
+  "claude-opus-4.8-fast": 200_000,
   // Gemini models
   "gemini-2.5-pro": 173_000,
   "gemini-3-flash-preview": 173_000,
   "gemini-3.1-pro-preview": 173_000,
+  "gemini-3.5-flash": 173_000,
   // GPT models
   "gpt-4.1": 128_000,
   "gpt-4o": 68_000,
@@ -224,7 +217,7 @@ export function getCopilotContextWindowSize(
 
 /**
  * Context window size (in tokens) for the Codex CLI.
- * Current Codex CLI models (gpt-5.x-codex series) use a 200k token context window.
+ * Current Codex CLI models (gpt-5.4, gpt-5.4-mini, gpt-5.5) use a 400k token context window.
  */
 export const CODEX_CLI_CONTEXT_WINDOW_SIZE = 400_000;
 
@@ -269,8 +262,9 @@ export function getQwenModelName(model: string): string | undefined {
 /**
  * Get the context window size for a Claude CLI model.
  *
- * Standard models have a 200k token context window.
- * The "sonnet[1m]" alias enables the 1M token extended context variant.
+ * Opus, the "[1m]" extended-context variant, and bare "sonnet" (which now
+ * resolves to Sonnet 5) get a 1M token window. Haiku and the older sonnet-4.x
+ * line (sonnet-4, sonnet-4.5, sonnet-4.6) remain on the 200k window.
  *
  * @param modelId The model alias or full model ID (e.g. "sonnet", "claude-opus-4-6")
  * @returns Context window size in tokens
@@ -281,6 +275,9 @@ export function getClaudeContextWindowSize(modelId: string): number {
     modelId.includes("1m") ||
     modelId.includes("opus")
   ) {
+    return 1_000_000;
+  }
+  if (modelId.includes("sonnet") && !/sonnet[-_]?4\b/.test(modelId)) {
     return 1_000_000;
   }
   return 200_000;

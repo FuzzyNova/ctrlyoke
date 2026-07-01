@@ -227,6 +227,16 @@ async function updateClis() {
 
 /**
  * Task: Sync models
+ *
+ * Order matters here: --import overwrites COPILOT_CLI_MODEL_IDS too (it comes
+ * bundled in discovered-models.json), but that file is only ever as fresh as
+ * the last VS Code export. --discover queries `copilot help config` live, so
+ * it must run AFTER --import to have the final say on COPILOT_CLI_MODEL_IDS -
+ * otherwise a stale export silently clobbers the live discovery.
+ *
+ * The Chat model superset (COPILOT_MODELS) only comes from VS Code's Language
+ * Model API, so it's imported from discovered-models.json when present, and
+ * skipped (with a reminder) otherwise.
  */
 async function syncModels() {
   logHeader("Syncing Model Registry");
@@ -238,17 +248,21 @@ async function syncModels() {
       "discovered-models.json"
     );
 
-    if (!fs.existsSync(discoveredModelsPath)) {
-      logWarning("No discovered-models.json found");
-      logInfo(
-        "Run 'ctrlyoke: Export Discovered Models' command in VS Code first"
+    if (fs.existsSync(discoveredModelsPath)) {
+      logInfo("Importing Chat models from discovered-models.json...");
+      await runCommand("npm", ["run", "sync-models:import"]);
+    } else {
+      logWarning(
+        "No discovered-models.json found - skipping Chat model import"
       );
-      logInfo("See CHORES.md section 2 for full workflow");
-      return;
+      logInfo(
+        "Run 'ctrlyoke: Export Discovered Models' in VS Code (F5) to refresh the Chat model superset (COPILOT_MODELS)"
+      );
     }
 
-    logInfo("Importing models to ModelConstants.ts...");
-    await runCommand("npm", ["run", "sync-models:import"]);
+    console.log();
+    logInfo("Discovering Copilot CLI models from `copilot help config`...");
+    await runCommand("npm", ["run", "sync-models:discover"]);
 
     console.log();
     logInfo("Syncing models to package.json and schema...");
@@ -318,7 +332,7 @@ ${colors.cyan}Available Tasks:${colors.reset}
   ${colors.green}update-deps${colors.reset}     Update dependencies and run npm audit
   ${colors.green}update-clis${colors.reset}     Update CLI tools (copilot, claude, codex)
   ${colors.green}check-clis${colors.reset}      Check installed CLI tool versions
-  ${colors.green}sync-models${colors.reset}     Sync model registry (requires exported models)
+  ${colors.green}sync-models${colors.reset}     Discover Copilot CLI models + sync registry (Chat models imported if exported)
   ${colors.green}check-all${colors.reset}       Run all checks (lint, format, tests)
   ${colors.green}all${colors.reset}             Run all automated chores
 
@@ -329,8 +343,9 @@ ${colors.cyan}Examples:${colors.reset}
   npm run chores -- --task all
 
 ${colors.cyan}Manual Tasks:${colors.reset}
-  Some tasks require manual steps. See ${colors.blue}CHORES.md${colors.reset} for details:
-  - Exporting discovered models (section 2)
+  Only two things still require manual steps - see ${colors.blue}CHORES.md${colors.reset} for details:
+  - Exporting the Chat model superset from VS Code (section 2) - Copilot CLI models
+    no longer need this, they're discovered automatically by 'sync-models'
   - Updating VS Code commands (section 3)
 
 ${colors.cyan}Documentation:${colors.reset}
@@ -384,12 +399,13 @@ async function main() {
       case "all":
         logHeader("Running All Automated Chores");
         await updateClis();
+        await syncModels();
         await updateDependencies();
         await runAllChecks();
         logHeader("All Automated Chores Complete");
         logInfo("Remaining manual steps:");
         logInfo(
-          "  1. Export discovered models in VS Code, then run: npm run chores -- --task sync-models"
+          "  1. If you need the Chat model superset refreshed, export it in VS Code (F5 -> ctrlyoke: Export Discovered Models), then re-run: npm run chores -- --task sync-models"
         );
         logInfo("  2. Update VS Code commands (see CHORES.md section 3)");
         break;

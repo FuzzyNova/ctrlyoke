@@ -718,6 +718,7 @@
     "sync-models": "node scripts/sync-models.mjs",
     "sync-models:check": "node scripts/sync-models.mjs --check",
     "sync-models:import": "node scripts/sync-models.mjs --import",
+    "sync-models:discover": "node scripts/sync-models.mjs --discover",
     "chores": "node scripts/chores.mjs",
     "compile:prod": "npm run compile:extension && npm run build:webview",
     "knip": "knip"

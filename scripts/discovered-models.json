@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-06-10T01:57:42.159Z",
+  "exportedAt": "2026-07-01T13:57:24.411Z",
   "source": "vscode.lm.selectChatModels({ vendor: 'copilot' })",
   "chatModels": [
     {
@@ -111,15 +111,13 @@
     "claude-haiku-4.5",
     "claude-fable-5",
     "claude-opus-4.8",
+    "claude-opus-4.8-fast",
     "claude-opus-4.7",
     "claude-opus-4.6",
-    "claude-opus-4.6-fast",
     "claude-opus-4.5",
     "gpt-5.5",
     "gpt-5.4",
     "gpt-5.3-codex",
-    "gpt-5.2-codex",
-    "gpt-5.2",
     "gpt-5.4-mini",
     "gpt-5-mini",
     "gemini-3.1-pro-preview",

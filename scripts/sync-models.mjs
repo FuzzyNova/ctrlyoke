@@ -20,10 +20,15 @@
  * Usage:
  *   node scripts/sync-models.mjs             # Sync all models from ModelConstants.ts
  *   node scripts/sync-models.mjs --check     # Check if in sync (CI mode)
- *   node scripts/sync-models.mjs --discover  # Discover models from Copilot CLI
+ *   node scripts/sync-models.mjs --discover  # Query `copilot help config` directly and
+ *                                             # update COPILOT_CLI_MODEL_IDS from it
  *   node scripts/sync-models.mjs --import    # Import from discovered-models.json and update ModelConstants.ts
  *
- * Workflow for updating Chat models:
+ * Workflow for updating CLI models (authoritative, no extension needed):
+ *   1. Run: npm run sync-models -- --discover  (updates COPILOT_CLI_MODEL_IDS)
+ *   2. Run: npm run sync-models (to update package.json and schema)
+ *
+ * Workflow for updating Chat models (requires the VS Code Language Model API):
  *   1. Run extension (F5)
  *   2. Run "ctrlyoke: Export Discovered Models" command
  *   3. Run: npm run sync-models -- --import
@@ -452,40 +457,100 @@ function updateSchema(
 }
 
 /**
- * Discover models from Copilot CLI
+ * Discover models directly from `copilot help config` and write them straight
+ * into COPILOT_CLI_MODEL_IDS in ModelConstants.ts.
+ *
+ * This is the authoritative source for Copilot CLI models — it doesn't depend
+ * on the VS Code extension's "Export Discovered Models" command (which only
+ * covers models the Chat Language Model API happens to expose, and can lag
+ * behind what the CLI itself actually supports).
  */
 async function discoverFromCli() {
   console.log("Discovering models from Copilot CLI...\n");
 
+  let stdout;
   try {
-    const { stdout } = await execAsync("copilot help config", {
-      timeout: 10000,
-    });
-
-    // Parse the `model` section to extract choices
-    const modelSectionMatch = stdout.match(
-      /`model`[^`]+?((?:\s+-\s+"[^"]+"\r?\n)+)/i
-    );
-
-    if (modelSectionMatch) {
-      const models = modelSectionMatch[1].match(/"([^"]+)"/g);
-      if (models && models.length > 0) {
-        const modelIds = models.map((m) => m.replace(/"/g, ""));
-        console.log("CLI-supported models:");
-        modelIds.forEach((m) => console.log(`  - "${m}"`));
-        console.log(`\nTotal: ${modelIds.length} models`);
-        console.log(
-          "\nTo update ModelConstants.ts, copy these to COPILOT_CLI_MODEL_IDS"
-        );
-        return;
-      }
-    }
-
-    console.log("Could not parse model list from 'copilot help config' output");
+    ({ stdout } = await execAsync("copilot help config", { timeout: 10000 }));
   } catch (error) {
     console.error("Failed to run 'copilot help config':", error.message);
     console.log("\nMake sure Copilot CLI is installed and in your PATH.");
+    process.exit(1);
   }
+
+  // Parse the `model` section to extract choices
+  const modelSectionMatch = stdout.match(
+    /`model`[^`]+?((?:\s+-\s+"[^"]+"\r?\n)+)/i
+  );
+
+  if (!modelSectionMatch) {
+    console.error(
+      "Could not parse model list from 'copilot help config' output"
+    );
+    process.exit(1);
+  }
+
+  const models = modelSectionMatch[1].match(/"([^"]+)"/g);
+  const modelIds = models.map((m) => m.replace(/"/g, ""));
+
+  console.log(`Found ${modelIds.length} CLI-supported models:`);
+  modelIds.forEach((m) => console.log(`  - "${m}"`));
+
+  const content = readFileSync(MODEL_CONSTANTS_PATH, "utf-8");
+  const {
+    content: updatedContent,
+    added,
+    removed,
+  } = updateCopilotCliModelIds(content, modelIds);
+  writeFileSync(MODEL_CONSTANTS_PATH, updatedContent);
+
+  console.log(
+    `\n✓ Updated COPILOT_CLI_MODEL_IDS with ${modelIds.length} models`
+  );
+  if (added.length > 0) {
+    console.log("  New CLI models:");
+    added.forEach((id) => console.log(`    + ${id}`));
+  }
+  if (removed.length > 0) {
+    console.log("  Removed CLI models:");
+    removed.forEach((id) => console.log(`    - ${id}`));
+  }
+  console.log("\nNext step: Run 'npm run sync-models' to update package.json");
+}
+
+/**
+ * Replace the COPILOT_CLI_MODEL_IDS array in ModelConstants.ts source content
+ * with `cliModelIds`, returning the updated content plus the added/removed
+ * model IDs relative to what was previously there.
+ *
+ * Shared by --import (source: discovered-models.json) and --discover
+ * (source: live `copilot help config` output) so both paths update the
+ * array identically.
+ */
+function updateCopilotCliModelIds(content, cliModelIds) {
+  const currentCliMatch = content.match(
+    /export\s+const\s+COPILOT_CLI_MODEL_IDS\s*=\s*\[([\s\S]*?)\]\s*as\s+const/
+  );
+  const currentCliIds = [];
+  if (currentCliMatch) {
+    const stringRegex = /["']([^"']+)["']/g;
+    let match;
+    while ((match = stringRegex.exec(currentCliMatch[1])) !== null) {
+      currentCliIds.push(match[1]);
+    }
+  }
+
+  const cliEntries = cliModelIds.map((id) => `  "${id}"`);
+  const newCliBlock = `export const COPILOT_CLI_MODEL_IDS = [\n${cliEntries.join(",\n")},\n] as const`;
+
+  const updatedContent = content.replace(
+    /export\s+const\s+COPILOT_CLI_MODEL_IDS\s*=\s*\[[\s\S]*?\]\s*as\s+const/,
+    newCliBlock
+  );
+
+  const added = cliModelIds.filter((id) => !currentCliIds.includes(id));
+  const removed = currentCliIds.filter((id) => !cliModelIds.includes(id));
+
+  return { content: updatedContent, added, removed };
 }
 
 /**
@@ -562,36 +627,15 @@ function importDiscoveredModels() {
 
   // === Update COPILOT_CLI_MODEL_IDS ===
   if (discovered.cliModelIds && discovered.cliModelIds.length > 0) {
-    // Get current CLI model IDs for comparison
-    const currentCliMatch = content.match(
-      /export\s+const\s+COPILOT_CLI_MODEL_IDS\s*=\s*\[([\s\S]*?)\]\s*as\s+const/
-    );
-    const currentCliIds = [];
-    if (currentCliMatch) {
-      const stringRegex = /["']([^"']+)["']/g;
-      let match;
-      while ((match = stringRegex.exec(currentCliMatch[1])) !== null) {
-        currentCliIds.push(match[1]);
-      }
-    }
-
-    // Build new CLI model IDs array
-    const cliEntries = discovered.cliModelIds.map((id) => `  "${id}"`);
-    const newCliBlock = `export const COPILOT_CLI_MODEL_IDS = [\n${cliEntries.join(",\n")},\n] as const`;
-
-    content = content.replace(
-      /export\s+const\s+COPILOT_CLI_MODEL_IDS\s*=\s*\[[\s\S]*?\]\s*as\s+const/,
-      newCliBlock
-    );
+    const {
+      content: updatedContent,
+      added: newCliModels,
+      removed: removedCliModels,
+    } = updateCopilotCliModelIds(content, discovered.cliModelIds);
+    content = updatedContent;
 
     console.log(
       `\n✓ Updated COPILOT_CLI_MODEL_IDS with ${discovered.cliModelIds.length} models`
-    );
-    const newCliModels = discovered.cliModelIds.filter(
-      (id) => !currentCliIds.includes(id)
-    );
-    const removedCliModels = currentCliIds.filter(
-      (id) => !discovered.cliModelIds.includes(id)
     );
     if (newCliModels.length > 0) {
       console.log("  New CLI models:");

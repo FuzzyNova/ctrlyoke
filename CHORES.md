@@ -65,13 +65,31 @@ npm install -g @openai/codex
 
 ---
 
-### 2. Update Chat Models
+### 2. Update Models
 
-**Frequency**: When new Copilot/Claude/Codex models are released
+**Frequency**: When new Copilot/Claude/Codex/Gemini models are released
 
-This workflow discovers new models available in GitHub Copilot Chat and updates ctrlyoke's model registry.
+Model lists split into two tracks with very different levels of automation. Copilot CLI
+models are fully scriptable; everything else either needs one manual VS Code step or is
+inherently manual because the vendor CLI has no scriptable "list models" command.
 
-#### Steps:
+#### 2a. Copilot CLI models — fully automated, no VS Code needed
+
+`COPILOT_CLI_MODEL_IDS` comes straight from `copilot help config`, which is a plain CLI
+command. This can be run headlessly and needs no F5/export step at all:
+
+```bash
+npm run sync-models:discover   # updates COPILOT_CLI_MODEL_IDS in ModelConstants.ts
+npm run sync-models            # propagates to package.json + workflow-schema.json
+```
+
+Or just run `npm run chores -- --task sync-models`, which does both automatically.
+
+#### 2b. Copilot Chat models — requires one manual VS Code step
+
+`COPILOT_MODELS` (the full display-name superset used by Chat mode) can only be read from
+VS Code's `vscode.lm.selectChatModels()` Language Model API, which isn't reachable outside
+the extension host. This one step can't be scripted:
 
 1. **Launch extension in dev mode**:
    - Press `F5` in VS Code to start debugging session
@@ -81,23 +99,33 @@ This workflow discovers new models available in GitHub Copilot Chat and updates 
    - Run: `ctrlyoke: Export Discovered Models`
    - This creates/updates `scripts/discovered-models.json`
 
-3. **Import models to ModelConstants.ts**:
+Once that file exists, the rest is scriptable again:
 
-   ```bash
-   npm run sync-models:import
-   ```
+```bash
+npm run sync-models:import   # imports COPILOT_MODELS from discovered-models.json
+npm run sync-models          # propagates to package.json + workflow-schema.json
+```
 
-4. **Sync to package.json and schema**:
+`npm run chores -- --task sync-models` also picks this up automatically if
+`scripts/discovered-models.json` is present (and skips it with a reminder if not).
 
-   ```bash
-   npm run sync-models
-   ```
+#### 2c. Codex / Claude CLI / Gemini CLI models — inherently manual
 
-   This updates:
-   - `package.json` settings enums
-   - `schemas/workflow-schema.json` model examples
+None of these have a scriptable model-list command to discover from:
 
-5. **Verify changes**:
+- **Codex CLI**: the model list only surfaces via the interactive `/model` slash command
+  inside a session — there's no headless `codex <flag>` equivalent to `copilot help config`.
+- **Gemini CLI**: `-m/--model` takes a value but doesn't enumerate available choices.
+- **Claude CLI**: has no list-models command at all (see the note in `ModelRegistry.ts`);
+  its aliases (`sonnet`/`opus`/`haiku`) rarely change.
+
+When these change, update `CODEX_CLI_MODELS`, `CLAUDE_CLI_MODELS`, or `GEMINI_CLI_MODELS`
+in `src/utils/ModelConstants.ts` directly, based on vendor release notes or docs, then run
+`npm run sync-models` to propagate the change.
+
+#### Verify + commit (all tracks)
+
+1. **Verify changes**:
    - Check `src/utils/ModelConstants.ts`
    - Check `package.json` settings
    - Check `schemas/workflow-schema.json`
@@ -105,18 +133,11 @@ This workflow discovers new models available in GitHub Copilot Chat and updates 
 
    **Note**: The YAML schema is auto-generated during the next `npm run compile`.
 
-6. **Commit all updated files**:
+2. **Commit all updated files**:
    ```bash
    git add src/utils/ModelConstants.ts package.json schemas/
    git commit -m "chore: update model registry with latest models"
    ```
-
-**Alternative - Check CLI models**:
-
-```bash
-# See current CLI-supported models
-node scripts/sync-models.mjs --discover
-```
 
 ---
 
@@ -281,7 +302,7 @@ See [images/README.md](images/README.md) for design recommendations.
 Before releasing a new version, run these tasks:
 
 - [ ] Update CLI tools (check for latest versions)
-- [ ] Update chat models (export and sync)
+- [ ] Update models (`npm run chores -- --task sync-models`; export Chat models from VS Code first if needed)
 - [ ] Update VS Code commands (list and document)
 - [ ] Update dependencies (`npm update` + `npm audit`)
 - [ ] Run full test suite (`npm test`)
@@ -306,20 +327,26 @@ The `scripts/chores.mjs` script automates common chores:
 
 ```bash
 # Run all chores
-npm run chores
+npm run chores -- --task all
 
 # Run specific tasks
-npm run chores -- --task update-models
+npm run chores -- --task sync-models
+npm run chores -- --task update-clis
+npm run chores -- --task check-clis
 npm run chores -- --task update-deps
 npm run chores -- --task check-all
 ```
 
 **Available tasks**:
 
-- `update-models` - Update model registry
+- `sync-models` - Discover Copilot CLI models (`copilot help config`) + sync the model
+  registry to `package.json`/schema; also imports Chat models if `discovered-models.json`
+  has been exported from VS Code
+- `update-clis` - Update CLI tools (copilot, claude, codex) via their native updaters
+- `check-clis` - Check installed CLI tool versions
 - `update-deps` - Update and audit dependencies
 - `check-all` - Run all checks (lint, format, tests)
-- `all` - Run all chores
+- `all` - Run all automated chores (CLI tools, model sync, deps, checks)
 
 ---
 
@@ -327,7 +354,7 @@ npm run chores -- --task check-all
 
 - **Schedule regular maintenance**: Set a monthly reminder to run through these chores
 - **After VS Code updates**: Check for new commands and API changes
-- **After Copilot updates**: Export models and check for new features
+- **After Copilot updates**: Copilot CLI models refresh automatically via `sync-models`; export from VS Code only if the Chat model superset changed
 - **Before major releases**: Run all chores and full test suite
 - **Document breaking changes**: Update CHANGELOG.md when CLIs introduce breaking changes
 
