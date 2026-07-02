@@ -60,10 +60,22 @@ export function GlobalSettingsDrawer() {
   const [activeScope, setActiveScope] = useState<SettingWriteScope>(
     SETTING_SCOPES.USER
   );
+  const [shouldRender, setShouldRender] = useState(globalSettingsOpen);
   const visibleTabs = TABS.filter((t) => t.id !== "developer" || dev?.enabled);
   const effectiveActiveTab = visibleTabs.some((t) => t.id === activeTab)
     ? activeTab
     : "general";
+
+  useEffect(() => {
+    if (globalSettingsOpen) {
+      setShouldRender(true);
+      return;
+    }
+    if (!shouldRender) return;
+
+    const timer = window.setTimeout(() => setShouldRender(false), 220);
+    return () => window.clearTimeout(timer);
+  }, [globalSettingsOpen, shouldRender]);
 
   // Load settings when opened
   useEffect(() => {
@@ -81,6 +93,10 @@ export function GlobalSettingsDrawer() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [globalSettingsOpen, closeGlobalSettings]);
+
+  if (!shouldRender) {
+    return null;
+  }
 
   function handleUpdate(path: string, value: unknown) {
     vscode.postMessage({
@@ -111,8 +127,17 @@ export function GlobalSettingsDrawer() {
       ref={drawerRef}
       className={`absolute inset-0 flex flex-col z-drawer bg-panel-bg border-t border-panel-border
         transition-transform duration-200 ease-out
-        ${globalSettingsOpen ? "translate-y-0" : "translate-y-full"}`}
+        ${globalSettingsOpen ? "translate-y-0" : "translate-y-full pointer-events-none"}`}
       aria-hidden={!globalSettingsOpen}
+      onTransitionEnd={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          event.propertyName === "transform" &&
+          !globalSettingsOpen
+        ) {
+          setShouldRender(false);
+        }
+      }}
     >
       {/* Title bar — always visible, never scrolls */}
       <div className="flex items-center justify-between px-2 h-[30px] border-b border-panel-border shrink-0">

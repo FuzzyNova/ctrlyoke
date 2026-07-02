@@ -89,6 +89,7 @@ export const COPILOT_CLI_MODEL_IDS = [
  * See: https://github.com/anthropics/claude-code
  */
 export const CLAUDE_CLI_MODELS = [
+  "fable",
   "sonnet",
   "sonnet[1m]",
   "opus",
@@ -100,6 +101,7 @@ export const CLAUDE_CLI_MODELS = [
  * Claude CLI model display names
  */
 export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
+  fable: "Fable",
   sonnet: "Sonnet",
   "sonnet[1m]": "Sonnet 1M Context",
   opus: "Opus",
@@ -262,9 +264,10 @@ export function getQwenModelName(model: string): string | undefined {
 /**
  * Get the context window size for a Claude CLI model.
  *
- * Opus, the "[1m]" extended-context variant, and bare "sonnet" (which now
- * resolves to Sonnet 5) get a 1M token window. Haiku and the older sonnet-4.x
- * line (sonnet-4, sonnet-4.5, sonnet-4.6) remain on the 200k window.
+ * Fable, Opus, the "[1m]" extended-context variant, and bare "sonnet" (which
+ * now resolves to Sonnet 5) get a 1M token window. Haiku and the older
+ * sonnet-4.x line (sonnet-4, sonnet-4.5, sonnet-4.6) remain on the 200k
+ * window.
  *
  * @param modelId The model alias or full model ID (e.g. "sonnet", "claude-opus-4-6")
  * @returns Context window size in tokens
@@ -273,7 +276,8 @@ export function getClaudeContextWindowSize(modelId: string): number {
   if (
     modelId.includes("[1m]") ||
     modelId.includes("1m") ||
-    modelId.includes("opus")
+    modelId.includes("opus") ||
+    modelId.includes("fable")
   ) {
     return 1_000_000;
   }
@@ -295,7 +299,7 @@ export function isValidClaudeModel(modelId: string): boolean {
 
 /**
  * Get the Claude CLI model alias for a given model identifier
- * Claude CLI accepts short aliases directly (sonnet, opus, haiku)
+ * Claude CLI accepts short aliases directly (fable, sonnet, opus, haiku)
  *
  * @param model The model identifier (alias or Copilot-style name like "claude-sonnet-4.5")
  * @returns The Claude CLI alias, or undefined if not recognized
@@ -315,6 +319,7 @@ export function getClaudeModelName(
   }
 
   // Map Copilot-style names to aliases
+  if (normalized.includes("fable")) return "fable";
   if (normalized.includes("sonnet")) return "sonnet";
   if (normalized.includes("opus")) return "opus";
   if (normalized.includes("haiku")) return "haiku";
@@ -415,3 +420,4 @@ export function getHarnessModelDisplayName(
       return COPILOT_MODELS[modelId] ?? modelId;
   }
 }
+

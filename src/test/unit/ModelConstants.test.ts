@@ -65,6 +65,10 @@ suite("ModelConstants", () => {
   });
 
   suite("getClaudeModelName", () => {
+    test("returns alias for fable", () => {
+      assert.strictEqual(getClaudeModelName("fable"), "fable");
+    });
+
     test("returns alias for direct match", () => {
       assert.strictEqual(getClaudeModelName("sonnet"), "sonnet");
     });
@@ -85,6 +89,10 @@ suite("ModelConstants", () => {
       assert.strictEqual(getClaudeModelName("claude-opus-4.6"), "opus");
     });
 
+    test("maps Copilot-style fable name to alias", () => {
+      assert.strictEqual(getClaudeModelName("claude-fable-5"), "fable");
+    });
+
     test("returns undefined for unrecognized model", () => {
       assert.strictEqual(getClaudeModelName("gpt-4o"), undefined);
     });
@@ -95,6 +103,10 @@ suite("ModelConstants", () => {
   });
 
   suite("isValidClaudeModel", () => {
+    test("returns true for fable alias", () => {
+      assert.strictEqual(isValidClaudeModel("fable"), true);
+    });
+
     test("returns true for valid alias", () => {
       assert.strictEqual(isValidClaudeModel("sonnet"), true);
     });
@@ -113,6 +125,14 @@ suite("ModelConstants", () => {
   });
 
   suite("getClaudeContextWindowSize", () => {
+    test("returns 1M for fable", () => {
+      assert.strictEqual(getClaudeContextWindowSize("fable"), 1_000_000);
+      assert.strictEqual(
+        getClaudeContextWindowSize("claude-fable-5"),
+        1_000_000
+      );
+    });
+
     test("returns 1M for bare sonnet (resolves to Sonnet 5)", () => {
       assert.strictEqual(getClaudeContextWindowSize("sonnet"), 1_000_000);
     });
@@ -207,6 +227,10 @@ suite("ModelConstants", () => {
       assert.ok(Object.keys(COPILOT_MODELS).length > 0);
     });
 
+    test("CLAUDE_CLI_MODELS includes fable", () => {
+      assert.ok(CLAUDE_CLI_MODELS.includes("fable"));
+    });
+
     test("CLAUDE_CLI_MODELS includes sonnet", () => {
       assert.ok(CLAUDE_CLI_MODELS.includes("sonnet"));
     });
@@ -224,3 +248,4 @@ suite("ModelConstants", () => {
     });
   });
 });
+
