@@ -282,7 +282,7 @@ const OutputPaneComponent: React.FC<OutputPaneProps> = (props) => {
       </div>
 
       {showVirtualizationOverlay && (
-        <div className="pointer-events-none absolute inset-y-0 left-0 right-[14px] flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-y-0 left-0 right-[var(--fp-output-minimap-width)] flex items-center justify-center">
           <div className="flex items-center gap-2 rounded border border-widget-border bg-editor-bg/90 px-3 py-1.5 text-xs text-description-fg shadow-sm backdrop-blur-[1px]">
             <i className="codicon codicon-loading codicon-modifier-spin" />
             <span>Rendering output…</span>

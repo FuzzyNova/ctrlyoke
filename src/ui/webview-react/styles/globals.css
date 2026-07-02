@@ -50,6 +50,11 @@
   --fp-output-font-size-sm: calc(var(--fp-output-font-size) - 1px);
   --fp-output-font-size-xs: calc(var(--fp-output-font-size) - 2px);
 
+  /* Output minimap rail width — single source shared by the rail itself,
+     the virtualization overlay's right inset, and the find bar's right offset
+     so the find bar can never overlap the minimap. */
+  --fp-output-minimap-width: 14px;
+
   /* Semantic colors — used in CliOutput, StatusMessage, and base element styles below.
      All other VS Code colors are referenced directly via Tailwind tokens. */
   --bg-primary: var(--vscode-editor-background);

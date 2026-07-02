@@ -403,7 +403,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
     // The rail itself is 14px and clips nothing — markers overflow to the left.
     <div
       ref={railRef}
-      className="relative flex-shrink-0 w-[14px] bg-sidebar-bg border-l border-panel-border [--fp-minimap-diff-added:theme(colors.minimap-diff-added)] [--fp-minimap-diff-removed:theme(colors.minimap-diff-removed)]"
+      className="relative flex-shrink-0 w-[var(--fp-output-minimap-width)] bg-sidebar-bg border-l border-panel-border [--fp-minimap-diff-added:theme(colors.minimap-diff-added)] [--fp-minimap-diff-removed:theme(colors.minimap-diff-removed)]"
       aria-hidden="true"
       onMouseDown={handleRailMouseDown}
       onTouchStart={handleRailTouchStart}
@@ -679,7 +679,7 @@ const OutputMinimapComponent: React.FC<OutputMinimapProps> = ({
               title={step.label}
               aria-label={step.label}
               tabIndex={0}
-              className={`w-[14px] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current ${dotColorClass}`}
+              className={`w-[var(--fp-output-minimap-width)] flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-focus-border transition-all duration-100 bg-current ${dotColorClass}`}
               style={{
                 height: isHovered ? "6px" : "4px",
               }}

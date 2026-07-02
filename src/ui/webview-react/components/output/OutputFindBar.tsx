@@ -90,9 +90,11 @@ export function OutputFindBar({
 
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    // right offset clears the minimap rail (its width + an 8px gap) so the
+    // bar never overlaps the minimap on wide screens.
     <div
       ref={containerDivRef}
-      className={`absolute right-2 top-0 z-raised flex items-center gap-1.5 overflow-hidden rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
+      className={`absolute right-[calc(var(--fp-output-minimap-width)_+_0.5rem)] top-0 z-raised flex items-center gap-1.5 overflow-hidden rounded border border-simple-find-sash-border bg-panel-sticky-bg/92 px-2 py-1 shadow-md backdrop-blur-md ${
         isNarrow ? "left-2" : ""
       } ${closing ? "animate-output-find-exit" : "animate-output-find-enter"}`}
       onKeyDown={onKeyDown}
