@@ -2,25 +2,91 @@
   "use strict";
 
   // Generate a stable per-tab ID so each browser tab tracks its own state.
-  // sessionStorage survives page refreshes but is unique per tab (not shared
-  // between tabs like localStorage), giving us the right scoping:
-  //   - Refresh: same tabId → same localStorage key → state restored ✓
-  //   - New tab: new tabId → new localStorage key → fresh start ✓
-  //   - 5 concurrent tabs: 5 different keys → independent per-tab state ✓
-  let tabId = sessionStorage.getItem("fpTabId");
-  if (!tabId) {
-    tabId = Math.random().toString(36).slice(2);
-    sessionStorage.setItem("fpTabId", tabId);
+  // sessionStorage survives page refreshes, but a real browser/PWA close clears
+  // it. Mirror the most recent state in localStorage so reopening the only tab
+  // can recover unsent prompt text even when the tab gets a new session id.
+  const TAB_ID_KEY = "fpTabId";
+  const LAST_TAB_ID_KEY = "fpLastTabId";
+  const OPEN_TABS_KEY = "fpOpenTabs";
+  const LAST_STATE_KEY = "fpState-last";
+  const OPEN_TAB_STALE_MS = 15000;
+  const HEARTBEAT_MS = 5000;
+
+  function randomId() {
+    return Math.random().toString(36).slice(2);
   }
+
+  function readJson(key, fallback) {
+    try {
+      return JSON.parse(localStorage.getItem(key) || "null") ?? fallback;
+    } catch {
+      localStorage.removeItem(key);
+      return fallback;
+    }
+  }
+
+  function writeJson(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* best-effort persistence */
+    }
+  }
+
+  function getOpenTabs(now) {
+    const rawTabs = readJson(OPEN_TABS_KEY, {});
+    const tabs =
+      rawTabs && typeof rawTabs === "object" && !Array.isArray(rawTabs)
+        ? rawTabs
+        : {};
+    for (const [id, lastSeen] of Object.entries(tabs)) {
+      if (typeof lastSeen !== "number" || now - lastSeen > OPEN_TAB_STALE_MS) {
+        delete tabs[id];
+      }
+    }
+    return tabs;
+  }
+
+  let tabId = sessionStorage.getItem(TAB_ID_KEY);
+  if (!tabId) {
+    const now = Date.now();
+    const openTabs = getOpenTabs(now);
+    const lastTabId = localStorage.getItem(LAST_TAB_ID_KEY);
+    tabId =
+      lastTabId && !Object.prototype.hasOwnProperty.call(openTabs, lastTabId)
+        ? lastTabId
+        : randomId();
+    sessionStorage.setItem(TAB_ID_KEY, tabId);
+  }
+  localStorage.setItem(LAST_TAB_ID_KEY, tabId);
   const STATE_KEY = "fpState-" + tabId;
+
+  function markTabOpen() {
+    const tabs = getOpenTabs(Date.now());
+    tabs[tabId] = Date.now();
+    writeJson(OPEN_TABS_KEY, tabs);
+  }
+
+  function markTabClosed() {
+    const tabs = getOpenTabs(Date.now());
+    delete tabs[tabId];
+    writeJson(OPEN_TABS_KEY, tabs);
+  }
+
+  markTabOpen();
+  setInterval(markTabOpen, HEARTBEAT_MS);
+  window.addEventListener("pagehide", markTabClosed);
+  window.addEventListener("beforeunload", markTabClosed);
 
   let _state = {};
   try {
-    _state = JSON.parse(localStorage.getItem(STATE_KEY) || "{}");
+    const persistedState = localStorage.getItem(STATE_KEY);
+    const lastState = localStorage.getItem(LAST_STATE_KEY);
+    _state = JSON.parse(persistedState || lastState || "{}");
   } catch {
     localStorage.removeItem(STATE_KEY);
+    localStorage.removeItem(LAST_STATE_KEY);
   }
-
   let ws;
   let reconnectTimer;
   let connectWatchdogTimer;
@@ -496,11 +562,8 @@
     },
     setState(s) {
       _state = s;
-      try {
-        localStorage.setItem(STATE_KEY, JSON.stringify(s));
-      } catch {
-        /* best-effort persistence */
-      }
+      writeJson(STATE_KEY, s);
+      writeJson(LAST_STATE_KEY, s);
     },
   };
 })();
