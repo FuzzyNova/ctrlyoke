@@ -4,13 +4,22 @@ import type { InteractiveAbortState } from "./CliFailureTracker";
 import { INTERACTIVE_ABORT_KINDS } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 
-const SESSION_START_TIMEOUT_MS = 60_000;
-const SESSION_START_POLL_MS = 100;
+const DEFAULT_SESSION_START_SOFT_TIMEOUT_MS = 60_000;
+const DEFAULT_SESSION_START_HARD_TIMEOUT_MS = 5 * 60_000;
+const DEFAULT_SESSION_START_POLL_MS = 100;
+const DEFAULT_LATE_START_RECOVERY_POLL_MS = 1_000;
 const INTERACTIVE_WAIT_ABORTED = Symbol("interactiveWaitAborted");
 
 export interface InteractiveSessionDiscovery {
   logPath: string;
   sessionId: string | null;
+}
+
+export interface CliInteractiveStartupTimeouts {
+  sessionStartSoftTimeoutMs?: number;
+  sessionStartHardTimeoutMs?: number;
+  sessionStartPollMs?: number;
+  lateStartRecoveryPollMs?: number;
 }
 
 export interface CliInteractiveStartupCoordinatorDeps {
@@ -20,6 +29,7 @@ export interface CliInteractiveStartupCoordinatorDeps {
   getAbortState: () => InteractiveAbortState | null;
   markProcessExitDuringStage: (stage: string, exitCode: number) => string;
   setFailureReason: (reason: string) => void;
+  startupTimeouts?: CliInteractiveStartupTimeouts;
 }
 
 export class CliInteractiveStartupCoordinator {
@@ -100,13 +110,14 @@ export class CliInteractiveStartupCoordinator {
 
     const notifyDir =
       this.deps.notificationMonitor.getNotificationDirectory(workspaceRoot);
+    const timeouts = this.getStartupTimeouts();
 
     const startResult = await this.deps.notificationMonitor
       .waitForSessionStart!(
       {
         directory: notifyDir,
-        timeoutMs: SESSION_START_TIMEOUT_MS,
-        pollMs: SESSION_START_POLL_MS,
+        timeoutMs: timeouts.sessionStartSoftTimeoutMs,
+        pollMs: timeouts.sessionStartPollMs,
       },
       params.startTime,
       params.runId,
@@ -118,12 +129,35 @@ export class CliInteractiveStartupCoordinator {
         return null;
       }
 
-      Log.error(
-        `❌ SessionStart hook timeout: ${startResult.error || "Unknown error"}`
+      Log.warn(
+        `⚠️ SessionStart hook did not arrive within ${timeouts.sessionStartSoftTimeoutMs}ms: ` +
+          `${startResult.error || "still waiting"}`
       );
-      this.deps.setFailureReason(
-        startResult.error || "SessionStart hook timeout"
+      Log.info(
+        `🔄 Keeping interactive startup alive and polling for a delayed session log ` +
+          `for up to ${timeouts.sessionStartHardTimeoutMs}ms total`
       );
+      const recovered = await this.recoverFromLateInteractiveStartup({
+        promptForDiscovery: params.promptForDiscovery,
+        startTime: params.startTime,
+      });
+      if (recovered) {
+        return recovered;
+      }
+
+      if (
+        this.handleInteractiveStartupAbort(
+          "waiting for delayed interactive startup recovery"
+        )
+      ) {
+        return null;
+      }
+
+      const timeoutReason =
+        `Timed out waiting for interactive session startup after ` +
+        `${timeouts.sessionStartHardTimeoutMs}ms`;
+      Log.error(`❌ ${timeoutReason}`);
+      this.deps.setFailureReason(timeoutReason);
       return null;
     }
 
@@ -202,7 +236,7 @@ export class CliInteractiveStartupCoordinator {
     promptForDiscovery: string,
     startTime: Date,
     sessionId: string | null,
-    errorContext: string
+    errorContext?: string
   ): Promise<InteractiveSessionDiscovery | null> {
     const discoveredLogPath = await this.waitForInteractiveStartupOperation(
       this.deps.logParser.discoverSessionLog(
@@ -217,7 +251,9 @@ export class CliInteractiveStartupCoordinator {
     }
 
     if (!discoveredLogPath) {
-      this.deps.setFailureReason(errorContext);
+      if (errorContext) {
+        this.deps.setFailureReason(errorContext);
+      }
       return null;
     }
 
@@ -253,6 +289,90 @@ export class CliInteractiveStartupCoordinator {
     return true;
   }
 
+  private async recoverFromLateInteractiveStartup(params: {
+    promptForDiscovery: string;
+    startTime: Date;
+  }): Promise<InteractiveSessionDiscovery | null> {
+    const timeouts = this.getStartupTimeouts();
+    const deadlineMs =
+      params.startTime.getTime() + timeouts.sessionStartHardTimeoutMs;
+
+    while (Date.now() < deadlineMs) {
+      if (
+        this.handleInteractiveStartupAbort(
+          "waiting for delayed interactive startup recovery"
+        )
+      ) {
+        return null;
+      }
+
+      const discovery = await this.discoverAndExtractSession(
+        params.promptForDiscovery,
+        params.startTime,
+        null
+      );
+      if (discovery) {
+        Log.info(
+          `✅ Recovered interactive startup after SessionStart timeout via session log discovery`
+        );
+        return discovery;
+      }
+
+      if (
+        this.handleInteractiveStartupAbort(
+          "waiting for delayed interactive startup recovery"
+        )
+      ) {
+        return null;
+      }
+
+      const remainingMs = deadlineMs - Date.now();
+      if (remainingMs <= 0) {
+        break;
+      }
+
+      const waitResult = await this.waitForInteractiveStartupOperation(
+        this.delay(
+          Math.min(timeouts.lateStartRecoveryPollMs, Math.max(1, remainingMs))
+        )
+      );
+      if (waitResult === INTERACTIVE_WAIT_ABORTED) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  private getStartupTimeouts(): Required<CliInteractiveStartupTimeouts> {
+    const configuredSoftTimeoutMs =
+      this.deps.startupTimeouts?.sessionStartSoftTimeoutMs ??
+      DEFAULT_SESSION_START_SOFT_TIMEOUT_MS;
+    const sessionStartSoftTimeoutMs = Math.max(1, configuredSoftTimeoutMs);
+    const configuredHardTimeoutMs =
+      this.deps.startupTimeouts?.sessionStartHardTimeoutMs ??
+      DEFAULT_SESSION_START_HARD_TIMEOUT_MS;
+    const sessionStartHardTimeoutMs = Math.max(
+      sessionStartSoftTimeoutMs,
+      configuredHardTimeoutMs
+    );
+
+    return {
+      sessionStartSoftTimeoutMs,
+      sessionStartHardTimeoutMs,
+      sessionStartPollMs: Math.max(
+        1,
+        this.deps.startupTimeouts?.sessionStartPollMs ??
+          DEFAULT_SESSION_START_POLL_MS
+      ),
+      lateStartRecoveryPollMs: Math.max(
+        1,
+        this.deps.startupTimeouts?.lateStartRecoveryPollMs ??
+          DEFAULT_LATE_START_RECOVERY_POLL_MS
+      ),
+    };
+  }
+
   private async waitForInteractiveStartupOperation<T>(
     operation: Promise<T>
   ): Promise<T | typeof INTERACTIVE_WAIT_ABORTED> {
@@ -272,7 +392,7 @@ export class CliInteractiveStartupCoordinator {
         if (this.deps.getAbortState()) {
           finish(() => resolve(INTERACTIVE_WAIT_ABORTED));
         }
-      }, SESSION_START_POLL_MS);
+      }, this.getStartupTimeouts().sessionStartPollMs);
 
       void operation
         .then((value) => {
@@ -282,5 +402,9 @@ export class CliInteractiveStartupCoordinator {
           finish(() => reject(error));
         });
     });
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

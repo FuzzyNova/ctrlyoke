@@ -159,4 +159,121 @@ suite("CliInteractiveStartupCoordinator", () => {
       sessionId: "session-from-log",
     });
   });
+
+  test("should recover from SessionStart timeout via delayed log discovery", async () => {
+    let failureReason: string | undefined;
+
+    const coordinator = new CliInteractiveStartupCoordinator({
+      logParser: {
+        extractResponse: () => ({ events: [], metadata: {} }),
+        isComplete: () => false,
+        watchLogFile: () => ({ close() {} }) as any,
+        readNewLines: async () => [{ type: "session.created" }],
+        discoverSessionLog: async () => "C:/logs/late-session.jsonl",
+        extractSessionId: () => "late-session-id",
+        extractStructuredEventsFromEvent: () => [],
+        extractContentFromEvent: () => undefined,
+        formatStatistics: () => "",
+        getFinalEventsOnCompletion: async () => [],
+      },
+      notificationMonitor: {
+        supportsSessionIdInFilename: true,
+        supportsSessionStart: true,
+        monitorForCompletion: async () => ({ completed: false }),
+        buildHookConfig: () => ({ type: "none" as const }),
+        getNotificationDirectory: () => process.cwd(),
+        waitForSessionStart: async () => ({
+          completed: false,
+          error: "Timeout waiting for SessionStart notification",
+        }),
+      },
+      getWorkspaceRoot: () => process.cwd(),
+      getAbortState: () => null,
+      markProcessExitDuringStage: (_stage: string, exitCode: number) =>
+        `process exit ${exitCode}`,
+      setFailureReason: (reason: string) => {
+        failureReason = reason;
+      },
+      startupTimeouts: {
+        sessionStartSoftTimeoutMs: 5,
+        sessionStartHardTimeoutMs: 25,
+        sessionStartPollMs: 1,
+        lateStartRecoveryPollMs: 1,
+      },
+    });
+
+    const result = await coordinator.resolveSession({
+      promptForDiscovery: "say hi",
+      startTime: new Date(),
+      runId: "run-4",
+    });
+
+    assert.deepStrictEqual(result, {
+      logPath: "C:/logs/late-session.jsonl",
+      sessionId: "late-session-id",
+    });
+    assert.strictEqual(failureReason, undefined);
+  });
+
+  test("should fail after hard startup timeout when no hook or log ever arrives", async function () {
+    this.timeout(1_000);
+
+    let failureReason: string | undefined;
+    let discoverAttempts = 0;
+
+    const coordinator = new CliInteractiveStartupCoordinator({
+      logParser: {
+        extractResponse: () => ({ events: [], metadata: {} }),
+        isComplete: () => false,
+        watchLogFile: () => ({ close() {} }) as any,
+        readNewLines: async () => [],
+        discoverSessionLog: async () => {
+          discoverAttempts += 1;
+          return null;
+        },
+        extractSessionId: () => null,
+        extractStructuredEventsFromEvent: () => [],
+        extractContentFromEvent: () => undefined,
+        formatStatistics: () => "",
+        getFinalEventsOnCompletion: async () => [],
+      },
+      notificationMonitor: {
+        supportsSessionIdInFilename: true,
+        supportsSessionStart: true,
+        monitorForCompletion: async () => ({ completed: false }),
+        buildHookConfig: () => ({ type: "none" as const }),
+        getNotificationDirectory: () => process.cwd(),
+        waitForSessionStart: async () => ({
+          completed: false,
+          error: "Timeout waiting for SessionStart notification",
+        }),
+      },
+      getWorkspaceRoot: () => process.cwd(),
+      getAbortState: () => null,
+      markProcessExitDuringStage: (_stage: string, exitCode: number) =>
+        `process exit ${exitCode}`,
+      setFailureReason: (reason: string) => {
+        failureReason = reason;
+      },
+      startupTimeouts: {
+        sessionStartSoftTimeoutMs: 5,
+        sessionStartHardTimeoutMs: 20,
+        sessionStartPollMs: 1,
+        lateStartRecoveryPollMs: 1,
+      },
+    });
+
+    const result = await coordinator.resolveSession({
+      promptForDiscovery: "say hi",
+      startTime: new Date(),
+      runId: "run-5",
+    });
+
+    assert.strictEqual(result, null);
+    assert.ok(discoverAttempts > 0);
+    assert.strictEqual(
+      failureReason,
+      "Timed out waiting for interactive session startup after 20ms"
+    );
+  });
 });
