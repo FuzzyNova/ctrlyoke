@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import {
   useMessageHandler,
@@ -45,9 +51,115 @@ import { useNavigationSync } from "./navigation/useNavigationSync";
 import { getReadyPreferredWorkingFilePath } from "./navigation/readyRoute";
 import { HistorySearchDrawer } from "@components/search";
 
+function isIosWebKitBrowser(): boolean {
+  const platform = navigator.platform;
+  const userAgent = navigator.userAgent;
+  return (
+    /iPad|iPhone|iPod/.test(userAgent) ||
+    (platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function isEditableElementFocused(): boolean {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = activeElement.tagName;
+  return (
+    tagName === "INPUT" ||
+    tagName === "TEXTAREA" ||
+    activeElement.isContentEditable
+  );
+}
+
+function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
+  const [rootStyle, setRootStyle] = useState<CSSProperties>({});
+
+  useEffect(() => {
+    const visualViewport = window.visualViewport;
+    if (!isMobile || !isIosWebKitBrowser() || !visualViewport) {
+      setRootStyle({});
+      return;
+    }
+
+    let frameId: number | null = null;
+
+    const updateRootStyle = () => {
+      frameId = null;
+
+      const offsetTop = Math.max(0, visualViewport.offsetTop);
+      const keyboardInset = Math.max(
+        0,
+        window.innerHeight - visualViewport.height - offsetTop
+      );
+      const shouldPinToVisualViewport =
+        isEditableElementFocused() && (keyboardInset > 80 || offsetTop > 0);
+
+      if (!shouldPinToVisualViewport) {
+        setRootStyle({});
+        return;
+      }
+
+      const nextStyle: CSSProperties = {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        width: "100%",
+        height: `${Math.round(visualViewport.height)}px`,
+        transform:
+          offsetTop > 0
+            ? `translate3d(0, ${Math.round(offsetTop)}px, 0)`
+            : undefined,
+        transformOrigin: "top left",
+        overflow: "hidden",
+      };
+
+      setRootStyle((currentStyle) =>
+        currentStyle.height === nextStyle.height &&
+        currentStyle.transform === nextStyle.transform
+          ? currentStyle
+          : nextStyle
+      );
+    };
+
+    const scheduleUpdate = () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      frameId = requestAnimationFrame(updateRootStyle);
+    };
+
+    scheduleUpdate();
+    visualViewport.addEventListener("resize", scheduleUpdate);
+    visualViewport.addEventListener("scroll", scheduleUpdate);
+    window.addEventListener("resize", scheduleUpdate);
+    window.addEventListener("orientationchange", scheduleUpdate);
+    document.addEventListener("focusin", scheduleUpdate);
+    document.addEventListener("focusout", scheduleUpdate);
+
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      visualViewport.removeEventListener("resize", scheduleUpdate);
+      visualViewport.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      window.removeEventListener("orientationchange", scheduleUpdate);
+      document.removeEventListener("focusin", scheduleUpdate);
+      document.removeEventListener("focusout", scheduleUpdate);
+    };
+  }, [isMobile]);
+
+  return rootStyle;
+}
+
 function App() {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
+  const iosVisualViewportRootStyle = useIosVisualViewportRootStyle(isMobile);
   // Record workflow / workspace-viewer navigations for the back/forward controls.
   useNavigationSync();
   // main.tsx rehydrates uiStore before App is imported, so the persisted
@@ -512,7 +624,10 @@ function App() {
 
   if (isMobile) {
     return (
-      <div className="h-dvh w-full flex flex-col bg-editor-bg text-foreground border-l border-r relative">
+      <div
+        className="h-dvh w-full flex flex-col bg-editor-bg text-foreground border-l border-r relative"
+        style={iosVisualViewportRootStyle}
+      >
         <Header
           onToggleMobileSteps={handleToggleMobileSteps}
           onToggleMobileWorkflowProps={handleToggleMobileWorkflowProps}
