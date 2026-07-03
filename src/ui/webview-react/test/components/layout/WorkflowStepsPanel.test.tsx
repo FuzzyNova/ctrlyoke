@@ -219,6 +219,32 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
     ).toHaveAttribute("data-workflow-step-index", "0");
   });
 
+  it("renders a thinner running-step overlay around the collapsed chip", () => {
+    resetStores();
+    useWorkflowStore.getState().loadWorkflow({
+      fileName: "test.prompt.md",
+      steps: [{ prompt: "Completed step" }, { prompt: "Running step" }],
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: 1,
+      results: [{ status: STEP_STATUS.COMPLETED }],
+    });
+    useUiStore.setState({ stepsCollapsed: true });
+
+    render(<WorkflowStepsPanel />);
+
+    const highlight = screen.getByTestId("executing-chip-highlight");
+    expect(highlight).toHaveClass(
+      "border",
+      "border-status-idle",
+      "animate-pulse-custom",
+      "transition-[transform,height,opacity]"
+    );
+    expect(highlight).not.toHaveClass("border-2");
+    expect(
+      document.querySelector('[data-workflow-chip-index="1"]')
+    ).toBeInTheDocument();
+  });
+
   it("does not render the execution highlight while the workflow is idle", () => {
     resetStores();
     useWorkflowStore.getState().loadWorkflow({

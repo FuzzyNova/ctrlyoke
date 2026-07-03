@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
@@ -30,6 +24,7 @@ import {
 import { FinalStepFooter } from "../prompts/FinalStepFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PromptChipRail } from "../prompts/PromptChipRail";
+import { ExecutingStepHighlight } from "../prompts/ExecutingStepHighlight";
 import {
   MESSAGE_TYPES,
   STEP_STATUS,
@@ -130,67 +125,6 @@ function SortableWorkflowStepWrapper({
         />
       </div>
     </div>
-  );
-}
-
-interface ExecutingStepHighlightProps {
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  layoutKey: string;
-  stepIndex: number;
-  visible: boolean;
-}
-
-/**
- * A single overlay owned by the list rather than an individual row. Moving the
- * same element between row bounds lets CSS animate execution advancing, and
- * can later be extended to span the first/last rows in a parallel group.
- */
-function ExecutingStepHighlight({
-  containerRef,
-  layoutKey,
-  stepIndex,
-  visible,
-}: ExecutingStepHighlightProps) {
-  const [bounds, setBounds] = useState({ top: 0, height: 0, measured: false });
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container || !visible) return;
-
-    const target = container.querySelector<HTMLElement>(
-      `[data-workflow-step-index="${stepIndex}"]`
-    );
-    if (!target) return;
-
-    const measure = () => {
-      setBounds({
-        top: target.offsetTop,
-        height: target.offsetHeight,
-        measured: true,
-      });
-    };
-
-    measure();
-    const resizeObserver = new ResizeObserver(measure);
-    resizeObserver.observe(container);
-    resizeObserver.observe(target);
-    return () => resizeObserver.disconnect();
-  }, [containerRef, layoutKey, stepIndex, visible]);
-
-  if (!visible) return null;
-
-  return (
-    <div
-      data-testid="executing-step-highlight"
-      className={`pointer-events-none absolute inset-x-0 top-0 z-raised border-2 border-status-idle animate-pulse-custom transition-[transform,height,opacity] duration-300 ease-out ${
-        bounds.measured ? "opacity-100" : "opacity-0"
-      }`}
-      style={{
-        height: bounds.height,
-        transform: `translateY(${bounds.top}px)`,
-      }}
-      aria-hidden="true"
-    />
   );
 }
 
@@ -881,8 +815,8 @@ const WorkflowStepsPanelInner: React.FC<{
           <div ref={stepListRef} className="relative py-1">
             <ExecutingStepHighlight
               containerRef={stepListRef}
-              layoutKey={sortableIds.join("|")}
-              stepIndex={currentStep}
+              layoutKey={`${currentStep}|${sortableIds.join("|")}`}
+              targetSelector={`[data-workflow-step-index="${currentStep}"]`}
               visible={isRunning}
             />
             {/* Done steps (indices 0..doneStepCount-1).
