@@ -148,6 +148,8 @@ export class CtrlYokeWebviewProvider
           this.handleDevAction(action, scopedPostMessage),
         handleDevStatusRequest: (scopedPostMessage) =>
           this.sendDevStatus(scopedPostMessage),
+        handleUxSnapshot: (payload, workspaceRoot, scopedPostMessage) =>
+          this.handleUxSnapshot(payload, workspaceRoot, scopedPostMessage),
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
         onPanelReady: () => this.handlePanelReady(),
@@ -1271,6 +1273,36 @@ export class CtrlYokeWebviewProvider
           "ctrlyoke.dev.sendTestNotification"
         );
       },
+    });
+  }
+
+  /**
+   * Persist a captured UX snapshot to disk (dev builds only) and reply with the
+   * saved path. Gated on IS_DEV_MODE so the write path (and DevCommands import)
+   * is dead-code-eliminated from production builds, mirroring handleDevAction.
+   */
+  private async handleUxSnapshot(
+    payload: { markdown: string; png?: string },
+    workspaceRoot: string,
+    postMessage: PostMessageFn
+  ): Promise<void> {
+    if (!IS_DEV_MODE) {
+      postMessage({
+        type: MESSAGE_TYPES.UX_SNAPSHOT_SAVED,
+        error: "UX snapshot capture is unavailable in this build.",
+      });
+      return;
+    }
+
+    const { writeUxSnapshot } = await import("../dev/DevCommands");
+    const result = await writeUxSnapshot(
+      payload.markdown,
+      payload.png,
+      workspaceRoot
+    );
+    postMessage({
+      type: MESSAGE_TYPES.UX_SNAPSHOT_SAVED,
+      ...result,
     });
   }
 

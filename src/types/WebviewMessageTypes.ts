@@ -419,6 +419,28 @@ export interface DevCommandUnavailableMessage {
   reason?: string;
 }
 
+/**
+ * Webview → Extension: a captured UX snapshot to persist under
+ * .ctrlyoke/snapshots/. `markdown` is the self-describing text dump
+ * (HTML + computed styles + matched author rules); `png` is reserved for a
+ * future visual companion (not written in v1).
+ */
+export interface UxSnapshotCaptureMessage {
+  type: typeof MESSAGE_TYPES.UX_SNAPSHOT_CAPTURE;
+  markdown: string;
+  png?: string;
+}
+
+/**
+ * Extension → Webview: result of persisting a UX snapshot. On success `path`
+ * is the workspace-relative file path; on failure `error` describes why.
+ */
+export interface UxSnapshotSavedMessage {
+  type: typeof MESSAGE_TYPES.UX_SNAPSHOT_SAVED;
+  path?: string;
+  error?: string;
+}
+
 export interface CommitMessageGenerationRecord {
   source: "scm" | "workspace-viewer";
   workingDirectory: string;
@@ -1517,6 +1539,7 @@ export type IncomingMessage =
   | DevBuildCompletedMessage
   | DevRestartingMessage
   | DevCommandUnavailableMessage
+  | UxSnapshotSavedMessage
   | CommitMessageGenerationUpdatedMessage
   | HarnessFilesResultMessage
   | HarnessFileOpResultMessage

@@ -309,6 +309,15 @@ export const MESSAGE_TYPES = {
   DEV_SEND_TEST_NOTIFICATION: "dev:sendTestNotification",
   DEV_REQUEST_STATUS: "dev:requestStatus",
 
+  // UX Snapshot capture — Webview → Extension (dev builds only)
+  // Carries `markdown` (and optional `png`) serialized from the live UI; the
+  // extension host writes it to .ctrlyoke/snapshots/. Distinct from the
+  // routeDevAction commands above because it carries a payload.
+  UX_SNAPSHOT_CAPTURE: "dev:uxSnapshotCapture",
+  // UX Snapshot saved — Extension → Webview (dev builds only): carries the
+  // workspace-relative `path` written, or an `error` string on failure.
+  UX_SNAPSHOT_SAVED: "dev:uxSnapshotSaved",
+
   // Developer dashboard events — Extension → Webview (dev builds only)
   DEV_STATUS: "dev:status",
   DEV_BUILD_STARTED: "dev:buildStarted",

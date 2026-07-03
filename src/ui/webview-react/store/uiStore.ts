@@ -244,6 +244,11 @@ interface UiState {
   // This client's identity assigned by the extension host on connect.
   // Used to derive isController for terminal sessions.
   myClientId: string;
+
+  // Dev-only "UX Snapshot" capture button visibility. Local UI preference,
+  // persisted alongside the other panel/layout prefs (not a synced workflow
+  // setting). Only takes effect in dev builds (see DeveloperSection).
+  uxSnapshotButtonVisible: boolean;
 }
 
 /**
@@ -424,6 +429,9 @@ interface UiActions {
   // Client identity
   setMyClientId: (clientId: string) => void;
 
+  // Dev-only UX snapshot button
+  setUxSnapshotButtonVisible: (visible: boolean) => void;
+
   // Reset UI to defaults
   resetUi: () => void;
   // Reset persisted layout state to initial defaults (for dev testing)
@@ -496,6 +504,7 @@ const initialState: UiState = {
   workspaceInitRequired: false,
   showLayoutPreference: false,
   myClientId: "",
+  uxSnapshotButtonVisible: false,
 };
 
 // Fields to persist via vscode.getState()/setState()
@@ -518,6 +527,7 @@ const persistedFields = [
   "activeWorkflowWorkingFilePath",
   "mobileStepsOpen",
   "mobileStepsMode",
+  "uxSnapshotButtonVisible",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -966,6 +976,9 @@ export const useUiStore = create<UiState & UiActions>()(
       setShowLayoutPreference: (show) => set({ showLayoutPreference: show }),
 
       setMyClientId: (clientId) => set({ myClientId: clientId }),
+
+      setUxSnapshotButtonVisible: (visible) =>
+        set({ uxSnapshotButtonVisible: visible }),
 
       // ============================================================================
       // RESET

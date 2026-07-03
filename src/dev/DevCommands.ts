@@ -26,10 +26,11 @@ import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
 } from "../utils/ModelRegistry";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { MESSAGE_TYPES } from "../types/DashboardConstants";
+import { getErrorMessage } from "../utils/ErrorUtils";
 
 export type DevDashboardAction =
   | "buildExtension"
@@ -982,6 +983,71 @@ async function dumpVsCodeCssVariables(
     undefined,
     context.subscriptions
   );
+}
+
+// ============================================================================
+// UX Snapshot Capture (dev only)
+// ============================================================================
+
+export interface UxSnapshotWriteResult {
+  /** Workspace-relative path of the written markdown file (success). */
+  path?: string;
+  /** Error message (failure). */
+  error?: string;
+}
+
+/**
+ * Persist a captured UX snapshot to `.ctrlyoke/snapshots/`.
+ *
+ * Host-agnostic: the caller supplies `workspaceRoot` (VS Code workspace root
+ * for the panel, the hosted server's `workspaceRoot` for a phone/browser
+ * client) so this same write logic serves both transports. Lives in
+ * DevCommands.ts so it is dead-code-eliminated from production builds.
+ *
+ * @param markdown Self-describing text dump (HTML + computed + matched rules).
+ * @param png Reserved for a future visual companion — accepted but not written in v1.
+ * @param workspaceRoot Absolute path of the workspace to write under.
+ * @returns The workspace-relative file path on success, or an error message.
+ */
+export async function writeUxSnapshot(
+  markdown: string,
+  png: string | undefined,
+  workspaceRoot: string
+): Promise<UxSnapshotWriteResult> {
+  // png is intentionally unused in v1 — the visual companion is a deferred
+  // follow-up. Referencing it here keeps the signature stable for that work.
+  void png;
+
+  if (!workspaceRoot) {
+    return { error: "No workspace is open to save the snapshot into." };
+  }
+  if (typeof markdown !== "string" || markdown.length === 0) {
+    return { error: "Snapshot was empty; nothing to save." };
+  }
+
+  try {
+    const snapshotsDir = path.join(
+      workspaceRoot,
+      PATH_CONSTANTS.CTRLYOKE_DIR,
+      PATH_CONSTANTS.SNAPSHOTS_DIR
+    );
+    await fs.promises.mkdir(snapshotsDir, { recursive: true });
+
+    const fileName = `ux-snapshot-${Date.now()}.md`;
+    const fullPath = path.join(snapshotsDir, fileName);
+    await fs.promises.writeFile(fullPath, markdown, "utf8");
+
+    const relativePath = path
+      .relative(workspaceRoot, fullPath)
+      .split(path.sep)
+      .join("/");
+    Log.info(`📸 ctrlyoke: Wrote UX snapshot to ${fullPath}`);
+    return { path: relativePath };
+  } catch (error) {
+    const message = getErrorMessage(error);
+    Log.error("❌ Failed to write UX snapshot:", message);
+    return { error: message };
+  }
 }
 
 // ============================================================================

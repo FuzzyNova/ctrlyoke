@@ -102,6 +102,12 @@ export const PATH_CONSTANTS = {
   /** Logs directory name (subdirectory of CTRLYOKE_DIR) */
   LOGS_DIR: "logs",
 
+  /**
+   * UX snapshots directory name (subdirectory of CTRLYOKE_DIR).
+   * Kept separate from LOGS_DIR so log rotation never deletes captured snapshots.
+   */
+  SNAPSHOTS_DIR: "snapshots",
+
   /** History directory name (subdirectory of CTRLYOKE_DIR) */
   HISTORY_DIR: ".history",
 

@@ -38,6 +38,12 @@ export function DeveloperSection() {
   );
   const resetLayoutState = useUiStore((s) => s.resetLayoutState);
   const showToast = useUiStore((s) => s.showToast);
+  const uxSnapshotButtonVisible = useUiStore(
+    (s) => s.uxSnapshotButtonVisible
+  );
+  const setUxSnapshotButtonVisible = useUiStore(
+    (s) => s.setUxSnapshotButtonVisible
+  );
 
   useEffect(() => {
     vscode.postMessage({ type: MESSAGE_TYPES.DEV_REQUEST_STATUS });
@@ -195,6 +201,24 @@ export function DeveloperSection() {
         >
           Reset Layout to Defaults
         </Button>
+      </div>
+
+      <div className="border-t border-panel-border pt-3 space-y-2">
+        <h3 className="text-xs font-semibold uppercase text-description-fg tracking-wide">
+          Debug Capture
+        </h3>
+        <p className="text-xs text-description-fg">
+          Shows a floating capture button pinned to the right edge. Tapping it
+          serializes the live UI (HTML, computed styles, and matched CSS rules)
+          to <span className="font-mono">.ctrlyoke/snapshots/</span> — useful on
+          a phone where there are no browser dev tools.
+        </p>
+        <SettingToggleRow
+          label="Show UX snapshot button"
+          description="Dev-only floating button that saves a UX snapshot on tap."
+          checked={uxSnapshotButtonVisible}
+          onChange={setUxSnapshotButtonVisible}
+        />
       </div>
 
       <div className="border-t border-panel-border pt-3 space-y-2">

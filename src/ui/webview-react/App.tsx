@@ -47,6 +47,7 @@ import {
 } from "./components/layout";
 import { WorkspaceViewerModal } from "./components/workspace-viewer/WorkspaceViewerModal";
 import { ContentPreviewModal } from "./components/shared/ContentPreviewModal";
+import { UxSnapshotButton } from "./components/dev/UxSnapshotButton";
 import { useNavigationSync } from "./navigation/useNavigationSync";
 import { getReadyPreferredWorkingFilePath } from "./navigation/readyRoute";
 import { HistorySearchDrawer } from "@components/search";
@@ -854,6 +855,9 @@ function App() {
         {/* Content preview modal — git diff / prior-context XML */}
         <ContentPreviewModal />
 
+        {/* Dev-only floating UX snapshot capture button */}
+        <UxSnapshotButton />
+
         {/* iOS safe area spacer — lifts all content above the home indicator.
             height = env(safe-area-inset-bottom), 0px on non-iOS / desktop.
             Placing it here (flex sibling of the main content area) means every
@@ -1109,6 +1113,9 @@ function App() {
 
       {/* Content preview modal — git diff / prior-context XML */}
       <ContentPreviewModal />
+
+      {/* Dev-only floating UX snapshot capture button */}
+      <UxSnapshotButton />
 
       {/* iOS safe area spacer — see mobile layout comment above */}
       <div className="safe-area-spacer" aria-hidden="true" />

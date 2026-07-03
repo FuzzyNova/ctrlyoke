@@ -373,6 +373,31 @@ export class WebviewMessageRouter {
       );
     });
 
+    // UX Snapshot capture — carries a payload (markdown + optional png), unlike
+    // the routeDevAction commands above. Gated the same way: when no write
+    // callback is registered (production build) emit DEV_COMMAND_UNAVAILABLE so
+    // no file-write path exists. Resolves the workspace root here so the same
+    // handler serves both the VS Code panel and phone/browser clients (whose
+    // messages arrive via routeExternalMessage on this same router).
+    table.set(MESSAGE_TYPES.UX_SNAPSHOT_CAPTURE, async (message) => {
+      if (!this.callbacks.handleUxSnapshot) {
+        this.emitMessage({
+          type: MESSAGE_TYPES.DEV_COMMAND_UNAVAILABLE,
+          command: MESSAGE_TYPES.UX_SNAPSHOT_CAPTURE,
+          reason: "Developer actions are unavailable in this build.",
+        });
+        return;
+      }
+      await this.callbacks.handleUxSnapshot(
+        {
+          markdown: typeof message.markdown === "string" ? message.markdown : "",
+          png: typeof message.png === "string" ? message.png : undefined,
+        },
+        this.getWorkspaceRoot(),
+        this.getCurrentPostMessage()
+      );
+    });
+
     // ── Dashboard — Workflow Control ──────────────────────────────────────
     table.set(MESSAGE_TYPES.NEW_PROMPT, () => {
       vscode.commands.executeCommand("ctrlyoke.createDraftPrompt");
@@ -2736,6 +2761,16 @@ export interface WebviewRouterCallbacks {
     postMessage: PostMessageFn
   ) => Promise<void>;
   handleDevStatusRequest?: (postMessage: PostMessageFn) => Promise<void>;
+  /**
+   * Persist a captured UX snapshot (dev builds only). Receives the payload, the
+   * resolved workspace root, and a scoped send so the confirmation reply reaches
+   * the originating client (panel or phone). Absent in production builds.
+   */
+  handleUxSnapshot?: (
+    payload: { markdown: string; png?: string },
+    workspaceRoot: string,
+    postMessage: PostMessageFn
+  ) => Promise<void>;
   /** Returns the hosted server URL if the server is currently running, undefined otherwise. */
   getServerUrl?: () => string | undefined;
   /** Returns all available LAN IPs (populated when binding to 0.0.0.0). */

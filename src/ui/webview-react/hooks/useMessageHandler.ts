@@ -471,6 +471,18 @@ function createMessageHandlers(): MessageHandlerMap {
       .showToast(message.reason ?? "Developer command unavailable", "error");
   };
 
+  handlers[MESSAGE_TYPES.UX_SNAPSHOT_SAVED] = (message) => {
+    if (message.error) {
+      useUiStore
+        .getState()
+        .showToast(`UX snapshot failed: ${message.error}`, "error");
+      return;
+    }
+    useUiStore
+      .getState()
+      .showToast(`UX snapshot saved to ${message.path}`, "success");
+  };
+
   handlers[MESSAGE_TYPES.COMMIT_MESSAGE_GENERATION_UPDATED] = (message) => {
     useSettingsStore
       .getState()
