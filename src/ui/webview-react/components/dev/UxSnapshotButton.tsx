@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useSettingsStore } from "@store/settingsStore";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -10,8 +10,13 @@ import { WebviewLog } from "@utils/logger";
  * Floating, dev-only "UX Snapshot" capture button pinned to the right-center of
  * the viewport. On tap it serializes the live UI (HTML + computed styles +
  * matched author rules) and posts it to the extension host, which writes it to
- * `.ctrlyoke/snapshots/`. The saved-path confirmation toast is fired from the
- * UX_SNAPSHOT_SAVED handler in useMessageHandler.
+ * `.ctrlyoke/snapshots/`.
+ *
+ * Feedback (mirrors the copy button in CliOutput): the icon flips to a spinner
+ * the instant it is tapped, stays spinning through the write round-trip, then
+ * shows a brief green check when the extension confirms the save. Because the
+ * capture is a heavy synchronous DOM walk that would block the paint, it is
+ * deferred a couple of frames so the spinner is visible first.
  *
  * Mounts only when (a) this is a dev build and (b) the user has toggled the
  * button on in Developer settings.
@@ -20,48 +25,76 @@ export function UxSnapshotButton() {
   const vscode = useVsCodeApi();
   const devEnabled = useSettingsStore((s) => s.dev?.enabled ?? false);
   const visible = useUiStore((s) => s.uxSnapshotButtonVisible);
+  const status = useUiStore((s) => s.uxSnapshotStatus);
+  const setStatus = useUiStore((s) => s.setUxSnapshotStatus);
   const showToast = useUiStore((s) => s.showToast);
-  const [capturing, setCapturing] = useState(false);
+
+  // Auto-reset: clear the green check / error flash after a moment, and guard
+  // against a missing reply leaving the spinner stuck forever.
+  useEffect(() => {
+    if (status === "idle") {
+      return;
+    }
+    const delay = status === "capturing" ? 8000 : 1200;
+    const timer = window.setTimeout(() => setStatus("idle"), delay);
+    return () => window.clearTimeout(timer);
+  }, [status, setStatus]);
 
   if (!devEnabled || !visible) {
     return null;
   }
 
   const handleCapture = () => {
-    if (capturing) {
+    if (status === "capturing") {
       return;
     }
-    setCapturing(true);
-    try {
-      const { markdown, png } = captureUxSnapshot();
-      vscode.postMessage({
-        type: MESSAGE_TYPES.UX_SNAPSHOT_CAPTURE,
-        markdown,
-        png,
+    // Paint the spinner first, then run the blocking capture two frames later so
+    // the tap gives instant feedback instead of freezing on the old icon.
+    setStatus("capturing");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          const { markdown, png } = captureUxSnapshot();
+          vscode.postMessage({
+            type: MESSAGE_TYPES.UX_SNAPSHOT_CAPTURE,
+            markdown,
+            png,
+          });
+        } catch (error) {
+          WebviewLog.error("UX snapshot capture failed", error);
+          showToast("UX snapshot capture failed", "error");
+          setStatus("error");
+        }
       });
-      showToast("Capturing UX snapshot…", "info");
-    } catch (error) {
-      WebviewLog.error("UX snapshot capture failed", error);
-      showToast("UX snapshot capture failed", "error");
-    } finally {
-      // The extension reply (UX_SNAPSHOT_SAVED) drives the final toast; release
-      // the button shortly after so a slow write can't wedge it permanently.
-      setTimeout(() => setCapturing(false), 1500);
-    }
+    });
   };
+
+  const iconClass =
+    status === "capturing"
+      ? "codicon-loading codicon-modifier-spin"
+      : status === "saved"
+        ? "codicon-check"
+        : status === "error"
+          ? "codicon-error"
+          : "codicon-device-camera";
+
+  const stateTextClass =
+    status === "saved"
+      ? "text-indicator-success"
+      : status === "error"
+        ? "text-error-fg"
+        : "text-description-fg hover:text-foreground";
 
   return (
     <button
       type="button"
       onClick={handleCapture}
-      disabled={capturing}
+      disabled={status === "capturing"}
       aria-label="Capture UX snapshot"
       title="Capture UX snapshot (dev)"
-      className="fixed right-0 top-1/2 -translate-y-1/2 z-popover flex items-center justify-center w-9 h-11 rounded-l-md border border-r-0 border-panel-border bg-editor-bg/90 text-description-fg shadow-md backdrop-blur hover:text-foreground hover:bg-editor-bg disabled:opacity-60 disabled:cursor-wait"
+      className={`fixed right-0 top-1/2 -translate-y-1/2 z-popover flex items-center justify-center w-9 h-11 rounded-l-md border border-r-0 border-panel-border bg-editor-bg/90 shadow-md backdrop-blur transition-colors hover:bg-editor-bg disabled:cursor-wait ${stateTextClass}`}
     >
-      <i
-        className={`codicon ${capturing ? "codicon-loading codicon-modifier-spin" : "codicon-device-camera"}`}
-      />
+      <i className={`codicon ${iconClass}`} />
     </button>
   );
 }

@@ -249,6 +249,9 @@ interface UiState {
   // persisted alongside the other panel/layout prefs (not a synced workflow
   // setting). Only takes effect in dev builds (see DeveloperSection).
   uxSnapshotButtonVisible: boolean;
+  // Transient capture progress for the UX snapshot button's icon feedback:
+  // idle → capturing (spinner) → saved (green check) / error, then back to idle.
+  uxSnapshotStatus: "idle" | "capturing" | "saved" | "error";
 }
 
 /**
@@ -431,6 +434,9 @@ interface UiActions {
 
   // Dev-only UX snapshot button
   setUxSnapshotButtonVisible: (visible: boolean) => void;
+  setUxSnapshotStatus: (
+    status: "idle" | "capturing" | "saved" | "error"
+  ) => void;
 
   // Reset UI to defaults
   resetUi: () => void;
@@ -505,6 +511,7 @@ const initialState: UiState = {
   showLayoutPreference: false,
   myClientId: "",
   uxSnapshotButtonVisible: false,
+  uxSnapshotStatus: "idle",
 };
 
 // Fields to persist via vscode.getState()/setState()
@@ -979,6 +986,8 @@ export const useUiStore = create<UiState & UiActions>()(
 
       setUxSnapshotButtonVisible: (visible) =>
         set({ uxSnapshotButtonVisible: visible }),
+
+      setUxSnapshotStatus: (status) => set({ uxSnapshotStatus: status }),
 
       // ============================================================================
       // RESET
