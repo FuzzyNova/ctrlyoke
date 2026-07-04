@@ -358,6 +358,90 @@ suite("ContextExpander.expandContextSplit", () => {
       assert.strictEqual(result.excerptBlocks, "");
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("path traversal protection", () => {
+    let outsideDir: string;
+
+    afterEach(() => {
+      try {
+        if (outsideDir) {
+          fs.rmSync(outsideDir, { recursive: true, force: true });
+        }
+      } catch {
+        // best-effort
+      }
+    });
+
+    test("blocks a full-file @path ref that escapes the workspace via '..'", async () => {
+      const root = freshWorkspace();
+      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-outside-"));
+      fs.writeFileSync(path.join(outsideDir, "secret.txt"), "TOP SECRET\n");
+      const traversal = path.relative(
+        root,
+        path.join(outsideDir, "secret.txt")
+      );
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(`@${traversal}`);
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.strictEqual(result.excerptBlocks, "");
+    });
+
+    test("blocks an absolute-path @path ref outside the workspace", async () => {
+      const root = freshWorkspace();
+      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-outside-"));
+      const absPath = path.join(outsideDir, "secret.txt");
+      fs.writeFileSync(absPath, "TOP SECRET\n");
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(`@${absPath}`);
+
+      assert.deepStrictEqual(result.directFileRefs, []);
+      assert.strictEqual(result.excerptBlocks, "");
+    });
+
+    test("blocks a #selection: range ref that escapes the workspace via '..'", async () => {
+      const root = freshWorkspace();
+      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-outside-"));
+      fs.writeFileSync(
+        path.join(outsideDir, "secret.txt"),
+        "TOP\nSECRET\nDATA\n"
+      );
+      const traversal = path.relative(
+        root,
+        path.join(outsideDir, "secret.txt")
+      );
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(
+        `#selection:${traversal}:1-2`
+      );
+
+      assert.strictEqual(result.excerptBlocks, "");
+      assert.ok(!result.excerptBlocks.includes("TOP"));
+    });
+
+    test("still allows a legitimate in-workspace reference alongside a blocked one", async () => {
+      const root = freshWorkspace();
+      outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-outside-"));
+      fs.writeFileSync(path.join(outsideDir, "secret.txt"), "TOP SECRET\n");
+      const traversal = path.relative(
+        root,
+        path.join(outsideDir, "secret.txt")
+      );
+      const insideFile = path.join(root, "inside.ts");
+      fs.writeFileSync(insideFile, "export const inside = true;\n");
+
+      const expander = new ContextExpander(root);
+      const result = await expander.expandContextSplit(
+        `@${traversal} and @inside.ts`
+      );
+
+      assert.deepStrictEqual(result.directFileRefs, [insideFile]);
+    });
+  });
 });
 
 suite("ContextExpander.expandContext", () => {

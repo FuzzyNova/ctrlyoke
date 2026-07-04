@@ -128,6 +128,12 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
       labels.push({ name, type: "head" });
     } else if (name.startsWith("tag: ")) {
       labels.push({ name: name.slice("tag: ".length).trim(), type: "tag" });
+    } else if (/^[^/]+\/HEAD$/.test(name)) {
+      // "<remote>/HEAD" (e.g. origin/HEAD) is a symbolic alias for the
+      // remote's default branch, not a real branch — skip it so it doesn't
+      // render as a second, redundant remote-branch pill alongside the
+      // branch it points to (e.g. origin/main).
+      continue;
     } else if (name.includes("/")) {
       // Anything with a slash is a remote-tracking ref (e.g. origin/main).
       labels.push({ name, type: "remoteBranch" });

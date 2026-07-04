@@ -489,6 +489,36 @@ suite("HostedWorkspaceViewerService", () => {
       );
     });
 
+    test("does not duplicate a remote-branch pill for the origin/HEAD alias", async () => {
+      const remoteRoot = createWorkspace();
+      const root = createWorkspace();
+
+      runGit(remoteRoot, "init", "--bare");
+      runGit(path.dirname(root), "clone", remoteRoot, path.basename(root));
+      configureGitIdentity(root);
+
+      commitFile(root, "tracked.txt", "one\n", "initial commit");
+      runGit(root, "push", "-u", "origin", "HEAD");
+      // Mirrors the origin/HEAD symbolic ref created for /security-review:
+      // git log --decorate then reports both "origin/main" and "origin/HEAD"
+      // on the same commit.
+      runGit(root, "remote", "set-head", "origin", "-a");
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.getCommitLog();
+
+      const head = result.commits[0];
+      const remoteBranchRefs = head.refs.filter(
+        (r) => r.type === "remoteBranch"
+      );
+      assert.strictEqual(
+        remoteBranchRefs.length,
+        1,
+        `expected exactly one remoteBranch pill, got: ${JSON.stringify(remoteBranchRefs)}`
+      );
+      assert.strictEqual(remoteBranchRefs[0].name, "origin/main");
+    });
+
     test("flags merge commits via isMerge", async () => {
       const root = createWorkspace();
       runGit(root, "init");

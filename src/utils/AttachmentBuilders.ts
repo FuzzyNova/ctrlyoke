@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { Log } from "./Log";
+import { isPathWithinDirectory } from "./PathSecurity";
 
 /**
  * Utility functions for building XML attachments for various reference types
@@ -86,7 +87,21 @@ export async function buildDirectoryAttachmentXml(
   const normalizedPath = dirPath.replace(/[/\\]+$/, "");
 
   // Build absolute URI
-  const absolutePath = path.join(workspaceRoot, normalizedPath);
+  const resolvedRoot = path.resolve(workspaceRoot);
+  const absolutePath = path.resolve(resolvedRoot, normalizedPath);
+
+  // @dir/ references come from prompt/workflow file content, which may not
+  // have been authored by the person running it — reject traversal outside
+  // the workspace rather than listing an arbitrary directory on disk.
+  if (!isPathWithinDirectory(absolutePath, resolvedRoot)) {
+    Log.error(
+      `Security: Directory reference "${dirPath}" resolves outside the workspace and was blocked`
+    );
+    return `<attachment id="directory:${normalizedPath}">
+Directory reference is outside the workspace and was blocked: ${normalizedPath}
+</attachment>`;
+  }
+
   const dirUri = vscode.Uri.file(absolutePath);
 
   // Check if directory exists

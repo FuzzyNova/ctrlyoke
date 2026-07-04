@@ -59,6 +59,31 @@ import type {
   WorkspaceGitRefDiffResponse,
 } from "../types/HostedWorkspaceViewerTypes";
 
+const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
+
+/**
+ * Theme vars are spliced verbatim into a server-rendered `<style>` block
+ * served to every hosted-dashboard visitor (see buildThemeStyleBlock). Only
+ * well-formed CSS custom-property names are kept, and any value containing
+ * `<`/`>` is dropped — that's the only way to break out of a `<style>`
+ * element's raw-text content model into a new tag/script.
+ */
+export function sanitizeThemeVars(
+  vars: Record<string, string>
+): Record<string, string> {
+  const safe: Record<string, string> = {};
+  for (const [key, value] of Object.entries(vars)) {
+    if (
+      typeof value === "string" &&
+      THEME_VAR_KEY_PATTERN.test(key) &&
+      !/[<>]/.test(value)
+    ) {
+      safe[key] = value;
+    }
+  }
+  return safe;
+}
+
 export class CtrlYokeHostedServer
   implements IDashboardProvider, IDashboardSink
 {
@@ -488,8 +513,11 @@ export class CtrlYokeHostedServer
   // ── Theme var snapshot (fed from VS Code webview capture) ─────────────────
 
   updateThemeVars(vars: Record<string, string>): void {
-    this.cachedThemeVars = vars;
-    this.broadcast({ type: MESSAGE_TYPES.THEME_VARS_UPDATED, vars });
+    this.cachedThemeVars = sanitizeThemeVars(vars);
+    this.broadcast({
+      type: MESSAGE_TYPES.THEME_VARS_UPDATED,
+      vars: this.cachedThemeVars,
+    });
   }
 
   // ── HTTP routes ───────────────────────────────────────────────────────────

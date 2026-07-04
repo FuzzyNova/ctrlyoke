@@ -12,6 +12,7 @@ import {
   HARNESS_IDS,
   PROMPT_PROPERTIES,
   PERMISSION_MODES,
+  PANEL_CLIENT_ID,
   type SettingWriteScope,
 } from "../../types/DashboardConstants";
 import { configService } from "../../config/CtrlYokeConfigService";
@@ -604,6 +605,53 @@ suite("WebviewSettingsSync", () => {
         sendPropsCalled,
         false,
         "sendWorkflowPropertiesToSettings should not be called when falling back to the serializer (no orchestrator)"
+      );
+    });
+  });
+
+  suite("WebviewMessageRouter — THEME_VARS_CAPTURED handler", () => {
+    function makeRouter() {
+      return new WebviewMessageRouter(
+        () => {},
+        {} as any,
+        {} as any,
+        () => undefined,
+        {} as any,
+        { handleClearWorkflow: async () => {}, updateWorkflowName: () => {} }
+      );
+    }
+
+    test("applies theme vars sent by the trusted in-panel client", async () => {
+      const router = makeRouter();
+      let received: Record<string, string> | undefined;
+      router.setThemeVarsCapturedCallback((vars) => {
+        received = vars;
+      });
+
+      await router.route(
+        { type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars: { "--x": "#fff" } },
+        { clientTag: PANEL_CLIENT_ID }
+      );
+
+      assert.deepStrictEqual(received, { "--x": "#fff" });
+    });
+
+    test("ignores theme vars sent by a non-panel (external browser) client", async () => {
+      const router = makeRouter();
+      let calls = 0;
+      router.setThemeVarsCapturedCallback(() => {
+        calls++;
+      });
+
+      await router.route(
+        { type: MESSAGE_TYPES.THEME_VARS_CAPTURED, vars: { "--x": "#fff" } },
+        { clientTag: "some-external-dashboard-client" }
+      );
+
+      assert.strictEqual(
+        calls,
+        0,
+        "THEME_VARS_CAPTURED from a non-panel client must not update the shared, HTML-embedded theme snapshot"
       );
     });
   });

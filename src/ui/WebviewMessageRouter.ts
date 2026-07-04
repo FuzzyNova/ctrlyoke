@@ -1145,7 +1145,14 @@ export class WebviewMessageRouter {
     });
 
     table.set(MESSAGE_TYPES.THEME_VARS_CAPTURED, (message) => {
-      this.themeVarsCapturedCallback?.(message.vars);
+      // Only the trusted in-panel VS Code webview may update the shared theme
+      // snapshot — it gets spliced into server-rendered HTML served to every
+      // hosted-dashboard visitor, so accepting it from external browser
+      // clients would let anyone holding a server token plant a stored
+      // injection that persists for every future visitor.
+      if (this.clientId === PANEL_CLIENT_ID) {
+        this.themeVarsCapturedCallback?.(message.vars);
+      }
     });
 
     // ── Settings — Workflow Properties ───────────────────────────────────

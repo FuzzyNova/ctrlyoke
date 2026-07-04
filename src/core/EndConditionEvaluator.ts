@@ -17,6 +17,7 @@ import {
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
 import { CliProcessManager } from "../utils/CliProcessManager";
+import { isPathWithinDirectory } from "../utils/PathSecurity";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
 export interface EvaluationResult {
@@ -423,9 +424,7 @@ export class EndConditionEvaluator {
    * `C:\dev\ctrlyoke-evil` would incorrectly match workspace root `C:\dev\ctrlyoke`.
    */
   static isWithinDirectory(candidate: string, directory: string): boolean {
-    return (
-      candidate === directory || candidate.startsWith(directory + path.sep)
-    );
+    return isPathWithinDirectory(candidate, directory);
   }
 
   /**

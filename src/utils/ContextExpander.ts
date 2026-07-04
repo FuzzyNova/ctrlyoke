@@ -6,6 +6,7 @@ import {
   parseGitChangeReferences,
 } from "./FileReferenceParser";
 import { buildDirectoryAttachmentXml } from "./AttachmentBuilders";
+import { isPathWithinDirectory } from "./PathSecurity";
 import { Log } from "./Log";
 import {
   getCommitDiff,
@@ -212,13 +213,14 @@ export class ContextExpander {
           }
         } else {
           // Full-file ref → return absolute path for direct @-reference (only if it exists)
-          const absolutePath = this.resolveWorkspacePath(ref.path);
           try {
+            const absolutePath = this.resolveWorkspacePath(ref.path);
             await fs.access(absolutePath);
             directFileRefs.push(absolutePath);
-          } catch {
+          } catch (err) {
             Log.warn(
-              `[ContextExpander] File not found, skipping: ${absolutePath}`
+              `[ContextExpander] Skipping unreadable or out-of-workspace reference: ${ref.path}`,
+              err
             );
           }
         }
@@ -478,6 +480,19 @@ ${content}
     // path.resolve handles both absolute and relative paths correctly
     // If relativePath is already absolute, it returns it as-is
     // If relative, it joins with workspaceRoot
-    return path.resolve(this.workspaceRoot, relativePath);
+    const resolvedRoot = path.resolve(this.workspaceRoot);
+    const resolved = path.resolve(resolvedRoot, relativePath);
+
+    // Reject `..` traversal and absolute-path references that escape the
+    // workspace — @-references come from prompt/workflow file content, which
+    // may not have been authored by the person running it (shared/imported
+    // workflows), so this boundary must be enforced regardless of intent.
+    if (!isPathWithinDirectory(resolved, resolvedRoot)) {
+      throw new Error(
+        `Reference "${relativePath}" resolves outside the workspace and was blocked`
+      );
+    }
+
+    return resolved;
   }
 }
