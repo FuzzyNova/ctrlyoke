@@ -94,8 +94,24 @@ function useVisibleTerminalHeight(
     window.addEventListener("focusin", updateVisibleHeight);
     window.addEventListener("focusout", updateVisibleHeight);
 
+    // The available terminal region also changes without any viewport/window
+    // event — e.g. the editor panel auto-expanding when its keyboard opens, a
+    // separator drag, or the session rail collapsing. Those shrink the parent
+    // via react-resizable-panels, and without recomputing the container keeps a
+    // now-too-tall explicit height, overflowing downward so the control bar
+    // hides behind the editor section. Observe the parent to re-clamp on any
+    // layout-driven resize. Observe the parent only (not the container): our
+    // own height write never changes the parent, so there is no feedback loop.
+    const observedParent = containerRef.current?.parentElement ?? null;
+    const resizeObserver =
+      observedParent && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(updateVisibleHeight)
+        : null;
+    resizeObserver?.observe(observedParent as Element);
+
     return () => {
       cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
       visualViewport.removeEventListener("resize", updateVisibleHeight);
       visualViewport.removeEventListener("scroll", updateVisibleHeight);
       window.removeEventListener("resize", updateVisibleHeight);
