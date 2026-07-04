@@ -75,8 +75,12 @@ function isEditableElementFocused(): boolean {
   );
 }
 
+type IosVisualViewportRootStyle = CSSProperties & {
+  "--safe-area-bottom"?: string;
+};
+
 function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
-  const [rootStyle, setRootStyle] = useState<CSSProperties>({});
+  const [rootStyle, setRootStyle] = useState<IosVisualViewportRootStyle>({});
 
   useEffect(() => {
     const visualViewport = window.visualViewport;
@@ -86,6 +90,85 @@ function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
     }
 
     let frameId: number | null = null;
+    let keyboardViewportActive = false;
+
+    // Scroll lock. The bug this solves was a scroll-driven feedback loop:
+    // iOS pans the layout viewport to reveal the focused editor (offsetTop
+    // tracks scrollY), and `body { overflow: hidden }` does NOT stop it
+    // (scrollY still ran to 510). Only taking the body out of the scroll flow
+    // with `position: fixed` truly locks it. With scroll locked at 0, offsetTop
+    // stays 0, so the root pin can use a constant `top: 0` — which also kills
+    // the loop, since a constant style no longer reflows on every scroll event.
+    const body = document.body;
+    const html = document.documentElement;
+    let scrollLocked = false;
+    const savedBody = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      bottom: body.style.bottom,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    const savedHtmlOverflow = html.style.overflow;
+    const rootContainer = document.getElementById("root");
+
+    // iOS Safari reveals a focused input by setting the `scrollTop` of an
+    // `overflow: hidden` ancestor (html / body / #root) — `overflow: hidden`
+    // does NOT block this programmatic scroll, and `window.scrollTo` does NOT
+    // reset it (that only touches the document scroll). While the root is
+    // `position: fixed` the ancestor scroll is invisible, but on unlock the
+    // root returns to normal flow and the leftover `scrollTop` shifts it up —
+    // the "stays offset after close" bug. So reset the containers directly.
+    const resetScrollContainers = () => {
+      if (window.scrollX !== 0 || window.scrollY !== 0) {
+        window.scrollTo(0, 0);
+      }
+      html.scrollTop = 0;
+      body.scrollTop = 0;
+      if (rootContainer) {
+        rootContainer.scrollTop = 0;
+      }
+    };
+
+    const lockScroll = () => {
+      if (scrollLocked) {
+        return;
+      }
+      scrollLocked = true;
+      resetScrollContainers();
+      body.style.position = "fixed";
+      body.style.top = "0";
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.bottom = "0";
+      body.style.width = "100%";
+      body.style.overflow = "hidden";
+      html.style.overflow = "hidden";
+    };
+
+    const unlockScroll = () => {
+      if (!scrollLocked) {
+        return;
+      }
+      scrollLocked = false;
+      body.style.position = savedBody.position;
+      body.style.top = savedBody.top;
+      body.style.left = savedBody.left;
+      body.style.right = savedBody.right;
+      body.style.bottom = savedBody.bottom;
+      body.style.width = savedBody.width;
+      body.style.overflow = savedBody.overflow;
+      html.style.overflow = savedHtmlOverflow;
+      // The ancestor scrollTop that Safari set to reveal the input outlives the
+      // fixed pin — reset it after restoring flow, or the root stays shifted.
+      // Reset now, then again next frame: the root is still `position: fixed`
+      // this tick (React clears its style asynchronously), so the ancestor has
+      // no scroll height yet; the deferred pass runs once flow is restored.
+      resetScrollContainers();
+      requestAnimationFrame(resetScrollContainers);
+    };
 
     const updateRootStyle = () => {
       frameId = null;
@@ -95,32 +178,44 @@ function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
         0,
         window.innerHeight - visualViewport.height - offsetTop
       );
-      const shouldPinToVisualViewport =
-        isEditableElementFocused() && (keyboardInset > 80 || offsetTop > 0);
+      const viewportLooksKeyboardAdjusted =
+        keyboardInset > 80 || offsetTop > 0;
 
-      if (!shouldPinToVisualViewport) {
+      const editableFocused = isEditableElementFocused();
+      if (editableFocused && viewportLooksKeyboardAdjusted) {
+        keyboardViewportActive = true;
+      } else if (!viewportLooksKeyboardAdjusted) {
+        keyboardViewportActive = false;
+      }
+
+      if (!keyboardViewportActive) {
+        unlockScroll();
         setRootStyle({});
         return;
       }
 
-      const nextStyle: CSSProperties = {
+      // Lock the body out of the scroll flow so iOS can neither pan nor run the
+      // reveal-the-input feedback loop, then pin the root to the top of the
+      // (now unpannable) visual viewport. `top` is a CONSTANT 0, never
+      // offsetTop: locking holds offsetTop at 0, and a constant style means
+      // repeated scroll events don't reflow the root — which is what stopped
+      // the runaway loop. `top`/height only (no transform) so fixed descendants
+      // aren't trapped and no body background is exposed (the "black box").
+      lockScroll();
+      const nextStyle: IosVisualViewportRootStyle = {
         position: "fixed",
         top: 0,
         left: 0,
         right: 0,
         width: "100%",
         height: `${Math.round(visualViewport.height)}px`,
-        transform:
-          offsetTop > 0
-            ? `translate3d(0, ${Math.round(offsetTop)}px, 0)`
-            : undefined,
-        transformOrigin: "top left",
         overflow: "hidden",
+        "--safe-area-bottom": "0px",
       };
 
       setRootStyle((currentStyle) =>
         currentStyle.height === nextStyle.height &&
-        currentStyle.transform === nextStyle.transform
+        currentStyle.position === nextStyle.position
           ? currentStyle
           : nextStyle
       );
@@ -151,6 +246,8 @@ function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
       window.removeEventListener("orientationchange", scheduleUpdate);
       document.removeEventListener("focusin", scheduleUpdate);
       document.removeEventListener("focusout", scheduleUpdate);
+      // Never leave the body locked if the hook tears down mid-keyboard.
+      unlockScroll();
     };
   }, [isMobile]);
 

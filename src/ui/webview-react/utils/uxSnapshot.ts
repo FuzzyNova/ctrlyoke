@@ -81,6 +81,7 @@ export function captureUxSnapshot(root?: HTMLElement): UxSnapshotResult {
   const sections: string[] = [];
   sections.push(buildHeaderSection(rootEl));
   sections.push(buildProvenanceNote());
+  sections.push(buildCaptureEnvironmentSection(rootEl));
   sections.push(buildStylesheetInventory());
   sections.push(buildAmbientRulesSection());
   sections.push(buildStyleDictionarySection(rootEl));
@@ -135,6 +136,51 @@ function buildProvenanceNote(): string {
     "and look them up in Styles (for a Tailwind app the class *is* the rule).",
     "Universal rules are in **Ambient rules**. Computed 'what actually painted'",
     "values are omitted here to keep the file small enough to read whole.",
+  ].join("\n");
+}
+
+// ============================================================================
+// Capture-time environment (iOS scroll-lock residue)
+// ============================================================================
+
+/**
+ * Snapshot of the elements the iOS keyboard scroll-lock mutates but that the
+ * serialized DOM never shows — the serializer starts at `#root`, so `<html>`
+ * and `<body>` (where the lock sets `position: fixed` etc.) are invisible.
+ * This reads their live inline styles plus window scroll and the root's actual
+ * geometry AT CAPTURE TIME, which is the direct tell for "page stays offset
+ * after the keyboard closes" (a lock that didn't fully restore, or a stuck
+ * scroll / height that didn't recompute).
+ */
+function buildCaptureEnvironmentSection(rootEl: HTMLElement): string {
+  const html = document.documentElement;
+  const body = document.body;
+  const appRoot = document.querySelector<HTMLElement>("#root > div") ?? rootEl;
+  const rect = appRoot.getBoundingClientRect();
+  let rootComputed = "(unavailable)";
+  try {
+    const cs = getComputedStyle(appRoot);
+    rootComputed = `position=${cs.position} height=${cs.height} top=${cs.top}`;
+  } catch {
+    /* jsdom / restricted */
+  }
+
+  return [
+    "## Environment at capture (scroll-lock residue)",
+    "",
+    "`<html>`/`<body>` are outside the serialized DOM (which starts at `#root`)",
+    "but are where the iOS keyboard scroll-lock writes inline styles. These are",
+    "read live at capture time — the direct check for state that failed to",
+    "restore after the keyboard closed.",
+    "",
+    "```text",
+    `html style attr: ${html.getAttribute("style") || "(none)"}`,
+    `body style attr: ${body.getAttribute("style") || "(none)"}`,
+    `window.scroll: (${Math.round(window.scrollX)}, ${Math.round(window.scrollY)})`,
+    `app root inline style: ${appRoot.getAttribute("style") || "(none)"}`,
+    `app root computed: ${rootComputed}`,
+    `app root rect: top=${Math.round(rect.top)} height=${Math.round(rect.height)}`,
+    "```",
   ].join("\n");
 }
 
