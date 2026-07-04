@@ -442,6 +442,82 @@ suite("ContextExpander.expandContextSplit", () => {
       assert.deepStrictEqual(result.directFileRefs, [insideFile]);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("multi-root workspace trust", () => {
+    let secondRoot: string;
+
+    afterEach(() => {
+      try {
+        if (secondRoot) {
+          fs.rmSync(secondRoot, { recursive: true, force: true });
+        }
+      } catch {
+        // best-effort
+      }
+    });
+
+    test("allows a full-file ref into a second trusted root that is not a descendant of the primary root", async () => {
+      const root = freshWorkspace();
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      const secondFile = path.join(secondRoot, "b.ts");
+      fs.writeFileSync(secondFile, "export const b = true;\n");
+      const relativeFromPrimary = path.relative(root, secondFile);
+
+      // Without the second root registered as trusted, the same reference
+      // must be rejected (this is the regression the multi-root fix closes).
+      const untrustedExpander = new ContextExpander(root);
+      const untrustedResult = await untrustedExpander.expandContextSplit(
+        `@${relativeFromPrimary}`
+      );
+      assert.deepStrictEqual(untrustedResult.directFileRefs, []);
+
+      const trustedExpander = new ContextExpander(root, [root, secondRoot]);
+      const trustedResult = await trustedExpander.expandContextSplit(
+        `@${relativeFromPrimary}`
+      );
+      assert.deepStrictEqual(trustedResult.directFileRefs, [secondFile]);
+    });
+
+    test("allows a @dir/ reference into a second trusted root", async () => {
+      const root = freshWorkspace();
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      fs.mkdirSync(path.join(secondRoot, "sub"));
+      fs.writeFileSync(path.join(secondRoot, "sub", "c.ts"), "// c\n");
+      const relativeDir = path.relative(root, path.join(secondRoot, "sub"));
+
+      const expander = new ContextExpander(root, [root, secondRoot]);
+      const result = await expander.expandContextSplit(`@${relativeDir}/`);
+
+      assert.ok(result.excerptBlocks.includes("c.ts"));
+      assert.ok(!result.excerptBlocks.includes("blocked"));
+    });
+
+    test("still blocks a reference outside every trusted root", async () => {
+      const root = freshWorkspace();
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      const untrustedDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "fp-ctx-untrusted-")
+      );
+      fs.writeFileSync(
+        path.join(untrustedDir, "secret.txt"),
+        "TOP SECRET\n"
+      );
+      const traversal = path.relative(
+        root,
+        path.join(untrustedDir, "secret.txt")
+      );
+
+      try {
+        const expander = new ContextExpander(root, [root, secondRoot]);
+        const result = await expander.expandContextSplit(`@${traversal}`);
+
+        assert.deepStrictEqual(result.directFileRefs, []);
+      } finally {
+        fs.rmSync(untrustedDir, { recursive: true, force: true });
+      }
+    });
+  });
 });
 
 suite("ContextExpander.expandContext", () => {

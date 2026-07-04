@@ -114,6 +114,10 @@ export class CliAdapter implements PlatformAdapter {
     return this.config.cwd ?? process.cwd();
   }
 
+  getWorkspaceRoots(): string[] {
+    return [this.getWorkspaceRoot()];
+  }
+
   log(message: string): void {
     if (!this.config.quiet) {
       console.log(message);

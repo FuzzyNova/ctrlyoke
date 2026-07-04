@@ -2,7 +2,9 @@ import * as path from "path";
 import * as vscode from "vscode";
 import {
   resolveWorkspaceRoot,
+  resolveTrustedWorkspaceRoots,
   type ResolverWorkspaceFolder,
+  type WorkspaceRootResolverInput,
 } from "./WorkspaceRootResolver";
 
 /** Native VS Code config namespace for bootstrap settings. */
@@ -12,15 +14,10 @@ const WORKSPACE_DIRECTORY_SETTING = "workspaceDirectory";
 
 /**
  * Gather the current window's resolver inputs from the live `vscode.workspace`
- * state and run {@link resolveWorkspaceRoot}.
- *
- * This is the single VS Code-side binding for the workspace root. Every
- * extension-host consumer that previously read
- * `vscode.workspace.workspaceFolders?.[0]?.uri.fsPath` must call this instead,
- * so the `.ctrlyoke` location is computed in exactly one place and honors the
- * `.code-workspace` directory plus the `ctrlyoke.workspaceDirectory` setting.
+ * state. Shared by every function in this module so they all agree on what
+ * "the workspace" means.
  */
-export function getVsCodeWorkspaceRoot(): string {
+function gatherResolverInput(): WorkspaceRootResolverInput {
   const setting = vscode.workspace
     .getConfiguration(CONFIG_NAMESPACE)
     .get<string>(WORKSPACE_DIRECTORY_SETTING, "");
@@ -38,11 +35,34 @@ export function getVsCodeWorkspaceRoot(): string {
     vscode.workspace.workspaceFolders ?? []
   ).map((folder) => ({ name: folder.name, fsPath: folder.uri.fsPath }));
 
-  return resolveWorkspaceRoot({
-    setting,
-    workspaceFileDir,
-    workspaceFolders,
-  });
+  return { setting, workspaceFileDir, workspaceFolders };
+}
+
+/**
+ * Resolve the directory that contains the `.ctrlyoke` folder for the current
+ * window by running {@link resolveWorkspaceRoot} against live `vscode.workspace`
+ * state.
+ *
+ * This is the single VS Code-side binding for the workspace root. Every
+ * extension-host consumer that previously read
+ * `vscode.workspace.workspaceFolders?.[0]?.uri.fsPath` must call this instead,
+ * so the `.ctrlyoke` location is computed in exactly one place and honors the
+ * `.code-workspace` directory plus the `ctrlyoke.workspaceDirectory` setting.
+ */
+export function getVsCodeWorkspaceRoot(): string {
+  return resolveWorkspaceRoot(gatherResolverInput());
+}
+
+/**
+ * Resolve every directory that should be trusted as "inside the workspace"
+ * for path-containment checks — the single {@link getVsCodeWorkspaceRoot} plus
+ * every folder in `vscode.workspace.workspaceFolders`. Use this (not
+ * `getVsCodeWorkspaceRoot` alone) anywhere a candidate path is checked against
+ * "is this inside the workspace," so multi-root `.code-workspace` folders that
+ * aren't descendants of the resolved `.ctrlyoke` root are still trusted.
+ */
+export function getVsCodeTrustedWorkspaceRoots(): string[] {
+  return resolveTrustedWorkspaceRoots(gatherResolverInput());
 }
 
 /**

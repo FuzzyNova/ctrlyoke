@@ -15,6 +15,7 @@ suite("EndConditionEvaluator Tests", () => {
     // Create a minimal mock PlatformAdapter for testing
     const mockPlatform: PlatformAdapter = {
       getWorkspaceRoot: () => "",
+      getWorkspaceRoots: () => [],
       getExtensionPath: () => "",
       log: () => {},
       warn: () => {},

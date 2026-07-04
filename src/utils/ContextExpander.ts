@@ -6,7 +6,7 @@ import {
   parseGitChangeReferences,
 } from "./FileReferenceParser";
 import { buildDirectoryAttachmentXml } from "./AttachmentBuilders";
-import { isPathWithinDirectory } from "./PathSecurity";
+import { isPathWithinAnyDirectory } from "./PathSecurity";
 import { Log } from "./Log";
 import {
   getCommitDiff,
@@ -53,11 +53,23 @@ export interface SplitContext {
  */
 export class ContextExpander {
   private workspaceRoot: string;
+  // Every directory trusted for path-containment checks: the primary
+  // workspace root plus any additional trusted roots (e.g. every folder of a
+  // multi-root `.code-workspace`, which VS Code does not require to be
+  // descendants of the primary root).
+  private trustedRoots: string[];
   // Track attachment IDs to prevent duplicates
   private attachmentIds = new Set<string>();
 
-  constructor(workspaceRoot: string) {
+  constructor(workspaceRoot: string, additionalTrustedRoots: string[] = []) {
     this.workspaceRoot = workspaceRoot;
+    this.trustedRoots = Array.from(
+      new Set(
+        [workspaceRoot, ...additionalTrustedRoots].map((root) =>
+          path.resolve(root)
+        )
+      )
+    );
   }
 
   /**
@@ -183,7 +195,8 @@ export class ContextExpander {
           // Directory listings → excerpt (synthetic, no single file path)
           const xml = await buildDirectoryAttachmentXml(
             ref.path,
-            this.workspaceRoot
+            this.workspaceRoot,
+            this.trustedRoots
           ).catch((err) => {
             Log.error(
               `[ContextExpander] Failed directory attachment ${ref.path}:`,
@@ -379,7 +392,11 @@ export class ContextExpander {
 
     if (ref.isDirectory) {
       // Directory reference - build tree structure
-      return buildDirectoryAttachmentXml(ref.path, this.workspaceRoot);
+      return buildDirectoryAttachmentXml(
+        ref.path,
+        this.workspaceRoot,
+        this.trustedRoots
+      );
     } else {
       // File reference (full file, line range, or symbol)
       return this.buildAttachmentXml(
@@ -480,14 +497,15 @@ ${content}
     // path.resolve handles both absolute and relative paths correctly
     // If relativePath is already absolute, it returns it as-is
     // If relative, it joins with workspaceRoot
-    const resolvedRoot = path.resolve(this.workspaceRoot);
-    const resolved = path.resolve(resolvedRoot, relativePath);
+    const resolved = path.resolve(this.workspaceRoot, relativePath);
 
-    // Reject `..` traversal and absolute-path references that escape the
-    // workspace — @-references come from prompt/workflow file content, which
-    // may not have been authored by the person running it (shared/imported
-    // workflows), so this boundary must be enforced regardless of intent.
-    if (!isPathWithinDirectory(resolved, resolvedRoot)) {
+    // Reject `..` traversal and absolute-path references that escape every
+    // trusted root — @-references come from prompt/workflow file content,
+    // which may not have been authored by the person running it (shared/
+    // imported workflows), so this boundary must be enforced regardless of
+    // intent. `trustedRoots` includes every open workspace folder, not just
+    // the primary root, so multi-root `.code-workspace` references work.
+    if (!isPathWithinAnyDirectory(resolved, this.trustedRoots)) {
       throw new Error(
         `Reference "${relativePath}" resolves outside the workspace and was blocked`
       );

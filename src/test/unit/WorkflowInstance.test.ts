@@ -28,6 +28,9 @@ class MockPlatform implements PlatformAdapter {
   getWorkspaceRoot(): string {
     return process.cwd();
   }
+  getWorkspaceRoots(): string[] {
+    return [process.cwd()];
+  }
   log(_message: string): void {}
   warn(_message: string): void {}
   error(_message: string): void {}
@@ -553,10 +556,11 @@ suite("WorkflowInstance runtime transitions", () => {
     const tempWorkspace = await fs.mkdtemp(
       path.join(os.tmpdir(), "fp-instance-runtime-")
     );
+    let instance: WorkflowInstance | undefined;
 
     try {
       const platform = new MockPlatform();
-      const instance = new WorkflowInstance(
+      instance = new WorkflowInstance(
         platform,
         undefined,
         new MockIntegrationFactory(platform),
@@ -631,6 +635,13 @@ suite("WorkflowInstance runtime transitions", () => {
         runtimeTransitions.map((transition) => transition.timestampMs)
       );
     } finally {
+      // The runtime-transition writes above each kick off a fire-and-forget
+      // search-index refresh (OutputHistoryManager.refreshSearchIndex). Await
+      // it before deleting the workspace, or the background refresh can still
+      // be writing into `.ctrlyoke/.search-index` mid-rmdir, causing an
+      // intermittent ENOTEMPTY on Windows. Same pattern as
+      // OutputHistoryManager.test.ts's teardown.
+      await instance?.outputHistoryManager.flushPendingIndexRefresh();
       await fs.rm(tempWorkspace, { recursive: true, force: true });
     }
   });

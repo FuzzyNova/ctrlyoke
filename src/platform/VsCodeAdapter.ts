@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import type { PlatformAdapter } from "./PlatformAdapter";
-import { getVsCodeWorkspaceRoot } from "./VsCodeWorkspaceRoot";
+import {
+  getVsCodeWorkspaceRoot,
+  getVsCodeTrustedWorkspaceRoots,
+} from "./VsCodeWorkspaceRoot";
 
 /**
  * VS Code implementation of PlatformAdapter.
@@ -12,6 +15,10 @@ export class VsCodeAdapter implements PlatformAdapter {
 
   getWorkspaceRoot(): string {
     return getVsCodeWorkspaceRoot();
+  }
+
+  getWorkspaceRoots(): string[] {
+    return getVsCodeTrustedWorkspaceRoots();
   }
 
   log(message: string): void {

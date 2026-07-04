@@ -409,7 +409,10 @@ export abstract class HarnessIntegration {
     let splitContext: SplitContext = { directFileRefs: [], excerptBlocks: "" };
     if (workspaceRoot) {
       try {
-        const expander = new ContextExpander(workspaceRoot);
+        const expander = new ContextExpander(
+          workspaceRoot,
+          this.getWorkspaceRoots()
+        );
         splitContext = await expander.expandContextSplit(userPromptText);
       } catch (error) {
         Log.error("[HarnessIntegration] Error in expandContextSplit:", error);
@@ -897,6 +900,17 @@ export abstract class HarnessIntegration {
    */
   protected getWorkspaceRoot(): string | undefined {
     return undefined;
+  }
+
+  /**
+   * Get every directory that should be trusted as "inside the workspace" for
+   * path-containment checks (e.g. `@file` prompt references). Defaults to
+   * just `getWorkspaceRoot()`; overridden where a platform adapter can supply
+   * the full multi-root list (see `CliIntegration`).
+   */
+  protected getWorkspaceRoots(): string[] {
+    const root = this.getWorkspaceRoot();
+    return root ? [root] : [];
   }
 
   /**

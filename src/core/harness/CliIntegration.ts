@@ -236,6 +236,14 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
+   * Override base class getWorkspaceRoots() to use the platform adapter, which
+   * knows about multi-root `.code-workspace` folders in the VS Code context.
+   */
+  protected override getWorkspaceRoots(): string[] {
+    return this.platform.getWorkspaceRoots();
+  }
+
+  /**
    * Set the workflow name used for VS Code terminal tab labeling.
    * Call this whenever a new workflow is loaded or renamed.
    */

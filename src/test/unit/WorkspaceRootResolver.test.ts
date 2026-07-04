@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as path from "path";
 import {
   resolveWorkspaceRoot,
+  resolveTrustedWorkspaceRoots,
   type ResolverWorkspaceFolder,
 } from "../../platform/WorkspaceRootResolver";
 
@@ -136,6 +137,46 @@ suite("WorkspaceRootResolver Tests", () => {
 
     test("no folder and no cwd falls back to process.cwd()", () => {
       assert.strictEqual(resolveWorkspaceRoot({}), process.cwd());
+    });
+  });
+
+  suite("resolveTrustedWorkspaceRoots", () => {
+    test("includes the primary root plus every workspace folder, even when the .code-workspace file lives outside all of them", () => {
+      // A completely ordinary multi-root layout: the .code-workspace file is
+      // saved in a directory that is NOT an ancestor of either project folder
+      // (VS Code does not require this). Before this helper existed, only
+      // `workspaceFileDir` was trusted, so @file refs into either folder were
+      // wrongly blocked as "outside the workspace."
+      const unrelatedConfigDir = path.resolve("/configs");
+      const frontendFolder = path.resolve("/repos/frontend");
+      const backendFolder = path.resolve("/other/backend");
+
+      const roots = resolveTrustedWorkspaceRoots({
+        workspaceFileDir: unrelatedConfigDir,
+        workspaceFolders: [
+          { name: "frontend", fsPath: frontendFolder },
+          { name: "backend", fsPath: backendFolder },
+        ],
+      });
+
+      assert.deepStrictEqual(
+        new Set(roots),
+        new Set([unrelatedConfigDir, frontendFolder, backendFolder])
+      );
+    });
+
+    test("dedupes when the primary root is also one of the workspace folders", () => {
+      const roots = resolveTrustedWorkspaceRoots({
+        workspaceFolders: folders, // no workspaceFileDir → primary root = folders[0] = appFolder
+      });
+
+      assert.deepStrictEqual(new Set(roots), new Set([appFolder, docsFolder]));
+      assert.strictEqual(roots.length, 2);
+    });
+
+    test("returns just the cwd fallback when no folders are open", () => {
+      const cwd = path.resolve("/some/cwd");
+      assert.deepStrictEqual(resolveTrustedWorkspaceRoots({ cwd }), [cwd]);
     });
   });
 });

@@ -61,4 +61,30 @@ suite("AttachmentBuilders.buildDirectoryAttachmentXml", () => {
     assert.ok(xml.includes("blocked"));
     assert.ok(!xml.includes("secret.txt"));
   });
+
+  test("allows a directory reference into a second trusted root (multi-root workspace)", async () => {
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-"));
+    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "fp-attach-second-"));
+    fs.mkdirSync(path.join(outsideDir, "sub"));
+    fs.writeFileSync(path.join(outsideDir, "sub", "b.ts"), "// b\n");
+    const relativeDir = path.relative(
+      workspaceRoot,
+      path.join(outsideDir, "sub")
+    );
+
+    // Without the second root trusted, the same reference is blocked.
+    const untrusted = await buildDirectoryAttachmentXml(
+      `${relativeDir}/`,
+      workspaceRoot
+    );
+    assert.ok(untrusted.includes("blocked"));
+
+    const trusted = await buildDirectoryAttachmentXml(
+      `${relativeDir}/`,
+      workspaceRoot,
+      [workspaceRoot, outsideDir]
+    );
+    assert.ok(trusted.includes("b.ts"));
+    assert.ok(!trusted.includes("blocked"));
+  });
 });

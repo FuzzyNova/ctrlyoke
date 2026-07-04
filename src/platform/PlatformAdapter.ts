@@ -20,6 +20,16 @@ export interface PlatformAdapter {
   getWorkspaceRoot(): string;
 
   /**
+   * Get every directory that should be trusted as "inside the workspace" for
+   * path-containment checks (e.g. `@file` prompt references) — not just the
+   * single `.ctrlyoke` root above. For a multi-root `.code-workspace`, VS Code
+   * does not require the folders to live under a common parent, so this
+   * includes `getWorkspaceRoot()` plus every open workspace folder.
+   * CLI: `[getWorkspaceRoot()]` (no multi-root concept).
+   */
+  getWorkspaceRoots(): string[];
+
+  /**
    * Log an informational message.
    * VS Code: vscode.window.showInformationMessage()
    * CLI: console.log()

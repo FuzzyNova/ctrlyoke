@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { getErrorMessage } from "../utils/ErrorUtils";
-import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import {
+  getVsCodeWorkspaceRoot,
+  getVsCodeTrustedWorkspaceRoots,
+} from "../platform/VsCodeWorkspaceRoot";
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
@@ -2237,10 +2240,12 @@ export class WebviewMessageRouter {
 
     const counts: Record<string, number> = {};
 
+    const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+
     await Promise.all(
       references.map(async (rawRef) => {
         try {
-          const expander = new ContextExpander(workspaceRoot);
+          const expander = new ContextExpander(workspaceRoot, trustedRoots);
           const expanded = await expander.expandContext(rawRef);
 
           if (expanded === rawRef) {

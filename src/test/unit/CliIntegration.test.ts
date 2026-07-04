@@ -17,6 +17,10 @@ class MockVsCodePlatform implements PlatformAdapter {
     return process.cwd();
   }
 
+  getWorkspaceRoots(): string[] {
+    return [process.cwd()];
+  }
+
   log(_message: string): void {}
 
   warn(_message: string): void {}

@@ -1,5 +1,21 @@
 # Allowed External File Roots Plan
 
+> **2026-07-04 update — interacts with a recent security fix.** A security audit
+> found that `ContextExpander.resolveWorkspacePath()` and
+> `AttachmentBuilders.buildDirectoryAttachmentXml()` had no containment check at
+> all: an `@../../../.ssh/id_rsa` or `@dir/../../` reference from an untrusted
+> prompt/workflow file could read or list arbitrary files outside the workspace.
+> Both now **hard-reject** anything outside the workspace root (see
+> `src/utils/PathSecurity.ts#isPathWithinDirectory`, used by both, and by
+> `EndConditionEvaluator`). This is a superset of what this plan already called
+> "ambiguous... make this explicit" below — it's now explicit, just not yet
+> external-root-aware. Implementing this plan means **loosening** that hard
+> reject at exactly those two call sites to also accept
+> `allowedExternalFileRoots`, via `FileAccessPolicy` built on top of the same
+> `isPathWithinDirectory` primitive rather than a new containment check. See the
+> "Shared Path Policy Helper" and "ContextExpander" sections below for the
+> updated call sites.
+
 ## Problem
 
 ctrlyoke is safest when prompt references and output file links stay inside the
@@ -98,6 +114,15 @@ Important: `confirmExternalFileLinks: false` should not mean "trust all external
 paths." It should only skip prompts for already trusted external roots. Unknown
 external roots remain blocked or require an explicit trust action.
 
+**Scope (see "Decisions"):** `allowedExternalFileRoots` must be settable at
+both the user/global level and the workspace level. `getAllowedExternalFileRoots()`
+below returns the **union** of both, not one overriding the other — mirror
+whatever pattern `CtrlYokeConfigService` already uses for other array-typed
+settings that merge rather than override across scopes. Workspace-scoped
+entries require the one-time per-workspace trust confirmation described in
+"Decisions" before they take effect; user-scoped entries don't (the user
+already made that trust decision on their own machine).
+
 Run `npm run generate-schema` after editing the JSON schema. Do not hand-edit the
 generated YAML schema.
 
@@ -126,6 +151,16 @@ shouldConfirmExternalFileLinks(): boolean
 ## Shared Path Policy Helper
 
 Create a single extension-host helper, e.g. `src/utils/FileAccessPolicy.ts`.
+
+**Reuse, don't reimplement:** `src/utils/PathSecurity.ts` already exports
+`isPathWithinDirectory(candidate, directory)` — the sibling-prefix-safe
+containment check (rejects `C:/logs2` matching `C:/logs`) called out in Phase 1's
+test list below. `FileAccessPolicy.evaluateFileAccess()` should call it once
+against the workspace root and once per configured `allowedExternalFileRoots`
+entry, not duplicate the string-prefix logic. `EndConditionEvaluator` also
+depends on this helper for script-path sandboxing — keep it a pure,
+already-resolved-path comparator and do any `path.resolve`/`fs.realpath`
+normalization in the caller, matching current usage.
 
 Responsibilities:
 
@@ -167,8 +202,19 @@ duplicate path containment logic in UI/router/expander files.
 
 Update `src/utils/ContextExpander.ts` so file reads use the shared policy helper.
 
-Current behavior is ambiguous because `path.resolve(workspaceRoot, absolutePath)`
-returns the absolute path unchanged. Make this explicit:
+**Current state (as of the 2026-07-04 security fix):** `resolveWorkspacePath()`
+already resolves the ref with `path.resolve(workspaceRoot, relativePath)` and
+**throws** if `!isPathWithinDirectory(resolved, workspaceRoot)` — no more silent
+absolute-path pass-through. It has exactly two callers: the full-file-ref branch
+in `expandContextSplit()` (wraps the call in try/catch and logs+skips on
+rejection) and `buildAttachmentXml()` (the thrown error propagates to the
+`.catch()` already wrapping that call in `expandContextSplit()`). Implementing
+this plan means changing `resolveWorkspacePath()` (or replacing it with a call
+into `FileAccessPolicy.evaluateFileAccess()`) so the throw only fires for
+`reason: "outsideTrustedRoots"`, not for `"trustedExternalRoot"` — the two
+existing catch sites don't need to change shape, just what they're allowed to
+catch. The "skipped with a warning and a structured error surfaced to the
+dashboard" behavior below is still net-new work; today's fix only logs+skips.
 
 - Workspace-relative refs resolve under the workspace.
 - Absolute refs are allowed only if they resolve inside the workspace or an allowed
@@ -209,16 +255,12 @@ When the user adds an external file from a picker or paste action:
 1. If the file is inside the workspace, insert the normal workspace-relative ref.
 2. If the file is under an allowed external root, insert a quoted absolute ref.
 3. If the file is outside all trusted roots, show a confirmation dialog:
-   - **Attach Once**: insert the quoted absolute ref for this prompt only; execution
-     may still require one-time read permission unless the attachment flow carries
-     a transient grant.
    - **Trust Parent Folder**: add the parent directory to
      `permissions.allowedExternalFileRoots` and insert the ref.
    - **Cancel**
 
-For the first implementation, prefer **Trust Parent Folder** and **Cancel** only.
-One-time grants are useful but require transient workflow/runtime state and can be
-added later.
+No one-time/"Attach Once" grant (see "Decisions") — every attachment requires a
+persisted trusted root.
 
 ## File Link Opening Flow
 
@@ -243,11 +285,11 @@ When the webview sends `OPEN_FILE`, `src/ui/WebviewMessageRouter.ts` should:
 
 Suggested VS Code modal actions:
 
-- **Open Once**
 - **Trust Parent Folder**
 - **Cancel**
 
-If "Trust Parent Folder" is selected, persist that folder to
+No "Open Once" (see "Decisions") — every link open requires a persisted trusted
+root. If "Trust Parent Folder" is selected, persist that folder to
 `permissions.allowedExternalFileRoots`, then open the file.
 
 ### PromptLinkProvider
@@ -335,10 +377,16 @@ read it because their sandbox is narrower.
    - any chat/native attachment path
 3. For external full-file refs in `expandContextSplit()`, embed content instead of
    adding to `directFileRefs`.
-4. Add tests for external absolute refs:
+4. Update `AttachmentBuilders.buildDirectoryAttachmentXml()` (`@dir/` refs) with
+   the same `FileAccessPolicy` check it currently does inline against the
+   workspace root only (added by the 2026-07-04 security fix) — directory
+   listings need external-root support too, and today's fix didn't anticipate
+   that path since it only closes the workspace-only hole.
+5. Add tests for external absolute refs:
    - trusted full file
    - trusted selection
-   - untrusted blocked
+   - trusted directory listing
+   - untrusted blocked (file and directory)
 
 ### Phase 4: Editor Links and UX
 
@@ -366,8 +414,10 @@ Document:
 | `src/types/CtrlYokeSettings.ts`                               | Add settings types and defaults                                              |
 | `src/types/WebviewMessageTypes.ts`                            | Include settings payload fields if needed                                    |
 | `src/utils/ConfigurationUtils.ts`                             | Add config keys and helpers                                                  |
-| `src/utils/FileAccessPolicy.ts`                               | New shared path access policy helper                                         |
-| `src/utils/ContextExpander.ts`                                | Enforce policy for file reads and external refs                              |
+| `src/utils/PathSecurity.ts`                                   | Already exists (2026-07-04 security fix); reuse `isPathWithinDirectory`/`isPathWithinAnyDirectory` as the containment primitives underlying `FileAccessPolicy` |
+| `src/utils/FileAccessPolicy.ts`                               | New shared path access policy helper, built on `PathSecurity.isPathWithinAnyDirectory` |
+| `src/utils/ContextExpander.ts`                                | Already accepts a `trustedRoots` list (multi-root fix, 2026-07-04); extend that list with `allowedExternalFileRoots` instead of hard-rejecting outside it |
+| `src/utils/AttachmentBuilders.ts`                             | Already accepts an `additionalTrustedRoots` list (multi-root fix, 2026-07-04); extend it with `allowedExternalFileRoots` the same way |
 | `src/completions/PromptLinkProvider.ts`                       | Resolve trusted absolute refs and route untrusted refs through confirmation  |
 | `src/ui/WebviewMessageRouter.ts`                              | Enforce policy for `OPEN_FILE` and trust-folder flow                         |
 | `src/ui/WebviewSettingsSync.ts`                               | Sync new settings to webview                                                 |
@@ -393,27 +443,94 @@ Document:
   - Try a sibling-prefix path attack: trusted `/tmp/logs` must not allow
     `/tmp/logs2/file.log`.
 
-## Open Questions
+## Decisions (2026-07-04)
 
-- Should "Trust Parent Folder" trust the immediate parent only, or offer a picker to
-  choose a higher-level root?
-- Should one-time external file grants be supported in v1, or should all external
-  attachment execution require a persisted trusted root?
-- Should common harness log directories be suggested in the UI without being
-  automatically trusted?
-- Should trusted external roots be user-scope only, or can workspaces define them?
-  User-scope is safer for machine-specific absolute paths; workspace-scope may be
-  useful for team-shared mounted paths but can become surprising.
+The open questions below are resolved. This section replaces "Open Questions."
+
+- **"Trust Parent Folder" trusts the immediate parent only.** No picker for a
+  higher-level root in v1. If a user wants a broader root trusted, they add it
+  explicitly via the Settings UI folder picker (see "Settings UI").
+- **No one-time grants in v1.** Every external attachment read and every
+  external file-link open requires a persisted trusted root — either "Trust
+  Parent Folder" or an explicit Settings UI entry. There is no "Open/Attach
+  Once" action. Simplify the confirmation dialogs in "Prompt Editor UX" and
+  "File Link Opening Flow" accordingly: **Trust Parent Folder** / **Cancel**
+  only, not **Attach Once** / **Open Once**.
+- **No harness log directory suggestions in the UI.** Don't special-case or
+  pre-populate common harness log paths (e.g. `~/.codex/sessions`) in the
+  Settings UI. Users add roots manually via the folder picker.
+- **Trusted external roots are both user-scope and workspace-scope**, not
+  user-scope only. A workspace's `.ctrlyoke/settings.json` (or equivalent
+  workspace-level config) and the user's global settings each contribute
+  entries; the effective allowlist is the **union** of both — matching how
+  `CtrlYokeConfigService`'s layered config generally works, and consistent
+  with the fact that this is an *allow*-list, so a union is safe rather than
+  the two scopes needing precedence rules on top of each other.
+
+  **New consideration this raises:** unlike most ctrlyoke settings, workspace-
+  scoped entries here directly widen what content the extension will silently
+  read from the local filesystem and embed into prompts. A workspace config
+  file can be committed to and shared through a repo. A malicious/compromised
+  repo could therefore ship a workspace setting that adds e.g. the user's SSH
+  key directory to `allowedExternalFileRoots`, paired with a bundled prompt
+  file that references a file in it — reading and exfiltrating it to the AI
+  backend with **no per-file confirmation at all**, since "no one-time grants"
+  means a persisted trusted root is sufficient on its own. Mitigate this before
+  shipping workspace-scope: require a one-time "This workspace wants to trust
+  external folder(s): `<list>` — Allow / Deny" prompt the first time a
+  workspace's *own* `allowedExternalFileRoots` entries are loaded (once per
+  workspace, cached alongside VS Code's native Workspace Trust state if
+  available), separate from the already-rejected per-reference one-time
+  grants. This is new work not in the original plan and should be scoped
+  into Phase 1.
 
 ## Recommended Initial Scope
 
 Ship the smallest secure version:
 
-1. User-scope `permissions.allowedExternalFileRoots`.
-2. No one-time grants for prompt execution.
-3. Dashboard output links prompt with `Open Once`, `Trust Parent Folder`, `Cancel`.
+1. Both user-scope and workspace-scope `permissions.allowedExternalFileRoots`
+   (union), with the one-time per-workspace confirmation described above for
+   workspace-scoped entries.
+2. No one-time grants for prompt execution or file-link opening.
+3. Dashboard output links prompt with `Trust Parent Folder` / `Cancel` only.
 4. Context expansion requires a trusted root for external files.
 5. External full-file refs are embedded, not passed through as direct harness refs.
 
 This solves the developer-log use case while keeping AI-generated output links and
 prompt attachment reads behind an explicit local trust boundary.
+
+## Multi-Root Workspace Support (implemented ahead of this plan, 2026-07-04)
+
+The "inside the workspace" half of the trust boundary now already accounts for
+multi-root `.code-workspace` folders, fixed as a follow-up to the security
+patch referenced at the top of this document:
+
+- **The bug:** `ContextExpander`/`AttachmentBuilders` originally checked
+  containment against the single window-wide `.ctrlyoke` root
+  (`getVsCodeWorkspaceRoot()`). For a saved multi-root `.code-workspace`, that
+  root is the directory *containing the `.code-workspace` file* — which VS
+  Code does not require to be an ancestor of the actual folders (e.g. folders
+  on different drives entirely). Any `@file`/`@dir/` reference into a folder
+  that wasn't a descendant of that directory was wrongly hard-blocked as
+  "outside the workspace."
+- **The fix:** `src/utils/PathSecurity.ts` now also exports
+  `isPathWithinAnyDirectory(candidate, directories[])`. `ContextExpander` and
+  `AttachmentBuilders.buildDirectoryAttachmentXml` both take an optional list
+  of additional trusted roots (`trustedRoots`/`additionalTrustedRoots`) and
+  check containment against the full set. `PlatformAdapter` gained
+  `getWorkspaceRoots(): string[]` (VS Code: `getVsCodeTrustedWorkspaceRoots()`
+  = the primary root plus every `vscode.workspace.workspaceFolders` entry,
+  deduped; CLI: `[getWorkspaceRoot()]`). `HarnessIntegration`/`CliIntegration`
+  and `WebviewMessageRouter.handleAttachmentTokenCountRequest` now pass this
+  list through when constructing `ContextExpander`.
+- **What this means for implementing external roots:** `FileAccessPolicy`'s
+  "inside workspace" branch should call the now-existing
+  `getWorkspaceRoots()`/`getVsCodeTrustedWorkspaceRoots()` (or
+  `isPathWithinAnyDirectory` directly against that list) rather than
+  re-deriving multi-root handling — that part of the "workspace vs. external"
+  split is already done. `FileAccessPolicy` only needs to add the
+  `"trustedExternalRoot"` branch on top.
+- Test coverage: `src/test/unit/PathSecurity.test.ts`,
+  `src/test/unit/WorkspaceRootResolver.test.ts` (`resolveTrustedWorkspaceRoots`
+  suite), and multi-root suites in `src/test/contextExpander.test.ts` and
+  `src/test/attachmentBuilders.test.ts`.

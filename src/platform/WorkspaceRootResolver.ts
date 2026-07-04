@@ -108,3 +108,27 @@ export function resolveWorkspaceRoot(
   // 4. CLI / no folder open.
   return cwd;
 }
+
+/**
+ * Resolve every directory that should be trusted as "inside the workspace"
+ * for path-containment checks (e.g. `@file` prompt references) — the primary
+ * `.ctrlyoke` root from {@link resolveWorkspaceRoot} plus every open workspace
+ * folder.
+ *
+ * This matters for multi-root `.code-workspace` setups: the primary root is
+ * often just the directory containing the `.code-workspace` file (or an
+ * explicit `ctrlyoke.workspaceDirectory` override), which is not guaranteed to
+ * be an ancestor of the actual folders — VS Code does not require multi-root
+ * folders to live under a common parent. Without this, a legitimate `@file`
+ * reference into a second workspace folder would be wrongly treated as
+ * "outside the workspace."
+ */
+export function resolveTrustedWorkspaceRoots(
+  input: WorkspaceRootResolverInput
+): string[] {
+  const primary = path.normalize(resolveWorkspaceRoot(input));
+  const folderPaths = (input.workspaceFolders ?? []).map((folder) =>
+    path.normalize(folder.fsPath)
+  );
+  return Array.from(new Set([primary, ...folderPaths]));
+}

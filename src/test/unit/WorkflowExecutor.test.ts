@@ -27,6 +27,9 @@ class MockPlatform implements PlatformAdapter {
   getWorkspaceRoot(): string {
     return process.cwd();
   }
+  getWorkspaceRoots(): string[] {
+    return [process.cwd()];
+  }
   log(_message: string): void {}
   warn(_message: string): void {}
   error(_message: string): void {}

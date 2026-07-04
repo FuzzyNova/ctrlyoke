@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { Log } from "./Log";
-import { isPathWithinDirectory } from "./PathSecurity";
+import { isPathWithinAnyDirectory } from "./PathSecurity";
 
 /**
  * Utility functions for building XML attachments for various reference types
@@ -76,12 +76,16 @@ async function buildDirectoryTree(
  * Build XML attachment for a directory structure
  *
  * @param dirPath Workspace-relative directory path (with or without trailing slash)
- * @param workspaceRoot Absolute path to workspace root
+ * @param workspaceRoot Absolute path to workspace root, used to resolve relative refs
+ * @param additionalTrustedRoots Extra absolute directories to also trust (e.g. every
+ *   folder of a multi-root `.code-workspace`, which need not be descendants of
+ *   `workspaceRoot`). Defaults to just `workspaceRoot`.
  * @returns XML string with directory tree
  */
 export async function buildDirectoryAttachmentXml(
   dirPath: string,
-  workspaceRoot: string
+  workspaceRoot: string,
+  additionalTrustedRoots: string[] = []
 ): Promise<string> {
   // Remove trailing slash for consistent path handling
   const normalizedPath = dirPath.replace(/[/\\]+$/, "");
@@ -89,11 +93,15 @@ export async function buildDirectoryAttachmentXml(
   // Build absolute URI
   const resolvedRoot = path.resolve(workspaceRoot);
   const absolutePath = path.resolve(resolvedRoot, normalizedPath);
+  const trustedRoots = [
+    resolvedRoot,
+    ...additionalTrustedRoots.map((root) => path.resolve(root)),
+  ];
 
   // @dir/ references come from prompt/workflow file content, which may not
   // have been authored by the person running it — reject traversal outside
-  // the workspace rather than listing an arbitrary directory on disk.
-  if (!isPathWithinDirectory(absolutePath, resolvedRoot)) {
+  // every trusted root rather than listing an arbitrary directory on disk.
+  if (!isPathWithinAnyDirectory(absolutePath, trustedRoots)) {
     Log.error(
       `Security: Directory reference "${dirPath}" resolves outside the workspace and was blocked`
     );

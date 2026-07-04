@@ -16,3 +16,17 @@ export function isPathWithinDirectory(
     candidate === directory || candidate.startsWith(directory + path.sep)
   );
 }
+
+/**
+ * Returns true if `candidate` is equal to or a descendant of any directory in
+ * `directories`. Use this for multi-root trust boundaries (e.g. every folder
+ * of an open multi-root workspace), rather than checking a single root.
+ */
+export function isPathWithinAnyDirectory(
+  candidate: string,
+  directories: readonly string[]
+): boolean {
+  return directories.some((directory) =>
+    isPathWithinDirectory(candidate, directory)
+  );
+}
