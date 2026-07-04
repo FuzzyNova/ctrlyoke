@@ -1,5 +1,4 @@
 import {
-  act,
   cleanup,
   fireEvent,
   render,
@@ -214,8 +213,9 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
       "border-2",
       "border-status-idle",
       "animate-pulse-custom",
-      "transition-[transform,height,opacity]"
+      "inset-0"
     );
+    expect(highlight).not.toHaveAttribute("style");
     expect(
       screen.getByText("Running step").closest("[data-workflow-step-index]")
     ).toHaveAttribute("data-workflow-step-index", "0");
@@ -239,97 +239,21 @@ describe("WorkflowStepsPanel keyboard shortcuts", () => {
       "border",
       "border-status-idle",
       "animate-pulse-custom",
-      "transition-[transform,height,opacity]"
+      "inset-0"
     );
     expect(highlight).not.toHaveClass("border-2");
+    expect(highlight).not.toHaveAttribute("style");
     expect(
       document.querySelector('[data-workflow-chip-index="1"]')
     ).toBeInTheDocument();
   });
 
-  it("remeasures the execution highlight when the target mounts at zero height", async () => {
-    const frameCallbacks: FrameRequestCallback[] = [];
-    let targetHeight = 0;
-    let targetTop = 0;
-    const requestAnimationFrameSpy = vi
-      .spyOn(window, "requestAnimationFrame")
-      .mockImplementation((callback: FrameRequestCallback) => {
-        frameCallbacks.push(callback);
-        return frameCallbacks.length;
-      });
-    const cancelAnimationFrameSpy = vi
-      .spyOn(window, "cancelAnimationFrame")
-      .mockImplementation(() => {});
-    const rectSpy = vi
-      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-      .mockImplementation(function (this: HTMLElement) {
-        if (this.dataset.highlightTarget === "true") {
-          return {
-            x: 0,
-            y: targetTop,
-            top: targetTop,
-            left: 0,
-            right: 100,
-            bottom: targetTop + targetHeight,
-            width: 100,
-            height: targetHeight,
-            toJSON: () => {},
-          };
-        }
+  it("renders the execution highlight without measured inline geometry", () => {
+    render(<ExecutingStepHighlight />);
 
-        return {
-          x: 0,
-          y: 0,
-          top: 0,
-          left: 0,
-          right: 100,
-          bottom: 200,
-          width: 100,
-          height: 200,
-          toJSON: () => {},
-        };
-      });
-
-    const container = document.createElement("div");
-    const renderRoot = document.createElement("div");
-    const target = document.createElement("div");
-    target.dataset.highlightTarget = "true";
-    container.append(renderRoot, target);
-    document.body.appendChild(container);
-    const containerRef = { current: container };
-
-    try {
-      render(
-        <ExecutingStepHighlight
-          containerRef={containerRef}
-          layoutKey="running"
-          targetSelector="[data-highlight-target='true']"
-          visible
-        />,
-        { container: renderRoot }
-      );
-      const highlight = screen.getByTestId("executing-step-highlight");
-      expect(highlight).toHaveStyle({ height: "0px" });
-
-      targetTop = 48;
-      targetHeight = 32;
-      await waitFor(() => expect(frameCallbacks.length).toBeGreaterThan(0));
-      act(() => {
-        while (frameCallbacks.length > 0) {
-          frameCallbacks.shift()?.(0);
-        }
-      });
-
-      expect(highlight).toHaveStyle({
-        height: "32px",
-        transform: "translateY(48px)",
-      });
-    } finally {
-      container.remove();
-      rectSpy.mockRestore();
-      requestAnimationFrameSpy.mockRestore();
-      cancelAnimationFrameSpy.mockRestore();
-    }
+    const highlight = screen.getByTestId("executing-step-highlight");
+    expect(highlight).toHaveClass("absolute", "inset-0");
+    expect(highlight).not.toHaveAttribute("style");
   });
 
   it("does not render the execution highlight while the workflow is idle", () => {

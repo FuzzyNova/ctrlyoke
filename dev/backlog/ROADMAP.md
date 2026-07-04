@@ -486,6 +486,24 @@ LAUNCH (not yet shipped) — gated on:
   0.B Pro Licensing ───────┼─► Tier 0 publish checklist ─► 4.3 Marketplace Listing
   Tier 0 publish mechanics ┘
 
+Launch-blocker sequencing (RELEASE_PLAN §2.5 / §2.9 — order is load-bearing):
+
+  1. Antigravity harness swap (§2.5)  ─┐  establish the correct, final harness list
+     Built-in agent + template cleanup │  (drop Gemini, fix dead model IDs / JSON→YAML,
+     — Part A + B (§2.9)              ─┘   add typed template variables)
+                                        │
+                                        ▼   ...only then author content that cites harnesses/formats:
+  2. ctrlyoke-tech-support agent (§2.9) ──┐
+     Native Getting Started walkthrough  ─┼─► must reflect the corrected list, not stale facts
+     Harness preflight (§2.9)            ─┘
+                                        │
+                                        ▼
+  3. Screenshots + demo GIF (§4) ─────────► capture AFTER onboarding/UI is final
+                                            (visuals must show the shipped experience)
+
+  Independent tracks (any time before publish):
+    Pro licensing (§2.6) · rebrand cutover (§2.7) · legal [DATE] (§2.8) · security review (§2.10)
+
 0.B Pro Licensing (PRO_LICENSE_PLAN.md)
   ├── needs: licensing-model decision (license key vs. user accounts)
   └── consumes: 2.8 / 0.A Landing Page (pricing page + checkout)
@@ -543,11 +561,21 @@ _Dates removed: the prior timeline asserted a May 12, 2026 release that never ha
 
 ### Launch Blockers (must land before publish)
 
-| Document                                       | Status      | Roadmap Item |
-| ---------------------------------------------- | ----------- | ------------ |
-| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md) | 📝 PLANNING | 0.A / 2.8    |
-| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)   | 📝 PLANNING | 0.B / 4.2    |
-| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)           | 🔄 PARTIAL  | Tier 0       |
+| Document                                                                                     | Status      | Roadmap Item      |
+| -------------------------------------------------------------------------------------------- | ----------- | ----------------- |
+| [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                                               | 📝 PLANNING | 0.A / 2.8         |
+| [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                 | 📝 PLANNING | 0.B / 4.2         |
+| [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                 | 📝 PLANNING | Release §2.7      |
+| [`ANTIGRAVITY_CLI_HARNESS_PLAN.md`](ANTIGRAVITY_CLI_HARNESS_PLAN.md)                         | 📝 PLANNING | Release §2.5      |
+| [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md)       | 📝 PLANNING | Release §2.9      |
+| [`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md)                   | 📝 PLANNING | Release §2.9      |
+| [`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md)                                         | 📝 PLANNING | Release §2.9 (P1) |
+| [`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md)                                     | 📝 PLANNING | Release §2.9      |
+| [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                         | 🔄 PARTIAL  | Tier 0            |
+
+> **Ordering matters — see the launch-blocker sequencing in the Dependency Graph below.**
+> The onboarding/tech-support content depends on the corrected harness list and formats,
+> so the harness swap + built-in-content cleanup must land _before_ that content is authored.
 
 ### Backlog (not yet started)
 

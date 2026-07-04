@@ -1,9 +1,11 @@
 # ctrlyoke v0.1.0 Release Plan
 
 **Created:** March 11, 2026
-**Updated:** June 25, 2026
-**Status:** READY_FOR_PUBLISH_PREP
+**Updated:** July 4, 2026
+**Status:** BLOCKED — functional + licensing + cutover work remain before publish (see Phase 2)
 **Target:** VS Code Marketplace public release first; npm CLI package after the extension release path is settled.
+
+> **July 4, 2026 review.** Package/metadata readiness (Phase 1) is done, but a backlog review surfaced blockers that were not previously tracked in this plan. The remaining ship gate is no longer just the mechanical publish checklist — it now includes one **functional** blocker (a broken harness shipping to users) and two work-streams tracked in sibling docs that this plan had omitted (Pro licensing implementation, and the ctrlyoke external cutover). These are consolidated in Phase 2 below so this stays the single "what's left" doc.
 
 ---
 
@@ -29,7 +31,7 @@ Codebase-backed release facts:
 - `package.json` contributes both bins: `ctrlyoke-mcp` and `ctrlyoke`, but `.vscodeignore` intentionally excludes `out/cli.js` from the VSIX.
 - `.vscodeignore` is now allowlist-based and includes the extension bundle, MCP server, webview assets, schemas, templates, runtime scripts, `resvg.wasm`, and `node-pty`.
 - `CHANGELOG.md` has a populated `[0.1.0] - 2026-05-12` release entry.
-- `README.md` documents all seven harnesses: `copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli`, and `copilot-chat`.
+- `README.md` documents seven harnesses, currently including `gemini-cli`. **This list is now wrong:** `gemini-cli` is broken (Google deprecated it) and is being replaced by `antigravity-cli` — see §2.5. README/CHANGELOG/docs must be corrected as part of that item before publish.
 
 Related launch/business planning now lives in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md). Licensing and commercial terms are tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
 
@@ -88,9 +90,9 @@ Already present in `package.json`:
 
 Still open:
 
-- [ ] Decide publisher: current `nhickster` vs. long-term business publisher.
-- [ ] Update repository/homepage/bugs URLs if moving to `fuzzynova/ctrlyoke`.
-- [ ] Update support/contact URLs after `support@ctrlyoke.dev` exists.
+- [x] ~~Decide publisher~~ — resolved: `fuzzynova` (see §2.1). The old `nhickster` reference is dead.
+- [x] ~~Update repository/homepage/bugs URLs~~ — `package.json` already points at `FuzzyNova/ctrlyoke` + `ctrlyoke.dev`. **Caveat:** these URLs 404 until the external cutover lands (see §2.7).
+- [x] ~~Update support/contact URLs~~ — README/site use `support@ctrlyoke.dev`. **Caveat:** the inbox must exist before launch (see §2.7).
 
 ### 1.4 VSIX Contents
 
@@ -179,6 +181,104 @@ Confirm:
 - [ ] `.ctrlyoke/`, `.agents/`, local logs, prompts, test logs, and dev-only files are not included.
 - [ ] The generated VSIX version is `0.1.0`.
 
+### 2.5 Broken Harness — Remove Gemini, Add Antigravity CLI
+
+**Status:** OPEN — **functional blocker**
+
+Google deprecated the Gemini CLI; the `gemini-cli` harness now **errors on invocation**, so any user who selects Gemini in a shipped v0.1.0 hits a hard failure. Shipping a harness that always fails is a release blocker, not a post-launch item.
+
+Tracked in detail by [`ANTIGRAVITY_CLI_HARNESS_PLAN.md`](ANTIGRAVITY_CLI_HARNESS_PLAN.md). Decision: **remove `gemini-cli` entirely** and add the `antigravity-cli` (`agy`, Google's replacement) harness in its place.
+
+- [ ] Resolve the two research blockers first (headless `-p` viability under `PtyProcessManager`/node-pty; workspace `.agents/mcp_config.json` loading on `agy` ≥ 1.0.14).
+- [ ] Add the `antigravity-cli` harness (provider, plain-text parser, glog/`last_conversations.json` session resolution, Claude-style `Stop` hook, MCP writer, permission mapper, hook script) — Part B of the plan.
+- [ ] Remove `gemini-cli` everywhere (~110 refs across ~20 `src` files, plus schemas/tests/docs) — Part C.
+- [ ] `npm run typecheck` + `npm run compile` + `npm test` clean; grep `gemini` over `src/` leaves only generic hits.
+- [ ] Update README, CHANGELOG, and marketplace copy: seven harnesses become seven with Gemini→Antigravity (not eight). Every doc that currently lists Gemini must change.
+- [ ] Verify docs coherence: `.github/copilot-instructions.md`, `docs/harnesses/*`, and this plan family no longer claim Gemini support.
+
+> **Downstream doc impact:** several release docs (README "seven harnesses", `RELEASE_CHECKLIST`, ROADMAP executive summary) still enumerate Gemini as a supported harness. Those enumerations are now wrong and must be corrected as part of this item before publish.
+
+### 2.6 Pro Licensing Implementation
+
+**Status:** OPEN — **launch blocker (was omitted from this plan)**
+
+The live site already advertises Free vs Pro and a pricing page, but the extension has **no license gating built** — `LicenseService`, activation, trial, and Pro gating are unstarted (Checklist Phase 4). Shipping with the website promising Pro while the extension has no free/Pro boundary is a launch inconsistency, and Phase 6 launch verification (unlicensed free path, Pro activation, air-gapped import) cannot pass until this exists.
+
+Tracked in detail by [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md) and Phases 3–4 of [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
+
+- [ ] Phase 3 (vendors): Keygen policy + public key, Lemon Squeezy product, webhook secret / admin token — created under the **ctrlyoke** identity (see [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md) §6–§7).
+- [ ] Phase 4 (extension): `LicenseService`, offline signed-license verification, online activation, air-gapped import, 14-day trial, Pro gating, and the unlicensed/free production path.
+- [ ] `ctrlyoke: Manage License` command (activation count, machine list, remote deactivate).
+- [ ] Set `CHECKOUT_URL` and flip `LAUNCHED = true` in `landing/src/config.ts` at go-live.
+
+### 2.7 ctrlyoke External / Business Cutover
+
+**Status:** OPEN — **launch blocker (external, mostly non-code)**
+
+`package.json` `repository`/`homepage`/`bugs` and the site links already point at `FuzzyNova/ctrlyoke` + `ctrlyoke.dev`, but **those URLs 404 and the `@ctrlyoke.dev` support inboxes do not exist yet.** The business identity is still live under `flightpath.dev`. Publishing before the cutover means a marketplace listing whose repo/homepage/support links are dead.
+
+Tracked in detail by [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md). Owner: Nathan (external dashboards).
+
+- [ ] Stand up `ctrlyoke.dev` DNS + Netlify primary domain; 301 `flightpath.dev` → `ctrlyoke.dev`.
+- [ ] Recreate the 6 product inboxes under `@ctrlyoke.dev` (esp. `support@`, `security@`, `privacy@`, `licensing@`) before launch — they're referenced in the shipped LICENSE/PRIVACY and site footer.
+- [ ] Rename GitHub `FuzzyNova/flightpath` → `FuzzyNova/ctrlyoke`; confirm the `package.json` URLs resolve.
+- [ ] Confirm marketplace publisher contact/branding reads ctrlyoke.
+
+### 2.8 Legal Effective-Date Placeholders
+
+**Status:** OPEN — **quick but required**
+
+`LICENSE.md` and `PRIVACY.md` still contain the literal `[DATE]` placeholder, and the live `/terms` + `/privacy` pages are already serving it publicly.
+
+- [ ] Set the real effective date in `LICENSE.md` and `PRIVACY.md` (Checklist Phase 5 / Cutover §8).
+- [ ] Complete attorney review of the EULA if not already final (see §2.3).
+
+### 2.9 New-User Experience & Built-in Content
+
+**Status:** OPEN — **all blockers** (Nathan confirmed July 4, 2026)
+
+A backlog review surfaced first-run / built-in-content gaps not previously tracked.
+Nathan's decision: **every item below blocks v0.1.0** — the first paid release must land
+a strong new-user story. The only deferred piece is the interactive tour (see note).
+
+> **Ordering (load-bearing):** land the **Antigravity harness swap (§2.5)** and the
+> **agent/template cleanup (Parts A+B)** first — they set the final harness list and
+> formats. Only then author the **tech-support agent, Getting Started walkthrough, and
+> preflight**, which cite harnesses/formats and would otherwise be written against stale
+> facts. Capture **screenshots + GIF (§4) last**, after the onboarding/UI is final. See
+> the launch-blocker sequencing diagram in `ROADMAP.md`.
+
+- [ ] **Built-in agent correctness** — `ctrlyoke-orchestrator.agent.md` recommends
+  non-existent models (`gpt-5`, `claude-sonnet-4.5`) and teaches the non-primary JSON
+  format. Ships to every user; same class as the broken Gemini harness. Fix per
+  [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part A.
+- [ ] **Template variables** — bring `simple-feature` / `full-feature` / `fix-tests` up to
+  the `spec-driven-loop` typed `_templateMeta.variables` pattern. ([`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part B)
+- [ ] **`ctrlyoke-tech-support` agent** — built-in support/onboarding agent for new users.
+  Support deflection for a solo launch. ([`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md))
+- [ ] **Native VS Code Getting Started integration** — `contributes.walkthroughs` (the
+  standard post-install Getting Started page most extensions use) + dashboard empty state.
+  A blank cold-open hurts Marketplace first impressions. ([`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md) Phase 1)
+- [ ] **Harness preflight** — proactively tell a user with no installed harness CLI how to
+  install/auth one, instead of only failing at run time. ([`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md))
+
+> **Interactive tour deferred — and possibly unnecessary.** If the native Getting Started
+> walkthrough plus strong screenshots/GIF (§4, now a blocker) deliver a good first
+> impression, a bespoke interactive dashboard tour (onboarding Phase 2) may not be needed
+> at all. Re-evaluate after Phase 1 ships; do not hold the release for it. Harness
+> auth-vs-installed distinction (preflight stretch) is likewise post-launch.
+
+### 2.10 Pre-Publish Security Review
+
+**Status:** IN PROGRESS — pre-publish gate
+
+ctrlyoke spawns external processes and drives AI over the user's codebase; a first paid,
+source-available release warrants a security pass before publish. **A security review is
+currently running via a separate agent.**
+
+- [ ] Complete the security review of the release branch.
+- [ ] Triage findings; fix anything that blocks a trustworthy first release.
+
 ---
 
 ## Phase 3 - Marketplace Publish
@@ -219,9 +319,13 @@ npx vsce publish --packagePath ctrlyoke-0.1.0.vsix
 
 ## Phase 4 - Documentation and Listing Polish
 
-These are not hard blockers now that package testing is complete, but they are high-value before broad announcement.
+Most items here are high-value-but-optional, **except the screenshots/GIF, which Nathan
+promoted to a release blocker** (July 4, 2026) — for a first paid release, marketplace/
+README visuals are effectively MVP for conversion and pair with the native Getting
+Started onboarding (§2.9).
 
-- [ ] Add at least one dashboard screenshot or GIF to `images/` and README.
+- [ ] **BLOCKER:** Add polished dashboard screenshots and at least one demo GIF to `images/`,
+  the README, and the Marketplace listing.
 - [ ] Add `ctrlyoke.dev` links after the landing page exists.
 - [ ] Add `support@ctrlyoke.dev` after the inbox exists.
 - [ ] Add a short Known Issues section if carrying known harness-specific rough edges into v0.1.0.
@@ -291,8 +395,18 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 | Business email/support identity            | DONE          | `support@ctrlyoke.dev`, DNS/DKIM/DMARC configured                                           |
 | Publisher identity                         | DONE          | `fuzzynova`, repo at FuzzyNova/ctrlyoke                                                     |
 | License/commercial terms                   | DECISION MADE | Custom EULA (source-available, $10M threshold); draft at `LICENSE_DRAFT.md`; needs attorney |
+| **Remove Gemini / add Antigravity harness** | **OPEN**      | **Functional blocker — Gemini errors on invocation; see §2.5 / `ANTIGRAVITY_CLI_HARNESS_PLAN.md`** |
+| **Pro licensing implementation**           | **OPEN**      | **Blocker — site advertises Pro; extension gating unbuilt; see §2.6 / `PRO_LICENSE_PLAN.md`** |
+| **ctrlyoke external cutover**              | **OPEN**      | **Blocker — repo/homepage URLs + support inboxes 404 until done; see §2.7 / `CTRLYOKE_REBRAND_CUTOVER.md`** |
+| **Legal `[DATE]` placeholders**            | **OPEN**      | **Set effective date in `LICENSE.md` + `PRIVACY.md` (live pages serve it now); see §2.8** |
+| **Built-in agent correctness**             | **OPEN**      | **Blocker — orchestrator agent recommends dead models / JSON format; see §2.9**             |
+| **New-user experience** (templates/support/onboarding/preflight) | **OPEN** | **Blocker — all of §2.9 confirmed as v0.1.0 gates; interactive tour deferred**            |
+| **Screenshots + demo GIF**                 | **OPEN**      | **Blocker — README + Marketplace visuals; see §4**                                          |
+| Pre-publish security review                | IN PROGRESS   | Running via a separate agent; triage findings before publish (§2.10)                        |
+| Extension-host OOM crash                   | RESOLVED      | Confirmed fixed by Nathan — no longer a blocker                                              |
+| `npm audit` sanity check                   | PRE-PUBLISH   | Down to dev-only findings (`DEPENDENCY_UPGRADE_PLAN.md`); confirm no new prod advisories     |
 | Final `vsce ls` package inspection         | OPEN          | Run immediately before publish                                                              |
-| Marketplace publish                        | OPEN          | Blocked on identity decision                                                                |
+| Marketplace publish                        | OPEN          | Blocked on §2.5–2.8                                                                          |
 | npm CLI publish                            | DEFERRED      | Separate packaging decision                                                                 |
 
 ---

@@ -8,7 +8,7 @@
  * Width is determined by the parent container. Internal layout adapts to the
  * available space — no fixed width is applied here.
  */
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useEditorStore } from "@store/editorStore";
 import { useUiStore } from "@store/uiStore";
@@ -85,6 +85,7 @@ type ChipProps = {
   status: ReturnType<ReturnType<typeof usePromptStatus>>;
   contextPct: number | undefined;
   canReorder: boolean;
+  isExecuting: boolean;
   isScript: boolean;
   onChipClick: () => void;
   onOpenContextMenu: (x: number, y: number) => void;
@@ -96,6 +97,7 @@ function ChipContent({
   status,
   contextPct,
   canReorder,
+  isExecuting,
   isScript,
   onChipClick,
   onOpenContextMenu,
@@ -123,6 +125,12 @@ function ChipContent({
       {...longPressHandlers}
       title={`${isScript ? "Script" : "Prompt"} ${slotNumber} — right-click for options`}
     >
+      {isExecuting && (
+        <ExecutingStepHighlight
+          borderClassName="border"
+          testId="executing-chip-highlight"
+        />
+      )}
       {/* Left status border bar */}
       <div
         className={`absolute left-0 top-0 bottom-0 w-[2px] ${borderBarClass}`}
@@ -370,7 +378,6 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
   const [sortableIds, setSortableIds] = useState<string[]>(() =>
     prompts.slice(currentStep).map((_, i) => `chip-pending-${currentStep + i}`)
   );
-  const chipListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setSortableIds(
@@ -458,15 +465,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
             <i className="codicon codicon-dash text-xxs text-description-fg" />
           </div>
         ) : (
-          <div ref={chipListRef} className="relative">
-            <ExecutingStepHighlight
-              containerRef={chipListRef}
-              layoutKey={`${currentStep}|${sortableIds.join("|")}`}
-              targetSelector={`[data-workflow-chip-index="${currentStep}"]`}
-              visible={isRunning}
-              borderClassName="border"
-              testId="executing-chip-highlight"
-            />
+          <div className="relative">
             {/* Done chips — static */}
             {prompts.slice(0, currentStep).map((prompt, i) => {
               const status = getPromptStatus(prompt, i);
@@ -479,6 +478,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                   status={status}
                   contextPct={contextPct}
                   canReorder={false}
+                  isExecuting={false}
                   isScript={isScriptStep(prompt)}
                   onChipClick={() => handleStepClick(i)}
                   onOpenContextMenu={(x, y) =>
@@ -530,6 +530,7 @@ export const PromptChipRail: React.FC<PromptChipRailProps> = ({ onExpand }) => {
                       status={status}
                       contextPct={contextPct}
                       canReorder={canReorder && !isCurrentStep}
+                      isExecuting={isRunning && isCurrentStep}
                       isScript={isScriptStep(prompt)}
                       onChipClick={() => handleStepClick(index)}
                       onOpenContextMenu={(x, y) =>

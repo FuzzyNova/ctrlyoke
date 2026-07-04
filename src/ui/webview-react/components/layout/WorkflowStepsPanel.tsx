@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useWorkflowStore, type WorkflowStep } from "@store/workflowStore";
 import { STEP_TYPES } from "@root/types/DashboardConstants";
 import type { ScriptStep } from "@root/types/WebviewMessageTypes";
@@ -117,6 +117,7 @@ function SortableWorkflowStepWrapper({
       <div className="flex-shrink-0 w-[26px] flex items-start justify-center pt-2 text-sm text-description-fg select-none">
         {slotNumber}
       </div>
+      {stepItemProps.isCurrent && <ExecutingStepHighlight />}
       <div ref={setNodeRef} style={style} className="relative flex-1 min-w-0">
         <WorkflowStepItem
           {...stepItemProps}
@@ -176,7 +177,6 @@ const WorkflowStepsPanelInner: React.FC<{
     useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
-  const stepListRef = useRef<HTMLDivElement>(null);
   // Determine if workflow is running
   const isRunning = isWorkflowRunning(executionState);
   const canChangeStartPosition =
@@ -812,13 +812,7 @@ const WorkflowStepsPanelInner: React.FC<{
             </p>
           </div>
         ) : (
-          <div ref={stepListRef} className="relative py-1">
-            <ExecutingStepHighlight
-              containerRef={stepListRef}
-              layoutKey={`${currentStep}|${sortableIds.join("|")}`}
-              targetSelector={`[data-workflow-step-index="${currentStep}"]`}
-              visible={isRunning}
-            />
+          <div className="relative py-1">
             {/* Done steps (indices 0..doneStepCount-1).
                 doneStepCount is capped at currentStep to guarantee no overlap with
                 the pending section (which starts at currentStep). History entries
@@ -850,7 +844,7 @@ const WorkflowStepsPanelInner: React.FC<{
                 return (
                   <div
                     key={`step-${index}-${step.name || ""}`}
-                    className="flex items-stretch"
+                    className="relative flex items-stretch"
                     data-workflow-step-index={index}
                   >
                     {/* Keep the status accent separate from the consistently sized number column. */}
