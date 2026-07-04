@@ -178,8 +178,7 @@ function useIosVisualViewportRootStyle(isMobile: boolean): CSSProperties {
         0,
         window.innerHeight - visualViewport.height - offsetTop
       );
-      const viewportLooksKeyboardAdjusted =
-        keyboardInset > 80 || offsetTop > 0;
+      const viewportLooksKeyboardAdjusted = keyboardInset > 80 || offsetTop > 0;
 
       const editableFocused = isEditableElementFocused();
       if (editableFocused && viewportLooksKeyboardAdjusted) {
@@ -809,7 +808,10 @@ function App() {
                       className={`flex-shrink-0 h-full border-r border-panel-border bg-sidebar-bg overflow-hidden ${sidebarChipClosing ? "animate-slide-out-sidebar" : "animate-slide-in-sidebar"}`}
                       onAnimationEnd={
                         sidebarChipClosing
-                          ? () => {
+                          ? (event) => {
+                              if (event.currentTarget !== event.target) {
+                                return;
+                              }
                               setSidebarChipClosing(false);
                               sidebarAfterClose.current?.();
                               sidebarAfterClose.current = null;
@@ -835,7 +837,10 @@ function App() {
                         className={`absolute inset-0 z-header bg-editor-bg flex flex-col ${promptsOverlayClosing ? "animate-slide-out-left" : "animate-slide-in-left"}`}
                         onAnimationEnd={
                           promptsOverlayClosing
-                            ? () => {
+                            ? (event) => {
+                                if (event.currentTarget !== event.target) {
+                                  return;
+                                }
                                 setPromptsOverlayClosing(false);
                                 promptsAfterClose.current?.();
                                 promptsAfterClose.current = null;
@@ -923,7 +928,10 @@ function App() {
                 className={`absolute inset-0 z-drawer bg-editor-bg flex flex-col ${settingsOverlayClosing ? "animate-slide-out-right" : "animate-slide-in-right"}`}
                 onAnimationEnd={
                   settingsOverlayClosing
-                    ? () => {
+                    ? (event) => {
+                        if (event.currentTarget !== event.target) {
+                          return;
+                        }
                         setSettingsOverlayClosing(false);
                         settingsAfterClose.current?.();
                         settingsAfterClose.current = null;

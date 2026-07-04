@@ -27,7 +27,7 @@ export function ExecutingStepHighlight({
   const measureBounds = useCallback(() => {
     const container = containerRef.current;
     if (!container || !visible) {
-      return;
+      return false;
     }
 
     const target = container.querySelector<HTMLElement>(targetSelector);
@@ -35,7 +35,7 @@ export function ExecutingStepHighlight({
       setBounds((current) =>
         current.measured ? { top: 0, height: 0, measured: false } : current
       );
-      return;
+      return false;
     }
 
     const containerRect = container.getBoundingClientRect();
@@ -53,6 +53,8 @@ export function ExecutingStepHighlight({
         ? current
         : nextBounds
     );
+
+    return nextBounds.measured;
   }, [containerRef, targetSelector, visible]);
 
   useLayoutEffect(() => {
@@ -63,7 +65,15 @@ export function ExecutingStepHighlight({
 
     const target = container.querySelector<HTMLElement>(targetSelector);
     const frameIds: number[] = [];
-    frameIds.push(window.requestAnimationFrame(measureBounds));
+    let retryCount = 0;
+    const retryUntilMeasured = () => {
+      if (measureBounds() || retryCount >= 30) {
+        return;
+      }
+      retryCount += 1;
+      frameIds.push(window.requestAnimationFrame(retryUntilMeasured));
+    };
+    frameIds.push(window.requestAnimationFrame(retryUntilMeasured));
     frameIds.push(
       window.requestAnimationFrame(() => {
         frameIds.push(window.requestAnimationFrame(measureBounds));
