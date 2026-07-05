@@ -99,6 +99,160 @@ export class CopilotLogParser extends BaseLogParser {
   /** Tracks in-flight tool calls across streaming events for extractStructuredEventsFromEvent. */
   private pendingStreamingTools = new Map<string, CopilotPendingTool>();
 
+  // ========================================================================
+  // OpenTelemetry Context Window Tracking
+  // ========================================================================
+  //
+  // Copilot CLI 1.0.x removed every per-turn context signal from events.jsonl and
+  // process-*.log (see extractResponse()/extractContextFromProcessLog() comments).
+  // The only remaining live signal is Copilot's built-in OpenTelemetry file exporter
+  // (`copilot help monitoring`): setting COPILOT_OTEL_ENABLED + COPILOT_OTEL_FILE_EXPORTER_PATH
+  // makes Copilot write one JSON line per span/metric to that file, incrementally, DURING
+  // execution (confirmed empirically — lines appear mid-run, not just at process exit).
+  // Each `chat <model>` span carries `gen_ai.usage.input_tokens` / `.output_tokens` attributes
+  // directly (no histogram math needed) — `input_tokens` is the full context size resent on
+  // that turn, i.e. exactly what session.truncation/session.shutdown used to report.
+  //
+  // This uses its own byte-offset tracker (separate from `lastReadPosition`, which
+  // BaseLogParser dedicates to the harness's main events.jsonl) because both files are
+  // tailed concurrently during the same monitoring session.
+
+  /** Byte offset into the OTel export file, independent of the main log's lastReadPosition. */
+  private otelReadPosition = 0;
+  /** Path set by CopilotCliProvider once it generates a per-invocation OTel export path. */
+  private otelFilePath: string | undefined;
+  /** Most recent chat span's input token count (= current context window usage). */
+  private otelLastInputTokens = 0;
+  /** Running total of output tokens across all chat spans seen this invocation. */
+  private otelCumulativeOutputTokens = 0;
+  /** Model reported by the most recent chat span, used to size the context window. */
+  private otelLastModel: string | undefined;
+
+  /**
+   * Register (or clear) the OTel export file for this invocation.
+   * Resets all OTel tracking state — must be called once per invocation, even when
+   * no path is available, so a previous invocation's state never leaks into this one
+   * (the parser instance is reused across prompts by CopilotCliProvider).
+   */
+  setOtelFilePath(filePath: string | undefined): void {
+    this.otelFilePath = filePath;
+    this.otelReadPosition = 0;
+    this.otelLastInputTokens = 0;
+    this.otelCumulativeOutputTokens = 0;
+    this.otelLastModel = undefined;
+  }
+
+  /** Read new lines from the OTel export file using its own dedicated offset tracker. */
+  private async readNewOtelLines(): Promise<Record<string, any>[]> {
+    if (!this.otelFilePath || !fs.existsSync(this.otelFilePath)) {
+      return [];
+    }
+
+    const stats = fs.statSync(this.otelFilePath);
+    const currentSize = stats.size;
+    if (currentSize < this.otelReadPosition) {
+      this.otelReadPosition = 0; // file truncated/rotated
+    }
+    if (currentSize === this.otelReadPosition) {
+      return [];
+    }
+
+    const buffer = Buffer.alloc(currentSize - this.otelReadPosition);
+    const fd = fs.openSync(this.otelFilePath, "r");
+    try {
+      fs.readSync(fd, buffer, 0, buffer.length, this.otelReadPosition);
+    } finally {
+      fs.closeSync(fd);
+    }
+    this.otelReadPosition = currentSize;
+
+    const entries: Record<string, any>[] = [];
+    for (const line of buffer.toString("utf8").split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        entries.push(JSON.parse(trimmed));
+      } catch {
+        // Skip malformed lines (partial write mid-flush)
+      }
+    }
+    return entries;
+  }
+
+  /**
+   * Poll the OTel export file for new `chat <model>` spans and fold them into
+   * running context-window state. Call repeatedly during monitoring (interactive
+   * mode) for live updates, and once more at completion to catch any final spans.
+   *
+   * @param modelId - Fallback model when a span doesn't report its own model
+   * @returns The latest context-window reading if any new chat span arrived, else null
+   */
+  async pollOtelContextWindow(
+    modelId: string
+  ): Promise<{ used: number; size: number } | null> {
+    if (!this.otelFilePath) {
+      return null;
+    }
+
+    const lines = await this.readNewOtelLines();
+    let updated = false;
+
+    for (const line of lines) {
+      if (
+        line.type === "span" &&
+        typeof line.name === "string" &&
+        line.name.startsWith("chat ") &&
+        line.attributes
+      ) {
+        const input = line.attributes["gen_ai.usage.input_tokens"];
+        const output = line.attributes["gen_ai.usage.output_tokens"];
+        if (typeof input === "number") {
+          this.otelLastInputTokens = input;
+          updated = true;
+        }
+        if (typeof output === "number") {
+          this.otelCumulativeOutputTokens += output;
+        }
+        this.otelLastModel =
+          line.attributes["gen_ai.response.model"] ??
+          line.attributes["gen_ai.request.model"] ??
+          this.otelLastModel;
+      }
+    }
+
+    if (!updated) {
+      return null;
+    }
+    return {
+      used: this.otelLastInputTokens,
+      size: getCopilotContextWindowSize(this.otelLastModel ?? modelId),
+    };
+  }
+
+  /**
+   * Final OTel-derived usage snapshot for this invocation, after all chat spans
+   * have been observed via pollOtelContextWindow(). Returns null if no chat span
+   * was ever seen (OTel unavailable, or the CLI made no model calls this turn).
+   */
+  getFinalOtelUsage(): {
+    inputTokens: number;
+    outputTokens: number;
+    contextWindowUsedTokens: number;
+    contextWindowSize: number;
+  } | null {
+    if (this.otelLastInputTokens <= 0) {
+      return null;
+    }
+    return {
+      inputTokens: this.otelLastInputTokens,
+      outputTokens: this.otelCumulativeOutputTokens,
+      contextWindowUsedTokens: this.otelLastInputTokens,
+      contextWindowSize: getCopilotContextWindowSize(
+        this.otelLastModel ?? this.resolvedModel
+      ),
+    };
+  }
+
   /**
    * Extract complete response from Copilot log events
    *

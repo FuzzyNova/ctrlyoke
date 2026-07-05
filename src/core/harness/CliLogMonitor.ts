@@ -226,13 +226,39 @@ export class CliLogMonitor {
         // Extract final response from accumulated events
         const response = parser.extractResponse(events);
 
-        // Copilot-specific: augment context window data from the process log.
-        // The process log (process-*.log) contains CompactionProcessor lines with
-        // accurate context utilization that fires every turn — more reliable than
-        // session.truncation events which only appear for long sessions.
+        // Copilot-specific: patch in context-window usage from whichever source is
+        // available, most-reliable first:
+        // 1. OpenTelemetry chat spans (live, per-turn — see pollOtelContextWindow()).
+        //    One last catch-up poll here covers spans written between the last
+        //    interval tick and completion.
+        // 2. Process log CompactionProcessor lines — legacy fallback, rarely fires
+        //    on current Copilot CLI versions but kept in case OTel is unavailable.
         const effectiveSessionId =
           response.metadata.sessionId || sessionId || undefined;
+
+        let contextPatched = false;
+        if (typeof (parser as any).pollOtelContextWindow === "function") {
+          await (parser as any).pollOtelContextWindow(model);
+        }
+        if (typeof (parser as any).getFinalOtelUsage === "function") {
+          const otelUsage = (parser as any).getFinalOtelUsage();
+          if (otelUsage) {
+            const existingOutputTokens =
+              response.metadata.usage?.outputTokens ?? 0;
+            response.metadata.usage = {
+              ...response.metadata.usage,
+              inputTokens: otelUsage.inputTokens,
+              outputTokens: existingOutputTokens,
+              totalTokens: otelUsage.inputTokens + existingOutputTokens,
+              contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,
+              contextWindowSize: otelUsage.contextWindowSize,
+            };
+            contextPatched = true;
+          }
+        }
+
         if (
+          !contextPatched &&
           effectiveSessionId &&
           typeof (parser as any).extractContextFromProcessLog === "function"
         ) {
@@ -492,6 +518,26 @@ export class CliLogMonitor {
       }
 
       cancellationInterval = setInterval(() => {
+        // Copilot-specific: poll the OTel export file for new chat spans on the same
+        // cadence as cancellation checks. This is the only live, per-turn context-window
+        // signal Copilot CLI 1.0.x still provides (see pollOtelContextWindow() for why) —
+        // it isn't tied to the main log's fs.watch since it tails a separate file.
+        if (
+          !completed &&
+          this.deps.hostCallbacks.onContextWindowUpdate &&
+          typeof (parser as any).pollOtelContextWindow === "function"
+        ) {
+          void (async () => {
+            const ctx = await (parser as any).pollOtelContextWindow(model);
+            if (ctx) {
+              this.deps.hostCallbacks.onContextWindowUpdate!(
+                ctx.used,
+                ctx.size
+              );
+            }
+          })();
+        }
+
         if (this.deps.runtimeState.isCancelling()) {
           Log.info("⏹️ Log monitoring cancelled by user");
           if (cancellationInterval) {

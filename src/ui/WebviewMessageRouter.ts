@@ -1751,6 +1751,7 @@ export class WebviewMessageRouter {
           detail: item.detail,
           documentation: item.documentation,
           sortText: item.sortText,
+          filterText: item.filterText,
         })),
         from: position,
         seq,

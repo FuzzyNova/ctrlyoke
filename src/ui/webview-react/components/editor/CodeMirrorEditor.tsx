@@ -126,6 +126,7 @@ interface ExtensionCompletionItem {
   detail?: string;
   insertText?: string;
   sortText?: string;
+  filterText?: string;
 }
 
 interface PendingCompletionRequest {
@@ -219,6 +220,7 @@ export function buildCodeMirrorCompletionResult(
   from: number,
   request: PendingCompletionRequest | null
 ): CompletionResult {
+  const useFilterTextForMatching = !shouldBypassCodeMirrorFiltering(request);
   const completions = items.map((item, index) => {
     // Calculate boost from sortText.
     // Handles both numeric prefixes ("000_", "001_") and
@@ -263,9 +265,12 @@ export function buildCodeMirrorCompletionResult(
     };
 
     const type = item.kind !== undefined ? kindMap[item.kind] || "text" : "text";
+    const matchLabel =
+      useFilterTextForMatching && item.filterText ? item.filterText : item.label;
 
     return {
-      label: item.label,
+      label: matchLabel,
+      displayLabel: matchLabel === item.label ? undefined : item.label,
       type,
       detail: item.detail,
       boost,

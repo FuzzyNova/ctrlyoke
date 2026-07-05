@@ -230,6 +230,28 @@ function getNormalizedParentDirectory(relativePath: string): string {
   return parentPath === "." ? "" : parentPath;
 }
 
+function matchesFuzzyQuery(candidate: string, query: string): boolean {
+  if (!query) {
+    return true;
+  }
+
+  if (candidate.includes(query)) {
+    return true;
+  }
+
+  let queryIndex = 0;
+  for (const character of candidate) {
+    if (character === query[queryIndex]) {
+      queryIndex++;
+      if (queryIndex === query.length) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function buildPathCompletionFilter(
   filterText: string,
   options?: {
@@ -282,12 +304,17 @@ function matchesPathCompletionFilter(
   }
 
   if (!filter.hasPathContext) {
-    return candidatePath.includes(filter.normalized);
+    return (
+      matchesFuzzyQuery(candidatePath, filter.normalized) ||
+      matchesFuzzyQuery(path.posix.basename(candidatePath), filter.normalized)
+    );
   }
 
+  const candidateName = path.posix.basename(candidatePath);
   return (
     getNormalizedParentDirectory(candidatePath) === filter.parentPath &&
-    path.posix.basename(candidatePath).startsWith(filter.childPrefix)
+    (candidateName.startsWith(filter.childPrefix) ||
+      matchesFuzzyQuery(candidateName, filter.childPrefix))
   );
 }
 
@@ -347,7 +374,7 @@ export async function getFileCompletions(
           `The CLI will automatically attach this file's content.\n\n` +
           `_For line ranges, use \`${buildSelectionReference(relativePath, 10, 20)}\`_`,
         sortText: `0_${relativePath.split("/").length}_${relativePath}`,
-        filterText: `${relativePath} ${fileName}`,
+        filterText: `${fileName} ${relativePath}`,
       };
 
       fileItems.push(fileItem);
@@ -378,7 +405,7 @@ export async function getFileCompletions(
         `ctrlyoke will attach a file tree of this directory.\n\n` +
         `_No file contents, just structure._`,
       sortText: `0_${dirPath.split("/").length}_0_${dirPath}`,
-      filterText: `${dirPath} ${dirName}`,
+      filterText: `${dirName} ${dirPath}`,
     };
 
     dirItems.push(dirItem);
@@ -710,7 +737,9 @@ export function getPriorContextCompletions(
   ];
 
   return keywords
-    .filter((keyword) => keyword.label.startsWith(filterText))
+    .filter((keyword) =>
+      matchesFuzzyQuery(keyword.label.toLowerCase(), filterText.toLowerCase())
+    )
     .map((keyword) => ({
       label: keyword.label,
       kind: vscode.CompletionItemKind.Keyword,
@@ -795,7 +824,7 @@ export async function getPromptFileCompletions(
       detail: dirName ? dirName : "Root",
       documentation: `**Prompt file reference**\n\nPath: \`${insertPath}\``,
       sortText: `${relativePath.split("/").length}_${relativePath}`,
-      filterText: `${relativePath} ${fileName}`,
+      filterText: `${fileName} ${relativePath}`,
     });
 
     if (items.length >= 200) break;

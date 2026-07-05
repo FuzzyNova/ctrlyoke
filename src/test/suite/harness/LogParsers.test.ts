@@ -962,6 +962,127 @@ suite("CopilotLogParser", () => {
     });
   });
 
+  suite("OTel context window tracking", () => {
+    test("should return null when no OTel file path is set", async () => {
+      const result = await parser.pollOtelContextWindow("gpt-5.4");
+      assert.strictEqual(result, null);
+      assert.strictEqual(parser.getFinalOtelUsage(), null);
+    });
+
+    test("should extract context window usage from chat spans", async () => {
+      const otelLines = [
+        { type: "span", name: "invoke_agent", attributes: {} },
+        {
+          type: "span",
+          name: "chat gpt-5.4",
+          attributes: {
+            "gen_ai.usage.input_tokens": 18689,
+            "gen_ai.usage.output_tokens": 42,
+            "gen_ai.response.model": "gpt-5.4",
+          },
+        },
+      ];
+      const filePath = createTempJsonlFile(otelLines);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        const result = await parser.pollOtelContextWindow("gpt-5.4");
+
+        assert.ok(result !== null);
+        assert.strictEqual(result?.used, 18689);
+        assert.ok(result!.size > 0);
+
+        const final = parser.getFinalOtelUsage();
+        assert.strictEqual(final?.contextWindowUsedTokens, 18689);
+        assert.strictEqual(final?.outputTokens, 42);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
+    test("should track the latest input and cumulative output tokens across multiple chat spans", async () => {
+      const otelLines = [
+        {
+          type: "span",
+          name: "chat gpt-5.4",
+          attributes: {
+            "gen_ai.usage.input_tokens": 18719,
+            "gen_ai.usage.output_tokens": 147,
+          },
+        },
+        { type: "span", name: "execute_tool powershell", attributes: {} },
+        {
+          type: "span",
+          name: "chat gpt-5.4",
+          attributes: {
+            "gen_ai.usage.input_tokens": 18894,
+            "gen_ai.usage.output_tokens": 53,
+          },
+        },
+      ];
+      const filePath = createTempJsonlFile(otelLines);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        const result = await parser.pollOtelContextWindow("gpt-5.4");
+
+        // "used" reflects the latest turn's context size, not a sum across turns.
+        assert.strictEqual(result?.used, 18894);
+
+        const final = parser.getFinalOtelUsage();
+        assert.strictEqual(final?.contextWindowUsedTokens, 18894);
+        // "outputTokens" accumulates across every chat span in this invocation.
+        assert.strictEqual(final?.outputTokens, 200);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
+    test("should return null on a second poll when no new spans were written", async () => {
+      const filePath = createTempJsonlFile([
+        {
+          type: "span",
+          name: "chat gpt-5.4",
+          attributes: { "gen_ai.usage.input_tokens": 1000, "gen_ai.usage.output_tokens": 10 },
+        },
+      ]);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        const first = await parser.pollOtelContextWindow("gpt-5.4");
+        assert.ok(first !== null);
+
+        const second = await parser.pollOtelContextWindow("gpt-5.4");
+        assert.strictEqual(second, null);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+
+    test("should reset all state when the OTel path is cleared (parser instance reuse across prompts)", async () => {
+      const filePath = createTempJsonlFile([
+        {
+          type: "span",
+          name: "chat gpt-5.4",
+          attributes: { "gen_ai.usage.input_tokens": 5000, "gen_ai.usage.output_tokens": 20 },
+        },
+      ]);
+
+      try {
+        parser.setOtelFilePath(filePath);
+        await parser.pollOtelContextWindow("gpt-5.4");
+        assert.ok(parser.getFinalOtelUsage() !== null);
+
+        // Simulate the next prompt execution with no OTel path available.
+        parser.setOtelFilePath(undefined);
+        assert.strictEqual(await parser.pollOtelContextWindow("gpt-5.4"), null);
+        assert.strictEqual(parser.getFinalOtelUsage(), null);
+      } finally {
+        cleanupTempFile(filePath);
+      }
+    });
+  });
+
   suite("isComplete", () => {
     test("should always return false (uses hooks for completion detection)", () => {
       // CopilotLogParser intentionally returns false for all events

@@ -94,6 +94,27 @@ describe("CodeMirrorEditor external reference completions", () => {
     expect(result.from).toBe(6);
     expect(result.filter).toBeUndefined();
   });
+
+  it("uses filterText for CodeMirror fuzzy matching while keeping the visible label", () => {
+    const result = buildCodeMirrorCompletionResult(
+      [
+        {
+          label: "CodeMirrorEditor.tsx",
+          kind: 16,
+          insertText: "src/file.ts",
+          filterText:
+            "CodeMirrorEditor.tsx src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+        },
+      ],
+      5,
+      { trigger: "@", query: "cme" }
+    );
+
+    expect(result.options[0]?.label).toBe(
+      "CodeMirrorEditor.tsx src/ui/webview-react/components/editor/CodeMirrorEditor.tsx"
+    );
+    expect(result.options[0]?.displayLabel).toBe("CodeMirrorEditor.tsx");
+  });
 });
 
 describe("CodeMirrorEditor prompt reference insertion", () => {

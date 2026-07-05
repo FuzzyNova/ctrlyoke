@@ -14,7 +14,10 @@ import { CopilotNotificationMonitor } from "./CopilotNotificationMonitor";
 import { CopilotToolPermissionMapper } from "./CopilotToolPermissionMapper";
 import { CopilotLogParser } from "./CopilotLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
-import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../../utils/ConfigurationUtils";
 import {
   initializeModelRegistry,
   isCliModelSupported,
@@ -84,6 +87,12 @@ export class CopilotCliProvider implements ICliProvider {
   /** Path to temporary .gitignore written in .github/hooks/ to hide ctrlyoke files from git. */
   private hooksDirGitignorePath: string | undefined;
   private enablePromptModeRepoHooksForHeadlessRun = false;
+  /**
+   * Per-invocation path for Copilot's OpenTelemetry file exporter, generated fresh in
+   * buildCliArgs() each prompt. Feeds live context-window tracking (see CopilotLogParser's
+   * OTel section) since Copilot CLI 1.0.x removed every other per-turn context signal.
+   */
+  private otelFilePath: string | undefined;
 
   constructor() {
     // No initialization needed
@@ -127,6 +136,22 @@ export class CopilotCliProvider implements ICliProvider {
     }
   ): Promise<string[]> {
     this.enablePromptModeRepoHooksForHeadlessRun = false;
+
+    // Generate a fresh per-invocation OTel export path (or clear it) every prompt.
+    // Must run unconditionally — the parser/provider instances are reused across
+    // prompts, so a stale path from a previous invocation must never leak forward.
+    this.otelFilePath = workspaceRoot
+      ? path.join(
+          workspaceRoot,
+          PATH_CONSTANTS.CTRLYOKE_DIR,
+          PATH_CONSTANTS.TEMP_DIR,
+          CopilotCliProvider.buildOtelFileName(
+            workflowContext?.promptIndex ?? 0,
+            workflowContext?.workingFilePath
+          )
+        )
+      : undefined;
+    this.logParser.setOtelFilePath(this.otelFilePath);
 
     const args: string[] = [];
 
@@ -376,9 +401,41 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   getHeadlessSpawnEnv(): NodeJS.ProcessEnv {
-    return this.enablePromptModeRepoHooksForHeadlessRun
+    const env: NodeJS.ProcessEnv = this.enablePromptModeRepoHooksForHeadlessRun
       ? { GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS: "true" }
       : {};
+    return { ...env, ...this.buildOtelSpawnEnv() };
+  }
+
+  /**
+   * Redirect Copilot's OpenTelemetry file exporter to this invocation's dedicated path.
+   *
+   * Overriding this is necessary, not optional: some environments already have
+   * COPILOT_OTEL_FILE_EXPORTER_PATH set globally (observed pointed at the Windows null
+   * device, `\\.\nul`), which silently discards the only live context-window signal
+   * Copilot CLI 1.0.x still exposes. Explicitly setting both vars here ensures ctrlyoke
+   * always gets the data regardless of what the user's shell environment does.
+   */
+  private buildOtelSpawnEnv(): NodeJS.ProcessEnv {
+    if (!this.otelFilePath) {
+      return {};
+    }
+    return {
+      COPILOT_OTEL_ENABLED: "true",
+      COPILOT_OTEL_FILE_EXPORTER_PATH: this.otelFilePath,
+    };
+  }
+
+  /**
+   * Interactive spawn env: base process env plus the OTel export path override.
+   * Copilot has no other reason to need env overrides in interactive mode today,
+   * unlike Claude's CLAUDECODE removal — this exists solely to carry the OTel vars.
+   */
+  getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
+    return {
+      ...CliProviderUtils.buildProcessEnv(),
+      ...this.buildOtelSpawnEnv(),
+    };
   }
 
   /**
@@ -417,7 +474,8 @@ export class CopilotCliProvider implements ICliProvider {
    * Return additional file paths to delete after workflow cleanup.
    *
    * Includes all per-prompt hook files created during this workflow's
-   * interactive and headless sessions, plus the Copilot OTel telemetry file.
+   * interactive and headless sessions, plus this invocation's Copilot OTel
+   * telemetry file (see buildOtelSpawnEnv()).
    *
    * Note: the .gitignore is NOT deleted here. Deletion is deferred to
    * cleanupWorkspaceArtifacts() so we can check whether concurrent workflows
@@ -426,10 +484,12 @@ export class CopilotCliProvider implements ICliProvider {
   getAdditionalCleanupFilePaths(workspaceRoot: string): string[] {
     return [
       ...this.hookFilePaths,
-      // Copilot CLI writes OpenTelemetry telemetry to COPILOT_OTEL_FILE_EXPORTER_PATH,
-      // which is internally set to the relative path "NUL". When the CWD is the workspace
-      // root this resolves to a real file rather than the Windows null device.
-      // Clean it up after each run so it doesn't linger.
+      ...(this.otelFilePath ? [this.otelFilePath] : []),
+      // Defensive: some environments have COPILOT_OTEL_FILE_EXPORTER_PATH set globally
+      // to the relative path "NUL" (observed pointed at the Windows null device via
+      // \\.\nul). buildOtelSpawnEnv() always overrides this for our own spawns, but
+      // clean up the stray file anyway in case anything ever bypasses that override —
+      // when CWD is the workspace root, "NUL" resolves to a real file, not the device.
       path.join(workspaceRoot, "NUL"),
     ];
   }
@@ -572,6 +632,26 @@ export class CopilotCliProvider implements ICliProvider {
     // Sanitize: keep alphanumeric, hyphens, underscores only
     const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
     return `ctrlyoke-${safeStem}-p${promptIndex}.json`;
+  }
+
+  /**
+   * Build a unique OTel export filename for a prompt, mirroring buildHookFileName()'s
+   * naming convention (same collision profile — accepted there already).
+   *
+   * Format: `ctrlyoke-otel-<stem>-p<promptIndex>.jsonl`
+   */
+  private static buildOtelFileName(
+    promptIndex: number,
+    workingFilePath?: string
+  ): string {
+    let stem: string;
+    if (workingFilePath) {
+      stem = path.basename(workingFilePath).replace(/\.ctrlyoke\.json$/i, "");
+    } else {
+      stem = String(Date.now());
+    }
+    const safeStem = stem.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-");
+    return `ctrlyoke-otel-${safeStem}-p${promptIndex}.jsonl`;
   }
 
   /**

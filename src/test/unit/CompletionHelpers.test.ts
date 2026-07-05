@@ -77,6 +77,38 @@ suite("CompletionHelpers", () => {
     assert.ok(!labels.includes("WorkflowFilePickerModal.tsx"));
   });
 
+  test("matches @ completions fuzzily against a basename-only query", async () => {
+    mockWorkspaceFiles([
+      "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+      "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
+      "src/ui/webview-react/components/workflow/WorkflowFilePickerModal.tsx",
+    ]);
+
+    const items = await getFileCompletions("cme");
+    const labels = items.map((item) => item.label);
+
+    assert.ok(labels.includes("CodeMirrorEditor.tsx"));
+    assert.ok(!labels.includes("CodeMirrorTheme.ts"));
+    assert.ok(!labels.includes("WorkflowFilePickerModal.tsx"));
+  });
+
+  test("matches @ completions fuzzily within the typed directory segment", async () => {
+    mockWorkspaceFiles([
+      "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+      "src/ui/webview-react/components/editor/CodeMirrorTheme.ts",
+      "src/ui/webview-react/components/editor/commands/CommandPalette.tsx",
+    ]);
+
+    const items = await getFileCompletions(
+      "src/ui/webview-react/components/editor/cme"
+    );
+    const labels = items.map((item) => item.label);
+
+    assert.ok(labels.includes("CodeMirrorEditor.tsx"));
+    assert.ok(!labels.includes("CodeMirrorTheme.ts"));
+    assert.ok(!labels.includes("commands/"));
+  });
+
   test("matches lone prompt-file path completions against the typed directory and child prefix", async () => {
     mockWorkspaceFiles([
       "prompts/seed.prompt.md",
@@ -89,5 +121,18 @@ suite("CompletionHelpers", () => {
     const labels = items.map((item) => item.label).sort();
 
     assert.deepStrictEqual(labels, ["seed.prompt.md", "setup.prompt.md"]);
+  });
+
+  test("matches lone prompt-file path completions fuzzily against the typed child name", async () => {
+    mockWorkspaceFiles([
+      "prompts/seed.prompt.md",
+      "prompts/setup.prompt.md",
+      "prompts/sub/section.prompt.md",
+    ]);
+
+    const items = await getPromptFileCompletions("./prompts/stpm");
+    const labels = items.map((item) => item.label);
+
+    assert.deepStrictEqual(labels, ["setup.prompt.md"]);
   });
 });
