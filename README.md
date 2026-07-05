@@ -411,3 +411,11 @@ Design documents and implementation notes are in `dev/implemented/`.
 - **Issues:** [github.com/FuzzyNova/ctrlyoke/issues](https://github.com/FuzzyNova/ctrlyoke/issues)
 - **Email:** support@ctrlyoke.dev
 - **Website:** [ctrlyoke.dev](https://ctrlyoke.dev)
+
+---
+
+## License
+
+ctrlyoke is distributed under the commercial license in [LICENSE.md](LICENSE.md).
+
+Third-party runtime dependency notices and attribution information are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

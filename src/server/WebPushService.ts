@@ -1,21 +1,10 @@
+import { buildPushHTTPRequest } from "@pushforge/builder";
 import { promises as fsp } from "fs";
 import * as path from "path";
 import { createHash } from "crypto";
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { CompletionNotificationEvent } from "../ui/notifications/CompletionNotificationFactory";
-
-type WebPushModule = {
-  generateVAPIDKeys(): { publicKey: string; privateKey: string };
-  setVapidDetails(subject: string, publicKey: string, privateKey: string): void;
-  sendNotification(
-    subscription: WebPushSubscriptionPayload,
-    payload?: string,
-    options?: { TTL?: number }
-  ): Promise<void>;
-};
-
-const webPush = require("web-push") as WebPushModule;
 
 export interface WebPushSubscriptionPayload {
   endpoint: string;
@@ -41,7 +30,15 @@ export interface StoredPushSubscription extends WebPushSubscriptionPayload {
 
 interface StoredVapidKeys {
   publicKey: string;
-  privateKey: string;
+  privateJwk: VapidPrivateJwk;
+}
+
+interface VapidPrivateJwk {
+  kty: "EC";
+  crv: "P-256";
+  x: string;
+  y: string;
+  d: string;
 }
 
 interface StoredPushRegistry {
@@ -182,12 +179,6 @@ export class WebPushService {
       }
 
       const keys = await this.getOrCreateVapidKeys();
-      webPush.setVapidDetails(
-        this.vapidSubject,
-        keys.publicKey,
-        keys.privateKey
-      );
-
       const payload = JSON.stringify({
         id: event.id,
         title: event.title,
@@ -205,15 +196,29 @@ export class WebPushService {
 
       for (const subscription of registry.subscriptions) {
         try {
-          await webPush.sendNotification(
-            {
+          const { endpoint, headers, body } = await buildPushHTTPRequest({
+            privateJWK: keys.privateJwk,
+            subscription: {
               endpoint: subscription.endpoint,
-              expirationTime: subscription.expirationTime,
               keys: subscription.keys,
             },
-            payload,
-            { TTL: 60 }
-          );
+            message: {
+              payload: JSON.parse(payload),
+              adminContact: this.vapidSubject,
+              options: { ttl: 60 },
+            },
+          });
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers,
+            body,
+          });
+          if (!response.ok) {
+            throw new PushDeliveryError(
+              response.status,
+              await safeReadResponseText(response)
+            );
+          }
           sent += 1;
           survivors.push({
             ...subscription,
@@ -270,17 +275,14 @@ export class WebPushService {
     try {
       const content = await fsp.readFile(this.vapidKeysPath, "utf8");
       const parsed = JSON.parse(content) as Partial<StoredVapidKeys>;
-      if (parsed.publicKey && parsed.privateKey) {
-        return {
-          publicKey: parsed.publicKey,
-          privateKey: parsed.privateKey,
-        };
+      if (isStoredVapidKeys(parsed)) {
+        return parsed;
       }
     } catch {
       // Fall through and generate new keys.
     }
 
-    const generated = webPush.generateVAPIDKeys();
+    const generated = await generateVapidKeys();
     await atomicWriteJson(this.vapidKeysPath, generated);
     return generated;
   }
@@ -310,6 +312,101 @@ export class WebPushService {
 
 function hashEndpoint(endpoint: string): string {
   return createHash("sha256").update(endpoint).digest("hex");
+}
+
+function isStoredVapidKeys(value: unknown): value is StoredVapidKeys {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<StoredVapidKeys>;
+  return Boolean(
+    typeof candidate.publicKey === "string" &&
+      isVapidPrivateJwk(candidate.privateJwk)
+  );
+}
+
+function isVapidPrivateJwk(value: unknown): value is VapidPrivateJwk {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<VapidPrivateJwk>;
+  return (
+    candidate.kty === "EC" &&
+    candidate.crv === "P-256" &&
+    typeof candidate.x === "string" &&
+    typeof candidate.y === "string" &&
+    typeof candidate.d === "string"
+  );
+}
+
+async function generateVapidKeys(): Promise<StoredVapidKeys> {
+  const keyPair = await crypto.subtle.generateKey(
+    {
+      name: "ECDSA",
+      namedCurve: "P-256",
+    },
+    true,
+    ["sign", "verify"]
+  );
+
+  const privateJwk = (await crypto.subtle.exportKey(
+    "jwk",
+    keyPair.privateKey
+  )) as Partial<VapidPrivateJwk>;
+  if (!isVapidPrivateJwk(privateJwk)) {
+    throw new Error("Failed to export generated VAPID key as a valid JWK");
+  }
+
+  return {
+    publicKey: encodePublicKeyFromJwk(privateJwk),
+    privateJwk,
+  };
+}
+
+function encodePublicKeyFromJwk(privateJwk: VapidPrivateJwk): string {
+  if (
+    typeof privateJwk.x !== "string" ||
+    typeof privateJwk.y !== "string"
+  ) {
+    throw new Error("VAPID private JWK is missing public coordinates");
+  }
+
+  const x = decodeBase64Url(privateJwk.x);
+  const y = decodeBase64Url(privateJwk.y);
+  if (x.length !== 32 || y.length !== 32) {
+    throw new Error("VAPID public coordinates must be 32 bytes each");
+  }
+
+  const publicKey = new Uint8Array(65);
+  publicKey[0] = 0x04;
+  publicKey.set(x, 1);
+  publicKey.set(y, 33);
+  return encodeBase64Url(publicKey);
+}
+
+function decodeBase64Url(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
+  return Uint8Array.from(Buffer.from(normalized + padding, "base64"));
+}
+
+function encodeBase64Url(value: Uint8Array): string {
+  return Buffer.from(value)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+class PushDeliveryError extends Error {
+  constructor(
+    readonly statusCode: number,
+    message: string
+  ) {
+    super(message || `Push service responded with status ${statusCode}`);
+  }
 }
 
 function isValidStoredSubscription(
@@ -363,6 +460,14 @@ function getStatusCode(error: unknown): number | undefined {
   return typeof candidate.statusCode === "number"
     ? candidate.statusCode
     : undefined;
+}
+
+async function safeReadResponseText(response: Response): Promise<string> {
+  try {
+    return await response.text();
+  } catch {
+    return response.statusText;
+  }
 }
 
 function getErrorMessage(error: unknown): string {

@@ -12,6 +12,7 @@ const defineConstants = {
   __DEV_MODE__: production ? "false" : "true",
   __BUILD_DATE__: JSON.stringify(buildDate),
 };
+const isolatedRuntimePackages = ["@resvg/resvg-wasm"];
 
 console.log(
   `[build] Mode: ${production ? "PRODUCTION" : "DEVELOPMENT"}, DEV_MODE: ${!production}`
@@ -67,6 +68,44 @@ function copyDirRecursive(src, dest) {
       fs.copyFileSync(srcPath, destPath);
     }
   }
+}
+
+function resolveInstalledPackageDir(packageName) {
+  const packageDir = path.join(__dirname, "node_modules", ...packageName.split("/"));
+  if (!fs.existsSync(path.join(packageDir, "package.json"))) {
+    throw new Error(
+      `Unable to locate installed package '${packageName}' under ${packageDir}`
+    );
+  }
+  return packageDir;
+}
+
+function copyInstalledPackageClosure(packageNames, destNodeModulesDir) {
+  const copied = new Set();
+
+  function copyPackage(packageName) {
+    if (copied.has(packageName)) {
+      return;
+    }
+
+    const packageDir = resolveInstalledPackageDir(packageName);
+    const packageJsonPath = path.join(packageDir, "package.json");
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+    const destDir = path.join(destNodeModulesDir, ...packageName.split("/"));
+
+    copyDirRecursive(packageDir, destDir);
+    copied.add(packageName);
+
+    for (const dependencyName of Object.keys(packageJson.dependencies || {})) {
+      copyPackage(dependencyName);
+    }
+  }
+
+  for (const packageName of packageNames) {
+    copyPackage(packageName);
+  }
+
+  return copied;
 }
 
 /**
@@ -205,29 +244,30 @@ const copyServerPlugin = {
 };
 
 /**
- * Plugin to copy the resvg WASM file to the output directory.
- * Required so PngIconService can load it at runtime via __dirname.
+ * Plugin to copy isolated runtime package trees to the output directory.
+ * This keeps MPL-licensed packages out of the proprietary esbuild bundles
+ * while still shipping them for runtime loading.
  * @type {import('esbuild').Plugin}
  */
-const copyWasmPlugin = {
-  name: "copy-wasm",
+const copyRuntimeDependenciesPlugin = {
+  name: "copy-runtime-dependencies",
 
   setup(build) {
     build.onEnd(() => {
-      const src = path.join(
-        __dirname,
-        "node_modules",
-        "@resvg",
-        "resvg-wasm",
-        "index_bg.wasm"
+      const runtimeDepsRoot = path.join(__dirname, "out", "runtime-deps");
+      const destNodeModulesDir = path.join(runtimeDepsRoot, "node_modules");
+
+      fs.rmSync(runtimeDepsRoot, { recursive: true, force: true });
+      fs.mkdirSync(destNodeModulesDir, { recursive: true });
+
+      const copied = copyInstalledPackageClosure(
+        isolatedRuntimePackages,
+        destNodeModulesDir
       );
-      const dest = path.join(__dirname, "out", "resvg.wasm");
-      if (fs.existsSync(src)) {
-        fs.copyFileSync(src, dest);
-        console.log("[copy] resvg.wasm -> out/resvg.wasm");
-      } else {
-        console.warn("[copy] resvg.wasm source not found, skipping");
-      }
+
+      console.log(
+        `[copy] isolated runtime packages -> out/runtime-deps/node_modules (${copied.size} packages)`
+      );
     });
   },
 };
@@ -277,7 +317,7 @@ async function main() {
       copySchemasPlugin,
       copyScriptsPlugin,
       copyServerPlugin,
-      copyWasmPlugin,
+      copyRuntimeDependenciesPlugin,
     ],
   });
 

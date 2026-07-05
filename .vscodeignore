@@ -11,6 +11,7 @@
 !LICENSE
 !LICENSE.md
 !LICENSE.txt
+!THIRD_PARTY_NOTICES.md
 !QUICK_START.md
 
 # Extension icons referenced from package.json contributions.
@@ -24,7 +25,6 @@
 # cli.js is released as a standalone npm package, not bundled with the VSIX.
 !out/extension.js
 !out/mcp-server.js
-!out/resvg.wasm
 
 # Runtime assets copied by the production build.
 !out/templates/**
@@ -42,6 +42,7 @@
 !out/ui/webview-react/codicons/**
 !out/ui/webview-react/dictionaries/**/*.aff
 !out/ui/webview-react/dictionaries/**/*.dic
+!out/runtime-deps/**
 
 # Runtime native dependency. Other dependencies are bundled by esbuild.
 !node_modules/node-pty/**

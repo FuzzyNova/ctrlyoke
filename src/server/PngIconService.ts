@@ -1,14 +1,50 @@
-import { initWasm, Resvg } from "@resvg/resvg-wasm";
 import * as fs from "fs";
-import * as path from "path";
 import { Log } from "../utils/Log";
 import {
   ICON_BG_COLOR_DEFAULT,
   ICON_FG_COLOR_DEFAULT,
 } from "../types/IconColorDefaults";
+import {
+  requireRuntimePackage,
+  resolveRuntimePackageFile,
+} from "./RuntimeDependencyPaths";
 
-// esbuild sets __dirname to out/ at runtime, so the WASM file is copied alongside extension.js.
-const WASM_PATH = path.join(__dirname, "resvg.wasm");
+interface ResvgRenderResult {
+  asPng(): Uint8Array;
+  free(): void;
+}
+
+interface ResvgInstance {
+  render(): ResvgRenderResult;
+  free(): void;
+}
+
+interface ResvgConstructor {
+  new (
+    svgSource: string,
+    options: { fitTo: { mode: "width"; value: number } }
+  ): ResvgInstance;
+}
+
+interface ResvgRuntimeModule {
+  initWasm(wasm: Buffer): Promise<void>;
+  Resvg: ResvgConstructor;
+}
+
+const RESVG_PACKAGE_NAME = "@resvg/resvg-wasm";
+const WASM_PATH = resolveRuntimePackageFile(RESVG_PACKAGE_NAME, "index_bg.wasm");
+
+let cachedResvgModule: ResvgRuntimeModule | null = null;
+
+function getResvgRuntimeModule(): ResvgRuntimeModule {
+  if (!cachedResvgModule) {
+    cachedResvgModule = requireRuntimePackage<ResvgRuntimeModule>(
+      RESVG_PACKAGE_NAME
+    );
+  }
+
+  return cachedResvgModule;
+}
 
 class PngIconService {
   private wasmReady = false;
@@ -23,6 +59,7 @@ class PngIconService {
     if (!this.initPromise) {
       this.initPromise = (async () => {
         const wasmBuffer = fs.readFileSync(WASM_PATH);
+        const { initWasm } = getResvgRuntimeModule();
         await initWasm(wasmBuffer);
         this.wasmReady = true;
       })();
@@ -36,6 +73,7 @@ class PngIconService {
     fgColor: string
   ): Promise<void> {
     await this.initWasmOnce();
+    const { Resvg } = getResvgRuntimeModule();
     const svgSource = fs
       .readFileSync(svgPath, "utf8")
       .replace(new RegExp(ICON_BG_COLOR_DEFAULT, "gi"), bgColor)

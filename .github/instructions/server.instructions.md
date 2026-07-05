@@ -61,6 +61,7 @@ Key supporting pieces:
 <notifications>
 - Hosted completion notifications are deduped per server instance via `notifiedEventIds` before broadcasting or sending push.
 - `WebPushService` serializes registry updates through an internal promise queue; do not bypass it with ad hoc file I/O.
+- `PngIconService` loads `@resvg/resvg-wasm` from `out/runtime-deps/node_modules/` on purpose. Keep `@resvg/resvg-wasm` isolated from the esbuild bundles rather than re-inlining it into `out/extension.js`.
 - Expired push subscriptions (404/410) are removed automatically during send attempts.
 - `ctrlyoke-service-worker.js` is a placeholder template, not the final script. Message-type constants and icon paths are injected by `HostedServiceWorkerScript`, so avoid hardcoding duplicated literals into the template.
 </notifications>
