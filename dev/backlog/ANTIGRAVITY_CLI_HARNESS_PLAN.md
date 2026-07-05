@@ -1,10 +1,12 @@
 # Replace Gemini with Antigravity CLI (`agy`) in ctrlyoke
 
 **Harness ID**: `antigravity-cli`
-**Binary**: `agy` (**v1.0.14** observed/re-verified; original research was v1.0.8)
+**Binary**: `agy` (**v1.0.16** re-verified 2026-07-05; previously v1.0.14 on 2026-06-30; original research was v1.0.8)
 **Vendor**: Google DeepMind
-**Last Updated**: 2026-06-30
+**Last Updated**: 2026-07-05
 **Scope**: Add the `antigravity-cli` harness **and remove the `gemini-cli` harness entirely.**
+
+**Decision confirmed 2026-07-05**: Google's official transition post confirms consumer Gemini CLI access stopped 2026-06-18 (already past, matching Nathan's own broken consumer access) and that enterprise Code Assist Standard/Enterprise licensees are **not** left without a path — they "can use [Antigravity CLI] now with your Google Cloud projects" alongside continued Gemini CLI support. So removing Gemini does not strand enterprise users; it just means they'd use `agy` like everyone else. Proceeding with full removal per Part C.
 
 ---
 
@@ -39,6 +41,28 @@ Re-ran `agy` locally (now **1.0.14**, up from 1.0.8) and re-checked the docs/cha
 7. **Permission engine hardened (1.0.9–1.0.13).** Default `toolPermission=request-review`; "Always Approve" rules are now **strict (non-regex) match by default**, opt into regex with a `regex:` prefix. Relevant when designing `custom` permission gating via a `PreToolUse` hook (A.8) — the hook-decision route is cleaner than trying to pre-seed allow-rules.
 
 The rest of Part A below is unchanged from the 1.0.8 research and remains accurate; inline notes flag where 1.0.14 supersedes a specific claim.
+
+---
+
+## Re-verification Delta — 2026-07-05 (`agy` 1.0.16) — **#1 blocker RESOLVED, better than hoped**
+
+Re-ran the actual research blockers locally against **1.0.16** (up from 1.0.14), this time spawning `agy` exactly the way ctrlyoke's code does instead of via a shell pipe. This surfaced one wrong assumption in the plan and resolved the single biggest open risk:
+
+1. **Correction to the plan's premise: ctrlyoke's headless path never uses a PTY.** A.5/A.9 assumed "ctrlyoke spawns via `PtyProcessManager` (a real pty)" for all execution. That's only true for **interactive** mode. `CliTransportCoordinator.executeHeadless()` (`src/core/harness/shared/CliTransportCoordinator.ts:306-368`) calls `this.spawnProcess()` (line 339), which calls `CliProcessManager.spawn()` (`src/utils/CliProcessManager.ts:55-140`) — a plain `child_process.spawn(command, args, { shell: false, stdio: ["ignore", "pipe", "pipe"] })`. **No node-pty, no real terminal, ever, for headless.** Interactive mode (VS Code PTY session via `PtyProcessManager.spawnPty`, or the standalone CLI's `spawnInteractive` with `stdio: "inherit"`) is the only path that touches a terminal.
+
+2. **The real headless spawn shape now works cleanly — no pty needed.** Reproduced `CliProcessManager.spawn()`'s exact shape (`child_process.spawn`, `stdio: ["ignore","pipe","pipe"]`, `shell: false`) against `agy -p "..."` locally: **exit 0, clean plain-text stdout (`"PONG\n"`), zero stderr, no ANSI escape codes.** This is a materially better result than testing under node-pty (which also works, but wraps the response in ANSI clear-screen/cursor/title-set sequences that would need stripping — irrelevant now since headless doesn't use pty at all).
+
+3. **Root cause of the "empty stdout" finding: fixed upstream in 1.0.15, not a pty issue.** The `agy changelog` for 1.0.15 states verbatim: *"Fixed a bug on Windows where print mode and other non-TUI command outputs were silently discarded when run in non-TTY environments (such as pipes or subprocesses)."* This is exactly the A.5 symptom (re-confirmed empty on 1.0.14). It's fixed in 1.0.15; we're shipping against ≥1.0.16. **Action: require `agy >= 1.0.15`** (not just `>= 1.0.9`) as the minimum version gate.
+
+4. **Consequence for the design: drop the `-i` + `Stop`-hook-for-all-runs fallback.** A.5/A.9/the effort estimate treated "headless doesn't work, fall back to interactive-always" as a real contingency to plan for. It is not needed — `--print` is viable as the primary headless path exactly as originally hoped, via ctrlyoke's existing plain-pipe headless spawn. Interactive `-i` + `Stop` hook is still needed, but only for interactive mode (as normal), not as an emergency headless substitute.
+
+5. **`agy models` also works non-interactively now** (same 1.0.15 fix applies). Confirmed exact label list via plain-pipe spawn: `Gemini 3.5 Flash (Medium/High/Low)`, `Gemini 3.1 Pro (Low/High)`, `Claude Sonnet 4.6 (Thinking)`, `Claude Opus 4.6 (Thinking)`, `GPT-OSS 120B (Medium)` — matches A.2 exactly, values confirmed verbatim for `ANTIGRAVITY_CLI_MODELS`.
+
+6. **Session ID + completion markers confirmed live in the CLI log**, matching A.4/A.7 exactly: `Print mode: conversation=<uuid>` (well, observed as `Print mode: starting (...conversationID="")` followed shortly by `Starting conversation update stream for <uuid>` once the conversation is created), and completion via `Stream completed for <uuid>, clearing ResponsePending` immediately followed by `Language server shutting down`. The glog parser design in B.1 is confirmed workable as written.
+
+7. **New finding — MCP does not appear to load at all in headless `-p` mode (workspace OR global).** Tested both: (a) a workspace `.agents/mcp_config.json` with one server entry (deliberately using a nonexistent command so any spawn attempt would show as a log error), and (b) the same probe entry in the global `~/.gemini/config/mcp_config.json`. Ran `agy -p "..."` against each. **Neither produced any log line mentioning `mcp`, the server name, or the fake command** — not even a failed-spawn error. This is a different and more pessimistic finding than issue #60 (which was about the workspace path specifically being ignored while global worked) — here, **neither path shows any evidence of MCP initialization during a single-shot headless print run**. Caveat: the test prompt ("say PONG") never attempted to invoke a tool, so this could mean either (a) headless print mode doesn't initialize MCP tooling at all, or (b) MCP servers are lazy-spawned only on first actual tool-call attempt and a trivial prompt never triggers that. **Follow-up needed before finalizing MCP scope for v1**: re-test with a prompt that forces a tool call against a real (working) MCP server and see if it spawns lazily. If it still doesn't spawn, headless MCP support may need to be scoped out of v1 entirely (interactive-only), which would be a scope reduction from A.8/B.1's "MCP in scope" assumption.
+
+**Net effect on sequencing**: step (1) in the "Lowest-risk sequencing" note at the bottom of this doc — "resolve the headless `-p` pty question first" — is done, and the answer is the good outcome (ship headless via `--print` + exit + log-based session ID, no pty/interactive fallback needed). The MCP lazy-load question (item 7 above) is the next thing to verify before committing to the `.agents/mcp_config.json` writer design in B.1.
 
 ---
 
@@ -346,11 +370,11 @@ Remove Gemini from: `harnessRunner.ts`, `hooks.harness.test.ts`, `ModelConstants
 
 ### Research (do first, while authenticated in a TTY)
 
-- [ ] **(#1 blocker)** `agy -p "hello"` under ctrlyoke's `PtyProcessManager` (node-pty) spawn → confirm plain-text stdout is **non-empty**. Re-confirmed empty in a plain pipe on 1.0.14 (A.5); if it's also empty under node-pty, switch the whole design to `-i` + `Stop` hook. **Do not start implementation until this is answered.**
-- [ ] **Verify workspace MCP actually loads**: write `.agents/mcp_config.json` with one local server, start agy, confirm the server spawns on 1.0.14. If not, fall back to global `~/.gemini/config/mcp_config.json` (A.8 / issue #60).
-- [ ] `agy models` (authenticated TTY) → confirm exact label strings for the Gemini + Claude + **GPT-OSS** model list (A.2)
+- [x] **(#1 blocker) RESOLVED 2026-07-05, better than hoped.** Reproduced ctrlyoke's *actual* headless spawn (`CliProcessManager.spawn` — plain `child_process.spawn`, `stdio:["ignore","pipe","pipe"]`, `shell:false`, **not** node-pty) against `agy -p "..."` on 1.0.16: exit 0, clean non-empty plain-text stdout, no ANSI codes. Root cause of the old empty-stdout finding was a Windows non-TTY bug, fixed in **1.0.15** per changelog. Action: gate on `agy >= 1.0.15`. No `-i`+`Stop`-hook-for-all-runs fallback needed — see the 2026-07-05 delta section above.
+- [ ] **MCP loading — reopened, more pessimistic than issue #60 suggested.** Tested both workspace `.agents/mcp_config.json` and global `~/.gemini/config/mcp_config.json` with a probe server entry (nonexistent command) during a headless `-p` run on 1.0.16: **neither produced any log evidence of MCP initialization** (not even a failed-spawn attempt). Unclear yet whether this means headless print mode skips MCP entirely, or servers are lazy-spawned only on an actual tool-call attempt (the probe prompt never invoked a tool). **Next step: re-test with a prompt that forces a real tool call against a working MCP server** before finalizing the `.agents/mcp_config.json` writer design in B.1 — if it still never loads, scope MCP down to interactive-only for v1.
+- [x] `agy models` (via plain-pipe spawn, no TTY needed — same 1.0.15 fix applies) → confirmed exact label strings on 1.0.16: `Gemini 3.5 Flash (Medium/High/Low)`, `Gemini 3.1 Pro (Low/High)`, `Claude Sonnet 4.6 (Thinking)`, `Claude Opus 4.6 (Thinking)`, `GPT-OSS 120B (Medium)` (A.2)
 - [ ] Capture a real `.agents/hooks.json` `Stop`/`PreToolUse` payload → confirm `conversationId`, `transcriptPath`, `workspacePaths`, `toolCall`, artifact-dir field names (A.6) — and whether workspace `.agents/hooks.json` is honored or only global `~/.gemini/config/hooks.json` fires
-- [x] `agy --version` ≥ 1.0.9 → **satisfied (1.0.14)**; headless-resume transcript-dump bug is fixed (A.4)
+- [x] `agy --version` ≥ 1.0.9 → **satisfied (1.0.16)**; headless-resume transcript-dump bug is fixed (A.4); session ID + completion markers reconfirmed live in the CLI log on 1.0.16 (see 2026-07-05 delta, item 6)
 
 ### Add Antigravity
 
