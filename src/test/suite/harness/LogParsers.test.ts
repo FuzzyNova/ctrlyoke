@@ -861,6 +861,105 @@ suite("CopilotLogParser", () => {
       assert.strictEqual(response.metadata.sessionId, "merged-session");
       assert.strictEqual(response.metadata.model, "gpt-5");
     });
+
+    test("should extract context window usage from session.shutdown currentTokens (Copilot CLI 1.0.x+)", () => {
+      // session.truncation was removed entirely in Copilot CLI 1.0.x — session.shutdown's
+      // currentTokens is now the only context window signal available.
+      const events = [
+        {
+          type: "session.start",
+          data: { sessionId: "shutdown-session", selectedModel: "gpt-5.4" },
+        },
+        {
+          type: "assistant.message",
+          data: { content: "Done" },
+        },
+        {
+          type: "session.shutdown",
+          data: {
+            shutdownType: "routine",
+            currentModel: "gpt-5.4",
+            currentTokens: 95987,
+            systemTokens: 15141,
+            conversationTokens: 72058,
+            toolDefinitionsTokens: 8785,
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      assert.strictEqual(
+        response.metadata.usage?.contextWindowUsedTokens,
+        95987
+      );
+      // No tokenLimit in session.shutdown — falls back to the known model context window.
+      assert.ok((response.metadata.usage?.contextWindowSize ?? 0) > 0);
+    });
+
+    test("should let a trailing session.shutdown override earlier session.truncation values", () => {
+      // Real chronology: session.truncation (if emitted at all) fires mid-session on earlier
+      // turns, and session.shutdown always fires last at process exit.
+      const events = [
+        {
+          type: "session.truncation",
+          data: {
+            postTruncationTokensInMessages: 5000,
+            tokenLimit: 128000,
+          },
+        },
+        {
+          type: "session.shutdown",
+          data: { currentTokens: 9000 },
+        },
+      ];
+
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
+
+      assert.strictEqual(
+        response.metadata.usage?.contextWindowUsedTokens,
+        9000
+      );
+    });
+  });
+
+  suite("extractLiveContextWindow", () => {
+    test("should extract from session.truncation events", () => {
+      const event = {
+        type: "session.truncation",
+        data: { postTruncationTokensInMessages: 42000, tokenLimit: 128000 },
+      } as unknown as BaseCliEvent;
+
+      const result = parser.extractLiveContextWindow(event, "gpt-5.4");
+
+      assert.deepStrictEqual(result, { used: 42000, size: 128000 });
+    });
+
+    test("should extract from session.shutdown events (Copilot CLI 1.0.x+)", () => {
+      const event = {
+        type: "session.shutdown",
+        data: { currentTokens: 95987 },
+      } as unknown as BaseCliEvent;
+
+      const result = parser.extractLiveContextWindow(event, "gpt-5.4");
+
+      assert.ok(result !== null);
+      assert.strictEqual(result?.used, 95987);
+      assert.ok(result!.size > 0);
+    });
+
+    test("should return null for events with no context window data", () => {
+      const event = {
+        type: "assistant.message",
+        data: { content: "hello" },
+      } as unknown as BaseCliEvent;
+
+      assert.strictEqual(parser.extractLiveContextWindow(event, "gpt-5.4"), null);
+    });
   });
 
   suite("isComplete", () => {

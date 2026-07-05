@@ -136,7 +136,11 @@ export class CopilotLogParser extends BaseLogParser {
     let model: string | undefined;
     let inputTokens = 0;
     let outputTokens = 0;
-    // Context window usage tracked via session.truncation events (fire every turn as a pre-call snapshot)
+    // Context window usage: pre-1.0 Copilot CLI fired session.truncation every turn as a
+    // pre-call snapshot (postTruncationTokensInMessages + tokenLimit). Versions 1.0.x+ removed
+    // that event entirely — the only remaining source is session.shutdown's currentTokens,
+    // which fires once at process exit and carries no tokenLimit, so the model's known
+    // context window size is used instead (see getCopilotContextWindowSize fallback below).
     let contextWindowUsedTokens = 0;
     let contextWindowSize: number | undefined;
 
@@ -184,6 +188,15 @@ export class CopilotLogParser extends BaseLogParser {
               text: `[Context truncated: ${removed.toLocaleString()} tokens removed, ${post.toLocaleString()}/${limit.toLocaleString()} tokens remaining]`,
             } as TextData,
           });
+        }
+      }
+
+      // session.shutdown fires once at process exit (Copilot CLI 1.0.x+). It's the only
+      // context window source left in current log versions — currentTokens reflects the
+      // total context in use (system + conversation + tool definitions) at session end.
+      if (event.type === "session.shutdown" && event.data) {
+        if (typeof event.data.currentTokens === "number") {
+          contextWindowUsedTokens = event.data.currentTokens;
         }
       }
 
@@ -385,6 +398,15 @@ export class CopilotLogParser extends BaseLogParser {
       const used = data?.postTruncationTokensInMessages;
       const size = data?.tokenLimit ?? getCopilotContextWindowSize(modelId);
       return used != null && used > 0 ? { used, size } : null;
+    }
+    // Copilot CLI 1.0.x+ dropped session.truncation; session.shutdown's currentTokens
+    // is the only remaining live signal, and it only arrives once at process exit.
+    if (event.type === "session.shutdown") {
+      const data = (event as any).data;
+      const used = data?.currentTokens;
+      return used != null && used > 0
+        ? { used, size: getCopilotContextWindowSize(modelId) }
+        : null;
     }
     return null;
   }
@@ -828,18 +850,26 @@ export class CopilotLogParser extends BaseLogParser {
   /**
    * Extract context window data from a session log by session ID.
    *
-   * Reads the last `session.truncation` event from the session log, which fires
-   * once per model call turn and contains the most accurate context fill data.
-   * Returns the final (highest) values from a multi-turn session.
+   * Reads the last `session.truncation` event from the session log, which fired
+   * once per model call turn (pre-1.0 Copilot CLI) and contains the most accurate
+   * context fill data. Returns the final (highest) values from a multi-turn session.
+   *
+   * Copilot CLI 1.0.x+ removed `session.truncation` entirely. When no truncation
+   * event is found, falls back to `session.shutdown`'s `currentTokens` — the only
+   * remaining context signal, fired once at process exit with no token-limit field,
+   * so `getCopilotContextWindowSize(modelId)` supplies the denominator.
    *
    * Used by CopilotCliProvider.augmentParsedOutput() to patch missing input token
    * data in JSON-mode headless output.
    *
    * @param sessionId - Session UUID from the `result` event in JSONL stdout
+   * @param modelId - Selected model, used to size the fallback context window when
+   *   only session.shutdown data is available (no tokenLimit field in that event)
    * @returns Truncation data if found, undefined if log unavailable or unreadable
    */
   static async extractTruncationDataFromLog(
-    sessionId: string
+    sessionId: string,
+    modelId?: string
   ): Promise<
     { postTruncationTokensInMessages: number; tokenLimit: number } | undefined
   > {
@@ -853,6 +883,7 @@ export class CopilotLogParser extends BaseLogParser {
       let last:
         | { postTruncationTokensInMessages: number; tokenLimit: number }
         | undefined;
+      let shutdownTokens: number | undefined;
 
       for (const line of content.split("\n")) {
         const trimmed = line.trim();
@@ -870,12 +901,27 @@ export class CopilotLogParser extends BaseLogParser {
               tokenLimit: event.data.tokenLimit,
             };
           }
+          if (
+            event.type === "session.shutdown" &&
+            typeof event.data?.currentTokens === "number"
+          ) {
+            shutdownTokens = event.data.currentTokens;
+          }
         } catch {
           // Skip malformed lines
         }
       }
 
-      return last;
+      if (last) {
+        return last;
+      }
+      if (shutdownTokens !== undefined) {
+        return {
+          postTruncationTokensInMessages: shutdownTokens,
+          tokenLimit: getCopilotContextWindowSize(modelId),
+        };
+      }
+      return undefined;
     } catch {
       return undefined;
     }

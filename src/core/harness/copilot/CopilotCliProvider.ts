@@ -745,16 +745,20 @@ export class CopilotCliProvider implements ICliProvider {
    * Augment JSON-mode headless output with context window data from Copilot log files.
    *
    * Copilot's --output-format json stdout contains output tokens per turn but no input tokens.
-   * Two fallback sources are tried in order:
+   * Fallback sources are tried in order:
    *
    * 1. **session.truncation events** (`~/.copilot/session-state/{sessionId}/events.jsonl`)
-   *    Fires once per model turn with postTruncationTokensInMessages + tokenLimit.
-   *    Only emitted on turns 2+ (when there is existing context to measure) — short or
-   *    single-turn prompts may not have any.
+   *    Pre-1.0 Copilot CLI only. Fired once per model turn with
+   *    postTruncationTokensInMessages + tokenLimit.
    *
-   * 2. **CompactionProcessor lines** (`~/.copilot/logs/process-*.log`)
-   *    Always written every turn: "Utilization X% (used/total tokens)".
-   *    Used as the fallback when session.truncation is absent.
+   * 2. **session.shutdown's currentTokens** (same events.jsonl)
+   *    Copilot CLI 1.0.x+ removed session.truncation entirely; currentTokens fires once
+   *    at process exit and is the only context signal left. No tokenLimit field, so
+   *    getCopilotContextWindowSize(model) supplies the denominator.
+   *
+   * 3. **CompactionProcessor lines** (`~/.copilot/logs/process-*.log`)
+   *    Legacy per-turn utilization line; observed to no longer fire reliably on
+   *    current Copilot CLI versions, kept as a last-resort fallback.
    *
    * This is the permanent architecture — session ID is not available until the final
    * `result` event, so real-time log tailing during execution is not feasible.
@@ -780,8 +784,10 @@ export class CopilotCliProvider implements ICliProvider {
       return output;
     }
 
-    const truncation =
-      await CopilotLogParser.extractTruncationDataFromLog(sessionId);
+    const truncation = await CopilotLogParser.extractTruncationDataFromLog(
+      sessionId,
+      output.metadata.model
+    );
     const outputTokens = output.metadata.usage?.outputTokens ?? 0;
 
     if (truncation) {
