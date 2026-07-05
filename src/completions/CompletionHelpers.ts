@@ -235,10 +235,29 @@ function matchesFuzzyQuery(candidate: string, query: string): boolean {
     return true;
   }
 
-  if (candidate.includes(query)) {
+  const normalizedCandidate = candidate.toLowerCase();
+  const normalizedQuery = query.toLowerCase();
+
+  if (normalizedCandidate.includes(normalizedQuery)) {
     return true;
   }
 
+  const boundarySignature = getBoundarySignature(candidate);
+  if (
+    boundarySignature &&
+    matchesSubsequence(boundarySignature, normalizedQuery)
+  ) {
+    return true;
+  }
+
+  if (hasUppercaseCharacter(candidate)) {
+    return false;
+  }
+
+  return matchesSubsequence(normalizedCandidate, normalizedQuery);
+}
+
+function matchesSubsequence(candidate: string, query: string): boolean {
   let queryIndex = 0;
   for (const character of candidate) {
     if (character === query[queryIndex]) {
@@ -250,6 +269,51 @@ function matchesFuzzyQuery(candidate: string, query: string): boolean {
   }
 
   return false;
+}
+
+function hasUppercaseCharacter(value: string): boolean {
+  return /[A-Z]/.test(value);
+}
+
+function getBoundarySignature(candidate: string): string {
+  let signature = "";
+
+  for (let index = 0; index < candidate.length; index++) {
+    const character = candidate[index];
+    const previous = index > 0 ? candidate[index - 1] : "";
+
+    const isBoundaryStart =
+      index === 0 ||
+      previous === "/" ||
+      previous === "-" ||
+      previous === "_" ||
+      previous === "." ||
+      (character >= "A" &&
+        character <= "Z" &&
+        previous >= "a" &&
+        previous <= "z");
+
+    if (isBoundaryStart) {
+      signature += character;
+      continue;
+    }
+
+    if (
+      signature.length > 0 &&
+      character >= "A" &&
+      character <= "Z" &&
+      previous >= "A" &&
+      previous <= "Z" &&
+      index + 1 < candidate.length
+    ) {
+      const next = candidate[index + 1];
+      if (next >= "a" && next <= "z") {
+        signature += character;
+      }
+    }
+  }
+
+  return signature.toLowerCase();
 }
 
 function buildPathCompletionFilter(
@@ -304,9 +368,10 @@ function matchesPathCompletionFilter(
   }
 
   if (!filter.hasPathContext) {
+    const candidateName = path.posix.basename(candidatePath);
     return (
-      matchesFuzzyQuery(candidatePath, filter.normalized) ||
-      matchesFuzzyQuery(path.posix.basename(candidatePath), filter.normalized)
+      candidatePath.toLowerCase().includes(filter.normalized) ||
+      matchesFuzzyQuery(candidateName, filter.normalized)
     );
   }
 
@@ -350,9 +415,7 @@ export async function getFileCompletions(
   for (const fileUri of files) {
     const relativePath = getNormalizedWorkspaceRelativePath(fileUri);
     collectWorkspaceDirectories(relativePath, directories);
-    const lowerRelativePath = relativePath.toLowerCase();
-
-    if (!matchesPathCompletionFilter(lowerRelativePath, filter)) {
+    if (!matchesPathCompletionFilter(relativePath, filter)) {
       continue;
     }
 
@@ -384,8 +447,7 @@ export async function getFileCompletions(
   // Add directory completions (with trailing slash)
   const dirItems: PlainCompletionItem[] = [];
   for (const dirPath of directories) {
-    const lowerDirPath = dirPath.toLowerCase();
-    if (!matchesPathCompletionFilter(lowerDirPath, filter)) {
+    if (!matchesPathCompletionFilter(dirPath, filter)) {
       continue;
     }
 
@@ -809,7 +871,7 @@ export async function getPromptFileCompletions(
       continue;
     }
 
-    if (!matchesPathCompletionFilter(lower, filter)) {
+    if (!matchesPathCompletionFilter(relativePath, filter)) {
       continue;
     }
 
