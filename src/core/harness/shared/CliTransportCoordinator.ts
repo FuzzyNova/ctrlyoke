@@ -176,7 +176,16 @@ export class CliTransportCoordinator {
       };
       const { stepName, promptNumber } = stepMetadata;
       const cwd = this.deps.runtimeState.getWorkspaceRoot() ?? process.cwd();
-      const mergedEnv = env ? { ...process.env, ...env } : process.env;
+      // Provider-level interactive env (e.g. Copilot's OTel export path override,
+      // see CopilotCliProvider.getInteractiveSpawnEnv()) must be merged in here too —
+      // this is the VS Code PTY spawn path, a separate call site from
+      // executeStandaloneInteractiveProcess() above, which already does this.
+      const providerEnv = this.deps.provider.getInteractiveSpawnEnv?.();
+      const mergedEnv = {
+        ...process.env,
+        ...providerEnv,
+        ...env,
+      };
       const preSessionId = `ai-cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const harnessId = this.deps.provider.config.harnessId;
       // Peek at the expected controller before spawning so TERMINAL_STARTED carries

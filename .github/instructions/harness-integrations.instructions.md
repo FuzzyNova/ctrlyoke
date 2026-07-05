@@ -16,6 +16,7 @@ Core CLI-harness runtime orchestration shared by every non-chat harness.
 - Interactive reuse is split across files: `CliIntegration` decides whether a PTY can be reused, while `CliExecutionRunner` performs inject mode against the existing PTY/log path. If a spawn-time property changes, retire the PTY instead of forcing reuse.
 - PTY handoff is intentionally noisy internally: `CliIntegration` sets `suppressPtyExitSessionId` so expected shutdowns during mode changes do not surface as prompt failures.
 - Do not remove the inject-mode focus/write timing. The `\x1b[I` focus-in sequence plus short delays before text and Enter are required for Copilot-style TUIs to accept injected input reliably.
+- `ICliProvider.getInteractiveSpawnEnv()` has two independent call sites in `CliTransportCoordinator`: `executeStandaloneInteractiveProcess()` (CLI-only, non-VS Code path) and `startInteractiveProcess()` (the real VS Code PTY path, used by `PtyProcessManager.spawnPty()`). Both must merge it in — it was previously only wired into the standalone path, so the VS Code PTY path silently ran every interactive session with just `process.env` + caller-supplied hook vars, dropping Copilot's OTel export override (`buildOtelSpawnEnv()`, context-window tracking went dark with no error) and Claude's `CLAUDECODE` deletion. When adding a new provider-level interactive env override, grep both call sites — don't assume one covers the other.
 </interactiveExecution>
 
 <logAndTerminalFlow>

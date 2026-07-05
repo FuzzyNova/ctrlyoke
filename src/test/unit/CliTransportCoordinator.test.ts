@@ -375,6 +375,94 @@ suite("CliTransportCoordinator", () => {
     assert.strictEqual(postedMessages[0]?.workflowId, "named-workflow");
   });
 
+  test("should merge provider.getInteractiveSpawnEnv() into the PTY spawn env", async () => {
+    // Regression test: startInteractiveProcess() previously only merged process.env
+    // with the caller's per-invocation env (hook vars etc.), silently dropping any
+    // provider-level interactive env override — e.g. Copilot's OTel export path
+    // (buildOtelSpawnEnv()) or Claude's CLAUDECODE removal. Both providers define
+    // getInteractiveSpawnEnv() specifically so this call site would use it.
+    let spawnedEnv: NodeJS.ProcessEnv | undefined;
+
+    const coordinator = new CliTransportCoordinator({
+      provider: {
+        config: {
+          name: "test-cli",
+          displayName: "Test CLI",
+          terminalName: "Test",
+          installHint: "",
+          shouldStreamHeadlessOutput: false,
+        },
+        responseParser: {
+          parse: () => ({ events: [], metadata: {} }),
+          parseTokenCounts: () => undefined,
+        },
+        notificationMonitor: {
+          supportsSessionIdInFilename: true,
+          supportsSessionStart: false,
+          monitorForCompletion: async () => ({ completed: false }),
+          buildHookConfig: () => ({ type: "none" as const }),
+          getNotificationDirectory: () => process.cwd(),
+        },
+        toolPermissionMapper: {},
+        buildCliArgs: async () => [],
+        buildHeadlessArgs: (baseArgs: string[], prompt: string) => [
+          ...baseArgs,
+          prompt,
+        ],
+        buildInteractiveArgs: (baseArgs: string[], promptText: string) => [
+          "--interactive",
+          promptText,
+          ...baseArgs,
+        ],
+        checkAvailability: async () => true,
+        getInteractiveSpawnEnv: () => ({
+          PROVIDER_OTEL_MARKER: "from-provider",
+        }),
+      } as unknown as ICliProvider,
+      processManager: {} as any,
+      resolveCliCommand: resolveCommand,
+      runtimeState: {
+        getWorkspaceRoot: () => process.cwd(),
+        isCancelling: () => false,
+      },
+      hostCallbacks: {
+        onBeforeInteractiveStart: () => {},
+        onCommandPrepared: () => {},
+        onStreamingChunk: () => {},
+        onStreamingEvents: () => {},
+        onResponseComplete: () => {},
+        onPtyExit: () => {},
+        cleanupTempFiles: async () => {},
+      },
+      postTerminalMessage: () => {},
+      getPtyManager: () =>
+        ({
+          getExpectedController: (_workflowId: string) => undefined,
+          spawnPty: (config: {
+            sessionId: string;
+            workflowId: string;
+            kind: string;
+            env?: NodeJS.ProcessEnv;
+          }) => {
+            spawnedEnv = config.env;
+            return {
+              id: config.sessionId,
+              workflowId: config.workflowId,
+              kind: config.kind,
+              reconnectBuffer: [],
+            };
+          },
+        }) as any,
+    });
+
+    await coordinator.startInteractiveProcess([], "prompt", undefined, {
+      CTRLYOKE_RUN_ID: "run-123",
+    });
+
+    assert.strictEqual(spawnedEnv?.PROVIDER_OTEL_MARKER, "from-provider");
+    assert.strictEqual(spawnedEnv?.CTRLYOKE_RUN_ID, "run-123");
+  });
+
   test("should refresh active PTY session metadata for inject reuse", async () => {
     const postedMessages: Array<{
       type?: string;
