@@ -2123,7 +2123,6 @@ export class WorkflowInstance {
       // In CLI mode always show the CLI command so it flows through
       // captureOutputInit and into onPromptStart events.
       shouldShowCliCommand: isCli() || this.shouldShowCliCommand(),
-      showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
       dynamicQueueConfig: this.getDynamicQueueConfig(),
       historyFilePath,
       workingFilePath: workingFilePath || undefined,

@@ -62,7 +62,6 @@ export interface WorkflowExecutionContext {
   currentPromptFilePath: string | undefined;
   dashboardProvider?: IDashboardSink;
   shouldShowCliCommand: boolean;
-  showCliOutput: boolean;
   dynamicQueueConfig: DynamicQueueConfig;
   getIntegrationForPrompt: (
     prompt: PromptStep,
@@ -233,36 +232,13 @@ export class WorkflowExecutor {
       this.promptQueue.getProgress().total
     );
 
-    let snapshotStrategy: "git" | "filesystem" | undefined;
-    if (context.snapshotService && context.workspaceFolderPath) {
-      try {
-        snapshotStrategy = await context.snapshotService.selectStrategy(
-          context.workspaceFolderPath
-        );
-      } catch {
-        // ignore — snapshots unavailable
-      }
-    }
+    const snapshotStrategy = await this.selectSnapshotStrategy(context);
+
+    await this.initializeFinalStepRuntime(context);
 
     const getFinalStep = () => this.promptQueue.getWorkflowFile().finalStep;
 
     const initialFinalStep = getFinalStep();
-
-    if (initialFinalStep && !this.promptQueue.getFinalStepRuntime()) {
-      await this.setFinalStepRuntime(context, {
-        phase: FINAL_STEP_PHASES.QUEUE,
-        loopCount: 0,
-      });
-    } else if (initialFinalStep) {
-      const runtime = this.promptQueue.getFinalStepRuntime();
-      context.dashboardProvider?.updateFinalStepStatus(
-        runtime?.status ?? null,
-        runtime?.loopCount ?? 0,
-        runtime?.phase ?? null
-      );
-    } else {
-      context.dashboardProvider?.updateFinalStepStatus(null, 0, null);
-    }
 
     // Only skip the queue drain and go straight to the finalStep when resuming
     // a run that was interrupted mid-finalStep AND there are no pending queue
@@ -285,45 +261,12 @@ export class WorkflowExecutor {
           };
           const prompt = state.steps[state.currentIndex];
 
-          let beforeState: RawWorkspaceState | undefined;
-          if (
-            context.snapshotService &&
-            context.workspaceFolderPath &&
-            snapshotStrategy
-          ) {
-            try {
-              beforeState = await context.snapshotService.captureWorkspaceState(
-                context.workspaceFolderPath,
-                snapshotStrategy
-              );
-            } catch {
-              // ignore
-            }
-          }
-
-          const shouldContinue = await this.executeSinglePrompt(
+          const shouldContinue = await this.executeWithSnapshot(
             target,
             prompt,
-            context
-          );
-
-          if (
-            beforeState &&
-            context.snapshotService &&
-            context.workspaceFolderPath &&
+            context,
             snapshotStrategy
-          ) {
-            try {
-              await this.captureAndEmitSnapshot(
-                target,
-                beforeState,
-                snapshotStrategy,
-                context
-              );
-            } catch (e) {
-              Log.warn("Failed to capture workspace snapshot:", e);
-            }
-          }
+          );
 
           if (!shouldContinue) {
             break;
@@ -362,50 +305,16 @@ export class WorkflowExecutor {
         startedAt: Date.now(),
       });
 
-      let finalBeforeState: RawWorkspaceState | undefined;
-      if (
-        context.snapshotService &&
-        context.workspaceFolderPath &&
-        snapshotStrategy
-      ) {
-        try {
-          finalBeforeState =
-            await context.snapshotService.captureWorkspaceState(
-              context.workspaceFolderPath,
-              snapshotStrategy
-            );
-        } catch {
-          // ignore
-        }
-      }
-
       const finalTarget: ExecutionTarget = {
         kind: FINAL_STEP_PHASES.FINAL_STEP,
         loopIndex,
       };
-      const shouldContinue = await this.executeSinglePrompt(
+      const shouldContinue = await this.executeWithSnapshot(
         finalTarget,
         currentFinalStep,
-        context
-      );
-
-      if (
-        finalBeforeState &&
-        context.snapshotService &&
-        context.workspaceFolderPath &&
+        context,
         snapshotStrategy
-      ) {
-        try {
-          await this.captureAndEmitSnapshot(
-            finalTarget,
-            finalBeforeState,
-            snapshotStrategy,
-            context
-          );
-        } catch (e) {
-          Log.warn("Failed to capture workspace snapshot:", e);
-        }
-      }
+      );
 
       if (!shouldContinue) {
         await this.persistInterruptedFinalStepRuntime(context);
@@ -1191,6 +1100,92 @@ export class WorkflowExecutor {
     target: ExecutionTarget
   ): number {
     return context.targetRunIndices?.get(getExecutionTargetRunKey(target)) ?? 0;
+  }
+
+  private async selectSnapshotStrategy(
+    context: WorkflowExecutionContext
+  ): Promise<"git" | "filesystem" | undefined> {
+    if (context.snapshotService && context.workspaceFolderPath) {
+      try {
+        return await context.snapshotService.selectStrategy(
+          context.workspaceFolderPath
+        );
+      } catch {
+        // ignore — snapshots unavailable
+      }
+    }
+    return undefined;
+  }
+
+  private async initializeFinalStepRuntime(
+    context: WorkflowExecutionContext
+  ): Promise<void> {
+    const initialFinalStep = this.promptQueue.getWorkflowFile().finalStep;
+
+    if (initialFinalStep && !this.promptQueue.getFinalStepRuntime()) {
+      await this.setFinalStepRuntime(context, {
+        phase: FINAL_STEP_PHASES.QUEUE,
+        loopCount: 0,
+      });
+    } else if (initialFinalStep) {
+      const runtime = this.promptQueue.getFinalStepRuntime();
+      context.dashboardProvider?.updateFinalStepStatus(
+        runtime?.status ?? null,
+        runtime?.loopCount ?? 0,
+        runtime?.phase ?? null
+      );
+    } else {
+      context.dashboardProvider?.updateFinalStepStatus(null, 0, null);
+    }
+  }
+
+  private async executeWithSnapshot(
+    target: ExecutionTarget,
+    step: WorkflowStep,
+    context: WorkflowExecutionContext,
+    snapshotStrategy: "git" | "filesystem" | undefined
+  ): Promise<boolean> {
+    let beforeState: RawWorkspaceState | undefined;
+    if (
+      context.snapshotService &&
+      context.workspaceFolderPath &&
+      snapshotStrategy
+    ) {
+      try {
+        beforeState = await context.snapshotService.captureWorkspaceState(
+          context.workspaceFolderPath,
+          snapshotStrategy
+        );
+      } catch {
+        // ignore
+      }
+    }
+
+    const shouldContinue = await this.executeSinglePrompt(
+      target,
+      step,
+      context
+    );
+
+    if (
+      beforeState &&
+      context.snapshotService &&
+      context.workspaceFolderPath &&
+      snapshotStrategy
+    ) {
+      try {
+        await this.captureAndEmitSnapshot(
+          target,
+          beforeState,
+          snapshotStrategy,
+          context
+        );
+      } catch (e) {
+        Log.warn("Failed to capture workspace snapshot:", e);
+      }
+    }
+
+    return shouldContinue;
   }
 
   /**
@@ -2006,10 +2001,6 @@ export class WorkflowExecutor {
     integration: HarnessIntegration,
     totalSteps: number
   ): void {
-    if (!context.showCliOutput) {
-      return;
-    }
-
     const tag = context.instanceTag ? `${context.instanceTag} ` : "";
     const workflowName = path.basename(
       context.currentPromptFilePath ?? "unknown"
@@ -2023,10 +2014,6 @@ export class WorkflowExecutor {
     context: WorkflowExecutionContext,
     totalSteps: number
   ): void {
-    if (!context.showCliOutput) {
-      return;
-    }
-
     const tag = context.instanceTag ? `${context.instanceTag} ` : "";
     const workflowName = path.basename(
       context.currentPromptFilePath ?? "unknown"

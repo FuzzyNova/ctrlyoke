@@ -8,7 +8,6 @@ import {
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
-  FINAL_STEP_PHASES,
   SESSION_KINDS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
@@ -16,7 +15,6 @@ import {
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
-import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import {
   getFileCompletions,
   getHashCompletions,
@@ -42,14 +40,12 @@ import type {
   RequestMcpRegistrySearchMessage,
   SaveMcpRegistryServerMessage,
   UndoPromptChangesMessage,
-  UndoFileInstruction,
   RedoPromptChangesMessage,
   UndoWorkflowChangesMessage,
   RedoWorkflowChangesMessage,
-  UndoRecord,
   DevDashboardAction,
 } from "../types/WebviewMessageTypes";
-import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
+import { UndoRedoCoordinator } from "./UndoRedoCoordinator";
 import {
   getPtyProcessManager,
   ptyPostMessage,
@@ -86,6 +82,7 @@ export class WebviewMessageRouter {
     string,
     (message: any) => void | Promise<void>
   >;
+  private readonly undoRedoCoordinator: UndoRedoCoordinator;
 
   constructor(
     private readonly defaultPostMessage: PostMessageFn,
@@ -97,6 +94,7 @@ export class WebviewMessageRouter {
   ) {
     this.scopedPostMessage = defaultPostMessage;
     this.clientId = PANEL_CLIENT_ID;
+    this.undoRedoCoordinator = new UndoRedoCoordinator(getOrchestrator);
     this.handlers = this.buildDispatchTable();
   }
 
@@ -393,7 +391,8 @@ export class WebviewMessageRouter {
       }
       await this.callbacks.handleUxSnapshot(
         {
-          markdown: typeof message.markdown === "string" ? message.markdown : "",
+          markdown:
+            typeof message.markdown === "string" ? message.markdown : "",
           png: typeof message.png === "string" ? message.png : undefined,
         },
         this.getWorkspaceRoot(),
@@ -1369,22 +1368,34 @@ export class WebviewMessageRouter {
 
     // ── Prompt Undo ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.UNDO_PROMPT_CHANGES, async (message) => {
-      await this.handleUndoPromptChanges(message as UndoPromptChangesMessage);
+      await this.undoRedoCoordinator.handleUndoPromptChanges(
+        message as UndoPromptChangesMessage,
+        this.getCurrentPostMessage(),
+        this.clientId
+      );
     });
 
     table.set(MESSAGE_TYPES.REDO_PROMPT_CHANGES, async (message) => {
-      await this.handleRedoPromptChanges(message as RedoPromptChangesMessage);
+      await this.undoRedoCoordinator.handleRedoPromptChanges(
+        message as RedoPromptChangesMessage,
+        this.getCurrentPostMessage(),
+        this.clientId
+      );
     });
 
     table.set(MESSAGE_TYPES.UNDO_WORKFLOW_CHANGES, async (message) => {
-      await this.handleUndoWorkflowChanges(
-        message as UndoWorkflowChangesMessage
+      await this.undoRedoCoordinator.handleUndoWorkflowChanges(
+        message as UndoWorkflowChangesMessage,
+        this.getCurrentPostMessage(),
+        this.clientId
       );
     });
 
     table.set(MESSAGE_TYPES.REDO_WORKFLOW_CHANGES, async (message) => {
-      await this.handleRedoWorkflowChanges(
-        message as RedoWorkflowChangesMessage
+      await this.undoRedoCoordinator.handleRedoWorkflowChanges(
+        message as RedoWorkflowChangesMessage,
+        this.getCurrentPostMessage(),
+        this.clientId
       );
     });
 
@@ -2185,31 +2196,7 @@ export class WebviewMessageRouter {
     stepCount: number
   ): Promise<void> {
     if (!ref) return;
-
-    const orchestrator = this.getOrchestrator();
-    const workingFilePath = orchestrator?.getQueueState(
-      this.clientId
-    )?.workingFilePath;
-
-    let content: string;
-
-    if (workingFilePath && fs.existsSync(workingFilePath)) {
-      try {
-        const raw = fs.readFileSync(workingFilePath, "utf-8");
-        const workingFile = JSON.parse(raw) as { steps?: unknown[] };
-        const steps = (workingFile.steps ??
-          []) as import("../types/CtrlYokeTypes").WorkflowStep[];
-        content = PriorContextPreviewBuilder.buildPreview(
-          ref,
-          stepCount,
-          steps
-        );
-      } catch {
-        content = `<!-- Could not read workflow state for $${ref} -->`;
-      }
-    } else {
-      content = `<!-- No active workflow — $${ref} will be resolved at execution time -->`;
-    }
+    const content = await this.buildPriorContextContent(ref, stepCount);
 
     try {
       const doc = await vscode.workspace.openTextDocument({
@@ -2270,335 +2257,6 @@ export class WebviewMessageRouter {
       type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
       counts,
     });
-  }
-
-  // ============================================================================
-  // Prompt Undo Handler
-  // ============================================================================
-
-  private async handleUndoPromptChanges(
-    message: UndoPromptChangesMessage
-  ): Promise<void> {
-    const { requestId, target, files, workspacePath } = message.data;
-    try {
-      const snapshotService = new WorkspaceSnapshotService();
-      const result = await snapshotService.undoFiles(files, workspacePath);
-
-      this.emitMessage({
-        type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
-        data: {
-          requestId,
-          target,
-          restoredFiles: result.restoredFiles,
-          failedFiles: result.failedFiles,
-        },
-      });
-
-      if (result.restoredFiles.length > 0) {
-        const undoRecord: UndoRecord = {
-          appliedAt: Date.now(),
-          restoredFiles: result.restoredFiles,
-          redoInstructions: result.redoInstructions,
-        };
-        const historyFilePath = await this.resolveHistoryFilePath();
-        if (historyFilePath) {
-          const outputHistoryManager =
-            this.getOrchestrator()?.getOutputHistoryManager();
-          if (outputHistoryManager) {
-            await outputHistoryManager.saveUndoRecord(
-              historyFilePath,
-              target,
-              undoRecord
-            );
-          }
-        }
-        this.emitMessage({
-          type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
-          target,
-          undoRecord,
-        });
-      }
-
-      if (result.failedFiles.length === 0) {
-        vscode.window.showInformationMessage(
-          `Undo complete: restored ${result.restoredFiles.length} file${result.restoredFiles.length !== 1 ? "s" : ""}.`
-        );
-      } else if (result.restoredFiles.length > 0) {
-        vscode.window.showWarningMessage(
-          `Undo partially complete: ${result.restoredFiles.length} restored, ${result.failedFiles.length} failed.`
-        );
-      } else {
-        vscode.window.showErrorMessage(
-          `Undo failed: ${result.failedFiles[0]?.error ?? "unknown error"}`
-        );
-      }
-    } catch (error) {
-      const errMsg = getErrorMessage(error);
-      this.emitMessage({
-        type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
-        data: {
-          requestId,
-          target,
-          restoredFiles: [],
-          failedFiles: (files as UndoFileInstruction[]).map((i) => ({
-            path: i.path,
-            error: errMsg,
-          })),
-        },
-      });
-      vscode.window.showErrorMessage(`Undo failed: ${errMsg}`);
-    }
-  }
-
-  private async handleRedoPromptChanges(
-    message: RedoPromptChangesMessage
-  ): Promise<void> {
-    const { requestId, target, files, workspacePath } = message.data;
-    try {
-      const snapshotService = new WorkspaceSnapshotService();
-      const result = await snapshotService.undoFiles(files, workspacePath);
-
-      this.emitMessage({
-        type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
-        data: {
-          requestId,
-          target,
-          restoredFiles: result.restoredFiles,
-          failedFiles: result.failedFiles,
-        },
-      });
-
-      if (result.restoredFiles.length > 0) {
-        const redoneAt = Date.now();
-        const historyFilePath = await this.resolveHistoryFilePath();
-        const outputHistoryManager =
-          this.getOrchestrator()?.getOutputHistoryManager();
-        if (historyFilePath && outputHistoryManager) {
-          await outputHistoryManager.markUndoRecordRedone(
-            historyFilePath,
-            target,
-            redoneAt
-          );
-          // Read the updated record and notify the webview
-          const history =
-            await outputHistoryManager.loadHistory(historyFilePath);
-          const stepOutput = (
-            target.kind === FINAL_STEP_PHASES.QUEUE
-              ? history.promptOutputs[target.stepIndex]
-              : history.finalStepOutputs?.[target.loopIndex]
-          ) as { undoRecord?: UndoRecord } | undefined;
-          if (stepOutput?.undoRecord) {
-            this.emitMessage({
-              type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
-              target,
-              undoRecord: stepOutput.undoRecord,
-            });
-          }
-        }
-      }
-
-      if (result.restoredFiles.length > 0) {
-        vscode.window.showInformationMessage(
-          `Redo complete: re-applied ${result.restoredFiles.length} file change${result.restoredFiles.length !== 1 ? "s" : ""}.`
-        );
-      } else {
-        vscode.window.showErrorMessage(
-          `Redo failed: ${result.failedFiles[0]?.error ?? "unknown error"}`
-        );
-      }
-    } catch (error) {
-      const errMsg = getErrorMessage(error);
-      this.emitMessage({
-        type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
-        data: {
-          requestId,
-          target,
-          restoredFiles: [],
-          failedFiles: (files as UndoFileInstruction[]).map((i) => ({
-            path: i.path,
-            error: errMsg,
-          })),
-        },
-      });
-      vscode.window.showErrorMessage(`Redo failed: ${errMsg}`);
-    }
-  }
-
-  private async handleUndoWorkflowChanges(
-    message: UndoWorkflowChangesMessage
-  ): Promise<void> {
-    const { requestId, workspacePath, entries } = message.data;
-    const snapshotService = new WorkspaceSnapshotService();
-    const totalRestored: string[] = [];
-    const totalFailed: Array<{ path: string; error: string }> = [];
-
-    for (const entry of entries) {
-      if (entry.files.length === 0) continue;
-      try {
-        const result = await snapshotService.undoFiles(
-          entry.files,
-          workspacePath
-        );
-        totalRestored.push(...result.restoredFiles);
-        totalFailed.push(...result.failedFiles);
-
-        if (result.restoredFiles.length > 0) {
-          const undoRecord: UndoRecord = {
-            appliedAt: Date.now(),
-            restoredFiles: result.restoredFiles,
-            redoInstructions: result.redoInstructions,
-          };
-          const historyFilePath = await this.resolveHistoryFilePath();
-          if (historyFilePath) {
-            const outputHistoryManager =
-              this.getOrchestrator()?.getOutputHistoryManager();
-            if (outputHistoryManager) {
-              await outputHistoryManager.saveUndoRecord(
-                historyFilePath,
-                entry.target,
-                undoRecord
-              );
-              this.emitMessage({
-                type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
-                target: entry.target,
-                undoRecord,
-              });
-            }
-          }
-        }
-      } catch (error) {
-        const errMsg = getErrorMessage(error);
-        totalFailed.push(
-          ...entry.files.map((f) => ({ path: f.path, error: errMsg }))
-        );
-      }
-    }
-
-    const firstTarget = entries[0]?.target ?? {
-      kind: FINAL_STEP_PHASES.QUEUE,
-      stepIndex: 0,
-    };
-    this.emitMessage({
-      type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
-      data: {
-        requestId,
-        target: firstTarget,
-        restoredFiles: totalRestored,
-        failedFiles: totalFailed,
-      },
-    });
-
-    if (totalFailed.length === 0 && totalRestored.length > 0) {
-      vscode.window.showInformationMessage(
-        `Undo complete: restored ${totalRestored.length} file${totalRestored.length !== 1 ? "s" : ""}.`
-      );
-    } else if (totalRestored.length > 0) {
-      vscode.window.showWarningMessage(
-        `Undo partially complete: ${totalRestored.length} restored, ${totalFailed.length} failed.`
-      );
-    } else if (totalFailed.length > 0) {
-      vscode.window.showErrorMessage(
-        `Undo failed: ${totalFailed[0]?.error ?? "unknown error"}`
-      );
-    }
-  }
-
-  private async handleRedoWorkflowChanges(
-    message: RedoWorkflowChangesMessage
-  ): Promise<void> {
-    const { requestId, workspacePath, entries } = message.data;
-    const snapshotService = new WorkspaceSnapshotService();
-    const totalRestored: string[] = [];
-    const totalFailed: Array<{ path: string; error: string }> = [];
-
-    for (const entry of entries) {
-      if (entry.files.length === 0) continue;
-      try {
-        const result = await snapshotService.undoFiles(
-          entry.files,
-          workspacePath
-        );
-        totalRestored.push(...result.restoredFiles);
-        totalFailed.push(...result.failedFiles);
-
-        if (result.restoredFiles.length > 0) {
-          const redoneAt = Date.now();
-          const historyFilePath = await this.resolveHistoryFilePath();
-          const outputHistoryManager =
-            this.getOrchestrator()?.getOutputHistoryManager();
-          if (historyFilePath && outputHistoryManager) {
-            await outputHistoryManager.markUndoRecordRedone(
-              historyFilePath,
-              entry.target,
-              redoneAt
-            );
-            const history =
-              await outputHistoryManager.loadHistory(historyFilePath);
-            const stepOutput = (
-              entry.target.kind === FINAL_STEP_PHASES.QUEUE
-                ? history.promptOutputs[entry.target.stepIndex]
-                : history.finalStepOutputs?.[entry.target.loopIndex]
-            ) as { undoRecord?: UndoRecord } | undefined;
-            if (stepOutput?.undoRecord) {
-              this.emitMessage({
-                type: MESSAGE_TYPES.UNDO_RECORD_UPDATED,
-                target: entry.target,
-                undoRecord: stepOutput.undoRecord,
-              });
-            }
-          }
-        }
-      } catch (error) {
-        const errMsg = getErrorMessage(error);
-        totalFailed.push(
-          ...entry.files.map((f) => ({ path: f.path, error: errMsg }))
-        );
-      }
-    }
-
-    const firstTarget = entries[0]?.target ?? {
-      kind: FINAL_STEP_PHASES.QUEUE,
-      stepIndex: 0,
-    };
-    this.emitMessage({
-      type: MESSAGE_TYPES.UNDO_PROMPT_RESULT,
-      data: {
-        requestId,
-        target: firstTarget,
-        restoredFiles: totalRestored,
-        failedFiles: totalFailed,
-      },
-    });
-
-    if (totalRestored.length > 0) {
-      vscode.window.showInformationMessage(
-        `Redo complete: re-applied ${totalRestored.length} file change${totalRestored.length !== 1 ? "s" : ""}.`
-      );
-    } else {
-      vscode.window.showErrorMessage(
-        `Redo failed: ${totalFailed[0]?.error ?? "unknown error"}`
-      );
-    }
-  }
-
-  /**
-   * Resolve the current history file path for the active workflow.
-   * Returns empty string if unavailable.
-   */
-  private async resolveHistoryFilePath(): Promise<string> {
-    try {
-      const orchestrator = this.getOrchestrator();
-      if (!orchestrator) return "";
-      const outputHistoryManager = orchestrator.getOutputHistoryManager();
-      const workingFilePath =
-        orchestrator.getQueueState(this.clientId).workingFilePath ?? "";
-      if (!workingFilePath) return "";
-      const workflowId =
-        OutputHistoryManager.extractWorkflowId(workingFilePath);
-      return await outputHistoryManager.getLatestHistoryFilePath(workflowId);
-    } catch {
-      return "";
-    }
   }
 
   // ============================================================================

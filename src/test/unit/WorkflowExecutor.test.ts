@@ -155,7 +155,6 @@ function makeContext(
     workspaceFolderPath: process.cwd(),
     currentPromptFilePath: "workflow.ctrlyoke.yaml",
     shouldShowCliCommand: false,
-    showCliOutput: false,
     dynamicQueueConfig: {
       maxQueueSize: 100,
       maxWorkflowExecutionTime: 3600,
