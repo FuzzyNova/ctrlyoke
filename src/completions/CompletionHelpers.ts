@@ -21,6 +21,7 @@ import {
   buildSelectionReferenceValue,
   buildSymbolReference,
   buildSymbolReferenceValue,
+  normalizeReferencePath,
 } from "./ContextReferenceBuilder";
 
 /**
@@ -213,6 +214,93 @@ export function initializeCompletionHelpers(
   context.subscriptions.push(configWatcher);
 }
 
+interface PathCompletionFilter {
+  normalized: string;
+  hasPathContext: boolean;
+  parentPath: string;
+  childPrefix: string;
+}
+
+function getNormalizedWorkspaceRelativePath(fileUri: vscode.Uri): string {
+  return normalizeReferencePath(vscode.workspace.asRelativePath(fileUri, false));
+}
+
+function getNormalizedParentDirectory(relativePath: string): string {
+  const parentPath = path.posix.dirname(relativePath);
+  return parentPath === "." ? "" : parentPath;
+}
+
+function buildPathCompletionFilter(
+  filterText: string,
+  options?: {
+    stripLeadingQuote?: boolean;
+    stripPromptPathPrefixes?: boolean;
+  }
+): PathCompletionFilter {
+  let normalized = normalizeReferencePath(filterText).toLowerCase();
+
+  if (options?.stripLeadingQuote && normalized.startsWith('"')) {
+    normalized = normalized.slice(1);
+  }
+
+  if (options?.stripPromptPathPrefixes) {
+    normalized = normalized.replace(/^\.\.?\//, "").replace(/^\//, "");
+  }
+
+  if (!normalized.includes("/")) {
+    return {
+      normalized,
+      hasPathContext: false,
+      parentPath: "",
+      childPrefix: normalized,
+    };
+  }
+
+  const endsWithSlash = normalized.endsWith("/");
+  const parentPath = (
+    endsWithSlash
+      ? normalized.slice(0, -1)
+      : normalized.slice(0, normalized.lastIndexOf("/"))
+  ).replace(/\/+$/, "");
+
+  return {
+    normalized,
+    hasPathContext: true,
+    parentPath,
+    childPrefix: endsWithSlash
+      ? ""
+      : normalized.slice(normalized.lastIndexOf("/") + 1),
+  };
+}
+
+function matchesPathCompletionFilter(
+  candidatePath: string,
+  filter: PathCompletionFilter
+): boolean {
+  if (!filter.normalized) {
+    return true;
+  }
+
+  if (!filter.hasPathContext) {
+    return candidatePath.includes(filter.normalized);
+  }
+
+  return (
+    getNormalizedParentDirectory(candidatePath) === filter.parentPath &&
+    path.posix.basename(candidatePath).startsWith(filter.childPrefix)
+  );
+}
+
+function collectWorkspaceDirectories(
+  relativePath: string,
+  directories: Set<string>
+): void {
+  const segments = relativePath.split("/");
+  for (let index = 1; index < segments.length; index++) {
+    directories.add(segments.slice(0, index).join("/"));
+  }
+}
+
 /**
  * Get file completions for @ trigger
  * Returns both file and directory completions
@@ -222,16 +310,9 @@ export async function getFileCompletions(
 ): Promise<PlainCompletionItem[]> {
   const fileItems: PlainCompletionItem[] = [];
   const files = await getWorkspaceFiles();
-
-  // Strip leading quote from quoted-path filter (@"path with spaces/...) so
-  // the actual path fragment is matched against relative paths (which never
-  // contain a literal double-quote character).
-  const normalizedFilterText = filterText.startsWith('"')
-    ? filterText.slice(1)
-    : filterText;
-
-  // Convert filter text to lowercase and normalize path separators
-  const filter = normalizedFilterText.toLowerCase().replace(/\\/g, "/");
+  const filter = buildPathCompletionFilter(filterText, {
+    stripLeadingQuote: true,
+  });
 
   // Track unique directories we've seen
   const directories = new Set<string>();
@@ -240,20 +321,16 @@ export async function getFileCompletions(
   const MAX_FILE_ITEMS = 450; // Leave room for directories so they don't get buried
 
   for (const fileUri of files) {
-    const relativePath = vscode.workspace.asRelativePath(fileUri, false);
+    const relativePath = getNormalizedWorkspaceRelativePath(fileUri);
+    collectWorkspaceDirectories(relativePath, directories);
+    const lowerRelativePath = relativePath.toLowerCase();
 
-    // Simple filtering: check if the path contains the filter text
-    if (filter && !relativePath.toLowerCase().includes(filter)) {
+    if (!matchesPathCompletionFilter(lowerRelativePath, filter)) {
       continue;
     }
 
-    const fileName = path.basename(relativePath);
-    const dirName = path.dirname(relativePath);
-
-    // Track directory for directory completions (even if we stop adding file items)
-    if (dirName !== ".") {
-      directories.add(dirName);
-    }
+    const fileName = path.posix.basename(relativePath);
+    const dirName = getNormalizedParentDirectory(relativePath);
 
     // Add file completion (but don't let files crowd out directory entries)
     if (fileItems.length < MAX_FILE_ITEMS) {
@@ -263,13 +340,13 @@ export async function getFileCompletions(
         label: fileName,
         kind: vscode.CompletionItemKind.File,
         insertText: insertPath,
-        detail: dirName === "." ? "Root directory" : dirName,
+        detail: dirName ? dirName : "Root directory",
         documentation:
           `**Full file attachment** (CLI-native)\n\n` +
           `Insert: \`${buildFileReference(relativePath)}\`\n\n` +
           `The CLI will automatically attach this file's content.\n\n` +
           `_For line ranges, use \`${buildSelectionReference(relativePath, 10, 20)}\`_`,
-        sortText: `0_${relativePath.split(path.sep).length}_${relativePath}`,
+        sortText: `0_${relativePath.split("/").length}_${relativePath}`,
         filterText: `${relativePath} ${fileName}`,
       };
 
@@ -280,12 +357,13 @@ export async function getFileCompletions(
   // Add directory completions (with trailing slash)
   const dirItems: PlainCompletionItem[] = [];
   for (const dirPath of directories) {
-    if (filter && !dirPath.toLowerCase().includes(filter)) {
+    const lowerDirPath = dirPath.toLowerCase();
+    if (!matchesPathCompletionFilter(lowerDirPath, filter)) {
       continue;
     }
 
-    const dirName = path.basename(dirPath);
-    const parentDir = path.dirname(dirPath);
+    const dirName = path.posix.basename(dirPath);
+    const parentDir = getNormalizedParentDirectory(dirPath);
 
     // Quote directory paths with spaces so the parser can handle them correctly
     const insertDirPath = buildDirectoryReferenceValue(dirPath);
@@ -293,13 +371,13 @@ export async function getFileCompletions(
       label: dirName + "/",
       kind: vscode.CompletionItemKind.Folder,
       insertText: insertDirPath,
-      detail: parentDir === "." ? "Root directory" : parentDir,
+      detail: parentDir ? parentDir : "Root directory",
       documentation:
         `**Directory structure attachment**\n\n` +
         `Insert: \`${buildDirectoryReference(dirPath)}\`\n\n` +
         `ctrlyoke will attach a file tree of this directory.\n\n` +
         `_No file contents, just structure._`,
-      sortText: `0_${dirPath.split(path.sep).length}_0_${dirPath}`,
+      sortText: `0_${dirPath.split("/").length}_0_${dirPath}`,
       filterText: `${dirPath} ${dirName}`,
     };
 
@@ -688,39 +766,33 @@ export async function getPromptFileCompletions(
   filterText: string
 ): Promise<PlainCompletionItem[]> {
   const files = await getWorkspaceFiles();
-
-  // Strip any leading ./ ../ or / from the filter so we compare against bare relative paths
-  const normalizedFilter = filterText
-    .replace(/^\.\.?\//, "")
-    .replace(/^\//, "")
-    .toLowerCase()
-    .replace(/\\/g, "/");
+  const filter = buildPathCompletionFilter(filterText, {
+    stripPromptPathPrefixes: true,
+  });
 
   const items: PlainCompletionItem[] = [];
 
   for (const fileUri of files) {
-    const relativePath = vscode.workspace
-      .asRelativePath(fileUri, false)
-      .replace(/\\/g, "/");
+    const relativePath = getNormalizedWorkspaceRelativePath(fileUri);
     const lower = relativePath.toLowerCase();
 
     if (!PROMPT_REF_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
       continue;
     }
 
-    if (normalizedFilter && !lower.includes(normalizedFilter)) {
+    if (!matchesPathCompletionFilter(lower, filter)) {
       continue;
     }
 
-    const fileName = path.basename(relativePath);
-    const dirName = path.dirname(relativePath);
+    const fileName = path.posix.basename(relativePath);
+    const dirName = getNormalizedParentDirectory(relativePath);
     const insertPath = `./${relativePath}`;
 
     items.push({
       label: fileName,
       kind: vscode.CompletionItemKind.File,
       insertText: insertPath,
-      detail: dirName === "." ? "Root" : dirName,
+      detail: dirName ? dirName : "Root",
       documentation: `**Prompt file reference**\n\nPath: \`${insertPath}\``,
       sortText: `${relativePath.split("/").length}_${relativePath}`,
       filterText: `${relativePath} ${fileName}`,

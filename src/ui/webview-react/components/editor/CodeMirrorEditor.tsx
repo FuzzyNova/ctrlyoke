@@ -118,6 +118,21 @@ interface ContextReferenceValidationResult {
   message?: string;
 }
 
+type CompletionTrigger = "@" | "#" | "~" | "$" | "path";
+
+interface ExtensionCompletionItem {
+  label: string;
+  kind?: number;
+  detail?: string;
+  insertText?: string;
+  sortText?: string;
+}
+
+interface PendingCompletionRequest {
+  trigger: CompletionTrigger;
+  query: string;
+}
+
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
 const LINK_TOUCH_LONG_PRESS_MS = 500;
 
@@ -181,6 +196,95 @@ export function getRetryPlaceholderCompletions(
     from,
     options,
   };
+}
+
+function shouldBypassCodeMirrorFiltering(
+  request: PendingCompletionRequest | null
+): boolean {
+  if (!request) {
+    return false;
+  }
+
+  return (
+    request.trigger === "path" ||
+    (request.trigger === "@" &&
+      (request.query.startsWith('"') ||
+        request.query.includes("/") ||
+        request.query.includes("\\")))
+  );
+}
+
+export function buildCodeMirrorCompletionResult(
+  items: ExtensionCompletionItem[],
+  from: number,
+  request: PendingCompletionRequest | null
+): CompletionResult {
+  const completions = items.map((item, index) => {
+    // Calculate boost from sortText.
+    // Handles both numeric prefixes ("000_", "001_") and
+    // bang-prefixed variants ("!000_", "!001_") used by git change items.
+    let boost: number;
+    if (item.sortText) {
+      const prefixMatch = item.sortText.match(/^!?(\d+)_/);
+      if (prefixMatch) {
+        const prefix = parseInt(prefixMatch[1]);
+        boost = 1000 - prefix * 100 - index * 0.01;
+      } else {
+        boost = -index;
+      }
+    } else {
+      boost = -index;
+    }
+
+    // Map VS Code CompletionItemKind to CodeMirror type
+    const kindMap: Record<number, string> = {
+      0: "text",
+      1: "method",
+      2: "function",
+      3: "function",
+      4: "property",
+      5: "variable",
+      6: "class",
+      7: "interface",
+      8: "namespace",
+      9: "property",
+      10: "constant",
+      11: "constant",
+      12: "enum",
+      13: "keyword",
+      14: "text",
+      15: "string",
+      16: "file",
+      17: "text",
+      18: "folder",
+      19: "enum",
+      20: "constant",
+      21: "class",
+    };
+
+    const type = item.kind !== undefined ? kindMap[item.kind] || "text" : "text";
+
+    return {
+      label: item.label,
+      type,
+      detail: item.detail,
+      boost,
+      // Don't prepend trigger - it stays in the document at position 'from'
+      // We only replace from 'from + 1' onward for trigger-based completions.
+      apply: item.insertText || item.label,
+    };
+  });
+
+  const result: CompletionResult = {
+    from: from + (request?.trigger === "path" ? 0 : 1),
+    options: completions,
+  };
+
+  if (shouldBypassCodeMirrorFiltering(request)) {
+    result.filter = false;
+  }
+
+  return result;
 }
 
 export function buildPromptReferenceInsertion(
@@ -270,7 +374,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const pendingCompletionResolveRef = useRef<((value: any) => void) | null>(
     null
   );
-  const pendingCompletionTriggerRef = useRef<string | null>(null);
+  const pendingCompletionRequestRef = useRef<PendingCompletionRequest | null>(
+    null
+  );
   const completionSeqRef = useRef(0);
   const validationSeqRef = useRef(0);
   const pendingValidationRequestsRef = useRef<
@@ -454,7 +560,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   // Handle completion response from extension
   const handleCompletionResponse = useCallback(
-    (items: any[], from: number, seq?: number) => {
+    (items: ExtensionCompletionItem[], from: number, seq?: number) => {
       // Discard stale responses from earlier requests
       if (seq !== undefined && seq !== completionSeqRef.current) {
         return;
@@ -463,84 +569,16 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         return;
       }
 
-      const completions = items.map((item, index) => {
-        // Calculate boost from sortText.
-        // Handles both numeric prefixes ("000_", "001_") and
-        // bang-prefixed variants ("!000_", "!001_") used by git change items.
-        let boost: number;
-        if (item.sortText) {
-          const prefixMatch = item.sortText.match(/^!?(\d+)_/);
-          if (prefixMatch) {
-            const prefix = parseInt(prefixMatch[1]);
-            boost = 1000 - prefix * 100 - index * 0.01;
-          } else {
-            boost = -index;
-          }
-        } else {
-          boost = -index;
-        }
-
-        // Map VS Code CompletionItemKind to CodeMirror type
-        const kindMap: Record<number, string> = {
-          0: "text",
-          1: "method",
-          2: "function",
-          3: "function",
-          4: "property",
-          5: "variable",
-          6: "class",
-          7: "interface",
-          8: "namespace",
-          9: "property",
-          10: "constant",
-          11: "constant",
-          12: "enum",
-          13: "keyword",
-          14: "text",
-          15: "string",
-          16: "file",
-          17: "text",
-          18: "folder",
-          19: "enum",
-          20: "constant",
-          21: "class",
-        };
-
-        const type =
-          item.kind !== undefined ? kindMap[item.kind] || "text" : "text";
-
-        return {
-          label: item.label,
-          type,
-          detail: item.detail,
-          boost,
-          // Don't prepend trigger - it stays in the document at position 'from'
-          // We only replace from 'from + 1' onward
-          apply: item.insertText || item.label,
-        };
-      });
-
-      // IMPORTANT: Skip trigger character (@/#) in 'from' position so CodeMirror
-      // matches against "src" instead of "@src" (labels don't include trigger)
-      // "path" completions replace from the start of the typed path (no trigger char to skip)
-      const isPathCompletion = pendingCompletionTriggerRef.current === "path";
-      const fromOffset = isPathCompletion ? 0 : 1;
-
-      const result: CompletionResult = {
-        from: from + fromOffset,
-        options: completions,
-      };
-      // Disable CodeMirror's built-in fuzzy filter for path completions.
-      // The query text (the full path) won't match filename labels, so we
-      // handle all filtering on the extension side.
-      if (isPathCompletion) {
-        result.filter = false;
-      }
-
-      pendingCompletionResolveRef.current(result);
+      pendingCompletionResolveRef.current(
+        buildCodeMirrorCompletionResult(
+          items,
+          from,
+          pendingCompletionRequestRef.current
+        )
+      );
 
       pendingCompletionResolveRef.current = null;
-      pendingCompletionTriggerRef.current = null;
+      pendingCompletionRequestRef.current = null;
     },
     []
   );
@@ -662,7 +700,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           pendingCompletionResolveRef.current(null);
         }
         pendingCompletionResolveRef.current = resolve;
-        pendingCompletionTriggerRef.current = trigger;
+        pendingCompletionRequestRef.current = {
+          trigger: trigger as CompletionTrigger,
+          query: afterTrigger,
+        };
 
         vscode.postMessage({
           type: MESSAGE_TYPES.REQUEST_COMPLETIONS,
@@ -708,7 +749,10 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           pendingCompletionResolveRef.current(null);
         }
         pendingCompletionResolveRef.current = resolve;
-        pendingCompletionTriggerRef.current = "path";
+        pendingCompletionRequestRef.current = {
+          trigger: "path",
+          query: before.text,
+        };
 
         vscode.postMessage({
           type: MESSAGE_TYPES.REQUEST_COMPLETIONS,

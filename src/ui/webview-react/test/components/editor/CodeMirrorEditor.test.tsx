@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import {
+  buildCodeMirrorCompletionResult,
   buildPromptReferenceInsertion,
   destroyOrphanedMouseSelection,
   findContextReferenceMatches,
@@ -58,6 +59,40 @@ describe("CodeMirrorEditor retry placeholder completions", () => {
   it("does not trigger after whitespace or a closing brace", () => {
     expect(getCompletions("{std out")).toBeNull();
     expect(getCompletions("{stdout}")).toBeNull();
+  });
+});
+
+describe("CodeMirrorEditor external reference completions", () => {
+  it("disables CodeMirror filtering for @ completions when the query already includes a path", () => {
+    const result = buildCodeMirrorCompletionResult(
+      [
+        {
+          label: "CodeMirrorEditor.tsx",
+          kind: 16,
+          insertText: "src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+          sortText: "0_src/ui/webview-react/components/editor/CodeMirrorEditor.tsx",
+        },
+      ],
+      12,
+      {
+        trigger: "@",
+        query: "src/ui/webview-react/components/editor/Co",
+      }
+    );
+
+    expect(result.from).toBe(13);
+    expect(result.filter).toBe(false);
+  });
+
+  it("keeps CodeMirror fuzzy filtering for basename-only @ completions", () => {
+    const result = buildCodeMirrorCompletionResult(
+      [{ label: "CodeMirrorEditor.tsx", kind: 16, insertText: "src/file.ts" }],
+      5,
+      { trigger: "@", query: "Co" }
+    );
+
+    expect(result.from).toBe(6);
+    expect(result.filter).toBeUndefined();
   });
 });
 
