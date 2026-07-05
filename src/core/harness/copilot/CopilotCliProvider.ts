@@ -827,16 +827,21 @@ export class CopilotCliProvider implements ICliProvider {
    * Copilot's --output-format json stdout contains output tokens per turn but no input tokens.
    * Fallback sources are tried in order:
    *
-   * 1. **session.truncation events** (`~/.copilot/session-state/{sessionId}/events.jsonl`)
+   * 1. **OpenTelemetry chat spans** (this invocation's `otelFilePath`, see `buildOtelSpawnEnv()`)
+   *    By the time headless collection runs, the process has already exited, so the file
+   *    is complete — one poll picks up every span written this invocation. Most reliable:
+   *    carries exact `gen_ai.usage.input_tokens` per turn, unlike the tiers below.
+   *
+   * 2. **session.truncation events** (`~/.copilot/session-state/{sessionId}/events.jsonl`)
    *    Pre-1.0 Copilot CLI only. Fired once per model turn with
    *    postTruncationTokensInMessages + tokenLimit.
    *
-   * 2. **session.shutdown's currentTokens** (same events.jsonl)
+   * 3. **session.shutdown's currentTokens** (same events.jsonl)
    *    Copilot CLI 1.0.x+ removed session.truncation entirely; currentTokens fires once
    *    at process exit and is the only context signal left. No tokenLimit field, so
    *    getCopilotContextWindowSize(model) supplies the denominator.
    *
-   * 3. **CompactionProcessor lines** (`~/.copilot/logs/process-*.log`)
+   * 4. **CompactionProcessor lines** (`~/.copilot/logs/process-*.log`)
    *    Legacy per-turn utilization line; observed to no longer fire reliably on
    *    current Copilot CLI versions, kept as a last-resort fallback.
    *
@@ -851,16 +856,39 @@ export class CopilotCliProvider implements ICliProvider {
       return output;
     }
 
+    // Already have input token data — Copilot may add this to JSON output in a future version.
+    if (output.metadata.usage && output.metadata.usage.inputTokens > 0) {
+      return output;
+    }
+
+    await this.logParser.pollOtelContextWindow(output.metadata.model ?? "");
+    const otelUsage = this.logParser.getFinalOtelUsage();
+    if (otelUsage) {
+      Log.debug(
+        `[CopilotCliProvider] Context window from OTel: ${otelUsage.contextWindowUsedTokens}/${otelUsage.contextWindowSize} tokens`
+      );
+      const existingOutputTokens = output.metadata.usage?.outputTokens ?? 0;
+      return {
+        ...output,
+        metadata: {
+          ...output.metadata,
+          usage: {
+            ...output.metadata.usage,
+            inputTokens: otelUsage.inputTokens,
+            outputTokens: existingOutputTokens,
+            totalTokens: otelUsage.inputTokens + existingOutputTokens,
+            contextWindowUsedTokens: otelUsage.contextWindowUsedTokens,
+            contextWindowSize: otelUsage.contextWindowSize,
+          },
+        },
+      };
+    }
+
     const sessionId = output.metadata.sessionId;
     if (!sessionId) {
       Log.debug(
         `[CopilotCliProvider] augmentParsedOutput: no sessionId in parsed metadata`
       );
-      return output;
-    }
-
-    // Already have input token data — Copilot may add this to JSON output in a future version.
-    if (output.metadata.usage && output.metadata.usage.inputTokens > 0) {
       return output;
     }
 
