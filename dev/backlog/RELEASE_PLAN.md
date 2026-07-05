@@ -279,6 +279,26 @@ currently running via a separate agent.**
 - [ ] Complete the security review of the release branch.
 - [ ] Triage findings; fix anything that blocks a trustworthy first release.
 
+### 2.11 Standalone Server — Deferred (setting hidden for v0.1.0)
+
+**Status:** RESOLVED — **deferred out of v0.1.0, not a blocker**
+
+The VS Code-hosted server (`CtrlYokeHostedServer`) ships in v0.1.0. The **standalone**
+`ctrlyoke server` CLI process (`STANDALONE_SERVER_PLAN.md` Phases 5–10) is **not
+implemented** — no `server` CLI subcommand, no `CtrlYokeServer` / `StandaloneServerAdapter`.
+Finishing it is a multi-day effort touching core orchestration (remove hard-coded
+`VsCodeAdapter`, add a `PlatformAdapter` file-watcher seam, standalone router/completion
+service, CLI launch UX) and does not gate a first release.
+
+Decision (July 5, 2026): defer standalone; do not ship a non-functional control.
+
+- [x] Hide the "Standalone port" row in `ServerSection.tsx` — the `server.standalonePort`
+  setting is inert (nothing reads it) and misplaced (it configures a non-VS-Code process).
+  Type/schema/default (`4748`) retained so standalone can surface it later with no config
+  migration.
+- [ ] Post-launch: implement `STANDALONE_SERVER_PLAN.md` Phases 5–10 and re-expose the port
+  from the standalone server's own surface (not the VS Code Server section).
+
 ---
 
 ## Phase 3 - Marketplace Publish
@@ -403,6 +423,7 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 | **New-user experience** (templates/support/onboarding/preflight) | **OPEN** | **Blocker — all of §2.9 confirmed as v0.1.0 gates; interactive tour deferred**            |
 | **Screenshots + demo GIF**                 | **OPEN**      | **Blocker — README + Marketplace visuals; see §4**                                          |
 | Pre-publish security review                | IN PROGRESS   | Running via a separate agent; triage findings before publish (§2.10)                        |
+| Standalone server                          | DEFERRED      | Not a blocker; hosted server ships. Standalone `ctrlyoke server` deferred, inert setting hidden (§2.11) |
 | Extension-host OOM crash                   | RESOLVED      | Confirmed fixed by Nathan — no longer a blocker                                              |
 | `npm audit` sanity check                   | PRE-PUBLISH   | Down to dev-only findings (`DEPENDENCY_UPGRADE_PLAN.md`); confirm no new prod advisories     |
 | Final `vsce ls` package inspection         | OPEN          | Run immediately before publish                                                              |
