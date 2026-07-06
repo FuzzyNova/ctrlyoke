@@ -176,34 +176,49 @@ export class CliInteractiveStartupCoordinator {
       params.promptForDiscovery,
       params.startTime,
       hookSessionId,
-      hookSessionId
-        ? "Log file not found after SessionStart"
-        : "Session log not found"
+      undefined
     );
 
-    if (!discovery) {
-      if (
-        this.handleInteractiveStartupAbort(
-          "discovering the session log after SessionStart"
-        )
-      ) {
-        return null;
-      }
+    if (discovery) {
+      Log.info(`✅ Found session log: ${discovery.logPath}`);
+      return discovery;
+    }
 
-      if (hookSessionId) {
-        Log.error(
-          `❌ Could not find log file for session ${hookSessionId} - this should not happen!`
-        );
-      } else {
-        Log.error(
-          "❌ Could not discover session log - no matching prompt found"
-        );
-      }
+    if (
+      this.handleInteractiveStartupAbort(
+        "discovering the session log after SessionStart"
+      )
+    ) {
       return null;
     }
 
-    Log.info(`✅ Found session log: ${discovery.logPath}`);
-    return discovery;
+    Log.info(
+      `🔄 Session start confirmed${hookSessionId ? ` for ${hookSessionId}` : ""}, but the session log is not ready yet; polling for up to ${timeouts.sessionStartHardTimeoutMs}ms total`
+    );
+
+    const recovered = await this.recoverFromLateInteractiveStartup({
+      promptForDiscovery: params.promptForDiscovery,
+      startTime: params.startTime,
+      preferredSessionId: hookSessionId,
+    });
+    if (recovered) {
+      return recovered;
+    }
+
+    if (
+      this.handleInteractiveStartupAbort(
+        "waiting for delayed interactive startup recovery"
+      )
+    ) {
+      return null;
+    }
+
+    const timeoutReason =
+      `Timed out waiting for interactive session startup after ` +
+      `${timeouts.sessionStartHardTimeoutMs}ms`;
+    Log.error(`❌ ${timeoutReason}`);
+    this.deps.setFailureReason(timeoutReason);
+    return null;
   }
 
   private async resolveWithoutSessionStart(params: {
@@ -216,20 +231,45 @@ export class CliInteractiveStartupCoordinator {
       params.promptForDiscovery,
       params.startTime,
       null,
-      "Session log not found"
+      undefined
     );
 
-    if (!discovery) {
-      if (this.handleInteractiveStartupAbort("discovering the session log")) {
-        return null;
-      }
+    if (discovery) {
+      Log.info(`✅ Found session log: ${discovery.logPath}`);
+      return discovery;
+    }
 
-      Log.error("❌ Could not discover session log - no matching prompt found");
+    if (this.handleInteractiveStartupAbort("discovering the session log")) {
       return null;
     }
 
-    Log.info(`✅ Found session log: ${discovery.logPath}`);
-    return discovery;
+    const timeouts = this.getStartupTimeouts();
+    Log.info(
+      `🔄 Session log not found yet; polling for up to ${timeouts.sessionStartHardTimeoutMs}ms total`
+    );
+
+    const recovered = await this.recoverFromLateInteractiveStartup({
+      promptForDiscovery: params.promptForDiscovery,
+      startTime: params.startTime,
+    });
+    if (recovered) {
+      return recovered;
+    }
+
+    if (
+      this.handleInteractiveStartupAbort(
+        "waiting for delayed interactive startup recovery"
+      )
+    ) {
+      return null;
+    }
+
+    const timeoutReason =
+      `Timed out waiting for interactive session startup after ` +
+      `${timeouts.sessionStartHardTimeoutMs}ms`;
+    Log.error(`❌ ${timeoutReason}`);
+    this.deps.setFailureReason(timeoutReason);
+    return null;
   }
 
   private async discoverAndExtractSession(
@@ -292,6 +332,7 @@ export class CliInteractiveStartupCoordinator {
   private async recoverFromLateInteractiveStartup(params: {
     promptForDiscovery: string;
     startTime: Date;
+    preferredSessionId?: string | null;
   }): Promise<InteractiveSessionDiscovery | null> {
     const timeouts = this.getStartupTimeouts();
     const deadlineMs =
@@ -309,7 +350,7 @@ export class CliInteractiveStartupCoordinator {
       const discovery = await this.discoverAndExtractSession(
         params.promptForDiscovery,
         params.startTime,
-        null
+        params.preferredSessionId ?? null
       );
       if (discovery) {
         Log.info(

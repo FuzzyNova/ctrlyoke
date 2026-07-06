@@ -17,15 +17,21 @@ export class AntigravityNotificationMonitor
   extends NotificationMonitorBase
   implements INotificationMonitor
 {
-  readonly supportsSessionStart = false;
+  readonly supportsSessionStart = true;
 
-  private static readonly USER_EVENT_MAP: Partial<Record<HookEvent, AntigravityHookKey>> =
-    {
+  private static readonly USER_EVENT_MAP: Partial<
+    Record<HookEvent, AntigravityHookKey>
+  > = {
+      sessionStart: "PreInvocation",
       stop: "Stop",
       preToolUse: "PreToolUse",
       postToolUse: "PostToolUse",
       permissionRequest: "PreToolUse",
     };
+
+  protected override getStartHookEvents(): string[] {
+    return ["PreInvocation"];
+  }
 
   buildHookConfig(
     scriptPath: string,
@@ -49,7 +55,10 @@ export class AntigravityNotificationMonitor
       Stop: null,
     };
 
-    const addHandler = (eventKey: AntigravityHookKey, handlerCommand: string) => {
+    const addHandler = (
+      eventKey: AntigravityHookKey,
+      handlerCommand: string
+    ) => {
       group[eventKey] ??= [];
       group[eventKey]!.push({
         type: "command",
@@ -58,6 +67,9 @@ export class AntigravityNotificationMonitor
       });
     };
 
+    if (selectedEvents.has("sessionStart")) {
+      addHandler("PreInvocation", command);
+    }
     if (selectedEvents.has("stop")) {
       addHandler("PostInvocation", command);
       addHandler("Stop", command);

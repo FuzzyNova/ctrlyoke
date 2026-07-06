@@ -27,6 +27,8 @@ function getStringField(input, keys) {
 
 function getLogicalEvent(nativeEvent) {
   switch (nativeEvent) {
+    case "PreInvocation":
+      return "sessionStart";
     case "PreToolUse":
       return "preToolUse";
     case "PostToolUse":
@@ -88,6 +90,36 @@ function main() {
       );
     }
 
+    if (hookEvent === "PreInvocation") {
+      if (sessionId && notifyDir) {
+        ensureNotifyDir(notifyDir, debugLog);
+        const notifyFile = buildNotifyFilePath(notifyDir, sessionId, true);
+        if (notifyFile) {
+          fs.writeFileSync(
+            notifyFile,
+            JSON.stringify(
+              {
+                timestamp: Date.now(),
+                sessionId,
+                status: "started",
+                hookEvent: "PreInvocation",
+                rawHookEvent: hookEvent,
+                transcriptPath: getStringField(hookInput, [
+                  "transcriptPath",
+                  "transcript_path",
+                ]),
+                rawHookData: hookInput,
+              },
+              null,
+              2
+            )
+          );
+        }
+      }
+      process.stdout.write("{}");
+      process.exit(0);
+    }
+
     if (hookEvent === "PostInvocation" || hookEvent === "Stop") {
       requireSessionId(sessionId, hookEvent, hookInput, SCRIPT_PREFIX, debugLog);
       ensureNotifyDir(notifyDir, debugLog);
@@ -107,11 +139,6 @@ function main() {
           2
         )
       );
-      process.stdout.write("{}");
-      process.exit(0);
-    }
-
-    if (hookEvent === "PreInvocation") {
       process.stdout.write("{}");
       process.exit(0);
     }

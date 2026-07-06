@@ -138,7 +138,13 @@ export class AntigravityCliProvider implements ICliProvider {
       notifyDir,
       workspaceRoot,
       userHooks,
-      [...new Set<HookEvent>(["stop", ...enabledNotificationHookEvents])]
+      [
+        ...new Set<HookEvent>([
+          "sessionStart",
+          "stop",
+          ...enabledNotificationHookEvents,
+        ]),
+      ]
     );
     if (hookConfig.type !== "json") {
       throw new Error("Unexpected Antigravity hook config type");

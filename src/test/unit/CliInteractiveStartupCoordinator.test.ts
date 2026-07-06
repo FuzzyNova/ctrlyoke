@@ -215,6 +215,130 @@ suite("CliInteractiveStartupCoordinator", () => {
     assert.strictEqual(failureReason, undefined);
   });
 
+  test("should recover via delayed log discovery after session-start hook provides session ID", async () => {
+    let failureReason: string | undefined;
+    let discoverAttempts = 0;
+
+    const coordinator = new CliInteractiveStartupCoordinator({
+      logParser: {
+        extractResponse: () => ({ events: [], metadata: {} }),
+        isComplete: () => false,
+        watchLogFile: () => ({ close() {} }) as any,
+        readNewLines: async () => [],
+        discoverSessionLog: async (
+          _promptText: string,
+          _startTime: Date,
+          sessionId?: string
+        ) => {
+          discoverAttempts += 1;
+          assert.strictEqual(sessionId, "hook-session-id");
+          return discoverAttempts >= 2 ? "C:/logs/hook-session.log" : null;
+        },
+        extractSessionId: () => "hook-session-id",
+        extractStructuredEventsFromEvent: () => [],
+        extractContentFromEvent: () => undefined,
+        formatStatistics: () => "",
+        getFinalEventsOnCompletion: async () => [],
+      },
+      notificationMonitor: {
+        supportsSessionIdInFilename: true,
+        supportsSessionStart: true,
+        monitorForCompletion: async () => ({ completed: false }),
+        buildHookConfig: () => ({ type: "none" as const }),
+        getNotificationDirectory: () => process.cwd(),
+        waitForSessionStart: async () => ({
+          completed: true,
+          data: {
+            hookEvent: "PreInvocation",
+            sessionId: "hook-session-id",
+          },
+        }),
+      },
+      getWorkspaceRoot: () => process.cwd(),
+      getAbortState: () => null,
+      markProcessExitDuringStage: (_stage: string, exitCode: number) =>
+        `process exit ${exitCode}`,
+      setFailureReason: (reason: string) => {
+        failureReason = reason;
+      },
+      startupTimeouts: {
+        sessionStartSoftTimeoutMs: 5,
+        sessionStartHardTimeoutMs: 25,
+        sessionStartPollMs: 1,
+        lateStartRecoveryPollMs: 1,
+      },
+    });
+
+    const result = await coordinator.resolveSession({
+      promptForDiscovery: "say hi",
+      startTime: new Date(),
+      runId: "run-4a",
+    });
+
+    assert.deepStrictEqual(result, {
+      logPath: "C:/logs/hook-session.log",
+      sessionId: "hook-session-id",
+    });
+    assert.ok(discoverAttempts >= 2);
+    assert.strictEqual(failureReason, undefined);
+  });
+
+  test("should recover via delayed log discovery when SessionStart is unsupported", async () => {
+    let failureReason: string | undefined;
+    let discoverAttempts = 0;
+
+    const coordinator = new CliInteractiveStartupCoordinator({
+      logParser: {
+        extractResponse: () => ({ events: [], metadata: {} }),
+        isComplete: () => false,
+        watchLogFile: () => ({ close() {} }) as any,
+        readNewLines: async () => [{ type: "session.created" }],
+        discoverSessionLog: async () => {
+          discoverAttempts += 1;
+          return discoverAttempts >= 2 ? "C:/logs/late-antigravity.log" : null;
+        },
+        extractSessionId: () => "late-session-id",
+        extractStructuredEventsFromEvent: () => [],
+        extractContentFromEvent: () => undefined,
+        formatStatistics: () => "",
+        getFinalEventsOnCompletion: async () => [],
+      },
+      notificationMonitor: {
+        supportsSessionIdInFilename: true,
+        supportsSessionStart: false,
+        monitorForCompletion: async () => ({ completed: false }),
+        buildHookConfig: () => ({ type: "none" as const }),
+        getNotificationDirectory: () => process.cwd(),
+      },
+      getWorkspaceRoot: () => process.cwd(),
+      getAbortState: () => null,
+      markProcessExitDuringStage: (_stage: string, exitCode: number) =>
+        `process exit ${exitCode}`,
+      setFailureReason: (reason: string) => {
+        failureReason = reason;
+      },
+      startupTimeouts: {
+        sessionStartSoftTimeoutMs: 5,
+        sessionStartHardTimeoutMs: 25,
+        sessionStartPollMs: 1,
+        lateStartRecoveryPollMs: 1,
+      },
+    });
+
+    const result = await coordinator.resolveSession({
+      promptForDiscovery: "say hi",
+      startTime: new Date(),
+      runId: "run-4b",
+    });
+
+    assert.deepStrictEqual(result, {
+      logPath: "C:/logs/late-antigravity.log",
+      sessionId: "late-session-id",
+    });
+    assert.ok(discoverAttempts >= 2);
+    assert.strictEqual(failureReason, undefined);
+  });
+
   test("should fail after hard startup timeout when no hook or log ever arrives", async function () {
     this.timeout(1_000);
 
