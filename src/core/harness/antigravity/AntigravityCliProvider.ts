@@ -19,6 +19,8 @@ import type {
 import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import { SettingsJsonMcpTracker } from "../shared/SettingsJsonMcpTracker";
+import { Log } from "../../../utils/Log";
 import { parseArgString } from "../../../utils/CliArgParser";
 import { withFileLock } from "../../../utils/FileLockUtils";
 import { MODEL_NONE } from "../../../utils/ModelConstants";
@@ -35,6 +37,22 @@ type AntigravityHookGroup = Record<
 >;
 
 export class AntigravityCliProvider implements ICliProvider {
+  /**
+   * Shared singleton tracker for parallel-safe MCP management. Unlike
+   * Gemini/Qwen (which use `.{tool}/settings.json`), agy auto-discovers MCP
+   * from the workspace `.agents/mcp_config.json` (a bare `{ mcpServers }`
+   * object), with `~/.gemini/config/mcp_config.json` as the user-level file.
+   */
+  private static readonly mcpTracker = SettingsJsonMcpTracker.getInstance(
+    "antigravity",
+    {
+      projectConfigPath: (workspaceRoot: string) =>
+        path.join(workspaceRoot, ".agents", "mcp_config.json"),
+      userConfigPath: () =>
+        path.join(os.homedir(), ".gemini", "config", "mcp_config.json"),
+    }
+  );
+
   readonly config: HarnessConfig = {
     name: "agy",
     harnessId: HARNESS_IDS.ANTIGRAVITY_CLI,
@@ -43,6 +61,9 @@ export class AntigravityCliProvider implements ICliProvider {
     installHint: "Install via: npm install -g @google/antigravity-cli",
     shouldStreamHeadlessOutput: true,
     usesInteractiveNotificationMonitor: true,
+    // agy headless resolves relative prompt-file paths against the home dir,
+    // not the workspace cwd — use absolute references so it finds them.
+    usesAbsoluteFileReferences: true,
   };
 
   readonly responseParser: IResponseParser = new AntigravityResponseParser();
@@ -55,8 +76,8 @@ export class AntigravityCliProvider implements ICliProvider {
   async buildCliArgs(
     _prompt: PromptStep,
     _isInteractive: boolean,
-    _extensionPath: string,
-    _workspaceRoot: string | undefined,
+    extensionPath: string,
+    workspaceRoot: string | undefined,
     sessionId: string | undefined,
     workflowContext?: {
       promptIndex: number;
@@ -70,6 +91,26 @@ export class AntigravityCliProvider implements ICliProvider {
     const resolvedModel = workflowContext?.resolvedProperties?.model;
     const resolvedResumeSession =
       workflowContext?.resolvedProperties?.resumeSession;
+
+    // MCP configuration (experimental — see isMcpEnabled). agy auto-discovers
+    // .agents/mcp_config.json, so no CLI arg is returned; this just writes the
+    // file via the tracker when enabled.
+    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+      workflowContext,
+      workspaceRoot,
+      extensionPath,
+      (serverPath, wsRoot, workingFile, additionalEnv, userServers) =>
+        this.getMcpConfigArgs(
+          serverPath,
+          wsRoot,
+          workingFile,
+          additionalEnv,
+          userServers
+        )
+    );
+    if (mcpArgs.length > 0) {
+      args.push(...mcpArgs);
+    }
 
     const model = this.validateAndGetModel(resolvedModel);
     if (model) {
@@ -201,6 +242,17 @@ export class AntigravityCliProvider implements ICliProvider {
     workingFilePath?: string
   ): Promise<void> {
     const workflowKey = workingFilePath ?? workspaceRoot;
+
+    // Remove this workflow's MCP servers from .agents/mcp_config.json
+    // (ref-counted — only removed when no other workflow needs them). Uses the
+    // same workflow key as getMcpConfigArgs. Safe to call even when MCP was
+    // never registered.
+    await AntigravityCliProvider.mcpTracker.unregisterWorkflow(
+      workflowKey,
+      workspaceRoot
+    );
+
+    // Remove this workflow's hook group from the global hooks.json.
     const groupName = this.getHookGroupName(workflowKey);
     const hooksPath = this.getGlobalHooksPath();
 
@@ -240,17 +292,55 @@ export class AntigravityCliProvider implements ICliProvider {
     );
   }
 
-  getMcpConfigArgs(
-    _mcpServerPath: string | undefined,
-    _workspaceRoot: string,
-    _workingFilePath?: string,
-    _additionalEnv?: Record<string, string>,
-    _userServers?: McpServerConfig[]
+  /**
+   * Register MCP servers by writing `.agents/mcp_config.json` (via the shared
+   * tracker for parallel-safe ref-counting). agy auto-discovers this file, so
+   * no CLI arg is needed — returns `[]` on success.
+   *
+   * agy has no `--allowed-mcp-server-names` flag, so no per-prompt server
+   * scoping is applied — parallel workflows in one workspace share the file's
+   * servers.
+   */
+  async getMcpConfigArgs(
+    mcpServerPath: string | undefined,
+    workspaceRoot: string,
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>,
+    userServers?: McpServerConfig[]
   ): Promise<string[] | null> {
-    return Promise.resolve(null);
+    if (!mcpServerPath && (!userServers || userServers.length === 0)) {
+      return null;
+    }
+
+    try {
+      const mcpEntries = CliProviderUtils.buildSettingsJsonMcpEntries(
+        mcpServerPath,
+        workspaceRoot,
+        workingFilePath,
+        additionalEnv,
+        userServers,
+        // agy's mcp_config.json uses serverUrl for remote servers and does not
+        // recognize the type/trust fields.
+        { remoteUrlKey: "serverUrl", includeRemoteType: false, includeTrust: false }
+      );
+
+      const workflowKey = workingFilePath ?? workspaceRoot;
+      await AntigravityCliProvider.mcpTracker.registerServers(
+        workflowKey,
+        workspaceRoot,
+        mcpEntries
+      );
+      Log.debug("🔧 Antigravity MCP servers written to .agents/mcp_config.json");
+      return [];
+    } catch (error) {
+      Log.warn(`Failed to register Antigravity MCP servers: ${error}`);
+      return null;
+    }
   }
 
   getMcpConfigFilePath(): null {
+    // MCP config is merged into .agents/mcp_config.json (auto-discovered, not a
+    // CLI arg). Cleanup is handled by cleanupWorkspaceArtifacts via the tracker.
     return null;
   }
 

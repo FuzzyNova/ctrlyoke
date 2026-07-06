@@ -35,9 +35,27 @@ class AsyncMutex {
 }
 
 /**
- * Tracks MCP server lifecycle in settings.json for Gemini and Qwen CLIs.
+ * Options for customizing where a tracker reads/writes its MCP config.
  *
- * Both CLIs auto-discover MCP servers from `.{tool}/settings.json`. When multiple
+ * Defaults reproduce the Gemini/Qwen behavior (`.{tool}/settings.json` in the
+ * project, `~/.{tool}/settings.json` for the user). Antigravity overrides these
+ * to use `.agents/mcp_config.json` (project) and `~/.gemini/config/mcp_config.json`
+ * (user), and those files hold a bare `{ "mcpServers": {...} }` object.
+ */
+export interface SettingsJsonMcpTrackerOptions {
+  /** Resolve the project-level config file path. Default: `<ws>/.<tool>/settings.json`. */
+  projectConfigPath?: (workspaceRoot: string) => string;
+  /** Resolve the user-level config file path. Default: `~/.<tool>/settings.json`. */
+  userConfigPath?: () => string;
+}
+
+/**
+ * Tracks MCP server lifecycle in a JSON config file for Gemini, Qwen, and
+ * Antigravity CLIs.
+ *
+ * These CLIs auto-discover MCP servers from a JSON file's `mcpServers` key
+ * (`.{tool}/settings.json` for Gemini/Qwen, `.agents/mcp_config.json` for
+ * Antigravity). When multiple
  * parallel workflows add/remove MCP servers, this tracker ensures:
  *
  * 1. **Reference counting** — servers aren't removed from settings.json while
@@ -75,10 +93,13 @@ export class SettingsJsonMcpTracker {
    *
    * @param toolName CLI tool name ("gemini" or "qwen")
    */
-  static getInstance(toolName: string): SettingsJsonMcpTracker {
+  static getInstance(
+    toolName: string,
+    options?: SettingsJsonMcpTrackerOptions
+  ): SettingsJsonMcpTracker {
     let instance = this.instances.get(toolName);
     if (!instance) {
-      instance = new SettingsJsonMcpTracker(toolName);
+      instance = new SettingsJsonMcpTracker(toolName, options);
       this.instances.set(toolName, instance);
     }
     return instance;
@@ -95,6 +116,12 @@ export class SettingsJsonMcpTracker {
 
   /** Tool's settings subdirectory (e.g. ".gemini", ".qwen") */
   private readonly settingsSubdir: string;
+
+  /** Resolves the project-level config file path from a workspace root. */
+  private readonly projectConfigPath: (workspaceRoot: string) => string;
+
+  /** Resolves the user-level config file path. */
+  private readonly userConfigPath: () => string;
 
   /** Async mutex for serializing all read-modify-write operations on settings.json. */
   private readonly mutex = new AsyncMutex();
@@ -117,8 +144,18 @@ export class SettingsJsonMcpTracker {
   /** Per-workflow tracking: which server names each workflow registered. */
   private workflowServers = new Map<string, string[]>();
 
-  private constructor(private readonly toolName: string) {
+  private constructor(
+    private readonly toolName: string,
+    options?: SettingsJsonMcpTrackerOptions
+  ) {
     this.settingsSubdir = `.${toolName}`;
+    this.projectConfigPath =
+      options?.projectConfigPath ??
+      ((workspaceRoot: string) =>
+        path.join(workspaceRoot, this.settingsSubdir, "settings.json"));
+    this.userConfigPath =
+      options?.userConfigPath ??
+      (() => path.join(os.homedir(), this.settingsSubdir, "settings.json"));
   }
 
   // ============================================================
@@ -162,16 +199,8 @@ export class SettingsJsonMcpTracker {
       return;
     }
 
-    const projectSettings = path.join(
-      workspaceRoot,
-      this.settingsSubdir,
-      "settings.json"
-    );
-    const userSettings = path.join(
-      os.homedir(),
-      this.settingsSubdir,
-      "settings.json"
-    );
+    const projectSettings = this.projectConfigPath(workspaceRoot);
+    const userSettings = this.userConfigPath();
 
     this.baselineProjectSettingsFileExisted = false;
     this.baselineProjectHadMcpServers = false;
@@ -244,11 +273,7 @@ export class SettingsJsonMcpTracker {
     // Serialize the file read-modify-write under the mutex
     await this.mutex.acquire();
     try {
-      const settingsPath = path.join(
-        workspaceRoot,
-        this.settingsSubdir,
-        "settings.json"
-      );
+      const settingsPath = this.projectConfigPath(workspaceRoot);
       let settings: Record<string, unknown> = {};
       try {
         settings = JSON.parse(await fs.readFile(settingsPath, "utf-8"));
@@ -269,7 +294,7 @@ export class SettingsJsonMcpTracker {
 
       if (changed) {
         settings.mcpServers = existingMcp;
-        await fs.mkdir(path.join(workspaceRoot, this.settingsSubdir), {
+        await fs.mkdir(path.dirname(settingsPath), {
           recursive: true,
         });
         await fs.writeFile(
@@ -333,11 +358,7 @@ export class SettingsJsonMcpTracker {
     if (toRemove.length > 0) {
       await this.mutex.acquire();
       try {
-        const settingsPath = path.join(
-          workspaceRoot,
-          this.settingsSubdir,
-          "settings.json"
-        );
+        const settingsPath = this.projectConfigPath(workspaceRoot);
         try {
           const settings = JSON.parse(
             await fs.readFile(settingsPath, "utf-8")

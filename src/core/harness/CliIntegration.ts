@@ -306,25 +306,29 @@ export class CliIntegration extends HarnessIntegration {
    */
   private formatDirectFileRef(absolutePath: string): string {
     const workspaceRoot = this.getWorkspaceRoot() ?? "";
-    const relativePath = path.relative(workspaceRoot, absolutePath);
-    const quoted = relativePath.includes(" ")
-      ? `"${relativePath}"`
-      : relativePath;
+    const refPath = this.provider.config.usesAbsoluteFileReferences
+      ? absolutePath
+      : path.relative(workspaceRoot, absolutePath);
+    const quoted = refPath.includes(" ") ? `"${refPath}"` : refPath;
     return this.provider.formatFileReference?.(quoted) ?? `@${quoted}`;
   }
 
   /**
    * Format a temp-file relative path as a file reference using the provider's
    * harness-specific prefix (e.g. "@path" for Copilot, "path" for Claude).
+   *
+   * Providers with `usesAbsoluteFileReferences` (Antigravity) get the absolute
+   * path so the harness can resolve it regardless of its working directory.
    */
   private formatTempFileRef(
     tempMgr: TempFileManager,
     absolutePath: string
   ): string {
-    const relativePath = tempMgr.getRelativePath(absolutePath);
-    return (
-      this.provider.formatFileReference?.(relativePath) ?? `@${relativePath}`
-    );
+    const refPath = this.provider.config.usesAbsoluteFileReferences
+      ? absolutePath
+      : tempMgr.getRelativePath(absolutePath);
+    const quoted = refPath.includes(" ") ? `"${refPath}"` : refPath;
+    return this.provider.formatFileReference?.(quoted) ?? `@${quoted}`;
   }
 
   /**

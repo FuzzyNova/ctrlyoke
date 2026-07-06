@@ -60,6 +60,19 @@ export interface HarnessConfig {
    * pre-render headings, tables, and chrome themselves (currently: copilot-cli).
    */
   rawTextOutput?: boolean;
+
+  /**
+   * When true, file references injected into the prompt (prompt file, agents,
+   * skills, context, @-mentioned files) use absolute paths instead of
+   * workspace-relative ones.
+   *
+   * Needed for Antigravity (agy): in headless `--print` mode agy's agent
+   * resolves a relative path against the user's home directory rather than the
+   * process cwd/workspace (even though its `workspaceDirs` is the workspace),
+   * so a relative `.ctrlyoke/temp/...prompt.md` is never found. Absolute paths
+   * resolve regardless of agy's cwd notion.
+   */
+  usesAbsoluteFileReferences?: boolean;
 }
 
 /**

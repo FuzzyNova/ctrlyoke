@@ -24,6 +24,22 @@ interface GetCliVersionOptions extends CliVersionCommandOptions {
 }
 
 /**
+ * Per-harness formatting knobs for {@link CliProviderUtils.buildSettingsJsonMcpEntries}.
+ *
+ * Defaults reproduce Gemini/Qwen output (`url` + `type` for remote servers,
+ * `trust: true` for auto-approved servers). Antigravity's `mcp_config.json`
+ * schema uses `serverUrl` and recognizes neither `type` nor `trust`.
+ */
+export interface SettingsJsonMcpEntryOptions {
+  /** Key used for a remote server's URL. Default `"url"`; Antigravity uses `"serverUrl"`. */
+  remoteUrlKey?: "url" | "serverUrl";
+  /** Whether to emit a `type` field for remote servers. Default `true`. */
+  includeRemoteType?: boolean;
+  /** Whether to emit a `trust` field for auto-approved/orchestrator servers. Default `true`. */
+  includeTrust?: boolean;
+}
+
+/**
  * Shared CLI provider utilities
  *
  * Contains common logic used by all CLI providers (Copilot, Claude, Codex)
@@ -310,8 +326,16 @@ export class CliProviderUtils {
     workspaceRoot: string,
     workingFilePath?: string,
     additionalEnv?: Record<string, string>,
-    userServers?: McpServerConfig[]
+    userServers?: McpServerConfig[],
+    options?: SettingsJsonMcpEntryOptions
   ): Record<string, unknown> {
+    // Defaults reproduce Gemini/Qwen semantics; Antigravity overrides the
+    // remote-URL key (serverUrl) and drops the type/trust fields its schema
+    // doesn't recognize.
+    const remoteUrlKey = options?.remoteUrlKey ?? "url";
+    const includeRemoteType = options?.includeRemoteType ?? true;
+    const includeTrust = options?.includeTrust ?? true;
+
     const mcpServers: Record<string, unknown> = {};
 
     // ctrlyoke server (when included in mcpServers list)
@@ -329,27 +353,34 @@ export class CliProviderUtils {
         Object.assign(env, additionalEnv);
       }
 
-      mcpServers["ctrlyoke"] = {
+      const ctrlyokeEntry: Record<string, unknown> = {
         command: "node",
         args: [normalizedServerPath],
         env,
-        trust: true, // ctrlyoke is the orchestrator — auto-approve its tools
       };
+      if (includeTrust) {
+        // ctrlyoke is the orchestrator — auto-approve its tools
+        ctrlyokeEntry.trust = true;
+      }
+      mcpServers["ctrlyoke"] = ctrlyokeEntry;
     }
 
     // User-defined MCP servers
     if (userServers) {
       for (const server of userServers) {
-        const entry: Record<string, unknown> = server.url
-          ? { url: server.url, type: server.transport ?? "streamable-http" }
-          : { command: server.command };
-        if (!server.url) {
+        const entry: Record<string, unknown> = {};
+        if (server.url) {
+          entry[remoteUrlKey] = server.url;
+          if (includeRemoteType) {
+            entry.type = server.transport ?? "streamable-http";
+          }
+          if (server.headers) entry.headers = server.headers;
+        } else {
+          entry.command = server.command;
           if (server.args) entry.args = server.args;
           if (server.env) entry.env = server.env;
-        } else {
-          if (server.headers) entry.headers = server.headers;
         }
-        if (server.autoApprove === true) {
+        if (includeTrust && server.autoApprove === true) {
           entry.trust = true;
         }
         mcpServers[server.id] = entry;
