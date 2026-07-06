@@ -1,5 +1,12 @@
 # Standalone ctrlyoke Server Plan
 
+**Status (updated 2026-07-05):** VS Code-hosted server is **shipped**. Standalone
+`ctrlyoke server` is **not started** (Phases 5–10 unimplemented) and is **deferred out of
+v0.1.0** — see `dev/backlog/RELEASE_PLAN.md` §2.11. The inert `server.standalonePort` UI row
+has been removed from `ServerSection.tsx`; the type/schema/default (`4748`) are retained so
+standalone can re-surface the port from its own CLI surface later with no config migration.
+This document is the standalone implementation backlog for after v0.1.0.
+
 ## Overview
 
 Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessible web app. Two delivery modes are planned, both built on a shared `IDashboardProvider` interface:
@@ -39,7 +46,7 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - A full VS Code extension replacement
 - Supporting the `copilot-chat` harness in the standalone server (directly automates VS Code's UI)
 
-## Current Codebase Audit (updated 2026-06-13)
+## Current Codebase Audit (updated 2026-07-05)
 
 ### Already in place
 
@@ -64,21 +71,96 @@ Expose the existing `src/ui/webview-react/` React dashboard as a browser-accessi
 - `HostedServerRouter.ts` is no longer needed as a separate concept; `CtrlYokeWebviewProvider.routeExternalMessage(...)` is the routing seam.
 - The remaining work in this document should be treated as **standalone-server implementation**, not hosted-server implementation.
 
-**Standalone server (Phases 5–10):**
+**Standalone server (Phases 5–10) — verified against `src/` on 2026-07-05:**
 
-- `WorkflowOrchestrator` still hard-codes `new VsCodeAdapter(this.context)` (5 call sites) — blocks standalone reuse.
-- `PromptFileWatcher` and `CliWatchSession` still call `vscode.workspace.createFileSystemWatcher()` directly (4 watcher instances total); `PlatformAdapter` has no `createFileWatcher()` seam yet.
-- `WebviewSettingsSync` still uses `vscode.workspace.workspaceFolders` directly (7 occurrences) for agent/skill/workspace discovery.
-- `src/cli.ts` now exposes `run`, `validate`, and `commit`; there is still no `ctrlyoke server` subcommand.
-- `StandaloneServerAdapter`, `CtrlYokeServer`, `WebSocketMessageRouter`, `CompletionService`, and `ServerFileWatcher` do not exist yet.
-- `fast-glob`, `ignore`, and `vscode-jsonrpc` are still not installed; the first two are needed once standalone file/symbol completions are added.
-- `src/ui/webview-react/utils/vsCodeStateStorage.ts` has not been renamed/wrapped as a platform-neutral `webviewStateStorage` helper yet.
-- The standalone launch UX does not exist yet: no terminal URL banner, no OSC-8 clickable link output, no terminal QR code, and no standalone token-persistence story outside VS Code secret storage.
+_Orchestration seams (Track 1 — shared prerequisites, still all open):_
+
+- `WorkflowOrchestrator` still constructs `new VsCodeAdapter(...)` internally at **5 sites** —
+  `WorkflowOrchestrator.ts:217` (integration factory), `:237` (`PromptFileParser`), `:240`
+  (`WorkspaceSessionManager`), `:244` (`EndConditionEvaluator`), and `:2192`
+  (`buildWorkflowInstance` → `WorkflowInstance`). The constructor takes a `vscode.ExtensionContext`,
+  not a `PlatformAdapter`; standalone reuse requires accepting an injected adapter instead.
+- `PlatformAdapter` still has **no `createFileWatcher()` seam** (grep: no matches), and there are
+  **6 direct `vscode.workspace.createFileSystemWatcher()` call sites** in reusable orchestration
+  paths that must route through it: `PromptFileWatcher.ts:49` (1); `CliWatchSession.ts:146,221,292,314`
+  (4 — working file, lock file, history run files, plus one more); and
+  `WorkflowOrchestrator.ts:2400` (`runnerJsonCreateWatcher`, not previously called out in this plan).
+- `WebviewSettingsSync` now uses `vscode.workspace.workspaceFolders` at **3 sites**
+  (`:164`, `:618`, `:711`) for agent/skill/workspace discovery — down from the "7 occurrences"
+  this plan previously recorded — plus `vscode.commands.executeCommand(...)` for server
+  enable/disable (`:949`, `:953`, `:959`), which is hosted-only and fine to leave.
+
+_Standalone-only pieces (Track 3, none exist yet):_
+
+- `src/cli.ts` exposes only `run`, `validate`, and `commit` — there is still **no `ctrlyoke server`
+  subcommand**.
+- `StandaloneServerAdapter`, `CtrlYokeServer`, `WebSocketMessageRouter`, `CompletionService`,
+  `ServerFileWatcher`, and `LspSymbolClient` **do not exist** (`src/server/` contains only the
+  hosted server + its helpers: `CtrlYokeHostedServer`, `HostedWorkspaceViewerService`,
+  `HostedServerMessageFactory`, `HostedServiceWorkerScript`, `WebPushService`, `PngIconService`,
+  `RuntimeDependencyPaths`).
+- Phase 4 theme CSS (`src/server/themes/vscode-default-{dark,light}.css`) **does not exist**.
+  The hosted server never needed it (it captures live `--vscode-*` vars from the VS Code webview
+  and injects them); standalone has no webview to capture from, so static theme defaults are a
+  genuine standalone-only gap.
+- `fast-glob`, `ignore`, `vscode-jsonrpc`, and `open` are **not installed** (verified against
+  `package.json`). `chokidar@^5`, `express@^5`, `ws@^8`, `qrcode@^1.5`, and `selfsigned@^5` **are**
+  present. `fast-glob` + `ignore` are needed for completions (Phase 8); `open` for `--open`
+  (Phase 10); `vscode-jsonrpc` only if the optional LSP symbol client ships.
+- `src/ui/webview-react/utils/vsCodeStateStorage.ts` has **not** been renamed/wrapped as a
+  platform-neutral `webviewStateStorage` helper yet.
+- Standalone launch UX does not exist: no terminal URL banner, OSC-8 clickable link, terminal QR
+  code, or token-persistence story outside VS Code secret storage.
 
 ### Readiness verdict
 
-- **VS Code-hosted server:** complete enough to treat as the reference implementation for standalone.
-- **Standalone server (Phases 5–10): not implemented yet, but lower-effort than the original estimate.** The main blockers are still the `VsCodeAdapter` construction path in `WorkflowOrchestrator`, the VS Code-only watcher implementations in `PromptFileWatcher` / `CliWatchSession`, and the absence of a CLI/server entrypoint — but the workspace-viewer feature set (file browser, git status/diff/stage/commit/push/pull, commit history, git-ref diffs) is now a vscode-free service that Phase 6/7 can mount directly, substantially shrinking that portion of the work.
+- **VS Code-hosted server:** shipped; treat it as the reference implementation for standalone.
+- **Standalone server (Phases 5–10): not started.** The load-bearing blockers are all in Track 1
+  (shared foundation): the 5 internal `VsCodeAdapter` constructions in `WorkflowOrchestrator`, the
+  missing `PlatformAdapter.createFileWatcher()` seam plus its 6 watcher call sites, and the absence
+  of a CLI/server entrypoint. The workspace-viewer feature set (file browser, git
+  status/diff/stage/commit/push/pull, commit history, git-ref diffs) is already a vscode-free
+  service (`HostedWorkspaceViewerService`, constructed from `workspaceRoot` alone) that Phase 6/7
+  can mount verbatim, so that portion is effectively done. Net: meaningful but bounded — the risk
+  concentrates in the orchestrator adapter refactor, which touches core execution paths.
+
+### Next Steps (post-v0.1.0, in dependency order)
+
+Do these roughly in order; steps 1–3 are the shared foundation and unblock everything else.
+
+1. **Adapter injection into `WorkflowOrchestrator`.** Change the constructor to accept a
+   `PlatformAdapter` (keep a `VsCodeAdapter`-from-`context` default for the extension path) and
+   thread it into the 5 internal construction sites (`:217`, `:237`, `:240`, `:244`, `:2192`).
+   Decide the strategy up front (Open Question 1): full adapter-first constructor vs. a
+   standalone factory that peels away `VsCodeAdapter` incrementally. **This is the highest-risk
+   step** — it touches integration wiring, parsing, session management, and instance
+   construction on the live execution path, so land it behind the existing test suite first.
+2. **`PlatformAdapter.createFileWatcher()` seam.** Add the method (VS Code impl returns a
+   `FileSystemWatcher`; standalone returns a `chokidar`-based `ServerFileWatcher`, Phase 9) and
+   route all 6 watcher call sites through it: `PromptFileWatcher.ts:49`,
+   `CliWatchSession.ts:{146,221,292,314}` (inject the adapter into its constructor), and
+   `WorkflowOrchestrator.ts:2400`. Design the seam around a `(glob, basePath)` pair, not
+   `vscode.RelativePattern`.
+3. **Workspace discovery off `vscode.workspace`.** Move the 3 `WebviewSettingsSync`
+   `workspaceFolders` reads (`:164`, `:618`, `:711`) behind adapter/constructor inputs. Leave the
+   `vscode.commands.executeCommand` server enable/disable calls (`:949`/`:953`/`:959`) as-is —
+   they are hosted-only.
+4. **Install standalone deps & add the entrypoint:** `fast-glob`, `ignore`, `open` (and
+   `vscode-jsonrpc` only if the LSP symbol client ships). Then build the standalone pieces
+   modeled on `CtrlYokeHostedServer` — `StandaloneServerAdapter` (Phase 5), `CtrlYokeServer`
+   (Phase 6, re-mounting `HostedWorkspaceViewerService` verbatim), `WebSocketMessageRouter`
+   (Phase 7), `CompletionService` (Phase 8), and `ServerFileWatcher` (Phase 9).
+5. **Standalone-only rendering/storage gaps:** author `src/server/themes/vscode-default-{dark,light}.css`
+   (Phase 4 — no VS Code webview to capture live vars from) and rename/wrap
+   `vsCodeStateStorage.ts` → platform-neutral `webviewStateStorage` backed by workspace-scoped
+   `localStorage`.
+6. **`ctrlyoke server` CLI command + launch UX** (Phase 10): `program.command("server")` +
+   `resolveServerConfig()`, tokenized local/LAN URL banner, OSC-8 clickable link, terminal QR
+   (reuse `qrcode`), and an HTTPS cert hint. Resolve the token-persistence model (Open Question 2)
+   before shipping.
+7. **Manual verification** per the Implementation Order Track 3 list: npm-installed CLI launch,
+   browser + phone clients, token gating, reconnects, TLS, parallel workflows, watch mode,
+   completions, and unsaved workspace-viewer draft recovery across tab close/reopen.
 
 ### Standalone CLI UX Requirements
 
@@ -185,7 +267,8 @@ By injecting a **WebSocket shim** in place of `acquireVsCodeApi()`, the entire c
 | `src/ui/WebviewSettingsSync.ts`               | `vscode.workspace.workspaceFolders`, command execution, `ConfigurationUtils`                                      | Move workspace discovery behind adapter/constructor inputs; keep settings reads routed through `ConfigurationUtils`                                                                                         |
 | `src/utils/ConfigurationUtils.ts`             | `vscode.workspace.getConfiguration()`                                                                             | **Done** — now reads from `CtrlYokeConfigService` (file-based config). No VS Code dependency remaining.                                                                                                     |
 | `src/core/orchestration/PromptFileWatcher.ts` | `vscode.workspace.createFileSystemWatcher()`                                                                      | `chokidar` (already in dependencies)                                                                                                                                                                        |
-| `src/core/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` (multiple watchers)                                                  | Same watcher abstraction; inject adapter into constructor                                                                                                                                                   |
+| `src/core/orchestration/CliWatchSession.ts`   | `vscode.workspace.createFileSystemWatcher()` × 4 (`:146`,`:221`,`:292`,`:314`)                                    | Same watcher abstraction; inject `PlatformAdapter` into constructor                                                                                                                                         |
+| `src/core/WorkflowOrchestrator.ts` (watcher)  | `vscode.workspace.createFileSystemWatcher()` for `*.runner.json` (`:2400`, `runnerJsonCreateWatcher`)             | Route through `PlatformAdapter.createFileWatcher()`; uses `vscode.RelativePattern` so the seam must accept a plain glob/base-path pair                                                                       |
 | `src/completions/CompletionHelpers.ts`        | `vscode.workspace.findFiles()`, Git extension                                                                     | Node.js `fs` + `fast-glob` + `ignore`                                                                                                                                                                       |
 
 ### Already Platform-Agnostic (zero or minimal changes)
@@ -1053,14 +1136,17 @@ The existing `vscode-shim` alias handles all `vscode` imports in the server code
 ```json
 "dependencies": {
   "fast-glob": "^3.x",
-  "ignore": "^5.x"
+  "ignore": "^5.x",
+  "open": "^10.x"
 }
 ```
 
-Notes:
+Notes (verified against `package.json`, 2026-07-05):
 
-- `express` + `ws` are already present.
-- `fast-glob` + `ignore` are only required once the standalone completion service lands.
+- `express@^5.2.1`, `ws@^8.20.0`, `chokidar@^5.0.0`, `qrcode@^1.5.4`, and `selfsigned@^5.5.0`
+  are already present.
+- `fast-glob` + `ignore` are only required once the standalone completion service (Phase 8) lands.
+- `open` is only required for the `--open` browser-launch flag (Phase 10).
 - `RUNNER_IDS.SERVER` already exists. The missing runtime plumbing is the CLI subcommand that uses it.
 
 Optional:
@@ -1118,14 +1204,22 @@ Full message coverage including multi-workflow types:
 
 ## Harness Compatibility
 
-| Harness        | Works in Server? | Notes                                |
-| -------------- | ---------------- | ------------------------------------ |
-| `copilot-cli`  | ✅ Yes           | Spawns process, no VS Code dep       |
-| `claude-cli`   | ✅ Yes           | Spawns process, no VS Code dep       |
-| `codex-cli`    | ✅ Yes           | Spawns process, no VS Code dep       |
-| `copilot-chat` | ❌ No            | Automates VS Code's Chat UI directly |
+| Harness           | Works in Server? | Notes                                                       |
+| ----------------- | ---------------- | ----------------------------------------------------------- |
+| `copilot-cli`     | ✅ Yes           | Spawns process, no VS Code dep                              |
+| `claude-cli`      | ✅ Yes           | Spawns process, no VS Code dep                              |
+| `codex-cli`       | ✅ Yes           | Spawns process, no VS Code dep                              |
+| `opencode-cli`    | ✅ Yes           | Spawns process, no VS Code dep                              |
+| `qwen-cli`        | ✅ Yes           | Spawns process, no VS Code dep                              |
+| `antigravity-cli` | ✅ Yes           | Spawns process, no VS Code dep (replaces `gemini-cli` — see `RELEASE_PLAN.md` §2.5) |
+| `copilot-chat`    | ❌ No            | Automates VS Code's Chat UI directly                       |
 
 Server validates harness at startup and rejects `copilot-chat` with a clear error.
+
+> **Harness-list note:** `WorkflowOrchestrator` currently still builds a `geminiCliIntegration`
+> (`WorkflowOrchestrator.ts:227`). The Gemini→Antigravity swap is tracked separately in
+> `RELEASE_PLAN.md` §2.5 / `ANTIGRAVITY_CLI_HARNESS_PLAN.md`; standalone should inherit whatever the
+> final CLI-harness list is at implementation time rather than re-deriving it here.
 
 ---
 
