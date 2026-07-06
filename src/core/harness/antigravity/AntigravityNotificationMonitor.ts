@@ -40,9 +40,16 @@ export class AntigravityNotificationMonitor
     userHooks?: UserHookConfig[],
     ctrlyokeEvents?: HookEvent[]
   ): HookConfig {
-    const command = CliNotificationMonitor.buildNodeCommand(
+    // agy executes hook commands with naive whitespace splitting and keeps
+    // literal quote characters (no shell quote processing), running them with
+    // cwd = ~/.gemini/config. A quoted path therefore reaches node with the
+    // quotes intact and is resolved relative to the config dir → "Cannot find
+    // module". Emit the command UNQUOTED (forward-slash absolute paths).
+    // NOTE: this means paths containing spaces are unsupported by agy hooks.
+    const baseCommand = CliNotificationMonitor.buildNodeCommand(
       scriptPath,
-      notifyDir
+      notifyDir,
+      false
     );
     const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const selectedEvents = new Set<HookEvent>(ctrlyokeEvents ?? ["stop"]);
@@ -55,10 +62,7 @@ export class AntigravityNotificationMonitor
       Stop: null,
     };
 
-    const addHandler = (
-      eventKey: AntigravityHookKey,
-      handlerCommand: string
-    ) => {
+    const pushHandler = (eventKey: AntigravityHookKey, handlerCommand: string) => {
       group[eventKey] ??= [];
       group[eventKey]!.push({
         type: "command",
@@ -67,24 +71,35 @@ export class AntigravityNotificationMonitor
       });
     };
 
+    // agy does NOT include the event name in the hook's stdin payload, so pass
+    // the native event name as an argv to our script (argv[3]). Each event has
+    // its own command string in hooks.json, so this uniquely identifies it.
+    const addHandler = (eventKey: AntigravityHookKey, extraArg?: string) => {
+      const parts = [baseCommand, eventKey];
+      if (extraArg) {
+        parts.push(extraArg);
+      }
+      pushHandler(eventKey, parts.join(" "));
+    };
+
     if (selectedEvents.has("sessionStart")) {
-      addHandler("PreInvocation", command);
+      addHandler("PreInvocation");
     }
     if (selectedEvents.has("stop")) {
-      addHandler("PostInvocation", command);
-      addHandler("Stop", command);
+      // Use Stop (fires once when the agent goes idle after a turn), NOT
+      // PostInvocation — PostInvocation fires per LLM invocation, so it fires
+      // multiple times per turn whenever tool calls are involved.
+      addHandler("Stop");
     }
     if (selectedEvents.has("preToolUse")) {
-      addHandler("PreToolUse", command);
+      addHandler("PreToolUse");
     }
     if (selectedEvents.has("postToolUse")) {
-      addHandler("PostToolUse", command);
+      addHandler("PostToolUse");
     }
     if (selectedEvents.has("permissionRequest")) {
-      addHandler(
-        "PreToolUse",
-        encodedDecisionHook ? `${command} "${encodedDecisionHook}"` : command
-      );
+      // encodedDecisionHook is base64 (no spaces), safe to pass unquoted.
+      addHandler("PreToolUse", encodedDecisionHook || undefined);
     }
 
     for (const hook of userHooks ?? []) {
@@ -100,7 +115,9 @@ export class AntigravityNotificationMonitor
       if (!nativeEvent) {
         continue;
       }
-      addHandler(nativeEvent, hook.command);
+      // User-supplied commands are run verbatim (not our script), so they get
+      // no injected event-name arg.
+      pushHandler(nativeEvent, hook.command);
     }
 
     return {
