@@ -47,7 +47,8 @@
             "codex-cli",
             "opencode-cli",
             "qwen-cli",
-            "gemini-cli"
+            "gemini-cli",
+            "antigravity-cli"
           ],
           "description": "The default harness to use for new workflows."
         },
@@ -61,7 +62,8 @@
             "codex-cli": { "type": "string" },
             "opencode-cli": { "type": "string" },
             "qwen-cli": { "type": "string" },
-            "gemini-cli": { "type": "string" }
+            "gemini-cli": { "type": "string" },
+            "antigravity-cli": { "type": "string" }
           },
           "additionalProperties": false
         },
@@ -74,7 +76,8 @@
             "codex-cli": { "type": "string" },
             "opencode-cli": { "type": "string" },
             "qwen-cli": { "type": "string" },
-            "gemini-cli": { "type": "string" }
+            "gemini-cli": { "type": "string" },
+            "antigravity-cli": { "type": "string" }
           },
           "additionalProperties": false
         },
@@ -291,7 +294,7 @@
         "allowedDirs": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Additional directories to allow tool access to. Applies to copilot-cli, claude-cli, codex-cli, and qwen-cli. Not supported by gemini-cli, opencode-cli, or copilot-chat."
+          "description": "Additional directories to allow tool access to. Applies to copilot-cli, claude-cli, codex-cli, and qwen-cli. Not supported by gemini-cli, antigravity-cli, opencode-cli, or copilot-chat."
         },
         "copilotAllowAllPaths": {
           "type": "boolean",
@@ -699,7 +702,8 @@
             "codex-cli",
             "opencode-cli",
             "qwen-cli",
-            "gemini-cli"
+            "gemini-cli",
+            "antigravity-cli"
           ],
           "description": "Harness to use for commit message generation. Empty = use the workspace default harness."
         },

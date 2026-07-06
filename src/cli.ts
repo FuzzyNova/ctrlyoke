@@ -55,7 +55,7 @@ program
   .description("Execute a prompt or workflow file")
   .option(
     "-H, --harness <harness>",
-    "AI harness: copilot-cli, claude-cli, codex-cli",
+    "AI harness: copilot-cli, claude-cli, codex-cli, gemini-cli, antigravity-cli, qwen-cli, opencode-cli",
     HARNESS_IDS.COPILOT_CLI
   )
   .option("-m, --model <model>", "Model to use")

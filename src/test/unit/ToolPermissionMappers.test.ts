@@ -6,6 +6,7 @@ import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPer
 import { OpenCodeToolPermissionMapper } from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
 import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
 import { GeminiToolPermissionMapper } from "../../core/harness/gemini/GeminiToolPermissionMapper";
+import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import type { ToolPermissionConfig } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
 
@@ -139,6 +140,56 @@ suite("ToolPermissionMappers", () => {
           mapper.hasFullPermissions(
             cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
           ),
+          false
+        );
+      });
+    });
+  });
+
+  suite("AntigravityToolPermissionMapper", () => {
+    const mapper = new AntigravityToolPermissionMapper();
+
+    suite("buildArgs", () => {
+      test("dangerouslyAllowAll → ['--dangerously-skip-permissions']", () => {
+        const args = mapper.buildArgs(
+          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
+        );
+        assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
+      });
+
+      test("allowAll → no CLI args", () => {
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
+        assert.deepStrictEqual(args, []);
+      });
+
+      test("custom mode → no CLI args", () => {
+        const args = mapper.buildArgs(
+          cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
+        );
+        assert.deepStrictEqual(args, []);
+      });
+    });
+
+    suite("hasFullPermissions", () => {
+      test("dangerouslyAllowAll → true", () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(
+            cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
+          ),
+          true
+        );
+      });
+
+      test("allowAll → true", () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
+          true
+        );
+      });
+
+      test("custom mode → false", () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg(PERMISSION_MODES.CUSTOM)),
           false
         );
       });

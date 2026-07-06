@@ -10,10 +10,12 @@ import {
   getQwenContextWindowSize,
   getGeminiModelName,
   getGeminiContextWindowSize,
+  getAntigravityModelName,
   COPILOT_MODELS,
   CLAUDE_CLI_MODELS,
   GEMINI_CLI_MODELS,
   QWEN_CLI_MODELS,
+  ANTIGRAVITY_CLI_MODELS,
   MODEL_NONE,
 } from "../../utils/ModelConstants";
 
@@ -222,6 +224,26 @@ suite("ModelConstants", () => {
     });
   });
 
+  suite("getAntigravityModelName", () => {
+    test("returns model name for known Antigravity model", () => {
+      assert.strictEqual(
+        getAntigravityModelName("Claude Sonnet 4.6 (Thinking)"),
+        "Claude Sonnet 4.6 (Thinking)"
+      );
+    });
+
+    test("returns arbitrary model string as-is", () => {
+      assert.strictEqual(
+        getAntigravityModelName("Custom AGY Model"),
+        "Custom AGY Model"
+      );
+    });
+
+    test("returns undefined for empty string", () => {
+      assert.strictEqual(getAntigravityModelName(""), undefined);
+    });
+  });
+
   suite("constant arrays", () => {
     test("COPILOT_MODELS has entries", () => {
       assert.ok(Object.keys(COPILOT_MODELS).length > 0);
@@ -241,6 +263,12 @@ suite("ModelConstants", () => {
 
     test("QWEN_CLI_MODELS includes qwen3.5-plus", () => {
       assert.ok(QWEN_CLI_MODELS.includes("qwen3.5-plus"));
+    });
+
+    test("ANTIGRAVITY_CLI_MODELS includes Claude Sonnet 4.6 (Thinking)", () => {
+      assert.ok(
+        ANTIGRAVITY_CLI_MODELS.includes("Claude Sonnet 4.6 (Thinking)")
+      );
     });
 
     test("MODEL_NONE is 'none'", () => {

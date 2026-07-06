@@ -11,6 +11,8 @@ import {
   CODEX_CLI_MODEL_LABELS,
   GEMINI_CLI_MODELS as MC_GEMINI_CLI_MODELS,
   GEMINI_CLI_MODEL_LABELS,
+  ANTIGRAVITY_CLI_MODELS as MC_ANTIGRAVITY_CLI_MODELS,
+  ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 
 // ============================================================================
@@ -520,6 +522,7 @@ export const HARNESS_IDS = {
   OPENCODE_CLI: "opencode-cli",
   QWEN_CLI: "qwen-cli",
   GEMINI_CLI: "gemini-cli",
+  ANTIGRAVITY_CLI: "antigravity-cli",
 } as const;
 
 // ============================================================================
@@ -536,6 +539,10 @@ export const HARNESS_INFO = {
   [HARNESS_IDS.OPENCODE_CLI]: { name: "OpenCode", shortName: "OpenCode" },
   [HARNESS_IDS.QWEN_CLI]: { name: "Qwen Code", shortName: "Qwen Code" },
   [HARNESS_IDS.GEMINI_CLI]: { name: "Gemini", shortName: "Gemini" },
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: {
+    name: "Antigravity CLI",
+    shortName: "Antigravity",
+  },
 } as const;
 
 // ============================================================================
@@ -545,14 +552,14 @@ export const HARNESS_INFO = {
 /**
  * Logical hook event names — mapped to CLI-specific event names at inject time.
  *
- * | Logical name        | Claude/Qwen      | Copilot CLI         | Gemini CLI   | Codex             | OpenCode                   |
- * |---------------------|------------------|---------------------|--------------|-------------------|----------------------------|
- * | "stop"              | Stop             | agentStop           | AfterAgent   | Stop              | session.status { idle }    |
- * | "sessionStart"      | SessionStart     | sessionStart        | SessionStart | SessionStart      | session.created            |
- * | "preToolUse"        | PreToolUse       | preToolUse          | BeforeTool   | PreToolUse        | tool.execute.before        |
- * | "postToolUse"       | PostToolUse      | postToolUse         | AfterTool    | PostToolUse       | tool.execute.after         |
- * | "userPromptSubmit"  | UserPromptSubmit | userPromptSubmitted | BeforeAgent  | UserPromptSubmit  | session.status { busy }    |
- * | "permissionRequest" | PermissionRequest| permissionRequest   | Notification | PermissionRequest | permission.asked           |
+ * | Logical name        | Claude/Qwen      | Copilot CLI         | Gemini CLI   | Antigravity CLI | Codex             | OpenCode                |
+ * |---------------------|------------------|---------------------|--------------|------------------|-------------------|-------------------------|
+ * | "stop"              | Stop             | agentStop           | AfterAgent   | PostInvocation   | Stop              | session.status { idle } |
+ * | "sessionStart"      | SessionStart     | sessionStart        | SessionStart | n/a              | SessionStart      | session.created         |
+ * | "preToolUse"        | PreToolUse       | preToolUse          | BeforeTool   | PreToolUse       | PreToolUse        | tool.execute.before     |
+ * | "postToolUse"       | PostToolUse      | postToolUse         | AfterTool    | PostToolUse      | PostToolUse       | tool.execute.after      |
+ * | "userPromptSubmit"  | UserPromptSubmit | userPromptSubmitted | BeforeAgent  | n/a              | UserPromptSubmit  | session.status { busy } |
+ * | "permissionRequest" | PermissionRequest| permissionRequest   | Notification | PreToolUse       | PermissionRequest | permission.asked        |
  */
 export type HookEvent =
   | "stop"
@@ -592,6 +599,7 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
       HARNESS_IDS.CODEX_CLI,
       HARNESS_IDS.QWEN_CLI,
       HARNESS_IDS.GEMINI_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
       HARNESS_IDS.OPENCODE_CLI,
     ],
   },
@@ -618,6 +626,7 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
       HARNESS_IDS.CODEX_CLI,
       HARNESS_IDS.QWEN_CLI,
       HARNESS_IDS.GEMINI_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
       HARNESS_IDS.OPENCODE_CLI,
     ],
   },
@@ -631,6 +640,7 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
       HARNESS_IDS.CODEX_CLI,
       HARNESS_IDS.QWEN_CLI,
       HARNESS_IDS.GEMINI_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
       HARNESS_IDS.OPENCODE_CLI,
     ],
   },
@@ -656,6 +666,7 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
       HARNESS_IDS.CODEX_CLI,
       HARNESS_IDS.GEMINI_CLI,
       HARNESS_IDS.QWEN_CLI,
+      HARNESS_IDS.ANTIGRAVITY_CLI,
       HARNESS_IDS.OPENCODE_CLI,
     ],
   },
@@ -693,6 +704,7 @@ export const DEFAULT_MODELS = {
   [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",
   [HARNESS_IDS.QWEN_CLI]: "qwen3.5-plus",
   [HARNESS_IDS.GEMINI_CLI]: "gemini-2.5-pro",
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: "Claude Sonnet 4.6 (Thinking)",
 } as const;
 
 // ============================================================================
@@ -727,6 +739,14 @@ export const GEMINI_CLI_MODELS = [
   ...MC_GEMINI_CLI_MODELS.map((id) => ({
     value: id,
     label: GEMINI_CLI_MODEL_LABELS[id] ?? id,
+  })),
+];
+
+export const ANTIGRAVITY_CLI_MODELS = [
+  { value: MODEL_OPTION_VALUES.NONE, label: "None" },
+  ...MC_ANTIGRAVITY_CLI_MODELS.map((id) => ({
+    value: id,
+    label: ANTIGRAVITY_CLI_MODEL_LABELS[id] ?? id,
   })),
 ];
 

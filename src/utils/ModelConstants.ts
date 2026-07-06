@@ -372,6 +372,34 @@ export const GEMINI_CLI_MODEL_LABELS: Record<string, string> = {
   "gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
 } as const;
 
+// ============================================================================
+// ANTIGRAVITY CLI MODELS
+// ============================================================================
+export const ANTIGRAVITY_CLI_MODELS = [
+  "Gemini 3.5 Flash (Medium)",
+  "Gemini 3.5 Flash (High)",
+  "Gemini 3.5 Flash (Low)",
+  "Gemini 3.1 Pro (Low)",
+  "Gemini 3.1 Pro (High)",
+  "Claude Sonnet 4.6 (Thinking)",
+  "Claude Opus 4.6 (Thinking)",
+  "GPT-OSS 120B (Medium)",
+] as const;
+
+export const ANTIGRAVITY_CLI_MODEL_LABELS: Record<string, string> =
+  Object.fromEntries(
+    ANTIGRAVITY_CLI_MODELS.map((model) => [model, model])
+  ) as Record<string, string>;
+
+export function getAntigravityModelName(model: string): string | undefined {
+  if (ANTIGRAVITY_CLI_MODELS.includes(model as any)) {
+    return model;
+  }
+  return model || undefined;
+}
+
+export type AntigravityCliModel = (typeof ANTIGRAVITY_CLI_MODELS)[number];
+
 /**
  * Get the Gemini CLI model name (identity function for now)
  *
@@ -414,6 +442,8 @@ export function getHarnessModelDisplayName(
       return CODEX_CLI_MODEL_LABELS[modelId] ?? modelId;
     case "gemini-cli":
       return GEMINI_CLI_MODEL_LABELS[modelId] ?? modelId;
+    case "antigravity-cli":
+      return ANTIGRAVITY_CLI_MODEL_LABELS[modelId] ?? modelId;
     case "qwen-cli":
       return QWEN_CLI_MODEL_LABELS[modelId] ?? modelId;
     default:

@@ -15,6 +15,7 @@ import { HarnessIcon } from "./HarnessIcon";
 // ─── Display names (official product names) ──────────────────────────────────
 
 export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> = {
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: "Antigravity",
   [HARNESS_IDS.COPILOT_CLI]: "Copilot CLI",
   [HARNESS_IDS.COPILOT_CHAT]: "Copilot",
   [HARNESS_IDS.CLAUDE_CLI]: "Claude Code",
@@ -27,6 +28,7 @@ export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> = {
 // ─── Grouping ─────────────────────────────────────────────────────────────────
 
 const CLI_HARNESSES: HarnessId[] = [
+  HARNESS_IDS.ANTIGRAVITY_CLI,
   HARNESS_IDS.CLAUDE_CLI,
   HARNESS_IDS.CODEX_CLI,
   HARNESS_IDS.COPILOT_CLI,

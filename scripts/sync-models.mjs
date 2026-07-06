@@ -182,6 +182,10 @@ function parseModelConstants() {
   const codexModels = parseCodexModels(content);
   const qwenModels = parseStringArrayConstant(content, "QWEN_CLI_MODELS");
   const geminiModels = parseStringArrayConstant(content, "GEMINI_CLI_MODELS");
+  const antigravityModels = parseStringArrayConstant(
+    content,
+    "ANTIGRAVITY_CLI_MODELS"
+  );
   const opencodeFallbackModels = parseStringArrayConstant(
     content,
     "OPENCODE_CLI_FALLBACK_MODELS"
@@ -198,6 +202,9 @@ function parseModelConstants() {
     `Found ${geminiModels.length} Gemini models in GEMINI_CLI_MODELS`
   );
   console.log(
+    `Found ${antigravityModels.length} Antigravity models in ANTIGRAVITY_CLI_MODELS`
+  );
+  console.log(
     `Found ${opencodeFallbackModels.length} OpenCode fallback models in OPENCODE_CLI_FALLBACK_MODELS`
   );
 
@@ -208,6 +215,7 @@ function parseModelConstants() {
     codexModels,
     qwenModels,
     geminiModels,
+    antigravityModels,
     opencodeFallbackModels,
   };
 }
@@ -392,6 +400,7 @@ function updateSchema(
     codexModels,
     qwenModels = [],
     geminiModels = [],
+    antigravityModels = [],
     opencodeFallbackModels = [],
   },
   checkOnly = false
@@ -411,6 +420,7 @@ function updateSchema(
       ...codexModels,
       ...qwenModels,
       ...geminiModels,
+      ...antigravityModels,
       ...opencodeFallbackModels,
     ]),
   ].sort();

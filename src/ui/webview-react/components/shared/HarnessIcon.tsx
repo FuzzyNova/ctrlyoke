@@ -3,6 +3,7 @@ import { HARNESS_IDS, type HarnessId } from "../../types/messages";
 
 // Raw SVG imports — inlined at build time, no CSP issues
 import claudeRaw from "@icons/harnesses/claude.svg?raw";
+import antigravityRaw from "@icons/harnesses/antigravity.svg?raw";
 import copilotChatRaw from "@icons/harnesses/copilot-chat.svg?raw";
 import copilotRaw from "@icons/harnesses/copilot-cli.svg?raw";
 import geminiRaw from "@icons/harnesses/gemini.svg?raw";
@@ -19,6 +20,7 @@ const ADAPTIVE_HARNESSES = new Set<HarnessId>([
 ]);
 
 const SVG_MAP: Record<HarnessId, string> = {
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: antigravityRaw,
   [HARNESS_IDS.CLAUDE_CLI]: claudeRaw,
   [HARNESS_IDS.COPILOT_CHAT]: copilotChatRaw,
   [HARNESS_IDS.COPILOT_CLI]: copilotRaw,

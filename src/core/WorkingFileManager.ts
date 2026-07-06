@@ -433,6 +433,14 @@ export class WorkingFileManager {
         return ConfigurationUtils.getClaudeCliModel();
       case HARNESS_IDS.CODEX_CLI:
         return ConfigurationUtils.getCodexCliModel();
+      case HARNESS_IDS.OPENCODE_CLI:
+        return ConfigurationUtils.getOpenCodeCliModel();
+      case HARNESS_IDS.QWEN_CLI:
+        return ConfigurationUtils.getQwenCliModel();
+      case HARNESS_IDS.GEMINI_CLI:
+        return ConfigurationUtils.getGeminiCliModel();
+      case HARNESS_IDS.ANTIGRAVITY_CLI:
+        return ConfigurationUtils.getAntigravityCliModel();
       default:
         return ConfigurationUtils.getCliModel();
     }

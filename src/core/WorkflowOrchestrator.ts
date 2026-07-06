@@ -161,6 +161,7 @@ export class WorkflowOrchestrator {
   private readonly openCodeCliIntegration: CliIntegration;
   private readonly qwenCliIntegration: CliIntegration;
   private readonly geminiCliIntegration: CliIntegration;
+  private readonly antigravityCliIntegration: CliIntegration;
 
   // Orchestration helpers
   private readonly templateImporter: TemplateImporter;
@@ -225,6 +226,8 @@ export class WorkflowOrchestrator {
     this.openCodeCliIntegration = this.integrationFactory.createOpenCodeCli();
     this.qwenCliIntegration = this.integrationFactory.createQwenCli();
     this.geminiCliIntegration = this.integrationFactory.createGeminiCli();
+    this.antigravityCliIntegration =
+      this.integrationFactory.createAntigravityCli();
 
     // Status bar
     this.statusBarManager = new StatusBarManager(context);
@@ -262,6 +265,7 @@ export class WorkflowOrchestrator {
       [HARNESS_IDS.OPENCODE_CLI, this.openCodeCliIntegration],
       [HARNESS_IDS.QWEN_CLI, this.qwenCliIntegration],
       [HARNESS_IDS.GEMINI_CLI, this.geminiCliIntegration],
+      [HARNESS_IDS.ANTIGRAVITY_CLI, this.antigravityCliIntegration],
     ];
     for (const [harnessId, integration] of allIntegrations) {
       context.subscriptions.push(
@@ -903,6 +907,7 @@ export class WorkflowOrchestrator {
           [HARNESS_IDS.OPENCODE_CLI]: "OpenCode CLI",
           [HARNESS_IDS.QWEN_CLI]: "Qwen Code CLI",
           [HARNESS_IDS.GEMINI_CLI]: "Gemini CLI",
+          [HARNESS_IDS.ANTIGRAVITY_CLI]: "Antigravity CLI",
         }[integrationMode] || "Copilot CLI";
       Log.info(`🔄 Default integration: ${modeLabel}`);
 
@@ -914,6 +919,7 @@ export class WorkflowOrchestrator {
         this.openCodeCliIntegration.initialize(),
         this.qwenCliIntegration.initialize(),
         this.geminiCliIntegration.initialize(),
+        this.antigravityCliIntegration.initialize(),
       ]);
 
       if (this.currentWorkspaceFolder) {
@@ -2318,6 +2324,8 @@ export class WorkflowOrchestrator {
         return this.qwenCliIntegration;
       case HARNESS_IDS.GEMINI_CLI:
         return this.geminiCliIntegration;
+      case HARNESS_IDS.ANTIGRAVITY_CLI:
+        return this.antigravityCliIntegration;
       case HARNESS_IDS.COPILOT_CLI:
       default:
         return this.copilotCliIntegration;
@@ -2331,6 +2339,7 @@ export class WorkflowOrchestrator {
     this.openCodeCliIntegration.setWorkflowName(name);
     this.qwenCliIntegration.setWorkflowName(name);
     this.geminiCliIntegration.setWorkflowName(name);
+    this.antigravityCliIntegration.setWorkflowName(name);
   }
 
   private updateStatusBar(): void {

@@ -59,7 +59,7 @@ export interface CtrlYokeGlobalSettings {
 
   // Permissions (harness-specific advanced settings)
   permissions: {
-    // Shared across copilot-cli, claude-cli, codex-cli, qwen-cli (not supported by gemini-cli, opencode-cli, copilot-chat)
+    // Shared across copilot-cli, claude-cli, codex-cli, qwen-cli (not supported by gemini-cli, antigravity-cli, opencode-cli, copilot-chat)
     allowedDirs: string[];
     // Copilot CLI-specific
     copilotAllowAllPaths: boolean;
@@ -223,6 +223,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
       "opencode-cli": "opencode/big-pickle",
       "qwen-cli": "qwen3.5-plus",
       "gemini-cli": "gemini-3-flash-preview",
+      "antigravity-cli": "Claude Sonnet 4.6 (Thinking)",
     },
     additionalArgs: {},
     agent: "",

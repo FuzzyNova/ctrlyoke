@@ -14,6 +14,7 @@ const HARNESS_WORKSPACE_AGENT_DIRS: Record<HarnessId, string[]> = {
   [HARNESS_IDS.COPILOT_CLI]: [".github/agents"],
   [HARNESS_IDS.CODEX_CLI]: [".agents"],
   [HARNESS_IDS.GEMINI_CLI]: [".gemini/agents"],
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: [".agents"],
   [HARNESS_IDS.OPENCODE_CLI]: [".opencode/agents"],
   [HARNESS_IDS.QWEN_CLI]: [".qwen/agents"],
   [HARNESS_IDS.COPILOT_CHAT]: [".github/agents"],
@@ -24,6 +25,7 @@ const HARNESS_USER_AGENT_DIRS: Record<HarnessId, string[]> = {
   [HARNESS_IDS.COPILOT_CLI]: ["~/.copilot/agents"],
   [HARNESS_IDS.CODEX_CLI]: ["~/.codex/agents"],
   [HARNESS_IDS.GEMINI_CLI]: ["~/.gemini/agents"],
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: ["~/.gemini/agents"],
   [HARNESS_IDS.OPENCODE_CLI]: ["~/.config/opencode/agents"],
   [HARNESS_IDS.QWEN_CLI]: ["~/.qwen/agents"],
   [HARNESS_IDS.COPILOT_CHAT]: ["~/.copilot/agents"],
@@ -34,6 +36,7 @@ const HARNESS_WORKSPACE_SKILL_DIRS: Record<HarnessId, string[]> = {
   [HARNESS_IDS.COPILOT_CLI]: [".github/skills"],
   [HARNESS_IDS.CODEX_CLI]: [".codex/skills"],
   [HARNESS_IDS.GEMINI_CLI]: [".gemini/skills"],
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: [".agents/skills"],
   [HARNESS_IDS.OPENCODE_CLI]: [".opencode/skills"],
   [HARNESS_IDS.QWEN_CLI]: [".qwen/skills"],
   [HARNESS_IDS.COPILOT_CHAT]: [".github/skills"],
@@ -44,6 +47,10 @@ const HARNESS_USER_SKILL_DIRS: Record<HarnessId, string[]> = {
   [HARNESS_IDS.COPILOT_CLI]: ["~/.copilot/skills"],
   [HARNESS_IDS.CODEX_CLI]: ["~/.codex/skills"],
   [HARNESS_IDS.GEMINI_CLI]: ["~/.gemini/skills"],
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: [
+    "~/.gemini/skills",
+    "~/.gemini/antigravity-cli/skills",
+  ],
   [HARNESS_IDS.OPENCODE_CLI]: ["~/.config/opencode/skills"],
   [HARNESS_IDS.QWEN_CLI]: ["~/.qwen/skills"],
   [HARNESS_IDS.COPILOT_CHAT]: ["~/.copilot/skills"],
@@ -51,7 +58,7 @@ const HARNESS_USER_SKILL_DIRS: Record<HarnessId, string[]> = {
 
 /**
  * File extension used when reading/writing agent files for each harness.
- * Claude CLI and Gemini use plain *.md (with YAML frontmatter agent headers);
+ * Claude CLI, Gemini, and Antigravity use plain *.md (with YAML frontmatter agent headers);
  * all others use *.agent.md.
  */
 export const HARNESS_AGENT_EXTENSION: Record<HarnessId, string> = {
@@ -59,6 +66,7 @@ export const HARNESS_AGENT_EXTENSION: Record<HarnessId, string> = {
   [HARNESS_IDS.COPILOT_CLI]: ".agent.md",
   [HARNESS_IDS.CODEX_CLI]: ".agent.md",
   [HARNESS_IDS.GEMINI_CLI]: ".md",
+  [HARNESS_IDS.ANTIGRAVITY_CLI]: ".md",
   [HARNESS_IDS.OPENCODE_CLI]: ".agent.md",
   [HARNESS_IDS.QWEN_CLI]: ".agent.md",
   [HARNESS_IDS.COPILOT_CHAT]: ".agent.md",

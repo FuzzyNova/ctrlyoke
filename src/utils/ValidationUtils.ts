@@ -6,6 +6,7 @@ import {
   COPILOT_CLI_MODEL_IDS,
   CLAUDE_CLI_MODELS,
   CODEX_CLI_MODELS,
+  ANTIGRAVITY_CLI_MODELS,
 } from "./ModelConstants";
 
 /**
@@ -31,6 +32,7 @@ const ALL_MODEL_IDS: string[] = [
     ...COPILOT_CLI_MODEL_IDS,
     ...CLAUDE_CLI_MODELS,
     ...CODEX_CLI_MODELS,
+    ...ANTIGRAVITY_CLI_MODELS,
   ]),
 ];
 
@@ -62,6 +64,7 @@ export class ValidationUtils {
           HARNESS_IDS.COPILOT_CHAT,
           HARNESS_IDS.CLAUDE_CLI,
           HARNESS_IDS.CODEX_CLI,
+          HARNESS_IDS.ANTIGRAVITY_CLI,
         ],
         nullable: true,
       },
@@ -134,6 +137,7 @@ export class ValidationUtils {
               HARNESS_IDS.COPILOT_CHAT,
               HARNESS_IDS.CLAUDE_CLI,
               HARNESS_IDS.CODEX_CLI,
+              HARNESS_IDS.ANTIGRAVITY_CLI,
             ],
             nullable: true,
           },

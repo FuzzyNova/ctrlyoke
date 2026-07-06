@@ -1449,7 +1449,10 @@ const WorkflowPropertiesPanelInner: React.FC<{
                         ? "ℹ️ Codex CLI uses sandbox/approval modes rather than individual tool patterns. Allowed Tools and Denied Tools lists are ignored."
                         : effectiveHarness === HARNESS_IDS.OPENCODE_CLI
                           ? "ℹ️ OpenCode CLI manages permissions via config file. Tool pattern lists are ignored."
-                          : "ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored."}
+                          : effectiveHarness ===
+                                HARNESS_IDS.ANTIGRAVITY_CLI
+                            ? "ℹ️ Antigravity CLI uses permission modes only. Tool pattern lists are ignored."
+                            : "ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored."}
                     </p>
                   )}
 
