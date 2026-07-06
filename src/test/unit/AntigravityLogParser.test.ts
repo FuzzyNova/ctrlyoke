@@ -62,7 +62,7 @@ suite("AntigravityLogParser", () => {
   });
 
   suite("extractResponse", () => {
-    test("returns text output and session metadata", () => {
+    test("returns transcript text output and session metadata", () => {
       const parser = new AntigravityLogParser();
 
       const result = parser.extractResponse([
@@ -87,8 +87,148 @@ suite("AntigravityLogParser", () => {
       assert.strictEqual(result.events[0].type, CLI_EVENT_TYPES.TEXT);
       assert.strictEqual(
         (result.events[0].data as { text: string }).text,
-        "first line\nsecond line"
+        "second line"
       );
+    });
+
+    test("includes exact context window usage from parsed events when available", () => {
+      const parser = new AntigravityLogParser();
+
+      const result = parser.extractResponse([
+        {
+          type: "response.text",
+          line: "answer",
+          sessionId: "22222222-2222-2222-2222-222222222222",
+          contextWindowUsedTokens: 42,
+          contextWindowSize: 1_000_000,
+          outputTokens: 3,
+        },
+      ]);
+
+      assert.strictEqual(
+        result.metadata.usage?.contextWindowUsedTokens,
+        42
+      );
+      assert.strictEqual(result.metadata.usage?.contextWindowSize, 1_000_000);
+      assert.strictEqual(result.metadata.usage?.inputTokens, 39);
+      assert.strictEqual(result.metadata.usage?.outputTokens, 3);
+      assert.strictEqual(result.metadata.usage?.totalTokens, 42);
+    });
+
+    test("does not expose infrastructure log lines as response text", () => {
+      const parser = new AntigravityLogParser();
+
+      const result = parser.extractResponse([
+        {
+          type: "log.line",
+          line: "I0706 11:27:16.479259 server.go:834] Starting conversation update stream",
+          sessionId: "22222222-2222-2222-2222-222222222222",
+        },
+      ]);
+
+      assert.strictEqual(result.events.length, 0);
+      assert.strictEqual(
+        result.metadata.sessionId,
+        "22222222-2222-2222-2222-222222222222"
+      );
+    });
+  });
+
+  suite("getFinalEventsOnCompletion", () => {
+    test("reads the latest model response from the Antigravity transcript", async () => {
+      await withTemporaryHome(async (homeDir) => {
+        const parser = new AntigravityLogParser();
+        const sessionId = "44444444-4444-4444-4444-444444444444";
+        const logDir = path.join(homeDir, ".gemini", "antigravity-cli", "log");
+        const logPath = path.join(logDir, "cli-20260705_120000.log");
+        const transcriptDir = path.join(
+          homeDir,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          sessionId,
+          ".system_generated",
+          "logs"
+        );
+        const transcriptPath = path.join(
+          transcriptDir,
+          "transcript_full.jsonl"
+        );
+
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.writeFileSync(
+          logPath,
+          `Starting conversation update stream for ${sessionId}\n`,
+          "utf8"
+        );
+        await parser.readNewLines(logPath);
+
+        fs.mkdirSync(transcriptDir, { recursive: true });
+        fs.writeFileSync(
+          transcriptPath,
+          [
+            JSON.stringify({
+              source: "USER_EXPLICIT",
+              type: "USER_INPUT",
+              status: "DONE",
+              content: "question",
+            }),
+            JSON.stringify({
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "DONE",
+              content: "first answer",
+            }),
+            JSON.stringify({
+              source: "MODEL",
+              type: "PLANNER_RESPONSE",
+              status: "DONE",
+              created_at: "2026-07-05T12:00:01Z",
+              content: "final answer",
+            }),
+          ].join("\n"),
+          "utf8"
+        );
+
+        const events = await parser.getFinalEventsOnCompletion(logPath);
+
+        assert.strictEqual(events.length, 1);
+        assert.strictEqual(events[0].type, "response.text");
+        assert.strictEqual(events[0].line, "final answer");
+        assert.strictEqual(events[0].sessionId, sessionId);
+      });
+    });
+  });
+
+  suite("extractLiveContextWindow", () => {
+    test("returns exact context usage from parsed events", () => {
+      const parser = new AntigravityLogParser();
+
+      const result = parser.extractLiveContextWindow(
+        {
+          type: "log.line",
+          line: "future usage line",
+          contextWindowUsedTokens: 17_000,
+          contextWindowSize: 1_000_000,
+        },
+        "Gemini 3.5 Flash (Low)"
+      );
+
+      assert.deepStrictEqual(result, {
+        used: 17_000,
+        size: 1_000_000,
+      });
+    });
+
+    test("returns null when Antigravity does not report exact context usage", () => {
+      const parser = new AntigravityLogParser();
+
+      const result = parser.extractLiveContextWindow(
+        { type: "log.line", line: "heartbeat" },
+        "Gemini 3.5 Flash (Low)"
+      );
+
+      assert.strictEqual(result, null);
     });
   });
 

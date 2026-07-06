@@ -10,8 +10,10 @@ import {
 import {
   CliEvent,
   TextData,
+  TokenUsage,
   UniversalCliOutput,
 } from "../../../types/CliOutputTypes";
+import { getAntigravityContextWindowSize } from "../../../utils/ModelConstants";
 
 interface AntigravityLogEvent extends BaseCliEvent {
   type:
@@ -21,10 +23,25 @@ interface AntigravityLogEvent extends BaseCliEvent {
     | "response.text";
   line: string;
   sessionId?: string;
+  timestamp?: number;
+  model?: string;
+  contextWindowUsedTokens?: number;
+  contextWindowSize?: number;
+  outputTokens?: number;
 }
 
 const SESSION_ID_REGEX =
   /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i;
+const TRANSCRIPT_READ_ATTEMPTS = 8;
+const TRANSCRIPT_READ_DELAY_MS = 150;
+
+interface AntigravityTranscriptEntry {
+  source?: string;
+  type?: string;
+  status?: string;
+  created_at?: string;
+  content?: unknown;
+}
 
 export class AntigravityLogParser
   extends BaseLogParser
@@ -108,7 +125,7 @@ export class AntigravityLogParser
   extractResponse(events: BaseCliEvent[]): UniversalCliOutput {
     const text = events
       .map((event) =>
-        event.type === "response.text" || event.type === "log.line"
+        event.type === "response.text"
           ? String((event as AntigravityLogEvent).line ?? "")
           : ""
       )
@@ -126,11 +143,15 @@ export class AntigravityLogParser
         ]
       : [];
 
+    const usage = this.extractTokenUsage(events);
+
     return {
       events: outputEvents,
       metadata: {
         harness: HARNESS_IDS.ANTIGRAVITY_CLI,
         sessionId: this.extractSessionId(events) ?? undefined,
+        model: this.resolvedModel || undefined,
+        usage,
       },
     };
   }
@@ -149,6 +170,7 @@ export class AntigravityLogParser
     });
 
     if (sessionId) {
+      this.cachedSessionId = sessionId;
       for (const candidate of candidates) {
         try {
           const content = fs.readFileSync(candidate, "utf8");
@@ -182,6 +204,51 @@ export class AntigravityLogParser
       return String((event as AntigravityLogEvent).line ?? "");
     }
     return undefined;
+  }
+
+  override extractLiveContextWindow(
+    event: BaseCliEvent,
+    modelId: string
+  ): { used: number; size: number } | null {
+    const antigravityEvent = event as AntigravityLogEvent;
+    if (typeof antigravityEvent.contextWindowUsedTokens !== "number") {
+      return null;
+    }
+
+    return {
+      used: antigravityEvent.contextWindowUsedTokens,
+      size:
+        antigravityEvent.contextWindowSize ??
+        getAntigravityContextWindowSize(antigravityEvent.model ?? modelId),
+    };
+  }
+
+  override async getFinalEventsOnCompletion(
+    _logPath: string
+  ): Promise<BaseCliEvent[]> {
+    const sessionId =
+      this.cachedSessionId ?? this.cachedLastConversationsSessionId;
+    if (!sessionId) {
+      return [];
+    }
+
+    const transcriptPath = this.getTranscriptPath(sessionId, true);
+    const compactTranscriptPath = this.getTranscriptPath(sessionId, false);
+
+    for (let attempt = 0; attempt < TRANSCRIPT_READ_ATTEMPTS; attempt += 1) {
+      const event =
+        this.readLatestResponseFromTranscript(transcriptPath, sessionId) ??
+        this.readLatestResponseFromTranscript(compactTranscriptPath, sessionId);
+      if (event) {
+        return [event];
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, TRANSCRIPT_READ_DELAY_MS)
+      );
+    }
+
+    return [];
   }
 
   formatStatistics(metadata: BaseCliEvent): string {
@@ -218,8 +285,101 @@ export class AntigravityLogParser
     return path.join(os.homedir(), ".gemini", "antigravity-cli", "log");
   }
 
+  private getBrainDirectory(sessionId: string): string {
+    return path.join(
+      os.homedir(),
+      ".gemini",
+      "antigravity-cli",
+      "brain",
+      sessionId
+    );
+  }
+
+  private getTranscriptPath(sessionId: string, full: boolean): string {
+    return path.join(
+      this.getBrainDirectory(sessionId),
+      ".system_generated",
+      "logs",
+      full ? "transcript_full.jsonl" : "transcript.jsonl"
+    );
+  }
+
   private extractSessionIdFromLine(line: string): string | undefined {
     const match = line.match(SESSION_ID_REGEX);
     return match?.[1];
+  }
+
+  private readLatestResponseFromTranscript(
+    transcriptPath: string,
+    sessionId: string
+  ): AntigravityLogEvent | undefined {
+    try {
+      if (!fs.existsSync(transcriptPath)) {
+        return undefined;
+      }
+
+      const content = fs.readFileSync(transcriptPath, "utf8");
+      let latest: AntigravityLogEvent | undefined;
+
+      for (const rawLine of content.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line) {
+          continue;
+        }
+
+        const entry = JSON.parse(line) as AntigravityTranscriptEntry;
+        if (
+          entry.source !== "MODEL" ||
+          entry.type !== "PLANNER_RESPONSE" ||
+          entry.status !== "DONE" ||
+          typeof entry.content !== "string" ||
+          entry.content.trim().length === 0
+        ) {
+          continue;
+        }
+
+        latest = {
+          type: "response.text",
+          line: entry.content.trim(),
+          sessionId,
+          timestamp: entry.created_at
+            ? new Date(entry.created_at).getTime()
+            : Date.now(),
+          model: this.resolvedModel || undefined,
+        };
+      }
+
+      return latest;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private extractTokenUsage(events: BaseCliEvent[]): TokenUsage | undefined {
+    const event = [...(events as AntigravityLogEvent[])]
+      .reverse()
+      .find(
+        (candidate) =>
+          typeof candidate.contextWindowUsedTokens === "number"
+      );
+    if (!event) {
+      return undefined;
+    }
+
+    const outputTokens = event.outputTokens ?? 0;
+    const contextWindowSize =
+      event.contextWindowSize ??
+      getAntigravityContextWindowSize(event.model ?? this.resolvedModel);
+    const inputTokens = Math.max(
+      event.contextWindowUsedTokens! - outputTokens,
+      0
+    );
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens: event.contextWindowUsedTokens!,
+      contextWindowUsedTokens: event.contextWindowUsedTokens,
+      contextWindowSize,
+    };
   }
 }

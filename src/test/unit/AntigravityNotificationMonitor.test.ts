@@ -57,7 +57,7 @@ suite("AntigravityNotificationMonitor", () => {
     assert.strictEqual(config.type, "json");
     const group = (config.config as Record<string, any>).ctrlyoke;
     assert.ok(Array.isArray(group.PreInvocation));
-    assert.ok(Array.isArray(group.PostInvocation));
+    assert.strictEqual(group.PostInvocation, null);
     assert.ok(Array.isArray(group.Stop));
   });
 });

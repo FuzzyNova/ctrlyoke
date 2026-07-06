@@ -398,6 +398,26 @@ export function getAntigravityModelName(model: string): string | undefined {
   return model || undefined;
 }
 
+/**
+ * Get the context window size for an Antigravity CLI model.
+ *
+ * Antigravity exposes display labels rather than API model IDs, so this maps
+ * by provider family and falls back to the Gemini-sized window used by the
+ * default Antigravity models.
+ */
+export function getAntigravityContextWindowSize(
+  modelId: string | undefined
+): number {
+  const normalized = (modelId ?? "").toLowerCase();
+  if (normalized.includes("claude")) {
+    return 200_000;
+  }
+  if (normalized.includes("gpt-oss")) {
+    return 128_000;
+  }
+  return 1_000_000;
+}
+
 export type AntigravityCliModel = (typeof ANTIGRAVITY_CLI_MODELS)[number];
 
 /**

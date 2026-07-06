@@ -11,6 +11,7 @@ import {
   getGeminiModelName,
   getGeminiContextWindowSize,
   getAntigravityModelName,
+  getAntigravityContextWindowSize,
   COPILOT_MODELS,
   CLAUDE_CLI_MODELS,
   GEMINI_CLI_MODELS,
@@ -241,6 +242,29 @@ suite("ModelConstants", () => {
 
     test("returns undefined for empty string", () => {
       assert.strictEqual(getAntigravityModelName(""), undefined);
+    });
+  });
+
+  suite("getAntigravityContextWindowSize", () => {
+    test("returns 1M for Gemini Antigravity models", () => {
+      assert.strictEqual(
+        getAntigravityContextWindowSize("Gemini 3.5 Flash (Low)"),
+        1_000_000
+      );
+    });
+
+    test("returns 200k for Claude Antigravity models", () => {
+      assert.strictEqual(
+        getAntigravityContextWindowSize("Claude Sonnet 4.6 (Thinking)"),
+        200_000
+      );
+    });
+
+    test("returns 128k for GPT-OSS Antigravity models", () => {
+      assert.strictEqual(
+        getAntigravityContextWindowSize("GPT-OSS 120B (Medium)"),
+        128_000
+      );
     });
   });
 
