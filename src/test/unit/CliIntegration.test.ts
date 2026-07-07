@@ -545,7 +545,7 @@ suite("CliIntegration", () => {
       configService.setCliOverlay({});
     });
 
-    test("single-root, setting off, no provider requirement: renders relative", () => {
+    test("single-root, setting off: renders relative", () => {
       configService.setCliOverlay({
         ui: { useAbsolutePathReferences: false },
       });
@@ -569,23 +569,7 @@ suite("CliIntegration", () => {
       assert.strictEqual(result, `@${absolutePath}`);
     });
 
-    test("provider hard requirement wins even with setting off and single root", () => {
-      configService.setCliOverlay({
-        ui: { useAbsolutePathReferences: false },
-      });
-      const integration = integrationWithPlatform(new MockVsCodePlatform(), {
-        config: {
-          usesAbsoluteFileReferences: true,
-        } as unknown as ICliProvider["config"],
-      });
-      const absolutePath = path.join(process.cwd(), "src", "a.ts");
-
-      const result = (integration as any).formatDirectFileRef(absolutePath);
-
-      assert.strictEqual(result, `@${absolutePath}`);
-    });
-
-    test("multi-root forces absolute even with setting off and no provider requirement", () => {
+    test("multi-root forces absolute even with setting off", () => {
       configService.setCliOverlay({
         ui: { useAbsolutePathReferences: false },
       });

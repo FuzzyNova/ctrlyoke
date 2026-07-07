@@ -415,8 +415,7 @@ export abstract class HarnessIntegration {
       try {
         const effectiveAbsolute = resolveEffectiveAbsoluteReferences(
           ConfigurationUtils.shouldUseAbsolutePathReferences(),
-          this.getWorkspaceRoots().length > 1,
-          this.requiresAbsoluteFileReferences()
+          this.getWorkspaceRoots().length > 1
         );
         const expander = new ContextExpander(
           workspaceRoot,
@@ -931,17 +930,6 @@ export abstract class HarnessIntegration {
    */
   protected getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
     return [];
-  }
-
-  /**
-   * Whether this harness hard-requires absolute file paths regardless of the
-   * `ui.useAbsolutePathReferences` setting or root count (e.g. Antigravity
-   * resolves relative paths against the user's home directory rather than
-   * the workspace in headless mode). Defaults to false; overridden by
-   * `CliIntegration` to consult the provider config.
-   */
-  protected requiresAbsoluteFileReferences(): boolean {
-    return false;
   }
 
   /**

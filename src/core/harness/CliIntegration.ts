@@ -257,15 +257,6 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Override base class requiresAbsoluteFileReferences() to consult the
-   * provider config — Antigravity hard-requires absolute paths regardless of
-   * the `ui.useAbsolutePathReferences` setting or root count.
-   */
-  protected override requiresAbsoluteFileReferences(): boolean {
-    return this.provider.config.usesAbsoluteFileReferences ?? false;
-  }
-
-  /**
    * Effective "render absolute file paths" decision for this CLI integration,
    * computed the same way as `HarnessIntegration.buildPromptSections` so
    * `formatDirectFileRef`/`formatTempFileRef` (invoked outside that method,
@@ -274,8 +265,7 @@ export class CliIntegration extends HarnessIntegration {
   private getEffectiveAbsolute(): boolean {
     return resolveEffectiveAbsoluteReferences(
       ConfigurationUtils.shouldUseAbsolutePathReferences(),
-      this.getWorkspaceRoots().length > 1,
-      this.requiresAbsoluteFileReferences()
+      this.getWorkspaceRoots().length > 1
     );
   }
 
@@ -353,8 +343,8 @@ export class CliIntegration extends HarnessIntegration {
    * Format a temp-file relative path as a file reference using the provider's
    * harness-specific prefix (e.g. "@path" for Copilot, "path" for Claude).
    *
-   * Providers with `usesAbsoluteFileReferences` (Antigravity) get the absolute
-   * path so the harness can resolve it regardless of its working directory.
+   * Renders absolute when `getEffectiveAbsolute()` is true (multi-root, or the
+   * `ui.useAbsolutePathReferences` setting in single-root).
    */
   private formatTempFileRef(
     tempMgr: TempFileManager,

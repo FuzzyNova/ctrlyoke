@@ -178,16 +178,14 @@ export function resolveNamedRelativePath(
 
 /**
  * Pure decision for whether prompt rendering should use absolute file paths.
- * A hard per-provider requirement (Antigravity) always wins; otherwise
- * multi-root workspaces force absolute (a `root2/...`-relative ref would be
- * wrong against the harness CLI's single cwd), and single-root falls back to
- * the user setting. Kept pure/sync so it's unit-testable without `vscode` and
+ * Multi-root workspaces force absolute (a `root2/...`-relative ref would be
+ * wrong against the harness CLI's single cwd); single-root falls back to the
+ * user setting. Kept pure/sync so it's unit-testable without `vscode` and
  * safe to call from the platform-agnostic CLI binary.
  */
 export function resolveEffectiveAbsoluteReferences(
   userSetting: boolean,
-  isMultiRoot: boolean,
-  providerRequiresAbsolute?: boolean
+  isMultiRoot: boolean
 ): boolean {
-  return !!providerRequiresAbsolute || (isMultiRoot ? true : userSetting);
+  return isMultiRoot ? true : userSetting;
 }

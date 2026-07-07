@@ -61,9 +61,6 @@ export class AntigravityCliProvider implements ICliProvider {
     installHint: "Install via: npm install -g @google/antigravity-cli",
     shouldStreamHeadlessOutput: true,
     usesInteractiveNotificationMonitor: true,
-    // agy headless resolves relative prompt-file paths against the home dir,
-    // not the workspace cwd — use absolute references so it finds them.
-    usesAbsoluteFileReferences: true,
   };
 
   readonly responseParser: IResponseParser = new AntigravityResponseParser();

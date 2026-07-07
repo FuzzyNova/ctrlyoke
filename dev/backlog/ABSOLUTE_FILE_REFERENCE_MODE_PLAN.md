@@ -1,6 +1,6 @@
 # Absolute vs. Relative Path References — Render-Time Conversion
 
-**Status**: Proposed, not started. Revised 2026-07-07 — earlier draft had completions insert
+**Status**: Implemented 2026-07-07. Revised same day — earlier draft had completions insert
 absolute paths into the prompt text; that made stored workflows machine-specific and has been
 dropped (see [Portability principle](#portability-principle-stored-relative-rendered-absolute)).
 **Motivated by**: [`ANTIGRAVITY_CLI_HARNESS_PLAN.md`](ANTIGRAVITY_CLI_HARNESS_PLAN.md)'s
@@ -8,6 +8,16 @@ dropped (see [Portability principle](#portability-principle-stored-relative-rend
 user's home directory instead of the workspace in headless mode) plus a separate,
 harness-agnostic problem: **multi-root workspaces have no unambiguous relative-path
 syntax** (`@path/to/file` doesn't say which root it's relative to).
+
+**Update (2026-07-07, later same day)**: the Antigravity per-provider hard requirement
+(`ICliProvider.config.usesAbsoluteFileReferences`, `CliIntegration.requiresAbsoluteFileReferences()`)
+described throughout this doc has been **removed**. Antigravity fixed the underlying
+relative-path-resolution bug as long as `--add-dir` is passed (ctrlyoke already does this via
+`CliProviderUtils.getWorkspaceDirs()`), so the workaround is no longer needed. Antigravity now
+follows the exact same rule as every other harness: `resolveEffectiveAbsoluteReferences(userSetting,
+isMultiRoot)` — on if `ui.useAbsolutePathReferences` is true, or unconditionally on in multi-root,
+off otherwise. Every mention below of a "provider hard requirement" / `providerRequiresAbsolute`
+is historical context for why the design left room for one — the parameter itself no longer exists.
 
 ---
 

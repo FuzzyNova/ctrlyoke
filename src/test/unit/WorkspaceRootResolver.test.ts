@@ -231,38 +231,24 @@ suite("WorkspaceRootResolver Tests", () => {
   });
 
   suite("resolveEffectiveAbsoluteReferences", () => {
-    test("provider hard requirement wins over everything else", () => {
-      assert.strictEqual(
-        resolveEffectiveAbsoluteReferences(false, false, true),
-        true
-      );
-    });
-
     test("multi-root forces absolute even when the user setting is off", () => {
       assert.strictEqual(
-        resolveEffectiveAbsoluteReferences(false, true, false),
+        resolveEffectiveAbsoluteReferences(false, true),
         true
       );
     });
 
     test("single-root falls back to the user setting (off)", () => {
       assert.strictEqual(
-        resolveEffectiveAbsoluteReferences(false, false, false),
+        resolveEffectiveAbsoluteReferences(false, false),
         false
       );
     });
 
     test("single-root falls back to the user setting (on)", () => {
       assert.strictEqual(
-        resolveEffectiveAbsoluteReferences(true, false, false),
+        resolveEffectiveAbsoluteReferences(true, false),
         true
-      );
-    });
-
-    test("providerRequiresAbsolute undefined is treated as false", () => {
-      assert.strictEqual(
-        resolveEffectiveAbsoluteReferences(false, false, undefined),
-        false
       );
     });
   });
