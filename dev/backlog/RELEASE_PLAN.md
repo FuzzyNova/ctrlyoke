@@ -2,10 +2,10 @@
 
 **Created:** March 11, 2026
 **Updated:** July 7, 2026
-**Status:** BLOCKED — licensing + cutover + onboarding/security work remain before publish (see Phase 2)
+**Status:** BLOCKED — licensing, external cutover, onboarding, package inspection, and launch visuals remain before publish (see Phase 2)
 **Target:** VS Code Marketplace public release first; npm CLI package after the extension release path is settled.
 
-> **July 7, 2026 review.** Package/metadata readiness (Phase 1) is done, and the former functional blocker -- replacing broken Gemini CLI support with Antigravity CLI -- is complete. The remaining ship gate is no longer just the mechanical publish checklist: launch still requires Pro licensing implementation, the ctrlyoke external cutover, new-user/onboarding blockers, legal finalization, security review closure, and final package inspection. These are consolidated in Phase 2 below so this stays the single "what's left" doc.
+> **July 7, 2026 review.** Package/metadata readiness (Phase 1), the Gemini-to-Antigravity harness swap, legal effective-date placeholders, and the pre-publish security review are complete. The remaining ship gate is Pro licensing implementation, the ctrlyoke external cutover, new-user/onboarding blockers, launch visuals, final package inspection, and the final custom EULA replacement tracked in §2.3. These are consolidated below so this stays the single "what's left" doc.
 
 ---
 
@@ -26,7 +26,7 @@ Codebase-backed release facts:
 - `package.json` version is `0.1.0`.
 - `package.json` publisher is `fuzzynova`.
 - `package.json` repository/homepage/bugs URLs point to `https://github.com/FuzzyNova/ctrlyoke` and `https://ctrlyoke.dev`.
-- `package.json` license is `Elastic-2.0` (placeholder — to be replaced with custom commercial EULA before launch; see §2.3).
+- `package.json` license is `Elastic-2.0` (placeholder -- to be replaced with custom commercial EULA before launch; see §2.3).
 - `package.json` has current marketplace metadata: improved description, categories, keywords, and gallery banner.
 - `package.json` contributes both bins: `ctrlyoke-mcp` and `ctrlyoke`, but `.vscodeignore` intentionally excludes `out/cli.js` from the VSIX.
 - `.vscodeignore` is now allowlist-based and includes the extension bundle, MCP server, webview assets, schemas, templates, runtime scripts, `resvg.wasm`, and `node-pty`.
@@ -78,7 +78,7 @@ Related launch/business planning now lives in [`RELEASE_CHECKLIST.md`](RELEASE_C
 
 ### 1.3 Marketplace Metadata
 
-**Status:** MOSTLY DONE
+**Status:** DONE
 
 Already present in `package.json`:
 
@@ -88,11 +88,13 @@ Already present in `package.json`:
 - [x] Gallery banner exists
 - [x] Icon exists at `images/icon.png`
 
-Still open:
+Completed:
 
-- [x] ~~Decide publisher~~ — resolved: `fuzzynova` (see §2.1). The old `nhickster` reference is dead.
-- [x] ~~Update repository/homepage/bugs URLs~~ — `package.json` already points at `FuzzyNova/ctrlyoke` + `ctrlyoke.dev`. **Caveat:** these URLs 404 until the external cutover lands (see §2.7).
-- [x] ~~Update support/contact URLs~~ — README/site use `support@ctrlyoke.dev`. **Caveat:** the inbox must exist before launch (see §2.7).
+- [x] Decide publisher: `fuzzynova` (see §2.1).
+- [x] Update repository/homepage/bugs URLs to `FuzzyNova/ctrlyoke` + `ctrlyoke.dev`.
+- [x] Update support/contact references to `support@ctrlyoke.dev`.
+
+External URL and inbox readiness is tracked once in §2.7.
 
 ### 1.4 VSIX Contents
 
@@ -226,12 +228,13 @@ Tracked in detail by [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md
 
 ### 2.8 Legal Effective-Date Placeholders
 
-**Status:** OPEN — **quick but required**
+**Status:** DONE
 
-`LICENSE.md` and `PRIVACY.md` still contain the literal `[DATE]` placeholder, and the live `/terms` + `/privacy` pages are already serving it publicly.
+The literal `[DATE]` placeholders in `LICENSE.md` and `PRIVACY.md` have been replaced with the real effective date.
 
-- [ ] Set the real effective date in `LICENSE.md` and `PRIVACY.md` (Checklist Phase 5 / Cutover §8).
-- [ ] Complete attorney review of the EULA if not already final (see §2.3).
+- [x] Set the real effective date in `LICENSE.md` and `PRIVACY.md` (Checklist Phase 5 / Cutover §8).
+
+Attorney review and the final custom EULA replacement remain tracked in §2.3, not here.
 
 ### 2.9 New-User Experience & Built-in Content
 
@@ -273,14 +276,12 @@ a strong new-user story. The only deferred piece is the interactive tour (see no
 
 ### 2.10 Pre-Publish Security Review
 
-**Status:** IN PROGRESS — pre-publish gate
+**Status:** DONE
 
-ctrlyoke spawns external processes and drives AI over the user's codebase; a first paid,
-source-available release warrants a security pass before publish. **A security review is
-currently running via a separate agent.**
+ctrlyoke spawns external processes and drives AI over the user's codebase; the pre-publish security pass is complete.
 
-- [ ] Complete the security review of the release branch.
-- [ ] Triage findings; fix anything that blocks a trustworthy first release.
+- [x] Complete the security review of the release branch.
+- [x] Triage findings; fix anything that blocks a trustworthy first release.
 
 ### 2.11 Standalone Server — Deferred (setting hidden for v0.1.0)
 
@@ -308,8 +309,8 @@ Decision (July 5, 2026): defer standalone; do not ship a non-functional control.
 
 ### 3.1 Marketplace Account
 
-- [ ] Create or verify the Marketplace publisher matching `package.json#publisher`.
-- [ ] Generate an Azure DevOps PAT with Marketplace Manage scope.
+- [x] Marketplace publisher matches `package.json#publisher`: `fuzzynova`.
+- [ ] Generate or verify an Azure DevOps PAT with Marketplace Manage scope.
 - [ ] Login:
 
 ```bash
@@ -412,7 +413,7 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 | Test package on Linux                      | DONE          | User-reported complete                                                                      |
 | Test package on macOS                      | DONE          | User-reported complete                                                                      |
 | Fix VSIX allowlist / webview assets        | DONE          | `.vscodeignore` is allowlist-based                                                          |
-| Marketplace metadata                       | MOSTLY DONE   | Publisher/repo identity still open                                                          |
+| Marketplace metadata                       | DONE          | Metadata is in place; external links/domains are tracked in §2.7                              |
 | README harness coverage                    | DONE          | All seven harnesses listed                                                                  |
 | README/package VS Code version consistency | DONE          | Both say 1.104.0                                                                            |
 | Business email/support identity            | DONE          | `support@ctrlyoke.dev`, DNS/DKIM/DMARC configured                                           |
@@ -421,16 +422,16 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 | **Remove Gemini / add Antigravity harness** | **DONE**      | Antigravity CLI is wired through source/docs/schemas; Gemini CLI removed from live product surfaces (§2.5) |
 | **Pro licensing implementation**           | **OPEN**      | **Blocker — site advertises Pro; extension gating unbuilt; see §2.6 / `PRO_LICENSE_PLAN.md`** |
 | **ctrlyoke external cutover**              | **OPEN**      | **Blocker — repo/homepage URLs + support inboxes 404 until done; see §2.7 / `CTRLYOKE_REBRAND_CUTOVER.md`** |
-| **Legal `[DATE]` placeholders**            | **OPEN**      | **Set effective date in `LICENSE.md` + `PRIVACY.md` (live pages serve it now); see §2.8** |
+| Legal effective-date placeholders          | DONE          | `LICENSE.md` and `PRIVACY.md` dates are set (§2.8)                                           |
 | **Built-in agent correctness**             | **DONE**      | Workflow composer/test-repair/template variable cleanup complete (§2.9)                     |
 | **New-user experience** (onboarding/preflight) | **OPEN** | **Tech-support agent done; next: Getting Started + harness preflight (§2.9)**            |
 | **Screenshots + demo GIF**                 | **OPEN**      | **Blocker — README + Marketplace visuals; see §4**                                          |
-| Pre-publish security review                | IN PROGRESS   | Running via a separate agent; triage findings before publish (§2.10)                        |
+| Pre-publish security review                | DONE          | Security review and release-blocking triage are complete (§2.10)                             |
 | Standalone server                          | DEFERRED      | Not a blocker; hosted server ships. Standalone `ctrlyoke server` deferred, inert setting hidden (§2.11) |
 | Extension-host OOM crash                   | RESOLVED      | Confirmed fixed by Nathan — no longer a blocker                                              |
 | `npm audit` sanity check                   | PRE-PUBLISH   | Down to dev-only findings (`DEPENDENCY_UPGRADE_PLAN.md`); confirm no new prod advisories     |
 | Final `vsce ls` package inspection         | OPEN          | Run immediately before publish                                                              |
-| Marketplace publish                        | OPEN          | Blocked on §2.5–2.8                                                                          |
+| Marketplace publish                        | OPEN          | Blocked on licensing, cutover, onboarding/visuals, and final package inspection               |
 | npm CLI publish                            | DEFERRED      | Separate packaging decision                                                                 |
 
 ---

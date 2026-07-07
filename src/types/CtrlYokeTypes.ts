@@ -524,6 +524,8 @@ export interface WorkflowSummary {
   completedAt?: number;
   /** Set to "cli" when the workflow is being executed by the ctrlyoke CLI. Undefined means vscode-managed. */
   managedBy?: RunnerId;
+  /** Resolved harness this workflow runs on (workflow/step override, or the global default). */
+  harness?: HarnessId;
 }
 
 /** Returns the 1-indexed step number for display (logs, UI labels). currentStep is 0-indexed internally. */

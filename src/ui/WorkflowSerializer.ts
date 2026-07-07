@@ -20,7 +20,12 @@ import type { TemplateManager } from "../core/TemplateManager";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
 import type { PostMessageFn } from "./WebviewSettingsSync";
-import type { WorkingFile } from "../types/CtrlYokeTypes";
+import {
+  isScriptStep,
+  type PromptStep,
+  type WorkingFile,
+} from "../types/CtrlYokeTypes";
+import { PropertyResolver } from "../utils/PropertyResolver";
 
 /**
  * WorkflowSerializer
@@ -598,7 +603,7 @@ export class WorkflowSerializer {
           const filePath = path.join(queueDir, file);
 
           try {
-            const workingFile = await readJsonFile(filePath);
+            const workingFile = (await readJsonFile(filePath)) as WorkingFile;
 
             const lastModified =
               workingFile.lastModifiedAt || workingFile.startedAt || 0;
@@ -634,6 +639,17 @@ export class WorkflowSerializer {
               }
             }
 
+            const steps = Array.isArray(workingFile.steps)
+              ? workingFile.steps
+              : [];
+            const firstAiStepHarness = steps.find(
+              (s): s is PromptStep => !isScriptStep(s)
+            )?.harness;
+            const harness = PropertyResolver.resolveHarnessValue(
+              firstAiStepHarness,
+              workingFile.harness
+            );
+
             return {
               filePath,
               workflowName:
@@ -642,6 +658,8 @@ export class WorkflowSerializer {
               startedAt: workingFile.startedAt || 0,
               lastModifiedAt: lastModified,
               isFavorite: workingFile.isFavorite ?? false,
+              totalSteps: steps.length,
+              harness,
             };
           } catch (error) {
             Log.warn(`Failed to parse workflow file ${file}:`, error);

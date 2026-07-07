@@ -561,6 +561,13 @@ export class WorkflowInstance {
 
   getSummary(): WorkflowSummary {
     const state = this.promptQueue.getState();
+    const firstAiStepHarness = state.steps.find(
+      (s): s is PromptStep => !isScriptStep(s)
+    )?.harness;
+    const harness = PropertyResolver.resolveHarnessValue(
+      firstAiStepHarness,
+      this.currentPromptFile?.promptFile?.harness
+    );
     return {
       id: this.id,
       workflowName: this.workflowName || state.workflowName || "",
@@ -570,6 +577,7 @@ export class WorkflowInstance {
       currentStep: state.currentIndex,
       totalSteps: state.steps.length,
       startedAt: this.startedAt || undefined,
+      harness,
     };
   }
 

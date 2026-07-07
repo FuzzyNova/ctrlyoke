@@ -5,15 +5,9 @@ import {
 } from "../../utils/status";
 import { formatRelativeTimeVerbose } from "../../utils/time";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
-
-interface RecentWorkflow {
-  workflowName: string;
-  filePath: string;
-  executionState: string;
-  lastModifiedAt?: number;
-  startedAt?: number;
-  isFavorite?: boolean;
-}
+import { HarnessIcon } from "../shared/HarnessIcon";
+import { HARNESS_INFO } from "../../types/messages";
+import type { RecentWorkflow } from "../../store/uiStore";
 
 interface RecentWorkflowsProps {
   workflows: RecentWorkflow[];
@@ -114,10 +108,35 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                     : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg fp-dropdown-row"
                 }`}
               >
+                {/* Harness icon */}
+                {workflow.harness && (
+                  <span
+                    className="flex-shrink-0 flex items-center"
+                    title={HARNESS_INFO[workflow.harness]?.name ?? workflow.harness}
+                  >
+                    <HarnessIcon harnessId={workflow.harness} size={14} />
+                  </span>
+                )}
+
                 {/* Workflow Name */}
                 <span className="workflow-menu-item-name flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                   {workflow.workflowName}
                 </span>
+
+                {/* Step count */}
+                {typeof workflow.totalSteps === "number" &&
+                  workflow.totalSteps > 0 && (
+                    <span
+                      className="flex-shrink-0 text-xs text-description-fg font-mono"
+                      title={`${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`}
+                    >
+                      {isNarrow ? (
+                        <i className="codicon codicon-list-ordered" />
+                      ) : (
+                        `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`
+                      )}
+                    </span>
+                  )}
 
                 {showTerminalIcon && (
                   <span

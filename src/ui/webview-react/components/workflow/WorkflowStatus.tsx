@@ -645,7 +645,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               />
             )}
             {recentWorkflows.length > 0 && (
-              <span className="workflow-count-badge text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
+              <span className="workflow-count-badge hidden sm:inline-block text-xxs font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
                 {recentWorkflows.length}
               </span>
             )}

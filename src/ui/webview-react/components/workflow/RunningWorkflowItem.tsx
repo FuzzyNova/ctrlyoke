@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { EXECUTION_STATES, RUNNER_IDS } from "../../types/messages";
+import {
+  EXECUTION_STATES,
+  RUNNER_IDS,
+  HARNESS_INFO,
+  workflowDisplayStep,
+} from "../../types/messages";
 import type { WorkflowSummary } from "../../types/messages";
 import {
   getExecutionStateBadgeClass,
   getExecutionStateBadgeIcon,
 } from "../../utils/status";
+import { HarnessIcon } from "../shared/HarnessIcon";
 
 interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
@@ -90,10 +96,34 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       title={workflow.filePath}
     >
+      {/* Harness icon */}
+      {workflow.harness && (
+        <span
+          className="flex-shrink-0 flex items-center"
+          title={HARNESS_INFO[workflow.harness]?.name ?? workflow.harness}
+        >
+          <HarnessIcon harnessId={workflow.harness} size={14} />
+        </span>
+      )}
+
       {/* Workflow name */}
       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
         {workflow.workflowName}
       </span>
+
+      {/* Step progress */}
+      {workflow.totalSteps > 0 && (
+        <span
+          className="flex-shrink-0 text-xs text-description-fg font-mono"
+          title={`Step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`}
+        >
+          {isNarrow ? (
+            <i className="codicon codicon-list-ordered" />
+          ) : (
+            `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}/${workflow.totalSteps}`
+          )}
+        </span>
+      )}
 
       {hasActiveTerminal && (
         <span

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { vsCodeRawStorage } from "@utils/vsCodeStateStorage";
-import type { WorkflowSummary } from "../types/messages";
+import type { WorkflowSummary, HarnessId } from "../types/messages";
 import { type FooterPicker } from "../types/messages";
 import type { OutputExecutionTarget } from "@root/types/OutputHistoryTypes";
 import type {
@@ -55,6 +55,8 @@ export interface RecentWorkflow {
   lastModifiedAt?: number;
   startedAt?: number;
   isFavorite?: boolean;
+  totalSteps?: number;
+  harness?: HarnessId;
 }
 
 /** Panel size snapshot for the desktop layout (steps/settings/editor in px; output as %). */

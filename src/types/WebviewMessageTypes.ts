@@ -762,6 +762,8 @@ export interface RecentWorkflowsMessage {
     lastModifiedAt?: number;
     startedAt?: number;
     isFavorite?: boolean;
+    totalSteps?: number;
+    harness?: HarnessId;
   }>;
 }
 
