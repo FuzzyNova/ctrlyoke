@@ -23,6 +23,11 @@ interface RecentWorkflowsProps {
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   showSearch?: boolean;
+  showFilters?: boolean;
+  filtersOpen?: boolean;
+  filtersActive?: boolean;
+  onToggleFilters?: () => void;
+  filterControls?: React.ReactNode;
   isFiltering?: boolean;
   isNarrow?: boolean;
   className?: string;
@@ -51,6 +56,11 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   searchValue = "",
   onSearchChange,
   showSearch = false,
+  showFilters = false,
+  filtersOpen = false,
+  filtersActive = false,
+  onToggleFilters,
+  filterControls,
   isFiltering = false,
   isNarrow = false,
   className = "",
@@ -65,6 +75,11 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
         searchValue={searchValue}
         onSearchChange={onSearchChange}
         showSearch={showSearch}
+        showFilters={showFilters}
+        filtersOpen={filtersOpen}
+        filtersActive={filtersActive}
+        onToggleFilters={onToggleFilters}
+        filterControls={filterControls}
       />
 
       {/* Scrollable Items */}
@@ -112,7 +127,9 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 {workflow.harness && (
                   <span
                     className="flex-shrink-0 flex items-center"
-                    title={HARNESS_INFO[workflow.harness]?.name ?? workflow.harness}
+                    title={
+                      HARNESS_INFO[workflow.harness]?.name ?? workflow.harness
+                    }
                   >
                     <HarnessIcon harnessId={workflow.harness} size={14} />
                   </span>

@@ -12,7 +12,7 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore, type RecentWorkflow } from "@store/uiStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useTerminalStore } from "@store/terminalStore";
-import { MESSAGE_TYPES, EXECUTION_STATES } from "@/types/messages";
+import { HARNESS_IDS, MESSAGE_TYPES, EXECUTION_STATES } from "@/types/messages";
 
 const postMessageSpy = vi.fn();
 
@@ -362,5 +362,149 @@ describe("WorkflowStatus — loaded state", () => {
 
     expect(screen.getByText("Alpha Workflow")).toBeInTheDocument();
     expect(screen.queryByText("Beta Workflow")).not.toBeInTheDocument();
+  });
+
+  it("augments search results with the state filter", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowStatus />);
+
+    setRecentWorkflows([
+      {
+        workflowName: "Stopped Workflow",
+        filePath: "/path/stopped.yaml",
+        executionState: EXECUTION_STATES.STOPPED,
+      },
+      {
+        workflowName: "Completed Workflow",
+        filePath: "/path/completed.yaml",
+        executionState: EXECUTION_STATES.COMPLETED,
+      },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    await user.click(screen.getByRole("button", { name: "Filter workflows" }));
+    await user.click(document.getElementById("workflow-state-filter")!);
+    await user.click(
+      within(document.body).getByRole("button", {
+        name: new RegExp(EXECUTION_STATES.COMPLETED),
+      })
+    );
+
+    expect(screen.getByText("Stopped Workflow")).toBeInTheDocument();
+    expect(screen.queryByText("Completed Workflow")).not.toBeInTheDocument();
+  });
+
+  it("filters recent workflows by harness", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowStatus />);
+
+    setRecentWorkflows([
+      {
+        workflowName: "Claude Workflow",
+        filePath: "/path/claude.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        harness: HARNESS_IDS.CLAUDE_CLI,
+      },
+      {
+        workflowName: "Codex Workflow",
+        filePath: "/path/codex.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        harness: HARNESS_IDS.CODEX_CLI,
+      },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    await user.click(screen.getByRole("button", { name: "Filter workflows" }));
+    await user.click(document.getElementById("workflow-harness-filter")!);
+    await user.click(
+      within(document.body)
+        .getAllByRole("button", { name: /Codex/ })
+        .find((button) => button.textContent === "Codex")!
+    );
+
+    expect(screen.getByText("Claude Workflow")).toBeInTheDocument();
+    expect(screen.queryByText("Codex Workflow")).not.toBeInTheDocument();
+  });
+
+  it("closing the filter drawer preserves active filters until Clear is clicked", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowStatus />);
+
+    setRecentWorkflows([
+      {
+        workflowName: "Recent Workflow",
+        filePath: "/path/recent.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        lastModifiedAt: Date.now(),
+      },
+      {
+        workflowName: "Old Workflow",
+        filePath: "/path/old.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        lastModifiedAt: Date.now() - 40 * 24 * 60 * 60 * 1000,
+      },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    await user.click(screen.getByRole("button", { name: "Filter workflows" }));
+    await user.selectOptions(
+      screen.getByLabelText("Workflow date preset"),
+      "last7"
+    );
+
+    expect(screen.getByText("Recent Workflow")).toBeInTheDocument();
+    expect(screen.queryByText("Old Workflow")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Close workflow filters" })
+    );
+
+    expect(screen.getByText("Recent Workflow")).toBeInTheDocument();
+    expect(screen.queryByText("Old Workflow")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Filter workflows" }));
+    await user.click(
+      screen.getByRole("button", { name: "Clear workflow filters" })
+    );
+
+    expect(screen.getByText("Recent Workflow")).toBeInTheDocument();
+    expect(screen.getByText("Old Workflow")).toBeInTheDocument();
+  });
+
+  it("filters recent workflows to favorites only", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowStatus />);
+
+    setRecentWorkflows([
+      {
+        workflowName: "Favorite Workflow",
+        filePath: "/path/favorite.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        isFavorite: true,
+      },
+      {
+        workflowName: "Regular Workflow",
+        filePath: "/path/regular.yaml",
+        executionState: EXECUTION_STATES.IDLE,
+        isFavorite: false,
+      },
+    ]);
+
+    await user.click(
+      screen.getByRole("button", { name: /Show recent workflows/i })
+    );
+    await user.click(screen.getByRole("button", { name: "Filter workflows" }));
+    await user.click(
+      screen.getByRole("checkbox", { name: "Show favorite workflows only" })
+    );
+
+    expect(screen.getByText("Favorite Workflow")).toBeInTheDocument();
+    expect(screen.queryByText("Regular Workflow")).not.toBeInTheDocument();
   });
 });

@@ -15,12 +15,15 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   RUNNER_IDS,
+  HARNESS_IDS,
+  HARNESS_INFO,
 } from "../../types/messages";
 import { DEFAULT_WORKFLOW_NAME } from "@root/types/DashboardConstants";
 import { RecentWorkflows } from "./RecentWorkflows";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { WorkflowDropdownHeader } from "./WorkflowDropdownHeader";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
+import { MultiCheckboxDropdown } from "../shared/MultiCheckboxDropdown";
 import {
   getExecutionStateBadgeClass,
   getExecutionStateBadgeIcon,
@@ -36,6 +39,39 @@ interface WorkflowStatusProps {
   className?: string;
 }
 
+const ALL_WORKFLOW_STATES = Object.values(EXECUTION_STATES);
+const ALL_WORKFLOW_HARNESSES = Object.values(HARNESS_IDS);
+
+const WORKFLOW_STATE_OPTIONS = ALL_WORKFLOW_STATES.map((state) => ({
+  value: state,
+  label: state,
+}));
+
+const WORKFLOW_HARNESS_OPTIONS = ALL_WORKFLOW_HARNESSES.map((harness) => ({
+  value: harness,
+  label: HARNESS_INFO[harness].name,
+}));
+
+type WorkflowDatePreset = "all" | "last7" | "last30" | "lastMonth" | "custom";
+
+interface WorkflowDateFilter {
+  preset: WorkflowDatePreset;
+  from: string;
+  to: string;
+}
+
+const DEFAULT_WORKFLOW_DATE_FILTER: WorkflowDateFilter = {
+  preset: "all",
+  from: "",
+  to: "",
+};
+
+const DATE_INPUT_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 function sortRecentWorkflows(workflows: RecentWorkflow[]): RecentWorkflow[] {
   return [...workflows].sort((a, b) => {
     if ((a.isFavorite ?? false) !== (b.isFavorite ?? false)) {
@@ -44,6 +80,49 @@ function sortRecentWorkflows(workflows: RecentWorkflow[]): RecentWorkflow[] {
 
     return (b.lastModifiedAt ?? 0) - (a.lastModifiedAt ?? 0);
   });
+}
+
+function formatDateInput(timestamp: number): string {
+  return DATE_INPUT_FORMATTER.format(new Date(timestamp));
+}
+
+function getDatePresetRange(
+  preset: Exclude<WorkflowDatePreset, "all" | "custom">
+): Pick<WorkflowDateFilter, "from" | "to"> {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (preset === "lastMonth") {
+    const from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const to = new Date(today.getFullYear(), today.getMonth(), 0);
+    return {
+      from: formatDateInput(from.getTime()),
+      to: formatDateInput(to.getTime()),
+    };
+  }
+
+  const days = preset === "last7" ? 6 : 29;
+  const from = new Date(today);
+  from.setDate(today.getDate() - days);
+
+  return {
+    from: formatDateInput(from.getTime()),
+    to: formatDateInput(today.getTime()),
+  };
+}
+
+function getDateStartMs(date: string): number | null {
+  if (!date) return null;
+  const parsed = new Date(`${date}T00:00:00`);
+  const time = parsed.getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function getDateEndMs(date: string): number | null {
+  if (!date) return null;
+  const parsed = new Date(`${date}T23:59:59.999`);
+  const time = parsed.getTime();
+  return Number.isNaN(time) ? null : time;
 }
 
 /**
@@ -171,6 +250,16 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const [dropdownLeft, setDropdownLeft] = useState(0);
   const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
   const [workflowSearch, setWorkflowSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedWorkflowStates, setSelectedWorkflowStates] = useState<
+    string[]
+  >(() => [...ALL_WORKFLOW_STATES]);
+  const [selectedWorkflowHarnesses, setSelectedWorkflowHarnesses] = useState<
+    string[]
+  >(() => [...ALL_WORKFLOW_HARNESSES]);
+  const [workflowDateFilter, setWorkflowDateFilter] =
+    useState<WorkflowDateFilter>(DEFAULT_WORKFLOW_DATE_FILTER);
+  const [favoriteWorkflowsOnly, setFavoriteWorkflowsOnly] = useState(false);
   // Pending workflow path waiting for delete confirmation
   const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(
     null
@@ -253,6 +342,56 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setWorkflowSearch("");
   }, []);
 
+  const filtersActive =
+    selectedWorkflowStates.length !== ALL_WORKFLOW_STATES.length ||
+    selectedWorkflowHarnesses.length !== ALL_WORKFLOW_HARNESSES.length ||
+    workflowDateFilter.from.length > 0 ||
+    workflowDateFilter.to.length > 0 ||
+    favoriteWorkflowsOnly;
+
+  const resetWorkflowFilters = useCallback(() => {
+    setSelectedWorkflowStates([...ALL_WORKFLOW_STATES]);
+    setSelectedWorkflowHarnesses([...ALL_WORKFLOW_HARNESSES]);
+    setWorkflowDateFilter(DEFAULT_WORKFLOW_DATE_FILTER);
+    setFavoriteWorkflowsOnly(false);
+  }, []);
+
+  const handleToggleFilters = useCallback(() => {
+    setFiltersOpen((open) => !open);
+  }, []);
+
+  const handleDatePresetChange = useCallback((preset: WorkflowDatePreset) => {
+    if (preset === "all") {
+      setWorkflowDateFilter(DEFAULT_WORKFLOW_DATE_FILTER);
+      return;
+    }
+
+    if (preset === "custom") {
+      setWorkflowDateFilter((current) => ({
+        ...current,
+        preset,
+      }));
+      return;
+    }
+
+    setWorkflowDateFilter({
+      preset,
+      ...getDatePresetRange(preset),
+    });
+  }, []);
+
+  const handleDateBoundChange = useCallback(
+    (bound: "from" | "to", value: string) => {
+      setWorkflowDateFilter((current) => ({
+        ...current,
+        preset:
+          value || current[bound === "from" ? "to" : "from"] ? "custom" : "all",
+        [bound]: value,
+      }));
+    },
+    []
+  );
+
   // Request recent workflows once on mount so the count badge is visible immediately
   useEffect(() => {
     vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
@@ -261,9 +400,13 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target;
+      const isDropdownPortalClick =
+        target instanceof Element && target.closest(".fp-dropdown-popup");
       if (
         containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        !containerRef.current.contains(event.target as Node) &&
+        !isDropdownPortalClick
       ) {
         closeDropdown();
       }
@@ -511,14 +654,67 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     : DEFAULT_WORKFLOW_NAME;
 
   const normalizedWorkflowSearch = workflowSearch.trim().toLowerCase();
-  const isFilteringWorkflows = normalizedWorkflowSearch.length > 0;
+  const isFilteringWorkflows =
+    normalizedWorkflowSearch.length > 0 || filtersActive;
+  const workflowDateStartMs = getDateStartMs(workflowDateFilter.from);
+  const workflowDateEndMs = getDateEndMs(workflowDateFilter.to);
   const workflowMatchesSearch = (
     workflow: Pick<
       RecentWorkflow,
-      "workflowName" | "filePath" | "executionState"
-    > & { workingFilePath?: string }
+      | "workflowName"
+      | "filePath"
+      | "executionState"
+      | "harness"
+      | "lastModifiedAt"
+      | "startedAt"
+      | "isFavorite"
+    > & { workingFilePath?: string; completedAt?: number }
   ) => {
-    if (!isFilteringWorkflows) return true;
+    const isFavorite =
+      workflow.isFavorite ??
+      sortedRecentWorkflows.some(
+        (recentWorkflow) =>
+          (recentWorkflow.filePath === workflow.filePath ||
+            recentWorkflow.filePath === workflow.workingFilePath) &&
+          (recentWorkflow.isFavorite ?? false)
+      );
+
+    if (
+      (favoriteWorkflowsOnly && !isFavorite) ||
+      !selectedWorkflowStates.includes(workflow.executionState) ||
+      (workflow.harness
+        ? !selectedWorkflowHarnesses.includes(workflow.harness)
+        : selectedWorkflowHarnesses.length !== ALL_WORKFLOW_HARNESSES.length)
+    ) {
+      return false;
+    }
+
+    const workflowTimestamp =
+      workflow.lastModifiedAt ?? workflow.startedAt ?? workflow.completedAt;
+    if (
+      (workflowDateStartMs !== null || workflowDateEndMs !== null) &&
+      workflowTimestamp === undefined
+    ) {
+      return false;
+    }
+
+    if (
+      workflowTimestamp !== undefined &&
+      workflowDateStartMs !== null &&
+      workflowTimestamp < workflowDateStartMs
+    ) {
+      return false;
+    }
+
+    if (
+      workflowTimestamp !== undefined &&
+      workflowDateEndMs !== null &&
+      workflowTimestamp > workflowDateEndMs
+    ) {
+      return false;
+    }
+
+    if (!normalizedWorkflowSearch) return true;
 
     return [
       workflow.workflowName,
@@ -540,6 +736,99 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       )
   );
   const showRunningWorkflowsSection = effectiveLoadedWorkflows.length > 0;
+  const workflowFilterControls = (
+    <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+      <div className="flex items-center gap-1.5 min-w-[120px] text-xs text-description-fg">
+        <span className="whitespace-nowrap">State</span>
+        <MultiCheckboxDropdown
+          id="workflow-state-filter"
+          selectedValues={selectedWorkflowStates}
+          onChange={setSelectedWorkflowStates}
+          options={WORKFLOW_STATE_OPTIONS}
+          placeholder="No states"
+          dropdownMaxHeight="260px"
+        />
+      </div>
+
+      <div className="flex items-center gap-1.5 min-w-[150px] text-xs text-description-fg">
+        <span className="whitespace-nowrap">Harness</span>
+        <MultiCheckboxDropdown
+          id="workflow-harness-filter"
+          selectedValues={selectedWorkflowHarnesses}
+          onChange={setSelectedWorkflowHarnesses}
+          options={WORKFLOW_HARNESS_OPTIONS}
+          placeholder="No harnesses"
+          dropdownMaxHeight="260px"
+        />
+      </div>
+
+      <label className="flex items-center gap-1.5 text-xs text-description-fg">
+        <span className="whitespace-nowrap">Date</span>
+        <select
+          aria-label="Workflow date preset"
+          value={workflowDateFilter.preset}
+          onChange={(event) =>
+            handleDatePresetChange(event.target.value as WorkflowDatePreset)
+          }
+          className="h-6 min-w-[102px] rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
+        >
+          <option value="all">Any time</option>
+          <option value="last7">Last 7 days</option>
+          <option value="last30">Last 30 days</option>
+          <option value="lastMonth">Last month</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+
+      <label className="flex items-center gap-1 text-xs text-description-fg">
+        <span className="whitespace-nowrap">From</span>
+        <input
+          type="date"
+          aria-label="Workflow date from"
+          value={workflowDateFilter.from}
+          onChange={(event) =>
+            handleDateBoundChange("from", event.target.value)
+          }
+          className="h-6 w-[128px] rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
+        />
+      </label>
+
+      <label className="flex items-center gap-1 text-xs text-description-fg">
+        <span className="whitespace-nowrap">To</span>
+        <input
+          type="date"
+          aria-label="Workflow date to"
+          value={workflowDateFilter.to}
+          onChange={(event) => handleDateBoundChange("to", event.target.value)}
+          className="h-6 w-[128px] rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
+        />
+      </label>
+
+      <label className="flex h-6 items-center gap-1.5 rounded border border-input-border bg-input-bg px-2 text-xs text-input-fg">
+        <input
+          type="checkbox"
+          aria-label="Show favorite workflows only"
+          checked={favoriteWorkflowsOnly}
+          onChange={(event) => setFavoriteWorkflowsOnly(event.target.checked)}
+          className="h-3 w-3 flex-shrink-0 accent-focus-border"
+        />
+        <i className="codicon codicon-star-full text-xxs text-favorite" />
+        <span className="whitespace-nowrap">Favorites only</span>
+      </label>
+
+      <button
+        type="button"
+        onClick={resetWorkflowFilters}
+        disabled={!filtersActive}
+        title="Clear workflow filters"
+        aria-label="Clear workflow filters"
+        className="flex h-6 items-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
+      >
+        <i className="codicon codicon-clear-all text-xxs" />
+        <span>Clear</span>
+      </button>
+    </div>
+  );
 
   return (
     <div
@@ -691,6 +980,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               searchValue={workflowSearch}
               onSearchChange={setWorkflowSearch}
               showSearch
+              showFilters
+              filtersOpen={filtersOpen}
+              filtersActive={filtersActive}
+              onToggleFilters={handleToggleFilters}
+              filterControls={workflowFilterControls}
             />
             <div className="py-1">
               {filteredEffectiveLoadedWorkflows.length === 0 &&
@@ -735,6 +1029,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             searchValue={workflowSearch}
             onSearchChange={setWorkflowSearch}
             showSearch={!showRunningWorkflowsSection}
+            showFilters={!showRunningWorkflowsSection}
+            filtersOpen={filtersOpen}
+            filtersActive={filtersActive}
+            onToggleFilters={handleToggleFilters}
+            filterControls={workflowFilterControls}
             isFiltering={isFilteringWorkflows}
             onNewWorkflow={() => {
               setActiveWorkflowWorkingFilePath(null);
