@@ -7,6 +7,10 @@ import {
 } from "./FileReferenceParser";
 import { buildDirectoryAttachmentXml } from "./AttachmentBuilders";
 import { isPathWithinAnyDirectory } from "./PathSecurity";
+import {
+  resolveNamedRelativePath,
+  type ResolverWorkspaceFolder,
+} from "../platform/WorkspaceRootResolver";
 import { Log } from "./Log";
 import {
   getCommitDiff,
@@ -58,10 +62,21 @@ export class ContextExpander {
   // multi-root `.code-workspace`, which VS Code does not require to be
   // descendants of the primary root).
   private trustedRoots: string[];
+  // Named roots (folder name → path) for folder-name-prefixed multi-root refs
+  // (`root2/src/index.ts`), e.g. every folder of a `.code-workspace`.
+  private namedRoots: ResolverWorkspaceFolder[];
+  // When true, render resolved absolute paths in excerpt descriptions/bodies
+  // instead of the as-typed relative ref (attachment ids are unaffected).
+  private effectiveAbsolute: boolean;
   // Track attachment IDs to prevent duplicates
   private attachmentIds = new Set<string>();
 
-  constructor(workspaceRoot: string, additionalTrustedRoots: string[] = []) {
+  constructor(
+    workspaceRoot: string,
+    additionalTrustedRoots: string[] = [],
+    namedRoots: ResolverWorkspaceFolder[] = [],
+    effectiveAbsolute: boolean = false
+  ) {
     this.workspaceRoot = workspaceRoot;
     this.trustedRoots = Array.from(
       new Set(
@@ -70,6 +85,8 @@ export class ContextExpander {
         )
       )
     );
+    this.namedRoots = namedRoots;
+    this.effectiveAbsolute = effectiveAbsolute;
   }
 
   /**
@@ -196,7 +213,9 @@ export class ContextExpander {
           const xml = await buildDirectoryAttachmentXml(
             ref.path,
             this.workspaceRoot,
-            this.trustedRoots
+            this.trustedRoots,
+            this.namedRoots,
+            this.effectiveAbsolute
           ).catch((err) => {
             Log.error(
               `[ContextExpander] Failed directory attachment ${ref.path}:`,
@@ -231,8 +250,12 @@ export class ContextExpander {
             await fs.access(absolutePath);
             directFileRefs.push(absolutePath);
           } catch (err) {
+            const suggestion =
+              this.namedRoots.length > 1
+                ? ` If this file is in a secondary workspace folder, prefix the path with its folder name (e.g. "${this.namedRoots[1].name}/...").`
+                : "";
             Log.warn(
-              `[ContextExpander] Skipping unreadable or out-of-workspace reference: ${ref.path}`,
+              `[ContextExpander] Skipping unreadable or out-of-workspace reference: ${ref.path}.${suggestion}`,
               err
             );
           }
@@ -395,7 +418,9 @@ export class ContextExpander {
       return buildDirectoryAttachmentXml(
         ref.path,
         this.workspaceRoot,
-        this.trustedRoots
+        this.trustedRoots,
+        this.namedRoots,
+        this.effectiveAbsolute
       );
     } else {
       // File reference (full file, line range, or symbol)
@@ -438,12 +463,14 @@ export class ContextExpander {
       `[ContextExpander] Read ${filePath} (${sizeKb} KB) in ${elapsed}ms`
     );
 
+    const displayPath = this.effectiveAbsolute ? absolutePath : filePath;
+
     // If no line range, attach entire file
     if (!startLine || !endLine) {
       const attachmentId = `file:${filePath}`;
       const description = symbolName
-        ? `Symbol: ${symbolName} in ${filePath}`
-        : `File: ${filePath}`;
+        ? `Symbol: ${symbolName} in ${displayPath}`
+        : `File: ${displayPath}`;
 
       return `<attachment id="${attachmentId}">
 ${description}
@@ -474,8 +501,8 @@ ${rawContent}
       ? `symbol:${filePath}:${startLine}-${endLine}`
       : `selection:${filePath}:${startLine}-${endLine}`;
     const description = symbolName
-      ? `Symbol: ${symbolName} in ${filePath}, lines ${startLine} to ${endLine}`
-      : `Excerpt from ${filePath}, lines ${startLine} to ${endLine}`;
+      ? `Symbol: ${symbolName} in ${displayPath}, lines ${startLine} to ${endLine}`
+      : `Excerpt from ${displayPath}, lines ${startLine} to ${endLine}`;
 
     return `<attachment id="${attachmentId}">
 ${description}:
@@ -494,10 +521,14 @@ ${content}
       throw new Error("No workspace folder open");
     }
 
-    // path.resolve handles both absolute and relative paths correctly
-    // If relativePath is already absolute, it returns it as-is
-    // If relative, it joins with workspaceRoot
-    const resolved = path.resolve(this.workspaceRoot, relativePath);
+    // Folder-name-prefixed refs (`root2/src/index.ts`) resolve against that
+    // named root; otherwise (and for absolute paths) behaves like
+    // path.resolve(workspaceRoot, relativePath) as before.
+    const resolved = resolveNamedRelativePath(
+      relativePath,
+      this.workspaceRoot,
+      this.namedRoots
+    );
 
     // Reject `..` traversal and absolute-path references that escape every
     // trusted root — @-references come from prompt/workflow file content,

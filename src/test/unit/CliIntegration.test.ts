@@ -21,6 +21,10 @@ class MockVsCodePlatform implements PlatformAdapter {
     return [process.cwd()];
   }
 
+  getNamedWorkspaceRoots() {
+    return [{ name: "root", fsPath: process.cwd() }];
+  }
+
   log(_message: string): void {}
 
   warn(_message: string): void {}
@@ -511,5 +515,104 @@ suite("CliIntegration", () => {
     } finally {
       await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
     }
+  });
+
+  suite("effective absolute file references", () => {
+    class MockMultiRootPlatform extends MockVsCodePlatform {
+      override getWorkspaceRoots(): string[] {
+        return [process.cwd(), path.resolve(process.cwd(), "..")];
+      }
+      override getNamedWorkspaceRoots() {
+        return [
+          { name: "root", fsPath: process.cwd() },
+          { name: "other", fsPath: path.resolve(process.cwd(), "..") },
+        ];
+      }
+    }
+
+    function integrationWithPlatform(
+      platform: PlatformAdapter,
+      overrides?: Partial<ICliProvider>
+    ): CliIntegration {
+      return new CliIntegration(createProvider(overrides), platform, false);
+    }
+
+    setup(() => {
+      configService.setCliOverlay({});
+    });
+
+    teardown(() => {
+      configService.setCliOverlay({});
+    });
+
+    test("single-root, setting off, no provider requirement: renders relative", () => {
+      configService.setCliOverlay({
+        ui: { useAbsolutePathReferences: false },
+      });
+      const integration = integrationWithPlatform(new MockVsCodePlatform());
+      const absolutePath = path.join(process.cwd(), "src", "a.ts");
+
+      const result = (integration as any).formatDirectFileRef(absolutePath);
+
+      assert.strictEqual(result, `@${path.join("src", "a.ts")}`);
+    });
+
+    test("single-root, setting on: renders absolute", () => {
+      configService.setCliOverlay({
+        ui: { useAbsolutePathReferences: true },
+      });
+      const integration = integrationWithPlatform(new MockVsCodePlatform());
+      const absolutePath = path.join(process.cwd(), "src", "a.ts");
+
+      const result = (integration as any).formatDirectFileRef(absolutePath);
+
+      assert.strictEqual(result, `@${absolutePath}`);
+    });
+
+    test("provider hard requirement wins even with setting off and single root", () => {
+      configService.setCliOverlay({
+        ui: { useAbsolutePathReferences: false },
+      });
+      const integration = integrationWithPlatform(new MockVsCodePlatform(), {
+        config: {
+          usesAbsoluteFileReferences: true,
+        } as unknown as ICliProvider["config"],
+      });
+      const absolutePath = path.join(process.cwd(), "src", "a.ts");
+
+      const result = (integration as any).formatDirectFileRef(absolutePath);
+
+      assert.strictEqual(result, `@${absolutePath}`);
+    });
+
+    test("multi-root forces absolute even with setting off and no provider requirement", () => {
+      configService.setCliOverlay({
+        ui: { useAbsolutePathReferences: false },
+      });
+      const integration = integrationWithPlatform(new MockMultiRootPlatform());
+      const absolutePath = path.join(process.cwd(), "src", "a.ts");
+
+      const result = (integration as any).formatDirectFileRef(absolutePath);
+
+      assert.strictEqual(result, `@${absolutePath}`);
+    });
+
+    test("formatTempFileRef agrees with the same effective-absolute decision", () => {
+      configService.setCliOverlay({
+        ui: { useAbsolutePathReferences: true },
+      });
+      const integration = integrationWithPlatform(new MockVsCodePlatform());
+      const absolutePath = path.join(process.cwd(), ".ctrlyoke", "temp", "x.md");
+      const mockTempMgr = {
+        getRelativePath: (p: string) => path.relative(process.cwd(), p),
+      };
+
+      const result = (integration as any).formatTempFileRef(
+        mockTempMgr,
+        absolutePath
+      );
+
+      assert.strictEqual(result, `@${absolutePath}`);
+    });
   });
 });

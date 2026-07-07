@@ -35,6 +35,10 @@ class MockPlatform implements PlatformAdapter {
     return [process.cwd()];
   }
 
+  getNamedWorkspaceRoots() {
+    return [{ name: "root", fsPath: process.cwd() }];
+  }
+
   log(_message: string): void {}
   warn(_message: string): void {}
   error(_message: string): void {}

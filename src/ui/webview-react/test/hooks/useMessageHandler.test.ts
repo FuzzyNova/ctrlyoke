@@ -647,6 +647,7 @@ describe("NOTIFICATION_EVENT", () => {
       sources: {
         notifications: "user",
       },
+      isMultiRoot: false,
     };
     useSettingsStore.getState().setFullGlobalSettings(fullSettings);
 

@@ -517,6 +517,10 @@
           "type": "boolean",
           "description": "Automatically grow the editor panel as you type past its current height, up to 60% of the available area. Shrinks back when text is deleted or the prompt is submitted."
         },
+        "useAbsolutePathReferences": {
+          "type": "boolean",
+          "description": "Send absolute file paths to the harness/model instead of relative paths. Stored workflow text stays relative regardless of this setting. Forced on in multi-root workspaces and by harnesses that require it (e.g. Antigravity)."
+        },
         "outputVirtualizationRowThreshold": {
           "type": "number",
           "minimum": -1,

@@ -10,6 +10,7 @@ function createSettings(): FullGlobalSettings {
   return {
     settings: CTRLYOKE_SETTINGS_DEFAULTS,
     sources: {},
+    isMultiRoot: false,
   };
 }
 

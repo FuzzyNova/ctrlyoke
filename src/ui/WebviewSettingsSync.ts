@@ -47,6 +47,7 @@ import { readJsonFile } from "../utils/FileSystemUtils";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeWorkspaceFolder,
+  isMultiRootWorkspace,
 } from "../platform/VsCodeWorkspaceRoot";
 import type { WorkflowOrchestrator } from "../core/WorkflowOrchestrator";
 import { AgentDiscovery } from "../utils/AgentDiscovery";
@@ -942,7 +943,11 @@ export class WebviewSettingsSync {
     this.emitMessage(
       {
         type: MESSAGE_TYPES.GLOBAL_SETTINGS_LOADED,
-        settings: { settings: allSettings, sources },
+        settings: {
+          settings: allSettings,
+          sources,
+          isMultiRoot: isMultiRootWorkspace(),
+        },
         commitMessageGeneration: commitMessageGenerationTracker.getLastRecord(),
         certMeta,
       },

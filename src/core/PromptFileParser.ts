@@ -12,6 +12,7 @@ import {
 import { PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { PlatformAdapter } from "../platform/PlatformAdapter";
+import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import {
   PROMPT_FILE_EXTENSIONS,
   looksLikeFilePath,
@@ -258,10 +259,17 @@ export class PromptFileParser {
       return relativeToPrompt;
     }
 
-    // Try relative to workspace root
+    // Try relative to workspace root — folder-name-prefixed multi-root refs
+    // (`root2/prompts/x.prompt.md`) resolve against that named root; an
+    // unprefixed ref resolves against the primary root, same as before.
     const workspaceRoot = this.platform?.getWorkspaceRoot();
     if (workspaceRoot) {
-      const relativeToWorkspace = path.resolve(workspaceRoot, filePath);
+      const namedRoots = this.platform?.getNamedWorkspaceRoots() ?? [];
+      const relativeToWorkspace = resolveNamedRelativePath(
+        filePath,
+        workspaceRoot,
+        namedRoots
+      );
       if (await this.fileExists(relativeToWorkspace)) {
         return relativeToWorkspace;
       }

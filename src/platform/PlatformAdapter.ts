@@ -1,3 +1,5 @@
+import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
+
 /**
  * Abstraction layer for platform-specific APIs.
  * Implemented by VsCodeAdapter (VS Code extension) and CliAdapter (standalone CLI).
@@ -28,6 +30,16 @@ export interface PlatformAdapter {
    * CLI: `[getWorkspaceRoot()]` (no multi-root concept).
    */
   getWorkspaceRoots(): string[];
+
+  /**
+   * Every open workspace folder as a name/path pair, for folder-name-prefixed
+   * relative ref resolution (`root2/src/index.ts`). Used to resolve refs
+   * produced by multi-root completions and to decide `effectiveAbsolute`.
+   * VS Code: one entry per `vscode.workspace.workspaceFolders` folder.
+   * CLI: a single entry — `{ name: basename(getWorkspaceRoot()), fsPath: getWorkspaceRoot() }`
+   * — so multi-root resolution can never trigger there.
+   */
+  getNamedWorkspaceRoots(): ResolverWorkspaceFolder[];
 
   /**
    * Log an informational message.

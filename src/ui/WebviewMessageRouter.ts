@@ -4,6 +4,7 @@ import { getErrorMessage } from "../utils/ErrorUtils";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeTrustedWorkspaceRoots,
+  getVsCodeNamedWorkspaceRoots,
 } from "../platform/VsCodeWorkspaceRoot";
 import {
   MESSAGE_TYPES,
@@ -2229,11 +2230,16 @@ export class WebviewMessageRouter {
     const counts: Record<string, number> = {};
 
     const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+    const namedRoots = getVsCodeNamedWorkspaceRoots();
 
     await Promise.all(
       references.map(async (rawRef) => {
         try {
-          const expander = new ContextExpander(workspaceRoot, trustedRoots);
+          const expander = new ContextExpander(
+            workspaceRoot,
+            trustedRoots,
+            namedRoots
+          );
           const expanded = await expander.expandContext(rawRef);
 
           if (expanded === rawRef) {

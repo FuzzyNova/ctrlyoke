@@ -327,6 +327,16 @@ export const ConfigurationUtils = {
     return configService.get(CONFIG_KEYS.UI).autoExpandEditorWhenTyping;
   },
 
+  /**
+   * Raw `ui.useAbsolutePathReferences` setting value only — NOT the
+   * multi-root-forced effective value. Callers that need the effective
+   * (rendered) value must combine this with `resolveEffectiveAbsoluteReferences`
+   * so the decision stays testable and CLI-safe.
+   */
+  shouldUseAbsolutePathReferences(): boolean {
+    return configService.get(CONFIG_KEYS.UI).useAbsolutePathReferences;
+  },
+
   getOutputVirtualizationRowThreshold(): number {
     return configService.get(CONFIG_KEYS.UI).outputVirtualizationRowThreshold;
   },

@@ -3,7 +3,9 @@ import type { PlatformAdapter } from "./PlatformAdapter";
 import {
   getVsCodeWorkspaceRoot,
   getVsCodeTrustedWorkspaceRoots,
+  getVsCodeNamedWorkspaceRoots,
 } from "./VsCodeWorkspaceRoot";
+import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
 
 /**
  * VS Code implementation of PlatformAdapter.
@@ -19,6 +21,10 @@ export class VsCodeAdapter implements PlatformAdapter {
 
   getWorkspaceRoots(): string[] {
     return getVsCodeTrustedWorkspaceRoots();
+  }
+
+  getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
+    return getVsCodeNamedWorkspaceRoots();
   }
 
   log(message: string): void {

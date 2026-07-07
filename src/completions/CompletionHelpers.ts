@@ -4,6 +4,7 @@ import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import { configService } from "../config/CtrlYokeConfigService";
+import { isMultiRootWorkspace } from "../platform/VsCodeWorkspaceRoot";
 import {
   getRecentCommits,
   getGitTrackedFiles,
@@ -222,7 +223,12 @@ interface PathCompletionFilter {
 }
 
 function getNormalizedWorkspaceRelativePath(fileUri: vscode.Uri): string {
-  return normalizeReferencePath(vscode.workspace.asRelativePath(fileUri, false));
+  // Multi-root: folder-name-prefixed (`root2/src/index.ts`) so the ref is
+  // unambiguous and resolvable without probing every root. Single-root keeps
+  // today's unprefixed form.
+  return normalizeReferencePath(
+    vscode.workspace.asRelativePath(fileUri, isMultiRootWorkspace())
+  );
 }
 
 function getNormalizedParentDirectory(relativePath: string): string {
@@ -508,7 +514,7 @@ async function getSymbolCompletions(
     for (const symbol of symbols) {
       const relativePath = vscode.workspace.asRelativePath(
         symbol.location.uri,
-        false
+        isMultiRootWorkspace()
       );
 
       const startLine = symbol.location.range.start.line + 1;
@@ -577,7 +583,10 @@ function getSelectionCompletions(): PlainCompletionItem[] {
     const document = editor.document;
 
     // Get workspace-relative path
-    const relativePath = vscode.workspace.asRelativePath(document.uri, false);
+    const relativePath = vscode.workspace.asRelativePath(
+      document.uri,
+      isMultiRootWorkspace()
+    );
 
     // Convert to 1-based line numbers
     const startLine = selection.start.line + 1;

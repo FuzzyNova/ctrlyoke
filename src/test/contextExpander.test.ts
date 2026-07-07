@@ -518,6 +518,106 @@ suite("ContextExpander.expandContextSplit", () => {
       }
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("named-root (folder-name-prefixed) resolution", () => {
+    let secondRoot: string;
+
+    afterEach(() => {
+      try {
+        if (secondRoot) {
+          fs.rmSync(secondRoot, { recursive: true, force: true });
+        }
+      } catch {
+        // best-effort
+      }
+    });
+
+    test("resolves a folder-name-prefixed ref against the matching named root", async () => {
+      const root = freshWorkspace();
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      const secondFile = path.join(secondRoot, "b.ts");
+      fs.writeFileSync(secondFile, "export const b = true;\n");
+
+      const expander = new ContextExpander(
+        root,
+        [root, secondRoot],
+        [
+          { name: "root1", fsPath: root },
+          { name: "root2", fsPath: secondRoot },
+        ]
+      );
+      const result = await expander.expandContextSplit("@root2/b.ts");
+
+      assert.deepStrictEqual(result.directFileRefs, [secondFile]);
+    });
+
+    test("unprefixed ref still resolves against the primary root", async () => {
+      const root = freshWorkspace();
+      secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+      const primaryFile = path.join(root, "a.ts");
+      fs.writeFileSync(primaryFile, "export const a = true;\n");
+
+      const expander = new ContextExpander(
+        root,
+        [root, secondRoot],
+        [
+          { name: "root1", fsPath: root },
+          { name: "root2", fsPath: secondRoot },
+        ]
+      );
+      const result = await expander.expandContextSplit("@a.ts");
+
+      assert.deepStrictEqual(result.directFileRefs, [primaryFile]);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("effectiveAbsolute rendering", () => {
+    test("renders the as-typed relative path in the excerpt when effectiveAbsolute is false", async () => {
+      const root = freshWorkspace();
+      const filePath = path.join(root, "a.ts");
+      fs.writeFileSync(
+        filePath,
+        "line1\nline2\nline3\n"
+      );
+
+      const expander = new ContextExpander(root, [root], [], false);
+      const result = await expander.expandContextSplit("#selection:a.ts:1-2");
+
+      assert.ok(result.excerptBlocks.includes("Excerpt from a.ts"));
+      assert.ok(!result.excerptBlocks.includes(filePath));
+    });
+
+    test("renders the resolved absolute path in the excerpt when effectiveAbsolute is true", async () => {
+      const root = freshWorkspace();
+      const filePath = path.join(root, "a.ts");
+      fs.writeFileSync(
+        filePath,
+        "line1\nline2\nline3\n"
+      );
+
+      const expander = new ContextExpander(root, [root], [], true);
+      const result = await expander.expandContextSplit("#selection:a.ts:1-2");
+
+      assert.ok(result.excerptBlocks.includes(`Excerpt from ${filePath}`));
+      // Attachment id stays as-typed (relative) even when rendering absolute.
+      assert.ok(result.excerptBlocks.includes('id="selection:a.ts:1-2"'));
+    });
+
+    test("renders the resolved absolute directory path in the body when effectiveAbsolute is true", async () => {
+      const root = freshWorkspace();
+      fs.mkdirSync(path.join(root, "sub"));
+      fs.writeFileSync(path.join(root, "sub", "c.ts"), "// c\n");
+
+      const expander = new ContextExpander(root, [root], [], true);
+      const result = await expander.expandContextSplit("@sub/");
+
+      const absoluteDir = path.join(root, "sub");
+      assert.ok(result.excerptBlocks.includes(absoluteDir));
+      assert.ok(result.excerptBlocks.includes('id="directory:sub"'));
+    });
+  });
 });
 
 suite("ContextExpander.expandContext", () => {

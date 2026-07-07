@@ -3,6 +3,10 @@ import * as path from "path";
 import { PlatformAdapter } from "../../platform/PlatformAdapter";
 import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import {
+  resolveEffectiveAbsoluteReferences,
+  type ResolverWorkspaceFolder,
+} from "../../platform/WorkspaceRootResolver";
+import {
   CliEvent,
   CliResult,
   UniversalCliOutput,
@@ -244,6 +248,38 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
+   * Override base class getNamedWorkspaceRoots() to use the platform adapter.
+   * `CliAdapter` always returns a single named root, so multi-root behavior
+   * can never trigger for the CLI binary.
+   */
+  protected override getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
+    return this.platform.getNamedWorkspaceRoots();
+  }
+
+  /**
+   * Override base class requiresAbsoluteFileReferences() to consult the
+   * provider config — Antigravity hard-requires absolute paths regardless of
+   * the `ui.useAbsolutePathReferences` setting or root count.
+   */
+  protected override requiresAbsoluteFileReferences(): boolean {
+    return this.provider.config.usesAbsoluteFileReferences ?? false;
+  }
+
+  /**
+   * Effective "render absolute file paths" decision for this CLI integration,
+   * computed the same way as `HarnessIntegration.buildPromptSections` so
+   * `formatDirectFileRef`/`formatTempFileRef` (invoked outside that method,
+   * via `CliPromptPreparer`'s deps) agree with it by construction.
+   */
+  private getEffectiveAbsolute(): boolean {
+    return resolveEffectiveAbsoluteReferences(
+      ConfigurationUtils.shouldUseAbsolutePathReferences(),
+      this.getWorkspaceRoots().length > 1,
+      this.requiresAbsoluteFileReferences()
+    );
+  }
+
+  /**
    * Set the workflow name used for VS Code terminal tab labeling.
    * Call this whenever a new workflow is loaded or renamed.
    */
@@ -306,7 +342,7 @@ export class CliIntegration extends HarnessIntegration {
    */
   private formatDirectFileRef(absolutePath: string): string {
     const workspaceRoot = this.getWorkspaceRoot() ?? "";
-    const refPath = this.provider.config.usesAbsoluteFileReferences
+    const refPath = this.getEffectiveAbsolute()
       ? absolutePath
       : path.relative(workspaceRoot, absolutePath);
     const quoted = refPath.includes(" ") ? `"${refPath}"` : refPath;
@@ -324,7 +360,7 @@ export class CliIntegration extends HarnessIntegration {
     tempMgr: TempFileManager,
     absolutePath: string
   ): string {
-    const refPath = this.provider.config.usesAbsoluteFileReferences
+    const refPath = this.getEffectiveAbsolute()
       ? absolutePath
       : tempMgr.getRelativePath(absolutePath);
     const quoted = refPath.includes(" ") ? `"${refPath}"` : refPath;

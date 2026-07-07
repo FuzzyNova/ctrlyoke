@@ -116,6 +116,15 @@ export interface CtrlYokeGlobalSettings {
     respectGitignoreForCompletions: boolean;
     autoExpandEditorWhenTyping: boolean;
     /**
+     * Render `@file` references as absolute paths in the final prompt sent to
+     * the harness/model, instead of the as-typed relative path. Stored
+     * workflow text is always relative regardless of this setting — this only
+     * affects render-time output. Forced on in multi-root workspaces and by
+     * providers that hard-require it (e.g. Antigravity) regardless of this
+     * value; see `resolveEffectiveAbsoluteReferences`.
+     */
+    useAbsolutePathReferences: boolean;
+    /**
      * Minimum projected output row count required before TanStack virtualization
      * is used. 0 = always virtualize, -1 = never virtualize.
      */
@@ -322,6 +331,7 @@ export const CTRLYOKE_SETTINGS_DEFAULTS: CtrlYokeGlobalSettings = {
     openPromptsInSecondGroup: false,
     respectGitignoreForCompletions: true,
     autoExpandEditorWhenTyping: true,
+    useAbsolutePathReferences: false,
     outputVirtualizationRowThreshold: 200,
     confirmDeleteOperations: true,
     confirmResetOperations: true,

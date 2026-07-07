@@ -21,6 +21,10 @@ import type { SplitContext } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { TempFileManager } from "../utils/TempFileManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import {
+  resolveEffectiveAbsoluteReferences,
+  type ResolverWorkspaceFolder,
+} from "../platform/WorkspaceRootResolver";
 import { stripAnsiCodes } from "../utils/TerminalOutputSanitizer";
 import { SplitConfig } from "../utils/PromptFileSplitter";
 import {
@@ -409,9 +413,16 @@ export abstract class HarnessIntegration {
     let splitContext: SplitContext = { directFileRefs: [], excerptBlocks: "" };
     if (workspaceRoot) {
       try {
+        const effectiveAbsolute = resolveEffectiveAbsoluteReferences(
+          ConfigurationUtils.shouldUseAbsolutePathReferences(),
+          this.getWorkspaceRoots().length > 1,
+          this.requiresAbsoluteFileReferences()
+        );
         const expander = new ContextExpander(
           workspaceRoot,
-          this.getWorkspaceRoots()
+          this.getWorkspaceRoots(),
+          this.getNamedWorkspaceRoots(),
+          effectiveAbsolute
         );
         splitContext = await expander.expandContextSplit(userPromptText);
       } catch (error) {
@@ -911,6 +922,26 @@ export abstract class HarnessIntegration {
   protected getWorkspaceRoots(): string[] {
     const root = this.getWorkspaceRoot();
     return root ? [root] : [];
+  }
+
+  /**
+   * Named roots (folder name → path) for folder-name-prefixed multi-root ref
+   * resolution (`root2/src/index.ts`). Defaults to none; overridden where a
+   * platform adapter can supply the full multi-root list (see `CliIntegration`).
+   */
+  protected getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
+    return [];
+  }
+
+  /**
+   * Whether this harness hard-requires absolute file paths regardless of the
+   * `ui.useAbsolutePathReferences` setting or root count (e.g. Antigravity
+   * resolves relative paths against the user's home directory rather than
+   * the workspace in headless mode). Defaults to false; overridden by
+   * `CliIntegration` to consult the provider config.
+   */
+  protected requiresAbsoluteFileReferences(): boolean {
+    return false;
   }
 
   /**

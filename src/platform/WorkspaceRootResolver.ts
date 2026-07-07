@@ -132,3 +132,62 @@ export function resolveTrustedWorkspaceRoots(
   );
   return Array.from(new Set([primary, ...folderPaths]));
 }
+
+/**
+ * Resolve a relative reference path that may be folder-name-prefixed
+ * (`root2/src/index.ts`, the multi-root stored form produced by
+ * `vscode.workspace.asRelativePath(uri, true)`) against the correct root.
+ *
+ * Resolution order:
+ * 1. Absolute paths are returned as-is (matches `path.resolve` semantics).
+ * 2. If the first path segment matches a named root's `name` (or, as
+ *    fallback, that root's directory basename), resolve the remainder
+ *    against that root.
+ * 3. Otherwise resolve the whole path against `primaryRoot` (today's
+ *    behavior — an unprefixed ref is "relative to the primary root").
+ *
+ * Deliberately synchronous and side-effect free: no filesystem probing
+ * across roots, so a ref always resolves to exactly one candidate path.
+ */
+export function resolveNamedRelativePath(
+  relativePath: string,
+  primaryRoot: string,
+  namedRoots: readonly ResolverWorkspaceFolder[]
+): string {
+  if (path.isAbsolute(relativePath)) {
+    return path.resolve(relativePath);
+  }
+
+  const normalized = relativePath.replace(/\\/g, "/");
+  const firstSlash = normalized.indexOf("/");
+  if (firstSlash > 0) {
+    const firstSegment = normalized.slice(0, firstSlash);
+    const rest = normalized.slice(firstSlash + 1);
+    const match = namedRoots.find(
+      (root) =>
+        root.name === firstSegment ||
+        path.basename(root.fsPath) === firstSegment
+    );
+    if (match) {
+      return path.resolve(match.fsPath, rest);
+    }
+  }
+
+  return path.resolve(primaryRoot, relativePath);
+}
+
+/**
+ * Pure decision for whether prompt rendering should use absolute file paths.
+ * A hard per-provider requirement (Antigravity) always wins; otherwise
+ * multi-root workspaces force absolute (a `root2/...`-relative ref would be
+ * wrong against the harness CLI's single cwd), and single-root falls back to
+ * the user setting. Kept pure/sync so it's unit-testable without `vscode` and
+ * safe to call from the platform-agnostic CLI binary.
+ */
+export function resolveEffectiveAbsoluteReferences(
+  userSetting: boolean,
+  isMultiRoot: boolean,
+  providerRequiresAbsolute?: boolean
+): boolean {
+  return !!providerRequiresAbsolute || (isMultiRoot ? true : userSetting);
+}

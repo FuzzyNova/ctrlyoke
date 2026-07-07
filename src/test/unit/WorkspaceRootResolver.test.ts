@@ -3,6 +3,8 @@ import * as path from "path";
 import {
   resolveWorkspaceRoot,
   resolveTrustedWorkspaceRoots,
+  resolveNamedRelativePath,
+  resolveEffectiveAbsoluteReferences,
   type ResolverWorkspaceFolder,
 } from "../../platform/WorkspaceRootResolver";
 
@@ -177,6 +179,91 @@ suite("WorkspaceRootResolver Tests", () => {
     test("returns just the cwd fallback when no folders are open", () => {
       const cwd = path.resolve("/some/cwd");
       assert.deepStrictEqual(resolveTrustedWorkspaceRoots({ cwd }), [cwd]);
+    });
+  });
+
+  suite("resolveNamedRelativePath", () => {
+    test("folder-name-prefixed ref resolves against the matching named root", () => {
+      assert.strictEqual(
+        resolveNamedRelativePath("docs/readme.md", appFolder, folders),
+        path.resolve(docsFolder, "readme.md")
+      );
+    });
+
+    test("falls back to the root's directory basename when name doesn't match", () => {
+      const unnamedRoots: ResolverWorkspaceFolder[] = [
+        { name: "Frontend App", fsPath: appFolder },
+      ];
+      assert.strictEqual(
+        resolveNamedRelativePath("app/src/index.ts", repoRoot, unnamedRoots),
+        path.resolve(appFolder, "src/index.ts")
+      );
+    });
+
+    test("unprefixed ref resolves against the primary root", () => {
+      assert.strictEqual(
+        resolveNamedRelativePath("src/index.ts", appFolder, folders),
+        path.resolve(appFolder, "src/index.ts")
+      );
+    });
+
+    test("no named-root match falls back to the primary root (segment looks like a path, not a folder name)", () => {
+      assert.strictEqual(
+        resolveNamedRelativePath("lib/index.ts", appFolder, folders),
+        path.resolve(appFolder, "lib/index.ts")
+      );
+    });
+
+    test("absolute paths are returned as-is regardless of named roots", () => {
+      const absolute = path.resolve("/elsewhere/file.ts");
+      assert.strictEqual(
+        resolveNamedRelativePath(absolute, appFolder, folders),
+        absolute
+      );
+    });
+
+    test("empty named roots behaves exactly like plain path.resolve", () => {
+      assert.strictEqual(
+        resolveNamedRelativePath("docs/readme.md", appFolder, []),
+        path.resolve(appFolder, "docs/readme.md")
+      );
+    });
+  });
+
+  suite("resolveEffectiveAbsoluteReferences", () => {
+    test("provider hard requirement wins over everything else", () => {
+      assert.strictEqual(
+        resolveEffectiveAbsoluteReferences(false, false, true),
+        true
+      );
+    });
+
+    test("multi-root forces absolute even when the user setting is off", () => {
+      assert.strictEqual(
+        resolveEffectiveAbsoluteReferences(false, true, false),
+        true
+      );
+    });
+
+    test("single-root falls back to the user setting (off)", () => {
+      assert.strictEqual(
+        resolveEffectiveAbsoluteReferences(false, false, false),
+        false
+      );
+    });
+
+    test("single-root falls back to the user setting (on)", () => {
+      assert.strictEqual(
+        resolveEffectiveAbsoluteReferences(true, false, false),
+        true
+      );
+    });
+
+    test("providerRequiresAbsolute undefined is treated as false", () => {
+      assert.strictEqual(
+        resolveEffectiveAbsoluteReferences(false, false, undefined),
+        false
+      );
     });
   });
 });

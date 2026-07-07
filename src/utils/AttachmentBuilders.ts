@@ -2,6 +2,10 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { Log } from "./Log";
 import { isPathWithinAnyDirectory } from "./PathSecurity";
+import {
+  resolveNamedRelativePath,
+  type ResolverWorkspaceFolder,
+} from "../platform/WorkspaceRootResolver";
 
 /**
  * Utility functions for building XML attachments for various reference types
@@ -75,24 +79,36 @@ async function buildDirectoryTree(
 /**
  * Build XML attachment for a directory structure
  *
- * @param dirPath Workspace-relative directory path (with or without trailing slash)
+ * @param dirPath Workspace-relative directory path (with or without trailing slash),
+ *   optionally folder-name-prefixed for multi-root (`root2/src/`)
  * @param workspaceRoot Absolute path to workspace root, used to resolve relative refs
  * @param additionalTrustedRoots Extra absolute directories to also trust (e.g. every
  *   folder of a multi-root `.code-workspace`, which need not be descendants of
  *   `workspaceRoot`). Defaults to just `workspaceRoot`.
+ * @param namedRoots Named roots for folder-name-prefixed resolution (see
+ *   `resolveNamedRelativePath`). Defaults to none (primary-root-only resolution).
+ * @param effectiveAbsolute When true, render the resolved absolute directory path
+ *   in the attachment body instead of the as-typed relative path (the id is
+ *   unaffected — it only needs to be stable for deduplication).
  * @returns XML string with directory tree
  */
 export async function buildDirectoryAttachmentXml(
   dirPath: string,
   workspaceRoot: string,
-  additionalTrustedRoots: string[] = []
+  additionalTrustedRoots: string[] = [],
+  namedRoots: ResolverWorkspaceFolder[] = [],
+  effectiveAbsolute: boolean = false
 ): Promise<string> {
   // Remove trailing slash for consistent path handling
   const normalizedPath = dirPath.replace(/[/\\]+$/, "");
 
   // Build absolute URI
   const resolvedRoot = path.resolve(workspaceRoot);
-  const absolutePath = path.resolve(resolvedRoot, normalizedPath);
+  const absolutePath = resolveNamedRelativePath(
+    normalizedPath,
+    resolvedRoot,
+    namedRoots
+  );
   const trustedRoots = [
     resolvedRoot,
     ...additionalTrustedRoots.map((root) => path.resolve(root)),
@@ -129,10 +145,12 @@ Directory not found: ${normalizedPath}
   const tree = await buildDirectoryTree(dirUri);
   const fileCount = (tree.match(/\n/g) || []).length;
 
-  return `<attachment id="directory:${normalizedPath}">
-Directory structure: ${normalizedPath}/ (${fileCount} items)
+  const displayPath = effectiveAbsolute ? absolutePath : normalizedPath;
 
-${normalizedPath}/
+  return `<attachment id="directory:${normalizedPath}">
+Directory structure: ${displayPath}/ (${fileCount} items)
+
+${displayPath}/
 ${tree}
 </attachment>`;
 }

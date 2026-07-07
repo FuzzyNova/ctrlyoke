@@ -66,6 +66,27 @@ export function getVsCodeTrustedWorkspaceRoots(): string[] {
 }
 
 /**
+ * Returns true when more than one folder is open in the current VS Code
+ * window (a multi-root `.code-workspace`). CLI code must never call this —
+ * `CliAdapter` always represents a single root, so nothing calls it there.
+ */
+export function isMultiRootWorkspace(): boolean {
+  return (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
+}
+
+/**
+ * Every open workspace folder as a name/path pair, for folder-name-prefixed
+ * relative ref resolution (`root2/src/index.ts`). Single-folder windows
+ * return that one folder; no folder open returns `[]`.
+ */
+export function getVsCodeNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
+  return (vscode.workspace.workspaceFolders ?? []).map((folder) => ({
+    name: folder.name,
+    fsPath: folder.uri.fsPath,
+  }));
+}
+
+/**
  * Return a `vscode.WorkspaceFolder` whose `uri.fsPath` is the resolved
  * workspace root, or `undefined` when no folder is open.
  *

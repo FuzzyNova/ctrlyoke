@@ -26,6 +26,7 @@ export function GeneralSection({
   const exec = settings.settings.execution;
   const history = settings.settings.history;
   const sources = settings.sources as Record<string, SettingSource>;
+  const isMultiRoot = settings.isMultiRoot;
 
   const rowProps = { sources, onReset, activeScope };
 
@@ -147,6 +148,19 @@ export function GeneralSection({
           checked={ui.autoExpandEditorWhenTyping}
           onChange={(v) => onUpdate("ui.autoExpandEditorWhenTyping", v)}
           path="ui.autoExpandEditorWhenTyping"
+          {...rowProps}
+        />
+        <SettingToggleRow
+          label="Use absolute file paths"
+          description={
+            isMultiRoot
+              ? "Forced on — multiple workspace folders are open."
+              : "Send absolute file paths to the harness/model instead of relative paths. Stored workflow text always stays relative."
+          }
+          checked={isMultiRoot ? true : ui.useAbsolutePathReferences}
+          onChange={(v) => onUpdate("ui.useAbsolutePathReferences", v)}
+          disabled={isMultiRoot}
+          path="ui.useAbsolutePathReferences"
           {...rowProps}
         />
         <SettingInputRow

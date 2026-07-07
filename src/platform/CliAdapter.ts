@@ -1,5 +1,6 @@
 import * as path from "path";
 import type { PlatformAdapter } from "./PlatformAdapter";
+import type { ResolverWorkspaceFolder } from "./WorkspaceRootResolver";
 import type {
   ExecutionMode,
   PermissionMode,
@@ -116,6 +117,11 @@ export class CliAdapter implements PlatformAdapter {
 
   getWorkspaceRoots(): string[] {
     return [this.getWorkspaceRoot()];
+  }
+
+  getNamedWorkspaceRoots(): ResolverWorkspaceFolder[] {
+    const fsPath = this.getWorkspaceRoot();
+    return [{ name: path.basename(fsPath), fsPath }];
   }
 
   log(message: string): void {

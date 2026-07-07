@@ -16,6 +16,7 @@ suite("EndConditionEvaluator Tests", () => {
     const mockPlatform: PlatformAdapter = {
       getWorkspaceRoot: () => "",
       getWorkspaceRoots: () => [],
+      getNamedWorkspaceRoots: () => [],
       getExtensionPath: () => "",
       log: () => {},
       warn: () => {},

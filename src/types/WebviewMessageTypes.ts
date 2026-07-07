@@ -903,6 +903,12 @@ export type SettingSource = SettingScope;
 export interface FullGlobalSettings {
   settings: CtrlYokeGlobalSettings;
   sources: Record<string, SettingSource>;
+  /**
+   * Whether the current VS Code window has more than one workspace folder
+   * open. When true, `ui.useAbsolutePathReferences` is forced on regardless
+   * of its stored value — the settings UI shows the toggle as forced-on.
+   */
+  isMultiRoot: boolean;
 }
 
 export type { TerminalSettings } from "./CtrlYokeSettings";
