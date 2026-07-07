@@ -107,7 +107,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       )}
 
       {/* Workflow name */}
-      <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
+      <span className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
         {workflow.workflowName}
       </span>
 

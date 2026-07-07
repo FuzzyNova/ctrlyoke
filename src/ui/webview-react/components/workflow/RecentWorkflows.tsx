@@ -119,7 +119,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 )}
 
                 {/* Workflow Name */}
-                <span className="workflow-menu-item-name flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                <span className="workflow-menu-item-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
                   {workflow.workflowName}
                 </span>
 

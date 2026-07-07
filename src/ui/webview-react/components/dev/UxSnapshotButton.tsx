@@ -44,6 +44,16 @@ export function UxSnapshotButton() {
     return null;
   }
 
+  // Swallow mousedown here so it never bubbles to document, where WorkflowStatus's
+  // outside-click listener (bound to "mousedown") would otherwise treat this tap as
+  // "outside" and close whatever dropdown is currently open — right before the click
+  // handler below gets a chance to snapshot it. React delegates synthetic events at
+  // the app root, which sits between this button and document in the bubble path, so
+  // this always runs before that document-level listener does.
+  const swallowMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
   const handleCapture = () => {
     if (status === "capturing") {
       return;
@@ -88,6 +98,7 @@ export function UxSnapshotButton() {
   return (
     <button
       type="button"
+      onMouseDown={swallowMouseDown}
       onClick={handleCapture}
       disabled={status === "capturing"}
       aria-label="Capture UX snapshot"
