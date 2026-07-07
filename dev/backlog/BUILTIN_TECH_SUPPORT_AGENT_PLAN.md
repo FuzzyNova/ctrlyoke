@@ -1,7 +1,7 @@
 # Built-in `ctrlyoke-tech-support` Agent
 
 **Created:** July 4, 2026
-**Status:** PLANNING
+**Status:** DONE
 **Priority:** **v0.1.0 BLOCKER** (confirmed by Nathan, July 4, 2026)
 **Effort:** 1–2 days
 **Related:** [`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md), [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md)
@@ -60,7 +60,7 @@ formats, not the stale ones. Tracked in `RELEASE_PLAN.md` §2.9.
 
 ## Acceptance
 
-- [ ] `ctrlyoke-tech-support.agent.md` authored; accurate against the shipped harness list and formats.
-- [ ] `agents/manifest.json` entry (id, label, description, tags, icon).
-- [ ] Agent defers to docs/support for out-of-scope questions; no invented specifics.
-- [ ] Added to the pre-publish "docs coherence" verification.
+- [x] `ctrlyoke-tech-support.agent.md` authored; accurate against the shipped harness list and formats.
+- [x] `agents/manifest.json` entry (id, label, description, tags, icon).
+- [x] Agent defers to docs/support for out-of-scope questions; no invented specifics.
+- [x] Added to the pre-publish "docs coherence" verification.

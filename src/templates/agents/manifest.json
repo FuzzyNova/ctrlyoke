@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "ctrlyoke custom agents for Copilot CLI and Claude CLI",
+  "description": "ctrlyoke built-in agents for workflow composition, orchestration, testing, and support",
   "agents": [
     {
       "id": "ctrlyoke-workflow-composer",
@@ -25,6 +25,14 @@
       "file": "test-repair.agent.md",
       "tags": ["testing", "validation", "fix"],
       "icon": "$(debug)"
+    },
+    {
+      "id": "ctrlyoke-tech-support",
+      "label": "ctrlyoke Tech Support",
+      "description": "Answers ctrlyoke setup, workflow authoring, dashboard, harness, MCP, agent/skill, validation, session, and troubleshooting questions using bundled product knowledge.",
+      "file": "ctrlyoke-tech-support.agent.md",
+      "tags": ["support", "onboarding", "troubleshooting"],
+      "icon": "$(question)"
     }
   ]
 }

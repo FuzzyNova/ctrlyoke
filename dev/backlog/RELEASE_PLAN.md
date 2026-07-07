@@ -1,17 +1,17 @@
 # ctrlyoke v0.1.0 Release Plan
 
 **Created:** March 11, 2026
-**Updated:** July 4, 2026
-**Status:** BLOCKED — functional + licensing + cutover work remain before publish (see Phase 2)
+**Updated:** July 7, 2026
+**Status:** BLOCKED — licensing + cutover + onboarding/security work remain before publish (see Phase 2)
 **Target:** VS Code Marketplace public release first; npm CLI package after the extension release path is settled.
 
-> **July 4, 2026 review.** Package/metadata readiness (Phase 1) is done, but a backlog review surfaced blockers that were not previously tracked in this plan. The remaining ship gate is no longer just the mechanical publish checklist — it now includes one **functional** blocker (a broken harness shipping to users) and two work-streams tracked in sibling docs that this plan had omitted (Pro licensing implementation, and the ctrlyoke external cutover). These are consolidated in Phase 2 below so this stays the single "what's left" doc.
+> **July 7, 2026 review.** Package/metadata readiness (Phase 1) is done, and the former functional blocker -- replacing broken Gemini CLI support with Antigravity CLI -- is complete. The remaining ship gate is no longer just the mechanical publish checklist: launch still requires Pro licensing implementation, the ctrlyoke external cutover, new-user/onboarding blockers, legal finalization, security review closure, and final package inspection. These are consolidated in Phase 2 below so this stays the single "what's left" doc.
 
 ---
 
 ## Current State
 
-This plan was refreshed against the current repository state on June 19, 2026.
+This plan was refreshed against the current repository state on July 7, 2026.
 
 The original critical testing work is complete:
 
@@ -31,7 +31,7 @@ Codebase-backed release facts:
 - `package.json` contributes both bins: `ctrlyoke-mcp` and `ctrlyoke`, but `.vscodeignore` intentionally excludes `out/cli.js` from the VSIX.
 - `.vscodeignore` is now allowlist-based and includes the extension bundle, MCP server, webview assets, schemas, templates, runtime scripts, `resvg.wasm`, and `node-pty`.
 - `CHANGELOG.md` has a populated `[0.1.0] - 2026-05-12` release entry.
-- `README.md` documents seven harnesses, currently including `gemini-cli`. **This list is now wrong:** `gemini-cli` is broken (Google deprecated it) and is being replaced by `antigravity-cli` — see §2.5. README/CHANGELOG/docs must be corrected as part of that item before publish.
+- `README.md`, `CHANGELOG.md`, `package.json`, schemas, and harness docs now document seven harnesses with `antigravity-cli` replacing the removed `gemini-cli`.
 
 Related launch/business planning now lives in [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md). Licensing and commercial terms are tracked in [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md).
 
@@ -183,20 +183,20 @@ Confirm:
 
 ### 2.5 Broken Harness — Remove Gemini, Add Antigravity CLI
 
-**Status:** OPEN — **functional blocker**
+**Status:** DONE
 
-Google deprecated the Gemini CLI; the `gemini-cli` harness now **errors on invocation**, so any user who selects Gemini in a shipped v0.1.0 hits a hard failure. Shipping a harness that always fails is a release blocker, not a post-launch item.
+Google deprecated the Gemini CLI; the `gemini-cli` harness errored on invocation and would have shipped a hard failure to users. This functional blocker is now resolved.
 
 Tracked in detail by [`ANTIGRAVITY_CLI_HARNESS_PLAN.md`](ANTIGRAVITY_CLI_HARNESS_PLAN.md). Decision: **remove `gemini-cli` entirely** and add the `antigravity-cli` (`agy`, Google's replacement) harness in its place.
 
-- [ ] Resolve the two research blockers first (headless `-p` viability under `PtyProcessManager`/node-pty; workspace `.agents/mcp_config.json` loading on `agy` ≥ 1.0.14).
-- [ ] Add the `antigravity-cli` harness (provider, plain-text parser, glog/`last_conversations.json` session resolution, Claude-style `Stop` hook, MCP writer, permission mapper, hook script) — Part B of the plan.
-- [ ] Remove `gemini-cli` everywhere (~110 refs across ~20 `src` files, plus schemas/tests/docs) — Part C.
-- [ ] `npm run typecheck` + `npm run compile` + `npm test` clean; grep `gemini` over `src/` leaves only generic hits.
-- [ ] Update README, CHANGELOG, and marketplace copy: seven harnesses become seven with Gemini→Antigravity (not eight). Every doc that currently lists Gemini must change.
-- [ ] Verify docs coherence: `.github/copilot-instructions.md`, `docs/harnesses/*`, and this plan family no longer claim Gemini support.
+- [x] Resolve the research blockers (headless `-p`, hooks, MCP config, session resolution).
+- [x] Add the `antigravity-cli` harness (provider, plain-text parser, log/cache session resolution, `Stop` hook completion, MCP writer, permission mapper, hook script) — Part B of the plan.
+- [x] Remove `gemini-cli` everywhere (~110 refs across ~20 `src` files, plus schemas/tests/docs) — Part C.
+- [x] `npm run typecheck` + `npm run compile` + `npm test` clean; grep `gemini` over `src/` leaves only generic/model-family/path hits.
+- [x] Update README, CHANGELOG, package metadata, schemas, and harness docs: seven harnesses remain seven with Gemini→Antigravity (not eight).
+- [x] Verify docs coherence: `.github/copilot-instructions.md`, `docs/harnesses/*`, and current release docs no longer claim Gemini CLI support.
 
-> **Downstream doc impact:** several release docs (README "seven harnesses", `RELEASE_CHECKLIST`, ROADMAP executive summary) still enumerate Gemini as a supported harness. Those enumerations are now wrong and must be corrected as part of this item before publish.
+> **Verification note:** `npm run compile` passed on July 7, 2026 after this status refresh. `rg "gemini-cli|Gemini CLI|GEMINI_CLI|HARNESS_IDS\.GEMINI|Harness\.Gemini|ctrlyoke-gemini|docs/harnesses/gemini"` across live source/docs found no active references; remaining `Gemini` mentions are Antigravity model labels, Google path names reused by Antigravity (`~/.gemini/`), or stale planning text outside live product surfaces.
 
 ### 2.6 Pro Licensing Implementation
 
@@ -241,12 +241,12 @@ A backlog review surfaced first-run / built-in-content gaps not previously track
 Nathan's decision: **every item below blocks v0.1.0** — the first paid release must land
 a strong new-user story. The only deferred piece is the interactive tour (see note).
 
-> **Ordering (load-bearing):** land the **Antigravity harness swap (§2.5)** and the
-> **agent/template cleanup (Parts A+B)** first — they set the final harness list and
-> formats. Only then author the **tech-support agent, Getting Started walkthrough, and
-> preflight**, which cite harnesses/formats and would otherwise be written against stale
-> facts. Capture **screenshots + GIF (§4) last**, after the onboarding/UI is final. See
-> the launch-blocker sequencing diagram in `ROADMAP.md`.
+> **Ordering (load-bearing):** the **Antigravity harness swap (§2.5)**,
+> **agent/template cleanup (Parts A+B)**, and **tech-support agent** are now done.
+> Next author the **Getting Started walkthrough** and **preflight**, which cite
+> the final harness list and formats. Capture **screenshots + GIF (§4) last**,
+> after the onboarding/UI is final. See the launch-blocker sequencing diagram in
+> `ROADMAP.md`.
 
 - [x] **Built-in agent correctness** — DONE. `ctrlyoke-orchestrator` was renamed to
   `ctrlyoke-workflow-composer` and rewritten (YAML-first, no hardcoded/dead model IDs,
@@ -258,8 +258,7 @@ a strong new-user story. The only deferred piece is the interactive tour (see no
   up to the typed `_templateMeta.variables` pattern (UI renders defaults/descriptions/
   textareas; blanks fall back to defaults). Documented in `docs/workflows/templates.md`.
   ([`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part B)
-- [ ] **`ctrlyoke-tech-support` agent** — built-in support/onboarding agent for new users.
-  Support deflection for a solo launch. ([`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md))
+- [x] **`ctrlyoke-tech-support` agent** — DONE. Built-in support/onboarding agent for new users, with dashboard navigation, workflow authoring, harness, MCP, validation, session, state-file, and troubleshooting guidance grounded in current product docs/UI; include it in pre-publish docs coherence checks. ([`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md))
 - [ ] **Native VS Code Getting Started integration** — `contributes.walkthroughs` (the
   standard post-install Getting Started page most extensions use) + dashboard empty state.
   A blank cold-open hurts Marketplace first impressions. ([`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md) Phase 1)
@@ -419,12 +418,12 @@ Recommended: defer npm publishing until after the extension Marketplace release 
 | Business email/support identity            | DONE          | `support@ctrlyoke.dev`, DNS/DKIM/DMARC configured                                           |
 | Publisher identity                         | DONE          | `fuzzynova`, repo at FuzzyNova/ctrlyoke                                                     |
 | License/commercial terms                   | DECISION MADE | Custom EULA (source-available, $10M threshold); draft at `LICENSE_DRAFT.md`; needs attorney |
-| **Remove Gemini / add Antigravity harness** | **OPEN**      | **Functional blocker — Gemini errors on invocation; see §2.5 / `ANTIGRAVITY_CLI_HARNESS_PLAN.md`** |
+| **Remove Gemini / add Antigravity harness** | **DONE**      | Antigravity CLI is wired through source/docs/schemas; Gemini CLI removed from live product surfaces (§2.5) |
 | **Pro licensing implementation**           | **OPEN**      | **Blocker — site advertises Pro; extension gating unbuilt; see §2.6 / `PRO_LICENSE_PLAN.md`** |
 | **ctrlyoke external cutover**              | **OPEN**      | **Blocker — repo/homepage URLs + support inboxes 404 until done; see §2.7 / `CTRLYOKE_REBRAND_CUTOVER.md`** |
 | **Legal `[DATE]` placeholders**            | **OPEN**      | **Set effective date in `LICENSE.md` + `PRIVACY.md` (live pages serve it now); see §2.8** |
-| **Built-in agent correctness**             | **OPEN**      | **Blocker — orchestrator agent recommends dead models / JSON format; see §2.9**             |
-| **New-user experience** (templates/support/onboarding/preflight) | **OPEN** | **Blocker — all of §2.9 confirmed as v0.1.0 gates; interactive tour deferred**            |
+| **Built-in agent correctness**             | **DONE**      | Workflow composer/test-repair/template variable cleanup complete (§2.9)                     |
+| **New-user experience** (onboarding/preflight) | **OPEN** | **Tech-support agent done; next: Getting Started + harness preflight (§2.9)**            |
 | **Screenshots + demo GIF**                 | **OPEN**      | **Blocker — README + Marketplace visuals; see §4**                                          |
 | Pre-publish security review                | IN PROGRESS   | Running via a separate agent; triage findings before publish (§2.10)                        |
 | Standalone server                          | DEFERRED      | Not a blocker; hosted server ships. Standalone `ctrlyoke server` deferred, inert setting hidden (§2.11) |

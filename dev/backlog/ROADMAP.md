@@ -1,6 +1,6 @@
 # ctrlyoke Extension — Strategic Roadmap
 
-**Last updated:** June 12, 2026  
+**Last updated:** July 7, 2026  
 **Current version:** 0.1.0 (unreleased — preparing the first VS Code Marketplace publish)  
 **Status:** Pre-release — no backward compatibility constraints
 
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-ctrlyoke is a VS Code extension that automates AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, and Gemini) through structured YAML/JSON prompt workflows. The core engine is fully functional: multi-harness CLI/Chat execution, parallel workflow execution, per-prompt session management, dynamic queue extension, React webview dashboard with CodeMirror 6 editor, script-based end conditions, agent injection, a standalone CLI binary, stale-state recovery, an embedded terminal, and mobile-responsive layout are all working.
+ctrlyoke is a VS Code extension that automates AI coding assistants (GitHub Copilot, Claude Code, Codex, OpenCode, Qwen Code, Antigravity CLI, and Copilot Chat) through structured YAML/JSON prompt workflows. The core engine is fully functional: multi-harness CLI/Chat execution, parallel workflow execution, per-prompt session management, dynamic queue extension, React webview dashboard with CodeMirror 6 editor, script-based end conditions, agent injection, a standalone CLI binary, stale-state recovery, an embedded terminal, and mobile-responsive layout are all working.
 
 **ctrlyoke has not shipped yet.** The engine is feature-complete and a large number of post-MVP features are already implemented in the codebase — completion notifications (1.1), backtick context suppression (1.2), workflow favorites (1.4), SCM commit message button (1.7), inline prior context (2.6), pre-conditions, and the full error-behavior subsystem (2.1) — but nothing has been published to the VS Code Marketplace or npm. The architecture is clean and SOLID-compliant, making new features straightforward to add.
 
@@ -26,7 +26,7 @@ See [Tier 0](#tier-0--launch-blockers) for the remaining ship blockers.
 
 ### Core Engine (implemented)
 
-- **Multi-harness execution**: Copilot CLI, Claude Code CLI, Codex CLI, OpenCode CLI, Qwen Code CLI, Gemini CLI, Copilot Chat UI automation
+- **Multi-harness execution**: Copilot CLI, Claude Code CLI, Codex CLI, OpenCode CLI, Qwen Code CLI, Antigravity CLI, Copilot Chat UI automation
 - **Composition-based CLI architecture**: Single `CliIntegration` class + `ICliProvider` interface; zero core changes needed to add new harnesses
 - **Parallel workflow execution**: `WorkflowInstance` (self-contained execution unit) + `WorkflowOrchestrator` (multi-workflow registry); per-workflow pause/resume/cancel; configurable concurrency
 - **Per-prompt session management**: Three-tier session ID resolution (prompt > workflow > global), session persistence across restarts
@@ -493,9 +493,9 @@ Launch-blocker sequencing (RELEASE_PLAN §2.5 / §2.9 — order is load-bearing)
      — Part A + B (§2.9)              ─┘   add typed template variables)
                                         │
                                         ▼   ...only then author content that cites harnesses/formats:
-  2. ctrlyoke-tech-support agent (§2.9) ──┐
-     Native Getting Started walkthrough  ─┼─► must reflect the corrected list, not stale facts
-     Harness preflight (§2.9)            ─┘
+  2. ctrlyoke-tech-support agent (§2.9) ✅
+     Native Getting Started walkthrough  ─┐
+     Harness preflight (§2.9)            ─┴─► must reflect the corrected list, not stale facts
                                         │
                                         ▼
   3. Screenshots + demo GIF (§4) ─────────► capture AFTER onboarding/UI is final
@@ -566,16 +566,16 @@ _Dates removed: the prior timeline asserted a May 12, 2026 release that never ha
 | [`LANDING_PAGE_PLAN.md`](LANDING_PAGE_PLAN.md)                                               | 📝 PLANNING | 0.A / 2.8         |
 | [`PRO_LICENSE_PLAN.md`](PRO_LICENSE_PLAN.md)                                                 | 📝 PLANNING | 0.B / 4.2         |
 | [`CTRLYOKE_REBRAND_CUTOVER.md`](CTRLYOKE_REBRAND_CUTOVER.md)                                 | 📝 PLANNING | Release §2.7      |
-| [`ANTIGRAVITY_CLI_HARNESS_PLAN.md`](ANTIGRAVITY_CLI_HARNESS_PLAN.md)                         | 📝 PLANNING | Release §2.5      |
-| [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md)       | 📝 PLANNING | Release §2.9      |
-| [`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md)                   | 📝 PLANNING | Release §2.9      |
+| [`ANTIGRAVITY_CLI_HARNESS_PLAN.md`](ANTIGRAVITY_CLI_HARNESS_PLAN.md)                         | ✅ DONE     | Release §2.5      |
+| [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md)       | ✅ DONE     | Release §2.9      |
+| [`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md)                   | ✅ DONE     | Release §2.9      |
 | [`ONBOARDING_TOUR_PLAN.md`](ONBOARDING_TOUR_PLAN.md)                                         | 📝 PLANNING | Release §2.9 (P1) |
 | [`HARNESS_PREFLIGHT_PLAN.md`](HARNESS_PREFLIGHT_PLAN.md)                                     | 📝 PLANNING | Release §2.9      |
 | [`RELEASE_PLAN.md`](RELEASE_PLAN.md)                                                         | 🔄 PARTIAL  | Tier 0            |
 
 > **Ordering matters — see the launch-blocker sequencing in the Dependency Graph below.**
-> The onboarding/tech-support content depends on the corrected harness list and formats,
-> so the harness swap + built-in-content cleanup must land _before_ that content is authored.
+> The corrected harness list, built-in-content cleanup, and tech-support agent are now landed.
+> The next onboarding implementation items are Getting Started and harness preflight.
 
 ### Backlog (not yet started)
 
