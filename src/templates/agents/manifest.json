@@ -3,10 +3,10 @@
   "description": "ctrlyoke custom agents for Copilot CLI and Claude CLI",
   "agents": [
     {
-      "id": "ctrlyoke-orchestrator",
-      "label": "ctrlyoke Orchestrator",
-      "description": "Creates structured ctrlyoke workflow files from feature requests. Converts your task into a Plan→Implement→Review→Docs→Commit workflow.",
-      "file": "ctrlyoke-orchestrator.agent.md",
+      "id": "ctrlyoke-workflow-composer",
+      "label": "ctrlyoke Workflow Composer",
+      "description": "Composes a ctrlyoke workflow file (.ctrlyoke.yaml) from a feature request. Turns your task into a structured, multi-step workflow another agent can run.",
+      "file": "ctrlyoke-workflow-composer.agent.md",
       "tags": ["workflow", "planning", "automation"],
       "icon": "$(compass)"
     },
@@ -17,6 +17,14 @@
       "file": "spec-orchestrator.agent.md",
       "tags": ["orchestration", "review", "loop"],
       "icon": "$(sync)"
+    },
+    {
+      "id": "test-repair",
+      "label": "Test Repair",
+      "description": "Diagnoses and fixes failing tests surfaced by an end-condition retry loop. Finds the root cause and makes the smallest correct fix without masking failures.",
+      "file": "test-repair.agent.md",
+      "tags": ["testing", "validation", "fix"],
+      "icon": "$(debug)"
     }
   ]
 }

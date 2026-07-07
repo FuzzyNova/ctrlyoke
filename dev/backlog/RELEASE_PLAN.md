@@ -248,9 +248,10 @@ a strong new-user story. The only deferred piece is the interactive tour (see no
 > facts. Capture **screenshots + GIF (§4) last**, after the onboarding/UI is final. See
 > the launch-blocker sequencing diagram in `ROADMAP.md`.
 
-- [ ] **Built-in agent correctness** — `ctrlyoke-orchestrator.agent.md` recommends
-  non-existent models (`gpt-5`, `claude-sonnet-4.5`) and teaches the non-primary JSON
-  format. Ships to every user; same class as the broken Gemini harness. Fix per
+- [x] **Built-in agent correctness** — DONE. `ctrlyoke-orchestrator` was renamed to
+  `ctrlyoke-workflow-composer` and rewritten (YAML-first, no hardcoded/dead model IDs,
+  trimmed); a new `test-repair` agent was added and wired into the `fix-tests` template;
+  `spec-orchestrator` audited clean. See
   [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part A.
 - [ ] **Template variables** — bring `simple-feature` / `full-feature` / `fix-tests` up to
   the `spec-driven-loop` typed `_templateMeta.variables` pattern. ([`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part B)

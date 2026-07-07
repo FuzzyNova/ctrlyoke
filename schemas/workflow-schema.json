@@ -124,7 +124,7 @@
               "type": "null"
             }
           ],
-          "description": "Custom agent to use for this prompt. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-orchestrator' for file 'ctrlyoke-orchestrator.agent.md'). The agent's instructions will be prepended to your prompt using <agentInstructions> tags. Agents are discovered from .github/agents/, .claude/agents/, or user prompts directory. Works with all providers (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat). Use null to explicitly disable inherited agent selection."
+          "description": "Custom agent to use for this prompt. Specify ONLY the agent name without file extensions (e.g., 'ctrlyoke-workflow-composer' for file 'ctrlyoke-workflow-composer.agent.md'). The agent's instructions will be prepended to your prompt using <agentInstructions> tags. Agents are discovered from .github/agents/, .claude/agents/, or user prompts directory. Works with all providers (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat). Use null to explicitly disable inherited agent selection."
         },
         "resumeSession": {
           "type": "boolean",

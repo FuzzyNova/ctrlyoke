@@ -41,15 +41,38 @@ variable pattern.
 
 ### A. Fix / modernize the built-in agents (correctness)
 
-- Rewrite `ctrlyoke-orchestrator.agent.md` to:
-  - Use current, valid model labels (single-source from `ModelConstants.ts`; avoid
-    hardcoding a specific version that will rot — prefer describing tiers, e.g.
-    "a strong model for planning, a cheaper/faster model for docs/commit").
-  - Teach **YAML** (`.ctrlyoke.yaml`) as the primary format (JSON as an aside at most),
-    matching the shipped templates and schema.
-  - Trim redundant examples; keep it tight.
-- Audit `spec-orchestrator.agent.md` for the same issues (it looks clean, but confirm).
-- Ensure **no agent mentions Gemini** once `gemini-cli` is removed (see the Antigravity plan).
+> **Reframe (decided July 2026):** "orchestrator" was overloaded. There are two distinct
+> roles: a **design-time author** that composes a workflow *file* from a request, and a
+> **run-time controller** that lives inside a running workflow's `finalStep` and extends
+> the queue via the `ctrlyoke_append_queue` MCP tool. The old `ctrlyoke-orchestrator` was
+> the former (written before `mcp-server.ts` existed) but misnamed. It was **renamed to
+> `ctrlyoke-workflow-composer`** and rewritten; `spec-orchestrator` is the run-time role
+> and stays as-is. Convention adopted: `ctrlyoke-*` = meta agents about operating ctrlyoke
+> (composer, tech-support); unprefixed = agents that do the user's dev work
+> (`spec-orchestrator`, `test-repair`).
+
+- [x] Rename `ctrlyoke-orchestrator.agent.md` → **`ctrlyoke-workflow-composer.agent.md`** and rewrite to:
+  - Drop hardcoded model IDs entirely (they rot and are harness-relative) — the agent now
+    tells the model to omit per-step `model` or describe a tier (capable for
+    plan/implement/review, cheaper/faster for docs/commit).
+  - Teach **YAML** (`.ctrlyoke.yaml`) with the real `steps:`/`@path`/`endCondition`/`{stdout}`
+    format; JSON examples removed.
+  - Trimmed ~60%; added a note pointing at the spec-driven-loop pattern for open-ended work.
+  - Updated all references: `manifest.json`, `schemas/workflow-schema.json` (+ regenerated
+    `.yaml`), `docs/workflows/agents-and-skills.md`, `CopilotChatIntegration.ts` comment.
+    Deleted the stale `.github/agents/` dogfood copy.
+- [x] Audited `spec-orchestrator.agent.md` — clean, current, no dead models; left as-is.
+- [x] No built-in agent mentions Gemini (confirmed post-`gemini-cli` removal).
+
+### A.2 New agent — `test-repair` (added July 2026)
+
+Green-lit alongside Part A: a dedicated fix-it agent for the existing `fix-tests` template
+(which previously had no agent). It reads the failed end-condition `{stdout}`, finds the
+root cause, and makes the smallest correct fix — with hard rules against masking failures
+(no skip/delete/`.only`, no weakened assertions). Wired into `fix-tests.ctrlyoke.yaml`
+(`agent: test-repair`) and registered in `manifest.json`.
+
+- [x] `test-repair.agent.md` created and wired into the `fix-tests` template.
 
 ### B. Bring all templates up to the `spec-driven-loop` variable pattern (UX)
 
@@ -78,9 +101,15 @@ Tracked in `RELEASE_PLAN.md` §2.9.
 
 ## Acceptance
 
-- [ ] `ctrlyoke-orchestrator.agent.md` uses valid model labels + YAML-first guidance; trimmed.
-- [ ] `spec-orchestrator.agent.md` audited/confirmed current.
-- [ ] No built-in agent references Gemini after harness removal.
+**Part A (agents) — DONE:**
+
+- [x] `ctrlyoke-orchestrator` renamed → `ctrlyoke-workflow-composer`; YAML-first, no hardcoded model IDs, trimmed.
+- [x] `spec-orchestrator.agent.md` audited/confirmed current.
+- [x] No built-in agent references Gemini after harness removal.
+- [x] `test-repair` agent added and wired into the `fix-tests` template.
+
+**Part B (template variables) — still open:**
+
 - [ ] `simple-feature`, `full-feature`, `fix-tests` declare typed `_templateMeta.variables` with defaults.
 - [ ] Template-instantiation UI shows typed inputs for all built-in templates.
 - [ ] `_templateMeta.variables` shape documented for template authors.

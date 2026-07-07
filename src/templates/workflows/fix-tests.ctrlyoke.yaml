@@ -5,6 +5,7 @@ _templateMeta:
 # prompts
 steps:
   - name: fix-tests
+    agent: test-repair
     prompt: |
       There are currently failing tests. Run {testCommand} to see which tests are failing, then fix them.
     endCondition:

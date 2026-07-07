@@ -457,7 +457,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
         Log.info("🆕 Starting new chat session");
 
         // When using native attachments and an agent is selected, open the
-        // agent-specific chat window (e.g., workbench.action.chat.openctrlyoke-orchestrator)
+        // agent-specific chat window (e.g., workbench.action.chat.openctrlyoke-workflow-composer)
         // so Copilot automatically applies that agent's instructions.
         let openedAgentChat = false;
         if (useNativeAttachments && resolvedAgent) {

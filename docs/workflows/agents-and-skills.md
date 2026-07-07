@@ -7,7 +7,7 @@ Agents and skills let you add reusable instruction layers without copying the sa
 `agent` selects one custom agent by name.
 
 ```yaml
-agent: ctrlyoke-orchestrator
+agent: ctrlyoke-workflow-composer
 ```
 
 The schema expects the bare name, not a file path or extension.

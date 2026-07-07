@@ -20,7 +20,7 @@ steps:
 
       Your tasks:
       1. Fully understand all requirements and scope in the spec
-      2. Analyze the existing codebase architecture, patterns, and conventions (@workspace)
+      2. Analyze the existing codebase architecture, patterns, and conventions
       3. Identify any gaps, ambiguities, or conflicts between the spec and the current architecture
       4. Update the specification document with a clear, refined implementation plan aligned with existing patterns
 

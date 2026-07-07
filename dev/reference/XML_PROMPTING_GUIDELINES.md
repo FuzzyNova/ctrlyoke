@@ -39,7 +39,7 @@ Based on Anthropic's official recommendations and extensive testing, XML tags pr
 Every prompt sent to Copilot follows this structure:
 
 ```
-[User's prompt text with context variables like @workspace, #file:path, slash commands, etc.]
+[User's prompt text with context variables like @path/to/file, #file:path, slash commands, etc.]
 ```
 
 For prompts with Dynamic Queue Extension enabled:

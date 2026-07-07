@@ -7,6 +7,27 @@ Session management controls how one step picks up from another.
 - use `resumeSession: true` when the next step should continue the previous compatible conversation
 - use `sessionId` when you need something more explicit
 
+## When to resume vs. start fresh
+
+`resumeSession: true` shares the previous step's live conversation, so **only use it when the combined work fits one context window** — small, tightly-coupled steps like implement-right-after-plan on a focused change.
+
+For **large features**, don't chain sessions: the full body of work won't fit a single context window, and an overstuffed session degrades quality. Instead, have an early step write a durable plan/design doc and give each later step its **own** session (`resumeSession: false`, the default), sharing context by referencing that doc:
+
+```yaml
+steps:
+  - name: plan
+    prompt: Analyze @src/ and write the implementation plan to docs/feature-plan.md.
+
+  - name: implement
+    prompt: Implement the feature per @docs/feature-plan.md.
+    # resumeSession omitted → fresh session; the plan doc carries the context
+
+  - name: review
+    prompt: Review the implementation against @docs/feature-plan.md and fix any issues.
+```
+
+The written artifact is the shared memory: it survives across fresh sessions and keeps each step focused on its slice.
+
 ## Numeric step references
 
 Use a number to resume the session captured by an earlier step:

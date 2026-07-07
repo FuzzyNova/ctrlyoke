@@ -8,15 +8,15 @@ ctrlyoke automates AI coding assistants — Copilot CLI, Claude Code, Codex, Ope
 
 ctrlyoke drives whichever AI CLI tool you have installed. You need at least one:
 
-| Harness        | CLI Tool                              |
-| -------------- | ------------------------------------- |
-| `copilot-cli`  | `gh` with GitHub Copilot extension    |
-| `claude-cli`   | `claude` (Claude Code CLI)            |
-| `codex-cli`    | `codex` (OpenAI Codex CLI)            |
-| `opencode-cli` | `opencode`                            |
-| `qwen-cli`     | Qwen Code CLI                         |
-| `antigravity-cli` | `agy` (Google Antigravity CLI)     |
-| `copilot-chat` | GitHub Copilot Chat VS Code extension |
+| Harness           | CLI Tool                              |
+| ----------------- | ------------------------------------- |
+| `copilot-cli`     | `gh` with GitHub Copilot extension    |
+| `claude-cli`      | `claude` (Claude Code CLI)            |
+| `codex-cli`       | `codex` (OpenAI Codex CLI)            |
+| `opencode-cli`    | `opencode`                            |
+| `qwen-cli`        | Qwen Code CLI                         |
+| `antigravity-cli` | `agy` (Google Antigravity CLI)        |
+| `copilot-chat`    | GitHub Copilot Chat VS Code extension |
 
 The default harness is `copilot-cli`. Change it in **ctrlyoke Settings** inside the dashboard, or set it per-workflow (see below).
 
@@ -57,7 +57,7 @@ Create a file ending in `.ctrlyoke.yaml` anywhere in your workspace:
 ```yaml
 harness: copilot-cli
 
-prompts:
+steps:
   - name: analyze
     prompt: |
       Analyze #file:src/app.ts and identify any issues with error handling.
@@ -100,9 +100,9 @@ Three formats are supported. All share the same JSON Schema and the same fields.
 
 ```yaml
 harness: claude-cli
-model: claude-sonnet-4-5
+model: sonnet
 
-prompts:
+steps:
   - name: step-1
     prompt: Implement the feature described in #file:.ctrlyoke/prompts/spec.prompt.md
     endCondition:
@@ -123,7 +123,7 @@ prompts:
 ```json
 {
   "harness": "claude-cli",
-  "prompts": [{ "prompt": "Analyze the codebase and create a summary." }]
+  "steps": [{ "prompt": "Analyze the codebase and create a summary." }]
 }
 ```
 
@@ -141,12 +141,12 @@ Set the harness in **ctrlyoke Settings** (gear icon in the dashboard) or overrid
 
 ```yaml
 harness: claude-cli # override for this workflow
-model: claude-opus-4-5 # override model for this workflow
+model: opus # override model for this workflow
 
-prompts:
+steps:
   - prompt: ...
     harness: codex-cli # override for this specific step
-    model: gpt-5
+    model: gpt-5.5
 ```
 
 Each harness supports two execution modes:
@@ -175,7 +175,7 @@ The dashboard shows all output continuously regardless of how many files were qu
 End conditions let ctrlyoke validate each step before moving to the next. If validation fails, ctrlyoke retries with an error-aware prompt:
 
 ```yaml
-prompts:
+steps:
   - prompt: Fix the failing tests.
     endCondition:
       script: npm test

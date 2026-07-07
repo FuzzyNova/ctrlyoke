@@ -102,10 +102,10 @@ endCondition:
   returns: "0"
   compareSource: exitCode
 
-prompts:
+steps:
   - name: analyze
     prompt: |
-      Analyze @workspace for security vulnerabilities.
+      Analyze @src/ for security vulnerabilities.
       Focus on input validation and authentication.
 
   - name: implement
@@ -192,7 +192,7 @@ The `"ctrlyoke"` shorthand injects the built-in ctrlyoke MCP server, giving the 
 `finalStep` is a special prompt that runs after all queued prompts complete. If the AI appended new prompts during the final prompt loop and `"ctrlyoke"` is in `mcpServers`, the executor re-runs the queue then `finalStep` again until no new prompts are added.
 
 ```yaml
-prompts:
+steps:
   - prompt: "Implement the feature"
 
 finalStep:
@@ -216,7 +216,7 @@ Supported events: `stop`, `sessionStart`, `preToolUse`, `postToolUse`, `userProm
 ### Session management
 
 ```yaml
-prompts:
+steps:
   - name: research
     prompt: "Research the problem"
 
