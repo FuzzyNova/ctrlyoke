@@ -77,7 +77,7 @@ export const WorkflowDropdownHeader: React.FC<WorkflowDropdownHeaderProps> = ({
           {onClose && (
             <button
               type="button"
-              className="control-button flex items-center justify-center w-5 h-5 rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              className="control-button flex h-6 w-6 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               onClick={onClose}
               title="Close workflow menu"
               aria-label="Close workflow menu"

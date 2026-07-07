@@ -125,6 +125,27 @@ function getDateEndMs(date: string): number | null {
   return Number.isNaN(time) ? null : time;
 }
 
+function formatMultiFilterLabel(
+  selectedValues: string[],
+  allValues: string[],
+  singularLabel: string,
+  pluralLabel: string,
+  options: Array<{ value: string; label: string }>
+): string {
+  if (selectedValues.length === allValues.length) {
+    return `All ${pluralLabel}`;
+  }
+
+  if (selectedValues.length === 1) {
+    return (
+      options.find((option) => option.value === selectedValues[0])?.label ??
+      selectedValues[0]
+    );
+  }
+
+  return `${selectedValues.length} ${selectedValues.length === 1 ? singularLabel : pluralLabel}`;
+}
+
 /**
  * WorkflowStatus - Split button showing current workflow name with dropdown
  *
@@ -737,84 +758,101 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   );
   const showRunningWorkflowsSection = effectiveLoadedWorkflows.length > 0;
   const workflowFilterControls = (
-    <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
-      <div className="flex items-center gap-1.5 min-w-[120px] text-xs text-description-fg">
-        <span className="whitespace-nowrap">State</span>
-        <MultiCheckboxDropdown
-          id="workflow-state-filter"
-          selectedValues={selectedWorkflowStates}
-          onChange={setSelectedWorkflowStates}
-          options={WORKFLOW_STATE_OPTIONS}
-          placeholder="No states"
-          dropdownMaxHeight="260px"
-        />
-      </div>
+    <div className="flex min-w-0 items-start gap-2">
+      <div className="flex min-w-0 flex-1 items-start gap-2 overflow-x-auto pb-0.5">
+        <div className="flex-shrink-0 text-xs text-description-fg">
+          <MultiCheckboxDropdown
+            id="workflow-state-filter"
+            selectedValues={selectedWorkflowStates}
+            onChange={setSelectedWorkflowStates}
+            options={WORKFLOW_STATE_OPTIONS}
+            placeholder="No States"
+            buttonLabel={formatMultiFilterLabel(
+              selectedWorkflowStates,
+              ALL_WORKFLOW_STATES,
+              "State",
+              "States",
+              WORKFLOW_STATE_OPTIONS
+            )}
+            className="w-fit min-w-[96px]"
+            dropdownMaxHeight="260px"
+          />
+        </div>
 
-      <div className="flex items-center gap-1.5 min-w-[150px] text-xs text-description-fg">
-        <span className="whitespace-nowrap">Harness</span>
-        <MultiCheckboxDropdown
-          id="workflow-harness-filter"
-          selectedValues={selectedWorkflowHarnesses}
-          onChange={setSelectedWorkflowHarnesses}
-          options={WORKFLOW_HARNESS_OPTIONS}
-          placeholder="No harnesses"
-          dropdownMaxHeight="260px"
-        />
-      </div>
+        <div className="flex-shrink-0 text-xs text-description-fg">
+          <MultiCheckboxDropdown
+            id="workflow-harness-filter"
+            selectedValues={selectedWorkflowHarnesses}
+            onChange={setSelectedWorkflowHarnesses}
+            options={WORKFLOW_HARNESS_OPTIONS}
+            placeholder="No Harnesses"
+            buttonLabel={formatMultiFilterLabel(
+              selectedWorkflowHarnesses,
+              ALL_WORKFLOW_HARNESSES,
+              "Harness",
+              "Harnesses",
+              WORKFLOW_HARNESS_OPTIONS
+            )}
+            className="w-fit min-w-[116px]"
+            dropdownMaxHeight="260px"
+          />
+        </div>
 
-      <label className="flex items-center gap-1.5 text-xs text-description-fg">
-        <span className="whitespace-nowrap">Date</span>
         <select
           aria-label="Workflow date preset"
           value={workflowDateFilter.preset}
           onChange={(event) =>
             handleDatePresetChange(event.target.value as WorkflowDatePreset)
           }
-          className="h-6 min-w-[102px] rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
+          className="h-7 min-w-[112px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
         >
           <option value="all">Any time</option>
           <option value="last7">Last 7 days</option>
           <option value="last30">Last 30 days</option>
           <option value="lastMonth">Last month</option>
-          <option value="custom">Custom</option>
+          <option value="custom">Custom range</option>
         </select>
-      </label>
 
-      <label className="flex items-center gap-1 text-xs text-description-fg">
-        <span className="whitespace-nowrap">From</span>
-        <input
-          type="date"
-          aria-label="Workflow date from"
-          value={workflowDateFilter.from}
-          onChange={(event) =>
-            handleDateBoundChange("from", event.target.value)
-          }
-          className="h-6 w-[128px] rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
-        />
-      </label>
+        {workflowDateFilter.preset === "custom" && (
+          <>
+            <input
+              type="date"
+              aria-label="Workflow date from"
+              value={workflowDateFilter.from}
+              onChange={(event) =>
+                handleDateBoundChange("from", event.target.value)
+              }
+              className="h-7 w-[128px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
+            />
+            <input
+              type="date"
+              aria-label="Workflow date to"
+              value={workflowDateFilter.to}
+              onChange={(event) =>
+                handleDateBoundChange("to", event.target.value)
+              }
+              className="h-7 w-[128px] flex-shrink-0 rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
+            />
+          </>
+        )}
 
-      <label className="flex items-center gap-1 text-xs text-description-fg">
-        <span className="whitespace-nowrap">To</span>
-        <input
-          type="date"
-          aria-label="Workflow date to"
-          value={workflowDateFilter.to}
-          onChange={(event) => handleDateBoundChange("to", event.target.value)}
-          className="h-6 w-[128px] rounded border border-input-border bg-input-bg px-1.5 text-xs text-input-fg outline-none focus:border-focus-border"
-        />
-      </label>
-
-      <label className="flex h-6 items-center gap-1.5 rounded border border-input-border bg-input-bg px-2 text-xs text-input-fg">
-        <input
-          type="checkbox"
-          aria-label="Show favorite workflows only"
-          checked={favoriteWorkflowsOnly}
-          onChange={(event) => setFavoriteWorkflowsOnly(event.target.checked)}
-          className="h-3 w-3 flex-shrink-0 accent-focus-border"
-        />
-        <i className="codicon codicon-star-full text-xxs text-favorite" />
-        <span className="whitespace-nowrap">Favorites only</span>
-      </label>
+        <button
+          type="button"
+          onClick={() => setFavoriteWorkflowsOnly((only) => !only)}
+          title="Favorites only"
+          aria-label="Favorites only"
+          aria-pressed={favoriteWorkflowsOnly}
+          className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border transition-colors ${
+            favoriteWorkflowsOnly
+              ? "border-focus-border bg-btn-bg text-favorite"
+              : "border-btn-border bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+          }`}
+        >
+          <i
+            className={`codicon ${favoriteWorkflowsOnly ? "codicon-star-full" : "codicon-star-empty"} text-xs`}
+          />
+        </button>
+      </div>
 
       <button
         type="button"
@@ -822,10 +860,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         disabled={!filtersActive}
         title="Clear workflow filters"
         aria-label="Clear workflow filters"
-        className="flex h-6 items-center gap-1 rounded border border-btn-border bg-btn-secondary-bg px-2 text-xs text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
+        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-btn-border bg-btn-secondary-bg text-btn-secondary-fg transition-colors hover:bg-btn-secondary-hover disabled:cursor-default disabled:opacity-50 disabled:hover:bg-btn-secondary-bg"
       >
         <i className="codicon codicon-clear-all text-xxs" />
-        <span>Clear</span>
       </button>
     </div>
   );

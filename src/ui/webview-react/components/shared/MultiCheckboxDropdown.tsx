@@ -14,6 +14,8 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
   onChange: (values: string[]) => void;
   options: Array<{ value: string; label: string; description?: string }>;
   placeholder?: string;
+  buttonLabel?: string;
+  className?: string;
   /** Max height of the open dropdown panel. Defaults to "60vh". */
   dropdownMaxHeight?: string;
 }
@@ -34,6 +36,8 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   onChange,
   options,
   placeholder = "Select...",
+  buttonLabel: buttonLabelOverride,
+  className = "w-full",
   namespace,
   hiddenValues = [],
   onHideOption,
@@ -95,16 +99,31 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
     (v) => !hiddenValues.includes(v)
   );
   const buttonLabel =
-    visibleSelected.length === 0
+    buttonLabelOverride ??
+    (visibleSelected.length === 0
       ? placeholder
       : visibleSelected.length === 1
-        ? visibleSelected[0]
+        ? (options.find((option) => option.value === visibleSelected[0])
+            ?.label ?? visibleSelected[0])
         : visibleSelected.length === 2
-          ? visibleSelected.join(", ")
-          : `${visibleSelected.slice(0, 2).join(", ")} +${visibleSelected.length - 2}`;
+          ? visibleSelected
+              .map(
+                (value) =>
+                  options.find((option) => option.value === value)?.label ??
+                  value
+              )
+              .join(", ")
+          : `${visibleSelected
+              .slice(0, 2)
+              .map(
+                (value) =>
+                  options.find((option) => option.value === value)?.label ??
+                  value
+              )
+              .join(", ")} +${visibleSelected.length - 2}`);
 
   return (
-    <div className="relative inline-block w-full">
+    <div className={`relative inline-block ${className}`}>
       <button
         ref={buttonRef}
         id={id}

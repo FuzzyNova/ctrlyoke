@@ -500,9 +500,7 @@ describe("WorkflowStatus — loaded state", () => {
       screen.getByRole("button", { name: /Show recent workflows/i })
     );
     await user.click(screen.getByRole("button", { name: "Filter workflows" }));
-    await user.click(
-      screen.getByRole("checkbox", { name: "Show favorite workflows only" })
-    );
+    await user.click(screen.getByRole("button", { name: "Favorites only" }));
 
     expect(screen.getByText("Favorite Workflow")).toBeInTheDocument();
     expect(screen.queryByText("Regular Workflow")).not.toBeInTheDocument();
