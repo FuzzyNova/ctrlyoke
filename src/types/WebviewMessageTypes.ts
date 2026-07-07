@@ -1233,7 +1233,9 @@ export interface LocalMcpServerEntry {
     | "opencode-workspace"
     | "opencode-user"
     | "qwen-workspace"
-    | "qwen-user";
+    | "qwen-user"
+    | "antigravity-workspace"
+    | "antigravity-user";
 }
 
 /**

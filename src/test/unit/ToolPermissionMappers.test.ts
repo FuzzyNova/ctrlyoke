@@ -157,16 +157,23 @@ suite("ToolPermissionMappers", () => {
         assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
-      test("allowAll → no CLI args", () => {
+      test("allowAll → ['--dangerously-skip-permissions']", () => {
         const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
-        assert.deepStrictEqual(args, []);
+        assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
-      test("custom mode → no CLI args", () => {
+      test("custom mode → ['--sandbox']", () => {
         const args = mapper.buildArgs(
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
         );
-        assert.deepStrictEqual(args, []);
+        assert.deepStrictEqual(args, ["--sandbox"]);
+      });
+
+      test("custom mode ignores allow and deny patterns", () => {
+        const args = mapper.buildArgs(
+          cfg(PERMISSION_MODES.CUSTOM, ["github(search)"], ["shell"])
+        );
+        assert.deepStrictEqual(args, ["--sandbox"]);
       });
     });
 

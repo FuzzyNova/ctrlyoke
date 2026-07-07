@@ -74,6 +74,7 @@ const EXPORT_TARGET_IDS = [
   HARNESS_IDS.CODEX_CLI,
   HARNESS_IDS.OPENCODE_CLI,
   HARNESS_IDS.QWEN_CLI,
+  HARNESS_IDS.ANTIGRAVITY_CLI,
 ] as const;
 
 function formatScopeLabel(scope: SettingWriteScope): string {
@@ -106,6 +107,10 @@ function formatLocalSourceLabel(source: LocalMcpServerEntry["source"]): string {
       return "Qwen Code Workspace";
     case "qwen-user":
       return "Qwen Code User";
+    case "antigravity-workspace":
+      return "Antigravity Workspace";
+    case "antigravity-user":
+      return "Antigravity User";
   }
 
   return source;
@@ -319,6 +324,11 @@ function getExportTargetDescription(
       ? ".qwen/settings.json"
       : "~/.qwen/settings.json";
   }
+  if (id === HARNESS_IDS.ANTIGRAVITY_CLI) {
+    return scope === SETTING_SCOPES.WORKSPACE
+      ? ".agents/mcp_config.json"
+      : "~/.gemini/config/mcp_config.json";
+  }
   return scope;
 }
 
@@ -409,6 +419,16 @@ function getTargetForLocalSource(
       };
     case "qwen-user":
       return { targetId: HARNESS_IDS.QWEN_CLI, scope: SETTING_SCOPES.USER };
+    case "antigravity-workspace":
+      return {
+        targetId: HARNESS_IDS.ANTIGRAVITY_CLI,
+        scope: SETTING_SCOPES.WORKSPACE,
+      };
+    case "antigravity-user":
+      return {
+        targetId: HARNESS_IDS.ANTIGRAVITY_CLI,
+        scope: SETTING_SCOPES.USER,
+      };
   }
 
   return null;
@@ -661,12 +681,14 @@ export function McpManagerSection({ activeScope }: McpManagerSectionProps) {
       "codex-workspace",
       "opencode-workspace",
       "qwen-workspace",
+      "antigravity-workspace",
       "vscode-user",
       "claude-user",
       "copilot-user",
       "codex-user",
       "opencode-user",
       "qwen-user",
+      "antigravity-user",
     ] as LocalMcpServerEntry["source"][];
     const orderedGroups = orderedSources.flatMap((source) => {
       const entries = groups.get(source);

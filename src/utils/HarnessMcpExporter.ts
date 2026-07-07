@@ -18,6 +18,8 @@ import {
 import type { McpServerConfig } from "../types/CtrlYokeTypes";
 import { Log } from "./Log";
 import {
+  getAntigravityUserMcpConfigPath,
+  getAntigravityWorkspaceMcpConfigPath,
   getClaudeUserConfigPath,
   getClaudeWorkspaceMcpConfigPath,
   getCodexUserMcpConfigPath,
@@ -191,6 +193,31 @@ function toQwenEntry(server: McpServerConfig): JsonObject | null {
   ) {
     Log.warn(
       `[HarnessMcpExporter] Skipping unsupported MCP server "${server.id}" for Qwen export.`
+    );
+    return null;
+  }
+
+  return {
+    command: server.command,
+    ...(server.args?.length ? { args: server.args } : {}),
+    ...(server.env ? { env: server.env } : {}),
+  };
+}
+
+function toAntigravityEntry(server: McpServerConfig): JsonObject | null {
+  if (server.url) {
+    return {
+      serverUrl: server.url,
+      ...(server.headers ? { headers: server.headers } : {}),
+    };
+  }
+
+  if (
+    typeof server.command !== "string" ||
+    server.command.trim().length === 0
+  ) {
+    Log.warn(
+      `[HarnessMcpExporter] Skipping unsupported MCP server "${server.id}" for Antigravity export.`
     );
     return null;
   }
@@ -521,6 +548,15 @@ export class HarnessMcpExporter {
       return writeJsonServerMap(filePath, "mcpServers", servers, toQwenEntry);
     }
 
+    if (targetId === HARNESS_IDS.ANTIGRAVITY_CLI) {
+      return writeJsonServerMap(
+        filePath,
+        "mcpServers",
+        servers,
+        toAntigravityEntry
+      );
+    }
+
     if (targetId === HARNESS_IDS.OPENCODE_CLI) {
       return writeJsonServerMap(filePath, "mcp", servers, toOpenCodeEntry);
     }
@@ -554,6 +590,10 @@ export class HarnessMcpExporter {
     }
 
     if (targetId === HARNESS_IDS.QWEN_CLI) {
+      return removeJsonServerMapEntries(filePath, "mcpServers", ids);
+    }
+
+    if (targetId === HARNESS_IDS.ANTIGRAVITY_CLI) {
       return removeJsonServerMapEntries(filePath, "mcpServers", ids);
     }
 
@@ -612,6 +652,12 @@ export class HarnessMcpExporter {
       return scope === SETTING_SCOPES.USER
         ? getQwenUserMcpConfigPath()
         : getQwenWorkspaceMcpConfigPath(this.workspaceRoot!);
+    }
+
+    if (targetId === HARNESS_IDS.ANTIGRAVITY_CLI) {
+      return scope === SETTING_SCOPES.USER
+        ? getAntigravityUserMcpConfigPath()
+        : getAntigravityWorkspaceMcpConfigPath(this.workspaceRoot!);
     }
 
     throw new Error(`Unsupported MCP export target: ${targetId}`);

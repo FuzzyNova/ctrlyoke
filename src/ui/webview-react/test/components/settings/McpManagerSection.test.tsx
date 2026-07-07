@@ -17,6 +17,7 @@ import {
 } from "@store/useMcpManagerStore";
 import { useSettingsStore } from "@store/settingsStore";
 import {
+  HARNESS_IDS,
   MESSAGE_TYPES,
   SETTING_SCOPES,
   SPECIAL_TARGET_IDS,
@@ -208,6 +209,40 @@ describe("McpManagerSection", () => {
           "legacy-server",
           { id: "server-a", command: "npx", args: ["server-a"] },
         ],
+        scope: SETTING_SCOPES.USER,
+      }
+    );
+  });
+
+  it("exports selected servers to Antigravity MCP config", async () => {
+    const user = userEvent.setup();
+    renderSection([createManagedServer("server-a")]);
+    const bulkBar = screen.getByText(/Select all \(1\/1\)/).closest("div")!;
+
+    sendMessageMock.mockClear();
+
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[0]
+    );
+    await user.click(
+      within(bulkBar).getByRole("button", { name: "Claude Code" })
+    );
+    await user.click(screen.getByRole("button", { name: /^Antigravity/ }));
+    await user.click(
+      within(bulkBar).getAllByRole("button", { name: "Save" })[1]
+    );
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      MESSAGE_TYPES.EXPORT_MCP_TO_HARNESS,
+      {
+        servers: [
+          {
+            id: "server-a",
+            command: "npx",
+            args: ["server-a"],
+          },
+        ],
+        targetId: HARNESS_IDS.ANTIGRAVITY_CLI,
         scope: SETTING_SCOPES.USER,
       }
     );

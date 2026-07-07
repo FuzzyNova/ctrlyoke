@@ -19,6 +19,8 @@ import {
   getClaudeWorkspaceMcpConfigPath,
   getCodexUserMcpConfigPath,
   getCodexWorkspaceMcpConfigPath,
+  getAntigravityUserMcpConfigPath,
+  getAntigravityWorkspaceMcpConfigPath,
   getCopilotUserMcpConfigPath,
   getCopilotWorkspaceMcpConfigPaths,
   getOpenCodeUserMcpConfigPath,
@@ -40,6 +42,7 @@ interface LocalConfigDescriptor {
     | "claude-json"
     | "copilot-json"
     | "qwen-json"
+    | "antigravity-json"
     | "opencode-json"
     | "codex-toml";
 }
@@ -244,6 +247,36 @@ function normalizeQwenServerMap(
           : typeof value.url === "string"
             ? "sse"
             : undefined,
+      headers: toStringRecord(value.headers),
+    });
+
+    return entry ? [entry] : [];
+  });
+}
+
+function normalizeAntigravityServerMap(
+  map: JsonRecord,
+  source: LocalSource,
+  filePath: string
+): LocalMcpServerEntry[] {
+  return Object.entries(map).flatMap(([id, value]) => {
+    if (!isPlainObject(value)) {
+      return [];
+    }
+
+    const remoteUrl =
+      typeof value.serverUrl === "string"
+        ? value.serverUrl
+        : typeof value.url === "string"
+          ? value.url
+          : undefined;
+
+    const entry = buildLocalEntry(id, source, filePath, {
+      command: typeof value.command === "string" ? value.command : undefined,
+      args: isStringArray(value.args) ? value.args : undefined,
+      env: toStringRecord(value.env),
+      url: remoteUrl,
+      transport: remoteUrl ? "streamable-http" : undefined,
       headers: toStringRecord(value.headers),
     });
 
@@ -601,6 +634,17 @@ async function discoverFromDescriptor(
     );
   }
 
+  if (
+    descriptor.format === "antigravity-json" &&
+    isPlainObject(parsed.mcpServers)
+  ) {
+    return normalizeAntigravityServerMap(
+      parsed.mcpServers,
+      descriptor.source,
+      descriptor.path
+    );
+  }
+
   if (descriptor.format === "opencode-json" && isPlainObject(parsed.mcp)) {
     return normalizeOpenCodeServerMap(
       parsed.mcp,
@@ -647,6 +691,11 @@ function getLocalConfigDescriptors(
       format: "qwen-json",
     },
     {
+      path: getAntigravityWorkspaceMcpConfigPath(workspaceRoot),
+      source: "antigravity-workspace",
+      format: "antigravity-json",
+    },
+    {
       path: getVscodeUserMcpConfigPath(),
       source: "vscode-user",
       format: "vscode-json",
@@ -675,6 +724,11 @@ function getLocalConfigDescriptors(
       path: getQwenUserMcpConfigPath(),
       source: "qwen-user",
       format: "qwen-json",
+    },
+    {
+      path: getAntigravityUserMcpConfigPath(),
+      source: "antigravity-user",
+      format: "antigravity-json",
     },
   ];
 }

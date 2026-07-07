@@ -159,6 +159,22 @@ export function getQwenUserMcpConfigPath(): string {
 }
 
 /**
+ * Returns the Antigravity CLI workspace MCP config path (`.agents/mcp_config.json`).
+ */
+export function getAntigravityWorkspaceMcpConfigPath(
+  workspaceRoot: string
+): string {
+  return path.join(workspaceRoot, ".agents", "mcp_config.json");
+}
+
+/**
+ * Returns the Antigravity CLI user MCP config path (`~/.gemini/config/mcp_config.json`).
+ */
+export function getAntigravityUserMcpConfigPath(): string {
+  return path.join(getHomeDir(), ".gemini", "config", "mcp_config.json");
+}
+
+/**
  * Returns the workspace ctrlyoke MCP registry path.
  */
 export function getCtrlYokeWorkspaceMcpRegistryPath(

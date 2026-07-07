@@ -370,8 +370,8 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get allowed directories for CLI operations (copilot-cli, claude-cli, codex-cli, qwen-cli).
-   * Not supported by gemini-cli, antigravity-cli, opencode-cli, or copilot-chat.
+   * Get allowed directories for CLI operations (copilot-cli, claude-cli, codex-cli, qwen-cli, antigravity-cli).
+   * Not supported by gemini-cli, opencode-cli, or copilot-chat.
    */
   getCliAllowedDirs(): string[] {
     return configService.get(CONFIG_KEYS.PERMISSIONS).allowedDirs;

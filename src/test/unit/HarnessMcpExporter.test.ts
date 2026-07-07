@@ -355,6 +355,77 @@ suite("HarnessMcpExporter", () => {
     });
   });
 
+  test("writes Antigravity MCP config with serverUrl for remotes", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const result = await exporter.export(
+      [
+        { id: "stdio-server", command: "node", args: ["server.js"] },
+        {
+          id: "remote-server",
+          url: "https://example.test/mcp",
+          headers: { Authorization: "Bearer token" },
+        },
+      ],
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      SETTING_SCOPES.WORKSPACE
+    );
+
+    const document = JSON.parse(await fs.readFile(result.filePath, "utf-8"));
+    assert.strictEqual(
+      result.filePath,
+      path.join(workspaceRoot, ".agents", "mcp_config.json")
+    );
+    assert.deepStrictEqual(document.mcpServers["stdio-server"], {
+      command: "node",
+      args: ["server.js"],
+    });
+    assert.deepStrictEqual(document.mcpServers["remote-server"], {
+      serverUrl: "https://example.test/mcp",
+      headers: { Authorization: "Bearer token" },
+    });
+  });
+
+  test("removes Antigravity MCP servers from the user config path", async () => {
+    const exporter = new HarnessMcpExporter(workspaceRoot);
+    const antigravityConfigPath = path.join(
+      userHome,
+      ".gemini",
+      "config",
+      "mcp_config.json"
+    );
+
+    await fs.mkdir(path.dirname(antigravityConfigPath), { recursive: true });
+    await fs.writeFile(
+      antigravityConfigPath,
+      JSON.stringify(
+        {
+          mcpServers: {
+            keep: { command: "node", args: ["keep.js"] },
+            remove: { command: "node", args: ["remove.js"] },
+          },
+        },
+        null,
+        2
+      ),
+      "utf-8"
+    );
+
+    const result = await exporter.remove(
+      ["remove"],
+      HARNESS_IDS.ANTIGRAVITY_CLI,
+      SETTING_SCOPES.USER
+    );
+
+    const document = JSON.parse(await fs.readFile(result.filePath, "utf-8"));
+    assert.strictEqual(result.filePath, antigravityConfigPath);
+    assert.strictEqual(result.removedCount, 1);
+    assert.deepStrictEqual(document.mcpServers.keep, {
+      command: "node",
+      args: ["keep.js"],
+    });
+    assert.strictEqual(document.mcpServers.remove, undefined);
+  });
+
   test("writes Codex MCP config in TOML form", async () => {
     const exporter = new HarnessMcpExporter(workspaceRoot);
     const codexConfigPath = path.join(workspaceRoot, ".codex", "config.toml");

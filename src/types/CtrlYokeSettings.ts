@@ -59,7 +59,7 @@ export interface CtrlYokeGlobalSettings {
 
   // Permissions (harness-specific advanced settings)
   permissions: {
-    // Shared across copilot-cli, claude-cli, codex-cli, qwen-cli (not supported by gemini-cli, antigravity-cli, opencode-cli, copilot-chat)
+    // Shared across copilot-cli, claude-cli, codex-cli, qwen-cli, antigravity-cli (not supported by gemini-cli, opencode-cli, copilot-chat)
     allowedDirs: string[];
     // Copilot CLI-specific
     copilotAllowAllPaths: boolean;

@@ -66,8 +66,8 @@ export function AdvancedPermissionsSection({
           />
         </SettingInputRow>
         <p className="text-xs text-description-fg mt-1">
-          Applies to copilot-cli, claude-cli, codex-cli, and qwen-cli. Not
-          supported by gemini-cli, antigravity-cli, opencode-cli, or
+          Applies to copilot-cli, claude-cli, codex-cli, qwen-cli, and
+          antigravity-cli. Not supported by gemini-cli, opencode-cli, or
           copilot-chat.
         </p>
       </div>
@@ -120,6 +120,16 @@ export function AdvancedPermissionsSection({
             />
           </SettingInputRow>
         </div>
+      </div>
+      <div className="border-t border-panel-border pt-4">
+        <h3 className="text-xs font-semibold uppercase text-description-fg mb-3 tracking-wide">
+          Antigravity CLI
+        </h3>
+        <p className="text-xs text-description-fg">
+          Antigravity CLI uses permission modes only: Allow All passes
+          --dangerously-skip-permissions, Custom passes --sandbox, and
+          individual allow/deny tool patterns are ignored.
+        </p>
       </div>
     </div>
   );

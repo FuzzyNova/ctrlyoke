@@ -30,6 +30,9 @@ suite("McpDiscoveryUtils", () => {
     await fs.mkdir(path.join(userHome, ".config", "opencode"), {
       recursive: true,
     });
+    await fs.mkdir(path.join(userHome, ".gemini", "config"), {
+      recursive: true,
+    });
 
     originalHome = process.env.HOME;
     originalUserProfile = process.env.USERPROFILE;
@@ -150,6 +153,23 @@ suite("McpDiscoveryUtils", () => {
       "utf-8"
     );
 
+    await fs.writeFile(
+      path.join(userHome, ".gemini", "config", "mcp_config.json"),
+      JSON.stringify(
+        {
+          mcpServers: {
+            cclsp: {
+              command: "node",
+              args: ["antigravity-server.js"],
+            },
+          },
+        },
+        null,
+        2
+      ),
+      "utf-8"
+    );
+
     const result = await safeDiscoverLocalMcpServers(workspaceRoot);
     assert.strictEqual(result.error, undefined);
 
@@ -164,6 +184,12 @@ suite("McpDiscoveryUtils", () => {
       .sort((a, b) => a.source.localeCompare(b.source));
 
     assert.deepStrictEqual(cclspEntries, [
+      {
+        source: "antigravity-user",
+        path: path.join(userHome, ".gemini", "config", "mcp_config.json"),
+        command: "node",
+        args: ["antigravity-server.js"],
+      },
       {
         source: "claude-user",
         path: path.join(userHome, ".claude.json"),
@@ -189,5 +215,46 @@ suite("McpDiscoveryUtils", () => {
         args: ["opencode-server.js"],
       },
     ]);
+  });
+
+  test("discovers Antigravity workspace MCP remotes from serverUrl", async () => {
+    const antigravityConfigPath = path.join(
+      workspaceRoot,
+      ".agents",
+      "mcp_config.json"
+    );
+    await fs.mkdir(path.dirname(antigravityConfigPath), { recursive: true });
+    await fs.writeFile(
+      antigravityConfigPath,
+      JSON.stringify(
+        {
+          mcpServers: {
+            remote: {
+              serverUrl: "https://example.test/mcp",
+              headers: { Authorization: "Bearer token" },
+            },
+          },
+        },
+        null,
+        2
+      ),
+      "utf-8"
+    );
+
+    const result = await safeDiscoverLocalMcpServers(workspaceRoot);
+    assert.strictEqual(result.error, undefined);
+
+    const entry = result.servers.find(
+      (server) =>
+        server.source === "antigravity-workspace" && server.id === "remote"
+    );
+    assert.deepStrictEqual(entry, {
+      id: "remote",
+      source: "antigravity-workspace",
+      path: antigravityConfigPath,
+      url: "https://example.test/mcp",
+      transport: "streamable-http",
+      headers: { Authorization: "Bearer token" },
+    });
   });
 });

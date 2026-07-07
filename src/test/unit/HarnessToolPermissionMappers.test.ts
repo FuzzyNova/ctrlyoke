@@ -222,15 +222,20 @@ suite("HarnessToolPermissionMappers", () => {
         assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
-      test("allowAll returns no flags because Antigravity has no non-dangerous CLI permission mode", () => {
+      test("allowAll returns the Antigravity bypass flag", () => {
         const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
-        assert.deepStrictEqual(args, []);
+        assert.deepStrictEqual(args, ["--dangerously-skip-permissions"]);
       });
 
-      test("custom mode ignores allow and deny lists", () => {
+      test("custom mode uses Antigravity sandbox and ignores allow and deny lists", () => {
         const args = mapper.buildArgs(
           cfg(PERMISSION_MODES.CUSTOM, ["write"], ["shell"])
         );
+        assert.deepStrictEqual(args, ["--sandbox"]);
+      });
+
+      test("none mode returns no permission flags", () => {
+        const args = mapper.buildArgs(cfg(PERMISSION_MODES.NONE));
         assert.deepStrictEqual(args, []);
       });
     });
@@ -1042,6 +1047,7 @@ suite("HarnessToolPermissionMappers", () => {
       copilot: new CopilotToolPermissionMapper(),
       claude: new ClaudeToolPermissionMapper(),
       codex: new CodexToolPermissionMapper(),
+      antigravity: new AntigravityToolPermissionMapper(),
       gemini: new GeminiToolPermissionMapper(),
       qwen: new QwenToolPermissionMapper(),
       opencode: new OpenCodeToolPermissionMapper(),

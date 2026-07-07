@@ -123,6 +123,11 @@ export class AntigravityCliProvider implements ICliProvider {
       args.push("--conversation", sessionId!);
     }
 
+    if (workspaceRoot) {
+      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(workspaceRoot);
+      workspaceDirs.forEach((dir) => args.push("--add-dir", dir));
+    }
+
     const additionalArgs = workflowContext?.resolvedProperties?.additionalArgs;
     if (additionalArgs) {
       args.push(...parseArgString(additionalArgs));
@@ -321,7 +326,11 @@ export class AntigravityCliProvider implements ICliProvider {
         userServers,
         // agy's mcp_config.json uses serverUrl for remote servers and does not
         // recognize the type/trust fields.
-        { remoteUrlKey: "serverUrl", includeRemoteType: false, includeTrust: false }
+        {
+          remoteUrlKey: "serverUrl",
+          includeRemoteType: false,
+          includeTrust: false,
+        }
       );
 
       const workflowKey = workingFilePath ?? workspaceRoot;
@@ -330,7 +339,9 @@ export class AntigravityCliProvider implements ICliProvider {
         workspaceRoot,
         mcpEntries
       );
-      Log.debug("🔧 Antigravity MCP servers written to .agents/mcp_config.json");
+      Log.debug(
+        "🔧 Antigravity MCP servers written to .agents/mcp_config.json"
+      );
       return [];
     } catch (error) {
       Log.warn(`Failed to register Antigravity MCP servers: ${error}`);

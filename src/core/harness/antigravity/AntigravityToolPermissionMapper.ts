@@ -10,11 +10,16 @@ export class AntigravityToolPermissionMapper
   implements IToolPermissionMapper
 {
   buildArgs(config: ToolPermissionConfig): string[] {
-    if (config.mode === PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL) {
-      return ["--dangerously-skip-permissions"];
+    switch (config.mode) {
+      case PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL:
+      case PERMISSION_MODES.ALLOW_ALL:
+        return ["--dangerously-skip-permissions"];
+      case PERMISSION_MODES.CUSTOM:
+        return ["--sandbox"];
+      case PERMISSION_MODES.NONE:
+      default:
+        return [];
     }
-
-    return [];
   }
 
   override hasFullPermissions(config: ToolPermissionConfig): boolean {
