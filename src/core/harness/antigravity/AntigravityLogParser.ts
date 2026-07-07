@@ -186,6 +186,34 @@ export class AntigravityLogParser
     return candidates[0] ?? null;
   }
 
+  /**
+   * Stateless read of a discovered log file to recover the conversation UUID after the
+   * process has already exited (headless fallback when `last_conversations.json` misses).
+   */
+  async extractSessionIdFromLogPath(
+    logPath: string
+  ): Promise<string | undefined> {
+    try {
+      const content = await fs.promises.readFile(logPath, "utf8");
+      for (const rawLine of content.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (
+          !line.includes("Starting conversation update stream for") &&
+          !line.includes("Print mode: conversation=")
+        ) {
+          continue;
+        }
+        const sessionId = this.extractSessionIdFromLine(line);
+        if (sessionId) {
+          return sessionId;
+        }
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   extractSessionId(events: BaseCliEvent[]): string | null {
     for (const event of events as AntigravityLogEvent[]) {
       if (event.sessionId) {

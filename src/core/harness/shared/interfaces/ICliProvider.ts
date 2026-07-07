@@ -335,11 +335,14 @@ export interface ICliProvider {
    *
    * @param promptText The prompt text that was sent (used to match the correct session log)
    * @param startTime When execution started (used to filter recently modified logs)
+   * @param workspaceRoot The workspace root the CLI was run against (used by providers whose
+   *   session-log cache is keyed by workspace path, e.g. Antigravity's `last_conversations.json`)
    * @returns Session ID if found in logs, undefined otherwise
    */
   extractSessionIdFromLogs?(
     promptText: string,
-    startTime: Date
+    startTime: Date,
+    workspaceRoot?: string
   ): Promise<string | undefined>;
 
   /**

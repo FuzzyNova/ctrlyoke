@@ -72,6 +72,7 @@ interface CliResponseCollectorLike {
     resolvedSessionId?: string;
     label?: string;
     model?: string;
+    workspaceRoot?: string;
   }): Promise<CollectedHeadlessResponse>;
 }
 
@@ -150,7 +151,8 @@ export class CliExecutionRunner {
     ) {
       const logSessionId = await this.deps.provider.extractSessionIdFromLogs(
         session.promptForSessionLog,
-        session.executionStartTime
+        session.executionStartTime,
+        this.deps.runtimeState.getWorkspaceRoot()
       );
       if (logSessionId) {
         session.setExtractedSessionId(logSessionId);
@@ -718,6 +720,7 @@ export class CliExecutionRunner {
         resolvedSessionId: session.resolvedSessionId,
         label,
         model: session.resolvedProperties?.model ?? "",
+        workspaceRoot: this.deps.runtimeState.getWorkspaceRoot(),
       });
 
       session.recordHeadlessResponse(collected);

@@ -42,6 +42,7 @@ export class CliResponseCollector {
     resolvedSessionId?: string;
     label?: string;
     model?: string;
+    workspaceRoot?: string;
   }): Promise<CollectedHeadlessResponse> {
     this.deps.provider.responseParser.setCurrentModel?.(params.model ?? "");
     let parsedOutput = this.deps.provider.responseParser.parse(
@@ -82,7 +83,8 @@ export class CliResponseCollector {
     ) {
       const logSessionId = await this.deps.provider.extractSessionIdFromLogs(
         params.promptForSessionLog,
-        params.executionStartTime
+        params.executionStartTime,
+        params.workspaceRoot
       );
       if (logSessionId) {
         extractedSessionId = logSessionId;

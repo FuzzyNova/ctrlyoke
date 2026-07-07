@@ -288,13 +288,30 @@ export class AntigravityCliProvider implements ICliProvider {
   }
 
   async extractSessionIdFromLogs(
-    _promptText: string,
-    _startTime: Date
+    promptText: string,
+    startTime: Date,
+    workspaceRoot?: string
   ): Promise<string | undefined> {
-    const workspaceRoot = process.cwd();
-    return await this.logParser.readSessionIdFromLastConversations(
-      workspaceRoot
+    if (workspaceRoot) {
+      const cachedSessionId =
+        await this.logParser.readSessionIdFromLastConversations(
+          workspaceRoot
+        );
+      if (cachedSessionId) {
+        return cachedSessionId;
+      }
+    }
+
+    // Fallback: the cache can miss under parallel workflows or if it hasn't
+    // flushed yet, so scrape the CLI log agy just wrote for this run.
+    const logPath = await this.logParser.discoverSessionLog(
+      promptText,
+      startTime
     );
+    if (!logPath) {
+      return undefined;
+    }
+    return await this.logParser.extractSessionIdFromLogPath(logPath);
   }
 
   /**
