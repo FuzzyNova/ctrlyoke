@@ -64,6 +64,7 @@ export default defineConfig({
             },
             { text: "Context references", link: "/workflows/context-files" },
             { text: "Agents and skills", link: "/workflows/agents-and-skills" },
+            { text: "Templates", link: "/workflows/templates" },
             { text: "End conditions", link: "/workflows/end-conditions" },
             { text: "Dynamic queue", link: "/workflows/dynamic-queue" },
           ],

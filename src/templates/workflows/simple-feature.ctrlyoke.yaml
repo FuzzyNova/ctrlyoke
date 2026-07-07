@@ -1,6 +1,11 @@
 _templateMeta:
   name: Simple Feature
-  description: "Plan → Implement → Commit"
+  description: "Plan → Implement → Commit in a single session for a small, focused change."
+  variables:
+    featureDescription:
+      type: text
+      multiline: true
+      description: What to build — describe the feature or change in a sentence or two.
 
 # prompts
 steps:

@@ -253,8 +253,11 @@ a strong new-user story. The only deferred piece is the interactive tour (see no
   trimmed); a new `test-repair` agent was added and wired into the `fix-tests` template;
   `spec-orchestrator` audited clean. See
   [`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part A.
-- [ ] **Template variables** — bring `simple-feature` / `full-feature` / `fix-tests` up to
-  the `spec-driven-loop` typed `_templateMeta.variables` pattern. ([`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part B)
+- [x] **Template variables** — DONE. Extended the variable model with `default` /
+  `description` / `multiline`, then brought `simple-feature` / `full-feature` / `fix-tests`
+  up to the typed `_templateMeta.variables` pattern (UI renders defaults/descriptions/
+  textareas; blanks fall back to defaults). Documented in `docs/workflows/templates.md`.
+  ([`BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md`](BUILTIN_AGENTS_TEMPLATES_CLEANUP_PLAN.md) Part B)
 - [ ] **`ctrlyoke-tech-support` agent** — built-in support/onboarding agent for new users.
   Support deflection for a solo launch. ([`BUILTIN_TECH_SUPPORT_AGENT_PLAN.md`](BUILTIN_TECH_SUPPORT_AGENT_PLAN.md))
 - [ ] **Native VS Code Getting Started integration** — `contributes.walkthroughs` (the

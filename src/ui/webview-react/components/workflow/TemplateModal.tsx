@@ -1,13 +1,29 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button } from "../shared";
 import { useUiStore } from "@store/uiStore";
-import type { TemplateVariable } from "@store/uiStore";
+import type { TemplateInfo, TemplateVariable } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 
 interface TemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+/** Build the initial variable values for a template, pre-filling declared defaults. */
+function seedVariableDefaults(
+  template: TemplateInfo | null
+): Record<string, string> {
+  const seed: Record<string, string> = {};
+  for (const variable of template?.variables ?? []) {
+    if (variable.default !== undefined) {
+      seed[variable.name] = variable.default;
+    } else if (variable.type === "select" && variable.options?.length) {
+      // A dropdown with no explicit default pre-selects its first option.
+      seed[variable.name] = variable.options[0];
+    }
+  }
+  return seed;
 }
 
 /**
@@ -62,13 +78,13 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     if (isOpen && !prevIsOpenRef.current) {
       const initId = defaultTemplateId || "blank";
       setSelectedTemplateId(initId);
-      setVariables({});
       setFilename("");
       setFilenameError(null);
       setDefaultConfirmation(false);
 
-      // Sync currentTemplate to match the default selection
+      // Sync currentTemplate to match the default selection and seed its defaults
       const template = templates.find((t) => t.id === initId) ?? null;
+      setVariables(seedVariableDefaults(template));
       setCurrentTemplate(template);
     }
     prevIsOpenRef.current = isOpen;
@@ -115,10 +131,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const handleTemplateChange = useCallback(
     (templateId: string) => {
       setSelectedTemplateId(templateId);
-      setVariables({});
 
       // Update currentTemplate directly from the local list (no round-trip needed)
       const template = templates.find((t) => t.id === templateId) ?? null;
+      setVariables(seedVariableDefaults(template));
       setCurrentTemplate(template);
     },
     [templates, setCurrentTemplate]
@@ -138,13 +154,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     []
   );
 
-  // Open OS file picker for a file-type variable
+  // Open OS picker for a file- or directory-type variable
   const handleBrowseFile = useCallback(
     (variable: string, meta?: TemplateVariable) => {
       vscode.postMessage({
         type: MESSAGE_TYPES.BROWSE_TEMPLATE_FILE,
         variable,
         fileFilter: meta?.fileFilter,
+        selectFolder: meta?.type === "directory",
       });
     },
     [vscode]
@@ -363,6 +380,15 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             <h4 className="text-sm font-medium text-foreground">Variables</h4>
             {currentTemplate.variables.map((variable) => {
               const isFile = variable.type === "file";
+              const isDirectory = variable.type === "directory";
+              const isPicker = isFile || isDirectory;
+              const isSelect = variable.type === "select";
+              const isMultiline =
+                !!variable.multiline && !isPicker && !isSelect;
+              const inputClass =
+                "flex-1 px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border font-mono text-xs";
+              const selectClass =
+                "w-full px-2 py-1.5 rounded bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-none focus:border-focus-border";
               return (
                 <div key={variable.name} className="form-group">
                   <label
@@ -371,40 +397,82 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                   >
                     <span className="block mb-1">
                       {variable.name}
-                      {isFile && (
+                      {isPicker && (
                         <span className="ml-1 text-xs text-description-fg">
-                          (file path)
+                          ({isDirectory ? "directory" : "file path"})
                         </span>
                       )}
                     </span>
-                    <div className={isFile ? "flex gap-1.5" : undefined}>
-                      <input
-                        type="text"
-                        aria-label={variable.name}
-                        id={`var-${variable.name}`}
-                        value={variables[variable.name] || ""}
-                        onChange={(e) =>
-                          handleVariableChange(variable.name, e.target.value)
-                        }
-                        onKeyDown={handleKeyDown}
-                        placeholder={
-                          isFile ? "path/to/spec.md" : `Enter ${variable.name}`
-                        }
-                        className="flex-1 px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border font-mono text-xs"
-                      />
-                      {isFile && (
+                    <div className={isPicker ? "flex gap-1.5" : undefined}>
+                      {isSelect ? (
+                        <select
+                          aria-label={variable.name}
+                          id={`var-${variable.name}`}
+                          value={variables[variable.name] ?? ""}
+                          onChange={(e) =>
+                            handleVariableChange(variable.name, e.target.value)
+                          }
+                          className={selectClass}
+                        >
+                          {(variable.options ?? []).map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isMultiline ? (
+                        <textarea
+                          aria-label={variable.name}
+                          id={`var-${variable.name}`}
+                          value={variables[variable.name] || ""}
+                          onChange={(e) =>
+                            handleVariableChange(variable.name, e.target.value)
+                          }
+                          onKeyDown={handleKeyDown}
+                          placeholder={`Enter ${variable.name}`}
+                          rows={3}
+                          className={`${inputClass} resize-y w-full`}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          aria-label={variable.name}
+                          id={`var-${variable.name}`}
+                          value={variables[variable.name] || ""}
+                          onChange={(e) =>
+                            handleVariableChange(variable.name, e.target.value)
+                          }
+                          onKeyDown={handleKeyDown}
+                          placeholder={
+                            isDirectory
+                              ? "path/to/dir"
+                              : isFile
+                                ? "path/to/spec.md"
+                                : `Enter ${variable.name}`
+                          }
+                          className={inputClass}
+                        />
+                      )}
+                      {isPicker && (
                         <Button
                           variant="secondary"
                           onClick={() =>
                             handleBrowseFile(variable.name, variable)
                           }
-                          title="Browse for file"
+                          title={
+                            isDirectory ? "Browse for folder" : "Browse for file"
+                          }
                         >
                           Browse…
                         </Button>
                       )}
                     </div>
                   </label>
+                  {variable.description && (
+                    <p className="mt-1 text-xs text-description-fg">
+                      {variable.description}
+                    </p>
+                  )}
                 </div>
               );
             })}

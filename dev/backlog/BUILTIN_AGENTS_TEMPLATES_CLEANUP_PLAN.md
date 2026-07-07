@@ -108,8 +108,16 @@ Tracked in `RELEASE_PLAN.md` §2.9.
 - [x] No built-in agent references Gemini after harness removal.
 - [x] `test-repair` agent added and wired into the `fix-tests` template.
 
-**Part B (template variables) — still open:**
+**Part B (template variables) — DONE:**
 
-- [ ] `simple-feature`, `full-feature`, `fix-tests` declare typed `_templateMeta.variables` with defaults.
-- [ ] Template-instantiation UI shows typed inputs for all built-in templates.
-- [ ] `_templateMeta.variables` shape documented for template authors.
+> The existing variable model only supported `type`/`fileFilter`/`autoFillFilename`, so
+> Part B first **extended the model** with `default`, `description`, and `multiline`
+> (`TemplateManager.TemplateVariable` + `parseTemplateMeta` + `mergeVariablesWithMeta`,
+> mirrored in the webview `uiStore` type and rendered by `TemplateModal.tsx`). Defaults are
+> applied server-side in `createWorkflow` so a blank field substitutes its default instead
+> of leaving a literal `{token}`.
+
+- [x] `simple-feature` (`featureDescription`, multiline), `full-feature` (`featureDescription` multiline, `planDocument` default `docs/plan.md`), and `fix-tests` (`testCommand` default `npm test`) declare typed `_templateMeta.variables` with descriptions/defaults.
+- [x] `TemplateModal.tsx` seeds declared defaults, renders variable descriptions, and renders multiline vars as a textarea.
+- [x] `_templateMeta.variables` shape documented: new `docs/workflows/templates.md` page (wired into the sidebar), the `TemplateManager` doc-comment, and the enhanced "New Template" starter that demonstrates every field.
+- [x] Unit test `src/test/unit/TemplateManager.test.ts` covers parsing + merge of the new fields (runs in the VS Code test host).

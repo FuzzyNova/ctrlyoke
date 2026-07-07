@@ -464,7 +464,8 @@ export class WorkflowSerializer {
   async handleBrowseTemplateFile(
     variable: string,
     fileFilter?: string[],
-    postMessage?: PostMessageFn
+    postMessage?: PostMessageFn,
+    selectFolder?: boolean
   ): Promise<void> {
     const pm = postMessage ?? this.postMessage;
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
@@ -472,7 +473,7 @@ export class WorkflowSerializer {
       : undefined;
     const filters: Record<string, string[]> = {};
 
-    if (fileFilter && fileFilter.length > 0) {
+    if (!selectFolder && fileFilter && fileFilter.length > 0) {
       // Extract extensions from glob patterns like **/*.md → md
       const exts = fileFilter
         .map((p) => p.replace(/^\*\*\/\*\./, ""))
@@ -481,14 +482,19 @@ export class WorkflowSerializer {
         filters["Spec / Design Files"] = exts;
       }
     }
-    filters["All Files"] = ["*"];
+    if (!selectFolder) {
+      filters["All Files"] = ["*"];
+    }
 
     const uris = await vscode.window.showOpenDialog({
       canSelectMany: false,
-      canSelectFolders: false,
+      canSelectFolders: !!selectFolder,
+      canSelectFiles: !selectFolder,
       defaultUri: workspaceRoot ? vscode.Uri.file(workspaceRoot) : undefined,
-      filters,
-      title: `Select file for {${variable}}`,
+      filters: selectFolder ? undefined : filters,
+      title: selectFolder
+        ? `Select folder for {${variable}}`
+        : `Select file for {${variable}}`,
     });
 
     if (uris && uris.length > 0) {

@@ -1,6 +1,15 @@
 _templateMeta:
   name: Full Feature
   description: "Plan → Implement → Review → Docs → Commit"
+  variables:
+    featureDescription:
+      type: text
+      multiline: true
+      description: What to build — describe the feature or change in a sentence or two.
+    planDocument:
+      type: text
+      default: docs/plan.md
+      description: Path where the plan is written and referenced by later steps.
 
 # prompts
 steps:

@@ -18,27 +18,45 @@ import { RETRY_PROMPT_PLACEHOLDERS } from "../types/DashboardConstants";
  *   {text:varName}  → type = 'text'  (plain input, explicit)
  *   {varName}       → type = 'text'  (plain input, default)
  *
- * Built-in templates hardcode fileFilter and autoFillFilename in BUILT_IN_TEMPLATES.
- * User templates can declare the same metadata via a top-level `_templateMeta` key:
+ * Templates enrich their `{placeholder}` variables via a top-level `_templateMeta` key:
  *
  *   _templateMeta:
  *     variables:
- *       specFile:
- *         type: file
- *         fileFilter: ["**\/*.md"]
- *         autoFillFilename: true
+ *       specFile:                    # matches {specFile} / {file:specFile} in the body
+ *         type: file                 # 'file'/'directory' (Browse), 'select' (dropdown), 'text' (default)
+ *         fileFilter: ["**\/*.md"]   # file-picker globs (type: file only)
+ *         autoFillFilename: true     # seed the workflow name from the picked file/folder
+ *       outputDir:
+ *         type: directory            # Browse button that picks a folder
+ *       logLevel:
+ *         type: select               # dropdown; options required
+ *         options: [debug, info, warn, error]
+ *         default: info
+ *       testCommand:
+ *         type: text
+ *         default: npm test          # pre-filled in the UI; substituted if left blank
+ *         description: The command that runs your test suite.  # helper text under the input
+ *         multiline: true            # render a textarea instead of a single-line input
  *
  * If multiple variables declare autoFillFilename: true, only the first wins.
  */
 export interface TemplateVariable {
   /** Matches the {placeholder} in the template content */
   name: string;
-  /** 'file' shows a Browse button; 'text' (default) is a plain input */
-  type?: "text" | "file";
+  /** 'file'/'directory' show a Browse button; 'select' shows a dropdown; 'text' (default) is a plain input */
+  type?: "text" | "file" | "directory" | "select";
   /** Glob patterns for the file picker filter. Only used when type = 'file' */
   fileFilter?: string[];
-  /** When true, the workflow filename auto-fills with the selected file's basename (no extension) */
+  /** Choices for the dropdown. Required (non-empty) when type = 'select' */
+  options?: string[];
+  /** When true, the workflow filename auto-fills with the selected file/folder basename (no extension) */
   autoFillFilename?: boolean;
+  /** Helper text shown under the input in the template-instantiation UI */
+  description?: string;
+  /** Default value pre-filled in the UI and substituted when the field is left blank */
+  default?: string;
+  /** When true, the input renders as a multi-line textarea instead of a single-line field */
+  multiline?: boolean;
 }
 
 /**
@@ -115,7 +133,12 @@ export class TemplateManager {
           if (typeof varMeta !== "object" || varMeta === null) continue;
           const vm = varMeta as Record<string, unknown>;
           const entry: Partial<Omit<TemplateVariable, "name">> = {};
-          if (vm["type"] === "file" || vm["type"] === "text")
+          if (
+            vm["type"] === "file" ||
+            vm["type"] === "text" ||
+            vm["type"] === "directory" ||
+            vm["type"] === "select"
+          )
             entry.type = vm["type"];
           if (
             Array.isArray(vm["fileFilter"]) &&
@@ -123,7 +146,17 @@ export class TemplateManager {
           ) {
             entry.fileFilter = vm["fileFilter"] as string[];
           }
+          if (
+            Array.isArray(vm["options"]) &&
+            vm["options"].every((o) => typeof o === "string")
+          ) {
+            entry.options = vm["options"] as string[];
+          }
           if (vm["autoFillFilename"] === true) entry.autoFillFilename = true;
+          if (typeof vm["description"] === "string")
+            entry.description = vm["description"];
+          if (typeof vm["default"] === "string") entry.default = vm["default"];
+          if (vm["multiline"] === true) entry.multiline = true;
           result.variables[varName] = entry;
         }
       }
@@ -155,6 +188,10 @@ export class TemplateManager {
       const merged: TemplateVariable = { ...variable };
       if (varMeta.type) merged.type = varMeta.type;
       if (varMeta.fileFilter) merged.fileFilter = varMeta.fileFilter;
+      if (varMeta.options) merged.options = varMeta.options;
+      if (varMeta.description) merged.description = varMeta.description;
+      if (varMeta.default !== undefined) merged.default = varMeta.default;
+      if (varMeta.multiline) merged.multiline = true;
 
       if (varMeta.autoFillFilename) {
         if (!autoFillAssigned) {
@@ -389,8 +426,27 @@ export class TemplateManager {
     // Get template content (built-ins are YAML; custom templates are JSON)
     const templateContent = await this.getTemplateContent(templateId);
 
+    // Apply declared defaults for any variable the caller left blank or absent,
+    // so an untouched field substitutes its default instead of leaving a literal
+    // {token} in the generated workflow.
+    const declared = this.mergeVariablesWithMeta(
+      this.extractVariables(templateContent),
+      this.parseTemplateMeta(templateContent).variables,
+      templateId
+    );
+    const withDefaults: Record<string, string> = { ...variables };
+    for (const variable of declared) {
+      const provided = withDefaults[variable.name];
+      if (
+        (provided === undefined || provided === "") &&
+        variable.default !== undefined
+      ) {
+        withDefaults[variable.name] = variable.default;
+      }
+    }
+
     // Replace variables in raw template string
-    const substituted = this.replaceVariables(templateContent, variables);
+    const substituted = this.replaceVariables(templateContent, withDefaults);
 
     // Parse (yaml.load handles both YAML and JSON) then re-serialize to desired format.
     // Strip _templateMeta — it's template-authoring metadata, not a workflow execution field.
@@ -428,7 +484,8 @@ export class TemplateManager {
   /**
    * Create a new custom template with a feature-demonstrating starter.
    * The starter includes _templateMeta, a file-type variable with autoFillFilename,
-   * and a plain text placeholder so users can see key features in context.
+   * and a multiline text variable with a default and description, so users can see
+   * every variable-metadata field in context.
    *
    * @param templateName Name for the new template
    * @returns Path to created template file
@@ -460,13 +517,19 @@ export class TemplateManager {
             fileFilter: ["**/*.md", "**/*.txt"],
             autoFillFilename: true,
           },
+          constraints: {
+            type: "text",
+            default: "Follow existing patterns; keep changes minimal.",
+            description: "Extra guidance applied while planning and implementing.",
+            multiline: true,
+          },
         },
       },
       steps: [
         {
           name: "plan",
           prompt:
-            "Review the following spec and create a detailed implementation plan:\n@{file:specFile}",
+            "Review the following spec and create a detailed implementation plan:\n@{file:specFile}\n\nConstraints: {text:constraints}",
         },
         {
           name: "implement",

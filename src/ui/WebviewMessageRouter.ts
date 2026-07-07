@@ -1009,7 +1009,8 @@ export class WebviewMessageRouter {
       this.serializer.handleBrowseTemplateFile(
         message.variable,
         message.fileFilter,
-        this.getCurrentPostMessage()
+        this.getCurrentPostMessage(),
+        message.selectFolder
       );
     });
 

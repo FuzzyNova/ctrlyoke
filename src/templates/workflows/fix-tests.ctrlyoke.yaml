@@ -1,6 +1,11 @@
 _templateMeta:
   name: Fix Tests
-  description: Run tests and fix failures with retry
+  description: Run tests and fix failures with a validation retry loop until they pass.
+  variables:
+    testCommand:
+      type: text
+      default: npm test
+      description: The command that runs your test suite (e.g. npm test, pytest, cargo test).
 
 # prompts
 steps:
