@@ -12,7 +12,6 @@ import {
 import {
   CLAUDE_CLI_MODELS as CLAUDE_CLI_MODEL_LIST,
   CODEX_CLI_MODELS as CODEX_CLI_MODEL_LIST,
-  GEMINI_CLI_MODELS as GEMINI_CLI_MODEL_LIST,
   ANTIGRAVITY_CLI_MODELS as ANTIGRAVITY_CLI_MODEL_LIST,
   PERMISSION_MODES,
   TERMINAL_CURSOR_STYLES,
@@ -298,7 +297,6 @@ interface SettingsActions {
 // Model lists imported from DashboardConstants (single source of truth)
 const CLAUDE_CLI_MODELS: ModelOption[] = [...CLAUDE_CLI_MODEL_LIST];
 const CODEX_CLI_MODELS: ModelOption[] = [...CODEX_CLI_MODEL_LIST];
-const GEMINI_CLI_MODELS: ModelOption[] = [...GEMINI_CLI_MODEL_LIST];
 const ANTIGRAVITY_CLI_MODELS: ModelOption[] = [...ANTIGRAVITY_CLI_MODEL_LIST];
 
 const initialGlobalSettings: GlobalSettings = {
@@ -370,10 +368,6 @@ const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
     available: false,
     status: HARNESS_STATUS_STRINGS.CHECKING,
   },
-  [HARNESS_IDS.GEMINI_CLI]: {
-    available: false,
-    status: HARNESS_STATUS_STRINGS.CHECKING,
-  },
   [HARNESS_IDS.ANTIGRAVITY_CLI]: {
     available: false,
     status: HARNESS_STATUS_STRINGS.CHECKING,
@@ -388,7 +382,6 @@ const initialState: SettingsState = {
     [HARNESS_IDS.CODEX_CLI]: CODEX_CLI_MODELS,
     [HARNESS_IDS.OPENCODE_CLI]: [],
     [HARNESS_IDS.QWEN_CLI]: [],
-    [HARNESS_IDS.GEMINI_CLI]: GEMINI_CLI_MODELS,
     [HARNESS_IDS.ANTIGRAVITY_CLI]: ANTIGRAVITY_CLI_MODELS,
   },
   availableAgents: [],

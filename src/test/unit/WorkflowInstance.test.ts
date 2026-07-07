@@ -902,7 +902,7 @@ suite("WorkflowInstance append-and-continue", () => {
           "steps:",
           "  - name: appended step",
           "    prompt: appended prompt",
-          "    harness: gemini-cli",
+          "    harness: antigravity-cli",
           "    model: append-step-model",
           '    additionalArgs: "--append-step"',
           "    toolPermissions:",
@@ -974,7 +974,7 @@ suite("WorkflowInstance append-and-continue", () => {
       assert.deepStrictEqual(appendedStep, {
         name: "appended step",
         prompt: "appended prompt",
-        harness: HARNESS_IDS.GEMINI_CLI,
+        harness: HARNESS_IDS.ANTIGRAVITY_CLI,
         model: "append-step-model",
         additionalArgs: "--append-step",
         toolPermissions: {

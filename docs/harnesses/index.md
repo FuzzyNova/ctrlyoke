@@ -11,7 +11,7 @@ Harnesses are the reason ctrlyoke can keep one workflow model while talking to v
 | `codex-cli`    | CLI             | OpenAI Codex workflows                    | Exposes Codex-specific sandbox controls       |
 | `opencode-cli` | CLI             | Provider-flexible OpenCode setups         | Useful when OpenCode is already your standard |
 | `qwen-cli`     | CLI             | Qwen Code users                           | Similar workflow model to other CLI harnesses |
-| `gemini-cli`   | CLI             | Gemini-based coding workflows             | Supports MCP config support                   |
+| `antigravity-cli` | CLI          | Google Antigravity workflows              | Uses `agy`; supports MCP config support       |
 | `copilot-chat` | VS Code chat UI | Users who want to stay in the chat window | No standalone CLI equivalent                  |
 
 ## Choosing a starting harness

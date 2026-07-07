@@ -46,7 +46,7 @@ export interface NotificationResult {
  * - Codex: TOML inline string
  */
 export type HookConfig =
-  | { type: "json"; config: object } // Copilot/Qwen/Gemini/Codex: JSON object
+  | { type: "json"; config: object } // Copilot/Qwen/Antigravity/Codex: JSON object
   | { type: "json-string"; config: string } // Claude: JSON string
   | { type: "none" }; // No hook support
 
@@ -508,7 +508,7 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
   /**
    * Builds the hooks record for harnesses that use a command-style hook entry
    * format. By default each entry is `{ hooks: [{ type: "command", command: "..." }] }`
-   * (Claude/Gemini); pass `buildHookGroup` to customize the entry shape (e.g.
+   * (Claude); pass `buildHookGroup` to customize the entry shape (e.g.
    * Codex's matcher-based `{ matcher, hooks: [...] }` via `createCodexCommandHookGroup`).
    *
    * Handles:

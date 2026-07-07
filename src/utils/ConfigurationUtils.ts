@@ -367,8 +367,6 @@ export const ConfigurationUtils = {
         return ConfigurationUtils.getCodexCliModel();
       case HARNESS_IDS.OPENCODE_CLI:
         return ConfigurationUtils.getOpenCodeCliModel();
-      case HARNESS_IDS.GEMINI_CLI:
-        return ConfigurationUtils.getGeminiCliModel();
       case HARNESS_IDS.ANTIGRAVITY_CLI:
         return ConfigurationUtils.getAntigravityCliModel();
       case HARNESS_IDS.QWEN_CLI:
@@ -381,7 +379,7 @@ export const ConfigurationUtils = {
 
   /**
    * Get allowed directories for CLI operations (copilot-cli, claude-cli, codex-cli, qwen-cli, antigravity-cli).
-   * Not supported by gemini-cli, opencode-cli, or copilot-chat.
+   * Not supported by opencode-cli or copilot-chat.
    */
   getCliAllowedDirs(): string[] {
     return configService.get(CONFIG_KEYS.PERMISSIONS).allowedDirs;
@@ -519,20 +517,6 @@ export const ConfigurationUtils = {
     return (
       configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.QWEN_CLI] ??
       DEFAULT_MODELS[HARNESS_IDS.QWEN_CLI]
-    );
-  },
-
-  // ============================================================
-  // GEMINI CLI SETTINGS
-  // ============================================================
-
-  /**
-   * Get Gemini CLI model
-   */
-  getGeminiCliModel(): string {
-    return (
-      configService.get(CONFIG_KEYS.DEFAULTS).models[HARNESS_IDS.GEMINI_CLI] ??
-      DEFAULT_MODELS[HARNESS_IDS.GEMINI_CLI]
     );
   },
 

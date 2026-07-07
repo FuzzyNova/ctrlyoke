@@ -11,7 +11,7 @@ ctrlyoke currently supports:
 - `codex-cli`
 - `opencode-cli`
 - `qwen-cli`
-- `gemini-cli`
+- `antigravity-cli`
 - `copilot-chat`
 
 ## Workflow

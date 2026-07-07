@@ -67,8 +67,7 @@ export function AdvancedPermissionsSection({
         </SettingInputRow>
         <p className="text-xs text-description-fg mt-1">
           Applies to copilot-cli, claude-cli, codex-cli, qwen-cli, and
-          antigravity-cli. Not supported by gemini-cli, opencode-cli, or
-          copilot-chat.
+          antigravity-cli. Not supported by opencode-cli or copilot-chat.
         </p>
       </div>
       <div className="border-t border-panel-border pt-4">

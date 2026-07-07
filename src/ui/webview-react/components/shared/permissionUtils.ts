@@ -25,7 +25,6 @@ export function getPermissionHarnessSupport(
       return "full";
     case HARNESS_IDS.CODEX_CLI:
     case HARNESS_IDS.OPENCODE_CLI:
-    case HARNESS_IDS.GEMINI_CLI:
     case HARNESS_IDS.ANTIGRAVITY_CLI:
       return "mode-only";
     case HARNESS_IDS.COPILOT_CHAT:

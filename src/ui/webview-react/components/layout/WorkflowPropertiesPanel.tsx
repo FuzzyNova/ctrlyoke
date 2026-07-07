@@ -1452,7 +1452,7 @@ const WorkflowPropertiesPanelInner: React.FC<{
                           : effectiveHarness ===
                                 HARNESS_IDS.ANTIGRAVITY_CLI
                             ? "ℹ️ Antigravity CLI uses permission modes only. Tool pattern lists are ignored."
-                            : "ℹ️ Gemini CLI uses approval modes only. Tool pattern lists are ignored."}
+                            : "ℹ️ This harness uses permission modes only. Tool pattern lists are ignored."}
                     </p>
                   )}
 

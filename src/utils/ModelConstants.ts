@@ -348,31 +348,6 @@ export function getQwenContextWindowSize(_modelId: string): number {
 }
 
 // ============================================================================
-// GEMINI CLI MODELS
-// Gemini CLI supported models
-// ============================================================================
-export const GEMINI_CLI_MODELS = [
-  "gemini-3-pro-preview",
-  "gemini-3-flash-preview",
-  "gemini-3.1-flash-lite-preview",
-  "gemini-2.5-pro",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-] as const;
-
-/**
- * Gemini CLI model display names
- */
-export const GEMINI_CLI_MODEL_LABELS: Record<string, string> = {
-  "gemini-3-pro-preview": "Gemini 3 Pro (Preview)",
-  "gemini-3-flash-preview": "Gemini 3 Flash (Preview)",
-  "gemini-3.1-flash-lite-preview": "Gemini 3.1 Flash Lite (Preview)",
-  "gemini-2.5-pro": "Gemini 2.5 Pro",
-  "gemini-2.5-flash": "Gemini 2.5 Flash",
-  "gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
-} as const;
-
-// ============================================================================
 // ANTIGRAVITY CLI MODELS
 // ============================================================================
 export const ANTIGRAVITY_CLI_MODELS = [
@@ -421,33 +396,6 @@ export function getAntigravityContextWindowSize(
 export type AntigravityCliModel = (typeof ANTIGRAVITY_CLI_MODELS)[number];
 
 /**
- * Get the Gemini CLI model name (identity function for now)
- *
- * @param model The model identifier
- * @returns The Gemini CLI model name, or undefined if not recognized
- */
-export function getGeminiModelName(model: string): string | undefined {
-  if (GEMINI_CLI_MODELS.includes(model as any)) {
-    return model;
-  }
-  // Accept any model string - Gemini CLI will validate
-  return model || undefined;
-}
-
-// Type exports for Gemini CLI
-export type GeminiCliModel = (typeof GEMINI_CLI_MODELS)[number];
-
-/**
- * Get the context window size for a Gemini CLI model.
- *
- * @param modelId The model identifier (e.g. "gemini-2.5-pro")
- * @returns Context window size in tokens
- */
-export function getGeminiContextWindowSize(_modelId: string): number {
-  return 1_000_000;
-}
-
-/**
  * Returns a human-readable display name for a model, resolved against the
  * correct label map for the given harness.
  */
@@ -460,8 +408,6 @@ export function getHarnessModelDisplayName(
       return CLAUDE_CLI_MODEL_LABELS[modelId] ?? modelId;
     case "codex-cli":
       return CODEX_CLI_MODEL_LABELS[modelId] ?? modelId;
-    case "gemini-cli":
-      return GEMINI_CLI_MODEL_LABELS[modelId] ?? modelId;
     case "antigravity-cli":
       return ANTIGRAVITY_CLI_MODEL_LABELS[modelId] ?? modelId;
     case "qwen-cli":

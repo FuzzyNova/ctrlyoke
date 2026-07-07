@@ -49,7 +49,7 @@ These settings apply to both the extension and the standalone CLI where relevant
   "models": {
     "copilot-cli": "claude-sonnet-4.5",
     "claude-cli": "sonnet",
-    "gemini-cli": "gemini-2.5-pro"
+    "antigravity-cli": "Claude Sonnet 4.6 (Thinking)"
   }
 }
 ```

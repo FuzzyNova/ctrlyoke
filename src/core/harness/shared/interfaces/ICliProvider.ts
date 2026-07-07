@@ -210,8 +210,8 @@ export interface ICliProvider {
    * Restore workspace files modified during interactive hook setup.
    *
    * Used by providers that write (and must restore) workspace-level config files
-   * for hook registration (e.g., Gemini writes .gemini/settings.json, Qwen writes
-   * .qwen/settings.json). Called by CliIntegration.cleanupWorkflowArtifacts()
+   * for hook registration (e.g., Qwen writes .qwen/settings.json). Called by
+   * CliIntegration.cleanupWorkflowArtifacts()
    * after the workflow completes.
    *
    * Providers that only delete temp files should use getAdditionalCleanupFilePaths()
@@ -233,7 +233,7 @@ export interface ICliProvider {
    * Claude: .ctrlyoke/temp/claude-hook-settings-*.json) implement this to prevent
    * files from previous prompts accumulating and firing unintended hooks.
    *
-   * Providers that use ref-counted settings.json (Codex, Gemini, Qwen) do not need
+   * Providers that use ref-counted settings.json (Codex, Qwen) do not need
    * this — registerWorkflow() replaces the workflow's entry on each call.
    */
   cleanupPreviousPromptHooks?(workspaceRoot: string): Promise<void>;

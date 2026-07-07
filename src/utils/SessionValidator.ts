@@ -14,7 +14,6 @@ import { Log } from "./Log";
  * - Codex CLI: Thread ID string (thread_xxx format, flexible)
  * - OpenCode CLI: ses_ prefix + alphanumeric string (e.g., ses_34106de37ffeG7oh0Bvq9cmRki)
  * - Qwen CLI: UUID v4 (strict format)
- * - Gemini CLI: UUID v4 (strict format)
  * - Antigravity CLI: UUID v4 (strict format)
  *
  * This validator ensures session IDs match the expected format for each harness
@@ -56,7 +55,6 @@ export class SessionValidator {
    * - **Codex CLI**: Any non-empty string (typically thread_xxx)
    * - **OpenCode CLI**: Must start with "ses_" followed by alphanumeric characters
  * - **Qwen CLI**: Strict UUID v4 format required
- * - **Gemini CLI**: Strict UUID v4 format required
  * - **Antigravity CLI**: Strict UUID v4 format required
    * - **Copilot Chat**: Not applicable (no session IDs)
    *
@@ -88,12 +86,6 @@ export class SessionValidator {
         return this.validateUuid(
           sessionId,
           HARNESS_INFO[HARNESS_IDS.QWEN_CLI].name
-        );
-
-      case HARNESS_IDS.GEMINI_CLI:
-        return this.validateUuid(
-          sessionId,
-          HARNESS_INFO[HARNESS_IDS.GEMINI_CLI].name
         );
 
       case HARNESS_IDS.ANTIGRAVITY_CLI:

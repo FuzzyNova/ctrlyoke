@@ -45,7 +45,7 @@ export class SettingsJsonHooksTracker {
   private registeredSettingsPath: string | undefined;
 
   private readonly toolName: string;
-  /** Subdirectory under workspace root (e.g. ".qwen", ".gemini", ".codex") */
+  /** Subdirectory under workspace root (e.g. ".qwen", ".codex") */
   private readonly settingsDir: string;
   /** Filename within settingsDir (e.g. "settings.json" or "hooks.json") */
   private readonly settingsFile: string;

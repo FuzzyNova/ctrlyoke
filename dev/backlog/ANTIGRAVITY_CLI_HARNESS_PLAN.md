@@ -433,29 +433,29 @@ Remove Gemini from: `harnessRunner.ts`, `hooks.harness.test.ts`, `ModelConstants
 
 ### Add Antigravity
 
-- [ ] `src/core/harness/antigravity/` — `AntigravityCliProvider`, `AntigravityResponseParser` (plain-text), `AntigravityLogParser` (custom glog), `AntigravityNotificationMonitor` (group-keyed hook config per the 2026-07-05 part 2 schema — use `Stop` for interactive completion, not `PostInvocation`), `AntigravityToolPermissionMapper`
-- [ ] `src/scripts/ctrlyoke-antigravity-hook.js` (I/O contract still JSON stdin/stdout like Claude's, but hook config shape is agy's own group-keyed format, not Claude's)
+- [x] `src/core/harness/antigravity/` — `AntigravityCliProvider`, `AntigravityResponseParser` (plain-text), `AntigravityLogParser` (custom glog), `AntigravityNotificationMonitor` (group-keyed hook config per the 2026-07-05 part 2 schema — use `Stop` for interactive completion, not `PostInvocation`), `AntigravityToolPermissionMapper`
+- [x] `src/scripts/ctrlyoke-antigravity-hook.js` (I/O contract still JSON stdin/stdout like Claude's, but hook config shape is agy's own group-keyed format, not Claude's)
 - [x] **MCP: `.agents/mcp_config.json` writer/tracker — IMPLEMENTED and WORKING (2026-07-06).** `AntigravityCliProvider.getMcpConfigArgs` writes a bare `{ mcpServers }` object to the workspace `.agents/mcp_config.json` via a shared `SettingsJsonMcpTracker` singleton (generalized to accept custom project/user config paths — agy uses `.agents/mcp_config.json` + `~/.gemini/config/mcp_config.json`). Remote servers use `serverUrl` (not `url`/`type`) and no `trust` field, via new `buildSettingsJsonMcpEntries` options. No `--allowed-mcp-server-names` flag exists on agy, so parallel workflows in one workspace share the file's servers (no per-prompt scoping). **MCP is NOT broken in agy 1.0.16 — confirmed working by manual testing (Nathan called MCP tools successfully, multiple times). No gate.** The earlier "hangs on startup / non-functional" findings (2026-07-05 part 2 delta) were a mis-diagnosis: the real symptom was agy headless **resolving the relative prompt-file path (`.ctrlyoke/temp/…prompt.md`) inconsistently** — its agent sometimes anchors relative paths to the workspace cwd and sometimes wanders the filesystem from the home dir searching for the file (reproduced 2026-07-06: two near-identical `agy --print` runs with a relative ref gave `FOUNDABS` vs a 60s+ wander/timeout). agy's process cwd IS the workspace (`workspaceDirs=[C:\dev\ctrlyoke]` in the log), so this is an agent-side relative-path quirk, not a spawn-cwd bug. **Fix (superseded, 2026-07-07): `usesAbsoluteFileReferences: true` on the Antigravity `HarnessConfig`** — `CliIntegration.formatDirectFileRef`/`formatTempFileRef` then emit absolute paths for all injected references (prompt/agent/skills/context/@-mentions). Verified: an absolute-path `--print` ref resolves deterministically (`FOUNDABS`). **Update (2026-07-07): agy fixed the underlying relative-path resolution as long as `--add-dir` is set (already the case — see `getWorkspaceDirs`/`--add-dir` wiring above), so the hard-coded `usesAbsoluteFileReferences` workaround was removed; Antigravity now follows the same `ui.useAbsolutePathReferences`/multi-root rule as every other harness (see `ABSOLUTE_FILE_REFERENCE_MODE_PLAN.md`).** Test agy with `--model "Gemini 3.5 Flash (Low)"` — the default (Sonnet) has a tiny quota that exhausts for ~28h.
-- [ ] Type/wiring/settings/UI/schema layers per Part B.2
-- [ ] `npm run generate-schema`
-- [ ] Tests: `AntigravityResponseParser.test.ts`, `AntigravityLogParser.test.ts`, `hooks.harness.test.ts` (Claude-style events); update `harnessRunner.ts`
-- [ ] Docs: `docs/harnesses/antigravity-cli.md`, copilot-instructions tables
+- [x] Type/wiring/settings/UI/schema layers per Part B.2
+- [x] `npm run generate-schema`
+- [x] Tests: `AntigravityResponseParser.test.ts`, `AntigravityLogParser.test.ts`, `hooks.harness.test.ts` (Claude-style events); update `harnessRunner.ts`
+- [x] Docs: `docs/harnesses/antigravity-cli.md`, copilot-instructions tables
 
 ### Remove Gemini (Part C)
 
-- [ ] Delete harness dir, hook script, doc page (C.1)
-- [ ] Type / wiring / settings / UI / schema removals (C.2–C.6)
-- [ ] Comment cleanups (C.7)
-- [ ] Test removals / re-point to Qwen (C.8)
-- [ ] Docs / scripts / dictionary (C.9)
+- [x] Delete harness dir, hook script, doc page (C.1)
+- [x] Type / wiring / settings / UI / schema removals (C.2–C.6)
+- [x] Comment cleanups (C.7)
+- [x] Test removals / re-point to Qwen (C.8)
+- [x] Docs / scripts / dictionary (C.9)
 - [ ] **Note**: removing Gemini does _not_ free agy's MCP/skills dirs — agy reuses `~/.gemini/`. Don't delete `~/.gemini/`-related path handling that Antigravity now depends on.
 
 ### Verification
 
-- [ ] `npm run typecheck` — zero errors (catches every missed Gemini reference)
-- [ ] `npm run compile`
-- [ ] `npm test` — existing pass; new Antigravity parser/log tests pass
-- [ ] Grep `gemini`/`Gemini`/`GEMINI` over `src/` → only generic/unrelated hits remain
+- [x] `npm run typecheck` — zero errors (catches every missed Gemini reference)
+- [x] `npm run compile`
+- [x] `npm test` — existing pass; new Antigravity parser/log tests pass
+- [x] Grep `gemini`/`Gemini`/`GEMINI` over `src/` → only generic/unrelated hits remain
 - [ ] Manual: set harness to `antigravity-cli`, confirm "Available", run a 1-step headless workflow (response captured via plain-text stdout), run a 2-step `resumeSession` workflow (UUID resume via `--conversation`)
 
 ---

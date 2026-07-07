@@ -7,7 +7,6 @@ import { ClaudeCliProvider } from "./harness/claude/ClaudeCliProvider";
 import { CodexCliProvider } from "./harness/codex/CodexCliProvider";
 import { OpenCodeCliProvider } from "./harness/opencode/OpenCodeCliProvider";
 import { QwenCliProvider } from "./harness/qwen/QwenCliProvider";
-import { GeminiCliProvider } from "./harness/gemini/GeminiCliProvider";
 import { AntigravityCliProvider } from "./harness/antigravity/AntigravityCliProvider";
 
 /**
@@ -61,12 +60,6 @@ export class IntegrationFactory {
     return new CliIntegration(provider, this.platform, registerWithContext);
   }
 
-  /** Create a new Gemini CLI integration */
-  createGeminiCli(registerWithContext: boolean = true): CliIntegration {
-    const provider = new GeminiCliProvider();
-    return new CliIntegration(provider, this.platform, registerWithContext);
-  }
-
   /** Create a new Antigravity CLI integration */
   createAntigravityCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new AntigravityCliProvider();
@@ -87,8 +80,6 @@ export class IntegrationFactory {
         return this.createOpenCodeCli(registerWithContext);
       case HARNESS_IDS.QWEN_CLI:
         return this.createQwenCli(registerWithContext);
-      case HARNESS_IDS.GEMINI_CLI:
-        return this.createGeminiCli(registerWithContext);
       case HARNESS_IDS.ANTIGRAVITY_CLI:
         return this.createAntigravityCli(registerWithContext);
       case HARNESS_IDS.COPILOT_CLI:

@@ -21,8 +21,7 @@ Runtime hook scripts used by CLI harnesses for session start/stop detection, too
 
 <harnessSpecificGotchas>
 - Copilot is the odd one out: providers create per-prompt `.github/hooks/*.json` files and Copilot auto-discovers them. Headless mode may still need those repo hooks when user hooks or hook notifications are enabled (`GITHUB_COPILOT_PROMPT_MODE_REPO_HOOKS`).
-- Claude writes a temp settings file and passes it through `--settings`; Codex/Qwen/Gemini merge hooks into their settings/trust machinery instead of using temp script-generated config.
-- Gemini normalizes `AfterAgent` to `Stop` and only treats `Notification` as meaningful when `notification_type === "ToolPermission"`.
+- Claude writes a temp settings file and passes it through `--settings`; Codex/Qwen merge hooks into their settings/trust machinery instead of using temp script-generated config.
 - Qwen treats `UserPromptSubmit` as a second start signal; its provider registers `userPromptSubmit` alongside `sessionStart`/`stop`.
 - Codex and Qwen intentionally write an unconditional invocation log entry before diagnostic flag checks so hook-registration failures can be distinguished from logging/config issues.
 - OpenCode is plugin-driven, not stdin-driven. Keep `permission.asked`, `tool.execute.before`, and `tool.execute.after` as top-level returned handlers; they do not come through the generic `event` callback.

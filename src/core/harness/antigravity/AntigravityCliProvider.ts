@@ -38,9 +38,9 @@ type AntigravityHookGroup = Record<
 
 export class AntigravityCliProvider implements ICliProvider {
   /**
-   * Shared singleton tracker for parallel-safe MCP management. Unlike
-   * Gemini/Qwen (which use `.{tool}/settings.json`), agy auto-discovers MCP
-   * from the workspace `.agents/mcp_config.json` (a bare `{ mcpServers }`
+   * Shared singleton tracker for parallel-safe MCP management. Unlike Qwen
+   * (which uses `.{tool}/settings.json`), agy auto-discovers MCP from the
+   * workspace `.agents/mcp_config.json` (a bare `{ mcpServers }`
    * object), with `~/.gemini/config/mcp_config.json` as the user-level file.
    */
   private static readonly mcpTracker = SettingsJsonMcpTracker.getInstance(

@@ -1,5 +1,5 @@
 ---
-applyTo: "src/core/harness/copilot/**, src/core/harness/claude/**, src/core/harness/codex/**, src/core/harness/opencode/**, src/core/harness/qwen/**, src/core/harness/gemini/**, src/core/harness/antigravity/**"
+applyTo: "src/core/harness/copilot/**, src/core/harness/claude/**, src/core/harness/codex/**, src/core/harness/opencode/**, src/core/harness/qwen/**, src/core/harness/antigravity/**"
 ---
 
 <purpose>
@@ -15,7 +15,7 @@ Harness-specific adapters for CLI execution. Provider directories should contain
 
 <statefulProviders>
 - Copilot, Claude, and Codex may write temp config/hook artifacts; clean those through `getAdditionalCleanupFilePaths()` and `cleanupWorkspaceArtifacts()` rather than ad hoc deletes in parser/monitor code.
-- Qwen and Gemini mutate shared `.{tool}/settings.json` state through the shared trackers. Always register/unregister per workflow and compute `--allowed-mcp-server-names` from the prompt-local MCP set so parallel workflows cannot see each other’s servers.
+- Qwen mutates shared `.qwen/settings.json` state through the shared trackers. Always register/unregister per workflow and compute `--allowed-mcp-server-names` from the prompt-local MCP set so parallel workflows cannot see each other’s servers.
 - OpenCode is intentionally different: MCP/tool permissions are config-file driven and completion comes from the deployed plugin. A near-empty permission mapper is expected there.
 </statefulProviders>
 

@@ -71,7 +71,6 @@
             "codex-cli",
             "opencode-cli",
             "qwen-cli",
-            "gemini-cli",
             "antigravity-cli"
           ]
         },
@@ -93,12 +92,6 @@
             "copilot-utility",
             "copilot-utility-small",
             "fable",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-2.5-pro",
-            "gemini-3-flash-preview",
-            "gemini-3-pro-preview",
-            "gemini-3.1-flash-lite-preview",
             "gemini-3.1-pro-preview",
             "gemini-3.5-flash",
             "gpt-4o-mini",
@@ -256,7 +249,7 @@
               "type": "null"
             }
           ],
-          "description": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies only to CLI harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, gemini-cli, antigravity-cli). Ignored for copilot-chat. Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\""
+          "description": "Additional CLI flags appended to ctrlyoke's standard argument set. ctrlyoke continues to manage model, permissions, workspace dirs, and session flags normally. Tokens are injected before the tool permission args. Applies only to CLI harnesses (copilot-cli, claude-cli, codex-cli, opencode-cli, qwen-cli, antigravity-cli). Ignored for copilot-chat. Use null at prompt level to explicitly disable additional args even if the workflow or settings define some. Example: \"--effort high --max-turns 10\""
         },
         "toolPermissions": {
           "oneOf": [
@@ -279,14 +272,14 @@
                   "items": {
                     "type": "string"
                   },
-                  "description": "Tool patterns to allow (used in custom mode). Uses Copilot CLI format — auto-converted for Claude/Qwen. Ignored by Codex, OpenCode, and Gemini (mode-only harnesses)."
+                  "description": "Tool patterns to allow (used in custom mode). Uses Copilot CLI format — auto-converted for Claude/Qwen. Ignored by Codex, OpenCode, and Antigravity (mode-only harnesses)."
                 },
                 "deniedTools": {
                   "type": "array",
                   "items": {
                     "type": "string"
                   },
-                  "description": "Tool patterns to deny (takes precedence over allow list). Ignored by Codex, OpenCode, and Gemini (mode-only harnesses)."
+                  "description": "Tool patterns to deny (takes precedence over allow list). Ignored by Codex, OpenCode, and Antigravity (mode-only harnesses)."
                 }
               },
               "additionalProperties": false
@@ -738,7 +731,7 @@
             "permissionRequest",
             "error"
           ],
-          "description": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen), agentStop (Copilot), AfterAgent (Gemini), notify (Codex)."
+          "description": "Logical hook event. Unsupported events for the active harness are silently skipped. 'stop' maps to Stop (Claude/Qwen/Antigravity), agentStop (Copilot), notify (Codex)."
         },
         "command": {
           "type": "string",

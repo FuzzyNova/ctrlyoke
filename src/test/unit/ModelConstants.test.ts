@@ -8,13 +8,10 @@ import {
   getClaudeContextWindowSize,
   getQwenModelName,
   getQwenContextWindowSize,
-  getGeminiModelName,
-  getGeminiContextWindowSize,
   getAntigravityModelName,
   getAntigravityContextWindowSize,
   COPILOT_MODELS,
   CLAUDE_CLI_MODELS,
-  GEMINI_CLI_MODELS,
   QWEN_CLI_MODELS,
   ANTIGRAVITY_CLI_MODELS,
   MODEL_NONE,
@@ -199,32 +196,6 @@ suite("ModelConstants", () => {
     });
   });
 
-  suite("getGeminiModelName", () => {
-    test("returns model name for known Gemini model", () => {
-      assert.strictEqual(
-        getGeminiModelName("gemini-2.5-pro"),
-        "gemini-2.5-pro"
-      );
-    });
-
-    test("returns arbitrary model string as-is", () => {
-      assert.strictEqual(getGeminiModelName("gemini-custom"), "gemini-custom");
-    });
-
-    test("returns undefined for empty string", () => {
-      assert.strictEqual(getGeminiModelName(""), undefined);
-    });
-  });
-
-  suite("getGeminiContextWindowSize", () => {
-    test("returns 1M for any model", () => {
-      assert.strictEqual(
-        getGeminiContextWindowSize("gemini-2.5-pro"),
-        1_000_000
-      );
-    });
-  });
-
   suite("getAntigravityModelName", () => {
     test("returns model name for known Antigravity model", () => {
       assert.strictEqual(
@@ -279,10 +250,6 @@ suite("ModelConstants", () => {
 
     test("CLAUDE_CLI_MODELS includes sonnet", () => {
       assert.ok(CLAUDE_CLI_MODELS.includes("sonnet"));
-    });
-
-    test("GEMINI_CLI_MODELS includes gemini-2.5-pro", () => {
-      assert.ok(GEMINI_CLI_MODELS.includes("gemini-2.5-pro"));
     });
 
     test("QWEN_CLI_MODELS includes qwen3.5-plus", () => {

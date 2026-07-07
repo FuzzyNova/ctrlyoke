@@ -33,7 +33,7 @@ ctrlyoke is a VS Code extension that automates AI coding assistants through stru
 | `codex-cli`    | OpenAI Codex CLI — JSONL events, notify hook                                    |
 | `opencode-cli` | OpenCode CLI — JSONL events, config-file permissions                            |
 | `qwen-cli`     | Qwen Code CLI — JSONL events, log-based session discovery                       |
-| `gemini-cli`   | Google Gemini CLI — JSON streaming, hook-based completion, MCP config support   |
+| `antigravity-cli` | Google Antigravity CLI — plain-text output, hook-based completion, MCP config support |
 | `copilot-chat` | GitHub Copilot Chat — UI automation via VS Code commands and session monitoring |
 
 Set the active harness:
@@ -320,7 +320,7 @@ All settings use the `ctrlyoke.` prefix.
 | `codexCliModel`    | `gpt-5.1-codex`               | Codex CLI    |
 | `openCodeCliModel` | `anthropic/claude-sonnet-4-6` | OpenCode CLI |
 | `qwenCliModel`     | `coder-model`                 | Qwen CLI     |
-| `geminiCliModel`   | `gemini-2.5-pro`              | Gemini CLI   |
+| `antigravityCliModel` | `Claude Sonnet 4.6 (Thinking)` | Antigravity CLI |
 | `copilotChatModel` | `claude-sonnet-4.5`           | Copilot Chat |
 
 ### Tool permissions

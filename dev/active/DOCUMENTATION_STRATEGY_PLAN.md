@@ -465,7 +465,7 @@ ctrlyoke/
 │   │   ├── codex-cli.md           # OpenAI Codex CLI
 │   │   ├── opencode-cli.md        # OpenCode multi-provider CLI
 │   │   ├── qwen-cli.md            # Qwen Code CLI
-│   │   ├── gemini-cli.md          # Google Gemini CLI
+│   │   ├── antigravity-cli.md     # Google Antigravity CLI
 │   │   └── copilot-chat.md        # Copilot Chat window (UI automation)
 │   │
 │   ├── workflows/                 # Workflow authoring guide
@@ -555,7 +555,7 @@ sidebar: [
       { text: "Codex CLI", link: "/harnesses/codex-cli" },
       { text: "OpenCode CLI", link: "/harnesses/opencode-cli" },
       { text: "Qwen Code CLI", link: "/harnesses/qwen-cli" },
-      { text: "Gemini CLI", link: "/harnesses/gemini-cli" },
+      { text: "Antigravity CLI", link: "/harnesses/antigravity-cli" },
       { text: "Copilot Chat", link: "/harnesses/copilot-chat" },
     ],
   },
@@ -723,7 +723,7 @@ ctrlyoke run <workflow-file>
 
   Options:
     -H, --harness <id>      AI harness: copilot-cli (default), claude-cli, codex-cli,
-                            opencode-cli, qwen-cli, gemini-cli, copilot-chat
+                            opencode-cli, qwen-cli, antigravity-cli, copilot-chat
     -m, --model <name>      Override the AI model
     --headless              Force headless mode (CI/CD, no user interaction)
     --interactive           Force interactive mode (TUI passthrough)

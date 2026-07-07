@@ -1488,7 +1488,7 @@ export class CliIntegration extends HarnessIntegration {
     for (const p of additionalPaths) {
       await fs.promises.unlink(p).catch(() => {});
     }
-    // Restore workspace config files modified during interactive hook setup (e.g., Gemini, Qwen)
+    // Restore workspace config files modified during interactive hook setup (e.g., Qwen)
     await this.provider.cleanupWorkspaceArtifacts?.(
       workspaceRoot,
       workingFilePath

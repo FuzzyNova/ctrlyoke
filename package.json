@@ -1,7 +1,7 @@
 {
   "name": "ctrlyoke",
   "displayName": "ctrlyoke",
-  "description": "Run multi-step AI coding workflows across 8 harnesses (Copilot, Claude, Codex, Gemini, Antigravity, Qwen, OpenCode) with sequential execution, end-condition validation, and a live dashboard.",
+  "description": "Run multi-step AI coding workflows across 7 harnesses (Copilot CLI, Copilot Chat, Claude, Codex, Antigravity, Qwen, OpenCode) with sequential execution, end-condition validation, and a live dashboard.",
   "version": "0.1.0",
   "publisher": "fuzzynova",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -28,7 +28,7 @@
     "copilot",
     "claude",
     "codex",
-    "gemini",
+    "antigravity",
     "workflow",
     "prompt",
     "agent",

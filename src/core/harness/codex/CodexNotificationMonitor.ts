@@ -18,7 +18,7 @@ import type { HookEvent, UserHookConfig } from "../../../types/CtrlYokeTypes";
  * Codex hooks use a matcher-based format (unlike Claude/Qwen which omit matcher):
  *   { matcher: "", hooks: [{ type: "command", command: "..." }] }
  *
- * Notification file format (standardized with Claude/Qwen/Gemini):
+ * Notification file format (standardized with Claude/Qwen/Antigravity):
  *   {sessionId}-start.json → { hookEvent: "SessionStart", sessionId, status: "started" }
  *   {sessionId}-stop.json  → { hookEvent: "Stop", sessionId, status: "completed" }
  *
@@ -49,7 +49,7 @@ export class CodexNotificationMonitor
    *
    * User hooks (from the workflow `hooks:` property) are handled by
    * CodexCliProvider via SettingsJsonHooksTracker — not here. The
-   * _userHooks parameter is intentionally unused (mirrors Qwen/Gemini pattern).
+   * _userHooks parameter is intentionally unused (mirrors Qwen pattern).
    */
   buildHookConfig(
     scriptPath: string,

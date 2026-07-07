@@ -26,7 +26,7 @@ interface GetCliVersionOptions extends CliVersionCommandOptions {
 /**
  * Per-harness formatting knobs for {@link CliProviderUtils.buildSettingsJsonMcpEntries}.
  *
- * Defaults reproduce Gemini/Qwen output (`url` + `type` for remote servers,
+ * Defaults reproduce Qwen output (`url` + `type` for remote servers,
  * `trust: true` for auto-approved servers). Antigravity's `mcp_config.json`
  * schema uses `serverUrl` and recognizes neither `type` nor `trust`.
  */
@@ -305,11 +305,11 @@ export class CliProviderUtils {
   }
 
   // ============================================================
-  // SETTINGS.JSON MCP HELPERS (Gemini CLI / Qwen Code CLI)
+  // SETTINGS.JSON MCP HELPERS (Qwen Code CLI / Antigravity CLI)
   // ============================================================
 
   /**
-   * Build MCP server entries for settings.json format (Gemini CLI and Qwen Code CLI).
+   * Build MCP server entries for settings.json-style MCP config files.
    *
    * Both CLIs auto-discover MCP from `.{tool}/settings.json` using the `mcpServers` key.
    * Config per server: { command: string, args?: string[], env?: Record<string, string>, trust?: boolean }
@@ -329,7 +329,7 @@ export class CliProviderUtils {
     userServers?: McpServerConfig[],
     options?: SettingsJsonMcpEntryOptions
   ): Record<string, unknown> {
-    // Defaults reproduce Gemini/Qwen semantics; Antigravity overrides the
+    // Defaults reproduce Qwen semantics; Antigravity overrides the
     // remote-URL key (serverUrl) and drops the type/trust fields its schema
     // doesn't recognize.
     const remoteUrlKey = options?.remoteUrlKey ?? "url";

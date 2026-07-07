@@ -437,8 +437,6 @@ export class WorkingFileManager {
         return ConfigurationUtils.getOpenCodeCliModel();
       case HARNESS_IDS.QWEN_CLI:
         return ConfigurationUtils.getQwenCliModel();
-      case HARNESS_IDS.GEMINI_CLI:
-        return ConfigurationUtils.getGeminiCliModel();
       case HARNESS_IDS.ANTIGRAVITY_CLI:
         return ConfigurationUtils.getAntigravityCliModel();
       default:

@@ -6,7 +6,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 
 <orientation>
 ## Terminology
-- Use **harness** for AI execution strategies (`copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `gemini-cli`, `copilot-chat`). Reserve **provider** for VS Code API types such as `CompletionItemProvider` or `WebviewViewProvider`.
+- Use **harness** for AI execution strategies (`copilot-cli`, `claude-cli`, `codex-cli`, `opencode-cli`, `qwen-cli`, `antigravity-cli`, `copilot-chat`). Reserve **provider** for VS Code API types such as `CompletionItemProvider` or `WebviewViewProvider`.
 </orientation>
 
 <debugging>
@@ -110,7 +110,7 @@ ctrlyoke automates AI coding harnesses through structured YAML/JSON/Markdown wor
 
 <knowledgeCapture>
 ## Capturing project knowledge (shared memory)
-- **Always record project memory here, never in harness-private memory.** ctrlyoke is built with 7 different harnesses (Claude, Copilot, Codex, Qwen, Gemini, Antigravity, opencode); anything you save to a single harness's private/internal memory (e.g. Claude's `~/.claude` memory) is invisible to the other six and is effectively lost. The `.github/instructions/*.instructions.md` files and this root file ARE the project's shared, cross-harness memory. If you catch yourself about to write a harness-private note about ctrlyoke, put it in the right instruction file instead.
+- **Always record project memory here, never in harness-private memory.** ctrlyoke is built with 7 different harnesses (Claude, Copilot, Codex, Qwen, Antigravity, Copilot Chat, opencode); anything you save to a single harness's private/internal memory (e.g. Claude's `~/.claude` memory) is invisible to the other six and is effectively lost. The `.github/instructions/*.instructions.md` files and this root file ARE the project's shared, cross-harness memory. If you catch yourself about to write a harness-private note about ctrlyoke, put it in the right instruction file instead.
 - When you learn something durable and non-obvious — a root cause, a cross-layer gotcha, an architectural decision, a "do it this way" convention, or a sharp edge that cost real debugging time — write it into the relevant `.github/instructions/*.instructions.md` file (or this base file for cross-cutting facts). These instruction files ARE the project's shared memory: every harness reads them, whereas any single agent's private/internal memory is invisible to the others. Do not leave shared-worthy knowledge in agent-private memory.
 - Pick the most specific instruction file using the routing table in `CLAUDE.md`. Keep entries concise and forward-looking: capture the durable rule, constraint, or "why", not a play-by-play of the change (git history already has that). Don't restate what the code or schema already makes obvious.
 - Verify any file/symbol/line references against the current code before recording them — instruction files are asserted as fact, so stale citations are worse than none.

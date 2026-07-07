@@ -87,8 +87,8 @@ suite("CtrlYokeConfigService", () => {
     service.setWorkspaceBackend(
       makeBackend({ defaults: { harness: "codex-cli" } })
     );
-    service.setCliOverlay({ defaults: { harness: "gemini-cli" } });
-    assert.strictEqual(service.get("defaults").harness, "gemini-cli");
+    service.setCliOverlay({ defaults: { harness: "antigravity-cli" } });
+    assert.strictEqual(service.get("defaults").harness, "antigravity-cli");
   });
 
   test("deep merge: workspace execution.mode does not wipe execution.scriptTimeout", () => {
@@ -149,12 +149,12 @@ suite("CtrlYokeConfigService", () => {
       service.setWorkspaceBackend(
         makeBackend({ defaults: { harness: "codex-cli" } })
       );
-      service.setCliOverlay({ defaults: { harness: "gemini-cli" } });
+      service.setCliOverlay({ defaults: { harness: "antigravity-cli" } });
       const result = service.resolve("defaults");
       assert.strictEqual(result.source, "cli");
       assert.strictEqual(
         (result.value as typeof CTRLYOKE_SETTINGS_DEFAULTS.defaults).harness,
-        "gemini-cli"
+        "antigravity-cli"
       );
     });
   });
@@ -252,9 +252,9 @@ suite("FileConfigBackend", () => {
       "utf-8"
     );
     const backend = new FileConfigBackend(configPath);
-    await backend.set("defaults.harness", "gemini-cli");
+    await backend.set("defaults.harness", "antigravity-cli");
     const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    assert.strictEqual(content.defaults?.harness, "gemini-cli");
+    assert.strictEqual(content.defaults?.harness, "antigravity-cli");
   });
 
   test("set() updates a nested setting without wiping siblings", async () => {

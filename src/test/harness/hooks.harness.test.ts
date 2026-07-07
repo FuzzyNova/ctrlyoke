@@ -46,7 +46,7 @@ type HarnessId =
   | "codex-cli"
   | "opencode-cli"
   | "qwen-cli"
-  | "gemini-cli";
+  | "antigravity-cli";
 
 /** Active harnesses for this test run. Comment out any you don't want to run. */
 const HARNESSES: HarnessId[] = [
@@ -55,7 +55,7 @@ const HARNESSES: HarnessId[] = [
   "codex-cli",
   "opencode-cli",
   "qwen-cli",
-  "gemini-cli",
+  "antigravity-cli",
 ];
 
 /**
@@ -67,7 +67,7 @@ const HARNESS_MODELS: Record<HarnessId, string | undefined> = {
   "codex-cli": "gpt-5.4",
   "opencode-cli": "opencode/big-pickle",
   "qwen-cli": "qwen3.5-plus",
-  "gemini-cli": "gemini-3-flash-preview",
+  "antigravity-cli": "Gemini 3.5 Flash (Low)",
 };
 
 /**
@@ -80,7 +80,7 @@ const REQUIRED_HOOKS: Record<HarnessId, string[]> = {
   "codex-cli": ["stop"],
   "opencode-cli": ["stop"],
   "qwen-cli": ["stop"],
-  "gemini-cli": ["stop"],
+  "antigravity-cli": ["stop"],
 };
 
 /**
@@ -94,7 +94,7 @@ const TOOL_HOOKS: Record<HarnessId, string[]> = {
   "codex-cli": ["preToolUse", "postToolUse"],
   "opencode-cli": ["preToolUse", "postToolUse"],
   "qwen-cli": ["preToolUse", "postToolUse"],
-  "gemini-cli": ["preToolUse", "postToolUse"],
+  "antigravity-cli": ["preToolUse", "postToolUse"],
 };
 
 /**
@@ -106,7 +106,7 @@ const SESSION_HOOKS: Record<HarnessId, string[]> = {
   "codex-cli": ["sessionStart", "userPromptSubmit"],
   "opencode-cli": ["sessionStart", "userPromptSubmit"],
   "qwen-cli": ["sessionStart", "userPromptSubmit"],
-  "gemini-cli": ["sessionStart", "userPromptSubmit"],
+  "antigravity-cli": ["sessionStart"],
 };
 
 // ---------------------------------------------------------------------------

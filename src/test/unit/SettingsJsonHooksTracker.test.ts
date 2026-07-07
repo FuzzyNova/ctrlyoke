@@ -483,8 +483,8 @@ suite("SettingsJsonHooksTracker", () => {
 
   test("should use separate instances per tool name", () => {
     const qwen = SettingsJsonHooksTracker.getInstance("qwen");
-    const gemini = SettingsJsonHooksTracker.getInstance("gemini");
-    assert.notStrictEqual(qwen, gemini);
+    const codex = SettingsJsonHooksTracker.getInstance("codex");
+    assert.notStrictEqual(qwen, codex);
 
     // Same name returns same instance
     const qwen2 = SettingsJsonHooksTracker.getInstance("qwen");

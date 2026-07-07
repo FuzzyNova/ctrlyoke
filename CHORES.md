@@ -109,17 +109,16 @@ npm run sync-models          # propagates to package.json + workflow-schema.json
 `npm run chores -- --task sync-models` also picks this up automatically if
 `scripts/discovered-models.json` is present (and skips it with a reminder if not).
 
-#### 2c. Codex / Claude CLI / Gemini CLI models — inherently manual
+#### 2c. Codex / Claude CLI models — inherently manual
 
 None of these have a scriptable model-list command to discover from:
 
 - **Codex CLI**: the model list only surfaces via the interactive `/model` slash command
   inside a session — there's no headless `codex <flag>` equivalent to `copilot help config`.
-- **Gemini CLI**: `-m/--model` takes a value but doesn't enumerate available choices.
 - **Claude CLI**: has no list-models command at all (see the note in `ModelRegistry.ts`);
   its aliases (`sonnet`/`opus`/`haiku`) rarely change.
 
-When these change, update `CODEX_CLI_MODELS`, `CLAUDE_CLI_MODELS`, or `GEMINI_CLI_MODELS`
+When these change, update `CODEX_CLI_MODELS` or `CLAUDE_CLI_MODELS`
 in `src/utils/ModelConstants.ts` directly, based on vendor release notes or docs, then run
 `npm run sync-models` to propagate the change.
 

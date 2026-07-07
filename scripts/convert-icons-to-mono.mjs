@@ -14,21 +14,6 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ICONS_DIR = path.join(__dirname, "..", "src", "ui", "icons");
 
-// ── Gemini ────────────────────────────────────────────────────────────────────
-// The actual icon shape is the 4-pointed star path defined in the SVG's <mask>.
-// We extract just that path and build a clean monochrome SVG from it.
-function convertGemini(svgContent) {
-  // The star path is the first <path d="M32.447 0 …" fill="…"> inside <mask id="maskme">
-  const pathMatch = svgContent.match(
-    /<mask id="maskme"[^>]*>[\s\S]*?<path\s+d="([^"]+)"/
-  );
-  if (!pathMatch)
-    throw new Error("google-gemini.svg: could not find star path in mask");
-
-  const starPath = pathMatch[1];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 65 65"><path d="${starPath}" fill="black"/></svg>`;
-}
-
 // ── OpenCode ──────────────────────────────────────────────────────────────────
 // The icon is two overlapping rectangles forming an open-square / frame shape.
 // Replace all fill values with black; drop defs, clip-path, and mask boilerplate.
@@ -76,7 +61,6 @@ function convertQwen(svgContent) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 const conversions = [
-  { file: "google-gemini.svg", convert: convertGemini },
   { file: "opencode-dark.svg", convert: convertOpenCode },
   { file: "qwen.svg", convert: convertQwen },
 ];

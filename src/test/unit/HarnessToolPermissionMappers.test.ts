@@ -5,7 +5,6 @@ import { ClaudeToolPermissionMapper } from "../../core/harness/claude/ClaudeTool
 import { CodexToolPermissionMapper } from "../../core/harness/codex/CodexToolPermissionMapper";
 import { OpenCodeToolPermissionMapper } from "../../core/harness/opencode/OpenCodeToolPermissionMapper";
 import { QwenToolPermissionMapper } from "../../core/harness/qwen/QwenToolPermissionMapper";
-import { GeminiToolPermissionMapper } from "../../core/harness/gemini/GeminiToolPermissionMapper";
 import { AntigravityToolPermissionMapper } from "../../core/harness/antigravity/AntigravityToolPermissionMapper";
 import type { ToolPermissionConfig } from "../../core/harness/shared/interfaces/IToolPermissionMapper";
 import { PERMISSION_MODES } from "../../types/DashboardConstants";
@@ -700,111 +699,6 @@ suite("HarnessToolPermissionMappers", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // GEMINI
-  // ──────────────────────────────────────────────────────────────────────────
-  suite("GeminiToolPermissionMapper", () => {
-    const mapper = new GeminiToolPermissionMapper();
-
-    suite("buildArgs", () => {
-      test("dangerouslyAllowAll → --approval-mode yolo", () => {
-        const args = mapper.buildArgs(
-          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
-        );
-        assert.deepStrictEqual(args, ["--approval-mode", "yolo"]);
-      });
-
-      test("allowAll → --approval-mode auto_edit", () => {
-        const args = mapper.buildArgs(cfg(PERMISSION_MODES.ALLOW_ALL));
-        assert.deepStrictEqual(args, ["--approval-mode", "auto_edit"]);
-      });
-
-      test("custom mode → --approval-mode default", () => {
-        const args = mapper.buildArgs(cfg(PERMISSION_MODES.CUSTOM));
-        assert.deepStrictEqual(args, ["--approval-mode", "default"]);
-      });
-
-      test("custom with tool patterns → --approval-mode default (patterns ignored)", () => {
-        const args = mapper.buildArgs(
-          cfg(PERMISSION_MODES.CUSTOM, ["write", "shell"], ["edit"])
-        );
-        assert.deepStrictEqual(args, ["--approval-mode", "default"]);
-      });
-
-      test("none mode → --approval-mode default (falls through to default branch)", () => {
-        const args = mapper.buildArgs(cfg(PERMISSION_MODES.NONE));
-        assert.deepStrictEqual(args, ["--approval-mode", "default"]);
-      });
-
-      test("dangerouslyAllowAll ignores allow/deny lists", () => {
-        const args = mapper.buildArgs(
-          cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, ["write"], ["shell"])
-        );
-        assert.deepStrictEqual(args, ["--approval-mode", "yolo"]);
-      });
-
-      test("always returns exactly 2 args", () => {
-        for (const mode of [
-          PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL,
-          PERMISSION_MODES.ALLOW_ALL,
-          PERMISSION_MODES.CUSTOM,
-          PERMISSION_MODES.NONE,
-        ] as const) {
-          const args = mapper.buildArgs(cfg(mode));
-          assert.strictEqual(
-            args.length,
-            2,
-            `mode ${mode} should produce exactly 2 args`
-          );
-          assert.strictEqual(args[0], "--approval-mode");
-        }
-      });
-    });
-
-    suite("hasFullPermissions", () => {
-      test("dangerouslyAllowAll → true", () => {
-        assert.strictEqual(
-          mapper.hasFullPermissions(
-            cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL)
-          ),
-          true
-        );
-      });
-
-      test("allowAll → true", () => {
-        assert.strictEqual(
-          mapper.hasFullPermissions(cfg(PERMISSION_MODES.ALLOW_ALL)),
-          true
-        );
-      });
-
-      test("custom → false", () => {
-        assert.strictEqual(
-          mapper.hasFullPermissions(
-            cfg(PERMISSION_MODES.CUSTOM, ["write"], [])
-          ),
-          false
-        );
-      });
-
-      test("none → false", () => {
-        assert.strictEqual(
-          mapper.hasFullPermissions(cfg(PERMISSION_MODES.NONE)),
-          false
-        );
-      });
-
-      test("dangerouslyAllowAll with deny list → still true", () => {
-        assert.strictEqual(
-          mapper.hasFullPermissions(
-            cfg(PERMISSION_MODES.DANGEROUSLY_ALLOW_ALL, [], ["write"])
-          ),
-          true
-        );
-      });
-    });
-  });
-
-  // ──────────────────────────────────────────────────────────────────────────
   // QWEN
   // ──────────────────────────────────────────────────────────────────────────
   suite("QwenToolPermissionMapper", () => {
@@ -1048,7 +942,6 @@ suite("HarnessToolPermissionMappers", () => {
       claude: new ClaudeToolPermissionMapper(),
       codex: new CodexToolPermissionMapper(),
       antigravity: new AntigravityToolPermissionMapper(),
-      gemini: new GeminiToolPermissionMapper(),
       qwen: new QwenToolPermissionMapper(),
       opencode: new OpenCodeToolPermissionMapper(),
     };

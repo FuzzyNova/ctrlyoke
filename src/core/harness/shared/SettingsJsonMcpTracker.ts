@@ -37,7 +37,7 @@ class AsyncMutex {
 /**
  * Options for customizing where a tracker reads/writes its MCP config.
  *
- * Defaults reproduce the Gemini/Qwen behavior (`.{tool}/settings.json` in the
+ * Defaults reproduce the Qwen behavior (`.{tool}/settings.json` in the
  * project, `~/.{tool}/settings.json` for the user). Antigravity overrides these
  * to use `.agents/mcp_config.json` (project) and `~/.gemini/config/mcp_config.json`
  * (user), and those files hold a bare `{ "mcpServers": {...} }` object.
@@ -50,11 +50,11 @@ export interface SettingsJsonMcpTrackerOptions {
 }
 
 /**
- * Tracks MCP server lifecycle in a JSON config file for Gemini, Qwen, and
+ * Tracks MCP server lifecycle in a JSON config file for Qwen and
  * Antigravity CLIs.
  *
  * These CLIs auto-discover MCP servers from a JSON file's `mcpServers` key
- * (`.{tool}/settings.json` for Gemini/Qwen, `.agents/mcp_config.json` for
+ * (`.{tool}/settings.json` for Qwen, `.agents/mcp_config.json` for
  * Antigravity). When multiple
  * parallel workflows add/remove MCP servers, this tracker ensures:
  *
@@ -71,7 +71,7 @@ export interface SettingsJsonMcpTrackerOptions {
  *
  * Usage per tool (one static singleton per tool name):
  * ```typescript
- * const tracker = SettingsJsonMcpTracker.getInstance("gemini");
+ * const tracker = SettingsJsonMcpTracker.getInstance("qwen");
  * // Before prompt: register servers and get allowed names
  * const allowed = await tracker.registerServers(workflowKey, workspaceRoot, entries);
  * // Build CLI args: --allowed-mcp-server-names ...allowed
@@ -91,7 +91,7 @@ export class SettingsJsonMcpTracker {
   /**
    * Get or create the singleton tracker for a tool.
    *
-   * @param toolName CLI tool name ("gemini" or "qwen")
+   * @param toolName CLI tool name (for example "qwen" or "antigravity")
    */
   static getInstance(
     toolName: string,
@@ -114,7 +114,7 @@ export class SettingsJsonMcpTracker {
   // INSTANCE STATE
   // ============================================================
 
-  /** Tool's settings subdirectory (e.g. ".gemini", ".qwen") */
+  /** Tool's settings subdirectory (e.g. ".qwen") */
   private readonly settingsSubdir: string;
 
   /** Resolves the project-level config file path from a workspace root. */

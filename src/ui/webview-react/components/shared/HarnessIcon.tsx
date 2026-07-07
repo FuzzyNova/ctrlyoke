@@ -6,7 +6,6 @@ import claudeRaw from "@icons/harnesses/claude.svg?raw";
 import antigravityRaw from "@icons/harnesses/antigravity.svg?raw";
 import copilotChatRaw from "@icons/harnesses/copilot-chat.svg?raw";
 import copilotRaw from "@icons/harnesses/copilot-cli.svg?raw";
-import geminiRaw from "@icons/harnesses/gemini.svg?raw";
 import openaiRaw from "@icons/harnesses/codex.svg?raw";
 import opencodeRaw from "@icons/harnesses/opencode.svg?raw";
 import qwenRaw from "@icons/harnesses/qwen.svg?raw";
@@ -24,7 +23,6 @@ const SVG_MAP: Record<HarnessId, string> = {
   [HARNESS_IDS.CLAUDE_CLI]: claudeRaw,
   [HARNESS_IDS.COPILOT_CHAT]: copilotChatRaw,
   [HARNESS_IDS.COPILOT_CLI]: copilotRaw,
-  [HARNESS_IDS.GEMINI_CLI]: geminiRaw,
   [HARNESS_IDS.CODEX_CLI]: openaiRaw,
   [HARNESS_IDS.OPENCODE_CLI]: opencodeRaw,
   [HARNESS_IDS.QWEN_CLI]: qwenRaw,

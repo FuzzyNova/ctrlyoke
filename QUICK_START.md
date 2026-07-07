@@ -1,6 +1,6 @@
 # ctrlyoke Quick Start
 
-ctrlyoke automates AI coding assistants — Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, Gemini CLI, and Copilot Chat — through structured prompt workflows you define in YAML, JSON, or Markdown.
+ctrlyoke automates AI coding assistants — Copilot CLI, Claude Code, Codex, OpenCode, Qwen Code, Antigravity CLI, and Copilot Chat — through structured prompt workflows you define in YAML, JSON, or Markdown.
 
 ---
 
@@ -15,7 +15,7 @@ ctrlyoke drives whichever AI CLI tool you have installed. You need at least one:
 | `codex-cli`    | `codex` (OpenAI Codex CLI)            |
 | `opencode-cli` | `opencode`                            |
 | `qwen-cli`     | Qwen Code CLI                         |
-| `gemini-cli`   | `gemini` (Google Gemini CLI)          |
+| `antigravity-cli` | `agy` (Google Antigravity CLI)     |
 | `copilot-chat` | GitHub Copilot Chat VS Code extension |
 
 The default harness is `copilot-cli`. Change it in **ctrlyoke Settings** inside the dashboard, or set it per-workflow (see below).

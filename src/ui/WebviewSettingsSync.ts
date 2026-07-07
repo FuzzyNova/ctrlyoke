@@ -36,7 +36,6 @@ import {
   getModelDisplayName,
   CLAUDE_CLI_MODEL_LABELS,
   CODEX_CLI_MODEL_LABELS,
-  GEMINI_CLI_MODEL_LABELS,
   ANTIGRAVITY_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import {
@@ -119,10 +118,6 @@ export class WebviewSettingsSync {
       available: false,
       status: HARNESS_STATUS_STRINGS.CHECKING,
     },
-    [HARNESS_IDS.GEMINI_CLI]: {
-      available: false,
-      status: HARNESS_STATUS_STRINGS.CHECKING,
-    },
     [HARNESS_IDS.ANTIGRAVITY_CLI]: {
       available: false,
       status: HARNESS_STATUS_STRINGS.CHECKING,
@@ -137,7 +132,6 @@ export class WebviewSettingsSync {
     HARNESS_IDS.CODEX_CLI,
     HARNESS_IDS.OPENCODE_CLI,
     HARNESS_IDS.QWEN_CLI,
-    HARNESS_IDS.GEMINI_CLI,
     HARNESS_IDS.ANTIGRAVITY_CLI,
   ] as const;
 
@@ -690,7 +684,6 @@ export class WebviewSettingsSync {
         HARNESS_IDS.OPENCODE_CLI
       ),
       [HARNESS_IDS.QWEN_CLI]: this.getModelForHarness(HARNESS_IDS.QWEN_CLI),
-      [HARNESS_IDS.GEMINI_CLI]: this.getModelForHarness(HARNESS_IDS.GEMINI_CLI),
       [HARNESS_IDS.ANTIGRAVITY_CLI]: this.getModelForHarness(
         HARNESS_IDS.ANTIGRAVITY_CLI
       ),
@@ -712,9 +705,6 @@ export class WebviewSettingsSync {
         ),
       [HARNESS_IDS.QWEN_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
         HARNESS_IDS.QWEN_CLI
-      ),
-      [HARNESS_IDS.GEMINI_CLI]: ConfigurationUtils.getAdditionalArgsForHarness(
-        HARNESS_IDS.GEMINI_CLI
       ),
       [HARNESS_IDS.ANTIGRAVITY_CLI]:
         ConfigurationUtils.getAdditionalArgsForHarness(
@@ -863,14 +853,6 @@ export class WebviewSettingsSync {
       })),
     ];
 
-    const geminiCliOptions = [
-      noneOption,
-      ...Object.entries(GEMINI_CLI_MODEL_LABELS).map(([value, label]) => ({
-        value,
-        label,
-      })),
-    ];
-
     const antigravityCliOptions = [
       noneOption,
       ...Object.entries(ANTIGRAVITY_CLI_MODEL_LABELS).map(
@@ -888,7 +870,6 @@ export class WebviewSettingsSync {
       [HARNESS_IDS.CODEX_CLI]: codexCliOptions,
       [HARNESS_IDS.OPENCODE_CLI]: openCodeCliOptions,
       [HARNESS_IDS.QWEN_CLI]: qwenCliOptions,
-      [HARNESS_IDS.GEMINI_CLI]: geminiCliOptions,
       [HARNESS_IDS.ANTIGRAVITY_CLI]: antigravityCliOptions,
     };
   }
