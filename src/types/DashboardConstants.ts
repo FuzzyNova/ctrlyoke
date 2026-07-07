@@ -554,12 +554,12 @@ export const HARNESS_INFO = {
  *
  * | Logical name        | Claude/Qwen      | Copilot CLI         | Gemini CLI   | Antigravity CLI | Codex             | OpenCode                |
  * |---------------------|------------------|---------------------|--------------|------------------|-------------------|-------------------------|
- * | "stop"              | Stop             | agentStop           | AfterAgent   | PostInvocation   | Stop              | session.status { idle } |
- * | "sessionStart"      | SessionStart     | sessionStart        | SessionStart | n/a              | SessionStart      | session.created         |
+ * | "stop"              | Stop             | agentStop           | AfterAgent   | Stop             | Stop              | session.status { idle } |
+ * | "sessionStart"      | SessionStart     | sessionStart        | SessionStart | PreInvocation    | SessionStart      | session.created         |
  * | "preToolUse"        | PreToolUse       | preToolUse          | BeforeTool   | PreToolUse       | PreToolUse        | tool.execute.before     |
  * | "postToolUse"       | PostToolUse      | postToolUse         | AfterTool    | PostToolUse      | PostToolUse       | tool.execute.after      |
  * | "userPromptSubmit"  | UserPromptSubmit | userPromptSubmitted | BeforeAgent  | n/a              | UserPromptSubmit  | session.status { busy } |
- * | "permissionRequest" | PermissionRequest| permissionRequest   | Notification | PreToolUse       | PermissionRequest | permission.asked        |
+ * | "permissionRequest" | PermissionRequest| permissionRequest   | Notification | n/a              | PermissionRequest | permission.asked        |
  */
 export type HookEvent =
   | "stop"
@@ -667,7 +667,6 @@ export const HOOK_EVENT_METADATA: HookEventMetadata[] = [
       HARNESS_IDS.CODEX_CLI,
       HARNESS_IDS.GEMINI_CLI,
       HARNESS_IDS.QWEN_CLI,
-      HARNESS_IDS.ANTIGRAVITY_CLI,
       HARNESS_IDS.OPENCODE_CLI,
     ],
   },

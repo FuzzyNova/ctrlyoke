@@ -105,7 +105,7 @@ Every group object always carries all 5 event keys; unused ones are `null` rathe
 > 1. **Headless** (`agy -p "..."`, single turn, no tool call): probe log shows **`PreInvocation` → `PostInvocation` → `Stop`, in that order, all within ~1.4s**, one call each. `Stop` payload: `{"terminationReason":"NO_TOOL_CALL","fullyIdle":true,"error":""}`.
 > 2. **Interactive-piped** (`agy -i "<prompt>"` with stdin piped, no real pty): **same three-event sequence fired after the first turn** — `PreInvocation`/`PostInvocation`/`Stop` all captured with `fullyIdle:true`, before the process had exited (it was still waiting on further stdin when killed).
 >
-> **Conclusion: `Stop` fires whenever the agent goes fully idle after a turn (no pending tool call), not just on process exit** — the earlier "did not fire" result was very likely caused by a mis-shaped hooks.json silently failing to load (or a bad hook response causing the framework to treat the hook as broken), not a real product limitation. This means **either `PostInvocation` or `Stop` works as the interactive per-turn completion signal** — prefer `PostInvocation` (fires first, has a stable `invocationNum`/`modelName` payload) since it doesn't depend on `fullyIdle` semantics that could differ once tool calls are in play (untested: whether `Stop` fires after every turn or only turns with no tool call — `NO_TOOL_CALL` in the payload hints it may be conditional; `PostInvocation` fired unconditionally in both tests and is the safer bet).
+> **Conclusion: `Stop` fires whenever the agent goes fully idle after a turn (no pending tool call), not just on process exit** — the earlier "did not fire" result was very likely caused by a mis-shaped hooks.json silently failing to load (or a bad hook response causing the framework to treat the hook as broken), not a real product limitation. A later implementation pass confirmed `PostInvocation` fires per LLM invocation, meaning tool-using turns can emit multiple `PostInvocation` hooks before the turn is complete. **Use `Stop` as the interactive per-turn completion signal**; `PreInvocation` remains acceptable for session-start discovery because repeated start writes are harmless.
 >
 > **Important side-finding — hook stdout contract differs by event type.** The probe returned `{"decision":"allow"}` on stdout for every event (copying the `PreToolUse`-style contract). For `PreInvocation`/`PostInvocation`/`Stop` this produced a logged error every time: `failed to unmarshal result ... via protojson: unknown field "decision"`. It did **not** block turn completion in these tests, but the hook script for these three event types should emit `{}` (or nothing) on stdout instead of a `{decision}` object — `decision` is only valid for the tool-permission-gating events (`PreToolUse`, and presumably `PostToolUse`).
 >
@@ -114,7 +114,7 @@ Every group object always carries all 5 event keys; unused ones are `null` rathe
 **Consequences for Part B**:
 - `AntigravityNotificationMonitor.buildHookConfig()` must emit the group-keyed shape above (one group, e.g. `"ctrlyoke"`, with all 5 event keys present and `null` for unused ones), not Claude's array-of-groups-per-event shape.
 - The ctrlyoke logical→native event map in A.6/B.1 needs to drop `sessionStart→SessionStart` and `userPromptSubmit→UserPromptSubmit` (neither event exists) and add `PreInvocation`/`PostInvocation` as available native hooks.
-- **RESOLVED**: use **`PostInvocation`** as the interactive per-turn completion signal (confirmed to fire unconditionally, once per turn, in both headless and interactive-piped tests — see the resolved sub-issue above). `Stop` also fires but only carries `fullyIdle`/`terminationReason: NO_TOOL_CALL` semantics that are unconfirmed once tool calls are involved, so it's the fallback, not primary. The hook script must **not** emit `{"decision":...}` on stdout for `PostInvocation`/`Stop` (unknown-field error) — only `PreToolUse` (and presumably `PostToolUse`) should get a `{decision}` response; `PostInvocation`/`Stop` handlers should emit `{}`.
+- **RESOLVED**: use **`Stop`** as the interactive per-turn completion signal. `PostInvocation` fires per LLM invocation, so tool-using turns can produce multiple `PostInvocation` hooks before the agent is actually idle. The hook script must **not** emit `{"decision":...}` on stdout for `PreInvocation`/`PostInvocation`/`Stop` (unknown-field error) — only the `PreToolUse` decision-hook path should forward a decision response; invocation/stop handlers should emit `{}`.
 
 ---
 
@@ -212,25 +212,25 @@ With no `--output-format` flag, `agy --print "..."` is expected to print the mod
 
 > **1.0.14 update**: the hook payload carries `conversationId` directly. That means **in interactive mode the session ID is available from the hook itself — no glog log parsing required** for the `-i` path. The `AntigravityLogParser` (A.3/B.1) is therefore only needed for the _headless_ path's session ID, and even there `cache/last_conversations.json` may suffice — consider deferring/simplifying the log parser accordingly.
 
-This is essentially Claude's hook contract, so `AntigravityNotificationMonitor` and `ctrlyoke-antigravity-hook.js` should be **cloned from the Claude implementations**, not Gemini's. ctrlyoke's logical→native event map becomes:
+Antigravity's stdin/stdout hook I/O is close to Claude's, but the config file shape and event set are agy-specific. ctrlyoke's logical→native event map becomes:
 
 | ctrlyoke logical    | Antigravity native                           |
 | ------------------- | -------------------------------------------- |
 | `stop`              | `Stop`                                       |
-| `sessionStart`      | `SessionStart`                               |
+| `sessionStart`      | `PreInvocation`                              |
 | `preToolUse`        | `PreToolUse`                                 |
 | `postToolUse`       | `PostToolUse`                                |
-| `userPromptSubmit`  | `UserPromptSubmit`                           |
-| `permissionRequest` | `PreToolUse` (decision `allow`/`deny`/`ask`) |
+| `userPromptSubmit`  | unsupported                                  |
+| `permissionRequest` | unsupported                                  |
 
 ### A.7 Completion detection
 
 - **Headless (`--print`)**: blocks until the turn finishes, then the process exits → use **process-exit detection** (no hook needed). The cli log also marks completion with `Stream completed for <uuid>, clearing ResponsePending` / `Language server shutting down` as a fallback.
-- **Interactive (`-i`)**: use a `Stop` hook (A.6) writing a notification file, exactly like Claude's monitor. Whether to register it in workspace `.agents/hooks.json` or global `~/.gemini/config/hooks.json` is the one open choice — prefer **workspace `.agents/hooks.json`** (parallel-workflow-safe, cleaned up per-workflow) over the shared global file.
+- **Interactive (`-i`)**: use a `Stop` hook (A.6) writing a notification file. Register it in the confirmed global `~/.gemini/config/hooks.json` group-keyed shape; workspace `.agents/hooks.json` was not the working config path for agy hooks.
 
 ### A.8 Permissions, MCP, dirs (verified)
 
-- **Permissions**: `--dangerously-skip-permissions` → ctrlyoke `dangerouslyAllowAll`. No `--allow-tools`/`--deny-tools` flags exist, so `allowAll`/`custom` either degrade to "prompt normally" **or** are enforced via a `PreToolUse` hook returning `{"decision":"deny"|"ask"}` (the Antigravity-native way to gate tools). Recommend the hook approach for `custom` mode.
+- **Permissions**: `--dangerously-skip-permissions` → ctrlyoke `dangerouslyAllowAll`. No `--allow-tools`/`--deny-tools` flags exist, so `allowAll`/`custom` do not have a native per-tool allow/deny mapping in agy v1. Keep `permissionRequest` unsupported rather than aliasing it onto `PreToolUse`.
 - `--add-dir <dir>` (repeatable) for extra workspace roots.
 - **MCP — supported (in scope), but the workspace path needs empirical confirmation on 1.0.14.** There is no `--mcp-config` flag, but agy reads MCP config from files:
   - Global: `~/.gemini/config/mcp_config.json` ← **confirmed present locally** and the reliable path.
@@ -316,20 +316,21 @@ Clone the **plain-text** parser shape, not Gemini's stream-json one.
 
 Because the rich event stream is unavailable (A.3), this parser only provides **session ID + completion**, not tool/diff/token events.
 
-#### [NEW] `AntigravityNotificationMonitor.ts` (model on **Claude's** monitor)
+#### [NEW] `AntigravityNotificationMonitor.ts`
 
-agy's hooks are Claude-style (A.6), so clone `ClaudeNotificationMonitor`:
+agy's hooks use JSON stdin/stdout like Claude, but its hooks config is group-name-keyed and supports only the five native events confirmed above:
 
-- `EVENT_MAP` = identity-ish Claude mapping: `stop→Stop`, `sessionStart→SessionStart`, `preToolUse→PreToolUse`, `postToolUse→PostToolUse`, `userPromptSubmit→UserPromptSubmit`, `permissionRequest→PreToolUse`.
-- `buildHookConfig()` → write Claude-shaped hook entries into **workspace `.agents/hooks.json`** (preferred over global `~/.gemini/config/hooks.json` for parallel-workflow isolation + clean teardown). The hook command runs `ctrlyoke-antigravity-hook.js <notifyDir>`.
+- `EVENT_MAP`: `stop→Stop`, `sessionStart→PreInvocation`, `preToolUse→PreToolUse`, `postToolUse→PostToolUse`; `userPromptSubmit` and `permissionRequest` unsupported.
+- `buildHookConfig()` → write agy's group-keyed hook entries into **global `~/.gemini/config/hooks.json`** under a ctrlyoke workflow-specific group name. Each group carries all five keys (`PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`) with `null` for unused events.
+- The hook command runs `ctrlyoke-antigravity-hook.js <notifyDir> <NativeEvent>` because agy omits the event name from stdin, so the script has to infer the logical event from the native one.
 - `getNotificationDirectory()` → `.ctrlyoke/temp/antigravity-notifications/`.
-- **Headless**: still exit-based (process-exit), no hook needed; the `Stop` hook is for interactive mode.
+- **Headless**: still exit-based (process-exit) for completion, but user hooks / hook-event notifications may still register agy hooks when configured.
 
 #### [NEW] `AntigravityToolPermissionMapper.ts`
 
 - `dangerouslyAllowAll` → `["--dangerously-skip-permissions"]`.
 - `allowAll` → `[]` (no native allow-list flag).
-- `custom` → no CLI flag; enforce via a `PreToolUse` hook returning `{"decision":"deny"|"ask"}` (A.8). For v1, `[]` + a TODO is acceptable if hook-based gating is deferred.
+- `custom` → no CLI flag; no dedicated agy permission-request hook support in v1, so this remains a best-effort / degraded mode rather than a per-tool approval mapper.
 
 #### [NEW] Hook script — `src/scripts/ctrlyoke-antigravity-hook.js` (clone Claude's)
 
@@ -426,13 +427,13 @@ Remove Gemini from: `harnessRunner.ts`, `hooks.harness.test.ts`, `ModelConstants
 - [x] **MCP loading — RESOLVED 2026-07-05, negative result.** Tested with a real, working MCP server (ctrlyoke's own `out/mcp-server.js`) in both workspace `.agents/mcp_config.json` and global `~/.gemini/config/mcp_config.json`, in both headless `-p` and interactive `-i` modes, with a prompt that forced a tool-call attempt. **In every combination, the tool never became callable** — in interactive mode the permission system prompted for `mcp(*/ctrlyoke_queue_status)` (proving the model tried), but the model then reported the server "may not be connected/active." **Conclusion: MCP is non-functional in this build (1.0.16) regardless of config location. Drop MCP support from v1 scope.** See the 2026-07-05 part 2 delta section above.
 - [x] `agy models` (via plain-pipe spawn, no TTY needed — same 1.0.15 fix applies) → confirmed exact label strings on 1.0.16: `Gemini 3.5 Flash (Medium/High/Low)`, `Gemini 3.1 Pro (Low/High)`, `Claude Sonnet 4.6 (Thinking)`, `Claude Opus 4.6 (Thinking)`, `GPT-OSS 120B (Medium)` (A.2)
 - [x] **Captured the real hooks.json schema — RESOLVED 2026-07-05, major correction to A.6.** Drove the CLI's own `/hooks` TUI (found via `agy.exe`'s embedded Go symbol strings) to create a hook through the product's own UI and read what it wrote. Real event list is only 5 items — `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop` — **not** the 9-event Claude-style list A.6 assumed (`SessionStart`/`SessionEnd`/`UserPromptSubmit`/`PreCompact`/`Notification`/`SubagentStop` don't exist). Schema is **group-name-keyed** (`{"<groupName>": {"PreToolUse": [...]|null, ..., "Stop": [...]|null}}`), inverted from Claude's event-name-keyed shape.
-- [x] **`PreInvocation`/`PostInvocation`/`Stop` firing — RESOLVED 2026-07-05 (later session).** A probe hook script wired to all 5 events confirmed `PreInvocation` → `PostInvocation` → `Stop` all fire, once per turn, in both headless (`-p`) and interactive-piped (`-i`) runs — contradicting the earlier "`Stop` never fires" finding, which was most likely caused by a bad hook response (see next item) rather than a real limitation. **Use `PostInvocation` as the primary interactive completion signal** (fires unconditionally); `Stop` is the fallback since its payload includes `fullyIdle`/`terminationReason` fields whose behavior around tool calls is unconfirmed. See the resolved sub-issue in the 2026-07-05 part 2 delta section above for full payload shapes.
+- [x] **`PreInvocation`/`PostInvocation`/`Stop` firing — RESOLVED 2026-07-05 (later session).** A probe hook script wired to all 5 events confirmed `PreInvocation` → `PostInvocation` → `Stop` all fire in simple headless (`-p`) and interactive-piped (`-i`) runs — contradicting the earlier "`Stop` never fires" finding, which was most likely caused by a bad hook response (see next item) rather than a real limitation. **Use `Stop` as the primary interactive completion signal**; a later implementation pass confirmed `PostInvocation` is per LLM invocation and can fire multiple times in a tool-using turn. See the resolved sub-issue in the 2026-07-05 part 2 delta section above for full payload shapes.
 - [x] **Hook stdout contract — `{"decision":...}` is `PreToolUse`-only.** Returning `{"decision":"allow"}` from a `PreInvocation`/`PostInvocation`/`Stop` handler produces a logged `protojson: unknown field "decision"` error (turn still completed in testing, but this should not be relied on). `ctrlyoke-antigravity-hook.js` must only emit `{decision}` for `PreToolUse`/`PostToolUse`; the invocation/stop handlers should emit `{}`.
 - [x] `agy --version` ≥ 1.0.9 → **satisfied (1.0.16)**; headless-resume transcript-dump bug is fixed (A.4); session ID + completion markers reconfirmed live in the CLI log on 1.0.16 (see 2026-07-05 delta, item 6)
 
 ### Add Antigravity
 
-- [ ] `src/core/harness/antigravity/` — `AntigravityCliProvider`, `AntigravityResponseParser` (plain-text), `AntigravityLogParser` (custom glog), `AntigravityNotificationMonitor` (group-keyed hook config per the 2026-07-05 part 2 schema — try `PostInvocation` for interactive completion, not `Stop`), `AntigravityToolPermissionMapper`
+- [ ] `src/core/harness/antigravity/` — `AntigravityCliProvider`, `AntigravityResponseParser` (plain-text), `AntigravityLogParser` (custom glog), `AntigravityNotificationMonitor` (group-keyed hook config per the 2026-07-05 part 2 schema — use `Stop` for interactive completion, not `PostInvocation`), `AntigravityToolPermissionMapper`
 - [ ] `src/scripts/ctrlyoke-antigravity-hook.js` (I/O contract still JSON stdin/stdout like Claude's, but hook config shape is agy's own group-keyed format, not Claude's)
 - [x] **MCP: `.agents/mcp_config.json` writer/tracker — IMPLEMENTED and WORKING (2026-07-06).** `AntigravityCliProvider.getMcpConfigArgs` writes a bare `{ mcpServers }` object to the workspace `.agents/mcp_config.json` via a shared `SettingsJsonMcpTracker` singleton (generalized to accept custom project/user config paths — agy uses `.agents/mcp_config.json` + `~/.gemini/config/mcp_config.json`). Remote servers use `serverUrl` (not `url`/`type`) and no `trust` field, via new `buildSettingsJsonMcpEntries` options. No `--allowed-mcp-server-names` flag exists on agy, so parallel workflows in one workspace share the file's servers (no per-prompt scoping). **MCP is NOT broken in agy 1.0.16 — confirmed working by manual testing (Nathan called MCP tools successfully, multiple times). No gate.** The earlier "hangs on startup / non-functional" findings (2026-07-05 part 2 delta) were a mis-diagnosis: the real symptom was agy headless **resolving the relative prompt-file path (`.ctrlyoke/temp/…prompt.md`) inconsistently** — its agent sometimes anchors relative paths to the workspace cwd and sometimes wanders the filesystem from the home dir searching for the file (reproduced 2026-07-06: two near-identical `agy --print` runs with a relative ref gave `FOUNDABS` vs a 60s+ wander/timeout). agy's process cwd IS the workspace (`workspaceDirs=[C:\dev\ctrlyoke]` in the log), so this is an agent-side relative-path quirk, not a spawn-cwd bug. **Fix (superseded, 2026-07-07): `usesAbsoluteFileReferences: true` on the Antigravity `HarnessConfig`** — `CliIntegration.formatDirectFileRef`/`formatTempFileRef` then emit absolute paths for all injected references (prompt/agent/skills/context/@-mentions). Verified: an absolute-path `--print` ref resolves deterministically (`FOUNDABS`). **Update (2026-07-07): agy fixed the underlying relative-path resolution as long as `--add-dir` is set (already the case — see `getWorkspaceDirs`/`--add-dir` wiring above), so the hard-coded `usesAbsoluteFileReferences` workaround was removed; Antigravity now follows the same `ui.useAbsolutePathReferences`/multi-root rule as every other harness (see `ABSOLUTE_FILE_REFERENCE_MODE_PLAN.md`).** Test agy with `--model "Gemini 3.5 Flash (Low)"` — the default (Sonnet) has a tiny quota that exhausts for ~28h.
 - [ ] Type/wiring/settings/UI/schema layers per Part B.2

@@ -19,19 +19,17 @@
  * PostToolUse.
  *
  * Usage (configured by ctrlyoke, written to ~/.gemini/config/hooks.json):
- *   node <script> <notifyDir> <NativeEvent> [<encodedDecisionHook>]
+ *   node <script> <notifyDir> <NativeEvent>
  *
  * argv[2] = notification directory
  * argv[3] = native event name (PreInvocation | PostInvocation | Stop | ...)
- * argv[4] = base64-encoded decision hook command (PreToolUse only, optional)
  *
  * Hook stdin payload shape (agy):
  *   PreInvocation/PostInvocation: { conversationId, invocationNum, modelName,
  *     transcriptPath, artifactDirectoryPath, workspacePaths, initialNumSteps }
  *   Stop: { conversationId, terminationReason, fullyIdle, executionNum, ... }
  *
- * Hook stdout contract: only PreToolUse/PostToolUse may emit {"decision":...};
- * PreInvocation/PostInvocation/Stop must emit {} (agy errors on unknown fields).
+ * Hook stdout contract: emit {} for invocation/stop/tool notification hooks.
  *
  * Debug logging: <workspace>/.ctrlyoke/logs/ctrlyoke-antigravity-hook-debug.log
  */
@@ -41,7 +39,6 @@ const {
   initializeLogger,
   readStdinJson,
   maybeWriteHookArtifact,
-  dispatchPermissionRequest,
   requireNotifyDir,
   requireSessionId,
   ensureNotifyDir,
@@ -81,7 +78,6 @@ function getLogicalEvent(nativeEvent) {
 function main() {
   const notifyDir = process.argv[2];
   const nativeEventArg = process.argv[3];
-  const encodedDecisionHook = process.argv[4];
   const debugLog = initializeLogger(SCRIPT_NAME, notifyDir);
 
   debugLog("🚀 Antigravity hook script invoked", {
@@ -89,12 +85,14 @@ function main() {
     argvLength: process.argv.length,
     cwd: process.cwd(),
     nativeEventArg,
-    hasDecisionHook: Boolean(encodedDecisionHook),
   });
 
   requireNotifyDir(SCRIPT_PREFIX, debugLog);
 
-  debugLog("📁 Hook configuration", { notifyDir, nativeEventArg });
+  debugLog("📁 Hook configuration", {
+    notifyDir,
+    nativeEventArg,
+  });
 
   readStdinJson(SCRIPT_PREFIX, debugLog, (hookInput) => {
     // agy does not put the event name in the payload — trust argv[3], falling
@@ -138,16 +136,6 @@ function main() {
         notifyDir,
         sessionId,
         toolName,
-        debugLog
-      );
-    }
-
-    if (hookEvent === "PreToolUse" && encodedDecisionHook) {
-      debugLog("🔐 Dispatching PreToolUse decision hook");
-      dispatchPermissionRequest(
-        encodedDecisionHook,
-        hookInput,
-        hookEvent,
         debugLog
       );
     }

@@ -26,7 +26,6 @@ export class AntigravityNotificationMonitor
       stop: "Stop",
       preToolUse: "PreToolUse",
       postToolUse: "PostToolUse",
-      permissionRequest: "PreToolUse",
     };
 
   protected override getStartHookEvents(): string[] {
@@ -51,7 +50,6 @@ export class AntigravityNotificationMonitor
       notifyDir,
       false
     );
-    const encodedDecisionHook = this.encodePermissionRequestHook(userHooks);
     const selectedEvents = new Set<HookEvent>(ctrlyokeEvents ?? ["stop"]);
 
     const group: Record<AntigravityHookKey, unknown[] | null> = {
@@ -72,14 +70,10 @@ export class AntigravityNotificationMonitor
     };
 
     // agy does NOT include the event name in the hook's stdin payload, so pass
-    // the native event name as an argv to our script (argv[3]). Each event has
-    // its own command string in hooks.json, so this uniquely identifies it.
-    const addHandler = (eventKey: AntigravityHookKey, extraArg?: string) => {
-      const parts = [baseCommand, eventKey];
-      if (extraArg) {
-        parts.push(extraArg);
-      }
-      pushHandler(eventKey, parts.join(" "));
+    // the native event name as argv[3]. Supported ctrlyoke logical events map
+    // 1:1 to a single native event for agy; unsupported ones are skipped.
+    const addHandler = (eventKey: AntigravityHookKey) => {
+      pushHandler(eventKey, `${baseCommand} ${eventKey}`);
     };
 
     if (selectedEvents.has("sessionStart")) {
@@ -97,19 +91,8 @@ export class AntigravityNotificationMonitor
     if (selectedEvents.has("postToolUse")) {
       addHandler("PostToolUse");
     }
-    if (selectedEvents.has("permissionRequest")) {
-      // encodedDecisionHook is base64 (no spaces), safe to pass unquoted.
-      addHandler("PreToolUse", encodedDecisionHook || undefined);
-    }
 
     for (const hook of userHooks ?? []) {
-      if (
-        hook.event === "permissionRequest" &&
-        selectedEvents.has("permissionRequest")
-      ) {
-        continue;
-      }
-
       const nativeEvent =
         AntigravityNotificationMonitor.USER_EVENT_MAP[hook.event];
       if (!nativeEvent) {

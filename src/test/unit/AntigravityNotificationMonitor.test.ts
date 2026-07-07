@@ -60,4 +60,68 @@ suite("AntigravityNotificationMonitor", () => {
     assert.strictEqual(group.PostInvocation, null);
     assert.ok(Array.isArray(group.Stop));
   });
+
+  test("buildHookConfig maps notification events to agy hook groups", () => {
+    const monitor = new AntigravityNotificationMonitor();
+    const config = monitor.buildHookConfig(
+      "script.js",
+      "notify-dir",
+      "workspace",
+      undefined,
+      ["preToolUse", "postToolUse", "permissionRequest"]
+    );
+
+    assert.strictEqual(config.type, "json");
+    const group = (config.config as Record<string, any>).ctrlyoke;
+    assert.ok(Array.isArray(group.PreToolUse));
+    assert.ok(Array.isArray(group.PostToolUse));
+    assert.strictEqual(group.PreInvocation, null);
+    assert.strictEqual(group.PostInvocation, null);
+    assert.strictEqual(group.Stop, null);
+    assert.strictEqual(group.PreToolUse.length, 1);
+    assert.strictEqual(group.PreToolUse[0].command, "node script.js notify-dir PreToolUse");
+    assert.strictEqual(
+      group.PostToolUse[0].command,
+      "node script.js notify-dir PostToolUse"
+    );
+  });
+
+  test("buildHookConfig wires user hooks from HooksEditor to supported agy events", () => {
+    const monitor = new AntigravityNotificationMonitor();
+    const config = monitor.buildHookConfig(
+      "script.js",
+      "notify-dir",
+      "workspace",
+      [
+        { event: "stop", command: "node stop-hook.js" },
+        { event: "sessionStart", command: "node start-hook.js" },
+        { event: "preToolUse", command: "node pre-hook.js" },
+        { event: "postToolUse", command: "node post-hook.js" },
+        { event: "permissionRequest", command: "node permission-hook.js" },
+        { event: "userPromptSubmit", command: "node unsupported-hook.js" },
+        { event: "error", command: "node error-hook.js" },
+      ],
+      []
+    );
+
+    assert.strictEqual(config.type, "json");
+    const group = (config.config as Record<string, any>).ctrlyoke;
+    assert.deepStrictEqual(
+      group.Stop.map((h: { command: string }) => h.command),
+      ["node stop-hook.js"]
+    );
+    assert.deepStrictEqual(
+      group.PreInvocation.map((h: { command: string }) => h.command),
+      ["node start-hook.js"]
+    );
+    assert.deepStrictEqual(
+      group.PreToolUse.map((h: { command: string }) => h.command),
+      ["node pre-hook.js"]
+    );
+    assert.deepStrictEqual(
+      group.PostToolUse.map((h: { command: string }) => h.command),
+      ["node post-hook.js"]
+    );
+    assert.strictEqual(group.PostInvocation, null);
+  });
 });
