@@ -1,6 +1,6 @@
 # Persistent History Search Index Plan
 
-> **Status:** Design draft - not implemented. Scope should be reviewed before coding.
+> **Status:** implemented
 
 ---
 
