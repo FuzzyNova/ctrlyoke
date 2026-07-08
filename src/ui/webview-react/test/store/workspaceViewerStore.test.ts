@@ -267,3 +267,24 @@ describe("diffRef tracking", () => {
     expect(store().pendingDiff).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// setLoadedImage
+// ---------------------------------------------------------------------------
+
+describe("setLoadedImage", () => {
+  it("loads an image data URI as a read-only, non-dirty selection", () => {
+    store().setLoadedImage("images/logo.png", "data:image/png;base64,AAAA");
+    expect(store().selectedFilePath).toBe("images/logo.png");
+    expect(store().fileImageDataUri).toBe("data:image/png;base64,AAAA");
+    expect(store().fileContent).toBe("");
+    expect(store().fileDirty).toBe(false);
+  });
+
+  it("is cleared when a normal text file is loaded afterwards", () => {
+    store().setLoadedImage("images/logo.png", "data:image/png;base64,AAAA");
+    store().setLoadedFileContent("src/app.ts", "export const x = 1;");
+    expect(store().fileImageDataUri).toBeNull();
+    expect(store().fileContent).toBe("export const x = 1;");
+  });
+});

@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { calcContextPct } from "@utils/tokenUtils";
 import { getHarnessModelDisplayName } from "@root/utils/ModelConstants";
 import { sanitizeTerminalOutput } from "@root/utils/TerminalOutputSanitizer";
@@ -50,6 +50,12 @@ import {
   type RowFindDecoration,
 } from "@utils/outputFind";
 import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
+import {
+  findContextReferenceMatches,
+  type ContextReferenceMatch,
+} from "../editor/CodeMirrorEditor";
+import { openContextReference } from "@utils/contextReferenceActions";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { formatCliCommandDisplay } from "@utils/outputCommandDisplay";
 import type {
   CliHeaderRow,
@@ -1007,50 +1013,102 @@ function HistoryBannerRowView({
   );
 }
 
-/**
- * Renders an echoed prompt as Markdown (so embedded file/image references
- * become links and inline thumbnails, matching AI-output rendering) with a
- * hover copy button that copies the verbatim raw prompt — since Markdown
- * rendering restyles the text, the button preserves easy copy-of-source that
- * the previous raw-text row gave for free.
- */
-const PromptRowView: React.FC<{
-  text: string;
-  findQuery?: string;
-  findCaseSensitive?: boolean;
-  highlightActiveIndex?: number;
-}> = ({ text, findQuery, findCaseSensitive, highlightActiveIndex }) => {
-  const [copied, setCopied] = useState(false);
+/** Human-readable tooltip for a decorated prompt reference. */
+function promptReferenceTooltip(ref: ContextReferenceMatch): string {
+  switch (ref.type) {
+    case "git":
+      return `Open git ${ref.gitRef ?? ""}`;
+    case "directory":
+      return `Reveal ${ref.path ?? ""}`;
+    case "lineRange":
+      return `Open ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
+    case "symbol":
+      return `Go to ${ref.symbolName ?? ""} in ${ref.path ?? ""}:${ref.lineStart}-${ref.lineEnd}`;
+    default:
+      return `Open ${ref.path ?? ""}`;
+  }
+}
 
-  const handleCopy = useCallback(async () => {
-    const didCopy = await copyTextToClipboard(text);
-    if (!didCopy) return;
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  }, [text]);
+/**
+ * Renders an echoed prompt as plain, selectable text (kept verbatim so it stays
+ * easy to copy) while turning ctrlyoke context references into clickable links
+ * that open exactly like the prompt editor's — symbol/selection reveal their
+ * range, directories reveal, files open (images open in VS Code / the workspace
+ * viewer), and git refs open the commit view. Reuses findContextReferenceMatches
+ * + openContextReference so the behavior stays single-sourced with
+ * CodeMirrorEditor. Deliberately NOT Markdown: the prompt uses ctrlyoke's own
+ * reference syntax, which Markdown would mangle.
+ */
+const PromptReferenceText: React.FC<{
+  text: string;
+  matches: RowFindDecoration["matches"];
+}> = ({ text, matches }) => {
+  const vscode = getVsCodeApi();
+  const refs = useMemo(() => findContextReferenceMatches(text), [text]);
+
+  // Rebase the row-relative find matches onto a [start,end) sub-slice so find
+  // highlighting still lands correctly inside both plain text and link spans.
+  const sliceMatches = (start: number, end: number) =>
+    matches
+      .filter((match) => match.start < end && match.end > start)
+      .map((match) => ({
+        start: Math.max(0, match.start - start),
+        end: Math.min(end, match.end) - start,
+        active: match.active,
+      }));
+
+  const nodes: React.ReactNode[] = [];
+  let cursor = 0;
+  for (const ref of refs) {
+    // References are sorted and non-overlapping; skip any that would run
+    // backwards so a stray match can't corrupt the slicing.
+    if (ref.from < cursor) continue;
+    if (ref.from > cursor) {
+      nodes.push(
+        <React.Fragment key={`text-${cursor}`}>
+          {highlightText(
+            text.slice(cursor, ref.from),
+            sliceMatches(cursor, ref.from)
+          )}
+        </React.Fragment>
+      );
+    }
+    nodes.push(
+      <span
+        key={`ref-${ref.from}`}
+        role="link"
+        tabIndex={0}
+        className="cursor-pointer text-link-fg hover:text-link-active-fg hover:underline"
+        title={promptReferenceTooltip(ref)}
+        onClick={() => openContextReference(ref, vscode)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openContextReference(ref, vscode);
+          }
+        }}
+      >
+        {highlightText(
+          text.slice(ref.from, ref.to),
+          sliceMatches(ref.from, ref.to)
+        )}
+      </span>
+    );
+    cursor = ref.to;
+  }
+  if (cursor < text.length) {
+    nodes.push(
+      <React.Fragment key="text-tail">
+        {highlightText(text.slice(cursor), sliceMatches(cursor, text.length))}
+      </React.Fragment>
+    );
+  }
 
   return (
     <div
-      className={`${OUTPUT_BLOCK_BASE} group/prompt relative border-l-output-prompt-border text-[var(--fg-primary)]`}
+      className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-[var(--fg-primary)]`}
     >
-      <button
-        type="button"
-        onClick={handleCopy}
-        title="Copy prompt"
-        aria-label="Copy prompt"
-        className={`icon-btn absolute right-1 top-1 px-1 py-0 opacity-0 transition-opacity focus:opacity-100 group-hover/prompt:opacity-100 ${
-          copied ? "text-indicator-success" : ""
-        }`}
-      >
-        <i className={`codicon ${copied ? "codicon-check" : "codicon-copy"}`} />
-      </button>
-      <MarkdownText
-        highlightQuery={findQuery}
-        highlightCaseSensitive={findCaseSensitive}
-        highlightActiveIndex={highlightActiveIndex}
-      >
-        {text}
-      </MarkdownText>
+      {nodes}
     </div>
   );
 };
@@ -1126,18 +1184,14 @@ function OutputRowComponent({
         />
       );
       break;
-    case "prompt": {
-      const promptMatches = getFieldMatches("prompt");
+    case "prompt":
       content = (
-        <PromptRowView
+        <PromptReferenceText
           text={row.text}
-          findQuery={findQuery}
-          findCaseSensitive={findCaseSensitive}
-          highlightActiveIndex={promptMatches.findIndex((match) => match.active)}
+          matches={getFieldMatches("prompt")}
         />
       );
       break;
-    }
     case "cli-command":
       content = (
         <div

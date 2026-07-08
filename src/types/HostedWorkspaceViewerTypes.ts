@@ -35,6 +35,12 @@ export interface WorkspaceFileResponse {
   content: string;
   readOnly?: boolean;
   reason?: string;
+  /**
+   * Populated for known image types: a `data:<mime>;base64,…` URI the client
+   * renders as an inline `<img>` instead of loading `content` into the text
+   * editor. When set, `content` is empty and the file is treated as read-only.
+   */
+  imageDataUri?: string;
 }
 
 export interface WorkspaceFileSaveRequest {

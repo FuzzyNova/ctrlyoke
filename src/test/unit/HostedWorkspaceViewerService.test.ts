@@ -235,6 +235,23 @@ suite("HostedWorkspaceViewerService", () => {
       assert.strictEqual(result.reason, "Binary file");
     });
 
+    test("returns a data URI for a known image type instead of rejecting it", async () => {
+      const root = createWorkspace();
+      // PNG magic bytes; readFile doesn't validate the format, only base64-encodes.
+      const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      fs.writeFileSync(path.join(root, "pic.png"), pngBytes);
+
+      const svc = new HostedWorkspaceViewerService(root);
+      const result = await svc.readFile("pic.png");
+
+      assert.strictEqual(result.readOnly, true);
+      assert.strictEqual(result.content, "");
+      assert.strictEqual(
+        result.imageDataUri,
+        `data:image/png;base64,${pngBytes.toString("base64")}`
+      );
+    });
+
     test("maps TypeScript extension to language ID", async () => {
       const root = createWorkspace();
       fs.writeFileSync(path.join(root, "index.ts"), "export const x = 1;");

@@ -31,8 +31,8 @@ import {
   type Diagnostic,
 } from "@codemirror/lint";
 import { RangeSetBuilder } from "@codemirror/state";
-import { getVsCodeApi, isStandalone } from "../../hooks/useVsCodeApi";
-import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
+import { getVsCodeApi } from "../../hooks/useVsCodeApi";
+import { openContextReference } from "@utils/contextReferenceActions";
 import {
   MESSAGE_TYPES,
   EDITOR_PLACEHOLDER_TEXT,
@@ -2033,108 +2033,20 @@ function openContextReferenceLink(
   vscode: any,
   stepCountRef: React.RefObject<number>
 ): boolean {
-  const type = target.getAttribute("data-type");
-
-  if (type === "git") {
-    const gitRef = target.getAttribute("data-git-ref");
-    if (isStandalone) {
-      // Browser: open the diff pane to this ref via the workspace viewer
-      void useWorkspaceViewerStore.getState().openToGitRef(gitRef ?? "");
-    } else {
-      // VS Code: open the change in the native diff UI (multi-file commit viewer)
-      vscode.postMessage({
-        type: MESSAGE_TYPES.OPEN_GIT_CHANGE,
-        ref: gitRef,
-      });
-    }
-    return true;
-  }
-
-  if (type === "priorContext") {
-    const ref = target.getAttribute("data-ref");
-    vscode.postMessage({
-      type: MESSAGE_TYPES.REQUEST_PRIOR_CONTEXT_PREVIEW,
-      ref,
-      stepCount: stepCountRef.current,
-    });
-    return true;
-  }
-
-  const path = target.getAttribute("data-path");
-
-  if (isStandalone) {
-    if (type === "file" || type === "directory") {
-      const store = useWorkspaceViewerStore.getState();
-      if (type === "directory") {
-        store.openToDirectory(path ?? "");
-      } else {
-        store.openToFile(path ?? "");
-      }
-      return true;
-    }
-
-    if (type === "lineRange") {
-      const lineStart = target.getAttribute("data-line-start");
-      const lineEnd = target.getAttribute("data-line-end");
-      useWorkspaceViewerStore
-        .getState()
-        .openToFile(
-          path ?? "",
-          lineStart ? parseInt(lineStart) : undefined,
-          lineEnd ? parseInt(lineEnd) : undefined
-        );
-      return true;
-    }
-
-    if (type === "symbol") {
-      const lineStart = target.getAttribute("data-line-start");
-      const lineEnd = target.getAttribute("data-line-end");
-      useWorkspaceViewerStore
-        .getState()
-        .openToFile(
-          path ?? "",
-          lineStart ? parseInt(lineStart) : undefined,
-          lineEnd ? parseInt(lineEnd) : undefined
-        );
-      return true;
-    }
-
-    return false;
-  }
-
-  if (type === "file" || type === "directory") {
-    vscode.postMessage({
-      type: MESSAGE_TYPES.OPEN_FILE,
-      path,
-    });
-    return true;
-  }
-
-  if (type === "lineRange") {
-    const lineStart = target.getAttribute("data-line-start");
-    const lineEnd = target.getAttribute("data-line-end");
-    vscode.postMessage({
-      type: MESSAGE_TYPES.OPEN_FILE,
-      path,
-      lineStart: lineStart ? parseInt(lineStart) : undefined,
-      lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
-    });
-    return true;
-  }
-
-  if (type === "symbol") {
-    const lineStart = target.getAttribute("data-line-start");
-    const lineEnd = target.getAttribute("data-line-end");
-    vscode.postMessage({
-      type: MESSAGE_TYPES.OPEN_FILE,
-      path,
-      lineStart: lineStart ? parseInt(lineStart) : undefined,
-      lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
-    });
-    return true;
-  }
-
-  return false;
+  // Adapt the decoration's data-* attributes to the shared reference-open
+  // logic (single-sourced with the output prompt row's inline links).
+  return openContextReference(
+    {
+      type: target.getAttribute("data-type"),
+      path: target.getAttribute("data-path"),
+      gitRef: target.getAttribute("data-git-ref"),
+      lineStart: target.getAttribute("data-line-start"),
+      lineEnd: target.getAttribute("data-line-end"),
+      ref: target.getAttribute("data-ref"),
+    },
+    vscode,
+    stepCountRef.current
+  );
 }
 
 // Handle clicks/taps on links. git/priorContext respond to plain clicks

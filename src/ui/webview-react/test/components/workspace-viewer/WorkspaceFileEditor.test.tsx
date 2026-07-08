@@ -89,6 +89,28 @@ describe("WorkspaceFileEditor link navigation", () => {
     }
   });
 
+  it("renders an <img> instead of the editor for a known image type", () => {
+    const onChange = vi.fn();
+    const onSave = vi.fn();
+    const dataUri = "data:image/png;base64,AAAA";
+
+    const { container } = render(
+      <WorkspaceFileEditor
+        filePath=".ctrlyoke/attachments/pasted-image-abc.png"
+        content=""
+        imageDataUri={dataUri}
+        onChange={onChange}
+        onSave={onSave}
+      />
+    );
+
+    const img = container.querySelector("img");
+    expect(img).not.toBeNull();
+    expect(img).toHaveAttribute("src", dataUri);
+    // No CodeMirror editor is created for an image.
+    expect(container.querySelector(".cm-editor")).toBeNull();
+  });
+
   it("applies a pending selection request inside CodeMirror", async () => {
     const editorRef = createRef<WorkspaceFileEditorHandle>();
     const onChange = vi.fn();

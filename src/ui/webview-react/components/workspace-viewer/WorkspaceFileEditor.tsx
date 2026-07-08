@@ -40,6 +40,12 @@ export interface WorkspaceFileEditorHandle {
 interface WorkspaceFileEditorProps {
   filePath: string;
   content: string;
+  /**
+   * When set (a `data:` URI for a known image type), the file is rendered as an
+   * inline <img> instead of the CodeMirror text editor — binary image bytes
+   * can't be loaded into the text editor. See HostedWorkspaceViewerService.readFile.
+   */
+  imageDataUri?: string;
   readOnly?: boolean;
   onChange: (newContent: string) => void;
   onSave: () => void;
@@ -77,6 +83,7 @@ export const WorkspaceFileEditor = forwardRef<
     {
       filePath,
       content,
+      imageDataUri,
       readOnly = false,
       onChange,
       onSave,
@@ -185,6 +192,8 @@ export const WorkspaceFileEditor = forwardRef<
 
     // Create / recreate the editor when extensions change (filePath or readOnly changed)
     useEffect(() => {
+      // Image files render as an <img> (below), not a CodeMirror view.
+      if (imageDataUri) return;
       if (!containerRef.current) return;
 
       const view = new EditorView({
@@ -234,6 +243,19 @@ export const WorkspaceFileEditor = forwardRef<
       );
       onPendingSelectionAppliedRef.current?.(pendingSelection.requestId);
     }, [content, pendingSelection]);
+
+    if (imageDataUri) {
+      return (
+        <div className="h-full w-full overflow-auto flex items-center justify-center bg-editor-bg p-4">
+          <img
+            src={imageDataUri}
+            alt={filePath}
+            title={filePath}
+            className="max-h-full max-w-full object-contain"
+          />
+        </div>
+      );
+    }
 
     return <div ref={containerRef} className="h-full w-full overflow-hidden" />;
   }

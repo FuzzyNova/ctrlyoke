@@ -33,6 +33,10 @@ import {
   getCommitInfo,
   getIgnoredEntryNames,
 } from "../utils/GitUtils";
+import {
+  isImageRefPath,
+  imageExtensionToMimeType,
+} from "../types/DashboardConstants";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
@@ -312,6 +316,25 @@ export class HostedWorkspaceViewerService {
 
     if (stat.size > MAX_FILE_SIZE) {
       return this.rejectedFileResponse(requestedPath, "File too large");
+    }
+
+    // Known image types: serve as a data URI the client renders inline as an
+    // <img>, rather than falling through to the binary-file rejection below.
+    if (isImageRefPath(resolved)) {
+      const extension = path.extname(resolved).replace(/^\./, "");
+      const mimeType = imageExtensionToMimeType(extension);
+      if (mimeType) {
+        const bytes = await fs.promises.readFile(resolved);
+        return {
+          path: this.relativePath(resolved),
+          name: path.basename(resolved),
+          size: stat.size,
+          eol: "lf",
+          content: "",
+          readOnly: true,
+          imageDataUri: `data:${mimeType};base64,${bytes.toString("base64")}`,
+        };
+      }
     }
 
     if (await this.isBinaryFile(resolved)) {

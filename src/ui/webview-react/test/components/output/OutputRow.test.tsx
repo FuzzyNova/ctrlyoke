@@ -347,6 +347,29 @@ describe("OutputRow auto-expand on hidden active match", () => {
     expect(mark).toHaveAttribute("data-find-active", "true");
   });
 
+  it("renders ctrlyoke references in the prompt row as clickable links", () => {
+    const row: OutputRenderRow = {
+      key: "row-prompt",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "prompt",
+      text: "Review @src/app.ts and #sym:src/utils.ts:runWorkflow:42-58 now",
+    };
+
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+
+    const links = container.querySelectorAll('[role="link"]');
+    expect(links.length).toBe(2);
+    expect(links[0].textContent).toBe("@src/app.ts");
+    expect(links[1].textContent).toBe("#sym:src/utils.ts:runWorkflow:42-58");
+    // Plain prose stays as text, not links.
+    expect(container).toHaveTextContent(
+      "Review @src/app.ts and #sym:src/utils.ts:runWorkflow:42-58 now"
+    );
+  });
+
   it("renders legacy user-stop error rows as warnings", () => {
     const row: OutputRenderRow = {
       key: "row-error",

@@ -178,6 +178,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const fileReadOnlyReason = useWorkspaceViewerStore(
     (s) => s.fileReadOnlyReason
   );
+  const fileImageDataUri = useWorkspaceViewerStore((s) => s.fileImageDataUri);
   const mobileEditorVisible = useWorkspaceViewerStore(
     (s) => s.mobileEditorVisible
   );
@@ -186,6 +187,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const setLoadedFileContent = useWorkspaceViewerStore(
     (s) => s.setLoadedFileContent
   );
+  const setLoadedImage = useWorkspaceViewerStore((s) => s.setLoadedImage);
   const discardFileDraft = useWorkspaceViewerStore((s) => s.discardFileDraft);
   const markFileSaved = useWorkspaceViewerStore((s) => s.markFileSaved);
   const setFileLoading = useWorkspaceViewerStore((s) => s.setFileLoading);
@@ -318,14 +320,16 @@ export const WorkspaceExplorerPane: React.FC = () => {
       if (isMobile) setMobileEditorVisible(true);
       try {
         const result = await workspaceFile(relPath);
-        if (result.readOnly) {
+        // Use the server's canonical workspace-relative path so that
+        // selectedFilePath is self-corrected even if relPath was an absolute
+        // path that failed stripping (e.g. due to workspacePath being empty).
+        const canonicalPath = result.path.replace(/\\/g, "/");
+        if (result.imageDataUri) {
+          setLoadedImage(canonicalPath, result.imageDataUri);
+        } else if (result.readOnly) {
           setFileReadOnly(true, result.reason);
         } else {
           setFileReadOnly(false);
-          // Use the server's canonical workspace-relative path so that
-          // selectedFilePath is self-corrected even if relPath was an absolute
-          // path that failed stripping (e.g. due to workspacePath being empty).
-          const canonicalPath = result.path.replace(/\\/g, "/");
           setLoadedFileContent(canonicalPath, result.content);
         }
       } catch (err) {
@@ -340,6 +344,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
       selectFile,
       setFileLoading,
       setLoadedFileContent,
+      setLoadedImage,
       setFileReadOnly,
       setMobileEditorVisible,
       setError,
@@ -832,6 +837,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
                   ref={editorRef}
                   filePath={selectedFilePath}
                   content={fileContent}
+                  imageDataUri={fileImageDataUri ?? undefined}
                   onChange={(newContent) => setFileContent(newContent)}
                   onSave={handleSave}
                   saving={fileSaving}

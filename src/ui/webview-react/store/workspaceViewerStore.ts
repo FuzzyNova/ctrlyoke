@@ -47,6 +47,8 @@ interface WorkspaceViewerState {
   fileSaving: boolean;
   fileReadOnly: boolean;
   fileReadOnlyReason: string | undefined;
+  /** `data:` URI for a known image file, rendered as an inline <img> instead of the text editor. Null for non-image files. */
+  fileImageDataUri: string | null;
   fileDrafts: Record<string, CachedFileDraft>;
 
   // Mobile: in explorer tab, whether the file editor is shown (vs directory list)
@@ -123,6 +125,8 @@ interface WorkspaceViewerActions {
   selectFile(path: string): void;
   setFileContent(content: string): void;
   setLoadedFileContent(path: string, content: string): void;
+  /** Load a known image file for inline <img> preview (read-only, no text content). */
+  setLoadedImage(path: string, imageDataUri: string): void;
   discardFileDraft(path: string, diskContent: string): void;
   markFileSaved(content?: string): void;
   setFileLoading(loading: boolean): void;
@@ -201,6 +205,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   fileSaving: false,
   fileReadOnly: false,
   fileReadOnlyReason: undefined,
+  fileImageDataUri: null,
   fileDrafts: {},
 
   mobileEditorVisible: false,
@@ -319,6 +324,7 @@ export const useWorkspaceViewerStore = create<
           fileDirty: draft !== undefined,
           fileReadOnly: false,
           fileReadOnlyReason: undefined,
+          fileImageDataUri: null,
         });
       },
 
@@ -358,6 +364,19 @@ export const useWorkspaceViewerStore = create<
           originalFileContent: content,
           fileDirty,
           fileDrafts: nextDrafts,
+          fileImageDataUri: null,
+        });
+      },
+
+      setLoadedImage(path, imageDataUri) {
+        set({
+          selectedFilePath: path,
+          fileContent: "",
+          originalFileContent: "",
+          fileDirty: false,
+          fileReadOnly: false,
+          fileReadOnlyReason: undefined,
+          fileImageDataUri: imageDataUri,
         });
       },
 
@@ -374,6 +393,7 @@ export const useWorkspaceViewerStore = create<
           originalFileContent: diskContent,
           fileDirty: false,
           fileDrafts: nextDrafts,
+          fileImageDataUri: null,
         });
       },
 
@@ -420,6 +440,7 @@ export const useWorkspaceViewerStore = create<
           fileDirty: false,
           fileReadOnly: false,
           fileReadOnlyReason: undefined,
+          fileImageDataUri: null,
         });
       },
 
