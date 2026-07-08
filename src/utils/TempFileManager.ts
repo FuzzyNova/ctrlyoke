@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
+import * as crypto from "crypto";
 import { Log } from "./Log";
 import { PATH_CONSTANTS } from "./ConfigurationUtils";
 import { TempFileCategory } from "../types/DashboardConstants";
@@ -23,6 +24,10 @@ export class TempFileManager {
   private readonly TEMP_SUBDIR_NAME = PATH_CONSTANTS.TEMP_DIR;
   private readonly PROMPT_EXTENSION = ".prompt.md";
   private readonly MCP_CONFIG_PREFIX = "mcp-config";
+  // Filename marker for pasted images. Kept in the name (not just the extension)
+  // so the temp orphan sweep can target these regardless of image extension
+  // without allow-listing arbitrary binary files a user may have dropped in temp.
+  private readonly PASTED_IMAGE_PREFIX = "pasted-image-";
   private readonly MAX_FILE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   private workspaceRoot: string;
@@ -42,6 +47,26 @@ export class TempFileManager {
    */
   getTempDir(): string {
     return this.tempDir;
+  }
+
+  /**
+   * The single, flat directory all pasted images are written to:
+   * `.ctrlyoke/attachments/`.
+   *
+   * Deliberately flat (not grouped per workflow) and used for *every* paste,
+   * saved or unsaved. Combined with content-addressed filenames from
+   * `createPastedImageFile()`, this makes the folder a content store: identical
+   * bytes always resolve to the same path, so a given image is stored **once**
+   * and deduped across every workflow that references it. It is a sibling of
+   * `temp/` and intentionally **not** gitignored, so committing the workflow
+   * file alongside this folder is enough to share both.
+   */
+  getAttachmentsDir(): string {
+    return path.join(
+      this.workspaceRoot,
+      this.TEMP_DIR_NAME,
+      PATH_CONSTANTS.ATTACHMENTS_DIR
+    );
   }
 
   /**
@@ -264,6 +289,62 @@ export class TempFileManager {
   }
 
   /**
+   * Write a pasted clipboard image to disk using a content-addressed filename.
+   *
+   * The filename is derived from the SHA-256 of the image bytes
+   * (`pasted-image-<hash12>.<ext>`), so identical images collapse to a single
+   * file: pasting the same image N times yields one file and N references to it,
+   * and a paste byte-identical to an existing file reuses that file. Because all
+   * pastes target the one flat `.ctrlyoke/attachments/` folder (see
+   * {@link getAttachmentsDir}), this dedup is **global** — the same image pasted
+   * into any number of different workflows is stored exactly once.
+   *
+   * On a dedup hit the file's mtime is refreshed via `utimes()`. Harmless for the
+   * never-swept attachments folder; it matters only if a caller ever points this
+   * at `.ctrlyoke/temp/` (e.g. the embedded-image stretch), where the 24h orphan
+   * sweep is mtime-based and could otherwise reap a still-referenced file.
+   *
+   * @param data Decoded image bytes
+   * @param extension Image extension without a dot (e.g. "png", "jpg")
+   * @param targetDir Absolute destination directory (normally the attachments dir)
+   * @returns Absolute path to the written (or reused) file
+   */
+  async createPastedImageFile(
+    data: Buffer,
+    extension: string,
+    targetDir: string
+  ): Promise<string> {
+    await fs.promises.mkdir(targetDir, { recursive: true });
+    const hash = crypto
+      .createHash("sha256")
+      .update(data)
+      .digest("hex")
+      .slice(0, 12);
+    const filename = `${this.PASTED_IMAGE_PREFIX}${hash}.${extension}`;
+    const filePath = path.join(targetDir, filename);
+
+    try {
+      // Dedup hit: file already exists — skip the write, refresh mtime so a
+      // temp-fallback file isn't reaped by the orphan sweep while still referenced.
+      await fs.promises.access(filePath);
+      const now = new Date();
+      await fs.promises.utimes(filePath, now, now).catch(() => {
+        // Best-effort mtime refresh; ignore failures.
+      });
+      return filePath;
+    } catch {
+      // Not present — write raw bytes (no encoding).
+      try {
+        await fs.promises.writeFile(filePath, data);
+        return filePath;
+      } catch (err) {
+        Log.error(`Failed to write pasted image file: ${err}`);
+        throw new Error(`Cannot write pasted image file: ${filePath}`);
+      }
+    }
+  }
+
+  /**
    * Delete a specific temp file
    * Does not throw on failure (logs error instead)
    *
@@ -324,10 +405,15 @@ export class TempFileManager {
             now
           );
         } else {
-          // Only process known top-level temp file types
+          // Only process known top-level temp file types. Pasted images are
+          // matched by the `pasted-image-` marker (regardless of extension)
+          // rather than by allow-listing image extensions, so unrelated binary
+          // files a user dropped in temp are never swept.
           const file = entry.name;
           const isTempFile =
-            file.endsWith(".md") || file.startsWith(this.MCP_CONFIG_PREFIX);
+            file.endsWith(".md") ||
+            file.startsWith(this.MCP_CONFIG_PREFIX) ||
+            file.startsWith(this.PASTED_IMAGE_PREFIX);
           if (!isTempFile) {
             continue;
           }

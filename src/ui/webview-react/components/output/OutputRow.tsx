@@ -1007,6 +1007,54 @@ function HistoryBannerRowView({
   );
 }
 
+/**
+ * Renders an echoed prompt as Markdown (so embedded file/image references
+ * become links and inline thumbnails, matching AI-output rendering) with a
+ * hover copy button that copies the verbatim raw prompt — since Markdown
+ * rendering restyles the text, the button preserves easy copy-of-source that
+ * the previous raw-text row gave for free.
+ */
+const PromptRowView: React.FC<{
+  text: string;
+  findQuery?: string;
+  findCaseSensitive?: boolean;
+  highlightActiveIndex?: number;
+}> = ({ text, findQuery, findCaseSensitive, highlightActiveIndex }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    const didCopy = await copyTextToClipboard(text);
+    if (!didCopy) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  }, [text]);
+
+  return (
+    <div
+      className={`${OUTPUT_BLOCK_BASE} group/prompt relative border-l-output-prompt-border text-[var(--fg-primary)]`}
+    >
+      <button
+        type="button"
+        onClick={handleCopy}
+        title="Copy prompt"
+        aria-label="Copy prompt"
+        className={`icon-btn absolute right-1 top-1 px-1 py-0 opacity-0 transition-opacity focus:opacity-100 group-hover/prompt:opacity-100 ${
+          copied ? "text-indicator-success" : ""
+        }`}
+      >
+        <i className={`codicon ${copied ? "codicon-check" : "codicon-copy"}`} />
+      </button>
+      <MarkdownText
+        highlightQuery={findQuery}
+        highlightCaseSensitive={findCaseSensitive}
+        highlightActiveIndex={highlightActiveIndex}
+      >
+        {text}
+      </MarkdownText>
+    </div>
+  );
+};
+
 function OutputRowComponent({
   row,
   findDecorations,
@@ -1078,15 +1126,18 @@ function OutputRowComponent({
         />
       );
       break;
-    case "prompt":
+    case "prompt": {
+      const promptMatches = getFieldMatches("prompt");
       content = (
-        <div
-          className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-[var(--fg-primary)]`}
-        >
-          {highlightText(row.text, getFieldMatches("prompt"))}
-        </div>
+        <PromptRowView
+          text={row.text}
+          findQuery={findQuery}
+          findCaseSensitive={findCaseSensitive}
+          highlightActiveIndex={promptMatches.findIndex((match) => match.active)}
+        />
       );
       break;
+    }
     case "cli-command":
       content = (
         <div

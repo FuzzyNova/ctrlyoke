@@ -38,10 +38,15 @@ import {
   EDITOR_PLACEHOLDER_TEXT,
   RETRY_PROMPT_PLACEHOLDERS,
   PROMPT_EDITOR_INSERT_MODES,
+  MAX_PASTED_IMAGE_BYTES,
+  PASTING_IMAGE_PLACEHOLDER,
+  PASTED_IMAGE_SAVE_TIMEOUT_MS,
+  mimeTypeToImageExtension,
   type RetryPromptPlaceholder,
   type PromptEditorInsertRequest,
 } from "../../types/messages";
 import { WebviewLog } from "../../utils/logger";
+import { useUiStore } from "../../store/uiStore";
 import { looksLikeFilePath } from "@root/utils/promptPathUtils";
 
 // Typo.js spell checker (will be loaded from window.Typo)
@@ -132,6 +137,12 @@ interface ExtensionCompletionItem {
 interface PendingCompletionRequest {
   trigger: CompletionTrigger;
   query: string;
+}
+
+interface PendingPaste {
+  from: number;
+  to: number;
+  timeoutId: ReturnType<typeof setTimeout>;
 }
 
 const LINK_TOUCH_MOVE_THRESHOLD_PX = 10;
@@ -387,6 +398,12 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const pendingValidationRequestsRef = useRef<
     Map<number, (value: ContextReferenceValidationResult[]) => void>
   >(new Map());
+  // Pasted-image placeholders awaiting a SAVE_PASTED_IMAGE round trip. Keyed by
+  // seq; the {from,to} range is kept live through edits via mapPos in the
+  // updateListener so the placeholder is replaced in the right spot even if the
+  // user keeps typing before the save completes.
+  const pasteSeqRef = useRef(0);
+  const pendingPastesRef = useRef<Map<number, PendingPaste>>(new Map());
   const vscode = getVsCodeApi();
 
   // Keep callback refs current
@@ -609,6 +626,133 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     [vscode]
   );
 
+  // Replace a pending paste's tracked placeholder range with final text — a
+  // `@ref ` on success or an empty string to remove it on failure/timeout — then
+  // forget the entry. Ranges are clamped to the current doc length to survive
+  // races with concurrent edits.
+  const resolvePendingPaste = useCallback((seq: number, replacement: string) => {
+    const entry = pendingPastesRef.current.get(seq);
+    if (!entry) return;
+    clearTimeout(entry.timeoutId);
+    pendingPastesRef.current.delete(seq);
+    const view = viewRef.current;
+    if (!view) return;
+    const docLen = view.state.doc.length;
+    const from = Math.min(entry.from, docLen);
+    const to = Math.min(Math.max(entry.to, from), docLen);
+    view.dispatch({ changes: { from, to, insert: replacement } });
+  }, []);
+
+  const handlePastedImageSaved = useCallback(
+    (seq: number, relativePath?: string, error?: string) => {
+      if (error || !relativePath) {
+        resolvePendingPaste(seq, "");
+        const messageText = error || "Failed to save pasted image";
+        WebviewLog.error(
+          `[CodeMirror] Pasted image save failed: ${messageText}`
+        );
+        useUiStore.getState().showToast(messageText, "error");
+        return;
+      }
+      // Trailing space terminates the @ref token so the user can keep typing.
+      resolvePendingPaste(seq, `@${relativePath} `);
+    },
+    [resolvePendingPaste]
+  );
+
+  // Insert a placeholder at the cursor, then read the image and ship it to the
+  // extension host to be saved. The placeholder is reconciled by
+  // handlePastedImageSaved when PASTED_IMAGE_SAVED arrives (or on timeout).
+  const processPastedImageFile = useCallback(
+    (file: File, mimeType: string, view: EditorView) => {
+      const pos = view.state.selection.main.head;
+      view.dispatch({
+        changes: { from: pos, insert: PASTING_IMAGE_PLACEHOLDER },
+        selection: { anchor: pos + PASTING_IMAGE_PLACEHOLDER.length },
+      });
+
+      const seq = ++pasteSeqRef.current;
+      const timeoutId = setTimeout(() => {
+        handlePastedImageSaved(seq, undefined, "Timed out saving pasted image");
+      }, PASTED_IMAGE_SAVE_TIMEOUT_MS);
+      pendingPastesRef.current.set(seq, {
+        from: pos,
+        to: pos + PASTING_IMAGE_PLACEHOLDER.length,
+        timeoutId,
+      });
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === "string" ? reader.result : "";
+        const base64 = result.slice(result.indexOf(",") + 1);
+        // Approximate decoded size before shipping a large payload via postMessage.
+        const approxBytes = Math.floor((base64.length * 3) / 4);
+        if (!base64) {
+          handlePastedImageSaved(seq, undefined, "Failed to read pasted image");
+          return;
+        }
+        if (approxBytes > MAX_PASTED_IMAGE_BYTES) {
+          handlePastedImageSaved(
+            seq,
+            undefined,
+            "Pasted image exceeds the maximum allowed size"
+          );
+          return;
+        }
+        vscode.postMessage({
+          type: MESSAGE_TYPES.SAVE_PASTED_IMAGE,
+          seq,
+          dataBase64: base64,
+          mimeType,
+        });
+      };
+      reader.onerror = () => {
+        handlePastedImageSaved(seq, undefined, "Failed to read pasted image");
+      };
+      reader.readAsDataURL(file);
+    },
+    [vscode, handlePastedImageSaved]
+  );
+
+  // Paste handler: intercept clipboard images, let everything else fall through
+  // to CodeMirror's default paste. Supports multiple images in one clipboard.
+  const handleImagePaste = useCallback(
+    (event: ClipboardEvent, view: EditorView): boolean => {
+      const items = event.clipboardData?.items;
+      if (!items) return false;
+      const imageItems = Array.from(items).filter((item) =>
+        item.type.startsWith("image/")
+      );
+      if (imageItems.length === 0) return false;
+
+      event.preventDefault();
+      for (const item of imageItems) {
+        if (!mimeTypeToImageExtension(item.type)) {
+          useUiStore
+            .getState()
+            .showToast(`Unsupported image type: ${item.type}`, "error");
+          continue;
+        }
+        const file = item.getAsFile();
+        if (!file) continue;
+        processPastedImageFile(file, item.type, view);
+      }
+      return true;
+    },
+    [processPastedImageFile]
+  );
+
+  // Clear any outstanding paste timeouts when the component unmounts.
+  useEffect(() => {
+    const pending = pendingPastesRef.current;
+    return () => {
+      for (const entry of pending.values()) {
+        clearTimeout(entry.timeoutId);
+      }
+      pending.clear();
+    };
+  }, []);
+
   // Listen for completion and context-reference validation responses from extension
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -625,12 +769,18 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           pendingValidationRequestsRef.current.delete(message.seq);
           resolve(message.results || []);
         }
+      } else if (message.type === MESSAGE_TYPES.PASTED_IMAGE_SAVED) {
+        handlePastedImageSaved(
+          message.seq,
+          message.relativePath,
+          message.error
+        );
       }
     };
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [handleCompletionResponse]);
+  }, [handleCompletionResponse, handlePastedImageSaved]);
 
   // Custom completions source
   const customCompletions = useCallback(
@@ -874,6 +1024,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
             },
           ],
         }),
+        ...(mode === "prompt"
+          ? [
+              EditorView.domEventHandlers({
+                paste: (event, view) =>
+                  handleImagePaste(event as ClipboardEvent, view),
+              }),
+            ]
+          : []),
         createFencedBlockDecorationExtension(),
         createLinkDecorationExtension(),
         createFileRefDecorationExtension(),
@@ -891,6 +1049,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           if (update.docChanged) {
             const newValue = update.state.doc.toString();
             onChangeRef.current(newValue);
+            // Keep pasted-image placeholder ranges pinned to their text as the
+            // user edits before the async save round trip resolves them.
+            if (pendingPastesRef.current.size > 0) {
+              for (const entry of pendingPastesRef.current.values()) {
+                entry.from = update.changes.mapPos(entry.from, -1);
+                entry.to = update.changes.mapPos(entry.to, 1);
+              }
+            }
           }
           // Selection-reset diagnostics live in the transactionFilter
           // (createSelectionResetDiagnosticExtension) so we can capture the
@@ -969,6 +1135,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     pathCompletions,
     retryPlaceholderCompletions,
     validateContextReferences,
+    handleImagePaste,
     mode,
     surface,
   ]);

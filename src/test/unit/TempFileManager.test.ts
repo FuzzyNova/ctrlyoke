@@ -169,6 +169,134 @@ suite("TempFileManager", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  suite("getAttachmentsDir", () => {
+    test("is the flat .ctrlyoke/attachments dir (no per-workflow subdir)", () => {
+      manager = freshManager();
+      assert.strictEqual(
+        manager.getAttachmentsDir(),
+        path.join(workspaceRoot, ".ctrlyoke", "attachments")
+      );
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("createPastedImageFile", () => {
+    test("writes raw bytes to a pasted-image file in the target dir", async () => {
+      manager = freshManager();
+      const dir = manager.getAttachmentsDir();
+      const data = Buffer.from([0, 1, 2, 3, 255]);
+      const filePath = await manager.createPastedImageFile(data, "png", dir);
+      createdFiles.push(filePath);
+      assert.ok(
+        path.basename(filePath).startsWith("pasted-image-"),
+        `Expected pasted-image- prefix, got: ${filePath}`
+      );
+      assert.ok(filePath.endsWith(".png"));
+      assert.deepStrictEqual(await fs.promises.readFile(filePath), data);
+    });
+
+    test("identical bytes dedup to a single content-addressed file", async () => {
+      manager = freshManager();
+      const dir = manager.getAttachmentsDir();
+      const data = Buffer.from("same-image-bytes");
+      const first = await manager.createPastedImageFile(data, "png", dir);
+      const second = await manager.createPastedImageFile(data, "png", dir);
+      createdFiles.push(first);
+      assert.strictEqual(first, second, "same bytes should reuse one path");
+      const images = (await fs.promises.readdir(dir)).filter((f) =>
+        f.startsWith("pasted-image-")
+      );
+      assert.strictEqual(images.length, 1, "only one file should be written");
+    });
+
+    test("dedup is content-only: the filename ignores which workflow pasted it", async () => {
+      manager = freshManager();
+      const dir = manager.getAttachmentsDir();
+      // Same bytes are all that matters — there is no workflow input to the
+      // filename, so a second paste (conceptually from another workflow) into
+      // the same flat store reuses the one file.
+      const data = Buffer.from("shared-across-workflows");
+      const a = await manager.createPastedImageFile(data, "png", dir);
+      const b = await manager.createPastedImageFile(data, "png", dir);
+      createdFiles.push(a);
+      assert.strictEqual(a, b);
+      const images = (await fs.promises.readdir(dir)).filter((f) =>
+        f.startsWith("pasted-image-")
+      );
+      assert.strictEqual(images.length, 1);
+    });
+
+    test("different bytes produce different files", async () => {
+      manager = freshManager();
+      const dir = manager.getAttachmentsDir();
+      const a = await manager.createPastedImageFile(Buffer.from("a"), "png", dir);
+      const b = await manager.createPastedImageFile(Buffer.from("b"), "png", dir);
+      createdFiles.push(a, b);
+      assert.notStrictEqual(a, b);
+    });
+
+    test("dedup hit refreshes mtime", async () => {
+      manager = freshManager();
+      const dir = manager.getAttachmentsDir();
+      const data = Buffer.from("touch-me");
+      const filePath = await manager.createPastedImageFile(data, "png", dir);
+      createdFiles.push(filePath);
+      const stale = new Date(Date.now() - 60 * 60 * 1000);
+      await fs.promises.utimes(filePath, stale, stale);
+      const before = (await fs.promises.stat(filePath)).mtimeMs;
+      await manager.createPastedImageFile(data, "png", dir);
+      const after = (await fs.promises.stat(filePath)).mtimeMs;
+      assert.ok(after > before, "mtime should be refreshed on a dedup hit");
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("cleanupOrphanedFiles — pasted images", () => {
+    test("sweeps old pasted images in temp; spares fresh, unrelated, and attachments", async () => {
+      manager = freshManager();
+      const tempDir = path.join(workspaceRoot, ".ctrlyoke", "temp");
+      const oldImg = await manager.createPastedImageFile(
+        Buffer.from("old"),
+        "png",
+        tempDir
+      );
+      const freshImg = await manager.createPastedImageFile(
+        Buffer.from("fresh"),
+        "png",
+        tempDir
+      );
+      // Unrelated binary the user happened to drop in temp — must be spared.
+      const unrelated = path.join(tempDir, "keep-me.bin");
+      await fs.promises.writeFile(unrelated, Buffer.from("keep"));
+      // Committed attachment image — must NEVER be swept (cleanup only scans temp).
+      const attachImg = await manager.createPastedImageFile(
+        Buffer.from("committed"),
+        "png",
+        manager.getAttachmentsDir()
+      );
+
+      const past = new Date(Date.now() - 25 * 60 * 60 * 1000);
+      await fs.promises.utimes(oldImg, past, past);
+      await fs.promises.utimes(unrelated, past, past);
+      await fs.promises.utimes(attachImg, past, past);
+
+      await manager.cleanupOrphanedFiles();
+
+      assert.ok(!fs.existsSync(oldImg), "old pasted image should be swept");
+      assert.ok(fs.existsSync(freshImg), "fresh pasted image should remain");
+      assert.ok(
+        fs.existsSync(unrelated),
+        "unrelated binary file should be spared"
+      );
+      assert.ok(
+        fs.existsSync(attachImg),
+        "attachment-folder image must never be swept"
+      );
+      createdFiles.push(freshImg, unrelated, attachImg);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   suite("getRelativePath", () => {
     test("returns workspace-relative path for a file inside workspaceRoot", () => {
       manager = freshManager();

@@ -99,6 +99,13 @@ export const PATH_CONSTANTS = {
   /** Temp directory name (subdirectory of CTRLYOKE_DIR) */
   TEMP_DIR: "temp",
 
+  /**
+   * Attachments directory name (subdirectory of CTRLYOKE_DIR).
+   * Committed, un-gitignored home for pasted images belonging to saved
+   * workflows — deliberately persistent, unlike TEMP_DIR.
+   */
+  ATTACHMENTS_DIR: "attachments",
+
   /** Logs directory name (subdirectory of CTRLYOKE_DIR) */
   LOGS_DIR: "logs",
 

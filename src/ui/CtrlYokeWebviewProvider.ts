@@ -42,7 +42,8 @@ import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
 import { workflowDisplayStep } from "../types/CtrlYokeTypes";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
 import { configService } from "../config/CtrlYokeConfigService";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
@@ -150,6 +151,12 @@ export class CtrlYokeWebviewProvider
           this.sendDevStatus(scopedPostMessage),
         handleUxSnapshot: (payload, workspaceRoot, scopedPostMessage) =>
           this.handleUxSnapshot(payload, workspaceRoot, scopedPostMessage),
+        resolveImageWebviewUri: (absolutePath: string) =>
+          this.view
+            ? this.view.webview
+                .asWebviewUri(vscode.Uri.file(absolutePath))
+                .toString()
+            : undefined,
         getServerUrl: () => this.runningServerUrl,
         getAvailableIps: () => this.runningServerAvailableIps,
         onPanelReady: () => this.handlePanelReady(),
@@ -190,6 +197,23 @@ export class CtrlYokeWebviewProvider
     // (subscribes to onDidChangeStatus on all integrations — single source of truth).
   }
 
+  /**
+   * Workspace `.ctrlyoke/temp/` and `.ctrlyoke/attachments/` dirs, added to
+   * `localResourceRoots` so pasted-image thumbnails can load. Empty when no
+   * workspace folder is open.
+   */
+  private getImageResourceRoots(): vscode.Uri[] {
+    if (!vscode.workspace.workspaceFolders?.length) {
+      return [];
+    }
+    const workspaceRoot = getVsCodeWorkspaceRoot();
+    return [PATH_CONSTANTS.TEMP_DIR, PATH_CONSTANTS.ATTACHMENTS_DIR].map((sub) =>
+      vscode.Uri.file(
+        path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR, sub)
+      )
+    );
+  }
+
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
@@ -200,9 +224,13 @@ export class CtrlYokeWebviewProvider
 
     webviewView.webview.options = {
       enableScripts: true,
+      // Deliberately narrow (see dev/implemented/UI_SECURITY_REVIEW.md). The two
+      // .ctrlyoke image dirs are added — and ONLY those, not the workspace root —
+      // so inline thumbnails can render pasted images without widening exposure.
       localResourceRoots: [
         this.webviewReactUri,
         vscode.Uri.joinPath(this.context.extensionUri, "images"),
+        ...this.getImageResourceRoots(),
       ],
     };
 

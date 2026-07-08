@@ -1590,6 +1590,21 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.CONTEXT_REFS_VALIDATION] = () => {};
 
   // --------------------------------------------------------------------------
+  // PASTED_IMAGE_SAVED - Handled by CodeMirrorEditor.tsx
+  // --------------------------------------------------------------------------
+  // The editor listens for the save result directly so it can reconcile the
+  // per-paste placeholder by seq. No-op here so the router doesn't misclassify
+  // this valid extension message as unknown.
+  handlers[MESSAGE_TYPES.PASTED_IMAGE_SAVED] = () => {};
+
+  // --------------------------------------------------------------------------
+  // FILE_PREVIEW_URI_RESPONSE - Handled by ImageRefThumbnail (MarkdownText.tsx)
+  // --------------------------------------------------------------------------
+  // The thumbnail component listens directly to resolve its per-request URI
+  // promise by seq. No-op here for the same reason as above.
+  handlers[MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE] = () => {};
+
+  // --------------------------------------------------------------------------
   // PRIOR_CONTEXT_PREVIEW_RESULT
   // --------------------------------------------------------------------------
   // GIT_CHANGE_PREVIEW_RESULT removed — browser now uses openToGitRef() →

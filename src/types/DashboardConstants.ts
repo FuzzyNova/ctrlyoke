@@ -147,6 +147,12 @@ export const MESSAGE_TYPES = {
   CONTEXT_REFS_VALIDATION: "contextRefsValidation", // Extension -> Webview: Inline context reference validation results
   INSERT_PROMPT_REFERENCES: "insertPromptReferences", // Extension -> Webview: insert raw context references into the live prompt editor
 
+  // Image paste - Webview <-> Extension
+  SAVE_PASTED_IMAGE: "savePastedImage", // Webview -> Extension: save a pasted clipboard image to disk
+  PASTED_IMAGE_SAVED: "pastedImageSaved", // Extension -> Webview: { seq, relativePath } or { seq, error }
+  REQUEST_FILE_PREVIEW_URI: "requestFilePreviewUri", // Webview -> Extension: resolve a workspace file path to a displayable webview URI
+  FILE_PREVIEW_URI_RESPONSE: "filePreviewUriResponse", // Extension -> Webview: { seq, uri } or { seq, error }
+
   // Token counting - Webview -> Extension: Request token counts for attachment references
   REQUEST_ATTACHMENT_TOKEN_COUNTS: "requestAttachmentTokenCounts",
   // Extension -> Webview: Return token counts for requested references
@@ -776,6 +782,84 @@ export const EDITOR_PLACEHOLDER_TEXT = {
   FINAL_PROMPT:
     "Use @ for files/folders, # for selections/symbols, ~ for git changes, $ for prior context\n\nNote: The Final Step runs after all other prompts complete. If it appends new prompts, it will run again once those finish.",
 } as const;
+
+// ============================================================================
+// IMAGE PASTE - Shared contract for clipboard-image paste support
+// Single-sourced so the webview paste handler (pre-check) and the extension
+// host save handler (validation) agree on accepted types and limits.
+// ============================================================================
+
+/** Accepted clipboard image MIME types → on-disk file extension. */
+export const PASTED_IMAGE_MIME_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+
+/** Maximum size (in bytes) of a pasted image accepted for save (15 MB). */
+export const MAX_PASTED_IMAGE_BYTES = 15 * 1024 * 1024;
+
+/** File extensions rendered as inline thumbnails in the output pane. */
+export const IMAGE_REF_EXTENSIONS = [
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+] as const;
+
+/** Placeholder inserted at the cursor while a pasted image saves asynchronously. */
+export const PASTING_IMAGE_PLACEHOLDER = "[Pasting image…]";
+
+/** Milliseconds before an unanswered SAVE_PASTED_IMAGE round trip is treated as failed. */
+export const PASTED_IMAGE_SAVE_TIMEOUT_MS = 30_000;
+
+/**
+ * Map a clipboard MIME type to its on-disk extension, or `undefined` if the
+ * type is not an accepted image type.
+ */
+export function mimeTypeToImageExtension(
+  mimeType: string | undefined
+): string | undefined {
+  if (!mimeType) {
+    return undefined;
+  }
+  return PASTED_IMAGE_MIME_EXTENSIONS[mimeType.toLowerCase()];
+}
+
+/**
+ * Map an on-disk image extension (no leading dot) to its MIME type, for
+ * building `data:` URIs when serving a thumbnail to a client that can't load a
+ * `vscode-webview://` resource URI (i.e. the hosted browser dashboard).
+ */
+export function imageExtensionToMimeType(
+  extension: string
+): string | undefined {
+  switch (extension.toLowerCase()) {
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    default:
+      return undefined;
+  }
+}
+
+/** True if a file path's extension is one rendered as an inline image thumbnail. */
+export function isImageRefPath(filePath: string): boolean {
+  const match = /\.([a-z0-9]+)$/i.exec(filePath);
+  if (!match) {
+    return false;
+  }
+  const ext = match[1].toLowerCase();
+  return (IMAGE_REF_EXTENSIONS as readonly string[]).includes(ext);
+}
 
 // ============================================================================
 // WORKFLOW ATTEMPT STATUS - Step-level attempt status values

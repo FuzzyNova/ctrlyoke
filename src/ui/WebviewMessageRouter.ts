@@ -12,8 +12,14 @@ import {
   SESSION_KINDS,
   PANEL_CLIENT_ID,
   QUEUE_POSITION,
+  MAX_PASTED_IMAGE_BYTES,
+  mimeTypeToImageExtension,
+  imageExtensionToMimeType,
   type WebviewLogLevel,
 } from "../types/DashboardConstants";
+import { TempFileManager } from "../utils/TempFileManager";
+import { buildFileReferenceValue } from "../completions/ContextReferenceBuilder";
+import { isPathWithinDirectory } from "../utils/PathSecurity";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import {
@@ -622,6 +628,14 @@ export class WebviewMessageRouter {
         message.references ?? [],
         message.seq
       );
+    });
+
+    table.set(MESSAGE_TYPES.SAVE_PASTED_IMAGE, async (message) => {
+      await this.handleSavePastedImage(message);
+    });
+
+    table.set(MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI, async (message) => {
+      await this.handleFilePreviewUriRequest(message);
     });
 
     table.set(
@@ -1853,6 +1867,167 @@ export class WebviewMessageRouter {
     });
   }
 
+  private getTempFileManager(): TempFileManager {
+    return new TempFileManager(this.getWorkspaceRoot());
+  }
+
+  /**
+   * Save a pasted clipboard image to disk and reply with the workspace-relative
+   * `@`-reference the editor should insert. Every paste — saved workflow or new
+   * unsaved prompt — lands in the flat, content-addressed `.ctrlyoke/attachments/`
+   * store, so identical images dedup across all workflows (see
+   * TempFileManager.getAttachmentsDir / createPastedImageFile).
+   */
+  private async handleSavePastedImage(message: {
+    seq?: number;
+    dataBase64?: string;
+    mimeType?: string;
+  }): Promise<void> {
+    const { seq } = message;
+    try {
+      const workspaceRoot = this.getWorkspaceRoot();
+      if (!workspaceRoot) {
+        throw new Error("No workspace folder open");
+      }
+
+      const extension = mimeTypeToImageExtension(message.mimeType);
+      if (!extension) {
+        throw new Error(
+          `Unsupported image type: ${message.mimeType ?? "unknown"}`
+        );
+      }
+      if (!message.dataBase64) {
+        throw new Error("Missing pasted image data");
+      }
+
+      const buffer = Buffer.from(message.dataBase64, "base64");
+      if (buffer.length === 0) {
+        throw new Error("Pasted image is empty");
+      }
+      if (buffer.length > MAX_PASTED_IMAGE_BYTES) {
+        throw new Error("Pasted image exceeds the maximum allowed size");
+      }
+
+      const tempFileManager = this.getTempFileManager();
+      const absolutePath = await tempFileManager.createPastedImageFile(
+        buffer,
+        extension,
+        tempFileManager.getAttachmentsDir()
+      );
+      const relativePath = buildFileReferenceValue(
+        tempFileManager.getRelativePath(absolutePath)
+      );
+
+      this.emitMessage({
+        type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+        seq,
+        relativePath,
+      });
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      Log.error(`Failed to save pasted image: ${errorMessage}`);
+      this.emitMessage({
+        type: MESSAGE_TYPES.PASTED_IMAGE_SAVED,
+        seq,
+        error: errorMessage,
+      });
+    }
+  }
+
+  /**
+   * Resolve a workspace-relative image path to a displayable URI for an inline
+   * thumbnail. Restricted to the two directories on `localResourceRoots`
+   * (`.ctrlyoke/temp/` and `.ctrlyoke/attachments/`): any other path — including
+   * one that escapes the workspace — returns an error so the webview falls back
+   * to a plain file-ref rather than leaking arbitrary filesystem paths as images.
+   *
+   * Transport-aware, so both the VS Code panel and the hosted browser dashboard
+   * render thumbnails:
+   * - **Panel** → a lightweight `vscode-webview://` resource URI via
+   *   `asWebviewUri` (streams from disk, no payload bloat).
+   * - **Hosted browser** (and panel fallback) → an inline `data:` URI, since a
+   *   browser can't load a `vscode-webview://` URI. Both webview CSPs already
+   *   allow `img-src data:`.
+   */
+  private async handleFilePreviewUriRequest(message: {
+    seq?: number;
+    relativePath?: string;
+  }): Promise<void> {
+    const { seq } = message;
+    const fail = (error: string): void => {
+      this.emitMessage({
+        type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
+        seq,
+        error,
+      });
+    };
+    const succeed = (uri: string): void => {
+      this.emitMessage({
+        type: MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE,
+        seq,
+        uri,
+      });
+    };
+
+    try {
+      const workspaceRoot = this.getWorkspaceRoot();
+      if (!workspaceRoot) {
+        return fail("No workspace folder open");
+      }
+      if (!message.relativePath) {
+        return fail("Missing image path");
+      }
+
+      const resolved = path.resolve(workspaceRoot, message.relativePath);
+      const allowedRoots = [
+        path.join(
+          workspaceRoot,
+          PATH_CONSTANTS.CTRLYOKE_DIR,
+          PATH_CONSTANTS.TEMP_DIR
+        ),
+        path.join(
+          workspaceRoot,
+          PATH_CONSTANTS.CTRLYOKE_DIR,
+          PATH_CONSTANTS.ATTACHMENTS_DIR
+        ),
+      ];
+      if (!allowedRoots.some((root) => isPathWithinDirectory(resolved, root))) {
+        return fail("Path is not an inline-previewable image location");
+      }
+
+      try {
+        await fs.promises.access(resolved);
+      } catch {
+        return fail("Image file no longer exists");
+      }
+
+      // Panel: prefer the lightweight webview-resource URI.
+      if (this.clientId === PANEL_CLIENT_ID) {
+        const uri = this.callbacks.resolveImageWebviewUri?.(resolved);
+        if (uri) {
+          return succeed(uri);
+        }
+        // Panel view unavailable (e.g. not resolved yet) — fall through to a
+        // data URI, which the panel CSP also permits.
+      }
+
+      // Hosted browser (and panel fallback): serve an inline data URI.
+      const extension = path.extname(resolved).replace(/^\./, "");
+      const mimeType = imageExtensionToMimeType(extension);
+      if (!mimeType) {
+        return fail("Unsupported image type for inline preview");
+      }
+      const stats = await fs.promises.stat(resolved);
+      if (stats.size > MAX_PASTED_IMAGE_BYTES) {
+        return fail("Image is too large to preview inline");
+      }
+      const bytes = await fs.promises.readFile(resolved);
+      return succeed(`data:${mimeType};base64,${bytes.toString("base64")}`);
+    } catch (error) {
+      fail(getErrorMessage(error));
+    }
+  }
+
   private async handleContextRefsValidation(
     references: Array<{
       id: string;
@@ -2449,6 +2624,13 @@ export interface WebviewRouterCallbacks {
     workspaceRoot: string,
     postMessage: PostMessageFn
   ) => Promise<void>;
+  /**
+   * Resolve an absolute, workspace-contained image path to a URI the webview can
+   * load in an `<img src>` (VS Code panel: `webview.asWebviewUri`). Absent for
+   * transports without a webview URI scheme (e.g. the hosted browser dashboard),
+   * in which case inline thumbnails fall back to a plain file-ref.
+   */
+  resolveImageWebviewUri?: (absolutePath: string) => string | undefined;
   /** Returns the hosted server URL if the server is currently running, undefined otherwise. */
   getServerUrl?: () => string | undefined;
   /** Returns all available LAN IPs (populated when binding to 0.0.0.0). */

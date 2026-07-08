@@ -15,6 +15,8 @@ import { toString as mdastToString } from "mdast-util-to-string";
 import type { Root } from "mdast";
 import type { PluginTuple } from "unified";
 import { openFile } from "@hooks/useMessageHandler";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
+import { MESSAGE_TYPES } from "../../types/messages";
 import { WebviewLog } from "@utils/logger";
 import {
   highlightCodeText,
@@ -163,6 +165,73 @@ function remarkFileLinks() {
 }
 
 /**
+ * Image extensions rendered as inline thumbnails (kept in sync with
+ * IMAGE_REF_EXTENSIONS in DashboardConstants). `jpe?g` covers jpg/jpeg.
+ */
+const IMAGE_EXTENSIONS = "png|jpe?g|gif|webp";
+
+/**
+ * Matches image paths (including pasted `@`-references) in AI/prompt text.
+ * Mirrors FILE_PATH_SOURCE but (a) targets image extensions, (b) accepts an
+ * optional leading `@` so a pasted `@relativePath.png` reference is consumed
+ * whole, and (c) allows a leading dot-directory segment (e.g. `.ctrlyoke/…`)
+ * so committed attachment refs are captured with their full workspace-relative
+ * path rather than losing the leading `.ctrlyoke`.
+ */
+const IMAGE_PATH_SOURCE =
+  "@?" +
+  "(?:" +
+  "[A-Za-z]:" +
+  SEP + // Windows absolute
+  "|" +
+  "\\.{1,2}" +
+  SEP + // ./ or ../
+  "|" +
+  "\\.?[a-zA-Z][\\w-]*" +
+  SEP + // dir/ or .dotdir/ (handles .ctrlyoke/)
+  ")" +
+  "(?:[\\w.\\-]+" +
+  SEP +
+  ")*" + // inner directory segments
+  "[\\w.\\-]+" + // filename base
+  "\\.(?:" +
+  IMAGE_EXTENSIONS +
+  ")\\b";
+
+/**
+ * Remark plugin that converts recognised image paths into `<image-ref>` nodes,
+ * the image sibling of `remarkFileLinks`'s `<file-ref>`. Kept as a real element
+ * (not an `<img>`) so it survives rehype-sanitize/rehype-harden — a raw `<img>`
+ * pointing at an AI-supplied URL is exactly the tracking-pixel/exfiltration
+ * vector those passes strip. The actual pixels load only after the extension
+ * host resolves the path to a scoped webview URI (see {@link ImageRefThumbnail}).
+ */
+function remarkImageRefs() {
+  return (tree: Root): undefined => {
+    findAndReplace(
+      tree,
+      [
+        [
+          new RegExp(IMAGE_PATH_SOURCE, "gi"),
+          (match: string) => {
+            const raw = normalizeCodexAbsPath(
+              match.replace(/^@/, "").replace(/\\{2,}/g, "\\")
+            );
+            const encoded = encodeURIComponent(raw);
+            const display = escapeHtml(raw);
+            return {
+              type: "html",
+              value: `<image-ref path="${encoded}">${display}</image-ref>`,
+            };
+          },
+        ],
+      ],
+      { ignore: ["link"] }
+    );
+  };
+}
+
+/**
  * Returns true when the given href is a local file reference that VS Code's
  * webview would otherwise block:
  *   - `file://` / `file:///` URLs
@@ -245,6 +314,173 @@ function FileRefButton({
       <i className="codicon codicon-file text-xxs opacity-70" />
       <span className="group-hover:underline">{children}</span>
     </button>
+  );
+}
+
+// ── Inline image-thumbnail preview ───────────────────────────────────────────
+//
+// The webview can't turn a workspace-relative path into a loadable URI on its
+// own — the extension host must call webview.asWebviewUri (VS Code) or expose a
+// static route (hosted). We request that URI over a seq-correlated message and
+// cache the result by path so scroll/virtualization re-mounts don't re-request.
+// A module-level singleton (rather than per-component listeners) keeps one
+// window listener regardless of how many thumbnails are on screen.
+
+const PREVIEW_URI_TIMEOUT_MS = 15_000;
+/** path → resolved URI (string) or null when it should fall back to a file-ref. */
+const imagePreviewUriCache = new Map<string, string | null>();
+/** path → in-flight request, so concurrent thumbnails for one path share it. */
+const inFlightPreviewRequests = new Map<string, Promise<string | null>>();
+const pendingPreviewResolvers = new Map<
+  number,
+  (uri: string | null) => void
+>();
+let previewSeqCounter = 0;
+let previewListenerInstalled = false;
+
+function ensurePreviewListener(): void {
+  if (previewListenerInstalled) return;
+  previewListenerInstalled = true;
+  window.addEventListener("message", (event: MessageEvent) => {
+    const message = event.data;
+    if (message?.type !== MESSAGE_TYPES.FILE_PREVIEW_URI_RESPONSE) return;
+    const resolve = pendingPreviewResolvers.get(message.seq);
+    if (!resolve) return;
+    pendingPreviewResolvers.delete(message.seq);
+    resolve(typeof message.uri === "string" ? message.uri : null);
+  });
+}
+
+function requestImagePreviewUri(relativePath: string): Promise<string | null> {
+  const cached = imagePreviewUriCache.get(relativePath);
+  if (cached !== undefined) return Promise.resolve(cached);
+  const existing = inFlightPreviewRequests.get(relativePath);
+  if (existing) return existing;
+
+  ensurePreviewListener();
+  const seq = ++previewSeqCounter;
+  const request = new Promise<string | null>((resolve) => {
+    const finish = (uri: string | null) => {
+      pendingPreviewResolvers.delete(seq);
+      resolve(uri);
+    };
+    pendingPreviewResolvers.set(seq, finish);
+    // Fall back if the host never answers, so the thumbnail never hangs.
+    setTimeout(() => finish(null), PREVIEW_URI_TIMEOUT_MS);
+    getVsCodeApi().postMessage({
+      type: MESSAGE_TYPES.REQUEST_FILE_PREVIEW_URI,
+      seq,
+      relativePath,
+    });
+  }).then((uri) => {
+    imagePreviewUriCache.set(relativePath, uri);
+    inFlightPreviewRequests.delete(relativePath);
+    return uri;
+  });
+
+  inFlightPreviewRequests.set(relativePath, request);
+  return request;
+}
+
+/**
+ * Downloads a resolved thumbnail to disk. Handles both transports:
+ *   - `data:` URIs (hosted browser) — anchor `download` saves directly; no
+ *     `fetch` (which the webview CSP's `connect-src` wouldn't allow for `data:`).
+ *   - `vscode-webview://` resource URIs (panel) — `fetch` is permitted by
+ *     `connect-src ${cspSource}`, so we pull the bytes into a blob and save that.
+ */
+async function downloadImage(uri: string, filename: string): Promise<void> {
+  try {
+    let href = uri;
+    let objectUrl: string | null = null;
+    if (!uri.startsWith("data:")) {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      href = URL.createObjectURL(blob);
+      objectUrl = href;
+    }
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    WebviewLog.warn("Image thumbnail download failed", error);
+  }
+}
+
+/**
+ * Renders an image reference as an inline thumbnail once the extension host
+ * resolves its path to a loadable URI. While loading, on resolution failure, or
+ * if the image element itself errors, it degrades to the same {@link FileRefButton}
+ * used for `<file-ref>` — never a broken-image icon.
+ *
+ * Once resolved it renders a centered, bordered thumbnail with a hover
+ * download button (the download button we'd otherwise want from Streamdown's
+ * native `<img>` — which we can't use, since our `src` is a workspace-relative
+ * path needing async host resolution rather than a load-ready URI).
+ */
+function ImageRefThumbnail({
+  path: encodedPath,
+  children,
+}: {
+  path?: string;
+  children?: React.ReactNode;
+}) {
+  const relativePath = encodedPath ? decodeURIComponent(encodedPath) : "";
+  // undefined = loading, null = fall back, string = show <img>.
+  const [uri, setUri] = useState<string | null | undefined>(() =>
+    imagePreviewUriCache.get(relativePath)
+  );
+
+  useEffect(() => {
+    if (!relativePath) {
+      setUri(null);
+      return;
+    }
+    const cached = imagePreviewUriCache.get(relativePath);
+    if (cached !== undefined) {
+      setUri(cached);
+      return;
+    }
+    let cancelled = false;
+    setUri(undefined);
+    void requestImagePreviewUri(relativePath).then((resolved) => {
+      if (!cancelled) setUri(resolved);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [relativePath]);
+
+  if (typeof uri !== "string") {
+    return <FileRefButton filePath={relativePath}>{children}</FileRefButton>;
+  }
+  const filename = relativePath.split(/[\\/]/).pop() || "image";
+  return (
+    <span className="my-2 flex justify-center">
+      <span className="group/thumb relative inline-block">
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- onError only triggers the file-ref fallback, not a user action */}
+        <img
+          src={uri}
+          alt={relativePath}
+          title={relativePath}
+          className="block max-h-60 max-w-full rounded-md border border-panel-border"
+          onError={() => setUri(null)}
+        />
+        <button
+          type="button"
+          onClick={() => void downloadImage(uri, filename)}
+          title={`Download ${filename}`}
+          aria-label={`Download ${filename}`}
+          className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity hover:brightness-110 focus:opacity-100 group-hover/thumb:opacity-100"
+        >
+          <i className="codicon codicon-cloud-download text-sm" />
+        </button>
+      </span>
+    </span>
   );
 }
 
@@ -351,6 +587,9 @@ function remarkHighlightMatches({
 const REMARK_PLUGINS = [
   ...Object.values(defaultRemarkPlugins),
   remarkLocalLinks,
+  // Image refs first so their paths become <image-ref> before remarkFileLinks
+  // scans (extensions are disjoint, but order keeps the intent explicit).
+  remarkImageRefs,
   remarkFileLinks,
 ];
 
@@ -565,6 +804,7 @@ function MermaidBlock({ code }: { code: string }) {
 // remarkHighlightMatches.
 const FILE_REF_ALLOWED_TAGS = {
   "file-ref": ["path"],
+  "image-ref": ["path"],
   mark: ["dataFindActive"],
 };
 
@@ -643,6 +883,15 @@ const MarkdownTextComponent: React.FC<MarkdownTextProps> = ({
           </FileRefButton>
         );
       },
+
+      // ── Image-ref custom element ───────────────────────────────────────
+      // Rendered by remarkImageRefs for image paths (incl. pasted @refs).
+      // Resolves to an inline thumbnail, falling back to a file-ref button.
+      "image-ref": (props: Record<string, unknown>) => (
+        <ImageRefThumbnail path={props.path as string | undefined}>
+          {props.children as React.ReactNode}
+        </ImageRefThumbnail>
+      ),
 
       // ── Links ─────────────────────────────────────────────────────────
       a: ({
