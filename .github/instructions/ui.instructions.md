@@ -52,6 +52,10 @@ Key roles:
 **Capabilities file is external contract:** `WebviewSettingsSync.writeCapabilities()` feeds the separate MCP server process. If harness/model availability semantics change, keep this file in sync.
 
 **Theme vars come from the panel:** `THEME_VARS_CAPTURED` is forwarded through `CtrlYokeWebviewProvider`/`WebviewMessageRouter` so hosted browser clients can mirror VS Code theme colors.
+
+**Inline image previews are host-gated, workspace-wide:** `WebviewMessageRouter.handleFilePreviewUriRequest` resolves any harness-referenced image path (using the same `resolveNamedRelativePath` + trusted-root containment as `@`-references, so multi-root works) and returns a URI only when it lands inside an open workspace folder and is an allowed image type. Because that host-side check is the real security boundary, `CtrlYokeWebviewProvider.getImageResourceRoots()` deliberately puts **every workspace folder** on `localResourceRoots` (not just `.ctrlyoke/temp`+`attachments`) so the panel can stream any workspace image via `asWebviewUri`; the webview never constructs these URIs itself. Do not re-narrow `localResourceRoots` back to the `.ctrlyoke` dirs, and do not add a duplicate client-side allow-list — the gate belongs in the router.
+
+**Opening a file must branch on whether a line was requested:** the `OPEN_FILE` handler in `WebviewMessageRouter` uses `showTextDocument` **only** when a line target is present (a selection needs a text editor). With no line it opens via the `vscode.open` command so VS Code picks the editor by file type — otherwise binary files (images, PDFs) throw `CodeExpectedError: File seems to be binary and cannot be opened as text`. Clicking an inline image thumbnail hits this path, so it must never force a text editor.
 </criticalPatterns>
 
 <relatedFiles>

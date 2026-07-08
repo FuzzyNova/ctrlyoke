@@ -42,8 +42,7 @@ import type { WorkflowSummary } from "../types/CtrlYokeTypes";
 import { PostMessageDashboardSink } from "./PostMessageDashboardSink";
 import { workflowDisplayStep } from "../types/CtrlYokeTypes";
 import { OutputHistoryManager } from "../core/orchestration/OutputHistoryManager";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
-import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { configService } from "../config/CtrlYokeConfigService";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
@@ -198,20 +197,20 @@ export class CtrlYokeWebviewProvider
   }
 
   /**
-   * Workspace `.ctrlyoke/temp/` and `.ctrlyoke/attachments/` dirs, added to
-   * `localResourceRoots` so pasted-image thumbnails can load. Empty when no
-   * workspace folder is open.
+   * Every open workspace folder root, added to `localResourceRoots` so inline
+   * image thumbnails can load — not just pasted images under `.ctrlyoke/` but
+   * any image the harness references anywhere in the workspace. Returns every
+   * folder of a multi-root `.code-workspace` (the `.ctrlyoke/temp` and
+   * `.ctrlyoke/attachments` dirs live inside a folder, so they stay covered).
+   * Empty when no workspace folder is open.
+   *
+   * Widening from the two `.ctrlyoke` dirs to the whole workspace is safe
+   * because the webview only ever loads URIs the extension host hands back from
+   * `handleFilePreviewUriRequest`, which validates every path resolves inside a
+   * trusted workspace root and is an allowed image type before returning it.
    */
   private getImageResourceRoots(): vscode.Uri[] {
-    if (!vscode.workspace.workspaceFolders?.length) {
-      return [];
-    }
-    const workspaceRoot = getVsCodeWorkspaceRoot();
-    return [PATH_CONSTANTS.TEMP_DIR, PATH_CONSTANTS.ATTACHMENTS_DIR].map((sub) =>
-      vscode.Uri.file(
-        path.join(workspaceRoot, PATH_CONSTANTS.CTRLYOKE_DIR, sub)
-      )
-    );
+    return (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri);
   }
 
   public resolveWebviewView(

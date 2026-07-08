@@ -35,9 +35,14 @@ injectFindHighlightStyles();
 /**
  * Recognized file extensions for auto-linking workspace paths.
  * Conservative list to avoid false positives in prose.
+ *
+ * `svg` lives here (a link/`<file-ref>` extension) rather than in
+ * {@link IMAGE_EXTENSIONS} (the inline-thumbnail list): an SVG can carry script,
+ * so it's opened as a file in VS Code rather than rendered inline, but it's
+ * still a real workspace file that should be a clickable link, not `[blocked]`.
  */
 const FILE_EXTENSIONS =
-  "ts|tsx|js|jsx|mjs|cjs|json|yaml|yml|md|py|sh|css|scss|html|toml|txt|rs|go|swift|java|c|cpp|h|vue|svelte|rb|php|dart|kt|cs";
+  "ts|tsx|js|jsx|mjs|cjs|json|yaml|yml|md|py|sh|css|scss|html|svg|toml|txt|rs|go|swift|java|c|cpp|h|vue|svelte|rb|php|dart|kt|cs";
 
 /**
  * Matches workspace-relative or absolute file paths that end with a
@@ -232,6 +237,19 @@ function remarkImageRefs() {
 }
 
 /**
+ * Bare workspace-relative file href like `images/icon.png` or `src/foo.ts`:
+ * no URL scheme (`http:`, `mailto:`, `c:`…), not server-absolute (`/`), not a
+ * fragment/query (`#`/`?`), and ending in a recognized file or image extension.
+ * rehype-harden would otherwise mark such a link `[blocked]` (it isn't a valid
+ * absolute URL); recognizing it as local lets `remarkLocalLinks` rewrite it to
+ * a `<file-ref>` that opens the workspace file instead.
+ */
+const WORKSPACE_RELATIVE_FILE_HREF = new RegExp(
+  `^(?![a-z][a-z\\d+.-]*:)(?![/#?])[\\w./\\\\-]+\\.(?:${FILE_EXTENSIONS}|${IMAGE_EXTENSIONS})$`,
+  "i"
+);
+
+/**
  * Returns true when the given href is a local file reference that VS Code's
  * webview would otherwise block:
  *   - `file://` / `file:///` URLs
@@ -239,6 +257,7 @@ function remarkImageRefs() {
  *   - Codex pseudo-absolute paths (/abs/path/c:/…)
  *   - Slash-prefixed Windows paths (/c:/…)
  *   - Explicitly relative paths   (./…  or  ../…)
+ *   - Bare workspace-relative file paths (images/icon.png, src/foo.ts)
  */
 function isLocalFileHref(href: string): boolean {
   return (
@@ -246,7 +265,8 @@ function isLocalFileHref(href: string): boolean {
     /^[A-Za-z]:[/\\]/.test(href) ||
     /^\/abs\/path\/[A-Za-z]:\//.test(href) ||
     /^\/[A-Za-z]:\//.test(href) ||
-    /^\.\.?[/\\]/.test(href)
+    /^\.\.?[/\\]/.test(href) ||
+    WORKSPACE_RELATIVE_FILE_HREF.test(href)
   );
 }
 
@@ -417,10 +437,13 @@ async function downloadImage(uri: string, filename: string): Promise<void> {
  * if the image element itself errors, it degrades to the same {@link FileRefButton}
  * used for `<file-ref>` — never a broken-image icon.
  *
- * Once resolved it renders a centered, bordered thumbnail with a hover
- * download button (the download button we'd otherwise want from Streamdown's
- * native `<img>` — which we can't use, since our `src` is a workspace-relative
- * path needing async host resolution rather than a load-ready URI).
+ * Once resolved it renders a centered, bordered thumbnail. The thumbnail itself
+ * is a button that opens the file in VS Code (same as clicking a `<file-ref>`),
+ * so a prose mention of an image still lets the reader jump to its location; a
+ * hover download button sits on top as a separate overlay (the download control
+ * we'd otherwise want from Streamdown's native `<img>` — which we can't use,
+ * since our `src` is a workspace-relative path needing async host resolution
+ * rather than a load-ready URI).
  */
 function ImageRefThumbnail({
   path: encodedPath,
@@ -459,17 +482,31 @@ function ImageRefThumbnail({
     return <FileRefButton filePath={relativePath}>{children}</FileRefButton>;
   }
   const filename = relativePath.split(/[\\/]/).pop() || "image";
+  // Clicking the thumbnail opens the file in VS Code, the same as a <file-ref>
+  // link — so a harness that merely mentions an image path in prose still gives
+  // the reader a way back to "where is this". Reuses FileRefButton's parsing so
+  // an optional `:line` suffix behaves identically.
+  const { path: openPath, line: openLine } = parseFilePathAndLine(relativePath);
   return (
     <span className="my-2 flex justify-center">
       <span className="group/thumb relative inline-block">
-        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- onError only triggers the file-ref fallback, not a user action */}
-        <img
-          src={uri}
-          alt={relativePath}
-          title={relativePath}
-          className="block max-h-60 max-w-full rounded-md border border-panel-border"
-          onError={() => setUri(null)}
-        />
+        <button
+          type="button"
+          onClick={() =>
+            openLine !== undefined ? openFile(openPath, openLine) : openFile(openPath)
+          }
+          title={`Open ${openPath}`}
+          aria-label={`Open ${openPath}`}
+          className="block cursor-pointer border-none bg-transparent p-0"
+        >
+          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- onError only swaps to the file-ref fallback, not a user action */}
+          <img
+            src={uri}
+            alt={relativePath}
+            className="block max-h-60 max-w-full rounded-md border border-panel-border"
+            onError={() => setUri(null)}
+          />
+        </button>
         <button
           type="button"
           onClick={() => void downloadImage(uri, filename)}

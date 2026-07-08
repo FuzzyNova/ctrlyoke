@@ -19,7 +19,8 @@ import {
 } from "../types/DashboardConstants";
 import { TempFileManager } from "../utils/TempFileManager";
 import { buildFileReferenceValue } from "../completions/ContextReferenceBuilder";
-import { isPathWithinDirectory } from "../utils/PathSecurity";
+import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
+import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import {
@@ -1935,16 +1936,23 @@ export class WebviewMessageRouter {
   }
 
   /**
-   * Resolve a workspace-relative image path to a displayable URI for an inline
-   * thumbnail. Restricted to the two directories on `localResourceRoots`
-   * (`.ctrlyoke/temp/` and `.ctrlyoke/attachments/`): any other path — including
-   * one that escapes the workspace — returns an error so the webview falls back
-   * to a plain file-ref rather than leaking arbitrary filesystem paths as images.
+   * Resolve a workspace image path to a displayable URI for an inline thumbnail.
+   * Any image anywhere in an open workspace folder is previewable — not just
+   * pasted images under `.ctrlyoke/` — so a harness that references an existing
+   * repo image (`docs/diagram.png`, `root2/assets/logo.webp`, …) gets a thumbnail
+   * too. The path is resolved with the same multi-root logic as `@`-references
+   * (`resolveNamedRelativePath` + trusted-root containment), so folder-name
+   * prefixes and every folder of a multi-root `.code-workspace` are honored, and
+   * any path that escapes every trusted root returns an error so the webview
+   * falls back to a plain file-ref rather than leaking arbitrary filesystem
+   * paths as images.
    *
    * Transport-aware, so both the VS Code panel and the hosted browser dashboard
    * render thumbnails:
    * - **Panel** → a lightweight `vscode-webview://` resource URI via
-   *   `asWebviewUri` (streams from disk, no payload bloat).
+   *   `asWebviewUri` (streams from disk, no payload bloat). Every workspace
+   *   folder is on `localResourceRoots` (see `getImageResourceRoots`), so the
+   *   panel can load a resolved image from anywhere in the workspace.
    * - **Hosted browser** (and panel fallback) → an inline `data:` URI, since a
    *   browser can't load a `vscode-webview://` URI. Both webview CSPs already
    *   allow `img-src data:`.
@@ -1978,27 +1986,30 @@ export class WebviewMessageRouter {
         return fail("Missing image path");
       }
 
-      const resolved = path.resolve(workspaceRoot, message.relativePath);
-      const allowedRoots = [
-        path.join(
-          workspaceRoot,
-          PATH_CONSTANTS.CTRLYOKE_DIR,
-          PATH_CONSTANTS.TEMP_DIR
-        ),
-        path.join(
-          workspaceRoot,
-          PATH_CONSTANTS.CTRLYOKE_DIR,
-          PATH_CONSTANTS.ATTACHMENTS_DIR
-        ),
-      ];
-      if (!allowedRoots.some((root) => isPathWithinDirectory(resolved, root))) {
-        return fail("Path is not an inline-previewable image location");
+      const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+      const resolved = resolveNamedRelativePath(
+        message.relativePath,
+        workspaceRoot,
+        getVsCodeNamedWorkspaceRoots()
+      );
+      if (!isPathWithinAnyDirectory(resolved, trustedRoots)) {
+        return fail("Image is not inside an open workspace folder");
       }
 
       try {
         await fs.promises.access(resolved);
       } catch {
         return fail("Image file no longer exists");
+      }
+
+      // Only ever hand back an allowed image type, regardless of transport —
+      // the webview requests previews only for image-extension paths, but this
+      // is the host-side gate that keeps a non-image workspace file from being
+      // surfaced as a thumbnail URI.
+      const extension = path.extname(resolved).replace(/^\./, "");
+      const mimeType = imageExtensionToMimeType(extension);
+      if (!mimeType) {
+        return fail("Unsupported image type for inline preview");
       }
 
       // Panel: prefer the lightweight webview-resource URI.
@@ -2012,11 +2023,6 @@ export class WebviewMessageRouter {
       }
 
       // Hosted browser (and panel fallback): serve an inline data URI.
-      const extension = path.extname(resolved).replace(/^\./, "");
-      const mimeType = imageExtensionToMimeType(extension);
-      if (!mimeType) {
-        return fail("Unsupported image type for inline preview");
-      }
       const stats = await fs.promises.stat(resolved);
       if (stats.size > MAX_PASTED_IMAGE_BYTES) {
         return fail("Image is too large to preview inline");
@@ -2320,19 +2326,26 @@ export class WebviewMessageRouter {
         return;
       }
 
-      const options: vscode.TextDocumentShowOptions = {
-        preview: false,
-      };
-
+      // A line target means the caller wants to land on a specific line, which
+      // only a text editor can do — force one via showTextDocument. Without a
+      // line, open through the `vscode.open` command so VS Code picks the right
+      // editor for the file type: text files still open in the editor, but
+      // binary files (images, PDFs, …) open in their native viewer instead of
+      // failing with "File seems to be binary and cannot be opened as text".
       if (lineStart) {
         const start = new vscode.Position(lineStart - 1, 0);
         const end = lineEnd
           ? new vscode.Position(lineEnd - 1, Number.MAX_SAFE_INTEGER)
           : start;
-        options.selection = new vscode.Range(start, end);
+        await vscode.window.showTextDocument(targetUri, {
+          preview: false,
+          selection: new vscode.Range(start, end),
+        });
+      } else {
+        await vscode.commands.executeCommand("vscode.open", targetUri, {
+          preview: false,
+        });
       }
-
-      await vscode.window.showTextDocument(targetUri, options);
     } catch (error) {
       Log.error("Error opening file:", error);
       vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
