@@ -370,6 +370,26 @@ describe("OutputRow auto-expand on hidden active match", () => {
     );
   });
 
+  it("does not linkify prompt references inside fenced code blocks", () => {
+    const row: OutputRenderRow = {
+      key: "row-prompt-fenced",
+      target: TARGET,
+      estimateSize: 0,
+      rowKind: "prompt",
+      text: "Use @src/app.ts here\n```\n@src/ignored.ts\n```",
+    };
+
+    const { container } = render(
+      <OutputRow row={row} isExecutionActive={false} />
+    );
+
+    const links = container.querySelectorAll('[role="link"]');
+    expect(links.length).toBe(1);
+    expect(links[0].textContent).toBe("@src/app.ts");
+    // The fenced reference is still shown as plain text, just not a link.
+    expect(container).toHaveTextContent("@src/ignored.ts");
+  });
+
   it("renders legacy user-stop error rows as warnings", () => {
     const row: OutputRenderRow = {
       key: "row-error",

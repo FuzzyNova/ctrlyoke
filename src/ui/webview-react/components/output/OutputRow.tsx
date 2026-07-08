@@ -52,6 +52,8 @@ import {
 import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
 import {
   findContextReferenceMatches,
+  getFencedBlockRanges,
+  isInFencedBlock,
   type ContextReferenceMatch,
 } from "../editor/CodeMirrorEditor";
 import { openContextReference } from "@utils/contextReferenceActions";
@@ -1044,7 +1046,14 @@ const PromptReferenceText: React.FC<{
   matches: RowFindDecoration["matches"];
 }> = ({ text, matches }) => {
   const vscode = getVsCodeApi();
-  const refs = useMemo(() => findContextReferenceMatches(text), [text]);
+  // Skip references inside ``` fenced blocks — they aren't expanded when the
+  // prompt runs, so CodeMirror doesn't decorate them either; match that here.
+  const refs = useMemo(() => {
+    const fencedRanges = getFencedBlockRanges(text);
+    return findContextReferenceMatches(text).filter(
+      (ref) => !isInFencedBlock(ref.from, ref.to, fencedRanges)
+    );
+  }, [text]);
 
   // Rebase the row-relative find matches onto a [start,end) sub-slice so find
   // highlighting still lands correctly inside both plain text and link spans.

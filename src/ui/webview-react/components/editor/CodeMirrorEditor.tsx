@@ -1668,7 +1668,7 @@ export function findContextReferenceMatches(
   ].sort((a, b) => a.from - b.from);
 }
 
-function getFencedBlockRanges(
+export function getFencedBlockRanges(
   text: string
 ): Array<{ from: number; to: number }> {
   const ranges: Array<{ from: number; to: number }> = [];
@@ -1680,7 +1680,7 @@ function getFencedBlockRanges(
   return ranges;
 }
 
-function isInFencedBlock(
+export function isInFencedBlock(
   from: number,
   to: number,
   fencedRanges: Array<{ from: number; to: number }>
