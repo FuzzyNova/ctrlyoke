@@ -3,6 +3,9 @@
     {
       "path": ".",
     },
+    {
+      "path": "../fuzzno",
+    },
   ],
   "settings": {
     "files.exclude": {

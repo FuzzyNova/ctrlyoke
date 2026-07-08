@@ -20,7 +20,10 @@ import {
 import { TempFileManager } from "../utils/TempFileManager";
 import { buildFileReferenceValue } from "../completions/ContextReferenceBuilder";
 import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
-import { resolveNamedRelativePath } from "../platform/WorkspaceRootResolver";
+import {
+  resolveNamedRelativePath,
+  type ResolverWorkspaceFolder,
+} from "../platform/WorkspaceRootResolver";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import {
@@ -1840,7 +1843,11 @@ export class WebviewMessageRouter {
         exists = true;
       } else if (workspaceRoot) {
         const candidates = [
-          path.resolve(workspaceRoot, filePath),
+          resolveNamedRelativePath(
+            filePath,
+            workspaceRoot,
+            getVsCodeNamedWorkspaceRoots()
+          ),
           path.resolve(
             workspaceRoot,
             PATH_CONSTANTS.CTRLYOKE_DIR,
@@ -2049,12 +2056,14 @@ export class WebviewMessageRouter {
     const workspaceRoot = vscode.workspace.workspaceFolders?.length
       ? getVsCodeWorkspaceRoot()
       : null;
+    const namedRoots = getVsCodeNamedWorkspaceRoots();
 
     const results = await Promise.all(
       references.map(async (reference) => {
         const validation = await this.validateContextReference(
           reference,
-          workspaceRoot
+          workspaceRoot,
+          namedRoots
         );
         return {
           id: reference.id,
@@ -2079,7 +2088,8 @@ export class WebviewMessageRouter {
       lineEnd?: string;
       symbolName?: string;
     },
-    workspaceRoot: string | null
+    workspaceRoot: string | null,
+    namedRoots: readonly ResolverWorkspaceFolder[]
   ): Promise<{ exists: boolean; message?: string }> {
     if (reference.type === "git") {
       return this.validateGitContextReference(reference.gitRef, workspaceRoot);
@@ -2091,7 +2101,8 @@ export class WebviewMessageRouter {
 
     const pathValidation = await this.resolveContextReferencePath(
       reference.path,
-      workspaceRoot
+      workspaceRoot,
+      namedRoots
     );
 
     if (!pathValidation.exists || !pathValidation.resolvedPath) {
@@ -2158,7 +2169,8 @@ export class WebviewMessageRouter {
 
   private async resolveContextReferencePath(
     filePath: string,
-    workspaceRoot: string | null
+    workspaceRoot: string | null,
+    namedRoots: readonly ResolverWorkspaceFolder[]
   ): Promise<{
     exists: boolean;
     resolvedPath?: string;
@@ -2169,7 +2181,7 @@ export class WebviewMessageRouter {
       ? [filePath]
       : workspaceRoot
         ? [
-            path.resolve(workspaceRoot, filePath),
+            resolveNamedRelativePath(filePath, workspaceRoot, namedRoots),
             path.resolve(
               workspaceRoot,
               PATH_CONSTANTS.CTRLYOKE_DIR,
