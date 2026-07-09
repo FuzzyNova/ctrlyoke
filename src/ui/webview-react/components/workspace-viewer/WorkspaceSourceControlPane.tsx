@@ -8,6 +8,7 @@ import {
   workspaceCommitLog,
   workspaceDiff,
   workspaceDiscard,
+  workspaceRepos,
   workspaceStage,
   workspaceStatus,
   workspaceUnstage,
@@ -101,6 +102,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const commitHistoryHasMore = useWorkspaceViewerStore(
     (s) => s.commitHistoryHasMore
   );
+  const selectedRepoId = useWorkspaceViewerStore((s) => s.selectedRepoId);
+  const setRepos = useWorkspaceViewerStore((s) => s.setRepos);
 
   const isMobile = useIsMobile();
   const [incomingCommitCount, setIncomingCommitCount] = useState(0);
@@ -112,7 +115,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   const loadStatus = useCallback(async (): Promise<SourceControlFile[]> => {
     setSourceControlLoading(true);
     try {
-      const result = await workspaceStatus();
+      const result = await workspaceStatus(selectedRepoId ?? undefined);
       setSourceControlFiles(result.files);
       setIncomingCommitCount(result.incomingCommitCount);
       setOutgoingCommitCount(result.outgoingCommitCount);
@@ -123,14 +126,24 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     } finally {
       setSourceControlLoading(false);
     }
-  }, [setScmError, setSourceControlFiles, setSourceControlLoading]);
+  }, [
+    selectedRepoId,
+    setScmError,
+    setSourceControlFiles,
+    setSourceControlLoading,
+  ]);
 
   const loadHistory = useCallback(async () => {
     setCommitHistoryLoading(true);
     try {
       // While detached, keep the branch we came from visible so the commits
       // "ahead" of the checked-out point still render in the graph.
-      const result = await workspaceCommitLog(0, 30, detachedBranchHint());
+      const result = await workspaceCommitLog(
+        0,
+        30,
+        detachedBranchHint(),
+        selectedRepoId ?? undefined
+      );
       setCommitHistory(
         result.commits,
         result.hasMore,
@@ -142,7 +155,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     } finally {
       setCommitHistoryLoading(false);
     }
-  }, [setCommitHistory, setCommitHistoryLoading]);
+  }, [selectedRepoId, setCommitHistory, setCommitHistoryLoading]);
 
   const loadMoreHistory = useCallback(async () => {
     if (!commitHistoryHasMore) return;
@@ -151,7 +164,8 @@ export const WorkspaceSourceControlPane: React.FC = () => {
       const result = await workspaceCommitLog(
         commitHistory.length,
         30,
-        detachedBranchHint()
+        detachedBranchHint(),
+        selectedRepoId ?? undefined
       );
       appendCommitHistory(result.commits, result.hasMore);
     } catch {
@@ -163,6 +177,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     appendCommitHistory,
     commitHistory.length,
     commitHistoryHasMore,
+    selectedRepoId,
     setCommitHistoryLoading,
   ]);
 
@@ -170,12 +185,22 @@ export const WorkspaceSourceControlPane: React.FC = () => {
     await Promise.all([loadStatus(), loadHistory()]);
   }, [loadHistory, loadStatus]);
 
+  // Discover repos once on mount; the selector appears only for multi-repo
+  // workspaces and defaults selection to the repo containing the open file.
+  useEffect(() => {
+    workspaceRepos()
+      .then((result) => setRepos(result.repos))
+      .catch(() => {
+        // ignore — selector simply won't appear; SCM falls back to aggregate
+      });
+  }, [setRepos]);
+
+  // Load status + history whenever the selected repo changes (loadStatus /
+  // loadHistory close over selectedRepoId, so their identity changes with it).
   useEffect(() => {
     void loadStatus();
     void loadHistory();
-    // Intentional: run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadStatus, loadHistory]);
 
   const selectFileDiff = useCallback(
     async (filePath: string) => {

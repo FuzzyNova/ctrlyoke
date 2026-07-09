@@ -60,6 +60,7 @@ export const WorkspaceCommitHistoryPane: React.FC<
   const setMobileDiffVisible = useWorkspaceViewerStore(
     (s) => s.setMobileDiffVisible
   );
+  const selectedRepoId = useWorkspaceViewerStore((s) => s.selectedRepoId);
 
   const { openContextMenu, commitHistoryContextMenuPortal } =
     useCommitHistoryContextMenu({ onRefresh });
@@ -91,13 +92,22 @@ export const WorkspaceCommitHistoryPane: React.FC<
     const branch = previousBranch ?? currentBranch;
     if (!branch) return;
     try {
-      await workspaceCheckoutBranch({ branch });
+      await workspaceCheckoutBranch({
+        branch,
+        repo: selectedRepoId ?? undefined,
+      });
       setPreviousBranch(null);
       onRefresh();
     } catch {
       // ignore — the parent loadStatus/loadHistory will surface any error
     }
-  }, [currentBranch, onRefresh, previousBranch, setPreviousBranch]);
+  }, [
+    currentBranch,
+    onRefresh,
+    previousBranch,
+    selectedRepoId,
+    setPreviousBranch,
+  ]);
 
   const returnBranchLabel =
     previousBranch ?? (currentBranch !== null ? currentBranch : null);

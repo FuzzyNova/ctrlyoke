@@ -56,9 +56,16 @@ import {
   OutputExecutionTarget,
 } from "../types/OutputHistoryTypes";
 import type { IDashboardSink } from "../types/IDashboardSink";
+import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 
 export interface WorkflowExecutionContext {
   workspaceFolderPath: string | undefined;
+  /**
+   * Open workspace roots (multi-root). Passed to WorkspaceSnapshotService so
+   * capture/undo span every root's repo, not just the primary. Empty/one-entry
+   * in single-root, where snapshot behavior stays byte-identical.
+   */
+  namedWorkspaceRoots?: readonly ResolverWorkspaceFolder[];
   currentPromptFilePath: string | undefined;
   dashboardProvider?: IDashboardSink;
   shouldShowCliCommand: boolean;
@@ -1043,7 +1050,8 @@ export class WorkflowExecutor {
 
     const afterState = await context.snapshotService.captureWorkspaceState(
       context.workspaceFolderPath,
-      strategy
+      strategy,
+      context.namedWorkspaceRoots
     );
 
     const changedFiles = await context.snapshotService.computeSnapshotChanges(
@@ -1056,6 +1064,7 @@ export class WorkflowExecutor {
       capturedAt: afterState.capturedAt,
       strategy,
       git: afterState.git,
+      repos: context.snapshotService.snapshotRepoInfos(afterState),
       changedFiles,
     };
 
@@ -1154,7 +1163,8 @@ export class WorkflowExecutor {
       try {
         beforeState = await context.snapshotService.captureWorkspaceState(
           context.workspaceFolderPath,
-          snapshotStrategy
+          snapshotStrategy,
+          context.namedWorkspaceRoots
         );
       } catch {
         // ignore

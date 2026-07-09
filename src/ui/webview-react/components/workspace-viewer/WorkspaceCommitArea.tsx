@@ -23,6 +23,9 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   onRefresh,
   outgoingCommitCount,
 }) => {
+  const repos = useWorkspaceViewerStore((s) => s.repos);
+  const selectedRepoId = useWorkspaceViewerStore((s) => s.selectedRepoId);
+  const setSelectedRepoId = useWorkspaceViewerStore((s) => s.setSelectedRepoId);
   const commitMessage = useWorkspaceViewerStore((s) => s.commitMessage);
   const committing = useWorkspaceViewerStore((s) => s.committing);
   const generatingCommitMessage = useWorkspaceViewerStore(
@@ -55,7 +58,8 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
     try {
       const result = await workspaceGenerateCommitMessage(
         commitMessage.trim() || undefined,
-        abortController.signal
+        abortController.signal,
+        selectedRepoId ?? undefined
       );
       setCommitMessage(result.message);
       if (!result.staged) {
@@ -73,6 +77,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   }, [
     commitMessage,
     generatingCommitMessage,
+    selectedRepoId,
     setGeneratingCommitMessage,
     setCommitMessage,
     setScmError,
@@ -96,7 +101,10 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
           await workspaceStage({ path: file.path });
         }
       }
-      await workspaceCommit({ message: commitMessage });
+      await workspaceCommit({
+        message: commitMessage,
+        repo: selectedRepoId ?? undefined,
+      });
       setCommitMessage("");
       clearDiff();
       await onRefresh();
@@ -108,6 +116,7 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
   }, [
     commitMessage,
     committing,
+    selectedRepoId,
     sourceControlFiles,
     setCommitting,
     setScmError,
@@ -121,31 +130,55 @@ export const WorkspaceCommitArea: React.FC<WorkspaceCommitAreaProps> = ({
     setPushing(true);
     setScmError(null);
     try {
-      await workspacePush();
+      await workspacePush(selectedRepoId ?? undefined);
       await onRefresh();
     } catch (err) {
       setScmError(String(err));
     } finally {
       setPushing(false);
     }
-  }, [pushing, setPushing, setScmError, onRefresh]);
+  }, [pushing, selectedRepoId, setPushing, setScmError, onRefresh]);
 
   const handlePull = useCallback(async () => {
     if (pulling) return;
     setPulling(true);
     setScmError(null);
     try {
-      await workspacePull();
+      await workspacePull(selectedRepoId ?? undefined);
       await onRefresh();
     } catch (err) {
       setScmError(String(err));
     } finally {
       setPulling(false);
     }
-  }, [pulling, setPulling, setScmError, onRefresh]);
+  }, [pulling, selectedRepoId, setPulling, setScmError, onRefresh]);
 
   return (
     <div className="flex flex-col gap-2 p-3 flex-shrink-0">
+      {repos.length > 1 && (
+        <label className="flex flex-col gap-1">
+          <span className="text-xxs font-semibold uppercase tracking-wide text-editor-fg opacity-50">
+            Repository
+          </span>
+          <div className="relative">
+            <i className="codicon codicon-repo pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60" />
+            <select
+              value={selectedRepoId ?? ""}
+              onChange={(e) => setSelectedRepoId(e.target.value || null)}
+              aria-label="Select repository"
+              className="w-full appearance-none rounded border border-panel-border bg-input-bg pl-7 pr-7 py-1 text-xs text-editor-fg focus:outline-none focus:border-focus-border"
+            >
+              {repos.map((repo) => (
+                <option key={repo.id} value={repo.id}>
+                  {repo.label}
+                </option>
+              ))}
+            </select>
+            <i className="codicon codicon-chevron-down pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-editor-fg opacity-60" />
+          </div>
+        </label>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={handlePush}

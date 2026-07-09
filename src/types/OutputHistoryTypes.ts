@@ -186,6 +186,36 @@ export interface SnapshotFileChange {
    * without needing to store the full file content.
    */
   lineEnding?: "crlf";
+  /**
+   * Multi-repo only: the folder-name prefix (matching `SnapshotRepoInfo.prefix`)
+   * of the repo/root this change belongs to. Absent/`""` for single-root
+   * snapshots. `path` is already folder-name-prefixed with this value in
+   * multi-root, so undo resolution keys off `path`; `repo` links the change to
+   * its `SnapshotRepoInfo` for per-repo `beforeContent` enrichment.
+   */
+  repo?: string;
+}
+
+/**
+ * Per-repo metadata for a multi-root workspace whose roots span several git
+ * repos. One entry per capture segment (git repo or filesystem root). Present
+ * on `WorkspaceSnapshot.repos` only in multi-root; single-root snapshots keep
+ * using the top-level `strategy`/`git` fields and omit `repos` entirely.
+ */
+export interface SnapshotRepoInfo {
+  /** Folder-name prefix for this segment's viewer paths (the workspace root's name). */
+  prefix: string;
+  /** Absolute path git ran against — the git toplevel for git repos, the root dir for filesystem roots. */
+  root: string;
+  /**
+   * The workspace root's path relative to `root` (POSIX), used to scope git to
+   * the root's subtree and to reconstruct repo-relative paths for enrichment.
+   * `""` when the root IS the git toplevel (the common case).
+   */
+  rootRelative: string;
+  strategy: "git" | "filesystem";
+  /** Git HEAD info for this repo at capture time; absent for filesystem segments. */
+  git?: WorkspaceSnapshotGitInfo;
 }
 
 export interface WorkspaceSnapshot {
@@ -196,8 +226,17 @@ export interface WorkspaceSnapshot {
   /**
    * Git repository metadata captured alongside git-backed snapshots.
    * Absent for filesystem snapshots or when git metadata could not be resolved.
+   * In multi-root snapshots this holds the PRIMARY root's git info (for
+   * back-compat/display); per-repo info lives in `repos`.
    */
   git?: WorkspaceSnapshotGitInfo;
+  /**
+   * Multi-root only: per-repo capture metadata, one entry per segment. Present
+   * only when the workspace spans multiple roots; single-root snapshots omit
+   * this and rely on the top-level `strategy`/`git`. Drives per-repo
+   * `beforeContent` enrichment for large git-clean files.
+   */
+  repos?: SnapshotRepoInfo[];
   /**
    * Files changed during this prompt that have NO structured event attribution.
    * May include changes from parallel workflows — shown with a warning in the dialog.

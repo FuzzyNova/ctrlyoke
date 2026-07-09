@@ -10,6 +10,7 @@ import type {
   PromptChangeType,
   WorkspaceSnapshot,
   WorkspaceSnapshotGitInfo,
+  SnapshotRepoInfo,
 } from "../types/OutputHistoryTypes";
 import type {
   UndoFileInstruction,
@@ -23,6 +24,12 @@ import {
   UNDO_FILE_ACTIONS,
   type SnapshotStrategy,
 } from "../types/DashboardConstants";
+import {
+  resolveNamedRelativePath,
+  type ResolverWorkspaceFolder,
+} from "../platform/WorkspaceRootResolver";
+import { discoverRepos } from "./WorkspaceRepoDiscovery";
+import { isPathWithinDirectory } from "./PathSecurity";
 
 const execFileAsync = promisify(execFile);
 
@@ -68,11 +75,38 @@ interface RawFileState {
   isAtHead: boolean; // true only under git strategy
 }
 
-export interface RawWorkspaceState {
+/**
+ * One capture unit: a single git repo or a filesystem root. `files` are keyed
+ * by the path git/fs reports RELATIVE TO `root` (POSIX) — the same key used for
+ * git pathspecs and `git show HEAD:<key>` — while `prefix`/`pathspec` map those
+ * keys to folder-name-prefixed viewer paths for multi-root. Single-root uses a
+ * single segment with `prefix: ""` and `pathspec: ""`, so its behavior is
+ * byte-identical to the pre-multi-root implementation.
+ */
+export interface RawWorkspaceSegment {
+  /** Folder-name prefix for viewer paths in this segment ("" for single-root/primary). */
+  prefix: string;
+  /** Absolute git toplevel (git segments) or root dir (filesystem segments). */
+  root: string;
+  /** The workspace root's path relative to `root` (POSIX); "" when the root IS `root`. */
+  pathspec: string;
   strategy: SnapshotStrategy;
-  files: Map<string, RawFileState>;
-  capturedAt: number;
   git?: WorkspaceSnapshotGitInfo;
+  files: Map<string, RawFileState>;
+}
+
+export interface RawWorkspaceState {
+  capturedAt: number;
+  /** Primary segment's strategy, surfaced for back-compat single-root reads. */
+  strategy: SnapshotStrategy;
+  /** Primary segment's git info, surfaced for back-compat single-root reads. */
+  git?: WorkspaceSnapshotGitInfo;
+  segments: RawWorkspaceSegment[];
+}
+
+/** Convert OS-separator paths to POSIX for viewer paths and git pathspecs. */
+function toPosixPath(p: string): string {
+  return p.split(path.sep).join("/");
 }
 
 interface SnapshotFileData {
@@ -296,12 +330,14 @@ function buildReversePatchString(hunks: UnifiedDiffHunk[]): string {
 
 export class WorkspaceSnapshotService {
   private buildModifiedChange(
-    filePath: string,
+    viewerPath: string,
+    repo: string | undefined,
     beforeState: RawFileState,
     afterState: SnapshotFileData
   ): SnapshotFileChange {
     const change: SnapshotFileChange = {
-      path: filePath,
+      path: viewerPath,
+      repo,
       changeType: "modified" as PromptChangeType,
       baseSource: SNAPSHOT_BASE_SOURCES.CAPTURED_BEFORE,
       afterHash: afterState.hash,
@@ -385,14 +421,14 @@ export class WorkspaceSnapshotService {
    * it should not be attributed to this prompt's undo history.
    */
   private matchesPreExistingDirtyContent(
-    before: RawWorkspaceState,
+    beforeSeg: RawWorkspaceSegment,
     filePath: string,
     afterHash: string | undefined
   ): boolean {
     if (afterHash === undefined) {
       return false;
     }
-    const dirtyBefore = before.files.get(filePath);
+    const dirtyBefore = beforeSeg.files.get(filePath);
     return dirtyBefore !== undefined && dirtyBefore.contentHash === afterHash;
   }
 
@@ -407,28 +443,34 @@ export class WorkspaceSnapshotService {
    * recorded twice.
    */
   private async getCommitRangeChanges(
-    before: RawWorkspaceState,
+    segment: RawWorkspaceSegment,
+    beforeSeg: RawWorkspaceSegment,
     afterCommit: string,
-    workspacePath: string,
     skipPaths: Set<string>
   ): Promise<SnapshotFileChange[]> {
-    const beforeCommit = before.git?.headCommit;
+    const beforeCommit = beforeSeg.git?.headCommit;
     if (!beforeCommit) {
       return [];
     }
+    const workspacePath = segment.root;
+    const repo = segment.prefix || undefined;
     const changes: SnapshotFileChange[] = [];
     let stdout: string;
     try {
-      const result = await execFileAsync(
-        "git",
-        [
-          "diff",
-          "--name-status",
-          "--no-renames",
-          `${beforeCommit}..${afterCommit}`,
-        ],
-        { cwd: workspacePath }
-      );
+      const diffArgs = [
+        "diff",
+        "--name-status",
+        "--no-renames",
+        `${beforeCommit}..${afterCommit}`,
+      ];
+      // Scope the commit-range diff to this root's subtree so a repo shared by
+      // multiple roots attributes each committed change to the right segment.
+      if (segment.pathspec) {
+        diffArgs.push("--", segment.pathspec);
+      }
+      const result = await execFileAsync("git", diffArgs, {
+        cwd: workspacePath,
+      });
       stdout = result.stdout;
     } catch (err) {
       Log.warn(
@@ -442,6 +484,15 @@ export class WorkspaceSnapshotService {
       const [status, ...pathParts] = line.split("\t");
       const filePath = pathParts.join("\t").replace(/\\/g, "/");
       if (!filePath || skipPaths.has(filePath)) continue;
+      // Defensive: keep only paths inside this segment's subtree.
+      if (
+        segment.pathspec &&
+        filePath !== segment.pathspec &&
+        !filePath.startsWith(`${segment.pathspec}/`)
+      ) {
+        continue;
+      }
+      const viewerPath = this.segmentViewerPath(segment, filePath);
 
       const statusChar = status?.[0];
       if (statusChar === "A") {
@@ -452,11 +503,14 @@ export class WorkspaceSnapshotService {
         );
         const afterHash =
           afterContent !== undefined ? computeHash(afterContent) : undefined;
-        if (this.matchesPreExistingDirtyContent(before, filePath, afterHash)) {
+        if (
+          this.matchesPreExistingDirtyContent(beforeSeg, filePath, afterHash)
+        ) {
           continue;
         }
         changes.push({
-          path: filePath,
+          path: viewerPath,
+          repo,
           changeType: "created",
           afterHash,
         });
@@ -467,7 +521,8 @@ export class WorkspaceSnapshotService {
           filePath
         );
         const change: SnapshotFileChange = {
-          path: filePath,
+          path: viewerPath,
+          repo,
           changeType: "deleted",
         };
         if (beforeContent !== undefined) {
@@ -483,11 +538,14 @@ export class WorkspaceSnapshotService {
         ]);
         const afterHash =
           afterContent !== undefined ? computeHash(afterContent) : undefined;
-        if (this.matchesPreExistingDirtyContent(before, filePath, afterHash)) {
+        if (
+          this.matchesPreExistingDirtyContent(beforeSeg, filePath, afterHash)
+        ) {
           continue;
         }
         const change: SnapshotFileChange = {
-          path: filePath,
+          path: viewerPath,
+          repo,
           changeType: "modified",
           baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
           afterHash,
@@ -531,24 +589,69 @@ export class WorkspaceSnapshotService {
 
   async captureWorkspaceState(
     workspacePath: string,
-    strategy: SnapshotStrategy
+    strategy: SnapshotStrategy,
+    namedRoots?: readonly ResolverWorkspaceFolder[]
   ): Promise<RawWorkspaceState> {
     const capturedAt = Date.now();
+
+    // Single-root (0/1 named roots): one segment against `workspacePath` with no
+    // prefix/pathspec — byte-identical to the pre-multi-root implementation.
+    if (!namedRoots || namedRoots.length <= 1) {
+      const seg = await this.captureSegment(workspacePath, strategy, "");
+      return {
+        capturedAt,
+        strategy,
+        git: seg.git,
+        segments: [
+          {
+            prefix: "",
+            root: workspacePath,
+            pathspec: "",
+            strategy,
+            git: seg.git,
+            files: seg.files,
+          },
+        ],
+      };
+    }
+
+    const segments = await this.captureMultiRootSegments(namedRoots);
+    const primary = this.primarySegment(segments, workspacePath);
+    return {
+      capturedAt,
+      strategy: primary?.strategy ?? strategy,
+      git: primary?.git,
+      segments,
+    };
+  }
+
+  /**
+   * Capture one repo/root: git dirty files (optionally scoped to a `pathspec`
+   * subtree) or a filesystem walk. `files` are keyed by the path relative to
+   * `root` (git-reported for git, root-relative for filesystem).
+   */
+  private async captureSegment(
+    root: string,
+    strategy: SnapshotStrategy,
+    pathspec: string
+  ): Promise<{ git?: WorkspaceSnapshotGitInfo; files: Map<string, RawFileState> }> {
     const files = new Map<string, RawFileState>();
     let git: WorkspaceSnapshotGitInfo | undefined;
 
     try {
       if (strategy === SNAPSHOT_STRATEGIES.GIT) {
-        git = await this.getGitSnapshotInfo(workspacePath);
+        git = await this.getGitSnapshotInfo(root);
         let stdout = "";
         try {
-          const result = await execFileAsync("git", ["status", "--porcelain"], {
-            cwd: workspacePath,
-          });
+          const args = ["status", "--porcelain"];
+          if (pathspec) {
+            args.push("--", pathspec);
+          }
+          const result = await execFileAsync("git", args, { cwd: root });
           stdout = result.stdout;
         } catch (err) {
           Log.warn(`WorkspaceSnapshotService: git status failed: ${err}`);
-          return { strategy, files, capturedAt, git };
+          return { git, files };
         }
 
         const lines = stdout.split("\n").filter((l) => l.length >= 3);
@@ -564,12 +667,22 @@ export class WorkspaceSnapshotService {
           if (!filePath) {
             continue;
           }
+          // Defensive: git status honours the pathspec, but skip anything that
+          // still falls outside the root's subtree so a shared repo's other
+          // roots never leak into this segment.
+          if (
+            pathspec &&
+            filePath !== pathspec &&
+            !filePath.startsWith(`${pathspec}/`)
+          ) {
+            continue;
+          }
 
           // isAtHead: true when the file exists in git HEAD (tracked, modified/deleted).
           // False for new/untracked (??) or newly staged (A) files.
           const isAtHead = xy !== "??" && xy[0] !== "A";
 
-          const absPath = path.join(workspacePath, filePath);
+          const absPath = path.join(root, filePath);
           const fileData = await readFileForSnapshot(absPath);
           if (!fileData) {
             continue;
@@ -582,33 +695,162 @@ export class WorkspaceSnapshotService {
         }
       } else {
         // filesystem strategy
-        const gitignorePath = path.join(workspacePath, ".gitignore");
+        const gitignorePath = path.join(root, ".gitignore");
         const gitignoreMatcher = buildGitignoreMatcher(gitignorePath);
-        await walkDirectory(
-          workspacePath,
-          workspacePath,
-          gitignoreMatcher,
-          files
-        );
+        await walkDirectory(root, root, gitignoreMatcher, files);
       }
     } catch (err) {
-      Log.warn(`WorkspaceSnapshotService: captureWorkspaceState error: ${err}`);
-      return { strategy, files: new Map(), capturedAt, git };
+      Log.warn(`WorkspaceSnapshotService: captureSegment error: ${err}`);
+      return { git, files: new Map() };
     }
 
-    return { strategy, files, capturedAt, git };
+    return { git, files };
+  }
+
+  /**
+   * Build one capture segment per workspace root: git segments (scoped to the
+   * root's subtree of its discovered repo) for roots inside a repo, filesystem
+   * segments otherwise. Two roots sharing a repo become two segments scoped by
+   * their respective pathspecs, so files never double-count.
+   */
+  private async captureMultiRootSegments(
+    namedRoots: readonly ResolverWorkspaceFolder[]
+  ): Promise<RawWorkspaceSegment[]> {
+    const repos = await discoverRepos([...namedRoots]);
+    const segments: RawWorkspaceSegment[] = [];
+
+    for (const root of namedRoots) {
+      const rootAbs = path.resolve(root.fsPath);
+      const repo = repos.find(
+        (r) =>
+          path.resolve(r.rootPath) === rootAbs ||
+          isPathWithinDirectory(rootAbs, r.rootPath)
+      );
+      if (repo) {
+        const pathspec = toPosixPath(
+          path.relative(path.resolve(repo.rootPath), rootAbs)
+        );
+        const seg = await this.captureSegment(
+          repo.rootPath,
+          SNAPSHOT_STRATEGIES.GIT,
+          pathspec
+        );
+        segments.push({
+          prefix: root.name,
+          root: repo.rootPath,
+          pathspec,
+          strategy: SNAPSHOT_STRATEGIES.GIT,
+          git: seg.git,
+          files: seg.files,
+        });
+      } else {
+        const seg = await this.captureSegment(
+          rootAbs,
+          SNAPSHOT_STRATEGIES.FILESYSTEM,
+          ""
+        );
+        segments.push({
+          prefix: root.name,
+          root: rootAbs,
+          pathspec: "",
+          strategy: SNAPSHOT_STRATEGIES.FILESYSTEM,
+          git: undefined,
+          files: seg.files,
+        });
+      }
+    }
+
+    return segments;
+  }
+
+  /** The segment corresponding to the primary root (for back-compat top-level fields). */
+  private primarySegment(
+    segments: RawWorkspaceSegment[],
+    workspacePath: string
+  ): RawWorkspaceSegment | undefined {
+    const resolved = path.resolve(workspacePath);
+    return (
+      segments.find((s) => path.resolve(s.root) === resolved) ??
+      segments.find((s) => isPathWithinDirectory(resolved, s.root)) ??
+      segments[0]
+    );
+  }
+
+  /** Folder-name-prefixed viewer path for a segment-relative (git-reported) path. */
+  private segmentViewerPath(
+    segment: RawWorkspaceSegment,
+    segmentRelPath: string
+  ): string {
+    let rootRel = segmentRelPath;
+    if (segment.pathspec) {
+      rootRel =
+        segmentRelPath === segment.pathspec
+          ? ""
+          : segmentRelPath.startsWith(`${segment.pathspec}/`)
+            ? segmentRelPath.slice(segment.pathspec.length + 1)
+            : segmentRelPath;
+    }
+    return segment.prefix ? `${segment.prefix}/${rootRel}` : rootRel;
+  }
+
+  /** Per-repo metadata for a WorkspaceSnapshot; undefined in single-root. */
+  snapshotRepoInfos(
+    state: RawWorkspaceState
+  ): SnapshotRepoInfo[] | undefined {
+    if (state.segments.length <= 1) {
+      return undefined;
+    }
+    return state.segments.map((segment) => ({
+      prefix: segment.prefix,
+      root: segment.root,
+      rootRelative: segment.pathspec,
+      strategy: segment.strategy,
+      git: segment.git,
+    }));
   }
 
   async computeSnapshotChanges(
     before: RawWorkspaceState,
     after: RawWorkspaceState,
-    workspacePath: string
+    _workspacePath: string
   ): Promise<SnapshotFileChange[]> {
     const changes: SnapshotFileChange[] = [];
-    const strategy = after.strategy;
+    for (const afterSeg of after.segments) {
+      const beforeSeg =
+        before.segments.find(
+          (s) =>
+            s.prefix === afterSeg.prefix &&
+            path.resolve(s.root) === path.resolve(afterSeg.root)
+        ) ??
+        ({
+          prefix: afterSeg.prefix,
+          root: afterSeg.root,
+          pathspec: afterSeg.pathspec,
+          strategy: afterSeg.strategy,
+          git: undefined,
+          files: new Map<string, RawFileState>(),
+        } satisfies RawWorkspaceSegment);
+      changes.push(...(await this.computeSegmentChanges(beforeSeg, afterSeg)));
+    }
+    return changes;
+  }
+
+  private async computeSegmentChanges(
+    beforeSeg: RawWorkspaceSegment,
+    afterSeg: RawWorkspaceSegment
+  ): Promise<SnapshotFileChange[]> {
+    const changes: SnapshotFileChange[] = [];
+    const strategy = afterSeg.strategy;
+    const workspacePath = afterSeg.root;
+    const repo = afterSeg.prefix || undefined;
+    const before = beforeSeg;
+    const after = afterSeg;
+    // Git-relative keys already surfaced, so the commit-range pass can skip them.
+    const seenSegmentPaths = new Set<string>();
 
     // Files in after: created or modified
     for (const [filePath, afterState] of after.files) {
+      seenSegmentPaths.add(filePath);
       const beforeState = before.files.get(filePath);
       if (!beforeState) {
         // File not in before snapshot. Under git strategy, the before snapshot only
@@ -621,7 +863,8 @@ export class WorkspaceSnapshotService {
         if (wasCleanAtHead) {
           // Fetch the HEAD content so we can compute a structured patch for reverse-patch undo.
           const change: SnapshotFileChange = {
-            path: filePath,
+            path: this.segmentViewerPath(afterSeg, filePath),
+            repo,
             changeType: "modified" as PromptChangeType,
             baseSource: SNAPSHOT_BASE_SOURCES.GIT_HEAD,
             afterHash: afterState.contentHash,
@@ -662,7 +905,8 @@ export class WorkspaceSnapshotService {
         } else {
           // Truly new file (untracked or newly staged)
           changes.push({
-            path: filePath,
+            path: this.segmentViewerPath(afterSeg, filePath),
+            repo,
             changeType: "created" as PromptChangeType,
             afterHash: afterState.contentHash,
           });
@@ -670,7 +914,8 @@ export class WorkspaceSnapshotService {
       } else if (afterState.contentHash !== beforeState.contentHash) {
         // Modified during prompt — before-content was captured (file was dirty before prompt)
         const change: SnapshotFileChange = {
-          path: filePath,
+          path: this.segmentViewerPath(afterSeg, filePath),
+          repo,
           changeType: "modified" as PromptChangeType,
           baseSource: SNAPSHOT_BASE_SOURCES.CAPTURED_BEFORE,
           afterHash: afterState.contentHash,
@@ -719,15 +964,25 @@ export class WorkspaceSnapshotService {
             ) {
               continue;
             }
+            // Represented here already — keep the commit-range pass from
+            // recording the same committed change twice.
+            seenSegmentPaths.add(filePath);
             changes.push(
-              this.buildModifiedChange(filePath, beforeState, currentFile)
+              this.buildModifiedChange(
+                this.segmentViewerPath(afterSeg, filePath),
+                repo,
+                beforeState,
+                currentFile
+              )
             );
             continue;
           }
         }
 
+        seenSegmentPaths.add(filePath);
         const change: SnapshotFileChange = {
-          path: filePath,
+          path: this.segmentViewerPath(afterSeg, filePath),
+          repo,
           changeType: "deleted" as PromptChangeType,
         };
         if (beforeState.content !== undefined) {
@@ -749,12 +1004,11 @@ export class WorkspaceSnapshotService {
       after.git?.headCommit &&
       before.git.headCommit !== after.git.headCommit
     ) {
-      const seenPaths = new Set(changes.map((change) => change.path));
       const commitRangeChanges = await this.getCommitRangeChanges(
+        afterSeg,
         before,
         after.git.headCommit,
-        workspacePath,
-        seenPaths
+        seenSegmentPaths
       );
       changes.push(...commitRangeChanges);
     }
@@ -764,29 +1018,43 @@ export class WorkspaceSnapshotService {
 
   async undoFiles(
     files: UndoFileInstruction[],
-    workspacePath: string
+    workspacePath: string,
+    namedRoots?: readonly ResolverWorkspaceFolder[]
   ): Promise<UndoResult> {
     const restoredFiles: string[] = [];
     const failedFiles: Array<{ path: string; error: string }> = [];
     const redoInstructions: UndoFileInstruction[] = [];
 
-    for (const instruction of files) {
-      const absPath = path.resolve(workspacePath, instruction.path);
+    // Trusted roots for the path-traversal guard: the primary workspace path
+    // plus every named root (multi-root). Windows/macOS are case-insensitive, so
+    // compare case-insensitively there (drive-letter/folder casing may differ);
+    // Linux stays case-sensitive to avoid aliasing distinct paths.
+    const roots = namedRoots ?? [];
+    const isWindows = process.platform === "win32";
+    const normalize = (p: string) => (isWindows ? p.toLowerCase() : p);
+    const trustedRoots = [
+      path.resolve(workspacePath),
+      ...roots.map((root) => path.resolve(root.fsPath)),
+    ].map(normalize);
 
-      // Security: prevent path traversal.
-      // Windows file systems are case-insensitive and drive letters may differ in case
-      // between the workspace path and the instruction path (e.g. "c:\..." vs "C:\..."),
-      // so compare case-insensitively on Windows. macOS/Linux are case-sensitive, so
-      // keep an exact comparison there to avoid incorrectly aliasing distinct paths.
-      const resolvedWorkspace = path.resolve(workspacePath);
-      const isWindows = process.platform === "win32";
-      const normalize = (p: string) => (isWindows ? p.toLowerCase() : p);
-      if (
-        !normalize(absPath).startsWith(
-          normalize(resolvedWorkspace + path.sep)
-        ) &&
-        normalize(absPath) !== normalize(resolvedWorkspace)
-      ) {
+    for (const instruction of files) {
+      // Folder-name-prefixed paths (multi-root) resolve against the matching
+      // root; unprefixed paths resolve against the primary workspace path.
+      const absPath = resolveNamedRelativePath(
+        instruction.path,
+        workspacePath,
+        roots
+      );
+
+      // Security: prevent path traversal — the resolved path must sit inside one
+      // of the trusted roots.
+      const normalizedAbs = normalize(absPath);
+      const withinTrusted = trustedRoots.some(
+        (root) =>
+          normalizedAbs === root ||
+          normalizedAbs.startsWith(root + path.sep)
+      );
+      if (!withinTrusted) {
         failedFiles.push({
           path: instruction.path,
           error: "Path traversal detected — skipping",
@@ -946,6 +1214,11 @@ export class WorkspaceSnapshotService {
     snapshot: WorkspaceSnapshot,
     workspaceFolderPath: string
   ): Promise<WorkspaceSnapshot> {
+    // Multi-root: enrich each change against ITS repo's HEAD/root.
+    if (snapshot.repos && snapshot.repos.length > 0) {
+      return this.enrichMultiRepoBeforeContent(snapshot);
+    }
+
     if (
       snapshot.strategy !== SNAPSHOT_STRATEGIES.GIT ||
       !snapshot.git?.headCommit
@@ -971,6 +1244,74 @@ export class WorkspaceSnapshotService {
             "git",
             ["show", `${headCommit}:${change.path}`],
             { cwd: workspaceFolderPath }
+          );
+          anyChanged = true;
+          return { ...change, beforeContent: content };
+        } catch {
+          return change;
+        }
+      })
+    );
+
+    if (!anyChanged) {
+      return snapshot;
+    }
+    return { ...snapshot, changedFiles: enrichedFiles };
+  }
+
+  /** Reconstruct a repo-toplevel-relative git path from a change's viewer path. */
+  private gitRelFromChange(
+    repoInfo: SnapshotRepoInfo,
+    viewerPath: string
+  ): string {
+    let rootRel = viewerPath;
+    if (repoInfo.prefix) {
+      rootRel =
+        viewerPath === repoInfo.prefix
+          ? ""
+          : viewerPath.startsWith(`${repoInfo.prefix}/`)
+            ? viewerPath.slice(repoInfo.prefix.length + 1)
+            : viewerPath;
+    }
+    if (!repoInfo.rootRelative) {
+      return rootRel;
+    }
+    return rootRel ? `${repoInfo.rootRelative}/${rootRel}` : repoInfo.rootRelative;
+  }
+
+  /** Multi-root variant of {@link enrichSnapshotBeforeContent}, per repo. */
+  private async enrichMultiRepoBeforeContent(
+    snapshot: WorkspaceSnapshot
+  ): Promise<WorkspaceSnapshot> {
+    const byPrefix = new Map(
+      (snapshot.repos ?? []).map((repo) => [repo.prefix, repo])
+    );
+    let anyChanged = false;
+
+    const enrichedFiles = await Promise.all(
+      snapshot.changedFiles.map(async (change): Promise<SnapshotFileChange> => {
+        if (
+          change.changeType !== "modified" ||
+          change.baseSource !== SNAPSHOT_BASE_SOURCES.GIT_HEAD ||
+          change.beforeContent !== undefined ||
+          change.contentCaptureSkipped
+        ) {
+          return change;
+        }
+        const info = byPrefix.get(change.repo ?? "");
+        if (
+          !info ||
+          info.strategy !== SNAPSHOT_STRATEGIES.GIT ||
+          !info.git?.headCommit
+        ) {
+          return change;
+        }
+        const gitRel = this.gitRelFromChange(info, change.path);
+        try {
+          const { stdout: content } = await execFileAsync(
+            "git",
+            ["show", `${info.git.headCommit}:${gitRel}`],
+            { cwd: info.root }
           );
           anyChanged = true;
           return { ...change, beforeContent: content };

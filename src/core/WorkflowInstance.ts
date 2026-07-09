@@ -2122,6 +2122,7 @@ export class WorkflowInstance {
     const self = this;
     return {
       workspaceFolderPath: this.workspaceFolderPath,
+      namedWorkspaceRoots: this.platform.getNamedWorkspaceRoots(),
       currentPromptFilePath: this.currentPromptFile?.filePath,
       // Use a getter so dashboardProvider is evaluated lazily each time
       // WorkflowExecutor accesses it.

@@ -3,7 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceCommitArea } from "@components/workspace-viewer/WorkspaceCommitArea";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { workspaceGenerateCommitMessage } from "@utils/hostedApi";
+import {
+  workspaceGenerateCommitMessage,
+  workspacePush,
+} from "@utils/hostedApi";
 
 vi.mock("@utils/hostedApi", () => ({
   workspaceCommit: vi.fn(),
@@ -155,6 +158,59 @@ describe("WorkspaceCommitArea", () => {
       expect(
         screen.getByRole("button", { name: "Commit" })
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("repo selector", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    function renderCommitArea() {
+      return render(
+        <WorkspaceCommitArea
+          incomingCommitCount={0}
+          onRefresh={vi.fn().mockResolvedValue(undefined)}
+          outgoingCommitCount={0}
+        />
+      );
+    }
+
+    it("hides the selector in a single-repo workspace", () => {
+      useWorkspaceViewerStore.setState({
+        repos: [{ id: "only", label: "only", rootPath: "/only" }],
+        selectedRepoId: "only",
+      });
+      renderCommitArea();
+
+      expect(
+        screen.queryByRole("combobox", { name: "Select repository" })
+      ).toBeNull();
+    });
+
+    it("shows the selector and scopes push to the chosen repo", async () => {
+      const user = userEvent.setup();
+      vi.mocked(workspacePush).mockResolvedValue({
+        branch: "main",
+        remote: "origin",
+      });
+      useWorkspaceViewerStore.setState({
+        repos: [
+          { id: "alpha", label: "alpha", rootPath: "/alpha" },
+          { id: "beta", label: "beta", rootPath: "/beta" },
+        ],
+        selectedRepoId: "alpha",
+      });
+      renderCommitArea();
+
+      const select = screen.getByRole("combobox", {
+        name: "Select repository",
+      });
+      await user.selectOptions(select, "beta");
+      expect(useWorkspaceViewerStore.getState().selectedRepoId).toBe("beta");
+
+      await user.click(screen.getByRole("button", { name: /Push/ }));
+      expect(workspacePush).toHaveBeenCalledWith("beta");
     });
   });
 });

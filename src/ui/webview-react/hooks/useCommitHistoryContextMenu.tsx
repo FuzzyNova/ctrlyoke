@@ -54,7 +54,10 @@ export function useCommitHistoryContextMenu({
       const store = useWorkspaceViewerStore.getState();
       const branchBeforeCheckout = store.currentBranch;
       try {
-        await workspaceCheckoutCommit({ hash: commit.hash });
+        await workspaceCheckoutCommit({
+          hash: commit.hash,
+          repo: store.selectedRepoId ?? undefined,
+        });
         if (branchBeforeCheckout) {
           store.setPreviousBranch(branchBeforeCheckout);
         }

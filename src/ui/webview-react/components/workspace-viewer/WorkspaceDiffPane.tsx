@@ -74,7 +74,10 @@ export const WorkspaceDiffPane: React.FC = () => {
           )?.hash ?? shortHash;
         ref = `~${fullHash}`;
       }
-      const { unifiedDiff } = await workspaceGitRefDiff(ref);
+      const { unifiedDiff } = await workspaceGitRefDiff(
+        ref,
+        store.selectedRepoId ?? undefined
+      );
       const safeName = refLabel.replace(/[^a-z0-9_]/gi, "-").toLowerCase();
       downloadTextFile(`ctrlyoke-${safeName}.diff`, unifiedDiff);
     } catch {

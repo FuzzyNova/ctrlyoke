@@ -19,6 +19,7 @@ import type {
 } from "../types/WebviewMessageTypes";
 import type { OutputExecutionTarget } from "../types/OutputHistoryTypes";
 import { WorkspaceSnapshotService } from "../utils/WorkspaceSnapshotService";
+import { getVsCodeNamedWorkspaceRoots } from "../platform/VsCodeWorkspaceRoot";
 
 type SnapshotEntry = {
   target: OutputExecutionTarget;
@@ -150,6 +151,9 @@ export class UndoRedoCoordinator {
     afterRestore: (entry: SnapshotEntry, result: UndoResult) => Promise<void>
   ): Promise<UndoResult> {
     const snapshotService = new WorkspaceSnapshotService();
+    // Named roots let undo resolve folder-name-prefixed paths (multi-root) back
+    // to the correct repo; empty in single-root, where resolution is unchanged.
+    const namedRoots = getVsCodeNamedWorkspaceRoots();
     const restoredFiles: string[] = [];
     const failedFiles: Array<{ path: string; error: string }> = [];
     const redoInstructions: UndoFileInstruction[] = [];
@@ -159,7 +163,8 @@ export class UndoRedoCoordinator {
       try {
         const result = await snapshotService.undoFiles(
           entry.files,
-          workspacePath
+          workspacePath,
+          namedRoots
         );
         restoredFiles.push(...result.restoredFiles);
         failedFiles.push(...result.failedFiles);

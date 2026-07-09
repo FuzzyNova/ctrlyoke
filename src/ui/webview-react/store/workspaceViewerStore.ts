@@ -7,6 +7,7 @@ import type {
   DiffKind,
   WorkspaceCommitLogEntry,
   WorkspaceCommitInfo,
+  WorkspaceRepo,
 } from "@root/types/HostedWorkspaceViewerTypes";
 import type { ParsedDiffFile } from "@utils/rdvAdapter";
 import { workspaceGitRefDiff } from "@utils/hostedApi";
@@ -19,6 +20,26 @@ import { parseUnifiedDiffToFiles } from "@utils/rdvAdapter";
 export type PendingNavigation =
   | { type: "file"; filePath: string; startLine?: number; endLine?: number }
   | { type: "directory"; dirPath: string };
+
+/**
+ * Best-effort match of a viewer path to the repo that owns it, for defaulting
+ * the SCM repo selector to follow the open file. Viewer paths are folder-name-
+ * prefixed with the root name in multi-root (`secondary/foo.ts`), and repo
+ * labels are those same root names, so the first path segment identifies the
+ * repo. Returns null for unprefixed/unknown paths (single-root falls back to
+ * the first repo).
+ */
+function repoIdForPath(
+  path: string | null,
+  repos: WorkspaceRepo[]
+): string | null {
+  if (!path) return null;
+  const firstSegment = path.replace(/\\/g, "/").split("/")[0];
+  const match = repos.find(
+    (repo) => repo.label === firstSegment || repo.id === firstSegment
+  );
+  return match?.id ?? null;
+}
 
 // ============================================================================
 // State
@@ -56,6 +77,11 @@ interface WorkspaceViewerState {
 
   // Mobile: in source control tab, whether the diff is shown (vs changed-file list)
   mobileDiffVisible: boolean;
+
+  // Repos (multi-repo workspaces). Empty/one → the repo selector stays hidden.
+  repos: WorkspaceRepo[];
+  /** Repo whose SCM state (status, diff, commit, history) the pane currently shows. */
+  selectedRepoId: string | null;
 
   // Source control
   sourceControlFiles: SourceControlFile[];
@@ -138,6 +164,10 @@ interface WorkspaceViewerActions {
   setMobileEditorVisible(v: boolean): void;
   setMobileDiffVisible(v: boolean): void;
 
+  // Repos
+  setRepos(repos: WorkspaceRepo[]): void;
+  setSelectedRepoId(id: string | null): void;
+
   // Source control
   setSourceControlFiles(files: SourceControlFile[]): void;
   setSourceControlLoading(loading: boolean): void;
@@ -210,6 +240,9 @@ const INITIAL_STATE: WorkspaceViewerState = {
 
   mobileEditorVisible: false,
   mobileDiffVisible: false,
+
+  repos: [],
+  selectedRepoId: null,
 
   sourceControlFiles: [],
   sourceControlLoading: false,
@@ -454,6 +487,25 @@ export const useWorkspaceViewerStore = create<
         set({ mobileDiffVisible: v });
       },
 
+      // --- Repos ---
+
+      setRepos(repos) {
+        const { selectedRepoId, selectedDiffPath, selectedFilePath } = get();
+        const stillValid =
+          selectedRepoId !== null &&
+          repos.some((repo) => repo.id === selectedRepoId);
+        const next = stillValid
+          ? selectedRepoId
+          : (repoIdForPath(selectedDiffPath ?? selectedFilePath, repos) ??
+            repos[0]?.id ??
+            null);
+        set({ repos, selectedRepoId: next });
+      },
+
+      setSelectedRepoId(id) {
+        set({ selectedRepoId: id });
+      },
+
       // --- Source control ---
 
       setSourceControlFiles(files) {
@@ -596,7 +648,10 @@ export const useWorkspaceViewerStore = create<
           pendingDiff: null,
         });
         try {
-          const { unifiedDiff, commitInfo } = await workspaceGitRefDiff(ref);
+          const { unifiedDiff, commitInfo } = await workspaceGitRefDiff(
+            ref,
+            get().selectedRepoId ?? undefined
+          );
           const diffFiles = parseUnifiedDiffToFiles(unifiedDiff);
           const shortRef = ref.startsWith("~") ? ref.slice(1) : ref;
           const diffRefLabel =

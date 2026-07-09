@@ -288,3 +288,37 @@ describe("setLoadedImage", () => {
     expect(store().fileContent).toBe("export const x = 1;");
   });
 });
+
+// ---------------------------------------------------------------------------
+// setRepos — repo selector defaulting
+// ---------------------------------------------------------------------------
+
+describe("setRepos", () => {
+  const repo = (id: string) => ({ id, label: id, rootPath: `/${id}` });
+
+  it("defaults the selection to the first repo when nothing is selected", () => {
+    store().setRepos([repo("alpha"), repo("beta")]);
+    expect(store().selectedRepoId).toBe("alpha");
+  });
+
+  it("keeps the current selection when it is still present", () => {
+    store().setRepos([repo("alpha"), repo("beta")]);
+    store().setSelectedRepoId("beta");
+    store().setRepos([repo("alpha"), repo("beta"), repo("gamma")]);
+    expect(store().selectedRepoId).toBe("beta");
+  });
+
+  it("re-defaults when the current selection disappears", () => {
+    store().setRepos([repo("alpha"), repo("beta")]);
+    store().setSelectedRepoId("beta");
+    store().setRepos([repo("alpha"), repo("gamma")]);
+    expect(store().selectedRepoId).toBe("alpha");
+  });
+
+  it("follows the open file's root when no selection is valid", () => {
+    // A folder-name-prefixed diff path identifies its repo by first segment.
+    store().selectDiff("beta/src/index.ts");
+    store().setRepos([repo("alpha"), repo("beta")]);
+    expect(store().selectedRepoId).toBe("beta");
+  });
+});
