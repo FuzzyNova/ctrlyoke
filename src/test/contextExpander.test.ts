@@ -660,3 +660,208 @@ suite("ContextExpander.expandContext", () => {
     assert.ok(result.includes("@inside.ts"));
   });
 });
+
+suite("ContextExpander.sanitizeReferences", () => {
+  let workspaceRoot: string;
+  let secondRoot: string;
+
+  function freshWorkspace(): string {
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-"));
+    return workspaceRoot;
+  }
+
+  afterEach(() => {
+    try {
+      if (workspaceRoot) {
+        fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      }
+      if (secondRoot) {
+        fs.rmSync(secondRoot, { recursive: true, force: true });
+      }
+    } catch {
+      // best-effort
+    }
+  });
+
+  test("leaves text untouched when there are no references", async () => {
+    const root = freshWorkspace();
+    const expander = new ContextExpander(root, [root], [], true);
+    const text = "Please implement the feature described above.";
+
+    assert.strictEqual(await expander.sanitizeReferences(text), text);
+  });
+
+  test("single-root, effectiveAbsolute false: leaves an unprefixed @ref textually unchanged", async () => {
+    const root = freshWorkspace();
+    fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
+
+    const expander = new ContextExpander(root, [root], [], false);
+    const result = await expander.sanitizeReferences(
+      "Please review @a.ts for issues."
+    );
+
+    assert.strictEqual(result, "Please review @a.ts for issues.");
+  });
+
+  test("multi-root, effectiveAbsolute true: rewrites a folder-prefixed @ref to its absolute path", async () => {
+    const root = freshWorkspace();
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    const secondFile = path.join(secondRoot, "b.ts");
+    fs.writeFileSync(secondFile, "export const b = true;\n");
+
+    const expander = new ContextExpander(
+      root,
+      [root, secondRoot],
+      [
+        { name: "root1", fsPath: root },
+        { name: "root2", fsPath: secondRoot },
+      ],
+      true
+    );
+    const result = await expander.sanitizeReferences(
+      "Please fix @root2/b.ts before merging."
+    );
+
+    assert.strictEqual(
+      result,
+      `Please fix @${secondFile} before merging.`
+    );
+  });
+
+  test("multi-root, effectiveAbsolute true: rewrites a folder-prefixed #sym: ref to its absolute path", async () => {
+    const root = freshWorkspace();
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    const secondFile = path.join(secondRoot, "b.ts");
+    fs.writeFileSync(secondFile, "export function foo() {}\n");
+
+    const expander = new ContextExpander(
+      root,
+      [root, secondRoot],
+      [
+        { name: "root1", fsPath: root },
+        { name: "root2", fsPath: secondRoot },
+      ],
+      true
+    );
+    const result = await expander.sanitizeReferences(
+      "When #sym:root2/b.ts:foo:1-1 runs, log the result."
+    );
+
+    assert.strictEqual(
+      result,
+      `When #sym:${secondFile}:foo:1-1 runs, log the result.`
+    );
+  });
+
+  test("multi-root, effectiveAbsolute true: rewrites a folder-prefixed #selection: ref to its absolute path", async () => {
+    const root = freshWorkspace();
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    const secondFile = path.join(secondRoot, "b.ts");
+    fs.writeFileSync(secondFile, "line1\nline2\n");
+
+    const expander = new ContextExpander(
+      root,
+      [root, secondRoot],
+      [
+        { name: "root1", fsPath: root },
+        { name: "root2", fsPath: secondRoot },
+      ],
+      true
+    );
+    const result = await expander.sanitizeReferences(
+      "See #selection:root2/b.ts:1-2 for context."
+    );
+
+    assert.strictEqual(
+      result,
+      `See #selection:${secondFile}:1-2 for context.`
+    );
+  });
+
+  test("single-root, effectiveAbsolute false: leaves #sym:/#selection: refs unchanged", async () => {
+    const root = freshWorkspace();
+    fs.writeFileSync(path.join(root, "a.ts"), "line1\nline2\n");
+
+    const expander = new ContextExpander(root, [root], [], false);
+    const text = "See #selection:a.ts:1-2 and #sym:a.ts:foo:1-2 here.";
+
+    assert.strictEqual(await expander.sanitizeReferences(text), text);
+  });
+
+  test("applies a custom formatFileRef (e.g. Codex dropping the @) even in single-root", async () => {
+    const root = freshWorkspace();
+    fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
+
+    const expander = new ContextExpander(root, [root], [], false);
+    const result = await expander.sanitizeReferences(
+      "Please review @a.ts for issues.",
+      (quotedPath) => quotedPath
+    );
+
+    assert.strictEqual(result, "Please review a.ts for issues.");
+  });
+
+  test("leaves an unreadable/nonexistent reference untouched", async () => {
+    const root = freshWorkspace();
+    const text = "See @missing.ts for details.";
+
+    const expander = new ContextExpander(root, [root], [], true);
+    assert.strictEqual(await expander.sanitizeReferences(text), text);
+  });
+
+  test("leaves directory refs untouched", async () => {
+    const root = freshWorkspace();
+    fs.mkdirSync(path.join(root, "sub"));
+    fs.writeFileSync(path.join(root, "sub", "c.ts"), "// c\n");
+
+    const expander = new ContextExpander(root, [root], [], true);
+    const text = "List everything under @sub/ please.";
+
+    assert.strictEqual(await expander.sanitizeReferences(text), text);
+  });
+
+  test("leaves references inside fenced code blocks untouched", async () => {
+    const root = freshWorkspace();
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    const secondFile = path.join(secondRoot, "b.ts");
+    fs.writeFileSync(secondFile, "export const b = true;\n");
+
+    const expander = new ContextExpander(
+      root,
+      [root, secondRoot],
+      [
+        { name: "root1", fsPath: root },
+        { name: "root2", fsPath: secondRoot },
+      ],
+      true
+    );
+    const text = ["Example:", "```", "@root2/b.ts", "```"].join("\n");
+
+    assert.strictEqual(await expander.sanitizeReferences(text), text);
+  });
+
+  test("preserves surrounding prose and trailing punctuation", async () => {
+    const root = freshWorkspace();
+    secondRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fp-ctx-second-"));
+    const secondFile = path.join(secondRoot, "b.ts");
+    fs.writeFileSync(secondFile, "export const b = true;\n");
+
+    const expander = new ContextExpander(
+      root,
+      [root, secondRoot],
+      [
+        { name: "root1", fsPath: root },
+        { name: "root2", fsPath: secondRoot },
+      ],
+      true
+    );
+    const result = await expander.sanitizeReferences(
+      "Have a look at @root2/b.ts, then update the tests."
+    );
+
+    assert.strictEqual(
+      result,
+      `Have a look at @${secondFile}, then update the tests.`
+    );
+  });
+});

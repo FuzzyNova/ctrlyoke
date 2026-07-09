@@ -277,6 +277,120 @@ export class ContextExpander {
   }
 
   /**
+   * Rewrite `@file`, `#selection:`, and `#sym:` reference tokens in prompt text
+   * so they carry a resolvable path even when the text is sent to the harness
+   * as-is (simple-prompt fast path, direct PTY injection) instead of going
+   * through {@link expandContextSplit}'s attachment pipeline.
+   *
+   * Folder-name-prefixed refs (`root2/src/index.ts`, from a multi-root
+   * workspace) are only ever resolved by ctrlyoke itself — the harness/model
+   * has no idea what "root2" means — so any consumer that doesn't route
+   * through the attachment pipeline needs the corrected path inline. This
+   * mirrors the `effectiveAbsolute` display-path substitution already done
+   * for excerpt descriptions in {@link buildAttachmentXml}, applied to the
+   * literal ref token instead of a separate description line.
+   *
+   * `formatFileRef` additionally lets a CLI provider rewrite the `@`-prefixed
+   * form of full-file/directory refs (e.g. Codex, which errors on a literal
+   * `@` in file references) — mirrors `CliIntegration.formatDirectFileRef`.
+   * `#selection:`/`#sym:` refs never carry an `@` prefix, so `formatFileRef`
+   * does not apply to them.
+   *
+   * Directory refs (`@dir/`) are left untouched — they always route through
+   * the excerpt/attachment pipeline (never the simple-prompt fast path) since
+   * `expandContextSplit` treats them as excerpt content, so there is no
+   * literal-text gap to close for them.
+   *
+   * Unreadable or out-of-workspace refs are left as-is (same skip-and-log
+   * behavior as {@link expandContextSplit}) rather than rewritten into a
+   * broken absolute path.
+   *
+   * @param promptText Original prompt text
+   * @param formatFileRef Formats an `@`-ref's already-quoted path into its
+   *   final token; defaults to prefixing with `@`.
+   */
+  async sanitizeReferences(
+    promptText: string,
+    formatFileRef: (quotedPath: string) => string = (quoted) => `@${quoted}`
+  ): Promise<string> {
+    try {
+      const maskedPromptText = this.maskBacktickBlocks(promptText);
+      const refs = parseAllFileReferences(maskedPromptText).filter(
+        (ref) =>
+          !ref.isDirectory &&
+          ref.startOffset !== undefined &&
+          ref.endOffset !== undefined
+      );
+      if (refs.length === 0) {
+        return promptText;
+      }
+
+      // Replace from the end of the text backwards so earlier offsets stay
+      // valid as later (in text order) refs are spliced in.
+      const orderedRefs = [...refs].sort(
+        (a, b) => b.startOffset! - a.startOffset!
+      );
+
+      let result = promptText;
+      for (const ref of orderedRefs) {
+        const replacement = await this.buildSanitizedReferenceText(
+          ref,
+          formatFileRef
+        );
+        if (replacement === null) {
+          continue;
+        }
+        result =
+          result.slice(0, ref.startOffset!) +
+          replacement +
+          result.slice(ref.endOffset!);
+      }
+      return result;
+    } catch (error) {
+      Log.error("[ContextExpander] Error in sanitizeReferences:", error);
+      return promptText;
+    }
+  }
+
+  /**
+   * Build the corrected inline token for a single reference, or null if the
+   * ref should be left untouched (unresolvable, or nothing would change).
+   */
+  private async buildSanitizedReferenceText(
+    ref: FileReference,
+    formatFileRef: (quotedPath: string) => string
+  ): Promise<string | null> {
+    let absolutePath: string;
+    try {
+      absolutePath = this.resolveWorkspacePath(ref.path);
+      await fs.access(absolutePath);
+    } catch {
+      return null;
+    }
+
+    const displayPath = this.effectiveAbsolute ? absolutePath : ref.path;
+    const quotedPath = displayPath.includes(" ")
+      ? `"${displayPath}"`
+      : displayPath;
+    const isExcerptRef = !!ref.symbolName || (!!ref.startLine && !!ref.endLine);
+
+    if (isExcerptRef) {
+      // #selection:/#sym: never carry an @ prefix, and only the resolved
+      // path (not the surrounding syntax) can change.
+      if (!this.effectiveAbsolute) {
+        return null;
+      }
+      return ref.symbolName
+        ? `#sym:${quotedPath}:${ref.symbolName}:${ref.startLine}-${ref.endLine}`
+        : `#selection:${quotedPath}:${ref.startLine}-${ref.endLine}`;
+    }
+
+    // Full-file @ ref — always route through formatFileRef so provider-level
+    // @ handling (e.g. Codex stripping it) applies even in single-root.
+    return formatFileRef(quotedPath);
+  }
+
+  /**
    * Expand ~diff, ~staged, ~stash:N, and ~<hash> git change references
    * into attachment XML blocks.
    */

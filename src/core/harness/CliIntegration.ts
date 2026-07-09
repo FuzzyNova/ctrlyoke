@@ -326,6 +326,15 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
 
   /**
+   * Format an already-quoted path using the provider's formatFileReference()
+   * override for a harness-specific prefix (e.g. Codex drops the `@`).
+   * Single source for every `@`-ref formatting decision in this class.
+   */
+  private formatFileReferenceToken(quoted: string): string {
+    return this.provider.formatFileReference?.(quoted) ?? `@${quoted}`;
+  }
+
+  /**
    * Format a workspace-relative or absolute path as a direct file reference,
    * with space-quoting applied when the path contains spaces.
    * Uses the provider's formatFileReference() override for harness-specific prefix.
@@ -336,7 +345,7 @@ export class CliIntegration extends HarnessIntegration {
       ? absolutePath
       : path.relative(workspaceRoot, absolutePath);
     const quoted = refPath.includes(" ") ? `"${refPath}"` : refPath;
-    return this.provider.formatFileReference?.(quoted) ?? `@${quoted}`;
+    return this.formatFileReferenceToken(quoted);
   }
 
   /**
@@ -354,7 +363,17 @@ export class CliIntegration extends HarnessIntegration {
       ? absolutePath
       : tempMgr.getRelativePath(absolutePath);
     const quoted = refPath.includes(" ") ? `"${refPath}"` : refPath;
-    return this.provider.formatFileReference?.(quoted) ?? `@${quoted}`;
+    return this.formatFileReferenceToken(quoted);
+  }
+
+  /**
+   * Override of {@link HarnessIntegration.formatInlineFileReference}: routes
+   * literal `@path` mentions found inline in prompt text through the same
+   * provider hook as ctrlyoke-generated refs, so e.g. Codex's "no @ prefix"
+   * requirement applies uniformly regardless of where the reference came from.
+   */
+  protected formatInlineFileReference(quotedPath: string): string {
+    return this.formatFileReferenceToken(quotedPath);
   }
 
   /**

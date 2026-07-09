@@ -99,7 +99,11 @@ export interface PromptSections {
   directFileRefs: string[];
   /** Embedded XML attachment blocks for selection/sym/git/dir content, or null */
   excerptContent: string | null;
-  /** The raw user prompt text (with @path tokens preserved as-is) */
+  /**
+   * The user prompt text, with @path/#selection:/#sym: reference tokens
+   * sanitized (folder-name-prefixed paths resolved, provider-specific @
+   * handling applied) via {@link ContextExpander.sanitizeReferences}.
+   */
   userPromptText: string;
 }
 
@@ -406,7 +410,8 @@ export abstract class HarnessIntegration {
     resolvedAgent?: string,
     resolvedSkills?: string[]
   ): Promise<PromptSections> {
-    const userPromptText = prompt.prompt.trim();
+    const rawPromptText = prompt.prompt.trim();
+    let userPromptText = rawPromptText;
     const workspaceRoot = this.getWorkspaceRoot();
 
     // Expand context into direct file refs + excerpt blocks (split, not merged)
@@ -423,7 +428,14 @@ export abstract class HarnessIntegration {
           this.getNamedWorkspaceRoots(),
           effectiveAbsolute
         );
-        splitContext = await expander.expandContextSplit(userPromptText);
+        splitContext = await expander.expandContextSplit(rawPromptText);
+        // Rewrite folder-name-prefixed refs to their resolved form inline,
+        // for consumers (simple-prompt fast path, direct PTY injection) that
+        // send userPromptText verbatim instead of going through splitContext.
+        userPromptText = await expander.sanitizeReferences(
+          rawPromptText,
+          (quotedPath) => this.formatInlineFileReference(quotedPath)
+        );
       } catch (error) {
         Log.error("[HarnessIntegration] Error in expandContextSplit:", error);
       }
@@ -887,6 +899,18 @@ export abstract class HarnessIntegration {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Format an already-quoted path as an inline `@file` reference token, for
+   * {@link ContextExpander.sanitizeReferences}'s rewrite of literal `@path`
+   * mentions in prompt text. Base implementation is the CLI-native `@`
+   * prefix; `CliIntegration` overrides this to honor `ICliProvider.
+   * formatFileReference` (e.g. Codex, which drops the `@` entirely) — the
+   * same provider hook used for ctrlyoke-generated file references.
+   */
+  protected formatInlineFileReference(quotedPath: string): string {
+    return `@${quotedPath}`;
   }
 
   /**

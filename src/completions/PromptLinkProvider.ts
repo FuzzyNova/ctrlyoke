@@ -1,6 +1,15 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { getVsCodeWorkspaceRoot } from "../platform/VsCodeWorkspaceRoot";
+import {
+  getVsCodeWorkspaceRoot,
+  getVsCodeNamedWorkspaceRoots,
+  getVsCodeTrustedWorkspaceRoots,
+} from "../platform/VsCodeWorkspaceRoot";
+import {
+  resolveNamedRelativePath,
+  type ResolverWorkspaceFolder,
+} from "../platform/WorkspaceRootResolver";
+import { isPathWithinAnyDirectory } from "../utils/PathSecurity";
 
 /**
  * Provides clickable links for ctrlyoke context references
@@ -68,22 +77,67 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       return undefined; // No workspace, can't resolve relative paths
     }
 
+    const namedRoots = getVsCodeNamedWorkspaceRoots();
+    const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+
     // 1. Detect full file references (@file.ext and @"path with spaces/file.ext")
-    links.push(...this.findFileLinks(document, text, workspaceRoot));
+    links.push(
+      ...this.findFileLinks(document, text, workspaceRoot, namedRoots, trustedRoots)
+    );
 
     // 2. Detect directory references (@dir/ and @"path with spaces/dir/")
-    links.push(...this.findDirectoryLinks(document, text, workspaceRoot));
+    links.push(
+      ...this.findDirectoryLinks(
+        document,
+        text,
+        workspaceRoot,
+        namedRoots,
+        trustedRoots
+      )
+    );
 
     // 3. Detect line range references (#selection:path:10-20 and #selection:"path with spaces/file":10-20)
-    links.push(...this.findLineRangeLinks(document, text, workspaceRoot));
+    links.push(
+      ...this.findLineRangeLinks(
+        document,
+        text,
+        workspaceRoot,
+        namedRoots,
+        trustedRoots
+      )
+    );
 
     // 4. Detect symbol references with encoded line ranges
-    links.push(...this.findSymbolLinks(document, text, workspaceRoot));
+    links.push(
+      ...this.findSymbolLinks(document, text, workspaceRoot, namedRoots, trustedRoots)
+    );
 
     // 5. Detect git change references (~diff, ~staged, ~stash:N, ~<hash>)
     links.push(...this.findGitChangeLinks(document, text));
 
     return links;
+  }
+
+  /**
+   * Resolve a ref's path the same way every other `@`-reference is resolved
+   * (`resolveNamedRelativePath` + trusted-root containment): a folder-name
+   * prefix from a multi-root `.code-workspace` (`root2/src/index.ts`)
+   * resolves against that named root instead of always joining onto the
+   * primary root, and a ref that escapes every trusted root is rejected
+   * (`null`) instead of producing a broken/unsafe link.
+   */
+  private resolveLinkPath(
+    relativePath: string,
+    workspaceRoot: string,
+    namedRoots: readonly ResolverWorkspaceFolder[],
+    trustedRoots: readonly string[]
+  ): string | null {
+    const resolved = resolveNamedRelativePath(
+      relativePath,
+      workspaceRoot,
+      namedRoots
+    );
+    return isPathWithinAnyDirectory(resolved, trustedRoots) ? resolved : null;
   }
 
   /**
@@ -117,18 +171,28 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   private findFileLinks(
     document: vscode.TextDocument,
     text: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    namedRoots: readonly ResolverWorkspaceFolder[],
+    trustedRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
     // Helper to add a file link from a regex match
     const addFileLink = (match: RegExpExecArray): void => {
       const relativePath = match[1];
+      const absolutePath = this.resolveLinkPath(
+        relativePath,
+        workspaceRoot,
+        namedRoots,
+        trustedRoots
+      );
+      if (absolutePath === null) {
+        return;
+      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
 
-      const absolutePath = path.join(workspaceRoot, relativePath);
       const fileUri = vscode.Uri.file(absolutePath);
 
       const link = new vscode.DocumentLink(range, fileUri);
@@ -158,18 +222,28 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   private findDirectoryLinks(
     document: vscode.TextDocument,
     text: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    namedRoots: readonly ResolverWorkspaceFolder[],
+    trustedRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
     // Helper to add a directory link from a regex match
     const addDirLink = (match: RegExpExecArray): void => {
       const relativePath = match[1];
+      const absolutePath = this.resolveLinkPath(
+        relativePath,
+        workspaceRoot,
+        namedRoots,
+        trustedRoots
+      );
+      if (absolutePath === null) {
+        return;
+      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
 
-      const absolutePath = path.join(workspaceRoot, relativePath);
       const dirUri = vscode.Uri.file(absolutePath);
 
       const commandUri = vscode.Uri.parse(
@@ -203,7 +277,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   private findLineRangeLinks(
     document: vscode.TextDocument,
     text: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    namedRoots: readonly ResolverWorkspaceFolder[],
+    trustedRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
@@ -213,11 +289,19 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const startLine = parseInt(match[2], 10);
       const endLine = parseInt(match[3], 10);
 
+      const absolutePath = this.resolveLinkPath(
+        relativePath,
+        workspaceRoot,
+        namedRoots,
+        trustedRoots
+      );
+      if (absolutePath === null) {
+        return;
+      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
 
-      const absolutePath = path.join(workspaceRoot, relativePath);
       const fileUri = vscode.Uri.file(absolutePath);
 
       const commandUri = vscode.Uri.parse(
@@ -296,7 +380,9 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   private findSymbolLinks(
     document: vscode.TextDocument,
     text: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    namedRoots: readonly ResolverWorkspaceFolder[],
+    trustedRoots: readonly string[]
   ): vscode.DocumentLink[] {
     const links: vscode.DocumentLink[] = [];
 
@@ -307,11 +393,19 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
       const startLine = parseInt(match[3], 10);
       const endLine = parseInt(match[4], 10);
 
+      const absolutePath = this.resolveLinkPath(
+        relativePath,
+        workspaceRoot,
+        namedRoots,
+        trustedRoots
+      );
+      if (absolutePath === null) {
+        return;
+      }
       const startPos = document.positionAt(match.index);
       const endPos = document.positionAt(match.index + match[0].length);
       const range = new vscode.Range(startPos, endPos);
 
-      const absolutePath = path.join(workspaceRoot, relativePath);
       const fileUri = vscode.Uri.file(absolutePath);
 
       const commandUri = vscode.Uri.parse(

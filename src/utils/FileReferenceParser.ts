@@ -27,6 +27,10 @@ export interface FileReference {
   endLine?: number;
   isDirectory?: boolean;
   symbolName?: string;
+  /** Offset of the first character of the matched token in the source text. */
+  startOffset?: number;
+  /** Offset one past the last character of the matched token in the source text. */
+  endOffset?: number;
 }
 
 export type InlinePriorContextRef =
@@ -90,9 +94,22 @@ export function parseAtReferences(prompt: string): FileReference[] {
       // Check if this is a directory reference (trailing slash)
       const isDirectory = filePath.endsWith("/") || filePath.endsWith("\\");
 
+      // Quoted paths aren't stripped of trailing punctuation, so match[0]
+      // spans exactly @"...". Unquoted paths may have had trailing prose
+      // punctuation stripped off filePath, so endOffset uses the stripped
+      // length ("@" plus filePath) rather than the raw match length —
+      // otherwise a sanitize pass would eat trailing punctuation like ").".
+      const startOffset = match.index;
+      const endOffset =
+        quotedPath !== undefined
+          ? match.index + match[0].length
+          : match.index + 1 + filePath.length;
+
       references.push({
         path: filePath,
         isDirectory,
+        startOffset,
+        endOffset,
       });
     }
   }
@@ -126,6 +143,8 @@ export function parseSelectionReferences(prompt: string): FileReference[] {
       path: filePath,
       startLine: parseInt(startLine, 10),
       endLine: parseInt(endLine, 10),
+      startOffset: match.index,
+      endOffset: match.index + match[0].length,
     });
   }
 
@@ -160,6 +179,8 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
       symbolName,
       startLine: parseInt(startLine, 10),
       endLine: parseInt(endLine, 10),
+      startOffset: match.index,
+      endOffset: match.index + match[0].length,
     });
   }
 
@@ -180,6 +201,8 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
       symbolName,
       startLine: parseInt(startLine, 10),
       endLine: parseInt(endLine, 10),
+      startOffset: match.index,
+      endOffset: match.index + match[0].length,
     });
   }
 

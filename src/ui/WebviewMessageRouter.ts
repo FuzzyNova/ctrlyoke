@@ -2273,7 +2273,8 @@ export class WebviewMessageRouter {
         return;
       }
       const workspaceRoot = getVsCodeWorkspaceRoot();
-      const workspaceRootUri = vscode.Uri.file(workspaceRoot);
+      const trustedRoots = getVsCodeTrustedWorkspaceRoots();
+      const namedRoots = getVsCodeNamedWorkspaceRoots();
 
       const normalizeCodexAbsPath = (rawPath: string): string => {
         const pathWithDrive = rawPath.match(/^\/abs\/path\/([A-Za-z]:)(\/.*)$/);
@@ -2289,17 +2290,6 @@ export class WebviewMessageRouter {
         return rawPath;
       };
 
-      const isPathInside = (childPath: string, parentPath: string): boolean => {
-        const relative = path.relative(
-          path.resolve(parentPath),
-          path.resolve(childPath)
-        );
-        return (
-          relative === "" ||
-          (!relative.startsWith("..") && !path.isAbsolute(relative))
-        );
-      };
-
       const normalizedPath = normalizeCodexAbsPath(
         relativePath.replace(/\\/g, "/")
       );
@@ -2308,18 +2298,18 @@ export class WebviewMessageRouter {
         ? normalizedPath.replace(/\/+$/, "")
         : normalizedPath;
 
-      // Detect absolute paths (Windows: C:/... or C:\..., POSIX: /...)
-      // and resolve them directly instead of joining with the workspace root.
-      const isAbsolute =
-        /^[A-Za-z]:\//.test(trimmedPath) || path.isAbsolute(trimmedPath);
-      const targetUri = isAbsolute
-        ? vscode.Uri.file(trimmedPath)
-        : vscode.Uri.joinPath(
-            workspaceRootUri,
-            ...trimmedPath.split("/").filter(Boolean)
-          );
+      // Resolve via the same folder-name-prefixed multi-root logic as every
+      // other @-reference (`resolveNamedRelativePath`): absolute paths pass
+      // through as-is, a `root2/...` prefix resolves against that named root,
+      // and an unprefixed path resolves against the primary root.
+      const resolvedFsPath = resolveNamedRelativePath(
+        trimmedPath,
+        workspaceRoot,
+        namedRoots
+      );
+      const targetUri = vscode.Uri.file(resolvedFsPath);
 
-      if (!isPathInside(targetUri.fsPath, workspaceRoot)) {
+      if (!isPathWithinAnyDirectory(targetUri.fsPath, trustedRoots)) {
         Log.warn(
           `Blocked dashboard request to open path outside workspace: ${relativePath}`
         );

@@ -599,4 +599,153 @@ suite("CliIntegration", () => {
       assert.strictEqual(result, `@${absolutePath}`);
     });
   });
+
+  suite("buildPromptSections inline reference sanitization", () => {
+    class MockDualRootPlatform extends MockVsCodePlatform {
+      constructor(
+        private readonly primary: string,
+        private readonly secondary: string
+      ) {
+        super();
+      }
+      override getWorkspaceRoot(): string {
+        return this.primary;
+      }
+      override getWorkspaceRoots(): string[] {
+        return [this.primary, this.secondary];
+      }
+      override getNamedWorkspaceRoots() {
+        return [
+          { name: "root1", fsPath: this.primary },
+          { name: "root2", fsPath: this.secondary },
+        ];
+      }
+    }
+
+    class MockSingleRootPlatform extends MockVsCodePlatform {
+      constructor(private readonly root: string) {
+        super();
+      }
+      override getWorkspaceRoot(): string {
+        return this.root;
+      }
+      override getWorkspaceRoots(): string[] {
+        return [this.root];
+      }
+      override getNamedWorkspaceRoots() {
+        return [{ name: "root", fsPath: this.root }];
+      }
+    }
+
+    let tempDirs: string[];
+
+    setup(() => {
+      tempDirs = [];
+      configService.setCliOverlay({});
+    });
+
+    teardown(() => {
+      configService.setCliOverlay({});
+      for (const dir of tempDirs) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true });
+        } catch {
+          // best-effort
+        }
+      }
+    });
+
+    function mkTempDir(prefix: string): string {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+      tempDirs.push(dir);
+      return dir;
+    }
+
+    test("rewrites a folder-prefixed @ref to its absolute path so the simple-prompt fast path sends a resolvable reference", async () => {
+      const root = mkTempDir("fp-cli-");
+      const secondRoot = mkTempDir("fp-cli-second-");
+      const secondFile = path.join(secondRoot, "b.ts");
+      fs.writeFileSync(secondFile, "export const b = true;\n");
+
+      const integration = new TestCliIntegration(
+        createProvider(),
+        new MockDualRootPlatform(root, secondRoot),
+        false
+      );
+
+      const sections = await (integration as any).buildPromptSections({
+        prompt: "Please fix @root2/b.ts before merging.",
+      } as PromptStep);
+
+      assert.strictEqual(
+        sections.userPromptText,
+        `Please fix @${secondFile} before merging.`
+      );
+    });
+
+    test("rewrites a folder-prefixed #sym: ref to its absolute path", async () => {
+      const root = mkTempDir("fp-cli-");
+      const secondRoot = mkTempDir("fp-cli-second-");
+      const secondFile = path.join(secondRoot, "b.ts");
+      fs.writeFileSync(secondFile, "export function foo() {}\n");
+
+      const integration = new TestCliIntegration(
+        createProvider(),
+        new MockDualRootPlatform(root, secondRoot),
+        false
+      );
+
+      const sections = await (integration as any).buildPromptSections({
+        prompt: "When #sym:root2/b.ts:foo:1-1 runs, log the result.",
+      } as PromptStep);
+
+      assert.strictEqual(
+        sections.userPromptText,
+        `When #sym:${secondFile}:foo:1-1 runs, log the result.`
+      );
+    });
+
+    test("strips the @ prefix for a Codex-like provider even in single-root", async () => {
+      const root = mkTempDir("fp-cli-");
+      fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
+
+      const integration = new TestCliIntegration(
+        createProvider({
+          formatFileReference: (relativeFilePath: string) =>
+            relativeFilePath,
+        }),
+        new MockSingleRootPlatform(root),
+        false
+      );
+
+      const sections = await (integration as any).buildPromptSections({
+        prompt: "Please review @a.ts for issues.",
+      } as PromptStep);
+
+      assert.strictEqual(
+        sections.userPromptText,
+        "Please review a.ts for issues."
+      );
+    });
+
+    test("single-root, non-Codex provider: leaves an unprefixed @ref textually unchanged", async () => {
+      const root = mkTempDir("fp-cli-");
+      fs.writeFileSync(path.join(root, "a.ts"), "export const a = 1;\n");
+
+      const integration = new TestCliIntegration(
+        createProvider(),
+        new MockSingleRootPlatform(root),
+        false
+      );
+
+      const sections = await (integration as any).buildPromptSections({
+        prompt: "Please review @a.ts for issues.",
+      } as PromptStep);
+
+      assert.strictEqual(
+        sections.userPromptText,
+        "Please review @a.ts for issues."
+      );
+    });
+  });
 });
