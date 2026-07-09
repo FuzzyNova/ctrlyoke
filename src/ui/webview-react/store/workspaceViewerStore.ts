@@ -22,28 +22,25 @@ export type PendingNavigation =
   | { type: "directory"; dirPath: string };
 
 /**
- * Best-effort match of a viewer path to the repo that owns it, for defaulting
- * the SCM repo selector to follow the open file. Viewer paths are folder-name-
- * prefixed with the root name in multi-root (`secondary/foo.ts`), and repo
- * labels are those same root names, so the first path segment identifies the
- * repo. Returns null for unprefixed/unknown paths (single-root falls back to
- * the first repo).
+ * Match a viewer path to the repo that owns it, for defaulting the SCM repo
+ * selector to follow the open file. Viewer paths are folder-name-prefixed with
+ * the root name in multi-root (`secondary/foo.ts`); the server supplies the
+ * authoritative prefix → repo-id map (`prefixRepoIds`) so we never guess from
+ * `label`/`id` — those diverge from the prefix when a root sits below its git
+ * toplevel. Returns null for unprefixed/unknown paths (single-root falls back
+ * to the first repo).
  *
- * The canonical prefix rules live in `platform/WorkspaceViewerPath.ts`
- * (`firstViewerSegment`), but that module pulls in `node:path` and can't be
- * imported into the webview bundle, so this mirrors only the first-segment
- * read. Keep the two in sync.
+ * The first-segment split mirrors `firstViewerSegment` in
+ * `platform/WorkspaceViewerPath.ts`, which can't be imported here (it pulls in
+ * `node:path`); keep the two in sync.
  */
 function repoIdForPath(
   path: string | null,
-  repos: WorkspaceRepo[]
+  prefixRepoIds: Record<string, string>
 ): string | null {
   if (!path) return null;
   const firstSegment = path.replace(/\\/g, "/").split("/")[0];
-  const match = repos.find(
-    (repo) => repo.label === firstSegment || repo.id === firstSegment
-  );
-  return match?.id ?? null;
+  return prefixRepoIds[firstSegment] ?? null;
 }
 
 // ============================================================================
@@ -85,6 +82,8 @@ interface WorkspaceViewerState {
 
   // Repos (multi-repo workspaces). Empty/one → the repo selector stays hidden.
   repos: WorkspaceRepo[];
+  /** Server-supplied viewer-path prefix → repo-id map (authoritative; see `repoIdForPath`). */
+  prefixRepoIds: Record<string, string>;
   /** Repo whose SCM state (status, diff, commit, history) the pane currently shows. */
   selectedRepoId: string | null;
 
@@ -170,7 +169,10 @@ interface WorkspaceViewerActions {
   setMobileDiffVisible(v: boolean): void;
 
   // Repos
-  setRepos(repos: WorkspaceRepo[]): void;
+  setRepos(
+    repos: WorkspaceRepo[],
+    prefixRepoIds: Record<string, string>
+  ): void;
   setSelectedRepoId(id: string | null): void;
 
   // Source control
@@ -247,6 +249,7 @@ const INITIAL_STATE: WorkspaceViewerState = {
   mobileDiffVisible: false,
 
   repos: [],
+  prefixRepoIds: {},
   selectedRepoId: null,
 
   sourceControlFiles: [],
@@ -494,17 +497,20 @@ export const useWorkspaceViewerStore = create<
 
       // --- Repos ---
 
-      setRepos(repos) {
+      setRepos(repos, prefixRepoIds) {
         const { selectedRepoId, selectedDiffPath, selectedFilePath } = get();
         const stillValid =
           selectedRepoId !== null &&
           repos.some((repo) => repo.id === selectedRepoId);
         const next = stillValid
           ? selectedRepoId
-          : (repoIdForPath(selectedDiffPath ?? selectedFilePath, repos) ??
+          : (repoIdForPath(
+              selectedDiffPath ?? selectedFilePath,
+              prefixRepoIds
+            ) ??
             repos[0]?.id ??
             null);
-        set({ repos, selectedRepoId: next });
+        set({ repos, prefixRepoIds, selectedRepoId: next });
       },
 
       setSelectedRepoId(id) {

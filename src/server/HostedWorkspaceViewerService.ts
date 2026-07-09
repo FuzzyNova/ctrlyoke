@@ -34,7 +34,11 @@ import {
   fromViewerPath,
   type ViewerRootContext,
 } from "../platform/WorkspaceViewerPath";
-import { discoverRepos } from "../utils/WorkspaceRepoDiscovery";
+import {
+  discoverRepos,
+  findRepoForPath,
+  mapRootPrefixesToRepos,
+} from "../utils/WorkspaceRepoDiscovery";
 import {
   isPathWithinDirectory,
   isPathWithinAnyDirectory,
@@ -258,7 +262,13 @@ export class HostedWorkspaceViewerService {
   }
 
   async getRepos(): Promise<WorkspaceReposResponse> {
-    return { repos: await this.getReposInternal() };
+    const repos = await this.getReposInternal();
+    // Only multi-root workspaces produce prefixed viewer paths; single-root
+    // leaves the map empty (the selector stays hidden anyway).
+    const prefixRepoIds = this.isMultiRoot
+      ? mapRootPrefixesToRepos(this.namedRoots, repos)
+      : {};
+    return { repos, prefixRepoIds };
   }
 
   /**
@@ -274,12 +284,7 @@ export class HostedWorkspaceViewerService {
         return match.rootPath;
       }
     }
-    const primary = path.resolve(this.workspaceRoot);
-    const containing = repos.find(
-      (repo) =>
-        path.resolve(repo.rootPath) === primary ||
-        isPathWithinDirectory(primary, repo.rootPath)
-    );
+    const containing = findRepoForPath(this.workspaceRoot, repos);
     return containing?.rootPath ?? this.workspaceRoot;
   }
 
@@ -291,12 +296,7 @@ export class HostedWorkspaceViewerService {
    */
   private async requireRepoRootForPath(absolutePath: string): Promise<string> {
     const repos = await this.getReposInternal();
-    const resolved = path.resolve(absolutePath);
-    const match = repos.find(
-      (repo) =>
-        path.resolve(repo.rootPath) === resolved ||
-        isPathWithinDirectory(absolutePath, repo.rootPath)
-    );
+    const match = findRepoForPath(absolutePath, repos);
     if (!match) {
       throw new Error("File is not inside a git repository");
     }

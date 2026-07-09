@@ -820,10 +820,15 @@ suite("HostedWorkspaceViewerService", () => {
       configureGitIdentity(primary);
       // secondary is left as a non-repo directory.
 
-      const repos = (await svc.getRepos()).repos;
+      const result = await svc.getRepos();
 
-      assert.strictEqual(repos.length, 1);
-      assert.strictEqual(repos[0].label, "primary");
+      assert.strictEqual(result.repos.length, 1);
+      assert.strictEqual(result.repos[0].label, "primary");
+      // The prefix map covers the git root and omits the non-repo root, so the
+      // client can follow the open file without guessing from labels/ids.
+      assert.deepStrictEqual(result.prefixRepoIds, {
+        primary: result.repos[0].id,
+      });
     });
 
     test("single-root behavior is unchanged when namedRoots has 0 or 1 entries", async () => {

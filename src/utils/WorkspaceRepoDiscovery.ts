@@ -4,6 +4,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import type { WorkspaceRepo } from "../types/HostedWorkspaceViewerTypes";
+import { isPathWithinDirectory } from "./PathSecurity";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 10_000;
@@ -99,4 +100,49 @@ export async function discoverRepos(
   }
 
   return repos;
+}
+
+/**
+ * The discovered repo whose git toplevel owns an absolute path — the path
+ * equals the toplevel or sits within it. The single containment predicate for
+ * every path→repo association: the client's prefix map
+ * ({@link mapRootPrefixesToRepos}) and the server's repo-scoping
+ * (`resolveRepoRoot`/`requireRepoRootForPath`) all resolve through here so they
+ * can never disagree about which repo a file belongs to. Returns the first
+ * match, matching how `fromViewerPath` resolves an ambiguous prefix.
+ */
+export function findRepoForPath(
+  absolutePath: string,
+  repos: readonly WorkspaceRepo[]
+): WorkspaceRepo | undefined {
+  const abs = path.resolve(absolutePath);
+  return repos.find((repo) => {
+    const repoRoot = path.resolve(repo.rootPath);
+    return abs === repoRoot || isPathWithinDirectory(abs, repoRoot);
+  });
+}
+
+/**
+ * Map each root's folder name (the viewer-path prefix it produces) to the id of
+ * the repo that owns it. The client uses this to default the SCM repo selector
+ * to the repo containing the open file, without reverse-engineering the mapping
+ * from `label`/`id` — which diverge from the prefix when a root sits below its
+ * git toplevel, and collapse when several roots share one repo.
+ *
+ * On duplicate root names the first wins, matching how `fromViewerPath`
+ * resolves an ambiguous prefix.
+ */
+export function mapRootPrefixesToRepos(
+  namedRoots: readonly ResolverWorkspaceFolder[],
+  repos: readonly WorkspaceRepo[]
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const root of namedRoots) {
+    if (root.name in map) continue;
+    const repo = findRepoForPath(root.fsPath, repos);
+    if (repo) {
+      map[root.name] = repo.id;
+    }
+  }
+  return map;
 }

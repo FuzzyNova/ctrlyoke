@@ -295,30 +295,55 @@ describe("setLoadedImage", () => {
 
 describe("setRepos", () => {
   const repo = (id: string) => ({ id, label: id, rootPath: `/${id}` });
+  // Identity prefix→id map for the common case where a root's folder name
+  // equals the repo id.
+  const identityMap = (...ids: string[]) =>
+    Object.fromEntries(ids.map((id) => [id, id]));
 
   it("defaults the selection to the first repo when nothing is selected", () => {
-    store().setRepos([repo("alpha"), repo("beta")]);
+    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
     expect(store().selectedRepoId).toBe("alpha");
   });
 
   it("keeps the current selection when it is still present", () => {
-    store().setRepos([repo("alpha"), repo("beta")]);
+    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
     store().setSelectedRepoId("beta");
-    store().setRepos([repo("alpha"), repo("beta"), repo("gamma")]);
+    store().setRepos(
+      [repo("alpha"), repo("beta"), repo("gamma")],
+      identityMap("alpha", "beta", "gamma")
+    );
     expect(store().selectedRepoId).toBe("beta");
   });
 
   it("re-defaults when the current selection disappears", () => {
-    store().setRepos([repo("alpha"), repo("beta")]);
+    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
     store().setSelectedRepoId("beta");
-    store().setRepos([repo("alpha"), repo("gamma")]);
+    store().setRepos([repo("alpha"), repo("gamma")], identityMap("alpha", "gamma"));
     expect(store().selectedRepoId).toBe("alpha");
   });
 
   it("follows the open file's root when no selection is valid", () => {
     // A folder-name-prefixed diff path identifies its repo by first segment.
     store().selectDiff("beta/src/index.ts");
-    store().setRepos([repo("alpha"), repo("beta")]);
+    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
     expect(store().selectedRepoId).toBe("beta");
+  });
+
+  it("follows the open file when the prefix differs from the repo id", () => {
+    // A root nested below its git toplevel prefixes with its folder name
+    // ("frontend") while the repo id is the toplevel basename ("monorepo").
+    // The server-supplied map is authoritative — matching label/id would miss.
+    store().selectDiff("frontend/src/index.ts");
+    store().setRepos([repo("monorepo"), repo("other")], {
+      frontend: "monorepo",
+      backend: "monorepo",
+    });
+    expect(store().selectedRepoId).toBe("monorepo");
+  });
+
+  it("falls back to the first repo when the prefix has no mapping", () => {
+    store().selectDiff("unmapped/src/index.ts");
+    store().setRepos([repo("alpha"), repo("beta")], identityMap("alpha", "beta"));
+    expect(store().selectedRepoId).toBe("alpha");
   });
 });

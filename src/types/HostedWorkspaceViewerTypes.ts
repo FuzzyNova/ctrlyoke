@@ -74,6 +74,16 @@ export interface WorkspaceRepo {
 
 export interface WorkspaceReposResponse {
   repos: WorkspaceRepo[];
+  /**
+   * Authoritative map from a viewer-path folder-name prefix (a workspace
+   * root's name, the first segment of a multi-root viewer path) to the id of
+   * the repo that owns it. The server computes this from the actual roots →
+   * repo containment, so the client never has to reverse-engineer it from
+   * `label`/`id` — those diverge from the prefix when a root sits below its git
+   * toplevel, and several roots can share one repo. Empty in single-root
+   * (viewer paths are unprefixed and the selector stays hidden).
+   */
+  prefixRepoIds: Record<string, string>;
 }
 
 export interface SourceControlFile {

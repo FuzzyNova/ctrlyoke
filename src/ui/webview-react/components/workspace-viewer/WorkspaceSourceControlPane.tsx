@@ -189,7 +189,7 @@ export const WorkspaceSourceControlPane: React.FC = () => {
   // workspaces and defaults selection to the repo containing the open file.
   useEffect(() => {
     workspaceRepos()
-      .then((result) => setRepos(result.repos))
+      .then((result) => setRepos(result.repos, result.prefixRepoIds))
       .catch(() => {
         // ignore — selector simply won't appear; SCM falls back to aggregate
       });

@@ -104,12 +104,19 @@ function isMultiRoot(ctx: ViewerRootContext): boolean {
   return ctx.namedRoots.length > 1;
 }
 
+/** `path.relative` with the result normalized to POSIX (`/`) separators. */
+function posixRelative(from: string, to: string): string {
+  return path.relative(from, to).split(path.sep).join("/");
+}
+
 /**
  * Absolute filesystem path → viewer path: plain workspace-relative in
  * single-root, folder-name-prefixed (`root2/src/index.ts`) in multi-root.
- * Inverse of {@link fromViewerPath}. A multi-root path outside every named root
- * falls back to a primary-root-relative path so callers always get a usable
- * string (containment is expected to have been validated upstream).
+ * Inverse of {@link fromViewerPath}. Viewer paths always use `/` separators
+ * (never OS-native `\`), so both branches normalize. A multi-root path outside
+ * every named root falls back to a primary-root-relative path so callers always
+ * get a usable string (containment is expected to have been validated
+ * upstream).
  */
 export function toViewerPath(
   absolutePath: string,
@@ -117,19 +124,15 @@ export function toViewerPath(
 ): string {
   const primary = path.resolve(ctx.primaryRoot);
   if (!isMultiRoot(ctx)) {
-    return path.relative(primary, absolutePath);
+    return posixRelative(primary, absolutePath);
   }
   const root = ctx.namedRoots.find((r) =>
     isPathWithinDirectory(absolutePath, path.resolve(r.fsPath))
   );
   if (!root) {
-    return path.relative(primary, absolutePath);
+    return posixRelative(primary, absolutePath);
   }
-  const rel = path
-    .relative(path.resolve(root.fsPath), absolutePath)
-    .split(path.sep)
-    .join("/");
-  return joinViewerPath(root.name, rel);
+  return joinViewerPath(root.name, posixRelative(path.resolve(root.fsPath), absolutePath));
 }
 
 /**
