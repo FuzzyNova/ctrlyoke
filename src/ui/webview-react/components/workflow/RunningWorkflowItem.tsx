@@ -117,11 +117,9 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
           className="flex-shrink-0 text-xs text-description-fg font-mono"
           title={`Step ${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)} of ${workflow.totalSteps}`}
         >
-          {isNarrow ? (
-            <i className="codicon codicon-list-ordered" />
-          ) : (
-            `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}/${workflow.totalSteps}`
-          )}
+          {isNarrow
+            ? `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}`
+            : `${Math.min(workflowDisplayStep(workflow), workflow.totalSteps)}/${workflow.totalSteps}`}
         </span>
       )}
 

@@ -83,7 +83,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
       />
 
       {/* Scrollable Items */}
-      <div className="workflow-menu-items overflow-y-auto overflow-x-hidden flex-1 min-h-0 py-1">
+      <div className="workflow-menu-items overflow-y-auto overflow-x-clip flex-1 min-h-0 py-1">
         {workflows.length === 0 ? (
           isFiltering ? (
             <div className="w-full px-3 py-2 text-left text-sm text-description-fg">
@@ -147,11 +147,9 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                       className="flex-shrink-0 text-xs text-description-fg font-mono"
                       title={`${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`}
                     >
-                      {isNarrow ? (
-                        <i className="codicon codicon-list-ordered" />
-                      ) : (
-                        `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`
-                      )}
+                      {isNarrow
+                        ? `${workflow.totalSteps}`
+                        : `${workflow.totalSteps} step${workflow.totalSteps === 1 ? "" : "s"}`}
                     </span>
                   )}
 

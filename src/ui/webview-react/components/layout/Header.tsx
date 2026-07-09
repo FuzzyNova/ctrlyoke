@@ -4,7 +4,7 @@ import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES, RUNNER_IDS } from "../../types/messages";
 import { useVsCodeApi, isStandalone } from "@hooks/useVsCodeApi";
 import { useWorkspaceViewerStore } from "@store/workspaceViewerStore";
-import { useIsMobile } from "@hooks/useMediaQuery";
+import { useIsMobile, useMediaQuery } from "@hooks/useMediaQuery";
 import { WebviewLog } from "@utils/logger";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
@@ -58,6 +58,16 @@ export const Header: React.FC<{
 }> = ({ onToggleMobileSteps, onToggleMobileWorkflowProps }) => {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
+  // WorkflowStatus is a heavy, stateful component (dropdown-open state, its own
+  // ResizeObserver, document-level outside-click listener, and a GET_RECENT_WORKFLOWS
+  // postMessage on mount). The header's three responsive tiers each have their own
+  // wrapper with tier-specific layout, so historically each tier mounted its own
+  // <WorkflowStatus>, hidden/shown purely via Tailwind classes — three simultaneous
+  // live instances at all times, only one of which is ever visible. `layoutTier`
+  // mirrors the header's own sm/lg Tailwind breakpoints via matchMedia so exactly one
+  // tier's WorkflowStatus actually mounts; the other two wrappers render without it.
+  const isWideLayout = useMediaQuery("(min-width: 1024px)");
+  const isMediumLayout = !isMobile && !isWideLayout;
   const btnSize = isMobile
     ? HEADER_BUTTON_SIZES.touch
     : HEADER_BUTTON_SIZES.default;
@@ -507,14 +517,16 @@ export const Header: React.FC<{
             move into the shared center lane so they can negotiate width together. */}
         <div className="header-status col-start-2 row-start-1 justify-self-stretch w-full flex items-center justify-center min-w-0 gap-0 px-1 sm:hidden">
           {!isMobile && <NavHistoryControls className="flex-shrink-0" />}
-          <WorkflowStatus className="flex-1 min-w-0" />
+          {isMobile && <WorkflowStatus className="flex-1 min-w-0" />}
         </div>
 
         {/* Desktop center lane: medium keeps a shared flex row, while lg+ promotes the centered
             region back into dedicated tracks so WorkflowStatus stays perfectly page-centered. */}
         <div className="hidden sm:flex sm:col-start-2 sm:row-start-1 lg:hidden min-w-0 items-center justify-center gap-0">
           <NavHistoryControls className="hidden md:flex flex-shrink-0" />
-          <WorkflowStatus className="flex-1 min-w-[200px] max-w-[500px] mr-1" />
+          {isMediumLayout && (
+            <WorkflowStatus className="flex-1 min-w-[200px] max-w-[500px] mr-1" />
+          )}
           {runControls}
         </div>
 
@@ -523,7 +535,9 @@ export const Header: React.FC<{
         </div>
 
         <div className="hidden lg:flex lg:col-start-4 lg:row-start-1 items-center justify-center min-w-0">
-          <WorkflowStatus className="w-full min-w-0 max-w-[500px]" />
+          {isWideLayout && (
+            <WorkflowStatus className="w-full min-w-0 max-w-[500px]" />
+          )}
         </div>
 
         <div className="hidden lg:flex lg:col-start-5 lg:row-start-1 items-center justify-start min-w-0 ml-1">

@@ -128,7 +128,6 @@ function getDateEndMs(date: string): number | null {
 function formatMultiFilterLabel(
   selectedValues: string[],
   allValues: string[],
-  singularLabel: string,
   pluralLabel: string,
   options: Array<{ value: string; label: string }>
 ): string {
@@ -143,7 +142,7 @@ function formatMultiFilterLabel(
     );
   }
 
-  return `${selectedValues.length} ${selectedValues.length === 1 ? singularLabel : pluralLabel}`;
+  return `${selectedValues.length} ${pluralLabel}`;
 }
 
 /**
@@ -336,7 +335,15 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setDropdownWidth(alignedDropdownWidth);
   }, [isMobile]);
 
+  // Position tracking (ResizeObserver + window resize/scroll) is only meaningful while the
+  // dropdown is actually open — the popup is `position: fixed` and invisible otherwise, so
+  // there's nothing to keep in sync. Scoping to `isDropdownOpen` means a closed WorkflowStatus
+  // carries no listeners at all instead of recalculating on every scroll for its entire lifetime.
   useLayoutEffect(() => {
+    if (!isDropdownOpen) {
+      return;
+    }
+
     updateDropdownTop();
 
     const container = containerRef.current;
@@ -356,7 +363,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       window.removeEventListener("resize", updateDropdownTop);
       window.removeEventListener("scroll", updateDropdownTop, true);
     };
-  }, [updateDropdownTop]);
+  }, [isDropdownOpen, updateDropdownTop]);
 
   const closeDropdown = useCallback(() => {
     setIsDropdownOpen(false);
@@ -447,12 +454,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       inputRef.current.select();
     }
   }, [isEditing]);
-
-  useLayoutEffect(() => {
-    if (!isDropdownOpen) return;
-
-    updateDropdownTop();
-  }, [isDropdownOpen, updateDropdownTop]);
 
   // Start editing workflow name
   const startEditing = useCallback(() => {
@@ -770,7 +771,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             buttonLabel={formatMultiFilterLabel(
               selectedWorkflowStates,
               ALL_WORKFLOW_STATES,
-              "State",
               "States",
               WORKFLOW_STATE_OPTIONS
             )}
@@ -789,7 +789,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             buttonLabel={formatMultiFilterLabel(
               selectedWorkflowHarnesses,
               ALL_WORKFLOW_HARNESSES,
-              "Harness",
               "Harnesses",
               WORKFLOW_HARNESS_OPTIONS
             )}
@@ -994,7 +993,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
       {/* Dropdown Menu */}
       <div
-        className={`workflow-dropdown-menu fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-hidden flex flex-col transition-all duration-200 ease-out ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
+        className={`workflow-dropdown-menu fixed left-0 right-0 w-screen sm:right-auto bg-dropdown-bg border-x-0 sm:border-x border-t-0 border-b border-dropdown-border sm:rounded-b shadow-lg z-panel overflow-clip flex flex-col transition-all duration-200 ease-out ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
         style={{
           top: dropdownTop,
           left: !isMobile && dropdownWidth !== null ? dropdownLeft : undefined,
@@ -1051,7 +1050,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         )}
 
         {/* Recent workflows list — exclude any already shown in Running Workflows */}
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-clip flex flex-col">
           <RecentWorkflows
             workflows={filteredRecentWorkflows}
             currentFilePath={fileName}
