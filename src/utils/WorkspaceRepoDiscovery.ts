@@ -54,9 +54,17 @@ export async function discoverRepos(
 ): Promise<WorkspaceRepo[]> {
   const seen = new Map<string, WorkspaceRepo>();
 
-  for (const root of roots) {
-    const top = await gitToplevel(root.fsPath);
-    if (!top) continue;
+  // Probe every root's git toplevel concurrently — each spawns its own `git`
+  // process and they don't depend on one another. Results are folded into
+  // `seen` afterward in the original root order so de-duplication (first root
+  // wins for a shared toplevel) stays deterministic.
+  const toplevels = await Promise.all(
+    roots.map((root) => gitToplevel(root.fsPath))
+  );
+
+  roots.forEach((root, i) => {
+    const top = toplevels[i];
+    if (!top) return;
 
     // Prefer the root's own path when it is the repo toplevel, so `rootPath`
     // matches the (possibly symlinked) trusted-root path used for prefixing.
@@ -70,12 +78,12 @@ export async function discoverRepos(
     }
 
     const key = pathKey(rootPath);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return;
 
     const sameAsRoot = pathKey(rootPath) === pathKey(root.fsPath);
     const label = sameAsRoot ? root.name : path.basename(rootPath);
     seen.set(key, { id: label, label, rootPath });
-  }
+  });
 
   // Guarantee unique ids so the UI selector can key on them safely.
   const repos = [...seen.values()];

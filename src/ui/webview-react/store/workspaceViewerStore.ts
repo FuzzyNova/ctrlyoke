@@ -28,6 +28,11 @@ export type PendingNavigation =
  * labels are those same root names, so the first path segment identifies the
  * repo. Returns null for unprefixed/unknown paths (single-root falls back to
  * the first repo).
+ *
+ * The canonical prefix rules live in `platform/WorkspaceViewerPath.ts`
+ * (`firstViewerSegment`), but that module pulls in `node:path` and can't be
+ * imported into the webview bundle, so this mirrors only the first-segment
+ * read. Keep the two in sync.
  */
 function repoIdForPath(
   path: string | null,

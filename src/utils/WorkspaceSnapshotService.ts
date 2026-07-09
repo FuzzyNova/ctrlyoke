@@ -24,10 +24,12 @@ import {
   UNDO_FILE_ACTIONS,
   type SnapshotStrategy,
 } from "../types/DashboardConstants";
+import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
   resolveNamedRelativePath,
-  type ResolverWorkspaceFolder,
-} from "../platform/WorkspaceRootResolver";
+  stripViewerPrefix,
+  joinViewerPath,
+} from "../platform/WorkspaceViewerPath";
 import { discoverRepos } from "./WorkspaceRepoDiscovery";
 import { isPathWithinDirectory } from "./PathSecurity";
 
@@ -781,16 +783,11 @@ export class WorkspaceSnapshotService {
     segment: RawWorkspaceSegment,
     segmentRelPath: string
   ): string {
-    let rootRel = segmentRelPath;
-    if (segment.pathspec) {
-      rootRel =
-        segmentRelPath === segment.pathspec
-          ? ""
-          : segmentRelPath.startsWith(`${segment.pathspec}/`)
-            ? segmentRelPath.slice(segment.pathspec.length + 1)
-            : segmentRelPath;
-    }
-    return segment.prefix ? `${segment.prefix}/${rootRel}` : rootRel;
+    // git reports paths relative to the repo toplevel; strip the root's own
+    // sub-path within that toplevel (`pathspec`), then re-prefix with the
+    // root's folder name to reach the viewer-path form.
+    const rootRel = stripViewerPrefix(segmentRelPath, segment.pathspec);
+    return joinViewerPath(segment.prefix, rootRel);
   }
 
   /** Per-repo metadata for a WorkspaceSnapshot; undefined in single-root. */
@@ -1264,19 +1261,10 @@ export class WorkspaceSnapshotService {
     repoInfo: SnapshotRepoInfo,
     viewerPath: string
   ): string {
-    let rootRel = viewerPath;
-    if (repoInfo.prefix) {
-      rootRel =
-        viewerPath === repoInfo.prefix
-          ? ""
-          : viewerPath.startsWith(`${repoInfo.prefix}/`)
-            ? viewerPath.slice(repoInfo.prefix.length + 1)
-            : viewerPath;
-    }
-    if (!repoInfo.rootRelative) {
-      return rootRel;
-    }
-    return rootRel ? `${repoInfo.rootRelative}/${rootRel}` : repoInfo.rootRelative;
+    // Inverse of `segmentViewerPath`: drop the root's folder-name prefix, then
+    // re-scope under the root's sub-path within the toplevel (`rootRelative`).
+    const rootRel = stripViewerPrefix(viewerPath, repoInfo.prefix);
+    return joinViewerPath(repoInfo.rootRelative, rootRel);
   }
 
   /** Multi-root variant of {@link enrichSnapshotBeforeContent}, per repo. */

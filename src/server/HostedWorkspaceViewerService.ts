@@ -28,10 +28,12 @@ import type {
   WorkspaceReposResponse,
   GitRefLabel,
 } from "../types/HostedWorkspaceViewerTypes";
+import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 import {
-  resolveNamedRelativePath,
-  type ResolverWorkspaceFolder,
-} from "../platform/WorkspaceRootResolver";
+  toViewerPath,
+  fromViewerPath,
+  type ViewerRootContext,
+} from "../platform/WorkspaceViewerPath";
 import { discoverRepos } from "../utils/WorkspaceRepoDiscovery";
 import {
   isPathWithinDirectory,
@@ -197,25 +199,13 @@ export class HostedWorkspaceViewerService {
     return match?.name ?? path.basename(this.workspaceRoot);
   }
 
+  /** Context describing which roots viewer-path conversions resolve against. */
+  private get viewerContext(): ViewerRootContext {
+    return { primaryRoot: this.workspaceRoot, namedRoots: this.namedRoots };
+  }
+
   private resolveAgainstRoots(requestedPath: string): string {
-    if (!this.isMultiRoot) {
-      return path.resolve(path.resolve(this.workspaceRoot), requestedPath);
-    }
-    // A bare root name with no further path segments (navigating to a root's
-    // own top level, e.g. "secondary") has no slash for
-    // `resolveNamedRelativePath` to key off, so it would otherwise fall
-    // through and be joined onto the primary root as a literal subdirectory.
-    // Match it directly against the root name first.
-    const normalized = requestedPath.replace(/\\/g, "/");
-    const exactRoot = this.namedRoots.find((root) => root.name === normalized);
-    if (exactRoot) {
-      return path.resolve(exactRoot.fsPath);
-    }
-    return resolveNamedRelativePath(
-      requestedPath,
-      this.workspaceRoot,
-      this.namedRoots
-    );
+    return fromViewerPath(requestedPath, this.viewerContext);
   }
 
   private findRootFor(
@@ -239,17 +229,31 @@ export class HostedWorkspaceViewerService {
   // toplevel>` so every repo — not just the primary root — supports status,
   // diff, stage, commit, history, etc. `discoverRepos` is the single source of
   // repo identity shared with the snapshot/undo layer.
+  //
+  // The result is cached with a short TTL rather than forever: `namedRoots` is
+  // fixed for this instance's lifetime, but the *repo* set discovered from them
+  // is not — a user can `git init` (or delete `.git`) inside an existing root
+  // mid-session, which changes discovery without changing the roots, so no
+  // reconstruction fires. The TTL keeps discovery off the hot path for bursts
+  // of SCM calls while still picking up such changes within a few seconds.
 
+  private static readonly REPO_CACHE_TTL_MS = 5_000;
   private repoCache: WorkspaceRepo[] | null = null;
+  private repoCacheAt = 0;
 
   private async getReposInternal(): Promise<WorkspaceRepo[]> {
-    if (this.repoCache) {
+    const now = Date.now();
+    if (
+      this.repoCache &&
+      now - this.repoCacheAt < HostedWorkspaceViewerService.REPO_CACHE_TTL_MS
+    ) {
       return this.repoCache;
     }
     const roots: ResolverWorkspaceFolder[] = this.isMultiRoot
       ? this.namedRoots
       : [{ name: this.primaryRootName, fsPath: this.workspaceRoot }];
     this.repoCache = await discoverRepos(roots);
+    this.repoCacheAt = now;
     return this.repoCache;
   }
 
@@ -358,20 +362,7 @@ export class HostedWorkspaceViewerService {
    * `resolveAgainstRoots`.
    */
   private relativePath(absolutePath: string): string {
-    if (!this.isMultiRoot) {
-      return path.relative(path.resolve(this.workspaceRoot), absolutePath);
-    }
-    const root = this.findRootFor(absolutePath);
-    if (!root) {
-      // Shouldn't happen once safeResolve has validated containment; fall
-      // back to the primary root so callers always get a usable string.
-      return path.relative(path.resolve(this.workspaceRoot), absolutePath);
-    }
-    const rel = path
-      .relative(path.resolve(root.fsPath), absolutePath)
-      .split(path.sep)
-      .join("/");
-    return rel ? `${root.name}/${rel}` : root.name;
+    return toViewerPath(absolutePath, this.viewerContext);
   }
 
   // ── Directory listing ────────────────────────────────────────────────────
