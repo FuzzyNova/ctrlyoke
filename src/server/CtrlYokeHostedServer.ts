@@ -811,11 +811,28 @@ export class CtrlYokeHostedServer
     );
 
     this.app.get(
-      "/api/workspace-viewer/status",
+      "/api/workspace-viewer/repos",
       requireToken,
       async (_req, res) => {
         try {
-          res.json(await this.viewerService.getStatus());
+          res.json(await this.viewerService.getRepos());
+        } catch (err) {
+          Log.error(`workspace-viewer /repos error: ${String(err)}`);
+          res.status(500).json({ error: "Internal server error" });
+        }
+      }
+    );
+
+    this.app.get(
+      "/api/workspace-viewer/status",
+      requireToken,
+      async (req, res) => {
+        const repo =
+          typeof req.query.repo === "string" && req.query.repo.trim()
+            ? req.query.repo.trim()
+            : undefined;
+        try {
+          res.json(await this.viewerService.getStatus(repo));
         } catch (err) {
           Log.error(`workspace-viewer /status error: ${String(err)}`);
           res.status(500).json({ error: "Internal server error" });
@@ -923,13 +940,14 @@ export class CtrlYokeHostedServer
       "/api/workspace-viewer/commit",
       requireToken,
       async (req, res) => {
-        const body = req.body as { message?: unknown };
+        const body = req.body as { message?: unknown; repo?: unknown };
         if (typeof body.message !== "string" || !body.message.trim()) {
           res.status(400).json({ error: "message is required" });
           return;
         }
+        const repo = typeof body.repo === "string" ? body.repo : undefined;
         try {
-          await this.viewerService.commit(body.message);
+          await this.viewerService.commit(body.message, repo);
           res.json({});
         } catch (err) {
           Log.error(`workspace-viewer /commit error: ${String(err)}`);
@@ -941,9 +959,11 @@ export class CtrlYokeHostedServer
     this.app.post(
       "/api/workspace-viewer/push",
       requireToken,
-      async (_req, res) => {
+      async (req, res) => {
+        const repo =
+          typeof req.body?.repo === "string" ? req.body.repo : undefined;
         try {
-          res.json(await this.viewerService.push());
+          res.json(await this.viewerService.push(repo));
         } catch (err) {
           Log.error(`workspace-viewer /push error: ${String(err)}`);
           res.status(500).json({ error: "Internal server error" });
@@ -954,9 +974,11 @@ export class CtrlYokeHostedServer
     this.app.post(
       "/api/workspace-viewer/pull",
       requireToken,
-      async (_req, res) => {
+      async (req, res) => {
+        const repo =
+          typeof req.body?.repo === "string" ? req.body.repo : undefined;
         try {
-          res.json(await this.viewerService.pull());
+          res.json(await this.viewerService.pull(repo));
         } catch (err) {
           Log.error(`workspace-viewer /pull error: ${String(err)}`);
           res.status(500).json({ error: "Internal server error" });
@@ -973,8 +995,12 @@ export class CtrlYokeHostedServer
             typeof req.body?.instructions === "string"
               ? req.body.instructions
               : undefined;
-          const result =
-            await this.viewerService.generateCommitMessage(instructions);
+          const repo =
+            typeof req.body?.repo === "string" ? req.body.repo : undefined;
+          const result = await this.viewerService.generateCommitMessage(
+            instructions,
+            repo
+          );
           if (!result) {
             res.status(422).json({
               error: "No changes detected. Stage or modify files first.",
@@ -1006,12 +1032,17 @@ export class CtrlYokeHostedServer
           typeof req.query.branch === "string" && req.query.branch.trim()
             ? req.query.branch.trim()
             : undefined;
+        const repo =
+          typeof req.query.repo === "string" && req.query.repo.trim()
+            ? req.query.repo.trim()
+            : undefined;
         try {
           res.json(
             await this.viewerService.getCommitLog(
               Number.isFinite(skip) ? skip : 0,
               Number.isFinite(limit) && limit > 0 ? limit : 30,
-              branch
+              branch,
+              repo
             )
           );
         } catch (err) {
@@ -1030,8 +1061,12 @@ export class CtrlYokeHostedServer
           res.status(400).json({ error: "ref is required" });
           return;
         }
+        const repo =
+          typeof req.query.repo === "string" && req.query.repo.trim()
+            ? req.query.repo.trim()
+            : undefined;
         try {
-          const result = await this.viewerService.getGitRefDiff(ref);
+          const result = await this.viewerService.getGitRefDiff(ref, repo);
           res.json(result satisfies WorkspaceGitRefDiffResponse);
         } catch (err) {
           Log.error(`workspace-viewer /git-ref-diff error: ${String(err)}`);
@@ -1044,13 +1079,16 @@ export class CtrlYokeHostedServer
       "/api/workspace-viewer/checkout-commit",
       requireToken,
       async (req, res) => {
-        const body = req.body as { hash?: unknown };
+        const body = req.body as { hash?: unknown; repo?: unknown };
         if (typeof body.hash !== "string" || !body.hash.trim()) {
           res.status(400).json({ error: "hash is required" });
           return;
         }
+        const repo = typeof body.repo === "string" ? body.repo : undefined;
         try {
-          res.json(await this.viewerService.checkoutCommit(body.hash.trim()));
+          res.json(
+            await this.viewerService.checkoutCommit(body.hash.trim(), repo)
+          );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           Log.error(`workspace-viewer /checkout-commit error: ${message}`);
@@ -1063,13 +1101,16 @@ export class CtrlYokeHostedServer
       "/api/workspace-viewer/checkout-branch",
       requireToken,
       async (req, res) => {
-        const body = req.body as { branch?: unknown };
+        const body = req.body as { branch?: unknown; repo?: unknown };
         if (typeof body.branch !== "string" || !body.branch.trim()) {
           res.status(400).json({ error: "branch is required" });
           return;
         }
+        const repo = typeof body.repo === "string" ? body.repo : undefined;
         try {
-          res.json(await this.viewerService.checkoutBranch(body.branch.trim()));
+          res.json(
+            await this.viewerService.checkoutBranch(body.branch.trim(), repo)
+          );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           Log.error(`workspace-viewer /checkout-branch error: ${message}`);

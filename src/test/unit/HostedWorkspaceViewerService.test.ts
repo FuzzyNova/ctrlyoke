@@ -750,7 +750,7 @@ suite("HostedWorkspaceViewerService", () => {
       assert.strictEqual(staged, "staged.txt");
     });
 
-    test("stageFile rejects a secondary-root path (git operations are primary-root only)", async () => {
+    test("stageFile rejects a secondary-root path when that root is not a git repo", async () => {
       const { svc, primary, secondary } = createMultiRootService();
       runGit(primary, "init");
       configureGitIdentity(primary);
@@ -758,8 +758,72 @@ suite("HostedWorkspaceViewerService", () => {
 
       await assert.rejects(
         () => svc.stageFile("secondary/other.txt"),
-        /primary workspace root/
+        /not inside a git repository/
       );
+    });
+
+    test("getStatus aggregates changes across every repo in a multi-repo workspace", async () => {
+      const { svc, primary, secondary } = createMultiRootService();
+      for (const root of [primary, secondary]) {
+        runGit(root, "init");
+        configureGitIdentity(root);
+      }
+      fs.writeFileSync(path.join(primary, "p.txt"), "p\n");
+      fs.writeFileSync(path.join(secondary, "s.txt"), "s\n");
+
+      const result = await svc.getStatus();
+
+      assert.deepStrictEqual(
+        result.files.map((f) => f.path).sort(),
+        ["primary/p.txt", "secondary/s.txt"]
+      );
+    });
+
+    test("getStatus scoped to a repo id reports only that repo's changes", async () => {
+      const { svc, primary, secondary } = createMultiRootService();
+      for (const root of [primary, secondary]) {
+        runGit(root, "init");
+        configureGitIdentity(root);
+      }
+      fs.writeFileSync(path.join(primary, "p.txt"), "p\n");
+      fs.writeFileSync(path.join(secondary, "s.txt"), "s\n");
+
+      const repos = (await svc.getRepos()).repos;
+      const secondaryRepo = repos.find((r) => r.label === "secondary");
+      assert.ok(secondaryRepo, "expected a repo labeled 'secondary'");
+
+      const result = await svc.getStatus(secondaryRepo.id);
+
+      assert.deepStrictEqual(
+        result.files.map((f) => f.path),
+        ["secondary/s.txt"]
+      );
+    });
+
+    test("stageFile stages a file in a secondary root that is its own git repo", async () => {
+      const { svc, primary, secondary } = createMultiRootService();
+      for (const root of [primary, secondary]) {
+        runGit(root, "init");
+        configureGitIdentity(root);
+      }
+      fs.writeFileSync(path.join(secondary, "other.txt"), "hello\n");
+
+      await svc.stageFile("secondary/other.txt");
+
+      const staged = runGit(secondary, "diff", "--cached", "--name-only");
+      assert.strictEqual(staged, "other.txt");
+    });
+
+    test("getRepos discovers one entry per repo and dedupes roots sharing a repo", async () => {
+      const { svc, primary } = createMultiRootService();
+      runGit(primary, "init");
+      configureGitIdentity(primary);
+      // secondary is left as a non-repo directory.
+
+      const repos = (await svc.getRepos()).repos;
+
+      assert.strictEqual(repos.length, 1);
+      assert.strictEqual(repos[0].label, "primary");
     });
 
     test("single-root behavior is unchanged when namedRoots has 0 or 1 entries", async () => {

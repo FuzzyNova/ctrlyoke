@@ -18,6 +18,7 @@ import type {
   WorkspaceCheckoutCommitRequest,
   WorkspaceCheckoutBranchRequest,
   WorkspaceGitRefDiffResponse,
+  WorkspaceReposResponse,
 } from "@root/types/HostedWorkspaceViewerTypes";
 
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
@@ -87,9 +88,21 @@ export async function workspaceSaveFile(
   });
 }
 
-export async function workspaceStatus(): Promise<WorkspaceScmStatusResponse> {
+export async function workspaceRepos(): Promise<WorkspaceReposResponse> {
+  return hostedFetch<WorkspaceReposResponse>("/api/workspace-viewer/repos");
+}
+
+/**
+ * SCM status. Omit `repo` for the aggregate across every repo (used by the
+ * explorer to color files across all roots); pass a repo id to scope to a
+ * single repo (used by the SCM pane's repo selector).
+ */
+export async function workspaceStatus(
+  repo?: string
+): Promise<WorkspaceScmStatusResponse> {
+  const query = repo ? `?repo=${encodeURIComponent(repo)}` : "";
   return hostedFetch<WorkspaceScmStatusResponse>(
-    "/api/workspace-viewer/status"
+    `/api/workspace-viewer/status${query}`
   );
 }
 
@@ -137,27 +150,38 @@ export async function workspaceCommit(
   });
 }
 
-export async function workspacePush(): Promise<WorkspacePushResponse> {
+export async function workspacePush(
+  repo?: string
+): Promise<WorkspacePushResponse> {
   return hostedFetch<WorkspacePushResponse>("/api/workspace-viewer/push", {
     method: "POST",
+    body: repo ? JSON.stringify({ repo }) : undefined,
   });
 }
 
-export async function workspacePull(): Promise<WorkspacePullResponse> {
+export async function workspacePull(
+  repo?: string
+): Promise<WorkspacePullResponse> {
   return hostedFetch<WorkspacePullResponse>("/api/workspace-viewer/pull", {
     method: "POST",
+    body: repo ? JSON.stringify({ repo }) : undefined,
   });
 }
 
 export async function workspaceGenerateCommitMessage(
   instructions?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  repo?: string
 ): Promise<WorkspaceGenerateCommitMessageResponse> {
+  const payload: { instructions?: string; repo?: string } = {};
+  if (instructions) payload.instructions = instructions;
+  if (repo) payload.repo = repo;
+  const body = Object.keys(payload).length ? JSON.stringify(payload) : undefined;
   return hostedFetch<WorkspaceGenerateCommitMessageResponse>(
     "/api/workspace-viewer/generate-commit-message",
     {
       method: "POST",
-      body: instructions ? JSON.stringify({ instructions }) : undefined,
+      body,
       signal,
     }
   );
@@ -193,21 +217,25 @@ export async function workspaceMoveEntry(
 export async function workspaceCommitLog(
   skip = 0,
   limit = 30,
-  branchHint?: string
+  branchHint?: string,
+  repo?: string
 ): Promise<WorkspaceCommitLogResponse> {
   const branchParam = branchHint
     ? `&branch=${encodeURIComponent(branchHint)}`
     : "";
+  const repoParam = repo ? `&repo=${encodeURIComponent(repo)}` : "";
   return hostedFetch<WorkspaceCommitLogResponse>(
-    `/api/workspace-viewer/commit-log?skip=${skip}&limit=${limit}${branchParam}`
+    `/api/workspace-viewer/commit-log?skip=${skip}&limit=${limit}${branchParam}${repoParam}`
   );
 }
 
 export async function workspaceGitRefDiff(
-  ref: string
+  ref: string,
+  repo?: string
 ): Promise<WorkspaceGitRefDiffResponse> {
+  const repoParam = repo ? `&repo=${encodeURIComponent(repo)}` : "";
   return hostedFetch<WorkspaceGitRefDiffResponse>(
-    `/api/workspace-viewer/git-ref-diff?ref=${encodeURIComponent(ref)}`
+    `/api/workspace-viewer/git-ref-diff?ref=${encodeURIComponent(ref)}${repoParam}`
   );
 }
 

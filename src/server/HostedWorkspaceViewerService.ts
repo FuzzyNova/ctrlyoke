@@ -23,12 +23,16 @@ import type {
   WorkspaceCommitLogResponse,
   WorkspaceCommitLogEntry,
   WorkspaceGitRefDiffResponse,
+  WorkspaceScmFile,
+  WorkspaceRepo,
+  WorkspaceReposResponse,
   GitRefLabel,
 } from "../types/HostedWorkspaceViewerTypes";
 import {
   resolveNamedRelativePath,
   type ResolverWorkspaceFolder,
 } from "../platform/WorkspaceRootResolver";
+import { discoverRepos } from "../utils/WorkspaceRepoDiscovery";
 import {
   isPathWithinDirectory,
   isPathWithinAnyDirectory,
@@ -227,29 +231,77 @@ export class HostedWorkspaceViewerService {
     return this.trustedRoots.some((root) => root === resolved);
   }
 
-  /**
-   * Path relative to the primary root only, unprefixed — for git pathspecs.
-   * Git commands always run `-C this.workspaceRoot` (one repo, the primary
-   * root), so they need a plain repo-relative path, never the folder-name-
-   * prefixed form `relativePath()` produces for secondary roots.
-   */
-  private relativeToPrimaryRoot(absolutePath: string): string {
-    return path.relative(path.resolve(this.workspaceRoot), absolutePath);
+  // ── Repo discovery ───────────────────────────────────────────────────────
+  //
+  // A multi-root workspace can span several git repos. Repos are discovered by
+  // git toplevel (see `discoverRepos`) and keyed by a stable id the UI passes
+  // back to scope repo-specific SCM operations. Git commands run `-C <repo
+  // toplevel>` so every repo — not just the primary root — supports status,
+  // diff, stage, commit, history, etc. `discoverRepos` is the single source of
+  // repo identity shared with the snapshot/undo layer.
+
+  private repoCache: WorkspaceRepo[] | null = null;
+
+  private async getReposInternal(): Promise<WorkspaceRepo[]> {
+    if (this.repoCache) {
+      return this.repoCache;
+    }
+    const roots: ResolverWorkspaceFolder[] = this.isMultiRoot
+      ? this.namedRoots
+      : [{ name: this.primaryRootName, fsPath: this.workspaceRoot }];
+    this.repoCache = await discoverRepos(roots);
+    return this.repoCache;
+  }
+
+  async getRepos(): Promise<WorkspaceReposResponse> {
+    return { repos: await this.getReposInternal() };
   }
 
   /**
-   * Git-backed operations (diff/stage/unstage/discard) only support the
-   * primary root's repo. Throws when the resolved path belongs to a
-   * secondary root instead of silently handing git a broken pathspec.
+   * Resolve a repo-scoped operation's target toplevel. A known repo id wins;
+   * otherwise fall back to the repo containing the primary root, then the
+   * primary root itself (single-repo / no-selection default).
    */
-  private assertWithinPrimaryRoot(absolutePath: string): void {
-    if (
-      !isPathWithinDirectory(absolutePath, path.resolve(this.workspaceRoot))
-    ) {
-      throw new Error(
-        "Git operations are only supported for the primary workspace root"
-      );
+  private async resolveRepoRoot(repoId?: string): Promise<string> {
+    const repos = await this.getReposInternal();
+    if (repoId) {
+      const match = repos.find((repo) => repo.id === repoId);
+      if (match) {
+        return match.rootPath;
+      }
     }
+    const primary = path.resolve(this.workspaceRoot);
+    const containing = repos.find(
+      (repo) =>
+        path.resolve(repo.rootPath) === primary ||
+        isPathWithinDirectory(primary, repo.rootPath)
+    );
+    return containing?.rootPath ?? this.workspaceRoot;
+  }
+
+  /**
+   * Find the repo toplevel that owns a resolved absolute path. Path-carrying
+   * git operations (diff/stage/unstage/discard) infer their repo this way.
+   * Throws when the path is not inside any discovered repo rather than handing
+   * git a pathspec outside the repo.
+   */
+  private async requireRepoRootForPath(absolutePath: string): Promise<string> {
+    const repos = await this.getReposInternal();
+    const resolved = path.resolve(absolutePath);
+    const match = repos.find(
+      (repo) =>
+        path.resolve(repo.rootPath) === resolved ||
+        isPathWithinDirectory(absolutePath, repo.rootPath)
+    );
+    if (!match) {
+      throw new Error("File is not inside a git repository");
+    }
+    return match.rootPath;
+  }
+
+  /** Path relative to a specific repo toplevel — for git pathspecs. */
+  private relativeToRepo(absolutePath: string, repoRoot: string): string {
+    return path.relative(path.resolve(repoRoot), absolutePath);
   }
 
   private realpathsOf(directories: readonly string[]): string[] {
@@ -694,16 +746,48 @@ export class HostedWorkspaceViewerService {
 
   // ── Git status ───────────────────────────────────────────────────────────
 
-  async getStatus(): Promise<WorkspaceScmStatusResponse> {
-    const [statusResult, syncCountsResult] = await Promise.allSettled([
-      execFileAsync(
-        "git",
-        ["-C", this.workspaceRoot, "status", "--porcelain=v1"],
-        {
-          timeout: GIT_TIMEOUT_MS,
-        }
+  /**
+   * SCM status. With no `repoId`, aggregates every discovered repo (what the
+   * explorer needs to color files across all roots); with a `repoId`, reports
+   * just that repo (what the SCM pane's repo selector needs). Sync counts sum
+   * across repos in the aggregate case.
+   */
+  async getStatus(repoId?: string): Promise<WorkspaceScmStatusResponse> {
+    const repos = await this.getReposInternal();
+    const targetRepos = repoId
+      ? repos.filter((repo) => repo.id === repoId)
+      : repos;
+
+    if (targetRepos.length === 0) {
+      return { files: [], incomingCommitCount: 0, outgoingCommitCount: 0 };
+    }
+
+    const results = await Promise.all(
+      targetRepos.map((repo) => this.getRepoStatus(repo.rootPath))
+    );
+
+    return {
+      files: results.flatMap((result) => result.files),
+      incomingCommitCount: results.reduce(
+        (sum, result) => sum + result.incomingCommitCount,
+        0
       ),
-      this.getSyncCounts(),
+      outgoingCommitCount: results.reduce(
+        (sum, result) => sum + result.outgoingCommitCount,
+        0
+      ),
+    };
+  }
+
+  /** Status for a single repo toplevel, with viewer-prefixed file paths. */
+  private async getRepoStatus(
+    repoRoot: string
+  ): Promise<WorkspaceScmStatusResponse> {
+    const [statusResult, syncCountsResult] = await Promise.allSettled([
+      execFileAsync("git", ["-C", repoRoot, "status", "--porcelain=v1"], {
+        timeout: GIT_TIMEOUT_MS,
+      }),
+      this.getSyncCounts(repoRoot),
     ]);
 
     if (statusResult.status !== "fulfilled") {
@@ -723,12 +807,12 @@ export class HostedWorkspaceViewerService {
           };
 
     return {
-      files: this.parsePorcelainV1(statusResult.value.stdout),
+      files: this.parsePorcelainV1(statusResult.value.stdout, repoRoot),
       ...syncCounts,
     };
   }
 
-  private async getSyncCounts(): Promise<
+  private async getSyncCounts(repoRoot: string): Promise<
     Pick<
       WorkspaceScmStatusResponse,
       "incomingCommitCount" | "outgoingCommitCount"
@@ -739,7 +823,7 @@ export class HostedWorkspaceViewerService {
         "git",
         [
           "-C",
-          this.workspaceRoot,
+          repoRoot,
           "rev-list",
           "--left-right",
           "--count",
@@ -765,54 +849,71 @@ export class HostedWorkspaceViewerService {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   }
 
+  /**
+   * Parse `git status --porcelain=v1` output for a repo rooted at `repoRoot`.
+   * Git reports repo-relative paths; each is mapped back to a viewer path via
+   * `relativePath()` (plain in single-root, folder-name-prefixed in multi-root)
+   * so status entries match the same convention as the tree/file/diff APIs and
+   * reference-link resolution — regardless of which repo produced them. Files
+   * that fall outside every trusted root (possible when a root is nested below
+   * its repo toplevel) are skipped since the viewer can't browse them.
+   */
   private parsePorcelainV1(
-    output: string
+    output: string,
+    repoRoot: string
   ): WorkspaceScmStatusResponse["files"] {
-    return output
-      .split("\n")
-      .filter((line) => line.length >= 3)
-      .map((line) => {
-        const x = line[0] ?? " ";
-        const y = line[1] ?? " ";
-        let filePath = line.slice(3);
+    const trustedRoots = this.trustedRoots;
+    const files: WorkspaceScmFile[] = [];
 
-        // Renamed files: "old-path -> new-path"
-        const arrowIdx = filePath.indexOf(" -> ");
-        if (arrowIdx !== -1) {
-          filePath = filePath.slice(arrowIdx + 4);
-        }
+    for (const line of output.split("\n")) {
+      if (line.length < 3) {
+        continue;
+      }
+      const x = line[0] ?? " ";
+      const y = line[1] ?? " ";
+      let filePath = line.slice(3);
 
-        const isUntracked = x === "?" && y === "?";
-        const stagedStatus = isUntracked ? null : x !== " " ? x : null;
-        const unstagedStatus = y !== " " ? y : null;
+      // Renamed files: "old-path -> new-path"
+      const arrowIdx = filePath.indexOf(" -> ");
+      if (arrowIdx !== -1) {
+        filePath = filePath.slice(arrowIdx + 4);
+      }
 
-        let kind: DiffKind;
-        if (isUntracked) {
-          kind = "untracked";
-        } else if (x === "A") {
-          kind = "added";
-        } else if (x === "D" || y === "D") {
-          kind = "deleted";
-        } else if (x === "R") {
-          kind = "renamed";
-        } else {
-          kind = "modified";
-        }
+      const normalized = normalizeScmPath(filePath);
+      if (!normalized) {
+        continue;
+      }
+      const absPath = path.resolve(repoRoot, normalized);
+      if (!isPathWithinAnyDirectory(absPath, trustedRoots)) {
+        continue;
+      }
 
-        const normalized = normalizeScmPath(filePath);
-        return {
-          // getStatus() always runs against the primary root's repo (`-C
-          // this.workspaceRoot`), so in multi-root prefix with the primary
-          // root's folder name to match the folder-name-prefixed convention
-          // used by the tree/file APIs and reference-link resolution.
-          path: this.isMultiRoot
-            ? `${this.primaryRootName}/${normalized}`
-            : normalized,
-          stagedStatus,
-          unstagedStatus,
-          kind,
-        };
+      const isUntracked = x === "?" && y === "?";
+      const stagedStatus = isUntracked ? null : x !== " " ? x : null;
+      const unstagedStatus = y !== " " ? y : null;
+
+      let kind: DiffKind;
+      if (isUntracked) {
+        kind = "untracked";
+      } else if (x === "A") {
+        kind = "added";
+      } else if (x === "D" || y === "D") {
+        kind = "deleted";
+      } else if (x === "R") {
+        kind = "renamed";
+      } else {
+        kind = "modified";
+      }
+
+      files.push({
+        path: this.relativePath(absPath),
+        stagedStatus,
+        unstagedStatus,
+        kind,
       });
+    }
+
+    return files;
   }
 
   // ── Git diff ─────────────────────────────────────────────────────────────
@@ -822,21 +923,21 @@ export class HostedWorkspaceViewerService {
     if (!resolved) {
       throw new Error("Path not allowed");
     }
-    this.assertWithinPrimaryRoot(resolved);
+    const repoRoot = await this.requireRepoRootForPath(resolved);
 
     const relPath = this.relativePath(resolved);
     const normalizedRelPath = normalizeScmPath(relPath);
-    const gitPath = toGitPath(this.relativeToPrimaryRoot(resolved));
+    const gitPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
     const language = languageFromPath(resolved);
 
-    // Determine kind from status
-    const status = await this.getStatus();
+    // Determine kind from the owning repo's status.
+    const status = await this.getRepoStatus(repoRoot);
     const fileStatus = status.files.find(
       (f) => normalizeScmPath(f.path) === normalizedRelPath
     );
     const kind: DiffKind = fileStatus?.kind ?? "modified";
 
-    const oldContent = await this.getHeadContent(gitPath);
+    const oldContent = await this.getHeadContent(gitPath, repoRoot);
     let newContent = "";
 
     if (kind !== "deleted") {
@@ -856,11 +957,14 @@ export class HostedWorkspaceViewerService {
     };
   }
 
-  private async getHeadContent(gitRelPath: string): Promise<string> {
+  private async getHeadContent(
+    gitRelPath: string,
+    repoRoot: string
+  ): Promise<string> {
     try {
       const { stdout } = await execFileAsync(
         "git",
-        ["-C", this.workspaceRoot, "show", `HEAD:${gitRelPath}`],
+        ["-C", repoRoot, "show", `HEAD:${gitRelPath}`],
         { timeout: GIT_TIMEOUT_MS }
       );
       return stdout;
@@ -874,23 +978,21 @@ export class HostedWorkspaceViewerService {
   async stageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
-    this.assertWithinPrimaryRoot(resolved);
-    const relPath = toGitPath(this.relativeToPrimaryRoot(resolved));
-    await execFileAsync(
-      "git",
-      ["-C", this.workspaceRoot, "add", "--", relPath],
-      { timeout: GIT_TIMEOUT_MS }
-    );
+    const repoRoot = await this.requireRepoRootForPath(resolved);
+    const relPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
+    await execFileAsync("git", ["-C", repoRoot, "add", "--", relPath], {
+      timeout: GIT_TIMEOUT_MS,
+    });
   }
 
   async unstageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
-    this.assertWithinPrimaryRoot(resolved);
-    const relPath = toGitPath(this.relativeToPrimaryRoot(resolved));
+    const repoRoot = await this.requireRepoRootForPath(resolved);
+    const relPath = toGitPath(this.relativeToRepo(resolved, repoRoot));
     await execFileAsync(
       "git",
-      ["-C", this.workspaceRoot, "restore", "--staged", "--", relPath],
+      ["-C", repoRoot, "restore", "--staged", "--", relPath],
       { timeout: GIT_TIMEOUT_MS }
     );
   }
@@ -898,11 +1000,11 @@ export class HostedWorkspaceViewerService {
   async discardFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
-    this.assertWithinPrimaryRoot(resolved);
+    const repoRoot = await this.requireRepoRootForPath(resolved);
 
     const relPath = this.relativePath(resolved);
     const normalizedRelPath = normalizeScmPath(relPath);
-    const status = await this.getStatus();
+    const status = await this.getRepoStatus(repoRoot);
     const fileStatus = status.files.find(
       (file) => normalizeScmPath(file.path) === normalizedRelPath
     );
@@ -916,11 +1018,11 @@ export class HostedWorkspaceViewerService {
       "git",
       [
         "-C",
-        this.workspaceRoot,
+        repoRoot,
         "restore",
         "--worktree",
         "--",
-        toGitPath(this.relativeToPrimaryRoot(resolved)),
+        toGitPath(this.relativeToRepo(resolved, repoRoot)),
       ],
       { timeout: GIT_TIMEOUT_MS }
     );
@@ -928,23 +1030,23 @@ export class HostedWorkspaceViewerService {
 
   // ── Git commit ───────────────────────────────────────────────────────────
 
-  async commit(message: string): Promise<void> {
+  async commit(message: string, repoId?: string): Promise<void> {
     if (!message.trim()) throw new Error("Commit message is required");
-    await execFileAsync(
-      "git",
-      ["-C", this.workspaceRoot, "commit", "-m", message],
-      { timeout: GIT_TIMEOUT_MS }
-    );
+    const repoRoot = await this.resolveRepoRoot(repoId);
+    await execFileAsync("git", ["-C", repoRoot, "commit", "-m", message], {
+      timeout: GIT_TIMEOUT_MS,
+    });
   }
 
   // ── Git push ─────────────────────────────────────────────────────────────
 
-  async push(): Promise<WorkspacePushResponse> {
+  async push(repoId?: string): Promise<WorkspacePushResponse> {
+    const repoRoot = await this.resolveRepoRoot(repoId);
     const [branch, remote] = await Promise.all([
-      this.currentBranch(),
-      this.currentRemote(),
+      this.currentBranch(repoRoot),
+      this.currentRemote(repoRoot),
     ]);
-    await execFileAsync("git", ["-C", this.workspaceRoot, "push"], {
+    await execFileAsync("git", ["-C", repoRoot, "push"], {
       timeout: GIT_TIMEOUT_MS,
     });
     return { branch, remote };
@@ -953,9 +1055,11 @@ export class HostedWorkspaceViewerService {
   // ── Commit message generation ────────────────────────────────────────────
 
   async generateCommitMessage(
-    instructions?: string
+    instructions?: string,
+    repoId?: string
   ): Promise<CommitResult | null> {
-    const diffResult = await this.commitGenerator.getDiff(this.workspaceRoot);
+    const repoRoot = await this.resolveRepoRoot(repoId);
+    const diffResult = await this.commitGenerator.getDiff(repoRoot);
     if (!diffResult) {
       return null;
     }
@@ -963,14 +1067,14 @@ export class HostedWorkspaceViewerService {
     const { message, prompt, cliCommand } =
       await this.commitGenerator.generateMessage(
         diffResult.diff,
-        this.workspaceRoot,
+        repoRoot,
         undefined,
         instructions
       );
 
     commitMessageGenerationTracker.setLastRecord({
       source: "workspace-viewer",
-      workingDirectory: this.workspaceRoot,
+      workingDirectory: repoRoot,
       commands: diffResult.commands,
       output: diffResult.diff,
       staged: diffResult.staged,
@@ -991,12 +1095,13 @@ export class HostedWorkspaceViewerService {
 
   // ── Git pull ─────────────────────────────────────────────────────────────
 
-  async pull(): Promise<WorkspacePullResponse> {
+  async pull(repoId?: string): Promise<WorkspacePullResponse> {
+    const repoRoot = await this.resolveRepoRoot(repoId);
     const [branch, remote] = await Promise.all([
-      this.currentBranch(),
-      this.currentRemote(),
+      this.currentBranch(repoRoot),
+      this.currentRemote(repoRoot),
     ]);
-    await execFileAsync("git", ["-C", this.workspaceRoot, "pull"], {
+    await execFileAsync("git", ["-C", repoRoot, "pull"], {
       timeout: GIT_TIMEOUT_MS,
     });
     return { branch, remote };
@@ -1004,11 +1109,11 @@ export class HostedWorkspaceViewerService {
 
   // ── Git helpers ──────────────────────────────────────────────────────────
 
-  private async currentBranch(): Promise<string> {
+  private async currentBranch(repoRoot: string): Promise<string> {
     try {
       const { stdout } = await execFileAsync(
         "git",
-        ["-C", this.workspaceRoot, "branch", "--show-current"],
+        ["-C", repoRoot, "branch", "--show-current"],
         { timeout: GIT_TIMEOUT_MS }
       );
       return stdout.trim() || "HEAD";
@@ -1017,11 +1122,11 @@ export class HostedWorkspaceViewerService {
     }
   }
 
-  private async currentRemote(): Promise<string> {
+  private async currentRemote(repoRoot: string): Promise<string> {
     try {
       const { stdout } = await execFileAsync(
         "git",
-        ["-C", this.workspaceRoot, "remote"],
+        ["-C", repoRoot, "remote"],
         { timeout: GIT_TIMEOUT_MS }
       );
       return stdout.trim().split("\n")[0] ?? "origin";
@@ -1035,43 +1140,33 @@ export class HostedWorkspaceViewerService {
   async getCommitLog(
     skip = 0,
     limit = 30,
-    branchHint?: string
+    branchHint?: string,
+    repoId?: string
   ): Promise<WorkspaceCommitLogResponse> {
+    const repoRoot = await this.resolveRepoRoot(repoId);
+
     // When detached, the caller passes the branch it came from so the branch's
     // newer ("ahead") commits stay visible instead of vanishing behind HEAD.
     // The hint is a plain ref name validated against existing local branches to
     // avoid feeding arbitrary input to git as a revision.
-    const safeBranch = await this.resolveBranchHint(branchHint);
+    const safeBranch = await this.resolveBranchHint(branchHint, repoRoot);
 
     // Fetch one extra to determine hasMore
-    const rows = await getRecentCommits(
-      this.workspaceRoot,
-      limit + 1,
-      skip,
-      safeBranch
-    );
+    const rows = await getRecentCommits(repoRoot, limit + 1, skip, safeBranch);
     const hasMore = rows.length > limit;
     const commits = hasMore ? rows.slice(0, limit) : rows;
 
     const [branchName, headHashResult, upstreamCommitsResult] =
       await Promise.allSettled([
-        execFileAsync(
-          "git",
-          ["-C", this.workspaceRoot, "branch", "--show-current"],
-          { timeout: GIT_TIMEOUT_MS }
-        ),
-        execFileAsync("git", ["-C", this.workspaceRoot, "rev-parse", "HEAD"], {
+        execFileAsync("git", ["-C", repoRoot, "branch", "--show-current"], {
+          timeout: GIT_TIMEOUT_MS,
+        }),
+        execFileAsync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
           timeout: GIT_TIMEOUT_MS,
         }),
         execFileAsync(
           "git",
-          [
-            "-C",
-            this.workspaceRoot,
-            "rev-list",
-            "--no-walk",
-            "@{upstream}..HEAD",
-          ],
+          ["-C", repoRoot, "rev-list", "--no-walk", "@{upstream}..HEAD"],
           { timeout: GIT_TIMEOUT_MS }
         ),
       ]);
@@ -1120,21 +1215,15 @@ export class HostedWorkspaceViewerService {
    * branch name when it exists, otherwise undefined (falls back to HEAD).
    */
   private async resolveBranchHint(
-    branchHint?: string
+    branchHint: string | undefined,
+    repoRoot: string
   ): Promise<string | undefined> {
     const name = branchHint?.trim();
     if (!name) return undefined;
     try {
       await execFileAsync(
         "git",
-        [
-          "-C",
-          this.workspaceRoot,
-          "show-ref",
-          "--verify",
-          "--quiet",
-          `refs/heads/${name}`,
-        ],
+        ["-C", repoRoot, "show-ref", "--verify", "--quiet", `refs/heads/${name}`],
         { timeout: GIT_TIMEOUT_MS }
       );
       return name;
@@ -1145,21 +1234,29 @@ export class HostedWorkspaceViewerService {
 
   // ── Checkout ─────────────────────────────────────────────────────────────
 
-  async checkoutCommit(hash: string): Promise<{ detached: boolean }> {
+  async checkoutCommit(
+    hash: string,
+    repoId?: string
+  ): Promise<{ detached: boolean }> {
+    const repoRoot = await this.resolveRepoRoot(repoId);
     // Validate the hash exists as a commit object
     await execFileAsync(
       "git",
-      ["-C", this.workspaceRoot, "cat-file", "-e", `${hash}^{commit}`],
+      ["-C", repoRoot, "cat-file", "-e", `${hash}^{commit}`],
       { timeout: GIT_TIMEOUT_MS }
     );
-    await execFileAsync("git", ["-C", this.workspaceRoot, "checkout", hash], {
+    await execFileAsync("git", ["-C", repoRoot, "checkout", hash], {
       timeout: GIT_TIMEOUT_MS,
     });
     return { detached: true };
   }
 
-  async checkoutBranch(branch: string): Promise<{ branch: string }> {
-    await execFileAsync("git", ["-C", this.workspaceRoot, "checkout", branch], {
+  async checkoutBranch(
+    branch: string,
+    repoId?: string
+  ): Promise<{ branch: string }> {
+    const repoRoot = await this.resolveRepoRoot(repoId);
+    await execFileAsync("git", ["-C", repoRoot, "checkout", branch], {
       timeout: GIT_TIMEOUT_MS,
     });
     return { branch };
@@ -1167,29 +1264,33 @@ export class HostedWorkspaceViewerService {
 
   // ── Git ref diff ──────────────────────────────────────────────────────────
 
-  async getGitRefDiff(ref: string): Promise<WorkspaceGitRefDiffResponse> {
+  async getGitRefDiff(
+    ref: string,
+    repoId?: string
+  ): Promise<WorkspaceGitRefDiffResponse> {
     const DIFF_REF = "~diff";
     const STAGED_REF = "~staged";
     const STASH_PREFIX = "~stash:";
+    const repoRoot = await this.resolveRepoRoot(repoId);
 
     if (ref === DIFF_REF) {
-      return { unifiedDiff: await getWorkingTreeDiff(this.workspaceRoot) };
+      return { unifiedDiff: await getWorkingTreeDiff(repoRoot) };
     }
     if (ref === STAGED_REF) {
-      return { unifiedDiff: await getStagedDiff(this.workspaceRoot) };
+      return { unifiedDiff: await getStagedDiff(repoRoot) };
     }
     if (ref.startsWith(STASH_PREFIX)) {
       const index = parseInt(ref.slice(STASH_PREFIX.length), 10);
       if (!Number.isFinite(index)) {
         throw new Error(`Invalid stash ref: ${ref}`);
       }
-      return { unifiedDiff: await getStashDiff(this.workspaceRoot, index) };
+      return { unifiedDiff: await getStashDiff(repoRoot, index) };
     }
     // Treat as commit hash
     const hash = ref.startsWith("~") ? ref.slice(1) : ref;
     const [unifiedDiff, commitInfo] = await Promise.all([
-      getCommitDiff(this.workspaceRoot, hash),
-      getCommitInfo(this.workspaceRoot, hash),
+      getCommitDiff(repoRoot, hash),
+      getCommitInfo(repoRoot, hash),
     ]);
     return { unifiedDiff, commitInfo };
   }

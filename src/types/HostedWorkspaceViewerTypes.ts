@@ -56,6 +56,26 @@ export interface WorkspaceFileSaveRequest {
   content: string;
 }
 
+/**
+ * A distinct git repository discovered within the workspace. In a multi-root
+ * workspace whose roots span several repos, there is one entry per repo (roots
+ * that share a repo collapse to one). `id` is a stable, unique key the UI passes
+ * back to scope repo-specific SCM operations; `rootPath` is the repo's git
+ * toplevel and stays server-side (never used as a client-facing viewer path).
+ */
+export interface WorkspaceRepo {
+  /** Stable, unique key used by the UI selector and repo-scoped API calls. */
+  id: string;
+  /** Human-readable name shown in the repo selector (root/folder name). */
+  label: string;
+  /** Absolute git toplevel path. Server-side only. */
+  rootPath: string;
+}
+
+export interface WorkspaceReposResponse {
+  repos: WorkspaceRepo[];
+}
+
 export interface SourceControlFile {
   path: string;
   stagedStatus: string | null;
@@ -101,6 +121,8 @@ export interface WorkspaceDiscardRequest {
 
 export interface WorkspaceCommitRequest {
   message: string;
+  /** Repo id (from WorkspaceRepo.id) to scope the commit to; omitted → primary repo. */
+  repo?: string;
 }
 
 export interface WorkspacePushResponse {
@@ -177,10 +199,14 @@ export interface WorkspaceCommitLogResponse {
 
 export interface WorkspaceCheckoutCommitRequest {
   hash: string;
+  /** Repo id to scope the checkout to; omitted → primary repo. */
+  repo?: string;
 }
 
 export interface WorkspaceCheckoutBranchRequest {
   branch: string;
+  /** Repo id to scope the checkout to; omitted → primary repo. */
+  repo?: string;
 }
 
 // ── Git ref diff ──────────────────────────────────────────────────────────────
