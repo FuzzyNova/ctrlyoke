@@ -58,6 +58,7 @@ import type {
   WorkspaceGenerateCommitMessageResponse,
   WorkspaceGitRefDiffResponse,
 } from "../types/HostedWorkspaceViewerTypes";
+import type { ResolverWorkspaceFolder } from "../platform/WorkspaceRootResolver";
 
 const THEME_VAR_KEY_PATTERN = /^--[A-Za-z0-9_-]+$/;
 
@@ -125,13 +126,17 @@ export class CtrlYokeHostedServer
     private readonly getOrchestrator: () => WorkflowOrchestrator,
     private port: number,
     private workspaceRoot: string,
+    namedWorkspaceRoots: ResolverWorkspaceFolder[],
     private token: string,
     private bindAddress: string = "127.0.0.1",
     tlsConfig?: { certPath: string; keyPath: string }
   ) {
     this.sink = new PostMessageDashboardSink((msg) => this.broadcast(msg));
     this.webPushService = new WebPushService(workspaceRoot);
-    this.viewerService = new HostedWorkspaceViewerService(workspaceRoot);
+    this.viewerService = new HostedWorkspaceViewerService(
+      workspaceRoot,
+      namedWorkspaceRoots
+    );
     if (tlsConfig) {
       const cert = fs.readFileSync(tlsConfig.certPath);
       const key = fs.readFileSync(tlsConfig.keyPath);

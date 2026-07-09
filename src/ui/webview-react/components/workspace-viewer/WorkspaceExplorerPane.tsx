@@ -253,6 +253,11 @@ export const WorkspaceExplorerPane: React.FC = () => {
   // Nav metadata kept in local state — not needed globally
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [rootLabel, setRootLabel] = useState<string>("");
+  // True when the current listing is the virtual top level of a multi-root
+  // workspace (one entry per root folder) rather than a real directory —
+  // entry-level file operations (cut/copy/delete/paste) are disabled there
+  // since each entry represents an entire workspace root.
+  const [isRootsList, setIsRootsList] = useState(false);
 
   const visibleEntries = useMemo(
     () =>
@@ -277,6 +282,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
         );
         setRootLabel(result.rootLabel);
         setExplorerIsGitRepo(result.isGitRepo);
+        setIsRootsList(result.isRootsList ?? false);
       } catch (err) {
         setError(String(err));
       } finally {
@@ -425,6 +431,7 @@ export const WorkspaceExplorerPane: React.FC = () => {
   const { clipboard, openContextMenu, explorerContextMenuPortal } =
     useWorkspaceExplorerContextMenu({
       explorerPath,
+      isRootsList,
       onRefresh: handleRefresh,
       onOpenFile: openFile,
     });

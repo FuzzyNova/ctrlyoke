@@ -18,12 +18,20 @@ export type WorkspaceTreeEntry = WorkspaceEntry;
 
 export interface WorkspaceTreeResponse {
   rootLabel: string;
-  /** Workspace-relative path; "" for root */
+  /** Workspace-relative path (folder-name-prefixed in multi-root, e.g. "root2/src"); "" for the top level. */
   path: string;
   parentPath: string | null;
   entries: WorkspaceTreeEntry[];
   /** Whether the workspace root is inside a git repository. */
   isGitRepo: boolean;
+  /**
+   * True when `entries` is the virtual top-level listing of every root in a
+   * multi-root workspace (one directory entry per root, `path` set to just
+   * the root's folder name) rather than a real directory's contents. Clients
+   * should disable entry-level file operations (cut/copy/delete/paste) for
+   * this listing since each entry represents an entire workspace root.
+   */
+  isRootsList: boolean;
 }
 
 export interface WorkspaceFileResponse {

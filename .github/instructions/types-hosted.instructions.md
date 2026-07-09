@@ -5,6 +5,7 @@ applyTo: "src/types/{HostedWorkspaceViewerTypes.ts,IconColorDefaults.ts}"
 <hostedViewerContracts>
 - `HostedWorkspaceViewerTypes.ts` is shared by the extension-side hosted server and the browser client, so keep payloads JSON-serializable and workspace-relative. Avoid VS Code-specific types or absolute-path assumptions in this file.
 - These request/response types back file-tree, file-content, SCM, and file-operation APIs for the hosted workspace viewer; changing them requires matching server and browser updates together.
+- `WorkspaceTreeResponse.path`/`parentPath`/entry `path` values are folder-name-prefixed (`root2/src/index.ts`) in a multi-root workspace, plain workspace-relative otherwise — see `HostedWorkspaceViewerService` in `server.instructions.md`. `isRootsList: true` marks the virtual top-level listing (one entry per root) rather than a real directory; the browser client must disable per-entry file operations (cut/copy/delete/paste) for that listing.
 </hostedViewerContracts>
 
 <generatedFiles>

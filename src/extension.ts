@@ -7,7 +7,10 @@ import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 import { ContextMenuReferenceCommands } from "./completions/ContextMenuReferenceCommands";
 import { CtrlYokeWebviewProvider } from "./ui/CtrlYokeWebviewProvider";
-import { getVsCodeWorkspaceRoot } from "./platform/VsCodeWorkspaceRoot";
+import {
+  getVsCodeWorkspaceRoot,
+  getVsCodeNamedWorkspaceRoots,
+} from "./platform/VsCodeWorkspaceRoot";
 import { ServerTokenStore } from "./platform/ServerTokenStore";
 import { CtrlYokeHostedServer } from "./server/CtrlYokeHostedServer";
 import {
@@ -1118,6 +1121,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       const hub = workflowOrchestrator.getDashboardBroadcastHub();
       const port = configService.get("server")?.port ?? 3000;
       const workspaceRoot = getVsCodeWorkspaceRoot();
+      const namedWorkspaceRoots = getVsCodeNamedWorkspaceRoots();
       const token = await new ServerTokenStore(context.secrets).getOrCreate();
       const bindAddress =
         configService.get("server")?.bindAddress ?? "127.0.0.1";
@@ -1133,6 +1137,7 @@ function registerCommands(context: vscode.ExtensionContext) {
           () => workflowOrchestrator,
           port,
           workspaceRoot,
+          namedWorkspaceRoots,
           token,
           bindAddress,
           tlsConfig

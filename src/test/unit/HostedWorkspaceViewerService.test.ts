@@ -238,7 +238,9 @@ suite("HostedWorkspaceViewerService", () => {
     test("returns a data URI for a known image type instead of rejecting it", async () => {
       const root = createWorkspace();
       // PNG magic bytes; readFile doesn't validate the format, only base64-encodes.
-      const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      const pngBytes = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      ]);
       fs.writeFileSync(path.join(root, "pic.png"), pngBytes);
 
       const svc = new HostedWorkspaceViewerService(root);
@@ -600,6 +602,180 @@ suite("HostedWorkspaceViewerService", () => {
 
       assert.strictEqual(result.commits.length, 1);
       assert.strictEqual(result.commits[0].subject, "only");
+    });
+  });
+
+  // ── multi-root ────────────────────────────────────────────────────────────
+
+  suite("multi-root", () => {
+    function createMultiRootService(): {
+      svc: HostedWorkspaceViewerService;
+      primary: string;
+      secondary: string;
+    } {
+      const primary = createWorkspace();
+      const secondary = createWorkspace();
+      const svc = new HostedWorkspaceViewerService(primary, [
+        { name: "primary", fsPath: primary },
+        { name: "secondary", fsPath: secondary },
+      ]);
+      return { svc, primary, secondary };
+    }
+
+    test("listDirectory('') returns a virtual roots list instead of the primary root's contents", async () => {
+      const { svc, primary } = createMultiRootService();
+      fs.writeFileSync(path.join(primary, "hello.txt"), "hello");
+
+      const result = await svc.listDirectory("");
+
+      assert.strictEqual(result.isRootsList, true);
+      assert.strictEqual(result.parentPath, null);
+      assert.deepStrictEqual(result.entries.map((e) => e.name).sort(), [
+        "primary",
+        "secondary",
+      ]);
+      assert.ok(
+        result.entries.every((e) => e.kind === "directory"),
+        "every root entry should be a directory"
+      );
+    });
+
+    test("browsing into a secondary root lists its contents with folder-name-prefixed paths", async () => {
+      const { svc, secondary } = createMultiRootService();
+      fs.writeFileSync(path.join(secondary, "foo.txt"), "foo");
+      fs.mkdirSync(path.join(secondary, "sub"));
+
+      const result = await svc.listDirectory("secondary");
+
+      assert.strictEqual(result.isRootsList, false);
+      assert.strictEqual(result.parentPath, "");
+      const byName = new Map(result.entries.map((e) => [e.name, e]));
+      assert.strictEqual(byName.get("foo.txt")?.path, "secondary/foo.txt");
+      assert.strictEqual(byName.get("sub")?.path, "secondary/sub");
+    });
+
+    test("readFile resolves a folder-name-prefixed path against the secondary root", async () => {
+      const { svc, secondary } = createMultiRootService();
+      fs.writeFileSync(path.join(secondary, "note.txt"), "secondary content");
+
+      const result = await svc.readFile("secondary/note.txt");
+
+      assert.strictEqual(result.readOnly, undefined);
+      assert.strictEqual(result.content, "secondary content");
+      assert.strictEqual(result.path, "secondary/note.txt");
+    });
+
+    test("readFile resolves an unprefixed path against the primary root", async () => {
+      const { svc, primary } = createMultiRootService();
+      fs.writeFileSync(path.join(primary, "note.txt"), "primary content");
+
+      const result = await svc.readFile("note.txt");
+
+      assert.strictEqual(result.content, "primary content");
+    });
+
+    test("readFile rejects a path outside every trusted root", async () => {
+      const { svc } = createMultiRootService();
+
+      const result = await svc.readFile(os.homedir());
+
+      assert.strictEqual(result.readOnly, true);
+    });
+
+    test("saveFile writes into the secondary root via a prefixed path", async () => {
+      const { svc, secondary } = createMultiRootService();
+      fs.writeFileSync(path.join(secondary, "edit.txt"), "original");
+
+      await svc.saveFile({ path: "secondary/edit.txt", content: "updated" });
+
+      const written = fs.readFileSync(path.join(secondary, "edit.txt"), "utf8");
+      assert.strictEqual(written, "updated");
+    });
+
+    test("deleteEntry rejects deleting a root folder itself", async () => {
+      const { svc } = createMultiRootService();
+
+      await assert.rejects(
+        () => svc.deleteEntry("secondary"),
+        /Path not allowed/
+      );
+    });
+
+    test("copyEntry copies a file from the primary root into the secondary root", async () => {
+      const { svc, primary, secondary } = createMultiRootService();
+      fs.writeFileSync(path.join(primary, "source.txt"), "copy me");
+
+      await svc.copyEntry({ sourcePath: "source.txt", destDir: "secondary" });
+
+      const copied = fs.readFileSync(
+        path.join(secondary, "source.txt"),
+        "utf8"
+      );
+      assert.strictEqual(copied, "copy me");
+      // Original remains in the primary root.
+      assert.ok(fs.existsSync(path.join(primary, "source.txt")));
+    });
+
+    test("moveEntry moves a file from the secondary root into the primary root", async () => {
+      const { svc, primary, secondary } = createMultiRootService();
+      fs.writeFileSync(path.join(secondary, "move-me.txt"), "moved content");
+
+      await svc.moveEntry({ sourcePath: "secondary/move-me.txt", destDir: "" });
+
+      assert.ok(fs.existsSync(path.join(primary, "move-me.txt")));
+      assert.ok(!fs.existsSync(path.join(secondary, "move-me.txt")));
+    });
+
+    test("getStatus prefixes changed-file paths with the primary root's folder name", async () => {
+      const { svc, primary } = createMultiRootService();
+      runGit(primary, "init");
+      configureGitIdentity(primary);
+      fs.writeFileSync(path.join(primary, "new-file.txt"), "hello\n");
+
+      const result = await svc.getStatus();
+
+      assert.strictEqual(result.files.length, 1);
+      assert.strictEqual(result.files[0].path, "primary/new-file.txt");
+    });
+
+    test("stageFile accepts the getStatus-prefixed path and stages the primary-root file", async () => {
+      const { svc, primary } = createMultiRootService();
+      runGit(primary, "init");
+      configureGitIdentity(primary);
+      fs.writeFileSync(path.join(primary, "staged.txt"), "hello\n");
+
+      await svc.stageFile("primary/staged.txt");
+
+      const staged = runGit(primary, "diff", "--cached", "--name-only");
+      assert.strictEqual(staged, "staged.txt");
+    });
+
+    test("stageFile rejects a secondary-root path (git operations are primary-root only)", async () => {
+      const { svc, primary, secondary } = createMultiRootService();
+      runGit(primary, "init");
+      configureGitIdentity(primary);
+      fs.writeFileSync(path.join(secondary, "other.txt"), "hello\n");
+
+      await assert.rejects(
+        () => svc.stageFile("secondary/other.txt"),
+        /primary workspace root/
+      );
+    });
+
+    test("single-root behavior is unchanged when namedRoots has 0 or 1 entries", async () => {
+      const root = createWorkspace();
+      fs.writeFileSync(path.join(root, "hello.txt"), "hello");
+      const svcNoRoots = new HostedWorkspaceViewerService(root);
+      const svcOneRoot = new HostedWorkspaceViewerService(root, [
+        { name: path.basename(root), fsPath: root },
+      ]);
+
+      for (const svc of [svcNoRoots, svcOneRoot]) {
+        const result = await svc.listDirectory("");
+        assert.strictEqual(result.isRootsList, false);
+        assert.strictEqual(result.parentPath, null);
+        assert.ok(result.entries.some((e) => e.name === "hello.txt"));
+      }
     });
   });
 });

@@ -10,6 +10,7 @@ import {
 import { commitMessageGenerationTracker } from "../git/CommitMessageGenerationTracker";
 import type {
   WorkspaceTreeResponse,
+  WorkspaceTreeEntry,
   WorkspaceFileResponse,
   WorkspaceFileSaveRequest,
   WorkspaceScmStatusResponse,
@@ -24,6 +25,14 @@ import type {
   WorkspaceGitRefDiffResponse,
   GitRefLabel,
 } from "../types/HostedWorkspaceViewerTypes";
+import {
+  resolveNamedRelativePath,
+  type ResolverWorkspaceFolder,
+} from "../platform/WorkspaceRootResolver";
+import {
+  isPathWithinDirectory,
+  isPathWithinAnyDirectory,
+} from "../utils/PathSecurity";
 import {
   getRecentCommits,
   getWorkingTreeDiff,
@@ -151,29 +160,124 @@ function classifyRefNames(refNames: string[]): GitRefLabel[] {
 export class HostedWorkspaceViewerService {
   private readonly commitGenerator = new CommitMessageGenerator();
 
-  constructor(private readonly workspaceRoot: string) {}
+  constructor(
+    private readonly workspaceRoot: string,
+    private readonly namedRoots: ResolverWorkspaceFolder[] = []
+  ) {}
+
+  // ── Multi-root helpers ───────────────────────────────────────────────────
+  //
+  // A multi-root `.code-workspace` is presented to viewer clients as a virtual
+  // top level listing every root by folder name (see `listRoots()`), and every
+  // path below that level is folder-name-prefixed (`root2/src/index.ts`) —
+  // the same stored-ref convention used by `resolveNamedRelativePath`
+  // elsewhere (PromptLinkProvider, WebviewMessageRouter, ContextExpander), so
+  // reference links clicked in the hosted browser resolve identically to how
+  // they resolve in the VS Code panel.
+
+  private get isMultiRoot(): boolean {
+    return this.namedRoots.length > 1;
+  }
+
+  private get trustedRoots(): string[] {
+    return this.isMultiRoot
+      ? this.namedRoots.map((root) => path.resolve(root.fsPath))
+      : [path.resolve(this.workspaceRoot)];
+  }
+
+  private get primaryRootName(): string {
+    const primary = path.resolve(this.workspaceRoot);
+    const match = this.namedRoots.find(
+      (root) => path.resolve(root.fsPath) === primary
+    );
+    return match?.name ?? path.basename(this.workspaceRoot);
+  }
+
+  private resolveAgainstRoots(requestedPath: string): string {
+    if (!this.isMultiRoot) {
+      return path.resolve(path.resolve(this.workspaceRoot), requestedPath);
+    }
+    // A bare root name with no further path segments (navigating to a root's
+    // own top level, e.g. "secondary") has no slash for
+    // `resolveNamedRelativePath` to key off, so it would otherwise fall
+    // through and be joined onto the primary root as a literal subdirectory.
+    // Match it directly against the root name first.
+    const normalized = requestedPath.replace(/\\/g, "/");
+    const exactRoot = this.namedRoots.find((root) => root.name === normalized);
+    if (exactRoot) {
+      return path.resolve(exactRoot.fsPath);
+    }
+    return resolveNamedRelativePath(
+      requestedPath,
+      this.workspaceRoot,
+      this.namedRoots
+    );
+  }
+
+  private findRootFor(
+    absolutePath: string
+  ): ResolverWorkspaceFolder | undefined {
+    return this.namedRoots.find((root) =>
+      isPathWithinDirectory(absolutePath, path.resolve(root.fsPath))
+    );
+  }
+
+  private isExactRoot(absolutePath: string): boolean {
+    const resolved = path.resolve(absolutePath);
+    return this.trustedRoots.some((root) => root === resolved);
+  }
+
+  /**
+   * Path relative to the primary root only, unprefixed — for git pathspecs.
+   * Git commands always run `-C this.workspaceRoot` (one repo, the primary
+   * root), so they need a plain repo-relative path, never the folder-name-
+   * prefixed form `relativePath()` produces for secondary roots.
+   */
+  private relativeToPrimaryRoot(absolutePath: string): string {
+    return path.relative(path.resolve(this.workspaceRoot), absolutePath);
+  }
+
+  /**
+   * Git-backed operations (diff/stage/unstage/discard) only support the
+   * primary root's repo. Throws when the resolved path belongs to a
+   * secondary root instead of silently handing git a broken pathspec.
+   */
+  private assertWithinPrimaryRoot(absolutePath: string): void {
+    if (
+      !isPathWithinDirectory(absolutePath, path.resolve(this.workspaceRoot))
+    ) {
+      throw new Error(
+        "Git operations are only supported for the primary workspace root"
+      );
+    }
+  }
+
+  private realpathsOf(directories: readonly string[]): string[] {
+    return directories.map((dir) => {
+      try {
+        return fs.realpathSync(dir);
+      } catch {
+        return dir;
+      }
+    });
+  }
 
   // ── Path safety ──────────────────────────────────────────────────────────
 
   private safeResolve(requestedPath: string): string | null {
-    const normalizedRoot = path.resolve(this.workspaceRoot);
-    const resolved = path.resolve(normalizedRoot, requestedPath);
+    const trustedRoots = this.trustedRoots;
+    const resolved = this.resolveAgainstRoots(requestedPath);
 
-    // Reject if the normalised path escapes the workspace
-    if (
-      !resolved.startsWith(normalizedRoot + path.sep) &&
-      resolved !== normalizedRoot
-    ) {
+    // Reject if the resolved path escapes every trusted root
+    if (!isPathWithinAnyDirectory(resolved, trustedRoots)) {
       return null;
     }
 
     // Try to resolve symlinks on the full path
     try {
       const realResolved = fs.realpathSync(resolved);
-      const realRoot = fs.realpathSync(normalizedRoot);
       if (
-        !realResolved.startsWith(realRoot + path.sep) &&
-        realResolved !== realRoot
+        !isPathWithinAnyDirectory(realResolved, this.realpathsOf(trustedRoots))
       ) {
         return null;
       }
@@ -183,10 +287,8 @@ export class HostedWorkspaceViewerService {
       const parent = path.dirname(resolved);
       try {
         const realParent = fs.realpathSync(parent);
-        const realRoot = fs.realpathSync(normalizedRoot);
         if (
-          !realParent.startsWith(realRoot + path.sep) &&
-          realParent !== realRoot
+          !isPathWithinAnyDirectory(realParent, this.realpathsOf(trustedRoots))
         ) {
           return null;
         }
@@ -197,16 +299,60 @@ export class HostedWorkspaceViewerService {
     }
   }
 
-  /** Returns workspace-relative path using the OS separator. */
+  /**
+   * Returns the viewer-relative path for an absolute filesystem path: plain
+   * workspace-relative in single-root, folder-name-prefixed
+   * (`root2/src/index.ts`) in multi-root — the inverse of
+   * `resolveAgainstRoots`.
+   */
   private relativePath(absolutePath: string): string {
-    const normalizedRoot = path.resolve(this.workspaceRoot);
-    return path.relative(normalizedRoot, absolutePath);
+    if (!this.isMultiRoot) {
+      return path.relative(path.resolve(this.workspaceRoot), absolutePath);
+    }
+    const root = this.findRootFor(absolutePath);
+    if (!root) {
+      // Shouldn't happen once safeResolve has validated containment; fall
+      // back to the primary root so callers always get a usable string.
+      return path.relative(path.resolve(this.workspaceRoot), absolutePath);
+    }
+    const rel = path
+      .relative(path.resolve(root.fsPath), absolutePath)
+      .split(path.sep)
+      .join("/");
+    return rel ? `${root.name}/${rel}` : root.name;
   }
 
   // ── Directory listing ────────────────────────────────────────────────────
 
+  /**
+   * The virtual top level shown for a multi-root workspace: one directory
+   * entry per open root, named after the root's folder name. Browsing into
+   * one produces folder-name-prefixed paths for everything below it.
+   */
+  private listRoots(): WorkspaceTreeResponse {
+    const entries: WorkspaceTreeEntry[] = this.namedRoots.map((root) => ({
+      name: root.name,
+      path: root.name,
+      kind: "directory" as const,
+    }));
+    return {
+      rootLabel: "workspace",
+      path: "",
+      parentPath: null,
+      entries,
+      isGitRepo: false,
+      isRootsList: true,
+    };
+  }
+
   async listDirectory(requestedPath: string): Promise<WorkspaceTreeResponse> {
-    const rootLabel = path.basename(this.workspaceRoot);
+    if (this.isMultiRoot && requestedPath.trim() === "") {
+      return this.listRoots();
+    }
+
+    const rootLabel = this.isMultiRoot
+      ? "workspace"
+      : path.basename(this.workspaceRoot);
 
     const resolved = this.safeResolve(requestedPath);
     if (!resolved) {
@@ -219,12 +365,20 @@ export class HostedWorkspaceViewerService {
         parentPath: null,
         entries: [],
         isGitRepo: false,
+        isRootsList: false,
       };
     }
 
     const relDir = this.relativePath(resolved);
-    const parentPath =
-      relDir === "" ? null : this.relativePath(path.dirname(resolved));
+    let parentPath: string | null;
+    if (relDir === "") {
+      parentPath = null;
+    } else if (this.isMultiRoot && !relDir.includes("/")) {
+      // relDir is a bare root name — its parent is the virtual roots list.
+      parentPath = "";
+    } else {
+      parentPath = this.relativePath(path.dirname(resolved));
+    }
 
     try {
       const dirents = await fs.promises.readdir(resolved, {
@@ -240,9 +394,22 @@ export class HostedWorkspaceViewerService {
 
       const allEntries = [...dirs, ...files].slice(0, MAX_ENTRIES);
 
+      // Each root can be its own git repo, so gitignore status is always
+      // computed against the root that actually contains `resolved`, not the
+      // primary root — the `relDir` used elsewhere is folder-name-prefixed in
+      // multi-root and would resolve to the wrong repo if passed directly.
+      const containingRoot = this.isMultiRoot
+        ? (this.findRootFor(resolved)?.fsPath ?? this.workspaceRoot)
+        : this.workspaceRoot;
+      const rootRelativeDir = this.isMultiRoot
+        ? path
+            .relative(path.resolve(containingRoot), resolved)
+            .split(path.sep)
+            .join("/")
+        : relDir;
       const ignoredNames = await getIgnoredEntryNames(
-        this.workspaceRoot,
-        relDir
+        containingRoot,
+        rootRelativeDir
       );
       const isGitRepo = ignoredNames !== null;
 
@@ -284,7 +451,14 @@ export class HostedWorkspaceViewerService {
         })
       );
 
-      return { rootLabel, path: relDir, parentPath, entries, isGitRepo };
+      return {
+        rootLabel,
+        path: relDir,
+        parentPath,
+        entries,
+        isGitRepo,
+        isRootsList: false,
+      };
     } catch (err) {
       Log.error(
         `WorkspaceViewer: listDirectory failed for ${resolved}: ${String(err)}`
@@ -295,6 +469,7 @@ export class HostedWorkspaceViewerService {
         parentPath,
         entries: [],
         isGitRepo: false,
+        isRootsList: false,
       };
     }
   }
@@ -428,7 +603,7 @@ export class HostedWorkspaceViewerService {
 
   async deleteEntry(requestedPath: string): Promise<void> {
     const resolved = this.safeResolve(requestedPath);
-    if (!resolved || this.relativePath(resolved) === "") {
+    if (!resolved || this.isExactRoot(resolved)) {
       throw new Error("Path not allowed");
     }
 
@@ -461,7 +636,7 @@ export class HostedWorkspaceViewerService {
     newName?: string
   ): Promise<{ resolvedSource: string; destPath: string }> {
     const resolvedSource = this.safeResolve(sourcePath);
-    if (!resolvedSource || this.relativePath(resolvedSource) === "") {
+    if (!resolvedSource || this.isExactRoot(resolvedSource)) {
       throw new Error("Path not allowed");
     }
     await fs.promises.lstat(resolvedSource);
@@ -474,12 +649,9 @@ export class HostedWorkspaceViewerService {
       throw new Error("Path not allowed");
     }
 
-    const normalizedRoot = path.resolve(this.workspaceRoot);
-    const resolvedDestDir = path.resolve(normalizedRoot, requestedDestDir);
-    if (
-      !resolvedDestDir.startsWith(normalizedRoot + path.sep) &&
-      resolvedDestDir !== normalizedRoot
-    ) {
+    const trustedRoots = this.trustedRoots;
+    const resolvedDestDir = this.resolveAgainstRoots(requestedDestDir);
+    if (!isPathWithinAnyDirectory(resolvedDestDir, trustedRoots)) {
       throw new Error("Path not allowed");
     }
 
@@ -492,22 +664,15 @@ export class HostedWorkspaceViewerService {
       existingAncestor = parent;
     }
 
-    const [realRoot, realAncestor] = await Promise.all([
-      fs.promises.realpath(normalizedRoot),
-      fs.promises.realpath(existingAncestor),
-    ]);
+    const realAncestor = await fs.promises.realpath(existingAncestor);
     if (
-      !realAncestor.startsWith(realRoot + path.sep) &&
-      realAncestor !== realRoot
+      !isPathWithinAnyDirectory(realAncestor, this.realpathsOf(trustedRoots))
     ) {
       throw new Error("Path not allowed");
     }
 
     const destPath = path.resolve(resolvedDestDir, destinationName);
-    if (
-      !destPath.startsWith(normalizedRoot + path.sep) &&
-      destPath !== normalizedRoot
-    ) {
+    if (!isPathWithinAnyDirectory(destPath, trustedRoots)) {
       throw new Error("Path not allowed");
     }
 
@@ -634,8 +799,15 @@ export class HostedWorkspaceViewerService {
           kind = "modified";
         }
 
+        const normalized = normalizeScmPath(filePath);
         return {
-          path: normalizeScmPath(filePath),
+          // getStatus() always runs against the primary root's repo (`-C
+          // this.workspaceRoot`), so in multi-root prefix with the primary
+          // root's folder name to match the folder-name-prefixed convention
+          // used by the tree/file APIs and reference-link resolution.
+          path: this.isMultiRoot
+            ? `${this.primaryRootName}/${normalized}`
+            : normalized,
           stagedStatus,
           unstagedStatus,
           kind,
@@ -650,10 +822,11 @@ export class HostedWorkspaceViewerService {
     if (!resolved) {
       throw new Error("Path not allowed");
     }
+    this.assertWithinPrimaryRoot(resolved);
 
     const relPath = this.relativePath(resolved);
     const normalizedRelPath = normalizeScmPath(relPath);
-    const gitPath = toGitPath(relPath);
+    const gitPath = toGitPath(this.relativeToPrimaryRoot(resolved));
     const language = languageFromPath(resolved);
 
     // Determine kind from status
@@ -701,7 +874,8 @@ export class HostedWorkspaceViewerService {
   async stageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
-    const relPath = toGitPath(this.relativePath(resolved));
+    this.assertWithinPrimaryRoot(resolved);
+    const relPath = toGitPath(this.relativeToPrimaryRoot(resolved));
     await execFileAsync(
       "git",
       ["-C", this.workspaceRoot, "add", "--", relPath],
@@ -712,7 +886,8 @@ export class HostedWorkspaceViewerService {
   async unstageFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
-    const relPath = toGitPath(this.relativePath(resolved));
+    this.assertWithinPrimaryRoot(resolved);
+    const relPath = toGitPath(this.relativeToPrimaryRoot(resolved));
     await execFileAsync(
       "git",
       ["-C", this.workspaceRoot, "restore", "--staged", "--", relPath],
@@ -723,6 +898,7 @@ export class HostedWorkspaceViewerService {
   async discardFile(filePath: string): Promise<void> {
     const resolved = this.safeResolve(filePath);
     if (!resolved) throw new Error("Path not allowed");
+    this.assertWithinPrimaryRoot(resolved);
 
     const relPath = this.relativePath(resolved);
     const normalizedRelPath = normalizeScmPath(relPath);
@@ -744,7 +920,7 @@ export class HostedWorkspaceViewerService {
         "restore",
         "--worktree",
         "--",
-        toGitPath(relPath),
+        toGitPath(this.relativeToPrimaryRoot(resolved)),
       ],
       { timeout: GIT_TIMEOUT_MS }
     );

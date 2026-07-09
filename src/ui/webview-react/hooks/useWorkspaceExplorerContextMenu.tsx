@@ -20,6 +20,13 @@ export interface WorkspaceClipboard {
 
 export interface UseWorkspaceExplorerContextMenuOptions {
   explorerPath: string;
+  /**
+   * True when the current directory listing is the virtual top level of a
+   * multi-root workspace (one entry per root folder). Cut/Copy/Delete/Paste
+   * are disabled in that view since each entry represents an entire
+   * workspace root, not a real file or subdirectory.
+   */
+  isRootsList: boolean;
   onRefresh: () => void;
   onOpenFile: (path: string) => void;
 }
@@ -44,6 +51,7 @@ function buildPastedFilePath(sourcePath: string, destDir: string): string {
 
 export function useWorkspaceExplorerContextMenu({
   explorerPath,
+  isRootsList,
   onRefresh,
   onOpenFile,
 }: UseWorkspaceExplorerContextMenuOptions) {
@@ -79,7 +87,7 @@ export function useWorkspaceExplorerContextMenu({
   );
 
   const handlePaste = useCallback(async () => {
-    if (!clipboard) return;
+    if (!clipboard || isRootsList) return;
     const destDir = explorerPath;
     try {
       if (clipboard.operation === "cut") {
@@ -95,7 +103,7 @@ export function useWorkspaceExplorerContextMenu({
     } catch (err) {
       console.error("Paste failed:", err);
     }
-  }, [clipboard, explorerPath, onOpenFile, onRefresh]);
+  }, [clipboard, explorerPath, isRootsList, onOpenFile, onRefresh]);
 
   const openContextMenu = useCallback(
     (x: number, y: number, entry: WorkspaceEntry) => {
@@ -103,6 +111,9 @@ export function useWorkspaceExplorerContextMenu({
         entry.kind === "file"
           ? "Add File to ctrlyoke"
           : "Add Directory to ctrlyoke";
+      const rootDisabledTitle = isRootsList
+        ? "Cannot modify a workspace root folder"
+        : undefined;
 
       setContextMenu({
         x,
@@ -111,7 +122,8 @@ export function useWorkspaceExplorerContextMenu({
           {
             label: "Cut",
             icon: "codicon-screen-cut",
-            disabled: false,
+            disabled: isRootsList,
+            disabledTitle: rootDisabledTitle,
             onClick: () => {
               setClipboard({
                 operation: "cut",
@@ -123,7 +135,8 @@ export function useWorkspaceExplorerContextMenu({
           {
             label: "Copy",
             icon: "codicon-copy",
-            disabled: false,
+            disabled: isRootsList,
+            disabledTitle: rootDisabledTitle,
             onClick: () => {
               setClipboard({
                 operation: "copy",
@@ -135,8 +148,12 @@ export function useWorkspaceExplorerContextMenu({
           {
             label: "Paste",
             icon: "codicon-clippy",
-            disabled: clipboard === null,
-            disabledTitle: clipboard === null ? "Nothing to paste" : undefined,
+            disabled: clipboard === null || isRootsList,
+            disabledTitle: isRootsList
+              ? rootDisabledTitle
+              : clipboard === null
+                ? "Nothing to paste"
+                : undefined,
             onClick: () => {
               void handlePaste();
             },
@@ -154,11 +171,11 @@ export function useWorkspaceExplorerContextMenu({
           {
             label: "Delete",
             icon: "codicon-trash",
-            disabled: entry.path.length === 0,
+            disabled: entry.path.length === 0 || isRootsList,
             disabledTitle:
               entry.path.length === 0
                 ? "Cannot delete workspace root"
-                : undefined,
+                : rootDisabledTitle,
             onClick: () => {
               if (!entry.path) return;
               void handleDelete(entry.path);
@@ -167,7 +184,7 @@ export function useWorkspaceExplorerContextMenu({
         ],
       });
     },
-    [clipboard, handleAddToCtrlYoke, handleDelete, handlePaste]
+    [clipboard, handleAddToCtrlYoke, handleDelete, handlePaste, isRootsList]
   );
 
   const explorerContextMenuPortal = contextMenu ? (
