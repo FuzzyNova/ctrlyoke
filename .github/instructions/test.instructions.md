@@ -47,6 +47,15 @@ Mocha/TDD tests for ctrlyoke core logic and the VS Code extension host. This sco
 
 </harnessTests>
 
+<coverageTooling>
+
+- `npm run test:coverage` (see `scripts/report-extension-coverage.mjs`) covers the extension-host suite. `nyc`/`c8` can't wrap `out/test/runTest.js` directly because it spawns VS Code as a separate Electron process — instead the script sets `NODE_V8_COVERAGE` so that process writes raw V8 coverage itself, then runs `c8 report` against those files.
+- On Windows, Node always lowercases the drive letter in `file://` coverage URLs (e.g. `file:///c:/dev/ctrlyoke/...`) while `c8` resolves the project root with OS-native casing (`C:\dev\ctrlyoke`). Since `c8`'s glob matching is case-sensitive, every file silently reports 0% unless the raw coverage JSON is normalized first (the script does this).
+- `c8`'s `--include`/`--exclude` glob must match the *executed* script path (`out/**/*.js`, since tests `require()` the tsc output directly) — not the original `src/**/*.ts`. The remap to `.ts` filenames for display happens afterward via source maps, so filtering on `src/**/*.ts` matches nothing and reports empty.
+- `out/ui/webview-react/**` and `out/runtime-deps/**` are Vite/copied bundles with inlined vendor sourcemaps (mermaid, cytoscape, lodash, react, ...); leaving them in `--include` pollutes the report with thousands of always-0% vendor "files". They're excluded in the script; webview coverage lives separately via `npm run test:ui:coverage`.
+
+</coverageTooling>
+
 <highValueCoverage>
 
 - The most important unit-test seams in this tree are runtime state ownership (`WorkflowStateMachine`, `WorkflowInstance`, `WorkflowExecutor`), working/history file persistence, CLI transport/parsing coordinators, property/session resolution, MCP/hooks config file mutation, and path/security validation.

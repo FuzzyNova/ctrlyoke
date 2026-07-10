@@ -7,6 +7,8 @@ logs
 
 # Test coverage artifacts
 src/ui/webview-react/coverage
+/coverage
+/.coverage-tmp
 
 # Build artifacts
 package.json.backup
