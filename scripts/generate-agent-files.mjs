@@ -97,26 +97,26 @@ Always read the main project instructions:
 
 ## Instruction Files
 
-The \`.github/instructions/\` directory contains detailed implementation guidelines organized by file scope. Read the relevant file before modifying code in that area.
+The \`.github/instructions/\` directory contains detailed implementation guidelines organized by file scope. Each instruction file covers a specific area of the codebase — check the table below to find which one applies to the files you're modifying.
+
+**Read each instruction file once per session** (or per area you're working in). Once you've read an instruction file, you don't need to re-read it every time you edit another file in that same area.
 
 ${table}
 
 ### How to Use
 
-**Before editing files in a specific directory:**
-
 1. Identify which pattern matches the files you're working on
-2. Read the corresponding instruction file in \`.github/instructions/[filename]\`
+2. Read the corresponding instruction file (only if you haven't already for this area)
 3. Apply the patterns and conventions described in that file
 
 ### Example
 
 \`\`\`
 Working on src/core/WorkflowOrchestrator.ts?
-→ Read: .github/instructions/core.instructions.md
+→ Read: .github/instructions/core.instructions.md (once for the session)
 
 Working on src/core/harness/CliIntegration.ts?
-→ Read: .github/instructions/harness-integrations.instructions.md
+→ Read: .github/instructions/harness-integrations.instructions.md (once for the session)
 \`\`\`
 
 ## Project Status
