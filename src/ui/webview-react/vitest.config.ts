@@ -37,6 +37,8 @@ export default defineConfig({
       provider: "v8",
       include: ["store/**", "hooks/**", "utils/**", "components/**"],
       exclude: ["test/**", "types/**"],
+      // json-summary powers dev/backlog/TESTING_GAPS.md (scripts/generate-testing-gaps.mjs).
+      reporter: ["text", "html", "clover", "json", "json-summary"],
     },
   },
 });

@@ -10,7 +10,14 @@ import {
   type CommitResult,
 } from "../../git/CommitMessageGenerator";
 
-suite("HostedWorkspaceViewerService", () => {
+suite("HostedWorkspaceViewerService", function () {
+  // Most tests here shell out to real git (init/config/commit/clone/push/
+  // fetch) via execFileSync/execFileAsync rather than mocking it. Process-
+  // spawn overhead under full-suite load (this file runs alongside real CLI
+  // discovery calls during extension activation) can intermittently push
+  // individual tests past the default 2000ms mocha timeout.
+  this.timeout(10_000);
+
   const tempRoots: string[] = [];
 
   function createWorkspace(): string {
