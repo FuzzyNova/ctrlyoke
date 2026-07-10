@@ -167,7 +167,7 @@ const EditorSectionInner: React.FC = () => {
         </div>
 
         <div
-          className="fp-mode-switch mx-2"
+          className="fp-mode-switch mx-2 select-none [-webkit-touch-callout:none]"
           role="group"
           aria-label="Step type"
         >

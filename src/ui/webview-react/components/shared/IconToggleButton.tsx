@@ -67,7 +67,7 @@ export const IconToggleButton: React.FC<{
       onClick={() => onToggle(!active)}
       title={active ? activeTooltip : inactiveTooltip}
       aria-pressed={active}
-      className={`control-button flex items-center gap-1 px-1 bg-transparent border-none cursor-pointer leading-none transition-colors ${
+      className={`control-button flex items-center gap-1 px-1 bg-transparent border-none cursor-pointer leading-none transition-colors select-none [-webkit-touch-callout:none] ${
         active
           ? "text-widget-highlight-fg hover:text-widget-highlight-fg-hover"
           : "text-description-fg hover:text-foreground"
